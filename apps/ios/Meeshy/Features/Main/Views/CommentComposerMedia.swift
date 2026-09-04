@@ -130,6 +130,43 @@ enum CommentComposerStaging {
         return result
     }
 
+    /// **Une vignette tapée dans la bande de récents → une pièce jointe**
+    /// (#4985), par le MÊME chemin que la photothèque.
+    ///
+    /// La bande écrivait jusqu'ici `image.jpegData(compressionQuality: 0.9)`
+    /// dans un fichier `.jpg`, sans jamais voir les octets de l'asset : un GIF
+    /// animé de 6 448 o arrivait au lecteur en JPEG fixe de 4 404 o. Le picker
+    /// voisin, corrigé par #4925, préservait déjà le format. **Deux entrées pour
+    /// le même geste, deux fidélités** — et rien, à l'écran, ne disait laquelle
+    /// on venait d'emprunter.
+    static func recentImageAttachment(preview: UIImage, originalData: Data?) async -> ComposerAttachment? {
+        guard let payload = await recentImagePayload(preview: preview, originalData: originalData) else {
+            return nil
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("comment_\(UUID().uuidString).\(payload.fileExtension)")
+        guard (try? payload.data.write(to: url)) != nil else { return nil }
+        return ComposerAttachment.image(url: url)
+    }
+
+    /// Les octets à écrire, et le nom sous lequel les écrire.
+    ///
+    /// **La question se pose aux OCTETS, jamais à l'UTI qui les a fait venir.**
+    /// La bande n'a lu l'original que parce que la photothèque annonçait un
+    /// format à préserver (`PreservedImageFormat.preservesOriginalBytes`) ; ici
+    /// on écrit VERBATIM, sans compresseur pour rattraper une annonce fausse,
+    /// donc le nom se dérive des signatures. Ce que l'original n'a pas mérité
+    /// retombe sur l'aperçu ré-encodé — le comportement d'hier, à l'octet près.
+    static func recentImagePayload(preview: UIImage,
+                                   originalData: Data?) async -> (data: Data, fileExtension: String)? {
+        if let originalData {
+            let ext = await imageFileExtension(for: originalData)
+            if ext != "jpg" { return (originalData, ext) }
+        }
+        guard let reencoded = preview.jpegData(compressionQuality: 0.9) else { return nil }
+        return (reencoded, "jpg")
+    }
+
     /// **L'extension d'une image, lue dans ses OCTETS** (#4925).
     ///
     /// `loadTransferable(type: Data.self)` rend le fichier ORIGINAL de la
@@ -144,22 +181,14 @@ enum CommentComposerStaging {
     /// tient déjà, et c'est elle qui décide plus tard de laisser passer un GIF.
     /// Deux tables divergeraient au premier format ajouté.
     ///
-    /// **Seuls les trois formats que le dépôt a DÉJÀ décidé de laisser passer**
-    /// gardent leur extension. `MediaCompressor.compressImageData` rend un GIF et
-    /// un WebP tels quels, et une PNG en PNG ; il transcode en revanche le HEIC
-    /// délibérément (« most web clients cannot decode HEIC inline »). Nommer un
-    /// HEIC `.heic` ici irait donc CONTRE une décision existante, en servant au
-    /// web un format qu'il ne rend pas.
-    ///
-    /// Tout le reste — JPEG compris — reste `jpg`, le comportement d'hier : ce
-    /// lot ouvre un chemin, il ne change pas le cas nominal.
+    /// **Quels formats gardent leur extension est tranché par
+    /// `PreservedImageFormat`** — site unique depuis #4985, où la bande de
+    /// médias récents a eu besoin de la MÊME règle pour une autre question
+    /// (« faut-il aller chercher les octets d'origine ? »). Cette fonction n'en
+    /// est plus qu'une projection : elle lit les signatures, l'autre nomme.
     static func imageFileExtension(for data: Data) async -> String {
-        switch await MediaCompressor.shared.imageMimeType(of: data) {
-        case "image/gif":  return "gif"
-        case "image/png":  return "png"
-        case "image/webp": return "webp"
-        default:           return "jpg"
-        }
+        PreservedImageFormat.fileExtension(
+            forMimeType: await MediaCompressor.shared.imageMimeType(of: data))
     }
 
     /// URLs de fichiers importés → `ComposerAttachment[]` (copie sécurisée en temp).

@@ -404,7 +404,8 @@ extension ConversationView {
     /// through the same preparation pipeline as a camera capture.
     func ingestRecentMediaPick(_ pick: RecentMediaPick) {
         switch pick {
-        case .image(let image): handleCameraCapture(image)
+        case .image(let image, let originalData):
+            handleRecentImage(image, originalData: originalData)
         case .video(let url): handleCameraVideo(url)
         }
     }
@@ -413,7 +414,7 @@ extension ConversationView {
     /// resolved pick; the edited result is staged like a camera capture.
     func editRecentMediaPick(_ pick: RecentMediaPick) {
         switch pick {
-        case .image(let image): scrollState.recentImageToEdit = image
+        case .image(let image, _): scrollState.recentImageToEdit = image
         case .video(let url): scrollState.recentVideoToEdit = url
         }
     }

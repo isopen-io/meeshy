@@ -1,6 +1,7 @@
 import SwiftUI
 import Photos
 import AVFoundation
+import ImageIO
 import UIKit
 import MeeshySDK
 import MeeshyUI
@@ -12,8 +13,23 @@ import MeeshyUI
 /// A media item the user tapped from the inline recent-media strip, resolved
 /// to something a host can ingest. Photos arrive as a `UIImage`, videos as a
 /// file URL in the temporary directory — mirroring the camera capture handlers.
+///
+/// **`originalData` existe parce qu'une `UIImage` ne peut pas porter un GIF**
+/// (#4985). Un bitmap est UNE image ; les images 2 à N d'un GIF n'existent plus
+/// une fois l'asset décodé, et aucune correction en aval ne peut les rendre. La
+/// perte se produisait donc à la LECTURE de l'asset, pas à l'écriture du
+/// fichier — mesuré : 6 448 o de GIF animé arrivés en 4 404 o de JPEG fixe.
+///
+/// L'aperçu reste une `UIImage` parce que c'est ce dont la vignette et
+/// l'éditeur ont besoin ; ce sont les hôtes d'INGESTION qui doivent préférer
+/// les octets quand ils sont là.
+///
+/// > `originalData` est `nil` pour la quasi-totalité d'une pellicule, et ce
+/// > n'est pas un défaut : les octets ne sont lus que lorsque les perdre
+/// > coûterait quelque chose (`PreservedImageFormat.preservesOriginalBytes`).
+/// > Un hôte qui trouve `nil` garde exactement le chemin d'hier.
 enum RecentMediaPick {
-    case image(UIImage)
+    case image(UIImage, originalData: Data?)
     case video(URL)
 }
 
@@ -280,12 +296,19 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     }
 
     private func resolveImage(_ asset: PHAsset) async -> RecentMediaPick? {
+        guard let preview = await previewImage(asset) else { return nil }
+        return .image(preview, originalData: await preservedOriginalData(for: asset))
+    }
+
+    /// L'aperçu bitmap — la vignette de la zone de pièces jointes et l'éditeur
+    /// n'ont besoin de rien d'autre. Inchangé depuis toujours.
+    private func previewImage(_ asset: PHAsset) async -> UIImage? {
         let options = PHImageRequestOptions()
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
-        let box = await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+        return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
             let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
                 continuation.resume(returning: ImageBox(image: image))
             }
@@ -296,8 +319,38 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
                 options: options,
                 resultHandler: completion
             )
+        }.image
+    }
+
+    /// **Les octets d'origine, lus SEULEMENT quand les perdre coûterait quelque
+    /// chose** (#4985).
+    ///
+    /// `PHAssetResource.assetResources(for:)` lit l'index local de la
+    /// photothèque : il nomme le format sans charger un octet du fichier. Sans
+    /// cette porte, chaque vignette tapée ferait remonter plusieurs mégaoctets
+    /// — pour un JPEG ou un HEIC, c'est-à-dire pour presque toute une pellicule
+    /// — afin de les jeter aussitôt.
+    ///
+    /// Un asset porte plusieurs ressources (l'original, la version modifiée,
+    /// les données d'ajustement) : il suffit qu'UNE d'elles nomme un format à
+    /// préserver. `.version = .current` rend ensuite ce que l'utilisateur VOIT
+    /// dans sa photothèque, retouches comprises — c'est ce qu'il croit envoyer.
+    private func preservedOriginalData(for asset: PHAsset) async -> Data? {
+        let mayPreserve = PHAssetResource.assetResources(for: asset)
+            .contains { PreservedImageFormat.preservesOriginalBytes(assetUTI: $0.uniformTypeIdentifier) }
+        guard mayPreserve else { return nil }
+
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+        options.version = .current
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
+            let completion: @Sendable (Data?, String?, CGImagePropertyOrientation, [AnyHashable: Any]?) -> Void = { data, _, _, _ in
+                continuation.resume(returning: data)
+            }
+            imageManager.requestImageDataAndOrientation(for: asset, options: options, resultHandler: completion)
         }
-        return box.image.map { .image($0) }
     }
 
     private func resolveVideo(_ asset: PHAsset) async -> RecentMediaPick? {

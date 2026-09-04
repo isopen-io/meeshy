@@ -1594,7 +1594,7 @@ struct CommentsSheetView: View {
             if let image = commentRecentImageToEdit {
                 MeeshyImageEditorView(image: image, context: .post, accentColor: accentColor, onAccept: { edited in
                     commentRecentImageToEdit = nil
-                    ingestCommentRecentMedia(.image(edited))
+                    ingestCommentRecentMedia(.image(edited, originalData: nil))
                 }, onCancel: {
                     commentRecentImageToEdit = nil
                 })
@@ -1762,21 +1762,21 @@ struct CommentsSheetView: View {
     /// resolved pick; the edited result is ingested like a strip tap.
     private func editCommentRecentMedia(_ pick: RecentMediaPick) {
         switch pick {
-        case .image(let image): commentRecentImageToEdit = image
+        case .image(let image, _): commentRecentImageToEdit = image
         case .video(let url): commentRecentVideoToEdit = url
         }
     }
 
-    /// Ingests a photo/video tapped in the inline recent-media strip into the
-    /// staged comment attachments.
+    /// Ingests a photo/video tapped in the inline recent-media strip — par le
+    /// staging PARTAGÉ avec la photothèque (#4985).
     private func ingestCommentRecentMedia(_ pick: RecentMediaPick) {
         switch pick {
-        case .image(let image):
-            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("comment_\(UUID().uuidString).jpg")
-            guard (try? data.write(to: url)) != nil else { return }
-            commentAttachments.append(ComposerAttachment.image(url: url))
+        case .image(let image, let originalData):
+            Task { @MainActor in
+                guard let staged = await CommentComposerStaging.recentImageAttachment(
+                    preview: image, originalData: originalData) else { return }
+                commentAttachments.append(staged)
+            }
         case .video(let url):
             commentAttachments.append(
                 ComposerAttachment(

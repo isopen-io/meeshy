@@ -1004,6 +1004,28 @@ extension ConversationView {
         trackPreparation(prep)
     }
 
+    /// **Une vignette tapée dans la bande de récents** (#4985).
+    ///
+    /// Sans octets d'origine — c'est-à-dire pour la quasi-totalité d'une
+    /// pellicule — c'est exactement le chemin d'une capture caméra, inchangé.
+    /// Avec, on emprunte `prepareImageData`, celui que la photothèque emprunte
+    /// déjà : `MediaCompressor.compressImageData` y laisse un GIF et un WebP
+    /// intacts, redimensionne une PNG et transcode le reste.
+    ///
+    /// Aucune seconde porte sur les signatures ici : le compresseur les relit
+    /// lui-même, et une porte de plus serait une quatrième copie d'une règle
+    /// que `PreservedImageFormat` tient désormais seule.
+    func handleRecentImage(_ image: UIImage, originalData: Data?) {
+        guard let originalData else { return handleCameraCapture(image) }
+        let prep = AttachmentPreparationService.shared.prepareImageData(
+            originalData,
+            image: image,
+            context: .message,
+            accentColor: accentColor
+        )
+        trackPreparation(prep)
+    }
+
     /// Wire a `PreparingAttachment` into the composer:
     /// 1. Append the in-flight handle so the tray shows a loading tile.
     /// 2. Observe the handle and, when it reaches `.ready`, promote the
