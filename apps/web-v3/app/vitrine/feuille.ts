@@ -18,6 +18,17 @@ import { compacte } from '@/app/enveloppe/feuille';
  *    (règle 11, qui l'autorise pour la vitrine et pour elle seule). C'est le
  *    seul plan de couleur de l'écran, et il ne coûte pas un octet de plus : un
  *    `color-mix` sur deux jetons déjà servis.
+ *
+ * PORTAGE TOUR 3 (jugement du 2026-09-02, § 12.5 renuméroté — voir « À
+ * corriger dans le dépôt tel qu'il est ») :
+ *
+ * 6. **`.heros` porte `--radius-xl`, pas `--radius-lg`** (règle 9 : « `xl`
+ *    héros, carte mise en avant, carte d'état vide »). Le héros n'est plus une
+ *    carte comme les autres — il a son propre rayon.
+ * 7. **`.heros` porte le SEUL dégradé de la v3** (règle 35), entre
+ *    `--color-tint-primary` et `--color-surface` : « la seule chose qu'une
+ *    capture d'application a et qu'une page de texte n'a pas, une lumière ».
+ *    Un plan uni, sans direction, ne rendait qu'un bloc teinté.
  * 2. **Les deux appels à l'action s'EMPILENT** (règle 4) : 56 px puis 52 px,
  *    pleine largeur, `--space-3` entre eux. Ils partageaient une ligne, ce qui
  *    les rendait étroits — donc durs à viser — sur un téléphone de 360 px.
@@ -38,7 +49,7 @@ import { compacte } from '@/app/enveloppe/feuille';
  * règle 1). Témoin : `__tests__/charte.test.ts`.
  */
 export const FEUILLE_DE_LA_VITRINE = compacte(`
-.heros{margin-top:var(--space-6);padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-tint-primary)}
+.heros{margin-top:var(--space-6);padding:var(--space-4);border-radius:var(--radius-xl);background:linear-gradient(180deg,var(--color-tint-primary),var(--color-surface))}
 .badge{display:inline-flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-5);padding:var(--space-2) var(--space-4);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
 .badge svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}
 .heros h1{margin:0 0 var(--space-4);font-size:var(--text-4xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}

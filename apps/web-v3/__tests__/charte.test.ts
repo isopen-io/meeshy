@@ -378,30 +378,58 @@ describe('règle 8 — chaque pas de l’échelle a son rôle', () => {
 });
 
 /**
- * RÈGLE 18 — l'état VIDE est DESSINÉ : « contour `--stroke-strong` pointillé
- * `--color-border-strong`, glyphe 40 px `--color-text-muted`, titre, phrase
- * ≤ `--measure` ».
- *
- * Ce que la charte demande et que la v3 ne servait pas : un contour POINTILLÉ
- * (le plein se lit comme une carte pleine, donc comme du contenu) et le glyphe
- * qui dit de quoi l'écran est vide. L'ACTION primaire de la règle 18 n'entre
- * pas ici : elle mènerait à une route que la v3 ne sert pas encore, et la
- * règle 7 — « un contrôle existe s'il a un EFFET » — l'emporte sur elle.
+ * RÈGLE 16 (tour 3, § 12.5 — remplace la citation « règle 18 » du tour 2,
+ * périmée depuis la renumérotation du 2026-09-02 : § 12.8 en fait la loi de
+ * portage) : « État vide et `trou` : pointillé `--stroke-strong`
+ * `--color-border-interactive`, jamais `--color-border-strong`. » Le contour
+ * de `.carte-vide` portait encore le filet des cartes PLEINES — un contour qui
+ * porte SEUL le sens de l'état (rien d'autre ne le distingue d'un bloc de
+ * texte) doit tenir le contraste d'un CONTRÔLE, pas celui d'un filet.
  */
-describe('règle 18 — l’état vide est dessiné', () => {
-  it('pose le contour pointillé et le glyphe de 40 px', () => {
-    expect(FEUILLE_CONNECTEE).toContain('var(--stroke-strong) dashed var(--color-border-strong)');
+describe('règle 16 — le contour de l’état vide est --color-border-interactive', () => {
+  it('pose le pointillé sur .carte-vide en --color-border-interactive, jamais --color-border-strong', () => {
+    const [carteVide] = regles(FEUILLE_CONNECTEE).filter(({ selecteur }) => selecteur === '.carte-vide');
+
+    expect(carteVide?.corps).toContain('var(--stroke-strong) dashed var(--color-border-interactive)');
+    expect(carteVide?.corps ?? '').not.toContain('--color-border-strong');
+  });
+
+  it('garde le glyphe de 40 px de l’état vide', () => {
     expect(FEUILLE_CONNECTEE).toContain('width:var(--glyph-large)');
   });
 });
 
-describe('règle 5 — quatre rayons, pas onze', () => {
-  // Les coins HAUTS de la feuille modale (règle 5 : « `--radius-2xl` : coins
-  // hauts de la feuille modale ») sont la seule forme composée admise.
+/**
+ * RÈGLE 18 (tour 3, § 12.5) — « L'encre du CONTENU est `--color-text` ; le
+ * gris est réservé à ce qu'on peut ne pas lire. » La règle NOMME `.carte-vide
+ * p` dans la liste des sélecteurs où `--color-text-muted|subtle` est interdit :
+ * la phrase de l'état vide se lisait en gris, alors que c'est le texte pour
+ * lequel on ouvre l'état.
+ */
+describe('règle 18 — l’encre de la phrase de l’état vide est --color-text', () => {
+  it('pose --color-text sur .carte-vide p, jamais --color-text-muted ni --color-text-subtle', () => {
+    const [carteVideP] = regles(FEUILLE_CONNECTEE).filter(({ selecteur }) => selecteur === '.carte-vide p');
+
+    expect(carteVideP?.corps).toContain('color:var(--color-text)');
+    expect(carteVideP?.corps ?? '').not.toMatch(/--color-text-(?:muted|subtle)\b/);
+  });
+});
+
+/**
+ * RÈGLE 9 (tour 3, § 12.5 — remplace la citation « règle 5 » du tour 2,
+ * périmée) : « Cinq rayons, un rôle chacun : … `xl` héros, carte mise en
+ * avant, carte d'état vide. » `.heros` et `.carte-vide` portaient encore
+ * `--radius-lg` — le rayon des CARTES, pas celui que le tour 3 leur donne en
+ * propre.
+ */
+describe('règle 9 — cinq rayons, un rôle chacun', () => {
+  // Les coins HAUTS de la feuille modale (règle 9 : « `2xl` feuille modale »)
+  // sont la seule forme composée admise.
   const AUTORISES = new Set([
     'var(--radius-pill)',
     'var(--radius-lg)',
     'var(--radius-md)',
+    'var(--radius-xl)',
     'var(--radius-xs)',
     'var(--radius-2xl) var(--radius-2xl) 0 0',
   ]);
@@ -412,28 +440,60 @@ describe('règle 5 — quatre rayons, pas onze', () => {
     expect(rayons.length).toBeGreaterThan(0);
     expect(rayons.filter((rayon) => !AUTORISES.has(rayon))).toEqual([]);
   });
+
+  it('pose --radius-xl sur .heros et .carte-vide, jamais --radius-lg ni --radius-md', () => {
+    const [heros] = regles(FEUILLE_DE_LA_VITRINE).filter(({ selecteur }) => selecteur === '.heros');
+    const [carteVide] = regles(FEUILLE_CONNECTEE).filter(({ selecteur }) => selecteur === '.carte-vide');
+
+    expect(heros?.corps).toContain('border-radius:var(--radius-xl)');
+    expect(carteVide?.corps).toContain('border-radius:var(--radius-xl)');
+    expect(`${heros?.corps ?? ''};${carteVide?.corps ?? ''}`).not.toMatch(/border-radius:var\(--radius-(?:lg|md)\)/);
+  });
 });
 
-describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', () => {
+/**
+ * RÈGLE 35 (tour 3, § 12.5) — « UN dégradé, et un seul : `.heros` de la
+ * vitrine, entre DEUX jetons voisins (`--color-tint-primary` → `--color-
+ * surface`). » Le tour 2 bannissait tout dégradé (c'était l'un des trois
+ * interdits du bloc « règles 9, 10 et 11 » ci-dessous, avant ce commit) ; le
+ * tour 3 en autorise nommément UN, borné à un seul sélecteur — le compte seul
+ * ne suffit pas, c'est le SÉLECTEUR qui doit porter le nom.
+ */
+describe('règle 35 — un dégradé, et un seul, sur .heros', () => {
+  it('n’écrit qu’un gradient(, uniquement sur .heros, entre --color-tint-primary et --color-surface', () => {
+    expect((TOUTES.match(/gradient\(/g) ?? []).length).toBe(1);
+
+    const selecteursDuDegrade = regles(TOUTES)
+      .filter(({ corps }) => corps.includes('gradient('))
+      .map(({ selecteur }) => selecteur);
+    expect(selecteursDuDegrade).toEqual(['.heros']);
+
+    const [heros] = regles(FEUILLE_DE_LA_VITRINE).filter(({ selecteur }) => selecteur === '.heros');
+    expect(heros?.corps).toContain('var(--color-tint-primary)');
+    expect(heros?.corps).toContain('var(--color-surface)');
+  });
+});
+
+describe('règles 14 et 16 — plans, filets, et ce qui ne se peint jamais', () => {
   it('bannit --color-border, invisible au soleil (1,28:1 en clair)', () => {
     expect(TOUTES).not.toContain('var(--color-border)');
   });
 
-  it('n’écrit ni ombre hors focus, ni dégradé, ni flou de fond', () => {
+  // Le dégradé de .heros a son propre témoin, nommé — règle 35 ci-dessus.
+  it('n’écrit ni ombre hors focus, ni flou de fond', () => {
     expect((TOUTES.match(/box-shadow:/g) ?? []).length).toBe(1);
     expect(SOCLE_DU_DOCUMENT).toContain('box-shadow:');
-    expect(TOUTES).not.toContain('gradient(');
     expect(TOUTES).not.toContain('backdrop-filter');
   });
 
-  /** Le SEUL `filter:blur` du dépôt : le cadre INERTE de `/chat/:lien` (règle 11, règle 25) — la modale, elle, n'en porte aucun. */
+  /** Le SEUL `filter:blur` du dépôt : le cadre INERTE de `/chat/:lien` (règle 27, règle 34) — la modale, elle, n'en porte aucun. */
   it('ne floute qu’une chose : le cadre inerte du fil', () => {
     expect((TOUTES.match(/filter:blur\(/g) ?? []).length).toBe(1);
     expect(FEUILLE_DU_FIL).toContain('.fil-ecran[inert]{filter:blur(var(--frame-blur))}');
   });
 
   /**
-   * Règle 9 — « `--color-surface-raised` = ce qui FLOTTE au-dessus du contenu,
+   * Règle 14 (tour 3, § 12.5) — « `--color-surface-raised` = ce qui FLOTTE au-dessus du contenu,
    * rien d'autre ». La feuille modale de jonction a été le seul emploi tant
    * que rien d'autre ne flottait ; le panneau de profil (§ 12.10.3) est le
    * SECOND et la feuille « nouveau lien » (#5071) le TROISIÈME — trois emplois
