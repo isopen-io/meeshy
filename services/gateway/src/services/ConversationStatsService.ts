@@ -1,4 +1,5 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
 export interface OnlineUserInfo {
   id: string;
@@ -101,10 +102,17 @@ export class ConversationStatsService {
         return await this.getOrCompute(prisma, conversationId, getConnectedUserIds);
       }
 
-      // Incremental update on message language count
+      // Incremental update on message language count. Callers pass the RAW
+      // persisted `originalLanguage` (`'fr-FR'`, `'FR'`, `'EN'`), so canonicalize
+      // through the same SSOT the full recompute (computeStats) uses — otherwise
+      // the two twins diverge and a region-tagged message opens a distinct
+      // `'fr-fr'` bucket beside the `'fr'` one it should have bumped.
       const stats = { ...existing!.stats };
       stats.messagesPerLanguage = { ...stats.messagesPerLanguage };
-      stats.messagesPerLanguage[messageLanguage] = (stats.messagesPerLanguage[messageLanguage] || 0) + 1;
+      const incLang = messageLanguage ? normalizeLanguageForDedup(messageLanguage) : '';
+      if (incLang) {
+        stats.messagesPerLanguage[incLang] = (stats.messagesPerLanguage[incLang] || 0) + 1;
+      }
 
       // Refresh online users snapshot quickly (cheap intersection)
       stats.onlineUsers = await this.computeOnlineUsers(prisma, conversationId, getConnectedUserIds());
@@ -202,9 +210,16 @@ export class ConversationStatsService {
       _count: { _all: true }
     }).catch(() => [] as any[]);
 
+    // `originalLanguage` is persisted verbatim, so a client's per-language
+    // breakdown would split 'en'/'en-US' and 'fr'/'FR' into distinct rows. Fold
+    // each groupBy row through the shared canonicalization SSOT and ACCUMULATE
+    // (not assign): two rows can now map to the same canonical key. A null/empty
+    // language is not a language bucket — skip it (mirrors audienceLanguages).
     const messagesPerLanguage: Record<string, number> = {};
     for (const row of messagesAgg) {
-      messagesPerLanguage[row.originalLanguage] = row._count._all;
+      const lang = row.originalLanguage ? normalizeLanguageForDedup(row.originalLanguage) : '';
+      if (!lang) continue;
+      messagesPerLanguage[lang] = (messagesPerLanguage[lang] || 0) + row._count._all;
     }
 
     // Participants and participants per language
@@ -218,7 +233,9 @@ export class ConversationStatsService {
       }).catch(() => []);
       participantCount = users.length;
       for (const u of users) {
-        participantsPerLanguage[u.systemLanguage] = (participantsPerLanguage[u.systemLanguage] || 0) + 1;
+        const lang = u.systemLanguage ? normalizeLanguageForDedup(u.systemLanguage) : '';
+        if (!lang) continue;
+        participantsPerLanguage[lang] = (participantsPerLanguage[lang] || 0) + 1;
       }
     } else {
       const members = await prisma.participant.findMany({
@@ -232,9 +249,9 @@ export class ConversationStatsService {
       participantCount = members.length;
       for (const m of members) {
         // Sécurité supplémentaire si user est null
-        if (m.user) {
-          const lang = m.user.systemLanguage;
-          participantsPerLanguage[lang] = (participantsPerLanguage[lang] || 0) + 1;
+        if (m.user && m.user.systemLanguage) {
+          const lang = normalizeLanguageForDedup(m.user.systemLanguage);
+          if (lang) participantsPerLanguage[lang] = (participantsPerLanguage[lang] || 0) + 1;
         }
       }
     }
