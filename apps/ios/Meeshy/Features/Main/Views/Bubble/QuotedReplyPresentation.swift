@@ -1,6 +1,5 @@
 import Foundation
 import MeeshySDK
-import SwiftUI
 
 /// **Ce qu'une citation MONTRE — une règle, trois peaux** (#4946).
 ///
@@ -269,17 +268,16 @@ nonisolated enum QuotedReplyPresentation {
     /// une approximation basse coupe un mot trop tôt, ce qui reste lisible ;
     /// une approximation haute laisse `lineLimit` couper, ce qui est l'état
     /// d'avant ce lot. Le sens de l'erreur est donc choisi, pas subi.
+    /// **`charactersPerLine` est un ENTIER, pas une taille de texte** — et
+    /// c'est une contrainte de conception, pas une commodité. Cette règle ne
+    /// connaît aucune vue : elle rend des chaînes et des entiers, les peaux
+    /// les rendent (garde `test_laRegle_estNonisolated_etNeConnaitAucuneVue`).
+    ///
+    /// La traduction « taille de texte du lecteur → signes par ligne » est
+    /// donc chez la vue, en UN site : `QuotedReplyPresentation+DynamicType.swift`.
     static func previewCharacterBudget(for skin: Skin,
-                                       dynamicTypeSize: DynamicTypeSize) -> Int {
-        let signesParLigne: Int
-        switch dynamicTypeSize {
-        case .xSmall, .small, .medium, .large:      signesParLigne = 46
-        case .xLarge, .xxLarge:                     signesParLigne = 38
-        case .xxxLarge:                             signesParLigne = 32
-        case .accessibility1, .accessibility2:      signesParLigne = 26
-        default:                                    signesParLigne = 20
-        }
-        return max(1, previewLineLimit(for: skin) * signesParLigne)
+                                       charactersPerLine: Int) -> Int {
+        max(1, previewLineLimit(for: skin) * max(1, charactersPerLine))
     }
 
     /// **Coupe à la dernière frontière de MOT qui tient dans le budget.**
