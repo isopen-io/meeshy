@@ -12,21 +12,35 @@ import MeeshyUI
 ///
 /// ## Ce que ce lot sert, et ce qu'il ne sert PAS
 ///
-/// La planche en dessine cinq. Trois existent de bout en bout et sont ici :
+/// La planche en dessine cinq. QUATRE existent de bout en bout et sont ici :
 ///
 /// | geste | où il vit |
 /// |---|---|
+/// | ✦ FILTRER | `StoryFilterGridView` (SDK) + `viewModel.applyFilter` — #5041 |
 /// | ✂ ROGNER | `MediaTrimStrip` (SDK) + `viewModel.setSourceTrim` |
 /// | ◍ MUET | `viewModel.toggleMediaMute` — no-op sur une image, rien à couper |
 /// | ⟲ PIVOTER | `viewModel.rotateMedia` — vaut pour une image AUSSI |
 ///
-/// **⌗ RECADRER et ✂ COUPER manquent au CONTRAT** (#5085) : aucun champ du
-/// modèle ne les porte, et les ajouter demande `packages/shared`, les trois
-/// décodeurs et les trois moteurs de rendu. Les monter inertes ferait pire que
-/// leur absence — la loi 4 bannit un contrôle sans effet, et ici l'auteur
-/// croirait avoir recadré.
+/// **Ce paragraphe affirmait, jusqu'au 2026-09-04, que « ⌗ RECADRER et ✂ COUPER
+/// manquent au CONTRAT : aucun champ du modèle ne les porte ». C'est faux pour
+/// RECADRER depuis `a0f2a86aa9`** — `MediaCropRect`, `StoryMediaObject.crop`, le
+/// round-trip `CanvasV3Migration` et `StoryMediaLayer.applyCrop` sont posés. La
+/// table à jour, avec la raison exacte de chaque refus, vit à un seul endroit :
+/// `MediaEditTool` (`ComposerObjectEditorRail.swift`).
 ///
-/// L'écran ne sera donc pas déclaré conforme sur ce lot : trois gestes sur cinq
+/// > **Une affirmation périmée ne se corrige pas là où on la relit, mais partout
+/// > où elle a été ÉCRITE.** Celle-ci vivait en deux exemplaires, à deux mots
+/// > près ; corriger le premier donne le sentiment d'avoir fini, et c'est
+/// > précisément ce sentiment qui laisse le second en place. La question qui
+/// > l'attrape n'est pas « ai-je corrigé la ligne ? » mais **« combien de sites
+/// > portent cette phrase ? »** — et elle se répond par un `grep` sur
+/// > l'AFFIRMATION, jamais sur le fichier qu'on a sous les yeux.
+///
+/// Le verdict, lui, ne change pas : ni recadrage ni scission ne sont servis. Les
+/// monter inertes ferait pire que leur absence — la loi 4 bannit un contrôle sans
+/// effet, et ici l'auteur croirait avoir recadré.
+///
+/// L'écran ne sera donc pas déclaré conforme sur ce lot : quatre gestes sur cinq
 /// est un Status, pas un livrable.
 extension ComposerObjectEditorView {
 
@@ -51,6 +65,18 @@ extension ComposerObjectEditorView {
     var mediaOptions: some View {
         if let media = mediaObject {
             VStack(alignment: .leading, spacing: 18) {
+                // **La grille du SDK, telle quelle** (#5041). `StoryFilterGridView`
+                // est autonome — aucun rappel, aucune dépendance à la coquille
+                // plein écran — et c'est ce qui la rend montable ici sans rien
+                // réécrire. L'aperçu qu'elle teinte est le fond de la slide,
+                // comme chez `EmbeddedSceneInspector` : le filtre est un réglage
+                // de SLIDE, et lui donner la vignette de l'objet aurait montré
+                // un aperçu qui ne correspond pas à ce qui change.
+                section(ComposerObjectEditorCopy.media(.filter), .media(.filter)) {
+                    StoryFilterGridView(
+                        viewModel: viewModel,
+                        previewImage: viewModel.currentSlideBackgroundImage)
+                }
                 if let source = viewModel.sourceTrim(id: objectId) {
                     section(ComposerObjectEditorCopy.trim, .media(.trim)) {
                         trimBand(source)

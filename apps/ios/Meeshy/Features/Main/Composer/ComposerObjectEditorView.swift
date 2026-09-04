@@ -344,6 +344,22 @@ struct ComposerObjectEditorView: View {
                 // datait du temps où cet écran ne savait éditer qu'un texte :
                 // taper un sticker ne faisait alors RIEN, ce qui se lit comme
                 // une scène morte plutôt que comme une limite.
+                //
+                // **Et le SUJET n'est plus muet pour autant** (#5099). Ce refus
+                // a longtemps EU L'AIR d'être ce qui empêchait de rappeler le
+                // clavier en touchant le texte — il ne l'était pas. La cause
+                // vivait une couche plus bas : le canvas capte le tap posé sur
+                // son propre champ de saisie et, `cancelsTouchesInView` valant
+                // `true`, l'annule pour le `UITextView`. Ce rappel est
+                // désormais servi par `StoryCanvasInlineEditTouchPolicy`, donc
+                // ce closure n'est même plus ATTEINT quand le doigt tombe sur le
+                // champ, placeholder compris.
+                //
+                // > Retirer la garde n'aurait rien réparé et aurait rouvert
+                // > l'écran sur lui-même. **Un refus qui se trouve sur le chemin
+                // > d'un geste absent n'en est pas forcément la cause** — la
+                // > question n'est pas « qui refuse ce geste ? » mais « qui le
+                // > reçoit avant lui ? ».
                 guard id != objectId else { return }
                 openEditor(id)
             },
@@ -427,12 +443,19 @@ struct ComposerObjectEditorView: View {
             VStack(spacing: 6) {
                 ForEach(ComposerObjectEditorRail.entries(for: family), id: \.self) { entree in
                     Button {
+                        // **La bascule vit dans la RÈGLE** (#5098) : retaper
+                        // l'entrée OUVERTE range son panneau, taper une autre
+                        // le rend. La condition est lue avant que la sélection
+                        // ne change — c'est la PAIRE (tapé, sélectionné) qui
+                        // décide, et l'écrire après aurait comparé l'entrée à
+                        // elle-même à chaque tap.
+                        let range = ComposerObjectEditorRail.collapsed(
+                            afterTapping: entree,
+                            selected: selectedTool,
+                            wasCollapsed: optionsAreCollapsed)
                         selectedTool = entree
-                        // Taper un outil le REND : le repli est un fait
-                        // d'affichage, et le geste qui choisit un outil dit
-                        // qu'on veut le régler.
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                            optionsAreCollapsed = false
+                            optionsAreCollapsed = range
                         }
                     } label: {
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
@@ -457,6 +480,31 @@ struct ComposerObjectEditorView: View {
             .padding(.vertical, 4)
         }
         .frame(width: ComposerObjectEditorRail.railWidth)
+        // **La CARTE, et c'est tout le correctif du #5097.**
+        //
+        // Le rail était déjà à gauche (#5026) et déjà défilable ; ce qui lui
+        // manquait n'était ni la place ni la course, c'était une FRONTIÈRE.
+        // Posé nu, il se terminait au contact de la zone d'options — deux jeux
+        // de glyphes contigus sur le même fond, et rien ne disait où l'un
+        // finissait. Clavier levé, ce qui reste au `HStack` se réduit d'autant
+        // et les deux se touchent.
+        //
+        // > Directive porteur 2026-09-04 : « la liste des tools à gauche […]
+        // > toujours être au dessus des options qui apparaissent en base et non
+        // > pas se confondre avec les option lorsqu'on a le clavier qui
+        // > s'affiche. »
+        //
+        // Le dessin n'est pas inventé : c'est EXACTEMENT celui du couloir droit
+        // (`ComposerTrailingRail`) — même rayon, même teinte, même respiration.
+        // C'est la dimension 6 prise au mot : les deux couloirs du même écran
+        // portent la même pièce, et l'auteur n'a rien à réapprendre en passant
+        // de l'un à l'autre.
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: ComposerObjectEditorRail.railWidth / 2,
+                             style: .continuous)
+                .fill(plateauTint.opacity(0.55))
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
     }
@@ -945,6 +993,13 @@ nonisolated enum ComposerObjectEditorCopy {
         case .split:
             return String(localized: "composer.object.editor.split",
                           defaultValue: "Couper", bundle: .main)
+        case .filter:
+            // La clé du SDK n'est pas réemployable : elle vit dans `.module`,
+            // et cet écran lit `.main`. Le MOT, lui, est le même que celui du
+            // panneau existant — deux libellés pour une seule grille se
+            // liraient comme deux réglages.
+            return String(localized: "composer.object.editor.filter",
+                          defaultValue: "Filtres", bundle: .main)
         }
     }
 

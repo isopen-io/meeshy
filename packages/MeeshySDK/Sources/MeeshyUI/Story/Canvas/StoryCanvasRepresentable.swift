@@ -88,6 +88,12 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var onBackgroundTapped: (() -> Void)?
     /// Appui long sur une zone VIDE — inerte chez qui ne le branche pas.
     public var onBackgroundLongPressed: (() -> Void)?
+    /// L'appui long sur un média DE FOND — voir `StoryCanvasBackgroundLongPress`.
+    public var onBackgroundMediaLongPressed: ((String) -> Void)?
+    /// La translation pendant qu'un appui long ARMÉ est tenu.
+    public var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    /// Le relâchement — ou l'annulation — d'un appui long armé.
+    public var onBackgroundLongPressEnded: (() -> Void)?
     /// Notifié quand le drag du background se termine (.ended). Le composer
     /// l'utilise pour resynchroniser son cache `viewModel.backgroundTransform`
     /// avec la nouvelle valeur typée. Le `slide` lui-même est déjà mis à jour
@@ -157,6 +163,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
                 onBackgroundLongPressed: (() -> Void)? = nil,
+                onBackgroundMediaLongPressed: ((String) -> Void)? = nil,
+                onBackgroundLongPressChanged: ((CGPoint) -> Void)? = nil,
+                onBackgroundLongPressEnded: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
                 isViewportZoomed: Bool = false,
                 onViewportZoomResetRequested: (() -> Void)? = nil,
@@ -185,6 +194,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundLongPressed = onBackgroundLongPressed
+        self.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        self.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        self.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
         self.isViewportZoomed = isViewportZoomed
         self.onViewportZoomResetRequested = onViewportZoomResetRequested
@@ -248,6 +260,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundLongPressed = onBackgroundLongPressed
+        view.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        view.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        view.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
         view.isViewportZoomed = isViewportZoomed
         view.onViewportZoomResetRequested = onViewportZoomResetRequested
@@ -280,6 +295,13 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // pushing sheets, etc.). This is cheap — just a property assignment.
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
+        // **Remis à jour à CHAQUE passe**, comme `onItemDoubleTapped` juste
+        // au-dessus : une closure posée au seul `makeUIView` capture l'état de
+        // la première composition. L'hôte qui présente le menu de fond lit le
+        // modèle courant — figée, elle agirait sur une slide périmée.
+        uiView.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        uiView.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        uiView.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         uiView.editableKinds = editableKinds
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged

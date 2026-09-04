@@ -97,6 +97,13 @@ public struct EmbeddedSceneCanvas: View {
     /// Appui long sur une zone VIDE de la carte — inerte chez qui ne le
     /// branche pas (le composer l'utilise pour ouvrir la caméra, #4036).
     public var onBackgroundLongPressed: (() -> Void)?
+    /// L'appui long sur un média DE FOND demande son menu (#5041). Sa présence
+    /// est ce qui fait basculer `StoryCanvasBackgroundLongPress` du viseur vers
+    /// le menu : non câblé, le geste garde son comportement d'avant.
+    public var onBackgroundMediaLongPressed: ((String) -> Void)?
+    /// La translation d'un appui long ARMÉ, puis son relâchement (#5041).
+    public var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    public var onBackgroundLongPressEnded: (() -> Void)?
 
     /// **Les bitmaps du composer, keyés par id d'objet média (#4038).**
     ///
@@ -174,6 +181,9 @@ public struct EmbeddedSceneCanvas: View {
         editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
         onBackgroundTapped: (() -> Void)? = nil,
         onBackgroundLongPressed: (() -> Void)? = nil,
+        onBackgroundMediaLongPressed: ((String) -> Void)? = nil,
+        onBackgroundLongPressChanged: ((CGPoint) -> Void)? = nil,
+        onBackgroundLongPressEnded: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
         loadedStickerAnimations: [String: Data] = [:],
         loadedImagesVersion: UInt64 = 0,
@@ -195,6 +205,9 @@ public struct EmbeddedSceneCanvas: View {
         self.editableKinds = editableKinds
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundLongPressed = onBackgroundLongPressed
+        self.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        self.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        self.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         self.loadedImages = loadedImages
         self.loadedStickerAnimations = loadedStickerAnimations
         self.loadedImagesVersion = loadedImagesVersion
@@ -241,6 +254,9 @@ public struct EmbeddedSceneCanvas: View {
                 selectionBadge: selectionBadge,
                 onBackgroundTapped: onBackgroundTapped,
                 onBackgroundLongPressed: onBackgroundLongPressed,
+                onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,
+                onBackgroundLongPressChanged: onBackgroundLongPressChanged,
+                onBackgroundLongPressEnded: onBackgroundLongPressEnded,
                 isDrawingOverlayActive: isDrawingOverlayActive,
                 loadedImages: loadedImages,
                 loadedStickerAnimations: loadedStickerAnimations,

@@ -45,24 +45,52 @@ import SwiftUI
 /// > rangées suit l'ordre des décisions. »
 ///
 /// **`served` n'est PAS `allCases`, et c'est la moitié qui compte.** La planche
-/// en dessine cinq ; deux n'existent nulle part dans le contrat (#5085) — aucun
-/// champ du modèle ne porte un recadrage ni une scission. Les servir ferait
-/// paraître deux outils qui ne changeraient rien, et l'auteur croirait avoir
-/// recadré : la loi 4 bannit exactement cela.
+/// en dessine cinq ; deux restent hors du jeu servi, mais **plus pour la même
+/// raison depuis le 2026-09-04** — et la distinction vaut d'être tenue à jour,
+/// parce qu'un motif périmé se relit comme une raison de ne pas y toucher.
 ///
-/// Les déclarer ici sans les servir dit la CIBLE sans la mentir. Le jour où le
-/// contrat les porte, ils rejoignent `served` et rien d'autre ne bouge.
+/// | outil | ce qui le retient AUJOURD'HUI |
+/// |---|---|
+/// | ✂ COUPER | le contrat, toujours — aucun champ ne porte une scission (#5085) |
+/// | ⌗ RECADRER | **plus le contrat** : `a0f2a86aa9` a posé `MediaCropRect`, `StoryMediaObject.crop`, le round-trip `CanvasV3Migration` et `StoryMediaLayer.applyCrop`. Ce qui reste est #5100 — `aspectRatio` ne sait pas distinguer « carré » de « pas encore mesuré », et sur les chemins vidéo elle arrive de façon asynchrone : taper `9:16` dans cette fenêtre sur une source 16:9 POSERAIT une borne dont le rapport réel vaut 1:1, et elle est persistée. Plus les deux autres clients, qui ne déclarent pas encore `crop` (#5085) |
+///
+/// Le verdict ne change pas — les servir ferait paraître deux outils qui ne
+/// changeraient rien, ou pire, un qui écrirait faux ; la loi 4 bannit les deux.
+/// Seule la RAISON change, et c'est elle qu'un relecteur consulte avant de
+/// décider s'il peut lever le refus.
+///
+/// Les déclarer ici sans les servir dit la CIBLE sans la mentir.
 nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// Les bornes de lecture — existe de bout en bout (`MediaTrimStrip`).
     case trim
     /// Muet et quart de tour — existent tous deux.
     case actions
-    /// ⌗ RECADRER — absent du contrat (#5085).
+    /// ⌗ RECADRER — au contrat depuis `a0f2a86aa9`, retenu par #5100.
     case crop
     /// ✂ COUPER — absent du contrat (#5085).
     case split
+    /// ✦ FILTRE — la teinte de la SLIDE (#5041).
+    ///
+    /// **Servi, contrairement à `crop` et `split`** : `StoryFilterGridView` et
+    /// `StoryComposerViewModel.applyFilter` existent de bout en bout, et
+    /// `EmbeddedSceneInspector` les monte déjà — mais dans l'écran DOCUMENT
+    /// seulement. L'éditeur plein écran, lui, ne les offrait nulle part.
+    ///
+    /// **Sa portée est la SLIDE, pas l'objet**, et c'est dit ici parce que rien
+    /// dans le nom ne le dirait : `applyFilter` écrit `currentEffects.filter`.
+    /// C'est exactement ce que la directive demande — « editer l'image general
+    /// avec filtre » — et c'est déjà la portée que l'inspecteur du document
+    /// sert pour toute sélection `.media`. Un filtre PAR média serait un ajout
+    /// de contrat, de la même nature que recadrer et couper (#5085).
+    case filter
 
-    static let served: [MediaEditTool] = [.trim, .actions]
+    /// **Ce que le rail sert pour un média.** `crop` et `split` restent hors du
+    /// jeu tant que le contrat ne les porte pas (#5085) ; les monter inertes
+    /// ferait croire à l'auteur qu'il a recadré.
+    ///
+    /// Le filtre ouvre la liste parce qu'il agit sur ce qu'on VOIT en premier —
+    /// la teinte de la scène — avant les bornes de lecture et les actions.
+    static let served: [MediaEditTool] = [.filter, .trim, .actions]
 }
 
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
@@ -224,22 +252,43 @@ nonisolated enum ComposerObjectEditorRail {
     /// atteignable, pas le dessin qui doit grossir.
     static let railWidth: CGFloat = 52
 
-    /// **Il n'y a pas de fonction de bascule, et c'est le cœur du lot.**
+    /// **La bascule a été REFUSÉE au #4936, puis RENDUE POSSIBLE au #5027.**
     ///
-    /// La liste dépliante en avait une (`opened(after:from:)`, qui rend `nil`
-    /// quand on retape l'entrée ouverte). Un rail n'en a pas besoin : taper une
-    /// entrée la sélectionne, point. Écrire `selected(after:from:)` aurait donné
-    /// une fonction qui rend son argument — une règle qui ne décide rien.
+    /// Ce qui était écrit ici — « il n'y a pas de fonction de bascule, et c'est
+    /// le cœur du lot » — n'était pas une négligence, et sa raison mérite d'être
+    /// relue avant d'être révoquée :
     ///
-    /// L'invariant « le bas n'est jamais vide » est donc porté par le **TYPE**,
-    /// pas par une garde : l'état de sélection de la vue est un
-    /// `ComposerObjectEditorSection` NON optionnel, ce qui rend le vide
-    /// irreprésentable. Une garde peut être oubliée à un site d'appel ; un type
-    /// qui ne sait pas exprimer l'état interdit ne peut pas l'être.
+    /// > « Un rail n'en a pas besoin : taper une entrée la sélectionne, point.
+    /// > […] L'invariant "le bas n'est jamais vide" est porté par le TYPE :
+    /// > l'état de sélection est un `ComposerObjectEditorSection` NON optionnel,
+    /// > ce qui rend le vide irreprésentable. »
     ///
-    /// > C'est la forme forte de la loi 4 : plutôt que de vérifier qu'un
-    /// > contrôle a toujours un effet, on retire au modèle le moyen de dire
-    /// > qu'il n'en a pas.
+    /// Ce raisonnement liait deux choses qui ne le sont plus. Replier exigeait
+    /// alors de **vider la sélection**, donc de rejouer le défaut que cet écran
+    /// existe pour fermer. Le #5027 a séparé les deux faits : `optionsAreCollapsed`
+    /// est un fait d'AFFICHAGE, posé à côté de la sélection et jamais à sa
+    /// place. L'outil reste choisi pendant que son panneau se range.
+    ///
+    /// > **Une bascule refusée parce qu'elle casserait un invariant cesse de le
+    /// > casser le jour où l'état qu'elle demandait existe ailleurs.** L'invariant
+    /// > du #4936 n'est pas levé ici — il reste vrai, et c'est très exactement ce
+    /// > qui rend la bascule sûre. La question à poser à un refus documenté n'est
+    /// > donc pas « la raison était-elle bonne ? » mais **« tient-elle encore
+    /// > dans le monde d'aujourd'hui ? »**
+    ///
+    /// > Directive porteur 2026-09-04 : « Lorsqu'on active un outil le retoucher
+    /// > le desactive et ses options se cachent. »
+    ///
+    /// Le geste ne vaut que sur l'entrée DÉJÀ ouverte. Taper une autre entrée
+    /// déplie toujours : choisir un outil dit qu'on veut le régler, et laisser
+    /// son panneau rangé rendrait le rail muet — c'est ce qui distingue une
+    /// bascule d'un interrupteur global.
+    static func collapsed(afterTapping tapped: ComposerObjectEditorSection,
+                          selected: ComposerObjectEditorSection,
+                          wasCollapsed: Bool) -> Bool {
+        guard tapped == selected else { return false }
+        return !wasCollapsed
+    }
 
     /// **L'outil qui reste sélectionné quand la FAMILLE change** (#4937).
     ///
@@ -293,6 +342,7 @@ nonisolated enum ComposerObjectEditorRail {
             case .actions: return "slider.horizontal.3"
             case .crop:    return "crop"
             case .split:   return "square.split.2x1"
+            case .filter:  return "camera.filters"
             }
         case .tool(let outil):
             switch outil {
