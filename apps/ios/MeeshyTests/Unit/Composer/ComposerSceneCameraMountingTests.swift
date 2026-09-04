@@ -32,39 +32,109 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    /// **L'aperçu est monté, et il occupe la CARTE.** `aspectRatio(…, .fit)`
-    /// dans le repère du canvas reproduit exactement le rectangle du dessin —
-    /// sans lui, l'aperçu remplirait la frame, letterbox compris, et déborderait
-    /// sur les couloirs où vivent les rails.
-    func test_laSurface_monteLAperçuAuxDimensionsDuDessin() throws {
-        let code = compact(try source("ComposerSceneSurface.swift"))
-        XCTAssertTrue(code.contains("CameraPreviewLayer(session:cameraSession)"),
-                      "la scène doit monter l'aperçu — sans consommateur, la session ne se voit nulle part")
-        XCTAssertTrue(code.contains("aspectRatio(aspectRatio,contentMode:.fit)"),
-                      "l'aperçu occupe la CARTE, pas la frame : sinon il couvre les couloirs")
+    /// **La surface PUBLIE sa géométrie ; le MEUBLE monte l'aperçu.**
+    ///
+    /// Le viseur avait DEUX montages — la carte et un overlay de plein écran —
+    /// qui se remplaçaient l'un l'autre. Une `AVCaptureVideoPreviewLayer`
+    /// neuve doit attendre sa première image : la bascule jouait donc son
+    /// fondu sur du noir, et c'est le « trop de temps » que le porteur a
+    /// mesuré le 2026-09-04. Aucune courbe d'animation ne rattrape un aperçu
+    /// qu'on détruit.
+    ///
+    /// Ce témoin tient les DEUX moitiés du correctif, parce qu'aucune ne vaut
+    /// sans l'autre : la surface ne peint plus, et le meuble peint une fois.
+    func test_laSurfacePublieSaGéométrie_etNeMonteAucunAperçu() throws {
+        let surface = compact(try source("ComposerSceneSurface.swift"))
+        XCTAssertTrue(surface.contains("anchorPreference(key:ComposerSceneCameraFrameKey.self"),
+                      "la surface doit publier OÙ elle dessine — c'est ce que le meuble ignore")
+        XCTAssertTrue(surface.contains("aspectRatio(aspectRatio,contentMode:.fit)"),
+                      "l'ancre porte le DESSIN, pas la frame : sinon le viseur couvre les couloirs")
+        XCTAssertFalse(surface.contains("CameraPreviewLayer("),
+                       "deux montages = un aperçu détruit puis reconstruit à chaque bascule")
+        XCTAssertFalse(surface.contains("ComposerSceneCameraBar("),
+                       "le chrome suit l'aperçu : le laisser ici en ferait deux")
     }
 
-    /// **Il ne prend AUCUN doigt.** Les gestes de la scène — déplacer, pincer,
-    /// et l'appui long qui vient d'armer ce viseur — doivent continuer
-    /// d'atteindre le canvas dessous. Un aperçu qui capte le toucher rendrait
-    /// la scène morte au moment où elle devient une caméra.
+    /// **Un seul `CameraPreviewLayer` dans tout le composer.** Le témoin
+    /// ci-dessus prouve que la surface n'en monte plus ; celui-ci prouve qu'il
+    /// n'a pas simplement DÉMÉNAGÉ en double.
+    func test_leComposer_neMonteQuUnSeulAperçu() throws {
+        let dossier = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer")
+        let fichiers = try FileManager.default
+            .contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+        var montages: [String] = []
+        for fichier in fichiers {
+            let code = compact(AppSourceGuard.stripComments(
+                try String(contentsOf: fichier, encoding: .utf8)))
+            let occurrences = code.components(separatedBy: "CameraPreviewLayer(session:").count - 1
+            montages.append(contentsOf: Array(repeating: fichier.lastPathComponent,
+                                              count: occurrences))
+        }
+        XCTAssertEqual(montages, ["MeeshyComposerHost+Viewfinder.swift"],
+                       "un aperçu qui se remplace ne peut pas grandir fluidement")
+    }
+
+    /// **Il ne prend AUCUN doigt.** L'appui long qui a armé ce viseur est
+    /// toujours en cours SOUS lui — c'est sa levée qui décidera photo ou
+    /// vidéo. Un aperçu qui capte le toucher couperait le geste en deux.
     func test_lAperçu_neCapteAucunGeste() throws {
-        XCTAssertTrue(compact(try source("ComposerSceneSurface.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        guard let début = code.range(of: "funcsceneCameraPreview(rect:CGRect)"),
+              let fin = code.range(of: "funcsceneCameraChrome(", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("l'aperçu ou le chrome a changé de nom") }
+        XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
             .contains("allowsHitTesting(false)"))
     }
 
-    /// **La session ne part que si le viseur est armé.** Sans ce gate, la
-    /// surface recevrait une session éteinte et monterait un aperçu noir
-    /// permanent par-dessus la scène — la panne exactement inverse de celle
-    /// qu'on corrige, et impossible à distinguer d'un fond noir légitime.
-    func test_leMeuble_neRemetLaSession_queSiLeViseurEstArmé() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
-        let code = compact(AppSourceGuard.stripComments(
-            try String(contentsOf: url, encoding: .utf8)))
-        XCTAssertTrue(code.contains("cameraSession:sceneCameraStage==.off?nil:sceneCamera.session"))
+    /// **Le plein écran couvre le SOCLE.** C'est le deuxième reproche du
+    /// porteur — « sans la rangée en bas d'audience et publier » — et sa cause
+    /// n'était pas un ordre de couches : le socle est le FRÈRE de la surface
+    /// dans la `VStack` du meuble, et un overlay ne couvre jamais son frère.
+    /// Le viseur doit donc ENVELOPPER la pile, pas se poser dessus.
+    func test_leViseur_enveloppeLaPile_socleCompris() throws {
+        let code = compact(try source("MeeshyComposerHost.swift"))
+        XCTAssertTrue(code.contains("withSceneCameraViewfinder(composerStack)"),
+                      "posé APRÈS le socle, le viseur ne l'aurait jamais couvert")
+        guard let début = code.range(of: "varcomposerStack:someView{"),
+              let fin = code.range(of: "varbody:someView{", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("la pile ou le body a changé de nom") }
+        XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound]).contains("socle"),
+                      "le socle doit être DANS ce que le viseur enveloppe")
+    }
+
+    /// **Le chrome respecte les marges système, l'image non.** Troisième
+    /// reproche du porteur : « les icônes de réduction, fermeture accessibles
+    /// et non au niveau de la barre système ». Les deux couches lisent la même
+    /// ancre — l'une en ignorant les marges, l'autre pas —, et c'est cet écart
+    /// qui les distingue. Une seule couche ne peut pas tenir les deux.
+    func test_lImageIgnoreLesMarges_quandLeChromeLesRespecte() throws {
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        guard let début = code.range(of: "funcwithSceneCameraViewfinder"),
+              let fin = code.range(of: "varsceneCameraGrowth", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("le montage a changé de nom") }
+        let corps = String(code[début.upperBound..<fin.lowerBound])
+        XCTAssertEqual(corps.components(separatedBy: "overlayPreferenceValue(ComposerSceneCameraFrameKey.self)").count - 1, 2,
+                       "deux couches, une par repère")
+        XCTAssertEqual(corps.components(separatedBy: "ignoresSafeArea()").count - 1, 1,
+                       "l'image seule ignore les marges — le chrome y serait sous l'encoche")
+        XCTAssertTrue(corps.range(of: "sceneCameraPreview(")!.lowerBound
+                      < corps.range(of: "ignoresSafeArea()")!.lowerBound,
+                      "c'est la couche de l'IMAGE qui ignore, pas celle du chrome")
+    }
+
+    /// **Rien ne se peint quand rien n'est armé.** Sans ce gate, le meuble
+    /// monterait un aperçu noir permanent par-dessus la scène — la panne
+    /// exactement inverse de celle qu'on corrige, et indiscernable d'un fond
+    /// noir légitime.
+    func test_leMeuble_nePeintLeViseur_queSiLeStageEstArmé() throws {
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        XCTAssertEqual(code.components(separatedBy: "sceneCameraStage != .off"
+            .replacingOccurrences(of: " ", with: "")).count - 1, 2,
+                       "les DEUX couches doivent porter le gate — une seule laisserait un chrome orphelin")
     }
 
     /// **Le geste n'ouvre plus de PORTAIL.** C'est la moitié qui se voit à
@@ -72,7 +142,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// l'appui long posait `presentedPortal = .camera` et la scène disparaissait
     /// sous une feuille modale au moment précis où l'auteur cadrait.
     func test_lAppuiLong_armeLaScène_etNOuvreAucunPortail() throws {
-        let code = compact(try source("MeeshyComposerHost.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         XCTAssertTrue(code.contains("funchandleSceneCaptureLongPress(){"))
         XCTAssertTrue(code.contains("armSceneCamera()"),
                       "le geste doit ARMER la scène")
@@ -99,7 +169,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
         let code = compact(AppSourceGuard.stripComments(
             try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(code.contains("funcposeSceneCapture(_result:CameraResult)"))
@@ -130,7 +200,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// session se ferme. La règle vient de la loi, jamais d'un `.off` écrit
     /// dans le meuble.
     func test_aprèsLaPose_leViseurSeRetire_etLaSessionSeFerme() throws {
-        let code = compact(try source("MeeshyComposerHost.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         XCTAssertTrue(code.contains("sceneCameraStage=ComposerSceneCamera.stageAfterCapture"))
         XCTAssertEqual(ComposerSceneCamera.stageAfterCapture, .off)
     }
@@ -150,8 +220,8 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
             try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(code.contains("collectSceneSegment(url)"),
                       "une vidéo doit rejoindre les segments, pas la scène")
-        XCTAssertTrue(code.contains("poseSceneCapture(.photo(image))"),
-                      "une photo se pose tout de suite")
+        XCTAssertTrue(code.contains("poseSceneCapture(.photo(image,data:sceneCamera.capturedPhotoData))"),
+                      "une photo se pose tout de suite — AVEC ses octets d'origine, qui portent l'EXIF")
     }
 
     /// **La durée est saisie AU RELÂCHEMENT, pas à l'arrivée du fichier.**
@@ -161,7 +231,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// zéro pour tous les segments sauf le dernier — un écart qui ne casse rien
     /// et fait mentir toute la bande, donc que rien ne signalerait.
     func test_laDuréeDuSegment_estSaisieAuRelâchement() throws {
-        let code = compact(try source("MeeshyComposerHost.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         // Le geste unique (#5074) a renommé `releaseSceneShutter` en
         // `closeSceneTake` : la CLÔTURE n'est plus toujours un relâchement —
         // sur une prise verrouillée, c'est un second appui. Ce que le témoin
@@ -184,7 +254,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// l'auteur croyait avoir jetés. C'est la fuite qui se voit, pas celle qui
     /// coûte de l'espace.
     func test_désarmer_effaceLesSegmentsEtLeursFichiers() throws {
-        let code = compact(try source("MeeshyComposerHost.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         guard let début = code.range(of: "funcdisarmSceneCamera(){"),
               let fin = code.range(of: "funcdiscardSceneSegments()", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le désarmement ou la purge a changé de nom") }
@@ -199,7 +269,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// scène rendue est un voyant allumé que rien à l'écran n'explique — et sur
     /// un appareil réel, une batterie qui se vide.
     func test_désarmer_fermeLaSession() throws {
-        let code = compact(try source("MeeshyComposerHost.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         XCTAssertTrue(code.contains("funcdisarmSceneCamera(){"))
         XCTAssertTrue(code.contains("sceneCamera.stop()"))
     }
@@ -236,7 +306,7 @@ final class ComposerSceneCameraPosingTests: XCTestCase {
     /// poser plus tard le ferait arriver après lui — le défaut que #4879 a
     /// fermé pour les quatre autres portes, rejoué par la cinquième.
     func test_armer_marqueLeRail_pourQueLaPriseAtterrisseSurLaScène() throws {
-        let code = compact(try source("MeeshyComposerHost.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         guard let début = code.range(of: "funcarmSceneCamera(){"),
               let fin = code.range(of: "funcdisarmSceneCamera()", range: début.upperBound..<code.endIndex)
         else { return XCTFail("l'armement ou le désarmement a changé de nom") }
@@ -249,7 +319,7 @@ final class ComposerSceneCameraPosingTests: XCTestCase {
     /// la scène le prochain média venu d'une autre porte — un lot suivant qui
     /// n'a rien demandé, et un défaut qui se manifesterait loin d'ici.
     func test_désarmer_retireLaMarque() throws {
-        let code = compact(try source("MeeshyComposerHost.swift"))
+        let code = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
         guard let début = code.range(of: "funcdisarmSceneCamera(){"),
               let fin = code.range(of: "funcdiscardSceneSegments()", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le désarmement ou la purge a changé de nom") }
