@@ -33,6 +33,34 @@ nonisolated enum ComposerCaptureSegments {
 
     /// **`✓` n'existe que s'il y a quelque chose à poser** (loi 4). Offert sur
     /// une prise vide, il rendrait une scène inchangée après un geste explicite
+
+    /// **Ce que le chrono AFFICHE, prise en cours comprise.**
+    ///
+    /// Directive porteur du 2026-09-04 : « si on a un vrai longpress ça
+    /// déclenche la capture vidéo **avec le chrono et indicateur** ».
+    ///
+    /// `totalDuration` ne compte que les segments CLOS — c'est sa définition, et
+    /// elle est juste : un segment n'a de durée qu'une fois refermé. Un chrono
+    /// bâti dessus reste donc **figé pendant toute la prise** et ne repart qu'au
+    /// relâchement, c'est-à-dire au moment exact où il cesse de servir. Le
+    /// défaut ne se voit pas sur une scène sans segment : à zéro plus zéro, un
+    /// chrono mort et un chrono juste affichent la même chose.
+    ///
+    /// La somme se fait ICI et non dans la barre pour que le « + » soit
+    /// éprouvable sans monter une vue — et pour qu'il n'existe qu'une fois : la
+    /// barre de la carte et celle du plein écran sont la même vue depuis le
+    /// 2026-09-04, mais rien ne garantissait qu'elles le restent.
+    ///
+    /// - Parameter live: la durée de la prise EN COURS. Elle n'entre que si la
+    ///   prise est en cours : hors enregistrement, `CameraModel` garde la
+    ///   dernière valeur atteinte, et l'ajouter compterait deux fois le segment
+    ///   qui vient d'être clos.
+    static func elapsed(segments: [ComposerCaptureSegment],
+                        live: TimeInterval,
+                        recording: Bool) -> TimeInterval {
+        totalDuration(segments) + (recording ? max(0, live) : 0)
+    }
+
     /// de validation — le pire des retours, parce qu'il ressemble à une panne.
     static func canValidate(_ segments: [ComposerCaptureSegment]) -> Bool {
         !segments.isEmpty

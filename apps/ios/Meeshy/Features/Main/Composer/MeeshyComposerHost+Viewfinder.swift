@@ -341,7 +341,12 @@ extension MeeshyComposerHost {
                 onToggleSize: { sceneCameraSize = sceneCameraSize.toggled },
                 segments: sceneSegments,
                 onDropLastSegment: { dropLastSceneSegment() },
-                onValidateSegments: { validateSceneSegments() })
+                onValidateSegments: { validateSceneSegments() },
+                // L'horloge de la prise en cours. Sans elle, le chrono ne
+                // comptait que les segments CLOS — donc restait figé pendant
+                // toute la prise et ne repartait qu'au relâchement, au moment
+                // exact où il cesse de servir.
+                liveDuration: sceneCamera.recordingDuration)
         }
         .frame(width: rect.width, height: rect.height)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: sceneCameraDismissDrag))

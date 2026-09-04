@@ -76,4 +76,43 @@ final class ComposerCaptureSegmentsTests: XCTestCase {
         XCTAssertFalse(ComposerCaptureSegments.needsMerge([]))
         XCTAssertTrue(ComposerCaptureSegments.needsMerge([seg(1, "a"), seg(1, "b")]))
     }
+
+    // MARK: - Le chrono, prise en cours comprise (porteur 2026-09-04)
+
+    /// **Le défaut ne se voyait pas sur une scène vierge** : à zéro plus zéro,
+    /// un chrono mort et un chrono juste affichent la même chose. Le témoin se
+    /// pose donc là où les deux mondes divergent — une prise EN COURS.
+    func test_pendantLaPrise_leChronoCompteLHorlogeVivante() {
+        XCTAssertEqual(
+            ComposerCaptureSegments.elapsed(segments: [], live: 3.5, recording: true),
+            3.5, accuracy: 0.001)
+    }
+
+    func test_horsPrise_lHorlogeVivanteNEntrePas() {
+        // `CameraModel.recordingDuration` GARDE sa dernière valeur après
+        // l'arrêt : l'ajouter compterait deux fois le segment qui vient d'être
+        // clos, et le chrono sauterait au relâchement.
+        XCTAssertEqual(
+            ComposerCaptureSegments.elapsed(segments: [], live: 3.5, recording: false),
+            0, accuracy: 0.001)
+    }
+
+    func test_pendantLaPrise_lesSegmentsClosEtLHorlogeSAdditionnent() {
+        let clos = [seg(2, "a"), seg(4, "b")]
+        XCTAssertEqual(
+            ComposerCaptureSegments.elapsed(segments: clos, live: 1.5, recording: true),
+            7.5, accuracy: 0.001)
+        XCTAssertEqual(
+            ComposerCaptureSegments.elapsed(segments: clos, live: 1.5, recording: false),
+            6, accuracy: 0.001)
+    }
+
+    /// Une horloge négative n'a aucun sens et viendrait d'un défaut ailleurs ;
+    /// la faire SOUSTRAIRE des segments déjà clos en ferait un second.
+    func test_uneHorlogeNégative_nEnlèveRienAuxSegmentsClos() {
+        XCTAssertEqual(
+            ComposerCaptureSegments.elapsed(
+                segments: [seg(5, "a")], live: -9, recording: true),
+            5, accuracy: 0.001)
+    }
 }

@@ -54,9 +54,24 @@ struct ComposerSceneCameraBar: View {
     let onDropLastSegment: () -> Void
     let onValidateSegments: () -> Void
 
+    /// **La durée de la prise EN COURS**, remise par le meuble depuis
+    /// `CameraModel.recordingDuration`.
+    ///
+    /// Elle est distincte des `segments` parce qu'elle n'a pas la même NATURE :
+    /// un segment est une prise CLOSE, avec un fichier et une durée arrêtée ;
+    /// ceci est une horloge qui court. Les additionner est la règle
+    /// (`ComposerCaptureSegments.elapsed`), et la barre ne fait que l'appeler —
+    /// le « + » écrit ici n'aurait été éprouvable qu'en montant une vue.
+    var liveDuration: TimeInterval = 0
+
     /// L'instant du poser de doigt. `nil` ⇒ aucun doigt. C'est lui qui fait la
     /// différence entre une photo et une prise, et il ne peut pas vivre
     /// ailleurs : la vue est le seul endroit qui voit le doigt.
+    /// La pulsation du témoin d'enregistrement. Elle vit dans la vue parce
+    /// qu'elle ne décrit RIEN du modèle : c'est une animation, et une animation
+    /// rangée dans l'état métier se rejoue à chaque changement de ce dernier.
+    @State private var recordingBlink: Double = 1
+
     @State private var pressedAt: Date?
     @State private var locked = false
     @State private var holdTask: Task<Void, Never>?
@@ -151,9 +166,24 @@ struct ComposerSceneCameraBar: View {
 
             HStack(spacing: 8) {
                 HStack(spacing: 5) {
-                    Circle().fill(MeeshyColors.error).frame(width: 6, height: 6)
+                    // **Le témoin d'enregistrement BAT.** Un point rouge fixe
+                    // ne distingue pas « ça tourne » de « il y a des segments »
+                    // — et c'est précisément la confusion que le chrono figé
+                    // entretenait.
+                    Circle()
+                        .fill(MeeshyColors.error)
+                        .frame(width: 6, height: 6)
+                        .opacity(stage == .recording ? recordingBlink : 1)
+                        .animation(stage == .recording
+                                   ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
+                                   : .default,
+                                   value: recordingBlink)
+                        .onAppear { recordingBlink = 0.25 }
                     Text(LocalizedNumber.duration(
-                        seconds: ComposerCaptureSegments.totalDuration(segments)))
+                        seconds: ComposerCaptureSegments.elapsed(
+                            segments: segments,
+                            live: liveDuration,
+                            recording: stage == .recording)))
                         .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)
                 }

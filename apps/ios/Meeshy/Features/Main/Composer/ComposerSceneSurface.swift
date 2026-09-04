@@ -21,16 +21,16 @@ import MeeshyUI
 ///
 /// Une scène n'est pas un document avec une image. Elle a ses portes, ses
 /// contrôleurs, sa géométrie et sa description ; les loger dans le document
-/// obligeait ce dernier à savoir ce qu'est un `MeeshyObject`.
+/// obligeait ce dernier à savoir ce qu'est un `MeeshySceneObject`.
 ///
 /// ## Ce qu'elle porte, et sur quel niveau du modèle
 ///
 /// | zone | niveau |
 /// |---|---|
 /// | barre haute (`ComposerTopBar`) | la `MeeshyPublication` |
-/// | rail *leading* — les portes | crée un `MeeshyObject` (sauf « description ») |
+/// | rail *leading* — les portes | crée un `MeeshySceneObject` (sauf « description ») |
 /// | la scène 9:16, encastrée | une `MeeshyScene` |
-/// | rail *trailing* — les contrôleurs | UN `MeeshyObject` |
+/// | rail *trailing* — les contrôleurs | UN `MeeshySceneObject` |
 /// | la description | la `MeeshySlide` |
 ///
 /// Le SOCLE n'est pas ici : il vit au meuble, sous les trois surfaces, et ne
@@ -97,6 +97,20 @@ struct ComposerSceneSurface: View {
     /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, planche
     /// `2b`). L'hôte décide du mode ; la surface ne fait que transmettre.
     var onBackgroundLongPressed: (() -> Void)?
+
+    /// **L'appui long sur un média DE FOND demande son MENU** (#5041).
+    ///
+    /// Distinct du jumeau ci-dessus, qui appartient au viseur : une scène qui
+    /// porte un fond n'est pas vide. Tant que le meuble ne le branche pas, la
+    /// règle du canvas (`StoryCanvasBackgroundLongPress`) retombe sur le viseur
+    /// — le geste ne devient jamais muet en attendant son hôte.
+    var onBackgroundMediaLongPressed: ((String) -> Void)?
+
+    /// **La durée d'un appui long ARMÉ** (#5041) : la translation pendant qu'on
+    /// tient, puis le relâchement. Le `.began` seul ouvrait un objectif ; ces
+    /// deux-là permettent de TENIR une prise.
+    var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    var onBackgroundLongPressEnded: (() -> Void)?
 
     /// **L'étape du viseur — la seule chose que la scène ait encore besoin de
     /// savoir de la caméra** (directive porteur 2026-09-04).
@@ -604,6 +618,9 @@ struct ComposerSceneSurface: View {
                     editableKinds: editableSceneKinds,
                     onBackgroundTapped: onBackgroundTapped,
                     onBackgroundLongPressed: onBackgroundLongPressed,
+                    onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,
+                    onBackgroundLongPressChanged: onBackgroundLongPressChanged,
+                    onBackgroundLongPressEnded: onBackgroundLongPressEnded,
                     loadedImages: sceneImages,
                     loadedStickerAnimations: sceneStickerAnimations,
                     loadedImagesVersion: sceneImagesVersion,
