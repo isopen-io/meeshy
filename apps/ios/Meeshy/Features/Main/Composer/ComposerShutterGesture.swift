@@ -22,11 +22,21 @@ nonisolated enum ComposerShutterGesture {
 
     /// Au-delà de ce temps, l'appui n'est plus une photo mais une prise vidéo.
     ///
-    /// 0,35 s : au-dessus du double-tap système (0,25 s) pour qu'un appui vif
-    /// reste une photo, en dessous du long-press SwiftUI (0,5 s) pour que la
-    /// vidéo démarre avant que le doigt ne se demande s'il s'est passé quelque
-    /// chose.
-    static let holdToFilm: TimeInterval = 0.35
+    /// **0,8 s depuis la directive porteur du 2026-09-04.**
+    ///
+    /// > « lorsqu'on a un touché un peu long et on lâche, une photo doit être
+    /// > prise (armement, visé, prise de photo) ; si le temps de prise de photo
+    /// > est dépassé, la vidéo est déclenchée »
+    ///
+    /// Le seuil valait 0,35 s, calé sur les seuils SYSTÈME (au-dessus du
+    /// double-tap, en dessous du long-press). C'était raisonner sur la
+    /// mécanique du geste et non sur son INTENTION : viser demande du temps, et
+    /// un photographe qui cadre tient le doigt bien au-delà d'une demi-seconde.
+    /// À 0,35 s, toute photo un peu réfléchie partait en vidéo.
+    ///
+    /// 0,8 s laisse le temps de viser, et reste assez court pour qu'une vidéo
+    /// démarre sans que le doigt se demande s'il s'est passé quelque chose.
+    static let holdToFilm: TimeInterval = 0.8
 
     /// De combien il faut glisser VERS LA DROITE, sans relâcher, pour
     /// verrouiller la prise (directive porteur 2026-09-04).

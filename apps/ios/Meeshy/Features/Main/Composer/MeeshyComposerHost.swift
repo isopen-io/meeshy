@@ -346,6 +346,11 @@ struct MeeshyComposerHost: View {
     /// `pendingCameraMode`, qui est reposé à chaque ouverture.
     @State var sceneCameraMode: ComposerSceneCameraMode?
 
+    /// La taille du viseur. REPOSÉE à chaque armement : un plein écran qui
+    /// survivrait ferait naître le viseur suivant dans un état que rien à
+    /// l'écran n'annonce — même raison que `pendingCameraMode`.
+    @State var sceneCameraSize: ComposerSceneCameraSize = .card
+
     /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
     ///
     /// `@StateObject` et non `.shared` : un bake appartient à CETTE
@@ -845,6 +850,7 @@ struct MeeshyComposerHost: View {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
         sceneCameraMode = mode
         sceneCameraStage = .armed
+        sceneCameraSize = .card
         // **Ce que le viseur prend appartient à la SCÈNE** (#4080, planche
         // `2b` : « ce qu'elle rend est posé dans la scène courante »).
         //
@@ -979,6 +985,7 @@ struct MeeshyComposerHost: View {
     /// allumé que rien à l'écran n'explique.
     func disarmSceneCamera() {
         sceneCameraStage = .off
+        sceneCameraSize = .card
         sceneCameraMode = nil
         // Quitter sans prendre RETIRE la marque : laissée posée, elle
         // classerait sur la scène le prochain média venu d'une AUTRE porte —

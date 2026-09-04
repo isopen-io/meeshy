@@ -115,6 +115,12 @@ struct ComposerSceneSurface: View {
     /// NOIRE — indiscernable d'une scène vide ou d'une caméra en panne.
     var cameraPermission: MediaPermissionState = .notDetermined
 
+    /// La taille du viseur — carte ou plein écran (directive porteur
+    /// 2026-09-04). La règle `ComposerSceneCameraSize` décide de ce que chaque
+    /// taille SERT ; cette vue ne fait que la relayer.
+    var cameraSize: ComposerSceneCameraSize = .card
+    var onToggleCameraSize: (() -> Void)?
+
     /// Les pastilles SERVIES et celle qui est choisie — résolues par le meuble
     /// (`ComposerSceneCamera.modes(for:)`), jamais recalculées ici.
     var cameraMode: ComposerSceneCameraMode = .photo
@@ -662,8 +668,13 @@ struct ComposerSceneSurface: View {
                     // scène vide — l'auteur cherchait un défaut là où il n'y
                     // avait qu'une case à cocher. La règle décide ; cette vue
                     // peint.
-                    switch ComposerSceneCameraSurface.shown(stage: cameraStage,
-                                                            permission: cameraPermission) {
+                    switch ComposerSceneCameraSurface.shown(
+                        // En plein écran, la carte ne peint plus le viseur —
+                        // c'est l'écran entier qui s'en charge, et le peindre
+                        // aux deux endroits ferait tourner deux aperçus sur la
+                        // même session.
+                        stage: cameraSize == .fullScreen ? .off : cameraStage,
+                        permission: cameraPermission) {
                     case .scene:
                         EmptyView()
                     case .viewfinder:
@@ -836,7 +847,7 @@ struct ComposerSceneSurface: View {
                 // c'est-à-dire hors de la scène — exactement ce que la
                 // directive corrige.
                 .overlay {
-                    if cameraStage != .off {
+                    if cameraStage != .off, cameraSize == .card {
                         ancreDansLeDessin(
                             ComposerSceneCameraBar(
                                 stage: cameraStage,
@@ -849,6 +860,8 @@ struct ComposerSceneSurface: View {
                                 onCycleFlash: { onCycleCameraFlash?() },
                                 onFlipCamera: { onFlipCamera?() },
                                 onDisarm: { onDisarmCamera?() },
+                                size: cameraSize,
+                                onToggleSize: { onToggleCameraSize?() },
                                 segments: cameraSegments,
                                 onDropLastSegment: { onDropLastSegment?() },
                                 onValidateSegments: { onValidateSegments?() }))
@@ -1018,6 +1031,50 @@ struct ComposerSceneSurface: View {
 
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        // **Le plein écran sort de la carte** (directive porteur 2026-09-04 :
+        // « il faut mettre [ ] plutôt pour passer en full screen entièrement »).
+        //
+        // Posé sur TOUTE la surface, pas sur le canvas : le viseur y couvre le
+        // plateau, ses rails et son socle — c'est le sens de « entièrement ». La
+        // carte, elle, cesse de peindre le viseur pendant ce temps ; deux
+        // aperçus sur une seule session en rendraient un noir sans rien dire.
+        .overlay {
+            if cameraStage != .off, cameraSize == .fullScreen {
+                ZStack {
+                    Color.black
+                    switch ComposerSceneCameraSurface.shown(stage: cameraStage,
+                                                            permission: cameraPermission) {
+                    case .scene:
+                        EmptyView()
+                    case .viewfinder:
+                        if let cameraSession {
+                            CameraPreviewLayer(session: cameraSession)
+                                .allowsHitTesting(false)
+                        }
+                    case .permissionRefused:
+                        CameraPermissionPanel()
+                    }
+                    ComposerSceneCameraBar(
+                        stage: cameraStage,
+                        mode: cameraMode,
+                        onPhoto: { onCameraPhoto?() },
+                        onStartFilming: { onCameraStartFilming?() },
+                        onLock: { onCameraLock?() },
+                        onCloseTake: { onCameraCloseTake?() },
+                        flashMode: cameraFlash,
+                        onCycleFlash: { onCycleCameraFlash?() },
+                        onFlipCamera: { onFlipCamera?() },
+                        onDisarm: { onDisarmCamera?() },
+                        size: cameraSize,
+                        onToggleSize: { onToggleCameraSize?() },
+                        segments: cameraSegments,
+                        onDropLastSegment: { onDropLastSegment?() },
+                        onValidateSegments: { onValidateSegments?() })
+                }
+                .ignoresSafeArea()
+                .transition(.opacity)
+            }
         }
         .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
         .onPreferenceChange(ComposerSceneCardBottomKey.self) { sceneCardBottom = $0 }

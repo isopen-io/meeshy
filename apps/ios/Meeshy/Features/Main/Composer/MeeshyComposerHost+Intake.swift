@@ -902,7 +902,14 @@ extension MeeshyComposerHost {
     func ingestCameraCapture(_ result: CameraResult) async {
         switch result {
         case .photo(let image):
-            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+            // **Redressée AVANT l'encodage** (#4080) : `jpegData` écrit le
+            // tampon de pixels tel quel, sans appliquer `imageOrientation` ni
+            // écrire d'EXIF. L'appareil rend toujours un tampon en PAYSAGE, et
+            // c'est l'orientation — perdue ici — qui le redressait à l'écran.
+            // Le défaut naît à l'écriture et ne se voit qu'un cran plus loin,
+            // chez le consommateur du fichier.
+            let redressée = ComposerCaptureOrientation.upright(image)
+            guard let data = redressée.jpegData(compressionQuality: 0.9) else { return }
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
             guard (try? data.write(to: url)) != nil else { return }

@@ -61,13 +61,29 @@ final class ComposerShutterGestureTests: XCTestCase {
                        "revenir en arrière ANNULE — c'est la moitié qui compte")
     }
 
-    /// **Les deux seuils ne se confondent pas avec ceux du système.** Au-dessus
-    /// du double-tap (0,25 s), en dessous du long-press SwiftUI (0,5 s) : un
-    /// appui vif reste une photo, et la vidéo démarre avant que le doigt ne se
-    /// demande s'il s'est passé quelque chose.
-    func test_leSeuilDeMaintien_vitEntreLesDeuxSeuilsSystème() {
-        XCTAssertGreaterThan(ComposerShutterGesture.holdToFilm, 0.25)
-        XCTAssertLessThan(ComposerShutterGesture.holdToFilm, 0.5)
+    /// **Le seuil se règle sur l'INTENTION, pas sur les seuils système.**
+    ///
+    /// Il valait 0,35 s, calé entre le double-tap et le long-press — un
+    /// raisonnement sur la mécanique du geste. Mais viser demande du temps, et
+    /// un photographe qui cadre tient le doigt bien au-delà d'une demi-seconde :
+    /// toute photo un peu réfléchie partait en vidéo (directive porteur
+    /// 2026-09-04).
+    ///
+    /// Le témoin épingle donc un PLANCHER généreux, pas une fenêtre étroite —
+    /// et il tomberait si quelqu'un rabaissait le seuil sur l'argument système,
+    /// qui est celui d'où l'on vient.
+    func test_leSeuil_laisseLeTempsDeViser() {
+        XCTAssertGreaterThanOrEqual(ComposerShutterGesture.holdToFilm, 0.7,
+                                    "sous 0,7 s, une photo visée part en vidéo")
+        XCTAssertLessThanOrEqual(ComposerShutterGesture.holdToFilm, 1.2,
+                                 "au-delà, le doigt se demande s'il s'est passé quelque chose")
+    }
+
+    /// **Un touché « un peu long » reste une PHOTO** — c'est la phrase même de
+    /// la directive, et le cas que l'ancien seuil trahissait.
+    func test_unTouchéUnPeuLong_resteUnePhoto() {
+        XCTAssertEqual(ComposerShutterGesture.outcome(heldFor: 0.5, locked: false), .photo)
+        XCTAssertEqual(ComposerShutterGesture.outcome(heldFor: 0.7, locked: false), .photo)
     }
 
     /// Tenue ou verrouillée, c'est une VIDÉO dans les deux cas : la différence

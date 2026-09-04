@@ -44,6 +44,12 @@ struct ComposerSceneCameraBar: View {
     let onFlipCamera: () -> Void
     let onDisarm: () -> Void
 
+    /// La taille courante, et ce qu'un appui sur `[ ]` produit. La règle
+    /// (`ComposerSceneCameraSize`) décide du glyphe et de qui montre la croix ;
+    /// cette vue peint.
+    let size: ComposerSceneCameraSize
+    let onToggleSize: () -> Void
+
     let segments: [ComposerCaptureSegment]
     let onDropLastSegment: () -> Void
     let onValidateSegments: () -> Void
@@ -81,10 +87,22 @@ struct ComposerSceneCameraBar: View {
                          tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
                          action: onCycleFlash)
             Spacer(minLength: 0)
-            glassControl(symbol: "xmark",
-                         label: ComposerSceneCameraCopy.disarmLabel,
+            // **`[ ]` a pris la place de `(x)`** (directive porteur
+            // 2026-09-04). En carte, le plateau reste visible et le viseur a
+            // déjà ses sorties — la croix y faisait double emploi et occupait
+            // la place du seul contrôle que la carte ne peut pas offrir
+            // autrement. En plein écran, il n'y a plus rien autour : la croix
+            // revient, et c'est la règle qui le dit.
+            if size.showsClose {
+                glassControl(symbol: "xmark",
+                             label: ComposerSceneCameraCopy.disarmLabel,
+                             tint: .white,
+                             action: onDisarm)
+            }
+            glassControl(symbol: size.toggleSymbol,
+                         label: ComposerSceneCameraCopy.sizeLabel(size),
                          tint: .white,
-                         action: onDisarm)
+                         action: onToggleSize)
             glassControl(symbol: "arrow.triangle.2.circlepath.camera",
                          label: ComposerSceneCameraCopy.flipLabel,
                          tint: .white,

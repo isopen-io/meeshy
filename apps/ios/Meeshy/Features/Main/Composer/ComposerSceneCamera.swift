@@ -179,3 +179,40 @@ nonisolated enum ComposerSceneCameraSurface {
         return .viewfinder
     }
 }
+
+/// **Le viseur a DEUX tailles** (directive porteur 2026-09-04 : « à la place de
+/// (x) pour fermer, il faut mettre [ ] plutôt pour passer en full screen
+/// entièrement »).
+///
+/// ## Pourquoi le plein écran REMPLACE la fermeture, et ne s'ajoute pas
+///
+/// Le viseur en carte a déjà une sortie : la porte du rail qui l'a armé, et le
+/// geste qui l'a ouvert. Une croix y faisait double emploi — et occupait la
+/// place du seul contrôle que la carte ne peut pas offrir autrement.
+///
+/// Le plein écran, lui, N'A PAS d'autre sortie : c'est pourquoi il garde la
+/// croix. Les deux tailles ne servent donc pas les mêmes contrôles, et c'est ce
+/// qui fait de ceci une règle plutôt qu'un booléen.
+nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Sendable {
+    /// Le viseur occupe la carte 9:16, plateau visible autour.
+    case card
+    /// Il occupe l'écran entier — plus de plateau, plus de rails.
+    case fullScreen
+
+    /// Ce qu'un appui sur le bouton de taille produit.
+    var toggled: ComposerSceneCameraSize { self == .card ? .fullScreen : .card }
+
+    /// Le glyphe de ce bouton — il annonce OÙ l'on va, jamais où l'on est.
+    /// Un chevron qui décrirait l'état laisserait deviner ce qu'un appui ferait.
+    var toggleSymbol: String {
+        self == .card
+            ? "arrow.up.left.and.arrow.down.right"
+            : "arrow.down.right.and.arrow.up.left"
+    }
+
+    /// **La croix n'existe qu'en plein écran.** En carte, le plateau reste
+    /// visible et le viseur a déjà ses sorties ; une croix y ferait double
+    /// emploi avec la porte qui l'a armé. En plein écran, il n'y a plus rien
+    /// autour — sans elle, l'écran serait un piège.
+    var showsClose: Bool { self == .fullScreen }
+}

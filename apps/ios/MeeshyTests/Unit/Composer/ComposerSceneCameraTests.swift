@@ -228,3 +228,34 @@ final class ComposerSceneCameraSurfaceTests: XCTestCase {
             .viewfinder)
     }
 }
+
+/// #4080 — **le viseur a deux tailles, et elles ne servent pas les mêmes
+/// contrôles** (directive porteur 2026-09-04).
+final class ComposerSceneCameraSizeTests: XCTestCase {
+
+    func test_leBouton_faitBasculerDansLesDeuxSens() {
+        XCTAssertEqual(ComposerSceneCameraSize.card.toggled, .fullScreen)
+        XCTAssertEqual(ComposerSceneCameraSize.fullScreen.toggled, .card)
+    }
+
+    /// **Le glyphe annonce OÙ l'on va, jamais où l'on est.** Un symbole qui
+    /// décrirait l'état laisserait deviner ce qu'un appui ferait — et ils sont
+    /// visuellement proches, donc l'erreur ne se verrait pas.
+    func test_lesDeuxGlyphes_diffèrent() {
+        XCTAssertNotEqual(ComposerSceneCameraSize.card.toggleSymbol,
+                          ComposerSceneCameraSize.fullScreen.toggleSymbol)
+    }
+
+    /// **La croix n'existe qu'en plein écran**, et c'est la décision qui fait
+    /// de ceci une règle plutôt qu'un booléen.
+    ///
+    /// En carte, le plateau reste visible : le viseur a déjà ses sorties — la
+    /// porte qui l'a armé, et le geste qui l'a ouvert. Une croix y ferait
+    /// double emploi et occuperait la place du seul contrôle que la carte ne
+    /// peut pas offrir autrement. En plein écran, il n'y a plus rien autour :
+    /// sans elle, l'écran serait un piège.
+    func test_seulLePleinÉcran_montreLaCroix() {
+        XCTAssertFalse(ComposerSceneCameraSize.card.showsClose)
+        XCTAssertTrue(ComposerSceneCameraSize.fullScreen.showsClose)
+    }
+}

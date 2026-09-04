@@ -438,6 +438,8 @@ extension MeeshyComposerHost {
             cameraSession: sceneCameraStage == .off ? nil : sceneCamera.session,
             cameraStage: sceneCameraStage,
             cameraPermission: sceneCamera.permission,
+            cameraSize: sceneCameraSize,
+            onToggleCameraSize: { sceneCameraSize = sceneCameraSize.toggled },
             cameraMode: sceneCameraMode ?? .photo,
             onCameraPhoto: { takeScenePhoto() },
             onCameraStartFilming: { startSceneFilming() },

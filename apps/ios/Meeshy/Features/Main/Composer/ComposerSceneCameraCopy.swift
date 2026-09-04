@@ -81,6 +81,16 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Filmer", bundle: .main)
     }
 
+    /// **Le libellé dit OÙ l'on va**, jamais où l'on est : un lecteur d'écran
+    /// n'a pas la carte sous les yeux pour deviner ce qu'un appui ferait.
+    static func sizeLabel(_ size: ComposerSceneCameraSize) -> String {
+        size == .card
+            ? String(localized: "composer.camera.size.enterFullScreen",
+                     defaultValue: "Passer en plein écran", bundle: .main)
+            : String(localized: "composer.camera.size.exitFullScreen",
+                     defaultValue: "Revenir à la carte", bundle: .main)
+    }
+
     /// La bascule d'objectif — l'action, parce qu'elle n'a que deux positions
     /// et qu'aucune des deux n'a besoin d'être nommée pour qu'on sache ce
     /// qu'un appui fera.

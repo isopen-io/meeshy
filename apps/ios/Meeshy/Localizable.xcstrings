@@ -3939,6 +3939,54 @@
         }
       }
     },
+    "story.sticker.library.lift.unreadable": {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "صورة غير قابلة للقراءة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bild nicht lesbar" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unreadable image" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Imagen ilegible" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Image illisible" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Immagine illeggibile" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Imagem ilegível" } }
+      }
+    },
+    "story.sticker.library.lift.saved": {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تم اقتصاص الموضوع وإضافته إلى ملصقاتي" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Motiv freigestellt und zu Meine Sticker hinzugefügt" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Subject lifted and added to My stickers" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sujeto recortado y añadido a Mis stickers" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sujet détouré et ajouté à Mes stickers" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Soggetto ritagliato e aggiunto ai Miei sticker" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Sujeito recortado e adicionado a Meus stickers" } }
+      }
+    },
+    "story.sticker.library.lift.unsupported": {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "يتطلب الاقتصاص نظام iOS 17" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Freistellen erfordert iOS 17" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Subject lift requires iOS 17" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El recorte requiere iOS 17" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le détourage demande iOS 17" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Il ritaglio richiede iOS 17" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "O recorte requer iOS 17" } }
+      }
+    },
+    "story.sticker.library.lift.noSubject": {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "لم يُعثر على موضوع في هذه الصورة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kein Motiv auf diesem Foto gefunden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No subject found in this photo" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se encontró ningún sujeto en esta foto" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun sujet trouvé sur cette photo" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Nessun soggetto trovato in questa foto" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Nenhum sujeito encontrado nesta foto" } }
+      }
+    },
     "story.viewer.sticker.saved.one": {
       "extractionState": "manual",
       "localizations": {
@@ -99209,6 +99257,30 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer le dernier segment" } },
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Rimuovi l'ultimo segmento" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover o último segmento" } }
+      }
+    },
+    "composer.camera.size.enterFullScreen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "ملء الشاشة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Vollbild" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Go full screen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Pantalla completa" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Passer en plein écran" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Schermo intero" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Tela cheia" } }
+      }
+    },
+    "composer.camera.size.exitFullScreen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "العودة إلى البطاقة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zurück zur Karte" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back to the card" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Volver a la tarjeta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Revenir à la carte" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Torna alla scheda" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Voltar ao cartão" } }
       }
     },
     "composer.camera.validate" : {
