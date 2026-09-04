@@ -327,12 +327,42 @@ struct FocalRow: View {
         content.reply != nil && !content.audioHostsReply && !content.visualHostsReply
     }
 
+    /// Le geste de la carte de scène, ou `nil` — même règle que la bulle : sans
+    /// identifiant il n'y a rien à ouvrir, et un tap qui n'ouvre rien est une
+    /// cible morte (loi 4). La carte, elle, se rend quand même : c'est la
+    /// citation qui « subsiste » quand la story a expiré.
+    private var storyCitationOpenTap: (() -> Void)? {
+        guard let citation = content.detachedStoryCitation,
+              !citation.messageId.isEmpty,
+              let onStoryReplyTap = actions.onStoryReplyTap else { return nil }
+        return { onStoryReplyTap(citation.messageId) }
+    }
+
     /// Le bloc contenu protégé par le flou de message — citation + médias +
     /// audio + non-média + texte. Le VStack reprend le MÊME espacement que la
     /// pile parente : hauteur de rangée identique, wrapper monté ou pas.
     private var contentSections: some View {
         VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
-            if showsQuotedReply, let reply = content.reply {
+            // **Vue `3h` (#5059) — une story citée est une SCÈNE ici aussi.**
+            //
+            // La rangée plate rendait TOUTE citation par `FocalQuotedReplyView`,
+            // y compris celle d'une story : un carré de 38 pt sur une ligne
+            // « 📷 Story · il y a 3 h ». C'est le mot que la doctrine emploie —
+            // *aplatie* — et la bulle l'avait corrigé seule au #4098.
+            //
+            // La règle de détachement n'est pas réécrite : elle vit sur
+            // `BubbleContent`, que cette rangée reçoit déjà. Un `else if` plutôt
+            // que deux `if` — les deux rendus s'excluent par CONSTRUCTION, pas
+            // par la coïncidence de deux prédicats qui pourraient diverger.
+            if let storyCitation = content.detachedStoryCitation {
+                BubbleStoryCitationCard(
+                    reply: storyCitation,
+                    isDark: input.isDark,
+                    accentHex: input.accentHex,
+                    onOpen: storyCitationOpenTap
+                )
+                .equatable()
+            } else if showsQuotedReply, let reply = content.reply {
                 FocalQuotedReplyView(
                     reply: reply,
                     accentHex: input.accentHex,

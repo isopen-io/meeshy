@@ -53,41 +53,99 @@ final class ForwardAttributionSingleSiteTests: XCTestCase {
     /// **La garde qui empêche la divergence de revenir.**
     ///
     /// Elle ne compte pas « la règle est-elle appliquée ? » — trois peaux
-    /// pourraient l'appliquer chacune et rester d'accord un temps. Elle compte
-    /// **combien de sites la résolvent**, parce que c'est le nombre qui prédit
-    /// la divergence : à deux, une règle de confidentialité finit par avoir
-    /// deux seuils.
+    /// pourraient l'appliquer chacune et rester d'accord un temps. Elle énumère
+    /// **qui la résout**, parce que c'est ce nombre qui prédit la divergence : à
+    /// deux endroits, une règle de confidentialité finit par avoir deux seuils.
     ///
-    /// Le site autorisé est `BubbleContentBuilder` — celui qui tient le
-    /// `Message`, donc sa `ForwardReference`. `MessageViewsDetailView` en est
-    /// exempté : il ne rend pas une bulle mais la fiche de détail d'un message,
-    /// et n'a pas de `BubbleContent` à lire.
-    func test_uneSeuleVueResoutLAttribution_leConstructeur() throws {
-        let sitesAutorises: Set<String> = [
-            "Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift",
-            "Meeshy/Features/Main/Views/Bubble/ForwardBadgePolicy.swift",
-            "Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift"
+    /// ## Une PROJECTION a le droit de résoudre ; une PEAU, non
+    ///
+    /// La liste s'est allongée d'un site au #5058-rivière, et il faut dire
+    /// pourquoi ce n'est pas un relâchement. Il y a deux MODÈLES de message dans
+    /// l'app : `BubbleContent` (bulle, focal, script) et `RiverBubbleContent`
+    /// (rivière). Chacun a sa projection, et une projection est le seul endroit
+    /// qui tienne encore la `ForwardReference` — la vue, elle, ne voit que le
+    /// modèle projeté.
+    ///
+    /// > La règle « un seul site » ne veut pas dire « un seul appelant » : elle
+    /// > veut dire **la règle vit à un seul endroit, et personne ne la
+    /// > réécrit**. Deux projections qui APPELLENT `ForwardBadgePolicy` la
+    /// > partagent ; une vue qui la rappellerait fabriquerait un second chemin
+    /// > que rien ne tient d'accord avec le premier.
+    ///
+    /// Le balayage est RÉCURSIF et sans liste de chemins : c'est ce qui lui
+    /// permet d'attraper une résolution rouverte dans un fichier qui n'existe
+    /// pas encore.
+    func test_seulesLesProjections_resolventLAttribution() throws {
+        let projectionsAutorisees: Set<String> = [
+            // Le constructeur de `BubbleContent` — bulle, focal, script.
+            "BubbleContentBuilder.swift",
+            // La projection de la rivière, qui a son propre modèle (#5058).
+            "RiverConversationMapping.swift",
+            // La règle elle-même.
+            "ForwardBadgePolicy.swift",
+            // La fiche de détail d'un message : elle ne rend pas une bulle et
+            // n'a aucun modèle projeté à lire.
+            "MessageViewsDetailView.swift"
         ]
-        let peaux = [
-            "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
-            "Meeshy/Features/Main/Focal/Row/FocalRow.swift"
-        ]
-        for peau in peaux {
+        let resolveurs = Set(fichiersContenant("ForwardBadgePolicy."))
+        XCTAssertTrue(
+            resolveurs.isSubset(of: projectionsAutorisees),
+            "Un site NON autorisé résout l'attribution lui-même : "
+                + "\(resolveurs.subtracting(projectionsAutorisees)). Une peau doit LIRE la "
+                + "valeur tranchée par sa projection, jamais la recalculer."
+        )
+    }
+
+    /// **Non-vacuité du balayage** — sans elle, un chemin faux rendrait zéro
+    /// fichier et l'assertion ci-dessus serait vraie en ne mesurant rien
+    /// (`Set()` est sous-ensemble de tout).
+    func test_leBalayage_trouveBienLesResolveurs() {
+        let resolveurs = Set(fichiersContenant("ForwardBadgePolicy."))
+        XCTAssertTrue(resolveurs.contains("BubbleContentBuilder.swift"),
+                      "Le constructeur DOIT apparaître : c'est la prémisse du test au-dessus.")
+        XCTAssertTrue(resolveurs.contains("RiverConversationMapping.swift"),
+                      "La projection de la rivière aussi — sans elle, la rivière n'affiche "
+                          + "aucun badge, ce que #5058 vient de corriger.")
+    }
+
+    /// **Les TROIS peaux LISENT l'attribution portée par leur modèle.**
+    func test_lesTroisPeaux_lisentLAttributionPortee() throws {
+        for (peau, champ) in [
+            ("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift", "content.forwardAttribution"),
+            ("Meeshy/Features/Main/Focal/Row/FocalRow.swift", "content.forwardAttribution"),
+            ("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift", "content.forwardAttribution")
+        ] {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(peau))
-            XCTAssertFalse(
-                code.contains("ForwardBadgePolicy."),
-                "\(peau) résout l'attribution elle-même. Une règle de confidentialité "
-                    + "résolue à deux endroits est une règle qui divergera : elle doit LIRE "
-                    + "`content.forwardAttribution`, tranché une fois par le constructeur."
+            XCTAssertTrue(
+                code.contains(champ),
+                "\(peau) doit lire `\(champ)` — sinon elle ne rend aucun badge (rivière avant "
+                    + "#5058) ou en rend un anonyme (focal avant ce lot)."
             )
             XCTAssertTrue(
-                code.contains("content.forwardAttribution"),
-                "\(peau) doit lire l'attribution portée — sinon elle ne rend aucun badge, "
-                    + "ou en rend un anonyme, ce que ce lot corrige."
+                code.contains("BubbleForwardedIndicator("),
+                "\(peau) doit RENDRE le badge : lire la valeur sans la peindre serait le "
+                    + "même silence, une couche plus bas."
             )
         }
-        XCTAssertTrue(sitesAutorises.contains("Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift"),
-                      "Prémisse : le constructeur est le site de résolution.")
+    }
+
+    /// Balayage récursif de la cible app : les noms de fichiers où le motif
+    /// apparaît hors commentaires.
+    private func fichiersContenant(_ motif: String) -> [String] {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // …/Unit/Views  (retire le FICHIER)
+            .deletingLastPathComponent()   // …/Unit
+            .deletingLastPathComponent()   // …/MeeshyTests
+            .deletingLastPathComponent()   // …/apps/ios
+            .appendingPathComponent("Meeshy")
+        guard let marcheur = FileManager.default.enumerator(
+            at: racine, includingPropertiesForKeys: nil) else { return [] }
+        return marcheur.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .compactMap { url in
+                guard let brut = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+                return AppSourceGuard.stripComments(brut).contains(motif) ? url.lastPathComponent : nil
+            }
     }
 
     /// **Non-vacuité** — le constructeur résout bien, et les DEUX moitiés sont

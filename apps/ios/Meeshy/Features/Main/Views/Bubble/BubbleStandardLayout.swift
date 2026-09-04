@@ -1346,17 +1346,11 @@ struct BubbleStandardLayout: View {
     /// - `visualHostsReply` / `audioHostsReply` ⇒ la citation est DÉJÀ logée
     ///   dans le conteneur unifié média ou dans le lecteur audio. La sortir de
     ///   là est une autre chirurgie ; la faire ici la rendrait EN DOUBLE.
-    private var detachedStoryCitation: ReplyReference? {
-        guard let reply = content.reply,
-              StoryCitationPlacement.isDetached(
-                isStoryReply: reply.isStory,
-                hasMoodEmoji: reply.reference.moodEmoji != nil,
-                visualHostsReply: content.visualHostsReply,
-                audioHostsReply: content.audioHostsReply
-              )
-        else { return nil }
-        return reply.reference
-    }
+    /// #5059 — la règle a QUITTÉ ce fichier pour `BubbleContent`, d'où les
+    /// trois peaux peuvent l'atteindre. Elle était déclarée « site unique » ici
+    /// et l'était : mais à portée `private`, donc unique dans son fichier
+    /// seulement. La rangée plate et la rivière retombaient sur l'aperçu plat.
+    private var detachedStoryCitation: ReplyReference? { content.detachedStoryCitation }
 
     /// Le geste de la carte, ou `nil` — sans identifiant il n'y a rien à
     /// ouvrir, et un tap qui n'ouvre rien est une cible morte (loi 4). La

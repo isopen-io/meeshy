@@ -78,12 +78,28 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
     /// L'hôte doit CONSULTER la règle, pas la rejouer. Une seconde copie du
     /// `guard` en cascade rendrait le témoin ci-dessus décoratif : il
     /// mesurerait une fonction que plus personne n'appelle.
+    ///
+    /// **#5059 — la consultation a DÉMÉNAGÉ d'un cran.** `detachedStoryCitation`
+    /// vivait en `private var` dans l'hôte, où il appelait la règle. Il est
+    /// remonté sur `BubbleContent`, d'où les TROIS peaux peuvent l'atteindre :
+    /// à portée `private`, un « site unique » n'est unique que dans son fichier,
+    /// et la rangée plate comme la rivière retombaient sur l'aperçu APLATI.
+    ///
+    /// L'invariant est le même — l'hôte n'écrit pas la règle —, seul le maillon
+    /// qu'il interroge a changé. La garde suit le montage, jamais le nom du
+    /// fichier où il vivait la veille.
     func test_theHostAsksTheRule_neverReplaysIt() throws {
         let host = try source(Self.host)
 
         XCTAssertTrue(
+            host.contains("content.detachedStoryCitation"),
+            "`detachedStoryCitation` doit DÉLÉGUER à `BubbleContent`, seul site que les trois "
+                + "peaux atteignent."
+        )
+        XCTAssertFalse(
             host.contains("StoryCitationPlacement.isDetached("),
-            "`detachedStoryCitation` doit appeler la règle partagée."
+            "Et ne PLUS appeler la règle directement : une peau qui la rappelle fabrique un "
+                + "second chemin que rien ne tient d'accord avec le premier."
         )
         XCTAssertFalse(
             host.contains("guard let reply = content.reply, reply.isStory else"),
