@@ -5,6 +5,14 @@ import XCTest
 /// fondues l'une dans l'autre. Chaque forme opposée ici est celle que
 /// `routes/sync/index.ts` sert, et l'ordre des paramètres celui du client web
 /// (`delta-client.ts`) : deux clients, UNE forme.
+extension ISO8601DateFormatter {
+    nonisolated(unsafe) static let avecFractionsDeTest: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+}
+
 final class SyncDeltaClientTests: XCTestCase {
 
     // MARK: - Mock (pattern maison : Result stubé + appels capturés)
@@ -21,7 +29,10 @@ final class SyncDeltaClientTests: XCTestCase {
 
     struct LigneDeTest: Decodable, Sendable, Equatable {
         let id: String
-        let lastMessageAt: String?
+        /// Une `Date`, PAS une `String` : c'est elle qui oppose la stratégie de
+        /// décodage de la maison — un témoin qui rangeait les instants dans des
+        /// chaînes a laissé passer un `JSONDecoder()` nu (#4172 2b l'a payé).
+        let lastMessageAt: Date?
     }
 
     private func reponse(_ statut: Int, entetes: [String: String] = [:]) -> HTTPURLResponse {
@@ -189,7 +200,7 @@ final class SyncDeltaClientTests: XCTestCase {
         XCTAssertFalse(delta.hasMore)
         XCTAssertEqual(
             delta.collections["conversations"]?.added,
-            [LigneDeTest(id: "c1", lastMessageAt: "2026-09-04T07:59:00.000Z")]
+            [LigneDeTest(id: "c1", lastMessageAt: ISO8601DateFormatter.avecFractionsDeTest.date(from: "2026-09-04T07:59:00.000Z"))]
         )
         XCTAssertEqual(delta.collections["conversations"]?.deleted, ["c9"])
         XCTAssertEqual(validateur, "\"v2\"")

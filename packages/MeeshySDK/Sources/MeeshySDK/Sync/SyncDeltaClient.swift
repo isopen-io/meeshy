@@ -162,7 +162,12 @@ public final class SyncDeltaClient: SyncDeltaClientProviding, Sendable {
         if reponse.statusCode == 304 { return .inchange }
         guard (200...299).contains(reponse.statusCode) else { return .muet }
 
-        guard let enveloppe = try? JSONDecoder().decode(EnveloppeDeSync<Row>.self, from: octets),
+        // LE DÉCODEUR EST CELUI DE LA MAISON (`APIClient.makeAPIPayloadDecoder`,
+        // la stratégie de dates unique) : un `JSONDecoder()` nu refuse les ISO
+        // du serveur dès qu'une ligne porte une `Date` — attrapé par le témoin
+        // moteur (#4172 2b) sur `Row = APIConversation`, invisible tant que les
+        // témoins du client rangeaient les instants dans des `String`.
+        guard let enveloppe = try? APIClient.makeAPIPayloadDecoder().decode(EnveloppeDeSync<Row>.self, from: octets),
               enveloppe.success == true,
               let delta = enveloppe.data
         else { return .muet }

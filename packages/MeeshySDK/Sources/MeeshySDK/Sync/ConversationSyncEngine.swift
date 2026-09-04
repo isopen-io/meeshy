@@ -265,6 +265,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         Date().timeIntervalSince(lastFullReconcileAt ?? .distantPast) >= fullReconcileInterval
     }
 
+    /// Le client `/sync` INJECTÉ (#4172 tranche 2b, #5089) — `nil` en
+    /// production : le client réel se construit PAR APPEL sur `api.baseURL`,
+    /// qui peut changer au login. Les tests injectent leur double.
+    /* partagé entre les fichiers du moteur (#4172) */ let syncDeltaOverride: SyncDeltaClientProviding?
+
     init(
         cache: CacheCoordinator = .shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
@@ -272,9 +277,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         api: APIClientProviding = APIClient.shared,
+        syncDelta: SyncDeltaClientProviding? = nil,
         fullReconcileInterval: TimeInterval = 86_400,
         markAsReceivedWindow: TimeInterval = 1.0
     ) {
+        self.syncDeltaOverride = syncDelta
         self.cache = cache
         self.conversationService = conversationService
         self.messageService = messageService

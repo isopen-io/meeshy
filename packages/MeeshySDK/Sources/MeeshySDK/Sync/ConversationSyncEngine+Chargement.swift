@@ -416,6 +416,17 @@ extension ConversationSyncEngine {
         isSyncing = true
         defer { isSyncing = false }
 
+        // LE CHEMIN NOMINAL EST `/sync` (#4172 tranche 2b) : UN aller-retour au
+        // lieu du rejouage à la main, la requête Prisma rétrécie côté serveur.
+        // Le repli vers `GET /conversations?updatedSince=` est NOMMÉ (critère 2)
+        // — jamais un `try?` qui fondrait un refus dans une absence de réseau.
+        switch await deltaViaSync() {
+        case .traite(let outcome):
+            return outcome
+        case .repli(let raison):
+            Self.logger.notice("[SyncEngine] delta /sync → repli \(raison.rawValue) : GET /conversations?updatedSince")
+        }
+
         do {
             let since = lastSyncTimestamp
             let sinceStr = ISO8601DateFormatter().string(from: since)
@@ -514,6 +525,144 @@ extension ConversationSyncEngine {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
             return .failed
         }
+    }
+
+    // MARK: - Delta via /sync (#4172 tranche 2b)
+
+    /// POURQUOI le repli est une ÉNUMÉRATION : le critère 2 de #4172 interdit le
+    /// `try?` silencieux — chaque retour au chemin historique DIT sa raison au
+    /// journal, et un futur drapeau de bascule s'y ajoutera comme un cas, pas
+    /// comme un booléen anonyme.
+    enum RaisonDuRepliDeSync: String, Sendable {
+        case creanceAbsente = "creance-absente"
+        case survolMuet = "survol-muet"
+    }
+
+    private enum CheminDuDelta {
+        case traite(DeltaOutcome)
+        case repli(RaisonDuRepliDeSync)
+    }
+
+    /// Le `checkpoint` servi porte des MILLISECONDES (`.000Z`) — le formateur
+    /// nu les refuse ; le repli sans fractions couvre un serveur qui n'en
+    /// servirait pas.
+    // `ISO8601DateFormatter` est thread-safe (documenté) ; le marqueur dit
+    // au compilateur ce que la doc garantit.
+    nonisolated(unsafe) private static let formatterDuCheckpoint: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private func clientDeSync() -> SyncDeltaClientProviding {
+        syncDeltaOverride ?? SyncDeltaClient(baseURL: api.baseURL)
+    }
+
+    private func creanceDeSync() -> SyncDeltaCredential? {
+        if let jeton = api.authToken { return .membre(jeton: jeton) }
+        if let session = api.anonymousSessionToken { return .invite(session: session) }
+        return nil
+    }
+
+    /// LE DELTA PAR `/sync` — la collection `conversations`, le `seq` ANNONCÉ
+    /// (sans lui la passerelle ne calcule jamais de trou, `routes/sync/index.ts`),
+    /// et le curseur SERVEUR (`checkpoint`) comme watermark.
+    ///
+    /// LES LIGNES SERVIES SONT PLUS MAIGRES QUE CELLES DU CACHE
+    /// (`syncConversationSelect` : ~21 colonnes, ni aperçu, ni non-lus, ni
+    /// participants). Les REMPLACER détruirait ce que le cache sait — le motif
+    /// « modèle plus strict que le fil » à l'envers. Chaque ligne reçue est donc
+    /// FUSIONNÉE dans l'existante : les champs que `/sync` sert avancent, le
+    /// reste ne bouge pas (`fusionneLigneDeSync`).
+    private func deltaViaSync() async -> CheminDuDelta {
+        guard let creance = creanceDeSync() else { return .repli(.creanceAbsente) }
+
+        let demande = SyncDeltaRequest(
+            since: ISO8601DateFormatter().string(from: lastSyncTimestamp),
+            collections: ["conversations"],
+            seq: await SyncSeqTracker.shared.lastSeq.flatMap { Int(exactly: $0) }
+        )
+        let issue: SyncDeltaOutcome<APIConversation> = await clientDeSync()
+            .demandeLeDelta(demande, creance: creance, rangeant: APIConversation.self)
+
+        switch issue {
+        case .muet:
+            return .repli(.survolMuet)
+        case .inchange:
+            // La fenêtre n'a pas bougé : rien à peindre, rien à avancer.
+            return .traite(.complete)
+        case let .delta(delta, _):
+            let collection = delta.collections["conversations"]
+            let recues = (collection?.added ?? []) + (collection?.modified ?? [])
+            let supprimees = collection?.deleted ?? []
+
+            let existing = await cache.conversations.load(for: "list").snapshot() ?? []
+            let parId = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+
+            let userId = await currentUserId()
+            let mappees = await Self.mapConversationsOffMain(recues, userId: userId)
+            let deltaConversations = mappees.map { Self.fusionneLigneDeSync(existante: parId[$0.id], recue: $0) }
+
+            let (merged, removedIds) = Self.mergeDeltaConversations(
+                existing: existing,
+                deltas: deltaConversations,
+                tombstoneIds: supprimees
+            )
+            let removedSet = Set(removedIds)
+            for removedId in removedIds {
+                await cache.messages.invalidate(for: removedId)
+                await SearchIndex.shared.removeConversation(id: removedId)
+            }
+            await saveSorted(merged, to: "list", baseline: existing)
+            await SearchIndex.shared.indexConversations(
+                deltaConversations.filter { $0.isActive && !removedSet.contains($0.id) }
+            )
+            _conversationsDidChange.send()
+
+            // LE WATERMARK EST LE CURSEUR SERVEUR. `checkpoint` est l'horloge de
+            // la passerelle — jamais celle de l'appareil (R15b) — et il n'avance
+            // que sur une fenêtre PROUVÉE complète : `hasMore` laisse le curseur
+            // en place pour que la fenêtre reste rejouable, `hasGap` dit que
+            // l'absence dépasse ce que le serveur sait rejouer — les deux
+            // escaladent vers `fullSync` par le chemin existant de l'appelant.
+            let incomplet = delta.hasMore || delta.hasGap
+            if !incomplet, let checkpoint = delta.checkpoint,
+               let date = Self.formatterDuCheckpoint.date(from: checkpoint) ?? ISO8601DateFormatter().date(from: checkpoint) {
+                lastSyncTimestamp = max(lastSyncTimestamp, date)
+            }
+            return .traite(DeltaOutcome(succeeded: true, mayHaveMore: incomplet))
+        }
+    }
+
+    /// LA FUSION PAR CHAMPS SERVIS — l'exact miroir de `syncConversationSelect`
+    /// (`routes/sync/conversations.ts`) : ce que `/sync` sert avance, ce qu'il
+    /// ne sert pas (aperçu, traductions, non-lus, participants, préférences,
+    /// rôle courant) reste au cache. Un champ ajouté au select serveur doit
+    /// s'ajouter ICI — le témoin de préservation
+    /// (`ConversationSyncEngineTests`) rougit si une ligne maigre efface ce
+    /// qu'elle ne portait pas.
+    static func fusionneLigneDeSync(existante: MeeshyConversation?, recue: MeeshyConversation) -> MeeshyConversation {
+        guard var fusion = existante else { return recue }
+        // Ce que `/sync` SERT avance — verbatim, y compris ses `nil` (un titre
+        // effacé côté serveur est une valeur, pas une absence).
+        fusion.title = recue.title
+        fusion.description = recue.description
+        fusion.avatar = recue.avatar
+        fusion.banner = recue.banner
+        fusion.communityId = recue.communityId
+        fusion.isActive = recue.isActive
+        fusion.memberCount = recue.memberCount
+        fusion.lastMessageAt = recue.lastMessageAt
+        fusion.encryptionMode = recue.encryptionMode
+        fusion.updatedAt = recue.updatedAt
+        fusion.slowModeSeconds = recue.slowModeSeconds
+        fusion.autoTranslateEnabled = recue.autoTranslateEnabled
+        fusion.closedAt = recue.closedAt
+        // Ce que `/sync` NE SERT PAS ne bouge pas : `userState` (non-lus, nom
+        // personnalisé), l'aperçu et ses traductions, les pièces, les
+        // participants, le rôle courant, les vignettes — et la palette (`let`),
+        // qui reste celle de la ligne existante par construction.
+        return fusion
     }
 
     /// Merge a batch of delta conversations into `existing` by id. Active deltas
