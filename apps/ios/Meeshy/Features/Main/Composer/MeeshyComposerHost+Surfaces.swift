@@ -57,7 +57,28 @@ extension MeeshyComposerHost {
             // commandes, et le socle n'aurait personne à presser.
             publishTrigger: publishTrigger,
             publishTargetType: selectedFormat.postType,
-            onPublishAllInBackground: onPublishAllInBackground,
+            // **La remise passe par le meuble, pour y GREFFER les légendes**
+            // (#4890, seconde moitié). Elle était transmise telle quelle, et
+            // `documentMediaCaptions` n'avait alors aucun lecteur : la légende
+            // saisie sur la scène d'un post mourait à la fermeture.
+            //
+            // Le meuble ne PUBLIE toujours pas — il n'appelle ni service, ni
+            // file, ni endpoint. Il complète la charge que l'atelier remet, avec
+            // la seule matière que l'atelier ne voit pas : sa propre carte de
+            // légendes. `accessibilityCarryingComposerCaptions` est le site
+            // UNIQUE de cette greffe.
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs,
+                                        loadedAudioURLs, loadedStickerAnimations, originalLanguage,
+                                        visibility, visibilityUserIds, draftId, references,
+                                        accessibility, targetType in
+                onPublishAllInBackground(
+                    slides, slideImages, loadedImages, loadedVideoURLs,
+                    loadedAudioURLs, loadedStickerAnimations, originalLanguage,
+                    visibility, visibilityUserIds, draftId, references,
+                    accessibilityCarryingComposerCaptions(accessibility, slides: slides),
+                    targetType
+                )
+            },
             onPreview: onPreview,
             onDismiss: onDismiss,
             // **La vignette d'une slide ouvre son FOND** (#5041, directive
@@ -793,7 +814,13 @@ extension MeeshyComposerHost {
                                 defaultValue: "Ajoutez une description…", bundle: .main),
             plateauTint: tint.color,
             onDone: { editsSceneDescription = false },
-            onHeightChange: { sceneDescriptionEditorHeight = $0 }
+            onHeightChange: { sceneDescriptionEditorHeight = $0 },
+            // **La langue se déclare où le texte se valide** (#5137). La MÊME
+            // capsule que le document — jamais une seconde : deux sélecteurs
+            // pour une seule `documentLanguage` auraient deux mémoires à faire
+            // diverger, et c'est exactement ce que #4621 a déjà payé sur la
+            // clé de son titre.
+            languageAccessory: AnyView(documentLanguageCapsule)
         )
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }

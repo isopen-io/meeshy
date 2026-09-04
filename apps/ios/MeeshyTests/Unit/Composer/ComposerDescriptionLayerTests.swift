@@ -55,6 +55,59 @@ final class ComposerDescriptionLayerTests: XCTestCase {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
+    // MARK: - #5137 — la langue se choisit AU-DESSUS de la coche
+
+    /// **L'ORDRE porte le sens du geste.** On déclare dans quelle langue on
+    /// écrit, PUIS on valide ce qu'on a écrit. Empilé dans l'autre sens, le même
+    /// couple dirait « je valide — ah, au fait, c'était en quelle langue » : la
+    /// langue arriverait après la décision qu'elle qualifie.
+    ///
+    /// Le témoin porte sur la POSITION relative dans la colonne de queue, pas
+    /// sur la présence des deux morceaux : présents mais inversés, ils
+    /// satisferaient n'importe quel `contains` séparé.
+    func test_laLangue_estPeinte_AU_DESSUS_deLaCoche() throws {
+        let calque = compact(try composer("ComposerDescriptionLayer.swift"))
+        guard let colonne = calque.range(of: "VStack(alignment:.trailing,spacing:6){") else {
+            return XCTFail("La colonne de queue du champ est introuvable — la garde ne mesurerait RIEN.")
+        }
+        let suite = String(calque[colonne.upperBound...])
+        guard let langue = suite.range(of: "ifletlanguageAccessory{languageAccessory}"),
+              let coche = suite.range(of: "validationCheck") else {
+            return XCTFail("La colonne doit porter l'accessoire de langue ET la coche.")
+        }
+        XCTAssertLessThan(langue.lowerBound, coche.lowerBound,
+                          "La langue se peint AVANT la coche dans le `VStack` — donc AU-DESSUS d'elle.")
+    }
+
+    /// **`nil` ⇒ rien de peint, jamais une capsule grisée.** Un site qui ne sait
+    /// pas déclarer de langue n'en promet aucune (loi 4) : c'est la différence
+    /// entre un contrôle absent et un contrôle INERTE, et l'inerte est pire —
+    /// il éteint la question chez le lecteur suivant.
+    func test_sansAccessoire_rienNestPeint() throws {
+        let calque = compact(try composer("ComposerDescriptionLayer.swift"))
+        XCTAssertTrue(calque.contains("varlanguageAccessory:AnyView?"),
+                      "L'accessoire est OPTIONNEL et sans valeur par défaut construite ici : "
+                        + "le calque ne sait rien de `documentLanguage` ni du portail qui l'ouvre.")
+        XCTAssertFalse(calque.contains("documentLanguageCapsule"),
+                       "Le calque ne CONSTRUIT pas la capsule — il la reçoit. La fabriquer ici en "
+                        + "ferait une seconde, avec sa propre mémoire à faire diverger.")
+    }
+
+    /// **Le meuble sert la MÊME capsule aux deux surfaces.** Deux sélecteurs
+    /// pour une seule `documentLanguage` auraient deux mémoires ; c'est la
+    /// dérive que #4621 a déjà payée sur la clé de son titre.
+    func test_leMeuble_sertLaMemeCapsule_ALaScene_etAuDocument() throws {
+        let meuble = compact(try composer("MeeshyComposerHost.swift"))
+        // **La virgule est le DISCRIMINANT.** Sans elle, l'assertion serait un
+        // préfixe de `contentLanguageAccessory:AnyView(documentLanguageCapsule)`
+        // et passerait au vert alors que le site de la SCÈNE aurait disparu :
+        // une garde qui mesure l'autre moitié de ce qu'elle croit mesurer.
+        XCTAssertTrue(meuble.contains(",languageAccessory:AnyView(documentLanguageCapsule)"),
+                      "L'éditeur de description de la scène doit recevoir la capsule.")
+        XCTAssertTrue(meuble.contains("contentLanguageAccessory:AnyView(documentLanguageCapsule)"),
+                      "Le champ de contenu du document doit recevoir la MÊME capsule.")
+    }
+
     /// **Le fusible.** Sans lui, les gardes NÉGATIVES qui suivent seraient vertes
     /// par OMISSION le jour où un chemin change.
     func test_lesSources_sontLisiblesEtNonVides() throws {

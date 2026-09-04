@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Les légendes du composer, classées par MÉDIA** (#4890).
 ///
@@ -95,6 +96,69 @@ nonisolated enum ComposerSlideTextRole: Equatable {
             captions.removeValue(forKey: media)
         } else {
             captions[media] = text
+        }
+    }
+
+    /// **La légende SORT du composer par la clé que le publieur sait traduire**
+    /// (#4890, seconde moitié).
+    ///
+    /// ## Le défaut que ceci referme
+    ///
+    /// `applyCaption` ci-dessus est le seul ÉCRIVAIN de `documentMediaCaptions`,
+    /// et jusqu'ici la carte n'avait qu'un seul LECTEUR : le getter de son
+    /// propre binding. Mesuré le 2026-09-04 : aucun chemin de publication ne la
+    /// consultait. L'auteur tapait une légende, la voyait à l'écran, la
+    /// validait — et elle mourait à la fermeture du composer.
+    ///
+    /// > Un texte saisi qui n'atteint aucun destinataire est PIRE qu'un champ
+    /// > absent : le champ absent ne promet rien, celui-là promet et ment. Et le
+    /// > défaut est invisible depuis le site où il naît — `applyCaption` fait
+    /// > exactement ce qu'il annonce ; c'est en aval que personne n'écoute.
+    ///
+    /// ## Pourquoi une TRADUCTION de clé, et pas une carte de plus
+    ///
+    /// Trois clés cohabitent sur la route d'une légende, et chacune est la seule
+    /// disponible à son étage :
+    ///
+    /// | étage | clé | pourquoi celle-là |
+    /// |---|---|---|
+    /// | composition | `URL` locale | l'id serveur n'existe pas encore |
+    /// | remise au publieur | `StoryMediaObject.id` | ce que `ComposerMediaAccessibility` transporte |
+    /// | envoi | `PostMedia.id` | attribué par l'upload, traduit par `StoryMediaTextMapping.serverKeyed` |
+    ///
+    /// Cette fonction fait le PREMIER saut ; le SDK fait le second. Écrire
+    /// directement en ids d'objet à la saisie aurait été plus court et FAUX :
+    /// l'objet de canvas peut être remplacé (re-pose du même fichier, changement
+    /// de fond) alors que le fichier, lui, ne bouge pas — la légende suivrait
+    /// alors un objet mort.
+    ///
+    /// ## Quel objet porte la légende d'une slide
+    ///
+    /// Le FOND, jamais un objet de premier plan. `slideIdByMediaURL` n'indexe
+    /// que les médias qui ont FONDÉ une slide (`role == .background`,
+    /// `MeeshyComposerHost+Intake`) : une URL présente ici désigne donc le fond
+    /// de sa slide. Le repli sur le premier objet média sert le cas où le
+    /// drapeau `isBackground` n'est pas encore posé — sans lui, une légende
+    /// disparaîtrait selon un détail d'ordonnancement plutôt que selon ce que
+    /// l'auteur a fait.
+    ///
+    /// Un média sans slide, une slide sans objet, un texte vide : l'entrée est
+    /// OMISE. Une clé fabriquée poserait la légende sur un média que l'auteur
+    /// n'a pas désigné — la faute exacte que `applyCaption` refuse déjà quand
+    /// `media == nil`.
+    static func canvasKeyed(_ captions: ComposerMediaCaptions,
+                            slideIdByMediaURL: [URL: String],
+                            slides: [StorySlide]) -> [String: String] {
+        captions.reduce(into: [:]) { keyed, entree in
+            let (url, texte) = entree
+            guard !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  let slideId = slideIdByMediaURL[url],
+                  let slide = slides.first(where: { $0.id == slideId })
+            else { return }
+            let objets = slide.effects.mediaObjects ?? []
+            guard let porteur = slide.effects.resolvedBackgroundMedia ?? objets.first
+            else { return }
+            keyed[porteur.id] = texte
         }
     }
 }

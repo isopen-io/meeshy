@@ -96,6 +96,15 @@ const demarre = (): void => {
   const main = document.querySelector<HTMLElement>('main[data-participation="composer"]');
   if (main === null) return;
 
+  // L'EFFET OBSERVABLE de l'arrivée du module — ce que les témoins attendent
+  // à la place d'une minuterie : `data-participation` est SERVI par le
+  // document (il dit qu'un module viendra, pas qu'il est là), et 1 200 ms
+  // d'attente aveugle rougissaient en CI dès que FCP + oisiveté + import
+  // dépassaient la minuterie. Deux niveaux : le module est LÀ (posé ici), le
+  // brouillon est ARMÉ (posé après les écouteurs — c'est lui que le témoin du
+  // brouillon attend avant de taper).
+  main.setAttribute('data-module-arrive', '1');
+
   const formulaire = main.querySelector<HTMLFormElement>('form');
   const texte = main.querySelector<HTMLTextAreaElement>(`textarea[name="${CHAMPS_DU_COMPOSER.texte}"]`);
   if (formulaire === null || texte === null) return;
@@ -132,16 +141,15 @@ const demarre = (): void => {
     efface(cle);
   });
 
-  // LE MODULE DIT QU'IL EST ARMÉ, et c'est la DERNIÈRE ligne de `demarre()` :
-  // le marqueur ne se pose qu'une fois le brouillon restauré ET les deux
-  // écouteurs posés. `data-participation`, lui, est écrit par le SERVEUR
-  // (`app/connecte/composer-vue.ts`) et existe donc dès le premier pixel : il
-  // dit quel module l'écran attend, jamais que ce module a fini. Un témoin qui
-  // ne dispose que du second doit compléter par une horloge — et une horloge
-  // tombe sur une machine chargée (`e2e/visual/v3-composer.spec.ts`, échec CI
-  // du 2026-09-04 : `waitForTimeout(1_200)` insuffisant, le champ relu vide).
-  // Ce marqueur est ce qu'un témoin OBSERVE à la place.
-  main.dataset.brouillon = 'arme';
+  main.setAttribute('data-brouillon', 'arme');
 };
 
 demarre();
+
+/**
+ * REMONTAGE PAR LE NAVIGATEUR DE ZONE (#5106) : un ES module réimporté ne se
+ * ré-exécute pas — la convention `monte()` des neuf modules, que celui-ci a
+ * ratée en naissant en parallèle du lot. Idempotent de fait : après un swap,
+ * les anciens écouteurs sont partis avec les anciens éléments.
+ */
+export const monte = demarre;

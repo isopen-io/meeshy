@@ -86,15 +86,43 @@ final class ComposerToolRowTrailingAccessoryGuardTests: XCTestCase {
         // l'accessoire de queue est un ENFANT de la rangée, jamais un overlay
         // posé par-dessus : deux enfants d'un `HStack` ne se superposent jamais,
         // par construction, et c'est ce qui a corrigé le chevauchement mesuré.
-        guard let toolsRange = toolRow.range(of: "ForEach(tools"),
-              let accessoryRange = toolRow.range(
-                of: "toolRowTrailingAccessory", range: toolsRange.upperBound..<toolRow.endIndex
-              ) else {
-            return XCTFail("Structure de `toolRow` inattendue — les outils ou l'accessoire sont introuvables.")
+        //
+        // **L'ancre `ForEach(tools` est tombée en DEUX temps, et la garde était
+        // ROUGE entre les deux.**
+        //
+        // 1. #5082 (2026-09-04) a sorti les sept outils de cette rangée pour les
+        //    ranger en COLONNE sous l'avatar — « ainsi ce restera toujours à
+        //    gauche comme pour le cas des Story et Reel ». `ForEach(tools`
+        //    n'était plus dans `toolRow`, et ce `guard` échouait : mesuré rouge
+        //    à HEAD, avant ce lot.
+        // 2. #5137 (le même jour) en a sorti la capsule de langue.
+        //
+        // > Une ancre qui nomme un VOISIN meurt quand le voisin déménage — même
+        // > si l'invariant, lui, tient toujours. La garde ne rougissait pas sur
+        // > une violation : elle rougissait sur son propre point de repère.
+        //
+        // L'invariant survit aux deux déménagements et se dit sans voisin : ce
+        // que la rangée rend, elle le rend DANS son `HStack`. Le sens de
+        // l'ordre (« slot de QUEUE ») est porté par la structure elle-même —
+        // `toolRowTrailingAccessory` est le dernier enfant du `HStack`, après le
+        // `ScrollView` qui prend toute la largeur.
+        guard let hstack = toolRow.range(of: "HStack(spacing: 16) {"),
+              let scroll = toolRow.range(of: "ScrollView(.horizontal",
+                                         range: hstack.upperBound..<toolRow.endIndex),
+              let accessoire = toolRow.range(of: "toolRowTrailingAccessory",
+                                             range: scroll.upperBound..<toolRow.endIndex)
+        else {
+            return XCTFail("Structure de `toolRow` inattendue — le `HStack`, son `ScrollView` ou "
+                            + "l'accessoire de queue sont introuvables.")
         }
-        XCTAssertTrue(
-            toolsRange.lowerBound < accessoryRange.lowerBound,
-            "`toolRowTrailingAccessory` doit venir APRÈS les outils : c'est le slot de QUEUE de la rangée."
+        XCTAssertLessThan(
+            scroll.lowerBound, accessoire.lowerBound,
+            "`toolRowTrailingAccessory` doit venir APRÈS le contenu défilant : c'est le slot de QUEUE."
+        )
+        XCTAssertFalse(
+            toolRow.contains(".overlay("),
+            "La rangée ne pose AUCUN overlay : c'est un overlay qui avait produit le chevauchement "
+                + "de #3904, et le remède fut d'en faire un enfant du flux."
         )
     }
 
@@ -180,6 +208,24 @@ final class ComposerToolRowTrailingAccessoryGuardTests: XCTestCase {
         )
     }
 
+    /// **RETOURNÉE au #5137** (directive porteur 2026-09-04 : « Du coup enlever
+    /// cela de la ligne canonique ! »).
+    ///
+    /// Ce que cette garde protégeait — « la capsule ne se pose plus en
+    /// `.overlay` sur toute la surface » — reste vrai et reste gardé. Ce qu'elle
+    /// affirmait EN PLUS est révoqué : elle exigeait que la capsule voyage par
+    /// `toolRowTrailingAccessory:`, c'est-à-dire en queue de la RANGÉE
+    /// canonique. Cette place n'a jamais été choisie pour son sens — elle a été
+    /// choisie au #3904 pour fuir un chevauchement.
+    ///
+    /// > Une place choisie pour éviter un défaut n'est pas la place JUSTE, et
+    /// > rien ne rougit quand on la garde. La garde qui l'épingle SCELLE le
+    /// > provisoire.
+    ///
+    /// La troisième assertion aurait survécu au déménagement **sans rien
+    /// mesurer** : `documentLanguageCapsule` est bien encore construite dans
+    /// `documentSurface`, à un autre argument. Elle est donc remplacée par une
+    /// garde qui nomme la destination.
     func test_host_documentSurface_noLongerOverlaysTheLanguageCapsuleOnTheWholeSurface() throws {
         let source = try hostSource()
         guard let block = body(of: "var documentSurface: some View {", in: source) else {
@@ -188,18 +234,24 @@ final class ComposerToolRowTrailingAccessoryGuardTests: XCTestCase {
         XCTAssertFalse(
             block.contains(".overlay(alignment: .bottomTrailing)"),
             "`documentSurface` pose encore un `.overlay(alignment: .bottomTrailing)` — c'est exactement la "
-                + "cause du chevauchement avec la bande de mentions. La capsule de langue doit désormais "
-                + "voyager par l'argument `toolRowTrailingAccessory:` de `ComposerDocumentSurface(`."
+                + "cause du chevauchement avec la bande de mentions (#3904). La capsule doit rester un "
+                + "ENFANT DU FLUX, quel que soit l'argument qui la porte."
+        )
+        XCTAssertTrue(
+            block.contains("contentLanguageAccessory: AnyView(documentLanguageCapsule)"),
+            "La capsule de langue doit voyager par `contentLanguageAccessory:` — au PIED du champ de "
+                + "contenu qu'elle qualifie (#5137), la place qu'elle occupe déjà sur la scène "
+                + "au-dessus de la coche du calque de description."
+        )
+        XCTAssertFalse(
+            block.contains("toolRowTrailingAccessory: AnyView(documentLanguageCapsule)"),
+            "La capsule a QUITTÉ la rangée canonique (#5137) : cette rangée porte ce qu'on ATTACHE à un "
+                + "texte, la langue le QUALIFIE."
         )
         XCTAssertTrue(
             block.contains("toolRowTrailingAccessory:"),
-            "`documentSurface` doit passer `toolRowTrailingAccessory:` à `ComposerDocumentSurface(` — sans "
-                + "cela la capsule de langue n'est plus affichée du tout."
-        )
-        XCTAssertTrue(
-            block.contains("documentLanguageCapsule"),
-            "`documentLanguageCapsule` doit toujours être construite quelque part dans `documentSurface` — "
-                + "seul son point d'attache dans la disposition change."
+            "Le slot RESTE — vide — avec son jumeau de tête : c'est lui qui tient l'invariant "
+                + "anti-chevauchement de #3903/#3904 pour tout futur accessoire de rangée."
         )
     }
 }

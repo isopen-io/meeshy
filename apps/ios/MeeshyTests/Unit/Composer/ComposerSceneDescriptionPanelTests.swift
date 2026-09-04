@@ -43,6 +43,27 @@ final class ComposerSceneDescriptionPanelTests: XCTestCase {
                       "Le volet doit disparaître pendant la saisie — sinon la description paraît deux fois.")
     }
 
+    /// **#5138 — le volet NAÎT REPLIÉ.**
+    ///
+    /// > « par défaut l'espace de contenu du caption doit être replié ! »
+    /// > — porteur, 2026-09-04
+    ///
+    /// Le témoin porte sur la DÉCLARATION (`@State var … =`), jamais sur la
+    /// chaîne `sceneDescriptionCollapsed = false` seule : celle-ci existe
+    /// légitimement dans `onEdit`, où ouvrir la saisie DOIT déplier. Une garde
+    /// non bornée aurait donc lu l'affectation du geste et rendu le verdict de
+    /// la naissance — verte sur les deux valeurs possibles.
+    func test_leVolet_naitReplié() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        let compact = source.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(compact.contains("@StatevarsceneDescriptionCollapsed=true"),
+                      "Le volet doit naître REPLIÉ : déplié d'entrée, il couvre la bande basse du "
+                        + "canvas à l'instant où l'auteur compose — avant qu'il y ait la moindre "
+                        + "légende à relire.")
+        XCTAssertFalse(compact.contains("@StatevarsceneDescriptionCollapsed=false"),
+                       "La valeur de naissance ne doit plus être `false` (#5138).")
+    }
+
     /// **Ouvrir la saisie DÉPLIE le volet.** Écrire dans un volet rangé
     /// laisserait l'auteur taper sans voir ce qu'il écrit.
     func test_ouvrirLaSaisie_déplieLeVolet() throws {
