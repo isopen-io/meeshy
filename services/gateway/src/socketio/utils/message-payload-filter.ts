@@ -1,4 +1,4 @@
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
 /**
  * Per-recipient language filtering for the `message:new` socket payload
@@ -65,12 +65,25 @@ export function filterMessagePayloadForLanguages<T extends object>(
  * le repli tombe alors sur cette valeur brute. Sans réduction, le set de langues
  * du groupe contient `'pt-br'`, qui ne matche jamais la clé de traduction `'pt'`
  * : la traduction existante est prunée et le lecteur retombe sur l'original —
- * violation directe du Prisme. On délègue à `normalizeLanguageCode` (source de
- * vérité partagée) et, si elle rejette l'entrée, on conserve le repli historique
- * (`.trim().toLowerCase()`) pour ne dropper aucun code plausible.
+ * violation directe du Prisme.
+ *
+ * On délègue à `normalizeLanguageForDedup` — la SSOT du couple
+ * « normalise-ou-replie » employée partout où des codes verbatim sont agrégés
+ * ou servent de clé (aperçu de liste, `recipient-language.ts`,
+ * `anonymous.ts`). Elle réduit ce que `normalizeLanguageCode` sait réduire et,
+ * pour un irréductible, REPLIE sur le sous-tag PRIMAIRE lowercased plutôt que
+ * sur la chaîne entière : la clé de groupe reste ainsi région-aveugle pour TOUT
+ * code, y compris hors catalogue (`'yue-HK'` → `'yue'`). Le repli historique
+ * `.trim().toLowerCase()` laissait un `'yue-HK'` et un `'yue'` former DEUX
+ * groupes — deux émissions de charge là où une suffit — la fuite exacte que le
+ * cas `'en'`/`'en-US'` interdit. Aucun code plausible n'est droppé (la SSOT ne
+ * rend jamais `undefined`) et, la carte de traduction étant à clés catalogue,
+ * le matching des langues réelles est inchangé.
+ *
+ * @see packages/shared/utils/language-normalize.ts — `normalizeLanguageForDedup`
  */
 function normalizeGroupLanguage(code: string): string {
-  return normalizeLanguageCode(code) ?? code.trim().toLowerCase();
+  return normalizeLanguageForDedup(code);
 }
 
 export interface SocketLanguageGroup {
