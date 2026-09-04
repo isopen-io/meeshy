@@ -3,6 +3,7 @@
  */
 
 import { LIS_LE_COMPOSER, PUBLIE_DEPUIS_LE_COMPOSER } from '@/app/connecte/composer-porte';
+import { documentDuComposer, type EtatDuComposer } from '@/app/connecte/composer-vue';
 import { COMPOSER, FORMATS_SERVIS, HUMEURS, LONGUEUR_MAX_DU_CONTENU } from '@/lib/contenu/composer';
 
 /**
@@ -300,41 +301,81 @@ describe('le composer est atteignable', () => {
 /**
  * LE MODULE DU BROUILLON (#4966) — ce que le DOCUMENT en dit.
  *
- * Le module lui-même est jugé par `e2e/visual/v3-composer.spec.ts` : ce qu'il
- * tient est une propriété de navigateur (`sessionStorage`, un rechargement, un
- * aller-retour), et aucun témoin de nœud ne peut la dire. Ce que ces témoins-ci
- * gardent est la COUTURE — le document nomme son module et embarque le
- * chargeur, sans quoi le module le mieux écrit n'arrive jamais.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CES TÉMOINS PILOTENT LA VUE, PAS LA PORTE, ET C'EST LA CI QUI L'A EXIGÉ
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Écrits d'abord à travers `LIS_LE_COMPOSER`, ils passaient EN LOCAL et
+ * rougissaient en CI. La porte lit l'actif COMPILÉ (`actifsTempsReel()`) pour
+ * en calculer l'empreinte ; le job `Test web-v3` lance jest SANS
+ * `scripts/build-participate.mjs`, donc `.rt/composer.js` est absent, donc
+ * `corps === ''`, donc `tempsReel: null` — et le document ne porte alors NI
+ * `data-participation` NI chargeur. C'est le comportement VOULU
+ * (§ 12.4 : sans module compilé, le Post/Redirect/Get reste le seul chemin),
+ * pas un défaut.
+ *
+ * **Un témoin qui dépend d'un artefact de build ne juge pas le code : il juge
+ * l'ordre dans lequel on a lancé les commandes.** La vue reçoit donc son
+ * `tempsReel` EXPLICITEMENT — même convention que `documentDesNotifs` et les
+ * autres écrans à module. Ce que la PORTE fait de l'actif réel est prouvé par
+ * `e2e/visual/v3-composer.spec.ts`, dont la suite construit avant de courir.
  */
+const MODULE = { module: '/__v3/rt/composer.abc.js' } as const;
+
+const etatDuComposer = (attributs: Partial<EtatDuComposer> = {}): EtatDuComposer => ({
+  format: FORMATS_SERVIS[0].cle,
+  texte: '',
+  humeur: null,
+  audience: 'PUBLIC',
+  langue: 'fr',
+  publie: false,
+  erreur: null,
+  tempsReel: MODULE,
+  ...attributs,
+});
+
 describe('la couture du module de brouillon', () => {
-  it('nomme son module et embarque le chargeur différé', async () => {
-    const doc = await (await LIS_LE_COMPOSER(requete('/composer'), serveur().recuperer)).text();
+  it('nomme son module et embarque le chargeur différé', () => {
+    const doc = documentDuComposer(etatDuComposer());
 
     expect(doc).toContain('data-participation="composer"');
-    expect(doc).toMatch(/data-module="[^"]+"/);
+    expect(doc).toContain(`data-module="${MODULE.module}"`);
     expect(doc).toContain('<script type="module">');
   });
 
   /**
    * IL PART AUSSI SUR UN REFUS, et c'est ce qui rend la règle « le serveur a
    * toujours raison » utile plutôt que théorique : sans module sur ce document,
-   * la saisie reposée serait la seule, et personne ne pourrait l'écraser — mais
-   * le brouillon du geste SUIVANT ne serait plus tenu non plus.
+   * la saisie reposée serait la seule, et le brouillon du geste SUIVANT ne
+   * serait plus tenu.
    */
-  it('part aussi sur le document d’un refus', async () => {
-    const reponse = await PUBLIE_DEPUIS_LE_COMPOSER(poste({ texte: '', humeur: '' }), serveur().recuperer);
-    const doc = await reponse.text();
+  it('part aussi sur le document d’un refus, avec la saisie reposée', () => {
+    const doc = documentDuComposer(
+      etatDuComposer({ texte: 'ce que j’avais tapé', erreur: COMPOSER.vide }),
+    );
 
-    expect(reponse.status).toBe(422);
     expect(doc).toContain('data-participation="composer"');
     expect(doc).toContain('<script type="module">');
+    expect(doc).toContain('ce que j’avais tapé');
   });
 
   /**
-   * LE FORMAT EST SERVI DANS LE FORMULAIRE, et c'est de là que le module le
-   * lit — jamais de l'adresse. La même valeur, mais celle-là est déjà validée
-   * contre le vocabulaire clos : un `?format=<n'importe quoi>` ne peut pas
-   * devenir une clé de stockage.
+   * SANS MODULE COMPILÉ, RIEN NE PART — et le formulaire marche quand même.
+   * C'est le socle du § 12.4, et c'est aussi ce que la CI exerce réellement.
+   */
+  it('ne porte ni attribut ni chargeur quand aucun module n’est compilé', () => {
+    const doc = documentDuComposer(etatDuComposer({ tempsReel: null }));
+
+    expect(doc).not.toContain('data-participation');
+    expect(doc).not.toContain('<script type="module">');
+    expect(doc).toContain('<form method="post">');
+  });
+
+  /**
+   * LE FORMAT EST SERVI DANS LE FORMULAIRE, et c'est de là que le module tire
+   * sa clé — jamais de l'adresse. La même valeur, mais celle-là est déjà
+   * validée contre le vocabulaire clos : un `?format=<n'importe quoi>` ne peut
+   * pas devenir une clé de stockage.
    */
   it('sert le format dans un champ caché, d’où le module tire sa clé', async () => {
     const doc = await (await LIS_LE_COMPOSER(requete('/composer?format=humeur'), serveur().recuperer)).text();
