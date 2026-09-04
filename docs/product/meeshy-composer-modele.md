@@ -650,14 +650,39 @@ clé rougit désormais.
 > gardent leur chiffre exact : ce sont des **événements datés**, traçables à
 > leurs commits, pas des populations à recompter.
 
-**Le 121ᵉ champ est entré dans les aveugles en connaissance de cause (2026-09-04).**
-`StoryMediaObject.crop` — le recadrage de la vue `2d` (#5085) — voyage bien dans
-le blob v1 et dans le round-trip v3, et il est APPLIQUÉ au rendu iOS
-(`contentsRect`, un sous-rectangle normalisé : aucun ré-encodage, conformément à
-la planche `4c`). Mais ni le web ni Android ne le lisent encore : un média
-recadré par un auteur iOS s'affiche donc ENTIER chez eux, sans que rien ne
-rougisse. C'est le reste de #5085, et le compter ici est ce qui l'empêche d'être
-oublié.
+**Le 121ᵉ champ est entré dans les aveugles en connaissance de cause, et il en est
+SORTI le même jour (2026-09-04).** `StoryMediaObject.crop` — le recadrage de la
+vue `2d` (#5085) — voyage dans le blob v1 et dans le round-trip v3, et il est
+APPLIQUÉ au rendu iOS (`contentsRect`, un sous-rectangle normalisé : aucun
+ré-encodage, conformément à la planche `4c`).
+
+Ce paragraphe a d'abord dit : « ni le web ni Android ne le lisent encore ; un
+média recadré s'affiche donc ENTIER chez eux ». **Ce n'est plus vrai**, mesuré le
+2026-09-04 en fin de journée :
+
+| couche | état |
+|---|---|
+| `packages/shared/types/canvas-v3.ts` | **déclare** `crop` — une clause `superRefine` : les quatre clés ensemble ou aucune, bornées à [0,1], et seulement sur un `media` |
+| `packages/shared/utils/media-crop.ts` | la règle partagée — `readMediaCrop`, `clampMediaCrop`, `effectiveMediaRatio`, `mediaCropStyle` |
+| web (`CanvasV3Scene.tsx`) | **lit et applique** |
+| Android (`core/model`) | **lit et applique** — modèle, deux formes de fil, projection au rendu |
+
+> **Un document qui dit CASSÉ ce qui marche nuit autant qu'un document qui dit
+> l'inverse.** Il invite à réparer ce qui l'est déjà, et il apprend au lecteur à
+> se méfier du reste. Un constat de divergence est daté par nature : il énonce
+> l'état d'un jour, et le jour passe. Celui-ci a vécu neuf heures.
+
+Ce que la fermeture a laissé, et qui reste vrai : le portage a révélé que le
+plancher de `clamped` **se défaisait lui-même** — l'origine bornée à `1`, puis la
+dimension à `1 - origine`, donc `0` à la limite : exactement le média invisible
+que le plancher existe pour empêcher. Les témoins Swift ne pouvaient pas
+l'attraper : ils éprouvaient des origines INTERNES, où les deux écritures
+s'accordent. *Réécrire une loi dans un second langage est un test qu'aucune suite
+ne remplace.*
+
+Et une frontière demeure, plus large que le recadrage : en v3, un média de plan
+`bg` ne devient jamais un objet chez le lecteur Android — l'aiguillage le réduit
+à une chaîne. **Ce qu'il porterait n'a pas où atterrir** (#5110).
 
 **Les huit pertes sont toutes tombées dans les 47 % aveugles.** Ce n'est pas une
 coïncidence : c'est le mécanisme. Un champ que le golden n'exerce pas n'est
