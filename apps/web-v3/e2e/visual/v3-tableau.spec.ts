@@ -8,6 +8,7 @@ import {
   AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
   IDENTIFIANT_DU_LIEN_PARTAGE,
+  LIEN_DU_FIL,
   PRENOM_DU_LECTEUR,
   chargeMesureReseau,
   passerelleDeBouchon,
@@ -127,6 +128,12 @@ test.describe('le tableau de bord garni', () => {
    * texte est l'adresse que le lecteur COPIE (`/chat/:lien`, la porte de
    * l'invité) ; la destination est la conversation du MEMBRE (`/chats/:cle`).
    * Les confondre enverrait le membre refaire une jonction déjà faite.
+   *
+   * L'ADRESSE COPIÉE PORTE LE `linkId` (#5077), jamais le slug `identifier` :
+   * la route d'aperçu anonyme prenait tout `mshy_*` pour un linkId, et une
+   * adresse composée du slug rendait « Ce lien ne mène nulle part » — mesuré
+   * sur staging. `IDENTIFIANT_DU_LIEN_PARTAGE` reste ce que la porte de
+   * l'invité REÇOIT en URL ; ce que la carte AFFICHE est la clé canonique.
    */
   test('la carte d’un lien mène à la conversation, pas à la porte de l’invité', async ({ browser }) => {
     const contexte = await browser.newContext();
@@ -135,7 +142,7 @@ test.describe('le tableau de bord garni', () => {
     await page.goto(`${v3.base}/`, { waitUntil: 'domcontentloaded' });
 
     const carte = page.locator(`a.carte[href="/chats/${CONVERSATION_DU_LECTEUR.id}"]`).last();
-    await expect(carte).toContainText(`/chat/${IDENTIFIANT_DU_LIEN_PARTAGE}`);
+    await expect(carte).toContainText(`/chat/${LIEN_DU_FIL}`);
     await contexte.close();
   });
 
