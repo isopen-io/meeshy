@@ -1,5 +1,6 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
 export type BroadcastTargeting = {
   readonly languages?: readonly string[];
@@ -20,6 +21,41 @@ const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma.UserWh
   }
   return {};
 };
+
+/**
+ * Les langues cibles NLLB d'une diffusion admin, CANONIQUES et dédupliquées.
+ *
+ * L'appelant fournit les `systemLanguage` d'un `groupBy` Prisma — persistés
+ * VERBATIM (`z.string().optional()`, aucune normalisation à l'écriture), donc
+ * région-tagués ou en casse mixte (`'fr-FR'`, `'FR'`, `'en-US'`, `'iw'`) selon la
+ * plateforme émettrice. Laissées telles quelles, ces variantes :
+ *   1. font stocker la traduction sous une clé non canonique (`translated['fr-FR']`)
+ *      que la LIVRAISON (`recipientLanguages` → codes canoniques) ne retrouve
+ *      jamais — le lecteur retombe sur l'original (violation Prisme règle #1) ;
+ *   2. dédupliquent comme des langues DISTINCTES (`'fr'`/`'fr-FR'` = deux jobs ML) ;
+ *   3. n'excluent pas la source quand elle-même est région-taguée.
+ *
+ * On canonicalise chaque code via la SSOT `normalizeLanguageForDedup` AVANT la
+ * déduplication et l'exclusion de la source — même remède que
+ * `PostService.audienceLanguages` (itération 287). L'ordre de première apparition
+ * est préservé (déterminisme).
+ */
+export function broadcastTargetLanguages(
+  rawLanguages: ReadonlyArray<string | null | undefined>,
+  sourceLanguage: string,
+): string[] {
+  const source = normalizeLanguageForDedup(sourceLanguage);
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of rawLanguages) {
+    if (!raw) continue;
+    const code = normalizeLanguageForDedup(raw);
+    if (code === source || seen.has(code)) continue;
+    seen.add(code);
+    result.push(code);
+  }
+  return result;
+}
 
 /**
  * Le ciblage d'une diffusion admin, traduit en filtre Prisma — commun aux

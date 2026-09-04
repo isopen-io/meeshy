@@ -3,6 +3,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
+import { broadcastTargetLanguages } from '../../jobs/broadcast-recipients';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
@@ -325,10 +326,15 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         _count: true,
       });
 
-      // Get unique target languages from recipients
-      const targetLanguages = recipientsByLanguage
-        .map((g: any) => g.systemLanguage)
-        .filter(Boolean) as string[];
+      // Get unique target languages from recipients — CANONICALISÉES avant l'envoi
+      // au translator : le `systemLanguage` groupé est persisté verbatim (`'fr-FR'`,
+      // `'iw'`) et, laissé tel quel, ferait stocker la traduction sous une clé que
+      // la livraison (codes canoniques) ne retrouve jamais. Voir
+      // `broadcastTargetLanguages`.
+      const targetLanguages = broadcastTargetLanguages(
+        recipientsByLanguage.map((g) => g.systemLanguage),
+        broadcast.sourceLanguage,
+      );
 
       // Translate content
       const translationService = new BroadcastTranslationService();
