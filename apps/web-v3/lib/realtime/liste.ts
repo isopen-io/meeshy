@@ -50,21 +50,19 @@ import { demandeLeDelta } from './sync/delta-client';
  * chaque bascule d'onglet serait exactement la lenteur que la directive appelle
  * un BUG.
  *
- * LE 304 EST DEMANDÉ, ET IL NE PEUT PAS TOMBER AUJOURD'HUI — mesuré, pas
- * supposé. La route calcule bien un ETag stable et rend 304 sur
- * `If-None-Match` (`routes/sync/index.ts:422-449`), mais un client de
- * NAVIGATEUR sur une AUTRE ORIGINE ne peut ni le lire ni le faire jouer :
+ * LE 304 TOMBE (#5015). La route calcule un ETag stable et rend 304 sur
+ * `If-None-Match` (`routes/sync/index.ts:422-449`) ; `server.ts` expose
+ * désormais `ETag` par CORS (`CORS_EXPOSED_HEADERS`, `config/cors-methods.ts`)
+ * — `ETag` n'étant pas dans la safelist CORS, un client de NAVIGATEUR sur une
+ * AUTRE ORIGINE (`https://meeshy.me` → `https://gate.meeshy.me`) ne pouvait
+ * pas le lire avant ce correctif, donc jamais composer `If-None-Match`.
  *
- *   • `server.ts:404-410` enregistre `@fastify/cors` SANS `exposedHeaders`, et
- *     `ETag` n'est pas un en-tête de réponse safelisté — `reponse.headers.get('etag')`
- *     rend `null` depuis `https://meeshy.me` vers `https://gate.meeshy.me` ;
- *   • `routes/sync/index.ts:446` pose `Cache-Control: no-store`, donc le cache
- *     HTTP du navigateur ne peut pas non plus revalider tout seul.
- *
- * Le `If-None-Match` reste posé ici — il est JUSTE, et il jouera le jour où la
- * passerelle exposera l'en-tête (issue gateway compagnon). Ce que ce module
- * tient SANS lui est la moitié qui porte la lenteur : la liste entière n'est
- * jamais redemandée, et le delta d'une fenêtre inchangée est vide.
+ * `routes/sync/index.ts:446` pose toujours `Cache-Control: no-store`
+ * (décision #5015 — charge PRIVÉE) : le cache HTTP du navigateur ne revalide
+ * pas tout seul, mais ça ne gêne pas le `If-None-Match` EXPLICITE posé ici.
+ * Ce que ce module tenait déjà SANS le 304 reste vrai en plus : la liste
+ * entière n'est jamais redemandée, et le delta d'une fenêtre inchangée est
+ * vide.
  */
 
 type Ecouteur = (...arguments_: unknown[]) => void;

@@ -193,11 +193,12 @@ describe('l’appel de /sync', () => {
   });
 
   /**
-   * LE VALIDATEUR ILLISIBLE N'EST PAS UNE PANNE. Depuis un NAVIGATEUR, sur une
-   * autre origine, `reponse.headers.get('etag')` rend `null` — la passerelle
-   * n'expose pas l'en-tête par CORS (`server.ts:404-410`, sans
-   * `exposedHeaders`). Le delta doit être servi quand même : c'est la moitié
-   * qui porte la lenteur, et elle ne dépend pas du 304.
+   * LE VALIDATEUR ILLISIBLE N'EST PAS UNE PANNE. `reponse.headers.get('etag')`
+   * peut rendre `null` — un intermédiaire qui filtre l'en-tête, une passerelle
+   * qui ne l'expose pas encore (c'était la production avant #5015 : `ETag`
+   * n'est pas dans la safelist CORS et `server.ts` n'appelait pas
+   * `exposedHeaders`) — et le delta doit être servi quand même : c'est la
+   * moitié qui porte la lenteur, et elle ne dépend pas du 304.
    */
   it('sert le delta même quand l’ETag n’est pas lisible', async () => {
     const { recuperer } = passerelle(() => new Response(JSON.stringify(corpsDeDelta()), { status: 200 }));
