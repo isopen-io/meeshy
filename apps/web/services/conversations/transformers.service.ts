@@ -50,6 +50,39 @@ export function extractPreviewTranslations(raw: unknown): Record<string, string>
 }
 
 /**
+ * Transforme les traductions BRUTES (REST ou socket) vers la forme `Message['translations']`.
+ *
+ * Au niveau module pour la même raison que `extractPreviewTranslations` juste
+ * au-dessus : le convertisseur socket (`meeshy-socketio.service.ts`) et le
+ * transformateur REST doivent rendre EXACTEMENT la même forme pour la même
+ * charge — deux règles divergentes ici sont ce qui faisait qu'un message
+ * arrivait sans ses traductions en temps réel puis les récupérait après un
+ * rechargement (#3644).
+ */
+export function transformMessageTranslations(
+  translations: unknown,
+  messageId: string,
+  originalLanguage: string
+): any[] {
+  if (!Array.isArray(translations)) {
+    return [];
+  }
+
+  return translations.map((t: any) => ({
+    id: String(t.id || ''),
+    messageId,
+    sourceLanguage: String(t.sourceLanguage || originalLanguage),
+    targetLanguage: String(t.targetLanguage || ''),
+    translatedContent: String(t.translatedContent || ''),
+    translationModel: (t.translationModel || 'basic') as TranslationModel,
+    cacheKey: String(t.cacheKey || ''),
+    confidenceScore: Number(t.confidenceScore) || undefined,
+    createdAt: new Date(String(t.createdAt || new Date())),
+    cached: Boolean(t.cached)
+  }));
+}
+
+/**
  * Service de transformation des données backend vers frontend
  */
 export class TransformersService {
@@ -282,28 +315,6 @@ export class TransformersService {
   }
 
   /**
-   * Transformer les traductions
-   */
-  private transformTranslations(translations: any[], messageId: string, originalLanguage: string): any[] {
-    if (!Array.isArray(translations)) {
-      return [];
-    }
-
-    return translations.map((t: any) => ({
-      id: String(t.id || ''),
-      messageId,
-      sourceLanguage: String(t.sourceLanguage || originalLanguage),
-      targetLanguage: String(t.targetLanguage || ''),
-      translatedContent: String(t.translatedContent || ''),
-      translationModel: (t.translationModel || 'basic') as TranslationModel,
-      cacheKey: String(t.cacheKey || ''),
-      confidenceScore: Number(t.confidenceScore) || undefined,
-      createdAt: new Date(String(t.createdAt || new Date())),
-      cached: Boolean(t.cached)
-    }));
-  }
-
-  /**
    * Transforme les données d'un message du backend vers le format frontend
    */
   transformMessageData(backendMessage: unknown): Message {
@@ -322,8 +333,8 @@ export class TransformersService {
     const finalSender = this.transformSender(sender, undefined, senderId);
     const originalLanguage = msg.originalLanguage ? String(msg.originalLanguage) : 'fr';
 
-    const translations = this.transformTranslations(
-      msg.translations as any[],
+    const translations = transformMessageTranslations(
+      msg.translations,
       messageId,
       originalLanguage
     );
