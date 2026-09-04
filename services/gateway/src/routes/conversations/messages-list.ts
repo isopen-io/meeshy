@@ -21,6 +21,7 @@ import {
   historyFloorFor
 } from '../../services/historyFloor';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   loadPersonalHistoryHiding,
@@ -207,10 +208,20 @@ export function registerMessagesListRoute(
 
       // Bandwidth opt-in : filtrage des traductions (texte + audio) aux seules
       // langues du Prisme demandées par le client. Absent/vide = toutes les
-      // langues (comportement historique). Normalisé, dédupliqué, borné.
+      // langues (comportement historique). Canonicalisé, dédupliqué, borné.
+      //
+      // Les codes arrivent VERBATIM du client : le SDK iOS envoie une liste
+      // « opaque » qui peut porter la locale appareil (rang 4 du Prisme,
+      // `Locale.current.identifier` → `en_US` / `pt_BR`), et le web l'`Accept-Language`.
+      // Les traductions sont stockées sous des clés CANONIQUES 2-lettres, donc
+      // un `.toLowerCase()` seul laissait `pt-BR` ne matcher aucune clé `pt` :
+      // la traduction était prunée et le lecteur retombait sur l'original —
+      // violation du Prisme. `normalizeLanguageForDedup` (SSOT, casse repliée ET
+      // région strippée) place le filtre dans l'espace EXACT des clés stockées,
+      // symétrique du chemin socket (`normalizeGroupLanguage`, message-payload-filter.ts).
       const languageFilter = languagesStr
         ? Array.from(new Set(
-            languagesStr.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)
+            languagesStr.split(',').map((l) => l.trim()).filter(Boolean).map(normalizeLanguageForDedup)
           )).slice(0, 20)
         : undefined;
       const hasLanguageFilter = !!languageFilter && languageFilter.length > 0;
