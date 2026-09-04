@@ -491,8 +491,8 @@ class CanvasV3ProjectionTest {
      */
     @Test
     fun `la fenêtre de lecture se convertit en millisecondes`() {
-        assertThat(StorySourceWindow.clippingMs(3.0, 8.0)).isEqualTo(3000L to 8000L)
-        assertThat(StorySourceWindow.clippingMs(1.5, 4.25)).isEqualTo(1500L to 4250L)
+        assertThat(StorySourceWindow.clippingMs(3.0, 8.0)).isEqualTo(StorySourceWindowMs(3000L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(1.5, 4.25)).isEqualTo(StorySourceWindowMs(1500L, 4250L))
         assertThat(StorySourceWindow.clippingMs(null, 8.0)).isNull()
         assertThat(StorySourceWindow.clippingMs(3.0, null)).isNull()
     }
@@ -506,6 +506,6 @@ class CanvasV3ProjectionTest {
     @Test
     fun `une fenêtre qui s aplatit à la milliseconde est refusée`() {
         assertThat(StorySourceWindow.clippingMs(3.0000, 3.0004)).isNull()
-        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(3000L to 3001L)
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(StorySourceWindowMs(3000L, 3001L))
     }
 }
