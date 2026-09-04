@@ -109,6 +109,10 @@ struct ComposerSceneSurface: View {
     /// les deux rails, la bande et les jetons.
     var cameraStage: ComposerSceneCameraStage = .off
 
+    /// L'état de la permission caméra. Sans lui, un refus laisserait la carte
+    /// NOIRE — indiscernable d'une scène vide ou d'une caméra en panne.
+    var cameraPermission: MediaPermissionState = .notDetermined
+
     /// Les pastilles SERVIES et celle qui est choisie — résolues par le meuble
     /// (`ComposerSceneCamera.modes(for:)`), jamais recalculées ici.
     var cameraMode: ComposerSceneCameraMode = .photo
@@ -650,12 +654,27 @@ struct ComposerSceneSurface: View {
                 // Les gestes de la scène — déplacer, pincer, l'appui long qui
                 // a armé ce viseur — continuent d'atteindre le canvas dessous.
                 .overlay {
-                    if let cameraSession, cameraStage != .off {
-                        CameraPreviewLayer(session: cameraSession)
+                    // **Trois états, pas deux** (#4080). Une permission refusée
+                    // laissait la carte noire, c'est-à-dire indiscernable d'une
+                    // scène vide — l'auteur cherchait un défaut là où il n'y
+                    // avait qu'une case à cocher. La règle décide ; cette vue
+                    // peint.
+                    switch ComposerSceneCameraSurface.shown(stage: cameraStage,
+                                                            permission: cameraPermission) {
+                    case .scene:
+                        EmptyView()
+                    case .viewfinder:
+                        if let cameraSession {
+                            CameraPreviewLayer(session: cameraSession)
+                                .aspectRatio(aspectRatio, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                                .allowsHitTesting(false)
+                                .transition(.opacity)
+                        }
+                    case .permissionRefused:
+                        CameraPermissionPanel()
                             .aspectRatio(aspectRatio, contentMode: .fit)
                             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                            .allowsHitTesting(false)
-                            .transition(.opacity)
                     }
                 }
 

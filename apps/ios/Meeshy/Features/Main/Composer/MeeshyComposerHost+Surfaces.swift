@@ -436,6 +436,7 @@ extension MeeshyComposerHost {
             // un aperçu noir sans que rien n'échoue.
             cameraSession: sceneCameraStage == .off ? nil : sceneCamera.session,
             cameraStage: sceneCameraStage,
+            cameraPermission: sceneCamera.permission,
             cameraMode: sceneCameraMode ?? .photo,
             onCameraPhoto: { takeScenePhoto() },
             onCameraStartFilming: { startSceneFilming() },

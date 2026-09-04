@@ -117,39 +117,10 @@ struct CameraView: View {
     /// Remplace le preview quand l'accès caméra est refusé ou restreint.
     /// Avant, `configure()` sortait en silence et l'utilisateur restait devant
     /// un écran noir sans explication ni recours.
-    private var permissionDeniedPanel: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 44, weight: .light))
-                .foregroundColor(.white.opacity(0.7))
+    /// **Le panneau est EXTRAIT** (#4080) : le viseur en scène en a besoin, et
+    /// deux écrans de refus écrits séparément auraient divergé au premier mot.
+    private var permissionDeniedPanel: some View { CameraPermissionPanel() }
 
-            Text(String(localized: "camera.permission.denied.title",
-                        defaultValue: "Accès à la caméra refusé", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundColor(.white)
-
-            Text(String(localized: "camera.permission.denied.body",
-                        defaultValue: "Autorisez Meeshy à utiliser la caméra pour prendre des photos et des vidéos.",
-                        bundle: .main))
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(.white.opacity(0.7))
-                .multilineTextAlignment(.center)
-
-            Button {
-                MediaPermissionCoordinator.openSettings()
-            } label: {
-                Text(String(localized: "camera.permission.openSettings",
-                            defaultValue: "Ouvrir les Réglages", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 24)
-                    .frame(height: 44)
-                    .background(Capsule().fill(.white))
-            }
-        }
-        .padding(.horizontal, 40)
-        .accessibilityElement(children: .contain)
-    }
 
     // MARK: - Top Bar
 

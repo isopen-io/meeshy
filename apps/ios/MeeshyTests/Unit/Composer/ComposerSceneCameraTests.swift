@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// #4080 (vue `2b`) — **le viseur vit dans la scène, et les trois pastilles ne
@@ -176,5 +177,54 @@ final class ComposerSceneCameraOverlayTests: XCTestCase {
         let cèdent = ComposerSceneCameraOverlay.Furniture.allCases
             .filter { ComposerSceneCameraOverlay.yieldsToViewfinder($0) }
         XCTAssertEqual(cèdent, [.description])
+    }
+}
+
+/// #4080 — **ce que la carte MONTRE, et pourquoi « noir » n'est pas un état.**
+final class ComposerSceneCameraSurfaceTests: XCTestCase {
+
+    func test_viseurÉteint_laSceneResteUneScene() {
+        // **`.camera` n'est PAS un cas de l'énuméré** : c'est une propriété
+        // calculée qui LIT le statut système vivant. L'employer dans un témoin
+        // le rendrait dépendant des réglages de la machine — vert ou rouge
+        // selon ce que le simulateur a accordé ce jour-là. Les cas nommés sont
+        // les seuls qui décrivent une intention.
+        for permission in [MediaPermissionState.granted, .denied, .notDetermined] {
+            XCTAssertEqual(
+                ComposerSceneCameraSurface.shown(stage: .off, permission: permission), .scene)
+        }
+    }
+
+    func test_permissionAccordée_montreLAperçu() {
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .granted), .viewfinder)
+    }
+
+    /// **Le cas qui manquait.** Une permission refusée laissait la carte NOIRE
+    /// — indiscernable d'une scène vide ou d'une caméra en panne. L'auteur
+    /// cherchait un défaut là où il n'y avait qu'une case à cocher.
+    func test_permissionRefusée_ditPOURQUOI_plutôtQueDeResterNoire() {
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .denied),
+            .permissionRefused)
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .recording, permission: .denied),
+            .permissionRefused)
+        // `.restricted` — bloqué par une politique (contrôle parental, MDM).
+        // Jamais promptable, et « ouvrir les Réglages » y est le seul recours,
+        // exactement comme `.denied` : les deux doivent rendre le même écran,
+        // sinon un appareil d'entreprise resterait devant une carte noire.
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .restricted),
+            .permissionRefused)
+    }
+
+    /// **`notDetermined` ne montre PAS le panneau** : le système est en train
+    /// de poser sa question, et un écran de refus affiché pendant qu'on demande
+    /// dirait le contraire de ce qui se passe.
+    func test_permissionEnCoursDeDemande_neCrieVictoireNiDéfaite() {
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .notDetermined),
+            .viewfinder)
     }
 }

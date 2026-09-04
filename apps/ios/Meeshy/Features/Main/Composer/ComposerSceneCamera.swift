@@ -1,3 +1,4 @@
+import MeeshySDK
 import Foundation
 
 /// **Le viseur vit DANS la scène — il n'est pas une feuille** (#4080, vue `2b`).
@@ -147,5 +148,34 @@ nonisolated enum ComposerSceneCameraOverlay {
     static func isServed(_ furniture: Furniture,
                          stage: ComposerSceneCameraStage) -> Bool {
         !(stage != .off && yieldsToViewfinder(furniture))
+    }
+}
+
+/// **Ce que la carte MONTRE quand le viseur est armé** (#4080).
+///
+/// Trois états, et le troisième est celui qui manquait : une permission REFUSÉE
+/// laissait la carte noire, c'est-à-dire indiscernable d'une scène vide ou
+/// d'une caméra en panne. L'auteur cherchait un défaut là où il n'y avait
+/// qu'une case à cocher.
+///
+/// `notDetermined` ne montre PAS le panneau : le système est en train de poser
+/// sa question, et un écran de refus affiché pendant qu'on demande dirait le
+/// contraire de ce qui se passe.
+nonisolated enum ComposerSceneCameraSurface {
+
+    enum Shown: String, Equatable, Sendable {
+        /// La scène est une scène.
+        case scene
+        /// L'aperçu de l'objectif.
+        case viewfinder
+        /// L'écran qui dit POURQUOI il n'y a pas d'image.
+        case permissionRefused
+    }
+
+    static func shown(stage: ComposerSceneCameraStage,
+                      permission: MediaPermissionState) -> Shown {
+        guard stage != .off else { return .scene }
+        if permission.needsSettingsRedirect { return .permissionRefused }
+        return .viewfinder
     }
 }
