@@ -457,7 +457,7 @@ se pose**, et aucune liste écrite à la main ne double cette décision.
 | `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
 
 **Le même média n'est pas la même porte selon son PLAN.** Une image de PREMIER
-PLAN devient un `MeeshyObject` et vit à gauche ; un FOND se règle par la porte
+PLAN devient un `MeeshySceneObject` et vit à gauche ; un FOND se règle par la porte
 `background`, à gauche elle aussi (#4919) — voir la correction ci-dessous. Idem
 pour le son : un son de fond est un attribut de la publication (il porte son
 crédit au socle) et vit en bas, un son POSÉ est un objet visible. Ranger les deux

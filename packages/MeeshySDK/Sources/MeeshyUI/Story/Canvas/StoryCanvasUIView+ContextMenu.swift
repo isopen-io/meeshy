@@ -38,7 +38,7 @@ public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equata
     /// **Le média quitte la scène et redevient une slide du post (#4046).**
     ///
     /// D'une autre NATURE que les deux au-dessus : l'empilement écrit le `z`
-    /// d'un `MeeshyObject` — son ordre DANS son plan — quand celle-ci écrit son
+    /// d'un `MeeshySceneObject` — son ordre DANS son plan — quand celle-ci écrit son
     /// `plane`. Les confondre ferait passer un objet devant un fond au lieu de
     /// le sortir.
     case leaveScene

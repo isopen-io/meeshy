@@ -17,7 +17,7 @@ import MeeshyUI
 ///
 /// C'est la **loi 6** qui tranche, pas l'esthétique : « le lecteur EST
 /// l'aperçu ». Un rail posé PAR-DESSUS la scène occupe exactement la place où un
-/// `MeeshyObject` peut vivre — l'aperçu mentirait sur le rendu final, et un
+/// `MeeshySceneObject` peut vivre — l'aperçu mentirait sur le rendu final, et un
 /// aperçu qui ment ne vaut pas l'espace qu'il économise.
 ///
 /// L'encastrement n'est d'ailleurs pas un réglage mais la condition d'existence
@@ -33,7 +33,7 @@ import MeeshyUI
 /// **Le 9:16 ne bouge pas** (loi 3) : c'est la largeur qui cède, et
 /// `CanvasGeometry.aspectFitSize` reste la source unique du dimensionnement — ce
 /// type ne fait que réduire l'aire qu'on lui donne. Et **rien ne se déplace dans
-/// le document** : les `anchor` d'un `MeeshyObject` sont normalisés (0…1), et
+/// le document** : les `anchor` d'un `MeeshySceneObject` sont normalisés (0…1), et
 /// l'espace design garde 1080 de large quelle que soit la largeur rendue.
 nonisolated enum ComposerRailGeometry {
 

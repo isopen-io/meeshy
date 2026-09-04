@@ -580,7 +580,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     /// **E1/E3 (#3886/#3888) — la langue DÉCLARÉE au bas du composer, défaut de
     /// TOUT objet posé sur la scène.** La capsule du composer (`documentLanguage`)
-    /// la sème ; chaque `MeeshyObject` créé (texte, média, audio, sticker, lieu)
+    /// la sème ; chaque `MeeshySceneObject` créé (texte, média, audio, sticker, lieu)
     /// naît avec elle comme `sourceLanguage`, et l'auteur peut la surcharger par
     /// objet (E3, `updateElementLanguage`). Défaut de repli `defaultSourceLanguage`
     /// (« fr ») tant qu'aucun hôte ne l'a semée — jamais un « fr » codé en dur

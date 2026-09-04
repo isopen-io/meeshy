@@ -46,7 +46,7 @@ extension MeeshyComposerHost {
     /// Sur la surface DOCUMENT, oui : l'icône de fond de la rangée d'outils la
     /// déplie. Sur la surface de SCÈNE, non — cette rangée n'y existe plus (le
     /// chrome est passé aux deux rails) et le rail *leading* ne porte que des
-    /// portes qui font entrer un `MeeshyObject` ; une COULEUR n'en est pas un.
+    /// portes qui font entrer un `MeeshySceneObject` ; une COULEUR n'en est pas un.
     /// Le `⋯` est alors le seul chemin restant, et la règle le lui accorde.
     ///
     /// La question se pose au MEUBLE parce que c'est lui qui monte les vues ;

@@ -529,7 +529,7 @@ nonisolated enum ComposerSoundCredit {
 ///   même défaut dans l'autre sens (#4064). Sur la surface DOCUMENT, la palette
 ///   s'ouvre par l'icône de fond de la rangée d'outils ; sur la surface de
 ///   SCÈNE cette rangée n'existe plus — le chrome est passé aux deux rails — et
-///   aucune porte ne fait entrer une COULEUR, qui n'est pas un `MeeshyObject`.
+///   aucune porte ne fait entrer une COULEUR, qui n'est pas un `MeeshySceneObject`.
 ///   La palette y était donc devenue INATTEIGNABLE : on pouvait retirer le
 ///   fond, jamais en changer.
 /// - **retirer le fond** — poser une couleur était une porte à SENS UNIQUE :
