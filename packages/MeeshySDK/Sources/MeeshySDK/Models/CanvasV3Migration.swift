@@ -456,6 +456,17 @@ public extension CanvasV3 {
         }
         if let sourceStart = media.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = media.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
+        // **Le recadrage voyage en QUATRE fractions plates** (#5085), du même
+        // style que ses voisines temporelles — et OMISES quand le cadre est
+        // entier : « les décode-défauts sont omis, leur absence les restitue ».
+        // Un objet imbriqué aurait demandé au payload une forme que le contrat
+        // ne garantit pas ; quatre nombres passent partout.
+        if let crop = media.crop, !crop.isFull {
+            payload["cropX"] = .number(crop.x)
+            payload["cropY"] = .number(crop.y)
+            payload["cropW"] = .number(crop.width)
+            payload["cropH"] = .number(crop.height)
+        }
         if let ducking = media.isDuckingDisabled { payload["isDuckingDisabled"] = .bool(ducking) }
         if media.placement != "media" { payload["placement"] = .string(media.placement) }
         if let fadeIn = media.fadeIn { payload["fadeIn"] = .number(fadeIn) }
@@ -783,6 +794,16 @@ public extension StoryEffects {
     private static func mediaObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryMediaObject {
         let muted = object.payload.bool("muted") ?? false
         let volume = object.payload.double("volume").map { Float($0) } ?? 1
+        // Les quatre fractions ne se lisent qu'ENSEMBLE : trois sur quatre
+        // décriraient un rectangle que personne n'a posé. Leur absence rend le
+        // cadre entier, qui est le défaut.
+        let crop: MediaCropRect? = {
+            guard let x = object.payload.double("cropX"),
+                  let y = object.payload.double("cropY"),
+                  let w = object.payload.double("cropW"),
+                  let h = object.payload.double("cropH") else { return nil }
+            return MediaCropRule.clamped(MediaCropRect(x: x, y: y, width: w, height: h))
+        }()
         var media = StoryMediaObject(
             id: object.id,
             postMediaId: object.payload.string("postMediaId") ?? "",
@@ -810,6 +831,7 @@ public extension StoryEffects {
         media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         media.sourceStart = object.payload.double("sourceStart")
         media.sourceEnd = object.payload.double("sourceEnd")
+        media.crop = crop
         return media
     }
 

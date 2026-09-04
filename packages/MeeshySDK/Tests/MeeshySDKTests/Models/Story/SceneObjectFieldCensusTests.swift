@@ -40,7 +40,16 @@ final class SceneObjectFieldCensusTests: XCTestCase {
     /// cesse d'être vrai. Un champ ajouté à un modèle est un champ de plus à
     /// exercer au golden — c'est tout l'argument du § « ce que cette opacité
     /// coûte », et il ne vaut que si le compte suit.
-    private static let recensementEcrit = 120
+    /// **121 depuis #5085** — `StoryMediaObject.crop`, la jumelle spatiale de
+    /// `sourceStart`/`sourceEnd`.
+    ///
+    /// La question que ce témoin impose de poser a été posée, et la réponse est
+    /// NON : le champ voyage dans le blob v1 (il est dans le `CodingKeys`, dans
+    /// l'`encode(to:)` et dans le round-trip v3), mais **aucun des deux autres
+    /// clients ne le lit encore**. Il entre donc dans les 47 % que rien ne
+    /// compare, et c'est un fait à porter, pas à masquer — le reste de #5085
+    /// (web, Android, renderer d'export) est ce qui l'en sortira.
+    private static let recensementEcrit = 121
 
     private func champs<T>(_ instance: T) -> Int {
         Mirror(reflecting: instance).children.count

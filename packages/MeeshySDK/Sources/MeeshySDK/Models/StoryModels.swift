@@ -177,6 +177,18 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     /// Point de sortie dans la SOURCE, en secondes. `nil` = jusqu'à la fin.
     public var sourceEnd: Double?
 
+    /// **Le cadre retenu dans la source** (#5085, vue `2d`) — la jumelle
+    /// SPATIALE de `sourceStart`/`sourceEnd`.
+    ///
+    /// Normalisé (fractions 0–1), donc indépendant de la résolution : c'est ce
+    /// qui permet au fichier de partir pendant que l'auteur recadre, comme la
+    /// planche `4c` l'exige — « ces trois gestes écrivent des bornes · aucun ne
+    /// ré-encode · aucun n'invalide la montée ».
+    ///
+    /// `nil` ⇒ le cadre entier. La valeur pleine est omise du fil pour la même
+    /// raison que les autres défauts de ce modèle : son absence la restitue.
+    public var crop: MediaCropRect?
+
     // Heritage (kept)
     public var sourceLanguage: String?
     /// Optional author-assigned clip name (persisted, backward-compatible).
@@ -220,6 +232,12 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
         case sourceStart, sourceEnd
+        // #5085 — la jumelle SPATIALE des deux bornes ci-dessus. Sans cette
+        // ligne, le champ existe, se règle, se rend… et disparaît au premier
+        // encodage : une `CodingKeys` explicite est une liste, donc un
+        // inventaire à tenir à jour, et rien ne rougit quand on l'oublie.
+        // C'est `CanvasV3ExhaustivityTests` qui l'a attrapé.
+        case crop
         case sourceLanguage, keyframes, thumbHash, name
         case isDuckingDisabled
     }
@@ -308,6 +326,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         sourceStart = try c.decodeIfPresent(Double.self, forKey: .sourceStart)
         sourceEnd = try c.decodeIfPresent(Double.self, forKey: .sourceEnd)
+        crop = try c.decodeIfPresent(MediaCropRect.self, forKey: .crop)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
         // Decoder clamp : `didSet` ne se déclenche pas pendant init, donc on
@@ -344,6 +363,12 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
         try c.encodeIfPresent(sourceStart, forKey: .sourceStart)
         try c.encodeIfPresent(sourceEnd, forKey: .sourceEnd)
+        // #5085 — la jumelle SPATIALE des deux bornes ci-dessus. Un
+        // `encode(to:)` MANUEL est un inventaire à tenir à jour : le champ
+        // existait, se réglait, se rendait — et disparaissait au premier
+        // encodage. Trois listes le nomment désormais (la propriété, la clé,
+        // cette ligne), et c'est `CanvasV3ExhaustivityTests` qui a compté.
+        try c.encodeIfPresent(crop, forKey: .crop)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)

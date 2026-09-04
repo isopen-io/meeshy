@@ -606,7 +606,7 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 > `CanvasV3ExhaustivityTests` sur les mêmes modèles — une seconde convention en
 > aurait fait deux.
 >
-> Elle rend **120**, un QUATRIÈME nombre : aucune des trois heuristiques n'était
+> Elle rend **121** depuis le 2026-09-04 (**120** au 2026-09-03), un QUATRIÈME nombre : aucune des trois heuristiques n'était
 > juste, et chacune paraissait l'être.
 >
 > **`SceneObjectFieldCensusTests` (SDK) tient ce chiffre** et rougit dès qu'un
@@ -617,7 +617,7 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 
 | mesure | valeur | tenue par |
 |---|---|---|
-| champs des cinq modèles d'objet | **120** (`Mirror`, 2026-09-03) | `SceneObjectFieldCensusTests` |
+| champs des cinq modèles d'objet | **121** (`Mirror`, 2026-09-04) | `SceneObjectFieldCensusTests` |
 | champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **≈ la moitié** † | — |
 | champs jamais exercés — donc jamais comparés | **≈ la moitié** † | — |
 | clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 | commit |
@@ -649,6 +649,15 @@ clé rougit désormais.
 > Les deux dernières lignes sont d'une autre nature, et c'est pourquoi elles
 > gardent leur chiffre exact : ce sont des **événements datés**, traçables à
 > leurs commits, pas des populations à recompter.
+
+**Le 121ᵉ champ est entré dans les aveugles en connaissance de cause (2026-09-04).**
+`StoryMediaObject.crop` — le recadrage de la vue `2d` (#5085) — voyage bien dans
+le blob v1 et dans le round-trip v3, et il est APPLIQUÉ au rendu iOS
+(`contentsRect`, un sous-rectangle normalisé : aucun ré-encodage, conformément à
+la planche `4c`). Mais ni le web ni Android ne le lisent encore : un média
+recadré par un auteur iOS s'affiche donc ENTIER chez eux, sans que rien ne
+rougisse. C'est le reste de #5085, et le compter ici est ce qui l'empêche d'être
+oublié.
 
 **Les huit pertes sont toutes tombées dans les 47 % aveugles.** Ce n'est pas une
 coïncidence : c'est le mécanisme. Un champ que le golden n'exerce pas n'est

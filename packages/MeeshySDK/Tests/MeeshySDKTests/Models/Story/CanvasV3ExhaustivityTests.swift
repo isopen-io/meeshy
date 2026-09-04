@@ -115,6 +115,10 @@ struct CanvasV3ExhaustivityTests {
             thumbHash: "abc123", name: "plan large",
             isDuckingDisabled: true, sourceStart: 2.5, sourceEnd: 9)
         media.mutedVolumeMemento = 0.9
+        // #5085 — une valeur DISTINCTE du défaut (le cadre entier), sans quoi
+        // l'étape 2 serait aveugle : un cadre plein est OMIS du fil par
+        // doctrine, donc il ne pourrait pas manquer à l'arrivée.
+        media.crop = MediaCropRect(x: 0.1, y: 0.2, width: 0.5, height: 0.6)
         return media
     }
 
