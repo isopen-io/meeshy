@@ -156,8 +156,17 @@ final class ComposerDescriptionLayerTests: XCTestCase {
         let s = compact(try composer("ComposerDescriptionLayer.swift"))
         XCTAssertTrue(s.contains(compact(".accessibilityHint(Text(ComposerDescriptionCopy.editHint))")),
                       "Le calque doit annoncer ce que le tap fait.")
-        XCTAssertTrue(s.contains(compact(".accessibilityLabel(Text(ComposerDescriptionCopy.done))")),
+        // **Le libellé est PARAMÉTRIQUE depuis #4890**, parce que le calque sert
+        // désormais deux textes : la légende d'un média et le corps d'un post.
+        // Ce que la garde protège est inchangé — la coche PORTE UN NOM, sortir
+        // par perte de focus n'étant atteignable par personne — mais la garde
+        // ne peut plus épingler la phrase de l'un des deux usages : elle
+        // épinglerait celle qui MENT dans l'autre.
+        XCTAssertTrue(s.contains(compact(".accessibilityLabel(Text(validationLabel))")),
                       "La fermeture est un contrôle NOMMÉ — sortir par perte de focus n'est atteignable par personne.")
+        XCTAssertTrue(s.contains(compact("var validationLabel: String = ComposerDescriptionCopy.done")),
+                      "Le défaut reste la phrase de la description : le site historique n'a rien "
+                        + "à déclarer pour garder ce qu'il avait.")
         XCTAssertFalse(s.contains(".onTapGesture"),
                        "Un geste sur du texte n'annonce rien à VoiceOver.")
     }
