@@ -436,8 +436,17 @@ struct ComposerDocumentSurface: View {
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top, spacing: 12) {
-                        avatarView
-                            .padding(.top, 10)
+                        // **La colonne d'outils suit l'AVATAR, pas le champ**
+                        // (#5082). Posée en frère de `content`, elle se rangeait
+                        // sous `textOnlyField` — qui s'étend — et retombait à
+                        // `y = 428` au lieu de `155`. Dans la colonne gauche de
+                        // l'en-tête, elle reste sous l'avatar quelle que soit la
+                        // hauteur prise par le texte.
+                        VStack(alignment: .leading, spacing: 12) {
+                            avatarView
+                                .padding(.top, 10)
+                            toolRail
+                        }
                         textOnlyField
                     }
                     foregroundSoundCard
@@ -557,7 +566,7 @@ struct ComposerDocumentSurface: View {
         // sans ça, une rangée d'outils vide ferait aussi disparaître les deux
         // accessoires (le chip de lieu, la capsule de langue) en silence —
         // alors que ni l'un ni l'autre ne dépend de `tools`.
-        if !tools.isEmpty || toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil {
+        if toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil {
             // **La rangée DÉFILE, et son occultation est peinte de la teinte du
             // PLATEAU (#4032).**
             //
@@ -586,30 +595,6 @@ struct ComposerDocumentSurface: View {
                         if let toolRowLeadingAccessory {
                             toolRowLeadingAccessory
                         }
-                        ForEach(tools, id: \.rawValue) { tool in
-                            toolButton(tool)
-                            // **La bascule de fond reste au 4e rang (#4071),
-                            // et j'y suis revenu APRÈS mesure.**
-                            //
-                            // Huit entrées nommées ne tiennent pas sur 402 pt —
-                            // ni en les resserrant, ni en les réordonnant :
-                            // quelque chose débordera toujours. Le vrai
-                            // arbitrage n'est donc pas « quel OUTIL cacher »
-                            // mais « quelle PORTE ».
-                            //
-                            // Je l'avais passée en queue pour rendre visibles
-                            // « Fichier », « Position » et « Vocal ». Mesuré à
-                            // l'écran, c'était pire : elle devenait invisible,
-                            // alors que **c'est elle qui fait NAÎTRE la
-                            // scène** (vue `1b` : « choisir un fond fait naître
-                            // la scène incrustée »). Cacher la porte d'une
-                            // branche entière du composer coûte plus que cacher
-                            // deux outils qui, eux, restent atteignables au
-                            // balayage — et la tuile qui dépasse le dit.
-                            if tool == .emoji, onPickBackground != nil {
-                                backgroundColorToggle
-                            }
-                        }
                     }
                     // Le padding vertical vit ICI, dans le contenu défilant :
                     // posé sur le `ScrollView`, il rognerait la zone tactile des
@@ -637,7 +622,7 @@ struct ComposerDocumentSurface: View {
             }
             .padding(16)
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerDocumentCopy.toolRow))
+            .accessibilityLabel(Text(ComposerDocumentCopy.publicationAccessories))
         }
     }
 
@@ -663,6 +648,85 @@ struct ComposerDocumentSurface: View {
     ///
     /// `.caption2`, pas une taille en points : sur la seule surface où il faut LIRE
     /// pour choisir sa porte, ignorer Dynamic Type serait le pire endroit.
+    /// **Les outils, en COLONNE sous l'avatar** (#5082).
+    ///
+    /// > Directive porteur 2026-09-04 : « classer les icones d'action / outils
+    /// > en dessous de l'avatar au lieu de classer en bas ! Ainsi ce restera
+    /// > toujours à gauche comme pour le cas des Story et Reel ! »
+    ///
+    /// Le même composer posait ses outils à deux endroits selon le format : rail
+    /// GAUCHE en Story (`x = 10, y = 190`), rangée BASSE en Post (`y = 694` sur
+    /// 874) — avec, entre l'avatar et elle, cinq cents points de vide sur toute
+    /// la moitié gauche. Un auteur qui passe d'un format à l'autre devait
+    /// rechercher ce qu'il venait d'utiliser.
+    ///
+    /// C'est le second déplacement du même genre : le retour porteur du
+    /// 2026-08-27 avait déjà sorti la bande de mentions de cette rangée basse,
+    /// « à côté des boutons d'action, LOIN D'OÙ L'AUTEUR TAPE ». Le motif se
+    /// répète — le bas de l'écran attire ce qui n'a pas de place, et l'y laisse.
+    ///
+    /// ## Ce que la directive ne demande PAS
+    ///
+    /// « Comme pour Story et Reel » dit **où**, pas **comment**. Les deux rails
+    /// restent différents, et c'est délibéré. La vue `1a` prescrit ici « une
+    /// TUILE : l'icône, et son mot dessous » (#4071), et les libellés y furent
+    /// AJOUTÉS sur mesure — huit glyphes muets, dont deux paires que rien ne
+    /// distinguait.
+    ///
+    /// > **Le discriminant n'est pas « glyphe ou libellé », c'est : LE NOM
+    /// > EST-IL REPRIS AILLEURS À L'ÉCRAN ?** Sur la scène, ouvrir un outil fait
+    /// > apparaître un panneau dont le titre redit son nom — le glyphe peut donc
+    /// > rester nu (#5029, retrait des noms du rail de l'éditeur). Le Post n'a
+    /// > aucun panneau, la barre de prise de vue non plus (#4080) : les deux
+    /// > étiquettent, pour la même raison. La règle unifie trois décisions que
+    /// > « glyphe ou libellé » présentait comme contradictoires.
+    ///
+    /// ## Ce que la colonne RÉSOUT au passage
+    ///
+    /// La rangée défilait horizontalement pour une raison mesurée : à
+    /// `accessibility-XXXL` elle occupait 630 pt sur un écran de 402, calée à
+    /// `x = −114`, coupée des DEUX côtés. **Une colonne n'a pas ce problème** —
+    /// sa largeur est celle d'une tuile, et la hauteur est ce qui manque le
+    /// moins ici. Le défilement vertical reprend le rôle, dans un espace qui
+    /// l'accueille au lieu de le subir.
+    ///
+    /// Les deux ACCESSOIRES ne montent pas avec les outils : la puce de lieu et
+    /// la capsule de langue disent d'où l'on publie et dans quelle langue — des
+    /// métadonnées de la PUBLICATION, pas des outils de composition (§ « Ce qui
+    /// appartient à la PUBLICATION » du modèle). Elles restent en bas, près du
+    /// socle qui porte l'audience, où leur nature les met.
+    @ViewBuilder
+    private var toolRail: some View {
+        if !tools.isEmpty {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: ComposerDocumentToolRowFit.spacing) {
+                    ForEach(tools, id: \.rawValue) { tool in
+                        toolButton(tool)
+                        // La porte du FOND garde sa place derrière l'emoji — sa
+                        // position fut mesurée (elle fait NAÎTRE la scène, vue
+                        // `1b`), et passer en colonne ne change pas cette raison.
+                        if tool == .emoji, onPickBackground != nil {
+                            backgroundColorToggle
+                        }
+                    }
+                    // **Une largeur UNIFORME, pas minimale.** En rangée, une
+                    // tuile large ne se voyait pas : les voisines défilaient. En
+                    // colonne, elle dessine un bord droit en dents de scie —
+                    // « Mentionner » dépasse « Fond » de vingt points. Le
+                    // `minWidth` de la tuile est juste pour une rangée et faux
+                    // pour une colonne ; l'alignement se rattrape donc ICI, au
+                    // site qui connaît l'axe, sans toucher la tuile que la
+                    // rangée d'accessoires partage encore.
+                }
+                .padding(.vertical, 2)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(ComposerDocumentCopy.toolRow))
+        }
+    }
+
     private func toolButton(_ tool: ComposerDocumentTool) -> some View {
         Button {
             lastTappedTool = tool
@@ -679,7 +743,11 @@ struct ComposerDocumentSurface: View {
                     .minimumScaleFactor(0.75)
             }
             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: ComposerDocumentToolRowFit.minimumTileWidth)
+            // **Fixe, plus minimale** (#5082). `minWidth` servait la RANGÉE :
+            // une tuile large y passait inaperçue, les voisines défilant. La
+            // colonne est le seul consommateur restant, et elle dessine un bord
+            // droit — « Mentionner » y dépassait ses voisines de douze points.
+            .frame(width: ComposerDocumentToolRowFit.minimumTileWidth)
             .padding(.vertical, 8)
             .padding(.horizontal, 6)
             .overlay(
@@ -716,7 +784,11 @@ struct ComposerDocumentSurface: View {
             .foregroundColor(showColorPalette
                 ? Color(hex: MeeshyColors.brandPrimaryHex)
                 : MeeshyColors.textSecondary(isDark: true))
-            .frame(minWidth: ComposerDocumentToolRowFit.minimumTileWidth)
+            // **Fixe, plus minimale** (#5082). `minWidth` servait la RANGÉE :
+            // une tuile large y passait inaperçue, les voisines défilant. La
+            // colonne est le seul consommateur restant, et elle dessine un bord
+            // droit — « Mentionner » y dépassait ses voisines de douze points.
+            .frame(width: ComposerDocumentToolRowFit.minimumTileWidth)
             .padding(.vertical, 8)
             .padding(.horizontal, 6)
             .overlay(

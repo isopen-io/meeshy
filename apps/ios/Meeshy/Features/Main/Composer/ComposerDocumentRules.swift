@@ -961,6 +961,18 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Outils du document", bundle: .main)
     }
 
+    /// **Ce que la rangée basse annonce depuis qu'elle n'a plus d'outils** (#5082).
+    ///
+    /// Les outils sont passés en colonne sous l'avatar ; la rangée ne porte plus
+    /// que la puce de lieu et la capsule de langue — d'où l'on publie, dans
+    /// quelle langue. Deux éléments s'annonçaient « Outils du document » le
+    /// temps d'une mesure : celui qui les porte, et celui qui ne les portait
+    /// plus. **Une étiquette qui survit à son contenu désigne le mauvais.**
+    static var publicationAccessories: String {
+        String(localized: "composer.document.a11y.publicationAccessories",
+               defaultValue: "Lieu et langue de la publication", bundle: .main)
+    }
+
     /// Le libellé du ruban de vignettes (B, #3883) — clé neuve, sur le patron
     /// de `toolRow` : `composer.a11y.removeAttachment` sert déjà le BOUTON de
     /// retrait de chaque vignette, mais aucune clé ne nommait le conteneur.
