@@ -10,7 +10,7 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
  * leurs lecteurs historiques.
  */
 export { type TempsReel } from './chargeur';
-import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, type TempsReel } from './chargeur';
 export { CHARGEUR_DE_PARTICIPATION };
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
@@ -594,17 +594,26 @@ export const documentPleinEcran = ({
   corps,
   script = '',
   feuille = FEUILLE,
+  hubs = true,
 }: {
   readonly titre: string;
   readonly description: string;
   readonly corps: string;
   readonly script?: string;
   readonly feuille?: string;
+  /**
+   * Les règles de spéculation (#5104) — servies par défaut aux écrans
+   * CONNECTÉS. La LECTURE PARTAGÉE les refuse (`hubs: false`) : son budget dit
+   * « aucun script applicatif » et un lecteur ANONYME n'a rien à précharger
+   * des hubs d'un compte qu'il n'a pas.
+   */
+  readonly hubs?: boolean;
 }): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots: 'noindex, nofollow' }) +
-  `<body>${corps}${script}</body>` +
+  // Les hubs se préchargent au survol (#5104) — servi par TOUT écran connecté.
+  `<body>${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}</body>` +
   '</html>';
 
 /**

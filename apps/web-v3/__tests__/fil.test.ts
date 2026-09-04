@@ -263,7 +263,9 @@ describe('le fil rendu', () => {
   it('offre un vrai formulaire d’envoi, sans JavaScript, et un envoi de 56 px', () => {
     expect(doc).toContain('<form class="composeur" id="composeur" method="post" action="/chats/68f2a81417a557e8ce4ddfbb" enctype="multipart/form-data">');
     expect(doc).toContain('<button class="envoyer" type="submit" aria-label="Envoyer">');
-    expect(doc.split('<script').length - 1).toBe(1);
+    // DEUX scripts : le thème, et les règles de spéculation (#5104 — du JSON
+    // déclaratif, aucun octet exécuté). Le chargeur, lui, n'y est pas.
+    expect(doc.split('<script').length - 1).toBe(2);
     expect(doc).not.toContain('data-participation');
   });
 
@@ -291,7 +293,8 @@ describe('le fil rendu', () => {
     expect(participant).toContain('data-socket="/__v3/rt/socket.io.def.js"');
     expect(participant).toContain('data-passerelle="https://gate.test"');
     expect(participant).toContain('data-porte="membre"');
-    expect(participant.split('<script').length - 1).toBe(2);
+    // Thème + chargeur + règles de spéculation (#5104).
+    expect(participant.split('<script').length - 1).toBe(3);
     expect(participant).toContain('<script type="module">');
     expect(participant).not.toContain('socket.io.esm');
   });

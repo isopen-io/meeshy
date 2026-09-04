@@ -38,6 +38,17 @@
  * participation remplit (§ 12.4) montrent et cachent par cet attribut ; ils
  * doivent pouvoir le faire sans connaître la feuille.
  */
+/*
+ * LA NAVIGATION FOND-ENCHAÎNE (#5104, directive porteur 2026-09-04).
+ * `@view-transition{navigation:auto}` vit ICI parce que les DEUX documents
+ * d'une navigation doivent l'opter — le socle est le seul CSS que tous
+ * partagent. C'est un no-op sur un navigateur non supportant. La durée est
+ * celle de la charte (règle 32 : ≤ 150 ms) et le crossfade d'OPACITÉ est
+ * l'exception nommée de cette règle — aucune géométrie ne bouge, aucun
+ * `@keyframes` n'est écrit. `prefers-reduced-motion` coupe la transition
+ * ENTIÈRE : le sélecteur universel du bloc au-dessus ne matche pas les
+ * pseudo-éléments `::view-transition-*`, d'où la coupure explicite.
+ */
 const compacte = (feuille: string): string => feuille.replace(/\s*\n\s*/g, '').trim();
 
 export const SOCLE_DU_DOCUMENT = compacte(`
@@ -47,6 +58,9 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-native);font-size:var(--text-md);line-height:var(--leading-relaxed);-webkit-font-smoothing:antialiased}
 :focus-visible{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:var(--stroke-strong);box-shadow:0 0 0 var(--stroke-strong) var(--color-focus-contra)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:0s;animation-duration:0s}}
+@view-transition{navigation:auto}
+::view-transition-old(root),::view-transition-new(root){animation-duration:150ms}
+@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}::view-transition-old(root),::view-transition-new(root){animation:none}}
 `);
 
 /**
