@@ -324,6 +324,19 @@ struct MeeshyComposerHost: View {
     /// séparément divergeraient au premier réglage.
     @State var sceneCameraFlash: AVCaptureDevice.FlashMode = .off
 
+    /// **Les segments de la prise en cours** (#4099, vue `4b`). Chacun est un
+    /// FICHIER déjà écrit — jamais des octets en mémoire, ce qui est toute la
+    /// promesse de la planche : valider concatène des pistes déjà encodées.
+    @State var sceneSegments: [ComposerCaptureSegment] = []
+
+    /// La durée du segment en cours, saisie AU RELÂCHEMENT.
+    ///
+    /// `CameraModel.recordingDuration` est remise à zéro au démarrage suivant,
+    /// et le fichier n'arrive qu'après — la lire au moment où l'URL se présente
+    /// rendrait zéro pour tous les segments sauf le dernier. C'est le genre
+    /// d'écart qui ne casse rien et fait mentir toute la bande.
+    @State var pendingSegmentDuration: TimeInterval = 0
+
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`, l'état ici.
     @State var sceneCameraStage: ComposerSceneCameraStage = .off
 
@@ -838,40 +851,97 @@ struct MeeshyComposerHost: View {
         sceneCamera.configure()
     }
 
-    /// **L'appui : il PREND, ou il commence à prendre.**
-    ///
-    /// La photo part tout de suite ; la vidéo commence à écrire et attend le
-    /// relâchement. `stage` porte la différence, et la loi de la relâche
-    /// (`ComposerSceneCamera.stageAfterRelease`) s'appuie dessus — sans passer
-    /// par `.recording`, MAINS LIBRES n'aurait rien à continuer.
-    func pressSceneShutter() {
-        guard let mode = sceneCameraMode, sceneCameraStage == .armed else { return }
+    /// **Un appui bref PREND une photo** (#4080, directive porteur 2026-09-04 :
+    /// le mode se lit du geste, pas d'un bouton).
+    func takeScenePhoto() {
+        guard sceneCameraStage == .armed else { return }
+        sceneCameraMode = .photo
         HapticFeedback.medium()
-        switch mode {
-        case .photo:
-            sceneCamera.takePhoto(flash: sceneCameraFlash)
-        case .video, .handsFree:
-            sceneCameraStage = .recording
-            Task {
-                await sceneCamera.enableAudioCaptureIfNeeded()
-                sceneCamera.startRecording()
-            }
+        sceneCamera.takePhoto(flash: sceneCameraFlash)
+    }
+
+    /// **Le doigt a TENU : la prise commence.** Le seuil vit dans
+    /// `ComposerShutterGesture`, et la vue le compte — elle seule voit le doigt.
+    func startSceneFilming() {
+        guard sceneCameraStage == .armed else { return }
+        sceneCameraMode = ComposerShutterGesture.mode(locked: false)
+        sceneCameraStage = .recording
+        Task {
+            await sceneCamera.enableAudioCaptureIfNeeded()
+            sceneCamera.startRecording()
         }
     }
 
-    /// **Le relâchement demande à la LOI ce qu'il fait**, il ne le décide pas.
-    ///
-    /// C'est là que les trois pastilles divergent — et écrire ce `switch` ici
-    /// le mettrait hors de portée d'un témoin, alors qu'il est toute la raison
-    /// d'être de la troisième.
-    func releaseSceneShutter() {
-        guard let mode = sceneCameraMode else { return }
-        let suivant = ComposerSceneCamera.stageAfterRelease(
-            mode: mode, stage: sceneCameraStage)
-        guard suivant != sceneCameraStage else { return }
-        sceneCameraStage = suivant
+    /// **Le doigt a remonté sans relâcher : la prise continue sans lui.** Rien
+    /// ne change à ce qui s'écrit — seul le mode change, et avec lui ce que le
+    /// relâchement fera.
+    func lockSceneTake() {
+        guard sceneCameraStage == .recording else { return }
+        sceneCameraMode = ComposerShutterGesture.mode(locked: true)
+    }
+
+    /// **La prise se clôt** — relâchement d'une prise tenue, ou appui sur une
+    /// prise verrouillée. La durée est saisie AVANT l'arrêt : le modèle remet
+    /// son horloge à zéro au démarrage suivant, et le fichier n'arrive
+    /// qu'après.
+    func closeSceneTake() {
+        guard sceneCameraStage == .recording else { return }
+        sceneCameraStage = .armed
+        pendingSegmentDuration = sceneCamera.recordingDuration
         sceneCamera.stopRecording()
         HapticFeedback.medium()
+    }
+
+    /// **Une vidéo prise au viseur en scène s'ACCUMULE, elle ne se pose pas**
+    /// (#4099, vue `4b`).
+    ///
+    /// > « relâcher pour clore le segment · ✓ pour poser dans la scène »
+    ///
+    /// C'est la seule différence de fond avec la feuille, et elle est délibérée :
+    /// la feuille pose à chaque prise, le viseur en scène laisse l'auteur en
+    /// enchaîner plusieurs avant de valider. Une PHOTO, elle, se pose tout de
+    /// suite — il n'y a rien à concaténer, et l'y faire attendre un `✓`
+    /// ajouterait un geste à l'usage le plus courant.
+    func collectSceneSegment(_ url: URL) {
+        sceneSegments.append(ComposerCaptureSegment(
+            url: url, duration: pendingSegmentDuration))
+        pendingSegmentDuration = 0
+    }
+
+    /// **Retirer le dernier segment supprime son FICHIER.** La règle dit lequel ;
+    /// l'effacement se fait ici, seul endroit qui a le droit de toucher au
+    /// disque. Sans lui, chaque essai abandonné laisserait un fichier dans le
+    /// dossier temporaire jusqu'au prochain vidage du système.
+    func dropLastSceneSegment() {
+        let (gardés, orphelin) = ComposerCaptureSegments.droppingLast(sceneSegments)
+        sceneSegments = gardés
+        if let orphelin {
+            FileManager.default.removeItemLogging(
+                at: orphelin, context: "segment de prise retiré par l'auteur", logger: .media)
+        }
+        HapticFeedback.light()
+    }
+
+    /// **`✓` concatène et pose.** Un segment unique EST le fichier final : le
+    /// passer au concaténateur le ré-écrirait pour rien, quand la planche
+    /// promet « quasi instantané quelle que soit la durée ».
+    func validateSceneSegments() {
+        let segments = sceneSegments
+        guard ComposerCaptureSegments.canValidate(segments) else { return }
+        sceneSegments = []
+        Task {
+            let finale: URL?
+            if ComposerCaptureSegments.needsMerge(segments) {
+                finale = await CameraModel.mergeSegments(segments.map(\.url))
+            } else {
+                finale = segments.first?.url
+            }
+            // Repli DOUX sur le dernier segment : une concaténation qui échoue
+            // ne doit pas perdre la prise entière — même règle que la feuille,
+            // et pour la même raison.
+            guard let url = finale ?? segments.last?.url else { return }
+            poseSceneCapture(.video(url))
+        }
     }
 
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
@@ -895,7 +965,25 @@ struct MeeshyComposerHost: View {
     func disarmSceneCamera() {
         sceneCameraStage = .off
         sceneCameraMode = nil
+        // **Les segments abandonnés emportent leurs FICHIERS** (#4099). Sans
+        // cette purge, quitter le viseur après trois essais laisserait trois
+        // .mov dans le dossier temporaire jusqu'au prochain vidage du système
+        // — et la prise suivante repartirait AVEC eux, ce qui poserait dans la
+        // scène des segments que l'auteur croyait avoir jetés.
+        discardSceneSegments()
         sceneCamera.stop()
+    }
+
+    /// Efface les segments en attente ET leurs fichiers. Appelé au
+    /// désarmement ; la validation, elle, vide la liste sans effacer — les
+    /// fichiers y sont consommés par la concaténation.
+    func discardSceneSegments() {
+        for segment in sceneSegments {
+            FileManager.default.removeItemLogging(
+                at: segment.url, context: "segment de prise abandonné", logger: .media)
+        }
+        sceneSegments = []
+        pendingSegmentDuration = 0
     }
 
     var body: some View {

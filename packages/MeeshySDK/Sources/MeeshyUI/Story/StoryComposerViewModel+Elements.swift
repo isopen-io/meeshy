@@ -1090,9 +1090,23 @@ extension StoryComposerViewModel {
         currentEffects = effects
     }
 
+    /// **Le quart de tour d'un média** (#4082, vue `2d`). La règle vit dans
+    /// `StoryMediaRotation` : elle normalise, et elle porte le SENS du glyphe.
+    ///
+    /// Contrairement au muet, ce geste vaut pour une IMAGE autant que pour une
+    /// vidéo — une photo prise de travers est le cas nominal, pas l'exception.
+    public func rotateMedia(id: String) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects,
+              let i = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[i].rotation = StoryMediaRotation.turned(medias[i].rotation)
+        effects.mediaObjects = medias
+        currentEffects = effects
+    }
+
     /// Mute un-bouton d'une piste VIDÉO (bouton canvas, rangée du panneau
     /// Médias). No-op pour une image — rien à couper.
-    func toggleMediaMute(id: String) {
+    public func toggleMediaMute(id: String) {
         var effects = currentEffects
         guard var medias = effects.mediaObjects,
               let i = medias.firstIndex(where: { $0.id == id }),

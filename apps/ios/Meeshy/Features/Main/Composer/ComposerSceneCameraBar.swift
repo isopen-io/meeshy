@@ -3,206 +3,251 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **La barre du viseur — trois pastilles, un déclencheur, une phrase** (#4080,
-/// vue `2b`).
+/// **Les contrôles du viseur vivent DANS la scène, et le mode se lit du GESTE**
+/// (#4080, vue `2b` — directive porteur 2026-09-04).
 ///
-/// > `PHOTO` · `VIDÉO` · `MAINS LIBRES` … « maintenir pour filmer · relâcher
-/// > pour poser dans la scène » — planche `2b`
+/// > « Les contrôles sont apparus mais hors de la zone scène alors que tout
+/// > doit être dans la scène ! Et la gestion photo vidéo ou mains libres se
+/// > fait par la gestuelle uniquement et non des boutons disponibles. »
 ///
-/// ## Elle vit dans le COULOIR, jamais sur la carte
+/// ## Deux corrections, et la première renverse une doctrine
 ///
-/// La cible dessine ces contrôles par-dessus un aperçu plein écran. Le composer
-/// n'a pas cette géographie : ses rails et sa rangée d'entrées vivent dans les
-/// couloirs du plateau (directive porteur 2026-08-31), et un contrôle posé sur
-/// le canvas vole les touches de la bande qu'il couvre. La barre prend donc la
-/// place de la rangée basse — la même place, le même échange de contenu que
-/// `railMode` opère déjà pour les contrôleurs d'un outil ouvert.
+/// **La géographie.** Le lot précédent posait cette barre dans le couloir bas
+/// du plateau, au nom de la loi 6 — « aucun contrôle sur le canvas, le player
+/// EST l'aperçu ». C'était une mauvaise lecture : cette loi protège l'APERÇU
+/// d'une composition, pour qu'il ne mente pas sur le rendu. Un VISEUR n'est pas
+/// un aperçu de composition — c'est un instrument de cadrage, et son chrome ne
+/// part avec aucune publication. La planche `2b` le dessine d'ailleurs
+/// par-dessus l'image, et le porteur le confirme.
 ///
-/// Ce n'est pas une entorse à la cible : `2b` prescrit un ORDRE (les modes
-/// au-dessus du déclencheur, la phrase en dessous) et des ÉTATS, et les deux
-/// sont ici. C'est la géographie du plateau qui prime, comme pour les rails.
+/// **Le geste.** Trois pastilles à choisir AVANT de déclencher demandaient une
+/// décision avant l'intention. Le geste la lit APRÈS — appuyer prend, tenir
+/// filme, remonter verrouille — ce qui est l'ordre dans lequel elle vient. Les
+/// seuils vivent dans `ComposerShutterGesture`, hors du corps de cette vue.
 struct ComposerSceneCameraBar: View {
 
-    let modes: [ComposerSceneCameraMode]
-    let mode: ComposerSceneCameraMode
     let stage: ComposerSceneCameraStage
-    let onPickMode: (ComposerSceneCameraMode) -> Void
-    /// L'appui — il PREND en photo, ou commence à filmer.
-    let onPress: () -> Void
-    /// Le relâchement. Ce qu'il fait dépend du mode, et la loi le dit
-    /// (`ComposerSceneCamera.stageAfterRelease`) : cette vue ne re-décide rien.
-    let onRelease: () -> Void
+    let mode: ComposerSceneCameraMode
+
+    /// Un appui bref : une photo.
+    let onPhoto: () -> Void
+    /// Le doigt a tenu : la prise commence.
+    let onStartFilming: () -> Void
+    /// Le doigt a remonté sans relâcher : la prise continue sans lui.
+    let onLock: () -> Void
+    /// La prise se clôt — relâchement d'une prise tenue, ou appui sur une
+    /// prise verrouillée.
+    let onCloseTake: () -> Void
 
     let flashMode: AVCaptureDevice.FlashMode
     let onCycleFlash: () -> Void
     let onFlipCamera: () -> Void
-    /// **La SORTIE.** Un état sans issue est un piège, quelle que soit sa
-    /// beauté : sans elle, armer le viseur condamnait l'auteur à publier ou à
-    /// tout fermer. C'est la loi 4 prise par l'autre bout — un contrôle existe
-    /// s'il a un effet, et un ÉTAT existe s'il a une porte de sortie.
     let onDisarm: () -> Void
 
+    let segments: [ComposerCaptureSegment]
+    let onDropLastSegment: () -> Void
+    let onValidateSegments: () -> Void
+
+    /// L'instant du poser de doigt. `nil` ⇒ aucun doigt. C'est lui qui fait la
+    /// différence entre une photo et une prise, et il ne peut pas vivre
+    /// ailleurs : la vue est le seul endroit qui voit le doigt.
+    @State private var pressedAt: Date?
+    @State private var locked = false
+    @State private var holdTask: Task<Void, Never>?
+
     var body: some View {
-        VStack(spacing: 12) {
-            if modes.count > 1 { modeRow }
-            // **La cible met le flash et la bascule EN HAUT ; le plateau n'a
-            // pas cette place** — sa barre haute porte déjà la fermeture, le
-            // format et le `⋯`. Les trois contrôles rejoignent donc la rangée
-            // du déclencheur, qui a exactement la géométrie de `2b` : quelque
-            // chose à gauche, le déclencheur au centre, quelque chose à droite.
-            HStack(spacing: 0) {
-                sideControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
-                            label: ComposerCameraFlash.label(for: flashMode),
-                            tint: flashMode == .off ? .white.opacity(0.55) : .yellow,
-                            action: onCycleFlash)
-                Spacer(minLength: 8)
-                shutter
-                Spacer(minLength: 8)
-                sideControl(symbol: "arrow.triangle.2.circlepath.camera",
-                            label: ComposerSceneCameraCopy.flipLabel,
-                            tint: .white.opacity(0.85),
-                            action: onFlipCamera)
-            }
-            .padding(.horizontal, 24)
+        VStack(spacing: 0) {
+            topControls
+            if !segments.isEmpty { segmentStrip }
+            Spacer(minLength: 0)
+            shutter
             hint
-            exit
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
     }
 
-    // MARK: - Les pastilles
+    // MARK: - En tête de la carte
 
-    /// **Montées seulement s'il y a un CHOIX.** Un format qui ne sert qu'un
-    /// mode afficherait une pastille unique et toujours sélectionnée — un
-    /// contrôle sans effet, que la loi 4 bannit.
-    private var modeRow: some View {
+    private var topControls: some View {
         HStack(spacing: 8) {
-            ForEach(modes, id: \.self) { candidat in
-                Button {
-                    onPickMode(candidat)
-                    HapticFeedback.light()
-                } label: {
-                    Text(ComposerSceneCameraCopy.label(for: candidat))
-                        .font(MeeshyFont.relative(11, weight: .bold))
-                        .foregroundStyle(candidat == mode ? Color.white : Color.white.opacity(0.7))
-                        .padding(.horizontal, 14)
-                        .frame(height: 30)
-                        .background {
-                            if candidat == mode {
-                                Capsule().fill(MeeshyColors.brandGradient)
-                            } else {
-                                Capsule().fill(Color.white.opacity(0.12))
-                            }
-                        }
-                        // La CIBLE fait 44 pt de haut, la pastille 30 : un
-                        // contrôle de 30 pt ne s'atteint pas au pouce
-                        // (dimension 5), et l'agrandir écraserait la rangée.
-                        .contentShape(Capsule().inset(by: -7))
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(candidat == mode ? [.isButton, .isSelected] : .isButton)
-            }
+            glassControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
+                         label: ComposerCameraFlash.label(for: flashMode),
+                         tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
+                         action: onCycleFlash)
+            Spacer(minLength: 0)
+            glassControl(symbol: "xmark",
+                         label: ComposerSceneCameraCopy.disarmLabel,
+                         tint: .white,
+                         action: onDisarm)
+            glassControl(symbol: "arrow.triangle.2.circlepath.camera",
+                         label: ComposerSceneCameraCopy.flipLabel,
+                         tint: .white,
+                         action: onFlipCamera)
         }
     }
 
-    // MARK: - Le déclencheur
-
-    /// **Un anneau blanc, un disque corail** — et le disque se rétracte en carré
-    /// pendant la prise, comme le déclencheur de la feuille. La forme dit
-    /// l'état sans un mot : rond = prêt, carré = en train d'écrire.
-    private var shutter: some View {
-        ZStack {
-            Circle()
-                .stroke(.white, lineWidth: 4)
-                .frame(width: 72, height: 72)
-            if stage == .recording {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-            } else {
-                Circle()
-                    .fill(MeeshyColors.error)
-                    .frame(width: 58, height: 58)
-            }
-        }
-        .contentShape(Circle())
-        // **`onPress` et `onRelease` sont DEUX événements, pas une action.**
-        // Un `Button` ne rend que le second, et la vidéo tenue a besoin du
-        // premier : c'est l'appui qui commence la prise, le relâchement qui la
-        // clôt. `DragGesture(minimumDistance: 0)` est la façon dont SwiftUI
-        // donne les deux sans imposer de déplacement.
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard stage != .recording else { return }
-                    onPress()
-                }
-                .onEnded { _ in onRelease() }
-        )
-        .accessibilityElement()
-        .accessibilityLabel(ComposerSceneCameraCopy.shutterLabel(mode: mode, stage: stage))
-        .accessibilityAddTraits(.isButton)
-    }
-
-    // MARK: - Les contrôles de côté
-
-    /// 44 pt de cible, quel que soit le glyphe (dimension 5) — le même gabarit
-    /// que la feuille, pour que le doigt retrouve la même taille d'un écran à
-    /// l'autre.
-    private func sideControl(symbol: String,
-                             label: String,
-                             tint: Color,
-                             action: @escaping () -> Void) -> some View {
+    /// **Sur du verre, jamais à nu.** Ces contrôles flottent sur une image que
+    /// l'objectif choisit : une glyphe blanche posée sur un mur clair
+    /// disparaîtrait. Même arbitrage que la description du volet de scène.
+    private func glassControl(symbol: String,
+                              label: String,
+                              tint: Color,
+                              action: @escaping () -> Void) -> some View {
         Button {
             action()
             HapticFeedback.light()
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(.white.opacity(0.12)))
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle())
+                .contentShape(Circle().inset(by: -2))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 
-    // MARK: - La sortie
+    // MARK: - La bande des segments (#4099, vue `4b`)
 
-    /// **Rendre la scène.** Le viseur n'est pas un mode où l'on reste ; sans
-    /// cette porte, l'armer condamnait l'auteur à publier ou à tout fermer.
-    private var exit: some View {
-        Button {
-            onDisarm()
-            HapticFeedback.light()
-        } label: {
-            Text(ComposerSceneCameraCopy.disarmLabel)
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
-                .frame(height: 32)
-                .padding(.horizontal, 16)
-                .contentShape(Capsule().inset(by: -6))
+    private var segmentStrip: some View {
+        VStack(spacing: 6) {
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    ForEach(Array(zip(segments, ComposerCaptureSegments.shares(segments))),
+                            id: \.0.id) { segment, part in
+                        Capsule()
+                            .fill(segment.id == segments.last?.id
+                                  ? MeeshyColors.error : Color.white.opacity(0.8))
+                            .frame(width: max(2, geo.size.width * part - 2))
+                    }
+                }
+            }
+            .frame(height: 3)
+
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Circle().fill(MeeshyColors.error).frame(width: 6, height: 6)
+                    Text(LocalizedNumber.duration(
+                        seconds: ComposerCaptureSegments.totalDuration(segments)))
+                        .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 9)
+                .frame(height: 24)
+                .adaptiveGlass(in: Capsule())
+
+                Text(ComposerSceneCameraCopy.segmentCount(segments.count))
+                    .font(MeeshyFont.relative(10, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.85))
+
+                Spacer(minLength: 4)
+
+                glassControl(symbol: "delete.left",
+                             label: ComposerSceneCameraCopy.dropSegmentLabel,
+                             tint: .white.opacity(0.9),
+                             action: onDropLastSegment)
+                if ComposerCaptureSegments.canValidate(segments) {
+                    glassControl(symbol: "checkmark",
+                                 label: ComposerSceneCameraCopy.validateLabel,
+                                 tint: .white,
+                                 action: onValidateSegments)
+                }
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.top, 10)
+    }
+
+    // MARK: - Le déclencheur — un seul, trois intentions
+
+    private var shutter: some View {
+        ZStack {
+            Circle()
+                .stroke(locked ? MeeshyColors.error : .white, lineWidth: 4)
+                .frame(width: 76, height: 76)
+            if stage == .recording {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(MeeshyColors.error)
+                    .frame(width: 30, height: 30)
+            } else {
+                Circle().fill(MeeshyColors.error).frame(width: 62, height: 62)
+            }
+        }
+        .contentShape(Circle().inset(by: -10))
+        .gesture(shutterGesture)
+        .accessibilityElement()
+        .accessibilityLabel(ComposerSceneCameraCopy.shutterLabel(mode: mode, stage: stage))
+        .accessibilityAddTraits(.isButton)
+        // VoiceOver ne TIENT pas un doigt : sans cette action, la vidéo serait
+        // inatteignable au lecteur d'écran — une capacité offerte à la main et
+        // refusée à la voix.
+        .accessibilityAction(named: Text(ComposerSceneCameraCopy.filmActionLabel)) {
+            stage == .recording ? onCloseTake() : onStartFilming()
+        }
+    }
+
+    private var shutterGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { valeur in
+                if pressedAt == nil {
+                    pressedAt = Date()
+                    locked = false
+                    armHold()
+                }
+                guard stage == .recording, !locked,
+                      ComposerShutterGesture.locks(translationY: valeur.translation.height)
+                else { return }
+                locked = true
+                onLock()
+                HapticFeedback.medium()
+            }
+            .onEnded { _ in
+                holdTask?.cancel()
+                holdTask = nil
+                let tenu = pressedAt.map { Date().timeIntervalSince($0) } ?? 0
+                pressedAt = nil
+                switch ComposerShutterGesture.outcome(heldFor: tenu, locked: locked) {
+                case .photo:
+                    // Une prise a pu démarrer et le doigt partir avant le seuil
+                    // — la course est possible. Ce qui EST en train de s'écrire
+                    // prime sur ce que la durée dit.
+                    if stage == .recording { onCloseTake() } else { onPhoto() }
+                case .closeTake:
+                    onCloseTake()
+                case .keepFilming:
+                    break
+                }
+            }
+    }
+
+    /// **Le maintien se compte au temps, pas au mouvement.** `onChanged` ne
+    /// refire que si le doigt BOUGE ; un doigt parfaitement immobile ne
+    /// démarrerait jamais la prise. La tâche différée est ce qui rend le geste
+    /// possible sans exiger un tremblement.
+    private func armHold() {
+        holdTask?.cancel()
+        holdTask = Task {
+            try? await Task.sleep(nanoseconds:
+                UInt64(ComposerShutterGesture.holdToFilm * 1_000_000_000))
+            guard !Task.isCancelled, pressedAt != nil, stage != .recording else { return }
+            onStartFilming()
+            HapticFeedback.medium()
+        }
     }
 
     // MARK: - La phrase
 
-    /// **Elle DIT le geste**, et change avec le mode et l'étape — la clé vient
-    /// de `ComposerSceneCamera.hintKey`, pas d'un `switch` écrit ici : une
-    /// condition dans un corps de vue est invisible aux tests, et celle-ci est
-    /// tout ce que l'affordance promet.
     private var hint: some View {
         Text(ComposerSceneCameraCopy.hint(mode: mode, stage: stage))
             .font(MeeshyFont.relative(11, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.6))
+            .foregroundStyle(.white.opacity(0.85))
+            .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
             .multilineTextAlignment(.center)
             .lineLimit(2)
-            .minimumScaleFactor(0.8)
-            .padding(.horizontal, 16)
-            // Lue par la phrase du déclencheur, qui la reprend : l'entendre
-            // deux fois de suite n'apprend rien.
+            .minimumScaleFactor(0.75)
+            .padding(.top, 10)
             .accessibilityHidden(true)
     }
 }

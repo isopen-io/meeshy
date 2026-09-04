@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-reseau.d.mts';
-import { APPAREILS_DU_BOUCHON, routesDuCompte } from './bouchon-compte';
+import {
+  APPAREILS_DU_BOUCHON,
+  boiteDeNotifsDeBouchon,
+  routesDuCompte,
+  type BoiteDeNotifsDeBouchon,
+} from './bouchon-compte';
 import {
   placeDeLInvite,
   porteDeLHote,
@@ -129,6 +134,8 @@ export type PasserelleDeBouchon = {
   readonly ferme: () => Promise<void>;
   /** Le socket, monté sur le même serveur — et sa porte de test. */
   readonly socket: BouchonSocket;
+  /** La boîte de notifications du lecteur (#4898) — `remets()` la restaure entre deux témoins. */
+  readonly boite: BoiteDeNotifsDeBouchon;
   /** Les sessions invitées dont la place est ACTIVE : en retirer une, c'est `isActive:false` en base (état F). */
   readonly placesActives: Set<string>;
   /**
@@ -298,6 +305,7 @@ export const passerelleDeBouchon = async (options?: {
   const appareils = APPAREILS_DU_BOUCHON.map((appareil) => ({ ...appareil }));
   const liensCrees: Record<string, unknown>[] = [];
   const conversationsCreees: { id: string; titre: string }[] = [];
+  const boite = boiteDeNotifsDeBouchon(conversationId);
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -307,6 +315,7 @@ export const passerelleDeBouchon = async (options?: {
     appareils,
     liensCrees,
     conversationsCreees,
+    boite,
   });
 
   const serveur = createServer(async (requete, reponse) => {
@@ -397,6 +406,7 @@ export const passerelleDeBouchon = async (options?: {
       await new Promise<void>((resoud) => serveur.close(() => resoud()));
     },
     socket: bouchon,
+    boite,
     placesActives,
     sessionsRevoquees,
     place,

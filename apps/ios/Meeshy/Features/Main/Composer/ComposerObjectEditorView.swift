@@ -82,6 +82,17 @@ struct ComposerObjectEditorView: View {
     /// exprimer un état que ce booléen dit sans y toucher.
     @State private var optionsAreCollapsed = false
 
+    /// La hauteur du CONTENU du panneau d'options, remontée par
+    /// `ComposerObjectEditorOptionsHeightKey` (#5083). Le panneau s'y ajuste
+    /// plutôt que de prendre tout ce qu'on l'autorise à prendre.
+    @State var optionsContentHeight: CGFloat = 0
+
+    /// La durée du fichier source d'un média, mesurée à l'ouverture (#4082).
+    /// Le modèle ne la porte pas de façon fiable ; sans elle, chaque
+    /// réouverture de la bande montrerait une source rétrécie à la fenêtre
+    /// précédente — un rognage qui se referme sur lui-même à chaque visite.
+    @State var mediaSourceDuration: Double = 0
+
     @State private var planZoom: Plan2DZoom = .fit
     @State private var moveOrigin: Double?
 
@@ -168,8 +179,27 @@ struct ComposerObjectEditorView: View {
                 scene
                 historyRail
             }
-            options
         }
+        // **Les options s'ANCRENT au bas, elles ne suivent pas la pile** (#5083,
+        // directive porteur 2026-09-04 : « dans la page plein écran d'ajout de
+        // texte il faut que les options soient en bas et non en milieu de
+        // l'écran »).
+        //
+        // Mesuré avant : la grille des polices finissait à 756 sur un écran de
+        // 874 — **cent-dix-huit points vides sous elle**, et le clavier levé la
+        // pinçait entre la carte et lui, loin des deux.
+        //
+        // Empilées en TROISIÈME enfant d'un `VStack`, les options prenaient la
+        // hauteur de leur contenu là où la pile les posait ; ce qui restait
+        // dessous n'appartenait à personne. `safeAreaInset` renverse la
+        // question : la barre est POSÉE sur le bord, et c'est la scène qui
+        // reçoit ce qui reste — exactement l'inverse, et exactement ce que la
+        // directive demande.
+        //
+        // C'est aussi ce que fait tout le reste du produit : le socle est ancré
+        // en bas, les options de l'outil DESSIN aussi. L'éditeur plein écran
+        // était l'exception.
+        .safeAreaInset(edge: .bottom, spacing: 0) { options }
         .background(plateauTint.ignoresSafeArea())
         .preferredColorScheme(.dark)
         // **Le glissement du bord de tête RAMÈNE à la scène** (#4997).
@@ -505,7 +535,15 @@ struct ComposerObjectEditorView: View {
 
     @ViewBuilder
     private var options: some View {
-        if !optionsAreCollapsed, let binding = viewModel.textObjectBinding(for: objectId) {
+        if !optionsAreCollapsed, family == .media {
+            ScrollView { mediaOptions }
+                .frame(height: ComposerObjectEditorOptions.height(
+                    content: optionsContentHeight,
+                    cap: ComposerObjectEditorRail.optionsMaxHeight))
+                .onPreferenceChange(ComposerObjectEditorOptionsHeightKey.self) {
+                    optionsContentHeight = $0
+                }
+        } else if !optionsAreCollapsed, let binding = viewModel.textObjectBinding(for: objectId) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     styleSection(binding)
@@ -528,6 +566,16 @@ struct ComposerObjectEditorView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 28)
+                // La hauteur RÉELLE du contenu, remontée au panneau. Mesurée en
+                // fond plutôt qu'en overlay : un `GeometryReader` posé en
+                // overlay imposerait sa propre taille au contenu qu'il mesure.
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: ComposerObjectEditorOptionsHeightKey.self,
+                            value: geo.size.height)
+                    }
+                }
             }
             // **Le bas prend ce qu'il LUI faut, jamais tout ce qui reste**
             // (#4997). Un `ScrollView` est greedy : posé en `maxHeight:
@@ -541,7 +589,29 @@ struct ComposerObjectEditorView: View {
             // et en deçà la place revient au sujet. C'est le sens même de la
             // directive — « laisser la place au canvas d'occuper suffisamment
             // l'espace ».
-            .frame(maxHeight: ComposerObjectEditorRail.optionsMaxHeight)
+            // **Le panneau fait la hauteur de son CONTENU, plafonnée** (#5083).
+            //
+            // `maxHeight:` seul ne suffisait pas, et c'est la vraie cause du
+            // défaut : un `ScrollView` est GLOUTON dans son axe — il prend les
+            // 260 points qu'on l'autorise à prendre, même quand son contenu en
+            // occupe 168, et le contenu se cale en HAUT de la boîte. Les
+            // quatre-vingt-douze points restants n'appartenaient à personne et
+            // ressemblaient à une marge voulue.
+            //
+            // Mesuré avant : la grille des polices finissait à 748 sur un écran
+            // de 874. L'ancrage au bord (`safeAreaInset`, ci-dessus) déplaçait
+            // la BOÎTE sans rien changer à ce qu'elle contenait — les deux
+            // correctifs sont nécessaires, et aucun ne suffit seul.
+            //
+            // La hauteur mesurée est bornée par le bas à 1 : une hauteur nulle
+            // à la première passe ferait disparaître le panneau une frame, ce
+            // qui se voit comme un clignotement à chaque ouverture d'outil.
+            .frame(height: ComposerObjectEditorOptions.height(
+                content: optionsContentHeight,
+                cap: ComposerObjectEditorRail.optionsMaxHeight))
+            .onPreferenceChange(ComposerObjectEditorOptionsHeightKey.self) {
+                optionsContentHeight = $0
+            }
             .scrollDisabled(planHoldsGesture)
         }
     }
@@ -705,7 +775,10 @@ struct ComposerObjectEditorView: View {
     /// La forme du corps n'a pas changé — chaque appelant passe le même
     /// `content()` qu'avant. Ce qui change est QUI décide de l'afficher.
     @ViewBuilder
-    private func section<Content: View>(_ titre: String,
+    // `internal` depuis #4082 : la branche MÉDIA vit dans
+    // `ComposerObjectEditorView+Media.swift` — le fichier passait 1000 lignes,
+    // seuil au-delà duquel un découpage se justifie sans se discuter.
+    func section<Content: View>(_ titre: String,
                                         _ id: ComposerObjectEditorSection,
                                         @ViewBuilder content: () -> Content) -> some View {
         if ComposerObjectEditorRail.isSelected(id, selected: selectedTool) {
@@ -758,6 +831,28 @@ nonisolated enum ComposerObjectEditorCopy {
     static var title: String {
         String(localized: "composer.object.editor.title",
                defaultValue: "Modifier l'objet", bundle: .main)
+    }
+
+    /// Les titres des sections d'un MÉDIA (#4082, vue `2d`).
+    static var trim: String {
+        String(localized: "composer.object.editor.trim",
+               defaultValue: "Rogner", bundle: .main)
+    }
+
+    static var mediaActions: String {
+        String(localized: "composer.object.editor.mediaActions",
+               defaultValue: "Média", bundle: .main)
+    }
+
+    static var mute: String {
+        String(localized: "composer.object.editor.mute",
+               defaultValue: "Muet", bundle: .main)
+    }
+
+    /// « Pivoter », jamais « Rotation » : le mot dit le GESTE, pas la propriété.
+    static var rotate: String {
+        String(localized: "composer.object.editor.rotate",
+               defaultValue: "Pivoter", bundle: .main)
     }
 
     static var done: String {
@@ -831,8 +926,25 @@ nonisolated enum ComposerObjectEditorCopy {
     static func entry(_ entry: ComposerObjectEditorSection) -> String {
         switch entry {
         case .tool(let outil): return tool(outil)
+        case .media(let outil): return media(outil)
         case .timing:          return timing
         case .plan:            return plan
+        }
+    }
+
+    /// Les libellés des outils d'un MÉDIA (#4082, vue `2d`). `crop` et `split`
+    /// portent leur mot bien qu'ils ne soient pas encore SERVIS (#5085) : le
+    /// jour où le contrat les porte, seule `MediaEditTool.served` change.
+    static func media(_ tool: MediaEditTool) -> String {
+        switch tool {
+        case .trim:    return trim
+        case .actions: return mediaActions
+        case .crop:
+            return String(localized: "composer.object.editor.crop",
+                          defaultValue: "Recadrer", bundle: .main)
+        case .split:
+            return String(localized: "composer.object.editor.split",
+                          defaultValue: "Couper", bundle: .main)
         }
     }
 

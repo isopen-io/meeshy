@@ -11902,6 +11902,36 @@ ce qui est légitime, ou autoriser ce qui casse.
 tire le commit. Écarter le `pbxproj` ne perd donc rien — il n'y a jamais de raison
 d'éditer ce fichier à la main pour n'en garder qu'une partie.
 
+### Un message d'échec RÉVÈLE ce que sa garde suppose — et décide de qui sera accusé
+
+L'extraction du #5069 a fait tomber deux gardes qui se ressemblent en tout :
+toutes deux lisent un fichier de source **par son nom**, toutes deux gardent une
+règle de câblage, toutes deux se périment au moment où le code déménage. Leurs
+messages d'échec sont opposés.
+
+| garde | ce qu'elle dit en tombant |
+|---|---|
+| `test_leRetrait_estServiAuxDeuxSurfaces` | « un seul est le défaut de #4918 rejoué : la trace existait, mais une seule surface la recevait » |
+| `test_laSurfaceDeDocument_aTousSesRappelsBranches` | « la garde doit être re-pointée, sinon elle mesure le vide » |
+
+La première produit **un faux rouge ARGUMENTÉ** : elle cite un défaut historique
+réel, décrit un symptôme cohérent, et envoie chercher exactement au mauvais
+endroit. Elle accuse un câblage INTACT d'être à moitié fait. La seconde envisage
+sa propre péremption et dit quoi faire.
+
+> **La différence n'est pas dans la règle gardée, elle est dans ce que le message
+> SUPPOSE.** La première suppose que si le compte est faux, c'est le code qui a
+> changé. La seconde envisage que ce soit elle.
+
+C'est une qualité qui s'écrit **au moment de rédiger le message**, pour un
+lecteur qu'on ne connaîtra pas — et elle ne coûte rien de plus qu'une subordonnée.
+
+La règle pratique, pour toute garde qui lit une source par son CHEMIN : son
+message doit nommer les DEUX hypothèses, et dans cet ordre — *soit la règle est
+violée, soit je cherche au mauvais endroit*. Une garde de source mesure toujours
+la géographie autant que la règle ; celle qui l'ignore ment avec aplomb le jour
+où la géographie bouge.
+
 ### Un ORDRE juste peut produire une disposition FAUSSE — le vide n'est pas un frère
 
 J'ai ouvert #5036 en lisant une capture du porteur : les hashtags apparaissaient

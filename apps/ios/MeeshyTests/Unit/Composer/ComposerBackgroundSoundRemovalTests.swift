@@ -48,7 +48,24 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
     /// Le compte est la garde : `1` est le défaut de #4918 rejoué, et il se lit
     /// exactement comme un câblage complet tant qu'on ne compte pas.
     func test_leRetrait_estServiAuxDeuxSurfaces() throws {
+        // **Le compte se fait sur les DEUX fichiers depuis le #5069.** La
+        // surface DOCUMENT a quitté `+Surfaces` pour `+DocumentSurface` — le
+        // fichier d'origine dépassait le plafond de 1200 lignes.
+        //
+        // Sans cette somme, la garde tomberait à `1` et rendrait son propre
+        // message d'échec : « un seul est le défaut de #4918 rejoué ». Elle
+        // accuserait un câblage INTACT d'être à moitié fait, parce qu'elle
+        // chercherait au mauvais endroit. C'est le piège propre aux gardes qui
+        // lisent un fichier PAR SON NOM : elles ne suivent pas le code qui
+        // déménage, et leur rouge désigne alors la mauvaise cause.
+        //
+        // Ce que la règle dit n'a pas changé : le retrait est servi aux deux
+        // surfaces. Ce qui change est le nombre de fichiers où elles vivent.
+        // Un seul `try`, en TÊTE : Swift refuse un `try` à droite d'un opérateur
+        // non affectant — il ne couvre que l'expression de tête d'une
+        // affectation, et le couvre alors ENTIÈREMENT.
         let hote = try source("MeeshyComposerHost+Surfaces.swift")
+            + source("MeeshyComposerHost+DocumentSurface.swift")
         let sites = hote.components(separatedBy: "onDeleteBackgroundSound:").count - 1
         XCTAssertEqual(sites, 2,
                        "le retrait doit être servi à la surface DOCUMENT et à la surface "

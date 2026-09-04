@@ -108,6 +108,65 @@ export type EtatDuCompteDeBouchon = {
   readonly liensCrees: Record<string, unknown>[];
   /** Les conversations de GROUPE créées pendant la session — relues par la liste. */
   readonly conversationsCreees: { id: string; titre: string }[];
+  /** La boîte de notifications du lecteur — servie par `GET /notifications`, mutée par `read-all`. */
+  readonly boite: BoiteDeNotifsDeBouchon;
+};
+
+/**
+ * LA BOÎTE DE NOTIFICATIONS DU BOUCHON (#4898) — deux lignes dans la forme de
+ * `formatNotification` (l'état sous `state`, le contexte sous `context`), et
+ * l'état MUTABLE que `POST /notifications/read-all` écrit, comme la passerelle
+ * écrit sa base : un bouchon qui répond 200 sans écrire fait passer un client
+ * qui n'a rien changé. `remets()` restaure l'état initial entre deux témoins.
+ */
+export type BoiteDeNotifsDeBouchon = {
+  lignes: Record<string, unknown>[];
+  nonLues: number;
+  readonly litTout: () => void;
+  readonly remets: () => void;
+};
+
+export const boiteDeNotifsDeBouchon = (conversationId: string): BoiteDeNotifsDeBouchon => {
+  const initiales = (): Record<string, unknown>[] => [
+    {
+      id: 'notif-1',
+      userId: MEMBRE.id,
+      type: 'message',
+      title: 'Ibrahim vous a répondu',
+      subtitle: null,
+      content: 'On se cale à 15 h ?',
+      actor: { id: 'u-ibrahim', displayName: 'Ibrahim' },
+      context: { conversationId },
+      state: { isRead: false, readAt: null, createdAt: ilYA(0.1) },
+    },
+    {
+      id: 'notif-2',
+      userId: MEMBRE.id,
+      type: 'contact_accepted',
+      title: 'Sara Kim a accepté votre demande',
+      subtitle: null,
+      content: null,
+      actor: { id: 'u-sara', displayName: 'Sara Kim' },
+      context: {},
+      state: { isRead: true, readAt: ilYA(1), createdAt: ilYA(1) },
+    },
+  ];
+  const boite: BoiteDeNotifsDeBouchon = {
+    lignes: initiales(),
+    nonLues: 1,
+    litTout: () => {
+      boite.lignes = boite.lignes.map((ligne) => ({
+        ...ligne,
+        state: { ...(ligne.state as Record<string, unknown>), isRead: true, readAt: new Date().toISOString() },
+      }));
+      boite.nonLues = 0;
+    },
+    remets: () => {
+      boite.lignes = initiales();
+      boite.nonLues = 1;
+    },
+  };
+  return boite;
 };
 
 /** Une partie de demande — `demandeAvecPresenceSchema`, présence MASQUÉE par la loi. */
@@ -415,6 +474,7 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/posts/') ||
         chemin.startsWith('/api/v1/social/') ||
         chemin.startsWith('/api/v1/users/me') ||
+        chemin.startsWith('/api/v1/notifications') ||
         estUnePreference
       )
     ) {
@@ -450,6 +510,28 @@ export const routesDuCompte =
       json({ error: 'Invalid JWT token', code: 'AUTH_FAILED' }, 401);
       return true;
     }
+    /**
+     * `GET /api/v1/notifications` (`routes/notifications.ts:69`) — la boîte,
+     * dans l'enveloppe RÉELLE : `data` + `unreadCount` à la RACINE + la
+     * pagination. `POST …/read-all` (`:401`) ÉCRIT l'état partagé et rend le
+     * compte marqué, comme là-bas.
+     */
+    if (chemin === '/api/v1/notifications/read-all' && requete.method === 'POST') {
+      const compte = etat.boite.nonLues;
+      etat.boite.litTout();
+      json({ success: true, data: { count: compte } });
+      return true;
+    }
+    if (chemin === '/api/v1/notifications' && (requete.method ?? 'GET') === 'GET') {
+      json({
+        success: true,
+        data: etat.boite.lignes,
+        pagination: { total: etat.boite.lignes.length },
+        unreadCount: etat.boite.nonLues,
+      });
+      return true;
+    }
+
     /**
      * `POST /api/v1/links` (`routes/links/creation.ts:29`) — la création d'un
      * lien de partage. Le bouchon REFUSE tout champ que `createLinkSchema` ne

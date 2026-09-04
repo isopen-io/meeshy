@@ -41,6 +41,7 @@ const TEMPS_REEL = {
     participate: { nom: 'p.js', url: '/__v3/rt/p.js', corps: '' },
     liste: { nom: 'l.js', url: '/__v3/rt/l.js', corps: '' },
     feed: { nom: 'feed.l.js', url: '/__v3/rt/feed.l.js', corps: '' },
+    notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
     socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' },
   },
 };

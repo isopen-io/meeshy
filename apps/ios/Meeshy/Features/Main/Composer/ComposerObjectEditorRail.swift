@@ -1,6 +1,7 @@
 import Foundation
 import MeeshySDK
 import MeeshyUI
+import SwiftUI
 
 /// **Les sections de l'éditeur d'objet — dix depuis l'EFFET (#4870) — et
 /// laquelle est OUVERTE** (#4842).
@@ -37,6 +38,33 @@ import MeeshyUI
 /// se mesure sur toutes les paires (90 pour dix sections), et qu'un témoin de
 /// vue n'en éprouverait qu'un
 /// chemin. Écrite dans un `body`, la même logique serait hors de portée.
+/// **Les outils d'un média dans l'éditeur plein écran** (#4082, vue `2d`).
+///
+/// > « Un seul écran pour les trois gestes. Le cadre porte le recadrage, la
+/// > bande porte le rognage, la coupe scinde à la tête de lecture — l'ordre des
+/// > rangées suit l'ordre des décisions. »
+///
+/// **`served` n'est PAS `allCases`, et c'est la moitié qui compte.** La planche
+/// en dessine cinq ; deux n'existent nulle part dans le contrat (#5085) — aucun
+/// champ du modèle ne porte un recadrage ni une scission. Les servir ferait
+/// paraître deux outils qui ne changeraient rien, et l'auteur croirait avoir
+/// recadré : la loi 4 bannit exactement cela.
+///
+/// Les déclarer ici sans les servir dit la CIBLE sans la mentir. Le jour où le
+/// contrat les porte, ils rejoignent `served` et rien d'autre ne bouge.
+nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
+    /// Les bornes de lecture — existe de bout en bout (`MediaTrimStrip`).
+    case trim
+    /// Muet et quart de tour — existent tous deux.
+    case actions
+    /// ⌗ RECADRER — absent du contrat (#5085).
+    case crop
+    /// ✂ COUPER — absent du contrat (#5085).
+    case split
+
+    static let served: [MediaEditTool] = [.trim, .actions]
+}
+
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
     /// Les outils du SDK — sept alors, huit depuis l'EFFET (#4870), et le
     /// huitième est entré ici sans qu'une ligne change : le cas porte
@@ -44,6 +72,9 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
     /// fait lire `TextEditTool.all` à l'écran plutôt qu'une liste écrite à la
     /// main.
     case tool(TextEditTool)
+    /// **Les outils d'un MÉDIA** (#4082, vue `2d`). Le `switch` d'`entries`
+    /// disait « différées, pas oubliées » ; les voici.
+    case media(MediaEditTool)
     /// D'où à où l'objet vit dans la slide.
     case timing
     /// Le plan 2D — où il se pose, se pince et se tourne.
@@ -155,7 +186,13 @@ nonisolated enum ComposerObjectEditorRail {
         // d'options propre dans le dépôt. Le `switch` est exhaustif à dessein —
         // une sixième famille ne compilera pas tant qu'elle n'aura pas dit ce
         // qu'elle règle.
-        case .media, .sticker, .place, .audio:
+        case .media:
+            outils = MediaEditTool.served.map { ComposerObjectEditorSection.media($0) }
+        // **Différées, pas oubliées** : ces familles n'ont pas de panneau
+        // d'options propre dans le dépôt. Le `switch` est exhaustif à dessein —
+        // une sixième famille ne compilera pas tant qu'elle n'aura pas dit ce
+        // qu'elle règle.
+        case .sticker, .place, .audio:
             outils = []
         }
         return outils + [.timing, .plan]
@@ -250,6 +287,13 @@ nonisolated enum ComposerObjectEditorRail {
         switch entry {
         case .timing: return "clock"
         case .plan:   return "rectangle.grid.1x2"
+        case .media(let outil):
+            switch outil {
+            case .trim:    return "scissors"
+            case .actions: return "slider.horizontal.3"
+            case .crop:    return "crop"
+            case .split:   return "square.split.2x1"
+            }
         case .tool(let outil):
             switch outil {
             case .style:      return "textformat"
@@ -357,5 +401,38 @@ nonisolated enum ComposerEdgeBackGesture {
         guard startX <= stripWidth else { return false }
         guard translation.width >= minimumTranslation else { return false }
         return abs(translation.width) > abs(translation.height)
+    }
+}
+
+/// **La hauteur SERVIE au panneau d'options** (#5083) — le contenu, plafonné.
+///
+/// Écrite hors du corps de vue pour être éprouvable : c'est une règle à deux
+/// bornes, et chacune répond à un défaut distinct.
+///
+/// Le PLAFOND est celui de #4997 : au-delà, les options mangeraient la carte.
+/// Le PLANCHER à 1 est plus subtil — la hauteur mesurée vaut zéro à la première
+/// passe de layout, avant que la préférence ne remonte. Servie telle quelle,
+/// elle ferait disparaître le panneau une frame, ce qui se voit comme un
+/// clignotement à chaque ouverture d'outil.
+nonisolated enum ComposerObjectEditorOptions {
+    static func height(content: CGFloat, cap: CGFloat) -> CGFloat {
+        min(max(content, 1), cap)
+    }
+}
+
+/// **La hauteur du contenu du panneau d'options** (#5083).
+///
+/// Jumelle verticale de ce que `ComposerSceneCardLeadingKey` fait pour le bord
+/// gauche de la scène : une vue ne peut pas calculer ce que son enfant mesure,
+/// elle ne peut que le RECEVOIR. Sans elle, le panneau prend les 260 points
+/// qu'on l'autorise à prendre — un `ScrollView` est glouton dans son axe — et
+/// laisse un vide qui ressemble à une marge voulue.
+///
+/// `max` en réduction : une seule vue publie, et un zéro venu d'une passe de
+/// layout intermédiaire ne doit pas écraser la mesure.
+struct ComposerObjectEditorOptionsHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

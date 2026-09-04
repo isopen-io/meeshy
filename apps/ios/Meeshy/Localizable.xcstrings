@@ -99138,6 +99138,175 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Trocar de câmera" } }
       }
     },
+    "composer.camera.segments" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "مقطع واحد" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%d مقاطع" } }
+            }
+          }
+        },
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%d Segment" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%d Segmente" } }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%d segment" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%d segments" } }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%d segmento" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%d segmentos" } }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%d segment" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%d segments" } }
+            }
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%d segmento" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%d segmenti" } }
+            }
+          }
+        },
+        "pt-BR" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%d segmento" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%d segmentos" } }
+            }
+          }
+        }
+      }
+    },
+    "composer.camera.dropSegment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إزالة المقطع الأخير" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Letztes Segment entfernen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove the last segment" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar el último segmento" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer le dernier segment" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Rimuovi l'ultimo segmento" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover o último segmento" } }
+      }
+    },
+    "composer.camera.validate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "وضعه في المشهد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "In die Szene setzen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Place in the scene" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Colocar en la escena" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Poser dans la scène" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Poni nella scena" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pôr na cena" } }
+      }
+    },
+    "composer.camera.filmAction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تصوير" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Filmen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Film" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Grabar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Filmer" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Filma" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Filmar" } }
+      }
+    },
+    "composer.object.editor.trim" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اقتصاص" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zuschneiden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Trim" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recortar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rogner" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Taglia" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Aparar" } }
+      }
+    },
+    "composer.object.editor.mediaActions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "وسائط" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Medium" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Media" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Medio" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Média" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Media" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mídia" } }
+      }
+    },
+    "composer.object.editor.mute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "كتم" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Stumm" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mute" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Silencio" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Muet" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Muto" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mudo" } }
+      }
+    },
+    "composer.object.editor.rotate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تدوير" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Drehen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rotate" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Girar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Pivoter" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Ruota" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Girar" } }
+      }
+    },
+    "composer.object.editor.crop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تأطير" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausschnitt" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Crop" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Encuadrar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Recadrer" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Ritaglia" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Enquadrar" } }
+      }
+    },
+    "composer.object.editor.split" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تقسيم" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Teilen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Split" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cortar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Couper" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Dividi" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Cortar" } }
+      }
+    },
     "composer.camera.disarm" : {
       "extractionState" : "manual",
       "localizations" : {
