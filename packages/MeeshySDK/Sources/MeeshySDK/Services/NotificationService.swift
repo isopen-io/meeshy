@@ -8,11 +8,27 @@ public final class NotificationService: @unchecked Sendable {
         self.api = api
     }
 
-    public func list(offset: Int = 0, limit: Int = 20, unreadOnly: Bool = false) async throws -> NotificationListResponse {
-        var queryItems = [
-            URLQueryItem(name: "offset", value: "\(offset)"),
-            URLQueryItem(name: "limit", value: "\(limit)"),
-        ]
+    /// LA LISTE, PAR CURSEUR D'ABORD (#4901). `offset` était NON OPTIONNEL :
+    /// la signature obligeait l'appelant à envoyer un rang — la forme qui
+    /// repaye un `count()` à chaque première page et SAUTE des lignes dès
+    /// qu'une notification arrive entre deux pages. Sans rang ni curseur, la
+    /// passerelle sert la première page KEYSET (`nextCursor` dans
+    /// `NotificationPagination`, déjà déclaré) ; `cursor` reprend la suite.
+    /// `offset` reste formulable — le repli de compatibilité, jamais le défaut
+    /// — et le curseur GAGNE quand les deux sont donnés : un appelant qui
+    /// tient un curseur tient déjà mieux qu'un rang.
+    public func list(
+        offset: Int? = nil,
+        cursor: String? = nil,
+        limit: Int = 20,
+        unreadOnly: Bool = false
+    ) async throws -> NotificationListResponse {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        } else if let offset {
+            queryItems.append(URLQueryItem(name: "offset", value: "\(offset)"))
+        }
         if unreadOnly {
             queryItems.append(URLQueryItem(name: "unreadOnly", value: "true"))
         }

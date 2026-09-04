@@ -356,6 +356,8 @@ public struct NotificationListView: View {
 
 @MainActor
 final class NotificationListViewModel: ObservableObject {
+    /// L'ancre de reprise servie par la page précédente — `nil` en fin de liste ou sur un gateway antérieur.
+    private var nextCursor: String?
     @Published var notifications: [APINotification] = []
     @Published var isLoading = false
     @Published var hasMore = false
@@ -508,12 +510,13 @@ final class NotificationListViewModel: ObservableObject {
 
     private func refreshFromAPI() async {
         do {
-            let response = try await NotificationService.shared.list(
-                offset: 0, limit: limit, unreadOnly: false
-            )
+            // Sans rang ni curseur : la première page KEYSET (#4901) — plus de
+            // `count()` payé pour un total que cet écran n'affiche pas.
+            let response = try await NotificationService.shared.list(limit: limit, unreadOnly: false)
             notifications = response.data
             hasMore = response.pagination?.hasMore ?? false
-            offset = limit
+            nextCursor = response.pagination?.nextCursor
+            offset = response.data.count
             try await CacheCoordinator.shared.notifications.save(response.data, for: "all")
             await NotificationToastManager.shared.refreshUnreadCount()
         } catch {
@@ -526,12 +529,20 @@ final class NotificationListViewModel: ObservableObject {
         guard !isLoading, hasMore else { return }
         isLoading = true
         do {
+            // LE CURSEUR QUAND IL EST LÀ (#4901) — stable sous insertion : une
+            // notification arrivée en tête entre deux pages ne fait ni doublon
+            // ni ligne sautée. Le RANG reste le repli d'un gateway antérieur
+            // qui ne servirait pas d'ancre (dimension 9), jamais le défaut.
             let response = try await NotificationService.shared.list(
-                offset: offset, limit: limit, unreadOnly: false
+                offset: nextCursor == nil ? offset : nil,
+                cursor: nextCursor,
+                limit: limit,
+                unreadOnly: false
             )
             notifications.append(contentsOf: response.data)
             hasMore = response.pagination?.hasMore ?? false
-            offset += limit
+            nextCursor = response.pagination?.nextCursor
+            offset += response.data.count
         } catch {
             Logger.notifications.error("Failed to load more notifications: \(error.localizedDescription)")
         }
