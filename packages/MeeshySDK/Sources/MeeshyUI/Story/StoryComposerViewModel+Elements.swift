@@ -713,8 +713,10 @@ extension StoryComposerViewModel {
     /// - Returns: `true` si un objet a été adopté. `false` — l'auteur a retiré
     ///   le média pendant la montée — n'est pas une erreur : l'appelant y lit
     ///   qu'il peut oublier cette pré-montée.
+    /// `public` parce que le REGISTRE de pré-montée vit côté app : le SDK
+    /// fournit l'atome — muter le document —, l'app décide QUAND l'appeler.
     @discardableResult
-    func adoptPreUploadedMedia(localURL: String, postMediaId: String, remoteURL: String) -> Bool {
+    public func adoptPreUploadedMedia(localURL: String, postMediaId: String, remoteURL: String) -> Bool {
         for slideIdx in slides.indices {
             var effects = slides[slideIdx].effects
             guard var medias = effects.mediaObjects,

@@ -129,3 +129,44 @@ nonisolated enum ComposerPreUploadPolicy {
         state.isReady
     }
 }
+
+
+/// **Quels objets du document attendent leur montée.**
+///
+/// La question se pose sur le DOCUMENT et non sur la porte d'entrée, et c'est
+/// délibéré. Le composer a **cinq** portes vers un média — la rangée du
+/// document, la porte du rail, la photothèque, le presse-papier, et le viseur
+/// en scène, né d'un GESTE et donc absent de tout inventaire de portes (#4879,
+/// #5069). Brancher la pré-montée sur chacune obligerait à les énumérer,
+/// c'est-à-dire à recommencer l'inventaire qui a déjà raté une porte deux fois.
+///
+/// Un balayage de l'état ATTEINT est indifférent au chemin par lequel l'objet
+/// est arrivé. Une sixième porte hérite de la pré-montée sans que personne
+/// n'ait à y penser.
+nonisolated enum ComposerPreUploadSweep {
+
+    /// Le fichier local d'un objet qui attend sa montée, ou `nil`.
+    ///
+    /// Deux refus, deux raisons :
+    /// - un `postMediaId` non vide ⇒ l'asset est DÉJÀ chez le serveur (montée
+    ///   aboutie, ou republication). Le remonter créerait un doublon ;
+    /// - une URL non locale ⇒ il n'y a pas de fichier à envoyer. C'est le cas
+    ///   d'un objet dont la montée vient d'aboutir : l'adoption a remplacé son
+    ///   URL par celle du serveur, et c'est ce qui rend ce balayage IDEMPOTENT
+    ///   sans qu'il ait à tenir une liste.
+    static func pendingFile(postMediaId: String, mediaURL: String?) -> URL? {
+        guard postMediaId.isEmpty, let mediaURL, let url = URL(string: mediaURL),
+              url.isFileURL else { return nil }
+        return url
+    }
+
+    /// La taille du fichier, ou `nil` s'il a disparu — un temporaire purgé, un
+    /// document restauré après un redémarrage. L'absence n'est pas une erreur :
+    /// la publication rencontrera le même vide et le signalera là où l'auteur
+    /// peut agir.
+    static func fileSize(at url: URL) -> Int64? {
+        guard let attributs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let taille = attributs[.size] as? NSNumber else { return nil }
+        return taille.int64Value
+    }
+}
