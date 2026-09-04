@@ -48,7 +48,13 @@ describe('les règles de spéculation', () => {
 
 describe('les View Transitions du socle', () => {
   it('optent la navigation, à la durée de la charte, et se coupent ENTIÈRES sur reduced-motion', () => {
-    expect(SOCLE_DU_DOCUMENT).toContain('@view-transition{navigation:auto}');
+    expect(SOCLE_DU_DOCUMENT).toContain('@media (scripting: enabled){@view-transition{navigation:auto}}');
+    // Le gate de scripting est une borne MESURÉE : sans frames (document non
+    // scripté d'un navigateur headless), une transition entrante ne finit
+    // jamais et la page reste non hit-testable — l'opt-in nu gelait sept
+    // chaînes sans JavaScript. Un lecteur no-JS garde la navigation nue.
+    expect(SOCLE_DU_DOCUMENT).not.toMatch(/(?<![({])@view-transition\{navigation:auto\}/u);
+    expect(SOCLE_DU_DOCUMENT).toContain('::view-transition{pointer-events:none}');
     expect(SOCLE_DU_DOCUMENT).toContain('animation-duration:150ms');
     // La coupure EXPLICITE : le sélecteur universel du socle ne matche pas les
     // pseudo-éléments ::view-transition-*.
