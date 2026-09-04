@@ -237,6 +237,13 @@ export type BouchonSocket = {
   readonly recus: readonly Emission[];
   /** Faire parler la room de la conversation, comme `io.to(room).emit`. */
   readonly emets: (conversationId: string, evenement: string, charge: unknown) => void;
+  /**
+   * Faire parler la room PERSONNELLE d'un lecteur — le canal des
+   * `notification:*` (`emitWithSeq` vers `ROOMS.user(userId)` pour `new`,
+   * `io.to(ROOMS.user(...))` pour `read` / `read-bulk` / `counts`,
+   * `NotificationService.ts:1650, 5375, 5054, 5033`).
+   */
+  readonly emetsAuLecteur: (userId: string, evenement: string, charge: unknown) => void;
   /** `message:new` d'un envoi par la ROUTE — l'identité client à l'expéditeur inscrit, la charge nue aux autres. */
   readonly diffuseLeMessage: (conversationId: string, message: Record<string, unknown>, expediteur: Identite) => void;
   /** `reaction:added` / `reaction:removed` d'un geste par la ROUTE. */
@@ -641,6 +648,9 @@ export const bouchonSocket = ({
     recus,
     emets: (conversationId, evenement, charge) => {
       io.to(room(conversationId)).emit(evenement, charge);
+    },
+    emetsAuLecteur: (userId, evenement, charge) => {
+      io.to(roomPersonnelle(userId)).emit(evenement, charge);
     },
     diffuseLaLigne,
     diffuseLeMessage,
