@@ -110,6 +110,11 @@ a.carte:hover{background:var(--color-tint-primary)}
  * 52 o gzip au fil et 69 o à la story (mesuré), sur le document déjà le plus
  * lourd du dépôt, pour des règles qu'aucun des deux n'applique.
  *
+ * ELLE PORTE AUSSI LE CHAMP DE RECHERCHE, et pour la même raison : « Rechercher
+ * partout » est posé en tête du seul tableau de bord (`MeeshyWebV3.dc.html:74`,
+ * table de navigation `:867` — « search, Recherche, champ »). Aucun autre écran
+ * de la zone ne le rend, aucun autre ne le paie.
+ *
  * Les deux règles viennent des ATOMES (`atomes-feuille.ts`), qu'elle partage
  * avec `/chats` : la pastille de langue est la même sur les deux écrans qu'un
  * tap sépare, et `apercuDeLigne` en est le bloc, servi ici sous la racine de la
@@ -118,4 +123,7 @@ a.carte:hover{background:var(--color-tint-primary)}
 export const FEUILLE_DU_TABLEAU = compacte(`
 ${PASTILLE_DE_LANGUE}
 ${apercuDeLigne('.carte')}
+.chercher{display:flex;align-items:center;gap:var(--space-3);min-height:var(--action-height-secondary);margin-top:var(--space-6);padding:0 var(--space-4);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text-muted);text-decoration:none}
+.chercher:hover{background:var(--color-tint-primary)}
+.chercher svg{flex:none;width:var(--glyph);height:var(--glyph);color:var(--color-primary)}
 `);

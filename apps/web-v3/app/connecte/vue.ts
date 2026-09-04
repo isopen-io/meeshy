@@ -8,7 +8,11 @@ import { languesDuLecteur } from '@/lib/api/fil';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 
+import { ESPACE } from '@/lib/contenu/espace';
+
 import { CHATS, PANNE, TABLEAU_DE_BORD, adresseDuLien, salutation } from './contenu';
+import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
+import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
 import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from './feuille';
 import { langAttribut } from './transcrit';
 
@@ -240,6 +244,8 @@ export type EtatDuTableau = {
   readonly total: number;
   readonly liens: LiensDuLecteur;
   readonly maintenant: number;
+  /** L'état `?espace` — la feuille de l'espace membre est-elle demandée ? */
+  readonly espace: boolean;
 };
 
 /**
@@ -285,6 +291,12 @@ const corpsDuTableau = ({
     `<h1>${echappe(salutation(lecteur?.prenom ?? null))}</h1>` +
     `<p>${echappe(TABLEAU_DE_BORD.apercu)}</p>` +
     '</div>' +
+    // « RECHERCHER PARTOUT » — le champ que la cible pose en tête du tableau de
+    // bord (`MeeshyWebV3.dc.html:74`) et la SEULE porte que `/search` avait sur
+    // la planche (`:867`, « search, Recherche, champ »). Un `<a>` plutôt qu'un
+    // `<input>` : la saisie vit sur `/search`, qui la sert déjà avec sa
+    // recherche incrémentale — un second champ ici ferait taper deux fois.
+    `<a class="chercher" href="/search">${svgDuSprite('ph-magnifying-glass')}${echappe(ESPACE.rechercher)}</a>` +
     `<ul class="chiffres" aria-label="${echappe(TABLEAU_DE_BORD.titre)}">` +
     chiffre(total, TABLEAU_DE_BORD.conversations, TABLEAU_DE_BORD.total) +
     chiffre(nonLus, TABLEAU_DE_BORD.nonLus, TABLEAU_DE_BORD.nonLusPrecision) +
@@ -310,21 +322,33 @@ const corpsDuTableau = ({
               .map((conversation) => carteDeFil({ conversation, langues, maintenant }))
               .join('')}</ul>`,
     }) +
-    sectionDesLiens(liens)
+    sectionDesLiens(liens) +
+    // LES DEUX RONDS EN DERNIER, ET DANS LE FLUX : leur conteneur réserve sous
+    // la dernière section la bande qu'ils occupent, sans quoi ils couvriraient
+    // « Nouveau lien de partage » au repos (charte règle 7 b/c).
+    actionsFlottantes('/')
   );
 };
 
-export const documentDuTableau = (etat: EtatDuTableau): string =>
-  documentDuSite({
+export const documentDuTableau = (etat: EtatDuTableau): string => {
+  // LA FEUILLE N'EST COMPOSÉE QUE DANS SON ÉTAT. Un tableau de bord au repos ne
+  // paie ni la géométrie du dialogue ni ses rangées — la même règle 7 qui a
+  // séparé `FEUILLE_DU_TABLEAU` de celle de la zone.
+  const dessus = etat.espace ? feuilleDeLEspace({ lecteur: etat.lecteur, hote: '/' }) : '';
+
+  return documentDuSite({
     titre: `${TABLEAU_DE_BORD.titre} — Meeshy`,
     description: TABLEAU_DE_BORD.apercu,
     // La feuille du TABLEAU en plus de celle de la zone, et pour lui seul : la
     // page de PANNE ci-dessous ne rend aucune carte de fil, donc aucun aperçu
     // — elle n'en paie pas un octet (charte règle 7).
-    feuille: FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU,
+    feuille:
+      FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DES_FLOTTANTES + (dessus === '' ? '' : FEUILLE_DE_L_ESPACE),
     corps: corpsDuTableau(etat),
     retour: false,
+    surimpression: dessus,
   });
+};
 
 /**
  * L'ÉTAT DE PANNE EST DESSINÉ, pas laissé blanc. La passerelle peut ne pas
