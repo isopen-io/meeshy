@@ -37,6 +37,20 @@ import { apercuDeLigne, CHAMP_D_APPEL, PASTILLE_DE_LANGUE } from './atomes-feuil
  *    « REPRENDRE » et « MES LIENS » de la cible `home.png`. Le `--text-2xl` du
  *    chrome faisait de chaque intertitre un second `h1`.
  *
+ * PORTAGE TOUR 3 (jugement du 2026-09-02, § 12.5 renuméroté — voir « À
+ * corriger dans le dépôt tel qu'il est ») :
+ *
+ * 6. **`.carte-vide` porte `--radius-xl`, pas `--radius-lg`** (règle 9 : « `xl`
+ *    héros, carte mise en avant, carte d'état vide »).
+ * 7. **Son contour pointillé prend `--color-border-interactive`, jamais
+ *    `--color-border-strong`** (règle 16 : « État vide et `trou` : pointillé
+ *    `--stroke-strong` `--color-border-interactive` »). Le filet des cartes
+ *    PLEINES ne tient pas le sens d'un contour qui le porte SEUL.
+ * 8. **`.carte-vide p` prend l'encre pleine `--color-text`, jamais
+ *    `--color-text-muted`** (règle 18, qui NOMME `.carte-vide p` dans la liste
+ *    des sélecteurs interdits au gris) : c'est le texte pour lequel on ouvre
+ *    l'état, pas une méta qu'on peut ne pas lire.
+ *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (§ 3.2 corollaire 2, charte
  * règle 1). Témoin : `__tests__/charte.test.ts`.
  */
@@ -74,10 +88,10 @@ a.carte:hover{background:var(--color-tint-primary)}
 
 .compte{flex:none;display:grid;place-items:center;min-width:var(--space-6);height:var(--space-6);padding:0 var(--space-2);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-semibold);background:var(--color-primary);color:var(--color-on-primary)}
 
-.carte-vide{margin-top:var(--space-3);padding:var(--space-5);border:var(--stroke-strong) dashed var(--color-border-strong);border-radius:var(--radius-lg);text-align:center}
+.carte-vide{margin-top:var(--space-3);padding:var(--space-5);border:var(--stroke-strong) dashed var(--color-border-interactive);border-radius:var(--radius-xl);text-align:center}
 .carte-vide svg{width:var(--glyph-large);height:var(--glyph-large);color:var(--color-text-muted)}
 .carte-vide h3{margin:var(--space-2) 0 var(--space-1);font-size:var(--text-lg);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
-.carte-vide p{margin:0 auto;max-width:var(--measure);color:var(--color-text-muted)}
+.carte-vide p{margin:0 auto;max-width:var(--measure);color:var(--color-text)}
 .carte-vide .action{margin-top:var(--space-5)}
 
 .acces{margin-top:var(--space-7)}
