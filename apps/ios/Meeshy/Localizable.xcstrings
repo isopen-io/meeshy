@@ -99126,6 +99126,30 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Local e idioma da publicação" } }
       }
     },
+    "composer.camera.flip" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "تبديل الكاميرا" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kamera wechseln" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Switch camera" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cambiar de cámara" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Changer d'objectif" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Cambia fotocamera" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Trocar de câmera" } }
+      }
+    },
+    "composer.camera.disarm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "العودة إلى المشهد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zurück zur Szene" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back to the scene" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Volver a la escena" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Revenir à la scène" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Torna alla scena" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Voltar à cena" } }
+      }
+    },
     "composer.camera.hint.handsFreeStart" : {
       "extractionState" : "manual",
       "localizations" : {

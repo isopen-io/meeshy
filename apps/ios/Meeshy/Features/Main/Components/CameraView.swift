@@ -181,28 +181,16 @@ struct CameraView: View {
         .padding(.top, 8)
     }
 
-    private var flashIcon: String {
-        switch flashMode {
-        case .on: return "bolt.fill"
-        case .auto: return "bolt.badge.automatic.fill"
-        default: return "bolt.slash.fill"
-        }
-    }
+    // **Le vocabulaire du flash a été EXTRAIT** (#4080) : la barre du viseur en
+    // scène sert les mêmes trois positions, et deux cycles écrits séparément
+    // auraient divergé au premier réglage. `ComposerCameraFlash` en est le site
+    // unique — glyphe, libellé et ordre du cycle.
+    private var flashIcon: String { ComposerCameraFlash.symbol(for: flashMode) }
 
-    private var flashAccessibilityLabel: String {
-        switch flashMode {
-        case .on: return String(localized: "camera.flash.on", defaultValue: "Flash activé", bundle: .main)
-        case .auto: return String(localized: "camera.flash.auto", defaultValue: "Flash automatique", bundle: .main)
-        default: return String(localized: "camera.flash.off", defaultValue: "Flash désactivé", bundle: .main)
-        }
-    }
+    private var flashAccessibilityLabel: String { ComposerCameraFlash.label(for: flashMode) }
 
     private func cycleFlash() {
-        switch flashMode {
-        case .off: flashMode = .on
-        case .on: flashMode = .auto
-        default: flashMode = .off
-        }
+        flashMode = ComposerCameraFlash.next(after: flashMode)
         HapticFeedback.light()
     }
 
