@@ -41,13 +41,47 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
     private func matter(_ slide: StorySlide,
                         hashtags: Int = 0,
                         description: String = "",
+                        content: String = "",
                         mentions: Int = 0,
                         location: Bool = false) -> ComposerRailMatter {
         ComposerRailDoorBadge.matter(slide: slide,
                                      hashtags: hashtags,
                                      description: description,
+                                     content: content,
                                      mentions: mentions,
                                      hasDocumentLocation: location)
+    }
+
+    // MARK: - #4890 — deux textes, deux pastilles INDÉPENDANTES
+
+    /// **Le témoin discriminant du lot.** Écrire UN des deux textes doit
+    /// allumer EXACTEMENT une pastille. Un relevé qui servirait le même booléen
+    /// aux deux portes passerait n'importe quel témoin qui n'en interroge
+    /// qu'une : c'est en les regardant ENSEMBLE que la confusion se voit.
+    func test_laLegende_etLeCorps_allumentDesPastillesDISTINCTES() {
+        let vide = StorySlide(id: "s")
+
+        let légendeSeule = matter(vide, description: "la grue au petit matin")
+        XCTAssertEqual(ComposerRailDoorBadge.count(.description, in: légendeSeule), 1)
+        XCTAssertNil(ComposerRailDoorBadge.count(.content, in: légendeSeule),
+                     "Une légende écrite n'allume PAS la porte du corps du post.")
+
+        let corpsSeul = matter(vide, content: "ce que je voulais dire")
+        XCTAssertEqual(ComposerRailDoorBadge.count(.content, in: corpsSeul), 1)
+        XCTAssertNil(ComposerRailDoorBadge.count(.description, in: corpsSeul),
+                     "Un corps écrit n'allume PAS la porte de la légende.")
+
+        let lesDeux = matter(vide, description: "la grue", content: "ce que je voulais dire")
+        XCTAssertEqual(ComposerRailDoorBadge.count(.description, in: lesDeux), 1)
+        XCTAssertEqual(ComposerRailDoorBadge.count(.content, in: lesDeux), 1)
+    }
+
+    /// **Un texte BLANC n'est pas un texte** — le même prédicat que la légende,
+    /// et volontairement le même : deux normalisations pour une seule question
+    /// auraient divergé au premier réglage.
+    func test_unCorpsBlanc_nAllumeAucunePastille() {
+        XCTAssertNil(ComposerRailDoorBadge.count(.content,
+                                                 in: matter(StorySlide(id: "s"), content: "   \n  ")))
     }
 
     // MARK: - Zéro ⇒ rien de peint

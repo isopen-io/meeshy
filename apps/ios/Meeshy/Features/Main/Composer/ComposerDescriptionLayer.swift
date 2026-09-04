@@ -107,6 +107,21 @@ struct ComposerDescriptionLayer: View {
     /// aucune (loi 4).
     var languageAccessory: AnyView?
 
+    /// **Ce que la coche VALIDE, dit à voix haute** (#4890).
+    ///
+    /// Le calque sert désormais DEUX textes — la légende d'un média et le corps
+    /// d'un post — et sa coche s'annonçait « Terminer la description » dans les
+    /// deux. Un lecteur d'écran entendait donc valider un texte pendant qu'il en
+    /// validait un autre : le glyphe `checkmark` ne porte aucune information,
+    /// c'est la phrase qui doit la porter.
+    ///
+    /// > Un libellé JUSTE pour l'usage d'origine devient FAUX au second usage,
+    /// > sans que rien ne rougisse — il reste non vide, traduit, et prononçable.
+    ///
+    /// Le défaut par défaut reste celui de la description : le site historique
+    /// n'a rien à déclarer pour garder ce qu'il avait.
+    var validationLabel: String = ComposerDescriptionCopy.done
+
     @State private var isEditing = false
     @FocusState private var isFocused: Bool
 
@@ -264,7 +279,7 @@ struct ComposerDescriptionLayer: View {
                 .glassControlForeground()
                 .frame(width: 32, height: 32)
         }
-        .accessibilityLabel(Text(ComposerDescriptionCopy.done))
+        .accessibilityLabel(Text(validationLabel))
     }
 
     private var field: some View {

@@ -46,6 +46,11 @@ struct ComposerSceneDescriptionEditor: View {
     /// peint, l'hôte la fabrique, et personne au milieu ne décide.
     var languageAccessory: AnyView?
 
+    /// Relais du libellé de la coche (#4890) — voir
+    /// `ComposerDescriptionLayer.validationLabel`. Le défaut garde ce que
+    /// l'appelant historique avait.
+    var validationLabel: String = ComposerDescriptionCopy.done
+
     var body: some View {
         // **Le glissement est CONTRÔLÉ, pas déclenché** (directive porteur
         // 2026-08-30, precision) :
@@ -102,7 +107,8 @@ struct ComposerSceneDescriptionEditor: View {
             // APRÈS `onValidate:` — l'ordre suit la DÉCLARATION du calque, que
             // Swift n'autorise pas à réordonner (`fillsAvailableHeight` garde sa
             // valeur par défaut entre les deux).
-            languageAccessory: languageAccessory
+            languageAccessory: languageAccessory,
+            validationLabel: validationLabel
         )
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
