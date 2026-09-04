@@ -56,8 +56,42 @@ final class ComposerPreUploadCopyTests: XCTestCase {
     /// envoi ne change pas d'ordre de grandeur en route.
     func test_lUnite_neSeciteQuUneFois() {
         let texte = ComposerPreUploadCopy.bytes(sent: 4_800_000, total: 14_200_000, locale: fr)
-        XCTAssertEqual(texte.components(separatedBy: "MB").count - 1
-                       + texte.components(separatedBy: "Mo").count - 1, 1, texte)
+        XCTAssertEqual(texte.components(separatedBy: "Mo").count - 1, 1, texte)
+        XCTAssertTrue(texte.hasSuffix("Mo"), "l'unité ferme la phrase : \(texte)")
+    }
+
+    /// **Le témoin qui aurait attrapé le paramètre INERTE, et que je n'avais
+    /// pas écrit.**
+    ///
+    /// La première version employait `ByteCountFormatter`, qui n'expose AUCUNE
+    /// propriété `locale` : le paramètre était décoratif. Tous mes témoins
+    /// passaient — ils mesuraient la locale du SIMULATEUR, française chez moi —
+    /// et tombaient chez un voisin dont le simulateur est anglais.
+    ///
+    /// La seule forme qui ne peut pas passer dans les deux mondes compare DEUX
+    /// locales sur la MÊME entrée : un paramètre inerte les rend identiques.
+    func test_laLocale_estVIVANTE_etNonDecorative() {
+        let enFr = ComposerPreUploadCopy.bytes(
+            sent: 4_800_000, total: 14_200_000, locale: Locale(identifier: "fr_FR"))
+        let enEn = ComposerPreUploadCopy.bytes(
+            sent: 4_800_000, total: 14_200_000, locale: Locale(identifier: "en_US"))
+        XCTAssertNotEqual(enFr, enEn,
+                          "un paramètre `locale` inerte rendrait la même chaîne : \(enFr)")
+        XCTAssertTrue(enFr.contains("4,8"), enFr)
+        XCTAssertTrue(enEn.contains("4.8"), enEn)
+    }
+
+    /// **La phrase ENTIÈRE doit être d'une seule locale.** Le défaut ne se
+    /// voyait pas sur `bytes` seul : il naissait de la COMPOSITION — pourcentage
+    /// français, nombre anglais, unité française dans la même ligne. Le témoin
+    /// se pose donc sur la phrase, pas sur ses morceaux.
+    func test_laPhraseEntiere_estDUneSeuleLocale() throws {
+        let phrase = try XCTUnwrap(ComposerPreUploadCopy.label(
+            for: .uploading(sent: 4_800_000, total: 14_200_000),
+            locale: Locale(identifier: "en_US")))
+        XCTAssertTrue(phrase.contains("4.8"), phrase)
+        XCTAssertTrue(phrase.contains("14.2"), phrase)
+        XCTAssertFalse(phrase.contains("4,8"), phrase)
     }
 
     /// **L'échelle vient du TOTAL, jamais de l'envoyé.**
@@ -69,8 +103,11 @@ final class ComposerPreUploadCopyTests: XCTestCase {
     /// les deux échelles coïncident et il passerait dans les deux mondes.
     func test_lEchelle_vientDuTotal_pasDeLEnvoye() {
         let texte = ComposerPreUploadCopy.bytes(sent: 12_000, total: 14_200_000, locale: fr)
-        XCTAssertFalse(texte.contains("kB") || texte.contains("ko"), texte)
+        XCTAssertFalse(texte.contains("ko") || texte.contains("kB"), texte)
         XCTAssertTrue(texte.contains("14,2"), texte)
+        // 12 000 octets sur une échelle en Mo : le premier nombre est un
+        // arrondi à une décimale, pas un « 12 » qui se lirait comme des Mo.
+        XCTAssertTrue(texte.hasPrefix("0"), texte)
     }
 
     /// Un envoi qui déborderait son total — un serveur qui accuse plus que ce

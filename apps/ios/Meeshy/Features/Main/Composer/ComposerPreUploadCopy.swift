@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 /// **Ce que la vue `4c` DIT de l'état d'un asset** (#5086).
 ///
@@ -58,26 +59,51 @@ nonisolated enum ComposerPreUploadCopy {
     /// deux nombres partagent forcément l'échelle — un envoi ne change pas
     /// d'ordre de grandeur en route.
     ///
+    /// ## Deux corrections du 2026-09-04, trouvées par une session voisine
+    ///
+    /// **1. `ByteCountFormatter` n'a AUCUNE propriété `locale`.** La première
+    /// écriture en employait un et déclarait pourtant un paramètre `locale:`
+    /// — inerte. Résultat à l'écran : « MONTÉE EN COURS · 34 % — 4.8 / 14.2 Mo »
+    /// — **une seule phrase, trois décisions de locale, deux résultats
+    /// contradictoires** : le pourcentage français (`LocalizedNumber` honore le
+    /// paramètre), le nombre anglais (le formateur suit le processus), l'unité
+    /// française. Les témoins passaient chez moi et tombaient chez le voisin,
+    /// parce qu'ils mesuraient la locale du SIMULATEUR.
+    ///
+    /// > **Une conformité APPARENTE est pire qu'une absence** : un paramètre
+    /// > `locale` qu'on voit passer éteint la question chez le prochain lecteur.
+    ///
+    /// **2. Le formatage des tailles a DÉJÀ une source unique** —
+    /// `formatMediaFileSize`, dont le doc-comment énumère ses consommateurs et
+    /// nomme « upload progress ». En écrire un second ici rejouait exactement le
+    /// défaut que ce helper dit avoir refermé : deux algorithmes derrière un
+    /// commentaire qui prétend la parité. La source a été ÉTENDUE (locale +
+    /// échelle imposée) plutôt que doublée.
+    ///
     /// L'échelle est choisie sur le TOTAL, jamais sur l'envoyé : sur les
     /// premiers octets d'un fichier de 14 Mo, une échelle choisie sur `sent`
     /// afficherait « 12,0 / 14,2 » en mélangeant kilo-octets et méga-octets.
+    ///
+    /// Le premier nombre est formaté SANS unité par une division explicite —
+    /// `ByteCountFormatStyle` ne sait pas l'omettre, et retirer le suffixe d'une
+    /// chaîne déjà formatée serait faux dans les locales qui ne le posent pas à
+    /// la fin (l'arabe en premier lieu).
     static func bytes(sent: Int64, total: Int64, locale: Locale = .current) -> String {
-        let formateur = ByteCountFormatter()
-        formateur.countStyle = .file
-        formateur.includesUnit = false
-        formateur.allowedUnits = allowedUnits(for: total)
-
-        let unite = ByteCountFormatter()
-        unite.countStyle = .file
-        unite.allowedUnits = allowedUnits(for: total)
-
-        let envoye = formateur.string(fromByteCount: max(0, min(sent, total)))
-        return "\(envoye) / \(unite.string(fromByteCount: max(0, total)))"
+        let echelle = scale(for: total)
+        let envoye = (Double(max(0, min(sent, total))) / echelle.divisor)
+            .formatted(.number.locale(locale).precision(.fractionLength(0...1)))
+        return "\(envoye) / \(formatMediaFileSize(max(0, total), allowedUnits: echelle.units, locale: locale))"
     }
 
-    private static func allowedUnits(for total: Int64) -> ByteCountFormatter.Units {
-        if total >= 1_000_000_000 { return .useGB }
-        if total >= 1_000_000 { return .useMB }
-        return .useKB
+    /// L'échelle et son diviseur, ensemble — les deux doivent s'accorder, et
+    /// les tenir dans deux fonctions les laisserait diverger en silence.
+    /// Les seuils sont DÉCIMAUX parce que `formatMediaFileSize` emploie
+    /// `.file`, la convention du Finder ; des seuils binaires ici rendraient
+    /// « 1024,0 / 1,0 Mo ».
+    private static func scale(for total: Int64) -> (units: ByteCountFormatStyle.Units, divisor: Double) {
+        if total >= 1_000_000_000 { return (.gb, 1_000_000_000) }
+        if total >= 1_000_000 { return (.mb, 1_000_000) }
+        return (.kb, 1_000)
     }
+
 }
