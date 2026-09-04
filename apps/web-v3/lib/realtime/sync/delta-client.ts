@@ -122,12 +122,11 @@ export type IssueDeSync =
  * `/chats` était une branche MORTE. Une règle de protocole tenue par un seul
  * des deux appelants n'est pas tenue.
  *
- * Le `if-none-match` n'est posé que si l'appelant DÉTIENT un validateur. Il n'en
- * détient un aujourd'hui que hors navigateur : la passerelle n'expose pas
- * `ETag` par CORS (`server.ts:404-410`, sans `exposedHeaders`), donc
- * `reponse.headers.get('etag')` rend `null` depuis une autre origine. Le
- * mécanisme est JUSTE et il jouera le jour où l'en-tête sera exposé (issue
- * gateway compagnon) ; il est mesuré ici, pas supposé.
+ * Le `if-none-match` n'est posé que si l'appelant DÉTIENT un validateur —
+ * lu depuis `ETag`, désormais exposé par CORS (`CORS_EXPOSED_HEADERS`,
+ * `config/cors-methods.ts`, #5015) : avant ce correctif, `ETag` n'étant pas
+ * dans la safelist CORS, `reponse.headers.get('etag')` rendait `null` depuis
+ * une autre origine et ce module n'avait jamais de validateur à renvoyer.
  */
 export const demandeLeDelta = async ({
   base,

@@ -434,12 +434,12 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
        */
       const validateur = `W/"${Buffer.from(JSON.stringify({ added, conversations, hasGap, demandees })).length}-${added.length}-${conversations.length}-${hasGap ? 1 : 0}"`;
       reponse.setHeader('etag', validateur);
-      // `Cache-Control: no-store` (`routes/sync/index.ts:446`) — et AUCUN
-      // `Access-Control-Expose-Headers`, comme `server.ts:404-410` : le bouchon
-      // reproduit la passerelle TELLE QU'ELLE EST, donc un client d'une autre
-      // origine ne peut ni lire cet ETag ni laisser le cache revalider. Le
-      // rendre lisible ici aurait fait passer un 304 que la production ne sert
-      // jamais.
+      // `Cache-Control: no-store` (`routes/sync/index.ts:446`, décision #5015 —
+      // charge PRIVÉE, `If-None-Match` explicite reste possible sans lui) :
+      // le bouchon reproduit la passerelle TELLE QU'ELLE EST. `ETag` est
+      // désormais LISIBLE d'une autre origine (`access-control-expose-headers`,
+      // posé une fois pour toute réponse dans `serveurs.ts`, #5015) — un client
+      // d'une autre origine peut donc composer `If-None-Match` et recevoir 304.
       reponse.setHeader('cache-control', 'no-store');
       if (String(requete.headers['if-none-match'] ?? '') === validateur) {
         reponse.writeHead(304);

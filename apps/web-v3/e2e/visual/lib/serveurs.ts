@@ -336,7 +336,7 @@ export const passerelleDeBouchon = async (options?: {
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';
     /**
-     * CORS, comme `server.ts:404-410` de la passerelle : `@fastify/cors` avec
+     * CORS, comme `server.ts:404-411` de la passerelle : `@fastify/cors` avec
      * `credentials: true`, l'origine RÉFLÉCHIE quand `config/cors-origins.ts`
      * l'admet, les méthodes de `config/cors-methods.ts`, et les en-têtes
      * demandés par le préflight réfléchis (le défaut de `@fastify/cors`) —
@@ -345,11 +345,18 @@ export const passerelleDeBouchon = async (options?: {
      * en-têtes, chaque `fetch` du navigateur est bloqué et le bouchon raconte
      * une chaîne que la production ne produit pas (mesuré : `/sync`, `refresh`
      * et le repli REST rendus « -1 », d'où cinq cas du § 6.5 rouges à tort).
+     *
+     * `access-control-expose-headers: etag` (`CORS_EXPOSED_HEADERS`,
+     * `config/cors-methods.ts`, #5015) : sans lui, `ETag` n'est pas dans la
+     * safelist CORS et `reponse.headers.get('etag')` rend `null` pour tout
+     * appelant d'une autre origine — le 304 de `GET /sync` (§ « au retour de
+     * focus ») ne serait alors jamais atteignable.
      */
     const origine = requete.headers.origin;
     if (typeof origine === 'string') {
       reponse.setHeader('access-control-allow-origin', origine);
       reponse.setHeader('access-control-allow-credentials', 'true');
+      reponse.setHeader('access-control-expose-headers', 'etag');
       reponse.setHeader('vary', 'Origin');
     }
     if (requete.method === 'OPTIONS') {

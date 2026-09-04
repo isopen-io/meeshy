@@ -38,7 +38,7 @@ import { registerRouteUsageHook } from './plugins/route-usage.plugin';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
-import { CORS_METHODS } from './config/cors-methods';
+import { CORS_METHODS, CORS_EXPOSED_HEADERS } from './config/cors-methods';
 import { fastifyCorsOrigin } from './config/cors-origins';
 import { conditionalGetOnSend } from './utils/etag';
 import { resolveTrustProxy } from './config/trust-proxy';
@@ -401,12 +401,17 @@ class MeeshyServer {
 
     // CORS — la règle vit dans `config/cors-origins` (#4480), pas ici : la porte
     // WebSocket applique la MÊME, et deux littéraux jumeaux avaient divergé.
+    // `exposedHeaders` : `ETag` n'est pas dans la safelist CORS — sans lui, le
+    // 304 que `conditionalGetOnSend` (~200 endpoints GET) et `GET /sync`
+    // posent est invisible à tout client web d'une autre origine, qui ne peut
+    // alors jamais composer `If-None-Match` (#5015).
     await this.server.register(cors, {
       origin: fastifyCorsOrigin({
         onRejected: (origin) => logger.warn(`CORS rejected origin: "${origin}"`)
       }),
       credentials: true,
-      methods: CORS_METHODS
+      methods: CORS_METHODS,
+      exposedHeaders: CORS_EXPOSED_HEADERS
     });
 
     // OpenAPI/Swagger documentation
