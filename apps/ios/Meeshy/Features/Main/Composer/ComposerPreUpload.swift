@@ -81,6 +81,43 @@ nonisolated enum ComposerPreUploadState: Equatable, Sendable {
 }
 
 /// Les règles de la pré-montée. Pures — aucune session, aucun fichier.
+///
+/// ## ⚠️ Ce qu'un TAMPON qui survit à sa ligne coûte (mesuré 2026-09-04)
+///
+/// #5086 annonçait le danger de la pré-montée comme « monter des choses qui ne
+/// seront peut-être jamais publiées ». **Cette moitié-là est gratuite** : la
+/// passerelle balaie déjà les `PostMedia` non rattachés
+/// (`MaintenanceService.cleanupOrphanedPostMedia`, prédicat partagé
+/// `unclaimedMediaWhere()`, seuil 24 h), et le prédicat est GÉNÉRIQUE — il ne
+/// regarde ni le contexte ni la provenance. `PostMedia.postId` étant nullable
+/// de longue date, le flux d'avant ce lot créait déjà des médias non rattachés
+/// entre le téléversement et la création du Post : la pré-montée ÉLARGIT une
+/// fenêtre, elle n'en invente pas.
+///
+/// **Le danger réel est l'inverse, et il n'est PAS traité :**
+///
+/// 1. la pré-montée aboutit ⇒ l'objet porte `postMediaId` ET une `mediaURL`
+///    distante ;
+/// 2. la composition n'est pas publiée dans les 24 h (brouillon repris) ;
+/// 3. le balayage détruit la ligne — elle est légitimement « libre » ;
+/// 4. l'auteur publie. La boucle SAUTE l'objet (`where postMediaId.isEmpty`),
+///    `updateMany` matche zéro, `describeClaimShortfall` écrit un `warn`
+///    SERVEUR — et **la publication part sans ce média**, silencieusement pour
+///    l'auteur.
+///
+/// Aggravant : l'adoption a remplacé `mediaURL` par l'URL distante, donc le
+/// fichier local n'est plus référencé — **la composition ne peut pas se
+/// rattraper**. Avant ce lot, le fichier local restait jusqu'à la publication.
+///
+/// > La question que l'issue posait — « que faire des assets montés pour
+/// > rien ? » — a une réponse gratuite. Celle qu'elle ne posait pas — « que
+/// > faire d'un asset qu'on a monté et que le serveur a eu RAISON de
+/// > détruire ? » — n'en a aucune, et c'est celle qui perd du contenu.
+///
+/// Décision en attente sur #5086 (trois directions y sont posées). La plus
+/// juste me paraît de rendre le tampon RÉVOCABLE — l'effacer à la reprise d'un
+/// brouillon plus vieux que le seuil —, ce qui suppose de garder l'URL locale
+/// que l'adoption écrase aujourd'hui.
 nonisolated enum ComposerPreUploadPolicy {
 
     /// **Ce qui vaut la peine de partir tôt.**
