@@ -1,10 +1,11 @@
 export const meta = {
   name: 'meeshy-web-v3-bout-en-bout',
   description:
-    'Developper la v3 web de bout en bout : charte visuelle jugee, vues neuves inscrites dans la planche et la conception, issues, TDD ecran par ecran, temps reel, revue croisee, gates, livraison — chaque agent sur le modele qui convient a sa tache',
+    'Developper la v3 web de bout en bout : dev resynchronise a chaque tour, travaux que personne d autre ne tient, charte jugee, vues neuves inscrites dans la planche et la conception, issues, TDD ecran par ecran, navigation en UNE page et temps reel, revue croisee, gates, livraison — chaque agent sur le modele qui convient a sa tache',
   whenToUse:
     "Lancer un tour de developpement de la v3 web (apps/web-v3) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat, fil temps reel), puis l'ordre calcule de ordre.md. Args : { branche, focus, plafond, tours, sans_issues, refaire_charte }.",
   phases: [
+    { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
     { title: 'Cadrer', detail: "mesurer ce qui existe, lire l'ordre calcule et les issues, choisir les travaux du tour", model: 'sonnet' },
     { title: 'Charte', detail: 'sautee par defaut (deja arretee, § 12.5) ; trois directions en concurrence + un juge seulement si refaire_charte=true', model: 'opus' },
     { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'sonnet' },
@@ -29,7 +30,11 @@ const V3 = `${REPO}/apps/web-v3`
 const SCRATCH = `${REPO}/.cache/web-v3-workflow`
 
 const A = args && typeof args === 'object' ? args : {}
-const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : 'dev'
+const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : 'claude/meeshy-web-v3-workflow-vgbfou'
+// `depuis` : la branche que CHAQUE tour reintegre avant de travailler (directive du porteur
+// 2026-09-04 : « pull dev regulierement »). Sur un depot ou `dev` avance de ~20 commits par jour,
+// un tour qui part d'une base vieille d'un tour livre des conflits, pas des ecrans.
+const DEPUIS = typeof A.depuis === 'string' && A.depuis ? A.depuis : 'dev'
 // Ordre du focus (directive du porteur 2026-09-01, etendue 2026-09-03 § 12.10) : la vitrine et le
 // tableau de bord d'abord, puis le fil COMPLET (thread, rich, media — citation, plein ecran,
 // transcription, profil en modale), la liste (chats, avec son balayage), puis les feeds et leur
@@ -37,7 +42,8 @@ const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : 'dev'
 // ordre vit dans le script, pas seulement dans l'appel.
 const FOCUS = Array.isArray(A.focus) && A.focus.length
   ? A.focus
-  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links', 'search', 'notifs']
+  : ['transitions', 'cache-de-zone', 'navigateur-de-zone', 'deconnexion', 'notifPrefs', 'reglages-details',
+     'vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links', 'search', 'notifs']
 const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
 const SANS_ISSUES = A.sans_issues === true
@@ -55,7 +61,7 @@ const SANS_CHARTE = A.refaire_charte !== true
 // toujours ses args, donc la priorite vit dans le script, pas seulement dans l'appel.
 const DABORD = Array.isArray(A.dabord) && A.dabord.length
   ? A.dabord.filter((c) => typeof c === 'string')
-  : ['thread', 'join', 'rights']
+  : ['navigateur-de-zone', 'cache-de-zone', 'transitions']
 const PHARES = new Set(Array.isArray(A.phares) ? A.phares : DABORD)
 const DATE = typeof A.date === 'string' ? A.date : '(date non fournie — la lire avec `date -I`)'
 // Livraison SANS INTERVENTION (directive du porteur, 2026-09-02) : apres le push, une PR vers `base`
@@ -114,6 +120,40 @@ DIRECTIVE DU PORTEUR (2026-09-01) — elle PRIME sur tout ce qui la contredit da
   premier pixel, cf. budgets.json « plancher-next-au-dessus-du-gate-de-requetes »), servi DANS LA
   ZONE v3 (jamais depuis public/ a la racine, § 4.4 ; un chemin d'actif nouveau entre nommement dans
   la regle Traefik du routeur frontend-v3 ET dans V3_ZONE_PREFIXES, dans cet ordre, § 4.4 bis).
+- NAVIGATION MODERNE EN **UNE PAGE**, sans un framework ni un octet de trop (directive du porteur
+  2026-09-04, « il est temps d'avoir une navigation moderne sur tout cela TOUT en maintenant des
+  pages legeres ») — TROIS ETAGES, deja specifies par le porteur, dans cet ordre de dependance :
+  1. ETAGE 1 — issue #5104, cle de travail \`transitions\`. ZERO octet de JavaScript :
+     \`@view-transition { navigation: auto }\` dans la feuille commune (fondu inter-documents,
+     no-op sur un navigateur qui ne le supporte pas, duree <= 150 ms, COUPE ENTIER par
+     \`prefers-reduced-motion\`), et \`<script type="speculationrules">\` en \`eagerness: moderate\`
+     (prechargement AU SURVOL, l'economie 3G d'abord) sur une liste FERMEE de hubs SANS EFFET DE
+     BORD. INTERDITS, et un temoin jest doit rougir si l'un y entre : \`prerender\` (il executerait
+     les modules et leurs sockets), \`/chat/:lien\`, \`/chats/:cle\`, et toute route que la garde de
+     provenance 503 (\`app/provenance.ts\`) protege deja.
+  2. ETAGE 2 — issues #4472/#4473, cle \`cache-de-zone\`. Le Service Worker PROPRE a la zone v3 :
+     son cache porte SON namespace (jamais \`meeshy-cache-\`, le prefixe du legacy — le Cache Storage
+     est a l'echelle de l'ORIGINE, et un \`activate\` sans namespace detruit les caches de l'autre),
+     sa portee reste ETROITE tant que l'etape 7 du § 4.9 n'est pas franchie, App Shell en
+     stale-while-revalidate et donnees d'API en RESEAU D'ABORD avec repli cache HORS LIGNE
+     SEULEMENT. Le trou du legacy ne s'herite PAS : les entrees d'API se segmentent par jeton
+     (\`Vary\`), sans quoi deux comptes — ou deux invites a jetons differents — partagent une entree.
+  3. ETAGE 3 — issue #5106, cle \`navigateur-de-zone\`. Le 9e module de participation (~2 Ko gzip,
+     patron Turbo SANS framework, servi comme les huit autres par \`lib/actifs-rt.ts\` et
+     \`app/rt/[nom]/route.ts\`) : il intercepte les \`<a>\` INTERNES a la zone, \`fetch\` le document
+     cible, echange \`<main>\` et les feuilles, \`pushState\`, et enveloppe l'echange d'une View
+     Transition same-document. LE SERVEUR RESTE L'UNIQUE COMPOSITEUR — aucun etat de vue ne migre
+     dans le client. Ce que ce module DOIT tenir, chacun avec son temoin : la frontiere de zone
+     jamais interceptee (le jumeau RUNTIME du lint \`zone/lien-sortant-en-navigation-client\`) ; le
+     cycle de vie passe par \`lib/realtime/lifecycle.ts\`, POINT D'ECOUTE UNIQUE — une navigation
+     douce ne declenche pas \`pagehide\`, donc l'ecran quitte recoit \`destruction\` par ce site et
+     par aucun autre, et le chargeur est RE-ARME pour l'ecran neuf ; aucune fuite de listener ni
+     de socket (mesure memoire sur 20 navigations) ; scroll restaure au retour arriere, focus pose
+     sur le \`<main>\` neuf, navigation ANNONCEE au lecteur d'ecran ; et le GAIN vise : UN socket
+     survit a /chats -> fil -> /chats.
+  LE REPLI EST LA REGLE, sur les trois etages : sans le module, sans le worker, sans le support des
+  View Transitions, chaque lien navigue comme aujourd'hui. C'est une AMELIORATION PROGRESSIVE,
+  jamais une condition — et jamais une raison d'hydrater quoi que ce soit (§ 12.10.6 tient).
 - Toutes les features de la webapp legacy (apps/web) ont vocation a exister dans la v3, ecran par
   ecran, dans l'ordre calcule — ce tour livre ses travaux, la critique de completude nomme le reste.
 
@@ -424,6 +464,25 @@ const TRAVAIL = {
   },
 }
 
+const SYNCHRO = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['reintegre', 'etat'],
+  properties: {
+    reintegre: { type: 'boolean', description: 'true si la branche porte maintenant origin/DEPUIS' },
+    etat: { type: 'string', description: 'FACTUEL : commandes et sorties (compte de commits repris, conflits, gates apres merge)' },
+    commits_repris: { type: 'integer' },
+    fichiers_touches_par_dev: { type: 'array', items: { type: 'string' }, description: 'les chemins que dev vient de bouger — ce que le tour ne doit pas reecrire a l aveugle' },
+    conflit_non_resolu: { type: 'string', description: 'vide si tout est resolu ; sinon ce qui demande un arbitrage' },
+    gates_apres_merge: { type: 'string', description: 'type-check / lint / test apres la reintegration — ce qui est rouge AVANT le tour' },
+    tenus_ailleurs: {
+      type: 'array',
+      description: 'ce que d AUTRES sessions tiennent en ce moment : PR ouvertes, branches claude/* poussees recemment, issues assignees',
+      items: { type: 'object', additionalProperties: false, required: ['quoi', 'preuve'], properties: { quoi: { type: 'string' }, preuve: { type: 'string' }, cles_a_eviter: { type: 'array', items: { type: 'string' } } } },
+    },
+  },
+}
+
 const CADRAGE = {
   type: 'object',
   additionalProperties: false,
@@ -434,6 +493,11 @@ const CADRAGE = {
     blocage: { type: 'string' },
     lot_courant: { type: 'string' },
     travaux: { type: 'array', items: TRAVAIL },
+    ecarte_car_tenu_ailleurs: {
+      type: 'array',
+      description: 'les cles ECARTEES de ce tour parce qu une autre session les tient — avec la preuve',
+      items: { type: 'object', additionalProperties: false, required: ['cle', 'preuve'], properties: { cle: { type: 'string' }, preuve: { type: 'string' } } },
+    },
     vues_a_ajouter_a_la_planche: {
       type: 'array',
       description: 'les vues du tour qui ne sont PAS dans la planche (aucun cible/<id>.png) et que la phase Concevoir doit y faire entrer',
@@ -586,11 +650,78 @@ for (let tour = 1; tour <= TOURS; tour += 1) {
   log(`=== TOUR ${tour}/${TOURS} — focus : ${focusDuTour.join(', ')} ===`)
 
   // -------------------------------------------------------------------------
+  phase('Synchroniser')
+  // -------------------------------------------------------------------------
+  // Directive du porteur 2026-09-04 : « pull dev regulierement, travailler sur ce que les autres
+  // sessions ne travaillent pas ». AVANT le cadrage, a CHAQUE tour — un tour qui part d'une base
+  // vieille d'un tour livre des conflits, pas des ecrans. Modele mecanique : c'est du git.
+  const synchro = await agent(`${SOCLE}
+
+TA MISSION — REINTEGRER \`${DEPUIS}\` DANS \`${BRANCHE}\`, PUIS RELEVER CE QUE LES AUTRES SESSIONS TIENNENT.
+Tu ne modifies AUCUN fichier de production autrement que par la fusion elle-meme.
+
+A. LA REINTEGRATION
+1. \`git branch --show-current\` — tu DOIS etre sur \`${BRANCHE}\`. Si la branche n'existe pas encore
+   localement, cree-la depuis \`origin/${DEPUIS}\` (\`git fetch origin ${DEPUIS} && git checkout -B ${BRANCHE} origin/${DEPUIS}\`).
+   NE CHANGE JAMAIS pour une autre branche de travail, ne cree pas de worktree.
+2. \`git status --short\` : si l'arbre est sale, \`git stash\` d'abord, et \`git stash pop\` apres la fusion.
+3. \`git fetch origin ${DEPUIS}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
+4. \`git log --oneline HEAD..origin/${DEPUIS}\` : compte les commits repris et lis leurs titres.
+   \`git diff --stat HEAD...origin/${DEPUIS}\` : note les chemins que dev vient de bouger, en
+   particulier sous apps/web-v3, packages/shared, packages/design-tokens et docs/product.
+5. \`git merge origin/${DEPUIS}\` — **JAMAIS** \`git pull --rebase\` ni \`git rebase\` (lecon 324 du
+   depot : le rebase aplatit un commit de fusion et pousse un etat partiel). Un conflit se resout en
+   gardant les DEUX apports quand les fichiers le permettent (design, lecons, matrice) ou en
+   reconciliant le CODE par sa logique — jamais en prenant un cote au hasard. Si un conflit demande
+   un arbitrage produit, laisse-le, rends conflit_non_resolu et reintegre=false.
+6. Apres la fusion : \`cd ${V3} && bun run type-check\` puis \`bun run test 2>&1 | tail -5\`. Ce qui est
+   rouge ICI est rouge AVANT le tour — c'est un FAIT a rapporter (gates_apres_merge), pas un blocage.
+
+B. LE RELEVE — CE QUE LES AUTRES SESSIONS TIENNENT
+Le depot est travaille par plusieurs sessions en parallele. Deux sessions sur le meme fichier, c'est
+un conflit garanti et un travail jete. Charge
+ToolSearch({query: "select:mcp__github__list_pull_requests,mcp__github__list_branches,mcp__github__list_issues,mcp__github__search_issues", max_results: 5})
+puis releve, pour \`isopen-io/meeshy\` :
+1. Les PR OUVERTES (list_pull_requests, state open, sort updated) : pour chacune, son titre, sa
+   branche head et les fichiers qu'elle touche si le titre ne suffit pas. Une PR ouverte qui parle
+   de la v3 web ou de la passerelle TIENT son sujet.
+2. Les branches poussees RECEMMENT (\`git branch -r --sort=-committerdate | head -30\`, et
+   \`git log --oneline -1 --format='%ci %s' <branche>\` sur celles nommees claude/* ou feat/web-v3-*)
+   dont le dernier commit a moins de 48 h. Une branche vivante qui n'est pas la tienne TIENT son sujet.
+3. Les issues ASSIGNEES ou visiblement en cours (list_issues label web, state OPEN) : une issue avec
+   un assignee, ou dont un commit tres recent de \`${DEPUIS}\` cite le numero, est prise.
+Rends \`tenus_ailleurs\` : une entree par sujet tenu, avec la PREUVE (numero de PR, nom de branche +
+date, numero d'issue) et les CLES de travail a eviter (les cles de ${D}/matrice.json, ou les cles
+d'axe \`transitions\`, \`cache-de-zone\`, \`navigateur-de-zone\`, \`deconnexion\`, \`notifPrefs\`,
+\`reglages-details\`). Si les outils GitHub ne repondent pas, dis-le et rends au moins le releve des
+branches — l'absence de releve n'arrete pas le tour, elle se DIT.
+
+Sois FACTUEL : 'etat' cite les commandes et leurs sorties, jamais une impression.`,
+    { label: `synchroniser:tour-${tour}`, phase: 'Synchroniser', schema: SYNCHRO, model: 'haiku', effort: 'medium' })
+
+  if (synchro && synchro.conflit_non_resolu) {
+    log(`ARRET — la reintegration de ${DEPUIS} demande un arbitrage : ${synchro.conflit_non_resolu}`)
+    resultatsDesTours.push({ tour, arret: 'conflit de reintegration', blocage: synchro.conflit_non_resolu, etat: synchro.etat })
+    break
+  }
+  if (synchro) {
+    log(`${DEPUIS} reintegre : ${synchro.commits_repris || 0} commits repris` +
+      (synchro.tenus_ailleurs && synchro.tenus_ailleurs.length ? ` — ${synchro.tenus_ailleurs.length} sujets tenus ailleurs` : ' — rien de tenu ailleurs'))
+  }
+
+  // Ce que le tour NE DOIT PAS prendre : les cles que d'autres sessions tiennent.
+  const TENUS = (synchro && Array.isArray(synchro.tenus_ailleurs) ? synchro.tenus_ailleurs : [])
+  const CLES_TENUES = new Set(TENUS.flatMap((t) => Array.isArray(t.cles_a_eviter) ? t.cles_a_eviter : []))
+  const RELEVE = TENUS.length
+    ? `\nCE QUE D'AUTRES SESSIONS TIENNENT EN CE MOMENT — n'y touche pas, et ne prends aucune de leurs cles :\n${TENUS.map((t) => `- ${t.quoi} (preuve : ${t.preuve})${(t.cles_a_eviter || []).length ? ` — cles a eviter : ${t.cles_a_eviter.join(', ')}` : ''}`).join('\n')}\n${synchro && synchro.fichiers_touches_par_dev && synchro.fichiers_touches_par_dev.length ? `FICHIERS QUE \`${DEPUIS}\` VIENT DE BOUGER (relis-les avant de les reecrire) :\n${synchro.fichiers_touches_par_dev.slice(0, 40).join(', ')}\n` : ''}`
+    : `\nAucun sujet releve comme tenu par une autre session a l'ouverture de ce tour.\n`
+
+  // -------------------------------------------------------------------------
   phase('Cadrer')
   // -------------------------------------------------------------------------
-  const cadrage = await agent(`${SOCLE}
-
+  const cadrage = await agent(`${SOCLE}${RELEVE}
 TA MISSION — CADRER ce tour. Tu ne modifies AUCUN fichier de production.
+\`${DEPUIS}\` VIENT D'ETRE REINTEGRE : la base est fraiche, ne la re-verifie pas, prends-la pour acquise.
 
 1. MESURE ce qui existe : \`git branch --show-current\`, \`git status --short\`, \`git log --oneline -15\`,
    \`find ${V3}/app -name 'route.ts' -o -name 'page.tsx' | sort\`, \`ls ${V3}/lib/*\`,
@@ -607,6 +738,22 @@ TA MISSION — CADRER ce tour. Tu ne modifies AUCUN fichier de production.
       ou "ecran" selon ce qui manque : dis-le dans existe_deja et detail) ;
    b) puis, s'il reste de la place, les ecrans suivants de ${D}/ordre.md dont les dependances
       sont livrees.
+   ECARTE, AVANT TOUT AUTRE CRITERE, toute cle que le releve ci-dessus dit tenue par une autre
+   session, et toute cle dont le travail toucherait les memes fichiers qu'une PR ouverte : rends-la
+   dans \`ecarte_car_tenu_ailleurs\` avec sa preuve, et prends la suivante. Deux sessions sur le meme
+   fichier, c'est un conflit garanti et un travail jete — ecarter n'est pas perdre le sujet, c'est
+   le laisser a qui le tient.
+   LES TROIS ETAGES DE LA NAVIGATION EN UNE PAGE (cles \`transitions\` #5104, \`cache-de-zone\`
+   #4472/#4473, \`navigateur-de-zone\` #5106) sont des travaux de PREMIERE CLASSE au meme titre qu'un
+   ecran : leurs issues sont DEJA OUVERTES par le porteur (milestone « La v3 web sert le role
+   premier », epopee #4371), donc la phase Ouvrir n'a pas a les recreer — elle les RETROUVE et pose
+   \`Status = In Progress\`. Leur ordre de dependance est 1 puis 2 puis 3 ; ne prends l'etage 3 que si
+   l'etage 1 est livre (le fondu same-document du module s'appuie sur l'opt-in de l'etage 1).
+   \`deconnexion\` (#5095, on entre dans la v3 et on n'en sort pas), \`notifPrefs\`
+   (/notifications/preferences) et \`reglages-details\` (#5066 — les quatre cles de matrice.json \`detail-privacy\`,
+   \`detail-media\`, \`detail-message\`, \`detail-notification\` : ni route web ni route de PASSERELLE,
+   ce qui en fait un travail a DEUX cotes ; ne le prends que si tu peux livrer les deux, sinon
+   dis-le et prends la suivante) sont les autres travaux nommes du focus.
    Pour chaque travail : titre SEMANTIQUE, route, audience, critere de fin OBSERVABLE (repris de
    matrice.json quand la ligne existe, ecrit sinon), corps d'issue (Contexte · Preuve attendue ·
    Critere de fin · Source).
@@ -629,7 +776,12 @@ Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`
   }
   // `sauter` : les cles a REPORTER au tour suivant (le porteur veut livrer plus tot ce qui est pret).
   const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter.filter((c) => typeof c === 'string') : [])
-  const choisis = (cadrage.travaux || []).slice(0, PLAFOND).filter((t) => !SAUTER.has(t.cle))
+  const choisis = (cadrage.travaux || [])
+    .filter((t) => !CLES_TENUES.has(t.cle))
+    .slice(0, PLAFOND)
+    .filter((t) => !SAUTER.has(t.cle))
+  const ecartes = (cadrage.travaux || []).filter((t) => CLES_TENUES.has(t.cle)).map((t) => t.cle)
+  if (ecartes.length) log(`Ecartes — tenus par une autre session : ${ecartes.join(', ')}`)
   if (SAUTER.size) log(`Reportes au tour suivant : ${[...SAUTER].join(', ')}`)
   const rang = (cle) => { const i = DABORD.indexOf(cle); return i === -1 ? DABORD.length : i }
   const travaux = [...choisis].sort((a, b) => rang(a.cle) - rang(b.cle))
