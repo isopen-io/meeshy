@@ -27830,3 +27830,52 @@ jusqu'au bout, jamais en relisant le fragment qu'on vient d'écrire.
 Sites : `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryStickerLayer.swift`
 (`configure` et `stampAnimated`). Témoin : `AnimatedStickerChainGuardTests` §
 « la couche a une branche synchrone animée ».
+
+## Leçon 507 — Une mesure qui se répète peut INVERSER son signe, et l'inversion est le diagnostic
+
+**Le fait.** Le 2026-09-03, le job `Build app` échoue avec dix-neuf `could not build module` en
+cascade, dont aucun ne nomme un fichier du dépôt. La première ligne du groupe dit tout :
+
+```
+error: Clang dependency scanner failure: file '…/AvailabilityVersions.h' has been modified
+since the module file '…/_AvailabilityInternal-37O24QQPYX0DO.pcm' was built:
+mtime changed (was 1785128638, now 1787976491)
+```
+
+J'ai ouvert #5084 sur cette mesure : « l'image du runner a été mise à jour, les `.pcm` restaurés
+depuis le cache sont périmés ». Correctif proposé : faire entrer `ProductBuildVersion` du SDK dans
+la clé de cache.
+
+Le 2026-09-04, même job, **même `.pcm`** — et l'écart est **inversé** : `was 1787976491, now
+1785128638`.
+
+**Ce que l'inversion dit, et que la première mesure ne pouvait pas dire.** Une seule lecture ne peut
+raconter qu'une histoire à sens unique : *A est devenu B*. La seconde lecture montre que A et B
+**alternent** — donc que deux révisions d'image circulent dans le pool de runners, chacune
+empoisonnant le cache que l'autre vient de sauver. C'est la seule lecture qui explique la régularité
+observée sur `dev` : 1024 vert · 1025 ROUGE · 1026 vert · 1027 ROUGE · 1028 vert.
+
+> **Une mesure prise une fois donne une VALEUR ; prise deux fois, elle donne une LOI.** Et tant
+> qu'on n'a qu'une valeur, on ne sait pas laquelle des deux on tient — donc on ne sait pas si le
+> discriminant qu'on s'apprête à mettre dans la clé discrimine réellement.
+
+**Et l'écart de diagnostic déplaçait le correctif.** `ProductBuildVersion` ne suffit pas : une
+republication d'image peut laisser le numéro de build du SDK **intact** en changeant les `mtime` des
+en-têtes — exactement le cas mesuré. La clé de #5084 aurait donc été posée, verte à la relecture,
+plausible dans sa justification, et **le défaut serait resté vivant**. Le discriminant juste est
+`ImageVersion`, parce que c'est la chose qui change entre les deux runs qu'on a comparés.
+
+**Le corollaire qui coûte le plus cher.** Un défaut qui tombe un run sur deux ressemble à un flake,
+et « flake » est l'étiquette qui ARRÊTE l'enquête. Ici c'est l'inverse qui est vrai :
+
+> **La régularité d'un « flake » est ce qui prouve qu'il n'en est pas un.** Un vrai flake n'est pas
+> un métronome. Une alternance stricte est une machine à deux états, donc quelque chose qu'on peut
+> nommer — et le nommer, c'est le corriger.
+
+**La forme générale.** Avant de porter un correctif rédigé depuis UNE observation — la sienne
+comprise —, re-mesurer. Pas pour se confirmer : pour savoir si l'observation était une valeur ou une
+loi. C'est le pendant temporel de la leçon 261 (une énumération de sites porte deux affirmations,
+dont une seule est vérifiée) : ici l'énoncé non vérifié n'est pas « ce sont tous les sites » mais
+**« c'est le sens de l'écart »**.
+
+Sites : `.github/workflows/ios.yml` (« Empreinte de l'image du runner »), issue #5084.
