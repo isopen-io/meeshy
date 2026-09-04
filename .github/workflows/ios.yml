@@ -319,21 +319,55 @@ jobs:
           path: ${{ runner.temp }}/spm
           key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
 
+      # **La lignée du cache est celle de l'IMAGE, pas celle du libellé d'Xcode**
+      # (#5084). Le préfixe `xc26_1_1` encodait la version COMMERCIALE d'Xcode ;
+      # le SDK bouge À L'INTÉRIEUR de ce libellé quand l'image du runner est
+      # republiée, et un `.pcm` bâti sous une révision devient invalide sous
+      # l'autre — sans qu'aucune erreur ne nomme un fichier du dépôt :
+      #
+      #   error: Clang dependency scanner failure: … 'AvailabilityVersions.h'
+      #   has been modified since the module file '…_AvailabilityInternal-….pcm'
+      #   was built: mtime changed (was 1787976491, now 1785128638)
+      #
+      # MESURE du 2026-09-04 — et c'est elle qui décide de la forme de la clé :
+      # les DEUX SENS de cet écart apparaissent selon le run (« was A, now B »
+      # le 03, « was B, now A » le 04, même `.pcm`). Il ne s'agit donc pas d'une
+      # image mise à jour une fois, mais de **deux révisions qui alternent dans
+      # le pool** — d'où un rouge un run sur deux sur `dev` (1024 ✓, 1025 ✗,
+      # 1026 ✓, 1027 ✗, 1028 ✓), déterministe et jamais un flake.
+      #
+      # `ImageVersion` est donc le discriminant JUSTE : c'est la chose qui
+      # change entre les deux runs qu'on a mesurés. `ProductBuildVersion` seul
+      # ne suffirait pas — une republication d'image peut laisser le numéro de
+      # build du SDK intact en changeant les mtimes, et c'est précisément le cas
+      # observé. Il reste dans la clé comme second axe et pour la lisibilité.
+      #
+      # Le prix est assumé : une image republiée repart sur un ModuleCache froid
+      # (~15 min, coût documenté aux lignes 50-74). Un cache manquant coûte des
+      # minutes ; un cache périmé coûte le run entier, et un run sur deux.
+      - name: Empreinte de l'image du runner (lignée du ModuleCache)
+        id: sdkfp
+        run: |
+          SDKBUILD="$(xcodebuild -version -sdk iphonesimulator ProductBuildVersion 2>/dev/null || echo unknown)"
+          LINEAGE="img${ImageVersion:-unknown}-sdk${SDKBUILD}"
+          echo "v=${LINEAGE}" >> "$GITHUB_OUTPUT"
+          echo "Lignée du cache DerivedData : ${LINEAGE}"
+
       # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
       # after the compile step (see "Save DerivedData build cache"), because the
       # post-job save is skipped on a timeout-cancellation exactly like the SPM
       # one. Rolling key → incremental reuse from the most recent prior run; the
-      # toolchain + manifest prefix starts a fresh lineage on a dependency or
-      # Xcode bump.
+      # lineage prefix starts a fresh one on a dependency, an Xcode OR an image
+      # bump.
       - name: Restore DerivedData build cache
         id: dd-restore
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/DerivedData
-          key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          key: ios-dd-macos15-${{ steps.sdkfp.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
           restore-keys: |
-            ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-
-            ios-dd-macos15-xc26_1_1-
+            ios-dd-macos15-${{ steps.sdkfp.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-
+            ios-dd-macos15-${{ steps.sdkfp.outputs.v }}-
 
       # XcodeGen owns project generation (see commit dropping hand-edited
       # pbxproj entries). The committed Meeshy.xcodeproj/project.pbxproj is a
@@ -536,7 +570,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/DerivedData
-          key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          key: ios-dd-macos15-${{ steps.sdkfp.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
 
       # The other half the PR gate skips (~8 min). It is also the half that needs
       # the simulator provisioned above, so the two are gated together or not at
