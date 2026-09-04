@@ -52359,7 +52359,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post"
+            "value": "Publicação"
           }
         }
       }
@@ -52369,7 +52369,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مقطع"
+            "value": "ريل"
           }
         },
         "de": {
@@ -52415,43 +52415,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حالة"
+            "value": "مزاج"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Status"
+            "value": "Mood"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Status"
+            "value": "Mood"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estado"
+            "value": "Mood"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Statut"
+            "value": "Mood"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stato"
+            "value": "Mood"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Status"
+            "value": "Mood"
           }
         }
       }

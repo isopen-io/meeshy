@@ -94,7 +94,12 @@ final class BubbleQuotedReplyThumbHashGuardTests: XCTestCase {
         assertServesThumbHash(bubbleThumb, "reply", peau: "bulle")
 
         let focal = try anchored(Self.focalPath, "struct FocalQuotedReplyView", floor: 4_000)
-        let focalThumb = try slice(of: focal, from: "if let thumbnailURL {", to: "VStack(alignment: .leading, spacing: 1)")
+        // La miniature de la rangée plate a quitté le `HStack` de tête pour le
+        // bloc de l'auteur (#5103) : elle vit désormais dans sa propre
+        // propriété. La borne suit la DÉCLARATION, jamais la disposition — une
+        // ancre posée sur une géographie rougit au premier déplacement, et
+        // c'est ce qui vient d'arriver à sa voisine.
+        let focalThumb = try slice(of: focal, from: "private var quotedThumbnail", to: "private var authorGate")
         assertServesThumbHash(focalThumb, "reference", peau: "rangée plate")
 
         let composer = try anchored(Self.composerPath, "func composerReplyAttachmentPreview", floor: 6_000)
@@ -225,34 +230,53 @@ final class BubbleQuotedReplyThumbHashGuardTests: XCTestCase {
         }
     }
 
-    // MARK: - La miniature est à GAUCHE, sur les trois peaux
+    // MARK: - La miniature est SOUS L'AUTEUR, sur les trois peaux
 
-    /// « Miniature à gauche, à sa DROITE le titre et la ligne de détails » —
-    /// la géographie demandée par le porteur. La rangée plate l'avait déjà ; la
+    /// **La géographie a changé le 2026-09-04, et cette garde avec elle.**
+    ///
+    /// Elle exigeait « miniature à GAUCHE, à sa droite le titre et la ligne de
+    /// détails », et elle avait raison de le faire : c'était la géographie
+    /// demandée, et son mérite était de la tenir sur les TROIS peaux (#4946).
+    ///
+    /// Nouvelle directive porteur : « lorsqu'on cite un message avec attachement,
+    /// on a sa miniature dans la citation **juste en dessous de l'auteur** ».
+    /// Ce qui change est la POSITION ; ce qui ne change pas est l'invariance —
+    /// une citation ne se lit toujours pas autrement selon la peau.
+    ///
+    /// > **Une garde qui épingle une disposition abandonnée est le même piège
+    /// > qu'un doc-comment périmé** : elle énonce une raison juste pour un
+    /// > arbitrage qui n'est plus celui du produit, et elle rougit au moment où
+    /// > on applique la nouvelle directive — donc exactement quand on a raison.
+    ///
+    /// Ce que la garde ne perd pas en changeant de cible : elle continue
+    /// d'interroger les trois peaux, et c'est cela qui l'a rendue utile. La
     /// bulle posait sa vignette en fin de ligne et le bandeau du composeur
-    /// entre le texte et sa croix de fermeture. Une citation ne change pas de
-    /// géographie selon la peau qui la rend.
-    func test_lesTroisPeaux_posentLaMiniatureAGaucheDuTitre() throws {
+    /// entre le texte et sa croix de fermeture ; sans elle, la nouvelle
+    /// géographie aurait pu n'être appliquée qu'à deux surfaces sur trois.
+    func test_lesTroisPeaux_posentLaMiniatureSousLAuteur() throws {
         let bubble = try anchored(Self.bubblePath, "struct BubbleQuotedReply", floor: 8_000)
-        let bubbleRow = try slice(of: bubble, from: "HStack(spacing: 8) {", to: "VStack(alignment: .leading, spacing: 2)")
+        let bubbleRow = try slice(of: bubble, from: "HStack(spacing: 8) {", to: "quotedDetailsLine")
         XCTAssertTrue(
             bubbleRow.contains("quotedThumbnail"),
-            "la miniature doit PRÉCÉDER le bloc titre + aperçu dans la bulle."
+            "la bulle doit monter sa miniature DANS le bloc de l'auteur, sous la ligne du nom."
+        )
+        XCTAssertNil(
+            bubbleRow.range(of: #"HStack\(spacing: 8\) \{\s*quotedThumbnail"#, options: .regularExpression),
+            "la miniature ne PRÉCÈDE plus le bloc titre + aperçu — elle le suit."
         )
 
         let focal = try anchored(Self.focalPath, "struct FocalQuotedReplyView", floor: 4_000)
-        let focalRow = try slice(of: focal, from: "if let thumbnailURL {", to: "VStack(alignment: .leading, spacing: 1)")
+        let focalRow = try slice(of: focal, from: "VStack(alignment: .leading, spacing: 2)", to: "padding(.leading")
         XCTAssertTrue(
-            focalRow.contains("CachedAsyncImage("),
-            "la rangée plate garde sa miniature avant le bloc de texte."
+            focalRow.contains("quotedThumbnail"),
+            "la rangée plate monte sa miniature dans le bloc de l'auteur, après la ligne du nom."
         )
 
         let composer = try anchored(Self.composerPath, "func composerReplyBanner", floor: 6_000)
-        let composerRow = try slice(of: composer, from: "func composerReplyBanner", to: "VStack(alignment: .leading, spacing: 2)")
+        let composerRow = try slice(of: composer, from: "VStack(alignment: .leading, spacing: 2)", to: "Spacer()")
         XCTAssertTrue(
             composerRow.contains("composerReplyAttachmentPreview(type: attType, reply: reply)"),
-            "le bandeau du composeur doit monter l'aperçu du média AVANT le bloc titre + aperçu — il vivait " +
-            "après le `Spacer()`, collé à la croix de fermeture."
+            "le bandeau du composeur monte l'aperçu du média DANS le bloc de l'auteur, sous sa ligne."
         )
     }
 
