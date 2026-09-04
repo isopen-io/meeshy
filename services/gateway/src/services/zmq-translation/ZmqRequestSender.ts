@@ -81,8 +81,13 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Dédupliquer les langues cibles sous leur forme CANONIQUE (SSOT
+    // `canonicalLanguage`) — la MÊME que le suivi `pendingLanguages` (ligne ~120)
+    // et le solde (`settleTranslationLanguage`). Un `.toLowerCase()` brut
+    // compterait `'en'` et `'en-US'` comme deux cibles, ferait traduire deux fois
+    // l'anglais et enverrait au translator un `'en-us'` que NLLB ne mappe pas ;
+    // la liste envoyée divergerait alors de son propre jeu de suivi.
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(canonicalLanguage))];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -118,7 +123,10 @@ export class ZmqRequestSender {
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      // `uniqueTargetLanguages` est DÉJÀ canonique (voir dédup ci-dessus) : le jeu
+      // de suivi EST exactement la liste envoyée, ce que le solde (par
+      // `canonicalLanguage(langue rendue)`) exige pour se reconnaître.
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;
