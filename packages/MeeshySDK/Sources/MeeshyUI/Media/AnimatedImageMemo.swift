@@ -39,9 +39,18 @@ import UIKit
 public enum AnimatedImageMemo {
 
     /// Une entrée — `NSCache` veut une classe, `Decoded` est une structure.
+    ///
+    /// **La `deinit` est `nonisolated`, et ici ce n'est pas une formalité.**
+    /// `MeeshyUI` déclare `.defaultIsolation(MainActor.self)` (SE-0466), donc
+    /// une classe non marquée reçoit une deinit synthétisée ISOLÉE qui double-
+    /// libère sur iOS 26.1. Cette boîte-ci a de plus la raison la plus directe
+    /// d'être libérée AILLEURS que sur le rendu : `NSCache` évince seul, sous
+    /// alerte mémoire, sur le fil que le système choisit. Corps vide — il n'y a
+    /// rien d'isolé à toucher, `Decoded` étant `nonisolated`.
     private final class Entry {
         let decoded: AnimatedImageDecoder.Decoded
         init(_ decoded: AnimatedImageDecoder.Decoded) { self.decoded = decoded }
+        nonisolated deinit {}
     }
 
     /// Assez pour toute la bibliothèque visible d'un panneau plus les stickers
