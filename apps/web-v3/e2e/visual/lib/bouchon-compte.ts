@@ -411,6 +411,65 @@ const FIL_SOCIAL_DU_BOUCHON = [
 ];
 
 /**
+ * LE FIL DE RÉELS CONNECTÉ (`/feed/reels`, #5032) — `scope=reels`.
+ *
+ * DEUX RÉELS, ET C'EST LE MINIMUM QUI PROUVE QUELQUE CHOSE. Avec un seul, le
+ * tap « Réel suivant » ne se rendrait jamais et le témoin sortirait vert sans
+ * avoir jamais parcouru : c'est le PAS du fil qui est le sujet, pas l'affichage
+ * d'un réel — celui-là, `/reels/:id` le garde déjà.
+ *
+ * ILS PORTENT LA MÊME FORME QUE `GET /posts/:id`, et ce n'est pas une
+ * commodité de bouchon : `feedPostInclude = postInclude`
+ * (`PostFeedService.ts:36`), donc la passerelle sert bien ici la ligne
+ * ENTIÈRE — `translations`, `originalLanguage`, `media`, `isLikedByMe`. C'est
+ * exactement ce qui permet au lecteur unique de la lire sans un aller-retour
+ * de plus, et un bouchon qui servirait une projection maigre ferait passer un
+ * client que la vraie passerelle nourrit autrement.
+ *
+ * LE PREMIER EST ESPAGNOL AVEC SA TRADUCTION FRANÇAISE : le Prisme de la
+ * lectrice doit servir « Le glossaire… » et ANNONCER « traduit de l'espagnol ».
+ * Un réel déjà français ne distinguerait pas un lecteur qui descend le Prisme
+ * d'un lecteur qui rend l'original.
+ */
+const REELS_DU_BOUCHON = [
+  {
+    id: 'reel-glossaire',
+    type: 'REEL',
+    content: 'Nuevo glosario compartido para el equipo.',
+    originalLanguage: 'es',
+    translations: { fr: { text: 'Le nouveau glossaire partagé pour l’équipe.' } },
+    createdAt: new Date(Date.now() - 20 * 3_600_000).toISOString(),
+    authorId: PAIR_HISPANOPHONE.id,
+    author: { id: PAIR_HISPANOPHONE.id, username: 'marta', displayName: PAIR_HISPANOPHONE.nom },
+    likeCount: 9,
+    commentCount: 0,
+    repostCount: 0,
+    isLikedByMe: false,
+    isRepostedByMe: false,
+    media: [{ fileUrl: 'https://cdn.meeshy.test/reel-glossaire.mp4', mimeType: 'video/mp4', width: 720, height: 1280 }],
+  },
+  {
+    id: 'reel-coulisses',
+    type: 'REEL',
+    content: 'Les coulisses de la revue de mars.',
+    originalLanguage: 'fr',
+    translations: {},
+    createdAt: new Date(Date.now() - 30 * 3_600_000).toISOString(),
+    authorId: PAIR_ANGLOPHONE.id,
+    author: { id: PAIR_ANGLOPHONE.id, username: 'ibrahim', displayName: PAIR_ANGLOPHONE.nom },
+    likeCount: 1200,
+    commentCount: 84,
+    repostCount: 12,
+    isLikedByMe: true,
+    isRepostedByMe: false,
+    media: [{ fileUrl: 'https://cdn.meeshy.test/reel-coulisses.mp4', mimeType: 'video/mp4', width: 720, height: 1280 }],
+  },
+];
+
+/** Le curseur du bouchon : l'INDEX du prochain réel, comme la passerelle rend une borne opaque. */
+export const CURSEUR_DU_SECOND_REEL = 'apres-reel-glossaire';
+
+/**
  * LE RAIL DE STORIES — `scope=stories&projection=tray`, projeté à un nom, un
  * auteur, et l'état vu/non-vu (`isViewedByMe`, servi dans les DEUX
  * projections — `PostFeedService.fetchAndEnrichStories`). Les QUATRE de la
@@ -694,6 +753,24 @@ export const routesDuCompte =
       const scope = url.searchParams.get('scope');
       if (scope === 'stories') {
         json({ success: true, data: RAIL_DU_BOUCHON, pagination: { limit: 50, hasMore: false, nextCursor: null } });
+        return true;
+      }
+      /**
+       * `scope=reels` (#5032) — le PAS du fil, servi comme la passerelle le
+       * sert : `limit=1`, et un `nextCursor` qui désigne le suivant. Le
+       * bouchon PAGINE réellement plutôt que de rendre les deux réels d'un
+       * bloc — sinon le témoin du parcours vérifierait un lien que rien
+       * n'aurait calculé.
+       */
+      if (scope === 'reels') {
+        const rang = url.searchParams.get('cursor') === CURSEUR_DU_SECOND_REEL ? 1 : 0;
+        const reel = REELS_DU_BOUCHON[rang];
+        const encore = rang === 0;
+        json({
+          success: true,
+          data: reel === undefined ? [] : [reel],
+          pagination: { limit: 1, hasMore: encore, nextCursor: encore ? CURSEUR_DU_SECOND_REEL : null },
+        });
         return true;
       }
       json({ success: true, data: FIL_SOCIAL_DU_BOUCHON, pagination: { limit: 20, hasMore: false, nextCursor: null } });

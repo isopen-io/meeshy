@@ -58,6 +58,16 @@ export type EtatDuFilSocial = {
   readonly tempsReel: { readonly module: string; readonly passerelle: string } | null;
 };
 
+/**
+ * L'EN-TÊTE PORTE LA PORTE DES RÉELS. La table de navigation de la planche
+ * (`MeeshyWebV3.dc.html:870`) pose un bouton « Réels » sur cet écran — c'est la
+ * SEULE entrée de `/feed/reels` qu'elle dessine, et sans elle l'écran serait
+ * servi sans qu'aucun lien n'y mène (leçon 507).
+ *
+ * IL PREND LA PLACE DE DROITE de l'en-tête du fil, celle que `.fil-tete` réserve
+ * déjà à une action (`.medias` sur le fil de conversation) : même géométrie,
+ * même cible de 44 px, aucun pixel neuf.
+ */
 const enTete = (): string =>
   '<header class="fil-tete">' +
   `<a class="retour" href="/" aria-label="${echappe(FIL_SOCIAL.retour)}">${svgDuSprite('ph-caret-left')}</a>` +
@@ -65,6 +75,7 @@ const enTete = (): string =>
   `<h1>${echappe(FIL_SOCIAL.titre)}</h1>` +
   `<p class="sous">${echappe(FIL_SOCIAL.sousTitre)}</p>` +
   '</div>' +
+  `<a class="medias" href="/feed/reels" aria-label="${echappe(FIL_SOCIAL.reels)}">${svgDuSprite('ph-film-strip')}</a>` +
   '</header>';
 
 /**

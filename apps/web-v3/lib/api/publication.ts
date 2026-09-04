@@ -5,6 +5,7 @@ import { urlDePiece } from './fil';
 import { genreDeMime, type GenreDePiece } from './formes';
 import { chaine, instant, nombre, objet } from './lecture';
 import { baseDeLaPasserelle, DELAI_DE_REPONSE_MS } from './passerelle';
+import { adresseDeLaStory } from '@/lib/contenu/partage';
 
 /**
  * CE QU'UNE PUBLICATION EST, LUE PAR LA V3 — la story d'abord (issue #4895),
@@ -96,6 +97,20 @@ export type Voisinage = {
   /** Les stories de CET auteur, de la plus ancienne à la plus récente — les barres du haut. */
   readonly segments: readonly Segment[];
   readonly rang: number;
+  /**
+   * OÙ MÈNENT LES DEUX TAPS — des **ADRESSES**, jamais des identifiants, et le
+   * changement est un CORRECTIF (#5032). `tap()` (`app/(public)/partage-vue.ts`)
+   * composait `adresseDeLaStory(cible)` EN DUR : un voisinage de réels aurait
+   * envoyé vers `/stories/<id>`. Le défaut était DORMANT — `GENRE_REEL` et
+   * `GENRE_HUMEUR` posent `avecSegments: false`, donc la porte ne demandait
+   * aucun voisinage et aucun tap ne se rendait — et il se serait réveillé à la
+   * première file de réels.
+   *
+   * Une adresse plutôt qu'un identifiant fait aussi entrer un voisinage que
+   * l'identifiant ne peut pas dire : le réel SUIVANT du fil connecté vit à
+   * `/feed/reels?cursor=…`, pas à `/reels/<id>` — c'est un pas de curseur, pas
+   * un nom. Le lecteur reste UN ; ce qui change est ce qu'on lui donne.
+   */
   readonly precedente: string | null;
   readonly suivante: string | null;
 };
@@ -356,11 +371,18 @@ export const voisinage = ({ story, visibles }: { readonly story: Story; readonly
     return { segments: [{ id: story.id, courant: true }], rang: 0, precedente: null, suivante: null };
   }
 
+  // L'ADRESSE, pas l'identifiant (voir `Voisinage`) : la conversion se fait ICI,
+  // au seul site qui sait que ces voisines sont des STORIES.
+  const adresse = (index: number): string | null => {
+    const voisine = memeAuteur[index];
+    return voisine === undefined ? null : adresseDeLaStory(voisine.id);
+  };
+
   return {
     segments: memeAuteur.map((voisine, index) => ({ id: voisine.id, courant: index === rang })),
     rang,
-    precedente: memeAuteur[rang - 1]?.id ?? null,
-    suivante: memeAuteur[rang + 1]?.id ?? null,
+    precedente: adresse(rang - 1),
+    suivante: adresse(rang + 1),
   };
 };
 

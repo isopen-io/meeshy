@@ -298,3 +298,83 @@ export const railDeStories = async ({
     })
     .filter((vignette): vignette is Vignette => vignette !== null);
 };
+
+/**
+ * LE RÉEL SUIVANT DU FIL CONNECTÉ (`/feed/reels`, #5032) — **UN** réel, et son
+ * curseur pour aller au suivant.
+ *
+ * POURQUOI UN SEUL, ET PAS VINGT. Le critère de la matrice demande « une seule
+ * vidéo décodée à la fois » ; la cible (`MeeshyWebV3.dc.html:180`) dessine UN
+ * réel plein écran — bouton de lecture, rail de gestes, auteur, barre de
+ * progression —, jamais une liste qui défile. Servir vingt réels dans un
+ * document en ferait vingt `<video>` que seul un module pourrait éteindre :
+ * le socle SANS JavaScript décoderait les vingt. Une page, un réel : le
+ * critère devient vrai par CONSTRUCTION, pas par un script qui le rattrape.
+ *
+ * ET C'EST LE MÊME LECTEUR QUE `/reels/:id`. La ligne que ce fil sert est
+ * hydratée par `postInclude` — `feedPostInclude = postInclude`
+ * (`services/gateway/src/services/PostFeedService.ts:36`), le MÊME include que
+ * la lecture d'un post unique. `partageLu` peut donc la lire telle quelle :
+ * aucun aller-retour de plus, et aucune seconde projection à tenir. C'est ce
+ * qui rend « un SEUL composant lecteur sert la route publique et la route
+ * connectée » vrai jusqu'à la donnée, pas seulement jusqu'au gabarit.
+ *
+ * CE QUE LA PASSERELLE SERT ICI, MESURÉ (`PostFeedService.getReels`) : les
+ * réels des AUTRES (`authorId: { not: userId }`) — c'est un fil de DÉCOUVERTE,
+ * jamais « mes réels » —, fenêtre chronologique réordonnée par affinité À
+ * L'INTÉRIEUR de la fenêtre, curseur opaque `createdAt+id`. Le réordonnancement
+ * borné à la fenêtre est ce qui rend le parcours sans doublon ni saut : le
+ * curseur est pris sur la BORNE chronologique, pas sur le dernier élu.
+ *
+ * `limite: 1` n'est donc pas une économie : c'est la définition du pas. Le
+ * `nextCursor` que la passerelle rend est exactement « après ce réel-ci ».
+ */
+export type ReelDuFil =
+  | {
+      readonly genre: 'reel';
+      /** La ligne BRUTE — `partageLu` la lit, ce module ne la projette pas. */
+      readonly brut: Readonly<Record<string, unknown>>;
+      /** Le curseur du réel SUIVANT, ou `null` quand celui-ci est le dernier. */
+      readonly curseurSuivant: string | null;
+    }
+  /** Le fil est VIDE — aucun réel à découvrir. Un état, pas une panne (charte règle 18). */
+  | { readonly genre: 'vide' }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+export const reelSuivant = async ({
+  jeton,
+  curseur,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly curseur?: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<ReelDuFil> => {
+  const parametres = new URLSearchParams({ scope: 'reels', limit: '1' });
+  if (curseur !== undefined && curseur !== '') parametres.set('cursor', curseur);
+  const reponse = await demande(
+    `${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}?${parametres.toString()}`,
+    jeton,
+    recuperer,
+  );
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (!reponse.ok) return { genre: 'panne' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'panne' };
+
+  const premier = objet(enveloppe.data[0]);
+  if (premier === null) return { genre: 'vide' };
+
+  const pagination = objet(enveloppe.pagination);
+  return {
+    genre: 'reel',
+    brut: premier,
+    curseurSuivant: pagination?.hasMore === true ? (chaine(pagination.nextCursor) ?? null) : null,
+  };
+};

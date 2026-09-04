@@ -224,6 +224,13 @@ const voisine = (id: string, minutes: number, auteurId = 'u2'): Voisine => ({
   publieeA: new Date(MAINTENANT - minutes * 60_000).toISOString(),
 });
 
+/**
+ * LE VOISINAGE REND DES ADRESSES, plus des identifiants (#5032). Ces témoins
+ * les opposent TELLES QUELLES plutôt que de les recomposer avec
+ * `adresseDeLaStory` : un témoin qui applique la même fonction que le code
+ * qu'il juge passe au vert quel que soit le préfixe qu'elle rend — c'est le
+ * défaut que le lot corrige, réinstallé dans sa propre garde.
+ */
 describe('le voisinage d’une story', () => {
   it('n’ordonne que les stories du MÊME auteur, de la plus ancienne à la plus récente', () => {
     const v = voisinage({
@@ -233,7 +240,7 @@ describe('le voisinage d’une story', () => {
     expect(v.segments.map((s) => s.id)).toEqual(['s1', 's2', 's3']);
     expect(v.rang).toBe(0);
     expect(v.precedente).toBeNull();
-    expect(v.suivante).toBe('s2');
+    expect(v.suivante).toBe('/stories/s2');
   });
 
   it('rend un seul segment quand le voisinage ne porte pas la story ouverte', () => {
@@ -249,8 +256,8 @@ describe('le voisinage d’une story', () => {
       visibles: [voisine('s0', 300), voisine('s1', 180), voisine('s2', 10)],
     });
     expect(v.rang).toBe(1);
-    expect(v.precedente).toBe('s0');
-    expect(v.suivante).toBe('s2');
+    expect(v.precedente).toBe('/stories/s0');
+    expect(v.suivante).toBe('/stories/s2');
   });
 });
 
