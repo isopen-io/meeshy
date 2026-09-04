@@ -120,3 +120,21 @@ export type GenreServi = {
 export const GENRE_STORY: GenreServi = { type: 'STORY', base: '/stories', copie: STORY, avecSegments: true };
 export const GENRE_REEL: GenreServi = { type: 'REEL', base: '/reels', copie: REEL, avecSegments: false };
 export const GENRE_HUMEUR: GenreServi = { type: 'STATUS', base: '/moods', copie: HUMEUR, avecSegments: false };
+
+/**
+ * L'ADRESSE D'UNE PUBLICATION PARTAGÉE — composée du `base` de son genre, ici
+ * et nulle part ailleurs.
+ *
+ * ELLE VIT DANS LA COPIE, PAS DANS LA VUE, depuis que le VOISINAGE porte des
+ * adresses (#5032, `lib/api/publication.ts` › `Voisinage`). `voisinage()`
+ * convertit ses voisines en adresses au seul site qui sait qu'elles sont des
+ * stories ; il ne peut pas importer une fonction de `app/`, et la recopier en
+ * aurait fait la jumelle que le § 3.2 interdit. `partage-vue.ts` les
+ * ré-exporte pour ses lecteurs historiques.
+ */
+export const adresseDuPartage = (genre: GenreServi, id: string, langue?: string): string =>
+  `${genre.base}/${encodeURIComponent(id)}${langue === undefined ? '' : `?lang=${encodeURIComponent(langue)}`}`;
+
+/** L'adresse d'une STORY — la projection que la porte de `/stories/:id` lit. */
+export const adresseDeLaStory = (id: string, langue?: string): string =>
+  adresseDuPartage(GENRE_STORY, id, langue);
