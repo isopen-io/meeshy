@@ -669,6 +669,29 @@ extension MeeshyComposerHost {
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
+        // **La prise se POSE par le chemin de la feuille, jamais par un second**
+        // (#4080). `ingestCameraCapture` est ce que `documentCameraSheet`
+        // appelle depuis toujours : il route le MIME, applique
+        // `ComposerMediaPlacement.role` — « pas de fond ⇒ il devient le fond,
+        // sinon un objet de premier plan », mot pour mot la planche `2b` — et
+        // pousse la montée. Un second chemin d'entrée diverge au premier format
+        // ajouté, et personne ne le verrait avant que l'un des deux ne pose au
+        // mauvais plan.
+        //
+        // Les deux signaux sont des IDENTIFIANTS, pas les valeurs : une seconde
+        // photo identique à la première ne changerait pas `capturedPhoto`, et
+        // `onReceive` ne se réveillerait pas. C'est la même paire que la feuille
+        // écoute, pour la même raison.
+        .onReceive(sceneCamera.$capturedPhotoId) { id in
+            guard id != nil, sceneCameraStage != .off,
+                  let image = sceneCamera.capturedPhoto else { return }
+            poseSceneCapture(.photo(image))
+        }
+        .onReceive(sceneCamera.$capturedVideoId) { id in
+            guard id != nil, sceneCameraStage != .off,
+                  let url = sceneCamera.capturedVideoURL else { return }
+            poseSceneCapture(.video(url))
+        }
     }
 
     var documentSurface: some View {

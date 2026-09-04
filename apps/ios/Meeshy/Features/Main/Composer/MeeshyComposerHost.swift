@@ -868,6 +868,21 @@ struct MeeshyComposerHost: View {
         HapticFeedback.medium()
     }
 
+    /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
+    /// entrée, pas un mode »).
+    ///
+    /// Rester armé après une pose ferait de la caméra un état du composer, et
+    /// l'auteur n'aurait plus de scène à regarder pour juger ce qu'il vient d'y
+    /// mettre. L'étape d'arrivée vient de la loi
+    /// (`ComposerSceneCamera.stageAfterCapture`), jamais d'un `.off` écrit ici.
+    func poseSceneCapture(_ result: CameraResult) {
+        sceneCameraStage = ComposerSceneCamera.stageAfterCapture
+        sceneCameraMode = nil
+        sceneCamera.stop()
+        HapticFeedback.success()
+        Task { await ingestCameraCapture(result) }
+    }
+
     /// **Désarmer REND la scène**, et ferme la session dans le même geste : une
     /// caméra qu'on laisse tourner derrière une scène rendue est un voyant
     /// allumé que rien à l'écran n'explique.

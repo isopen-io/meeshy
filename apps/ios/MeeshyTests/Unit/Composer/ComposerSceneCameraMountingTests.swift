@@ -88,6 +88,53 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
                        "le geste ne doit plus présenter de feuille — la caméra est une ENTRÉE, pas un mode")
     }
 
+    /// **La prise se pose par le chemin de la FEUILLE, jamais par un second.**
+    ///
+    /// `ingestCameraCapture` route le MIME, applique `ComposerMediaPlacement.role`
+    /// — « pas de fond ⇒ il devient le fond, sinon un objet de premier plan »,
+    /// mot pour mot la planche `2b` — et pousse la montée. Un second chemin
+    /// d'entrée diverge au premier format ajouté, et personne ne le verrait
+    /// avant que l'un des deux ne pose au mauvais plan.
+    func test_laPrise_passeParLeMêmeChemin_queLaFeuille() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        let code = compact(AppSourceGuard.stripComments(
+            try String(contentsOf: url, encoding: .utf8)))
+        XCTAssertTrue(code.contains("funcposeSceneCapture(_result:CameraResult)"))
+        XCTAssertTrue(code.contains("awaitingestCameraCapture(result)"),
+                      "la pose doit emprunter le chemin de la feuille, pas un second")
+    }
+
+    /// **Les deux signaux sont des IDENTIFIANTS, pas les valeurs.** Une seconde
+    /// photo identique à la première ne changerait pas `capturedPhoto`, et
+    /// l'observateur ne se réveillerait jamais — la scène resterait armée sur
+    /// une prise déjà faite. C'est la même paire que la feuille écoute, pour la
+    /// même raison, et c'est le genre de détail qu'un `onReceive` posé sur la
+    /// valeur rend faux SANS jamais rougir.
+    func test_lesObservateurs_écoutentLesIdentifiants_pasLesValeurs() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
+        let code = compact(AppSourceGuard.stripComments(
+            try String(contentsOf: url, encoding: .utf8)))
+        XCTAssertTrue(code.contains("onReceive(sceneCamera.$capturedPhotoId)"))
+        XCTAssertTrue(code.contains("onReceive(sceneCamera.$capturedVideoId)"))
+        XCTAssertFalse(code.contains("onReceive(sceneCamera.$capturedPhoto)"),
+                       "écouter la VALEUR raterait deux prises identiques d'affilée")
+    }
+
+    /// **Une entrée, pas un mode** : après la pose, le viseur se retire et la
+    /// session se ferme. La règle vient de la loi, jamais d'un `.off` écrit
+    /// dans le meuble.
+    func test_aprèsLaPose_leViseurSeRetire_etLaSessionSeFerme() throws {
+        let code = compact(try source("MeeshyComposerHost.swift"))
+        XCTAssertTrue(code.contains("sceneCameraStage=ComposerSceneCamera.stageAfterCapture"))
+        XCTAssertEqual(ComposerSceneCamera.stageAfterCapture, .off)
+    }
+
     /// **Désarmer FERME la session.** Une caméra laissée tournante derrière une
     /// scène rendue est un voyant allumé que rien à l'écran n'explique — et sur
     /// un appareil réel, une batterie qui se vide.
