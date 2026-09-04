@@ -401,14 +401,17 @@ describe('POST /attachments/upload — anonymous, shareLink not found', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when share link does not exist', async () => {
+  // #4856 — l'ABSENCE de ce lien décrit l'état de la session de CET appelant
+  // (résolue côté serveur depuis son jeton), jamais un identifiant qu'il
+  // sonde : aucun anti-oracle n'est en jeu, et le vrai statut est 404.
+  it('returns 404 when share link does not exist', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/attachments/upload',
       headers: { 'content-type': CT },
       payload: multipartFile('photo.jpg', 'image/jpeg'),
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -816,14 +819,17 @@ describe('POST /attachments/upload-text — anonymous, share link not found (tas
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when share link does not exist', async () => {
+  // #4856 — même raison que sur `POST /attachments/upload` : la session de
+  // l'appelant est la seule source de `shareLinkId`, donc son absence n'ouvre
+  // aucun oracle et le vrai statut est 404.
+  it('returns 404 when share link does not exist', async () => {
     mockCreateTextAttachment.mockClear();
     const res = await app.inject({
       method: 'POST',
       url: '/attachments/upload-text',
       payload: { content: 'text' },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
     expect(mockCreateTextAttachment).not.toHaveBeenCalled();
   });
 });

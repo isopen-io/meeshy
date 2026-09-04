@@ -397,7 +397,11 @@ describe('POST /conversations/:id/new-link', () => {
     expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
-  it('returns 403 when user record not found', async () => {
+  // #4856 — `currentUserId` vient du JWT de l'appelant, jamais d'un
+  // identifiant qu'il sonde : son absence décrit son PROPRE compte (jeton
+  // valide, ligne `User` disparue), aucun anti-oracle n'est en jeu, et le
+  // vrai statut est 404.
+  it('returns 404 when user record not found', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
     mockResolveConversationId.mockResolvedValue(CONV_ID);
     prisma.conversation.findUnique.mockResolvedValue({ id: CONV_ID, type: 'group', title: 'Test' });
@@ -405,7 +409,7 @@ describe('POST /conversations/:id/new-link', () => {
     prisma.user.findUnique.mockResolvedValue(null);
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
   it('returns 403 for direct conversation type', async () => {

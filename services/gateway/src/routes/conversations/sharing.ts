@@ -204,8 +204,13 @@ export function registerSharingRoutes(
         select: { role: true }
       });
 
+      // #4856 — `currentUserId` vient du JWT de l'appelant, jamais d'un
+      // identifiant qu'il choisit : une absence ici ne dit rien sur un TIERS,
+      // elle décrit son PROPRE compte (jeton valide, ligne `User` disparue —
+      // suppression de compte, incohérence de données). Aucun anti-oracle
+      // n'est en jeu, et le schéma de la route déclare déjà 404.
       if (!user) {
-        return sendForbidden(reply, 'User not found');
+        return sendNotFound(reply, 'User not found');
       }
 
       // #4169 — tout le reste (résolution de l'identifiant de conversation,

@@ -29,6 +29,7 @@ import {
 import {
   refuserAccesConversation,
   verdictAccesConversation,
+  CODE_NON_MEMBRE,
   type MessagesDeRefusDAcces
 } from './utils/access-control';
 import type { ConversationParams } from './types';
@@ -127,9 +128,15 @@ export function registerMessageSearchRoute(
       // NEGATIVE Prisma `take`. Search is cursor-based, so only the limit is used.
       const { limit: searchLimit } = validatePagination('0', limitStr, { maxLimit: 50 });
 
+      // #4856 — un identifiant qui ne résout à AUCUNE conversation reçoit le
+      // même refus, mot pour mot, qu'un identifiant qui en résout une dont
+      // l'appelant n'est pas membre (`REFUS_DE_RECHERCHE.nonMembre`, servi
+      // juste en dessous) : distinguer les deux dirait à quiconque essaie
+      // un identifiant au hasard s'il a touché une conversation réelle,
+      // exactement ce que le 403 de cette route existe pour taire.
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendForbidden(reply, 'Conversation not found');
+        return sendForbidden(reply, REFUS_DE_RECHERCHE.nonMembre, { code: CODE_NON_MEMBRE });
       }
 
       const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);

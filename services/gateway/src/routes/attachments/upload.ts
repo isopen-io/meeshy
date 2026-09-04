@@ -9,6 +9,7 @@ import {
   sendBadRequest,
   sendUnauthorized,
   sendForbidden,
+  sendNotFound,
   sendInternalError,
 } from '../../utils/response.js';
 
@@ -93,6 +94,10 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without upload permissions',
             ...errorResponseSchema
           },
+          404: {
+            description: 'The share link backing this anonymous session no longer exists',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -157,8 +162,14 @@ export async function registerUploadRoutes(
             },
           });
 
+          // #4856 — `authContext.anonymousUser?.shareLinkId` vient de la
+          // vérification du jeton de session de CET appelant, jamais d'un
+          // identifiant qu'il choisit : son absence décrit l'état de SA
+          // PROPRE session (lien retiré/expiré après l'établissement de la
+          // session), pas celle d'une ressource qu'il chercherait à sonder.
+          // Aucun anti-oracle n'est en jeu.
           if (!shareLink) {
-            return sendForbidden(reply, 'Share link not found');
+            return sendNotFound(reply, 'Share link not found');
           }
 
           // Round 1 sécurité (task-1-fix-round-1) : la classification ne se
@@ -252,6 +263,10 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without file upload permission',
             ...errorResponseSchema
           },
+          404: {
+            description: 'The share link backing this anonymous session no longer exists',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -304,8 +319,11 @@ export async function registerUploadRoutes(
             select: { allowAnonymousFiles: true },
           });
 
+          // #4856 — même raison que sur `POST /attachments/upload` ci-dessus :
+          // `shareLinkId` vient de la session de CET appelant, pas d'un
+          // identifiant qu'il sonde.
           if (!shareLink) {
-            return sendForbidden(reply, 'Share link not found');
+            return sendNotFound(reply, 'Share link not found');
           }
 
           if (!shareLink.allowAnonymousFiles) {

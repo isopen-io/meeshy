@@ -424,8 +424,13 @@ export async function registerMetadataRoutes(
               select: participantSelect,
             });
 
+        // #4856 — `conversationId` vient de l'URL, sondable par n'importe qui :
+        // les deux branches d'identité doivent rendre le MÊME refus pour la
+        // MÊME absence de ligne `Participant`, sans quoi la forme anonyme
+        // apprenait « cette conversation n'existe pas » à qui la forme
+        // enregistrée refusait déjà de dire.
         if (!participant) {
-          return sendForbidden(reply, isAnonymous ? 'Participant not found' : 'Access denied to this conversation');
+          return sendForbidden(reply, 'Access denied to this conversation');
         }
 
         if (isAnonymous && participant.conversationId !== conversationId) {

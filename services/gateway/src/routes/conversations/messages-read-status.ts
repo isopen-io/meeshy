@@ -214,8 +214,14 @@ export function registerMarkUnreadRoute(
       // Resolve participant ID for this user
       const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
+      // #4856 — `canAccessConversation` a déjà PROUVÉ, deux lignes plus haut,
+      // que cette conversation est pour l'appelant : une absence ici ne peut
+      // plus enseigner à un attaquant qu'une conversation existe, elle décrit
+      // seulement l'état de SA PROPRE participation. Le 403 était un accident
+      // de la migration #4792 (copié depuis le refus d'accès voisin), pas une
+      // décision anti-énumération — le schéma de la route déclare déjà 404.
       if (!currentParticipant) {
-        return sendForbidden(reply, 'Participant not found in this conversation');
+        return sendNotFound(reply, 'Participant not found in this conversation');
       }
 
       // Find the latest message in the conversation (not sent by the user)
