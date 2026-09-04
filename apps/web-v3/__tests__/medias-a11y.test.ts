@@ -1,7 +1,7 @@
 import { axe } from 'jest-axe';
 
 import { documentDesMedias, type EtatDesMedias } from '@/app/connecte/medias-vue';
-import { message, type Message } from '@/lib/api/fil';
+import { message, type Fil, type Message } from '@/lib/api/fil';
 import { galerie } from '@/lib/api/medias';
 
 /**
@@ -71,11 +71,22 @@ const messages = PIECES.map((piece, rang) =>
   ),
 );
 
+const filDe = (msgs: readonly Message[], plusAncien: string | null = 'm0'): Fil => ({
+  id: 'c1',
+  titre: 'Équipe Lagos',
+  membres: 12,
+  presence: { participants: [], presents: [] },
+  messages: msgs,
+  plusAncien,
+});
+
 const etat = (attributs: Partial<EtatDesMedias> = {}): EtatDesMedias => ({
   cle: 'c1',
   titre: 'Équipe Lagos',
   galerie: galerie({ messages, genre: null }),
   plusAncien: 'm0',
+  fil: filDe(messages),
+  plein: null,
   ...attributs,
 });
 
@@ -92,6 +103,21 @@ describe('la galerie des médias — gate B', () => {
 
   it('ne porte aucune violation grave, filtre actif et vide', async () => {
     ecris(documentDesMedias(etat({ galerie: galerie({ messages, genre: 'audio' }) })));
+    expect(await graves()).toEqual([]);
+  });
+
+  /**
+   * LA FENÊTRE VIDE AVEC UNE PAGE PLUS ANCIENNE — défaut majeur corrigé : la
+   * carte porte désormais une action, jamais un lien orphelin en double.
+   */
+  it('ne porte aucune violation grave, fenêtre vide avec une page plus ancienne', async () => {
+    ecris(documentDesMedias(etat({ galerie: galerie({ messages: [], genre: null }), plusAncien: 'm42' })));
+    expect(await graves()).toEqual([]);
+  });
+
+  /** LA SURIMPRESSION PLEIN ÉCRAN DE LA GALERIE — défaut majeur corrigé (#5024). */
+  it('ne porte aucune violation grave, la surimpression plein écran ouverte', async () => {
+    ecris(documentDesMedias(etat({ plein: 'a1' })));
     expect(await graves()).toEqual([]);
   });
 

@@ -2,7 +2,7 @@ import { moi } from '@/lib/api/compte';
 import { fil, languesDuLecteur, type Creance } from '@/lib/api/fil';
 import { galerie, genreDemande } from '@/lib/api/medias';
 
-import { CACHE_PRIVE, curseurDemande, rendu } from '@/app/connecte/fil-porte';
+import { CACHE_PRIVE, curseurDemande, pleinDemande, rendu } from '@/app/connecte/fil-porte';
 import { documentIntrouvable } from '@/app/connecte/fil-vue';
 import { documentDesMedias } from '@/app/connecte/medias-vue';
 import { documentDePanne } from '@/app/connecte/vue';
@@ -16,7 +16,9 @@ import { jetonDuLecteur } from '@/app/session';
  * la passerelle accepte les deux, et la v3 lui passe ce qu'elle a reçu.
  * `?genre=image|video|audio|fichier` filtre la grille ; `?avant=<id>` remonte
  * d'une page — le MÊME curseur que le fil, puisque c'est le MÊME lot de
- * messages qui est lu.
+ * messages qui est lu. `?media=<pièce>` (`pleinDemande`, lue au MÊME site que
+ * les deux portes du fil) ouvre la surimpression plein écran d'une tuile,
+ * résolue contre `issue.fil` — déjà en main, donc sans requête de plus.
  *
  * UNE SEULE MÉTHODE. Cet écran ne mute rien : pas de POST, et pas d'accusé de
  * lecture — parcourir une galerie n'est pas LIRE la conversation, et poser
@@ -83,6 +85,8 @@ export const GET = async (
       titre: issue.fil.titre,
       galerie: galerie({ messages: issue.fil.messages, genre }),
       plusAncien: issue.fil.plusAncien,
+      fil: issue.fil,
+      plein: pleinDemande(requete),
     }),
   );
 };

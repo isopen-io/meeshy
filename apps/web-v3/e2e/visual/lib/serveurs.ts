@@ -89,6 +89,8 @@ export {
   INVITE,
   LIEN_DU_FIL,
   MEMBRE,
+  messageDeFichier,
+  messageProtege,
   messagesRiches,
   NOM_DU_LIEN,
   PAIR_ANGLOPHONE,
@@ -482,6 +484,28 @@ const attend = async (url: string, jusqua: number): Promise<void> => {
 };
 
 /**
+ * Tue le GROUPE de processus d'un enfant lancé `detached: true` — pas
+ * seulement l'enfant direct.
+ *
+ * `next start`, même appelé sans `npx`, FORKE son propre serveur de rendu
+ * (`next-server`) : un `enfant.kill()` simple ne tue que le processus CLI
+ * (`npx`/`next`), et `next-server` — le processus qui écoute réellement le
+ * port — lui survit, reparenté à PID 1, jusqu'à épuiser la mémoire de la
+ * machine une session après l'autre (mesuré : 71 `next-server` orphelins
+ * accumulés avant ce correctif, chacun ~250 Mo, cf. `tasks/lessons.md`).
+ * `detached: true` fait de l'enfant le CHEF d'un nouveau groupe dont son PID
+ * devient l'identifiant ; envoyer le signal au PID NÉGATIF l'envoie à TOUT le
+ * groupe — `next-server` forké compris, qui hérite du groupe de son parent.
+ */
+export const tueLeGroupeDeProcessus = (pid: number, signal: NodeJS.Signals = 'SIGTERM'): void => {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // Le groupe n'existe déjà plus (l'enfant est mort seul, ou jamais démarré) — rien à faire.
+  }
+};
+
+/**
  * Le serveur de la v3, tel que la production le lance — l'artefact de `next
  * build`, pas le mode développement, dont les octets et les requêtes n'ont
  * rien à voir avec ceux du § 8.3.
@@ -514,6 +538,9 @@ export const serveurDeLaV3 = async (passerelle: string): Promise<ServeurV3> => {
         NODE_ENV: 'production',
       },
       stdio: 'ignore',
+      // § tueLeGroupeDeProcessus juste au-dessus : sans ce drapeau, `next
+      // start` fuit son propre `next-server` à chaque fermeture de suite.
+      detached: true,
     },
   );
 
@@ -524,7 +551,11 @@ export const serveurDeLaV3 = async (passerelle: string): Promise<ServeurV3> => {
     ferme: () =>
       new Promise((resoud) => {
         enfant.once('exit', () => resoud());
-        enfant.kill('SIGTERM');
+        if (enfant.pid === undefined) {
+          resoud();
+          return;
+        }
+        tueLeGroupeDeProcessus(enfant.pid);
       }),
   };
 };

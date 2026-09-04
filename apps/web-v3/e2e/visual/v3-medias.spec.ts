@@ -6,7 +6,7 @@ import { expect, test, type Browser, type BrowserContext, type CDPSession, type 
 
 import { THEME_STORAGE_KEY } from '../../app/theme-script';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
-import { chargeDeMessage, JETON_DU_MEMBRE } from './lib/bouchon-socket';
+import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { ciblesMesurees, ciblesTropPetites, LARGEURS } from './lib/cibles';
 // `lib/a11y.ts` importe un `.mjs` que le transpile CommonJS de Playwright ne charge pas dans le
 // projet `chaines` : ce spec monte sa propre chaîne, donc il prend le verdict et les colonnes à
@@ -15,7 +15,8 @@ import { COLONNES_DE_THEME, rapporteViolations, violationsBloquantes } from './l
 import {
   CONVERSATION_DU_LECTEUR,
   CONVERSATION_RICHE,
-  INVITE,
+  messageDeFichier,
+  messageProtege,
   messagesRiches,
   passerelleDeBouchon,
   PISTE_TRADUITE,
@@ -57,56 +58,6 @@ let v3: ServeurV3;
 
 const MEDIAS = (genre?: string): string =>
   `${v3.base}/chats/${CONVERSATION_DU_LECTEUR.id}/medias${genre === undefined ? '' : `?genre=${genre}`}`;
-
-/** Un PDF — le quatrième genre de la table, que `messagesRiches` ne porte pas. */
-const messageDeFichier = (conversationId: string) => ({
-  ...chargeDeMessage({
-    id: 'r7',
-    conversationId,
-    senderId: INVITE.id,
-    content: '',
-    originalLanguage: 'fr',
-    sender: { id: INVITE.id, displayName: INVITE.nom, type: 'anonymous' },
-    attachments: [
-      {
-        id: 'ar7',
-        fileUrl: '2026/09/ar7/budget.pdf',
-        originalName: 'budget.pdf',
-        mimeType: 'application/pdf',
-        fileSize: 1_258_291,
-      },
-    ],
-    createdAt: new Date(Date.now() - 17 * 60_000).toISOString(),
-  }),
-  senderParticipantId: INVITE.id,
-});
-
-/**
- * UN MESSAGE PROTÉGÉ QUI PORTE UNE PHOTO — le témoin du cycle 125, posé sur un
- * écran neuf : la galerie ne doit JAMAIS servir l'URL d'une pièce à vue unique.
- */
-const messageProtege = (conversationId: string) => ({
-  ...chargeDeMessage({
-    id: 'r8',
-    conversationId,
-    senderId: INVITE.id,
-    content: '',
-    originalLanguage: 'fr',
-    sender: { id: INVITE.id, displayName: INVITE.nom, type: 'anonymous' },
-    attachments: [
-      {
-        id: 'ar8',
-        fileUrl: '/api/v1/attachments/file/2026/secret-vue-unique.jpg',
-        originalName: 'secret-vue-unique.jpg',
-        mimeType: 'image/jpeg',
-        fileSize: 512_000,
-      },
-    ],
-    createdAt: new Date(Date.now() - 16 * 60_000).toISOString(),
-  }),
-  senderParticipantId: INVITE.id,
-  isViewOnce: true,
-});
 
 const contexteDuMembre = async (
   navigateur: Browser,
@@ -208,11 +159,14 @@ test.describe('la grille — parcourir sans rien télécharger', () => {
   });
 
   /**
-   * L'EFFET, JAMAIS L'ATTRIBUT. La planche dessine des tuiles inertes ; celles-ci
-   * ouvrent le fichier dans un onglet, et la galerie reste où elle est — comme
-   * l'affiche du fil, pour la même raison (`download` est ignoré hors origine).
+   * CE QUE LE TAP OUVRE VIENT DE LA MÊME TABLE QUE LE FIL
+   * (`FORME_PAR_GENRE.ouvre`, § 12.10.1) — le défaut majeur #5024 (2), corrigé
+   * ici : une image ou une vidéo ouvre le MÊME plein écran que le fil, SANS
+   * quitter le document ; SEUL un genre sans plein écran (le fichier) ouvre
+   * encore un onglet, sur le fichier servi — comme l'affiche du fil, pour la
+   * même raison (`download` est ignoré hors origine).
    */
-  test('ouvre chaque tuile sur son média, sans quitter la galerie', async ({ browser }) => {
+  test('ouvre image et vidéo dans le plein écran de la galerie, jamais dans un onglet', async ({ browser }) => {
     const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
     const page = await contexte.newPage();
     await page.goto(MEDIAS(), { waitUntil: 'load' });
@@ -221,13 +175,45 @@ test.describe('la grille — parcourir sans rien télécharger', () => {
     const tuiles = page.locator('.grille .tuile');
     expect(await tuiles.count()).toBe(3);
     expect(await page.locator('.lecteurs > li').count()).toBe(1);
-    for (const href of await tuiles.evaluateAll((noeuds) => noeuds.map((n) => n.getAttribute('href') ?? ''))) {
-      expect(href).toContain(passerelle.base);
-    }
+
+    // Seule la tuile FICHIER (ar7, un PDF — aucun plein écran) mène à la
+    // passerelle ; image et vidéo restent sur le DOCUMENT de la galerie.
+    const hrefFichier = await page.locator('li[data-piece="ar7"] .tuile').getAttribute('href');
+    expect(hrefFichier).toContain(passerelle.base);
+    const hrefImage = await page.locator('li[data-piece="ar1"] .tuile').getAttribute('href');
+    const hrefVideo = await page.locator('li[data-piece="ar2"] .tuile').getAttribute('href');
+    [hrefImage, hrefVideo].forEach((href) => {
+      expect(href).not.toContain(passerelle.base);
+      expect(href).toContain('autour=');
+      expect(href).toContain('media=');
+    });
 
     const image = page.locator('li[data-piece="ar1"] .tuile');
-    await expect(image).toHaveAttribute('aria-label', /Télécharger tableau\.jpg · 420 Ko/);
-    const [ouvert] = await Promise.all([contexte.waitForEvent('page'), image.click()]);
+    await expect(image).toHaveAttribute('aria-label', /Ouvrir tableau\.jpg · 420 Ko/);
+    await image.click();
+    await page.waitForLoadState('load');
+    expect(page.url()).not.toBe(avant);
+    expect(page.url().startsWith(v3.base)).toBe(true);
+    await expect(page.locator('dialog.plein')).toHaveAttribute('data-genre', 'image');
+    await expect(page.locator('main#main-content')).toHaveJSProperty('inert', true);
+
+    // Fermer ramène EXACTEMENT à la tranche d'où l'on vient — jamais un onglet perdu.
+    await page.locator('dialog.plein .fermer').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('dialog.plein')).toHaveCount(0);
+    await contexte.close();
+  });
+
+  /** LE SEUL GESTE QUI QUITTE ENCORE L'ÉCRAN : un genre sans plein écran (§ 12.10.1). */
+  test('ouvre un FICHIER dans un onglet, la galerie restant où elle est', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(MEDIAS(), { waitUntil: 'load' });
+    const avant = page.url();
+
+    const fichier = page.locator('li[data-piece="ar7"] .tuile');
+    await expect(fichier).toHaveAttribute('aria-label', /Télécharger budget\.pdf/);
+    const [ouvert] = await Promise.all([contexte.waitForEvent('page'), fichier.click()]);
     await ouvert.waitForLoadState('domcontentloaded').catch(() => undefined);
     expect(page.url()).toBe(avant);
     expect(ouvert.url()).toContain('/api/v1/attachments/file/');
