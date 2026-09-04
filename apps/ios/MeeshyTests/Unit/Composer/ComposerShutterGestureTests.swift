@@ -31,19 +31,34 @@ final class ComposerShutterGestureTests: XCTestCase {
         XCTAssertEqual(ComposerShutterGesture.outcome(heldFor: 0.01, locked: true), .keepFilming)
     }
 
-    /// **REMONTER verrouille, descendre non.** L'écran a son origine en HAUT :
-    /// une translation négative est une remontée. Confondre les deux
-    /// verrouillerait en éloignant le pouce du déclencheur — l'inverse exact du
-    /// geste, et une erreur qui se teste bien parce qu'elle est silencieuse.
-    func test_seulLaRemontée_verrouille() {
-        XCTAssertTrue(ComposerShutterGesture.locks(translationY: -80))
-        XCTAssertFalse(ComposerShutterGesture.locks(translationY: 80))
-        XCTAssertFalse(ComposerShutterGesture.locks(translationY: -10))
+    /// **La DROITE verrouille, la gauche non** (directive porteur 2026-09-04).
+    ///
+    /// Le sens n'est pas un détail : glisser à gauche ramènerait vers les
+    /// portes du rail, un geste qui veut dire autre chose. Et le déclencheur
+    /// vivant au BAS de la carte, remonter ferait passer le doigt sur l'image —
+    /// il masquerait le sujet au moment précis où on le filme.
+    func test_seulLeGlissementÀDroite_verrouille() {
+        XCTAssertTrue(ComposerShutterGesture.locks(translationX: 80))
+        XCTAssertFalse(ComposerShutterGesture.locks(translationX: -80))
+        XCTAssertFalse(ComposerShutterGesture.locks(translationX: 10))
     }
 
-    func test_auSeuilExactDeRemontée_çaVerrouille() {
+    func test_auSeuilExact_çaVerrouille() {
         XCTAssertTrue(ComposerShutterGesture.locks(
-            translationY: -ComposerShutterGesture.liftToLock))
+            translationX: ComposerShutterGesture.slideToLock))
+    }
+
+    /// **Le geste se VOIT pendant qu'il se fait.** La directive du 2026-08-30
+    /// veut des gestes progressifs et annulables : un seuil franchi sans
+    /// prévenir laisse l'auteur découvrir l'état après coup. La progression est
+    /// bornée aux deux bouts — au-delà du seuil elle reste à 1, en arrière elle
+    /// retombe à 0, ce qui EST l'annulation.
+    func test_laProgression_estBornéeEtRéversible() {
+        XCTAssertEqual(ComposerShutterGesture.lockProgress(translationX: 0), 0)
+        XCTAssertEqual(ComposerShutterGesture.lockProgress(translationX: 32), 0.5, accuracy: 0.001)
+        XCTAssertEqual(ComposerShutterGesture.lockProgress(translationX: 999), 1)
+        XCTAssertEqual(ComposerShutterGesture.lockProgress(translationX: -50), 0,
+                       "revenir en arrière ANNULE — c'est la moitié qui compte")
     }
 
     /// **Les deux seuils ne se confondent pas avec ceux du système.** Au-dessus

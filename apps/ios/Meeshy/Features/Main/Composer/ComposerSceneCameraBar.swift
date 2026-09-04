@@ -54,13 +54,17 @@ struct ComposerSceneCameraBar: View {
     @State private var pressedAt: Date?
     @State private var locked = false
     @State private var holdTask: Task<Void, Never>?
+    /// Où en est le glissement vers le verrou, de 0 à 1. Rendu pendant le
+    /// geste : la directive du 2026-08-30 veut qu'un glissement se VOIE
+    /// pendant qu'il se fait, et reste annulable jusqu'au bout.
+    @State private var lockProgress: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
             topControls
             if !segments.isEmpty { segmentStrip }
             Spacer(minLength: 0)
-            shutter
+            shutterRow
             hint
         }
         .padding(.horizontal, 14)
@@ -162,6 +166,39 @@ struct ComposerSceneCameraBar: View {
 
     // MARK: - Le déclencheur — un seul, trois intentions
 
+    /// **Le déclencheur et la PISTE de verrouillage, sur une rangée.**
+    ///
+    /// La piste ne paraît que pendant une prise non verrouillée — hors de ce
+    /// moment elle n'a rien à dire, et un rail permanent laisserait croire à
+    /// une commande qu'on peut presser.
+    private var shutterRow: some View {
+        HStack(spacing: 10) {
+            shutter
+            if stage == .recording && !locked { lockTrack }
+        }
+    }
+
+    /// La cible du verrou, avec la progression du doigt. Le cadenas se
+    /// remplit ; à 1, le geste bascule.
+    private var lockTrack: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white.opacity(0.35 + 0.65 * lockProgress))
+            Image(systemName: "lock.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4 + 0.6 * lockProgress))
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .adaptiveGlass(in: Capsule())
+        .overlay(
+            Capsule().strokeBorder(.white.opacity(0.25 * lockProgress), lineWidth: 2)
+        )
+        .accessibilityHidden(true)
+        .transition(.opacity)
+    }
+
     private var shutter: some View {
         ZStack {
             Circle()
@@ -196,10 +233,16 @@ struct ComposerSceneCameraBar: View {
                     locked = false
                     armHold()
                 }
-                guard stage == .recording, !locked,
-                      ComposerShutterGesture.locks(translationY: valeur.translation.height)
-                else { return }
+                guard stage == .recording, !locked else { return }
+                // **Le geste se montre pendant qu'il se fait** — et revenir en
+                // arrière l'annule, ce que la progression rend tout seul en
+                // retombant à zéro.
+                lockProgress = ComposerShutterGesture.lockProgress(
+                    translationX: valeur.translation.width)
+                guard ComposerShutterGesture.locks(
+                    translationX: valeur.translation.width) else { return }
                 locked = true
+                lockProgress = 1
                 onLock()
                 HapticFeedback.medium()
             }
@@ -208,6 +251,7 @@ struct ComposerSceneCameraBar: View {
                 holdTask = nil
                 let tenu = pressedAt.map { Date().timeIntervalSince($0) } ?? 0
                 pressedAt = nil
+                lockProgress = locked ? 1 : 0
                 switch ComposerShutterGesture.outcome(heldFor: tenu, locked: locked) {
                 case .photo:
                     // Une prise a pu démarrer et le doigt partir avant le seuil
