@@ -32,9 +32,23 @@ let passerelle: PasserelleDeBouchon;
 let v3: ServeurV3;
 
 /** Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais par une minuterie seule. */
+/**
+ * ATTENDRE UNE OBSERVATION, JAMAIS UNE HORLOGE.
+ *
+ * `data-participation` est servi par le document (`app/connecte/composer-vue.ts`)
+ * et existe donc dès le premier pixel : l'attendre ne prouve rien sur le module,
+ * qui arrive après. Ce témoin complétait par `waitForTimeout(1_200)` — un pari
+ * sur la vitesse de la machine, tenu en local (2,8 s au total) et perdu en CI le
+ * 2026-09-04, où le champ relu après rechargement était encore vide.
+ *
+ * `data-brouillon="arme"` est posé par la DERNIÈRE ligne de `demarre()`
+ * (`lib/realtime/composer.ts`), une fois le brouillon restauré et les écouteurs
+ * posés. L'attendre, c'est attendre le fait plutôt qu'un délai qui l'approche.
+ */
 const attendsLeModule = async (page: import('@playwright/test').Page): Promise<void> => {
-  await page.waitForFunction(() => document.querySelector('main[data-participation="composer"]') !== null);
-  await page.waitForTimeout(1_200);
+  await page.waitForFunction(
+    () => document.querySelector('main[data-participation="composer"][data-brouillon="arme"]') !== null,
+  );
 };
 
 test.beforeAll(async () => {

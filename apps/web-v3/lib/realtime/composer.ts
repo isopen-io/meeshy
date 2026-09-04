@@ -131,6 +131,17 @@ const demarre = (): void => {
   formulaire.addEventListener('submit', () => {
     efface(cle);
   });
+
+  // LE MODULE DIT QU'IL EST ARMÉ, et c'est la DERNIÈRE ligne de `demarre()` :
+  // le marqueur ne se pose qu'une fois le brouillon restauré ET les deux
+  // écouteurs posés. `data-participation`, lui, est écrit par le SERVEUR
+  // (`app/connecte/composer-vue.ts`) et existe donc dès le premier pixel : il
+  // dit quel module l'écran attend, jamais que ce module a fini. Un témoin qui
+  // ne dispose que du second doit compléter par une horloge — et une horloge
+  // tombe sur une machine chargée (`e2e/visual/v3-composer.spec.ts`, échec CI
+  // du 2026-09-04 : `waitForTimeout(1_200)` insuffisant, le champ relu vide).
+  // Ce marqueur est ce qu'un témoin OBSERVE à la place.
+  main.dataset.brouillon = 'arme';
 };
 
 demarre();
