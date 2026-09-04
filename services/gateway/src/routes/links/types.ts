@@ -387,6 +387,17 @@ export const messageSchema = {
     isEdited: { type: 'boolean', description: 'Whether the message was edited' },
     editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edition timestamp' },
     replyToId: { type: 'string', nullable: true, description: 'Quoted message identifier' },
+    // #4885 — non déclarés, ces quatre champs (+ le compteur/plafond de vue
+    // unique) étaient chargés par `getConversationMessagesWithDetails` et
+    // retirés ici par `fast-json-stringify` : un visiteur SANS COMPTE lisant
+    // un lien de partage recevait un message à vue unique / flouté /
+    // éphémère sans aucun moyen de le savoir.
+    isViewOnce: { type: 'boolean', description: 'View-once message (disappears after view)' },
+    maxViewOnceCount: { type: 'number', nullable: true, description: 'Maximum unique viewers allowed for view-once messages' },
+    viewOnceCount: { type: 'number', description: 'Number of unique viewers' },
+    isBlurred: { type: 'boolean', description: 'Content blurred until tap to reveal' },
+    effectFlags: { type: 'number', description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Self-destruct timestamp' },
     // Le SENS des messages système (avis d'arrivée, résumé d'appel) vit dans
     // `metadata` + `messageSource` — sans eux, le visiteur anonyme ne peut pas
     // les rendre dans SA langue et retombe sur le repli français stocké.
