@@ -204,3 +204,56 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         XCTAssertTrue(code.contains("sceneCamera.stop()"))
     }
 }
+
+/// #4080 — **ce que le viseur prend appartient à la SCÈNE.**
+///
+/// > « Je vois une scène noire après la prise […] et le compteur de composants
+/// > n'entre pas après la prise ! » — porteur, 2026-09-04
+///
+/// Les deux symptômes sont UN seul fait : la prise n'arrivait jamais sur la
+/// slide courante. `railPosesNextMedia` — le drapeau que
+/// `syncPostMediaIntoSlides` lit pour choisir la porte d'un média — n'était
+/// armé que par la porte média du rail. Une capture partait donc sans marque et
+/// se classait « rangée du document », une slide à elle : rien à peindre sur la
+/// scène, rien à compter sur la pastille.
+final class ComposerSceneCameraPosingTests: XCTestCase {
+
+    private func source(_ nom: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/\(nom)")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// **L'armement marque le rail**, et il le fait AVANT la prise :
+    /// `ingestIntoDocument` consomme le drapeau avant d'écrire (#4879), et
+    /// l'observateur qui lit `railPosedMediaURLs` tourne sur cette écriture. Le
+    /// poser plus tard le ferait arriver après lui — le défaut que #4879 a
+    /// fermé pour les quatre autres portes, rejoué par la cinquième.
+    func test_armer_marqueLeRail_pourQueLaPriseAtterrisseSurLaScène() throws {
+        let code = compact(try source("MeeshyComposerHost.swift"))
+        guard let début = code.range(of: "funcarmSceneCamera(){"),
+              let fin = code.range(of: "funcdisarmSceneCamera()", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("l'armement ou le désarmement a changé de nom") }
+        XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
+            .contains("railPosesNextMedia=true"),
+            "sans la marque, la prise se classe « rangée du document » — une slide à elle")
+    }
+
+    /// **Quitter sans prendre la RETIRE.** Laissée posée, elle classerait sur
+    /// la scène le prochain média venu d'une autre porte — un lot suivant qui
+    /// n'a rien demandé, et un défaut qui se manifesterait loin d'ici.
+    func test_désarmer_retireLaMarque() throws {
+        let code = compact(try source("MeeshyComposerHost.swift"))
+        guard let début = code.range(of: "funcdisarmSceneCamera(){"),
+              let fin = code.range(of: "funcdiscardSceneSegments()", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("le désarmement ou la purge a changé de nom") }
+        XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
+            .contains("railPosesNextMedia=false"))
+    }
+}

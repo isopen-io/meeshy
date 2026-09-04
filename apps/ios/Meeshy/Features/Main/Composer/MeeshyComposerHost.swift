@@ -845,6 +845,21 @@ struct MeeshyComposerHost: View {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
         sceneCameraMode = mode
         sceneCameraStage = .armed
+        // **Ce que le viseur prend appartient à la SCÈNE** (#4080, planche
+        // `2b` : « ce qu'elle rend est posé dans la scène courante »).
+        //
+        // Sans cette ligne, la prise partait dans `documentLocalMedia` sans
+        // marque de rail, donc `syncPostMediaIntoSlides` la classait « rangée
+        // du document » — une slide à elle. Symptômes signalés par le porteur :
+        // la scène reste NOIRE après la prise, et la pastille du rail ne
+        // compte pas. Deux manifestations d'un seul fait — le média n'était
+        // jamais arrivé sur la slide courante.
+        //
+        // Le marquage se fait à l'ARMEMENT et non à la pose : `ingestIntoDocument`
+        // consomme le drapeau AVANT d'écrire (#4879), et l'observateur qui lit
+        // `railPosedMediaURLs` tourne sur l'écriture. Le poser plus tard le
+        // ferait arriver après lui.
+        railPosesNextMedia = true
         // `configure()` demande la permission PUIS ouvre la session — c'est le
         // même point d'entrée que la feuille, et il rend un panneau explicatif
         // plutôt qu'un aperçu noir si l'accès est refusé.
@@ -965,6 +980,10 @@ struct MeeshyComposerHost: View {
     func disarmSceneCamera() {
         sceneCameraStage = .off
         sceneCameraMode = nil
+        // Quitter sans prendre RETIRE la marque : laissée posée, elle
+        // classerait sur la scène le prochain média venu d'une AUTRE porte —
+        // un lot suivant qui n'a rien demandé.
+        railPosesNextMedia = false
         // **Les segments abandonnés emportent leurs FICHIERS** (#4099). Sans
         // cette purge, quitter le viseur après trois essais laisserait trois
         // .mov dans le dossier temporaire jusqu'au prochain vidage du système
