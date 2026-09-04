@@ -89,3 +89,42 @@ export const feuilleQuiMonte = (classe: string): string =>
   `dialog.${classe}::backdrop{background:var(--color-overlay)}` +
   `dialog.${classe} .poignee{display:block;position:relative;width:100%;height:var(--target-min);margin:0 0 var(--space-2)}` +
   `dialog.${classe} .poignee::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:var(--glyph-large);height:var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-strong)}`;
+
+/**
+ * L'AVIS D'UN ÉCRAN — la ligne discrète qui dit ce qui vient d'avoir lieu
+ * (« Tout lu », « Publié. », « Demande acceptée »), sous l'en-tête et au-dessus
+ * du contenu.
+ *
+ * ATOME PARAMÉTRÉ, la même raison qu'`apercuDeLigne` : trois écrans le rendent
+ * sous trois racines — `.contacts-ecran`, `.notifs-ecran`, `.composer` — et un
+ * sélecteur GROUPÉ le ferait voyager sur les documents qui ne l'affichent pas
+ * (charte règle 7). Il était RECOPIÉ à l'identique dans deux feuilles quand le
+ * troisième écran est arrivé : deux copies se surveillent, trois divergent.
+ *
+ * LE `>` EST PORTÉ PAR L'ATOME, pas laissé à l'appelant : l'avis est un enfant
+ * DIRECT de l'écran. Sans lui, la règle attraperait le `.avis` d'une
+ * surimpression servie dans le même document, qui a sa propre géométrie.
+ */
+export const avisDEcran = (racine: string): string =>
+  `${racine}>.avis{display:flex;align-items:center;gap:var(--space-2);margin:0;padding:var(--space-3) var(--space-4);font-size:var(--text-sm);color:var(--color-text-muted)}` +
+  `${racine}>.avis svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}`;
+
+/**
+ * LE CHAMP D'APPEL — la barre tapable qui, en tête d'écran, MÈNE à l'écran qui
+ * sait faire la chose : « Rechercher partout » sur le tableau de bord (#5093),
+ * « Quoi de neuf ? » sur le fil (#4966).
+ *
+ * ATOME NON PARAMÉTRÉ : les deux écrans le rendent sous le MÊME sélecteur, à la
+ * racine de leur document, et il dit la même chose aux deux — « ceci se
+ * touche, et vous partez ailleurs ». Le paramétrer par une racine n'ajouterait
+ * qu'une indirection.
+ *
+ * C'EST UN `<a>`, JAMAIS UN `<input>`, sur les deux écrans, et la feuille le
+ * SUPPOSE (aucune règle de saisie, de focus de champ, de placeholder) : ce
+ * qu'on taperait dans un faux champ serait perdu au moment d'arriver sur
+ * l'écran qui sait le traiter. La forme le dit ; le HTML le tient.
+ */
+export const CHAMP_D_APPEL =
+  '.chercher{display:flex;align-items:center;gap:var(--space-3);min-height:var(--action-height-secondary);margin-top:var(--space-6);padding:0 var(--space-4);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text-muted);text-decoration:none}' +
+  '.chercher:hover{background:var(--color-tint-primary)}' +
+  '.chercher svg{flex:none;width:var(--glyph);height:var(--glyph);color:var(--color-primary)}';

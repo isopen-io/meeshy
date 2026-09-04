@@ -140,6 +140,13 @@ export type PasserelleDeBouchon = {
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires (#5091) — écrit par le POST, `remets()` entre témoins. */
   readonly filDeCommentaires: FilDeCommentairesDeBouchon;
+  /**
+   * LES CORPS DE `POST /api/v1/posts` REÇUS (#4966) — ce que le composer a
+   * réellement ENVOYÉ. Le critère de fin porte sur la charge (audience, emoji,
+   * langue revendiquée) ; l'assérer sur le document rendu ne dirait rien de ce
+   * qui part.
+   */
+  readonly publicationsRecues: readonly Record<string, unknown>[];
   /** Les sessions invitées dont la place est ACTIVE : en retirer une, c'est `isActive:false` en base (état F). */
   readonly placesActives: Set<string>;
   /**
@@ -309,6 +316,7 @@ export const passerelleDeBouchon = async (options?: {
   const appareils = APPAREILS_DU_BOUCHON.map((appareil) => ({ ...appareil }));
   const liensCrees: Record<string, unknown>[] = [];
   const conversationsCreees: { id: string; titre: string }[] = [];
+  const publicationsRecues: Record<string, unknown>[] = [];
   const boite = boiteDeNotifsDeBouchon(conversationId);
   const filDeCommentaires = filDeCommentairesDeBouchon();
   const duCompte = routesDuCompte({
@@ -320,6 +328,7 @@ export const passerelleDeBouchon = async (options?: {
     appareils,
     liensCrees,
     conversationsCreees,
+    publicationsRecues,
     boite,
     filDeCommentaires,
   });
@@ -414,6 +423,7 @@ export const passerelleDeBouchon = async (options?: {
     socket: bouchon,
     boite,
     filDeCommentaires,
+    publicationsRecues,
     placesActives,
     sessionsRevoquees,
     place,

@@ -1,6 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { apercuDeLigne, PASTILLE_DE_LANGUE } from './atomes-feuille';
+import { apercuDeLigne, CHAMP_D_APPEL, PASTILLE_DE_LANGUE } from './atomes-feuille';
 
 /**
  * La feuille de la zone CONNECTÉE — le tableau de bord, la liste des
@@ -123,7 +123,5 @@ a.carte:hover{background:var(--color-tint-primary)}
 export const FEUILLE_DU_TABLEAU = compacte(`
 ${PASTILLE_DE_LANGUE}
 ${apercuDeLigne('.carte')}
-.chercher{display:flex;align-items:center;gap:var(--space-3);min-height:var(--action-height-secondary);margin-top:var(--space-6);padding:0 var(--space-4);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text-muted);text-decoration:none}
-.chercher:hover{background:var(--color-tint-primary)}
-.chercher svg{flex:none;width:var(--glyph);height:var(--glyph);color:var(--color-primary)}
+${CHAMP_D_APPEL}
 `);
