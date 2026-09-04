@@ -167,7 +167,11 @@ describe('une bulle qui arrive', () => {
     expect(ligne.querySelector('.avatar')?.textContent).toBe('MR');
     // Les fentes des deux rendus portent les mêmes classes : rien n'a été composé.
     const servie = p.liste.querySelector<HTMLElement>('li[data-id="m1"]')!;
-    ['.avatar', '.qui .nom', '.texte', 'details.original', '.meta .langue', '.meta time', 'ul.reactions'].forEach((fente) => {
+    // `.datation time` et non `.meta time` depuis #5136 : l'heure et l'accusé
+    // ont quitté la ligne méta pour la SECONDE COLONNE du corps. C'est
+    // précisément l'invariant que cette boucle garde — servie et directe
+    // doivent porter la MÊME géographie, pas seulement les mêmes classes.
+    ['.avatar', '.qui .nom', '.texte', 'details.original', '.meta .langue', '.corps.colonnes > .bulle', '.corps.colonnes > .datation time', 'ul.reactions'].forEach((fente) => {
       expect(ligne.querySelector(fente)).not.toBeNull();
       expect(servie.querySelector(fente)).not.toBeNull();
     });
