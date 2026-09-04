@@ -402,8 +402,10 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = bg.scale
-                            scaleY = bg.scale
+                            // Deux axes depuis #5085 : un recadrage non carré
+                            // agrandit différemment en largeur et en hauteur.
+                            scaleX = bg.scaleX
+                            scaleY = bg.scaleY
                             rotationZ = bg.rotationDegrees
                             translationX = bg.offsetXFraction * size.width
                             translationY = bg.offsetYFraction * size.height
@@ -429,8 +431,10 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = bg.scale
-                            scaleY = bg.scale
+                            // Deux axes depuis #5085 : un recadrage non carré
+                            // agrandit différemment en largeur et en hauteur.
+                            scaleX = bg.scaleX
+                            scaleY = bg.scaleY
                             rotationZ = bg.rotationDegrees
                             translationX = bg.offsetXFraction * size.width
                             translationY = bg.offsetYFraction * size.height

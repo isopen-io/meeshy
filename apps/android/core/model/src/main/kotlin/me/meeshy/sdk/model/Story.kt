@@ -174,6 +174,16 @@ data class StoryMediaObject(
     val intrinsicDuration: Double? = null,
     val isBackground: Boolean = false,
     val loop: Boolean = false,
+    /**
+     * Crop bounds in fractions of the source (#5085) — `null` when the whole media is
+     * shown. The v1 wire nests them under `crop`; the canvas-v3 payload flattens them
+     * to `cropX`/`cropY`/`cropW`/`cropH`, projected by [CanvasV3Projection].
+     *
+     * They travelled from iOS with **no Android reader at all** until 2026-09-04: an
+     * image cropped by the author rendered WHOLE here, and no test could turn red —
+     * the field simply never reached a decoder.
+     */
+    val crop: StoryMediaCrop? = null,
     val zIndex: Int = 0,
     val startTime: Double? = null,
     val duration: Double? = null,

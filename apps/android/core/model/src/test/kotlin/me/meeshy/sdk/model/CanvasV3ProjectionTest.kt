@@ -309,4 +309,86 @@ class CanvasV3ProjectionTest {
         assertThat(text.textEffect).isEqualTo("relief")
         assertThat(StoryTextEffect.fromWire(text.textEffect)).isEqualTo(StoryTextEffect.RELIEF)
     }
+
+    /**
+     * #5085 — **les quatre bornes du recadrage arrivent bien jusqu'au modèle.**
+     *
+     * Elles voyagent à plat dans la charge (`cropX`/`cropY`/`cropW`/`cropH`),
+     * que le contrat déclare permissive : rien ne les refusait, et rien ne les
+     * LISAIT non plus. Ce témoin est le second fait — le premier étant la
+     * clause de `canvas-v3.ts` qui les déclare.
+     */
+    @Test
+    fun `les bornes de recadrage d un media arrivent au modele`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.jpg",
+                             "cropX": 0.0, "cropY": 0.5, "cropW": 1.0, "cropH": 0.5 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val media = projected.mediaObjects?.firstOrNull()
+        assertThat(media).isNotNull()
+        assertThat(media!!.crop).isEqualTo(StoryMediaCrop(x = 0.0, y = 0.5, width = 1.0, height = 0.5))
+    }
+
+    /**
+     * **Un recadrage amputé ne devient pas un cadrage fabriqué.** Le contrat le
+     * refuse au fil ; le modèle le refuse aussi, parce qu'un document déjà
+     * stocké sous l'ancienne forme ne repasse par aucune validation.
+     */
+    @Test
+    fun `un recadrage amputé au fil ne produit aucun cadrage`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.jpg",
+                             "cropX": 0.0, "cropY": 0.5, "cropW": 1.0 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        assertThat(projected.mediaObjects?.firstOrNull()?.crop).isNull()
+    }
+
+    /**
+     * **La frontière de ce lot, dite plutôt que supposée** (#5085).
+     *
+     * En v3, un média de plan `bg` ne devient PAS un [StoryMediaObject] : il se
+     * réduit à `background` (une chaîne) et `backgroundTransform`. Le
+     * recadrage d'un FOND v3 ne peut donc atteindre aucun lecteur Android —
+     * non parce que le champ manque, mais parce que l'objet qui le porterait
+     * n'existe pas à l'arrivée.
+     *
+     * C'est une lacune PRÉEXISTANTE et plus large que le recadrage : le même
+     * aiguillage perd `isBackground`, `mediaURL` et `loop` de l'objet. Le fond
+     * v1 (le cas nominal aujourd'hui, `mediaObjects` + `isBackground`) est,
+     * lui, entièrement servi.
+     *
+     * Ce témoin ne demande pas de corriger — il EMPÊCHE la lacune de se
+     * refermer en silence. Le jour où l'aiguillage v3 émettra un objet, il
+     * rougira, et son auteur lira ici pourquoi il ne le faisait pas.
+     */
+    @Test
+    fun `un media de plan bg en v3 ne devient pas un objet media`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "bg", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "background": "https://cdn/x.jpg",
+                             "cropX": 0.0, "cropY": 0.5, "cropW": 1.0, "cropH": 0.5 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        assertThat(projected.mediaObjects).isNull()
+        assertThat(projected.background).isEqualTo("https://cdn/x.jpg")
+    }
 }

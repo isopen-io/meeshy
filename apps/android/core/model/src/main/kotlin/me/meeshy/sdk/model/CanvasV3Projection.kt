@@ -133,6 +133,13 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
         intrinsicDuration = payload.dbl("intrinsicDuration"),
         isBackground = payload.bool("isBackground") ?: false,
         loop = payload.bool("loop") ?: false,
+        // Les quatre bornes se lisent ENSEMBLE ou pas du tout (#5085) : un
+        // recadrage amputé n'a pas de repli sensé, et le compléter
+        // fabriquerait un cadrage que personne n'a posé.
+        crop = StoryMediaCrop.fromPayloadBounds(
+            payload.dbl("cropX"), payload.dbl("cropY"),
+            payload.dbl("cropW"), payload.dbl("cropH"),
+        ),
         zIndex = z,
         startTime = timing?.start,
         duration = payload.dbl("duration"),
