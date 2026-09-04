@@ -139,7 +139,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .bandeau .caret{margin-left:auto;color:var(--color-text-muted)}
 .bandeau .caret svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .bandeau b{display:block;font-weight:var(--font-weight-semibold)}
-.bandeau p{margin:0;font-size:var(--text-base);color:var(--color-text-muted)}
+.bandeau p{margin:0;font-size:var(--text-base);color:var(--color-text)}
 .bandeau ul{margin:var(--space-2) 0 0;padding:0;list-style:none}
 .bandeau li{display:flex;gap:var(--space-3);padding:var(--space-2) 0;border-top:var(--stroke-hair) solid var(--color-border-strong)}
 .bandeau li.refuse{color:var(--color-text-muted)}
