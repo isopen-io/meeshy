@@ -96,6 +96,15 @@ const demarre = (): void => {
   const main = document.querySelector<HTMLElement>('main[data-participation="composer"]');
   if (main === null) return;
 
+  // L'EFFET OBSERVABLE de l'arrivée du module — ce que les témoins attendent
+  // à la place d'une minuterie : `data-participation` est SERVI par le
+  // document (il dit qu'un module viendra, pas qu'il est là), et 1 200 ms
+  // d'attente aveugle rougissaient en CI dès que FCP + oisiveté + import
+  // dépassaient la minuterie. Deux niveaux : le module est LÀ (posé ici), le
+  // brouillon est ARMÉ (posé après les écouteurs — c'est lui que le témoin du
+  // brouillon attend avant de taper).
+  main.setAttribute('data-module-arrive', '1');
+
   const formulaire = main.querySelector<HTMLFormElement>('form');
   const texte = main.querySelector<HTMLTextAreaElement>(`textarea[name="${CHAMPS_DU_COMPOSER.texte}"]`);
   if (formulaire === null || texte === null) return;
@@ -131,6 +140,16 @@ const demarre = (): void => {
   formulaire.addEventListener('submit', () => {
     efface(cle);
   });
+
+  main.setAttribute('data-brouillon', 'arme');
 };
 
 demarre();
+
+/**
+ * REMONTAGE PAR LE NAVIGATEUR DE ZONE (#5106) : un ES module réimporté ne se
+ * ré-exécute pas — la convention `monte()` des neuf modules, que celui-ci a
+ * ratée en naissant en parallèle du lot. Idempotent de fait : après un swap,
+ * les anciens écouteurs sont partis avec les anciens éléments.
+ */
+export const monte = demarre;
