@@ -7,7 +7,6 @@ import { expect, test } from '@playwright/test';
 import {
   AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
-  IDENTIFIANT_DU_LIEN_PARTAGE,
   LIEN_DU_FIL,
   PRENOM_DU_LECTEUR,
   chargeMesureReseau,
