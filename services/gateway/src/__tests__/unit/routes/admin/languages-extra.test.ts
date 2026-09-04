@@ -232,6 +232,58 @@ describe('Admin languages routes — extra coverage', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // GET /stats — usersByLanguage folds region/case variants to canonical codes
+  //
+  // `systemLanguage` est persisté VERBATIM (aucune normalisation à l'écriture) :
+  // le web (`Accept-Language` → 'en-US'/'pt-BR') et iOS (`Locale.current` →
+  // 'fr_FR'/'FR') coexistent en base avec les formes canoniques 2-lettres. Un
+  // `groupBy(['systemLanguage'])` clé sur la valeur brute produit un bucket par
+  // variante ; sans repli, le graphe « Utilisateurs par langue préférée » sous-
+  // compte la langue dominante et se fragmente en variantes régionales. Le repli
+  // passe par la SSOT `normalizeLanguageForDedup`, comme le reste des résolveurs
+  // de langue serveur.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('GET /stats — usersByLanguage canonicalization', () => {
+    it('folds region-tagged and mixed-case variants into one canonical bucket, summing counts', async () => {
+      setupStatsMocks(prisma, {
+        usersByLanguage: [
+          { systemLanguage: 'fr', _count: { id: 100 } },
+          { systemLanguage: 'fr-FR', _count: { id: 5 } },
+          { systemLanguage: 'FR', _count: { id: 2 } },
+          { systemLanguage: 'fr_FR', _count: { id: 3 } },
+        ],
+      });
+      app = buildApp(prisma);
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/stats' });
+      const body = JSON.parse(res.body);
+
+      expect(res.statusCode).toBe(200);
+      // 100 + 5 + 2 + 3, tous français, une seule entrée canonique
+      expect(body.data.usersByLanguage).toEqual({ fr: 110 });
+    });
+
+    it('is idempotent on already-canonical codes', async () => {
+      setupStatsMocks(prisma, {
+        usersByLanguage: [
+          { systemLanguage: 'fr', _count: { id: 40 } },
+          { systemLanguage: 'en', _count: { id: 25 } },
+          { systemLanguage: 'es', _count: { id: 10 } },
+        ],
+      });
+      app = buildApp(prisma);
+      await app.ready();
+
+      const res = await app.inject({ method: 'GET', url: '/stats' });
+      const body = JSON.parse(res.body);
+
+      expect(res.statusCode).toBe(200);
+      expect(body.data.usersByLanguage).toEqual({ fr: 40, en: 25, es: 10 });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // GET /stats — null originalLanguage and zero-count data branches
   // ──────────────────────────────────────────────────────────────────────────
   describe('GET /stats — null/zero data branches', () => {

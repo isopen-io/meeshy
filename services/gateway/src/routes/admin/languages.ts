@@ -6,6 +6,7 @@ import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from 
 import { validateQuery } from '../../validation/helpers.js';
 import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
 import { requirePermission } from '../../middleware/authorize';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
 // Les agrégations lourdes (utilisateurs distincts, paires de traduction, timeline)
 // sont exécutées côté MongoDB via aggregateRaw : seuls les agrégats traversent le
@@ -205,9 +206,16 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         }
       });
 
+      // `systemLanguage` est persisté VERBATIM : les variantes région-taguées /
+      // casse mixte (`fr-FR`, `FR`, `fr_FR`) forment autant de buckets distincts
+      // que `groupBy` recopierait tels quels. On replie chaque bucket sur son code
+      // canonique via la SSOT `normalizeLanguageForDedup` et on ADDITIONNE les
+      // comptes — sinon la langue dominante est sous-comptée et le graphe se
+      // fragmente en variantes. Idempotent sur des codes déjà canoniques.
       const usersLanguageMap = usersByLanguage.reduce((acc, item) => {
         if (item.systemLanguage) {
-          acc[item.systemLanguage] = item._count.id;
+          const canonical = normalizeLanguageForDedup(item.systemLanguage);
+          acc[canonical] = (acc[canonical] ?? 0) + item._count.id;
         }
         return acc;
       }, {} as Record<string, number>);
