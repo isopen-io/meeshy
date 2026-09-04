@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import SwiftUI
 @testable import Meeshy
 
 /// La RÈGLE de présentation d'une citation, en exécution.
@@ -325,5 +326,66 @@ final class QuotedReplyPresentationTests: XCTestCase {
                 mimeType: "image/jpeg"
             )
         )
+    }
+
+    // MARK: - La coupure se fait par MOT (#5103)
+
+    /// **Un texte qui tient dans son budget n'est pas touché.** Sans cette
+    /// borne, la règle poserait une ellipse sur une citation complète — le
+    /// lecteur croirait qu'il manque quelque chose.
+    func test_wordTruncated_shortText_isReturnedUntouched() {
+        let court = "Bonjour"
+        XCTAssertEqual(QuotedReplyPresentation.wordTruncated(court, maxCharacters: 40), court)
+        XCTAssertFalse(QuotedReplyPresentation.wordTruncated(court, maxCharacters: 40).contains("…"))
+    }
+
+    /// **La coupure tombe ENTRE deux mots, jamais au milieu d'un.** C'est la
+    /// directive du 2026-09-04, et c'est ce que `lineLimit` seul ne sait pas
+    /// faire : il coupe au caractère qui déborde.
+    func test_wordTruncated_cutsOnAWordBoundary_neverMidWord() {
+        let texte = "Le rendez-vous de demain est déplacé à quatorze heures trente"
+        let coupe = QuotedReplyPresentation.wordTruncated(texte, maxCharacters: 30)
+
+        XCTAssertTrue(coupe.hasSuffix("…"), "une coupure s'annonce")
+        let corps = String(coupe.dropLast())
+        XCTAssertFalse(corps.hasSuffix(" "), "pas d'espace orpheline avant l'ellipse")
+
+        // Le corps conservé doit être un PRÉFIXE du texte qui s'arrête sur une
+        // frontière de mot : le caractère suivant, dans l'original, est une espace.
+        XCTAssertTrue(texte.hasPrefix(corps), "le corps reste un préfixe de l'original")
+        let suite = texte.dropFirst(corps.count)
+        XCTAssertTrue(suite.isEmpty || suite.first == " ",
+                      "la coupure doit tomber sur une frontière de mot, pas dans « \(corps) »")
+    }
+
+    /// **Un mot unique plus long que le budget se coupe quand même.** Préserver
+    /// la frontière de mot n'a pas de sens ici : la seule alternative serait de
+    /// déborder, et un débordement casse la mise en page qu'on protège.
+    func test_wordTruncated_singleOverlongWord_isStillCut() {
+        let mot = String(repeating: "a", count: 80)
+        let coupe = QuotedReplyPresentation.wordTruncated(mot, maxCharacters: 20)
+        XCTAssertTrue(coupe.hasSuffix("…"))
+        XCTAssertLessThanOrEqual(coupe.count, 21, "le budget est tenu, ellipse comprise")
+    }
+
+    /// **La bulle offre plus de texte que la rangée plate**, parce qu'elle
+    /// offre plus de LIGNES (3 contre 2) — le budget en caractères doit suivre
+    /// le budget en lignes, sinon les deux peaux coupent au même endroit pour
+    /// des hauteurs différentes.
+    func test_previewCharacterBudget_followsTheLineBudgetOfEachSkin() {
+        let bulle = QuotedReplyPresentation.previewCharacterBudget(for: .bubble, dynamicTypeSize: .large)
+        let plate = QuotedReplyPresentation.previewCharacterBudget(for: .focal, dynamicTypeSize: .large)
+        XCTAssertGreaterThan(bulle, plate)
+    }
+
+    /// **Un budget en caractères qui ignore la taille de texte ment.** À
+    /// `accessibility3`, une ligne porte deux fois moins de mots ; garder le
+    /// même budget ferait déborder la citation hors de ses trois lignes, et la
+    /// coupure par mot ne servirait plus à rien.
+    func test_previewCharacterBudget_shrinksAsTheReadersTypeGrows() {
+        let normal = QuotedReplyPresentation.previewCharacterBudget(for: .bubble, dynamicTypeSize: .large)
+        let grand = QuotedReplyPresentation.previewCharacterBudget(for: .bubble, dynamicTypeSize: .accessibility3)
+        XCTAssertLessThan(grand, normal)
+        XCTAssertGreaterThan(grand, 0, "un budget nul masquerait TOUTE citation")
     }
 }
