@@ -611,10 +611,19 @@ Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
 
 **Le premier de ces noms EST un type depuis le 2026-08-31** :
 `MeeshySceneObject` (`packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshySceneObject.swift`),
-une somme à cinq cas — `text` · `media` · `sticker` · `location` · `audio` — qui
+une somme à cinq cas — `text` · `media` · `sticker` · **`place`** · `audio` — qui
 rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
 `isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
 Les quatre autres noms restent à écrire.
+
+> **`place`, et non `location`** (#4960) — et cette ligne a dit `location`
+> jusqu'au 2026-09-04, seule de tout le dépôt. Le contrat du fil dit `place`
+> (`ACTIVE_KINDS`, `packages/shared/types/canvas-v3.ts`), son miroir Swift dit
+> `place` (`ObjectKind`), la timeline dit `place` (`TimelineClipKind`) et
+> l'inspecteur aussi (`ClipSnapshot.Kind`). Un document qui GOUVERNE le
+> vocabulaire est le pire endroit où laisser le mot abandonné : il ne casse
+> aucune compilation, et il réintroduit la divergence chez le prochain qui
+> nomme quelque chose d'après lui.
 
 **Ce que la somme a rendu visible.** Des dizaines de fonctions interrogeaient
 quatre ou cinq tableaux à la suite pour UN identifiant ; chacune décidait seule
