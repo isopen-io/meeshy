@@ -187,6 +187,17 @@ data class StoryMediaObject(
     val zIndex: Int = 0,
     val startTime: Double? = null,
     val duration: Double? = null,
+    /**
+     * Playback bounds INSIDE the source, in seconds (#5129) — `null` when the whole
+     * source plays. Distinct from [startTime]/[duration], which say WHEN the object is
+     * on screen; these say WHICH PART of the file plays once it is. Both travel or
+     * neither does (see [StorySourceWindow]).
+     *
+     * They travelled from iOS with no Android reader at all until 2026-09-04: a clip
+     * trimmed to seconds 3 → 8 of a thirty-second video played all thirty here.
+     */
+    val sourceStart: Double? = null,
+    val sourceEnd: Double? = null,
     val fadeIn: Double? = null,
     val fadeOut: Double? = null,
     val sourceLanguage: String? = null,
@@ -216,6 +227,9 @@ data class StoryAudioPlayerObject(
     val zIndex: Int? = null,
     val startTime: Float? = null,
     val duration: Float? = null,
+    /** Playback bounds inside the source, in seconds (#5129). See [StorySourceWindow]. */
+    val sourceStart: Float? = null,
+    val sourceEnd: Float? = null,
     val loop: Boolean? = null,
     val fadeIn: Float? = null,
     val fadeOut: Float? = null,

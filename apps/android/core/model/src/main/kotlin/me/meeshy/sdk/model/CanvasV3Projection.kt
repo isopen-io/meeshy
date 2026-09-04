@@ -143,6 +143,15 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
         zIndex = z,
         startTime = timing?.start,
         duration = payload.dbl("duration"),
+        // **Les deux bornes se lisent ENSEMBLE ou pas du tout** (#5129), même
+        // règle que le recadrage juste au-dessus : un début sans fin n'a pas de
+        // repli sensé. Et ce ne sont PAS `startTime`/`duration` — celles-là
+        // disent quand l'objet est à l'écran, celles-ci quelle partie de la
+        // source joue.
+        sourceStart = StorySourceWindow
+            .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.first,
+        sourceEnd = StorySourceWindow
+            .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.second,
         fadeIn = payload.dbl("fadeIn"),
         fadeOut = payload.dbl("fadeOut"),
         sourceLanguage = locale,
@@ -193,6 +202,13 @@ private fun ObjectV3.asAudio(at: Pair<Double, Double>): StoryAudioPlayerObject =
     zIndex = z,
     startTime = timing?.start?.toFloat(),
     duration = payload.dbl("duration")?.toFloat(),
+    // iOS écrit les deux bornes sur les DEUX familles (`CanvasV3Migration.swift:457`
+    // et `:542`) : les lire pour le seul média laisserait un vocal rogné jouer
+    // en entier (#5129).
+    sourceStart = StorySourceWindow
+        .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.first?.toFloat(),
+    sourceEnd = StorySourceWindow
+        .fromPayloadBounds(payload.dbl("sourceStart"), payload.dbl("sourceEnd"))?.second?.toFloat(),
     loop = payload.bool("loop"),
     fadeIn = payload.dbl("fadeIn")?.toFloat(),
     fadeOut = payload.dbl("fadeOut")?.toFloat(),

@@ -90,9 +90,22 @@ final class ComposerBackgroundMenuTests: XCTestCase {
     /// l'effacement ferait arriver l'action sur un `nil`, et jamais de façon
     /// reproductible — donc jamais dans un test.
     func test_lIdentifiant_estLuAvantDEtreEffacé() throws {
+        // **La borne est le CORPS de la fonction, pas le fichier.** Écrit sur
+        // le fichier entier, ce témoin comparait la lecture au PREMIER
+        // `backgroundMenuObjectId = nil` du fichier — celui du `Binding` du
+        // dialogue, vingt lignes plus haut et sans rapport. Il rougissait donc
+        // sur un code juste.
+        //
+        // C'est la forme jumelle du piège de préfixe : une garde de source qui
+        // ne borne pas sa fenêtre garde le premier motif qui ressemble, pas
+        // celui qu'elle vise.
         let code = try source("MeeshyComposerHost+BackgroundMenu.swift")
-        guard let lecture = code.range(of: "guardletid=backgroundMenuObjectId"),
-              let effacement = code.range(of: "backgroundMenuObjectId=nil")
+        guard let debut = code.range(of: "funcapplyBackgroundMenu("),
+              let fin = code.range(of: "case.edit:", range: debut.upperBound..<code.endIndex)
+        else { return XCTFail("l'application du menu a changé de forme") }
+        let corps = String(code[debut.upperBound..<fin.lowerBound])
+        guard let lecture = corps.range(of: "guardletid=backgroundMenuObjectId"),
+              let effacement = corps.range(of: "backgroundMenuObjectId=nil")
         else { return XCTFail("la lecture ou l'effacement a changé de forme") }
         XCTAssertLessThan(lecture.lowerBound, effacement.lowerBound)
     }

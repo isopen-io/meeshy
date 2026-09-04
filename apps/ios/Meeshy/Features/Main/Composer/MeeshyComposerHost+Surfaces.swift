@@ -573,8 +573,16 @@ extension MeeshyComposerHost {
             // faire descendre jusqu'au canvas est ce qui manquait pour que
             // « un seul objet à la fois » se VOIE.
             selectedItemId: selectedSceneItemId,
-            selectionBadge: ComposerObjectChips.badge(forSelected: selectedSceneItemId,
-                                                      in: viewModel.currentSlide),
+            // **L'état de la pré-montée s'ajoute au badge** (#5086, vue `4c`).
+            // Le registre est indexé par FICHIER ; l'objet sélectionné porte
+            // son URL locale tant qu'il n'est pas adopté, et l'URL distante
+            // ensuite — donc `state(for:)` rend `.idle` dès l'adoption, et le
+            // badge cesse de parler d'une montée finie. C'est le même fait qui
+            // rend le balayage idempotent : une seule valeur, deux usages.
+            selectionBadge: ComposerObjectChips.badge(
+                forSelected: selectedSceneItemId,
+                in: viewModel.currentSlide,
+                preUpload: selectedSceneItemPreUpload),
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence

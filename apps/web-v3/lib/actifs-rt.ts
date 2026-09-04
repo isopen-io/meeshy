@@ -61,6 +61,7 @@ export type ActifsTempsReel = {
   readonly recherche: ActifTempsReel;
   readonly liens: ActifTempsReel;
   readonly commentaires: ActifTempsReel;
+  readonly navigateur: ActifTempsReel;
   readonly composer: ActifTempsReel;
   readonly socket: ActifTempsReel;
 };
@@ -104,6 +105,7 @@ export const actifsTempsReel = memo(
     recherche: actif('recherche', lisLeModule('recherche')),
     liens: actif('liens', lisLeModule('liens')),
     commentaires: actif('commentaires', lisLeModule('commentaires')),
+    navigateur: actif('navigateur', lisLeModule('navigateur')),
     composer: actif('composer', lisLeModule('composer')),
     socket: actif(
       'socket.io',
@@ -114,9 +116,13 @@ export const actifsTempsReel = memo(
 
 /** L'actif que le nom désigne — `null` pour tout autre nom, y compris un hash périmé. */
 export const actifParNom = (nom: string): ActifTempsReel | null => {
-  const actifs = actifsTempsReel();
+  // `Object.values`, jamais une énumération à la main : la liste manuscrite a
+  // retenu le 9ᵉ module en 404 pendant que le document composait son URL avec
+  // le même memo (#5106) — une énumération qui affirme « tous » se périme à
+  // chaque actif nouveau, et le témoin « chaque actif du memo est servable »
+  // (actifs-rt.test.ts) rougit désormais à sa place.
   return (
-    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.recherche, actifs.liens, actifs.commentaires, actifs.composer, actifs.socket].find(
+    Object.values(actifsTempsReel()).find(
       (candidat) => candidat.nom === nom && candidat.corps !== '',
     ) ?? null
   );

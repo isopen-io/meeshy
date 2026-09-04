@@ -30,6 +30,12 @@ const nextConfig: NextConfig = {
    */
   outputFileTracingIncludes: {
     /**
+     * Le travailleur de zone (#4473) : lu par CHEMIN (`lib/sw/actif-sw.ts`),
+     * donc invisible au traceur — sans cette entrée, l'image servirait 404 sur
+     * `/__v3/sw` et le worker n'existerait qu'en local, en silence.
+     */
+    '/sw': ['./.rt/sw.js'],
+    /**
      * Le sous-sprite critique est inliné par la COQUILLE (§ 8.5) : il est donc
      * lu par toute page, pas par une route nommée. La clé est un glob pour cette
      * seule raison — l'attacher à un chemin laisserait la page suivante servir
@@ -126,6 +132,7 @@ const nextConfig: NextConfig = {
       './.rt/recherche.js',
       './.rt/liens.js',
       './.rt/commentaires.js',
+      './.rt/navigateur.js',
       './.rt/composer.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],

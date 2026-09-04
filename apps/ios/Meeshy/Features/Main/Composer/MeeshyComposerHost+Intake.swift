@@ -168,6 +168,16 @@ extension MeeshyComposerHost {
         for (url, _) in mediaRoleByURL where !present.contains(url) {
             mediaRoleByURL.removeValue(forKey: url)
         }
+
+        // **La pré-montée part d'ICI, à la fin de la dérivation** (#5086, vue
+        // `4c`). C'est le seul moment où l'état du document est ARRÊTÉ : les
+        // objets sont posés, leurs fichiers copiés, leurs URL locales écrites.
+        //
+        // Un appel posé sur chaque porte d'entrée aurait exigé de les
+        // énumérer — cinq, dont une née d'un GESTE et absente de tout
+        // inventaire (#4879, #5069). Ici, une sixième porte hérite de la
+        // pré-montée sans que personne n'ait à y penser.
+        startPendingPreUploads()
     }
 
 

@@ -146,7 +146,15 @@ extension ComposerObjectEditorView {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 13, weight: .semibold))
+                // **Taille RELATIVE, pas figée** (`FixedFontSizeGuardTests`). Un
+                // glyphe de 13 pt en dur reste à 13 pt quand l'utilisateur
+                // demande le plus grand corps de texte — et il est alors le seul
+                // élément illisible d'une capsule qui, elle, a grandi. Le
+                // préjudice n'est pas esthétique : c'est un contrôle que
+                // quelqu'un ne peut pas lire, précisément celui qui en avait
+                // besoin. Une taille figée ne se justifierait que par un cadre
+                // fixe qui déborderait ; cette capsule s'étire avec son contenu.
+                Image(systemName: symbol).font(MeeshyFont.relative(13, weight: .semibold))
                 Text(title).font(MeeshyFont.relative(12, weight: .semibold))
             }
             .foregroundStyle(isOn ? Color.white : Color.white.opacity(0.85))

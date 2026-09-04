@@ -242,3 +242,12 @@ const demarre = (): void => {
 };
 
 demarre();
+
+/**
+ * REMONTAGE PAR LE NAVIGATEUR DE ZONE (#5106) : un ES module réimporté ne se
+ * ré-exécute pas — après une navigation douce, c'est cet export que le
+ * navigateur appelle pour monter l'écran neuf. L'auto-démarrage ci-dessus
+ * reste : sans navigateur (amélioration progressive), l'import du chargeur
+ * suffit, comme avant.
+ */
+export const monte = demarre;

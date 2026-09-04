@@ -1,33 +1,3 @@
-/**
- * LA LOI DE LA BANNIÈRE, JUGÉE CHEZ ELLE (#4454).
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * POURQUOI CE FICHIER EXISTE, ET CE QU'IL DIT DE LA REMONTÉE D'UNE LOI
- * ─────────────────────────────────────────────────────────────────────────────
- *
- * La loi a été remontée du web existant vers `packages/shared` pour cesser
- * d'être écrite trois fois. Ses TÉMOINS, eux, sont restés chez les clients :
- * `apps/web/__tests__/utils/notification-banner.test.ts` et
- * `apps/web-v3/__tests__/banniere-notification.test.ts` la couvrent — chacun À
- * TRAVERS SA LIAISON.
- *
- * Résultat mesuré en CI : `notification-banner.ts` à **7,14 % de lignes** dans
- * la couverture de `packages/shared`, sous les seuils du paquet (98 / 98 / 94),
- * et le gate rouge. Le code était pourtant exercé — mais par les suites de DEUX
- * AUTRES paquets, qui ne comptent pas ici.
- *
- * **REMONTER UNE LOI SANS REMONTER SES TÉMOINS LA REND ORPHELINE.** Ce n'est
- * pas une exigence de chiffre : un paquet partagé dont la règle n'est prouvée
- * que par ses consommateurs ne peut plus être modifié en confiance depuis
- * lui-même — le jour où un client cesse de l'appeler, la règle n'a plus aucun
- * témoin, et rien ne rougit.
- *
- * Ce fichier juge donc la loi PAR ELLE-MÊME, avec des conventions COUSUES : ce
- * qui est vérifié est le CADRAGE et la COMPOSITION, jamais le vocabulaire d'un
- * client. Les deux suites clientes gardent leur objet propre — que la LIAISON
- * apporte les bonnes conventions.
- */
-
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -38,477 +8,431 @@ import {
   buildNotificationThumbnail,
   notificationBannerFraming,
   type ConventionsDuClient,
-  type TranslateFunction,
-} from '../../utils/notification-banner';
-import type { Notification } from '../../types/notification';
+} from '../../utils/notification-banner.js';
+import { NotificationTypeEnum, type Notification } from '../../types/notification.js';
 
 /**
- * LE `t` COUSU — il rend une forme RECONNAISSABLE plutôt qu'une phrase
- * française : ce qui est jugé ici est « la loi a-t-elle demandé CETTE clé ? »,
- * pas « la phrase est-elle jolie ». Une phrase en dur ici gèlerait précisément
- * ce que #4451 a déplacé côté serveur.
+ * Témoins DIRECTS de `packages/shared/utils/notification-banner.ts` — la loi
+ * de bannière elle-même, pas son ré-export web (#5117). Les sept cadrages
+ * sont en miroir de `apps/web/__tests__/utils/notification-banner.test.ts`
+ * et de `NotificationBannerPresentationTests` (iOS) ; ces témoins-ci exercent
+ * en plus les conventions client comme un troisième client le ferait — sans
+ * dépendre du vocabulaire d'aucun des deux clients existants.
  */
-const t: TranslateFunction = (cle, params) =>
-  cle === 'titles.inConversation'
-    ? `<${params?.sender ?? ''}|${params?.title ?? ''}>`
-    : `<${cle}>`;
 
-const conventions: ConventionsDuClient = {
-  nomDeLActeur: (acteur) => {
-    const nom = (acteur as { displayName?: unknown } | undefined)?.displayName;
-    return typeof nom === 'string' ? nom : '';
-  },
-  apercuDeMessage: (contenu, piecesJointes) =>
-    piecesJointes === undefined ? contenu : `[${piecesJointes.length}]${contenu}`,
-  titreDeRepli: () => '<repli>',
+const t = (key: string, params?: Record<string, string>): string => {
+  if (key === 'titles.inConversation') return `${params?.sender} dans ${params?.title}`;
+  if (key === 'attachments.photo') return 'Photo';
+  if (key === 'attachments.video') return 'Vidéo';
+  if (key === 'attachments.audio') return 'Audio';
+  return key;
 };
 
-const notification = (parts: Record<string, unknown>): Notification => parts as unknown as Notification;
+const conventions: ConventionsDuClient = {
+  nomDeLActeur: (acteur) => (acteur && 'displayName' in acteur ? String(acteur.displayName) : 'Quelqu’un'),
+  apercuDeMessage: (contenu, piecesJointes) =>
+    piecesJointes && piecesJointes.length > 0 ? `${contenu} (+${piecesJointes.length})` : contenu,
+  titreDeRepli: (notification) => `repli.${notification.type}`,
+};
 
-const ALICE = { id: 'u9', displayName: 'Alice Martin' };
+const notification = (overrides: Partial<Notification>): Notification => ({
+  id: 'n1',
+  userId: 'u1',
+  type: 'new_message',
+  priority: 'normal',
+  title: null,
+  subtitle: null,
+  content: '',
+  actor: undefined,
+  context: {},
+  metadata: {},
+  state: { isRead: false, readAt: null, createdAt: new Date('2026-08-30T10:00:00Z'), expiresAt: undefined },
+  delivery: { emailSent: false, pushSent: false },
+  ...overrides,
+} as Notification);
 
-describe('le cadrage — le TYPE décide, jamais la forme des champs', () => {
-  it.each([
-    ['new_message', 'conversation'],
-    ['message_reply', 'conversation'],
-    ['user_mentioned', 'conversation'],
-    ['message_reaction', 'conversation'],
-    ['contact_request', 'relation'],
-    ['contact_accepted', 'relation'],
-    ['friend_request', 'relation'],
-    ['friend_accepted', 'relation'],
-    ['story_reaction', 'action'],
-    ['post_like', 'action'],
-    ['friend_new_story', 'action'],
-    ['un_type_inconnu', 'action'],
-  ])('range %s en %s', (type, attendu) => {
-    expect(notificationBannerFraming(notification({ type }))).toBe(attendu);
+const alice = { id: 'a1', username: 'alice', displayName: 'Alice Martin', avatar: null };
+
+describe('notificationBannerFraming', () => {
+  it('range chaque famille de types', () => {
+    expect(notificationBannerFraming(notification({ type: NotificationTypeEnum.NEW_MESSAGE }))).toBe('conversation');
+    expect(notificationBannerFraming(notification({ type: NotificationTypeEnum.MESSAGE_REPLY }))).toBe('conversation');
+    expect(notificationBannerFraming(notification({ type: NotificationTypeEnum.USER_MENTIONED }))).toBe('conversation');
+    expect(notificationBannerFraming(notification({ type: NotificationTypeEnum.MESSAGE_REACTION }))).toBe('conversation');
+    expect(notificationBannerFraming(notification({ type: NotificationTypeEnum.CONTACT_REQUEST }))).toBe('relation');
+    expect(notificationBannerFraming(notification({ type: NotificationTypeEnum.FRIEND_ACCEPTED }))).toBe('relation');
+    expect(notificationBannerFraming(notification({ type: NotificationTypeEnum.POST_COMMENT }))).toBe('action');
   });
 
-  it('range en action une charge dont le type n’est pas une chaîne', () => {
-    expect(notificationBannerFraming(notification({ type: 42 }))).toBe('action');
-    expect(notificationBannerFraming(notification({}))).toBe('action');
+  it('retombe sur une chaîne vide quand le type n’est pas une chaîne', () => {
+    expect(notificationBannerFraming(notification({ type: undefined as unknown as string }))).toBe('action');
   });
 });
 
-describe('le titre', () => {
-  it('rend le seul acteur pour un tête-à-tête', () => {
-    const titre = buildNotificationHeadline(
+describe('buildNotificationHeadline — cadrage conversation', () => {
+  it('n’annonce que l’acteur pour une conversation directe', () => {
+    const headline = buildNotificationHeadline(
       notification({
-        type: 'new_message',
-        actor: ALICE,
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        actor: alice,
         context: { conversationType: 'direct', conversationTitle: 'Alice Martin' },
       }),
       t,
       conventions,
     );
-
-    expect(titre).toBe('Alice Martin');
+    expect(headline).toBe('Alice Martin');
   });
 
-  /**
-   * SUR UN MESSAGE, `subtitle` PORTE LE NOM DU GROUPE — pas une phrase
-   * d'action. Le concaténer écrirait « Alice Martin Les collègues ». C'est le
-   * défaut exact que la lecture « si subtitle existe, c'est une action »
-   * produirait, et la seule chose qui l'en sépare est le TYPE.
-   */
-  it('compose « X dans {groupe} » pour un groupe, sans jamais concaténer le sous-titre', () => {
-    const titre = buildNotificationHeadline(
+  it('nomme le groupe depuis le contexte serveur à défaut de nom local', () => {
+    const headline = buildNotificationHeadline(
       notification({
-        type: 'new_message',
-        subtitle: 'Les collègues',
-        actor: ALICE,
-        context: { conversationType: 'group', conversationTitle: 'Les collègues' },
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        actor: alice,
+        context: { conversationType: 'group', conversationTitle: 'Équipe Tech' },
       }),
       t,
       conventions,
     );
-
-    expect(titre).toBe('<Alice Martin|Les collègues>');
+    expect(headline).toBe('Alice Martin dans Équipe Tech');
   });
 
-  it('préfère le nom LOCAL du groupe à celui du fil — il n’existe que sur l’appareil', () => {
-    const titre = buildNotificationHeadline(
+  it('préfère le nom LOCAL du groupe à celui du serveur', () => {
+    const headline = buildNotificationHeadline(
       notification({
-        type: 'new_message',
-        actor: ALICE,
-        context: { conversationType: 'group', conversationTitle: 'Les collègues' },
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        actor: alice,
+        context: { conversationType: 'group', conversationTitle: 'Équipe Tech' },
       }),
       t,
       conventions,
-      'Équipe produit',
+      '😴 Mon équipe',
     );
-
-    expect(titre).toBe('<Alice Martin|Équipe produit>');
+    expect(headline).toBe('Alice Martin dans 😴 Mon équipe');
   });
 
-  it('rend l’acteur seul quand un groupe n’a AUCUN nom — il n’y a rien à composer', () => {
-    const titre = buildNotificationHeadline(
-      notification({ type: 'new_message', actor: ALICE, context: { conversationType: 'group' } }),
-      t,
-      conventions,
-    );
-
-    expect(titre).toBe('Alice Martin');
-  });
-
-  /**
-   * DEUX CADRAGES COEXISTENT SUR `title`, et le discriminant est l'ÉGALITÉ avec
-   * le nom de l'acteur : sur le fil TEMPS RÉEL, `title` EST l'acteur et
-   * `subtitle` porte la phrase — le titre est leur SOMME ; en liste REST,
-   * `title` est déjà la phrase entière, et y ajouter le sous-titre écrirait
-   * « Alice a commenté votre réel Votre réel ».
-   */
-  it('somme l’acteur et la phrase d’action quand `title` EST l’acteur', () => {
-    const titre = buildNotificationHeadline(
+  it('retombe sur l’acteur seul quand un groupe n’a aucun nom connu', () => {
+    const headline = buildNotificationHeadline(
       notification({
-        type: 'post_comment',
-        title: 'Alice Martin',
-        subtitle: 'a commenté votre réel',
-        actor: ALICE,
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        actor: alice,
+        context: { conversationType: 'group' },
       }),
       t,
       conventions,
     );
-
-    expect(titre).toBe('Alice Martin a commenté votre réel');
-  });
-
-  it('ne rallonge pas un titre REST déjà entier', () => {
-    const titre = buildNotificationHeadline(
-      notification({
-        type: 'post_comment',
-        title: 'Alice Martin a commenté votre réel',
-        subtitle: 'Votre réel',
-        actor: ALICE,
-      }),
-      t,
-      conventions,
-    );
-
-    expect(titre).toBe('Alice Martin a commenté votre réel');
-  });
-
-  it('somme sur l’ACTEUR quand la phrase existe sans titre du tout', () => {
-    const titre = buildNotificationHeadline(
-      notification({ type: 'post_comment', subtitle: 'a commenté votre réel', actor: ALICE }),
-      t,
-      conventions,
-    );
-
-    expect(titre).toBe('Alice Martin a commenté votre réel');
-  });
-
-  /**
-   * NI TITRE RICHE NI PHRASE D'ACTION : lignes anciennes, ou type que le
-   * builder serveur ne couvre pas. Le repli CLIENT reprend la main — c'est la
-   * troisième convention, et la loi ne fabrique aucune phrase elle-même.
-   */
-  it('rend la main au repli du client quand le serveur n’a rien servi', () => {
-    const titre = buildNotificationHeadline(
-      notification({ type: 'post_comment', actor: ALICE }),
-      t,
-      conventions,
-    );
-
-    expect(titre).toBe('<repli>');
+    expect(headline).toBe('Alice Martin');
   });
 });
 
-describe('le corps', () => {
-  it('sert l’extrait d’un message, par la convention du client', () => {
-    const corps = buildNotificationBannerBody(
+describe('buildNotificationHeadline — les deux cadrages du champ `title`', () => {
+  it('ne réadditionne pas un titre REST déjà composé', () => {
+    const headline = buildNotificationHeadline(
       notification({
-        type: 'new_message',
-        content: 'on se voit à 18 h ?',
-        context: { conversationType: 'direct' },
+        type: NotificationTypeEnum.POST_COMMENT,
+        title: 'Alice Martin a commenté votre réel',
+        subtitle: 'Votre réel',
+        actor: alice,
+      }),
+      t,
+      conventions,
+    );
+    expect(headline).toBe('Alice Martin a commenté votre réel');
+  });
+
+  it('additionne titre (= acteur) et action sur une charge de fil temps réel', () => {
+    const headline = buildNotificationHeadline(
+      notification({
+        type: NotificationTypeEnum.POST_COMMENT,
+        title: 'Alice Martin',
+        subtitle: 'a commenté votre réel',
+        actor: alice,
+      }),
+      t,
+      conventions,
+    );
+    expect(headline).toBe('Alice Martin a commenté votre réel');
+  });
+
+  it('retombe sur le repli client quand le serveur n’a ni titre ni action', () => {
+    const headline = buildNotificationHeadline(
+      notification({ type: NotificationTypeEnum.POST_COMMENT, actor: alice }),
+      t,
+      conventions,
+    );
+    expect(headline).toBe('repli.post_comment');
+  });
+});
+
+describe('buildNotificationBannerBody', () => {
+  it('ne rend aucun corps pour une relation', () => {
+    const body = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.FRIEND_REQUEST, content: 'Nouvelle demande de contact' }),
+      t,
+      conventions,
+    );
+    expect(body).toBeNull();
+  });
+
+  it('rend le contenu comme aperçu pour une conversation, pièces jointes comprises', () => {
+    const body = buildNotificationBannerBody(
+      notification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        content: 'Regarde ça',
+        metadata: { attachments: [{ id: 'p1' }] },
+      }),
+      t,
+      conventions,
+    );
+    expect(body).toBe('Regarde ça (+1)');
+  });
+
+  it('ignore des `attachments` qui ne sont pas un tableau', () => {
+    const body = buildNotificationBannerBody(
+      notification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        content: 'Regarde ça',
+        metadata: { attachments: 'pas-un-tableau' },
+      }),
+      t,
+      conventions,
+    );
+    expect(body).toBe('Regarde ça');
+  });
+
+  it('ne rend aucun corps pour une conversation sans contenu', () => {
+    const body = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.NEW_MESSAGE, content: '' }),
+      t,
+      conventions,
+    );
+    expect(body).toBeNull();
+  });
+
+  it('résume le média (photo/vidéo/audio) quand une action n’a pas d’extrait', () => {
+    const photo = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.FRIEND_NEW_POST, content: '', metadata: { mediaType: 'IMAGE' } }),
+      t,
+      conventions,
+    );
+    const video = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.FRIEND_NEW_POST, content: '', metadata: { mediaType: 'video' } }),
+      t,
+      conventions,
+    );
+    const audio = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.FRIEND_NEW_POST, content: '', metadata: { mediaType: 'audio' } }),
+      t,
+      conventions,
+    );
+    const inconnu = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.FRIEND_NEW_POST, content: '', metadata: { mediaType: 'pdf' } }),
+      t,
+      conventions,
+    );
+    expect(photo).toBe('Photo');
+    expect(video).toBe('Vidéo');
+    expect(audio).toBe('Audio');
+    expect(inconnu).toBeNull();
+  });
+
+  it('ne redit pas l’action dans le corps quand le contenu vaut déjà le sous-titre', () => {
+    const body = buildNotificationBannerBody(
+      notification({
+        type: NotificationTypeEnum.FRIEND_NEW_POST,
+        subtitle: 'a publié une nouvelle story',
+        content: 'a publié une nouvelle story',
+        metadata: { mediaType: 'image' },
+      }),
+      t,
+      conventions,
+    );
+    expect(body).toBe('Photo');
+  });
+
+  it('rend le contenu tel quel pour une action dont l’extrait diffère du sous-titre', () => {
+    const body = buildNotificationBannerBody(
+      notification({
+        type: NotificationTypeEnum.FRIEND_NEW_POST,
+        subtitle: 'a publié un nouveau réel',
+        content: 'Mon week-end en 15 secondes',
+      }),
+      t,
+      conventions,
+    );
+    expect(body).toBe('Mon week-end en 15 secondes');
+  });
+});
+
+describe('buildNotificationReactionBadge', () => {
+  it('ne rend rien pour un type qui n’est pas une réaction', () => {
+    expect(buildNotificationReactionBadge(notification({ type: NotificationTypeEnum.NEW_MESSAGE }), 'Alice')).toBeNull();
+  });
+
+  it('lit `emoji` pour les réactions de contenu', () => {
+    const badge = buildNotificationReactionBadge(
+      notification({ type: NotificationTypeEnum.STORY_REACTION, metadata: { emoji: '🔥' } }),
+      'Alice a réagi à votre story',
+    );
+    expect(badge).toBe('🔥');
+  });
+
+  it('lit `reactionEmoji` pour les réactions de message', () => {
+    const badge = buildNotificationReactionBadge(
+      notification({ type: NotificationTypeEnum.MESSAGE_REACTION, metadata: { reactionEmoji: '👍' } }),
+      'Alice',
+    );
+    expect(badge).toBe('👍');
+  });
+
+  it('ne rend rien quand aucun émoji n’est présent', () => {
+    const badge = buildNotificationReactionBadge(
+      notification({ type: NotificationTypeEnum.COMMENT_LIKE, metadata: {} }),
+      'Alice a aimé votre commentaire',
+    );
+    expect(badge).toBeNull();
+  });
+
+  it('ne redouble pas un émoji déjà porté par la phrase', () => {
+    const badge = buildNotificationReactionBadge(
+      notification({ type: NotificationTypeEnum.STORY_REACTION, metadata: { emoji: '🔥' } }),
+      'Alice Martin a réagi 🔥 à votre story',
+    );
+    expect(badge).toBeNull();
+  });
+});
+
+describe('buildNotificationThumbnail', () => {
+  it('préfère la vignette du post à toute autre source', () => {
+    const url = buildNotificationThumbnail(
+      notification({
+        metadata: { postThumbnailUrl: 'https://cdn/post.jpg' },
+        context: { firstAttachmentUrl: 'https://cdn/other.jpg', firstAttachmentMimeType: 'image/jpeg' },
+      }),
+    );
+    expect(url).toBe('https://cdn/post.jpg');
+  });
+
+  it('rend la photo de la 1re pièce jointe d’un message', () => {
+    const url = buildNotificationThumbnail(
+      notification({ context: { firstAttachmentUrl: 'https://cdn/p.jpg', firstAttachmentMimeType: 'image/jpeg' } }),
+    );
+    expect(url).toBe('https://cdn/p.jpg');
+  });
+
+  it('ne rend aucune vignette pour un vocal', () => {
+    const url = buildNotificationThumbnail(
+      notification({ context: { firstAttachmentUrl: 'https://cdn/v.m4a', firstAttachmentMimeType: 'audio/m4a' } }),
+    );
+    expect(url).toBeNull();
+  });
+
+  it('ne rend aucune vignette quand le contexte ne porte ni vignette ni pièce jointe image', () => {
+    expect(buildNotificationThumbnail(notification({ context: {} }))).toBeNull();
+  });
+
+  it('ne rend aucune vignette quand l’URL de la pièce jointe est vide', () => {
+    const url = buildNotificationThumbnail(
+      notification({ context: { firstAttachmentUrl: '   ', firstAttachmentMimeType: 'image/png' } }),
+    );
+    expect(url).toBeNull();
+  });
+});
+
+describe('buildNotificationBanner — assemble les quatre champs', () => {
+  it('compose une bannière complète pour une réaction sur contenu', () => {
+    const banner = buildNotificationBanner(
+      notification({
+        type: NotificationTypeEnum.STORY_REACTION,
+        title: 'Alice Martin',
+        subtitle: 'a réagi 🔥 à votre story',
+        content: 'Votre story · 📷 Photo',
+        actor: alice,
+        metadata: { emoji: '🔥', postThumbnailUrl: 'https://cdn/s.jpg' },
       }),
       t,
       conventions,
     );
 
-    expect(corps).toBe('on se voit à 18 h ?');
+    expect(banner).toEqual({
+      headline: 'Alice Martin a réagi 🔥 à votre story',
+      body: 'Votre story · 📷 Photo',
+      reactionBadge: null,
+      thumbnailUrl: 'https://cdn/s.jpg',
+    });
   });
 
-  /**
-   * LE CAS NOMINAL D'UNE PHOTO — un message SANS LÉGENDE. La garde retournait
-   * `null` sur l'absence de TEXTE avant de regarder les pièces jointes : la
-   * convention faite pour ce cas n'était jamais appelée. C'est l'absence des
-   * DEUX qui fait un corps vide, jamais celle du texte seul.
-   */
-  it('demande au client de résumer les pièces jointes d’un message SANS LÉGENDE', () => {
-    const corps = buildNotificationBannerBody(
+  it('transmet le nom de groupe local aux quatre champs', () => {
+    const banner = buildNotificationBanner(
       notification({
-        type: 'new_message',
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        actor: alice,
+        content: 'Salut',
+        context: { conversationType: 'group', conversationTitle: 'Équipe Tech' },
+      }),
+      t,
+      conventions,
+      { groupName: '😴 Mon équipe' },
+    );
+
+    expect(banner.headline).toBe('Alice Martin dans 😴 Mon équipe');
+    expect(banner.body).toBe('Salut');
+  });
+});
+
+/**
+ * LA GARDE DU CORRECTIF DE LA BRANCHE `feat/banniere-v3` (#4454), ajoutée à ces
+ * témoins plutôt qu'en concurrence d'eux.
+ *
+ * Deux fichiers de témoins pour la même loi ont été écrits en parallèle, par
+ * deux sessions, au même chemin. Celui-ci — le premier arrivé sur `dev` — est
+ * gardé ENTIER ; ce qui suit n'ajoute que les cas qu'il ne couvrait pas, parce
+ * qu'ils gardent un correctif qui n'existait pas encore quand il a été écrit.
+ *
+ * **LE DÉFAUT CORRIGÉ.** `buildNotificationBannerBody` sortait sur
+ * `if (!contenu) return null` AVANT de regarder les pièces jointes : une photo
+ * envoyée SANS LÉGENDE — le cas nominal — poussait une bannière portant le seul
+ * nom de l'expéditeur, et `apercuDeMessage`, la convention faite pour ce cas,
+ * n'était jamais appelée. C'est l'absence des DEUX qui fait un corps vide,
+ * jamais celle du texte seul.
+ *
+ * Le témoin « ne rend aucun corps pour une conversation sans contenu » ci-dessus
+ * reste juste et le reste : il n'a pas de pièce jointe, et c'est précisément ce
+ * qui l'en distingue.
+ */
+describe('buildNotificationBannerBody — un message sans légende n’est pas un message vide', () => {
+  it('demande au client de résumer les pièces jointes d’un message SANS texte', () => {
+    const body = buildNotificationBannerBody(
+      notification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
         content: '',
-        metadata: { attachments: [{ mimeType: 'image/jpeg' }] },
+        metadata: { attachments: [{ id: 'p1' }] },
       }),
       t,
       conventions,
     );
 
-    expect(corps).toBe('[1]');
+    expect(body).toBe(' (+1)');
   });
 
-  it('marque aussi les pièces jointes d’un message qui PORTE une légende', () => {
-    const corps = buildNotificationBannerBody(
-      notification({
-        type: 'new_message',
-        content: 'regarde',
-        metadata: { attachments: [{ mimeType: 'image/jpeg' }, { mimeType: 'image/png' }] },
-      }),
+  it('ne rend toujours aucun corps quand le tableau de pièces jointes est VIDE', () => {
+    const body = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.NEW_MESSAGE, content: '', metadata: { attachments: [] } }),
       t,
       conventions,
     );
 
-    expect(corps).toBe('[2]regarde');
+    expect(body).toBeNull();
   });
 
-  it('rend `null` quand un message n’a NI texte NI pièce jointe', () => {
-    for (const charge of [
-      { type: 'new_message', content: '' },
-      { type: 'new_message', content: '   ' },
-      { type: 'new_message', content: '', metadata: { attachments: [] } },
-      { type: 'new_message', content: '', metadata: { attachments: 'pas un tableau' } },
-      { type: 'new_message' },
-    ]) {
-      expect(buildNotificationBannerBody(notification(charge), t, conventions)).toBeNull();
-    }
-  });
-
-  /** « Nouvelle demande de contact » sous « Alice veut se connecter » dit deux fois la même chose. */
-  it.each(['contact_request', 'contact_accepted', 'friend_request', 'friend_accepted'])(
-    'se tait sur une relation (%s), quoi que le serveur ait servi',
-    (type) => {
-      const corps = buildNotificationBannerBody(
-        notification({ type, content: 'Nouvelle demande de contact', subtitle: 'veut se connecter' }),
-        t,
-        conventions,
-      );
-
-      expect(corps).toBeNull();
-    },
-  );
-
-  it('sert l’extrait d’une action quand il diffère de la phrase déjà servie en titre', () => {
-    const corps = buildNotificationBannerBody(
-      notification({ type: 'post_comment', subtitle: 'a commenté votre réel', content: 'superbe !' }),
-      t,
-      conventions,
-    );
-
-    expect(corps).toBe('superbe !');
-  });
-
-  /**
-   * Le serveur garantit une ligne de liste non vide : faute d'extrait, `content`
-   * retombe sur la phrase d'action elle-même. Sur une bannière qui porte déjà
-   * cette phrase en titre, la répéter est un doublon — d'où le résumé MÉDIA.
-   */
-  it.each([
-    ['image', 'attachments.photo'],
-    ['video', 'attachments.video'],
-    ['audio', 'attachments.audio'],
-    ['IMAGE', 'attachments.photo'],
-  ])('remplace un doublon par le résumé du média (%s)', (genre, cle) => {
-    const corps = buildNotificationBannerBody(
-      notification({
-        type: 'friend_new_post',
-        subtitle: 'a publié',
-        content: 'a publié',
-        metadata: { mediaType: genre },
-      }),
-      t,
-      conventions,
-    );
-
-    expect(corps).toBe(`<${cle}>`);
-  });
-
-  it('sert le résumé du média quand une action n’a AUCUN extrait', () => {
-    const corps = buildNotificationBannerBody(
-      notification({ type: 'friend_new_post', metadata: { mediaType: 'video' } }),
-      t,
-      conventions,
-    );
-
-    expect(corps).toBe('<attachments.video>');
-  });
-
-  it('rend `null` sur un genre de média que la loi n’interroge pas', () => {
-    for (const metadata of [{ mediaType: 'sculpture' }, { mediaType: 42 }, {}, undefined, 'pas un objet']) {
+  it('ne rend aucun corps quand il n’y a NI texte NI pièce jointe lisible', () => {
+    for (const metadata of [{}, { attachments: 'pas-un-tableau' }]) {
       expect(
         buildNotificationBannerBody(
-          notification({ type: 'friend_new_post', subtitle: 'a publié', content: 'a publié', metadata }),
+          notification({ type: NotificationTypeEnum.NEW_MESSAGE, content: '', metadata }),
           t,
           conventions,
         ),
       ).toBeNull();
     }
-  });
-});
-
-describe('la pastille de réaction', () => {
-  it.each(['message_reaction', 'post_like', 'story_reaction', 'status_reaction', 'comment_like', 'comment_reaction'])(
-    'la rend sous ses DEUX noms de fil (%s)',
-    (type) => {
-      expect(
-        buildNotificationReactionBadge(notification({ type, metadata: { emoji: '🔥' } }), 'a réagi'),
-      ).toBe('🔥');
-      expect(
-        buildNotificationReactionBadge(notification({ type, metadata: { reactionEmoji: '❤️' } }), 'a réagi'),
-      ).toBe('❤️');
-    },
-  );
-
-  /**
-   * Le serveur fusionne déjà l'émoji dans la phrase d'action (« a réagi 🔥 à
-   * votre story ») : le rendre une seconde fois en pastille ferait dire deux
-   * fois la même chose à deux endroits de la même carte.
-   */
-  it('se tait quand la phrase porte déjà l’émoji', () => {
-    expect(
-      buildNotificationReactionBadge(
-        notification({ type: 'story_reaction', metadata: { emoji: '🔥' } }),
-        'Alice a réagi 🔥 à votre story',
-      ),
-    ).toBeNull();
-  });
-
-  it('se tait sur un type qui n’est pas une réaction, émoji ou non', () => {
-    expect(
-      buildNotificationReactionBadge(notification({ type: 'new_message', metadata: { emoji: '🔥' } }), 'X'),
-    ).toBeNull();
-    expect(buildNotificationReactionBadge(notification({ type: 42 }), 'X')).toBeNull();
-  });
-
-  it('se tait sur une réaction SANS émoji servi', () => {
-    for (const metadata of [{}, { emoji: '' }, { emoji: 7 }, undefined]) {
-      expect(buildNotificationReactionBadge(notification({ type: 'post_like', metadata }), 'X')).toBeNull();
-    }
-  });
-});
-
-describe('la vignette', () => {
-  it('préfère celle du contenu visé', () => {
-    expect(
-      buildNotificationThumbnail(
-        notification({
-          metadata: { postThumbnailUrl: 'https://cdn/post.jpg' },
-          context: { firstAttachmentMimeType: 'image/jpeg', firstAttachmentUrl: 'https://cdn/piece.jpg' },
-        }),
-      ),
-    ).toBe('https://cdn/post.jpg');
-  });
-
-  it('retombe sur la photo de la première pièce jointe d’un message', () => {
-    expect(
-      buildNotificationThumbnail(
-        notification({ context: { firstAttachmentMimeType: 'image/png', firstAttachmentUrl: 'https://cdn/p.png' } }),
-      ),
-    ).toBe('https://cdn/p.png');
-  });
-
-  /**
-   * ELLE EST ABSENTE DU FIL quand le message est protégé (éphémère / vue unique
-   * / flouté / chiffré) — la passerelle la retient EN BLOC. Rien à re-garder
-   * ici, rien à fabriquer depuis une autre source non plus.
-   */
-  it('ne fabrique RIEN quand la passerelle n’a pas servi l’URL', () => {
-    expect(
-      buildNotificationThumbnail(notification({ context: { firstAttachmentMimeType: 'image/jpeg' } })),
-    ).toBeNull();
-  });
-
-  it('ne rend une pièce jointe que si elle est une IMAGE', () => {
-    for (const mime of ['video/mp4', 'application/pdf', 'audio/mpeg', 42, undefined]) {
-      expect(
-        buildNotificationThumbnail(
-          notification({ context: { firstAttachmentMimeType: mime, firstAttachmentUrl: 'https://cdn/x' } }),
-        ),
-      ).toBeNull();
-    }
-  });
-
-  it('rend `null` sur une charge sans contexte ni métadonnées', () => {
-    expect(buildNotificationThumbnail(notification({}))).toBeNull();
-  });
-});
-
-describe('la bannière entière — les quatre champs d’une seule descente', () => {
-  it('compose le titre, le corps, la pastille et la vignette ensemble', () => {
-    const banniere = buildNotificationBanner(
-      notification({
-        type: 'story_reaction',
-        title: 'Alice Martin',
-        subtitle: 'a réagi à votre story',
-        content: 'super !',
-        actor: ALICE,
-        metadata: { emoji: '❤️', postThumbnailUrl: 'https://cdn/s.jpg' },
-      }),
-      t,
-      conventions,
-    );
-
-    expect(banniere).toEqual({
-      headline: 'Alice Martin a réagi à votre story',
-      body: 'super !',
-      reactionBadge: '❤️',
-      thumbnailUrl: 'https://cdn/s.jpg',
-    });
-  });
-
-  /**
-   * LA PASTILLE EST JUGÉE CONTRE LE TITRE QUE CETTE DESCENTE VIENT DE COMPOSER,
-   * jamais contre un titre calculé à part : deux descentes parallèles
-   * rendraient la pastille sur une phrase qui la porte déjà.
-   */
-  it('juge la pastille contre le titre qu’elle vient elle-même de composer', () => {
-    const banniere = buildNotificationBanner(
-      notification({
-        type: 'story_reaction',
-        title: 'Alice Martin',
-        subtitle: 'a réagi 🔥 à votre story',
-        actor: ALICE,
-        metadata: { emoji: '🔥' },
-      }),
-      t,
-      conventions,
-    );
-
-    expect(banniere.headline).toContain('🔥');
-    expect(banniere.reactionBadge).toBeNull();
-  });
-
-  it('passe le nom LOCAL du groupe jusqu’au titre', () => {
-    const banniere = buildNotificationBanner(
-      notification({
-        type: 'new_message',
-        actor: ALICE,
-        content: 'je suis en route',
-        context: { conversationType: 'group', conversationTitle: 'Les collègues' },
-      }),
-      t,
-      conventions,
-      { groupName: 'Équipe produit' },
-    );
-
-    expect(banniere.headline).toBe('<Alice Martin|Équipe produit>');
-    expect(banniere.body).toBe('je suis en route');
-  });
-
-  it('ne rougit sur AUCUNE charge illisible — elle vient du réseau', () => {
-    const banniere = buildNotificationBanner(
-      notification({ type: 42, title: [], subtitle: null, content: 7, actor: 'pas un objet', metadata: [], context: null }),
-      t,
-      conventions,
-    );
-
-    expect(banniere).toEqual({
-      headline: '<repli>',
-      body: null,
-      reactionBadge: null,
-      thumbnailUrl: null,
-    });
   });
 });

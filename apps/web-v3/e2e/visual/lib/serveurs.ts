@@ -496,7 +496,10 @@ const attend = async (url: string, jusqua: number): Promise<void> => {
  * L'absence de build est une ERREUR, jamais un test ignoré : une mesure dont le
  * prérequis manque doit se voir (§ 9.2), et un `skip` la rendrait verte.
  */
-export const serveurDeLaV3 = async (passerelle: string): Promise<ServeurV3> => {
+export const serveurDeLaV3 = async (
+  passerelle: string,
+  environnement: Record<string, string> = {},
+): Promise<ServeurV3> => {
   if (!existsSync(join(RACINE_V3, '.next', 'app-build-manifest.json'))) {
     throw new Error("apps/web-v3 n'est pas construit — lancer d'abord `cd apps/web-v3 && bun run build`");
   }
@@ -519,6 +522,9 @@ export const serveurDeLaV3 = async (passerelle: string): Promise<ServeurV3> => {
         // est mise en cache PAR URL (§ 5.4).
         NEXT_PUBLIC_FRONTEND_URL: base,
         NODE_ENV: 'production',
+        // Ce que le TEST déploie — `V3_SW_PORTEES` pour la chaîne du
+        // travailleur de zone (#4472), comme le compose la pose en staging.
+        ...environnement,
       },
       stdio: 'ignore',
     },

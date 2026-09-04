@@ -136,3 +136,12 @@ describe('la route qui les sert', () => {
     expect(reponse.headers.get('cache-control')).toBe('no-store');
   });
 });
+
+describe("chaque actif du memo est SERVABLE — l'énumération manuscrite ne peut plus retenir un module", () => {
+  it('actifParNom retrouve chaque actif que actifsTempsReel compose (corps non vide)', () => {
+    for (const [cle, actif] of Object.entries(actifsTempsReel())) {
+      if (actif.corps === '') continue;
+      expect({ cle, servi: actifParNom(actif.nom) !== null }).toEqual({ cle, servi: true });
+    }
+  });
+});
