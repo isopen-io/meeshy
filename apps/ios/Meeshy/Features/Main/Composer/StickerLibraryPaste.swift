@@ -331,19 +331,26 @@ extension View {
     /// appel, la section « Mes stickers » de `StickerPickerView` n'est pas
     /// rendue (loi 4).
     func storyStickerLibraryProvided() -> some View {
-        // **La capacité est TYPÉE avant d'être passée.** Un ternaire entre une
-        // closure littérale et `nil` n'est pas inférable : le compilateur rend
-        // « type of expression is ambiguous » sur l'appel ENTIER, à quinze
-        // lignes de la ligne fautive. La constante annotée résout l'inférence là
-        // où la décision se prend.
+        // **La closure porte son type AVANT d'entrer dans le ternaire, et c'est
+        // la seule forme qui compile.** Annoter le `let` ne suffit pas : le type
+        // contextuel ne descend pas dans les BRANCHES d'un ternaire, si bien que
+        // la closure littérale s'y infère `(Data) async -> [Item]?` — sans
+        // `@MainActor`, donc inconvertible vers `Lift`. Les deux diagnostics
+        // successifs le disaient à deux niveaux d'abstraction différents
+        // (« ambiguous », puis « cannot convert ») pour une seule et même cause.
         //
+        // Ici, la ligne 1 est la forme canonique — un type sur un `let`, une
+        // closure littérale en face —, et la ligne 2 ne choisit plus qu'entre
+        // deux valeurs déjà typées.
+        let capability: StoryStickerLibraryProvider.Lift = { data in
+            await StickerLibraryLift.lift(imageData: data)
+        }
         // `nil` sur iOS 16 : l'entrée « détourer » n'est alors PAS rendue
         // (loi 4). Le prédicat vit dans le service, pas ici — un second
         // `#available` écrit au site d'injection divergerait du premier au jour
         // où le plancher monte.
-        let lift: StoryStickerLibraryProvider.Lift? = StickerSubjectLift.isAvailable
-            ? { data in await StickerLibraryLift.lift(imageData: data) }
-            : nil
+        let lift: StoryStickerLibraryProvider.Lift? =
+            StickerSubjectLift.isAvailable ? capability : nil
         return environment(\.storyStickerLibrary, StoryStickerLibraryProvider(
             recents: { await StickerLibraryPaste.recents() },
             paste: { providers in await StickerLibraryPaste.paste(providers) },
