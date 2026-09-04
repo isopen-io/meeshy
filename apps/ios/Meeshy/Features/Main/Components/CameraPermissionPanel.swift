@@ -15,7 +15,10 @@ struct CameraPermissionPanel: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "camera.fill")
-                .font(.system(size: 38, weight: .light))
+                // Le glyphe d'un panneau de REFUS doit grandir comme son
+                // texte : c'est un écran qu'on lit quand quelque chose ne
+                // marche pas, donc précisément là où la grande taille sert.
+                .font(MeeshyFont.relative(38, weight: .light))
                 .foregroundStyle(.white.opacity(0.7))
 
             Text(String(localized: "camera.permission.denied.title",

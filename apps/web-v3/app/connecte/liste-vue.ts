@@ -17,7 +17,7 @@ import {
 } from '@/lib/contenu/liste';
 import type { Contact } from '@/lib/api/contacts';
 
-import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, blocDuNavigateur, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
 import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
@@ -469,6 +469,6 @@ export const documentDesChats = (etat: EtatDesChats): string => {
     retour: true,
     surimpression: surimpose,
     attributsDuMain: attributsDeParticipation(etat),
-    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
+    script: (etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION) + blocDuNavigateur(),
   });
 };

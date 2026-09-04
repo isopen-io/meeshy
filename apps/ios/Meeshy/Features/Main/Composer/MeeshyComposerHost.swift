@@ -396,6 +396,12 @@ struct MeeshyComposerHost: View {
     /// ouvre le menu d'un fond, le remplace, puis valide.
     @State var backgroundMenuObjectId: String?
 
+    /// **Le registre des pré-montées** (#5086, vue `4c`). `@StateObject` parce
+    /// que le meuble le POSSÈDE : sa durée de vie est celle de la composition,
+    /// et un `@ObservedObject` le reconstruirait à chaque rendu — donc
+    /// relancerait les envois.
+    @StateObject var preUploads = ComposerPreUploadRegistry()
+
     /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
     ///
     /// `@StateObject` et non `.shared` : un bake appartient à CETTE

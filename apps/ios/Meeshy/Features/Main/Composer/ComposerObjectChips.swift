@@ -223,8 +223,17 @@ nonisolated enum ComposerObjectChips {
     /// objet de premier plan (règle produit 2026-07-11, le fond n'est mouvable
     /// que par sa propre porte). Dire le plan explique donc pourquoi le doigt
     /// n'obtient pas le même effet sur deux objets d'apparence semblable.
+    /// - Parameter preUpload: l'état de la pré-montée de CET objet, quand il en
+    ///   a une (#5086, vue `4c`). Il s'ajoute au badge plutôt que d'occuper une
+    ///   surface neuve : la vue `4c` dit l'état de l'asset À CÔTÉ de ce qui le
+    ///   décrit — « porteur · plan content » puis « MONTÉE EN COURS · 34 % » —,
+    ///   et c'est déjà exactement ce que ce badge est.
+    ///
+    ///   `.idle` par défaut : la très grande majorité des objets n'a rien qui
+    ///   monte, et les quatre autres familles n'ont pas d'asset du tout.
     static func badge(forSelected id: String?,
                       in slide: StorySlide,
+                      preUpload: ComposerPreUploadState = .idle,
                       locale: Locale = .current) -> String? {
         guard let id, let objet = slide.sceneObject(id: id) else { return nil }
         // Le PLAN et le RANG viennent de la somme, qui les résout pour les cinq
@@ -234,8 +243,16 @@ nonisolated enum ComposerObjectChips {
         // cinq familles ont leur mot. Le seul `nil` qui subsiste est celui du
         // dessus — l'id qui ne désigne plus rien, un objet supprimé pendant que
         // la sélection le tenait encore. Un état NOMINAL, pas une lacune.
-        return badge(kind: badgeKind(objet.kind), isBackground: objet.isBackground,
-                     zIndex: objet.zIndex, locale: locale)
+        let socle = badge(kind: badgeKind(objet.kind), isBackground: objet.isBackground,
+                          zIndex: objet.zIndex, locale: locale)
+        // **La MONTÉE ne se dit que si elle a quelque chose à dire.** `nil`
+        // plutôt qu'une chaîne vide chez `ComposerPreUploadCopy` : une chaîne
+        // vide se concaténerait en silence et laisserait un séparateur
+        // orphelin — le défaut exact du « Texte : » de VoiceOver.
+        guard let montee = ComposerPreUploadCopy.label(for: preUpload, locale: locale) else {
+            return socle
+        }
+        return "\(socle) · \(montee)"
     }
 
     /// **Le mot d'un kind — TOTAL, plus aucun `nil`.**

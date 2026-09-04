@@ -10,7 +10,8 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
  * leurs lecteurs historiques.
  */
 export { type TempsReel } from './chargeur';
-import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR, blocDuNavigateur, type TempsReel } from './chargeur';
+import { porteesDuTravailleur } from '@/lib/sw/portees';
 export { CHARGEUR_DE_PARTICIPATION };
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
@@ -594,17 +595,29 @@ export const documentPleinEcran = ({
   corps,
   script = '',
   feuille = FEUILLE,
+  hubs = true,
 }: {
   readonly titre: string;
   readonly description: string;
   readonly corps: string;
   readonly script?: string;
   readonly feuille?: string;
+  /**
+   * Les règles de spéculation (#5104) — servies par défaut aux écrans
+   * CONNECTÉS. La LECTURE PARTAGÉE les refuse (`hubs: false`) : son budget dit
+   * « aucun script applicatif » et un lecteur ANONYME n'a rien à précharger
+   * des hubs d'un compte qu'il n'a pas.
+   */
+  readonly hubs?: boolean;
 }): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots: 'noindex, nofollow' }) +
-  `<body>${corps}${script}</body>` +
+  // Les hubs se préchargent au survol (#5104), et le travailleur de zone
+  // (#4472/#4473) s'enregistre — pour TOUT document plein écran, la lecture
+  // partagée comprise : c'est elle, `/l/`, que son cache sert en premier. Sans
+  // `V3_SW_PORTEES` dans l'environnement, le script n'existe pas.
+  `<body>${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}${SCRIPT_DU_TRAVAILLEUR(porteesDuTravailleur(process.env['V3_SW_PORTEES']))}${blocDuNavigateur()}</body>` +
   '</html>';
 
 /**

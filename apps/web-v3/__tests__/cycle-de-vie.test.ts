@@ -909,3 +909,41 @@ describe('le site unique du cycle de vie', () => {
     });
   });
 });
+
+describe("le départ de zone — la navigation douce que pagehide ne voit pas (#5106)", () => {
+  beforeEach(() => {
+    canaux.clear();
+    enVol.length = 0;
+    differe = false;
+    poseLeCanal();
+    visibilite('visible');
+    enLigne(true);
+  });
+
+  it("l'événement de départ émet destruction — le navigateur de zone le déclenche AVANT le swap", () => {
+    const { vues } = observe();
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    expect(vues.filter((vue) => vue.type === 'destruction')).toHaveLength(1);
+  });
+
+  it('le départ NETTOIE tout seul : plus aucune transition après lui — aucun listener ne fuit', () => {
+    const { vues } = observe();
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    const apresLeDepart = vues.length;
+    bascule('hidden');
+    reseau('offline');
+    transition('pagehide', false);
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    expect(vues.length).toBe(apresLeDepart);
+  });
+
+  it('le départ ne détruit que SA propre observation — le nouvel écran observe librement ensuite', () => {
+    const premiere = observe();
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    const seconde = observe();
+    bascule('hidden');
+    expect(seconde.vues.some((vue) => vue.type === 'masquage')).toBe(true);
+    expect(premiere.vues.some((vue) => vue.type === 'masquage')).toBe(false);
+    seconde.detache();
+  });
+});

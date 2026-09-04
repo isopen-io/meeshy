@@ -245,6 +245,34 @@ binding existe pour lui.
 
 ## 4 bis. Les TROIS lecteurs, mesurés (2026-09-02)
 
+> **Addendum du 2026-09-04 — la méthode de ce comptage a une faille que le
+> recadrage vient de révéler, et les chiffres ci-dessous ne sont PAS corrigés.**
+>
+> Ils restent ceux du 2026-09-02, à leur date, parce qu'ils ont été obtenus en
+> comptant les clés *effectivement lues* par chaque projection. Les recompter
+> aujourd'hui avec une méthode plus grossière — toute chaîne entre guillemets —
+> rendrait 57 pour Android et 11 pour le web : **remplacer une mesure soignée
+> par une mesure large est une régression, pas une mise à jour.**
+>
+> Ce que la mesure du jour révèle est ailleurs, et c'est méthodologique. Le
+> recadrage (#5085) est désormais lu par les deux lecteurs, mais **pas de la
+> même façon** :
+>
+> | lecteur | où vivent les noms de clés `cropX/Y/W/H` |
+> |---|---|
+> | Android | dans `CanvasV3Projection.kt` — la projection les NOMME |
+> | web | dans `packages/shared/utils/media-crop.ts` — `readMediaCrop(payload)`, la règle partagée les nomme à sa place |
+>
+> **Un audit « quelles clés chaque lecteur lit-il ? » conduit sur les fichiers du
+> LECTEUR manquerait donc entièrement le recadrage côté web** — non parce qu'il
+> ne le lit pas, mais parce qu'il le lit par délégation. Toute reprise de ce
+> comptage doit suivre les modules partagés, sinon elle sous-compte le lecteur
+> le mieux factorisé et récompense celui qui recopie.
+>
+> C'est la forme lecteur du défaut de #4833 : un inventaire qui interroge un
+> site rate ce qui a été délégué à un autre.
+
+
 Le § 5 disait, à la première écriture de ce document, que les lecteurs web et
 Android n'étaient pas mesurés et qu'il ne fallait pas lire ce silence comme une
 conformité. Mesure faite le jour même — et le silence ne l'était pas.

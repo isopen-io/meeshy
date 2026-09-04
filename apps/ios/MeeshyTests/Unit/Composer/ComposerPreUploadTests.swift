@@ -110,4 +110,72 @@ final class ComposerPreUploadTests: XCTestCase {
         XCTAssertTrue(code.contains("wheremediaObjects[i].postMediaId.isEmpty"),
                       "c'est cette clause, et elle seule, qui rend le repli automatique")
     }
+
+    // MARK: - Le balayage du document
+
+    /// **Un objet DÉJÀ distant ne repart pas.** C'est aussi ce qui rend le
+    /// balayage idempotent sans qu'il tienne la moindre liste : l'adoption
+    /// remplace l'URL locale par celle du serveur, donc le passage suivant ne
+    /// voit plus l'objet.
+    func test_unObjetDejaDistant_neFigurePasDansLeBalayage() {
+        XCTAssertNil(ComposerPreUploadSweep.pendingFile(
+            postMediaId: "pm1", mediaURL: "file:///tmp/a.jpg"))
+        XCTAssertNil(ComposerPreUploadSweep.pendingFile(
+            postMediaId: "", mediaURL: "https://cdn/a.jpg"))
+    }
+
+    func test_unObjetLocalSansIdentifiant_attendSaMontee() {
+        XCTAssertEqual(
+            ComposerPreUploadSweep.pendingFile(postMediaId: "", mediaURL: "file:///tmp/a.jpg"),
+            URL(fileURLWithPath: "/tmp/a.jpg"))
+    }
+
+    /// Un objet sans URL du tout — un média déclaré dont l'asset n'a pas été
+    /// chargé — n'a rien à monter. La publication le signalera là où l'auteur
+    /// peut agir ; le balayage se tait.
+    func test_unObjetSansURL_naRienAMonter() {
+        XCTAssertNil(ComposerPreUploadSweep.pendingFile(postMediaId: "", mediaURL: nil))
+        XCTAssertNil(ComposerPreUploadSweep.pendingFile(postMediaId: "", mediaURL: ""))
+    }
+
+    /// **La taille se lit sur le DISQUE, pas sur une déclaration.** Un
+    /// temporaire purgé ou un document restauré après un redémarrage rend
+    /// `nil` — et l'absence n'est pas une erreur : c'est la publication qui
+    /// rencontrera le même vide, là où l'auteur peut agir.
+    func test_laTaille_seLitSurLeDisque_etLAbsenceNEstPasUneErreur() throws {
+        let fichier = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pre-montee-\(UUID().uuidString).bin")
+        try Data(repeating: 7, count: 4_096).write(to: fichier)
+        defer { try? FileManager.default.removeItem(at: fichier) }
+
+        XCTAssertEqual(ComposerPreUploadSweep.fileSize(at: fichier), 4_096)
+        XCTAssertNil(ComposerPreUploadSweep.fileSize(
+            at: fichier.appendingPathExtension("absent")))
+    }
+
+    /// **Le balayage est branché en fin de DÉRIVATION, pas sur une porte.**
+    ///
+    /// Le composer a cinq portes vers un média, dont le viseur en scène né
+    /// d'un GESTE — donc absent de tout inventaire de portes (#4879, #5069).
+    /// Un appel par porte aurait recommencé l'inventaire qui a déjà raté une
+    /// porte deux fois ; branché sur l'état ATTEINT, une sixième porte en
+    /// hérite sans que personne n'y pense.
+    ///
+    /// Le témoin exige la POSITION, pas seulement la présence : appelé avant
+    /// la dérivation, il balaierait l'état d'avant et raterait exactement le
+    /// média qu'on vient de poser.
+    func test_leBalayage_estAppeleEnFinDeDerivation() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let debut = code.range(of: "funcsyncPostMediaIntoSlides(){"),
+              let appel = code.range(of: "startPendingPreUploads()", range: debut.upperBound..<code.endIndex)
+        else { return XCTFail("la dérivation ou le balayage a changé de nom") }
+        // Rien d'autre entre l'appel et la fin de la fonction que sa fermeture.
+        let apres = String(code[appel.upperBound...]).prefix(1)
+        XCTAssertEqual(apres, "}", "le balayage doit être la DERNIÈRE chose que la dérivation fait")
+    }
 }

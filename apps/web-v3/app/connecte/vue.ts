@@ -1,3 +1,4 @@
+import { blocDuNavigateur } from '@/app/connecte/chargeur';
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { echappe } from '@/app/socle';
@@ -337,6 +338,7 @@ export const documentDuTableau = (etat: EtatDuTableau): string => {
   const dessus = etat.espace ? feuilleDeLEspace({ lecteur: etat.lecteur, hote: '/' }) : '';
 
   return documentDuSite({
+    script: blocDuNavigateur(),
     titre: `${TABLEAU_DE_BORD.titre} — Meeshy`,
     description: TABLEAU_DE_BORD.apercu,
     // La feuille du TABLEAU en plus de celle de la zone, et pour lui seul : la
