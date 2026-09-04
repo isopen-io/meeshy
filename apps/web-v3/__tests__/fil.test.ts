@@ -215,6 +215,7 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
     feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
     notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
     contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
+    recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
@@ -275,6 +276,7 @@ describe('le fil rendu', () => {
             feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
             notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
             contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
+            recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
             socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
           },
         },

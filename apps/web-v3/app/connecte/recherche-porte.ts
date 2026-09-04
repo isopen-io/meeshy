@@ -1,4 +1,5 @@
 import { jetonDuLecteur } from '@/app/session';
+import { actifsTempsReel } from '@/lib/actifs-rt';
 import { cherche, type Recuperateur } from '@/lib/api/recherche';
 import { PARAMETRE_DE_RECHERCHE } from '@/lib/contenu/recherche';
 
@@ -30,6 +31,17 @@ import { documentDePanne } from './vue';
  * LES TROIS QUESTIONS SONT LES MÊMES : un jeton ? la passerelle l'accepte-t-elle ?
  * a-t-elle répondu ? Un 401 renvoie se connecter, un silence dessine la panne.
  */
+
+/**
+ * LE SOCLE DU MODULE (#4897) — `null` tant que l'actif compilé est absent : le
+ * formulaire GET reste alors le seul chemin, toujours correct (§ 12.4). Pas de
+ * passerelle ici : le module redemande CE document, même origine.
+ */
+const moduleDeParticipation = (): { readonly module: string } | null => {
+  const actifs = actifsTempsReel();
+  if (actifs.recherche.corps === '') return null;
+  return { module: actifs.recherche.url };
+};
 
 const CHEMIN = '/search';
 
@@ -73,6 +85,7 @@ export const RECHERCHE_SERVIE = async (
       conversations: trouvailles.conversations,
       personnes: trouvailles.personnes,
       encoreDesPersonnes: trouvailles.encoreDesPersonnes,
+      tempsReel: moduleDeParticipation(),
     }),
   );
 };

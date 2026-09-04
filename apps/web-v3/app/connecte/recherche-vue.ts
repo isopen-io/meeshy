@@ -12,6 +12,7 @@ import {
 
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
+import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
 import { documentPleinEcran } from './fil-vue';
 import { FEUILLE_DE_LA_RECHERCHE } from './recherche-feuille';
 import { carteVide, versLeFil } from './vue';
@@ -49,6 +50,8 @@ export type EtatDeLaRecherche = {
   readonly conversations: readonly Conversation[];
   readonly personnes: readonly PersonneTrouvee[];
   readonly encoreDesPersonnes: boolean;
+  /** Ce que le document porte pour son module (§ 12.4, #4897) — le module échange `#resultats`, il n'appelle aucune passerelle. */
+  readonly tempsReel: { readonly module: string } | null;
 };
 
 const CHAMP = 'recherche-q';
@@ -174,17 +177,30 @@ const resultats = (etat: EtatDeLaRecherche): string => {
   );
 };
 
-const corps = (etat: EtatDeLaRecherche): string =>
-  '<main id="main-content" class="recherche-ecran">' +
+/**
+ * LA RÉGION QUE LE MODULE ÉCHANGE (#4897). Le direct de cet écran ne compose
+ * RIEN côté client : il redemande CE document au serveur (`/search?q=…`),
+ * en extrait `#resultats` — composé par le MÊME code, Prisme et gardes de
+ * présence compris — et le pose ici. Un identifiant, deux lecteurs : la vue
+ * qui le sert, le module qui l'échange.
+ */
+const corps = (etat: EtatDeLaRecherche, participation: string): string =>
+  `<main id="main-content" class="recherche-ecran"${participation}>` +
   enTete() +
   formulaire(etat.requete) +
-  resultats(etat) +
+  `<div id="resultats">${resultats(etat)}</div>` +
   '</main>';
 
 export const documentDeLaRecherche = (etat: EtatDeLaRecherche): string =>
   documentPleinEcran({
     titre: RECHERCHE.titre,
     description: RECHERCHE.portee,
-    corps: corps(etat),
+    corps: corps(
+      etat,
+      etat.tempsReel === null
+        ? ''
+        : ` data-participation="recherche" data-module="${echappe(etat.tempsReel.module)}"`,
+    ),
     feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DE_LA_RECHERCHE,
+    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });
