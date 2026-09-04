@@ -653,12 +653,22 @@ struct MeeshyComposerHost: View {
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
 
-    /// **Le repli du volet de description** (#4742).
+    /// **Le repli du volet de description** (#4742, défaut RETOURNÉ au #5138).
     ///
     /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
     /// d'histoire ne doit pas rouvrir un volet que l'auteur vient de ranger.
-    /// Déplié par défaut — la description existe pour être relue.
-    @State var sceneDescriptionCollapsed = false
+    ///
+    /// **Replié par défaut** (directive porteur 2026-09-04 : « par défaut
+    /// l'espace de contenu du caption doit être replié »). Il naissait déplié,
+    /// et la raison écrite ici — « la description existe pour être relue » —
+    /// valait tant que le volet était le SEUL endroit où le texte se voyait
+    /// (#4742). Depuis #4993 il se peint PAR-DESSUS la scène : déplié d'entrée,
+    /// il couvre la bande basse du canvas à l'instant précis où l'auteur
+    /// compose — c'est-à-dire avant qu'il y ait la moindre légende à relire.
+    ///
+    /// Replié n'est pas caché : le chevron reste disponible en permanence
+    /// (#4993), et ouvrir la saisie déplie (`sceneDescriptionPanel.onEdit`).
+    @State var sceneDescriptionCollapsed = true
 
     /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu

@@ -960,6 +960,7 @@
 		947118BFB9F264EC888D7C6C /* ComposerSoundCreditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C857F7336DEABE137D924932 /* ComposerSoundCreditTests.swift */; };
 		948CBBE0C339871A8874C121 /* DependencyContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75FBA68E95B0DC9C9C31339 /* DependencyContainerTests.swift */; };
 		94C0ACF6FD3CED3509BA6148 /* PiPVideoSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A0D13CC0A92C4E7C213929 /* PiPVideoSampleBufferView.swift */; };
+		94C4C1516CDC7E3020C221A2 /* MeeshyComposerHost+Captions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E274ADD5509BE618A620F8 /* MeeshyComposerHost+Captions.swift */; };
 		94D0D43CEFEBDA3059FDC73D /* MemberActionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C68D0D26197E5D941C36AB4D /* MemberActionPolicy.swift */; };
 		950FDFF7DF5FBC35258D9DF1 /* MeeshyComposerHost+Resolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE3DD3B40E4FA5B4344986CD /* MeeshyComposerHost+Resolution.swift */; };
 		9535C82FAF0DC305F0F4C1A8 /* MockMessageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E9D9F147489D464DA6B635 /* MockMessageService.swift */; };
@@ -2277,6 +2278,7 @@
 		46C5F6917010CE7350B7C9D2 /* SheetToolbarSemanticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetToolbarSemanticsTests.swift; sourceTree = "<group>"; };
 		46C995F19B6659E7C79CE239 /* LentilleSticker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleSticker.swift; sourceTree = "<group>"; };
 		46DEA6B26C55201E4D78A0D0 /* MeeshyComposerHost+Portals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Portals.swift"; sourceTree = "<group>"; };
+		46E274ADD5509BE618A620F8 /* MeeshyComposerHost+Captions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Captions.swift"; sourceTree = "<group>"; };
 		46E99EAB14CB0CB7637CFA78 /* LivingSummaryViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivingSummaryViewModelTests.swift; sourceTree = "<group>"; };
 		46F810BC30FF467339460377 /* CallReconnectPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallReconnectPolicyTests.swift; sourceTree = "<group>"; };
 		47145ABE260AD90CE3A3EC52 /* EditHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStore.swift; sourceTree = "<group>"; };
@@ -3994,6 +3996,7 @@
 				81D8289380C287C92B3AC246 /* MeeshyComposerHost.swift */,
 				840369ED47FCE4E9E1C3B56B /* MeeshyComposerHost+Audience.swift */,
 				913C71ECF67F17DF6DFD9FE6 /* MeeshyComposerHost+BackgroundMenu.swift */,
+				46E274ADD5509BE618A620F8 /* MeeshyComposerHost+Captions.swift */,
 				57CB2432EA0CA6E811A2B70D /* MeeshyComposerHost+DocumentSurface.swift */,
 				0122537C9FD2D351DA768EE9 /* MeeshyComposerHost+EditBands.swift */,
 				2F298EE6535BB5E9C9BAF5F7 /* MeeshyComposerHost+Intake.swift */,
@@ -6629,6 +6632,7 @@
 				9CE1CCE130E382DE4607B484 /* MeeshyAppIntents.swift in Sources */,
 				1F463F4E6A8C9683FB7410CC /* MeeshyComposerHost+Audience.swift in Sources */,
 				402AD92DED53C79CC3C1081A /* MeeshyComposerHost+BackgroundMenu.swift in Sources */,
+				94C4C1516CDC7E3020C221A2 /* MeeshyComposerHost+Captions.swift in Sources */,
 				AAC4CB4F9EB66621EA703DBE /* MeeshyComposerHost+DocumentSurface.swift in Sources */,
 				65F8D7569604D552B95E4708 /* MeeshyComposerHost+EditBands.swift in Sources */,
 				C86A55394B7EB8CBD0BB988C /* MeeshyComposerHost+Intake.swift in Sources */,
