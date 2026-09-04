@@ -483,4 +483,29 @@ class CanvasV3ProjectionTest {
         assertThat(media!!.sourceStart).isNull()
         assertThat(media.sourceEnd).isNull()
     }
+
+    /**
+     * #5129 — **la conversion en millisecondes est une DÉCISION, donc elle se
+     * teste.** Elle vit dans la règle et non dans la surface de lecture, qui
+     * reste opaque : celle-ci reçoit deux nombres ou rien.
+     */
+    @Test
+    fun `la fenêtre de lecture se convertit en millisecondes`() {
+        assertThat(StorySourceWindow.clippingMs(3.0, 8.0)).isEqualTo(StorySourceWindowMs(3000L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(1.5, 4.25)).isEqualTo(StorySourceWindowMs(1500L, 4250L))
+        assertThat(StorySourceWindow.clippingMs(null, 8.0)).isNull()
+        assertThat(StorySourceWindow.clippingMs(3.0, null)).isNull()
+    }
+
+    /**
+     * **Deux bornes distinctes en secondes peuvent se confondre en millisecondes**
+     * (3,0000 et 3,0004). La fenêtre serait VIDE, et le clip se tairait — un
+     * silence qu'aucun message n'expliquerait. La règle refuse, comme elle refuse
+     * `end <= start`.
+     */
+    @Test
+    fun `une fenêtre qui s aplatit à la milliseconde est refusée`() {
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0004)).isNull()
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(StorySourceWindowMs(3000L, 3001L))
+    }
 }

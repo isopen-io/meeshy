@@ -9,7 +9,6 @@ import {
   banniereDeNotification,
   cadrageDeBanniere,
   titreDeBanniere,
-  TYPES_TRANSCRITS,
   type NotificationServie,
   type TraduireDansLaConversation,
 } from '@/lib/notifications/banniere';
@@ -265,26 +264,146 @@ describe('ce que la bannière REFUSE de fabriquer', () => {
   });
 });
 
-describe('les littéraux de type transcrivent l’énumération partagée', () => {
-  const source = (): string =>
+describe('UNE loi, trois clients — et rien qui la réécrive ici', () => {
+  const liaison = (): string =>
+    readFileSync(join(__dirname, '..', 'lib', 'notifications', 'banniere.ts'), 'utf8');
+
+  const loi = (): string =>
     readFileSync(
-      join(__dirname, '..', '..', '..', 'packages', 'shared', 'types', 'notification.ts'),
+      join(__dirname, '..', '..', '..', 'packages', 'shared', 'utils', 'notification-banner.ts'),
       'utf8',
     );
 
-  it('lit bien la source partagée — sans quoi la garde ci-dessous serait vide', () => {
-    const contenu = source();
-    expect(contenu).toContain('NotificationTypeEnum');
-    expect(contenu.length).toBeGreaterThan(1000);
-    expect(TYPES_TRANSCRITS.size).toBe(13);
+  it('lit bien les deux sources — sans quoi les gardes ci-dessous seraient vides', () => {
+    expect(liaison()).toContain('notificationBannerFraming');
+    expect(loi().length).toBeGreaterThan(1000);
   });
 
-  it('chaque littéral transcrit est bien un membre de NotificationTypeEnum', () => {
-    const contenu = source();
-    const absents = [...TYPES_TRANSCRITS].filter(
-      (valeur) => !contenu.includes(`= '${valeur}'`),
+  /**
+   * LA GARDE QUI REMPLACE CELLE DE LA TRANSCRIPTION, et qui garde plus qu'elle.
+   *
+   * Ce fichier portait treize littéraux de type recopiés de
+   * `NotificationTypeEnum`, et une garde qui relisait le fichier de
+   * l'énumération pour prouver qu'ils n'en avaient pas dérivé. La loi partagée
+   * importe l'énumération : il n'y a plus rien à transcrire, donc plus rien à
+   * faire dériver.
+   *
+   * Ce qui reste à garder est l'inverse : que la liaison ne se remette pas à
+   * ÉCRIRE la loi. Les trois ensembles de types sont le témoin le plus court —
+   * ils sont ce que la copie locale portait en premier, et ce qu'une troisième
+   * écriture reposerait en premier.
+   */
+  it('la liaison ne redéclare aucun ensemble de types — la loi les tient', () => {
+    const source = liaison();
+    expect(source).not.toContain('new Set');
+    expect(source).not.toContain("'new_message'");
+    expect(source).not.toContain("'friend_request'");
+    expect(source).not.toContain("'story_reaction'");
+  });
+
+  it('la liaison n’écrit aucune règle de cadrage — elle DÉLÈGUE les quatre', () => {
+    const source = liaison();
+    for (const appel of [
+      'notificationBannerFraming',
+      'buildNotificationHeadline',
+      'buildNotificationBanner',
+    ]) {
+      expect(source).toContain(appel);
+    }
+  });
+
+  /**
+   * Elle en porte dans ses DOC-COMMENTS, qui expliquent la règle en français
+   * comme tout le dépôt ; ce qu'elle ne doit porter nulle part, c'est un
+   * littéral que le RENDU sert. On lit donc le CODE, commentaires ôtés — un
+   * témoin qui lirait le fichier entier rougirait sur sa propre explication.
+   */
+  it('la loi partagée ne SERT aucun littéral de langue — c’est ce qui la rend partageable', () => {
+    const code = loi()
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^[ \t]*\/\/.*$/gm, '');
+
+    expect(code).toContain('function buildNotificationBanner');
+    for (const phrase of ['dans « ', '📷', '📎', 'Photo', 'Vidéo', 'Quelqu']) {
+      expect(code).not.toContain(phrase);
+    }
+  });
+});
+
+describe('ce que la liaison apporte que la copie locale n’avait pas', () => {
+  it('un message à pièce jointe se résume AVANT son extrait', () => {
+    const banniere = banniereDeNotification(
+      notification({
+        type: 'new_message',
+        actor: acteurAlice,
+        content: 'regarde ça',
+        context: { conversationType: 'direct' },
+        metadata: { attachments: [{ mimeType: 'image/jpeg' }] },
+      }),
+      traduire,
     );
 
-    expect(absents).toEqual([]);
+    expect(banniere.corps).toBe('📷 Photo · regarde ça');
+  });
+
+  it('une pièce jointe qui n’est pas une image se marque en fichier', () => {
+    const banniere = banniereDeNotification(
+      notification({
+        type: 'new_message',
+        actor: acteurAlice,
+        content: '',
+        context: { conversationType: 'direct' },
+        metadata: { attachments: [{ mimeType: 'application/pdf' }] },
+      }),
+      traduire,
+    );
+
+    expect(banniere.corps).toBe('📎 Fichier');
+  });
+
+  it('une publication sans extrait sert le genre de son média plutôt que rien', () => {
+    const banniere = banniereDeNotification(
+      notification({
+        type: 'friend_new_post',
+        title: 'Alice Martin',
+        subtitle: 'a publié une photo',
+        content: 'a publié une photo',
+        actor: acteurAlice,
+        metadata: { mediaType: 'image' },
+      }),
+      traduire,
+    );
+
+    expect(banniere.titre).toBe('Alice Martin a publié une photo');
+    expect(banniere.corps).toBe('Photo');
+  });
+
+  it('un acteur nommé par son seul prénom et son nom garde ce rang', () => {
+    const titre = titreDeBanniere(
+      notification({
+        type: 'new_message',
+        actor: { firstName: 'Amina', lastName: 'Diallo', username: 'adiallo' },
+        context: { conversationType: 'direct' },
+      }),
+      traduire,
+    );
+
+    expect(titre).toBe('Amina Diallo');
+  });
+
+  it('un genre de média que la loi n’interroge pas ne fait paraître AUCUNE clé', () => {
+    const banniere = banniereDeNotification(
+      notification({
+        type: 'friend_new_post',
+        title: 'Alice Martin',
+        subtitle: 'a publié',
+        content: 'a publié',
+        actor: acteurAlice,
+        metadata: { mediaType: 'sculpture' },
+      }),
+      traduire,
+    );
+
+    expect(banniere.corps).toBeNull();
   });
 });

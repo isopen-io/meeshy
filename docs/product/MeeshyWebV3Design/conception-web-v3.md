@@ -1437,6 +1437,19 @@ Rien au 12.10.1-12.10.5 ne justifie un octet de JavaScript hors ce que § 12.4 a
 12.10.7 — Le budget d'agents : le bon modèle, jamais le plus cher par défaut
 Mesuré dans l'historique du script (commits `38c15163`, `8524d3f0`) : `Implementer`, `Corriger`, `Concevoir`, `Documenter`, `Livrer` et `Completude` étaient fixés sur `opus` (`fable` avant le 2026-09-02) pour CHAQUE écran et CHAQUE tour, et la compétition de charte se relançait à CHAQUE invocation malgré une charte déjà arrêtée au § 12.5 — quatre appels dont un juge à effort `max`, systématiquement. `.claude/workflows/meeshy-web-v3-bout-en-bout.js` est corrigé en conséquence (2026-09-03) : `sonnet` par défaut sur ces phases ; `opus` réservé à la revue croisée de CONCEPTION (la valeur du contradicteur, § 10.5), à la recette au navigateur des écrans PHARES et au jugement de charte ; la charte ne se relance plus qu'à la demande explicite (`refaire_charte:true`).
 
+12.10.8 — Le bon modèle au bon moment, par RÔLE (directive du porteur, 2026-09-04)
+Le porteur a précisé la règle du § 12.10.7 : « ne pas utiliser systématiquement Opus ou Fable, pas économique par rapport à ce qu'on souhaite réaliser » — et l'a rendue POSITIVE : *Fable pour décrire les développements, Sonnet et Haiku pour les faire, avec SYSTÉMATIQUEMENT une revue Opus pour corriger et mettre en conformité.* Le script porte cette répartition dans UNE constante (`MODELE`, surchargeable par l'argument `modeles`), et chaque phase y prend son modèle par son RÔLE, jamais par son nom :
+
+| rôle | phases | modèle | pourquoi ce modèle |
+|---|---|---|---|
+| **décrire** | Cadrer (l'état des lieux par surface, contre `dev`), **Spécifier** (une spécification par travail — nouvelle phase), Complétude | `fable` | la valeur est dans la PRÉCISION de ce qui est demandé (fichier:ligne, route réelle, témoin par ligne de critère), pas dans le volume produit ; un travail mal décrit coûte deux tours |
+| **développer** | Implémenter, Corriger, Gates, Documenter, Livrer, Concevoir | `sonnet` | le volume, guidé par une spécification opposable |
+| **petit** | Implémenter, quand la spécification juge le travail PETIT (une feuille, un contenu, un relais délimité, sans temps réel ni route nouvelle) | `haiku` | le spécificateur décide, et dit pourquoi |
+| **mécanique** | Synchroniser (git), Ouvrir (issues) | `haiku` | aucun jugement de conception |
+| **relire** | **Revue-correction** — SYSTÉMATIQUE, sur chaque travail : surface ET conception, puis le relecteur CORRIGE lui-même ce qui se corrige et met en conformité (charte, passerelle, Prisme, accessibilité, budget) ; recette au navigateur des écrans phares ; contre-revue | `opus` | c'est le contradicteur qui rend le travail livrable ; ce qu'il ne peut pas corriger repart au développeur, contre-relu ensuite |
+| **juger** | le jugement de charte (seulement `refaire_charte:true`) | `opus` | |
+
+Deux conséquences de forme. **La revue n'est plus deux relecteurs en parallèle qui constatent, mais UN relecteur qui constate ET corrige** : la passe de correction séparée ne reste que pour ce que le relecteur a jugé hors de sa passe (une ré-implémentation, une décision produit, un endpoint absent). **Et une spécification précède chaque implémentation** : l'implémenteur suit un document qu'il peut contredire en le disant, et le relecteur l'OPPOSE au diff ligne à ligne — c'est ce qui permet de confier le volume à un modèle moins cher sans perdre la conformité. Les écrans PHARES (`thread`, `chats` — `join` et `rights` sont des états de l'adresse du fil de l'invité, joués par la même recette) gardent leur recette au navigateur, à effort `high` et non `max`.
 
 ---
 

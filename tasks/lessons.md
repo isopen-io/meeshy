@@ -28083,7 +28083,265 @@ et laisse l'ensemble dans un état que personne n'a voulu — **plus difficile �
 diagnostiquer que l'absence complète du geste**, parce que la partie faite
 détourne l'attention de la partie manquante.
 
-## Leçon 512 — Un module qui AFFIRME garder une pièce protégée sans lire ses propres drapeaux ment par omission
+## Leçon 512 — Avant d'écrire un module, chercher celui qu'on est en train de réécrire
+
+**Ce qui s'est passé.** Le lot de la bannière en application (#4454) a commencé par remonter la loi
+du web existant dans `packages/shared/utils/notification-banner.ts`, puis par écrire, côté v3, une
+liaison, une copie, une région, une feuille — quatre fichiers, tous compilant. Au moment d'écrire
+les témoins, un `ls __tests__/` a rendu `banniere-notification.test.ts` : **la v3 avait DÉJÀ sa loi
+de bannière**, `lib/notifications/banniere.ts`, 258 lignes, avec 290 lignes de témoins, mergée dans
+`dev` avant le début de la session. Je réécrivais, à l'octet près, ce qui existait — dans le lot
+dont l'objet DÉCLARÉ était d'empêcher exactement cette troisième écriture.
+
+**Pourquoi ça n'a pas sauté aux yeux.** Le module existant n'était importé par RIEN sauf ses
+témoins : du code livré, prouvé, et sans appelant. Aucun `grep` du chemin d'exécution ne le
+rencontre ; aucune erreur de compilation ne le signale ; il ne paraît dans aucun bundle. Un module
+sans consommateur est INVISIBLE à toutes les recherches qui partent d'un consommateur.
+
+**La règle.** *Avant d'écrire un fichier, chercher son SUJET — pas son chemin, ni ses appelants.*
+Un `ls` du répertoire des témoins et un `grep -ril <sujet>` coûtent dix secondes ; ils auraient rendu
+le fichier au premier essai. La question à poser n'est pas « où ce code sera-t-il appelé ? » mais
+**« quelqu'un a-t-il déjà écrit ceci ? »**, et le meilleur endroit où la poser est le répertoire des
+TÉMOINS : un module peut n'avoir aucun appelant, il a presque toujours un témoin, et le témoin porte
+le sujet dans son nom.
+
+**Le corollaire, qui a coûté davantage.** Le fichier existant PORTAIT son argument d'architecture
+dans un doc-comment : « les littéraux transcrivent `NotificationTypeEnum` plutôt que d'en importer
+la valeur : un import de VALEUR tirerait le module entier dans le chunk de `(connected)`, que le
+§ 8.3 plafonne ». Mesuré : SEIZE fichiers de la v3 importent déjà des valeurs de `@meeshy/shared`,
+dont un module de navigateur, et la v3 n'expédie aucun JavaScript de page — il n'y a pas de chunk
+`(connected)`. **Un argument d'architecture écrit dans un doc-comment est une AFFIRMATION à
+vérifier, jamais un fait à respecter** ; celui-ci justifiait une duplication de loi par une
+contrainte qui n'existait pas.
+
+**Et l'affirmation avait quand même raison sur le CHIFFRE.** L'import de valeur coûtait bien :
++2 944 o gzip sur `participate.js`, +3 119 o sur `liste.js` — TypeScript émet de
+`NotificationTypeEnum` (~150 membres) un objet littéral entier, tiré pour nommer quatorze
+constantes. La bonne réponse n'était donc ni la copie (deux lois) ni l'import (trois kilo-octets sur
+la 3G rurale) mais la TROISIÈME : prouver l'appartenance à la COMPILATION —
+`['new_message', …] satisfies readonly \`${NotificationTypeEnum}\`[]`, un `import type` qui n'émet
+rien. Une source unique, un membre renommé qui rend rouge plus tôt qu'un témoin, et zéro octet.
+**Quand un doc-comment oppose la source unique au poids, chercher la formulation qui rend les
+deux** — le compilateur sait vérifier beaucoup de ce qu'on croit devoir exécuter.
+
+Sites : `packages/shared/utils/notification-banner.ts` (`TypeDeNotification`, les trois `satisfies`),
+`apps/web-v3/lib/notifications/banniere.ts` (la liaison, qui a remplacé la copie),
+`apps/web-v3/__tests__/banniere-notification.test.ts` § « UNE loi, trois clients — et rien qui la
+réécrive ici » (la garde de transcription, devenue une garde de NON-RÉÉCRITURE). Issue #4454.
+
+## Leçon 513 — Une garde qui rend `null` avant de poser sa question ne l'a jamais posée
+
+**Ce qui s'est passé.** La loi de la bannière compose le CORPS d'une notification de conversation
+ainsi :
+
+```ts
+const contenu = nonVide(notification.content);
+if (cadrage === 'conversation') {
+  if (!contenu) return null;                       // ← ici
+  const piecesJointes = …;
+  return conventions.apercuDeMessage(contenu, piecesJointes);
+}
+```
+
+`apercuDeMessage` est la convention par laquelle chaque client compose « 📷 Photo », « 📎 Fichier ».
+Elle n'était JAMAIS appelée sur le cas nominal d'une photo : **un message envoyé sans légende**. Le
+`if (!contenu) return null` sortait avant de regarder les pièces jointes. La bannière d'une photo
+n'affichait donc que le nom de l'expéditeur — et le web existant vivait avec ce défaut depuis
+l'origine, la loi partagée l'ayant repris tel quel.
+
+**La règle.** *Un `return` anticipé sur l'absence d'UNE source est un jugement sur TOUTES les
+sources.* La question était « ce message a-t-il quelque chose à montrer ? » et le code demandait
+« ce message a-t-il du TEXTE ? ». Les deux coïncident tant qu'aucun message n'est fait d'autre
+chose que de texte — c'est-à-dire jamais, dans une messagerie qui porte des photos.
+
+**Comment le trouver.** Le témoin qui l'a attrapé ne visait pas ce cas : il vérifiait que la liaison
+v3 apportait bien le marqueur de pièce jointe, avec un contenu VIDE parce que c'était le cas le plus
+court à écrire. **Un témoin écrit sur la valeur la plus dégénérée du champ voisin trouve les gardes
+qui ont sorti trop tôt** — et la question à poser à tout retour anticipé est : *que RESTAIT-il à
+regarder après ce `return` ?*
+
+**La forme générale.** C'est la famille des cycles 123-125 (« que transporte la charge À CÔTÉ du
+texte que je viens de garder ? ») avec le signe inversé : là, une garde laissait partir plus qu'elle
+n'autorisait ; ici, elle retenait plus qu'elle ne le devait. Dans les deux cas le défaut est dans ce
+que la garde NE REGARDE PAS, et dans les deux cas il est écrit à côté d'elle, par la même main.
+
+Sites : `packages/shared/utils/notification-banner.ts` (`buildNotificationBannerBody`, la branche
+`conversation`), `apps/web/__tests__/utils/notification-banner.test.ts` § « annonce la pièce jointe
+d'un message envoyé sans légende », `apps/web-v3/__tests__/banniere-notification.test.ts` § « une
+pièce jointe qui n'est pas une image se marque en fichier ». Issue #4454.
+
+## Leçon 514 — Une exemption lève exactement ce qu'elle a été relue pour lever
+
+**Ce qui s'est passé.** Le brouillon du composer (#4966) est le SECOND fichier
+de la v3 autorisé à toucher le stockage du navigateur. La liste des détenteurs
+existait — un témoin (`zone-session-invitee.test.ts`) et une règle ESLint —, et
+elle avait été écrite quand il n'y en avait qu'UN. Les deux moitiés du défaut
+qu'elle garde — la CLÉ `meeshy.guest` composée ailleurs, et l'ACCÈS direct au
+stockage — vivaient dans **une seule liste**, `restrictedStorageSyntax`, et
+l'unique exemption (`lib/api/guest-session.ts`) les levait ensemble.
+
+C'était sans conséquence tant qu'il n'y avait qu'un détenteur : le seul fichier
+exempté était précisément celui dont la clé était le sujet. Ajouter le second
+par le même geste lui aurait rendu **le droit d'écrire `meeshy.guest`**, qui ne
+le concerne en rien — un défaut ouvert par une exemption, pas par du code.
+
+**La règle.** *Une liste d'interdits fusionnée est une exemption fusionnée.*
+Tant qu'un seul site est exempté, la fusion est invisible ; au second, elle
+distribue des droits que personne n'a relus. La question à poser en ajoutant une
+entrée à une liste d'exemptions est donc : **qu'est-ce que cette entrée lève, en
+plus de ce que je viens d'y écrire ?** — et si la réponse dépasse le besoin,
+c'est la liste des interdits qu'il faut scinder, pas l'exemption qu'il faut
+élargir.
+
+**Le témoin qui l'a rendu.** Aucun. Le gate a rougi sur le bon fait — « ce
+fichier touche au stockage » — et la scission est venue de la lecture de
+l'exemption qu'on s'apprêtait à écrire. C'est l'inverse du cas ordinaire : ici
+le gate a fait son travail, et le risque était dans la **réparation**.
+
+**La forme générale.** C'est la jumelle des cycles 123-125 appliquée aux
+PERMISSIONS plutôt qu'aux charges : « que transporte cette garde à côté de ce
+que je regarde ? » devient « qu'autorise cette exemption à côté de ce que je
+veux autoriser ? ». Dans les deux cas, ce qui échappe est ce qui voyage avec.
+
+Sites : `apps/web-v3/eslint.config.mjs` (`cleDuJetonInvite` / `accesAuStockage`,
+scindés ; `DETENTEUR_DU_BROUILLON`, qui ne lève que le second),
+`apps/web-v3/__tests__/zone-session-invitee.test.ts` (`DETENTEURS_DE_STOCKAGE`,
+dont chaque entrée porte désormais sa raison de STOCKAGE et pas seulement sa
+clé). Issue #4966.
+
+## Leçon 515 — Une décision différée énumère des options, et l'énumération vieillit comme les autres
+
+**Ce qui s'est passé.** `/feed` n'écoutait rien d'entrant, et le doc-comment de
+son module portait la raison, longuement : un socket coûterait 12 849 o gzip sur
+l'écran destiné à la 3G rurale. Il renvoyait à une question ouverte — « socket
+dédié, `GET /sync`, ou instantané assumé ? » — et concluait : *« voir § 11
+question 13 avant d'y toucher »*.
+
+Trois options, présentées comme le champ des possibles. En les vérifiant une par
+une :
+
+- le **socket** coûte ce que le commentaire dit, et c'est rédhibitoire ;
+- **`GET /sync` n'était pas une option du tout** : ses collections sont
+  `conversations`, `messages`, `reactions`, `participants`
+  (`services/gateway/src/routes/sync/budget.ts`) — **jamais les publications**.
+  L'option supposait un endpoint qui n'existe pas, et l'adopter aurait demandé
+  une modification du gateway, hors du périmètre ;
+- l'**instantané assumé** est le statu quo, c'est-à-dire le renoncement.
+
+La **quatrième** — redemander le DOCUMENT `/feed` au retour et échanger ses
+publications — n'était dans aucune des trois. Elle coûte **+1 674 o gzip**, sept
+fois et demie moins qu'un socket, et couvre le cas dominant : on quitte
+l'onglet, on revient dix minutes après, le fil n'est pas celui de tout à
+l'heure. Le motif existait déjà dans le dépôt (`commentaires.ts`, #5091 : « le
+document frais EST la réponse »).
+
+**La règle.** *Une décision différée fige un CHAMP D'OPTIONS au moment où elle
+est écrite, et ce champ vieillit comme n'importe quelle énumération.* Avant de
+choisir dans une liste d'options héritée, vérifier **la prémisse de chacune** —
+et se demander ce que la liste ne contient pas. C'est la leçon 261 (« une
+énumération de sites dit *ces sites appliquent la règle*, presque jamais *ce sont
+les sites où elle s'applique* ») déplacée du SITE vers l'OPTION : une
+énumération d'options dit *ces options ont été envisagées*, jamais *ce sont les
+options qui existent*.
+
+**Le signe qui l'annonçait.** Le commentaire pesait le SOCKET avec un chiffre
+mesuré, et les deux autres options sans aucun chiffre. Une comparaison où une
+seule branche est chiffrée n'est pas une comparaison — c'est un argument contre
+une branche, et les autres n'ont jamais été instruites.
+
+Sites : `apps/web-v3/lib/realtime/feed-etat.ts` (`doitRafraichirLeFil`,
+`TOLERANCE_DE_TETE_PX` — la règle, pure et opposable sans navigateur),
+`apps/web-v3/lib/realtime/feed.ts` (`rafraichis`, `suisLAbsence`),
+`apps/web-v3/e2e/visual/v3-feed-fraicheur.spec.ts`. Issue #5031.
+
+**Corollaire de rendu, tiré du même lot.** Le rafraîchissement n'échange QUE
+`#publications` et le lien « plus », jamais le `<main>` entier : le corps porte
+`#journal-des-gestes`, une région `aria-live`, et **une région `aria-live`
+remplacée n'est plus surveillée** — le navigateur ne suit que celles qui
+existaient quand il a construit l'arbre. L'échanger rendrait muette chaque
+confirmation de geste suivante, sans que rien à l'écran ne le montre. C'est le
+même fait de plateforme qui fait SERVIR la région de la bannière plutôt que la
+créer (leçon 512, #4454) : il se paie une fois à la création, et une seconde
+fois à chaque remplacement.
+
+## Leçon 516 — Remonter une loi sans remonter ses témoins la rend orpheline
+
+**Ce qui s'est passé.** La loi de la bannière a été remontée du web existant
+vers `packages/shared` pour cesser d'être écrite trois fois (#4454). Le lot
+était soigneux : l'API du client ne changeait pas d'un caractère, et ses seize
+témoins passaient **sans qu'une ligne du fichier de tests ne bouge** — la preuve
+même qu'un déplacement de code doit produire.
+
+Puis la v3 a été liée à la même loi, avec ses propres témoins. Deux paquets
+l'exerçaient donc, et abondamment. En CI, `notification-banner.ts` s'est affiché
+à **7,14 % de lignes** dans la couverture de `packages/shared`, sous les seuils
+du paquet (98 / 98 / 94), et le gate a rougi.
+
+Le code était exercé — **par les suites de deux AUTRES paquets, qui ne comptent
+pas là où il vit.**
+
+**La règle.** *Un déplacement de code déplace ses obligations de preuve avec
+lui.* « Les témoins existants passent inchangés » est le bon critère pour
+prouver qu'on n'a rien cassé ; ce n'est PAS le critère pour prouver que le code
+est couvert **à sa nouvelle adresse**. Les deux questions se ressemblent au
+point qu'on ne pose que la première.
+
+**Pourquoi ce n'est pas une exigence de chiffre.** Un paquet partagé dont la
+règle n'est prouvée que par ses consommateurs ne peut plus être modifié en
+confiance depuis lui-même : le jour où un client cesse de l'appeler, ou change
+de forme, la règle n'a plus aucun témoin **et rien ne rougit**. La couverture ne
+faisait ici que rendre visible une dépendance de preuve inversée.
+
+**Le corollaire sur ce qu'on écrit.** Les témoins de la loi, chez elle, jugent
+le **cadrage** et la **composition** avec des conventions COUSUES — jamais le
+vocabulaire d'un client. Les suites clientes gardent leur objet propre : que la
+LIAISON apporte les bonnes conventions. Écrire chez la loi des phrases
+françaises d'un client y gèlerait ce que la remontée venait justement d'en
+sortir.
+
+Sites : `packages/shared/__tests__/utils/notification-banner.test.ts` (54
+témoins, la loi jugée chez elle) ; les suites clientes
+(`apps/web/__tests__/utils/notification-banner.test.ts`,
+`apps/web-v3/__tests__/banniere-notification.test.ts`) restent en place et
+gardent leur liaison. Issue #4454.
+## Leçon 517 — `git add -A` puis un correctif, c'est un commit qui ne compile pas
+
+**Ce qui s'est passé.** Fusion de `dev` dans une branche de lot, treize conflits
+résolus. J'ai fait `git add -A` pour marquer les résolutions, puis lancé `tsc` :
+il a rendu un DIX-QUATORZIÈME désalignement, dans un fichier NEUF de ma branche
+donc jamais en conflit — `__tests__/banniere-servie.test.ts` ignorait un actif
+que `dev` venait d'ajouter. Je l'ai corrigé, vérifié `tsc` vert, lancé la suite
+entière, le build, les gates. Tout vert. J'ai committé.
+
+**Le correctif n'était pas dans le commit.** `git add -A` était passé AVANT le
+`sed`. Pendant une fusion, `git commit` sans `-a` valide L'INDEX — et l'index
+portait la version fautive. Le message de commit affirmait « Corrigé » ; l'arbre
+versionné, lui, ne compilait pas. La CI tournait déjà dessus.
+
+**La règle.** *Pendant une fusion, tout correctif postérieur au `git add` doit
+être RE-ajouté, et la preuve se prend sur l'INDEX, pas sur l'arbre de travail.*
+`git stash && tsc && git stash pop` répond exactement à la question qu'on croit
+avoir posée : « est-ce que CE QUE JE M'APPRÊTE À COMMITER compile ? » — la
+commande qu'on lance d'ordinaire répond à une autre, « est-ce que ce que j'ai
+sous la main compile ? », et les deux divergent dès qu'on corrige après avoir
+ajouté.
+
+**Pourquoi c'est particulièrement traître ici.** Une fusion invite au
+`git add -A` précoce : c'est le geste qui déclare les conflits résolus, et il
+tombe naturellement AVANT les vérifications. Tout ce qu'on corrige ensuite —
+et une fusion en fait corriger — atterrit hors de l'index sans qu'aucun signal
+ne le dise. `git status` l'affiche, mais on ne le relit pas : on vient de voir
+treize gates verts.
+
+**Ce qui l'a attrapé.** Pas moi : le hook de fin de session qui refuse un arbre
+sale. Sans lui, un merge non compilable partait en CI avec un message de commit
+qui affirmait le contraire.
+
+Sites : `apps/web-v3/__tests__/banniere-servie.test.ts` (l'actif manquant),
+`apps/web-v3/budgets-mesures.json` (la mesure des modules, réécrite par
+`--mesure` après le même `git add`). Fusion `1becc7e4d7`.
+
+## Leçon 518 — Un module qui AFFIRME garder une pièce protégée sans lire ses propres drapeaux ment par omission
 
 **Le fait (revue de `media`, #4525, 2026-09-04).** La galerie des médias d'une conversation
 (`apps/web-v3/lib/api/medias.ts`) se déclare elle-même « une PROJECTION PURE du fil », et son test
@@ -28113,7 +28371,7 @@ jamais un contournement côté client.
 
 Site : `apps/web-v3/lib/api/medias.ts`. Détail : rapport de revue `media` (#4525), tour 2026-09-04.
 
-## Leçon 513 — Un gate de conformité qui dépend d'un état non déclaré rend un écran invisible aux instruments, en silence
+## Leçon 519 — Un gate de conformité qui dépend d'un état non déclaré rend un écran invisible aux instruments, en silence
 
 **Le fait (revue de `vitrine`/`home`, #5115, 2026-09-04).** Le portage de la charte du tour 3
 (contour, encre, dégradé) sur `app/vitrine/feuille.ts` et `app/connecte/feuille.ts` a été validé par

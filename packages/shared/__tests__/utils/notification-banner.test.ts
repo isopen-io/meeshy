@@ -378,3 +378,61 @@ describe('buildNotificationBanner — assemble les quatre champs', () => {
     expect(banner.body).toBe('Salut');
   });
 });
+
+/**
+ * LA GARDE DU CORRECTIF DE LA BRANCHE `feat/banniere-v3` (#4454), ajoutée à ces
+ * témoins plutôt qu'en concurrence d'eux.
+ *
+ * Deux fichiers de témoins pour la même loi ont été écrits en parallèle, par
+ * deux sessions, au même chemin. Celui-ci — le premier arrivé sur `dev` — est
+ * gardé ENTIER ; ce qui suit n'ajoute que les cas qu'il ne couvrait pas, parce
+ * qu'ils gardent un correctif qui n'existait pas encore quand il a été écrit.
+ *
+ * **LE DÉFAUT CORRIGÉ.** `buildNotificationBannerBody` sortait sur
+ * `if (!contenu) return null` AVANT de regarder les pièces jointes : une photo
+ * envoyée SANS LÉGENDE — le cas nominal — poussait une bannière portant le seul
+ * nom de l'expéditeur, et `apercuDeMessage`, la convention faite pour ce cas,
+ * n'était jamais appelée. C'est l'absence des DEUX qui fait un corps vide,
+ * jamais celle du texte seul.
+ *
+ * Le témoin « ne rend aucun corps pour une conversation sans contenu » ci-dessus
+ * reste juste et le reste : il n'a pas de pièce jointe, et c'est précisément ce
+ * qui l'en distingue.
+ */
+describe('buildNotificationBannerBody — un message sans légende n’est pas un message vide', () => {
+  it('demande au client de résumer les pièces jointes d’un message SANS texte', () => {
+    const body = buildNotificationBannerBody(
+      notification({
+        type: NotificationTypeEnum.NEW_MESSAGE,
+        content: '',
+        metadata: { attachments: [{ id: 'p1' }] },
+      }),
+      t,
+      conventions,
+    );
+
+    expect(body).toBe(' (+1)');
+  });
+
+  it('ne rend toujours aucun corps quand le tableau de pièces jointes est VIDE', () => {
+    const body = buildNotificationBannerBody(
+      notification({ type: NotificationTypeEnum.NEW_MESSAGE, content: '', metadata: { attachments: [] } }),
+      t,
+      conventions,
+    );
+
+    expect(body).toBeNull();
+  });
+
+  it('ne rend aucun corps quand il n’y a NI texte NI pièce jointe lisible', () => {
+    for (const metadata of [{}, { attachments: 'pas-un-tableau' }]) {
+      expect(
+        buildNotificationBannerBody(
+          notification({ type: NotificationTypeEnum.NEW_MESSAGE, content: '', metadata }),
+          t,
+          conventions,
+        ),
+      ).toBeNull();
+    }
+  });
+});
