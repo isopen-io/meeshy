@@ -1,18 +1,21 @@
+import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
 import { moi } from '@/lib/api/compte';
 import {
   chargeDeLaStory,
+  ecrisUnCommentaire,
   filDeLaPublication,
   publicationLue,
   type Recuperateur,
 } from '@/lib/api/publication';
+import { COMMENTAIRES } from '@/lib/contenu/commentaires';
 
 import {
   documentDesCommentaires,
   documentIndisponible,
   documentDInvitation,
 } from './commentaires-vue';
-import { rendu } from './fil-porte';
+import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
 import { documentDePanne } from './vue';
 
 /**
@@ -45,10 +48,13 @@ export const COMMENTAIRES_SERVIS = async ({
   requete,
   id,
   recuperer,
+  refus,
 }: {
   readonly requete: Request;
   readonly id: string;
   readonly recuperer?: Recuperateur;
+  /** Le POST refusé re-sert l'écran par ici : la saisie TENUE et le motif dit. */
+  readonly refus?: { readonly saisieTenue: string; readonly motif: string };
 }): Promise<Response> => {
   const jeton = jetonDuLecteur(requete);
 
@@ -95,6 +101,62 @@ export const COMMENTAIRES_SERVIS = async ({
       commentaires: fil.commentaires,
       encore: fil.encore,
       maintenant: Date.now(),
+      avis: new URL(requete.url).searchParams.has(TEMOIN_DU_COMMENTAIRE) ? 'commente' : null,
+      saisieTenue: refus?.saisieTenue,
+      motif: refus?.motif ?? null,
     }),
   );
+};
+
+/**
+ * `?commente` est posé par la REDIRECTION du POST, jamais par le lecteur :
+ * c'est le Post/Redirect/Get qui porte le compte rendu — un rechargement ne
+ * republie rien.
+ */
+const TEMOIN_DU_COMMENTAIRE = 'commente';
+
+/**
+ * LE POST DE `/post/:id` (#5091) — écrire un commentaire, le chemin pauvre.
+ *
+ * L'ORIGINE D'ABORD (la garde des autres surfaces d'écriture, jamais une
+ * jumelle) ; SANS JETON, L'INVITATION (le même verdict que le GET — un POST
+ * anonyme ne déclenche rien) ; un contenu VIDE est refusé ICI, sans appel :
+ * la passerelle accepte un commentaire média-seul, mais cet écran ne sert que
+ * du texte, et poster du vide serait un geste sans dire.
+ *
+ * UN REFUS RE-SERT L'ÉCRAN, saisie TENUE et motif dit — perdre un texte tapé
+ * est le défaut le plus cher d'un formulaire. Le succès REDIRIGE (`?commente`) :
+ * le commentaire est dans la liste re-servie, et l'avis le dit.
+ */
+export const COMMENTAIRE_POSTE = async ({
+  requete,
+  id,
+  recuperer,
+}: {
+  readonly requete: Request;
+  readonly id: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Response> => {
+  if (origineEtrangere(requete)) return refusDOrigine(requete);
+
+  const jeton = jetonDuLecteur(requete);
+  if (jeton === null) return rendu(documentDInvitation({ id }));
+
+  const saisie = await requete.formData().catch(() => null);
+  const contenu = (saisie?.get('contenu') ?? '').toString().trim();
+  if (contenu === '') {
+    return COMMENTAIRES_SERVIS({ requete, id, recuperer, refus: { saisieTenue: '', motif: COMMENTAIRES.videRefuse } });
+  }
+
+  const issue = await ecrisUnCommentaire({ id, contenu, jeton, recuperer });
+  if (issue === 'session-expiree') return rendu(documentDInvitation({ id }));
+  if (issue === 'faite') {
+    return redirection(`/post/${encodeURIComponent(id)}?${TEMOIN_DU_COMMENTAIRE}`, { 'cache-control': CACHE_PRIVE });
+  }
+  return COMMENTAIRES_SERVIS({
+    requete,
+    id,
+    recuperer,
+    refus: { saisieTenue: contenu, motif: COMMENTAIRES.refuse },
+  });
 };

@@ -811,3 +811,48 @@ export const publie = async ({
     statut: reponse.status,
   };
 };
+
+/**
+ * `POST /posts/:postId/comments` (`routes/posts/comments.ts:164`, requiredAuth,
+ * `CreateCommentSchema` : `content` ≤ 2000) — le geste d'écriture de `/post/:id`
+ * (#5091). Quatre issues, jamais fondues : `faite`, `session-expiree` (le cas
+ * NOMINAL d'un retour après quelques jours), `refus` (la passerelle a dit non —
+ * contenu invalide, publication fermée), `panne`.
+ */
+export type IssueDuCommentaire = 'faite' | 'session-expiree' | 'refus' | 'panne';
+
+export const ecrisUnCommentaire = async ({
+  id,
+  contenu,
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly id: string;
+  readonly contenu: string;
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<IssueDuCommentaire> => {
+  const reponse = await (recuperer ?? ((u: string, o?: RequestInit) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/posts/${encodeURIComponent(id)}/comments`,
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ content: contenu }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_DE_REPONSE_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return 'panne';
+  if (reponse.status === 401) return 'session-expiree';
+
+  const enveloppe = (await reponse.json().catch(() => null)) as { readonly success?: unknown } | null;
+  if (enveloppe?.success === true) return 'faite';
+  return reponse.status >= 500 ? 'panne' : 'refus';
+};

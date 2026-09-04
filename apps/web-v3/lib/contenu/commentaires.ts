@@ -15,6 +15,12 @@ import { deLaLangue } from './langues';
  */
 
 export const COMMENTAIRES = {
+  /** Le geste d'écriture (#5091) — l'étiquette, l'attente et les trois retours. */
+  ecrire: 'Écrire un commentaire',
+  publier: 'Publier',
+  publie: 'Commentaire publié',
+  videRefuse: 'Écrivez quelque chose avant de publier.',
+  refuse: 'Le commentaire n’a pas pu être publié. Réessayez dans un instant.',
   titre: 'Commentaires',
   retour: 'Retour',
   /** L'en-tête de la liste, lu avant les lignes par les lecteurs d'écran. */
