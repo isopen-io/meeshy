@@ -416,6 +416,7 @@ describe('le tableau de bord', () => {
     total: 7,
     liens: { genre: 'liste', liens: [LIEN()] },
     maintenant: MAINTENANT,
+      espace: false,
   });
 
   it('salue par le prénom et porte le mot du legacy', () => {
@@ -477,6 +478,7 @@ describe('le tableau de bord', () => {
       total: 1,
       liens: { genre: 'liste', liens: [] },
       maintenant: MAINTENANT,
+      espace: false,
     });
 
   it('tait le compte de participants sur une carte à deux', () => {
@@ -517,6 +519,7 @@ describe('le tableau de bord', () => {
       total: 1,
       liens: { genre: 'liste', liens: [] },
       maintenant: MAINTENANT,
+      espace: false,
     });
 
   const APERCU_ESPAGNOL = {
@@ -611,11 +614,22 @@ describe('le tableau de bord', () => {
 
   /**
    * Charte règle 6 — « chacun est un `<a href>` vers une route SERVIE ; tant que
-   * sa destination n'existe pas, il n'est pas rendu — jamais inerte ». La v3 ne
-   * sert aujourd'hui ni compte ni réglages : l'écran n'en rend AUCUN.
+   * sa destination n'existe pas, il n'est pas rendu — jamais inerte ».
+   *
+   * **LA MOITIÉ DE CE TÉMOIN A CHANGÉ DE SENS, ET C'EST SA PRÉMISSE QUI A
+   * BOUGÉ, PAS LA RÈGLE.** Il gardait « aucun rond flottant » pour la raison
+   * qu'il portait écrite : « la v3 ne sert aujourd'hui ni compte ni réglages ».
+   * Elle sert désormais les six écrans de `/settings`, `/feed`, `/contacts`,
+   * `/notifications`, `/search` et `/links` — et c'est exactement ce que la
+   * règle 6 attendait pour que les ronds soient RENDUS (#5093). Ce qu'elle
+   * interdit — une cible inerte, un `href="#"`, un `onclick` — n'a jamais
+   * bougé et reste gardé ligne pour ligne ; ce que valait le premier `expect`
+   * est repris, et durci, par `__tests__/espace-membre.test.ts`, qui oppose
+   * chaque destination aux `app/**\/route.ts` réellement présents.
    */
-  it('ne rend aucun rond flottant, aucune cible inerte', () => {
-    expect(doc).not.toContain('flottant');
+  it('rend les deux ronds vers des routes servies, et aucune cible inerte', () => {
+    expect(doc).toContain('class="flottante gauche" href="/feed"');
+    expect(doc).toContain('class="flottante droite" href="/?espace"');
     expect(doc).not.toContain('href="#"');
     expect(doc).not.toContain('onclick');
   });
@@ -649,6 +663,7 @@ describe('le tableau de bord', () => {
       total: 0,
       liens: { genre: 'liste', liens: [LIEN({ conversation: null })] },
       maintenant: MAINTENANT,
+      espace: false,
     });
 
     expect(orphelin).toContain('<li class="carte">');
@@ -668,6 +683,7 @@ describe('le tableau de bord', () => {
       total: 0,
       liens: { genre: 'indisponible' },
       maintenant: MAINTENANT,
+      espace: false,
     });
     const aucun = documentDuTableau({
       lecteur: null,
@@ -675,6 +691,7 @@ describe('le tableau de bord', () => {
       total: 0,
       liens: { genre: 'liste', liens: [] },
       maintenant: MAINTENANT,
+      espace: false,
     });
 
     expect(muette).not.toContain(TABLEAU_DE_BORD.liens);
@@ -692,6 +709,7 @@ describe('le tableau de bord', () => {
       total: 0,
       liens: { genre: 'liste', liens: [] },
       maintenant: MAINTENANT,
+      espace: false,
     });
     expect(nu).toContain(CHATS.vide);
     expect(nu).toContain(TABLEAU_DE_BORD.salutationSansNom);
