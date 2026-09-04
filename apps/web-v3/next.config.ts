@@ -106,14 +106,16 @@ const nextConfig: NextConfig = {
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
     /**
-     * LA ROUTE QUI SERT LES MODULES trace les QUATRE fichiers de `.rt/` — c'est
+     * LA ROUTE QUI SERT LES MODULES trace TOUS les fichiers de `.rt/` — c'est
      * l'entrée qui fait exister chaque module dans l'arbre `standalone`. Un
      * module absent ne casse RIEN de visible : `actifsTempsReel` rend un corps
      * vide, la porte sert `tempsReel: null`, et l'écran perd son direct EN
      * SILENCE — c'est ainsi que `/feed` a tourné sans module en production,
      * `feed.js` n'ayant jamais été tracé. Le témoin de `actifs-rt.test.ts`
      * (« chaque module que les actifs servent est tracé ») garde désormais la
-     * liste : un cinquième module devra s'y inscrire pour exister.
+     * liste : tout module neuf doit s'y inscrire pour exister — c'est ce témoin,
+     * et lui seul, qui a rendu l'oubli de `composer.js` (#4966) au moment où il
+     * a été écrit, plutôt qu'en production trois semaines plus tard.
      */
     '/rt/[nom]': [
       './.rt/participate.js',
@@ -124,6 +126,7 @@ const nextConfig: NextConfig = {
       './.rt/recherche.js',
       './.rt/liens.js',
       './.rt/commentaires.js',
+      './.rt/composer.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },

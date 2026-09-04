@@ -13,7 +13,9 @@ import { lisLActif, memo } from './actifs';
  * `feed.<hash>.js` (`/feed`, #5031), `notifs.<hash>.js` (`/notifications`,
  * #4898), `contacts.<hash>.js` (`/contacts`, #4921) et `recherche.<hash>.js`
  * (`/search`, #4897), `liens.<hash>.js` (`/links`, #5090) et
- * `commentaires.<hash>.js` (`/post/:id`, #5091) sont les HUIT modules de
+ * `commentaires.<hash>.js` (`/post/:id`, #5091) et `composer.<hash>.js`
+ * (`/composer`, #4966 — le seul qui ne parle à personne : il tient un
+ * BROUILLON dans `sessionStorage`) sont les NEUF modules de
  * participation
  * compilés par `scripts/build-participate.mjs` (bun build, AVANT `next
  * build`) — huit fichiers parce qu'un écran ne doit télécharger que ce qu'il
@@ -59,6 +61,7 @@ export type ActifsTempsReel = {
   readonly recherche: ActifTempsReel;
   readonly liens: ActifTempsReel;
   readonly commentaires: ActifTempsReel;
+  readonly composer: ActifTempsReel;
   readonly socket: ActifTempsReel;
 };
 
@@ -101,6 +104,7 @@ export const actifsTempsReel = memo(
     recherche: actif('recherche', lisLeModule('recherche')),
     liens: actif('liens', lisLeModule('liens')),
     commentaires: actif('commentaires', lisLeModule('commentaires')),
+    composer: actif('composer', lisLeModule('composer')),
     socket: actif(
       'socket.io',
       lisFichier(join(process.cwd(), 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js')),
@@ -112,7 +116,7 @@ export const actifsTempsReel = memo(
 export const actifParNom = (nom: string): ActifTempsReel | null => {
   const actifs = actifsTempsReel();
   return (
-    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.recherche, actifs.liens, actifs.commentaires, actifs.socket].find(
+    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.recherche, actifs.liens, actifs.commentaires, actifs.composer, actifs.socket].find(
       (candidat) => candidat.nom === nom && candidat.corps !== '',
     ) ?? null
   );

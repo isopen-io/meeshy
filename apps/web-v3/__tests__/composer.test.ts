@@ -296,3 +296,58 @@ describe('le composer est atteignable', () => {
     expect(source).toContain('href="/composer"');
   });
 });
+
+/**
+ * LE MODULE DU BROUILLON (#4966) — ce que le DOCUMENT en dit.
+ *
+ * Le module lui-même est jugé par `e2e/visual/v3-composer.spec.ts` : ce qu'il
+ * tient est une propriété de navigateur (`sessionStorage`, un rechargement, un
+ * aller-retour), et aucun témoin de nœud ne peut la dire. Ce que ces témoins-ci
+ * gardent est la COUTURE — le document nomme son module et embarque le
+ * chargeur, sans quoi le module le mieux écrit n'arrive jamais.
+ */
+describe('la couture du module de brouillon', () => {
+  it('nomme son module et embarque le chargeur différé', async () => {
+    const doc = await (await LIS_LE_COMPOSER(requete('/composer'), serveur().recuperer)).text();
+
+    expect(doc).toContain('data-participation="composer"');
+    expect(doc).toMatch(/data-module="[^"]+"/);
+    expect(doc).toContain('<script type="module">');
+  });
+
+  /**
+   * IL PART AUSSI SUR UN REFUS, et c'est ce qui rend la règle « le serveur a
+   * toujours raison » utile plutôt que théorique : sans module sur ce document,
+   * la saisie reposée serait la seule, et personne ne pourrait l'écraser — mais
+   * le brouillon du geste SUIVANT ne serait plus tenu non plus.
+   */
+  it('part aussi sur le document d’un refus', async () => {
+    const reponse = await PUBLIE_DEPUIS_LE_COMPOSER(poste({ texte: '', humeur: '' }), serveur().recuperer);
+    const doc = await reponse.text();
+
+    expect(reponse.status).toBe(422);
+    expect(doc).toContain('data-participation="composer"');
+    expect(doc).toContain('<script type="module">');
+  });
+
+  /**
+   * LE FORMAT EST SERVI DANS LE FORMULAIRE, et c'est de là que le module le
+   * lit — jamais de l'adresse. La même valeur, mais celle-là est déjà validée
+   * contre le vocabulaire clos : un `?format=<n'importe quoi>` ne peut pas
+   * devenir une clé de stockage.
+   */
+  it('sert le format dans un champ caché, d’où le module tire sa clé', async () => {
+    const doc = await (await LIS_LE_COMPOSER(requete('/composer?format=humeur'), serveur().recuperer)).text();
+
+    expect(doc).toContain('<input type="hidden" name="format" value="humeur">');
+  });
+
+  it('un format inventé ne devient pas une clé — le vocabulaire est clos', async () => {
+    const doc = await (
+      await LIS_LE_COMPOSER(requete('/composer?format=../../evasion'), serveur().recuperer)
+    ).text();
+
+    expect(doc).toContain(`<input type="hidden" name="format" value="${FORMATS_SERVIS[0].cle}">`);
+    expect(doc).not.toContain('evasion');
+  });
+});

@@ -25,6 +25,7 @@ const TEMPS_REEL = {
     recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
     liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
     commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };

@@ -124,15 +124,43 @@ const JETON_INVITE =
   "Le jeton invité a un seul détenteur : lib/api/guest-session.ts (une entrée meeshy.guest.<lien> PAR LIEN, § 6.3). Une clé composée ailleurs, ou un accès direct au stockage, rouvre le défaut mesuré au § 6.1 point 7 — un second lien écrase le premier.";
 const DETENTEUR_DU_JETON = 'lib/api/guest-session.ts';
 
-const restrictedStorageSyntax = [
-  'Literal[value=/meeshy\\.guest/]',
-  'TemplateElement[value.raw=/meeshy\\.guest/]',
+// DEUX MOITIÉS, DÉSORMAIS SÉPARÉES — et la séparation a une raison précise.
+//
+// La CLÉ du jeton invité et l'ACCÈS au stockage étaient une seule liste tant
+// qu'un seul fichier avait le droit de toucher au stockage : lever l'une
+// levait l'autre, et c'était sans conséquence. Le brouillon du composer
+// (#4966) est le SECOND détenteur, et il n'a aucune raison d'écrire
+// `meeshy.guest` — lui rendre les deux moitiés d'un coup lui ouvrirait un
+// défaut qui ne le concerne pas.
+//
+// Une exemption doit lever exactement ce qu'elle a été relue pour lever.
+const cleDuJetonInvite = ['Literal[value=/meeshy\\.guest/]', 'TemplateElement[value.raw=/meeshy\\.guest/]'].map(
+  (selector) => ({ selector, message: JETON_INVITE }),
+);
+
+const accesAuStockage = [
   // `localStorage.x` et `window.localStorage.x` — l'identité seule
   // (`evenement.storageArea !== window.localStorage`) n'est PAS un accès et
   // reste écrivable : ce qui est barré, c'est la LECTURE et l'ÉCRITURE.
   "MemberExpression[object.name=/^(localStorage|sessionStorage)$/]",
   "MemberExpression[object.property.name=/^(localStorage|sessionStorage)$/]",
 ].map((selector) => ({ selector, message: JETON_INVITE }));
+
+const restrictedStorageSyntax = [...cleDuJetonInvite, ...accesAuStockage];
+
+/**
+ * LE SECOND DÉTENTEUR DE STOCKAGE (#4966) — le brouillon du composer.
+ *
+ * Il tient la saisie dans `sessionStorage`, sous `meeshy.v3.brouillon.<format>`.
+ * `sessionStorage` et non `localStorage` : le brouillon est le texte NON PUBLIÉ
+ * de quelqu'un, exactement ce que le `no-store` du document refuse de laisser
+ * resservir par le bouton « précédent ». Un onglet fermé l'emporte, et c'est la
+ * propriété qu'on veut — la v3 n'a pas de route de déconnexion qui l'effacerait.
+ *
+ * L'exemption ne lève QUE l'accès au stockage : la clé du jeton invité lui
+ * reste barrée, et le cycle de vie aussi.
+ */
+const DETENTEUR_DU_BROUILLON = 'lib/realtime/composer.ts';
 
 const evenementsDuCycle = ['visibilitychange', 'pageshow', 'pagehide', 'online', 'offline', 'storage'];
 const evenementsDeFausseVisibilite = ['focus', 'blur'];
@@ -215,6 +243,12 @@ const config = [
   {
     files: [SITE_UNIQUE_DU_CYCLE],
     rules: { 'no-restricted-syntax': ['error', ...syntaxeDesAdieux, ...restrictedStorageSyntax] },
+  },
+  // Le brouillon garde TOUT le cycle de vie et la clé du jeton ; il ne lève que
+  // l'accès au stockage, qui est sa raison d'exister.
+  {
+    files: [DETENTEUR_DU_BROUILLON],
+    rules: { 'no-restricted-syntax': ['error', ...restrictedLifecycleSyntax, ...cleDuJetonInvite] },
   },
 ];
 
