@@ -111,11 +111,11 @@ struct ComposerSceneSurface: View {
 
     /// Les pastilles SERVIES et celle qui est choisie — résolues par le meuble
     /// (`ComposerSceneCamera.modes(for:)`), jamais recalculées ici.
-    var cameraModes: [ComposerSceneCameraMode] = []
     var cameraMode: ComposerSceneCameraMode = .photo
-    var onPickCameraMode: ((ComposerSceneCameraMode) -> Void)?
-    var onCameraPress: (() -> Void)?
-    var onCameraRelease: (() -> Void)?
+    var onCameraPhoto: (() -> Void)?
+    var onCameraStartFilming: (() -> Void)?
+    var onCameraLock: (() -> Void)?
+    var onCameraCloseTake: (() -> Void)?
     var cameraFlash: AVCaptureDevice.FlashMode = .off
     var onCycleCameraFlash: (() -> Void)?
     var onFlipCamera: (() -> Void)?
@@ -271,6 +271,28 @@ struct ComposerSceneSurface: View {
                     overlay: geo.size,
                     ratio: aspectRatio,
                     horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+        }
+    }
+
+    /// **Borne un contenu AU DESSIN** (#4080) — ni au-dessus, ni en dessous :
+    /// DEDANS.
+    ///
+    /// `ancreAuDessin` pose au BAS du dessin ; celle-ci lui donne exactement le
+    /// rectangle du dessin, de sorte que ce qu'on y met flotte sur l'image et
+    /// jamais dans le letterbox. C'est ce que le viseur exige : ses contrôles
+    /// posés sur la frame paraîtraient hors de la scène, ce que la directive du
+    /// 2026-09-04 corrige mot pour mot.
+    @ViewBuilder
+    private func ancreDansLeDessin<Contenu: View>(_ contenu: Contenu) -> some View {
+        GeometryReader { geo in
+            let inset = ComposerRailGeometry.sceneBottomInset(
+                overlay: geo.size,
+                ratio: aspectRatio,
+                horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true))
+            contenu
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, inset)
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
         }
     }
 
@@ -769,6 +791,38 @@ struct ComposerSceneSurface: View {
                 .overlay(alignment: .bottom) {
                     ancreAuDessin(descriptionOverlay, alignment: .bottom)
                 }
+                // **Le chrome du viseur vit DANS la carte** (#4080, directive
+                // porteur 2026-09-04 : « tout doit être dans la scène »).
+                //
+                // La loi 6 protège l'APERÇU d'une composition, pour qu'il ne
+                // mente pas sur le rendu. Un VISEUR n'est pas un aperçu de
+                // composition — c'est un instrument de cadrage, et son chrome
+                // ne part avec aucune publication. La planche `2b` le dessine
+                // d'ailleurs par-dessus l'image.
+                //
+                // `ancreAuDessin` le borne au DESSIN et non à la frame : posé
+                // sur celle-ci, les contrôles flotteraient dans le letterbox,
+                // c'est-à-dire hors de la scène — exactement ce que la
+                // directive corrige.
+                .overlay {
+                    if cameraStage != .off {
+                        ancreDansLeDessin(
+                            ComposerSceneCameraBar(
+                                stage: cameraStage,
+                                mode: cameraMode,
+                                onPhoto: { onCameraPhoto?() },
+                                onStartFilming: { onCameraStartFilming?() },
+                                onLock: { onCameraLock?() },
+                                onCloseTake: { onCameraCloseTake?() },
+                                flashMode: cameraFlash,
+                                onCycleFlash: { onCycleCameraFlash?() },
+                                onFlipCamera: { onFlipCamera?() },
+                                onDisarm: { onDisarmCamera?() },
+                                segments: cameraSegments,
+                                onDropLastSegment: { onDropLastSegment?() },
+                                onValidateSegments: { onValidateSegments?() }))
+                    }
+                }
                 .padding(.top, 8)
 
                 // **Ce que la publication EMPORTE, COLLÉ au bas de la scène**
@@ -929,24 +983,7 @@ struct ComposerSceneSurface: View {
                 // planche — l'ordre des modes, du déclencheur et de la phrase,
                 // et leurs états — est tenu ; c'est la géographie qui suit le
                 // plateau, comme pour les rails.
-                if cameraStage != .off {
-                    ComposerSceneCameraBar(
-                        modes: cameraModes,
-                        mode: cameraMode,
-                        stage: cameraStage,
-                        onPickMode: { onPickCameraMode?($0) },
-                        onPress: { onCameraPress?() },
-                        onRelease: { onCameraRelease?() },
-                        flashMode: cameraFlash,
-                        onCycleFlash: { onCycleCameraFlash?() },
-                        onFlipCamera: { onFlipCamera?() },
-                        onDisarm: { onDisarmCamera?() },
-                        segments: cameraSegments,
-                        onDropLastSegment: { onDropLastSegment?() },
-                        onValidateSegments: { onValidateSegments?() })
-                } else {
-                    lowToolRow
-                }
+                lowToolRow
 
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

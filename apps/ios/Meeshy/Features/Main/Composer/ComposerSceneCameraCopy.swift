@@ -73,6 +73,14 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Poser dans la scène", bundle: .main)
     }
 
+    /// **L'action VoiceOver du déclencheur.** Un lecteur d'écran ne TIENT pas
+    /// un doigt : sans elle, la vidéo serait offerte à la main et refusée à la
+    /// voix — une capacité que le geste rendrait inatteignable.
+    static var filmActionLabel: String {
+        String(localized: "composer.camera.filmAction",
+               defaultValue: "Filmer", bundle: .main)
+    }
+
     /// La bascule d'objectif — l'action, parce qu'elle n'a que deux positions
     /// et qu'aucune des deux n'a besoin d'être nommée pour qu'on sache ce
     /// qu'un appui fera.

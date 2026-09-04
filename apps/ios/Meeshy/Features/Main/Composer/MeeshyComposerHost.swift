@@ -851,40 +851,42 @@ struct MeeshyComposerHost: View {
         sceneCamera.configure()
     }
 
-    /// **L'appui : il PREND, ou il commence à prendre.**
-    ///
-    /// La photo part tout de suite ; la vidéo commence à écrire et attend le
-    /// relâchement. `stage` porte la différence, et la loi de la relâche
-    /// (`ComposerSceneCamera.stageAfterRelease`) s'appuie dessus — sans passer
-    /// par `.recording`, MAINS LIBRES n'aurait rien à continuer.
-    func pressSceneShutter() {
-        guard let mode = sceneCameraMode, sceneCameraStage == .armed else { return }
+    /// **Un appui bref PREND une photo** (#4080, directive porteur 2026-09-04 :
+    /// le mode se lit du geste, pas d'un bouton).
+    func takeScenePhoto() {
+        guard sceneCameraStage == .armed else { return }
+        sceneCameraMode = .photo
         HapticFeedback.medium()
-        switch mode {
-        case .photo:
-            sceneCamera.takePhoto(flash: sceneCameraFlash)
-        case .video, .handsFree:
-            sceneCameraStage = .recording
-            Task {
-                await sceneCamera.enableAudioCaptureIfNeeded()
-                sceneCamera.startRecording()
-            }
+        sceneCamera.takePhoto(flash: sceneCameraFlash)
+    }
+
+    /// **Le doigt a TENU : la prise commence.** Le seuil vit dans
+    /// `ComposerShutterGesture`, et la vue le compte — elle seule voit le doigt.
+    func startSceneFilming() {
+        guard sceneCameraStage == .armed else { return }
+        sceneCameraMode = ComposerShutterGesture.mode(locked: false)
+        sceneCameraStage = .recording
+        Task {
+            await sceneCamera.enableAudioCaptureIfNeeded()
+            sceneCamera.startRecording()
         }
     }
 
-    /// **Le relâchement demande à la LOI ce qu'il fait**, il ne le décide pas.
-    ///
-    /// C'est là que les trois pastilles divergent — et écrire ce `switch` ici
-    /// le mettrait hors de portée d'un témoin, alors qu'il est toute la raison
-    /// d'être de la troisième.
-    func releaseSceneShutter() {
-        guard let mode = sceneCameraMode else { return }
-        let suivant = ComposerSceneCamera.stageAfterRelease(
-            mode: mode, stage: sceneCameraStage)
-        guard suivant != sceneCameraStage else { return }
-        sceneCameraStage = suivant
-        // Saisie AVANT l'arrêt : le modèle remet son horloge à zéro au démarrage
-        // suivant, et le fichier n'arrive qu'après.
+    /// **Le doigt a remonté sans relâcher : la prise continue sans lui.** Rien
+    /// ne change à ce qui s'écrit — seul le mode change, et avec lui ce que le
+    /// relâchement fera.
+    func lockSceneTake() {
+        guard sceneCameraStage == .recording else { return }
+        sceneCameraMode = ComposerShutterGesture.mode(locked: true)
+    }
+
+    /// **La prise se clôt** — relâchement d'une prise tenue, ou appui sur une
+    /// prise verrouillée. La durée est saisie AVANT l'arrêt : le modèle remet
+    /// son horloge à zéro au démarrage suivant, et le fichier n'arrive
+    /// qu'après.
+    func closeSceneTake() {
+        guard sceneCameraStage == .recording else { return }
+        sceneCameraStage = .armed
         pendingSegmentDuration = sceneCamera.recordingDuration
         sceneCamera.stopRecording()
         HapticFeedback.medium()

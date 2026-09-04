@@ -162,9 +162,13 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// et fait mentir toute la bande, donc que rien ne signalerait.
     func test_laDuréeDuSegment_estSaisieAuRelâchement() throws {
         let code = compact(try source("MeeshyComposerHost.swift"))
-        guard let début = code.range(of: "funcreleaseSceneShutter(){"),
+        // Le geste unique (#5074) a renommé `releaseSceneShutter` en
+        // `closeSceneTake` : la CLÔTURE n'est plus toujours un relâchement —
+        // sur une prise verrouillée, c'est un second appui. Ce que le témoin
+        // garde n'a pas bougé d'un mot : la durée se lit AVANT l'arrêt.
+        guard let début = code.range(of: "funccloseSceneTake(){"),
               let fin = code.range(of: "funccollectSceneSegment(", range: début.upperBound..<code.endIndex)
-        else { return XCTFail("le relâchement ou la collecte a changé de nom") }
+        else { return XCTFail("la clôture ou la collecte a changé de nom") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("pendingSegmentDuration=sceneCamera.recordingDuration"))
         XCTAssertTrue(corps.range(of: "pendingSegmentDuration=sceneCamera.recordingDuration")!.lowerBound
