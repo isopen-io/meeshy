@@ -303,6 +303,30 @@ struct MeeshyComposerHost: View {
     /// `documentCameraSheet`, l'unique lecteur.
     @State var pendingCameraMode: CameraCaptureMode = .photo
 
+    /// **Le viseur POSÉ DANS LA SCÈNE** (#4080, vue `2b`).
+    ///
+    /// > « ça déclenche la caméra et ouvre la sheet caméra au lieu de
+    /// > déclencher la caméra et **utiliser le fond de la scène comme
+    /// > caméra** » — porteur, 2026-09-04
+    ///
+    /// `@StateObject` et non `.shared`, pour la même raison que l'export : une
+    /// session de capture appartient à CETTE composition. Un singleton
+    /// laisserait la caméra ouverte après la fermeture du composer — voyant
+    /// allumé, batterie consommée, et aucun écran pour dire pourquoi.
+    ///
+    /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
+    /// demande, donc le porter ici ne coûte rien tant que l'auteur n'a pas armé.
+    @StateObject var sceneCamera = CameraModel()
+
+    /// L'étape du viseur — la loi est dans `ComposerSceneCamera`, l'état ici.
+    @State var sceneCameraStage: ComposerSceneCameraStage = .off
+
+    /// La pastille choisie. `nil` tant que rien n'est armé : un mode qui
+    /// survivrait à la fermeture rendrait le prochain armement dépendant du
+    /// précédent, ce que rien à l'écran n'annoncerait — même raison que
+    /// `pendingCameraMode`, qui est reposé à chaque ouverture.
+    @State var sceneCameraMode: ComposerSceneCameraMode?
+
     /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
     ///
     /// `@StateObject` et non `.shared` : un bake appartient à CETTE
@@ -783,8 +807,89 @@ struct MeeshyComposerHost: View {
             format: selectedFormat
         ) else { return }
         HapticFeedback.medium()
-        presentCamera(mode: ComposerSceneCaptureGesture.mode(
-            format: selectedFormat, opening: profile.opensWith))
+        armSceneCamera()
+    }
+
+    /// **Le viseur s'ARME dans la scène — il ne se PRÉSENTE plus** (#4080).
+    ///
+    /// Le geste et sa règle n'ont pas bougé d'une ligne ; c'est sa DESTINATION
+    /// qui change. `presentCamera(mode:)` posait `presentedPortal = .camera`,
+    /// donc une feuille modale par-dessus le composer — la scène disparaissait
+    /// au moment précis où l'auteur cadrait ce qu'il allait y poser.
+    ///
+    /// > « La caméra est une entrée, pas un mode. » — planche `2b`
+    ///
+    /// Le mode d'ouverture vient de `ComposerSceneCamera`, jamais d'un littéral :
+    /// c'est le premier SERVI par le format, donc jamais une pastille que la
+    /// rangée ne montrerait pas.
+    func armSceneCamera() {
+        guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
+        sceneCameraMode = mode
+        sceneCameraStage = .armed
+        // `configure()` demande la permission PUIS ouvre la session — c'est le
+        // même point d'entrée que la feuille, et il rend un panneau explicatif
+        // plutôt qu'un aperçu noir si l'accès est refusé.
+        sceneCamera.configure()
+    }
+
+    /// **L'appui : il PREND, ou il commence à prendre.**
+    ///
+    /// La photo part tout de suite ; la vidéo commence à écrire et attend le
+    /// relâchement. `stage` porte la différence, et la loi de la relâche
+    /// (`ComposerSceneCamera.stageAfterRelease`) s'appuie dessus — sans passer
+    /// par `.recording`, MAINS LIBRES n'aurait rien à continuer.
+    func pressSceneShutter() {
+        guard let mode = sceneCameraMode, sceneCameraStage == .armed else { return }
+        HapticFeedback.medium()
+        switch mode {
+        case .photo:
+            sceneCamera.takePhoto(flash: .off)
+        case .video, .handsFree:
+            sceneCameraStage = .recording
+            Task {
+                await sceneCamera.enableAudioCaptureIfNeeded()
+                sceneCamera.startRecording()
+            }
+        }
+    }
+
+    /// **Le relâchement demande à la LOI ce qu'il fait**, il ne le décide pas.
+    ///
+    /// C'est là que les trois pastilles divergent — et écrire ce `switch` ici
+    /// le mettrait hors de portée d'un témoin, alors qu'il est toute la raison
+    /// d'être de la troisième.
+    func releaseSceneShutter() {
+        guard let mode = sceneCameraMode else { return }
+        let suivant = ComposerSceneCamera.stageAfterRelease(
+            mode: mode, stage: sceneCameraStage)
+        guard suivant != sceneCameraStage else { return }
+        sceneCameraStage = suivant
+        sceneCamera.stopRecording()
+        HapticFeedback.medium()
+    }
+
+    /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
+    /// entrée, pas un mode »).
+    ///
+    /// Rester armé après une pose ferait de la caméra un état du composer, et
+    /// l'auteur n'aurait plus de scène à regarder pour juger ce qu'il vient d'y
+    /// mettre. L'étape d'arrivée vient de la loi
+    /// (`ComposerSceneCamera.stageAfterCapture`), jamais d'un `.off` écrit ici.
+    func poseSceneCapture(_ result: CameraResult) {
+        sceneCameraStage = ComposerSceneCamera.stageAfterCapture
+        sceneCameraMode = nil
+        sceneCamera.stop()
+        HapticFeedback.success()
+        Task { await ingestCameraCapture(result) }
+    }
+
+    /// **Désarmer REND la scène**, et ferme la session dans le même geste : une
+    /// caméra qu'on laisse tourner derrière une scène rendue est un voyant
+    /// allumé que rien à l'écran n'explique.
+    func disarmSceneCamera() {
+        sceneCameraStage = .off
+        sceneCameraMode = nil
+        sceneCamera.stop()
     }
 
     var body: some View {

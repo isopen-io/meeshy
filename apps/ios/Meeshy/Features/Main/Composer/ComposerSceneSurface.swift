@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
@@ -96,6 +97,27 @@ struct ComposerSceneSurface: View {
     /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, planche
     /// `2b`). L'hôte décide du mode ; la surface ne fait que transmettre.
     var onBackgroundLongPressed: (() -> Void)?
+
+    /// **La session du viseur POSÉ DANS LA SCÈNE** (#4080, vue `2b`).
+    ///
+    /// Reçue, jamais construite ici : une surface qui ouvrirait sa propre
+    /// session en tiendrait une seconde à côté de celle du meuble, et deux
+    /// sessions concurrentes sur le même objectif rendent un aperçu noir sans
+    /// que rien n'échoue. `nil` ⇒ aucun viseur, et la scène est une scène.
+    var cameraSession: AVCaptureSession?
+
+    /// L'étape du viseur. La LOI vit dans `ComposerSceneCamera` ; cette vue ne
+    /// fait que peindre ce qu'on lui donne — elle ne re-décide rien, comme pour
+    /// les deux rails, la bande et les jetons.
+    var cameraStage: ComposerSceneCameraStage = .off
+
+    /// Les pastilles SERVIES et celle qui est choisie — résolues par le meuble
+    /// (`ComposerSceneCamera.modes(for:)`), jamais recalculées ici.
+    var cameraModes: [ComposerSceneCameraMode] = []
+    var cameraMode: ComposerSceneCameraMode = .photo
+    var onPickCameraMode: ((ComposerSceneCameraMode) -> Void)?
+    var onCameraPress: (() -> Void)?
+    var onCameraRelease: (() -> Void)?
 
     // MARK: - Les deux rails
 
@@ -584,6 +606,32 @@ struct ComposerSceneSurface: View {
                     selectionBadge: selectionBadge
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // **Le viseur OCCUPE la carte** (#4080, vue `2b`) — il ne
+                // s'ouvre pas par-dessus elle.
+                //
+                // > « utiliser le fond de la scène comme caméra » — porteur,
+                // > 2026-09-04
+                //
+                // Posé AVANT le padding des couloirs, exprès : le repère est
+                // alors celui dans lequel la carte se `fit`, donc un
+                // `aspectRatio(.fit)` y reproduit EXACTEMENT le rectangle du
+                // dessin. Posé après, il couvrirait aussi les couloirs — et le
+                // viseur déborderait sur les rails, qui sont précisément ce
+                // qu'on garde visible pour que la caméra reste une ENTRÉE et
+                // non un mode.
+                //
+                // `allowsHitTesting(false)` : l'aperçu ne prend aucun doigt.
+                // Les gestes de la scène — déplacer, pincer, l'appui long qui
+                // a armé ce viseur — continuent d'atteindre le canvas dessous.
+                .overlay {
+                    if let cameraSession, cameraStage != .off {
+                        CameraPreviewLayer(session: cameraSession)
+                            .aspectRatio(aspectRatio, contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
 
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
@@ -865,7 +913,29 @@ struct ComposerSceneSurface: View {
                 // d'une lecture. Elle n'entre donc PAS dans
                 // `ComposerCanonicalZone.Element`, et ce commentaire dit
                 // pourquoi pour que personne ne l'y remette.
-                lowToolRow
+                // **Le viseur PREND la rangée basse** (#4080), exactement
+                // comme les contrôleurs d'un outil ouvert la prennent depuis
+                // #4072 : la place est permanente, son contenu change.
+                //
+                // La cible `2b` dessine ces contrôles SUR un aperçu plein
+                // écran ; le plateau n'a pas cette géographie — ses rails et sa
+                // rangée d'entrées vivent dans les couloirs, et un contrôle
+                // posé sur le canvas vole les touches de la bande qu'il couvre
+                // (directive porteur 2026-08-31). Ce qui est PRESCRIT par la
+                // planche — l'ordre des modes, du déclencheur et de la phrase,
+                // et leurs états — est tenu ; c'est la géographie qui suit le
+                // plateau, comme pour les rails.
+                if cameraStage != .off {
+                    ComposerSceneCameraBar(
+                        modes: cameraModes,
+                        mode: cameraMode,
+                        stage: cameraStage,
+                        onPickMode: { onPickCameraMode?($0) },
+                        onPress: { onCameraPress?() },
+                        onRelease: { onCameraRelease?() })
+                } else {
+                    lowToolRow
+                }
 
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

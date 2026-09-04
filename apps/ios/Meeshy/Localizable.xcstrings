@@ -99042,6 +99042,102 @@
         }
       }
     },
+    "composer.camera.mode.photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "صورة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Foto" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Photo" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Foto" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Photo" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Foto" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Foto" } }
+      }
+    },
+    "composer.camera.mode.video" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "فيديو" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Video" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Video" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Vídeo" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Vidéo" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Video" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Vídeo" } }
+      }
+    },
+    "composer.camera.mode.handsFree" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "بدون يدين" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Freihändig" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hands-free" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Manos libres" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mains libres" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Mani libere" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mãos livres" } }
+      }
+    },
+    "composer.camera.hint.photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "انقر لالتقاط صورة" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "tippen, um ein Foto aufzunehmen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "tap to take a photo" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "toca para hacer una foto" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "toucher pour prendre une photo" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "tocca per scattare una foto" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "toque para tirar uma foto" } }
+      }
+    },
+    "composer.camera.hint.video" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "اضغط مطولاً للتصوير · حرّر لوضعه في المشهد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "halten zum Filmen · loslassen, um in die Szene zu setzen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "hold to film · release to place in the scene" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "mantén para grabar · suelta para colocar en la escena" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "maintenir pour filmer · relâcher pour poser dans la scène" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "tieni premuto per filmare · rilascia per porre nella scena" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "segure para filmar · solte para pôr na cena" } }
+      }
+    },
+    "composer.camera.hint.videoHolding" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "حرّر لوضعه في المشهد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "loslassen, um in die Szene zu setzen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "release to place in the scene" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "suelta para colocar en la escena" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "relâcher pour poser dans la scène" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "rilascia per porre nella scena" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "solte para pôr na cena" } }
+      }
+    },
+    "composer.camera.hint.handsFreeStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "انقر للبدء — بدون يدين" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "tippen zum Starten – freihändig" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "tap to start — hands-free" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "toca para empezar: manos libres" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "toucher pour lancer — les mains libres" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "tocca per iniziare — mani libere" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "toque para começar — mãos livres" } }
+      }
+    },
+    "composer.camera.hint.handsFreeStop" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "انقر للإيقاف والوضع في المشهد" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "tippen zum Stoppen und in die Szene setzen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "tap to stop and place in the scene" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "toca para parar y colocar en la escena" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "toucher pour arrêter et poser dans la scène" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "tocca per fermare e porre nella scena" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "toque para parar e pôr na cena" } }
+      }
+    },
     "composer.document.a11y.tools": {
       "extractionState": "manual",
       "localizations": {
