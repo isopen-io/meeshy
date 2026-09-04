@@ -432,6 +432,18 @@ extension MeeshyComposerHost {
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             onBackgroundLongPressed: { handleSceneCaptureLongPress() },
+            // **Le geste de la scène EST celui de l'obturateur** (directive
+            // porteur 2026-09-04). L'appui long arme et vise ; sa LEVÉE rend
+            // une photo, ou clôt la vidéo s'il a tenu. Glisser à DROITE
+            // pendant la prise la verrouille, ce qui libère la main pour les
+            // autres gestes — retourner l'objectif, par exemple.
+            // **Un fond ne s'ouvre pas au viseur, il s'ouvre à son MENU**
+            // (#5041). La règle du canvas retombe sur le viseur tant que ce
+            // rappel est nil — donc le geste n'est jamais muet, même le jour
+            // où le meuble ne sert pas encore le menu.
+            onBackgroundMediaLongPressed: { backgroundMenuObjectId = $0 },
+            onBackgroundLongPressChanged: { handleSceneCaptureLongPressChanged($0) },
+            onBackgroundLongPressEnded: { handleSceneCaptureLongPressEnded() },
             // **Le viseur n'est plus remis à la surface — il est MONTÉ par le
             // meuble** (directive porteur 2026-09-04, `sceneCameraViewfinder`).
             //
