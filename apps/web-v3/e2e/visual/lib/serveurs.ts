@@ -10,9 +10,11 @@ import {
   APPAREILS_DU_BOUCHON,
   boiteDeNotifsDeBouchon,
   filDeCommentairesDeBouchon,
+  filSocialDeBouchon,
   routesDuCompte,
   type BoiteDeNotifsDeBouchon,
   type FilDeCommentairesDeBouchon,
+  type FilSocialDeBouchon,
 } from './bouchon-compte';
 import {
   placeDeLInvite,
@@ -140,6 +142,8 @@ export type PasserelleDeBouchon = {
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires (#5091) — écrit par le POST, `remets()` entre témoins. */
   readonly filDeCommentaires: FilDeCommentairesDeBouchon;
+  /** Le fil social (#5031) — `publie()` pose une ligne EN TÊTE, `remets()` entre témoins. */
+  readonly filSocial: FilSocialDeBouchon;
   /**
    * LES CORPS DE `POST /api/v1/posts` REÇUS (#4966) — ce que le composer a
    * réellement ENVOYÉ. Le critère de fin porte sur la charge (audience, emoji,
@@ -319,6 +323,7 @@ export const passerelleDeBouchon = async (options?: {
   const publicationsRecues: Record<string, unknown>[] = [];
   const boite = boiteDeNotifsDeBouchon(conversationId);
   const filDeCommentaires = filDeCommentairesDeBouchon();
+  const filSocial = filSocialDeBouchon();
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -331,6 +336,7 @@ export const passerelleDeBouchon = async (options?: {
     publicationsRecues,
     boite,
     filDeCommentaires,
+    filSocial,
   });
 
   const serveur = createServer(async (requete, reponse) => {
@@ -430,6 +436,7 @@ export const passerelleDeBouchon = async (options?: {
     socket: bouchon,
     boite,
     filDeCommentaires,
+    filSocial,
     publicationsRecues,
     placesActives,
     sessionsRevoquees,
@@ -489,7 +496,10 @@ const attend = async (url: string, jusqua: number): Promise<void> => {
  * L'absence de build est une ERREUR, jamais un test ignoré : une mesure dont le
  * prérequis manque doit se voir (§ 9.2), et un `skip` la rendrait verte.
  */
-export const serveurDeLaV3 = async (passerelle: string): Promise<ServeurV3> => {
+export const serveurDeLaV3 = async (
+  passerelle: string,
+  environnement: Record<string, string> = {},
+): Promise<ServeurV3> => {
   if (!existsSync(join(RACINE_V3, '.next', 'app-build-manifest.json'))) {
     throw new Error("apps/web-v3 n'est pas construit — lancer d'abord `cd apps/web-v3 && bun run build`");
   }
@@ -512,6 +522,9 @@ export const serveurDeLaV3 = async (passerelle: string): Promise<ServeurV3> => {
         // est mise en cache PAR URL (§ 5.4).
         NEXT_PUBLIC_FRONTEND_URL: base,
         NODE_ENV: 'production',
+        // Ce que le TEST déploie — `V3_SW_PORTEES` pour la chaîne du
+        // travailleur de zone (#4472), comme le compose la pose en staging.
+        ...environnement,
       },
       stdio: 'ignore',
     },

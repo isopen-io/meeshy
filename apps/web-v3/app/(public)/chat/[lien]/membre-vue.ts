@@ -1,3 +1,4 @@
+import { blocDuNavigateur } from '@/app/connecte/chargeur';
 import { documentDeMessage, documentDuSite } from '@/app/enveloppe/vue';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { echappe } from '@/app/socle';
@@ -68,6 +69,7 @@ export const documentDuRefusDuMembre = ({ code, message }: { readonly code: stri
  */
 export const documentDeLAdhesion = ({ segment, nom }: { readonly segment: string; readonly nom: string }): string =>
   documentDuSite({
+    script: blocDuNavigateur(),
     titre: `${ADHESION_DU_MEMBRE.titre(nom)} — Meeshy`,
     description: ADHESION_DU_MEMBRE.corps,
     feuille: FEUILLE_CONNECTEE,

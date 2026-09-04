@@ -366,6 +366,14 @@ export async function registerMetadataRoutes(
             description: 'Access denied to this conversation',
             ...errorResponseSchema
           },
+          // #4856 — un invité anonyme dont le `participantId` de session ne
+          // résout plus à aucune ligne (retiré entretemps) est un « je ne
+          // trouve pas » sur SA PROPRE identité, pas un refus d'accès à un
+          // tiers : rien à cacher.
+          404: {
+            description: 'The anonymous participant this session was authenticated as no longer exists',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -425,7 +433,17 @@ export async function registerMetadataRoutes(
             });
 
         if (!participant) {
-          return sendForbidden(reply, isAnonymous ? 'Participant not found' : 'Access denied to this conversation');
+          // #4856 — les deux branches n'étaient pas le même refus : la
+          // branche anonyme cherche la ligne `Participant` de SA PROPRE
+          // session (son `participantId` de jeton), jamais celle d'un tiers
+          // — son absence est un « je ne trouve pas ». La branche inscrite,
+          // elle, cherche un membership sous l'identité de l'appelant dans
+          // CETTE conversation : rien ne distingue ici « pas membre » de
+          // « conversation inexistante », donc le 403 anti-énumération reste
+          // le bon statut, inchangé.
+          return isAnonymous
+            ? sendNotFound(reply, 'Participant not found')
+            : sendForbidden(reply, 'Access denied to this conversation');
         }
 
         if (isAnonymous && participant.conversationId !== conversationId) {

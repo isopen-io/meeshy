@@ -297,6 +297,8 @@ describe('la greffe du temps réel', () => {
       recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
       liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
       commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+      navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
+      composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
       socket: { nom: 'socket.io.c.js', url: '/__v3/rt/socket.io.c.js', corps: '' },
     },
   };

@@ -488,9 +488,13 @@ describe('GET /conversations/:id/attachments — anonymous participant not found
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when anonymous participant is not found', async () => {
+  // #4856 — le `participantId` recherché est celui de la SESSION anonyme
+  // appelante (son propre jeton), jamais un tiers énuméré : son absence est
+  // un « je ne trouve pas », pas un refus d'accès. Le texte disait déjà
+  // « not found » sous un 403.
+  it('returns 404 when anonymous participant is not found', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 });
 

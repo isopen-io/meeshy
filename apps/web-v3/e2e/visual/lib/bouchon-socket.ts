@@ -216,6 +216,13 @@ export const evenementDeReaction = ({
 export type BouchonSocket = {
   readonly io: Server;
   /**
+   * Le NOMBRE de fermetures de socket vues par le serveur — le témoin de
+   * « l'écran quitté reçoit destruction » (#5106) : un COMPTEUR, jamais un
+   * solde net, parce qu'une poignée de main transitoire ou une reconnexion
+   * ferait mentir le solde sans qu'aucune destruction n'ait manqué.
+   */
+  readonly deconnexions: () => number;
+  /**
    * CE QU'UN MESSAGE DOIT À LA LIGNE DE LISTE de chaque destinataire —
    * `conversation:updated` (le rang et l'aperçu DÉJÀ descendu au prisme du
    * lecteur : `MeeshySocketIOManager.ts:3216`, `MessageHandler.ts:1691`) puis
@@ -400,6 +407,7 @@ export const bouchonSocket = ({
     pingTimeout: PING_DU_BOUCHON.toleranceMs,
   });
   const recus: Emission[] = [];
+  let fermetures = 0;
   const identites = new Map<string, Identite>();
   let jonctionsRefusees = 0;
 
@@ -640,11 +648,13 @@ export const bouchonSocket = ({
 
     socket.on('disconnect', () => {
       identites.delete(socket.id);
+      fermetures += 1;
     });
   });
 
   return {
     io,
+    deconnexions: () => fermetures,
     recus,
     emets: (conversationId, evenement, charge) => {
       io.to(room(conversationId)).emit(evenement, charge);

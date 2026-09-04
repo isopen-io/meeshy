@@ -1,4 +1,4 @@
-import { NotificationTypeEnum, type Notification } from '../types/notification.js';
+import type { Notification, NotificationTypeEnum } from '../types/notification.js';
 
 /**
  * **LA LOI DE LA BANNIÈRE — une seule, trois clients** (#4454, dimension 11).
@@ -86,28 +86,50 @@ export type ConventionsDuClient = {
  */
 export type CadrageDeBanniere = 'conversation' | 'relation' | 'action';
 
+/**
+ * LES TROIS ENSEMBLES, PROUVÉS PAR LE COMPILATEUR ET NON PAR UN IMPORT.
+ *
+ * `satisfies readonly TypeDeNotification[]` fait échouer la compilation sur un
+ * littéral qui ne serait pas membre de `NotificationTypeEnum` — la même
+ * garantie qu'une lecture de l'énumération, mais RENDUE À LA COMPILATION, donc
+ * gratuite à l'exécution.
+ *
+ * ET C'EST LE POINT : `NotificationTypeEnum` est une énumération de ~150
+ * membres, dont TypeScript émet un objet littéral. L'importer comme VALEUR pour
+ * nommer quatorze constantes tirait ce module entier dans chaque client qui
+ * lit cette loi — mesuré à +2 944 o gzip sur `participate.js` et +3 119 o sur
+ * `liste.js` de la v3, deux modules qu'un lecteur en 3G rurale télécharge (§ 12.6).
+ * Trois kilo-octets pour quatorze chaînes de quinze caractères.
+ *
+ * `import type` n'émet rien ; le template littéral `${NotificationTypeEnum}`
+ * projette l'énumération sur l'union de ses VALEURS, ce qu'un `satisfies` sait
+ * vérifier. La loi reste la seule source, et un membre renommé dans
+ * l'énumération rend toujours rouge — à la compilation, plus tôt qu'un témoin.
+ */
+type TypeDeNotification = `${NotificationTypeEnum}`;
+
 const TYPES_DE_CONVERSATION = new Set<string>([
-  NotificationTypeEnum.NEW_MESSAGE,
-  NotificationTypeEnum.MESSAGE_REPLY,
-  NotificationTypeEnum.USER_MENTIONED,
-  NotificationTypeEnum.MESSAGE_REACTION,
-]);
+  'new_message',
+  'message_reply',
+  'user_mentioned',
+  'message_reaction',
+] satisfies readonly TypeDeNotification[]);
 
 const TYPES_DE_RELATION = new Set<string>([
-  NotificationTypeEnum.CONTACT_REQUEST,
-  NotificationTypeEnum.CONTACT_ACCEPTED,
-  NotificationTypeEnum.FRIEND_REQUEST,
-  NotificationTypeEnum.FRIEND_ACCEPTED,
-]);
+  'contact_request',
+  'contact_accepted',
+  'friend_request',
+  'friend_accepted',
+] satisfies readonly TypeDeNotification[]);
 
 const TYPES_DE_REACTION = new Set<string>([
-  NotificationTypeEnum.MESSAGE_REACTION,
-  NotificationTypeEnum.POST_LIKE,
-  NotificationTypeEnum.STORY_REACTION,
-  NotificationTypeEnum.STATUS_REACTION,
-  NotificationTypeEnum.COMMENT_LIKE,
-  NotificationTypeEnum.COMMENT_REACTION,
-]);
+  'message_reaction',
+  'post_like',
+  'story_reaction',
+  'status_reaction',
+  'comment_like',
+  'comment_reaction',
+] satisfies readonly TypeDeNotification[]);
 
 export function notificationBannerFraming(notification: Notification): CadrageDeBanniere {
   const type = typeof notification.type === 'string' ? notification.type : '';
@@ -209,9 +231,16 @@ export function buildNotificationBannerBody(
   const contenu = nonVide(notification.content);
 
   if (cadrage === 'conversation') {
-    if (!contenu) return null;
-    const piecesJointes = (notification.metadata as { attachments?: unknown })?.attachments;
-    return conventions.apercuDeMessage(contenu, Array.isArray(piecesJointes) ? piecesJointes : undefined);
+    // UN MESSAGE SANS LÉGENDE N'EST PAS UN MESSAGE VIDE. La garde lisait
+    // `if (!contenu) return null` AVANT de regarder les pièces jointes : une
+    // photo envoyée seule — le cas nominal — produisait une bannière portant
+    // le seul nom de l'expéditeur, et le marqueur « 📷 Photo » que la
+    // convention du client sait composer n'était jamais demandé. C'est
+    // l'absence des DEUX qui fait un corps vide, jamais celle du texte seul.
+    const brutes = (notification.metadata as { attachments?: unknown })?.attachments;
+    const piecesJointes = Array.isArray(brutes) && brutes.length > 0 ? brutes : undefined;
+    if (!contenu && piecesJointes === undefined) return null;
+    return conventions.apercuDeMessage(contenu ?? '', piecesJointes);
   }
 
   // Le serveur garantit que la LIGNE DE LISTE n'est jamais vide : à défaut

@@ -9,6 +9,7 @@ import {
   sendBadRequest,
   sendUnauthorized,
   sendForbidden,
+  sendNotFound,
   sendInternalError,
 } from '../../utils/response.js';
 
@@ -93,6 +94,14 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without upload permissions',
             ...errorResponseSchema
           },
+          // #4856 — le lien de partage RECHERCHÉ est celui par lequel
+          // l'appelant s'est lui-même authentifié (son propre
+          // `shareLinkId` de session) : sa disparition entretemps est un
+          // « je ne trouve pas », pas un refus d'accès à un tiers.
+          404: {
+            description: 'The share link this anonymous session was authenticated with no longer exists',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -158,7 +167,9 @@ export async function registerUploadRoutes(
           });
 
           if (!shareLink) {
-            return sendForbidden(reply, 'Share link not found');
+            // #4856 — le lien recherché ici est celui de la SESSION anonyme
+            // de l'appelant, jamais celui d'un tiers : rien à cacher.
+            return sendNotFound(reply, 'Share link not found');
           }
 
           // Round 1 sécurité (task-1-fix-round-1) : la classification ne se
@@ -252,6 +263,12 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without file upload permission',
             ...errorResponseSchema
           },
+          // #4856 — même verdict que sur `/attachments/upload` : le lien de
+          // partage recherché est celui de la session anonyme appelante.
+          404: {
+            description: 'The share link this anonymous session was authenticated with no longer exists',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -305,7 +322,9 @@ export async function registerUploadRoutes(
           });
 
           if (!shareLink) {
-            return sendForbidden(reply, 'Share link not found');
+            // #4856 — comme sur `/attachments/upload` : c'est le lien de la
+            // session anonyme appelante, jamais celui d'un tiers.
+            return sendNotFound(reply, 'Share link not found');
           }
 
           if (!shareLink.allowAnonymousFiles) {

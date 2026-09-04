@@ -489,7 +489,7 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/__v3/rt/`))"
+      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/__v3/rt/`) || PathPrefix(`/__v3/sw`))"
       - "traefik.http.routers.frontend-v3.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3.middlewares=compress@file"

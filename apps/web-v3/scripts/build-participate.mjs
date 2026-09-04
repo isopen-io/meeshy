@@ -44,6 +44,8 @@ const SOURCES = [
   { base: 'recherche', chemin: join(RACINE, 'lib', 'realtime', 'recherche.ts') },
   { base: 'liens', chemin: join(RACINE, 'lib', 'realtime', 'liens.ts') },
   { base: 'commentaires', chemin: join(RACINE, 'lib', 'realtime', 'commentaires.ts') },
+  { base: 'navigateur', chemin: join(RACINE, 'lib', 'realtime', 'navigateur.ts') },
+  { base: 'composer', chemin: join(RACINE, 'lib', 'realtime', 'composer.ts') },
 ];
 const DOSSIER = join(RACINE, '.rt');
 const SOCKET = join(RACINE, 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js');
@@ -62,8 +64,17 @@ const compileUn = ({ base, chemin }) => {
   return { brut: readFileSync(sortie).length, gzip: gzip(sortie) };
 };
 
+// Le TRAVAILLEUR DE ZONE (#4473) sort de la même chaîne mais PAS de la même
+// liste : il n'est pas un module de participation (aucune entrée dans
+// `ActifsTempsReel`, aucune adresse hashée — l'URL d'un Service Worker doit
+// être STABLE, sinon chaque build enregistrerait un worker NEUF au lieu de
+// mettre à jour l'existant). Sa version vit DANS son cache, par l'empreinte
+// que `app/sw/route.ts` substitue au service.
+const TRAVAILLEUR = { base: 'sw', chemin: join(RACINE, 'lib', 'sw', 'travailleur.js') };
+
 export const compile = () => {
   mkdirSync(DOSSIER, { recursive: true });
+  compileUn(TRAVAILLEUR);
   const modules = Object.fromEntries(SOURCES.map((source) => [source.base, compileUn(source)]));
   return {
     ...modules,
@@ -75,7 +86,7 @@ const ecrisLaMesure = (poids) => {
   const mesures = JSON.parse(readFileSync(MESURES, 'utf8'));
   mesures.participate = {
     quoi:
-      'Le poids des CINQ modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
+      'Le poids des CINQ modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], lib/realtime/composer.ts pour /composer [#4966], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
     participate_brut_octets: poids.participate.brut,
     participate_gzip_9_octets: poids.participate.gzip,
     liste_brut_octets: poids.liste.brut,
@@ -92,12 +103,14 @@ const ecrisLaMesure = (poids) => {
     liens_gzip_9_octets: poids.liens.gzip,
     commentaires_brut_octets: poids.commentaires.brut,
     commentaires_gzip_9_octets: poids.commentaires.gzip,
+    composer_brut_octets: poids.composer.brut,
+    composer_gzip_9_octets: poids.composer.gzip,
     socket_io_client_brut_octets: poids.socket?.brut ?? null,
     socket_io_client_gzip_9_octets: poids.socket?.gzip ?? null,
     commande: 'cd apps/web-v3 && node scripts/build-participate.mjs --mesure',
     date: new Date().toISOString().slice(0, 10),
   };
-  writeFileSync(MESURES, `${JSON.stringify(mesures, null, 1)}\n`);
+  writeFileSync(MESURES, `${JSON.stringify(mesures, null, 2)}\n`);
 };
 
 const main = () => {

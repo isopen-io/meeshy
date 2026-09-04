@@ -11,10 +11,11 @@
 //      revendiquée, lus sur le corps que le bouchon a retenu. Le critère de fin
 //      porte sur ce qui PART, jamais sur le `<select>` rendu : une confidentialité
 //      se vérifie sur la charge.
-//   3. **Le retour de bfcache** — `page.goBack()` après une navigation : les
-//      champs sont NATIFS et l'écran n'expédie aucun script, donc le navigateur
-//      restitue la saisie tout seul. C'est une propriété du socle, et la seule
-//      façon de la prouver est de le faire faire au navigateur.
+//   3. **La survie du BROUILLON** — un rechargement, un changement de format,
+//      un aller-retour : la saisie revient. C'est le module qui la tient
+//      (`lib/realtime/composer.ts`, `sessionStorage`), le document étant
+//      `no-store` donc hors bfcache ; seule une vraie session de navigateur
+//      peut le dire.
 
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type BrowserContext } from '@playwright/test';
@@ -29,6 +30,12 @@ import { COLONNES_DE_THEME } from './lib/verdict-axe';
 
 let passerelle: PasserelleDeBouchon;
 let v3: ServeurV3;
+
+/** Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais par une minuterie seule. */
+const attendsLeModule = async (page: import('@playwright/test').Page): Promise<void> => {
+  await page.waitForFunction(() => document.querySelector('main[data-participation="composer"]') !== null);
+  await page.waitForTimeout(1_200);
+};
 
 test.beforeAll(async () => {
   passerelle = await passerelleDeBouchon();
@@ -142,37 +149,136 @@ test('une humeur part avec son emoji, même sans un mot', async ({ browser }) =>
 });
 
 /**
- * **CE QUE LE BROUILLON NE FAIT PAS ENCORE, ET POURQUOI — mesuré, pas supposé.**
+ * **LE BROUILLON, ET LE CHOIX DE STOCKAGE QU'IL A FALLU FAIRE.**
  *
- * #4966 demande « un brouillon saisi survit à un rechargement et à un retour
- * bfcache ». Il ne survit PAS, et la cause n'est pas un oubli : le document
- * d'un écran CONNECTÉ est servi `cache-control: no-store, private`
- * (`app/connecte/porte.ts` › `CACHE_PRIVE`), et un document `no-store` n'entre
- * pas dans le bfcache de Chromium. Mesuré ici même le 2026-09-04 : après un
- * aller sur `/feed` et un retour arrière, le champ est VIDE.
+ * #4966 demande qu'« un brouillon saisi survive à un rechargement et à un
+ * retour ». Il ne survivait pas, et la cause était MESURÉE : le document d'un
+ * écran connecté est servi `cache-control: no-store, private`
+ * (`app/connecte/porte.ts` › `CACHE_PRIVE`), et `no-store` exclut un document
+ * du bfcache de Chromium. Retirer `no-store` ferait resservir par le bouton
+ * « précédent » un document qui porte les publications d'UNE personne, sur un
+ * appareil qui peut être partagé — une fuite payée pour un confort.
  *
- * Les deux moitiés de l'alternative sont mauvaises, et c'est ce qui range la
- * chose en suivi plutôt qu'en correctif : retirer `no-store` ferait resservir
- * par le bouton « précédent » un document qui porte les publications d'UNE
- * personne, sur un appareil qui peut être partagé — on paierait une fuite pour
- * un confort. Tenir le brouillon demande donc le MODULE (une entrée de
- * `localStorage`, restituée au chargement), c'est-à-dire la seconde tranche de
- * cet écran, comme le commentaire (#5091) et le lien (#5071) l'ont eue.
+ * D'où le module, et **`sessionStorage` plutôt que `localStorage`** : le
+ * brouillon est le texte NON PUBLIÉ de quelqu'un, exactement ce que `no-store`
+ * refuse de laisser resservir. `localStorage` recréerait cette exposition sans
+ * borne de temps, lisible par la personne SUIVANTE qui ouvre l'écran sur le
+ * même appareil — et la v3 n'a pas encore de route de déconnexion pour
+ * l'effacer. `sessionStorage` meurt avec l'onglet : il couvre le critère
+ * ENTIER, et rien de plus.
  *
- * CE TÉMOIN GARDE DONC LES DEUX FAITS QUI SONT VRAIS AUJOURD'HUI : l'écran
- * n'expédie aucun module, et son document ne se met pas en cache. Le second est
- * une propriété de SÉCURITÉ, pas une performance — c'est lui qui empêche le
- * « précédent » de resservir la publication de quelqu'un d'autre.
+ * CE QUE CE TÉMOIN PROUVE, ET QU'AUCUN TÉMOIN DE NŒUD NE PEUT DIRE : que le
+ * module DIFFÉRÉ, arrivé après le premier pixel, a bien trouvé le champ, et que
+ * le stockage choisi survit aux trois gestes que l'issue nomme.
  */
-test('n’expédie aucun module, et ne se met pas en cache', async ({ browser }) => {
+test('le brouillon survit à un rechargement', async ({ browser }) => {
+  const ctx = await contexte(browser);
+  const page = await ctx.newPage();
+
+  await page.goto(`${v3.base}/composer`);
+  await attendsLeModule(page);
+  await page.locator('#c-texte').fill('un brouillon qui doit revenir');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await attendsLeModule(page);
+
+  await expect(page.locator('#c-texte')).toHaveValue('un brouillon qui doit revenir');
+
+  await ctx.close();
+});
+
+test('le brouillon survit à un aller-retour, que le bfcache REFUSE à cet écran', async ({ browser }) => {
   const ctx = await contexte(browser);
   const page = await ctx.newPage();
 
   const reponse = await page.goto(`${v3.base}/composer`);
-
-  expect(await page.locator('script[src]').count(), 'le composer ne doit expédier aucun module').toBe(0);
+  // Le document reste `no-store` : c'est une propriété de SÉCURITÉ, et c'est
+  // elle qui rend le module nécessaire plutôt que redondant.
   expect(reponse?.headers()['cache-control'] ?? '').toContain('no-store');
   expect(reponse?.headers()['cache-control'] ?? '').toContain('private');
+
+  await attendsLeModule(page);
+  await page.locator('#c-texte').fill('écrit avant de partir');
+
+  await page.goto(`${v3.base}/feed`, { waitUntil: 'domcontentloaded' });
+  await page.goBack({ waitUntil: 'domcontentloaded' });
+  await attendsLeModule(page);
+
+  await expect(page.locator('#c-texte')).toHaveValue('écrit avant de partir');
+
+  await ctx.close();
+});
+
+/**
+ * DEUX FORMATS, DEUX BROUILLONS. « post » et « humeur » sont deux
+ * compositions ; passer de l'une à l'autre — une NAVIGATION, `?format=` — ne
+ * doit pas déverser le texte de la première dans la seconde.
+ */
+test('chaque format tient SON brouillon, et ne déborde pas sur l’autre', async ({ browser }) => {
+  const ctx = await contexte(browser);
+  const page = await ctx.newPage();
+
+  await page.goto(`${v3.base}/composer?format=post`);
+  await attendsLeModule(page);
+  await page.locator('#c-texte').fill('le texte du post');
+
+  await page.goto(`${v3.base}/composer?format=humeur`, { waitUntil: 'domcontentloaded' });
+  await attendsLeModule(page);
+  await expect(page.locator('#c-texte')).toHaveValue('');
+
+  await page.goto(`${v3.base}/composer?format=post`, { waitUntil: 'domcontentloaded' });
+  await attendsLeModule(page);
+  await expect(page.locator('#c-texte')).toHaveValue('le texte du post');
+
+  await ctx.close();
+});
+
+/**
+ * PUBLIER FERME LE BROUILLON. Sans cet effacement, revenir au composer après
+ * avoir publié reposerait le texte qu'on vient d'envoyer au monde — et le
+ * geste suivant serait de le republier.
+ */
+test('publier efface le brouillon', async ({ browser }) => {
+  const ctx = await contexte(browser);
+  const page = await ctx.newPage();
+
+  await page.goto(`${v3.base}/composer`);
+  await attendsLeModule(page);
+  await page.locator('#c-texte').fill('ceci part au monde');
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL(/publie=1/);
+
+  await page.goto(`${v3.base}/composer`, { waitUntil: 'domcontentloaded' });
+  await attendsLeModule(page);
+  await expect(page.locator('#c-texte')).toHaveValue('');
+
+  await ctx.close();
+});
+
+/**
+ * **LE SERVEUR A TOUJOURS RAISON** — la règle la moins évidente du module.
+ * Après un REFUS, la porte re-sert la saisie dans le document. Le module ne
+ * doit PAS restaurer par-dessus : il écraserait la frappe par une version plus
+ * ANCIENNE d'elle-même. Le témoin le prouve par la seule voie possible — taper
+ * un texte, le laisser partir, et vérifier que ce qui revient est celui du
+ * SERVEUR.
+ */
+test('après un refus, le module ne réécrit pas par-dessus la saisie que le serveur repose', async ({
+  browser,
+}) => {
+  const ctx = await contexte(browser);
+  const page = await ctx.newPage();
+
+  await page.goto(`${v3.base}/composer`);
+  await attendsLeModule(page);
+  await page.locator('#c-texte').fill('   ');
+  await page.locator('button[type="submit"]').click();
+
+  await expect(page.locator('.alerte')).toContainText(COMPOSER.vide);
+  await attendsLeModule(page);
+  // Le champ porte ce que le SERVEUR a reposé (la saisie nettoyée), pas le
+  // brouillon — que la soumission vient d'effacer.
+  await expect(page.locator('#c-texte')).toHaveValue('');
 
   await ctx.close();
 });
