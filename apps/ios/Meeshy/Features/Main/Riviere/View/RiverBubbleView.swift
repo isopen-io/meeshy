@@ -43,6 +43,28 @@ struct RiverBubbleContent: Equatable {
     /// système : il n'est la voix de personne.
     let identity: RiverBubbleIdentity?
 
+    /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
+    ///
+    /// `nil` ⇒ le message n'a pas été transféré. La rivière n'affichait AUCUN
+    /// badge : c'était le seul des quatre modes où la feature n'existait pas du
+    /// tout — pas un repli dégradé, une absence.
+    ///
+    /// La valeur est résolue par `RiverConversationMapping`, la PROJECTION,
+    /// jamais par la vue. C'est la même discipline que `BubbleContent` tient
+    /// pour la bulle et la rangée plate ; ce ne sont pas deux résolutions mais
+    /// deux projections d'une règle qui vit chez `ForwardBadgePolicy`.
+    let forwardAttribution: ForwardAttribution?
+
+    /// **La story citée, quand elle QUITTE la bulle** — vue `3h` (#5059).
+    ///
+    /// `nil` ⇒ rien à détacher, et `replyPreview` rend l'aperçu plat comme
+    /// avant. Non-`nil` ⇒ la scène est rendue en 9:16, jamais aplatie sur une
+    /// ligne « 📷 Story · il y a 3 h ».
+    ///
+    /// La règle du détachement n'est pas réécrite ici : c'est
+    /// `BubbleContent.detachedStoryCitation`, projeté par le mapping.
+    let storyCitation: ReplyReference?
+
     init(
         bubble: RiverLaneResolver.RiverBubble,
         senderDisplayName: String,
@@ -53,6 +75,16 @@ struct RiverBubbleContent: Equatable {
         replyPreview: RiverReplyPreview? = nil,
         systemNotice: RiverSystemNotice? = nil,
         groupPosition: RiverGroupPosition = .solo,
+        // **Défauts `nil`, et c'est le sens SÛR.** Un site de montage qui les
+        // ignore obtient le comportement d'avant — aucun badge, aucun
+        // détachement — jamais un badge fabriqué ni une carte vide. Les suites
+        // antérieures à ce lot restent donc justes sans être touchées.
+        //
+        // Posés AVANT `identity` : ils décrivent le MESSAGE, là où `identity`
+        // décrit sa VOIX. L'ordre d'un init se lit, et grouper les faits d'un
+        // même sujet évite qu'un appelant en oublie un au milieu de l'autre.
+        forwardAttribution: ForwardAttribution? = nil,
+        storyCitation: ReplyReference? = nil,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -65,6 +97,8 @@ struct RiverBubbleContent: Equatable {
         self.systemNotice = systemNotice
         self.groupPosition = groupPosition
         self.identity = identity
+        self.forwardAttribution = forwardAttribution
+        self.storyCitation = storyCitation
     }
 }
 
@@ -395,7 +429,44 @@ struct RiverBubbleView: View, Equatable {
     /// N'EN FAIT PLUS PARTIE (§7ter A.5).
     private var messageBox: some View {
         VStack(alignment: .leading, spacing: RiverMetrics.Bubble.baseGap) {
-            if let replyPreview = content.replyPreview {
+            // **#5058 — le badge de transfert, enfin.** La rivière était le seul
+            // des quatre modes à n'en afficher AUCUN : pas un repli dégradé
+            // comme la rangée plate, une absence. `BubbleForwardedIndicator`
+            // est réutilisé TEL QUEL, avec l'attribution que la projection a
+            // tranchée — la vue ne décide de rien.
+            if let attribution = content.forwardAttribution {
+                BubbleForwardedIndicator(
+                    isMe: content.bubble.isViewer,
+                    isDark: isDark,
+                    attribution: attribution
+                )
+            }
+
+            // **#5059 — une story citée est une SCÈNE ici aussi.**
+            //
+            // La carte fait 132 pt de large, donc elle tient dans une bulle de
+            // rivière (210–540). Elle est posée DANS la bulle et non au-dessus,
+            // contrairement à la peau bulle : là-bas la carte se pose sur le
+            // fond de la conversation pour ne pas vivre dans le fond COLORÉ
+            // d'une bulle ; ici la bulle est neutre (`backgroundSecondary`), et
+            // la sortir romprait le contour, les rayons de groupe et la
+            // géométrie des couloirs qui la décrivent comme une unité.
+            //
+            // `onOpen: nil` — DETTE NOMMÉE, pas un oubli. Cette vue n'a aucun
+            // canal vers le lecteur de stories (ses actions sont « ouvrir dans
+            // le fil » et « répondre »). La carte se rend quand même : c'est la
+            // citation qui « subsiste », et un `onTapGesture` posé sans
+            // gestionnaire avalerait le tap au lieu de le laisser passer — une
+            // cible morte, loi 4.
+            if let storyCitation = content.storyCitation {
+                BubbleStoryCitationCard(
+                    reply: storyCitation,
+                    isDark: isDark,
+                    accentHex: colorHex,
+                    onOpen: nil
+                )
+                .equatable()
+            } else if let replyPreview = content.replyPreview {
                 quotedReply(replyPreview)
             }
 

@@ -68,6 +68,37 @@ class ShareViewController: UIViewController {
                     session: session
                 )
             },
+            // **Vue `2a` — composer plutôt qu'envoyer tel quel** (#5056).
+            //
+            // L'extension ne compose PAS : elle est sans dépendance SDK et le
+            // composer vit dans l'app. Elle DÉCRIT (les fichiers sont déjà
+            // copiés) et rend la main. `ShareComposeHandoffConsumer` reprend la
+            // fiche au réveil de l'app.
+            //
+            // Aucun `discardStagedMedia()` ici, et c'est la même raison qu'à
+            // `onFinish` : la fiche référence désormais ces fichiers, donc ils
+            // ne sont plus orphelins — les effacer perdrait la pièce.
+            onCompose: { [weak self] media, texte in
+                guard let self else { return }
+                let fiche = ShareComposeHandoff(
+                    shareId: shareId,
+                    createdAt: Date(),
+                    text: texte,
+                    media: media
+                )
+                do {
+                    try fiche.write()
+                } catch {
+                    // La fiche n'a pas pu s'écrire : rien à reprendre côté app.
+                    // On efface plutôt que de laisser des fichiers que plus
+                    // personne ne décrit — exactement le cas qui a coûté 500 Mio
+                    // orphelins au round 1 de revue.
+                    self.discardStagedMedia()
+                    self.complete()
+                    return
+                }
+                self.openApp(fiche.openURL)
+            },
             onCancel: { [weak self] in
                 self?.discardStagedMedia()
                 self?.complete()
@@ -89,6 +120,21 @@ class ShareViewController: UIViewController {
 
         controller.didMove(toParent: self)
         hostingController = controller
+    }
+
+    /// **Le RACCOURCI, jamais le chemin.** `extensionContext.open` peut échouer
+    /// sans un mot ; la fiche est déjà sur le disque et l'app la balaie à chaque
+    /// réveil, donc la pièce arrive de toute façon. On ferme la feuille dans les
+    /// DEUX cas — laisser l'auteur devant une feuille qui ne réagit pas serait
+    /// pire que l'ouverture manquée.
+    private func openApp(_ url: URL?) {
+        guard let url, let contexte = extensionContext else {
+            complete()
+            return
+        }
+        contexte.open(url) { [weak self] _ in
+            self?.complete()
+        }
     }
 
     private func complete() {
@@ -318,6 +364,9 @@ struct ShareContentView: View {
     let stagingFailure: ShareMediaStagingError?
     let state: ShareScreenState
     let onSend: (ShareSession, [String], String?, [ShareStagedMedia]) async -> SharePendingShare
+    /// **Composer au lieu d'envoyer** (#5056, vue `2a`). Reçoit ce qui a été
+    /// préparé ; c'est l'appelant qui écrit la fiche et rend la main.
+    let onCompose: ([ShareStagedMedia], String?) -> Void
     /// Distinct de `onFinish` : appelé UNIQUEMENT par le bouton Annuler, pour
     /// que l'appelant sache qu'aucun envoi n'a été tenté et puisse effacer
     /// les fichiers déjà copiés (round 1 de revue, fuite Important).
@@ -510,6 +559,30 @@ struct ShareContentView: View {
                 .cornerRadius(12)
                 .disabled(!ShareCancelPolicy.isCancelAllowed(sendWasAttempted: sendWasAttempted))
 
+                if canCompose {
+                    Button {
+                        // Verrou à sens unique, comme l'envoi : une fois la
+                        // fiche écrite, les fichiers lui appartiennent et
+                        // « Annuler » ne doit plus les effacer.
+                        sendWasAttempted = true
+                        onCompose(media, content)
+                    } label: {
+                        // Défaut ANGLAIS, comme `share.cancel` et `share.send`
+                        // juste à côté : c'est la convention de cette
+                        // extension, et un défaut français ferait rougir le
+                        // cliquet du dépôt. La clé est traduite dans les sept
+                        // langues du catalogue PROPRE à l'extension.
+                        Text(String(localized: "share.compose",
+                                    defaultValue: "Compose"))
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
+                    .background(Color.secondary.opacity(0.2))
+                    .foregroundStyle(.primary)
+                    .cornerRadius(12)
+                    .disabled(isSending)
+                }
+
                 if case .ready = state {
                     Button {
                         send()
@@ -538,6 +611,21 @@ struct ShareContentView: View {
 
     private var canSend: Bool {
         !model.selectedIds.isEmpty && !isSending && (content?.isEmpty == false || !media.isEmpty)
+    }
+
+    /// **Composer ne demande AUCUN destinataire** — c'est ce qui le distingue
+    /// d'envoyer, et la raison pour laquelle il est offert dans des états où
+    /// « Envoyer » ne l'est pas.
+    ///
+    /// Il est offert même hors session (`.signedOut`) et sans conversation
+    /// (`.noConversations`) : la fiche se dépose sur le disque, l'app la reprend
+    /// au réveil, et c'est l'app qui demandera de se connecter si besoin.
+    /// L'exiger ici ferait perdre la pièce à quelqu'un qui vient d'installer.
+    ///
+    /// Une préparation ÉCHOUÉE le retire : composer une pièce qui n'a pas été
+    /// copiée ouvrirait un composer vide — le refus est plus honnête.
+    private var canCompose: Bool {
+        stagingFailure == nil && !isSending && (content?.isEmpty == false || !media.isEmpty)
     }
 
     private func send() {

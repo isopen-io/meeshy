@@ -241,6 +241,36 @@ nonisolated enum RiverConversationMapping {
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
                 groupPosition: positions[bubble.messageId] ?? .solo,
+                // **#5058 — l'attribution d'un transfert, résolue par la
+                // PROJECTION.** La rivière n'affichait aucun badge : le seul des
+                // quatre modes où la feature n'existait pas du tout.
+                //
+                // Les deux moitiés sont lues ENSEMBLE : `forwardedFromId` dit
+                // QUE c'est un transfert, `ForwardBadgePolicy` dit QUI on a le
+                // droit de nommer. Lire la seconde sans la première rendrait
+                // `.anonymous` sur tout message ordinaire — un badge
+                // « Transféré » sous chaque bulle de la rivière.
+                forwardAttribution: message.forwardedFromId == nil
+                    ? nil
+                    : ForwardBadgePolicy.attribution(for: message.forwardedFrom),
+                // **#5059 — la story citée reste une SCÈNE.**
+                //
+                // Le prédicat n'est pas réécrit : c'est celui de
+                // `BubbleContent.detachedStoryCitation`, appliqué aux faits que
+                // la rivière connaît. Les deux hôtes de média valent `false` par
+                // CONSTRUCTION et non par défaut : la bulle de rivière rend un
+                // `Text` et rien d'autre — elle n'a ni conteneur média ni
+                // lecteur audio qui pourrait déjà loger la citation. Le jour où
+                // elle en aurait un, ce littéral devra suivre, et c'est
+                // pourquoi il est écrit ici plutôt que sous-entendu.
+                storyCitation: message.replyTo.flatMap { reference in
+                    StoryCitationPlacement.isDetached(
+                        isStoryReply: reference.isStoryReply,
+                        hasMoodEmoji: reference.moodEmoji != nil,
+                        visualHostsReply: false,
+                        audioHostsReply: false
+                    ) ? reference : nil
+                },
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
