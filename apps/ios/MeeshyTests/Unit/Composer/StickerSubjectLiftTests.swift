@@ -100,8 +100,24 @@ final class StickerSubjectLiftTests: XCTestCase {
         let source = try MyStoriesSourceCorpus.text(
             of: "Meeshy/Features/Main/Composer/StickerLibraryPaste.swift")
 
-        XCTAssertTrue(source.contains("lift: StickerSubjectLift.isAvailable"),
-                      "la capacité doit être injectée, et gardée par la disponibilité de l'API.")
+        // **Deux FAITS, jamais une signature.** Ce témoin citait la chaîne
+        // `"lift: StickerSubjectLift.isAvailable"` — c'est-à-dire un ternaire
+        // écrit tel quel à l'argument. Ce ternaire ne compilait pas : entre une
+        // fermeture littérale et `nil`, Swift n'a aucun type à unifier, et le
+        // contrat porte de surcroît `@MainActor @Sendable`. La forme qui compile
+        // sort la décision dans une variable TYPÉE, puis passe `lift: lift`.
+        //
+        // Rien de ce que la garde protège n'a bougé — la capacité est toujours
+        // injectée, toujours derrière la disponibilité de l'API. Les deux
+        // assertions le disent séparément et survivent à la prochaine
+        // réécriture : une garde qui cite une signature est un inventaire à
+        // tenir à jour, et elle rougit pour des raisons qui ne sont pas les
+        // siennes — ici, pour un correctif de COMPILATION.
+        XCTAssertTrue(source.contains("StickerSubjectLift.isAvailable"),
+                      "l'injection doit rester gardée par la disponibilité de l'API.")
+        XCTAssertTrue(source.contains("lift: lift"),
+                      "…et la capacité ainsi décidée doit être REMISE au provider : "
+                      + "une variable calculée puis non passée aurait l'air d'être injectée.")
         XCTAssertTrue(source.contains("StickerLibraryPaste.save(image:"),
                       "le sujet détouré doit entrer par la MÊME queue d'écriture que le collage.")
     }
