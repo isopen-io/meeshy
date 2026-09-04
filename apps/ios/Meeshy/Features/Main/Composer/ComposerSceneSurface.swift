@@ -120,6 +120,9 @@ struct ComposerSceneSurface: View {
     var onCycleCameraFlash: (() -> Void)?
     var onFlipCamera: (() -> Void)?
     var onDisarmCamera: (() -> Void)?
+    var cameraSegments: [ComposerCaptureSegment] = []
+    var onDropLastSegment: (() -> Void)?
+    var onValidateSegments: (() -> Void)?
 
     // MARK: - Les deux rails
 
@@ -937,7 +940,10 @@ struct ComposerSceneSurface: View {
                         flashMode: cameraFlash,
                         onCycleFlash: { onCycleCameraFlash?() },
                         onFlipCamera: { onFlipCamera?() },
-                        onDisarm: { onDisarmCamera?() })
+                        onDisarm: { onDisarmCamera?() },
+                        segments: cameraSegments,
+                        onDropLastSegment: { onDropLastSegment?() },
+                        onValidateSegments: { onValidateSegments?() })
                 } else {
                     lowToolRow
                 }

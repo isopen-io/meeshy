@@ -42,8 +42,15 @@ struct ComposerSceneCameraBar: View {
     /// s'il a un effet, et un ÉTAT existe s'il a une porte de sortie.
     let onDisarm: () -> Void
 
+    /// **Les segments de la prise en cours** (#4099, vue `4b`). Vide ⇒ la bande
+    /// n'existe pas : rien à compter, rien à retirer, rien à valider.
+    let segments: [ComposerCaptureSegment]
+    let onDropLastSegment: () -> Void
+    let onValidateSegments: () -> Void
+
     var body: some View {
         VStack(spacing: 12) {
+            if !segments.isEmpty { segmentStrip }
             if modes.count > 1 { modeRow }
             // **La cible met le flash et la bascule EN HAUT ; le plateau n'a
             // pas cette place** — sa barre haute porte déjà la fermeture, le
@@ -143,6 +150,76 @@ struct ComposerSceneCameraBar: View {
         .accessibilityElement()
         .accessibilityLabel(ComposerSceneCameraCopy.shutterLabel(mode: mode, stage: stage))
         .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: - La bande des segments (#4099, vue `4b`)
+
+    /// **Un bandeau proportionnel, un compte, et de quoi défaire.**
+    ///
+    /// La cible met le bandeau tout en haut de l'écran et les vignettes juste
+    /// au-dessus du déclencheur. Le plateau garde son canvas libre : les deux
+    /// rejoignent la barre, dans le même ORDRE — ce qui s'est écrit d'abord,
+    /// ce qu'on peut défaire ensuite.
+    private var segmentStrip: some View {
+        VStack(spacing: 8) {
+            // Le bandeau : une part par segment, proportionnelle à sa durée.
+            // Les parts viennent de la règle, jamais d'un calcul écrit ici —
+            // c'est elle qui sait répartir également quand la durée totale est
+            // encore nulle plutôt que de diviser par zéro.
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    ForEach(Array(zip(segments, ComposerCaptureSegments.shares(segments))),
+                            id: \.0.id) { segment, part in
+                        Capsule()
+                            .fill(segment.id == segments.last?.id
+                                  ? MeeshyColors.error
+                                  : Color.white.opacity(0.75))
+                            .frame(width: max(2, geo.size.width * part - 2))
+                    }
+                }
+            }
+            .frame(height: 3)
+
+            HStack(spacing: 8) {
+                // `●` et la durée TOTALE — l'auteur compte le temps de sa prise,
+                // pas celui de son dernier geste.
+                HStack(spacing: 6) {
+                    Circle().fill(MeeshyColors.error).frame(width: 7, height: 7)
+                    Text(LocalizedNumber.duration(
+                        seconds: ComposerCaptureSegments.totalDuration(segments)))
+                        .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 26)
+                .background(Capsule().fill(MeeshyColors.error.opacity(0.22)))
+
+                Text(ComposerSceneCameraCopy.segmentCount(segments.count))
+                    .font(MeeshyFont.relative(11, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+
+                Spacer(minLength: 4)
+
+                // ⌫ — retirer le dernier. Il SUPPRIME un fichier, il ne rejoue
+                // rien : c'est la promesse de la planche, et c'est ce qui rend
+                // le geste instantané.
+                sideControl(symbol: "delete.left",
+                            label: ComposerSceneCameraCopy.dropSegmentLabel,
+                            tint: .white.opacity(0.8),
+                            action: onDropLastSegment)
+
+                // ✓ — concaténer et poser. Monté seulement s'il y a de la
+                // matière : offert sur une prise vide, il laisserait la scène
+                // inchangée après un geste explicite de validation.
+                if ComposerCaptureSegments.canValidate(segments) {
+                    sideControl(symbol: "checkmark",
+                                label: ComposerSceneCameraCopy.validateLabel,
+                                tint: .white,
+                                action: onValidateSegments)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Les contrôles de côté

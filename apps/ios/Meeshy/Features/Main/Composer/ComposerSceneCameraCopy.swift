@@ -53,6 +53,26 @@ enum ComposerSceneCameraCopy {
         }
     }
 
+    /// **Le compte des segments, au PLURIEL correct.** Une chaîne « %d
+    /// SEGMENTS » figée dirait « 1 SEGMENTS » — et c'est la première chose
+    /// qu'on voit après une prise unique, donc le cas le plus fréquent.
+    static func segmentCount(_ n: Int) -> String {
+        String(localized: "composer.camera.segments",
+               defaultValue: "\(n) segments", bundle: .main)
+    }
+
+    static var dropSegmentLabel: String {
+        String(localized: "composer.camera.dropSegment",
+               defaultValue: "Retirer le dernier segment", bundle: .main)
+    }
+
+    /// « Poser », jamais « Valider » : le mot dit ce que le geste FAIT à la
+    /// scène, et c'est la phrase de la planche — « ✓ pour poser dans la scène ».
+    static var validateLabel: String {
+        String(localized: "composer.camera.validate",
+               defaultValue: "Poser dans la scène", bundle: .main)
+    }
+
     /// La bascule d'objectif — l'action, parce qu'elle n'a que deux positions
     /// et qu'aucune des deux n'a besoin d'être nommée pour qu'on sache ce
     /// qu'un appui fera.

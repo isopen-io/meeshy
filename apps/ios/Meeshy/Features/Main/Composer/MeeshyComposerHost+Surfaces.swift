@@ -445,6 +445,9 @@ extension MeeshyComposerHost {
             onCycleCameraFlash: { sceneCameraFlash = ComposerCameraFlash.next(after: sceneCameraFlash) },
             onFlipCamera: { sceneCamera.switchCamera() },
             onDisarmCamera: { disarmSceneCamera() },
+            cameraSegments: sceneSegments,
+            onDropLastSegment: { dropLastSceneSegment() },
+            onValidateSegments: { validateSceneSegments() },
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -691,10 +694,13 @@ extension MeeshyComposerHost {
                   let image = sceneCamera.capturedPhoto else { return }
             poseSceneCapture(.photo(image))
         }
+        // **Une vidéo s'ACCUMULE, une photo se POSE** (#4099). C'est la seule
+        // divergence avec la feuille, et elle est la vue `4b` tout entière :
+        // « relâcher pour clore le segment · ✓ pour poser dans la scène ».
         .onReceive(sceneCamera.$capturedVideoId) { id in
             guard id != nil, sceneCameraStage != .off,
                   let url = sceneCamera.capturedVideoURL else { return }
-            poseSceneCapture(.video(url))
+            collectSceneSegment(url)
         }
     }
 

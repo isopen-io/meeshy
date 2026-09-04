@@ -135,6 +135,62 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         XCTAssertEqual(ComposerSceneCamera.stageAfterCapture, .off)
     }
 
+    /// **Une VIDÉO s'accumule, une PHOTO se pose** (#4099, vue `4b`).
+    ///
+    /// C'est la seule divergence avec la feuille, et elle EST la vue : « relâcher
+    /// pour clore le segment · ✓ pour poser dans la scène ». Une photo, elle,
+    /// n'a rien à concaténer — la faire attendre un `✓` ajouterait un geste à
+    /// l'usage le plus courant.
+    func test_uneVidéoSAccumule_quandUnePhotoSePose() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift")
+        let code = compact(AppSourceGuard.stripComments(
+            try String(contentsOf: url, encoding: .utf8)))
+        XCTAssertTrue(code.contains("collectSceneSegment(url)"),
+                      "une vidéo doit rejoindre les segments, pas la scène")
+        XCTAssertTrue(code.contains("poseSceneCapture(.photo(image))"),
+                      "une photo se pose tout de suite")
+    }
+
+    /// **La durée est saisie AU RELÂCHEMENT, pas à l'arrivée du fichier.**
+    ///
+    /// `CameraModel.recordingDuration` est remise à zéro au démarrage suivant,
+    /// et le fichier n'arrive qu'après. La lire quand l'URL se présente rendrait
+    /// zéro pour tous les segments sauf le dernier — un écart qui ne casse rien
+    /// et fait mentir toute la bande, donc que rien ne signalerait.
+    func test_laDuréeDuSegment_estSaisieAuRelâchement() throws {
+        let code = compact(try source("MeeshyComposerHost.swift"))
+        guard let début = code.range(of: "funcreleaseSceneShutter(){"),
+              let fin = code.range(of: "funccollectSceneSegment(", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("le relâchement ou la collecte a changé de nom") }
+        let corps = String(code[début.upperBound..<fin.lowerBound])
+        XCTAssertTrue(corps.contains("pendingSegmentDuration=sceneCamera.recordingDuration"))
+        XCTAssertTrue(corps.range(of: "pendingSegmentDuration=sceneCamera.recordingDuration")!.lowerBound
+                      < corps.range(of: "sceneCamera.stopRecording()")!.lowerBound,
+                      "la durée se lit AVANT l'arrêt, sinon l'horloge est déjà repartie")
+    }
+
+    /// **Les segments abandonnés emportent leurs FICHIERS.**
+    ///
+    /// Sans la purge, quitter le viseur après trois essais laisserait trois
+    /// `.mov` dans le dossier temporaire — et, pire, la prise SUIVANTE
+    /// repartirait avec eux : elle poserait dans la scène des segments que
+    /// l'auteur croyait avoir jetés. C'est la fuite qui se voit, pas celle qui
+    /// coûte de l'espace.
+    func test_désarmer_effaceLesSegmentsEtLeursFichiers() throws {
+        let code = compact(try source("MeeshyComposerHost.swift"))
+        guard let début = code.range(of: "funcdisarmSceneCamera(){"),
+              let fin = code.range(of: "funcdiscardSceneSegments()", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("le désarmement ou la purge a changé de nom") }
+        XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound])
+            .contains("discardSceneSegments()"))
+        XCTAssertTrue(code.contains("funcdiscardSceneSegments(){"))
+        XCTAssertTrue(code.contains("removeItemLogging("),
+                      "la purge doit toucher au DISQUE, pas seulement vider une liste")
+    }
+
     /// **Désarmer FERME la session.** Une caméra laissée tournante derrière une
     /// scène rendue est un voyant allumé que rien à l'écran n'explique — et sur
     /// un appareil réel, une batterie qui se vide.

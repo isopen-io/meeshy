@@ -324,6 +324,19 @@ struct MeeshyComposerHost: View {
     /// séparément divergeraient au premier réglage.
     @State var sceneCameraFlash: AVCaptureDevice.FlashMode = .off
 
+    /// **Les segments de la prise en cours** (#4099, vue `4b`). Chacun est un
+    /// FICHIER déjà écrit — jamais des octets en mémoire, ce qui est toute la
+    /// promesse de la planche : valider concatène des pistes déjà encodées.
+    @State var sceneSegments: [ComposerCaptureSegment] = []
+
+    /// La durée du segment en cours, saisie AU RELÂCHEMENT.
+    ///
+    /// `CameraModel.recordingDuration` est remise à zéro au démarrage suivant,
+    /// et le fichier n'arrive qu'après — la lire au moment où l'URL se présente
+    /// rendrait zéro pour tous les segments sauf le dernier. C'est le genre
+    /// d'écart qui ne casse rien et fait mentir toute la bande.
+    @State var pendingSegmentDuration: TimeInterval = 0
+
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`, l'état ici.
     @State var sceneCameraStage: ComposerSceneCameraStage = .off
 
@@ -870,8 +883,63 @@ struct MeeshyComposerHost: View {
             mode: mode, stage: sceneCameraStage)
         guard suivant != sceneCameraStage else { return }
         sceneCameraStage = suivant
+        // Saisie AVANT l'arrêt : le modèle remet son horloge à zéro au démarrage
+        // suivant, et le fichier n'arrive qu'après.
+        pendingSegmentDuration = sceneCamera.recordingDuration
         sceneCamera.stopRecording()
         HapticFeedback.medium()
+    }
+
+    /// **Une vidéo prise au viseur en scène s'ACCUMULE, elle ne se pose pas**
+    /// (#4099, vue `4b`).
+    ///
+    /// > « relâcher pour clore le segment · ✓ pour poser dans la scène »
+    ///
+    /// C'est la seule différence de fond avec la feuille, et elle est délibérée :
+    /// la feuille pose à chaque prise, le viseur en scène laisse l'auteur en
+    /// enchaîner plusieurs avant de valider. Une PHOTO, elle, se pose tout de
+    /// suite — il n'y a rien à concaténer, et l'y faire attendre un `✓`
+    /// ajouterait un geste à l'usage le plus courant.
+    func collectSceneSegment(_ url: URL) {
+        sceneSegments.append(ComposerCaptureSegment(
+            url: url, duration: pendingSegmentDuration))
+        pendingSegmentDuration = 0
+    }
+
+    /// **Retirer le dernier segment supprime son FICHIER.** La règle dit lequel ;
+    /// l'effacement se fait ici, seul endroit qui a le droit de toucher au
+    /// disque. Sans lui, chaque essai abandonné laisserait un fichier dans le
+    /// dossier temporaire jusqu'au prochain vidage du système.
+    func dropLastSceneSegment() {
+        let (gardés, orphelin) = ComposerCaptureSegments.droppingLast(sceneSegments)
+        sceneSegments = gardés
+        if let orphelin {
+            FileManager.default.removeItemLogging(
+                at: orphelin, context: "segment de prise retiré par l'auteur", logger: .media)
+        }
+        HapticFeedback.light()
+    }
+
+    /// **`✓` concatène et pose.** Un segment unique EST le fichier final : le
+    /// passer au concaténateur le ré-écrirait pour rien, quand la planche
+    /// promet « quasi instantané quelle que soit la durée ».
+    func validateSceneSegments() {
+        let segments = sceneSegments
+        guard ComposerCaptureSegments.canValidate(segments) else { return }
+        sceneSegments = []
+        Task {
+            let finale: URL?
+            if ComposerCaptureSegments.needsMerge(segments) {
+                finale = await CameraModel.mergeSegments(segments.map(\.url))
+            } else {
+                finale = segments.first?.url
+            }
+            // Repli DOUX sur le dernier segment : une concaténation qui échoue
+            // ne doit pas perdre la prise entière — même règle que la feuille,
+            // et pour la même raison.
+            guard let url = finale ?? segments.last?.url else { return }
+            poseSceneCapture(.video(url))
+        }
     }
 
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
@@ -895,7 +963,25 @@ struct MeeshyComposerHost: View {
     func disarmSceneCamera() {
         sceneCameraStage = .off
         sceneCameraMode = nil
+        // **Les segments abandonnés emportent leurs FICHIERS** (#4099). Sans
+        // cette purge, quitter le viseur après trois essais laisserait trois
+        // .mov dans le dossier temporaire jusqu'au prochain vidage du système
+        // — et la prise suivante repartirait AVEC eux, ce qui poserait dans la
+        // scène des segments que l'auteur croyait avoir jetés.
+        discardSceneSegments()
         sceneCamera.stop()
+    }
+
+    /// Efface les segments en attente ET leurs fichiers. Appelé au
+    /// désarmement ; la validation, elle, vide la liste sans effacer — les
+    /// fichiers y sont consommés par la concaténation.
+    func discardSceneSegments() {
+        for segment in sceneSegments {
+            FileManager.default.removeItemLogging(
+                at: segment.url, context: "segment de prise abandonné", logger: .media)
+        }
+        sceneSegments = []
+        pendingSegmentDuration = 0
     }
 
     var body: some View {
