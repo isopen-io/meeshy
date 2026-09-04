@@ -10,9 +10,11 @@ import {
   APPAREILS_DU_BOUCHON,
   boiteDeNotifsDeBouchon,
   filDeCommentairesDeBouchon,
+  filSocialDeBouchon,
   routesDuCompte,
   type BoiteDeNotifsDeBouchon,
   type FilDeCommentairesDeBouchon,
+  type FilSocialDeBouchon,
 } from './bouchon-compte';
 import {
   placeDeLInvite,
@@ -140,6 +142,8 @@ export type PasserelleDeBouchon = {
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires (#5091) — écrit par le POST, `remets()` entre témoins. */
   readonly filDeCommentaires: FilDeCommentairesDeBouchon;
+  /** Le fil social (#5031) — `publie()` pose une ligne EN TÊTE, `remets()` entre témoins. */
+  readonly filSocial: FilSocialDeBouchon;
   /**
    * LES CORPS DE `POST /api/v1/posts` REÇUS (#4966) — ce que le composer a
    * réellement ENVOYÉ. Le critère de fin porte sur la charge (audience, emoji,
@@ -319,6 +323,7 @@ export const passerelleDeBouchon = async (options?: {
   const publicationsRecues: Record<string, unknown>[] = [];
   const boite = boiteDeNotifsDeBouchon(conversationId);
   const filDeCommentaires = filDeCommentairesDeBouchon();
+  const filSocial = filSocialDeBouchon();
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -331,6 +336,7 @@ export const passerelleDeBouchon = async (options?: {
     publicationsRecues,
     boite,
     filDeCommentaires,
+    filSocial,
   });
 
   const serveur = createServer(async (requete, reponse) => {
@@ -430,6 +436,7 @@ export const passerelleDeBouchon = async (options?: {
     socket: bouchon,
     boite,
     filDeCommentaires,
+    filSocial,
     publicationsRecues,
     placesActives,
     sessionsRevoquees,
