@@ -889,6 +889,16 @@ struct RootView: View {
             conversationListViewModel: conversationViewModel,
             statusViewModel: statusViewModel
         )
+        // **Vue `2a` — l'entrée externe** (#5056). Montée à la racine, comme le
+        // composer de création juste au-dessus, et pour la MÊME raison : deux
+        // hôtes vivants présenteraient le cover en double sur la même fiche.
+        //
+        // La fiche vient du conteneur App Group, déposée par l'extension de
+        // partage ; `ShareComposeHandoffConsumer` la balaie à chaque réveil.
+        .shareComposeCover(
+            consumer: ShareComposeHandoffConsumer.shared,
+            storyViewModel: storyViewModel
+        )
         // Point de montage unique du SyncPill (indicateur de frappe global +
         // statut connexion + file d'attente hors-ligne), voir
         // docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
