@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
@@ -32,11 +33,39 @@ struct ComposerSceneCameraBar: View {
     /// (`ComposerSceneCamera.stageAfterRelease`) : cette vue ne re-décide rien.
     let onRelease: () -> Void
 
+    let flashMode: AVCaptureDevice.FlashMode
+    let onCycleFlash: () -> Void
+    let onFlipCamera: () -> Void
+    /// **La SORTIE.** Un état sans issue est un piège, quelle que soit sa
+    /// beauté : sans elle, armer le viseur condamnait l'auteur à publier ou à
+    /// tout fermer. C'est la loi 4 prise par l'autre bout — un contrôle existe
+    /// s'il a un effet, et un ÉTAT existe s'il a une porte de sortie.
+    let onDisarm: () -> Void
+
     var body: some View {
         VStack(spacing: 12) {
             if modes.count > 1 { modeRow }
-            shutter
+            // **La cible met le flash et la bascule EN HAUT ; le plateau n'a
+            // pas cette place** — sa barre haute porte déjà la fermeture, le
+            // format et le `⋯`. Les trois contrôles rejoignent donc la rangée
+            // du déclencheur, qui a exactement la géométrie de `2b` : quelque
+            // chose à gauche, le déclencheur au centre, quelque chose à droite.
+            HStack(spacing: 0) {
+                sideControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
+                            label: ComposerCameraFlash.label(for: flashMode),
+                            tint: flashMode == .off ? .white.opacity(0.55) : .yellow,
+                            action: onCycleFlash)
+                Spacer(minLength: 8)
+                shutter
+                Spacer(minLength: 8)
+                sideControl(symbol: "arrow.triangle.2.circlepath.camera",
+                            label: ComposerSceneCameraCopy.flipLabel,
+                            tint: .white.opacity(0.85),
+                            action: onFlipCamera)
+            }
+            .padding(.horizontal, 24)
             hint
+            exit
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
@@ -114,6 +143,48 @@ struct ComposerSceneCameraBar: View {
         .accessibilityElement()
         .accessibilityLabel(ComposerSceneCameraCopy.shutterLabel(mode: mode, stage: stage))
         .accessibilityAddTraits(.isButton)
+    }
+
+    // MARK: - Les contrôles de côté
+
+    /// 44 pt de cible, quel que soit le glyphe (dimension 5) — le même gabarit
+    /// que la feuille, pour que le doigt retrouve la même taille d'un écran à
+    /// l'autre.
+    private func sideControl(symbol: String,
+                             label: String,
+                             tint: Color,
+                             action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(.white.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    // MARK: - La sortie
+
+    /// **Rendre la scène.** Le viseur n'est pas un mode où l'on reste ; sans
+    /// cette porte, l'armer condamnait l'auteur à publier ou à tout fermer.
+    private var exit: some View {
+        Button {
+            onDisarm()
+            HapticFeedback.light()
+        } label: {
+            Text(ComposerSceneCameraCopy.disarmLabel)
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(height: 32)
+                .padding(.horizontal, 16)
+                .contentShape(Capsule().inset(by: -6))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - La phrase

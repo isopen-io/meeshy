@@ -53,6 +53,21 @@ enum ComposerSceneCameraCopy {
         }
     }
 
+    /// La bascule d'objectif — l'action, parce qu'elle n'a que deux positions
+    /// et qu'aucune des deux n'a besoin d'être nommée pour qu'on sache ce
+    /// qu'un appui fera.
+    static var flipLabel: String {
+        String(localized: "composer.camera.flip",
+               defaultValue: "Changer d'objectif", bundle: .main)
+    }
+
+    /// **La sortie du viseur.** « Annuler » serait faux — rien n'est annulé,
+    /// la scène revient telle qu'elle était. Le mot dit ce qu'on RETROUVE.
+    static var disarmLabel: String {
+        String(localized: "composer.camera.disarm",
+               defaultValue: "Revenir à la scène", bundle: .main)
+    }
+
     /// **Le libellé parlé dit l'ACTION, jamais la forme.** « Bouton rond
     /// corail » n'apprend rien ; « Prendre une photo » et « Arrêter
     /// l'enregistrement » disent ce qu'un appui fera — et ils diffèrent selon

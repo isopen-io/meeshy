@@ -118,6 +118,10 @@ struct ComposerSceneSurface: View {
     var onPickCameraMode: ((ComposerSceneCameraMode) -> Void)?
     var onCameraPress: (() -> Void)?
     var onCameraRelease: (() -> Void)?
+    var cameraFlash: AVCaptureDevice.FlashMode = .off
+    var onCycleCameraFlash: (() -> Void)?
+    var onFlipCamera: (() -> Void)?
+    var onDisarmCamera: (() -> Void)?
 
     // MARK: - Les deux rails
 
@@ -932,7 +936,11 @@ struct ComposerSceneSurface: View {
                         stage: cameraStage,
                         onPickMode: { onPickCameraMode?($0) },
                         onPress: { onCameraPress?() },
-                        onRelease: { onCameraRelease?() })
+                        onRelease: { onCameraRelease?() },
+                        flashMode: cameraFlash,
+                        onCycleFlash: { onCycleCameraFlash?() },
+                        onFlipCamera: { onFlipCamera?() },
+                        onDisarm: { onDisarmCamera?() })
                 } else {
                     lowToolRow
                 }

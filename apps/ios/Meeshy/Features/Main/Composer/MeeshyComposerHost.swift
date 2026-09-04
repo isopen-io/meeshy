@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -317,6 +318,11 @@ struct MeeshyComposerHost: View {
     /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
     /// demande, donc le porter ici ne coûte rien tant que l'auteur n'a pas armé.
     @StateObject var sceneCamera = CameraModel()
+
+    /// Le flash du viseur en scène. Le CYCLE et le vocabulaire vivent dans
+    /// `ComposerCameraFlash`, partagés avec la feuille : deux cycles écrits
+    /// séparément divergeraient au premier réglage.
+    @State var sceneCameraFlash: AVCaptureDevice.FlashMode = .off
 
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`, l'état ici.
     @State var sceneCameraStage: ComposerSceneCameraStage = .off
@@ -843,7 +849,7 @@ struct MeeshyComposerHost: View {
         HapticFeedback.medium()
         switch mode {
         case .photo:
-            sceneCamera.takePhoto(flash: .off)
+            sceneCamera.takePhoto(flash: sceneCameraFlash)
         case .video, .handsFree:
             sceneCameraStage = .recording
             Task {
