@@ -62,8 +62,17 @@ const compileUn = ({ base, chemin }) => {
   return { brut: readFileSync(sortie).length, gzip: gzip(sortie) };
 };
 
+// Le TRAVAILLEUR DE ZONE (#4473) sort de la même chaîne mais PAS de la même
+// liste : il n'est pas un module de participation (aucune entrée dans
+// `ActifsTempsReel`, aucune adresse hashée — l'URL d'un Service Worker doit
+// être STABLE, sinon chaque build enregistrerait un worker NEUF au lieu de
+// mettre à jour l'existant). Sa version vit DANS son cache, par l'empreinte
+// que `app/sw/route.ts` substitue au service.
+const TRAVAILLEUR = { base: 'sw', chemin: join(RACINE, 'lib', 'sw', 'travailleur.js') };
+
 export const compile = () => {
   mkdirSync(DOSSIER, { recursive: true });
+  compileUn(TRAVAILLEUR);
   const modules = Object.fromEntries(SOURCES.map((source) => [source.base, compileUn(source)]));
   return {
     ...modules,

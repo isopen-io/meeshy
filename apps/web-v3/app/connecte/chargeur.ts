@@ -77,3 +77,38 @@ export const REGLES_DE_SPECULATION =
   JSON.stringify({ prefetch: [{ urls: [...HUBS_PRECHARGEABLES], eagerness: 'moderate' }] }) +
   '</script>';
 
+/**
+ * LA REGISTRATION DU TRAVAILLEUR DE ZONE (#4472) — une registration PAR
+ * portée, jamais `scope: '/'` tant que l'étape 7 du § 4.9 n'est pas franchie.
+ *
+ * Les portées viennent de `lib/sw/portees.ts` (l'environnement du conteneur) ;
+ * l'URL du script les transporte dans sa query — c'est ainsi qu'elles
+ * atteignent le worker (`self.location`), et qu'un changement de portées
+ * change l'URL, donc déclenche l'update. Sans portée : AUCUN script — pas un
+ * script vide, rien.
+ *
+ * La registration attend `load` puis l'oisiveté : le téléchargement du script
+ * du worker est une requête de script, et le gate « aucune requête de script
+ * avant le premier pixel » la couvre. `catch` silencieux : un 404 (worker non
+ * construit, déploiement sans env) laisse le document exactement ce qu'il est.
+ *
+ * AUCUN écouteur `controllerchange`, AUCUN `reload` : le battement
+ * réenregistrement → activation → rechargement est précisément ce que #4472
+ * interdit aux franchissements de frontière. Nos documents n'ont pas d'état
+ * client à rejouer — un worker qui s'active les contrôlera à la navigation
+ * suivante.
+ */
+export const SCRIPT_DU_TRAVAILLEUR = (portees: readonly string[]): string => {
+  if (portees.length === 0) return '';
+  const url = `/__v3/sw?portees=${encodeURIComponent(portees.join(','))}`;
+  return (
+    '<script>' +
+    "if('serviceWorker' in navigator){addEventListener('load',()=>{" +
+    `const l=()=>{for(const p of ${JSON.stringify(portees)})` +
+    `navigator.serviceWorker.register(${JSON.stringify(url)},{scope:p,updateViaCache:'none'}).catch(()=>{})};` +
+    "'requestIdleCallback'in window?requestIdleCallback(l,{timeout:3000}):setTimeout(l,1500)" +
+    '},{once:true})}' +
+    '</script>'
+  );
+};
+
