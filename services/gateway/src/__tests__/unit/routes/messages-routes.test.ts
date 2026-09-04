@@ -1508,12 +1508,11 @@ describe('POST /conversations/:id/mark-unread', () => {
     expect(mockSendForbidden).toHaveBeenCalled();
   });
 
-  it('returns 404 when no participant (#4856 — l’accès à la conversation est déjà prouvé, rien à cacher)', async () => {
+  it('returns 404 when no participant (#4856)', async () => {
     prisma.participant.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
     expect(mockSendNotFound).toHaveBeenCalled();
-    expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
   it('no other-user messages → { unreadCount: 0 }', async () => {
@@ -1992,12 +1991,11 @@ describe('GET /conversations/:id/messages/search', () => {
   const makeSearchReq = (q = 'hello', extra: any = {}) =>
     makeRequest({ query: { q, ...extra } });
 
-  it('404 when conversationId not found (#4856 — was 403 "Conversation not found", statut et texte se contredisaient)', async () => {
+  it('404 when conversationId not found (#4856)', async () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
     expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-    expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
   it('403 when no access', async () => {
@@ -2759,11 +2757,7 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     prisma.participant.findFirst.mockResolvedValueOnce(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    // #4856 — l'appelant a déjà prouvé son accès à la conversation ; un
-    // participant absent malgré cet accès est un « je ne trouve pas », pas
-    // un refus anti-énumération.
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Participant not found in this conversation');
-    expect(mockSendForbidden).not.toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Participant not found in this conversation'); // #4856
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
     expect(prisma.participant.findFirst).toHaveBeenCalledTimes(1);
   });

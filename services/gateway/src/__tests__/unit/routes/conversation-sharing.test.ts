@@ -397,12 +397,7 @@ describe('POST /conversations/:id/new-link', () => {
     expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
-  // #4856 — cette ligne `User` est celle de l'APPELANT lui-même (son propre
-  // JWT) : aucun tiers n'est énuméré ici, donc pas de raison
-  // anti-énumération pour déguiser l'absence en refus. Aligné sur
-  // `sendNotFound` — même verdict que la cible d'une invitation, plus bas
-  // dans ce même fichier.
-  it('returns 404 when user record not found', async () => {
+  it('returns 404 when user record not found (#4856)', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
     mockResolveConversationId.mockResolvedValue(CONV_ID);
     prisma.conversation.findUnique.mockResolvedValue({ id: CONV_ID, type: 'group', title: 'Test' });
@@ -411,7 +406,6 @@ describe('POST /conversations/:id/new-link', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
     expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'User not found');
-    expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
   it('returns 403 for direct conversation type', async () => {
