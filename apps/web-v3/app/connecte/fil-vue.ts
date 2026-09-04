@@ -10,7 +10,7 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
  * leurs lecteurs historiques.
  */
 export { type TempsReel } from './chargeur';
-import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, type TempsReel } from './chargeur';
 export { CHARGEUR_DE_PARTICIPATION };
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
@@ -597,6 +597,7 @@ export const documentPleinEcran = ({
   script = '',
   feuille = FEUILLE,
   banniere = '',
+  hubs = true,
 }: {
   readonly titre: string;
   readonly description: string;
@@ -610,15 +611,28 @@ export const documentPleinEcran = ({
    * croix inerte est un contrôle sans effet (charte règle 7).
    *
    * Seul le FIL la sert parmi les écrans pleins : c'est le seul dont le module
-   * tient un socket. Les huit autres (`/notifications`, `/search`, `/contacts`,
-   * `/links`, `/post/:id`, `/feed`, `/composer`, la galerie) ne la portent pas.
+   * tient un socket. Les neuf autres (`/notifications`, `/search`, `/contacts`,
+   * `/links`, `/post/:id`, `/feed`, `/composer`, `/stories/new`, la galerie) ne
+   * la portent pas.
    */
   readonly banniere?: string;
+  /**
+   * Les règles de spéculation (#5104) — servies par défaut aux écrans
+   * CONNECTÉS. La LECTURE PARTAGÉE les refuse (`hubs: false`) : son budget dit
+   * « aucun script applicatif » et un lecteur ANONYME n'a rien à précharger
+   * des hubs d'un compte qu'il n'a pas.
+   */
+  readonly hubs?: boolean;
 }): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots: 'noindex, nofollow' }) +
-  `<body>${banniere}${corps}${script}</body>` +
+  // LA BANNIÈRE OUVRE LE CORPS, les hubs le ferment. La première est une
+  // région `aria-live` qui doit exister quand le navigateur construit son
+  // arbre d'accessibilité (#4454) ; les secondes se préchargent au survol
+  // (#5104) et n'ont rien à annoncer. Les deux sont hors du `<main>`, qu'une
+  // surimpression rend `inert` — une croix inerte serait un contrôle sans effet.
+  `<body>${banniere}${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}</body>` +
   '</html>';
 
 /**

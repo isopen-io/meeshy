@@ -28020,7 +28020,70 @@ Sites : `apps/web-v3/app/connecte/composer-porte.ts` (`langueRevendiquee`, qui l
 § « se tait sur la langue quand le lecteur n'en déclare aucune » et « ne revendique aucune langue ».
 Issue #4966.
 
-## Leçon 511 — Avant d'écrire un module, chercher celui qu'on est en train de réécrire
+## Leçon 511 — Sauver la MOITIÉ d'un lot le casse mieux que ne pas le sauver
+
+**Contexte (2026-09-04, arbre partagé à quatre sessions).** Une session a voulu
+protéger le travail en cours d'une autre et a committé ses fichiers **non
+suivis** — `2de214435f chore(composer): sauvegarde des trois fichiers de la
+pre-montee restes non suivis`. Intention irréprochable, résultat : **l'arbre a
+cessé de compiler**, avec dix erreurs.
+
+Le lot avait sept morceaux, pas trois :
+
+| morceau | sort |
+|---|---|
+| trois fichiers NEUFS | committés par la sauvegarde |
+| `adoptPreUploadedMedia` → `public` (SDK) | **perdu** |
+| `@StateObject var preUploads` (hôte) | **perdu** |
+| `enum ComposerPreUploadSweep` (ajout en fin de fichier existant) | **perdu** |
+| l'appel `startPendingPreUploads()` (fin d'une fonction existante) | **perdu** |
+
+Les trois fichiers sauvés référençaient exactement les quatre choses disparues.
+Chaque erreur du compilateur était l'un des quatre morceaux manquants.
+
+### Le renversement, qui est le cœur de la leçon
+
+**Un WIP non committé ne casse personne.** Il n'est pas dans l'arbre ; tout
+compile autour de lui. Committer ses seuls fichiers neufs produit un arbre qui
+**ne peut pas** compiler, et qui compilait avant. La sauvegarde a strictement
+DÉGRADÉ l'état qu'elle voulait protéger.
+
+> **Le discriminant n'est pas « tracké ou non » mais « ce fichier a-t-il des
+> dépendances non committées ? »** — et un fichier neuf en a presque toujours,
+> sinon il ne servirait à rien.
+
+C'est le contraire de l'intuition : les fichiers neufs ont l'air d'être ce qu'on
+peut sauver le plus sûrement, puisqu'ils n'écrasent rien. Ils sont en réalité les
+plus dangereux à sauver SEULS, parce qu'ils n'existent que pour être appelés.
+
+### Ce qui a évité la récidive, et qui n'est pas la vigilance
+
+Le porteur a demandé, une heure plus tard : « commit le repos actuel et push sur
+dev ». Committer sans mesurer aurait poussé un `dev` cassé pour quatre sessions.
+
+Ce qui l'a évité est un GESTE, pas une qualité : **compiler AVANT de signer**,
+jamais après. `git status` ne dit rien de la compilabilité d'un arbre — il dit
+qui a touché quoi, ce qui est une autre question. La seule façon de savoir si un
+arbre est publiable est de le construire.
+
+Corollaire pour un arbre partagé, et il vaut pour les deux rôles :
+- **Ne jamais committer le WIP d'une autre session**, même pour le protéger. Si
+  on croit devoir le faire, le lui DIRE d'abord : elle committera son lot entier
+  en une minute, avec le message que seul son auteur peut écrire.
+- **Committer tôt et souvent son propre lot.** Ce qui reste non committé dans un
+  arbre partagé finira emporté par le premier qui livre — c'est arrivé deux fois
+  ce jour-là, dans les deux sens.
+
+### La forme générale
+
+C'est la famille des **demi-corrections** : un `defaultValue` sans clé au
+catalogue (leçon 509), un `exclude` désignant un artefact de runtime, une garde
+posée sans son consommateur. Chacune fait quelque chose de juste sur une partie,
+et laisse l'ensemble dans un état que personne n'a voulu — **plus difficile à
+diagnostiquer que l'absence complète du geste**, parce que la partie faite
+détourne l'attention de la partie manquante.
+
+## Leçon 512 — Avant d'écrire un module, chercher celui qu'on est en train de réécrire
 
 **Ce qui s'est passé.** Le lot de la bannière en application (#4454) a commencé par remonter la loi
 du web existant dans `packages/shared/utils/notification-banner.ts`, puis par écrire, côté v3, une
@@ -28066,7 +28129,7 @@ Sites : `packages/shared/utils/notification-banner.ts` (`TypeDeNotification`, le
 `apps/web-v3/__tests__/banniere-notification.test.ts` § « UNE loi, trois clients — et rien qui la
 réécrive ici » (la garde de transcription, devenue une garde de NON-RÉÉCRITURE). Issue #4454.
 
-## Leçon 512 — Une garde qui rend `null` avant de poser sa question ne l'a jamais posée
+## Leçon 513 — Une garde qui rend `null` avant de poser sa question ne l'a jamais posée
 
 **Ce qui s'est passé.** La loi de la bannière compose le CORPS d'une notification de conversation
 ainsi :
@@ -28107,7 +28170,7 @@ Sites : `packages/shared/utils/notification-banner.ts` (`buildNotificationBanner
 d'un message envoyé sans légende », `apps/web-v3/__tests__/banniere-notification.test.ts` § « une
 pièce jointe qui n'est pas une image se marque en fichier ». Issue #4454.
 
-## Leçon 513 — Une exemption lève exactement ce qu'elle a été relue pour lever
+## Leçon 514 — Une exemption lève exactement ce qu'elle a été relue pour lever
 
 **Ce qui s'est passé.** Le brouillon du composer (#4966) est le SECOND fichier
 de la v3 autorisé à toucher le stockage du navigateur. La liste des détenteurs
@@ -28146,7 +28209,7 @@ scindés ; `DETENTEUR_DU_BROUILLON`, qui ne lève que le second),
 dont chaque entrée porte désormais sa raison de STOCKAGE et pas seulement sa
 clé). Issue #4966.
 
-## Leçon 514 — Une décision différée énumère des options, et l'énumération vieillit comme les autres
+## Leçon 515 — Une décision différée énumère des options, et l'énumération vieillit comme les autres
 
 **Ce qui s'est passé.** `/feed` n'écoutait rien d'entrant, et le doc-comment de
 son module portait la raison, longuement : un socket coûterait 12 849 o gzip sur
@@ -28198,10 +28261,10 @@ remplacée n'est plus surveillée** — le navigateur ne suit que celles qui
 existaient quand il a construit l'arbre. L'échanger rendrait muette chaque
 confirmation de geste suivante, sans que rien à l'écran ne le montre. C'est le
 même fait de plateforme qui fait SERVIR la région de la bannière plutôt que la
-créer (leçon 511, #4454) : il se paie une fois à la création, et une seconde
+créer (leçon 512, #4454) : il se paie une fois à la création, et une seconde
 fois à chaque remplacement.
 
-## Leçon 515 — Remonter une loi sans remonter ses témoins la rend orpheline
+## Leçon 516 — Remonter une loi sans remonter ses témoins la rend orpheline
 
 **Ce qui s'est passé.** La loi de la bannière a été remontée du web existant
 vers `packages/shared` pour cesser d'être écrite trois fois (#4454). Le lot

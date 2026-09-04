@@ -49,3 +49,31 @@ export const CHARGEUR_DE_PARTICIPATION =
   'setTimeout(l,4000)};' +
   'document.readyState==="complete"?p():addEventListener("load",p,{once:true})}' +
   '</script>';
+
+/**
+ * LES HUBS PRÉCHARGEABLES (#5104) — une liste FERMÉE d'adresses EXACTES, et
+ * seulement des lectures sans effet de bord. `eagerness: "moderate"` : le
+ * préchargement part au SURVOL, jamais d'office — l'économie 3G d'abord.
+ *
+ * JAMAIS `/chat/:lien` ni `/chats/:cle` (un GET y JOINT ou y ACCUSE — la
+ * garde de provenance les 503 déjà sur `Sec-Purpose: prefetch`, ceci est la
+ * défense en profondeur, pas la garde), et JAMAIS `prerender` : un prérendu
+ * exécuterait le chargeur, donc les modules, donc leurs sockets — pour un
+ * écran que personne ne regarde. La garde `speculation.test.ts` fige la
+ * liste : une adresse à effet de bord qui y entrerait rougit.
+ */
+export const HUBS_PRECHARGEABLES = [
+  '/chats',
+  '/feed',
+  '/links',
+  '/notifications',
+  '/contacts',
+  '/settings',
+  '/search',
+] as const;
+
+export const REGLES_DE_SPECULATION =
+  '<script type="speculationrules">' +
+  JSON.stringify({ prefetch: [{ urls: [...HUBS_PRECHARGEABLES], eagerness: 'moderate' }] }) +
+  '</script>';
+

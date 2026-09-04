@@ -281,6 +281,7 @@ const corps = (etat: EtatDeLaStory): string => {
 
 export const documentDuPartage = (etat: EtatDeLaStory): string =>
   documentPleinEcran({
+    hubs: false, // lecture partagée : zéro script applicatif, rien à précharger (#5104)
     titre: `${etat.genre.copie.de(etat.story.auteur)} — Meeshy`,
     description: etat.story.texte === '' ? etat.genre.copie.titre : etat.story.texte,
     corps: corps(etat),
