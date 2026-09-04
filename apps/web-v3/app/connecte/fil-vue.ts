@@ -23,6 +23,8 @@ import { nomDeLangue } from '@/lib/contenu/langues';
 import { MEDIAS } from '@/lib/contenu/medias';
 
 import { FEUILLE_CONNECTEE } from './feuille';
+import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
+import { REGION_DE_LA_BANNIERE } from './banniere-vue';
 import { FEUILLE_DU_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
 import { gabaritDeLigne, lignes } from './fil-lignes';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
@@ -594,17 +596,29 @@ export const documentPleinEcran = ({
   corps,
   script = '',
   feuille = FEUILLE,
+  banniere = '',
 }: {
   readonly titre: string;
   readonly description: string;
   readonly corps: string;
   readonly script?: string;
   readonly feuille?: string;
+  /**
+   * LA RÉGION DE LA BANNIÈRE (#4454) — servie VIDE, AVANT le corps, donc hors
+   * du `<main>` que toute surimpression rend `inert`. Voir la même raison, plus
+   * longuement, dans `ParametresDuDocument` (`app/enveloppe/vue.ts`) : une
+   * croix inerte est un contrôle sans effet (charte règle 7).
+   *
+   * Seul le FIL la sert parmi les écrans pleins : c'est le seul dont le module
+   * tient un socket. Les huit autres (`/notifications`, `/search`, `/contacts`,
+   * `/links`, `/post/:id`, `/feed`, `/composer`, la galerie) ne la portent pas.
+   */
+  readonly banniere?: string;
 }): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots: 'noindex, nofollow' }) +
-  `<body>${corps}${script}</body>` +
+  `<body>${banniere}${corps}${script}</body>` +
   '</html>';
 
 /**
@@ -662,8 +676,17 @@ export const documentDuFil = (etat: EtatDuFil): string => {
     // navigateur donne gratuitement — la première tabulation atteint la croix,
     // et le lecteur d'écran n'annonce plus un fil que rien ne montre.
     corps: html + corpsDuFil(etat, { inerte: html !== '' }),
+    // LA BANNIÈRE NE PART QU'AVEC SON MODULE (#4454) — même condition que le
+    // chargeur, et pour la même raison : sans socket, rien n'y sera jamais
+    // peint. Une région servie qu'aucun code ne remplit est du poids sans usage,
+    // et un `<output>` vide qu'un lecteur d'écran surveille pour rien.
+    banniere: etat.tempsReel === null ? '' : REGION_DE_LA_BANNIERE,
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
-    feuille: FEUILLE + (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') + (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : ''),
+    feuille:
+      FEUILLE +
+      (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
+      (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') +
+      (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : ''),
   });
 };
 

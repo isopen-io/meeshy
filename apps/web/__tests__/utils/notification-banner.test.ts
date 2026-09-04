@@ -109,6 +109,26 @@ describe('buildNotificationBanner — les sept cadrages', () => {
     expect(banner.body).toBe('Coucou');
   });
 
+  /**
+   * LE CAS NOMINAL D'UNE PHOTO — un message SANS LÉGENDE. La loi retournait
+   * `null` sur l'absence de texte AVANT de regarder les pièces jointes : la
+   * bannière ne portait alors que le nom de l'expéditeur, et `formatMessagePreview`
+   * — qui sait pourtant composer « 📷 Photo » — n'était jamais appelée.
+   */
+  it('annonce la pièce jointe d’un message envoyé sans légende', () => {
+    const banner = buildNotificationBanner(notification({
+      type: 'new_message',
+      title: 'Alice Martin',
+      content: '',
+      actor: alice,
+      context: { conversationId: 'c1', conversationTitle: 'Alice Martin', conversationType: 'direct' },
+      metadata: { attachments: [{ mimeType: 'image/jpeg' }] },
+    }), t);
+
+    expect(banner.headline).toBe('Alice Martin');
+    expect(banner.body).toBe('📷 Photo');
+  });
+
   it('nomme le groupe pour un message de groupe', () => {
     const banner = buildNotificationBanner(notification({
       type: 'new_message',

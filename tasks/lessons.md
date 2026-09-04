@@ -28019,3 +28019,90 @@ Sites : `apps/web-v3/app/connecte/composer-porte.ts` (`langueRevendiquee`, qui l
 `Lecteur.systemLanguage` — ce que le lecteur a DÉCLARÉ), `apps/web-v3/__tests__/composer.test.ts`
 § « se tait sur la langue quand le lecteur n'en déclare aucune » et « ne revendique aucune langue ».
 Issue #4966.
+
+## Leçon 511 — Avant d'écrire un module, chercher celui qu'on est en train de réécrire
+
+**Ce qui s'est passé.** Le lot de la bannière en application (#4454) a commencé par remonter la loi
+du web existant dans `packages/shared/utils/notification-banner.ts`, puis par écrire, côté v3, une
+liaison, une copie, une région, une feuille — quatre fichiers, tous compilant. Au moment d'écrire
+les témoins, un `ls __tests__/` a rendu `banniere-notification.test.ts` : **la v3 avait DÉJÀ sa loi
+de bannière**, `lib/notifications/banniere.ts`, 258 lignes, avec 290 lignes de témoins, mergée dans
+`dev` avant le début de la session. Je réécrivais, à l'octet près, ce qui existait — dans le lot
+dont l'objet DÉCLARÉ était d'empêcher exactement cette troisième écriture.
+
+**Pourquoi ça n'a pas sauté aux yeux.** Le module existant n'était importé par RIEN sauf ses
+témoins : du code livré, prouvé, et sans appelant. Aucun `grep` du chemin d'exécution ne le
+rencontre ; aucune erreur de compilation ne le signale ; il ne paraît dans aucun bundle. Un module
+sans consommateur est INVISIBLE à toutes les recherches qui partent d'un consommateur.
+
+**La règle.** *Avant d'écrire un fichier, chercher son SUJET — pas son chemin, ni ses appelants.*
+Un `ls` du répertoire des témoins et un `grep -ril <sujet>` coûtent dix secondes ; ils auraient rendu
+le fichier au premier essai. La question à poser n'est pas « où ce code sera-t-il appelé ? » mais
+**« quelqu'un a-t-il déjà écrit ceci ? »**, et le meilleur endroit où la poser est le répertoire des
+TÉMOINS : un module peut n'avoir aucun appelant, il a presque toujours un témoin, et le témoin porte
+le sujet dans son nom.
+
+**Le corollaire, qui a coûté davantage.** Le fichier existant PORTAIT son argument d'architecture
+dans un doc-comment : « les littéraux transcrivent `NotificationTypeEnum` plutôt que d'en importer
+la valeur : un import de VALEUR tirerait le module entier dans le chunk de `(connected)`, que le
+§ 8.3 plafonne ». Mesuré : SEIZE fichiers de la v3 importent déjà des valeurs de `@meeshy/shared`,
+dont un module de navigateur, et la v3 n'expédie aucun JavaScript de page — il n'y a pas de chunk
+`(connected)`. **Un argument d'architecture écrit dans un doc-comment est une AFFIRMATION à
+vérifier, jamais un fait à respecter** ; celui-ci justifiait une duplication de loi par une
+contrainte qui n'existait pas.
+
+**Et l'affirmation avait quand même raison sur le CHIFFRE.** L'import de valeur coûtait bien :
++2 944 o gzip sur `participate.js`, +3 119 o sur `liste.js` — TypeScript émet de
+`NotificationTypeEnum` (~150 membres) un objet littéral entier, tiré pour nommer quatorze
+constantes. La bonne réponse n'était donc ni la copie (deux lois) ni l'import (trois kilo-octets sur
+la 3G rurale) mais la TROISIÈME : prouver l'appartenance à la COMPILATION —
+`['new_message', …] satisfies readonly \`${NotificationTypeEnum}\`[]`, un `import type` qui n'émet
+rien. Une source unique, un membre renommé qui rend rouge plus tôt qu'un témoin, et zéro octet.
+**Quand un doc-comment oppose la source unique au poids, chercher la formulation qui rend les
+deux** — le compilateur sait vérifier beaucoup de ce qu'on croit devoir exécuter.
+
+Sites : `packages/shared/utils/notification-banner.ts` (`TypeDeNotification`, les trois `satisfies`),
+`apps/web-v3/lib/notifications/banniere.ts` (la liaison, qui a remplacé la copie),
+`apps/web-v3/__tests__/banniere-notification.test.ts` § « UNE loi, trois clients — et rien qui la
+réécrive ici » (la garde de transcription, devenue une garde de NON-RÉÉCRITURE). Issue #4454.
+
+## Leçon 512 — Une garde qui rend `null` avant de poser sa question ne l'a jamais posée
+
+**Ce qui s'est passé.** La loi de la bannière compose le CORPS d'une notification de conversation
+ainsi :
+
+```ts
+const contenu = nonVide(notification.content);
+if (cadrage === 'conversation') {
+  if (!contenu) return null;                       // ← ici
+  const piecesJointes = …;
+  return conventions.apercuDeMessage(contenu, piecesJointes);
+}
+```
+
+`apercuDeMessage` est la convention par laquelle chaque client compose « 📷 Photo », « 📎 Fichier ».
+Elle n'était JAMAIS appelée sur le cas nominal d'une photo : **un message envoyé sans légende**. Le
+`if (!contenu) return null` sortait avant de regarder les pièces jointes. La bannière d'une photo
+n'affichait donc que le nom de l'expéditeur — et le web existant vivait avec ce défaut depuis
+l'origine, la loi partagée l'ayant repris tel quel.
+
+**La règle.** *Un `return` anticipé sur l'absence d'UNE source est un jugement sur TOUTES les
+sources.* La question était « ce message a-t-il quelque chose à montrer ? » et le code demandait
+« ce message a-t-il du TEXTE ? ». Les deux coïncident tant qu'aucun message n'est fait d'autre
+chose que de texte — c'est-à-dire jamais, dans une messagerie qui porte des photos.
+
+**Comment le trouver.** Le témoin qui l'a attrapé ne visait pas ce cas : il vérifiait que la liaison
+v3 apportait bien le marqueur de pièce jointe, avec un contenu VIDE parce que c'était le cas le plus
+court à écrire. **Un témoin écrit sur la valeur la plus dégénérée du champ voisin trouve les gardes
+qui ont sorti trop tôt** — et la question à poser à tout retour anticipé est : *que RESTAIT-il à
+regarder après ce `return` ?*
+
+**La forme générale.** C'est la famille des cycles 123-125 (« que transporte la charge À CÔTÉ du
+texte que je viens de garder ? ») avec le signe inversé : là, une garde laissait partir plus qu'elle
+n'autorisait ; ici, elle retenait plus qu'elle ne le devait. Dans les deux cas le défaut est dans ce
+que la garde NE REGARDE PAS, et dans les deux cas il est écrit à côté d'elle, par la même main.
+
+Sites : `packages/shared/utils/notification-banner.ts` (`buildNotificationBannerBody`, la branche
+`conversation`), `apps/web/__tests__/utils/notification-banner.test.ts` § « annonce la pièce jointe
+d'un message envoyé sans légende », `apps/web-v3/__tests__/banniere-notification.test.ts` § « une
+pièce jointe qui n'est pas une image se marque en fichier ». Issue #4454.
