@@ -10,6 +10,7 @@ import {
   FORMATS_SERVIS,
   HUMEURS,
   LONGUEUR_MAX_DU_CONTENU,
+  ONGLET_DE_LA_STORY,
   type Audience,
   type FormatServi,
 } from '@/lib/contenu/composer';
@@ -90,6 +91,10 @@ const onglets = (courant: FormatServi): string =>
       `<li><a href="${echappe(versLeFormat(cle))}"${cle === courant ? ' aria-current="page"' : ''}>` +
       `${svgDuSprite(glyphe)}${echappe(libelle)}</a></li>`,
   ).join('') +
+  // LA STORY EST UN ÉCRAN, PAS UN FORMAT — l'onglet MÈNE à `/stories/new`
+  // (#5033) et ne porte donc jamais `aria-current` : on n'y est jamais.
+  `<li><a href="${echappe(ONGLET_DE_LA_STORY.href)}">` +
+  `${svgDuSprite(ONGLET_DE_LA_STORY.glyphe)}${echappe(ONGLET_DE_LA_STORY.libelle)}</a></li>` +
   '</ul>';
 
 const champDuTexte = ({ etat, libelle, indice }: { readonly etat: EtatDuComposer; readonly libelle: string; readonly indice: string }): string =>

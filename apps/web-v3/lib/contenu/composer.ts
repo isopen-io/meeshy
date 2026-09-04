@@ -8,9 +8,12 @@
  *   « already uploaded » : cet écran ne téléverse rien, et publier un `REEL`
  *   sans média produirait un réel sans réel. Ce n'est pas un onglet à câbler
  *   plus tard au même endroit — c'est un lot de téléversement.
- * • **Story** a sa propre route (`/stories/new`, #5033), qui n'existe pas
- *   encore. L'onglet REVIENDRA quand elle sera servie, et c'est écrit dans
- *   #5033 en toutes lettres.
+ * • **Story** a sa propre route (`/stories/new`, #5033), servie depuis ce
+ *   lot : son onglet est donc un LIEN VERS ELLE, pas un format de ce
+ *   formulaire. Publier une story demande une audience par défaut différente
+ *   (`FRIENDS`, le défaut serveur) et une durée de vie à annoncer — deux
+ *   choses qu'un troisième `?format=` aurait fondues dans un écran qui ne les
+ *   distingue pas.
  *
  * Un onglet vers une route absente, ou vers une publication qu'on ne peut pas
  * composer, est le contrôle sans effet de la charte règle 7 — la même doctrine
@@ -35,6 +38,19 @@ export const FORMATS_SERVIS = [
   { cle: 'post', glyphe: 'ph-article', libelle: 'Post', type: 'POST' },
   { cle: 'humeur', glyphe: 'ph-smiley', libelle: 'Humeur', type: 'STATUS' },
 ] as const;
+
+/**
+ * LA STORY N'EST PAS UN FORMAT DE CE FORMULAIRE — c'est un ÉCRAN. L'onglet est
+ * rendu à côté des deux autres, comme la cible le dessine, mais il MÈNE
+ * ailleurs : `/stories/new` (#5033). Le distinguer dans le type plutôt que de
+ * le glisser dans `FORMATS_SERVIS` est ce qui empêche la porte de le traiter
+ * comme un `?format=` qu'elle publierait elle-même.
+ */
+export const ONGLET_DE_LA_STORY = {
+  glyphe: 'ph-sparkle',
+  libelle: 'Story',
+  href: '/stories/new',
+} as const;
 
 export type FormatServi = (typeof FORMATS_SERVIS)[number]['cle'];
 

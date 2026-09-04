@@ -84,8 +84,23 @@ describe('le composer servi', () => {
     expect(html).toContain('href="/composer?format=post"');
     expect(html).toContain('href="/composer?format=humeur"');
     expect(html).not.toContain('format=reel');
+    // « Story » n'est PAS un format de ce formulaire : c'est un écran, et son
+    // onglet MÈNE ailleurs (#5033).
     expect(html).not.toContain('format=story');
-    expect(html).not.toContain('href="/stories/new"');
+  });
+
+  /**
+   * L'ONGLET « STORY » EST UN LIEN VERS SON ÉCRAN, et il ne porte jamais
+   * `aria-current` : on n'est jamais « sur » la story depuis le composer. Ce
+   * témoin garde la porte de `/stories/new` — leçon 507 — ET la distinction :
+   * un `?format=story` voudrait dire que le composer la publie lui-même, avec
+   * le mauvais défaut d'audience.
+   */
+  it('mène à l’écran de story, sans prétendre y être', async () => {
+    const html = await (await LIS_LE_COMPOSER(requete('/composer'), serveur().recuperer)).text();
+
+    expect(html).toContain('href="/stories/new"');
+    expect(html).not.toContain('href="/stories/new" aria-current');
   });
 
   it('sert le format demandé, et le dit à autre chose qu’à la couleur', async () => {
