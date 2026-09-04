@@ -1508,8 +1508,7 @@ describe('POST /conversations/:id/mark-unread', () => {
     expect(mockSendForbidden).toHaveBeenCalled();
   });
 
-  // #4856 — accès déjà prouvé, l'absence décrit l'appelant lui-même : 404.
-  it('returns 404 when no participant', async () => {
+  it('returns 404 when no participant (#4856 — access already proven, absence describes caller)', async () => {
     prisma.participant.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
@@ -2758,10 +2757,7 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     prisma.participant.findFirst.mockResolvedValueOnce(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    // #4856 — `canAccessConversation` a déjà prouvé cette conversation pour
-    // l'appelant : l'absence ici décrit son PROPRE état, jamais une ressource
-    // qu'un tiers pourrait sonder. Le vrai statut est donc 404.
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Participant not found in this conversation');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Participant not found in this conversation'); // #4856
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
     expect(prisma.participant.findFirst).toHaveBeenCalledTimes(1);
   });

@@ -397,11 +397,7 @@ describe('POST /conversations/:id/new-link', () => {
     expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
-  // #4856 — `currentUserId` vient du JWT de l'appelant, jamais d'un
-  // identifiant qu'il sonde : son absence décrit son PROPRE compte (jeton
-  // valide, ligne `User` disparue), aucun anti-oracle n'est en jeu, et le
-  // vrai statut est 404.
-  it('returns 404 when user record not found', async () => {
+  it('returns 404 when user record not found (#4856 — own JWT identity, no oracle)', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
     mockResolveConversationId.mockResolvedValue(CONV_ID);
     prisma.conversation.findUnique.mockResolvedValue({ id: CONV_ID, type: 'group', title: 'Test' });
