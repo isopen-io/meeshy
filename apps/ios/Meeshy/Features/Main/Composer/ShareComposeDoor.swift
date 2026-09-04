@@ -50,7 +50,7 @@ struct ShareComposeDoor: View {
             // défaut du SDK, écrit ici plutôt que laissé au hasard d'un défaut
             // de paramètre.
             initialVisibility: PostVisibility.friends.rawValue,
-            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                 storyViewModel.publishStoryInBackground(
                     targetType: targetType,
                     slides: slides,
@@ -58,6 +58,12 @@ struct ShareComposeDoor: View {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    // #3956 — un GIF collé dans le composer OUVERT DEPUIS LE
+                    // PARTAGE part animé comme partout ailleurs. Cette porte
+                    // est née après l'élargissement du canal et ne le portait
+                    // pas : le compilateur l'a dit en dix décalages d'un cran,
+                    // jamais en nommant l'argument manquant.
+                    loadedStickerAnimations: loadedStickerAnimations,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,

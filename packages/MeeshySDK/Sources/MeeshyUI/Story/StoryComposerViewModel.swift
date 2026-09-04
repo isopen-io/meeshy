@@ -154,6 +154,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     var retiredVideoURLs: [String: URL] = [:]
     var retiredAudioURLs: [String: URL] = [:]
     var retiredSlideImages: [String: UIImage] = [:]
+    /// Les octets animés d'un sticker supprimé — même purge paresseuse que les
+    /// bitmaps : un undo qui ramène le sticker doit le ramener ANIMÉ, pas figé
+    /// sur son image 1.
+    var retiredStickerAnimations: [String: Data] = [:]
 
     // MARK: - Floating Text Edit Mode
 
@@ -330,6 +334,19 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published public internal(set) var loadedVideoURLs: [String: URL] = [:]
     @Published public internal(set) var loadedAudioURLs: [String: URL] = [:]
 
+    /// **Les octets ANIMÉS d'un sticker collé, keyés par id d'élément** (#3956)
+    /// — vide pour tout sticker fixe, qui ne paie donc rien.
+    ///
+    /// Jumelle de `loadedVideoURLs` : le composer tient à part ce qu'une
+    /// `UIImage` ne sait pas porter. `loadedImages[id]` garde la PREMIÈRE image
+    /// du même sticker — la cover, l'export, le thumbHash et la vignette de
+    /// grille continuent de la lire sans rien connaître de l'animation.
+    ///
+    /// Les octets, et non des images décodées : un GIF de trente images décodé
+    /// en mémoire pour chaque sticker posé coûterait des dizaines de mégaoctets
+    /// que rien ne borne. Le site qui PEINT décode au budget de sa surface.
+    @Published public internal(set) var loadedStickerAnimations: [String: Data] = [:]
+
     /// **Les sources déjà PORTÉES dans la scène (B1, #3924).** Clé
     /// d'idempotence d'`applyContentMedia` : les closures de bascule de mode
     /// refirent à chaque changement (Post↔Story↔Réel), et sans cette mémoire un
@@ -361,6 +378,20 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             loadedImages[id] = image
         } else {
             loadedImages.removeValue(forKey: id)
+        }
+        loadedImagesVersion &+= 1
+    }
+
+    /// Enregistre (ou retire, si `data == nil`) les octets ANIMÉS d'un sticker
+    /// sous sa clé, **et bump `loadedImagesVersion`** pour la même raison que
+    /// `registerLoadedImage` : sans ce bump, le `ComposerImageCacheReader` du
+    /// canvas reste périmé et le sticker collé s'affiche figé sur son image 1
+    /// — un défaut MUET, puisque quelque chose s'affiche.
+    func registerLoadedStickerAnimation(_ data: Data?, for id: String) {
+        if let data {
+            loadedStickerAnimations[id] = data
+        } else {
+            loadedStickerAnimations.removeValue(forKey: id)
         }
         loadedImagesVersion &+= 1
     }

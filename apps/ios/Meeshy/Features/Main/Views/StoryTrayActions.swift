@@ -192,7 +192,7 @@ struct StoryComposerCover: ViewModifier {
                 intent: ComposerIntent(origin: .storyTray),
                 initialVisibility: viewModel.lastComposerVisibility,
                 draftId: viewModel.pendingDraftId,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                     viewModel.publishStoryInBackground(
                         targetType: targetType,
                         slides: slides,
@@ -200,6 +200,7 @@ struct StoryComposerCover: ViewModifier {
                         loadedImages: loadedImages,
                         loadedVideoURLs: loadedVideoURLs,
                         loadedAudioURLs: loadedAudioURLs,
+                        loadedStickerAnimations: loadedStickerAnimations,
                         originalLanguage: originalLanguage,
                         visibility: visibility,
                         visibilityUserIds: visibilityUserIds,

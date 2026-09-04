@@ -17,6 +17,14 @@ import MeeshySDK
 /// (UIImage non Equatable, dict hashable seulement via clés).
 struct ComposerImageCacheReader: ImageCacheReader {
     let images: [String: UIImage]
+    /// **Les octets ANIMÉS des stickers collés, keyés comme les bitmaps**
+    /// (#3956) — vide tant qu'aucun GIF n'a été posé.
+    ///
+    /// Ils voyagent À CÔTÉ des images, jamais à leur place : `images[key]` reste
+    /// la première image du même sticker, et c'est elle que peignent la cover,
+    /// l'export et le thumbHash. La couche essaie les octets d'abord ; leur
+    /// absence n'est pas un échec, c'est le cas nominal d'une image fixe.
+    var animations: [String: Data] = [:]
     let version: UInt64
 
     func cachedImage(for key: String) async -> UIImage? {
@@ -106,6 +114,13 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
     public var loadedImagesVersion: UInt64 = 0
+    /// Octets animés des stickers collés, keyés par `sticker.id` (miroir de
+    /// `viewModel.loadedStickerAnimations`, #3956). Sans ce fil, un GIF posé sur
+    /// la scène s'y peint FIGÉ sur son image 1 pendant que la publication, elle,
+    /// l'envoie animé — l'aperçu mentirait sur ce qui va être publié (loi 6).
+    /// Le cookie ci-dessus couvre aussi ce dictionnaire :
+    /// `registerLoadedStickerAnimation` le bump.
+    public var loadedStickerAnimations: [String: Data] = [:]
     /// URLs locales (file://) des clips audio importés, keyées par `audio.id`
     /// (miroir de `viewModel.loadedAudioURLs`). Wiré vers
     /// `readerContext.localAudioURLResolver` pour que le mixer joue le son en
@@ -147,6 +162,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onViewportZoomResetRequested: (() -> Void)? = nil,
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
+                loadedStickerAnimations: [String: Data] = [:],
                 loadedImagesVersion: UInt64 = 0,
                 loadedAudioURLs: [String: URL] = [:],
                 canvasCornerRadius: CGFloat = 0,
@@ -174,6 +190,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onViewportZoomResetRequested = onViewportZoomResetRequested
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.loadedImages = loadedImages
+        self.loadedStickerAnimations = loadedStickerAnimations
         self.loadedImagesVersion = loadedImagesVersion
         self.loadedAudioURLs = loadedAudioURLs
         self.canvasCornerRadius = canvasCornerRadius
@@ -195,7 +212,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     private func makeComposerContext() -> StoryReaderContext {
         let audioURLs = loadedAudioURLs
         let audioResolver: @Sendable (String) -> URL? = { audioURLs[$0] }
-        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
+        let reader = ComposerImageCacheReader(images: loadedImages,
+                                              animations: loadedStickerAnimations,
+                                              version: loadedImagesVersion)
         return StoryReaderContext(imageCache: reader, localAudioURLResolver: audioResolver)
     }
 

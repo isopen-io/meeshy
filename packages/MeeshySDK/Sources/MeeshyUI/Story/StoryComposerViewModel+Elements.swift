@@ -542,13 +542,21 @@ extension StoryComposerViewModel {
     /// L'emoji de repli est écrit ICI, pas à la publication : un brouillon relu
     /// par une version antérieure — qui ne sait rien de l'image — doit déjà
     /// montrer un glyphe.
+    /// - Parameter animatedData: les octets d'un GIF/APNG/WebP/HEICS collé
+    ///   (#3956) — `nil` pour une image fixe, qui ne paie donc rien. Ils sont
+    ///   retenus sous le MÊME id que le bitmap : la couche du canvas essaie les
+    ///   octets d'abord et retombe sur l'image fixe quand il n'y en a pas.
     @discardableResult
     public func addSticker(image: UIImage,
                            provider: String,
-                           scale: Double? = nil) -> StorySticker {
+                           scale: Double? = nil,
+                           animatedData: Data? = nil) -> StorySticker {
         let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
                                  provider: provider, scale: scale)
         registerLoadedImage(image, for: sticker.id)
+        if let animatedData {
+            registerLoadedStickerAnimation(animatedData, for: sticker.id)
+        }
         return sticker
     }
 
@@ -845,6 +853,12 @@ extension StoryComposerViewModel {
         if let img = loadedImages.removeValue(forKey: id) { retiredImages[id] = img }
         if let url = loadedVideoURLs.removeValue(forKey: id) { retiredVideoURLs[id] = url }
         if let url = loadedAudioURLs.removeValue(forKey: id) { retiredAudioURLs[id] = url }
+        // Les octets animés suivent leur bitmap (#3956) : les laisser derrière
+        // ferait grossir le composer d'un GIF par sticker supprimé, et l'undo
+        // ramènerait un sticker figé.
+        if let bytes = loadedStickerAnimations.removeValue(forKey: id) {
+            retiredStickerAnimations[id] = bytes
+        }
         mediaAspectRatios.removeValue(forKey: id)
         zIndexMap.removeValue(forKey: id)
     }

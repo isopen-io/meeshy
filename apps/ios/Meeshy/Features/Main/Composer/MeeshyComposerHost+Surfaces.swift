@@ -382,6 +382,7 @@ extension MeeshyComposerHost {
             aspectRatio: viewModel.currentCanvasRatio,
             plateauTint: tint.color,
             sceneImages: viewModel.loadedImages,
+            sceneStickerAnimations: viewModel.loadedStickerAnimations,
             sceneImagesVersion: viewModel.loadedImagesVersion,
             onItemTapped: { id, kind in
                 selectedSceneItemId = id

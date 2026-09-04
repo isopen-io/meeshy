@@ -60,6 +60,8 @@ struct ComposerSceneSurface: View {
     let aspectRatio: CGFloat
     let plateauTint: Color
     var sceneImages: [String: UIImage] = [:]
+    /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
+    var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
     var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
 
@@ -619,6 +621,7 @@ struct ComposerSceneSurface: View {
                     onBackgroundTapped: onBackgroundTapped,
                     onBackgroundLongPressed: onBackgroundLongPressed,
                     loadedImages: sceneImages,
+                    loadedStickerAnimations: sceneStickerAnimations,
                     loadedImagesVersion: sceneImagesVersion,
                     // Le canvas retire son calque de dessin persisté pendant
                     // qu'une surface live est posée dessus — sinon le trait

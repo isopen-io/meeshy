@@ -219,6 +219,8 @@ struct ComposerDocumentSurface: View {
     /// cookie qui dit au canvas qu'un bitmap a changé (un dictionnaire d'images
     /// n'est pas `Equatable`).
     var sceneImages: [String: UIImage] = [:]
+    /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
+    var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
 
     /// **Le slot de tête de `toolRow` (#3903).** Un chip d'état actif (le lieu,
@@ -384,6 +386,7 @@ struct ComposerDocumentSurface: View {
                     onBackgroundTapped: onSceneBackgroundTapped,
                     onBackgroundLongPressed: onSceneBackgroundLongPressed,
                     loadedImages: sceneImages,
+                    loadedStickerAnimations: sceneStickerAnimations,
                     loadedImagesVersion: sceneImagesVersion
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

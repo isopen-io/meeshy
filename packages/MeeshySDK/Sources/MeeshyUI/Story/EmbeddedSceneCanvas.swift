@@ -106,6 +106,10 @@ public struct EmbeddedSceneCanvas: View {
     /// qu'au premier post à photos, où la carte se peignait au tiers de sa
     /// taille, calée en haut à gauche.
     public var loadedImages: [String: UIImage]
+    /// Octets animés des stickers collés (#3956) — la scène embarquée les
+    /// joue comme le canvas plein écran ; sans ce fil, un GIF posé ici
+    /// s'y peindrait figé alors qu'il anime dans l'autre surface.
+    public var loadedStickerAnimations: [String: Data]
 
     /// Cookie monotone : les dictionnaires d'`UIImage` ne sont pas `Equatable`,
     /// donc c'est LUI qui dit au canvas qu'un bitmap a changé. Le transmettre
@@ -171,6 +175,7 @@ public struct EmbeddedSceneCanvas: View {
         onBackgroundTapped: (() -> Void)? = nil,
         onBackgroundLongPressed: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
+        loadedStickerAnimations: [String: Data] = [:],
         loadedImagesVersion: UInt64 = 0,
         isDrawingOverlayActive: Bool = false,
         editingTextId: String? = nil,
@@ -191,6 +196,7 @@ public struct EmbeddedSceneCanvas: View {
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundLongPressed = onBackgroundLongPressed
         self.loadedImages = loadedImages
+        self.loadedStickerAnimations = loadedStickerAnimations
         self.loadedImagesVersion = loadedImagesVersion
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.editingTextId = editingTextId
@@ -237,6 +243,7 @@ public struct EmbeddedSceneCanvas: View {
                 onBackgroundLongPressed: onBackgroundLongPressed,
                 isDrawingOverlayActive: isDrawingOverlayActive,
                 loadedImages: loadedImages,
+                loadedStickerAnimations: loadedStickerAnimations,
                 loadedImagesVersion: loadedImagesVersion,
                 // Rayon compensé par l'échelle : la carte est rendue à sa taille
                 // de référence PUIS réduite, donc un rayon UIKit de

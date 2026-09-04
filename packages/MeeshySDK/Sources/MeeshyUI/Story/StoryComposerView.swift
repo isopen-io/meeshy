@@ -276,6 +276,11 @@ public struct StoryComposerView: View {
         _ loadedImages: [String: UIImage],
         _ loadedVideoURLs: [String: URL],
         _ loadedAudioURLs: [String: URL],
+        /// **Les octets ANIMÉS des stickers collés, keyés par id d'élément**
+        /// (#3956). `loadedImages` n'en porte que la première image : sans ce
+        /// canal, la publication téléverserait un PNG figé de ce que l'auteur
+        /// vient de composer animé, et l'aperçu serait le seul à avoir dit vrai.
+        _ loadedStickerAnimations: [String: Data],
         _ originalLanguage: String?,
         _ visibility: String,
         _ visibilityUserIds: [String],
@@ -327,7 +332,7 @@ public struct StoryComposerView: View {
         publishTrigger: ComposerPublishTrigger? = nil,
         publishTargetType: PostType = .story,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -359,7 +364,7 @@ public struct StoryComposerView: View {
         publishTrigger: ComposerPublishTrigger? = nil,
         publishTargetType: PostType = .story,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {

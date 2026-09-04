@@ -164,6 +164,7 @@ extension MeeshyComposerHost {
                 aspectRatio: viewModel.currentCanvasRatio,
                 plateauTint: tint.color,
                 sceneImages: viewModel.loadedImages,
+                sceneStickerAnimations: viewModel.loadedStickerAnimations,
                 sceneImagesVersion: viewModel.loadedImagesVersion,
                 onClose: { closeObjectEditor() },
                 // Le plan 2D peut désigner un autre objet : c'est le MEUBLE qui
