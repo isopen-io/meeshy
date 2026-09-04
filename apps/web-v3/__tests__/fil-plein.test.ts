@@ -84,6 +84,7 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
     liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
     commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
     navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
+    composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };

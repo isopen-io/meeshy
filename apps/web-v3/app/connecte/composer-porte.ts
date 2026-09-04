@@ -1,4 +1,5 @@
 import { CACHE_PRIVE, rendu, versLaConnexion } from '@/app/connecte/porte';
+import { actifsTempsReel } from '@/lib/actifs-rt';
 import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
 import { moi, type Lecteur } from '@/lib/api/compte';
@@ -88,10 +89,12 @@ const etatNeuf = ({
   format,
   lecteur,
   publieOk,
+  tempsReel,
 }: {
   readonly format: FormatServi;
   readonly lecteur: Lecteur | null;
   readonly publieOk: boolean;
+  readonly tempsReel: { readonly module: string } | null;
 }): EtatDuComposer => ({
   format,
   texte: '',
@@ -100,7 +103,20 @@ const etatNeuf = ({
   langue: langueRevendiquee(lecteur),
   publie: publieOk,
   erreur: null,
+  tempsReel,
 });
+
+/**
+ * LE SOCLE DU MODULE (#4966) — `null` tant que l'actif compilé est absent : le
+ * Post/Redirect/Get reste alors le seul chemin, et il suffit (§ 12.4). Le
+ * module ne parle à personne : il tient le BROUILLON dans `sessionStorage`,
+ * que le `no-store` du document ne peut pas tenir à sa place.
+ */
+const moduleDuBrouillon = (): { readonly module: string } | null => {
+  const actifs = actifsTempsReel();
+  if (actifs.composer.corps === '') return null;
+  return { module: actifs.composer.url };
+};
 
 export const LIS_LE_COMPOSER = async (requete: Request, recuperer?: Recuperateur): Promise<Response> => {
   const jeton = jetonDuLecteur(requete);
@@ -116,6 +132,7 @@ export const LIS_LE_COMPOSER = async (requete: Request, recuperer?: Recuperateur
         format: formatDemande(adresse.searchParams.get(CHAMP_DU_FORMAT)),
         lecteur: identite.genre === 'lecteur' ? identite.lecteur : null,
         publieOk: adresse.searchParams.get('publie') === '1',
+        tempsReel: moduleDuBrouillon(),
       }),
     ),
   );
@@ -161,6 +178,11 @@ export const PUBLIE_DEPUIS_LE_COMPOSER = async (
         langue: langueRevendiquee(lecteur),
         publie: false,
         erreur,
+        // LE MODULE PART AUSSI SUR UN REFUS, et c'est ce qui rend la règle 1
+        // du brouillon utile plutôt que théorique : la saisie est reposée par
+        // le SERVEUR, le module la voit dans un champ non vide, et ne
+        // l'écrase pas par une version plus ancienne d'elle-même.
+        tempsReel: moduleDuBrouillon(),
       }),
       422,
     );

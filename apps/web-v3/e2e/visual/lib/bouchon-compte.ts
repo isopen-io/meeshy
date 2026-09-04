@@ -118,6 +118,8 @@ export type EtatDuCompteDeBouchon = {
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires d'une publication — écrit par le POST, relu par le GET (#5091). */
   readonly filDeCommentaires: FilDeCommentairesDeBouchon;
+  /** Le fil social — MUTABLE, pour prouver le rafraîchissement au retour (#5031). */
+  readonly filSocial: FilSocialDeBouchon;
 };
 
 /**
@@ -480,6 +482,55 @@ const REELS_DU_BOUCHON = [
 ];
 
 /** Le curseur du bouchon : l'INDEX du prochain réel, comme la passerelle rend une borne opaque. */
+/**
+ * LE FIL SOCIAL, MUTABLE (#5031) — pour prouver le RAFRAÎCHISSEMENT AU RETOUR.
+ *
+ * Un témoin qui rechargerait un fil INCHANGÉ ne dirait rien : il passerait
+ * aussi bien avec un module qui ne rafraîchit pas. La publication neuve est
+ * donc posée ENTRE les deux lectures, comme un ami la posterait pendant qu'on
+ * regarde ailleurs — et c'est elle, présente ou absente à l'écran, qui rend le
+ * verdict.
+ *
+ * `remets()` restaure l'état initial entre témoins.
+ */
+export type FilSocialDeBouchon = {
+  posts: Record<string, unknown>[];
+  /** Publie une ligne EN TÊTE, comme le fil la sert (le plus récent d'abord). */
+  readonly publie: (texte: string) => Record<string, unknown>;
+  readonly remets: () => void;
+};
+
+export const filSocialDeBouchon = (): FilSocialDeBouchon => {
+  const initiaux = (): Record<string, unknown>[] => FIL_SOCIAL_DU_BOUCHON.map((post) => ({ ...post }));
+  let suivant = 0;
+  const fil: FilSocialDeBouchon = {
+    posts: initiaux(),
+    publie: (texte) => {
+      suivant += 1;
+      const post = {
+        ...FIL_SOCIAL_DU_BOUCHON[0],
+        id: `p-neuve-${suivant}`,
+        content: texte,
+        translations: {},
+        createdAt: new Date().toISOString(),
+        likeCount: 0,
+        commentCount: 0,
+        repostCount: 0,
+        isLiked: false,
+        isReposted: false,
+        media: [],
+      };
+      fil.posts = [post, ...fil.posts];
+      return post;
+    },
+    remets: () => {
+      fil.posts = initiaux();
+      suivant = 0;
+    },
+  };
+  return fil;
+};
+
 export const CURSEUR_DU_SECOND_REEL = 'apres-reel-glossaire';
 
 /**
@@ -831,7 +882,7 @@ export const routesDuCompte =
         });
         return true;
       }
-      json({ success: true, data: FIL_SOCIAL_DU_BOUCHON, pagination: { limit: 20, hasMore: false, nextCursor: null } });
+      json({ success: true, data: etat.filSocial.posts, pagination: { limit: 20, hasMore: false, nextCursor: null } });
       return true;
     }
 
