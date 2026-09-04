@@ -692,6 +692,43 @@ extension StoryComposerViewModel {
         slides[targetIndex].effects = effects
     }
 
+    /// **Adopte une PRÉ-MONTÉE** — l'asset est déjà chez le serveur, l'objet
+    /// cesse d'être local (#5086, vue `4c`).
+    ///
+    /// La recherche se fait par URL LOCALE et non par identifiant d'objet, et
+    /// balaie TOUTES les slides. Deux raisons, chacune décisive :
+    ///
+    /// - la montée est lancée à la POSE, et l'auteur peut déplacer l'objet
+    ///   d'une slide à l'autre pendant qu'elle voyage ; un index de slide
+    ///   capturé au départ désignerait la mauvaise à l'arrivée ;
+    /// - le registre de pré-montée est indexé par FICHIER, parce que c'est le
+    ///   fichier qui monte. Lui faire tenir des identifiants d'objet
+    ///   l'obligerait à suivre les créations et suppressions du document.
+    ///
+    /// Les deux champs se posent ENSEMBLE, et c'est ce qui rend l'adoption
+    /// sûre : la boucle de publication saute tout objet dont `postMediaId` est
+    /// non vide, donc un objet qui porterait l'identifiant sans l'URL distante
+    /// serait publié avec un `file://` que personne ne peut lire.
+    ///
+    /// - Returns: `true` si un objet a été adopté. `false` — l'auteur a retiré
+    ///   le média pendant la montée — n'est pas une erreur : l'appelant y lit
+    ///   qu'il peut oublier cette pré-montée.
+    @discardableResult
+    func adoptPreUploadedMedia(localURL: String, postMediaId: String, remoteURL: String) -> Bool {
+        for slideIdx in slides.indices {
+            var effects = slides[slideIdx].effects
+            guard var medias = effects.mediaObjects,
+                  let mediaIdx = medias.firstIndex(where: { $0.mediaURL == localURL })
+            else { continue }
+            medias[mediaIdx].postMediaId = postMediaId
+            medias[mediaIdx].mediaURL = remoteURL
+            effects.mediaObjects = medias
+            slides[slideIdx].effects = effects
+            return true
+        }
+        return false
+    }
+
     /// Met à jour l'aspectRatio (width/height) d'un media. Appelé après le
     /// pick PhotosPicker / record une fois que l'asset natural size est
     /// mesurée via `UIImage.size` (image) ou `AVAssetTrack.naturalSize` +
