@@ -105,9 +105,21 @@ const nextConfig: NextConfig = {
       './.rt/liste.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
+    /**
+     * LA ROUTE QUI SERT LES MODULES trace les QUATRE fichiers de `.rt/` — c'est
+     * l'entrée qui fait exister chaque module dans l'arbre `standalone`. Un
+     * module absent ne casse RIEN de visible : `actifsTempsReel` rend un corps
+     * vide, la porte sert `tempsReel: null`, et l'écran perd son direct EN
+     * SILENCE — c'est ainsi que `/feed` a tourné sans module en production,
+     * `feed.js` n'ayant jamais été tracé. Le témoin de `actifs-rt.test.ts`
+     * (« chaque module que les actifs servent est tracé ») garde désormais la
+     * liste : un cinquième module devra s'y inscrire pour exister.
+     */
     '/rt/[nom]': [
       './.rt/participate.js',
       './.rt/liste.js',
+      './.rt/feed.js',
+      './.rt/notifs.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },

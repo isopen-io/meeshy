@@ -122,17 +122,19 @@
   }
  },
  "participate": {
-  "quoi": "Le poids des TROIS modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.",
-  "participate_brut_octets": 89433,
-  "participate_gzip_9_octets": 26549,
-  "liste_brut_octets": 49334,
-  "liste_gzip_9_octets": 13757,
-  "feed_brut_octets": 33173,
-  "feed_gzip_9_octets": 7613,
+  "quoi": "Le poids des QUATRE modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.",
+  "participate_brut_octets": 89437,
+  "participate_gzip_9_octets": 26551,
+  "liste_brut_octets": 49650,
+  "liste_gzip_9_octets": 13890,
+  "feed_brut_octets": 33177,
+  "feed_gzip_9_octets": 7615,
+  "notifs_brut_octets": 41355,
+  "notifs_gzip_9_octets": 10842,
   "socket_io_client_brut_octets": 40435,
   "socket_io_client_gzip_9_octets": 12849,
   "commande": "cd apps/web-v3 && node scripts/build-participate.mjs --mesure",
-  "date": "2026-09-03"
+  "date": "2026-09-04"
  },
  "documents_du_fil": {
   "quoi": "Ce que le fil REMET EN UNE FOIS — le HTML, la table de jetons, la feuille et les symboles qu'il inline —, et ce que l'ÉTAT `?media=` (§ 12.10.1) y ajoute. Le tour qui a livré le plein écran déclarait qu'il « n'ajoute aucun motif de budget » : vrai des REQUÊTES (la surimpression est servie DANS le même document, mesuré par v3-fil-riche.spec.ts § « le coût du plein écran, mesuré »), faux du POIDS, que rien ne pesait. Mesuré sur une tranche FIXE — image, vidéo, vocal transcrit, fichier, temps réel armé — pour que le chiffre suive le CODE et non les données. Relevé le 2026-09-03 après l'extraction de la pastille de langue en ATOME partagé avec /chats (app/connecte/atomes-feuille.ts) : +2 o gzip sur le fil, +3 o sur l'état ?media=, parce que l'atome dimensionne désormais SON glyphe (`.langue svg`) au lieu de dépendre d'une règle voisine du fil — sans quoi la même pastille était invisible dans la liste. Relevé une seconde fois le même jour après la fusion de `dev` (§ 12.10.2, le compte de participants qui se tait à deux) : +33 o gzip sur les deux variantes — `compteDeParticipants`/`presenceServie` entrent dans `lib/contenu/fil.ts`, lu par `fil-vue.ts` aux côtés de `ETATS_DU_TEMPS_REEL` déjà présent ; le surcoût du plein écran ne bouge pas (578 o), la hausse est sur le SOCLE du document, pas sur la surimpression. Relevé une troisième fois le 2026-09-03 après profilMembre (§ 12.10.3) : +342 o gzip sur le fil, +315 o sur l'état ?media=, parce que chaque message d'un auteur autre que soi porte désormais deux cliquables de plus vers son profil (avatar-lien, nom-lien, app/connecte/fil-lignes.ts) et que la feuille du fil déclare leur géométrie (app/connecte/fil-feuille.ts). Le panneau de profil lui-même (dialog.profil, FEUILLE_DU_PROFIL) reste hors de ce document tant que ?profil= n'est pas posé — comme le plein écran d'un média, un état de l'adresse n'est payé que par qui le sert. Relevé une QUATRIÈME fois le 2026-09-03, après que le script de thème inline a appris à lire le cookie `meeshy_theme` (`/settings/application`, charte règle 7 — le choix de thème doit avoir un EFFET sans une ligne de JavaScript de page) : +66 o gzip sur le fil, +65 o sur l'état ?media=, et le MÊME surcoût sur TOUT document du dépôt, puisque le script vit dans `teteDuDocument`. C'est le prix assumé d'un réglage qui marche : sans le cookie, le formulaire de l'apparence n'aurait aucun effet et la rangée serait un contrôle qui ment. Le cookie porte TROIS valeurs (`light`/`dark`/`system`) parce que l'effacer ne suffisait pas à revenir au système — le script en recopie la valeur dans `localStorage`, et le repli y relisait le choix précédent (défaut trouvé par le témoin navigateur, corrigé dans le même lot). Le script reste sous son propre budget de 400 o (385 o, `__tests__/theme-script.test.ts`).",

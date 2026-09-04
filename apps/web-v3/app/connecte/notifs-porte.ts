@@ -1,10 +1,12 @@
 import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
+import { actifsTempsReel } from '@/lib/actifs-rt';
 import { moi } from '@/lib/api/compte';
+import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import { boiteDuLecteur, toutMarquerLu, type Recuperateur } from '@/lib/api/notifications';
 
 import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
-import { documentDesNotifs } from './notifs-vue';
+import { documentDesNotifs, type EtatDesNotifs } from './notifs-vue';
 import { documentDePanne } from './vue';
 
 /**
@@ -47,6 +49,20 @@ const TEMOIN_DE_L_ACTION = 'tout-lu';
 const aToutLu = (requete: Request): boolean =>
   new URL(requete.url).searchParams.has(TEMOIN_DE_L_ACTION);
 
+/**
+ * LE SOCLE DU MODULE DE PARTICIPATION (#4898) — `null` tant que l'actif
+ * compilé est absent (tests, avant le premier `bun build`) : le chemin SANS
+ * JavaScript reste alors le SEUL chemin, ce qui est toujours correct
+ * (amélioration progressive, jamais une condition, § 12.4). Contrairement au
+ * fil social, cet écran a besoin du SOCKET : les événements `notification:*`
+ * arrivent par la room personnelle du lecteur.
+ */
+const moduleDeParticipation = (): EtatDesNotifs['tempsReel'] => {
+  const actifs = actifsTempsReel();
+  if (actifs.notifs.corps === '') return null;
+  return { module: actifs.notifs.url, socket: actifs.socket.url, passerelle: baseDeLaPasserellePublique() };
+};
+
 const sert = async ({
   jeton,
   toutLu,
@@ -72,6 +88,7 @@ const sert = async ({
       nonLues: boite.nonLues,
       maintenant: Date.now(),
       toutLu,
+      tempsReel: moduleDeParticipation(),
     }),
   );
 };

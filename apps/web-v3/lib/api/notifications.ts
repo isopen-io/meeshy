@@ -1,3 +1,5 @@
+import { ATTRIBUT_PAR_CONTEXTE, type CleDeContexte } from '../contenu/notifs';
+
 import { baseDeLaPasserelle } from './links';
 import { DELAI_DE_REPONSE_MS } from './passerelle';
 
@@ -67,6 +69,12 @@ export type Notification = {
   readonly nomDeLActeur: string | null;
   readonly lue: boolean;
   readonly creeeA: string | null;
+  /**
+   * Les clés de `context` que le prédicat partagé d'un `notification:read-bulk`
+   * lit (`notificationMatchesReadBulkScope`, `@meeshy/shared`) — et RIEN
+   * d'autre : le reste de `context` n'a pas de lecteur ici, donc pas de relais.
+   */
+  readonly contexte: Readonly<Partial<Record<CleDeContexte, string>>>;
 };
 
 export type Boite =
@@ -110,6 +118,14 @@ const notification = (brut: Readonly<Record<string, unknown>>): Notification | n
   const lue = etat === null ? brut.isRead === true : etat.isRead === true;
   const creeeA = etat === null ? chaine(brut.createdAt) : chaine(etat.createdAt);
 
+  const contexteServi = objet(brut.context);
+  const contexte = (Object.keys(ATTRIBUT_PAR_CONTEXTE) as readonly CleDeContexte[]).reduce<
+    Partial<Record<CleDeContexte, string>>
+  >((retenu, cle) => {
+    const valeur = chaine(contexteServi?.[cle]);
+    return valeur === null ? retenu : { ...retenu, [cle]: valeur };
+  }, {});
+
   return {
     id,
     genre: chaine(brut.type) ?? 'system',
@@ -119,7 +135,22 @@ const notification = (brut: Readonly<Record<string, unknown>>): Notification | n
     nomDeLActeur: chaine(objet(brut.actor)?.displayName),
     lue,
     creeeA,
+    contexte,
   };
+};
+
+/**
+ * LA MÊME PROJECTION POUR UNE CHARGE SOCKET (issue #4898). `notification:new`
+ * porte `{...formatted}` — la forme que la liste sert, `state` compris — et le
+ * module de participation doit en faire une ligne IDENTIQUE à celle que la vue
+ * aurait servie : un seul mappeur, sinon la ligne reçue et la ligne servie
+ * divergent au premier correctif (le doc-comment de `notification` l'annonçait
+ * déjà : « le jour où la liste et l'événement peignent la même ligne, ils
+ * doivent en lire l'état au même endroit »).
+ */
+export const notificationServie = (brut: unknown): Notification | null => {
+  const charge = objet(brut);
+  return charge === null ? null : notification(charge);
 };
 
 /**

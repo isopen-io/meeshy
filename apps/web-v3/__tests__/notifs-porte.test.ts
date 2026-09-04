@@ -107,15 +107,18 @@ describe('la porte de /notifications', () => {
     expect(html).toContain('Tout marquer comme lu');
   });
 
-  it('ne rend PAS « Tout lire » quand il n’y a rien à lire', async () => {
+  it('sert « Tout lire » CACHÉ quand il n’y a rien à lire — la fente existe, le contrôle n’est pas rendu', async () => {
     const { recuperer } = passerelle({
-      '/auth/me': () => json({ success: true, data: { id: 'u1' } }),
+      '/auth/me': () => json({ success: true, data: { id: 'u1', displayName: 'Moi' } }),
       '/notifications': () => json({ success: true, data: [], pagination: { total: 0 }, unreadCount: 0 }),
     });
 
     const html = await (await BOITE(requete('https://meeshy.test/notifications'), recuperer)).text();
 
-    expect(html).not.toContain('Tout marquer comme lu');
+    // Le module de participation révèle la fente quand une non-lue ARRIVE ;
+    // une fente absente serait un nœud à FABRIQUER. Cachée, elle n'est pas
+    // rendue — la loi 4 (« un contrôle existe s'il a un effet ») reste tenue.
+    expect(html).toMatch(/<form class="tout-lire" method="post" hidden>/);
     expect(html).toContain('Aucune notification');
   });
 

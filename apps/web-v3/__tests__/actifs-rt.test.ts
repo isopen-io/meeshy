@@ -14,8 +14,9 @@ import { PREFIXE_RT, actifParNom, actifsTempsReel } from '@/lib/actifs-rt';
  * l'adresse et le nom viennent d'une seule lecture ; un nom inconnu — ou un
  * hash périmé — rend 404 ; ce qui est servi est immuable.
  *
- * TROIS MODULES, PAS UN. Le fil (`participate`), la liste (`liste`) et le fil
- * social (`feed`, #5031) sont compilés séparément parce qu'un écran ne doit
+ * QUATRE MODULES, PAS UN. Le fil (`participate`), la liste (`liste`), le fil
+ * social (`feed`, #5031) et la boîte (`notifs`, #4898) sont compilés
+ * séparément parce qu'un écran ne doit
  * télécharger que ce qu'il exécute : `participate.js` pèse 26 Ko gzip
  * (composeur, réserve, plein écran, peinture de bulles), dont ni `/chats` ni
  * `/feed` n'exécutent une ligne. Le socle que `participate` et `liste`
@@ -33,15 +34,17 @@ describe('les quatre actifs', () => {
     expect(actifs.participate.url).toBe(`${PREFIXE_RT}/${actifs.participate.nom}`);
     expect(actifs.liste.url).toBe(`${PREFIXE_RT}/${actifs.liste.nom}`);
     expect(actifs.feed.url).toBe(`${PREFIXE_RT}/${actifs.feed.nom}`);
+    expect(actifs.notifs.url).toBe(`${PREFIXE_RT}/${actifs.notifs.nom}`);
     expect(actifs.socket.url).toBe(`${PREFIXE_RT}/${actifs.socket.nom}`);
     expect(actifs.participate.nom).toMatch(/^participate\.[0-9a-f]{16}\.js$/);
     expect(actifs.liste.nom).toMatch(/^liste\.[0-9a-f]{16}\.js$/);
     expect(actifs.feed.nom).toMatch(/^feed\.[0-9a-f]{16}\.js$/);
+    expect(actifs.notifs.nom).toMatch(/^notifs\.[0-9a-f]{16}\.js$/);
     expect(actifs.socket.nom).toMatch(/^socket\.io\.[0-9a-f]{16}\.js$/);
   });
 
   /**
-   * Les trois modules ne partagent AUCUNE adresse : servir la liste au fil (ou
+   * Les quatre modules ne partagent AUCUNE adresse : servir la liste au fil (ou
    * l'inverse) ferait exécuter un module qui ne trouve pas sa surface et
    * n'échouerait nulle part — un temps réel silencieusement mort.
    */
@@ -49,6 +52,28 @@ describe('les quatre actifs', () => {
     expect(actifs.liste.url).not.toBe(actifs.participate.url);
     expect(actifs.feed.url).not.toBe(actifs.participate.url);
     expect(actifs.feed.url).not.toBe(actifs.liste.url);
+    expect(actifs.notifs.url).not.toBe(actifs.participate.url);
+    expect(actifs.notifs.url).not.toBe(actifs.liste.url);
+    expect(actifs.notifs.url).not.toBe(actifs.feed.url);
+  });
+
+  /**
+   * CHAQUE MODULE QUE LES ACTIFS SERVENT EST TRACÉ (`next.config.ts`,
+   * `/rt/[nom]`). `standalone` ne copie que ce qu'une entrée désigne : un
+   * module non tracé rend un corps vide en production, la porte sert
+   * `tempsReel: null`, et l'écran perd son direct EN SILENCE — c'est arrivé à
+   * `/feed`, jamais tracé entre #5031 et #4898. La liste attendue est DÉRIVÉE
+   * des actifs (jamais énumérée ici) : un cinquième module l'étendra tout seul.
+   */
+  it('trace chaque module de participation dans next.config — un module non tracé meurt en silence', async () => {
+    const { default: nextConfig } = await import('../next.config');
+    const traces = (nextConfig.outputFileTracingIncludes ?? {})['/rt/[nom]'] ?? [];
+    const modules = Object.keys(actifsTempsReel()).filter((base) => base !== 'socket');
+
+    modules.forEach((base) => {
+      expect(traces).toContain(`./.rt/${base}.js`);
+    });
+    expect(traces).toContain('./node_modules/socket.io-client/dist/socket.io.esm.min.js');
   });
 
   it('servent socket.io-client tel quel, depuis son paquet — jamais recopié', () => {

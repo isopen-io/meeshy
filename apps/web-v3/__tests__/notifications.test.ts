@@ -86,12 +86,26 @@ describe('la boîte du lecteur', () => {
       nomDeLActeur: 'Alice',
       lue: false,
       creeeA: '2026-09-02T20:00:00.000Z',
+      contexte: {},
     });
 
     // Ce qui n'est pas projeté ne peut pas fuir par un rendu distrait.
     expect(Object.keys(n)).not.toContain('delivery');
     expect(Object.keys(n)).not.toContain('metadata');
     expect(Object.keys(n)).not.toContain('userId');
+  });
+
+  it('ne retient de `context` que les clés du prédicat de masse — rien d’autre ne voyage', async () => {
+    const recuperer = servi(
+      enveloppe([
+        ligne({ context: { conversationId: 'c1', messageId: 'm1', campagne: 'x' } }),
+      ]),
+    );
+
+    const boite = await boiteDuLecteur({ jeton: JETON, base: BASE, recuperer });
+    if (boite.genre !== 'liste') throw new Error('liste attendue');
+
+    expect(boite.notifications[0]?.contexte).toEqual({ conversationId: 'c1' });
   });
 
   it('lit l’état SOUS `state` — une ligne lue est rendue lue', async () => {
