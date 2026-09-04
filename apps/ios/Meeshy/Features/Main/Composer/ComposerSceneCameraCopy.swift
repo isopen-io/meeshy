@@ -1,0 +1,75 @@
+import Foundation
+
+/// **Le vocabulaire du viseur** (#4080, vue `2b`).
+///
+/// Séparé de la vue pour la raison habituelle du dépôt : une chaîne composée
+/// dans un corps de vue est hors de portée d'un témoin, et celles-ci portent
+/// une RÈGLE — la phrase du bas change avec le mode ET l'étape, et c'est elle
+/// qui dit à l'auteur quoi faire de son doigt.
+@MainActor
+enum ComposerSceneCameraCopy {
+
+    static func label(for mode: ComposerSceneCameraMode) -> String {
+        switch mode {
+        case .photo:
+            return String(localized: "composer.camera.mode.photo",
+                          defaultValue: "Photo", bundle: .main)
+        case .video:
+            return String(localized: "composer.camera.mode.video",
+                          defaultValue: "Vidéo", bundle: .main)
+        case .handsFree:
+            return String(localized: "composer.camera.mode.handsFree",
+                          defaultValue: "Mains libres", bundle: .main)
+        }
+    }
+
+    /// La phrase du bas. La CLÉ vient de `ComposerSceneCamera.hintKey` — la
+    /// règle est là-bas, éprouvée sans monter de vue ; ici n'est que la table
+    /// de traduction. Les deux ne peuvent pas diverger : un `switch` exhaustif
+    /// sur les mêmes clés.
+    static func hint(mode: ComposerSceneCameraMode,
+                     stage: ComposerSceneCameraStage) -> String {
+        switch ComposerSceneCamera.hintKey(mode: mode, stage: stage) {
+        case "composer.camera.hint.photo":
+            return String(localized: "composer.camera.hint.photo",
+                          defaultValue: "toucher pour prendre une photo",
+                          bundle: .main)
+        case "composer.camera.hint.video":
+            return String(localized: "composer.camera.hint.video",
+                          defaultValue: "maintenir pour filmer · relâcher pour poser dans la scène",
+                          bundle: .main)
+        case "composer.camera.hint.videoHolding":
+            return String(localized: "composer.camera.hint.videoHolding",
+                          defaultValue: "relâcher pour poser dans la scène",
+                          bundle: .main)
+        case "composer.camera.hint.handsFreeStart":
+            return String(localized: "composer.camera.hint.handsFreeStart",
+                          defaultValue: "toucher pour lancer — les mains libres",
+                          bundle: .main)
+        default:
+            return String(localized: "composer.camera.hint.handsFreeStop",
+                          defaultValue: "toucher pour arrêter et poser dans la scène",
+                          bundle: .main)
+        }
+    }
+
+    /// **Le libellé parlé dit l'ACTION, jamais la forme.** « Bouton rond
+    /// corail » n'apprend rien ; « Prendre une photo » et « Arrêter
+    /// l'enregistrement » disent ce qu'un appui fera — et ils diffèrent selon
+    /// le mode, ce qu'un libellé unique ne pourrait pas rendre.
+    static func shutterLabel(mode: ComposerSceneCameraMode,
+                             stage: ComposerSceneCameraStage) -> String {
+        if stage == .recording {
+            return String(localized: "camera.record.stop",
+                          defaultValue: "Arrêter l'enregistrement", bundle: .main)
+        }
+        switch mode {
+        case .photo:
+            return String(localized: "camera.capture.photo",
+                          defaultValue: "Prendre une photo", bundle: .main)
+        case .video, .handsFree:
+            return String(localized: "camera.record.start",
+                          defaultValue: "Démarrer l'enregistrement", bundle: .main)
+        }
+    }
+}

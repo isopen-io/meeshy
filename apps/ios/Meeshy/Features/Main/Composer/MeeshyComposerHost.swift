@@ -832,6 +832,42 @@ struct MeeshyComposerHost: View {
         sceneCamera.configure()
     }
 
+    /// **L'appui : il PREND, ou il commence à prendre.**
+    ///
+    /// La photo part tout de suite ; la vidéo commence à écrire et attend le
+    /// relâchement. `stage` porte la différence, et la loi de la relâche
+    /// (`ComposerSceneCamera.stageAfterRelease`) s'appuie dessus — sans passer
+    /// par `.recording`, MAINS LIBRES n'aurait rien à continuer.
+    func pressSceneShutter() {
+        guard let mode = sceneCameraMode, sceneCameraStage == .armed else { return }
+        HapticFeedback.medium()
+        switch mode {
+        case .photo:
+            sceneCamera.takePhoto(flash: .off)
+        case .video, .handsFree:
+            sceneCameraStage = .recording
+            Task {
+                await sceneCamera.enableAudioCaptureIfNeeded()
+                sceneCamera.startRecording()
+            }
+        }
+    }
+
+    /// **Le relâchement demande à la LOI ce qu'il fait**, il ne le décide pas.
+    ///
+    /// C'est là que les trois pastilles divergent — et écrire ce `switch` ici
+    /// le mettrait hors de portée d'un témoin, alors qu'il est toute la raison
+    /// d'être de la troisième.
+    func releaseSceneShutter() {
+        guard let mode = sceneCameraMode else { return }
+        let suivant = ComposerSceneCamera.stageAfterRelease(
+            mode: mode, stage: sceneCameraStage)
+        guard suivant != sceneCameraStage else { return }
+        sceneCameraStage = suivant
+        sceneCamera.stopRecording()
+        HapticFeedback.medium()
+    }
+
     /// **Désarmer REND la scène**, et ferme la session dans le même geste : une
     /// caméra qu'on laisse tourner derrière une scène rendue est un voyant
     /// allumé que rien à l'écran n'explique.

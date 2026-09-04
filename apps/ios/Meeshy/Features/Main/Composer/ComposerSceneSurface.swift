@@ -109,6 +109,14 @@ struct ComposerSceneSurface: View {
     /// les deux rails, la bande et les jetons.
     var cameraStage: ComposerSceneCameraStage = .off
 
+    /// Les pastilles SERVIES et celle qui est choisie — résolues par le meuble
+    /// (`ComposerSceneCamera.modes(for:)`), jamais recalculées ici.
+    var cameraModes: [ComposerSceneCameraMode] = []
+    var cameraMode: ComposerSceneCameraMode = .photo
+    var onPickCameraMode: ((ComposerSceneCameraMode) -> Void)?
+    var onCameraPress: (() -> Void)?
+    var onCameraRelease: (() -> Void)?
+
     // MARK: - Les deux rails
 
     /// **Ce que le rail *leading* montre** — déjà résolu par
@@ -902,7 +910,29 @@ struct ComposerSceneSurface: View {
                 // d'une lecture. Elle n'entre donc PAS dans
                 // `ComposerCanonicalZone.Element`, et ce commentaire dit
                 // pourquoi pour que personne ne l'y remette.
-                lowToolRow
+                // **Le viseur PREND la rangée basse** (#4080), exactement
+                // comme les contrôleurs d'un outil ouvert la prennent depuis
+                // #4072 : la place est permanente, son contenu change.
+                //
+                // La cible `2b` dessine ces contrôles SUR un aperçu plein
+                // écran ; le plateau n'a pas cette géographie — ses rails et sa
+                // rangée d'entrées vivent dans les couloirs, et un contrôle
+                // posé sur le canvas vole les touches de la bande qu'il couvre
+                // (directive porteur 2026-08-31). Ce qui est PRESCRIT par la
+                // planche — l'ordre des modes, du déclencheur et de la phrase,
+                // et leurs états — est tenu ; c'est la géographie qui suit le
+                // plateau, comme pour les rails.
+                if cameraStage != .off {
+                    ComposerSceneCameraBar(
+                        modes: cameraModes,
+                        mode: cameraMode,
+                        stage: cameraStage,
+                        onPickMode: { onPickCameraMode?($0) },
+                        onPress: { onCameraPress?() },
+                        onRelease: { onCameraRelease?() })
+                } else {
+                    lowToolRow
+                }
 
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

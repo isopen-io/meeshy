@@ -436,6 +436,11 @@ extension MeeshyComposerHost {
             // un aperçu noir sans que rien n'échoue.
             cameraSession: sceneCameraStage == .off ? nil : sceneCamera.session,
             cameraStage: sceneCameraStage,
+            cameraModes: ComposerSceneCamera.modes(for: selectedFormat),
+            cameraMode: sceneCameraMode ?? .photo,
+            onPickCameraMode: { sceneCameraMode = $0 },
+            onCameraPress: { pressSceneShutter() },
+            onCameraRelease: { releaseSceneShutter() },
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
