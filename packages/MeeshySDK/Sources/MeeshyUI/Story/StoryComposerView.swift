@@ -302,6 +302,22 @@ public struct StoryComposerView: View {
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
+    /// **Ouvrir l'éditeur d'objet sur un objet de la scène** (#5041).
+    ///
+    /// > Directive porteur : « Longpress editer sur la miniature des slide
+    /// > permet d'ouvrir le background ».
+    ///
+    /// L'atelier ne SAIT pas éditer un objet — cet écran vit chez l'hôte
+    /// (`ComposerObjectEditorView`, app). Ce rappel est la seule chose que
+    /// l'atelier a besoin de connaître : un identifiant, et quelqu'un pour
+    /// l'ouvrir.
+    ///
+    /// **Optionnel, et c'est ce qui gouverne l'affordance** : sa présence est le
+    /// `hostServesEditor` que lit `SlideThumbEditAffordance`. Un appelant qui ne
+    /// le branche pas ne voit aucune entrée « Éditer » — plutôt qu'une entrée
+    /// qui aurait l'air de marcher jusqu'au tap.
+    public var onEditSceneObject: ((String) -> Void)?
+
     /// Qui peint l'audience, l'œil et la flèche de publication (V3-1).
     /// `.atelier` par défaut : un appelant qui ne sait rien d'un meuble garde
     /// exactement la barre qu'il avait.
@@ -334,7 +350,8 @@ public struct StoryComposerView: View {
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
-        onDismiss: @escaping () -> Void
+        onDismiss: @escaping () -> Void,
+        onEditSceneObject: ((String) -> Void)? = nil
     ) {
         self.allowedVisibilities = allowedVisibilities
         self.chromeOwner = chromeOwner
@@ -346,6 +363,7 @@ public struct StoryComposerView: View {
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
         self.onDismiss = onDismiss
+        self.onEditSceneObject = onEditSceneObject
     }
 
     /// Repost-aware initializer (C.1). Lets a caller hand the composer a
@@ -366,7 +384,8 @@ public struct StoryComposerView: View {
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
-        onDismiss: @escaping () -> Void
+        onDismiss: @escaping () -> Void,
+        onEditSceneObject: ((String) -> Void)? = nil
     ) {
         self._viewModel = StateObject(wrappedValue: viewModel)
         self.allowedVisibilities = allowedVisibilities
@@ -383,6 +402,7 @@ public struct StoryComposerView: View {
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
         self.onDismiss = onDismiss
+        self.onEditSceneObject = onEditSceneObject
         // Mode édition (`init(editing:)`) : PRIORITÉ ABSOLUE — le composer
         // s'ouvre sur la visibilité ACTUELLE de la story, jamais sur le dernier
         // choix mémorisé. Cette réassignation vient donc APRÈS celle du

@@ -366,6 +366,36 @@ struct MeeshyComposerHost: View {
     /// `ComposerSceneCameraFrame.dismisses(translationY:)`.
     @State var sceneCameraDismissDrag: CGFloat = 0
 
+    /// **L'instant où le doigt s'est posé sur la SCÈNE**, `nil` quand aucun
+    /// appui long n'est en cours (directive porteur 2026-09-04 : « il faut que
+    /// le simple longpress déclenche la photo et non pas juste l'objectif »).
+    ///
+    /// C'est lui qui fait la différence entre une photo et une vidéo, et il ne
+    /// peut pas se déduire du stage : `armed` dit qu'on cadre, pas depuis
+    /// combien de temps. La barre tient le sien (`pressedAt`) pour son propre
+    /// obturateur ; celui-ci appartient au geste de la scène, qui commence
+    /// AVANT que la barre n'existe.
+    ///
+    /// Sa présence sert de second rôle, et c'est ce qui rend la levée sûre : le
+    /// canvas émet sa fin même quand l'hôte a refusé l'armement (le refus vit
+    /// chez nous, ses trois gardes chez lui). Sans témoin de début, cette fin
+    /// prendrait une photo que personne n'a armée.
+    @State var sceneHoldStartedAt: Date?
+
+    /// La minuterie qui fait passer de la visée à la VIDÉO. Elle est nécessaire
+    /// parce qu'un `UILongPressGestureRecognizer` n'émet `.changed` que sur un
+    /// MOUVEMENT : un doigt immobile ne réveille personne, et la vidéo ne
+    /// partirait jamais sans qu'on bouge.
+    @State var sceneHoldTask: Task<Void, Never>?
+
+    /// **Le fond dont le menu est ouvert**, `nil` quand aucun ne l'est (#5041).
+    ///
+    /// Un identifiant plutôt qu'un booléen : le menu agit sur UN objet, et un
+    /// booléen aurait obligé à garder l'identifiant ailleurs — donc deux états
+    /// à tenir d'accord, dont la divergence se serait vue le jour où l'auteur
+    /// ouvre le menu d'un fond, le remplace, puis valide.
+    @State var backgroundMenuObjectId: String?
+
     /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
     ///
     /// `@StateObject` et non `.shared` : un bake appartient à CETTE
@@ -885,7 +915,11 @@ struct MeeshyComposerHost: View {
         // frère. C'est ce qui laissait la rangée visible en plein écran, quelle
         // que soit la couche employée — la géométrie de la composition, pas un
         // ordre de z.
-        withSceneCameraViewfinder(composerStack)
+        // **Le menu du fond est monté sur la PILE, pas sur la racine** (#5041) :
+        // SwiftUI n'honore qu'UNE présentation par vue, et la racine porte déjà
+        // la feuille de partage (#4996). Une seconde y serait silencieusement
+        // avalée — le mode de panne qui ne rougit nulle part.
+        withSceneCameraViewfinder(backgroundMenuPresented(composerStack))
         .background(tint.color.ignoresSafeArea())
 
         // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du

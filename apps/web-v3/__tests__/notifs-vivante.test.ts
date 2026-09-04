@@ -39,7 +39,14 @@ const TEMPS_REEL = {
 const peint = (notifications: readonly Notification[], nonLues = notifications.filter((n) => !n.lue).length): void => {
   document.open();
   document.write(
-    documentDesNotifs({ notifications, nonLues, maintenant: MAINTENANT, toutLu: false, tempsReel: TEMPS_REEL }),
+    documentDesNotifs({
+      notifications,
+      nonLues,
+      maintenant: MAINTENANT,
+      toutLu: false,
+      tempsReel: TEMPS_REEL,
+      curseurSuivant: null,
+    }),
   );
   document.close();
 };

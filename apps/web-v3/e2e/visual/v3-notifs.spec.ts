@@ -9,6 +9,7 @@ import {
   type ServeurV3,
 } from './lib/serveurs';
 import { UTILISATEUR_DU_MEMBRE } from './lib/bouchon-socket';
+import { CURSEUR_DE_LA_BOITE_SUIVANTE } from './lib/bouchon-compte';
 
 /**
  * `/notifications` — LA BOÎTE, EN DIRECT (issue #4898, § 12.4).
@@ -169,6 +170,37 @@ test.describe('la boîte de notifications, en direct', () => {
     await page.waitForURL(/tout-lu/);
 
     await expect(page.locator('.avis')).toContainText('Tout est marqué comme lu');
+  });
+
+  test('la page 2 s’ouvre au curseur suivant et s’empile sans casser le compteur — #5087', async ({ browser }) => {
+    passerelle.boite.pageSuivante = [
+      {
+        id: 'notif-ancienne',
+        userId: UTILISATEUR_DU_MEMBRE,
+        type: 'message',
+        title: 'Chidi vous a répondu',
+        subtitle: null,
+        content: 'La semaine prochaine, alors.',
+        actor: { id: 'u-chidi', displayName: 'Chidi' },
+        context: {},
+        state: { isRead: true, readAt: '2026-08-20T09:00:00.000Z', createdAt: '2026-08-20T09:00:00.000Z' },
+      },
+    ];
+
+    const { page } = await ouvreLaBoite(browser);
+    const lien = page.locator('a.plus-ancien');
+    await expect(lien).toHaveCount(1);
+    await expect(lien).toHaveAttribute('href', `/notifications?cursor=${CURSEUR_DE_LA_BOITE_SUIVANTE}`);
+    // La même pastille que le reste de l'écran : 1 non lue, la page 2 n'y change rien.
+    await expect(page.locator('.fil-tete .sous')).toHaveText('1 non lue');
+
+    await lien.click();
+
+    await expect(page).toHaveURL(new RegExp(`cursor=${CURSEUR_DE_LA_BOITE_SUIVANTE}$`));
+    await expect(page.locator('li[data-id="notif-ancienne"]')).toBeVisible();
+    await expect(page.locator('.fil-tete .sous')).toHaveText('1 non lue');
+    // La page finale n'offre plus de suite.
+    await expect(page.locator('a.plus-ancien')).toHaveCount(0);
   });
 
   test('le document en direct ne porte aucune violation axe grave', async ({ browser }) => {

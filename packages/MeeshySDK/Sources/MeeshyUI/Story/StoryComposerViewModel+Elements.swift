@@ -609,7 +609,14 @@ extension StoryComposerViewModel {
             postMediaId: "",
             kind: kind,
             placement: "media",
-            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
+            // **`nil`, et c'est la correction du #5100.** Ce site posait `1.0`
+            // avec un TODO « compute real aspectRatio from asset » : la valeur
+            // était donc une SENTINELLE qui se lisait comme un carré. Les
+            // appelants mesurent ensuite (`setMediaAspectRatio`) ; jusque-là
+            // l'objet doit DIRE qu'il ne sait pas, sans quoi un recadrage tapé
+            // pendant cette fenêtre pose une borne calculée contre 1:1 —
+            // enregistrée, publiée, et impossible à distinguer d'un choix.
+            aspectRatio: nil,
             x: center.x,
             y: center.y,
             scale: 1.0,

@@ -49,6 +49,10 @@ const TEMOIN_DE_L_ACTION = 'tout-lu';
 const aToutLu = (requete: Request): boolean =>
   new URL(requete.url).searchParams.has(TEMOIN_DE_L_ACTION);
 
+/** Même lecture que `curseurDeLURL` (`social-porte.ts`) : absent, une chaîne opaque. */
+const curseurDeLURL = (requete: Request): string | undefined =>
+  new URL(requete.url).searchParams.get('cursor') ?? undefined;
+
 /**
  * LE SOCLE DU MODULE DE PARTICIPATION (#4898) — `null` tant que l'actif
  * compilé est absent (tests, avant le premier `bun build`) : le chemin SANS
@@ -65,16 +69,18 @@ const moduleDeParticipation = (): EtatDesNotifs['tempsReel'] => {
 
 const sert = async ({
   jeton,
+  curseur,
   toutLu,
   recuperer,
 }: {
   readonly jeton: string;
+  readonly curseur?: string;
   readonly toutLu: boolean;
   readonly recuperer?: Recuperateur;
 }): Promise<Response> => {
   const [identite, boite] = await Promise.all([
     moi({ jeton, recuperer }),
-    boiteDuLecteur({ jeton, recuperer }),
+    boiteDuLecteur({ jeton, curseur, recuperer }),
   ]);
 
   if (identite.genre === 'session-expiree' || boite.genre === 'session-expiree') {
@@ -89,6 +95,7 @@ const sert = async ({
       maintenant: Date.now(),
       toutLu,
       tempsReel: moduleDeParticipation(),
+      curseurSuivant: boite.curseurSuivant,
     }),
   );
 };
@@ -97,7 +104,7 @@ export const BOITE = async (requete: Request, recuperer?: Recuperateur): Promise
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return versLaConnexion();
 
-  return sert({ jeton, toutLu: aToutLu(requete), recuperer });
+  return sert({ jeton, curseur: curseurDeLURL(requete), toutLu: aToutLu(requete), recuperer });
 };
 
 /**

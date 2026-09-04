@@ -154,7 +154,48 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var mutedVolumeMemento: Float?
 
     // NEW — Phase 1 Canvas Fidelity fields
-    public var aspectRatio: Double         // figé à la composition (REQUIRED, fallback 1.0 on legacy decode)
+    /// **Le ratio MESURÉ sur l'asset — `nil` tant qu'aucune mesure n'est
+    /// arrivée** (#5100).
+    ///
+    /// Avant ce champ, `aspectRatio` était un `Double` non optionnel posé à
+    /// `1.0` à la composition puis renseigné une fois l'asset mesuré. **`1.0`
+    /// disait donc à la fois « je ne sais pas encore » et « ce média est
+    /// carré »**, et aucun consommateur ne pouvait savoir laquelle des deux
+    /// valeurs il tenait.
+    ///
+    /// Le dépôt contournait déjà le problème, et le contournement portait
+    /// l'aveu : l'hydratation à la lecture testait `abs(aspectRatio - 1.0) < 0.05`
+    /// — la SENTINELLE, pas une propriété du média. Une photo réellement carrée
+    /// était réécrite comme si son ratio était inconnu ; le résultat coïncidait
+    /// par chance, la règle ne pouvait structurellement pas distinguer les cas.
+    ///
+    /// > **Une valeur de repli qui vaut aussi une valeur légitime n'est pas un
+    /// > repli, c'est une ambiguïté.** Elle ne se corrige pas par un seuil plus
+    /// > fin — tout seuil teste la sentinelle — mais en rendant l'absence
+    /// > REPRÉSENTABLE.
+    ///
+    /// Fait de MÉMOIRE, jamais de fil : `aspectRatio` reste le champ sérialisé
+    /// (voir `encode(to:)`), et l'écrire en plus ajouterait au contrat un champ
+    /// que personne ne lit et que les trois décodeurs devraient apprendre.
+    public var measuredAspectRatio: Double?
+
+    /// **Le ratio à SERVIR** — projection de la mesure, avec le repli
+    /// historique quand elle manque (#5100).
+    ///
+    /// Calculée plutôt que stockée : tous les consommateurs existants continuent
+    /// de lire `aspectRatio` sans rien changer, et ceux qui ont besoin de savoir
+    /// si la valeur est FIABLE lisent `measuredAspectRatio`. Deux questions
+    /// distinctes, deux accès — au lieu d'une valeur qui répondait mal aux deux.
+    public var aspectRatio: Double {
+        get { measuredAspectRatio ?? Self.unmeasuredAspectRatio }
+        set { measuredAspectRatio = newValue }
+    }
+
+    /// Le repli servi tant qu'aucune mesure n'est arrivée. Nommé pour que les
+    /// sites qui le rencontrent puissent le RECONNAÎTRE — un `1.0` écrit en
+    /// ligne est indiscernable d'un ratio légitime, ce qui est exactement le
+    /// défaut que ce lot ferme.
+    public static let unmeasuredAspectRatio: Double = 1.0
     public var anchor: CGPoint             // pivot rotation/scale, default (0.5, 0.5)
     public var intrinsicDuration: Double?  // durée native de l'asset, peuplée à la composition
 
@@ -247,7 +288,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 mediaURL: String? = nil,
                 mediaType: String = "image",
                 placement: String = "media",
-                aspectRatio: Double,                        // REQUIRED, no default
+                aspectRatio: Double?,                       // `nil` = pas encore mesuré (#5100)
                 x: Double = 0.5, y: Double = 0.5,
                 scale: Double = 1.0, rotation: Double = 0,
                 anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
@@ -276,7 +317,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.scale = scale; self.rotation = rotation
         self.anchor = anchor
         self.volume = volume
-        self.aspectRatio = aspectRatio
+        self.measuredAspectRatio = aspectRatio
         self.isBackground = isBackground
         self.loop = loop
         self.zIndex = zIndex
@@ -308,7 +349,11 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         // clé — l'absence se lit « aucun niveau mémorisé ».
         mutedVolumeMemento = try c.decodeIfPresent(Float.self, forKey: .mutedVolumeMemento)
         // aspectRatio: REQUIRED but falls back to 1.0 for legacy drafts that predate this field
-        aspectRatio = try c.decodeIfPresent(Double.self, forKey: .aspectRatio) ?? 1.0
+        // **La PRÉSENCE de la clé fait la mesure** (#5100). Une charge qui porte
+        // `aspectRatio` a été écrite par quelqu'un qui savait — même quand la
+        // valeur vaut 1. Une charge qui ne la porte pas est un legacy dont on
+        // ignore tout, et le repli de `aspectRatio` la sert sans mentir.
+        measuredAspectRatio = try c.decodeIfPresent(Double.self, forKey: .aspectRatio)
         if let anchorContainer = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
             let ax = try anchorContainer.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
             let ay = try anchorContainer.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
@@ -390,7 +435,7 @@ extension StoryMediaObject {
                 mediaURL: String? = nil,
                 kind: StoryMediaKind,
                 placement: String = "media",
-                aspectRatio: Double,
+                aspectRatio: Double?,
                 x: Double = 0.5, y: Double = 0.5,
                 scale: Double = 1.0, rotation: Double = 0,
                 anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
@@ -2216,7 +2261,11 @@ extension StoryItem {
             postMediaId: carrier.id,
             mediaURL: url,
             mediaType: FeedMediaType.video.rawValue,
-            aspectRatio: carrier.aspectRatio ?? 1.0,
+            // **Pas de `?? 1.0` ici** (#5100) : le repli posait une MESURE, alors
+            // que le porteur legacy peut très bien n'avoir aucun ratio. Laisser
+            // passer le `nil` dit la vérité, et `aspectRatio` sert le même repli
+            // qu'avant à quiconque le lit.
+            aspectRatio: carrier.aspectRatio,
             isBackground: true,
             loop: true,
             intrinsicDuration: carrier.duration.map(Double.init),
@@ -2258,7 +2307,18 @@ extension StoryItem {
                 // (rares) stories portant déjà un ratio réel ≠ 1.0 ne sont
                 // jamais touchées — parité avec l'hydratation de `duration`
                 // ci-dessus (fix proportions 2026-06-30).
-                if abs(medias[i].aspectRatio - 1.0) < 0.05,
+                // **La condition porte sur la MESURE, plus sur un seuil** (#5100).
+                //
+                // Elle testait `abs(aspectRatio - 1.0) < 0.05` — c'est-à-dire la
+                // SENTINELLE, pas une propriété du média. Une photo réellement
+                // carrée était donc réécrite comme si son ratio était inconnu ;
+                // le résultat coïncidait par chance (w/h ≈ 1), et la règle ne
+                // pouvait structurellement pas distinguer les deux cas.
+                //
+                // Depuis que « pas encore mesuré » est représentable, la question
+                // se pose telle qu'elle a toujours été voulue : *ce média a-t-il
+                // un ratio ?* Un carré mesuré traverse désormais intact.
+                if medias[i].measuredAspectRatio == nil,
                    let w = feed?.width, let h = feed?.height, w > 0, h > 0 {
                     medias[i].aspectRatio = Double(w) / Double(h)
                 }

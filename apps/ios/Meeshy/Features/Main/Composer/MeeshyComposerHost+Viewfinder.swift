@@ -43,6 +43,75 @@ extension MeeshyComposerHost {
         ) else { return }
         HapticFeedback.medium()
         armSceneCamera()
+        // **Le geste ne s'arrête pas à l'armement** (directive porteur
+        // 2026-09-04) :
+        //
+        // > « il faut que le simple longpress déclenche la photo et non pas
+        // > juste l'objectif, si on a un vrai longpress ça déclenche la capture
+        // > vidéo avec le chrono et indicateur »
+        //
+        // L'appui long ARME et VISE ; c'est sa LEVÉE qui décide. Un doigt
+        // relâché tôt rend une photo, un doigt qui tient bascule en vidéo. La
+        // loi est celle de l'obturateur de la barre — `ComposerShutterGesture`,
+        // le site unique (#5074) — et non un second seuil écrit ici : deux
+        // seuils pour un même verbe divergent au premier réglage.
+        sceneHoldStartedAt = Date()
+        sceneHoldTask?.cancel()
+        // Un `UILongPressGestureRecognizer` n'émet `.changed` que sur un
+        // MOUVEMENT. Un doigt parfaitement immobile — le cas nominal quand on
+        // cadre — ne réveillerait personne, et la vidéo ne partirait jamais.
+        // C'est l'horloge qui la déclenche, pas le geste.
+        sceneHoldTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds:
+                UInt64(ComposerShutterGesture.holdToFilm * 1_000_000_000))
+            guard !Task.isCancelled, sceneHoldStartedAt != nil else { return }
+            HapticFeedback.medium()
+            startSceneFilming()
+        }
+    }
+
+    /// **Le doigt glisse pendant la prise : à DROITE, il la verrouille.**
+    ///
+    /// Directive porteur 2026-09-04 : « il faut s'assurer de pouvoir déplacer à
+    /// droite pour verrouiller l'enregistrement afin d'accéder à d'autres gestes
+    /// comme le changement de la caméra en continuant à enregistrer ».
+    ///
+    /// Le sens et le seuil viennent de `ComposerShutterGesture`, la même loi que
+    /// la barre applique à son obturateur. Le verrou est IDEMPOTENT : le
+    /// reconnaisseur émet `.changed` à chaque image tant que le doigt bouge, et
+    /// `lockSceneTake` se garde déjà d'un stage qui n'enregistre pas.
+    func handleSceneCaptureLongPressChanged(_ translation: CGPoint) {
+        guard sceneHoldStartedAt != nil,
+              ComposerShutterGesture.locks(translationX: translation.x) else { return }
+        guard sceneCameraMode != ComposerShutterGesture.mode(locked: true) else { return }
+        HapticFeedback.light()
+        lockSceneTake()
+    }
+
+    /// **La levée décide** — et c'est la même loi que la barre, à un fait près :
+    /// ici le « verrouillé » se LIT sur le mode courant plutôt que sur un
+    /// booléen de vue. `ComposerShutterGesture.mode(locked:)` est l'unique
+    /// producteur de ce mode, donc le lire est équivalent à le tenir — et évite
+    /// un second état à garder d'accord avec le premier.
+    func handleSceneCaptureLongPressEnded() {
+        sceneHoldTask?.cancel()
+        sceneHoldTask = nil
+        // La fin arrive AUSSI quand l'hôte a refusé l'armement : le canvas
+        // n'applique que ses trois gardes, la clause « scène vide » vit ici.
+        // Sans ce témoin de début, cette fin poserait une photo que personne
+        // n'a armée — et sur une scène qui a déjà un fond.
+        guard let debut = sceneHoldStartedAt else { return }
+        sceneHoldStartedAt = nil
+        switch ComposerShutterGesture.outcome(
+            heldFor: Date().timeIntervalSince(debut),
+            locked: sceneCameraMode == ComposerShutterGesture.mode(locked: true)) {
+        case .photo:
+            takeScenePhoto()
+        case .closeTake:
+            closeSceneTake()
+        case .keepFilming:
+            break
+        }
     }
 
     /// **Le viseur s'ARME dans la scène — il ne se PRÉSENTE plus** (#4080).

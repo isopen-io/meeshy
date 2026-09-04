@@ -87,6 +87,12 @@ struct BubbleQuotedReply: View, Equatable {
     /// `MessageListViewController.openQuotedMedia`). Meme regle de nullite.
     var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
 
+    /// **La taille de texte du lecteur décide du budget de la citation** (#5103).
+    /// Sans elle, le nombre de signes qu'on garde avant de couper serait le même
+    /// à `large` et à `accessibility3` — et la coupure par mot ne servirait à
+    /// rien, `lineLimit` reprenant la main au milieu d'un mot.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     /// Cote de l'avatar de la ZONE 1 — la MEME que celle de la rangee plate
     /// (`FocalMetrics.Avatar.size`), sans emprunter le jeton d'une autre peau :
     /// une citation montre le meme visage a la meme taille, quelle que soit la
@@ -400,6 +406,45 @@ struct BubbleQuotedReply: View, Equatable {
         }
     }
 
+    /// **Le nom, son deux-points, puis le texte — UN seul paragraphe** (#5103).
+    ///
+    /// > « Il faut mettre le début du message juste après les `:` de l'auteur
+    /// > et poursuivre sur 2 autres lignes si nécessaire avant de couper par
+    /// > mot » — directive porteur du 2026-09-04.
+    ///
+    /// Rend un `Text`, pas une `View`, et c'est ce qui rend la promesse
+    /// tenable : deux `Text` concaténés COULENT dans le même paragraphe, là où
+    /// deux vues voisines occupent deux blocs. `MessageTextRenderer.render`
+    /// rendant déjà un `Text`, mentions et hashtags gardent leur teinte au
+    /// passage — le flot ne coûte pas le rendu riche.
+    ///
+    /// **La coupure est faite AVANT le rendu, pas par `lineLimit`.** Celui-ci
+    /// reste posé par l'appelant comme borne de hauteur, mais il coupe au
+    /// caractère qui déborde ; c'est `wordTruncated` qui tient la promesse de
+    /// couper entre deux mots.
+    private func quotedFlow(previewColor: Color, nameColor: Color) -> Text {
+        // Aperçu VIDE + pièce jointe → le libellé court du genre (« Photo »,
+        // « Vidéo »), jamais le « Media » en dur d'avant le câblage d'AttachmentKind.
+        let fallback = attachmentKind?.shortLabel
+            ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
+        let brut = reply.previewText.isEmpty ? fallback : reply.previewText
+        let coupe = QuotedReplyPresentation.wordTruncated(
+            brut,
+            maxCharacters: QuotedReplyPresentation.previewCharacterBudget(
+                for: .bubble, dynamicTypeSize: dynamicTypeSize))
+
+        return Text(quotedTitle)
+            .font(.caption.weight(.bold))
+            .foregroundColor(nameColor)
+            + Text(" ")
+            + MessageTextRenderer.render(
+                coupe,
+                fontSize: 12, color: previewColor,
+                mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: previewColor,
+                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+            )
+    }
+
     /// Glyphe de la ligne d'apercu. ZONE 2 quand il est la SEULE affordance du
     /// media ; simple ornement sinon, efface de VoiceOver puisque le libelle
     /// court voisin (« Photo », « Video », …) dit deja le genre.
@@ -446,27 +491,34 @@ struct BubbleQuotedReply: View, Equatable {
                 .frame(width: 4)
 
             HStack(spacing: 8) {
-                // ZONE 2 — miniature du media cite, bouton play par-dessus
-                // une piste temporelle. Tap : le media EN PLEIN ECRAN. A
-                // GAUCHE, comme sur la rangee plate et dans le bandeau du
-                // composeur : une citation ne change pas de geographie selon
-                // la peau qui la rend (#4946).
-                quotedThumbnail
-
-                VStack(alignment: .leading, spacing: 2) {
-                    // Titre + date du mood sur la MÊME ligne : dans l'aperçu, la
-                    // date vivait avec le contenu et lui mangeait sa largeur, ce
-                    // qui le coupait à mi-phrase.
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // **Le texte part du deux-points de l'auteur** (#5103,
+                    // directive porteur du 2026-09-04). Le nom occupait sa
+                    // propre rangée et le texte commençait à la suivante :
+                    // une citation de trois mots coûtait deux lignes, dont
+                    // une ne portait qu'un nom.
+                    //
+                    // `MessageTextRenderer.render` rend un `Text` — c'est ce
+                    // qui permet de CONCATÉNER, donc de faire couler le texte
+                    // dans le même paragraphe que le nom plutôt que de le
+                    // poser dans une vue voisine. Mentions et hashtags gardent
+                    // leur teinte au passage.
+                    HStack(alignment: .top, spacing: 6) {
                         // ZONE 1. Le NOM qui la suit est INERTE : sous la LOI
                         // DES ZONES il retombe en zone 3 (retour au message
                         // cite), et il n'a jamais porte de geste ici.
                         authorGate
 
-                        Text(quotedTitle)
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(nameColor)
-                            .lineLimit(QuotedReplyPresentation.titleLineLimit)
+                        if reply.moodEmoji != nil || reply.isStoryReply {
+                            Text(quotedTitle)
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(nameColor)
+                                .lineLimit(QuotedReplyPresentation.titleLineLimit)
+                        } else {
+                            quotedFlow(previewColor: previewColor, nameColor: nameColor)
+                                .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .bubble))
+                                .tint(previewColor)
+                        }
 
                         moodDateLabel(previewColor: previewColor)
 
@@ -478,23 +530,19 @@ struct BubbleQuotedReply: View, Equatable {
                     } else if reply.isStoryReply {
                         BubbleStoryReplyPreview(reply: reply, previewColor: previewColor)
                     } else {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 5) {
-                                previewGlyph(previewColor: previewColor)
+                        // ZONE 2 — **la miniature se pose SOUS l'auteur**
+                        // (#5103). Elle vivait à GAUCHE du bloc, au titre de
+                        // l'invariance de géographie entre les trois peaux
+                        // (#4946) ; la directive déplace cette géographie, elle
+                        // ne l'abandonne pas — les trois peaux la suivent.
+                        quotedThumbnail
 
-                                // Empty preview text + attachment → use the kind's
-                                // localized short label ("Photo", "Vidéo", ...)
-                                // instead of the hardcoded "Media" fallback that
-                                // surfaced before the AttachmentKind plumbing fix.
-                                let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
-                                MessageTextRenderer.render(
-                                    reply.previewText.isEmpty ? fallback : reply.previewText,
-                                    fontSize: 12, color: previewColor,
-                                    mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: previewColor,
-                                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                                )
-                                .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .bubble))
-                                .tint(previewColor)
+                        HStack(spacing: 5) {
+                            // Le glyphe reste la SEULE affordance du média quand
+                            // aucune miniature ne voyage : le retirer ici
+                            // fermerait la zone 2 pour un audio ou un document.
+                            if thumbnailUrlString == nil {
+                                previewGlyph(previewColor: previewColor)
                             }
 
                             quotedDetailsLine(previewColor: previewColor)

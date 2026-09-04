@@ -97,7 +97,15 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// Le viseur doit donc ENVELOPPER la pile, pas se poser dessus.
     func test_leViseur_enveloppeLaPile_socleCompris() throws {
         let code = compact(try source("MeeshyComposerHost.swift"))
-        XCTAssertTrue(code.contains("withSceneCameraViewfinder(composerStack)"),
+        // L'enveloppe se garde sur son NOM et sur ce qu'elle contient, pas
+        // sur un appel littéral : d'autres enveloppes s'intercalent — le menu
+        // du fond l'a fait le jour même (#5041) — et une garde qui épingle
+        // `withSceneCameraViewfinder(composerStack)` rougirait pour un ajout
+        // qui ne change rien à ce qu'elle protège.
+        guard let enveloppe = code.range(of: "withSceneCameraViewfinder(")
+        else { return XCTFail("l'enveloppe du viseur a changé de nom") }
+        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStack)")
+                      || code[enveloppe.upperBound...].hasPrefix("composerStack)"),
                       "posé APRÈS le socle, le viseur ne l'aurait jamais couvert")
         guard let début = code.range(of: "varcomposerStack:someView{"),
               let fin = code.range(of: "varbody:someView{", range: début.upperBound..<code.endIndex)

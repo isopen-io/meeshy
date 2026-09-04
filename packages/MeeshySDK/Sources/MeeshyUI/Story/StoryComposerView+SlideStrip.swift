@@ -98,6 +98,37 @@ extension StoryComposerView {
             )
         }
         .contextMenu {
+            // **La vignette ouvre le FOND de sa slide** (#5041, directive porteur :
+            // « Longpress editer sur la miniature des slide permet d'ouvrir le
+            // background »). L'entrée n'existe que si la slide en a un ET si
+            // l'hôte sait ouvrir un éditeur — la règle porte les trois refus et
+            // leurs témoins ; ici on ne fait que rendre.
+            if let fondId = SlideThumbEditAffordance.editableBackgroundId(
+                in: slide.effects, hostServesEditor: onEditSceneObject != nil) {
+                Button {
+                    // **Sélectionner AVANT d'ouvrir, et dans cet ordre.**
+                    //
+                    // L'éditeur d'objet lit `viewModel.currentSlide` pour trouver
+                    // ce qu'il édite. Ouvert sur le fond d'une slide qui n'est pas
+                    // la courante, il chercherait un objet introuvable et se
+                    // refermerait aussitôt — un geste qui a l'air de marcher et
+                    // ne fait rien, exactement ce que l'affordance évite en amont.
+                    //
+                    // Les trois lignes sont celles du tap sur la vignette, à
+                    // l'identique : c'est le même geste de mise au point, et une
+                    // séquence différente ferait diverger deux chemins vers la
+                    // même slide.
+                    syncCurrentSlideEffects()
+                    withAnimation(.spring(response: 0.25)) { viewModel.selectSlide(at: index) }
+                    restoreCanvas(from: viewModel.slides[index])
+                    onEditSceneObject?(fondId)
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "story.composer.editSlideBackground",
+                                 defaultValue: "Éditer le fond", bundle: .module),
+                          systemImage: "slider.horizontal.3")
+                }
+            }
             if viewModel.slides.count > 1 {
                 Button(role: .destructive) {
                     syncCurrentSlideEffects()

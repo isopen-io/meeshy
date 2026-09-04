@@ -59,7 +59,21 @@ extension MeeshyComposerHost {
             publishTargetType: selectedFormat.postType,
             onPublishAllInBackground: onPublishAllInBackground,
             onPreview: onPreview,
-            onDismiss: onDismiss
+            onDismiss: onDismiss,
+            // **La vignette d'une slide ouvre son FOND** (#5041, directive
+            // porteur : « Longpress editer sur la miniature des slide permet
+            // d'ouvrir le background »).
+            //
+            // Le MÊME site que toutes les autres portes de l'éditeur d'objet —
+            // `openObjectEditor` est l'unique façon d'ouvrir un objet, quelle
+            // que soit la porte, et recopier ici ce qu'il contient est
+            // exactement ce qui a fait diverger deux chemins au #4634.
+            //
+            // Sa PRÉSENCE gouverne l'affordance : `SlideThumbEditAffordance` lit
+            // `onEditSceneObject != nil` pour décider si l'entrée existe. Un
+            // hôte qui ne le branche pas ne voit aucun « Éditer le fond »,
+            // plutôt qu'une entrée qui aurait l'air de marcher jusqu'au tap.
+            onEditSceneObject: { openObjectEditor($0) }
         )
         .storyLocationPickerProvided()
         .storyCameraCaptureProvided()
@@ -432,6 +446,18 @@ extension MeeshyComposerHost {
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             onBackgroundLongPressed: { handleSceneCaptureLongPress() },
+            // **Le geste de la scène EST celui de l'obturateur** (directive
+            // porteur 2026-09-04). L'appui long arme et vise ; sa LEVÉE rend
+            // une photo, ou clôt la vidéo s'il a tenu. Glisser à DROITE
+            // pendant la prise la verrouille, ce qui libère la main pour les
+            // autres gestes — retourner l'objectif, par exemple.
+            // **Un fond ne s'ouvre pas au viseur, il s'ouvre à son MENU**
+            // (#5041). La règle du canvas retombe sur le viseur tant que ce
+            // rappel est nil — donc le geste n'est jamais muet, même le jour
+            // où le meuble ne sert pas encore le menu.
+            onBackgroundMediaLongPressed: { backgroundMenuObjectId = $0 },
+            onBackgroundLongPressChanged: { handleSceneCaptureLongPressChanged($0) },
+            onBackgroundLongPressEnded: { handleSceneCaptureLongPressEnded() },
             // **Le viseur n'est plus remis à la surface — il est MONTÉ par le
             // meuble** (directive porteur 2026-09-04, `sceneCameraViewfinder`).
             //
