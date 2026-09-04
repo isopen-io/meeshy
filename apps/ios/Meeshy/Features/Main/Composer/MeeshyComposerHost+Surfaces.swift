@@ -33,6 +33,24 @@ extension MeeshyComposerHost {
         StoryComposerView(
             viewModel: viewModel,
             initialVisibility: initialVisibility,
+            // **Les deux moitiés de l'audience d'un contenu REPRIS** (#5053).
+            //
+            // Elles étaient le troisième des trois manques que `ComposerIntent`
+            // énumérait pour router `.repost` vers l'atelier nu : « il ne passe
+            // ni `allowedVisibilities` ni `initialVisibilityUserIds` à
+            // l'atelier, si bien que le plafond d'audience du repost (loi 10)
+            // tomberait EN SILENCE ».
+            //
+            // Le mot est SILENCE : un plafond absent ne rougit pas, il offre
+            // simplement une audience de plus, que l'auteur choisit et que le
+            // serveur refuse ensuite — 403 `REPOST_AUDIENCE_WIDENING`, après
+            // que la composition est faite.
+            //
+            // Les ids voyagent AVEC le plafond, jamais séparément : une
+            // audience `ONLY` sans sa liste est une audience VIDE, et le repost
+            // ne serait visible de personne sans que rien ne le dise.
+            initialVisibilityUserIds: hydration?.initialVisibilityUserIds ?? [],
+            allowedVisibilities: hydration?.allowedVisibilities,
             chromeOwner: chromeOwner,
             // #4135 — sans elle, `chromeOwner == .host` laisserait la scène
             // SANS aucun chemin de départ : l'atelier n'assemble plus ses
@@ -335,8 +353,7 @@ extension MeeshyComposerHost {
                 hashtags: composerHashtags.count,
                 description: sceneDescriptionBinding.wrappedValue,
                 mentions: composerReferences.count,
-                hasDocumentLocation: documentLocation != nil,
-                hasDocumentBackground: documentBackground != nil))
+                hasDocumentLocation: documentLocation != nil))
     }
 
     var sceneSurface: some View {
@@ -620,6 +637,7 @@ extension MeeshyComposerHost {
             backgroundSound: avatarBadgeSound,
             onEditBackgroundSound: editBackgroundSoundAction,
             onDeleteBackgroundSound: deleteBackgroundSoundAction,
+            onPromoteBackgroundSound: promoteBackgroundSoundAction,
             // **Le pied lit les MÊMES magasins que le reste du meuble** (#5002).
             //
             // `composerHashtags` — pas `ComposerHashtags.tags(in: documentText)`.

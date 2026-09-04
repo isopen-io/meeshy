@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { apercuDeLigne, PASTILLE_DE_LANGUE } from './atomes-feuille';
+
 /**
  * La feuille de la zone CONNECTÉE — le tableau de bord, la liste des
  * conversations et le cadre du fil, qui partagent un vocabulaire : des CARTES
@@ -94,4 +96,26 @@ a.carte:hover{background:var(--color-tint-primary)}
 .cartes{grid-template-columns:1fr 1fr}
 .carte-vide .action{width:auto}
 }
+`);
+
+/**
+ * LA FEUILLE DU TABLEAU DE BORD — ce que la CARTE de reprise sert, et que rien
+ * d'autre dans la zone ne rend.
+ *
+ * Elle est SÉPARÉE de `FEUILLE_CONNECTEE` pour la raison même qui a séparé
+ * celle de `/chats` (charte règle 7) : la feuille de zone voyage sur les SIX
+ * documents de la zone — le fil, son état `?media=`, la galerie des médias, le
+ * choix de `/chat/:lien`, la story —, et l'aperçu au Prisme n'est rendu que
+ * par DEUX d'entre eux. Y remonter la pastille et le bloc d'aperçu coûtait
+ * 52 o gzip au fil et 69 o à la story (mesuré), sur le document déjà le plus
+ * lourd du dépôt, pour des règles qu'aucun des deux n'applique.
+ *
+ * Les deux règles viennent des ATOMES (`atomes-feuille.ts`), qu'elle partage
+ * avec `/chats` : la pastille de langue est la même sur les deux écrans qu'un
+ * tap sépare, et `apercuDeLigne` en est le bloc, servi ici sous la racine de la
+ * carte.
+ */
+export const FEUILLE_DU_TABLEAU = compacte(`
+${PASTILLE_DE_LANGUE}
+${apercuDeLigne('.carte')}
 `);

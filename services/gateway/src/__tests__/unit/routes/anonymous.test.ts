@@ -418,16 +418,41 @@ describe('GET /anonymous/link/:identifier', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  /**
+   * #5077 — les `identifier` GÉNÉRÉS commencent EUX AUSSI par `mshy_`
+   * (`mshy_beta-staging`). Prendre tout `mshy_*` pour un `linkId` rendait 404
+   * sur chaque adresse que `/links` compose depuis le slug — mesuré sur
+   * staging le 2026-09-04. Même piège que `findShareLinkByIdentifier`
+   * (`prisma-queries.ts`), fix `ab22f62ac`, jamais reporté ici. Le témoin lit
+   * le WHERE : un mock qui l'ignore ne teste pas la requête.
+   */
+  it('résout un identifier custom mshy_* — le where accepte linkId ET identifier', async () => {
+    const findFirst = (app as any).prisma.conversationShareLink.findFirst;
+    findFirst.mockClear();
+    findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      linkId: 'mshy_JLKGTETp', identifier: 'mshy_beta-staging',
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/anonymous/link/mshy_beta-staging' });
+
+    expect(res.statusCode).toBe(200);
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { OR: [{ linkId: 'mshy_beta-staging' }, { identifier: 'mshy_beta-staging' }] },
+      }),
+    );
+  });
+
   it('returns 404 when link by ObjectID not found', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
     (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'GET', url: '/anonymous/link/507f1f77bcf86cd799439011' });
     expect(res.statusCode).toBe(404);
   });
 
   it('returns 410 when link is inactive', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
       ...mockShareLink, isActive: false,
       conversation: { id: CONV_ID, title: 'T', description: null, type: 'group', createdAt: new Date() },
     });
@@ -436,8 +461,7 @@ describe('GET /anonymous/link/:identifier', () => {
   });
 
   it('returns 200 with link info on success', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
       ...mockShareLink,
       conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
     });
@@ -456,8 +480,7 @@ describe('GET /anonymous/link/:identifier', () => {
       { type: 'user', language: null, user: { systemLanguage: 'EN', regionalLanguage: null, customDestinationLanguage: null } },
       { type: 'anonymous', language: 'fr', user: null },
     ]);
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
       ...mockShareLink,
       conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
     });
@@ -485,8 +508,7 @@ describe('GET /anonymous/link/:identifier', () => {
    * ni message, ni identité.
    */
   it('sert les quatre droits que le lien accorde à un invité', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
       ...mockShareLink,
       allowAnonymousMessages: true,
       allowAnonymousFiles: true,
@@ -507,17 +529,16 @@ describe('GET /anonymous/link/:identifier', () => {
   });
 
   it('demande les quatre droits au select racine — jamais une colonne devinée', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    const findUnique = (app as any).prisma.conversationShareLink.findUnique;
-    findUnique.mockClear();
-    findUnique.mockResolvedValueOnce({
+    const findFirst = (app as any).prisma.conversationShareLink.findFirst;
+    findFirst.mockClear();
+    findFirst.mockResolvedValueOnce({
       ...mockShareLink,
       conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
     });
 
     await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
 
-    expect(findUnique.mock.calls[0][0].select).toMatchObject({
+    expect(findFirst.mock.calls[0][0].select).toMatchObject({
       allowAnonymousMessages: true,
       allowAnonymousFiles: true,
       allowAnonymousImages: true,
@@ -538,15 +559,16 @@ describe('GET /anonymous/link/:identifier — select racine explicite', () => {
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
-  it('branche mshy_* : findUnique porte select (jamais include), avec conversation et creator imbriqués', async () => {
-    const findUnique = (app as any).prisma.conversationShareLink.findUnique;
-    findUnique.mockClear();
-    findUnique.mockResolvedValueOnce({ ...mockShareLink });
+  it('branche mshy_* : findFirst porte select (jamais include), avec conversation et creator imbriqués — et le where accepte les deux clés (#5077)', async () => {
+    const findFirst = (app as any).prisma.conversationShareLink.findFirst;
+    findFirst.mockClear();
+    findFirst.mockResolvedValueOnce({ ...mockShareLink });
 
     await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
 
-    expect(findUnique).toHaveBeenCalledTimes(1);
-    const call = findUnique.mock.calls[0][0];
+    expect(findFirst).toHaveBeenCalledTimes(1);
+    const call = findFirst.mock.calls[0][0];
+    expect(call.where).toEqual({ OR: [{ linkId: LINK_ID }, { identifier: LINK_ID }] });
     expect(call).not.toHaveProperty('include');
     expect(call.select).toMatchObject({
       id: true,

@@ -6,16 +6,22 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
 import { FEUILLE_DU_CHOIX } from '@/app/(public)/chat/[lien]/choix-feuille';
-import { FEUILLE_DE_LA_STORY } from '@/app/(public)/stories/[id]/story-feuille';
+import { FEUILLE_DE_LA_STORY } from '@/app/(public)/partage-feuille';
+import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 import { tableDeJetons } from '@/app/actifs-inlines';
-import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
+import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from '@/app/connecte/feuille';
 import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
+import { FEUILLE_DU_PLEIN } from '@/app/connecte/plein-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
-import { FEUILLE_DES_LIENS } from '@/app/connecte/liens-feuille';
+import { FEUILLE_DES_LIENS, FEUILLE_DU_NOUVEAU_LIEN } from '@/app/connecte/liens-feuille';
 import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
+import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from '@/app/connecte/liste-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
+import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
+import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
+import { FEUILLE_DES_REGLAGES } from '@/app/connecte/reglages-feuille';
 import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { FEUILLE_DE_LA_VITRINE } from '@/app/vitrine/feuille';
@@ -57,14 +63,23 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/vitrine/feuille.ts', source: FEUILLE_DE_LA_VITRINE },
   { nom: 'app/connecte/feuille.ts', source: FEUILLE_CONNECTEE },
   { nom: 'app/connecte/fil-feuille.ts', source: FEUILLE_DU_FIL },
+  { nom: 'app/connecte/plein-feuille.ts', source: FEUILLE_DU_PLEIN },
   { nom: 'app/(public)/chat/[lien]/choix-feuille.ts', source: FEUILLE_DU_CHOIX },
   { nom: 'app/connecte/medias-feuille.ts', source: FEUILLE_DES_MEDIAS },
-  { nom: 'app/(public)/stories/[id]/story-feuille.ts', source: FEUILLE_DE_LA_STORY },
+  { nom: 'app/(public)/partage-feuille.ts', source: FEUILLE_DE_LA_STORY },
+  { nom: 'app/choix-de-langue.ts', source: FEUILLE_DU_CHOIX_DE_LANGUE },
   { nom: 'app/connecte/notifs-feuille.ts', source: FEUILLE_DES_NOTIFS },
   { nom: 'app/connecte/contacts-feuille.ts', source: FEUILLE_DES_CONTACTS },
   { nom: 'app/connecte/liens-feuille.ts', source: FEUILLE_DES_LIENS },
   { nom: 'app/connecte/recherche-feuille.ts', source: FEUILLE_DE_LA_RECHERCHE },
   { nom: 'app/connecte/commentaires-feuille.ts', source: FEUILLE_DES_COMMENTAIRES },
+  { nom: 'app/connecte/liste-feuille.ts', source: FEUILLE_DE_LA_LISTE },
+  { nom: 'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU', source: FEUILLE_DU_TABLEAU },
+  { nom: 'app/connecte/profil-feuille.ts', source: FEUILLE_DU_PROFIL },
+  { nom: 'app/connecte/social-feuille.ts', source: FEUILLE_DU_FIL_SOCIAL },
+  { nom: 'app/connecte/reglages-feuille.ts', source: FEUILLE_DES_REGLAGES },
+  { nom: 'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN', source: FEUILLE_DU_NOUVEAU_LIEN },
+  { nom: 'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV', source: FEUILLE_DE_LA_NOUVELLE_CONV },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -125,14 +140,23 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/vitrine/feuille.ts',
       'app/connecte/feuille.ts',
       'app/connecte/fil-feuille.ts',
+      'app/connecte/plein-feuille.ts',
       'app/(public)/chat/[lien]/choix-feuille.ts',
       'app/connecte/medias-feuille.ts',
-      'app/(public)/stories/[id]/story-feuille.ts',
+      'app/(public)/partage-feuille.ts',
+      'app/choix-de-langue.ts',
       'app/connecte/notifs-feuille.ts',
       'app/connecte/contacts-feuille.ts',
       'app/connecte/liens-feuille.ts',
       'app/connecte/recherche-feuille.ts',
       'app/connecte/commentaires-feuille.ts',
+      'app/connecte/liste-feuille.ts',
+      'app/connecte/feuille.ts › FEUILLE_DU_TABLEAU',
+      'app/connecte/profil-feuille.ts',
+      'app/connecte/social-feuille.ts',
+      'app/connecte/reglages-feuille.ts',
+      'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN',
+      'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -217,10 +241,38 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
   const COMPOSITIONS: readonly { readonly nom: string; readonly source: string }[] = [
     { nom: 'vitrine', source: CHROME + FEUILLE_DE_LA_VITRINE },
     { nom: 'connecté', source: CHROME + FEUILLE_CONNECTEE },
+    // Le TABLEAU DE BORD sert la feuille de zone PLUS la sienne — l'aperçu au
+    // Prisme de ses cartes (`cible/home.png`), que les cinq autres
+    // compositions ne rendent pas et ne paient donc pas (charte règle 7).
+    { nom: 'tableau de bord', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU },
+    // `/chats` MANQUAIT à ce relevé : sa feuille est la seule de la zone qu'aucune
+    // composition n'opposait au plafond.
+    { nom: 'liste', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE },
     { nom: 'fil', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL },
+    // L'état `?media=` du fil (§ 12.10.1) : la SEULE composition qui porte la
+    // feuille du plein écran — un fil ordinaire n'en paie pas un octet.
+    { nom: 'fil en plein écran', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_PLEIN },
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
     { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
     { nom: 'story', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY },
+    // `/feed` (#5031) — le fil social, servi par `documentPleinEcran` comme le
+    // fil, la liste et les commentaires : chrome + connecté + sa feuille.
+    { nom: 'fil social', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL_SOCIAL },
+    // Les SIX écrans de réglages servent la MÊME composition : chrome, zone
+    // connectée, l'en-tête du fil (qu'ils réemploient) et leur feuille. Une
+    // seule ligne suffit donc à les opposer tous les six au plafond.
+    { nom: 'réglages', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_REGLAGES },
+    // L'état `/links?nouveau` : la SEULE composition qui porte la feuille de
+    // création — un carnet ordinaire n'en paie pas un octet.
+    {
+      nom: 'liens avec la feuille de création',
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_LIENS + FEUILLE_DU_NOUVEAU_LIEN,
+    },
+    // L'état `/chats?nouvelle` : la liste plus sa feuille de création.
+    {
+      nom: 'liste avec la feuille de conversation',
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DE_LA_NOUVELLE_CONV,
+    },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
 
@@ -359,17 +411,34 @@ describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', 
   });
 
   /**
-   * Règle 9 — « `--color-surface-raised` = la feuille modale et le rond
-   * flottant secondaire, rien d'autre » ; témoin : ≤ 2 sélecteurs, et la
-   * feuille modale est le seul à le peindre tant que le rond n'existe pas.
+   * Règle 9 — « `--color-surface-raised` = ce qui FLOTTE au-dessus du contenu,
+   * rien d'autre ». La feuille modale de jonction a été le seul emploi tant
+   * que rien d'autre ne flottait ; le panneau de profil (§ 12.10.3) est le
+   * SECOND et la feuille « nouveau lien » (#5071) le TROISIÈME — trois emplois
+   * assumés de la règle, pas trois écarts d'elle : les trois FLOTTENT, sur le
+   * même plan.
+   *
+   * LE PIED COLLANT DE LA TROISIÈME EN EST UN QUATRIÈME EMPLOI, et il mérite
+   * qu'on dise pourquoi il n'en est pas un écart : il ne flotte pas AU-DESSUS
+   * de la feuille, il EST la feuille — le fond qu'il peint doit être
+   * exactement celui sous lequel le formulaire défile, sans quoi le bouton
+   * « Créer » se lirait sur une bande d'une autre couleur. Un second jeton
+   * l'aurait fait diverger au premier changement de surface.
    */
-  it('ne réserve --color-surface-raised qu’à ce qui flotte — la feuille modale seule aujourd’hui', () => {
+  it('ne réserve --color-surface-raised qu’à ce qui flotte', () => {
     const peints = FEUILLES.flatMap(({ nom, source }) =>
       regles(source)
         .filter(({ corps }) => corps.includes('var(--color-surface-raised)'))
         .map(({ selecteur }) => `${nom} › ${selecteur}`),
     );
-    expect(peints).toEqual(['app/(public)/chat/[lien]/choix-feuille.ts › dialog.feuille']);
+    expect(peints).toEqual([
+      'app/(public)/chat/[lien]/choix-feuille.ts › dialog.feuille',
+      'app/connecte/profil-feuille.ts › dialog.profil',
+      'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN › dialog.nouveau-lien',
+      'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN › dialog.nouveau-lien .pied',
+      'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV › dialog.nouvelle-conv',
+      'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV › dialog.nouvelle-conv .pied',
+    ]);
   });
 });
 
@@ -408,6 +477,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.pieces .media', // le cliquable — une pièce jointe, sur son affiche
     '.lecteur .lire', // le cliquable — le rond de lecture d'un vocal ou d'une vidéo
     '.pieces .transcrit-original summary', // le cliquable — l'original d'un transcrit
+    '.pieces>li[data-genre=video] .media .lire', // le cliquable — le rond de lecture d'une vidéo, sur son poster
+    '.pieces .fiche', // le cliquable — la fiche d'un vocal, où sa transcription se lit entière
+    // Le plein écran (§ 12.10.1) : le cliquable — la croix qui ferme, l'original
+    // d'un transcrit. La scène, le nom du fichier et son poids restent sur l'encre.
+    'dialog.plein .fermer',
+    'dialog.plein .transcrit-original summary',
     '.frappe', // « écrit… », charte règle 27
     '.composeur .envoyer', // le cliquable — action primaire du fil
     '.composeur .joindre', // le cliquable — joindre une pièce
@@ -440,6 +515,35 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // commentaire et le compte de cœurs restent sur l'encre.
     '.source[aria-current]',
     '.prisme summary',
+    // La liste (`cible/chats.png`) : le cliquable — le résumé du menu d'une
+    // ligne, SURVOLÉ, comme « Réagir » l'est dans le fil. La ligne elle-même,
+    // son aperçu, son heure et son filet restent sur l'encre ; la pastille de
+    // non-lus (`.compte`) et celle de langue (`.langue`) sont déjà nommées plus
+    // haut, et c'est la même règle qui les gouverne des deux côtés.
+    '.actions>summary:hover',
+    // Le fil social (`cible/feed.png`, #5031) : le cœur PRESSÉ — même emploi
+    // que `.story-repondre .aimer[aria-pressed=true]`, la mienne parmi les
+    // réactions —, et l'état « Reposté » — même emploi que `.ligne .accuse`,
+    // « ceci est de moi ». Le nom de l'auteur, l'heure, le texte d'un post et
+    // le compte des trois gestes restent sur l'encre.
+    '.geste-aime[aria-pressed="true"]',
+    '.geste-reposte',
+    // La langue COCHÉE d'un post à plusieurs textes — même emploi que
+    // `.source[aria-current]` des commentaires et `.puces.filtres
+    // .puce[aria-current]` de la galerie : un contrôle SÉLECTIONNÉ, l'accent
+    // en fond. `RANGS_LANGUE_MAX` (`social-feuille.ts`) borne la génération —
+    // ce n'est pas un sélecteur écrit huit fois, c'est UNE règle, répétée par
+    // position (`:has()` ne peut pas relier un radio et son label par ID à
+    // travers la structure du document, § doc-comment du fichier).
+    '.prisme-multi:has(>input:nth-of-type(1):checked) .langues label:nth-of-type(1),.prisme-multi:has(>input:nth-of-type(2):checked) .langues label:nth-of-type(2),.prisme-multi:has(>input:nth-of-type(3):checked) .langues label:nth-of-type(3),.prisme-multi:has(>input:nth-of-type(4):checked) .langues label:nth-of-type(4),.prisme-multi:has(>input:nth-of-type(5):checked) .langues label:nth-of-type(5),.prisme-multi:has(>input:nth-of-type(6):checked) .langues label:nth-of-type(6),.prisme-multi:has(>input:nth-of-type(7):checked) .langues label:nth-of-type(7),.prisme-multi:has(>input:nth-of-type(8):checked) .langues label:nth-of-type(8)',
+    // Le saut de rail et le lien de pagination — le cliquable, comme `a` nu,
+    // mais une CLASSE plutôt que le sélecteur `a` (`.saut` reste hors-écran
+    // hors focus, `.plus` porte un contour pris à part) : même emploi 1.
+    '.saut',
+    '.plus',
+    // L'anneau NON VU d'une vignette de story — même emploi que `.compte`/
+    // `.notif .pastille` : « ceci vous attend », pas encore lu.
+    '.rail .cercle[data-vu="0"]',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

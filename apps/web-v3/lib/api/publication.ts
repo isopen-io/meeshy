@@ -52,6 +52,14 @@ export type MediaDeStory = {
   readonly alt: string | null;
   readonly largeur: number | null;
   readonly hauteur: number | null;
+  /**
+   * `thumbnailUrl` (`postIncludes.ts:107`, `mediaSelect`) — l'affiche qu'un
+   * `<video preload="none">` peint AVANT la pression (§ media-html.ts). `null`
+   * pour un genre sans vignette (image, son) ou quand la passerelle n'en sert
+   * aucune : une affiche inventée serait pire qu'aucune (§ INTERDITS, aucune
+   * mesure/valeur ne s'invente).
+   */
+  readonly affiche: string | null;
 };
 
 export type Story = {
@@ -93,12 +101,19 @@ export type Voisinage = {
 };
 
 const CHEMIN_DES_POSTS = '/api/v1/posts';
-/** Le plafond de `SocialPostsQuerySchema` sur ce scope (`validatePagination`, `maxLimit: 50`). */
-const CHEMIN_DES_STORIES = '/api/v1/social/posts?scope=stories&limit=50';
+/**
+ * Le plafond de `SocialPostsQuerySchema` sur ce scope (`validatePagination`,
+ * `maxLimit: 50`). `projection=tray` (`routes/posts/feed.ts:213`,
+ * `postIncludes.ts:264-296`) : `storiesVisibles` ne projette que
+ * `{ id, auteurId, publieeA }`, exactement ce que sert la projection légère —
+ * la fenêtre de voisinage n'a besoin ni du canvas ni des traductions.
+ */
+const CHEMIN_DES_STORIES = '/api/v1/social/posts?scope=stories&projection=tray&limit=50';
 
 const DELAI_MS = DELAI_DE_REPONSE_MS;
 
-const demande = (
+/** EXPORTÉE — `lib/api/social.ts` fait le MÊME appel (Bearer, délai, catch réseau) pour le fil et le rail de stories. */
+export const demande = (
   url: string,
   jeton: string,
   recuperer: Recuperateur | undefined,
@@ -116,7 +131,13 @@ const demande = (
  * Une entrée sans texte n'existe pas : la servir ferait une langue OFFERTE qui
  * rend une story vide.
  */
-const traductions = (brut: unknown): Readonly<Record<string, string>> => {
+/**
+ * EXPORTÉE — `lib/api/social.ts` (le fil, #5031) en a besoin pour le MÊME
+ * dépouillement : la carte `code → texte` d'un post est identique, qu'il
+ * s'ouvre en plein écran (`/post/:id`) ou qu'il défile dans le fil
+ * (`/feed`). L'exporter évite la jumelle que réécrire ce filtre ferait naître.
+ */
+export const traductions = (brut: unknown): Readonly<Record<string, string>> => {
   const carte = objet(brut);
   if (carte === null) return {};
   return Object.entries(carte).reduce<Record<string, string>>((acc, [code, entree]) => {
@@ -126,16 +147,19 @@ const traductions = (brut: unknown): Readonly<Record<string, string>> => {
   }, {});
 };
 
-const media = (brut: unknown, origine: string): MediaDeStory | null => {
+/** EXPORTÉE pour la MÊME raison que `traductions` — `lib/api/social.ts` lit la même forme de pièce. */
+export const media = (brut: unknown, origine: string): MediaDeStory | null => {
   const piece = objet(brut);
   const servie = chaine(piece?.fileUrl);
   if (piece === null || servie === null) return null;
+  const affiche = chaine(piece.thumbnailUrl);
   return {
     url: urlDePiece(servie, origine),
     genre: genreDeMime(chaine(piece.mimeType)),
     alt: chaine(piece.alt) ?? chaine(piece.caption),
     largeur: nombre(piece.width),
     hauteur: nombre(piece.height),
+    affiche: affiche === null ? null : urlDePiece(affiche, origine),
   };
 };
 
@@ -149,7 +173,8 @@ const media = (brut: unknown, origine: string): MediaDeStory | null => {
  * demandée que rien ne traduit retombe sur le Prisme plutôt que de refuser :
  * une adresse tapée à la main ne casse pas une lecture.
  */
-const servie = ({
+/** EXPORTÉE — `lib/api/social.ts` en a besoin pour élire la langue d'une publication du fil, sans réécrire la règle du § 5.4. */
+export const servie = ({
   carte,
   langueOriginale,
   langues,
@@ -177,26 +202,40 @@ const servie = ({
   return memeQueLOrigine ? null : descente(langues);
 };
 
+/** Les trois genres que l'écran de PARTAGE sert — une adresse chacun, un seul lecteur. */
+export type GenreDePartage = 'STORY' | 'REEL' | 'STATUS';
+
 /**
- * LA STORY, LUE. Rend `null` pour TOUT ce qui ne se sert pas — pas une story,
- * supprimée, échue —, et l'appelant en fait la MÊME réponse qu'une story
- * absente : distinguer révélerait l'existence du contenu (§ 5.1).
+ * UNE PUBLICATION PARTAGÉE, LUE. Rend `null` pour TOUT ce qui ne se sert pas —
+ * pas le genre attendu, supprimée, échue —, et l'appelant en fait la MÊME
+ * réponse qu'une publication absente : distinguer révélerait l'existence du
+ * contenu (§ 5.1).
+ *
+ * LE GENRE EST UN PARAMÈTRE, ET C'EST TOUT CE QUI SÉPARE LES TROIS ÉCRANS.
+ * Cette fonction s'appelait `storyLue` et refusait en dur `type !== 'STORY'` :
+ * servir un réel ou une humeur aurait demandé d'en écrire une deuxième, puis
+ * une troisième, chacune divergeant à sa manière. C'est exactement la jumelle
+ * que #4929 interdit — « rendu par le MÊME composant lecteur que
+ * post/story/reel ». L'échéance (`expiresAt`) n'est pas story-spécifique : une
+ * humeur d'une heure en porte une aussi, et la garde est déjà conditionnelle.
  */
-export const storyLue = ({
+export const partageLu = ({
   brut,
+  genre,
   langues,
   langueDemandee,
   maintenant,
   origine,
 }: {
   readonly brut: Readonly<Record<string, unknown>>;
+  readonly genre: GenreDePartage;
   readonly langues: readonly string[];
   readonly langueDemandee: string | null;
   readonly maintenant: number;
   readonly origine: string;
 }): Story | null => {
   const id = chaine(brut.id);
-  if (id === null || chaine(brut.type) !== 'STORY') return null;
+  if (id === null || chaine(brut.type) !== genre) return null;
   if (instant(brut.deletedAt) !== null) return null;
 
   const expireA = instant(brut.expiresAt);
@@ -216,7 +255,7 @@ export const storyLue = ({
     expireA,
     texte: elue?.text ?? texteOriginal,
     texteOriginal,
-    langueServie: elue?.language ?? null,
+    langueServie: elue?.language ?? langueOriginale,
     langueOriginale,
     languesOffertes: [...new Set([...(langueOriginale === null ? [] : [langueOriginale]), ...Object.keys(carte)])],
     medias: Array.isArray(brut.media)
@@ -394,6 +433,37 @@ export const aime = async ({
     }),
   );
 
+/**
+ * REPARTAGER — `POST /posts/:postId/repost` (`routes/posts/interactions.ts:790`,
+ * `requiredAuth`), UNE SEULE forme : le repost SIMPLE (`isQuote:false`, le
+ * défaut de `RepostSchema`), sans citation ni changement d'audience — la v3 ne
+ * sert pas encore le composeur qui recueillerait les deux (#5031, comme
+ * `reponds` ci-dessus ne sert pas l'écriture d'un commentaire riche).
+ *
+ * IL N'Y A PAS DE ROUTE POUR DÉFAIRE UN REPOST (vérifié : aucun `DELETE
+ * …/repost` monté). Le geste est donc à SENS UNIQUE — l'appelant ne propose ce
+ * bouton qu'à qui n'a pas encore reposté (`isRepostedByMe === false`), jamais
+ * une bascule qu'aucune route ne saurait défaire.
+ */
+export const reposte = async ({
+  id,
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly id: string;
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<IssueDuGeste> =>
+  refusDe(
+    await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}/${encodeURIComponent(id)}/repost`, jeton, recuperer, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    }),
+  );
+
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -403,7 +473,7 @@ export const aime = async ({
  *
  * UN SEUL LECTEUR POUR LES TROIS SOURCES. La cible dessine trois puces — Post,
  * Réel, Story — et le critère de fin exige qu'un MÊME lecteur les rende. C'est
- * `publicationLue` : `storyLue` refuse tout ce qui n'est pas `type === 'STORY'`
+ * `publicationLue` : `partageLu` refuse tout ce qui n'est pas le genre demandé
  * parce que l'écran d'une story a ses propres règles d'expiration ; celui-ci
  * accepte les trois, et porte le `genre` pour que la vue le DISE.
  *
@@ -452,8 +522,31 @@ export type Publication = {
   readonly auteur: string;
   readonly texte: string;
   readonly texteOriginal: string;
+  /**
+   * LA LANGUE DU TEXTE AFFICHÉ — celle que le Prisme a élue, ou celle de
+   * l'ORIGINAL quand c'est lui qui est servi.
+   *
+   * Elle valait `null` dans ce second cas, et deux choses en dépendaient à
+   * tort. Le `lang=` d'abord : servir l'original anglais dans un document
+   * français SANS l'annoncer fait lire l'anglais à voix française — ce qui
+   * arrive dès qu'un lecteur demande `?lang=en` sur un contenu écrit en
+   * anglais, exactement ce que le sélecteur de langue vient d'offrir. La ligne
+   * du Prisme ensuite, qui se gardait sur `null` alors que la question qu'elle
+   * pose est autre : « le texte affiché est-il une TRADUCTION ? »,
+   * c'est-à-dire `langueServie !== langueOriginale`.
+   *
+   * Les deux questions sont désormais séparées, et chacune se lit dans le
+   * champ qui y répond.
+   */
   readonly langueServie: string | null;
   readonly langueOriginale: string | null;
+  /**
+   * LES LANGUES QUE LA PUBLICATION PORTE RÉELLEMENT — son original et les
+   * traductions qui ont un texte. C'est ce que le sélecteur de langue OFFRE
+   * (`app/choix-de-langue.ts`) : une langue de plus serait un lien qui ne
+   * change rien (charte règle 7), une de moins un texte inatteignable.
+   */
+  readonly languesOffertes: readonly string[];
   readonly publieeA: string | null;
 };
 
@@ -492,8 +585,11 @@ export const publicationLue = ({
     auteur: chaine(auteur?.displayName) ?? chaine(auteur?.username) ?? 'Quelqu’un',
     texte: elue?.text ?? texteOriginal,
     texteOriginal,
-    langueServie: elue?.language ?? null,
+    langueServie: elue?.language ?? langueOriginale,
     langueOriginale,
+    // Le MÊME calcul que la story, et la même raison : l'original concourt à
+    // son rang, et une traduction sans texte n'est pas une langue offerte.
+    languesOffertes: [...new Set([...(langueOriginale === null ? [] : [langueOriginale]), ...Object.keys(carte)])],
     publieeA: instant(brut.createdAt),
   };
 };
@@ -544,7 +640,7 @@ const commentaire = (
     auteurId,
     texte: elue?.text ?? texteOriginal,
     texteOriginal,
-    langueServie: elue?.language ?? null,
+    langueServie: elue?.language ?? langueOriginale,
     langueOriginale,
     publieA: instant(brut.createdAt),
     aimes: nombre(brut.likeCount) ?? 0,
@@ -615,5 +711,103 @@ export const filDeLaPublication = async ({
       .map((ligne) => commentaire(ligne, langues, moiId))
       .filter((c): c is Commentaire => c !== null),
     encore: objet(enveloppe.pagination)?.hasMore === true,
+  };
+};
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * PUBLIER (#4966, `/composer` ; #5033, `/stories/new`) — au même endroit et
+ * par les mêmes primitives que la lecture ci-dessus.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * `POST /api/v1/posts` (`services/gateway/src/routes/posts/core.ts:365`,
+ * `preValidation: [requiredAuth]`) est la SEULE porte de création que la v3
+ * appelle : le corps est celui de `CreatePostSchema`
+ * (`routes/posts/types.ts:233-237`), qui refuse un contenu de plus de 5000
+ * caractères et exige qu'au moins un porteur de contenu soit présent
+ * (`hasAnyContentCarrier`).
+ *
+ * `visibility` EST UN PARAMÈTRE, PAS UNE CONSTANTE — depuis #5033
+ * (`/stories/new`), qui en fait un contrôle RÉEL (trois valeurs, mutant la
+ * charge envoyée : c'est le critère de fin de cet écran). Composer
+ * (`/composer`, post/réel/humeur, #4966) ne le fournit toujours pas : le
+ * défaut `'PUBLIC'` préserve son comportement à l'octet près — sa ligne
+ * « Audience » reste INFORMATIVE (comme « Traduction »), la ligne ne DEVIENT
+ * un contrôle que pour l'écran qui la câble.
+ *
+ * `originalLanguage` — `CreatePostSchema.originalLanguage`
+ * (`routes/posts/types.ts:249-251`) — EST LA REVENDICATION DU CLIENT (§ Prisme,
+ * « canonicalize the client claim at the write boundary »). Sans elle, la
+ * passerelle retombe sur `detectLanguage(content)` : une étiquette DEVINÉE, et
+ * le pivot de toute la descente du Prisme chez les LECTEURS — l'erreur ne se
+ * voit jamais chez l'auteur (revue croisée #4966, défaut 8). `langue` est
+ * `null` quand `/auth/me` n'a servi aucune `systemLanguage` : ne RIEN
+ * revendiquer est correct, la passerelle devine alors comme elle l'a toujours
+ * fait — une chaîne vide ne l'est pas, elle poserait un `originalLanguage`
+ * vide dans le corps.
+ */
+
+export type PublicationEnvoyee =
+  | { readonly genre: 'publie'; readonly id: string }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
+
+const REFUS_PUBLICATION = 'La publication n’a pas pu être envoyée. Réessayez.';
+
+export const publie = async ({
+  jeton,
+  type,
+  texte,
+  visibility = 'PUBLIC',
+  langue = null,
+  cmid = null,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly type: 'POST' | 'REEL' | 'STATUS' | 'STORY';
+  readonly texte: string;
+  /** `CreatePostSchema.visibility` — `'PUBLIC'` pour composer, la valeur RÉELLEMENT choisie pour une story (#5033). */
+  readonly visibility?: 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+  /** `originalLanguage` — la revendication du client. `null` : rien à revendiquer, la passerelle devine. */
+  readonly langue?: string | null;
+  /**
+   * `X-Client-Mutation-Id` — `cmid_<uuid v4 minuscule>`
+   * (`services/gateway/src/middleware/clientMutationId.ts:29`). Un rejeu
+   * PORTANT LE MÊME `cmid` (retour en ligne, un second onglet) retombe sur
+   * `MutationLogService` et rend le résultat déjà produit plutôt que d'en
+   * fabriquer un second (`POST /posts` est enveloppé par `withMutationLog`,
+   * `replayCost: 'diverges'` — routes/posts/core.ts:389-410). `null` : aucun
+   * en-tête posé, l'appel n'est pas idempotent (chemin SANS JavaScript).
+   */
+  readonly cmid?: string | null;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<PublicationEnvoyee> => {
+  const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}`, jeton, recuperer, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(cmid === null ? {} : { 'x-client-mutation-id': cmid }),
+    },
+    body: JSON.stringify({
+      type,
+      content: texte,
+      visibility,
+      ...(langue === null ? {} : { originalLanguage: langue }),
+    }),
+  });
+
+  if (reponse === null) return { genre: 'refus', message: REFUS_PUBLICATION, statut: null };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success === true) {
+    const id = chaine(objet(enveloppe.data)?.id);
+    if (id !== null) return { genre: 'publie', id };
+  }
+
+  return {
+    genre: 'refus',
+    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_PUBLICATION,
+    statut: reponse.status,
   };
 };

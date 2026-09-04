@@ -360,6 +360,13 @@ targets:
       - path: MeeshyShareExtension/ShareLimits.swift
       - path: MeeshyShareExtension/ShareMediaStaging.swift
       - path: MeeshyShareExtension/SharePendingShare.swift
+      # #5056 — la fiche de COMPOSITION (vue `2a`). Listée ici pour la même
+      # raison que sa jumelle d'envoi juste au-dessus : c'est le seul endroit
+      # où les DEUX miroirs du contrat coexistent, donc le seul où leur dérive
+      # peut être attrapée mécaniquement (`ShareComposeContractTests`). Sans
+      # cette ligne, la suite ne compile pas — et une suite qui ne compile pas
+      # est plus honnête qu'une suite verte par omission.
+      - path: MeeshyShareExtension/ShareComposeHandoff.swift
       # Lot B-2 : client TUS de l'extension. LISTÉ ICI EXPRÈS — « le dépôt a
       # déjà vécu des suites vertes par omission » (spec, § Tests et gates).
       - path: MeeshyShareExtension/ShareTusClient.swift

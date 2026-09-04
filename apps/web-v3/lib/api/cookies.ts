@@ -22,6 +22,32 @@ export const COOKIE_DE_SESSION = 'meeshy_session';
 export const COOKIE_DE_JETON = 'meeshy_auth';
 
 /**
+ * LE THÈME CHOISI SUR CET APPAREIL — un cookie, et non `localStorage`.
+ *
+ * Il fallait choisir, parce que `/settings/application` doit avoir un EFFET
+ * sans une ligne de JavaScript de page (charte règle 7, et le gate à 0 Ko de JS
+ * des écrans de la zone). Un formulaire ne peut écrire que ce que le SERVEUR
+ * pose, et le serveur ne peut poser qu'un cookie : c'est le seul magasin que
+ * les deux bouts partagent.
+ *
+ * `localStorage['meeshy-theme']` reste LU par le script de tête, et le cookie y
+ * est RECOPIÉ. Ce n'est pas pour la webapp legacy — elle ne lit pas cette clé,
+ * elle a les siennes (`gp-theme-mode`, `meeshy-app`), que la v3 refuse
+ * délibérément (#4411). `meeshy-theme` est la clé PROPRE de la v3, et elle
+ * n'avait aucun écrivain (#4477) : la recopie lui en donne un, garde le choix
+ * quand seuls les cookies sont effacés, et alimente les colonnes de thème du
+ * § 9.6.
+ *
+ * IL PORTE TROIS VALEURS — `light`, `dark`, `system` — et son ABSENCE en est
+ * une quatrième, qui ne veut pas dire la même chose que `system` : absent, rien
+ * n'a été choisi ICI (on suit alors le legacy, puis l'OS) ; `system`, le
+ * lecteur a CHOISI de suivre son système. Effacer le cookie pour dire le second
+ * ne marchait pas — le script recopie le cookie dans `localStorage`, et le
+ * repli y relisait le choix précédent (voir `app/theme-script.tsx`).
+ */
+export const COOKIE_DE_THEME = 'meeshy_theme';
+
+/**
  * La valeur d'un cookie dans un en-tête `Cookie` — celui d'une requête, ou
  * `document.cookie`, qui ont la même forme. Un pourcent isolé fait jeter
  * `decodeURIComponent` : la valeur brute reste servie, c'est à la passerelle

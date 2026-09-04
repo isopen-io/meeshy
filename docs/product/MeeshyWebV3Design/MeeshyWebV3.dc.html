@@ -572,6 +572,45 @@
 </div>
 </sc-if>
 
+<!-- LE PROFIL D'UN PARTICIPANT (conception § 12.10.3, directive du porteur 2026-09-03).
+     Une SURIMPRESSION sur le fil — `<dialog>` natif —, ouverte depuis l'avatar ou le nom
+     d'un auteur dans `thread` / `rich` / `chats`. Trois décisions se lisent sur ce dessin :
+
+     1. LE FIL RESTE LISIBLE DERRIÈRE. Le voile assombrit, il ne FLOUTE pas. Le flou de
+        `join` a une raison qui n'existe pas ici — rien de la conversation ne doit partir
+        avant le choix ; ici le lecteur EST dans la conversation. Un flou de plus coûterait
+        du GPU sans rien protéger (charte : ce qui flotte se distingue par un PLAN).
+     2. AUCUN POINT DE PRÉSENCE. La présence n'est servie qu'entre amis acceptés
+        (`resolvePresenceVisibility`, directive 2026-08-25) : le profil d'une personne qu'on
+        n'a pas ajoutée n'en porte pas. Le vide est la règle, pas un oubli.
+     3. TROIS RANGS D'ACTION, ET RIEN D'INERTE. 56 px « Écrire », 52 px en contour
+        « Ajouter en ami », 44 px « Bloquer ou signaler » ; la croix, le voile et Échap
+        ferment — c'est-à-dire qu'ils rendent l'adresse du fil sans `?profil=`. -->
+<sc-if value="{{ isProfilMembre }}" hint-placeholder-val="{{ true }}">
+<div onClick="{{ closeProfil }}" style="position:absolute;inset:0;background:rgba(0,0,0,.6)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:88%;overflow-y:auto;background:var(--color-surface);border-top:1px solid var(--color-neutral-800);border-radius:26px 26px 0 0;padding:12px 20px 28px;display:flex;flex-direction:column;gap:14px">
+<div style="width:40px;height:4px;border-radius:9999px;background:var(--color-neutral-800);margin:0 auto"></div>
+<div style="display:flex;align-items:flex-start;gap:14px">
+<div style="width:64px;height:64px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font:600 24px var(--font-body);flex:none;color:var(--color-bg);background:{{ profil.color }}">{{ profil.initials }}</div>
+<div style="flex:1;min-width:0;padding-top:2px">
+<div style="font:700 22px/1.2 var(--font-body);color:var(--color-text)">{{ profil.name }}</div>
+<div style="margin-top:3px;font:400 14px var(--font-body);color:var(--color-neutral-500)">{{ profil.handle }}</div>
+<div style="margin-top:6px;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:9999px;border:1px solid var(--color-neutral-800);font:600 11.5px var(--font-body);color:var(--color-neutral-400)"><i class="ph ph-user" style="font-size:13px;line-height:1"></i>{{ profil.relationLabel }}</div>
+</div>
+<div onClick="{{ closeProfil }}" style="width:44px;height:44px;border-radius:9999px;border:1px solid var(--color-neutral-800);color:var(--color-neutral-400);display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer" style-hover="border-color:var(--meeshy-p)"><i class="ph ph-x" style="font-size:20px;line-height:1"></i></div>
+</div>
+<div style="font:400 15px/1.5 var(--font-body);color:var(--color-neutral-400)">{{ profil.bio }}</div>
+<div style="border-radius:16px;background:var(--color-bg);border:1px solid var(--color-neutral-900);padding:2px 14px">
+<sc-for list="{{ profil.rows }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;gap:12px;padding:11px 0;border-top:1px solid var(--color-neutral-900)"><i class="ph {{ r.icon }}" style="font-size:19px;line-height:1;color:var(--meeshy-p);flex:none;margin-top:2px"></i><div style="min-width:0"><div style="font:600 14px var(--font-body);color:var(--color-text)">{{ r.title }}</div><div style="margin-top:2px;font:400 12.5px/1.45 var(--font-body);color:var(--color-neutral-600)">{{ r.sub }}</div></div></div>
+</sc-for>
+</div>
+<div onClick="{{ ecrireA }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 17px var(--font-body);cursor:pointer"><i class="ph ph-chat-circle-dots" style="font-size:22px;line-height:1"></i>Écrire à Marta</div>
+<div onClick="{{ demanderAmi }}" style="height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px var(--font-body);cursor:pointer"><i class="ph ph-user-plus" style="font-size:20px;line-height:1"></i>Ajouter en ami</div>
+<div onClick="{{ closeProfil }}" style="min-height:44px;display:flex;align-items:center;justify-content:center;gap:8px;font:600 14.5px var(--font-body);color:var(--color-neutral-500);cursor:pointer"><i class="ph ph-shield" style="font-size:18px;line-height:1"></i>Bloquer ou signaler</div>
+</div>
+</sc-if>
+
 </div>
 
 <div style="width:390px;font:400 12px/1.6 var(--font-body);color:var(--color-neutral-500);text-align:center">Vue courante : <b style="color:var(--color-text)">{{ title }}</b> · <span onClick="{{ goHome }}" style="color:var(--meeshy-p);cursor:pointer">retour à l'accueil</span></div>
@@ -795,6 +834,12 @@ const SCREENS = {
   join: { title: 'Rejoindre', subtitle: 'État CHOIX · anonyme ou compte ?', route: '/chat/:lien' },
   rights: { title: 'Droits du lien', subtitle: 'État INVITÉ · juste après la jonction', route: '/chat/:lien' },
   rich: { title: 'Types de messages', subtitle: 'Image, vidéo, audio, transfert, réponse, story', route: '/chats/:id' },
+  // Le profil d'un PARTICIPANT (directive 2026-09-03, conception § 12.10.3) — une
+  // SURIMPRESSION sur le fil, jamais une page : la route est celle du fil, plus un
+  // état porté par la chaîne de requête, pour qu'un lien `?profil=` s'ouvre et se
+  // ferme sans une ligne de JavaScript. Ce n'est PAS `sheet:member`, qui mène le
+  // lecteur vers SON PROPRE compte.
+  profilMembre: { title: 'Profil du participant', subtitle: 'Surimpression sur le fil', route: '/chats/:cle?profil=:membre' },
   story: { title: 'Story', subtitle: 'Lecture plein écran', route: '/stories/:id' },
   storyCreate: { title: 'Nouvelle story', subtitle: 'Capture, texte, langue', route: '/stories/new' },
   storyFail: { title: 'Story', subtitle: 'Indisponible', route: '/stories/:id' },
@@ -811,7 +856,7 @@ const SCREENS = {
 const MAP = [
   { title: 'SITE', keys: [['vitrine', 'ph-globe-hemisphere-west']] },
   { title: 'ENTRÉE PUBLIQUE', keys: [['linkRedirect', 'ph-arrows-clockwise'], ['join', 'ph-link-simple'], ['rights', 'ph-ghost'], ['login', 'ph-sign-in'], ['signup', 'ph-user-plus'], ['linkExpired', 'ph-warning-circle']] },
-  { title: 'MEMBRE — PRINCIPAL', keys: [['home', 'ph-house'], ['chats', 'ph-chats-circle'], ['thread', 'ph-chat-circle-dots'], ['rich', 'ph-stack'], ['media', 'ph-image'], ['search', 'ph-magnifying-glass']] },
+  { title: 'MEMBRE — PRINCIPAL', keys: [['home', 'ph-house'], ['chats', 'ph-chats-circle'], ['thread', 'ph-chat-circle-dots'], ['rich', 'ph-stack'], ['profilMembre', 'ph-user'], ['media', 'ph-image'], ['search', 'ph-magnifying-glass']] },
   { title: 'APPELS', keys: [['callAudio', 'ph-phone'], ['callVideo', 'ph-video-camera'], ['calls', 'ph-clock-counter-clockwise']] },
   { title: 'SOCIAL', keys: [['feed', 'ph-squares-four'], ['reels', 'ph-film-strip'], ['composer', 'ph-note-pencil'], ['comments', 'ph-chat-teardrop-text'], ['story', 'ph-sparkle'], ['storyCreate', 'ph-plus-circle'], ['storyFail', 'ph-warning-circle']] },
   { title: 'ESPACE MEMBRE', keys: [['notifs', 'ph-bell'], ['contacts', 'ph-address-book'], ['communities', 'ph-users-three'], ['links', 'ph-link-simple'], ['settings', 'ph-gear'], ['notifPrefs', 'ph-sliders'], ['profileEdit', 'ph-user-circle'], ['password', 'ph-lock-key']] },
@@ -820,8 +865,8 @@ const MAP = [
 const EXITS = {
   vitrine: [['signup', 'Créer son compte', 'bouton du héros'], ['login', 'Se connecter', 'bouton du héros'], ['signup', 'Créer un compte gratuit', 'appel final'], ['join', 'Lien reçu', 'hors site · /chat/:lien']],
   home: [['chats', 'Chats', 'Tout voir'], ['links', 'Mes liens', 'carte'], ['communities', 'Communautés', 'créer'], ['search', 'Recherche', 'champ'], ['feed', 'Fil', 'bouton gauche'], ['settings', 'Espace membre', 'bouton droit']],
-  chats: [['thread', 'Conversation', 'carte de focus'], ['join', 'Créer un lien', 'en-tête'], ['thread', 'Nouvelle conversation', 'en-tête'], ['feed', 'Fil', 'bouton gauche'], ['settings', 'Espace membre', 'bouton droit']],
-  thread: [['chats', 'Retour', 'chevron'], ['rich', 'Messages riches', 'défilement'], ['media', 'Médias', 'pièce jointe'], ['callAudio', 'Rappeler', 'bulle d’appel'], ['callVideo', 'Appel vidéo', 'en-tête'], ['contacts', 'Profil', 'nom de l’auteur']],
+  chats: [['thread', 'Conversation', 'carte de focus'], ['join', 'Créer un lien', 'en-tête'], ['thread', 'Nouvelle conversation', 'en-tête'], ['profilMembre', 'Profil du participant', 'avatar d’une ligne'], ['feed', 'Fil', 'bouton gauche'], ['settings', 'Espace membre', 'bouton droit']],
+  thread: [['chats', 'Retour', 'chevron'], ['rich', 'Messages riches', 'défilement'], ['media', 'Médias', 'pièce jointe'], ['callAudio', 'Rappeler', 'bulle d’appel'], ['callVideo', 'Appel vidéo', 'en-tête'], ['profilMembre', 'Profil du participant', 'avatar ou nom de l’auteur · ?profil=']],
   feed: [['composer', 'Composer', 'champ'], ['reels', 'Réels', 'bouton'], ['comments', 'Commentaires', 'icône'], ['media', 'Média', 'image']],
   reels: [['comments', 'Commentaires', 'icône'], ['feed', 'Retour', 'chevron']],
   composer: [['feed', 'Publier', 'bouton'], ['media', 'Ajouter', 'vignette']],
@@ -836,7 +881,12 @@ const EXITS = {
   search: [['chats', 'Conversations', 'rangée'], ['contacts', 'Personnes', 'rangée'], ['media', 'Médias', 'rangée']],
   join: [['rights', 'Continuer en anonyme', 'formulaire de la modale · même adresse'], ['login', 'Se connecter', 'bouton · ?returnUrl=/chat/:lien'], ['signup', 'Créer un compte', 'bouton · ?returnUrl=/chat/:lien'], ['linkExpired', 'Lien expiré', 'cas d’échec']],
   rights: [['thread', 'Le fil', 'même adresse, bandeau replié']],
-  rich: [['thread', 'Retour au fil', 'chevron'], ['media', 'Média', 'vignette'], ['callVideo', 'Appel vidéo', 'lecture'], ['story', 'Story citée', 'vignette']],
+  rich: [['thread', 'Retour au fil', 'chevron'], ['media', 'Média', 'vignette'], ['callVideo', 'Appel vidéo', 'lecture'], ['story', 'Story citée', 'vignette'], ['profilMembre', 'Profil du participant', 'avatar ou nom de l’auteur · ?profil=']],
+  // Fermer la surimpression REND l'adresse du fil (`/chats/:cle` sans `?profil=`) : c'est
+  // la même vue, sans son état. Les deux actions du profil MÈNENT ailleurs — écrire ouvre
+  // le tête-à-tête, la demande d'ami se lit dans Contacts —, sans quoi elles seraient des
+  // contrôles sans effet (charte, loi « un contrôle existe s'il a un effet »).
+  profilMembre: [['thread', 'Fermer', 'croix, Échap ou voile · retour à /chats/:cle'], ['thread', 'Écrire à Marta', 'action primaire · tête-à-tête'], ['contacts', 'Demande d’ami envoyée', 'action secondaire · optimiste']],
   story: [['comments', 'Répondre', 'champ'], ['feed', 'Fermer', 'croix'], ['storyFail', 'Story expirée', 'cas d’échec']],
   storyCreate: [['story', 'Publier', 'bouton'], ['feed', 'Retour', 'chevron']],
   storyFail: [['feed', 'Retour au fil', 'bouton'], ['storyCreate', 'Créer une story', 'bouton']],
@@ -889,8 +939,19 @@ class Component extends DCLogic {
     // `rights` est un ÉTAT du fil (directive 2026-09-01) : le cadre porte le nom
     // de la conversation, pas le libellé du navigateur.
     const isRightsState = screen === 'rights';
-    const title = list ? list.title : isRightsState ? SCREENS.thread.title : meta.title;
-    const subtitle = list ? list.subtitle : isRightsState ? 'Entré comme Tolu · anonyme' : meta.subtitle;
+    // `profilMembre` est, lui aussi, un ÉTAT du fil : le cadre garde l'en-tête de la
+    // CONVERSATION, la surimpression se pose par-dessus. Le libellé « Profil du
+    // participant » ne vit que dans le navigateur de droite, jamais dans le téléphone.
+    const isProfilMembre = screen === 'profilMembre';
+    const surLeFil = isRightsState || isProfilMembre;
+    const title = list ? list.title : surLeFil ? SCREENS.thread.title : meta.title;
+    const subtitle = list
+      ? list.subtitle
+      : isRightsState
+        ? 'Entré comme Tolu · anonyme'
+        : isProfilMembre
+          ? SCREENS.thread.subtitle
+          : meta.subtitle;
 
     const isVitrine = screen === 'vitrine';
     const isThread = screen === 'thread';
@@ -1106,7 +1167,8 @@ class Component extends DCLogic {
       isHome: screen === 'home',
       isChats: screen === 'chats',
       isThread,
-      isThreadLike: isThread || isRights,
+      isThreadLike: isThread || isRights || isProfilMembre,
+      isProfilMembre,
       isFeed: screen === 'feed',
       isReels,
       isComposer,
@@ -1217,8 +1279,8 @@ class Component extends DCLogic {
       isDoc: s.format !== 'status',
       moods: MOOD_EMOJIS.map((e) => ({ emoji: e, bg: e === s.mood ? 'rgba(129,140,248,.14)' : 'var(--color-surface)', ring: e === s.mood ? '0 0 0 2px ' + P : 'none', pick: () => this.setState({ mood: e === s.mood ? '' : e }) })),
 
-      showComposerBar: isThread || isRights || screen === 'rich',
-      showFabs: !isVitrine && !isThread && !isComposer && !isJoin && !isRights && !isReels && !isComments && screen !== 'rich' && !isStory && !isCall && !isAuth && !bl && screen !== 'storyCreate' && screen !== 'profileEdit' && screen !== 'password',
+      showComposerBar: isThread || isRights || isProfilMembre || screen === 'rich',
+      showFabs: !isVitrine && !isThread && !isComposer && !isJoin && !isRights && !isProfilMembre && !isReels && !isComments && screen !== 'rich' && !isStory && !isCall && !isAuth && !bl && screen !== 'storyCreate' && screen !== 'profileEdit' && screen !== 'password',
       memberIcon: s.sheet === 'member' ? 'ph-x' : 'ph-user-circle',
       tapFeeds: () => this.go('feed'),
       toggleMember: () => this.setState((st) => ({ sheet: st.sheet === 'member' ? null : 'member' })),
@@ -1243,7 +1305,33 @@ class Component extends DCLogic {
       goCalls: () => this.go('calls'),
       goRights: () => this.go('rights'),
       openThread: () => this.go('thread'),
-      openProfile: () => this.go('contacts'),
+      // L'avatar et le nom d'un participant ouvrent SON profil, plus l'annuaire.
+      openProfile: () => this.go('profilMembre'),
+      closeProfil: () => this.go('thread'),
+      ecrireA: () => this.go('thread'),
+      demanderAmi: () => this.go('contacts'),
+      // CE QUE LA PASSERELLE SERT VRAIMENT, et rien de plus.
+      // `GET /api/v1/directory/people/:handle?expand=relation` (services/gateway/src/routes/
+      // directory/person.ts:175, getOptionalAuth — un invité anonyme y a droit) rend
+      // `publicProfileSchema` (routes/users/public-profile.ts) : displayName, username, bio,
+      // avatar, banner, role, createdAt, voicePublic, isAnonymous, isMeeshyer, + relation.
+      // Il ne rend AUCUNE langue depuis #4161 : la ligne de langue ci-dessous vient du FIL
+      // (langue d'origine du message lu), jamais du profil — l'y attribuer serait un champ
+      // inventé. Et la PRÉSENCE est absente : elle n'est servie qu'entre amis acceptés
+      // (`resolvePresenceVisibility`, directive 2026-08-25), donc le profil d'une personne
+      // qu'on n'a pas encore ajoutée ne porte AUCUN point — ce vide est la règle rendue
+      // visible, pas un oubli de dessin.
+      profil: {
+        initials: 'MR', color: '#F59E0B',
+        name: 'Marta Ruiz', handle: '@marta',
+        bio: 'Traductrice · Madrid. Je relis les revues trimestrielles.',
+        relationLabel: 'PAS ENCORE AMIS',
+        rows: [
+          { icon: 'ph-translate', title: 'Écrit en espagnol dans ce fil', sub: 'Vous la lisez en français — le Prisme traduit à l’arrivée.' },
+          { icon: 'ph-clock', title: 'Sur Meeshy depuis mars 2024', sub: 'Membre du compte, pas un invité de lien.' },
+          { icon: 'ph-chats-circle', title: 'Participe à Équipe Lagos', sub: 'Vous avez cette conversation en commun.' },
+        ],
+      },
       openAttach: () => this.setState({ sheet: 'attach' }),
       openCreateLink: () => this.setState({ sheet: 'link' }),
       openCreateConv: () => this.setState({ sheet: 'conv' }),

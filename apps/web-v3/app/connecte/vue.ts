@@ -1,12 +1,16 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
+import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { echappe } from '@/app/socle';
 
-import { documentDuSite } from '@/app/enveloppe/vue';
-import type { Conversation, Lecteur, LiensDuLecteur } from '@/lib/api/compte';
+import { documentDeMessage, documentDuSite } from '@/app/enveloppe/vue';
+import { apercuServi, type ApercuServi, type Conversation, type Lecteur, type LiensDuLecteur } from '@/lib/api/compte';
+import { languesDuLecteur } from '@/lib/api/fil';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
+import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 
 import { CHATS, PANNE, TABLEAU_DE_BORD, adresseDuLien, salutation } from './contenu';
-import { FEUILLE_CONNECTEE } from './feuille';
+import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from './feuille';
+import { langAttribut } from './transcrit';
 
 /**
  * LES DEUX ÉCRANS DE LA ZONE CONNECTÉE, rendus par le SERVEUR.
@@ -22,29 +26,13 @@ import { FEUILLE_CONNECTEE } from './feuille';
  */
 
 /**
- * QUAND, EN RELATIF — et le relatif n'est pas un choix de style.
- *
- * Une heure absolue rendue par le serveur est rendue dans le FUSEAU DU SERVEUR
- * (UTC en production) : « 18:06 » s'afficherait faux pour un lecteur à Paris, à
- * Lagos ou à São Paulo, et personne ne le verrait puisque l'heure a l'air d'une
- * heure. Un écart relatif ne dépend que de l'horloge, qui est la même partout.
+ * L'ÉCART RELATIF (`quand`) vit dans `lib/temps.ts`, avec les deux autres
+ * formats de date de la v3, depuis qu'il a DEUX auteurs : le document servi et
+ * le module qui repeint une ligne de `/chats` en direct. Ce module le
+ * ré-exporte pour ses lecteurs historiques.
  */
-const MINUTE = 60_000;
-const HEURE = 60 * MINUTE;
-const JOUR = 24 * HEURE;
-
-export const quand = (iso: string | null, maintenant: number): string => {
-  if (iso === null) return '';
-  const instant = Date.parse(iso);
-  if (Number.isNaN(instant)) return '';
-
-  const ecart = Math.max(0, maintenant - instant);
-  if (ecart < MINUTE) return 'à l’instant';
-  if (ecart < HEURE) return `il y a ${Math.floor(ecart / MINUTE)} min`;
-  if (ecart < JOUR) return `il y a ${Math.floor(ecart / HEURE)} h`;
-  if (ecart < 7 * JOUR) return `il y a ${Math.floor(ecart / JOUR)} j`;
-  return `il y a ${Math.floor(ecart / (7 * JOUR))} sem.`;
-};
+export { quand } from '@/lib/temps';
+import { quand } from '@/lib/temps';
 
 /**
  * OÙ MÈNE UNE CONVERSATION — chez nous, désormais. Ce site pointait vers
@@ -58,42 +46,6 @@ export const quand = (iso: string | null, maintenant: number): string => {
  */
 export const versLeFil = (conversation: Conversation): string => `/chats/${conversation.id}`;
 
-const ligne = (conversation: Conversation, maintenant: number): string => {
-  const meta = [
-    `${conversation.membres} ${CHATS.participants}`,
-    quand(conversation.dernierMessageA, maintenant),
-  ]
-    .filter((morceau) => morceau !== '')
-    .join(' · ');
-
-  return (
-    '<li>' +
-    `<a class="ligne" href="${echappe(versLeFil(conversation))}">` +
-    avatar(conversation.titre) +
-    '<span class="corps">' +
-    `<span class="nom">${echappe(conversation.titre)}</span>` +
-    `<span class="meta">${echappe(meta)}</span>` +
-    '</span>' +
-    (conversation.nonLus > 0
-      ? `<span class="compte">${conversation.nonLus}<span class="hors-ecran"> ${echappe(CHATS.nonLus)}</span></span>`
-      : '') +
-    '</a>' +
-    '</li>'
-  );
-};
-
-const listeDesFils = (
-  conversations: readonly Conversation[],
-  maintenant: number,
-): string => `<ul>${conversations.map((c) => ligne(c, maintenant)).join('')}</ul>`;
-
-const vide = (): string =>
-  carteVide({
-    glyphe: 'ph-chats-circle',
-    titre: CHATS.vide,
-    phrase: CHATS.videPrecision,
-  });
-
 /**
  * LA TEINTE ET LES INITIALES vivent dans `lib/avatar.ts`, le site UNIQUE des
  * deux rendus d'un avatar (serveur et module de participation) ; ce module la
@@ -101,21 +53,91 @@ const vide = (): string =>
  */
 export { teinteDeLAvatar } from '@/lib/avatar';
 
-const avatar = (titre: string): string =>
+/**
+ * L'AVATAR — initiales et teinte, servi par les DEUX écrans de la zone (la
+ * carte du tableau de bord et la ligne de `/chats`, `app/connecte/liste-vue.ts`)
+ * depuis le site unique de leur calcul (`lib/avatar.ts`).
+ */
+export const avatar = (titre: string): string =>
   `<span class="avatar ${teinteDeLAvatar(titre)}" aria-hidden="true">${echappe(initiales(titre))}</span>`;
+
+/**
+ * LA PASTILLE DE LANGUE — le CODE de la langue d'ORIGINE, rendu SEULEMENT
+ * quand une traduction est servie à sa place (charte règle 22). Sur un aperçu
+ * déjà écrit dans la langue du lecteur, elle n'apprendrait rien.
+ */
+const pastilleDeLangue = (traduitDe: string | null, reserve: boolean): string =>
+  traduitDe === null && !reserve
+    ? ''
+    : `<span class="langue" title="${echappe(CHATS.traduitDepuis)}"${traduitDe === null ? ' hidden' : ''}>` +
+      `${svgDuSprite('ph-translate')}<span class="code">${echappe(traduitDe ?? '')}</span></span>`;
+
+/**
+ * **L'APERÇU DU DERNIER MESSAGE, DESCENDU AU PRISME — UN SEUL COMPOSEUR POUR
+ * LES DEUX ÉCRANS DE LA ZONE.** La carte du tableau de bord (`cible/home.png` :
+ * pastille `ES` puis « Merci, je t'envoie le fichier ») et la ligne de `/chats`
+ * (`app/connecte/liste-vue.ts`) disent la MÊME chose de la MÊME donnée ; les
+ * écrire deux fois, c'est se donner rendez-vous pour diverger — la pastille
+ * change de côté sur un écran et pas sur l'autre, à un tap d'intervalle.
+ *
+ * La descente elle-même n'est pas ici : `apercuServi` (`lib/api/compte.ts`) est
+ * le site unique, projection de `resolvePrismTranslation`. Ce composeur ne fait
+ * que RENDRE ce qu'elle élit — et `lang=` dit ce qui part à côté du texte
+ * (cycle 123), retiré quand la langue servie est celle du document.
+ *
+ * `reserve` NOMME LA SEULE DIFFÉRENCE entre les deux emplois, et ce n'est pas
+ * un goût : sur `/chats`, le module de participation repeint la ligne en
+ * direct, donc les fentes sont servies MÊME VIDES (il n'a pas de disque d'où
+ * tirer le glyphe du sprite, et créer un nœud sous le doigt du lecteur
+ * recalculerait la mise en page de la ligne au moment où elle bouge). Le
+ * tableau de bord n'a pas de module : il ne paie pas des fentes que rien ne
+ * remplira.
+ */
+export const apercuAuPrisme = ({ servi, reserve }: { readonly servi: ApercuServi | null; readonly reserve: boolean }): string => {
+  if (servi === null && !reserve) return '';
+  return (
+    `<span class="apercu"${servi === null ? ' hidden' : ''}>` +
+    pastilleDeLangue(servi?.traduitDe ?? null, reserve) +
+    `<span class="texte"${langAttribut(servi?.langue ?? null, DOCUMENT_LANGUAGE)}>${echappe(servi?.texte ?? '')}</span>` +
+    '</span>'
+  );
+};
 
 /**
  * LA CARTE D'UN FIL À REPRENDRE — la cible `home.png` en dessine deux, et elles
  * ne sont pas les lignes plates de `/chats` : une carte porte un avatar large et
  * respire (charte règle 12).
+ *
+ * **CE QUE LA CIBLE MET SOUS LE NOM EST L'APERÇU**, pas un dénombrement : la
+ * carte « Marta Ruiz » y porte la pastille `ES` puis « Merci, je t'envoie le
+ * fichier », et celle du groupe « Ibrahim : On se cale à 15 h ? ». La donnée
+ * descendait déjà (`Conversation.apercuTraductions`, le résolveur, la ligne de
+ * `/chats`) et cette carte ne l'affichait pas — le cycle 122 du `CLAUDE.md`
+ * posé sur la v3 : une descente juste dont la valeur n'atteint aucun lecteur
+ * n'a corrigé personne.
+ *
+ * LA MÉTA NE DISPARAÎT PAS, ELLE CÈDE LA PLACE. Une conversation qui n'a encore
+ * rien dit garde son compte de participants (au seuil du § 12.10.2, site unique
+ * `lib/contenu/fil.ts`) et son écart relatif : une carte réduite à son seul nom
+ * n'est pas un état, c'est une ligne vide (charte règle 18). Jamais les deux à
+ * la fois — la cible n'en montre qu'une.
  */
-const carteDeFil = (conversation: Conversation, maintenant: number): string => {
-  const meta = [
-    `${conversation.membres} ${CHATS.participants}`,
+const carteDeFil = ({
+  conversation,
+  langues,
+  maintenant,
+}: {
+  readonly conversation: Conversation;
+  readonly langues: readonly string[];
+  readonly maintenant: number;
+}): string => {
+  const servi = apercuServi(conversation, langues);
+  const meta = enUneLigne([
+    compteDeParticipants({ membres: conversation.membres, mot: CHATS.participants }),
     quand(conversation.dernierMessageA, maintenant),
-  ]
-    .filter((morceau) => morceau !== '')
-    .join(' · ');
+  ]);
+  const sousLigne =
+    servi === null ? `<span class="meta">${echappe(meta)}</span>` : apercuAuPrisme({ servi, reserve: false });
 
   return (
     '<li>' +
@@ -123,7 +145,7 @@ const carteDeFil = (conversation: Conversation, maintenant: number): string => {
     avatar(conversation.titre) +
     '<span class="corps">' +
     `<span class="nom">${echappe(conversation.titre)}</span>` +
-    `<span class="meta">${echappe(meta)}</span>` +
+    sousLigne +
     '</span>' +
     (conversation.nonLus > 0
       ? `<span class="compte">${conversation.nonLus}<span class="hors-ecran"> ${echappe(CHATS.nonLus)}</span></span>`
@@ -254,6 +276,9 @@ const corpsDuTableau = ({
 }: EtatDuTableau): string => {
   const nonLus = conversations.reduce((somme, c) => somme + c.nonLus, 0);
   const recentes = conversations.slice(0, 3);
+  // LE PRISME DU LECTEUR, depuis le site unique qui l'ordonne
+  // (`lib/api/fil.ts` › `languesDuLecteur`) — jamais un ordre réécrit ici.
+  const langues = languesDuLecteur(lecteur ?? {});
 
   return (
     '<div class="bonjour">' +
@@ -281,7 +306,9 @@ const corpsDuTableau = ({
               phrase: CHATS.videPrecision,
               action: { libelle: TABLEAU_DE_BORD.versLesChats, href: '/chats' },
             })
-          : `<ul class="cartes">${recentes.map((c) => carteDeFil(c, maintenant)).join('')}</ul>`,
+          : `<ul class="cartes">${recentes
+              .map((conversation) => carteDeFil({ conversation, langues, maintenant }))
+              .join('')}</ul>`,
     }) +
     sectionDesLiens(liens)
   );
@@ -291,32 +318,12 @@ export const documentDuTableau = (etat: EtatDuTableau): string =>
   documentDuSite({
     titre: `${TABLEAU_DE_BORD.titre} — Meeshy`,
     description: TABLEAU_DE_BORD.apercu,
-    feuille: FEUILLE_CONNECTEE,
+    // La feuille du TABLEAU en plus de celle de la zone, et pour lui seul : la
+    // page de PANNE ci-dessous ne rend aucune carte de fil, donc aucun aperçu
+    // — elle n'en paie pas un octet (charte règle 7).
+    feuille: FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU,
     corps: corpsDuTableau(etat),
     retour: false,
-  });
-
-export type EtatDesChats = {
-  readonly conversations: readonly Conversation[];
-  readonly maintenant: number;
-};
-
-export const documentDesChats = ({ conversations, maintenant }: EtatDesChats): string =>
-  documentDuSite({
-    titre: `${CHATS.titre} — Meeshy`,
-    description: CHATS.accroche,
-    feuille: FEUILLE_CONNECTEE,
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(CHATS.titre)}</h1>` +
-      `<p>${echappe(CHATS.accroche)}</p>` +
-      '</div>' +
-      '<section class="fil" aria-label="' +
-      echappe(CHATS.titre) +
-      '">' +
-      (conversations.length === 0 ? vide() : listeDesFils(conversations, maintenant)) +
-      '</section>',
-    retour: true,
   });
 
 /**
@@ -324,19 +331,11 @@ export const documentDesChats = ({ conversations, maintenant }: EtatDesChats): s
  * répondre ; la dimension 8 demande que cet état-là existe aussi.
  */
 export const documentDePanne = (): string =>
-  documentDuSite({
-    titre: `${PANNE.titre} — Meeshy`,
-    description: PANNE.corps,
+  documentDeMessage({
+    titre: PANNE.titre,
+    paragraphes: [PANNE.corps],
+    actions: [{ libelle: PANNE.action, href: '/' }],
     feuille: FEUILLE_CONNECTEE,
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(PANNE.titre)}</h1>` +
-      `<p>${echappe(PANNE.corps)}</p>` +
-      '</div>' +
-      '<section class="acces" aria-label="' +
-      echappe(PANNE.action) +
-      '"><nav>' +
-      `<a class="action primaire" href="/">${echappe(PANNE.action)}</a>` +
-      '</nav></section>',
+    robots: 'index, follow',
     retour: false,
   });

@@ -82,6 +82,25 @@ struct ComposerSceneReferenceFooter: View {
     /// déplacerait la règle chez l'appelant, où elle se dédoublerait.
     let references: [ComposerReference]
 
+    /// **Le bord gauche du DESSIN**, mesuré par la surface — la JUMELLE BASSE
+    /// de ce que `ComposerSceneSoundHeader` reçoit depuis #5011 (#5036).
+    ///
+    /// > Directive porteur 2026-09-03 : « les hashtag et mention doivent etre
+    /// > directement en bas de la scene **aligé comme le son de fond de la
+    /// > scene** ! »
+    ///
+    /// Le montage posait `.padding(.horizontal, 16)` — un littéral, quand la
+    /// carte est ajustée à son ratio puis CENTRÉE : son bord gauche vaut
+    /// `16 + (largeur de carte − largeur de dessin) / 2`, et bouge avec le ratio
+    /// comme avec l'écran. Mesuré au #5017 : 65 pt là où le littéral en donnait
+    /// 44. Les deux bandes qui encadrent la carte s'alignaient donc l'une sur le
+    /// dessin et l'autre sur le couloir — le même mot, deux bords.
+    ///
+    /// `0` avant la première passe de mise en page : le pied se pose alors au
+    /// bord et se recale à la frame suivante, sans saut visible (il n'apparaît
+    /// que lorsqu'une référence existe, donc jamais pendant l'ouverture).
+    var leadingInset: CGFloat = 0
+
     var tint: Color = MeeshyColors.indigo400
 
     /// `nil` ⇒ la ligne reste une lecture, et ne s'annonce alors ni comme
@@ -110,6 +129,8 @@ struct ComposerSceneReferenceFooter: View {
                 }
                 .equatable()
             }
+            .padding(.leading, leadingInset)
+            .padding(.trailing, leadingInset)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

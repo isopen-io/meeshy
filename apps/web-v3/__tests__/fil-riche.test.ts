@@ -170,7 +170,7 @@ describe('ce qu’un message CITE — une citation, sa forme dérivée du genre'
   it('lit une RÉPONSE dans `replyTo`, avec son auteur, son aperçu et sa langue', () => {
     const citations = rendu(brut({ replyToId: 'm0', replyTo: REPLY })).citations;
     expect(citations).toEqual<readonly Citation[]>([
-      { genre: 'reponse', source: 'Ibrahim', sorte: null, pourMoi: false, apercu: 'Le tableau final de la revue.', langue: 'en', cible: 'm0' },
+      { genre: 'reponse', source: 'Ibrahim', sorte: null, pourMoi: false, apercu: 'Le tableau final de la revue.', langue: 'en', cible: 'm0', surLaPage: false },
     ]);
   });
 
@@ -186,7 +186,7 @@ describe('ce qu’un message CITE — une citation, sa forme dérivée du genre'
       brut({ forwardedFromId: 'x1', forwardedFromConversationId: 'c9', forwardedFromConversation: { id: 'c9', title: 'Diaspora FR-EN', type: 'group' } }),
     ).citations;
     expect(citations).toEqual<readonly Citation[]>([
-      { genre: 'transfert', source: 'Diaspora FR-EN', sorte: null, pourMoi: false, apercu: '', langue: null, cible: 'x1' },
+      { genre: 'transfert', source: 'Diaspora FR-EN', sorte: null, pourMoi: false, apercu: '', langue: null, cible: 'x1', surLaPage: false },
     ]);
   });
 
@@ -209,7 +209,7 @@ describe('ce qu’un message CITE — une citation, sa forme dérivée du genre'
       }),
     ).citations;
     expect(citations).toEqual<readonly Citation[]>([
-      { genre: 'story', source: 'Amina', sorte: 'story', pourMoi: true, apercu: 'Trois graphiques, deux surprises.', langue: null, cible: 's1' },
+      { genre: 'story', source: 'Amina', sorte: 'story', pourMoi: true, apercu: 'Trois graphiques, deux surprises.', langue: null, cible: 's1', surLaPage: false },
     ]);
   });
 
@@ -221,7 +221,7 @@ describe('ce qu’un message CITE — une citation, sa forme dérivée du genre'
   it('lit la même citation depuis `metadata.postReplyTo` que le fil temps réel sert brut', () => {
     const snapshot = { id: 's1', type: 'STATUS', moodEmoji: '🎉', previewText: '', thumbnailUrl: null, authorId: 'u7', authorName: 'Luc Mbaye' };
     const citation = rendu(brut({ storyReplyToId: 's1', metadata: { postReplyTo: snapshot } })).citations[0];
-    expect(citation).toEqual<Citation>({ genre: 'story', source: 'Luc Mbaye', sorte: 'humeur', pourMoi: false, apercu: '🎉', langue: null, cible: 's1' });
+    expect(citation).toEqual<Citation>({ genre: 'story', source: 'Luc Mbaye', sorte: 'humeur', pourMoi: false, apercu: '🎉', langue: null, cible: 's1', surLaPage: false });
   });
 
   it('les cite dans un ORDRE fixe — provenance, puis réponse, puis publication', () => {
@@ -252,6 +252,7 @@ describe('le libellé d’une citation — UNE table, lue par le serveur et par 
     apercu: '',
     langue: null,
     cible: 'm0',
+    surLaPage: false,
     ...attributs,
   });
 
@@ -278,6 +279,8 @@ const FIL_RICHE = (messages: readonly Message[]): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  plein: null,
+  profil: null,
 });
 
 describe('le document servi — six formes, un balisage', () => {
@@ -313,6 +316,12 @@ describe('le document servi — six formes, un balisage', () => {
    * vocal — jamais une affiche de téléchargement PUIS un lecteur natif, ce que
    * le rendu empilait (le même fichier annoncé deux fois, nom de fichier en
    * texte primaire d'un bloc que `cible/rich.png` ne dessine pas).
+   *
+   * DEPUIS LA DIRECTIVE § 12.10.1, la VIDÉO est une AFFICHE comme l'image : son
+   * poster mène au PLEIN ÉCRAN, où elle se joue. Ce qui reste un lecteur DANS
+   * la ligne est ce qui s'écoute sur place sans rien coûter — le vocal, et lui
+   * seul (`sEcouteSurPlace`, `lib/api/formes.ts`). La cible ne bouge pas : le
+   * poster 16/9 au rond de lecture est le même, seul le geste change.
    */
   it('rend UN bloc par pièce, choisi par le genre, sur un `<li data-genre>`', () => {
     expect(servi).toContain('<li data-piece="a1" data-genre="image">');
@@ -326,7 +335,7 @@ describe('le document servi — six formes, un balisage', () => {
     // `column-reverse`) : l'ordre du DOM est l'inverse de l'ordre d'écriture.
     expect(blocs).toEqual([
       ['audio', 'lecteur'],
-      ['video', 'lecteur'],
+      ['video', 'affiche'],
       ['image', 'affiche'],
     ]);
     // Une pièce, un bloc : autant d'ouvertures que de pièces, jamais deux par pièce.
@@ -380,15 +389,27 @@ describe('le document servi — six formes, un balisage', () => {
   });
 
   /**
-   * TOUCHER UNE PIÈCE JOINTE NE QUITTE PLUS LA CONVERSATION. `download` est
-   * IGNORÉ hors origine, et la passerelle EST une autre origine que le
-   * document : le clic NAVIGUAIT l'onglet vers le fichier brut — fil, position
-   * de lecture et socket perdus, sans que rien ne l'annonce.
+   * TOUCHER UNE PIÈCE JOINTE NE QUITTE PLUS LA CONVERSATION — et depuis la
+   * directive § 12.10.1, une image ou une vidéo n'ouvre même plus d'onglet :
+   * elle ouvre le PLEIN ÉCRAN, un état de l'adresse hôte. Ce qui n'a pas de
+   * plein écran (un PDF, une archive) garde l'onglet, et `download` reste
+   * absent : il est IGNORÉ hors origine, et la passerelle EST une autre origine
+   * que le document — le clic NAVIGUAIT alors l'onglet vers le fichier brut,
+   * fil, position de lecture et socket perdus, sans que rien ne l'annonce.
    */
-  it('ouvre une pièce dans un onglet, sans `download`, et NOMME le geste', () => {
+  it('ouvre une image en plein écran, un fichier dans un onglet, et NOMME les deux gestes', () => {
     expect(servi).not.toContain('download');
-    expect(servi).toContain('target="_blank" rel="noopener"');
-    expect(servi).toContain(`aria-label="${FIL.telecharger('photo.jpg', '94 Ko')}"`);
+    // L'adresse nomme la TRANCHE (le message) autant que la pièce : c'est ce
+    // qui la rend servable hors des quarante derniers messages.
+    expect(servi).toContain('<a class="media" href="/chats/c1?autour=m1&amp;media=a1"');
+    expect(servi).toContain(`aria-label="${FIL.pleinEcran('photo.jpg', '94 Ko')}"`);
+    expect(servi).not.toContain('target="_blank"');
+
+    const fichier = documentDuFil(
+      FIL_RICHE([rendu(brut({ id: 'm7', attachments: [PIECE({ id: 'a9', mimeType: 'application/pdf', originalName: 'notes.pdf' })] }))]),
+    ).replace(/<template[\s\S]*?<\/template>/g, '');
+    expect(fichier).toContain('target="_blank" rel="noopener"');
+    expect(fichier).toContain(`aria-label="${FIL.telecharger('notes.pdf', '94 Ko')}"`);
   });
 
   it('pose lang= sur une transcription servie dans une langue ≠ celle du document', () => {
@@ -444,7 +465,7 @@ describe('le document servi — six formes, un balisage', () => {
       ...document_.replace(/<template[\s\S]*?<\/template>/g, '').matchAll(/<ul class="(?:pieces|citations)"[\s\S]*?<\/ul>/g),
     ].map(([bloc]) => bloc);
 
-    const membre = morceaux(documentDuFil(FIL_RICHE(messages)));
+    const membre = morceaux(documentDuFil(FIL_RICHE(messages))).map((bloc) => bloc.replaceAll('/chats/c1', '<porte>'));
     const invite = morceaux(
       documentDuFil({
         ...FIL_RICHE(messages),
@@ -453,7 +474,10 @@ describe('le document servi — six formes, un balisage', () => {
       }),
     );
     expect(membre.length).toBe(6);
-    expect(invite).toEqual(membre);
+    // Les deux portes rendent le même balisage AU NOM DE LEUR ADRESSE PRÈS :
+    // le plein écran est un état de l'adresse HÔTE, donc `/chats/:cle?media=`
+    // chez le membre et `/chat/:lien?media=` chez l'invité.
+    expect(invite.map((bloc) => bloc.replaceAll('/chat/lagos-q1', '<porte>'))).toEqual(membre);
   });
 
   it('porte un gabarit qui offre au module les MÊMES fentes — pièces et citations', () => {

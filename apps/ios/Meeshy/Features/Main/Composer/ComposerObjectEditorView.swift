@@ -72,6 +72,14 @@ struct ComposerObjectEditorView: View {
     @State private var selectedTool: ComposerObjectEditorSection =
         ComposerObjectEditorRail.initiallySelected
 
+    /// **Le panneau de l'outil est-il REPLIÉ ?** (#5027)
+    ///
+    /// Un fait d'AFFICHAGE, posé à côté de `selectedTool` et jamais à sa
+    /// place : l'outil reste sélectionné, donc rouvrir ramène celui qu'on
+    /// réglait. Le rendre optionnel aurait cassé l'invariant de #4936 pour
+    /// exprimer un état que ce booléen dit sans y toucher.
+    @State private var optionsAreCollapsed = false
+
     @State private var planZoom: Plan2DZoom = .fit
     @State private var moveOrigin: Double?
 
@@ -116,37 +124,49 @@ struct ComposerObjectEditorView: View {
         max(1, viewModel.currentSlide.duration)
     }
 
-    /// **L'anatomie du PLATEAU, ici aussi** (#4936) — et les outils EN BAS
-    /// (#4997, directive porteur 2026-09-03).
+    /// **L'anatomie du PLATEAU, ici aussi** (#4936) — et les outils dans le
+    /// couloir de TÊTE (#5026, directive porteur 2026-09-03, seconde).
     ///
-    /// > « des icônes d'outils aplaties, lister les outils entièrement en bas
-    /// > (en bas de l'écran pour laisser la place au canvas d'occuper
-    /// > suffisamment l'espace) »
+    /// > « Cette vue plein écran, la rangée canonique doit être rangée à
+    /// > gauche, scrollable. »
     ///
-    /// Le #4936 avait posé les outils dans le couloir GAUCHE, par symétrie avec
-    /// la surface de scène. Mesuré à l'écran : la carte 9:16 y perdait 52 pt de
-    /// LARGEUR, donc ≈ 92 pt de hauteur (le ratio les lie), pendant qu'une
-    /// bande vide restait sous les options. Sur cet écran-ci le couloir gauche
-    /// coûte plus qu'il ne rend — la symétrie est un moyen, pas la fin.
+    /// ## Deux directives contraires en une journée, et la seconde gagne
     ///
-    /// > Une place juste dans une disposition peut être fausse dans une autre.
-    /// > Ce n'est pas le rail qui change de valeur, c'est ce que la place
-    /// > LIBÉRÉE rend — ici, la seule dimension que le sujet ne peut pas
-    /// > gagner autrement.
+    /// Le #4997 avait descendu ce rail du couloir vers une rangée basse, sur la
+    /// directive « lister les outils entièrement en bas […] pour laisser la
+    /// place au canvas ». Sa mesure était juste : le couloir coûtait 52 pt de
+    /// LARGEUR de carte, donc ≈ 92 pt de hauteur, le ratio 9:16 les liant.
+    ///
+    /// Ce que cette mesure ne pouvait pas voir : **elle avait été prise sans le
+    /// clavier.** Le cas nominal de cet écran est l'édition d'un texte — donc
+    /// clavier LEVÉ — et le bas n'existe alors plus. La rangée s'y retrouvait
+    /// écrasée entre les options et le clavier, tronquée à droite, pendant que
+    /// le couloir de tête restait vide sur toute la hauteur.
+    ///
+    /// > **Une place justifiée par une mesure prise dans un seul état cesse de
+    /// > l'être dans l'autre.** La question à poser n'était pas « le couloir
+    /// > coûte-t-il de la largeur ? » — il en coûte — mais « que vaut le bas
+    /// > quand le clavier l'occupe ? ». Aucune des deux directives n'a tort ;
+    /// > c'est l'état mesuré qui manquait à la première.
+    ///
+    /// La justification du #4997 est RÉVOQUÉE ici plutôt qu'effacée : un
+    /// commentaire qui explique pourquoi le code fait quelque chose se relit
+    /// comme une raison de ne pas y toucher, et celui-là décrivait un arbitrage
+    /// renversé.
     ///
     /// Ce qui NE change pas : le sujet reste en haut et ne défile jamais hors
     /// de l'écran, l'historique garde son couloir droit — « au même endroit »
     /// était la moitié explicite de la directive du #4936 —, et le bas montre
-    /// toujours les options de l'outil ouvert. Seule la place du RAIL bouge.
+    /// les options de l'outil ouvert.
     var body: some View {
         VStack(spacing: 0) {
             header
             HStack(alignment: .center, spacing: 0) {
+                toolRail
                 scene
                 historyRail
             }
             options
-            toolRow
         }
         .background(plateauTint.ignoresSafeArea())
         .preferredColorScheme(.dark)
@@ -158,6 +178,21 @@ struct ComposerObjectEditorView: View {
         // posé sur toute la vue — le canvas y déplace des objets, et un
         // glissement horizontal capté partout lui volerait chaque translation.
         .overlay(alignment: .leading) { edgeBackStrip }
+        // **Le glissement BAS rend l'écran à la scène** (#5027) : le clavier
+        // part, puis le panneau de l'outil se replie.
+        //
+        // Posé en `simultaneousGesture` et non en `gesture` : la zone
+        // d'options défile et le plan 2D panne. Un `gesture` exclusif leur
+        // volerait le doigt ; la règle, elle, refuse tout ce qui n'est pas
+        // franchement vertical, donc les deux cohabitent.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { valeur in
+                    guard ComposerObjectEditorDismissGesture.completes(
+                        translation: valeur.translation) else { return }
+                    yieldScreenToScene()
+                }
+        )
         // **Changer d'objet peut changer de FAMILLE** (#4937), et l'outil
         // courant peut ne plus exister pour elle : passer d'un texte réglé sur
         // POLICE à un sticker laisserait le bas vide.
@@ -303,48 +338,81 @@ struct ComposerObjectEditorView: View {
         // ne la demande pas.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)
-        // **16 pt des DEUX côtés depuis que le rail est descendu** (#4997) :
-        // le couloir gauche n'existe plus, et la carte reprend sa largeur. Le
-        // couloir DROIT reste, lui — l'historique y vit, et la carte s'arrête
-        // donc avant lui, comme sur la surface de scène.
-        .padding(.leading, 16)
+        // Les DEUX couloirs sont de nouveau occupés (#5026) — les outils à
+        // gauche, l'historique à droite — et la carte s'encastre entre eux,
+        // comme sur la surface de scène.
+        .padding(.horizontal, 16)
         .padding(.bottom, 10)
     }
 
     // MARK: - Les deux rails, dans les couloirs
 
-    /// **La rangée d'OUTILS, tout en bas** (#4997) — et des glyphes NUS.
+    /// **Le rail d'OUTILS, dans le couloir de tête** (#5026) — glyphes plats,
+    /// SANS nom (#5029, retirée), sans barre de défilement (#5038).
     ///
-    /// > « des icônes d'outils aplaties, lister les outils entièrement en bas »
+    /// ## La place : le couloir, parce que le bas appartient au clavier
     ///
-    /// Deux changements, et le second est le moins visible. La PLACE d'abord :
-    /// dix entrées à l'horizontale font `10 × 44 + 9 × 8 = 512 pt` là où un
-    /// écran de 393 pt en offre 361 une fois les marges retirées — la rangée
-    /// DÉFILE donc, exactement comme celle de `ComposerLeadingRail` en mode
-    /// outil, et pour la même raison arithmétique. Une `HStack` trop large
-    /// n'est pas clippée par SwiftUI : elle dessine par-dessus les deux bords.
+    /// Voir la doctrine du `body`. Ce que le rail gagne à revenir ici n'est pas
+    /// de la surface, c'est de la DISPONIBILITÉ : clavier levé, le bas est
+    /// occupé et le couloir ne l'est pas.
     ///
-    /// Le STYLE ensuite : le glyphe seul, teinté quand il est choisi. Les
-    /// pastilles à fond arrondi du #4936 étaient un troisième vocabulaire de
-    /// bouton d'outil dans le même composer — la surface de scène n'en peint
-    /// aucun, le SDK peint des bulles qui reflètent une VALEUR. Le rail dit ce
-    /// que l'outil FAIT ; c'est la couleur qui dit lequel est ouvert, le même
-    /// signal que `ComposerLeadingRail.toolButton` donne déjà.
-    private var toolRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+    /// ## Le nom sous le glyphe a été ESSAYÉ, puis retiré
+    ///
+    /// #5029 l'avait posé — les dix glyphes sont une iconographie provisoire,
+    /// et `rectangle.dashed` (CADRE) contre `square.on.square.dashed`
+    /// (BORDURE) se distinguent mal. Vérifié au simulateur : dix libellés
+    /// empilés dans un couloir de 56 pt débordaient des deux côtés et venaient
+    /// toucher la carte.
+    ///
+    /// > Directive porteur 2026-09-03 : « Supprime les noms des tool, ça gâche
+    /// > tout ; de toute façon les options apparaissent en bas du titre de
+    /// > l'outil. »
+    ///
+    /// Et la raison est juste, pas seulement esthétique : **le nom est DÉJÀ
+    /// servi**, par le titre de la section d'options que `section(_:_:content:)`
+    /// peint sous la carte. Le mettre aussi dans le rail le disait deux fois
+    /// pour un glyphe à la fois — et une seule ligne d'écran peut le dire, celle
+    /// de l'outil OUVERT, qui est la seule dont on a besoin.
+    ///
+    /// L'iconographie reste provisoire et relève de la planche (#4936) ; ce
+    /// lot ne la fixe pas, il retire la béquille qui la compensait mal.
+    ///
+    /// ## Aucun indicateur de défilement
+    ///
+    /// Il était MONTRÉ au #4936, et pour une raison mesurée : deux entrées sur
+    /// dix tombent hors du rail visible, et rien ne disait qu'il fallait
+    /// défiler. La directive le retire — « lorsqu'on scrolle sur la liste des
+    /// outils à gauche on ne doit pas montrer la barre de défilement ».
+    ///
+    /// > La mesure qui justifiait la barre n'a pas disparu : ce qui la remplace
+    /// > est le DÉBORDEMENT VISIBLE — la dernière entrée est coupée au bord du
+    /// > couloir, ce qui dit « ça continue » sans peindre de chrome. Une barre
+    /// > qui n'apparaît qu'au geste ne le disait de toute façon pas avant le
+    /// > geste.
+    private var toolRail: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 6) {
                 ForEach(ComposerObjectEditorRail.entries(for: family), id: \.self) { entree in
-                    Button { selectedTool = entree } label: {
+                    Button {
+                        selectedTool = entree
+                        // Taper un outil le REND : le repli est un fait
+                        // d'affichage, et le geste qui choisit un outil dit
+                        // qu'on veut le régler.
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                            optionsAreCollapsed = false
+                        }
+                    } label: {
                         Image(systemName: ComposerObjectEditorRail.symbolName(entree))
                             .font(.title3)
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
                                              ? MeeshyColors.brandPrimary
                                              : Color.white.opacity(0.55))
-                            // 44 pt de CIBLE quel que soit le glyphe (dimension
-                            // 5) : dessiné à sa taille naturelle, un `clock`
-                            // donnerait 17 pt que personne n'atteint du pouce.
-                            .frame(width: 44, height: 44)
+                            // 44 pt de CIBLE quel que soit le glyphe
+                            // (dimension 5) : dessiné à sa taille naturelle, un
+                            // `clock` donnerait 17 pt que personne n'atteint du
+                            // pouce.
+                            .frame(width: ComposerObjectEditorRail.railWidth, height: 44)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -353,10 +421,9 @@ struct ComposerObjectEditorView: View {
                                             ? [.isButton, .isSelected] : .isButton)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
         }
-        .frame(height: 44)
-        .padding(.bottom, 6)
+        .frame(width: ComposerObjectEditorRail.railWidth)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ComposerObjectEditorCopy.toolRow)
     }
@@ -412,9 +479,30 @@ struct ComposerObjectEditorView: View {
 
     // MARK: - Toutes les options, empilées
 
+    /// **Rendre l'écran à la scène** (#5027) — dans cet ORDRE, et il compte.
+    ///
+    /// Le clavier part d'abord : c'est lui qui occupe le plus de place, et le
+    /// voir descendre pendant que le panneau se replie donne au geste un seul
+    /// mouvement plutôt que deux. L'inverse — replier puis lâcher le clavier —
+    /// fait sauter la scène deux fois.
+    ///
+    /// La dismission passe par le responder GLOBAL parce que le champ n'est pas
+    /// à nous : le texte s'édite EN LIGNE dans le canvas UIKit, et l'éditeur
+    /// n'en tient que l'identifiant. `exitTextEditingMode()` ferait plus que
+    /// demandé — il sortirait de l'édition, alors que le geste ne demande que
+    /// de la place.
+    private func yieldScreenToScene() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            optionsAreCollapsed = true
+        }
+        HapticFeedback.light()
+    }
+
     @ViewBuilder
     private var options: some View {
-        if let binding = viewModel.textObjectBinding(for: objectId) {
+        if !optionsAreCollapsed, let binding = viewModel.textObjectBinding(for: objectId) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     styleSection(binding)
@@ -423,7 +511,13 @@ struct ComposerObjectEditorView: View {
                     // passer de l'un à l'autre ne demande pas de réapprendre.
                     ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
                         section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
-                            TextEditToolOptions(tool: tool, textObject: binding)
+                            // **L'écran plein demande la GRILLE** (#5045).
+                            // Les deux hôtes SDK gardent la rangée : au-dessus
+                            // du clavier et dans la zone basse de la scène, la
+                            // hauteur d'une grille n'existe pas.
+                            TextEditToolOptions(tool: tool,
+                                                textObject: binding,
+                                                layout: .grid)
                         }
                     }
                     timingSection

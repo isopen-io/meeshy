@@ -1,4 +1,4 @@
-import { documentDuSite } from '@/app/enveloppe/vue';
+import { documentDeMessage, documentDuSite } from '@/app/enveloppe/vue';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { echappe } from '@/app/socle';
 import { ADHESION_DU_MEMBRE, REFUS_DU_MEMBRE } from '@/lib/contenu/fil';
@@ -31,6 +31,11 @@ export const LIEN_INTROUVABLE = {
   action: 'Retour à l’accueil',
 } as const;
 
+/**
+ * Ce helper local ÉTAIT `documentDeMessage` — écrit avant lui, au caractère
+ * près. Il n'en reste que l'adaptation de sa signature (une action, pas une
+ * liste), gardée parce que ses trois appelants la lisent mieux ainsi.
+ */
 const documentDeRefus = ({
   titre,
   phrase,
@@ -40,19 +45,12 @@ const documentDeRefus = ({
   readonly phrase: string;
   readonly action: { readonly libelle: string; readonly href: string };
 }): string =>
-  documentDuSite({
-    titre: `${titre} — Meeshy`,
-    description: phrase,
+  documentDeMessage({
+    titre,
+    paragraphes: [phrase],
+    actions: [action],
     feuille: FEUILLE_CONNECTEE,
-    corps:
-      '<div class="bonjour">' +
-      `<h1>${echappe(titre)}</h1>` +
-      `<p>${echappe(phrase)}</p>` +
-      '</div>' +
-      `<section class="acces" aria-label="${echappe(action.libelle)}"><nav>` +
-      `<a class="action primaire" href="${echappe(action.href)}">${echappe(action.libelle)}</a>` +
-      '</nav></section>',
-    retour: true,
+    robots: 'index, follow',
   });
 
 export const documentDuRefusDuMembre = ({ code, message }: { readonly code: string; readonly message: string | null }): string =>

@@ -68,6 +68,20 @@ export type ParametresDuDocument = {
   readonly corps: string;
   readonly retour: boolean;
   /**
+   * CE QUE LE `<main>` PORTE EN PLUS DE SON IDENTIFIANT — les attributs de
+   * PARTICIPATION d'une surface temps réel (§ 12.4), et rien d'autre. Ils sont
+   * passés par le document plutôt qu'écrits dans le corps parce que le module
+   * les cherche sur `main[data-module]` : un second `<main>` imbriqué pour les
+   * porter ferait deux repères de page là où la règle 5 n'en veut qu'un.
+   */
+  readonly attributsDuMain?: string;
+  /**
+   * Le chargeur du module de participation, posé APRÈS le corps — le seul
+   * `<script>` d'un écran connecté hors moteur de thème, et il n'arrive qu'après
+   * le premier pixel (`app/connecte/chargeur.ts`).
+   */
+  readonly script?: string;
+  /**
    * `index, follow` par défaut — les pages du SITE s'indexent. Un écran qui vit
    * à l'adresse d'un CONTENU (l'invitation et l'indisponible de `/stories/:id`)
    * pose `noindex, nofollow` : le § 5.4 le demande pour toute la famille des
@@ -75,6 +89,15 @@ export type ParametresDuDocument = {
    * seule tête de document.
    */
   readonly robots?: string;
+  /**
+   * UNE SURIMPRESSION — le profil d'un participant (`?profil=`, § 12.10.3),
+   * rendue HORS de `<div class="enveloppe">` : une surimpression n'est pas un
+   * morceau du contenu qu'elle recouvre, exactement comme pour le fil
+   * (`app/connecte/fil-vue.ts` › `documentDuFil`). L'enveloppe entière devient
+   * `inert` derrière elle — c'est TOUT ce que ce document porte à recouvrir,
+   * là où le fil n'a que son `<main>`.
+   */
+  readonly surimpression?: string;
 };
 
 export type ParametresDeTete = {
@@ -121,18 +144,97 @@ export const documentDuSite = ({
   corps,
   retour,
   robots,
+  attributsDuMain = '',
+  script = '',
+  surimpression = '',
 }: ParametresDuDocument): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots }) +
   '<body>' +
-  '<div class="enveloppe">' +
+  // LA SURIMPRESSION AVANT L'ENVELOPPE, INERTE DERRIÈRE ELLE — l'ordre et
+  // l'accès que `documentDuFil` applique à son `<main>` (même raison : CLS,
+  // Échap sans JavaScript, un lecteur d'écran qui n'annonce plus ce qu'il ne
+  // montre pas).
+  surimpression +
+  `<div class="enveloppe"${surimpression === '' ? '' : ' inert'}>` +
   enTete(retour) +
-  `<main id="main-content">${corps}</main>` +
+  `<main id="main-content"${attributsDuMain}>${corps}</main>` +
   pied() +
   '</div>' +
+  script +
   '</body>' +
   '</html>';
+
+/**
+ * UNE PAGE QUI DIT UNE CHOSE — un titre, ce qu'il faut savoir, et ce qu'on
+ * peut faire.
+ *
+ * CINQ écrans la composaient à la main, au caractère près : la panne
+ * (`connecte/vue.ts`), l'invitation et l'indisponible de la story, ceux des
+ * commentaires, et le refus d'origine (`provenance.ts`). En ajouter deux —
+ * les réels et les humeurs — en aurait fait sept, et une divergence sur la
+ * SEPTIÈME copie ne se serait vue nulle part.
+ *
+ * Ce n'est pas un gabarit générique : c'est la forme que la charte donne à un
+ * écran sans contenu (règle 18 — l'état vide est DESSINÉ). Le titre est un
+ * `<h1>` parce que chaque document en veut exactement un ; les actions vivent
+ * dans une `<section class="acces">` NOMMÉE par la première d'entre elles,
+ * pour qu'un lecteur d'écran sache ce que ce groupe de liens propose.
+ *
+ * `actions` VIDE ne rend pas la section — un `<nav>` sans lien serait un
+ * repère d'orientation qui ne mène nulle part.
+ */
+export type ActionDuMessage = {
+  readonly libelle: string;
+  readonly href: string;
+  /** `primaire` par défaut : c'est le geste que l'écran propose. */
+  readonly ton?: 'primaire' | 'contour';
+  readonly glyphe?: string;
+};
+
+export const documentDeMessage = ({
+  titre,
+  paragraphes,
+  actions = [],
+  feuille,
+  robots = 'noindex, nofollow',
+  retour = true,
+  description,
+}: {
+  readonly titre: string;
+  readonly paragraphes: readonly string[];
+  readonly actions?: readonly ActionDuMessage[];
+  readonly feuille: string;
+  readonly robots?: string;
+  readonly retour?: boolean;
+  /** Par défaut le PREMIER paragraphe : la description d'une page qui dit une chose est ce qu'elle dit. */
+  readonly description?: string;
+}): string =>
+  documentDuSite({
+    titre: `${titre} — ${MARQUE}`,
+    description: description ?? paragraphes[0] ?? titre,
+    feuille,
+    robots,
+    retour,
+    corps:
+      '<div class="bonjour">' +
+      `<h1>${echappe(titre)}</h1>` +
+      paragraphes.map((texte) => `<p>${echappe(texte)}</p>`).join('') +
+      '</div>' +
+      (actions.length === 0
+        ? ''
+        : `<section class="acces" aria-label="${echappe(actions[0]?.libelle ?? '')}"><nav>` +
+          actions
+            .map(
+              ({ libelle, href, ton = 'primaire', glyphe }) =>
+                `<a class="action ${ton}" href="${echappe(href)}">` +
+                (glyphe === undefined ? '' : svgDuSprite(glyphe)) +
+                `${echappe(libelle)}</a>`,
+            )
+            .join('') +
+          '</nav></section>'),
+  });
 
 /**
  * LA RÉPONSE, et sa politique de cache.

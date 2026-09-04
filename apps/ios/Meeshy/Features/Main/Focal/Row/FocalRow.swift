@@ -278,19 +278,25 @@ struct FocalRow: View {
     /// `FocalEphemeralBadge` (ce chantier) pour un countdown vivant sans
     /// faire porter le `@StateObject` par `FocalRow`.
     ///
-    /// `BubbleForwardedIndicator` prend une `ForwardAttribution` déjà
-    /// tranchée — `BubbleContent` ne porte que le booléen `isForwarded` (pas
-    /// de `ForwardReference` résolue), donc l'attribution reste `.anonymous`
-    /// ici : repli sur le libellé générique « Transféré ». Écart signalé, pas
-    /// une seconde résolution inventée — et c'est le repli SÛR, jamais celui
-    /// qui nommerait quelqu'un.
+    /// **L'attribution est la MÊME qu'en bulle depuis le #5058.** Elle restait
+    /// `.anonymous` ici — « Transféré » tout court — parce que `BubbleContent`
+    /// ne portait qu'un booléen et que la rangée plate n'avait pas le `Message`
+    /// d'où la bulle tirait sa `ForwardReference`. L'écart était SIGNALÉ, et le
+    /// repli était le bon : jamais celui qui nommerait quelqu'un.
+    ///
+    /// Ce qui manquait était en AMONT. `BubbleContent.forwardAttribution` porte
+    /// désormais la valeur tranchée par `ForwardBadgePolicy` au site unique
+    /// qu'est `BubbleContentBuilder` — pas une seconde résolution inventée ici,
+    /// ce que le repli refusait à juste titre, mais la PREMIÈRE, remontée là où
+    /// les trois peaux la partagent. Une règle de confidentialité résolue à
+    /// deux endroits est une règle qui divergera.
     @ViewBuilder
     private var badgesSection: some View {
         if content.isPinned {
             BubblePinnedIndicator()
         }
-        if content.isForwarded {
-            BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: .anonymous)
+        if let attribution = content.forwardAttribution {
+            BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: attribution)
         }
         if let ephemeral = content.ephemeral {
             FocalEphemeralBadge(expiresAt: ephemeral.expiresAt, isDark: input.isDark)
@@ -321,12 +327,42 @@ struct FocalRow: View {
         content.reply != nil && !content.audioHostsReply && !content.visualHostsReply
     }
 
+    /// Le geste de la carte de scène, ou `nil` — même règle que la bulle : sans
+    /// identifiant il n'y a rien à ouvrir, et un tap qui n'ouvre rien est une
+    /// cible morte (loi 4). La carte, elle, se rend quand même : c'est la
+    /// citation qui « subsiste » quand la story a expiré.
+    private var storyCitationOpenTap: (() -> Void)? {
+        guard let citation = content.detachedStoryCitation,
+              !citation.messageId.isEmpty,
+              let onStoryReplyTap = actions.onStoryReplyTap else { return nil }
+        return { onStoryReplyTap(citation.messageId) }
+    }
+
     /// Le bloc contenu protégé par le flou de message — citation + médias +
     /// audio + non-média + texte. Le VStack reprend le MÊME espacement que la
     /// pile parente : hauteur de rangée identique, wrapper monté ou pas.
     private var contentSections: some View {
         VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
-            if showsQuotedReply, let reply = content.reply {
+            // **Vue `3h` (#5059) — une story citée est une SCÈNE ici aussi.**
+            //
+            // La rangée plate rendait TOUTE citation par `FocalQuotedReplyView`,
+            // y compris celle d'une story : un carré de 38 pt sur une ligne
+            // « 📷 Story · il y a 3 h ». C'est le mot que la doctrine emploie —
+            // *aplatie* — et la bulle l'avait corrigé seule au #4098.
+            //
+            // La règle de détachement n'est pas réécrite : elle vit sur
+            // `BubbleContent`, que cette rangée reçoit déjà. Un `else if` plutôt
+            // que deux `if` — les deux rendus s'excluent par CONSTRUCTION, pas
+            // par la coïncidence de deux prédicats qui pourraient diverger.
+            if let storyCitation = content.detachedStoryCitation {
+                BubbleStoryCitationCard(
+                    reply: storyCitation,
+                    isDark: input.isDark,
+                    accentHex: input.accentHex,
+                    onOpen: storyCitationOpenTap
+                )
+                .equatable()
+            } else if showsQuotedReply, let reply = content.reply {
                 FocalQuotedReplyView(
                     reply: reply,
                     accentHex: input.accentHex,

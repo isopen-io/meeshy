@@ -1,0 +1,339 @@
+import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
+import { documentDesChats, type EtatDesChats } from '@/app/connecte/liste-vue';
+import type { Message } from '@/lib/api/fil';
+import type { Conversation } from '@/lib/api/compte';
+import type { ProfilServi } from '@/lib/api/profil';
+import { PROFIL } from '@/lib/contenu/profil';
+import { FIL } from '@/lib/contenu/fil';
+import { CHATS } from '@/lib/contenu/liste';
+
+/**
+ * LE PROFIL D'UN PARTICIPANT (§ 12.10.3) — un ÉTAT (`?profil=`) rendu par UN
+ * SEUL module de vue (`app/connecte/profil-vue.ts`) aux TROIS adresses de
+ * l'écran : `/chats/:cle` (membre), `/chat/:lien` (invité) et `/chats` (la
+ * liste). Ces témoins gardent :
+ *
+ *   • la MÊME surimpression aux trois hôtes (au retour près, qui est leur
+ *     adresse à chacun) — aucune jumelle ;
+ *   • les trois chemins de fermeture (croix, voile, poignée), tous vers
+ *     l'adresse NUE de l'hôte ;
+ *   • le `<main>` (fil) / `<div class="enveloppe">` (liste) INERTE derrière
+ *     la surimpression, comme le plein écran d'un média ;
+ *   • ce que le panneau NE LIT ni NE FABRIQUE JAMAIS : une langue du profil
+ *     (elle vient du FIL), une présence hors de ce qui est servi ;
+ *   • les trois actions gardées par `peutAgir` (un compte) ET `!estSoi` — un
+ *     invité anonyme n'en voit AUCUNE, y compris « Écrire » ;
+ *   • le sous-état de confirmation d'un blocage, sans un octet de
+ *     `confirm()`.
+ */
+
+const PROFIL_TROUVE = (extra: Partial<Extract<ProfilServi, { genre: 'profil' }>> = {}): ProfilServi => ({
+  genre: 'profil',
+  profil: {
+    id: 'u-marta',
+    nom: 'Marta Ruiz',
+    pseudonyme: 'marta',
+    bio: 'Traductrice · Madrid.',
+    membreDepuis: '2024-03-01T00:00:00.000Z',
+    anonyme: false,
+  },
+  relation: 'none',
+  estSoi: false,
+  ...extra,
+});
+
+const MESSAGE = (attributs: Partial<Message> = {}): Message => ({
+  id: 'r1',
+  clientMessageId: null,
+  auteur: 'Marta',
+  auteurId: 'u-marta',
+  anonyme: false,
+  deMoi: false,
+  systeme: false,
+  texte: 'Hola',
+  texteOriginal: 'Hola',
+  langueServie: null,
+  langueOriginale: 'es',
+  traductions: {},
+  ecritA: '2026-09-01T12:00:00.000Z',
+  protege: false,
+  edite: false,
+  supprime: false,
+  pieces: [],
+  citations: [],
+  reactions: [],
+  accuse: 'lu',
+  ...attributs,
+});
+
+const ETAT_FIL = (messages: readonly Message[], attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
+  porte: { genre: 'membre', cle: 'c1' },
+  fil: { id: 'c1', titre: 'Équipe Lagos', membres: 4, presence: { participants: [], presents: [] }, messages, plusAncien: null },
+  lecteur: { id: 'u1', nom: 'Amina', langues: ['fr'] },
+  erreur: null,
+  brouillon: '',
+  maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
+  composeur: { genre: 'ouvert' },
+  tempsReel: null,
+  plein: null,
+  profil: null,
+  ...attributs,
+});
+
+const servi = (etat: EtatDuFil): string => documentDuFil(etat).replace(/<template[\s\S]*?<\/template>/g, '');
+
+const dialogue = (doc: string): string => /<dialog class="profil"[\s\S]*?<\/dialog>/.exec(doc)?.[0] ?? '';
+
+describe('le profil d’un participant — surimpression du fil (membre)', () => {
+  it('ne rend rien tant que l’adresse ne le demande pas', () => {
+    const doc = servi(ETAT_FIL([MESSAGE()]));
+    expect(doc).not.toContain('<dialog class="profil"');
+  });
+
+  it('ouvre la surimpression sur le profil SERVI', () => {
+    const doc = servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } }));
+    expect(doc).toContain('<dialog class="profil"');
+    expect(doc).toContain(' open');
+    expect(doc).toContain('Marta Ruiz');
+    expect(doc).toContain('@marta');
+    expect(doc).toContain('Traductrice · Madrid.');
+  });
+
+  it('rend AUCUNE langue et AUCUNE présence — ce que le profil ne sert jamais', () => {
+    const doc = dialogue(servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).not.toContain('isOnline');
+    expect(doc).not.toContain('en ligne');
+  });
+
+  /** La ligne de langue vient du FIL — le message le plus récent de CET auteur, jamais du profil. */
+  it('dit la langue DEPUIS LE FIL — « Écrit en Español dans ce fil »', () => {
+    const doc = dialogue(servi(ETAT_FIL([MESSAGE({ langueOriginale: 'es' })], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).toContain(PROFIL.ecritDansCeFil('Español'));
+    expect(doc).toContain(PROFIL.lecteurPrisme('Español'));
+  });
+
+  it('ne rend AUCUNE ligne de langue sans message de cet auteur dans la tranche', () => {
+    const doc = dialogue(
+      servi(ETAT_FIL([MESSAGE({ auteurId: 'u-autre' })], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })),
+    );
+    expect(doc).not.toContain('ph-translate');
+  });
+
+  it('dit « Sur Meeshy depuis mars 2024 »', () => {
+    const doc = dialogue(servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).toMatch(/mars 2024/);
+  });
+
+  it('dit la conversation EN COMMUN — le titre du fil ouvert', () => {
+    const doc = dialogue(servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).toContain(PROFIL.participeA('Équipe Lagos'));
+  });
+
+  it('rend les TROIS actions à un membre, sur une personne qui n’est pas encore amie', () => {
+    const doc = dialogue(servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).toContain(PROFIL.ecrire('Marta'));
+    expect(doc).toContain(PROFIL.ajouterEnAmi);
+    expect(doc).toContain(PROFIL.bloquerOuSignaler);
+    expect(doc).toContain(PROFIL.pasEncoreAmis);
+  });
+
+  it('cache « Ajouter en ami » quand la relation est déjà FRIEND, et dit « Ami »', () => {
+    const doc = dialogue(
+      servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE({ relation: 'friend' }), confirmerBlocage: false } })),
+    );
+    expect(doc).not.toContain(PROFIL.ajouterEnAmi);
+    expect(doc).toContain(PROFIL.ami);
+    // Écrire et Bloquer restent : la relation ne les gouverne pas.
+    expect(doc).toContain(PROFIL.ecrire('Marta'));
+    expect(doc).toContain(PROFIL.bloquerOuSignaler);
+  });
+
+  it('relation=self : aucune des trois actions, « C’est vous »', () => {
+    const doc = dialogue(
+      servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u1', servi: PROFIL_TROUVE({ relation: 'self', estSoi: true }), confirmerBlocage: false } })),
+    );
+    expect(doc).toContain(PROFIL.cEstVous);
+    expect(doc).not.toContain(PROFIL.ecrire('Marta'));
+    expect(doc).not.toContain(PROFIL.ajouterEnAmi);
+    expect(doc).not.toContain(PROFIL.bloquerOuSignaler);
+  });
+
+  it('rend introuvable, limite et panne — chacun sa phrase, aucune action', () => {
+    const introuvable = dialogue(servi(ETAT_FIL([], { profil: { handle: 'x', servi: { genre: 'introuvable' }, confirmerBlocage: false } })));
+    expect(introuvable).toContain(PROFIL.introuvable);
+    expect(introuvable).not.toContain('actions-profil');
+
+    const limite = dialogue(servi(ETAT_FIL([], { profil: { handle: 'x', servi: { genre: 'limite', message: 'Patientez.' }, confirmerBlocage: false } })));
+    expect(limite).toContain('Patientez.');
+
+    const panne = dialogue(servi(ETAT_FIL([], { profil: { handle: 'x', servi: { genre: 'panne' }, confirmerBlocage: false } })));
+    expect(panne).toContain(PROFIL.panne);
+  });
+
+  it('ferme par la croix, le voile ET la poignée — les trois vers l’adresse NUE de l’hôte', () => {
+    const doc = servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } }));
+    expect(doc).toContain('<a class="voile" href="/chats/c1"');
+    expect(doc).toContain('<a class="fermer" href="/chats/c1"');
+    expect(doc).toContain('<a class="poignee" href="/chats/c1"');
+  });
+
+  it('rend le fil INERTE derrière la surimpression, et la déclare modale', () => {
+    const doc = servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } }));
+    expect(doc.indexOf('<dialog class="profil"')).toBeLessThan(doc.indexOf('<main'));
+    expect(doc).toContain('<main id="main-content" class="fil-ecran" inert');
+    expect(doc).toContain('aria-modal="true"');
+  });
+
+  it('ne floute PAS le fond — aucun filter:blur, un voile suffit', () => {
+    const html = documentDuFil(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } }));
+    // Le seul filter:blur du dépôt reste celui du cadre inerte de /chat/:lien (charte).
+    expect(html).not.toMatch(/dialog\.profil[^}]*filter:blur/);
+  });
+
+  it('confirme un blocage SANS confirm() — un second état de la même adresse', () => {
+    const doc = dialogue(
+      servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: true } })),
+    );
+    expect(doc).toContain(PROFIL.confirmerLeBlocage('Marta Ruiz'));
+    expect(doc).toContain(PROFIL.confirmer);
+    expect(doc).toContain('<a class="action discrete" href="/chats/c1?profil=u-marta">');
+    // Aucune des trois actions nominales pendant la confirmation.
+    expect(doc).not.toContain(PROFIL.ajouterEnAmi);
+  });
+
+  it('ignore ?confirmer= sur un profil qui n’a pas les trois actions (introuvable)', () => {
+    const doc = dialogue(servi(ETAT_FIL([], { profil: { handle: 'x', servi: { genre: 'introuvable' }, confirmerBlocage: true } })));
+    expect(doc).not.toContain(PROFIL.confirmer);
+    expect(doc).toContain(PROFIL.introuvable);
+  });
+});
+
+describe('le profil d’un participant — surimpression du fil (invité)', () => {
+  const ETAT_INVITE = (attributs: Partial<EtatDuFil> = {}): EtatDuFil =>
+    ETAT_FIL([MESSAGE()], {
+      porte: { genre: 'invite', lien: 'mshy_lagos' as never, segment: 'lagos-q1', pseudo: 'Tolu', droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true }, jonctionFraiche: false },
+      lecteur: { id: 'p9', nom: 'Tolu', langues: ['fr'] },
+      ...attributs,
+    });
+
+  it('rend la MÊME identité, badge, bio et infos que le membre — au retour près, et sans actions (peutAgir=false)', () => {
+    const membre = dialogue(servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    const invite = dialogue(servi(ETAT_INVITE({ profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    const sansActions = (html: string): string => html.replace(/<div class="actions-profil">[\s\S]*?<\/div>/, '');
+    expect(sansActions(invite).replaceAll('/chat/lagos-q1', '/chats/c1')).toBe(sansActions(membre));
+  });
+
+  it('un invité anonyme ne voit AUCUNE des trois actions — pas même « Écrire »', () => {
+    const doc = dialogue(servi(ETAT_INVITE({ profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).not.toContain(PROFIL.ecrire('Marta'));
+    expect(doc).not.toContain(PROFIL.ajouterEnAmi);
+    expect(doc).not.toContain(PROFIL.bloquerOuSignaler);
+    // Le badge de relation reste rendu — c'est une INFORMATION, pas une action.
+    expect(doc).toContain(PROFIL.pasEncoreAmis);
+  });
+
+  it('ferme vers l’adresse NUE de l’invité — /chat/:lien', () => {
+    const doc = servi(ETAT_INVITE({ profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } }));
+    expect(doc).toContain('<a class="voile" href="/chat/lagos-q1"');
+    expect(doc).toContain('<a class="fermer" href="/chat/lagos-q1"');
+  });
+});
+
+describe('le profil d’un participant — surimpression de la LISTE (/chats)', () => {
+  const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
+    id: 'c1',
+    identifiant: 'lagos',
+    titre: 'Équipe Lagos',
+    genre: 'direct',
+    membres: 2,
+    nonLus: 0,
+    dernierMessageA: '2026-09-01T12:00:00.000Z',
+    apercu: null,
+    apercuTraductions: null,
+    apercuLangueOriginale: null,
+    sourdine: false,
+    archivee: false,
+    participantsInscrits: [{ id: 'u-marta', nom: 'Marta Ruiz' }],
+    ...attributs,
+  });
+
+  const ETAT_LISTE = (attributs: Partial<EtatDesChats> = {}): EtatDesChats => ({
+    conversations: [CONVERSATION()],
+    maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
+    langues: ['fr'],
+    moi: 'u1',
+    tempsReel: null,
+    profil: null,
+    ...attributs,
+  });
+
+  it('ne rend rien sans ?profil=', () => {
+    expect(documentDesChats(ETAT_LISTE())).not.toContain('<dialog class="profil"');
+  });
+
+  it('ouvre la surimpression, avec la conversation EN COMMUN retrouvée LOCALEMENT', () => {
+    const doc = dialogue(documentDesChats(ETAT_LISTE({ profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).toContain('Marta Ruiz');
+    expect(doc).toContain(PROFIL.participeA('Équipe Lagos'));
+    // Aucune langue : la liste ne charge aucun message.
+    expect(doc).not.toContain('ph-translate');
+  });
+
+  it('rend les trois actions — /chats est un écran du MEMBRE', () => {
+    const doc = dialogue(documentDesChats(ETAT_LISTE({ profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } })));
+    expect(doc).toContain(PROFIL.ecrire('Marta'));
+    expect(doc).toContain(PROFIL.ajouterEnAmi);
+  });
+
+  it('ferme vers /chats, et rend l’ENVELOPPE inerte derrière elle', () => {
+    const doc = documentDesChats(ETAT_LISTE({ profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } }));
+    expect(doc).toContain('<a class="voile" href="/chats"');
+    expect(doc).toContain('<a class="fermer" href="/chats"');
+    expect(doc).toContain('<div class="enveloppe" inert>');
+  });
+
+  it('l’AVATAR d’un tête-à-tête ouvre le profil de l’AUTRE personne', () => {
+    const doc = documentDesChats(ETAT_LISTE());
+    expect(doc).toContain('<a class="avatar-lien" href="/chats?profil=u-marta"');
+    expect(doc).toContain(CHATS.voirLeProfil('Marta Ruiz'));
+  });
+
+  it('un GROUPE n’a personne à ouvrir — l’avatar reste dans la ligne', () => {
+    const doc = documentDesChats(ETAT_LISTE({ conversations: [CONVERSATION({ genre: 'group', participantsInscrits: [] })] }));
+    expect(doc).not.toContain('class="avatar-lien"');
+    expect(doc).toContain('<a class="ligne"');
+  });
+
+  it('un tête-à-tête dont le pair n’a pas de compte n’a pas de lien non plus', () => {
+    const doc = documentDesChats(ETAT_LISTE({ conversations: [CONVERSATION({ participantsInscrits: [] })] }));
+    expect(doc).not.toContain('class="avatar-lien"');
+  });
+});
+
+describe('l’avatar et le nom d’un auteur ouvrent son profil, dans le fil', () => {
+  it('lie l’avatar ET le nom vers ?profil=<auteurId>', () => {
+    const doc = servi(ETAT_FIL([MESSAGE()]));
+    expect(doc).toContain('<a class="avatar-lien" href="/chats/c1?profil=u-marta"');
+    expect(doc).toContain('<a class="nom-lien" href="/chats/c1?profil=u-marta">');
+    expect(doc).toContain(FIL.voirLeProfil('Marta'));
+  });
+
+  it('ne lie RIEN pour un message ANONYME (invité de lien, sans compte)', () => {
+    const doc = servi(ETAT_FIL([MESSAGE({ anonyme: true })]));
+    expect(doc).not.toContain('class="avatar-lien"');
+    expect(doc).not.toContain('class="nom-lien"');
+  });
+
+  it('ne lie RIEN pour SES PROPRES messages — pas de destination « mon compte »', () => {
+    const doc = servi(ETAT_FIL([MESSAGE({ deMoi: true, auteurId: 'u1' })]));
+    expect(doc).not.toContain('class="avatar-lien"');
+    expect(doc).not.toContain('class="nom-lien"');
+    expect(doc).toContain(`>${FIL.vous}<`);
+  });
+
+  it('ne lie RIEN pour une ligne SYSTÈME', () => {
+    const doc = servi(ETAT_FIL([MESSAGE({ systeme: true, texte: 'A rejoint la conversation' })]));
+    expect(doc).not.toContain('class="avatar-lien"');
+    expect(doc).not.toContain('class="nom-lien"');
+  });
+});

@@ -19,10 +19,15 @@ extension StickerPickerView {
     ///   l'onglet Texte sans mots tapés. Les vignettes restent visibles (elles
     ///   disent ce que le cadre fera), mais ne vibrent pas sous le doigt pour
     ///   rien (loi 4).
+    /// **Une GRILLE, plus un onglet** (#5012). Le `ScrollView` et son plafond de
+    /// hauteur sont partis : les familles se parcourent désormais verticalement,
+    /// dans UN défilement qui les contient toutes. Imbriquer deux défilements
+    /// aurait rendu la grille intérieure inatteignable au doigt sur un écran
+    /// court — le geste vertical serait pris par celle du dessus.
     @ViewBuilder
-    func templateTab(family: StickerTemplateFamily, enabled: Bool = true) -> some View {
+    func templateGrid(family: StickerTemplateFamily, enabled: Bool = true) -> some View {
         let emplacements = slots(for: family)
-        ScrollView {
+        Group {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
                       spacing: 10) {
                 ForEach(StickerTemplateCatalog.templates(family: family)) { gabarit in
@@ -49,7 +54,6 @@ extension StickerPickerView {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
-        .frame(maxHeight: 260)
     }
 
     // MARK: - Texte
@@ -79,7 +83,7 @@ extension StickerPickerView {
                 .padding(.horizontal, 12)
                 .accessibilityLabel(String(localized: "sticker.text.field.a11y",
                                            defaultValue: "Texte de la décoration", bundle: .module))
-            templateTab(family: .text, enabled: !typedStickerTextTrimmed.isEmpty)
+            templateGrid(family: .text, enabled: !typedStickerTextTrimmed.isEmpty)
         }
         .padding(.top, 6)
     }
@@ -161,7 +165,7 @@ extension StickerPickerView {
                     .padding(.vertical, 28)
             } else {
                 placeChips
-                templateTab(family: .location)
+                templateGrid(family: .location)
             }
         }
         .padding(.top, 6)

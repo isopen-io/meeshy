@@ -17,8 +17,10 @@ import { FIL, raisonDeFermeture } from '@/lib/contenu/fil';
 
 import {
   accuseCeQuiEstServi,
+  ancreDemandee,
   CACHE_PRIVE,
   curseurDemande,
+  pleinDemande,
   lisLeFormulaire,
   redirection,
   rendu,
@@ -27,6 +29,7 @@ import {
   traiteLaSoumission,
 } from '@/app/connecte/fil-porte';
 import { adresseDeLaPorte, documentDuFil, type Composeur } from '@/app/connecte/fil-vue';
+import { chargeLeProfilSiDemande, traiteLActionDeProfil } from '@/app/connecte/profil-porte';
 import { documentDePanne } from '@/app/connecte/vue';
 import { chargementSpeculatif, navigationEtrangere, origineEtrangere, refusDOrigine, sansEffet } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
@@ -320,12 +323,17 @@ const invite = async ({
   const titre = (battement.genre === 'valide' ? battement.conversation.titre : null) ?? place.nom ?? FIL.conversation;
   const langues = languesDuLecteur({ systemLanguage: participant?.langue ?? null });
 
+  const plein = pleinDemande(requete);
   const issue = await fil({
     cle: conversation,
     creance: { genre: 'invite', jeton },
     moi: participant?.id ?? null,
     langues,
     avant: curseurDemande(requete),
+    // La tranche que le lien d'un média nomme (§ 12.10.1) : sans elle, la pièce
+    // d'un message ancien n'était dans aucune tranche servie, et le tap
+    // n'ouvrait rien.
+    autour: ancreDemandee(requete),
   });
 
   if (issue.genre === 'panne') return rendu(documentDePanne(), 503);
@@ -335,7 +343,13 @@ const invite = async ({
   const bienvenue = new URL(requete.url).searchParams.has(PARAMETRE_DE_JONCTION_FRAICHE);
   const fermeture = issue.genre === 'lien-clos' ? issue.code : issue.genre === 'introuvable' ? 'INTROUVABLE' : clos;
 
-  if (issue.genre === 'fil' && erreur === null) accuseCeQuiEstServi({ fil: lu, creance: { genre: 'invite', jeton } });
+  if (issue.genre === 'fil' && erreur === null) accuseCeQuiEstServi({ fil: lu, creance: { genre: 'invite', jeton }, plein });
+
+  // `?profil=` (§ 12.10.3) — l'invité n'a AUCUN compte : la route du profil
+  // n'est jamais présentée de jeton, donc jamais de `relation` autre que
+  // `'none'`, et la vue ne rend aucune des trois actions (`peutAgir: false`,
+  // porte `invite`).
+  const profil = await chargeLeProfilSiDemande({ requete, jeton: null });
 
   return rendu(
     documentDuFil({
@@ -354,6 +368,8 @@ const invite = async ({
       maintenant: Date.now(),
       composeur: composeurDe(droits, fermeture),
       tempsReel: tempsReelDuDocument(),
+      plein,
+      profil,
     }),
     erreur === null ? 200 : statut,
   );
@@ -567,6 +583,18 @@ export const POST = async (requete: Request, contexte: Contexte): Promise<Respon
   if (formulaire !== null && jonctionDemandee) return rejonction({ requete, segment, situation, formulaire });
 
   const { place, jeton, vers } = situation;
+  // Défense en profondeur (§ 12.10.3 point 5) : l'invité n'a aucun compte, la
+  // vue ne rend donc aucun des trois formulaires d'action du profil — mais un
+  // POST forgé à la main les présenterait quand même, et `jeton: null` (jamais
+  // la session invitée, qui n'est pas un JWT) fait échouer les trois routes de
+  // la passerelle avant même d'être tentées.
+  const actionDeProfil = await traiteLActionDeProfil({
+    formulaire,
+    jeton: null,
+    adresseHote: adresseDeLaPorte({ genre: 'invite', lien: place.lien, segment, pseudo: null, droits: null, jonctionFraiche: false }),
+  });
+  if (actionDeProfil !== null) return actionDeProfil;
+
   const soumission = soumissionDuFil(formulaire);
   if (soumission.genre === 'message' && soumission.texte === '' && soumission.fichiers.length === 0) {
     return invite({ requete, segment, place, jeton, vers, erreur: FIL.messageVide, brouillon: '' });

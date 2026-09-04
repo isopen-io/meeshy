@@ -3,7 +3,7 @@
 > **Ce fichier est une SOURCE, pas un tableau de bord.** L'etat d'implementation de chaque vue vit
 > dans son issue GitHub, jamais ici. Regenere par `capture-cibles.js` — ne pas editer a la main.
 
-La planche `MeeshyWebV3.dc.html` porte **38 ecrans**, chacun avec sa route web.
+La planche `MeeshyWebV3.dc.html` porte **39 ecrans**, chacun avec sa route web.
 
 ## SITE
 
@@ -30,6 +30,7 @@ La planche `MeeshyWebV3.dc.html` porte **38 ecrans**, chacun avec sa route web.
 | Chats | `/chats` | Chats | ![chats](cible/chats.png) |
 | Équipe Lagos | `/chats/:cle` | Équipe Lagos | ![thread](cible/thread.png) |
 | Types de messages | `/chats/:id` | Types de messages | ![rich](cible/rich.png) |
+| Profil du participant | `/chats/:cle?profil=:membre` | Équipe Lagos | ![profilMembre](cible/profilMembre.png) |
 | Médias partagés | `/chats/:cle/medias` | Médias partagés | ![media](cible/media.png) |
 | Recherche | `/search` | Recherche | ![search](cible/search.png) |
 

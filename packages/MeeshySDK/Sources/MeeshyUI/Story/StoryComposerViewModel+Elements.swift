@@ -307,14 +307,25 @@ extension StoryComposerViewModel {
     func addReference(_ reference: ComposerReference) {
         let key = reference.username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !key.isEmpty else { return }
-        let previous = references.first { $0.username.lowercased() == key }
-        references = ComposerReferences.upsert(reference, into: references)
 
-        if previous?.display == .pinned, reference.display != .pinned {
-            removeBadge(of: previous ?? reference)
+        // **La mention naît attachée à la publication COURANTE** (#4068).
+        // En profil Story, une slide EST une publication : c'est son id qui
+        // fait la portée. L'appelant n'a pas à la fournir — il ne sait pas
+        // toujours dans quel profil il est, et une clé qu'on peut oublier de
+        // passer est une portée qui se perd en silence.
+        var attachée = reference
+        if attachée.publicationKey == nil { attachée.publicationKey = currentSlide.id }
+
+        let previous = references.first {
+            $0.username.lowercased() == key && $0.publicationKey == attachée.publicationKey
         }
-        if reference.display == .pinned, previous?.display != .pinned {
-            poseBadge(for: reference)
+        references = ComposerReferences.upsert(attachée, into: references)
+
+        if previous?.display == .pinned, attachée.display != .pinned {
+            removeBadge(of: previous ?? attachée)
+        }
+        if attachée.display == .pinned, previous?.display != .pinned {
+            poseBadge(for: attachée)
         }
     }
 
@@ -989,7 +1000,7 @@ extension StoryComposerViewModel {
     /// Contrainte : au plus 1 media visuel en background + 1 audio en background par slide.
     /// Toggle ON sur un élément → les autres du même type sont repassés en foreground.
     /// Toggle OFF → l'élément redevient foreground (aucun autre n'est promu automatiquement).
-    func toggleBackground(id: String) {
+    public func toggleBackground(id: String) {
         var effects = currentEffects
 
         if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == id }) {

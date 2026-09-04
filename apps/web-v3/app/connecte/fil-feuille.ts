@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
+
 /**
  * LA FEUILLE DU FIL — le même module pour les deux portes (`/chats/:cle`,
  * `/chat/:lien`), et la charte du § 12.5 appliquée règle par règle :
@@ -92,9 +94,10 @@ export const FEUILLE_DU_FIL = compacte(`
 .fil-tete .medias svg{width:var(--glyph);height:var(--glyph)}
 .fil-tete .titre{flex:1;min-width:0}
 .fil-tete h1{margin:0;font-size:var(--text-xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fil-tete .sous{margin:0;font-size:var(--text-sm);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fil-tete .sous{margin:0;min-height:calc(var(--text-sm) * var(--leading-normal));font-size:var(--text-sm);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .etat{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min)}
 .etat .point{display:block;width:var(--presence-dot);height:var(--presence-dot);border-radius:var(--radius-pill);border:var(--stroke-strong) solid var(--color-text-subtle);transition:background-color 150ms,border-color 150ms}
+.etat[data-etat=inconnu] .point{border-style:dashed}
 .etat[data-etat=connecte] .point{background:var(--color-success);border-color:var(--color-success)}
 .etat[data-etat=hors-ligne] .point{border-color:var(--color-warning)}
 
@@ -132,14 +135,22 @@ export const FEUILLE_DU_FIL = compacte(`
 .lignes{flex:1 0 auto;margin:0;padding:0;list-style:none;display:flex;flex-direction:column-reverse;gap:var(--space-4)}
 .lignes>li:not(:has(~li)){visibility:hidden}
 .ligne{display:flex;gap:var(--space-3);align-items:flex-start;border-radius:var(--radius-lg);transition:background-color 150ms}
-.ligne.neuve{background:var(--color-tint-primary)}
+.ligne.neuve,.ligne:target{background:var(--color-tint-primary)}
+.ligne:target{outline:var(--stroke-strong) solid var(--color-border-interactive);outline-offset:var(--space-1)}
 .ligne.suite{margin-top:calc(var(--space-3) * -1)}
-.ligne.suite .avatar{visibility:hidden}
+.ligne.suite .avatar,.ligne.suite .avatar-lien{visibility:hidden}
 .ligne .avatar{flex:none}
 .ligne .avatar.fantome{background:var(--color-surface);border:var(--stroke-hair) solid var(--color-border-strong);color:var(--color-text-muted)}
 .ligne .avatar svg{width:var(--glyph);height:var(--glyph)}
+/* L'avatar ouvre le profil d'un auteur (§ 12.10.3) : un cliquable de plus, pas
+   une couleur de plus — le nom d'un auteur et son avatar restent sur l'encre. */
+.ligne .avatar-lien{flex:none;display:block}
 .ligne .corps{flex:1;min-width:0}
 .ligne .qui{margin:0;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:baseline;font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
+/* La cible du NOM atteint 44 px SANS agrandir le TEXTE — le même idiome que
+   .original summary (charte règle 4) : min-height centré, jamais un
+   padding qui pousserait la ligne suivante. */
+.ligne .nom-lien{display:inline-flex;align-items:center;min-height:var(--target-min);color:inherit;text-decoration:none}
 .ligne.suite .qui{display:none}
 .ligne .anonyme{display:inline-flex;align-items:center;gap:var(--space-1);font-size:var(--text-sm);font-weight:var(--font-weight-regular);color:var(--color-text-muted)}
 .ligne .anonyme svg{width:var(--glyph-inline);height:var(--glyph-inline)}
@@ -166,14 +177,17 @@ export const FEUILLE_DU_FIL = compacte(`
 .ligne .reagir svg{width:var(--glyph);height:var(--glyph)}
 .ligne.systeme{justify-content:center}
 .ligne.systeme .corps{flex:none;text-align:center;font-size:var(--text-sm);color:var(--color-text-muted)}
-.langue{display:inline-flex;align-items:center;gap:var(--space-1);padding:0 var(--space-1);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--color-primary)}
+${PASTILLE_DE_LANGUE}
 .original{margin-top:var(--space-1)}
 .original summary{display:inline-flex;align-items:center;gap:var(--space-1);min-height:var(--target-min);font-size:var(--text-sm);color:var(--color-primary);list-style:none;cursor:pointer}
 .original summary::-webkit-details-marker{display:none}
 .original summary svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .original p{margin:0;color:var(--color-text-muted);white-space:pre-wrap;overflow-wrap:anywhere}
 .citations{margin:var(--space-1) 0 0;padding:0;list-style:none;display:grid;gap:var(--space-2)}
-.citation{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-left:var(--space-1) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface)}
+.citation{display:block}
+.citation .saut{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-2) var(--space-3);border-left:var(--space-1) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface);color:inherit;text-decoration:none;transition:background-color 150ms}
+.citation a.saut[href]{border-left-color:var(--color-border-interactive)}
+.citation a.saut[href]:hover{background:var(--color-tint-primary)}
 .citation .vignette{display:flex;align-items:center;justify-content:center;flex:none;width:var(--avatar-small);height:var(--avatar-small);border-radius:var(--radius-xs);background:var(--color-bg-sunken);color:var(--color-text-muted);line-height:0}
 .citation[data-genre=story] .vignette{width:var(--avatar);height:var(--avatar)}
 .citation .vignette svg{width:var(--glyph-inline);height:var(--glyph-inline)}
@@ -182,16 +196,20 @@ export const FEUILLE_DU_FIL = compacte(`
 .citation .apercu{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-base)}
 .pieces{margin:var(--space-2) 0 0;padding:0;list-style:none;display:grid;gap:var(--space-2)}
 .pieces>li{position:relative;display:grid;gap:var(--space-2);min-width:0}
-.pieces .media{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-strong) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);text-decoration:none;color:var(--color-primary);font-size:var(--text-base);font-weight:var(--font-weight-medium)}
+.pieces .media{position:relative;display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-strong) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);text-decoration:none;color:var(--color-primary);font-size:var(--text-base);font-weight:var(--font-weight-medium)}
 .pieces .vignette{display:flex;align-items:center;justify-content:center;flex:none;line-height:0;color:var(--color-text-muted)}
 .pieces .vignette svg{width:var(--glyph);height:var(--glyph)}
 .pieces .etiquette{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--space-2);min-width:0}
 .pieces .nom-de-piece{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pieces .poids{color:var(--color-text-muted);font-weight:var(--font-weight-regular);font-size:var(--text-sm)}
-.pieces>li[data-genre=image] .media{flex-direction:column;align-items:stretch;gap:0;padding:0;overflow:hidden}
+.pieces>li[data-genre=image] .media,.pieces>li[data-genre=video] .media{flex-direction:column;align-items:stretch;gap:0;padding:0;overflow:hidden}
 .pieces>li[data-genre=image] .vignette{aspect-ratio:4/3;background:var(--color-bg-sunken)}
+.pieces>li[data-genre=video] .vignette{aspect-ratio:16/9;background:var(--color-bg-sunken)}
 .pieces>li[data-genre=image] .vignette svg{width:var(--glyph-large);height:var(--glyph-large)}
-.pieces>li[data-genre=image] .nom-de-piece{display:none}
+.pieces>li[data-genre=image] .nom-de-piece,.pieces>li[data-genre=video] .nom-de-piece{display:none}
+.media .lire{display:none}
+.pieces>li[data-genre=video] .media .lire{display:flex;align-items:center;justify-content:center;width:var(--action-height);height:var(--action-height);border-radius:var(--radius-pill);background:var(--color-primary);color:var(--color-on-primary);line-height:0}
+.pieces>li[data-genre=video] .media .lire svg{width:var(--glyph);height:var(--glyph)}
 .lecteur{position:relative;display:block}
 .lecteur>summary{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-3);border:var(--stroke-strong) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);list-style:none;cursor:pointer}
 .lecteur>summary::-webkit-details-marker{display:none}
@@ -201,14 +219,11 @@ export const FEUILLE_DU_FIL = compacte(`
 .lecteur .rail{flex:1;min-width:0;height:var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-interactive)}
 .lecteur .etiquette{flex:none}
 .lecteur .nom-de-piece{display:none}
-.pieces audio,.pieces video{display:block;width:100%;border-radius:var(--radius-lg);background:var(--color-bg-sunken)}
-.pieces video{aspect-ratio:16/9;height:auto}
-.pieces>li[data-genre=video] .lecteur>summary{flex-direction:column;justify-content:center;aspect-ratio:16/9;padding:var(--space-4);background:var(--color-bg-sunken)}
-.pieces>li[data-genre=video] .lecteur .lire{width:var(--action-height);height:var(--action-height)}
-.pieces>li[data-genre=video] .lecteur .lire svg{width:var(--glyph);height:var(--glyph)}
-.pieces>li[data-genre=video] .lecteur .rail{display:none}
+.pieces audio{display:block;width:100%;border-radius:var(--radius-lg);background:var(--color-bg-sunken)}
 .pieces>li[data-genre=image] .etiquette,.pieces>li[data-genre=video] .etiquette{position:absolute;left:var(--space-3);bottom:var(--space-3);margin:0;padding:0 var(--space-2);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-pill);background:var(--color-surface)}
-.pieces .transcription{margin:0;padding-left:var(--space-3);border-left:var(--stroke-strong) solid var(--color-border-interactive);font-size:var(--text-base)}
+.pieces .transcription{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;line-clamp:4;margin:0;padding-left:var(--space-3);border-left:var(--stroke-strong) solid var(--color-border-interactive);font-size:var(--text-base);overflow:hidden}
+.pieces .fiche{display:inline-flex;align-items:center;gap:var(--space-2);justify-self:start;min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-primary);text-decoration:none}
+.pieces .fiche svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .pieces .transcrit{display:flex;align-items:center;gap:var(--space-1);margin:0;font-size:var(--text-sm);color:var(--color-text-muted)}
 .pieces .transcrit-original{margin:0}
 .pieces .transcrit-original summary{display:inline-flex;align-items:center;gap:var(--space-1);min-height:var(--target-min);font-size:var(--text-sm);color:var(--color-primary);list-style:none;cursor:pointer}
@@ -216,7 +231,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .pieces .transcrit-original summary svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .pieces .transcrit-original p{margin:0;color:var(--color-text-muted);white-space:pre-wrap;overflow-wrap:anywhere}
 .citation .glyphe,.media .glyphe{display:none;line-height:0}
-.citation[data-genre=transfert] .glyphe[data-genre=transfert],.citation[data-genre=reponse] .glyphe[data-genre=reponse],.citation[data-genre=story] .glyphe[data-genre=story],.pieces>li[data-genre=image] .glyphe[data-genre=image],.pieces>li[data-genre=audio] .glyphe[data-genre=audio],.pieces>li[data-genre=video] .glyphe[data-genre=video],.pieces>li[data-genre=fichier] .glyphe[data-genre=fichier]{display:inline-flex}
+.citation[data-genre=transfert] .glyphe[data-genre=transfert],.citation[data-genre=reponse] .glyphe[data-genre=reponse],.citation[data-genre=story] .glyphe[data-genre=story],.pieces>li[data-genre=image] .glyphe[data-genre=image],.pieces>li[data-genre=audio] .glyphe[data-genre=audio],.pieces>li[data-genre=fichier] .glyphe[data-genre=fichier]{display:inline-flex}
 .reactions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-2) 0 0;padding:0;list-style:none}
 .reactions form{margin:0}
 .reaction{display:inline-flex;align-items:center;gap:var(--space-1);min-height:var(--target-min);min-width:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-pill);background:var(--color-surface);font:inherit;font-size:var(--text-sm);color:var(--color-text);cursor:pointer;transition:background-color 150ms,border-color 150ms,color 150ms}
@@ -225,7 +240,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .trou{margin:var(--space-2) 0;padding:var(--space-3);border:var(--stroke-strong) dashed var(--color-border-strong);border-radius:var(--radius-lg);text-align:center;font-size:var(--text-sm);color:var(--color-text-muted)}
 .trou a{display:inline-flex;align-items:center;min-height:var(--target-min);font-weight:var(--font-weight-medium)}
 .frappe-zone{order:2;margin-top:auto;min-height:var(--space-6);padding:0 var(--space-4)}
-.frappe{margin:0;font-size:var(--text-sm);font-style:italic;color:var(--color-primary)}
+${TRACE_DE_FRAPPE}
 .nouveaux{position:fixed;left:50%;bottom:calc(var(--action-height) + var(--space-8));transform:translateX(-50%);width:auto;z-index:3;background:var(--color-bg)}
 
 .composeur{order:3;display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--space-2);margin:0;padding:var(--space-3) var(--space-4) var(--space-4);background:var(--color-bg);border-top:var(--stroke-hair) solid var(--color-border-strong)}

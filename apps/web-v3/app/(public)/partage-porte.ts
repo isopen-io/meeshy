@@ -10,20 +10,20 @@ import {
   chargeDeLaStory,
   reponds,
   storiesVisibles,
-  storyLue,
+  partageLu,
   voisinage,
   type Recuperateur,
 } from '@/lib/api/publication';
-import { STORY } from '@/lib/contenu/story';
+import { type GenreServi } from '@/lib/contenu/partage';
 
 import {
-  adresseDeLaStory,
+  adresseDuPartage,
   CHAMP_DE_L_AIME,
   CHAMP_DE_LA_REPONSE,
   documentDeLInvitation,
-  documentDeLaStory,
+  documentDuPartage,
   documentIndisponible,
-} from './story-vue';
+} from '@/app/(public)/partage-vue';
 
 /**
  * LA PORTE DE `/stories/:id` — trois questions, dans cet ordre, et l'ordre est
@@ -46,24 +46,43 @@ import {
  * story et le voisinage ne dépendent pas les uns des autres : les enchaîner
  * multiplierait par trois la latence du seul aller-retour que cet écran paie
  * sur une 3G rurale. Le Prisme se descend APRÈS, sur la charge brute — c'est
- * pourquoi `lib/api/publication.ts` sépare `chargeDeLaStory` de `storyLue`.
+ * pourquoi `lib/api/publication.ts` sépare `chargeDeLaStory` de `partageLu`.
  *
  * `recuperer` est la MÊME couture que celle du tableau de bord : elle laisse un
  * témoin opposer un serveur à la porte sans lancer de serveur. Elle n'est
  * jamais fournie en production.
+ *
+ * **`maintenant` EST LA SECONDE COUTURE, ET POUR LA MÊME RAISON.** Une story a
+ * une ÉCHÉANCE (`expiresAt`) : la porte décide donc de ce qu'elle sert en
+ * lisant une horloge, et une horloge lue par `Date.now()` au fond du module est
+ * une entrée que le témoin ne peut pas fixer. Ses fixtures dataient — la suite
+ * a viré au rouge le 2026-09-03 à 05:00 UTC, sur un code que personne n'avait
+ * touché. Un témoin qui dépend du JOUR où on le rejoue ne garde rien : il
+ * annonce vert jusqu'à l'heure où il annonce rouge.
+ *
+ * Le défaut de ce genre ne se voit pas dans un diff, seulement dans le
+ * CALENDRIER — la couture est ce qui le rend impossible.
  */
 
 type Demande = {
+  /**
+   * LE GENRE SERVI. Cette porte s'appelait `stories/[id]/porte.ts` et posait
+   * `STORY` partout : servir un réel ou une humeur aurait demandé de la
+   * recopier deux fois, avec deux occasions de diverger. Le genre porte le
+   * vocabulaire, le préfixe d'adresse et le fait que le contenu se PARCOURE —
+   * c'est tout ce qui sépare les trois écrans (#4929).
+   */
+  readonly genre: GenreServi;
   readonly requete: Request;
   readonly id: string;
   readonly recuperer?: Recuperateur;
-  /** L'horloge, injectable : une story EXPIRE, et un témoin qui lit l'heure
-   *  réelle devient rouge à la date de sa fixture — sans qu'aucune ligne ait
-   *  changé (leçon 234i, l'horloge après la locale). */
+  /** L'horloge de la décision — injectée par les témoins, `Date.now()` en production.
+   *  Une story EXPIRE : un témoin qui lit l'heure réelle devient rouge à la date de
+   *  sa fixture sans qu'aucune ligne n'ait changé (#5021). */
   readonly maintenant?: number;
 };
 
-const invitation = (id: string): Response => rendu(documentDeLInvitation({ id }));
+const invitation = (genre: GenreServi, id: string): Response => rendu(documentDeLInvitation({ genre, id }));
 
 const langueDemandee = (requete: Request): string | null => {
   const valeur = new URL(requete.url).searchParams.get('lang');
@@ -84,36 +103,42 @@ type Charge =
  * rend telle quelle ; le POST la rend avec le refus PEINT et le texte saisi,
  * jamais perdu.
  */
-const charge = async ({ requete, id, recuperer, maintenant = Date.now() }: Demande): Promise<Charge> => {
+const charge = async ({ genre, requete, id, recuperer, maintenant = Date.now() }: Demande): Promise<Charge> => {
   const jeton = jetonDuLecteur(requete);
-  if (jeton === null) return { genre: 'reponse', reponse: invitation(id) };
+  if (jeton === null) return { genre: 'reponse', reponse: invitation(genre, id) };
 
   const [identite, chargee, visibles] = await Promise.all([
     moi({ jeton, recuperer }),
     chargeDeLaStory({ id, jeton, recuperer }),
-    storiesVisibles({ jeton, recuperer }),
+    // LE VOISINAGE N'EST DEMANDÉ QUE S'IL SE REND. Un réel et une humeur se
+    // lisent seuls : appeler `/social/posts` pour composer une barre que
+    // l'écran ne pose pas serait une requête payée par le lecteur pour rien
+    // (dimension 2), sur des réseaux où elle se compte.
+    genre.avecSegments ? storiesVisibles({ jeton, recuperer }) : Promise.resolve([]),
   ]);
 
   if (chargee.genre === 'session-expiree' || identite.genre === 'session-expiree') {
-    return { genre: 'reponse', reponse: invitation(id) };
+    return { genre: 'reponse', reponse: invitation(genre, id) };
   }
-  if (chargee.genre === 'introuvable') return { genre: 'reponse', reponse: rendu(documentIndisponible(), 404) };
+  if (chargee.genre === 'introuvable') return { genre: 'reponse', reponse: rendu(documentIndisponible(genre), 404) };
   if (chargee.genre === 'panne') return { genre: 'reponse', reponse: rendu(documentDePanne(), 503) };
 
   const lecteur: Lecteur | null = identite.genre === 'lecteur' ? identite.lecteur : null;
-  const story = storyLue({
+  const story = partageLu({
+    genre: genre.type,
     brut: chargee.brut,
     langues: languesDuLecteur(lecteur ?? {}),
     langueDemandee: langueDemandee(requete),
     maintenant,
     origine: baseDeLaPasserellePublique(),
   });
-  if (story === null) return { genre: 'reponse', reponse: rendu(documentIndisponible(), 404) };
+  if (story === null) return { genre: 'reponse', reponse: rendu(documentIndisponible(genre), 404) };
 
   return {
     genre: 'story',
     html: ({ erreur, brouillon, confirmation }) =>
-      documentDeLaStory({
+      documentDuPartage({
+        genre,
         story,
         voisinage: voisinage({ story, visibles }),
         maintenant,
@@ -124,7 +149,7 @@ const charge = async ({ requete, id, recuperer, maintenant = Date.now() }: Deman
   };
 };
 
-export const lisLaStory = async (demande: Demande): Promise<Response> => {
+export const lisLePartage = async (demande: Demande): Promise<Response> => {
   const lue = await charge(demande);
   if (lue.genre === 'reponse') return lue.reponse;
 
@@ -144,22 +169,22 @@ const texteDe = (formulaire: FormData | null, nom: string): string => {
  * commentaire — et le navigateur demanderait « voulez-vous renvoyer le
  * formulaire ? » sur un écran où la réponse « oui » duplique une parole.
  */
-const versLaStory = (id: string, confirme: boolean): Response =>
+const versLePartage = (genre: GenreServi, id: string, confirme: boolean): Response =>
   new Response(null, {
     status: 303,
     headers: {
-      location: `${adresseDeLaStory(id)}${confirme ? '?repondu=1' : ''}`,
+      location: `${adresseDuPartage(genre, id)}${confirme ? '?repondu=1' : ''}`,
       'cache-control': CACHE_PRIVE,
     },
   });
 
-export const soumetsALaStory = async (demande: Demande): Promise<Response> => {
+export const soumetsAuPartage = async (demande: Demande): Promise<Response> => {
   // Un formulaire venu d'un autre site ne poste RIEN : la garde précède la
   // lecture du corps, comme sur la porte de l'invité (leçon 451).
   if (origineEtrangere(demande.requete)) return refusDOrigine(demande.requete);
 
   const jeton = jetonDuLecteur(demande.requete);
-  if (jeton === null) return invitation(demande.id);
+  if (jeton === null) return invitation(demande.genre, demande.id);
 
   const formulaire = await champs(demande.requete);
   const brouillon = texteDe(formulaire, CHAMP_DE_LA_REPONSE);
@@ -168,12 +193,12 @@ export const soumetsALaStory = async (demande: Demande): Promise<Response> => {
   const issue =
     bascule === ''
       ? brouillon === ''
-        ? ({ genre: 'refus', message: STORY.vide, statut: 400 } as const)
+        ? ({ genre: 'refus', message: demande.genre.copie.vide, statut: 400 } as const)
         : await reponds({ id: demande.id, jeton, texte: brouillon, recuperer: demande.recuperer })
       : await aime({ id: demande.id, jeton, pose: bascule === '1', recuperer: demande.recuperer });
 
-  if (issue.genre === 'fait') return versLaStory(demande.id, bascule === '' );
-  if (issue.statut === 401) return invitation(demande.id);
+  if (issue.genre === 'fait') return versLePartage(demande.genre, demande.id, bascule === '');
+  if (issue.statut === 401) return invitation(demande.genre, demande.id);
 
   const lue = await charge(demande);
   if (lue.genre === 'reponse') return lue.reponse;

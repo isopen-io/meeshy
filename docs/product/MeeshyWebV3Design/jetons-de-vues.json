@@ -31,6 +31,14 @@
   "(apps/web-v3/e2e/visual/lib/serveurs.ts) reconnaît pour servir CET état-là — comme",
   "`lien-vivant` / `jeton-expire` séparent déjà les deux vues de `/l/:token`. `thread` est",
   "le fil du MEMBRE (`/chats/:cle`) ; le fil de l'INVITÉ est la vue `rights`, même module.",
+  "UN ÉTAT QUI VIT DANS LA CHAÎNE DE REQUÊTE (conception § 12.10.3). `profilMembre` est une",
+  "SURIMPRESSION sur le fil, pas une page : sa route est celle du fil PLUS `?profil=:membre`.",
+  "Elle déclare donc DEUX jetons — `cle`, la même conversation que `thread`, et `membre`, la",
+  "personne dont le profil s'ouvre — et c'est le SECOND qui la sépare de `thread` : sans lui,",
+  "les deux vues viseraient `/chats/equipe-lagos` et le refus « route partagée » tomberait à",
+  "bon droit. Un jeton de la chaîne de requête se déclare comme un jeton de chemin :",
+  "`motifJeton` de vues-comparables.mjs lit la route ENTIÈRE (c'est déjà le cas de `login`).",
+  "",
   "UN ÉTAT DE SESSION, DÉCLARÉ PAR VUE (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,",
   "`/chats/:id` — ne rend rien à un visiteur sans créance : elle redirige vers `/login`. Ce n'est",
   "pas un jeton de route qui la sépare d'une vue publique, c'est une SESSION. Une vue le déclare",
@@ -72,6 +80,11 @@
   },
   "rich": {
    "id": "fil-riche",
+   "@session": "membre"
+  },
+  "profilMembre": {
+   "cle": "equipe-lagos",
+   "membre": "u3",
    "@session": "membre"
   },
   "media": {

@@ -8,50 +8,21 @@ import MeeshySDK
 /// qui marchait.
 extension StickerPickerView {
 
-    var filteredEmojis: [String] { selectedCategory.emojis }
-
     // MARK: - Emoji
 
-    var emojiTab: some View {
-        VStack(spacing: 0) {
-            categoryTabs
-            emojiGrid
-        }
-    }
+    // `emojiTab`, `categoryTabs` et `filteredEmojis` sont partis au #5012 : le
+    // ruban de catégories est devenu une liste de sections, et `selectedCategory`
+    // n'a plus d'état à porter. Les laisser aurait donné trois vues qui compilent
+    // et que personne ne monte — une vue sans consommateur n'a aucun site où
+    // rougir (leçon 483).
 
-    private var categoryTabs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(StickerCategory.allCases, id: \.self) { category in
-                    Button {
-                        withAnimation(.spring(response: 0.25)) { selectedCategory = category }
-                        HapticFeedback.light()
-                    } label: {
-                        Text(category.icon)
-                            .font(.system(size: 22))
-                            .frame(width: 40, height: 36)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedCategory == category
-                                          ? Color.white.opacity(0.2) : Color.clear)
-                            )
-                    }
-                    // .plain obligatoire : le style par défaut rend les
-                    // glyphes emoji INVISIBLES dans la sheet (vécu it.72 —
-                    // onglets et grille vides à la 1re mise en service).
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-    }
-
-    private var emojiGrid: some View {
-        ScrollView {
+    /// La grille d'UNE catégorie — sans défilement propre depuis #5012 : les
+    /// huit catégories sont des sections d'une seule liste verticale.
+    func emojiGrid(_ category: StickerCategory) -> some View {
+        Group {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                       spacing: 8) {
-                ForEach(filteredEmojis, id: \.self) { emoji in
+                ForEach(category.emojis, id: \.self) { emoji in
                     Button {
                         onStickerSelected(emoji)
                         HapticFeedback.medium()
@@ -69,7 +40,6 @@ extension StickerPickerView {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .frame(maxHeight: 240)
     }
 
     // MARK: - « Mes stickers »
@@ -102,7 +72,10 @@ extension StickerPickerView {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)
             } else {
-                ScrollView {
+                // **Plus de défilement intérieur** (#5012) : les sections se
+                // parcourent dans UN défilement, et une grille bornée à 200 pt
+                // au milieu volerait le geste vertical de celui qui la contient.
+                Group {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
                               spacing: 8) {
                         ForEach(libraryItems) { item in
@@ -126,7 +99,6 @@ extension StickerPickerView {
                     }
                     .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 200)
             }
         }
         .padding(.horizontal, 12)

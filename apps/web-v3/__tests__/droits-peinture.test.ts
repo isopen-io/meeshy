@@ -18,6 +18,8 @@ const TEMPS_REEL = {
   passerelle: 'https://gate.test',
   actifs: {
     participate: { nom: 'participate.a.js', url: '/__v3/rt/participate.a.js', corps: '' },
+    liste: { nom: 'liste.a.js', url: '/__v3/rt/liste.a.js', corps: '' },
+    feed: { nom: 'feed.a.js', url: '/__v3/rt/feed.a.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };
@@ -32,6 +34,8 @@ const sers = (droits: Droits, tempsReel: EtatDuFil['tempsReel'] = TEMPS_REEL): H
     maintenant: 0,
     composeur: { genre: 'ouvert' },
     tempsReel,
+    plein: null,
+    profil: null,
   } satisfies EtatDuFil);
   document.body.innerHTML = html.slice(html.indexOf('<body>') + '<body>'.length, html.lastIndexOf('</body>'));
   const main = document.querySelector<HTMLElement>('main');

@@ -75,7 +75,7 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
         for (fichier, rappel) in [("ComposerDocumentSurface.swift", "onDeleteBackgroundSound"),
                                   ("ComposerSceneSoundHeader.swift", "onDelete")] {
             let code = try source(fichier)
-            XCTAssertTrue(code.contains("ComposerSoundDeletionMenu"),
+            XCTAssertTrue(code.contains("ComposerSoundActionsMenu"),
                           "\(fichier) monte la pastille du fond sans son menu de retrait")
             XCTAssertTrue(code.contains("supprimer: \(rappel)"),
                           "\(fichier) monte le menu sans le brancher sur le retrait du FOND")
@@ -110,10 +110,10 @@ final class ComposerBackgroundSoundRemovalTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSoundDeletionMenu.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSoundActionsMenu.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(code.contains("struct ComposerSoundDeletionMenu"))
-        XCTAssertFalse(code.contains("private struct ComposerSoundDeletionMenu"),
+        XCTAssertTrue(code.contains("struct ComposerSoundActionsMenu"))
+        XCTAssertFalse(code.contains("private struct ComposerSoundActionsMenu"),
                        "le rendre privé le retirerait à la surface scène, qui n'en a pas d'autre")
     }
 

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-reseau.d.mts';
-import { routesDuCompte } from './bouchon-compte';
+import { APPAREILS_DU_BOUCHON, routesDuCompte } from './bouchon-compte';
 import {
   placeDeLInvite,
   porteDeLHote,
@@ -20,6 +20,7 @@ import {
 } from './bouchon-fil';
 import { creanceSelonLaPasserelle, lienParDefaut, routesDuLien, type LienDeBouchon } from './bouchon-lien';
 import {
+  AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
   CONVERSATION_RICHE,
   INVITE,
@@ -72,6 +73,7 @@ import { bouchonSocket, magasinDeReactions, type BouchonSocket, type Emission, t
 export const RACINE_V3 = join(__dirname, '..', '..', '..');
 
 export {
+  AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
   CONVERSATION_RICHE,
   CREATEUR_DU_LIEN,
@@ -159,8 +161,29 @@ export type PasserelleDeBouchon = {
    * d'un MEMBRE qui annonce son `seq` rend `hasGap` — jamais celui d'un invité,
    * dont le curseur vaut 0 par la loi du serveur (§ 7).
    */
-  readonly sync: { curseur: number };
+  readonly sync: { curseur: number; conversations: Readonly<Record<string, unknown>>[] };
   readonly creuseUnTrou: () => void;
+  /**
+   * Les préférences du lecteur PAR conversation, telles que
+   * `PUT /user-preferences/conversations/:id` les écrit et que `GET
+   * /conversations` les RESERT dans `userPreferences[0]` — l'état partagé que
+   * la ligne `UserConversationPreferences` tient en base.
+   *
+   * Exposée pour la même raison que `lien` et `sync` : un spec qui vient d'en
+   * poser une doit pouvoir remettre le monde d'aplomb pour le suivant. La
+   * passerelle NE FILTRE PAS sur `isArchived` — c'est au client de le faire
+   * (voir `bouchon-compte.ts`), et c'est ce que la suite mesure.
+   */
+  readonly preferences: Map<string, { isMuted?: boolean; isArchived?: boolean }>;
+  /**
+   * Les conversations que le lecteur a masquées pour lui — `DELETE
+   * …/delete-for-me`, une porte à SENS UNIQUE que la passerelle applique bien,
+   * elle, dans son `whereClause` (`core-list.ts:176-190`). Exposée pour la
+   * remettre d'aplomb : un spec qui franchit cette porte la ferme pour TOUS
+   * ceux qui le suivent, et un témoin voisin devient rouge pour une raison qui
+   * n'est pas la sienne (mesuré).
+   */
+  readonly masquees: Set<string>;
   /** Les réactions, l'état ABSOLU partagé par la route et par le socket. */
   readonly reactions: MagasinDeReactions;
   /** Les pièces téléversées, par identifiant — servies par `GET /attachments/file/*`. */
@@ -203,7 +226,7 @@ export const passerelleDeBouchon = async (options?: {
   const lien = lienParDefaut();
   const place = placeDeLInvite();
   const invite = { id: INVITE.id, nom: INVITE.nom, session: INVITE.session, place };
-  const sync = { curseur: 0 };
+  const sync = { curseur: 0, conversations: [] as Readonly<Record<string, unknown>>[] };
   const reactions = magasinDeReactions(REACTIONS_INITIALES);
   const pieces = new Map<string, PieceDeBouchon>();
   const presences = Object.assign(new Map<string, boolean>(PRESENCES_INITIALES), {
@@ -269,7 +292,22 @@ export const passerelleDeBouchon = async (options?: {
       inconnus: options?.inconnus ?? [],
     },
   });
-  const duCompte = routesDuCompte({ creanceDe, lecteurSansRien: options?.lecteurSansRien ?? false });
+  const preferences = new Map<string, { isMuted?: boolean; isArchived?: boolean }>();
+  const masquees = new Set<string>();
+  const profil: Record<string, string> = {};
+  const appareils = APPAREILS_DU_BOUCHON.map((appareil) => ({ ...appareil }));
+  const liensCrees: Record<string, unknown>[] = [];
+  const conversationsCreees: { id: string; titre: string }[] = [];
+  const duCompte = routesDuCompte({
+    creanceDe,
+    lecteurSansRien: options?.lecteurSansRien ?? false,
+    preferences,
+    masquees,
+    profil,
+    appareils,
+    liensCrees,
+    conversationsCreees,
+  });
 
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';
@@ -299,7 +337,12 @@ export const passerelleDeBouchon = async (options?: {
       reponse.end();
       return;
     }
-    const octets = requete.method === 'POST' || requete.method === 'PATCH' ? await corpsDe(requete) : Buffer.alloc(0);
+    // PUT et DELETE portent eux aussi un corps : `PUT /user-preferences/…`
+    // envoie les champs à changer, et le lire ici est ce qui permet au bouchon
+    // de TENIR l'état que la passerelle tient (leçon : un bouchon qui répond
+    // 200 sans écrire fait passer un client qui n'a rien changé).
+    const avecCorps = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(requete.method ?? 'GET');
+    const octets = avecCorps ? await corpsDe(requete) : Buffer.alloc(0);
     const appel: { -readonly [K in keyof AppelRecu]: AppelRecu[K] } = { methode: requete.method ?? 'GET', chemin, a: Date.now(), corps: octets.toString('utf8'), statut: null };
     journal.push(appel);
     const ecrisLEnTete = reponse.writeHead.bind(reponse);
@@ -322,12 +365,22 @@ export const passerelleDeBouchon = async (options?: {
     // le compte (`/links` nu) — comme Fastify les distingue par leur route, pas par un préfixe.
     if (await duFil({ requete, reponse, url, corps: octets, json, erreur })) return;
     if (await duLien({ requete, url, corps: octets, json, erreur })) return;
-    if (duCompte({ requete, url, json })) return;
+    if (duCompte({ requete, url, corps: octets, json })) return;
 
     json({ success: true, data: { clickId: 'clic-1' } });
   });
 
-  const bouchon = bouchonSocket({ serveur, placesActives, identifiants, reactions, presences });
+  const bouchon = bouchonSocket({
+    serveur,
+    placesActives,
+    identifiants,
+    reactions,
+    presences,
+    // Les rooms que `_joinUserConversations` joint à l'authentification : les
+    // deux conversations que `GET /conversations` sert au membre, et le fil
+    // riche. Sans elles, la LISTE n'entendrait aucune frappe.
+    conversationsDuMembre: [conversationId, AUTRE_CONVERSATION.id, CONVERSATION_RICHE.id],
+  });
 
   const port = await portLibre();
   await ecoute(serveur, port);
@@ -354,6 +407,8 @@ export const passerelleDeBouchon = async (options?: {
     creuseUnTrou: () => {
       sync.curseur += SEUIL_DE_TROU + 1;
     },
+    preferences,
+    masquees,
     reactions,
     pieces,
     deposeUnePiece: ({ nom, type, octets, dureeMs }) => {

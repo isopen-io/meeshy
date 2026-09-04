@@ -12,7 +12,7 @@ import {
 } from '@/lib/api/fil';
 import { cleDeLien, cleDuLien, effaceLaPlace, jetonDuCookie, poseSession, type CleDeLien } from '@/lib/api/guest-session';
 import { rafraichis, raisonDeFermeture, type Droits } from '@/lib/api/invite';
-import { BANDEAUX, FIL } from '@/lib/contenu/fil';
+import { BANDEAUX, ETATS_DU_TEMPS_REEL, FIL } from '@/lib/contenu/fil';
 
 import { prendsLeComposeur, type ControleurDuComposeur } from './composeur';
 import { defilement, type Defilement } from './defilement';
@@ -29,13 +29,14 @@ import {
   type Peintre,
 } from './fil-peinture';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
+import { prendsLePleinEcran } from './plein-ecran';
 import {
+  doitRattraper,
   PERIODE_DU_BATTEMENT_MS,
   POLITIQUE_DE_RECONNEXION,
-  SEUIL_DE_RATTRAPAGE_MS,
 } from './reconnect-policy';
 import { clesDeLaReserve, purgeLesAutres, reserve, type Reserve } from './reserve';
-import { litLeDelta, urlDeSync } from './sync/delta-client';
+import { demandeLeDelta } from './sync/delta-client';
 
 /**
  * LE MODULE DE PARTICIPATION (conception § 12.4) — le seul JavaScript
@@ -227,9 +228,21 @@ type Contexte = {
   accuseProgramme: ReturnType<typeof setTimeout> | null;
 };
 
+/**
+ * LE POINT D'ÉTAT — l'attribut ET son nom, jamais l'un sans l'autre.
+ *
+ * L'attribut seul ne disait rien à qui n'a pas d'yeux : le libellé hors-écran
+ * naissait rempli par le serveur (`ETATS_DU_TEMPS_REEL.inconnu`) et n'était
+ * plus jamais touché, si bien qu'un fil parfaitement vivant continuait
+ * d'annoncer « pas encore actif » à un lecteur d'écran. Les deux se posent
+ * donc ensemble, depuis la table que le serveur a lue.
+ */
 const point = (ctx: Contexte, etat: 'connecte' | 'creux' | 'hors-ligne'): void => {
   const noeud = ctx.main.querySelector<HTMLElement>('.etat');
-  if (noeud !== null) noeud.dataset.etat = etat;
+  if (noeud === null) return;
+  noeud.dataset.etat = etat;
+  const nom = noeud.querySelector<HTMLElement>('.hors-ecran');
+  if (nom !== null) nom.textContent = ETATS_DU_TEMPS_REEL[etat];
 };
 
 const bandeau = (ctx: Contexte, identifiant: string, visible: boolean): void => {
@@ -508,13 +521,15 @@ const noteLeSeq = (ctx: Contexte, charge: unknown): void => {
 const rattrape = async (ctx: Contexte): Promise<void> => {
   const depuis = ctx.checkpoint ?? F.dernierInstantServi(ctx.etat);
   if (depuis === null) return;
-  const reponse = await fetch(
-    urlDeSync({ base: ctx.config.passerelle, depuis, scope: ctx.config.conversation, ...(ctx.seq === null ? {} : { seq: ctx.seq }) }),
-    { headers: { accept: 'application/json', ...entetesDeCreance(ctx.creance) }, cache: 'no-store' },
-  ).catch(() => null);
-  if (reponse === null || !reponse.ok) return;
-  const delta = litLeDelta(await reponse.json().catch(() => null));
-  if (delta === null) return;
+  const issue = await demandeLeDelta({
+    base: ctx.config.passerelle,
+    depuis,
+    scope: ctx.config.conversation,
+    seq: ctx.seq,
+    entetes: entetesDeCreance(ctx.creance),
+  });
+  if (issue.genre !== 'delta') return;
+  const delta = issue.delta;
   ctx.checkpoint = delta.checkpoint;
   if (delta.checkpointSeq !== null) ctx.seq = Math.max(ctx.seq ?? 0, delta.checkpointSeq);
   let etat = ctx.etat;
@@ -721,9 +736,9 @@ const branche = (ctx: Contexte, socket: Socket): void => {
   });
   ecoute('conversation:joined', () => {
     point(ctx, 'connecte');
-    const absence = ctx.deconnecteDepuis === null ? 0 : Date.now() - ctx.deconnecteDepuis;
+    const rattraper = doitRattraper({ deconnecteDepuis: ctx.deconnecteDepuis, maintenant: Date.now() });
     ctx.deconnecteDepuis = null;
-    if (absence >= SEUIL_DE_RATTRAPAGE_MS) void rattrape(ctx);
+    if (rattraper) void rattrape(ctx);
     void videLaFile(ctx);
   });
   ecoute('conversation:join-error', (charge) => {
@@ -905,6 +920,9 @@ const surTransition = (ctx: Contexte) => (transition: TransitionDeCycle): void =
 const demarre = async (): Promise<void> => {
   const main = document.querySelector<HTMLElement>('main[data-participation="fil"]');
   if (main === null) return;
+  // AVANT toute créance : une surimpression servie doit se fermer à Échap même
+  // sur un fil dont l'authentification a échoué (`plein-ecran.ts`).
+  prendsLePleinEcran();
   const config = configuration(main);
   if (config === null) return;
   const creance = creanceDe(config);

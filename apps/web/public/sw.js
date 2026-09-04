@@ -94,6 +94,18 @@ function log(...args) {
 // § 12.3 — servie par la v3 avec un formulaire sans JavaScript ; il entre ici
 // AVANT le routeur (§ 4.4 bis), sinon le shell legacy de `/chat/[id]` sorti du
 // cache recouvrirait la modale de choix chez tout visiteur revenant.
+// HUIT PREFIXES AJOUTES LE 2026-09-03, et la raison merite d'etre dite : ces
+// ecrans etaient LIVRES, testes et mesures depuis des jours, et sur AUCUN
+// chemin de bascule. Le worker les interceptait donc chez tout visiteur
+// revenant, et le routeur ne pouvait pas les reclamer sans les servir aux
+// seuls navigateurs neufs. Six d'entre eux (`/contacts`, `/links`, `/search`,
+// `/notifications`, `/post`, `/stories`) etaient dans ce trou depuis leur
+// livraison ; deux (`/reels`, `/moods`) y entrent avec elle.
+//
+// C'est la PREMIERE marche du § 4.4 bis — declarer, DEPLOYER, puis reclamer au
+// routeur. L'invariant « le worker legacy connait TOUT ce que la zone sert »
+// (`scripts/lib/v3-routage.mjs`) la garde desormais : un ecran servi par
+// `apps/web-v3/app` et absent de cette liste fait rougir le gate.
 const V3_ZONE_PREFIXES = [
   '/__v3',
   '/l',
@@ -107,6 +119,17 @@ const V3_ZONE_PREFIXES = [
   '/signup',
   '/chats',
   '/chat',
+  '/contacts',
+  '/links',
+  '/search',
+  '/notifications',
+  '/post',
+  '/stories',
+  '/reels',
+  '/moods',
+  '/settings',
+  '/feed',
+  '/composer',
 ];
 
 function belongsToV3Zone(pathname) {

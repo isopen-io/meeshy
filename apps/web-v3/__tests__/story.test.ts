@@ -2,15 +2,17 @@
  * @jest-environment node
  */
 
-import { lisLaStory, soumetsALaStory } from '@/app/(public)/stories/[id]/porte';
+import { lisLePartage, soumetsAuPartage } from '@/app/(public)/partage-porte';
 import {
   documentDeLInvitation,
   documentDeLaStory,
+  documentDuPartage,
   documentIndisponible,
   type EtatDeLaStory,
-} from '@/app/(public)/stories/[id]/story-vue';
+} from '@/app/(public)/partage-vue';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/lib/api/cookies';
-import { storyLue, voisinage, type Story, type Voisine } from '@/lib/api/publication';
+import { GENRE_HUMEUR, GENRE_REEL, GENRE_STORY, type GenreServi } from '@/lib/contenu/partage';
+import { partageLu, voisinage, type Story, type Voisine } from '@/lib/api/publication';
 import { STORY } from '@/lib/contenu/story';
 
 /**
@@ -48,7 +50,18 @@ const brute = (attributs: Record<string, unknown> = {}): Record<string, unknown>
   content: 'Three charts, two surprises. The review lands tomorrow.',
   originalLanguage: 'en',
   createdAt: '2026-09-02T09:00:00.000Z',
-  expiresAt: '2026-09-03T05:00:00.000Z',
+  // UNE DATE RELATIVE, ET C'EST UN CORRECTIF. Cette échéance était écrite en
+  // absolu — `2026-09-03T05:00:00Z` —, donc vraie le jour où le témoin a été
+  // écrit et FAUSSE à partir de 05:00 UTC le lendemain : `lisLePartage` lit
+  // l'horloge RÉELLE (`porte.ts:100`), et la story se mettait à échoir pour de
+  // bon. Deux témoins verts la veille rendaient 404 le jour même, sans qu'une
+  // ligne du dépôt ait changé.
+  //
+  // Ce que le témoin veut dire est « une story qui n'a PAS échu », pas « une
+  // story qui échoit à cinq heures » : il le dit désormais. Les deux épreuves
+  // qui veulent l'inverse passent leur propre date, absolue et PASSÉE — un
+  // repère qui, lui, ne peut pas se périmer.
+  expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   authorId: 'u2',
   author: { id: 'u2', displayName: 'Ibrahim', username: 'ibrahim' },
   translations: {
@@ -65,12 +78,13 @@ const lue = (
   langues: readonly string[] = ['fr'],
   langueDemandee: string | null = null,
 ): Story => {
-  const story = storyLue({ brut: brute(attributs), langues, langueDemandee, maintenant: MAINTENANT, origine: ORIGINE });
+  const story = partageLu({ genre: 'STORY', brut: brute(attributs), langues, langueDemandee, maintenant: MAINTENANT, origine: ORIGINE });
   if (story === null) throw new Error('story non lue');
   return story;
 };
 
 const etat = (story: Story, attributs: Partial<EtatDeLaStory> = {}): EtatDeLaStory => ({
+  genre: GENRE_STORY,
   story,
   voisinage: voisinage({ story, visibles: [] }),
   maintenant: MAINTENANT,
@@ -107,11 +121,16 @@ describe('le Prisme sur une story', () => {
   it('sert l’original — sans rien annoncer — quand l’origine gagne à son rang', () => {
     const story = lue({}, ['en', 'fr']);
     expect(story.texte).toBe('Three charts, two surprises. The review lands tomorrow.');
-    expect(story.langueServie).toBeNull();
+    // `langueServie` porte la langue du texte AFFICHÉ, l'original compris —
+    // c'est ce qui permet de poser `lang="en"` sur de l'anglais servi dans un
+    // document français. « Rien n'est annoncé » se lit désormais sur l'égalité
+    // avec `langueOriginale`, pas sur un `null` qui confondait deux questions.
+    expect(story.langueServie).toBe(story.langueOriginale);
   });
 
   it('sert l’original quand aucune traduction ne matche', () => {
-    expect(lue({}, ['yo']).langueServie).toBeNull();
+    const sansTraduction = lue({}, ['yo']);
+    expect(sansTraduction.langueServie).toBe(sansTraduction.langueOriginale);
   });
 
   it('n’offre que les langues RÉELLEMENT servies, l’origine comprise', () => {
@@ -141,7 +160,10 @@ describe('la langue explicitement demandée', () => {
   it('rend l’original quand elle DÉSIGNE la langue d’origine', () => {
     const story = lue({}, ['fr'], 'en');
     expect(story.texte).toBe('Three charts, two surprises. The review lands tomorrow.');
-    expect(story.langueServie).toBeNull();
+    // C'EST LE CAS QUE LE SÉLECTEUR DE LANGUE PRODUIT : le lecteur demande la
+    // langue d'ORIGINE, et l'original est servi. Il doit porter son `lang=` —
+    // sans quoi un document français ferait lire l'anglais à voix française.
+    expect(story.langueServie).toBe('en');
   });
 
   it('retombe sur le prisme quand aucune traduction ne la porte — jamais un refus', () => {
@@ -154,7 +176,7 @@ describe('la langue explicitement demandée', () => {
 describe('une story que la v3 ne sert pas', () => {
   it('refuse une story ÉCHUE — le balayeur ne passe qu’après, le client filtre', () => {
     expect(
-      storyLue({
+      partageLu({ genre: 'STORY',
         brut: brute({ expiresAt: '2026-09-02T11:59:00.000Z' }),
         langues: ['fr'],
         langueDemandee: null,
@@ -166,13 +188,13 @@ describe('une story que la v3 ne sert pas', () => {
 
   it('refuse un post qui n’est pas une story — l’adresse dit `stories`', () => {
     expect(
-      storyLue({ brut: brute({ type: 'POST' }), langues: ['fr'], langueDemandee: null, maintenant: MAINTENANT, origine: ORIGINE }),
+      partageLu({ genre: 'STORY', brut: brute({ type: 'POST' }), langues: ['fr'], langueDemandee: null, maintenant: MAINTENANT, origine: ORIGINE }),
     ).toBeNull();
   });
 
   it('refuse une story supprimée', () => {
     expect(
-      storyLue({
+      partageLu({ genre: 'STORY',
         brut: brute({ deletedAt: '2026-09-02T10:00:00.000Z' }),
         langues: ['fr'],
         langueDemandee: null,
@@ -189,7 +211,7 @@ describe('le média d’une story', () => {
       media: [{ id: 'p1', fileUrl: '/api/v1/attachments/file/2026/scene.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920, alt: 'Trois graphiques' }],
     });
     expect(story.medias).toEqual([
-      { url: `${ORIGINE}/api/v1/attachments/file/2026/scene.jpg`, genre: 'image', alt: 'Trois graphiques', largeur: 1080, hauteur: 1920 },
+      { url: `${ORIGINE}/api/v1/attachments/file/2026/scene.jpg`, genre: 'image', alt: 'Trois graphiques', largeur: 1080, hauteur: 1920, affiche: null },
     ]);
   });
 });
@@ -263,7 +285,13 @@ describe('le document d’une story', () => {
    */
   it('annonce la traduction ET donne le retour à l’original', () => {
     const html = documentDeLaStory(etat(lue()));
-    expect(html).toContain(STORY.traduitDe('English'));
+
+    // EN TOUTES LETTRES, ET EN FRANÇAIS. Ce témoin composait sa phrase depuis
+    // `STORY.traduitDe('English')` — il suivait donc la source au lieu de la
+    // juger, et serait resté vert sur « Traduit de English », qui n'est pas du
+    // français. La langue se nomme dans la langue du document
+    // (`lib/contenu/langues.ts`), et la phrase se décline.
+    expect(html).toContain('Traduit de l’anglais');
     expect(html).toContain('href="/stories/s1?lang=en"');
   });
 
@@ -306,7 +334,7 @@ describe('le document d’une story', () => {
 });
 
 describe('l’invitation servie au visiteur sans session', () => {
-  const html = documentDeLInvitation({ id: 's1' });
+  const html = documentDeLInvitation({ genre: GENRE_STORY, id: 's1' });
 
   it('garde l’adresse demandée pour y revenir', () => {
     expect(html).toContain('href="/login?returnUrl=%2Fstories%2Fs1"');
@@ -337,6 +365,27 @@ const soumission = (chemin: string, champs: Readonly<Record<string, string>>, en
   });
 };
 
+/**
+ * **L'HORLOGE EST INJECTÉE, JAMAIS LUE.** Une story a une échéance : la porte
+ * compare `expiresAt` à une horloge, et tant qu'elle lisait `Date.now()`, ces
+ * témoins étaient datés — la suite a viré au rouge le 2026-09-03 à 05:00 UTC,
+ * l'heure de la fixture, sur un code que personne n'avait touché.
+ *
+ * `MAINTENANT` est la MÊME horloge que celle des témoins de vue ci-dessus, si
+ * bien que la fixture reste ABSOLUE des deux côtés. Rendre `expiresAt` relatif
+ * (`Date.now() + 1 h`) aurait déplacé la pourriture d'un jour et fait dépendre
+ * le verdict de l'ordre d'exécution : ce qu'on veut n'est pas une échéance qui
+ * fuit devant l'horloge, c'est une horloge qui ne bouge pas.
+ *
+ * Les deux passe-plats existent pour qu'aucun site d'appel ne puisse l'oublier
+ * — un témoin ajouté demain hériterait sinon du défaut d'aujourd'hui.
+ */
+const lisLa = (demande: Omit<Parameters<typeof lisLePartage>[0], 'genre'>): Promise<Response> =>
+  lisLePartage({ genre: GENRE_STORY, maintenant: MAINTENANT, ...demande });
+
+const soumetsA = (demande: Omit<Parameters<typeof soumetsAuPartage>[0], 'genre'>): Promise<Response> =>
+  soumetsAuPartage({ genre: GENRE_STORY, maintenant: MAINTENANT, ...demande });
+
 type Appel = { readonly methode: string; readonly chemin: string; readonly corps: string };
 
 const passerelle = (parChemin: Readonly<Record<string, () => Response>>) => {
@@ -364,7 +413,7 @@ const MONDE = {
 describe('la porte de la story', () => {
   it('sert l’INVITATION sans un seul appel à la passerelle quand aucun jeton n’accompagne la demande', async () => {
     const jamais = passerelle({});
-    const reponse = await lisLaStory({ requete: requete('/stories/s1'), id: 's1', recuperer: jamais.recuperer });
+    const reponse = await lisLa({ requete: requete('/stories/s1'), id: 's1', recuperer: jamais.recuperer });
 
     expect(reponse.status).toBe(200);
     expect(jamais.appels).toEqual([]);
@@ -373,7 +422,7 @@ describe('la porte de la story', () => {
 
   it('sert l’INVITATION — jamais une erreur — quand la passerelle refuse le jeton', async () => {
     const monde = passerelle({ ...MONDE, '/api/v1/posts/s1': () => json({}, 401) });
-    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer });
+    const reponse = await lisLa({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer });
 
     expect(reponse.status).toBe(200);
     expect(await reponse.text()).toContain('/login?returnUrl=%2Fstories%2Fs1');
@@ -381,7 +430,7 @@ describe('la porte de la story', () => {
 
   it('sert la story au lecteur connecté, dans sa langue', async () => {
     const monde = passerelle(MONDE);
-    const reponse = await lisLaStory({
+    const reponse = await lisLa({
       requete: requete('/stories/s1', AVEC_JETON),
       id: 's1',
       recuperer: monde.recuperer,
@@ -401,13 +450,44 @@ describe('la porte de la story', () => {
     const absente = passerelle({ ...MONDE, '/api/v1/posts/s1': () => json({ success: false, error: 'Post not found' }, 404) });
     const echue = passerelle({ ...MONDE, '/api/v1/posts/s1': () => json({ success: true, data: brute({ expiresAt: '2026-01-01T00:00:00.000Z' }) }) });
 
-    const premiere = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: absente.recuperer });
-    const seconde = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: echue.recuperer });
+    const premiere = await lisLa({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: absente.recuperer });
+    const seconde = await lisLa({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: echue.recuperer });
 
     expect(premiere.status).toBe(404);
     expect(seconde.status).toBe(404);
     expect(await premiere.text()).toBe(await seconde.text());
-    expect(documentIndisponible()).toContain(STORY.indisponible.titre);
+    expect(documentIndisponible(GENRE_STORY)).toContain(STORY.indisponible.titre);
+  });
+
+  /**
+   * **L'ÉCHÉANCE SE MESURE À L'HORLOGE QU'ON DONNE À LA PORTE.** Une MÊME
+   * fixture, deux horloges : vivante une minute avant, indisponible une minute
+   * après. C'est le témoin qui ROUGIT si l'horloge redevient `Date.now()` —
+   * celui de la story échue, lui, resterait vert (sa fixture est morte depuis
+   * janvier, quelle que soit l'horloge).
+   */
+  it('lit l’échéance à l’horloge INJECTÉE, jamais à celle du jour où on la rejoue', async () => {
+    const echeance = Date.parse('2026-09-03T05:00:00.000Z');
+    // Fixture ABSOLUE et PROPRE à ce témoin — le `brute()` par défaut de `MONDE`
+    // expire désormais un jour APRÈS l'instant réel du test (fixture relative,
+    // § brute()), donc il ne peut plus servir à vérifier une échéance à une
+    // date PRÉCISE : ce témoin fixe la sienne, comme le fait déjà « échue ».
+    const monde = { ...MONDE, '/api/v1/posts/s1': () => json({ success: true, data: brute({ expiresAt: new Date(echeance).toISOString() }) }) };
+    const avant = await lisLa({
+      requete: requete('/stories/s1', AVEC_JETON),
+      id: 's1',
+      recuperer: passerelle(monde).recuperer,
+      maintenant: echeance - 60_000,
+    });
+    const apres = await lisLa({
+      requete: requete('/stories/s1', AVEC_JETON),
+      id: 's1',
+      recuperer: passerelle(monde).recuperer,
+      maintenant: echeance + 60_000,
+    });
+
+    expect(avant.status).toBe(200);
+    expect(apres.status).toBe(404);
   });
 
   it('dessine la panne quand la passerelle ne répond pas', async () => {
@@ -417,18 +497,18 @@ describe('la porte de la story', () => {
         throw new Error('réseau');
       },
     };
-    const reponse = await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: muette.recuperer });
+    const reponse = await lisLa({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: muette.recuperer });
     expect(reponse.status).toBe(503);
   });
 
   it('demande la story ET le voisinage en UN aller-retour, jamais en deux', async () => {
     const monde = passerelle(MONDE);
-    await lisLaStory({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer });
+    await lisLa({ requete: requete('/stories/s1', AVEC_JETON), id: 's1', recuperer: monde.recuperer });
 
     expect(monde.appels.map((appel) => appel.chemin).sort()).toEqual([
       '/api/v1/auth/me',
       '/api/v1/posts/s1',
-      '/api/v1/social/posts?scope=stories&limit=50',
+      '/api/v1/social/posts?scope=stories&projection=tray&limit=50',
     ]);
   });
 });
@@ -436,8 +516,7 @@ describe('la porte de la story', () => {
 describe('ce qu’un formulaire de la story fait', () => {
   it('poste la réponse en COMMENTAIRE et revient par une redirection (Post/Redirect/Get)', async () => {
     const monde = passerelle({ ...MONDE, '/api/v1/posts/s1/comments': () => json({ success: true, data: { id: 'c1' } }, 201) });
-    const reponse = await soumetsALaStory({
-      requete: soumission('/stories/s1', { reponse: 'Hâte de voir ça.' }),
+    const reponse = await soumetsA({ requete: soumission('/stories/s1', { reponse: 'Hâte de voir ça.' }),
       id: 's1',
       recuperer: monde.recuperer,
     });
@@ -449,18 +528,17 @@ describe('ce qu’un formulaire de la story fait', () => {
 
   it('bascule l’aime par les DEUX routes que la passerelle expose', async () => {
     const pose = passerelle({ ...MONDE, '/api/v1/posts/s1/like': () => json({ success: true, data: {} }) });
-    await soumetsALaStory({ requete: soumission('/stories/s1', { aime: '1' }), id: 's1', recuperer: pose.recuperer });
+    await soumetsA({ requete: soumission('/stories/s1', { aime: '1' }), id: 's1', recuperer: pose.recuperer });
     expect(pose.appels.at(-1)?.methode).toBe('POST');
 
     const retire = passerelle({ ...MONDE, '/api/v1/posts/s1/like': () => json({ success: true, data: {} }) });
-    await soumetsALaStory({ requete: soumission('/stories/s1', { aime: '0' }), id: 's1', recuperer: retire.recuperer });
+    await soumetsA({ requete: soumission('/stories/s1', { aime: '0' }), id: 's1', recuperer: retire.recuperer });
     expect(retire.appels.at(-1)?.methode).toBe('DELETE');
   });
 
   it('refuse un formulaire venu d’un autre site, sans rien poster', async () => {
     const monde = passerelle(MONDE);
-    const reponse = await soumetsALaStory({
-      requete: soumission('/stories/s1', { reponse: 'Bonjour' }, { 'sec-fetch-site': 'cross-site' }),
+    const reponse = await soumetsA({ requete: soumission('/stories/s1', { reponse: 'Bonjour' }, { 'sec-fetch-site': 'cross-site' }),
       id: 's1',
       recuperer: monde.recuperer,
     });
@@ -474,8 +552,7 @@ describe('ce qu’un formulaire de la story fait', () => {
       ...MONDE,
       '/api/v1/posts/s1/comments': () => json({ success: false, error: 'Invalid request' }, 400),
     });
-    const reponse = await soumetsALaStory({
-      requete: soumission('/stories/s1', { reponse: 'Bravo' }),
+    const reponse = await soumetsA({ requete: soumission('/stories/s1', { reponse: 'Bravo' }),
       id: 's1',
       recuperer: monde.recuperer,
       maintenant: MAINTENANT,
@@ -489,8 +566,7 @@ describe('ce qu’un formulaire de la story fait', () => {
 
   it('renvoie à l’invitation quand la session a expiré entre la lecture et l’envoi', async () => {
     const monde = passerelle({ ...MONDE, '/api/v1/posts/s1/comments': () => json({}, 401) });
-    const reponse = await soumetsALaStory({
-      requete: soumission('/stories/s1', { reponse: 'Bravo' }),
+    const reponse = await soumetsA({ requete: soumission('/stories/s1', { reponse: 'Bravo' }),
       id: 's1',
       recuperer: monde.recuperer,
     });
@@ -498,3 +574,72 @@ describe('ce qu’un formulaire de la story fait', () => {
     expect(await reponse.text()).toContain('/login?returnUrl=%2Fstories%2Fs1');
   });
 });
+
+/**
+ * LES DEUX AUTRES GENRES — le réel et l'humeur, servis par le MÊME lecteur.
+ *
+ * Ces témoins ne rejouent PAS ce que la story prouve déjà : la descente du
+ * Prisme, le `404` indistinguable, l'invitation sans appel sont éprouvés
+ * au-dessus, sur un chemin de code qui est désormais littéralement le même.
+ * Ce qu'ils gardent est ce que le partage du lecteur pourrait CASSER — et qui
+ * ne se verrait nulle part ailleurs :
+ *
+ *   1. le genre est un VERROU, pas une étiquette : demander un réel sur
+ *      l'adresse d'une humeur rend INTROUVABLE, sinon `/moods/:id` servirait
+ *      n'importe quelle publication à qui en devine l'identifiant ;
+ *   2. le vocabulaire suit le genre — un réel ne dit jamais « story » ;
+ *   3. les adresses composées (`?lang=`, la cible du formulaire) portent la
+ *      base du genre, sans quoi répondre à un réel posterait vers une story ;
+ *   4. la barre de segments n'existe QUE là où l'on se déplace.
+ */
+describe('un réel et une humeur, servis par le lecteur de la story', () => {
+  const luAvecGenre = (genre: GenreServi, type: string): Story | null =>
+    partageLu({
+      genre: genre.type,
+      brut: brute({ type }),
+      langues: ['fr'],
+      langueDemandee: null,
+      maintenant: MAINTENANT,
+      origine: ORIGINE,
+    });
+
+  it.each([
+    [GENRE_REEL, 'REEL'],
+    [GENRE_HUMEUR, 'STATUS'],
+  ])('lit le genre qu’on lui demande (%#)', (genre, type) => {
+    expect(luAvecGenre(genre, type)).not.toBeNull();
+  });
+
+  it.each([
+    [GENRE_REEL, 'STATUS'],
+    [GENRE_HUMEUR, 'REEL'],
+    [GENRE_REEL, 'STORY'],
+    [GENRE_HUMEUR, 'POST'],
+  ])('REFUSE tout autre genre — un verrou, pas une étiquette (%#)', (genre, type) => {
+    expect(luAvecGenre(genre, type)).toBeNull();
+  });
+
+  it('dit « réel », jamais « story » — et compose ses adresses sur SA base', () => {
+    const reel = luAvecGenre(GENRE_REEL, 'REEL');
+    if (reel === null) throw new Error('le réel devait se lire');
+
+    const html = documentDuPartage({ ...etat(reel), genre: GENRE_REEL });
+
+    expect(html).toContain('Réel de Ibrahim');
+    expect(html).toContain('href="/reels/s1?lang=en"');
+    expect(html).toContain('action="/reels/s1"');
+    // Le vocabulaire de la story n'a pas fui avec le lecteur.
+    expect(html).not.toContain('Story de');
+    expect(html).not.toContain('/stories/s1');
+  });
+
+  it('ne pose AUCUNE barre de segments — un réel et une humeur se lisent seuls', () => {
+    const humeur = luAvecGenre(GENRE_HUMEUR, 'STATUS');
+    if (humeur === null) throw new Error('l’humeur devait se lire');
+
+    expect(documentDuPartage({ ...etat(humeur), genre: GENRE_HUMEUR })).not.toContain('class="segments"');
+    // La story, elle, la garde : c'est le seul genre qui se PARCOURT.
+    expect(documentDuPartage(etat(lue()))).toContain('class="segments"');
+  });
+});
+

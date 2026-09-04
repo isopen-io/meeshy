@@ -280,7 +280,29 @@ nonisolated struct BubbleContent: Equatable {
     let isBlurred: Bool                    // gates le composant de blur reveal
     let isViewOnce: Bool
     let isPinned: Bool
-    let isForwarded: Bool
+    /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
+    ///
+    /// `nil` ⇒ le message n'a pas été transféré. Un booléen à côté d'une
+    /// attribution serait la paire redondante que le dépôt proscrit ; ici
+    /// l'absence EST le fait, et `isForwarded` n'en est qu'une lecture.
+    ///
+    /// **Pourquoi la valeur est résolue en amont et non par la peau.** Ce champ
+    /// portait `isForwarded: Bool`, et les trois peaux n'en tiraient pas la même
+    /// chose : la bulle appelait `ForwardBadgePolicy.attribution(for:)` sur le
+    /// `Message` qu'elle avait sous la main, la rangée plate ne l'avait PAS et
+    /// retombait sur `.anonymous`. Le doc-comment de `FocalRow` nommait
+    /// l'écart et son motif — « écart signalé, pas une seconde résolution
+    /// inventée » —, et le repli était le bon : jamais celui qui nommerait
+    /// quelqu'un. Mais ce qui manquait était en AMONT, pas dans la peau.
+    ///
+    /// Une règle de CONFIDENTIALITÉ résolue à deux endroits est une règle qui
+    /// divergera : la liste blanche de `ForwardBadgePolicy` échoue FERMÉ, et
+    /// une peau qui la contourne pour « faire pareil » ouvrirait la fuite que
+    /// la liste existe pour fermer. Un seul site résout, trois peaux rendent.
+    let forwardAttribution: ForwardAttribution?
+
+    /// Lecture de commodité — dérivée, jamais stockée à côté.
+    var isForwarded: Bool { forwardAttribution != nil }
     let editedAt: Date?
     let isEditSaving: Bool
     let hasEditHistory: Bool
@@ -373,7 +395,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned
-            && lhs.isForwarded == rhs.isForwarded
+            && lhs.forwardAttribution == rhs.forwardAttribution
             && lhs.editedAt == rhs.editedAt
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory

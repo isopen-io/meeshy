@@ -110,6 +110,101 @@ nonisolated enum ComposerLowZone: Equatable {
     }
 }
 
+/// **La ZONE CANONIQUE — ce que le bas de la scène peint hors outil, et ce qui
+/// s'efface quand un outil s'ouvre** (#5010, directive porteur 2026-09-03).
+///
+/// > « lorsqu'on affiche les options d'un outil il faut cacher les éléments
+/// > permanents de la zone canonique pour afficher ces outils ! »
+///
+/// ## Ce que la règle du dessus ne pouvait pas dire
+///
+/// `ComposerLowZone.resolve` arbitre entre les options d'un outil et la bande
+/// contextuelle : deux occupants d'une MÊME place. Elle ne dit rien des
+/// éléments qui vivent SOUS cette place et qui, eux, restaient peints — la
+/// rangée de portes et le pied des références. L'auteur ouvrait un outil et
+/// ses réglages se partageaient le bas avec deux rangées qui ne le
+/// concernaient plus.
+///
+/// L'inventaire mesuré au moment d'écrire cette règle :
+///
+/// | élément | gouverné avant #5010 ? |
+/// |---|---|
+/// | options d'outil / bande | oui (`ComposerLowZone.resolve`) |
+/// | jetons d'objet | oui (`ComposerObjectChips.isServed`) |
+/// | rangée de portes (#4072) | oui — **par construction**, voir ci-dessous |
+/// | pied des références (#5002) | **non** — le seul trou réel |
+///
+/// ## La rangée de portes N'EST PAS dans cet inventaire, et c'est mesuré
+///
+/// Le corps de l'issue la comptait parmi les éléments non gouvernés, sur la foi
+/// de son doc-comment qui la déclare « permanente » (#4072). La mesure dit
+/// l'inverse : `lowToolRow` ÉCHANGE son contenu selon `railMode` — outil
+/// ouvert, elle peint les contrôleurs de cet outil ; sinon, les portes. Les
+/// portes disparaissent donc déjà, et ce qui reste à leur place EST l'interface
+/// de l'outil.
+///
+/// > **L'y inscrire aurait caché les contrôleurs de l'outil qu'on venait
+/// > d'ouvrir** — un « correctif » qui casse, appliqué à du code correct, sur
+/// > la foi d'un doc-comment plutôt que d'une lecture. Le mot « permanente »
+/// > décrit la PLACE, pas son contenu ; c'est cette ambiguïté qui a trompé
+/// > l'inventaire, et le doc-comment de #4072 la lève dans le même lot.
+///
+/// Ce type ne gouverne donc que ce qui est peint EN PLUS de la place que
+/// l'outil réclame — et il n'y en a que deux.
+///
+/// ## Pourquoi un type, et pas `!toolIsOpen` recopié trois fois
+///
+/// Parce que la troisième copie diverge. C'est la leçon que ce fichier porte
+/// déjà : trois surfaces sont mortes d'un coup pour avoir lu la présence d'une
+/// VUE au lieu de la question qu'elles posaient.
+///
+/// Et parce qu'une fonction qui rendrait `!toolIsOpen` en ignorant son premier
+/// paramètre ne déciderait RIEN. Ce que celle-ci décide est l'APPARTENANCE :
+/// tout ce que le bas peint n'est pas de la zone canonique. L'en-tête du son de
+/// fond (#5001) vit AU-DESSUS de la carte et garde sa propre porte
+/// (`ComposerSceneSoundTrace.served`) — l'inscrire ici l'aurait fait céder une
+/// place que les options d'outil ne réclament pas.
+nonisolated enum ComposerCanonicalZone {
+
+    /// Ce que le bas de la scène peint quand aucun outil n'est ouvert.
+    ///
+    /// **Le `switch` de `yieldsToTool` est exhaustif** : un quatrième élément
+    /// ne compilera pas tant qu'il n'aura pas dit s'il cède la place. C'est la
+    /// question qu'on oublie en ajoutant une rangée — et les deux « non » du
+    /// tableau ci-dessus sont ce que coûte de l'oublier.
+    enum Element: String, CaseIterable, Sendable {
+        /// Le pied des hashtags et mentions référencées (#5002) — le seul
+        /// élément que personne ne gouvernait.
+        case references
+        /// Les jetons de l'objet sélectionné (#4073, vue `1c`). Il cédait
+        /// déjà ; ce qui change est qu'il cède au MÊME endroit que son voisin.
+        case objectChips
+    }
+
+    /// **Cet élément cède-t-il la place aux options d'un outil ?**
+    ///
+    /// Les trois cèdent aujourd'hui. La fonction existe quand même, et ce n'est
+    /// pas une précaution : elle est le SITE où un futur élément dira qu'il ne
+    /// cède pas, avec sa raison — au lieu de l'écrire dans un `body`, où
+    /// personne ne pourra l'éprouver.
+    static func yieldsToTool(_ element: Element) -> Bool {
+        switch element {
+        // Il LIT ce que la publication emporte — une lecture permanente, donc
+        // exactement le genre d'élément que la directive vise.
+        case .references: return true
+        // Il réglait déjà l'objet sélectionné et cédait déjà : la règle ne
+        // change pas son sort, elle lui donne le même site que son voisin.
+        case .objectChips: return true
+        }
+    }
+
+    /// La question que les sites de montage posent. Ils n'écrivent plus
+    /// `!toolIsOpen` : ils demandent si LEUR élément est servi.
+    static func isServed(_ element: Element, toolIsOpen: Bool) -> Bool {
+        !(toolIsOpen && yieldsToTool(element))
+    }
+}
+
 /// **La bande contextuelle de la scène.** Montée SOUS le canvas et AU-DESSUS de
 /// la description, ce qui donne au bas de l'écran un dégradé de niveaux du
 /// modèle : l'objet (les rails), la scène (cette bande), la slide (la

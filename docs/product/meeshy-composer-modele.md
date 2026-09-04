@@ -140,6 +140,62 @@ Les deux peuvent coexister sur une même publication sans se contredire — l'un
 l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais être décrit comme
 « posant un lieu » : il n'en pose aucun.
 
+### Deux bandes encadrent la carte, et elles ne qualifient PAS la même chose
+
+Depuis #5001 et #5002, la carte de scène est encadrée de deux bandes. Elles se
+ressemblent — même gouttière, même bord gauche aligné sur le dessin, même geste
+(toucher ⇒ la feuille correspondante). **Leur portée est pourtant opposée**, et
+rien à l'écran ne le dit :
+
+| | ce que la bande qualifie | où vit la donnée | change en changeant de slide |
+|---|---|---|---|
+| **au-dessus** — note · spectre · crédit · durée | le **son de fond de CETTE scène** (plan `background`, « UN visuel et UN son ») | `MeeshySlide` courante | **oui** |
+| **en dessous** — hashtags · mentions référencées | des métadonnées de la **PUBLICATION** entière | dérivées de `documentText`, partagées par toutes les slides | **non** |
+
+C'est le comportement JUSTE — le § ci-dessus et le contrat le disent tous les
+deux : la porte d'un hashtag « ouvre le sélecteur de la publication », et
+`CanvasV3Migration` tient qu'une mention est « une MÉTADONNÉE, pas un objet ».
+Mais la symétrie visuelle affirme une symétrie de sens qui n'existe pas : en
+faisant défiler ses scènes, l'utilisateur voit la bande haute changer et la
+basse rester, sans qu'aucun signe n'ait annoncé pourquoi.
+
+> **Deux surfaces qui se ressemblent affirment qu'elles parlent de la même
+> chose.** Le vocabulaire, ici, n'est pas dans les mots — il est dans la
+> RESSEMBLANCE. Une bande qui encadre la carte se lit comme parlant de la carte ;
+> celle du bas parle de tout ce qui l'entoure.
+
+Ce que le modèle tranche : les deux portées sont **justes** et ne bougent pas.
+Ce qu'il ne tranche PAS : s'il faut les distinguer à l'œil, et comment. C'est une
+décision de design, ouverte en `décision-produit` — pas un défaut à corriger
+d'initiative, parce qu'un correctif inventé ici figerait un choix qui appartient
+au porteur.
+
+### Comment un FRÈRE apprend où est la carte — les deux clés de préférence
+
+La carte de scène est **ajustée à son ratio puis CENTRÉE** dans un canvas de
+hauteur infinie. Ses bords ne sont donc pas ceux de son parent, et l'écart varie
+avec le ratio comme avec l'écran. Trois mécanismes coexistent pour le franchir,
+et **ils ne s'emploient pas dans les mêmes cas** — c'est la distinction qui a
+coûté deux diagnostics faux :
+
+| ce qu'on veut poser | mécanisme | pourquoi |
+|---|---|---|
+| un contenu SUR le plateau, aligné au dessin (rails, trace du son) | `ComposerRailGeometry.sceneBottomInset` / `sceneLeadingInset`, appliqués en **overlay** | l'overlay connaît la géométrie du canvas qu'il recouvre ; il ne paie **aucun** espacement de pile |
+| un FRÈRE de la pile (le pied des références) | `ComposerSceneCardLeadingKey` et `ComposerSceneCardBottomKey`, deux `PreferenceKey` publiées par le lecteur de géométrie du canvas et lues en `@State` par la surface | un frère ne voit pas la géométrie du canvas ; il faut la lui REMONTER |
+| un contenu DANS la carte (la description) | rien à franchir | il est déjà dans le repère du dessin |
+
+> **Une pile ne voit pas le VIDE de ses enfants, seulement leurs cadres.** Un
+> frère posé sous un canvas `maxHeight: .infinity` se range sous le CADRE, donc
+> sous le letterbox — 77 pt mesurés au 2026-09-03, la moitié basse exacte du
+> centrage. Aucun réordonnancement n'y change rien : il n'y a pas de frère à
+> déplacer, il y a du vide à franchir.
+
+**Et une gouttière n'est pas un espacement de pile.** Un overlay ne paie que la
+gouttière ; un frère paie la gouttière ET le `spacing` du `VStack`. Le haut et le
+bas d'une même carte peuvent donc afficher le même écart par deux chemins
+différents (mesuré : 14 pt des deux côtés, dont 6 + 8 en bas) — les confondre
+double l'écart au premier réglage.
+
 ### Les trois plans
 `background` (le fond : UN visuel, et UN son) · `content` (le porteur) · `foreground` (ce qui se pose dessus, ordonné par `z`).
 
@@ -280,6 +336,89 @@ Qui exécute la projection — le meuble, ou la porte — est l'objet de **#4733
 (« le meuble publie la story par un second chemin »), non arbitré à ce jour. Ce
 paragraphe décrit ce qui EST et ce que toute forme devra porter ; il ne tranche
 pas #4733, et ne doit pas être lu comme le faisant.
+
+## 1 bis-2. `storyEffects` est un NOM DE CHAMP, pas un format (mesure 2026-09-03)
+
+Question posée par le porteur : *« storyEffects est encore d'actualité dans cette
+nouvelle version ? On a plus migré vers les MeeshySceneObject avec tous les
+détails d'effet, start, end, transition d'entrée et de sortie ? »*
+
+La réponse tient en une phrase et vaut d'être écrite ici, parce que le nom du
+champ suggère le contraire de ce qui s'y trouve : **la migration a eu lieu À
+L'INTÉRIEUR du champ.** `storyEffects` est le nom de la colonne et de la clé du
+fil ; son CONTENU est un document **canvas v3**, et la passerelle refuse tout le
+reste.
+
+| couche | ce qui porte la scène | mesure |
+|---|---|---|
+| le fil | clé `storyEffects`, contenu **canvas v3** | `routes/posts/core.ts:100` — `if (!isCanvasV3(storyEffects))` refuse, puis `CanvasV3Schema.safeParse` |
+| le contrat | `ObjectV3Schema` | `packages/shared/types/canvas-v3.ts` |
+| iOS, en mémoire | `StoryEffects` (forme v1) | `StoryModels.swift:962` |
+| iOS, à l'encodage | **toujours v3** | `StoryEffects.encode` → `CanvasV3(migrating: self)` (`StoryModels.swift:1290`) |
+| iOS, le vocabulaire d'objet | `MeeshySceneObject`, **somme à cinq cas** — `text` · `media` · `sticker` · `place` · `audio` | `Models/MeeshySceneObject.swift:56` |
+
+Le pont est **bidirectionnel et sans mémoire** : l'encodage part TOUJOURS du
+runtime courant, jamais du `canvasV3` reçu — une composition neuve et une story
+éditée émettent donc l'une comme l'autre l'état réel du canvas.
+
+### Ce qu'un objet porte, exactement
+
+Neuf champs, et il faut les citer pour clore la question des « détails d'effet » :
+
+`id` · `kind` · `anchor` · `plane` (`bg`/`content`/`fg`) · `z` ·
+`transform { scale, rotation, opacity }` · `timing? { start, end, keyframes }` ·
+`locale?` · `payload`
+
+Donc : **`start` et `end` EXISTENT**, portés par `timing`, et l'entrée d'un objet
+dans la timeline n'est pas un ajout de contrat.
+
+### Les transitions : elles EXISTENT, une couche plus haut, et sans vocabulaire partagé
+
+> **Correction d'une mesure fausse écrite dans ce document le 2026-09-03.** J'y
+> avais affirmé « aucune transition d'entrée ni de sortie n'est modélisée », sur
+> la foi d'un `grep -n "transition"` rendant zéro dans `packages/shared/types/`.
+> Le motif était SENSIBLE À LA CASSE et ratait `clipTransitions`. La phrase est
+> restée committée moins d'une heure ; elle est fausse et voici l'état réel.
+
+**Un OBJET n'a pas de transition** — c'est le seul point que l'affirmation
+fausse avait juste. Ses neuf champs portent `timing { start, end, keyframes }` :
+des bornes, pas une manière d'apparaître.
+
+**Une SCÈNE en a trois**, et elles sont vivantes de bout en bout :
+
+| champ | ce qu'il porte | qui le produit | qui le rend |
+|---|---|---|---|
+| `opening` | l'entrée de la scène | `viewModel.openingEffect` (composer iOS) | iOS (`StoryViewerView+Canvas`, `+Content`), Android (`CanvasV3Projection`), web (`story-transforms`) |
+| `closing` | la sortie | `viewModel.closingEffect` | idem |
+| `clipTransitions` | les fondus entre clips adjacents, **30 au plus** | `TimelineViewModel`, `VideoCompositor` | iOS, Android (`StoryClipTransitionResolver`), web (crossfade) |
+
+Le vocabulaire côté client est `StoryTransitionEffect` — **quatre** cas :
+`fade` · `zoom` · `slide` · `reveal`.
+
+### Ce qui, en revanche, n'existe VRAIMENT pas : leur définition PARTAGÉE
+
+Le contrat les transporte **opaques** :
+
+```ts
+opening: z.record(z.string(), z.unknown()).optional(),
+closing: z.record(z.string(), z.unknown()).optional(),
+clipTransitions: z.array(z.record(z.string(), z.unknown())).max(30).optional(),
+```
+
+`z.unknown()` — le contrat garantit qu'un objet passe, jamais ce qu'il contient.
+Le vocabulaire des quatre effets est donc défini **trois fois côté client**
+(Swift `StoryTransitionEffect`, Kotlin `StoryClipTransition`, TypeScript dans
+`story-transforms`) et **nulle part** dans `packages/shared`.
+
+> C'est la forme exacte que ce dépôt a déjà payée trois fois sur le Prisme : une
+> règle réécrite par chaque client diverge sans qu'aucun témoin ne tombe, parce
+> que rien ne les compare. Ici le risque est plus discret encore — le contrat
+> ACCEPTE tout, donc un cinquième effet ajouté par un seul client voyage
+> intact jusqu'aux deux autres, qui l'ignorent en silence.
+
+Ce qui reste à décider n'est donc pas « faut-il des transitions » mais **« faut-il
+que le contrat les CONNAISSE »** — un lot de contrat, distinct du rognage
+temporel que `timing` couvre déjà.
 
 ## 1 ter. Ce que chaque nom devient SOUS le composer
 
@@ -549,6 +688,211 @@ Trois façons de fermer le trou, non exclusives, par coût croissant :
 Tant que (3) n'est pas tranchée, **la charge reste une convention, jamais un
 contrat** — et tout lot qui y ajoute une clé doit la porter à la main sur chaque
 couche qui recompose.
+
+## 6 ter. La frontière SDK ↔ app : un vocabulaire de VERBES (mesure 2026-09-03)
+
+Le § 6 bis mesure où la structure d'une publication est connue. Celui-ci mesure
+**comment on la modifie** — question distincte, et dont la réponse n'était écrite
+nulle part alors que le compilateur la fait respecter.
+
+### La règle, telle qu'elle est réellement appliquée
+
+| | ce qui est exposé | portée |
+|---|---|---|
+| l'ÉTAT (`StoryComposerViewModel.currentEffects`) | la LECTURE seule | `public internal(set)` |
+| le protocole `StoryComposerProviding` | rien, hors du SDK | `internal` |
+| les OPÉRATIONS | ~42 verbes | `public func` |
+
+**L'app ne peut pas écrire dans les effets. Elle appelle des verbes** —
+`addText`, `addSticker`, `addLocation`, `deleteElement`, `duplicateElement`,
+`bringForward`, `sendBackward`, `toggleBackground`, `updateTextContent`,
+`moveElement`… — chacun tenant les invariants que la mutation directe
+contournerait (un seul fond par slide, le nettoyage des champs legacy, la
+cohérence du `zIndex`).
+
+Ce n'est pas une convention documentée puis oubliée : `public internal(set)` la
+fait respecter à la compilation. C'est la meilleure sorte de règle — celle qu'on
+ne peut pas enfreindre par distraction.
+
+> Cette frontière est la forme concrète, pour le composer, de la règle de partage
+> du § « SDK Purity » : des briques aux paramètres opaques dans le SDK, la
+> décision produit chez l'app. Un verbe dit *comment* ; l'app décide *quand* et
+> *où*.
+
+### Les DEUX corps de `POST /posts` divergent par CONCEPTION (mesure 2026-09-03)
+
+`docs/product/api-simplification/social.md` compte **cinq sites** qui construisent
+le corps de `POST /posts`, « pour deux types de corps distincts
+(`CreatePostRequest`, `CreateStoryRequest`) », et prescrit de « réunir ces
+symboles » avant toute bascule de route. Le document ne dit pas CE QUI diverge ;
+mesuré ici, parce que le chiffre brut induit en erreur.
+
+| | champs |
+|---|---|
+| `CreatePostRequest` | **18** |
+| `CreateStoryRequest` | **12** |
+| en propre à la story | **aucun** — c'est un sous-ensemble STRICT |
+| en propre au post | `moodEmoji` · `location` · `audioUrl` · `audioDuration` · `mobileTranscription` · `discoverabilityPrecision` |
+
+Six champs manquants a l'air d'une perte. **Ce n'en est pas une** : pour une
+story, ces informations vivent DANS `storyEffects`, pas à côté.
+
+| champ absent du corps story | où il vit pour une story |
+|---|---|
+| `location` | un `StoryLocationObject` posé sur la scène (`addLocation` remplit `currentEffects.locationObjects`) — le § « Ce qui appartient à la PUBLICATION » dit exactement pourquoi les deux ne sont pas le même lieu |
+| `mobileTranscription` | `StoryEffects.voiceTranscriptions: [StoryVoiceTranscription]?` |
+| `audioUrl` · `audioDuration` | un `audioPlayerObject` de la scène, avec son plan et sa durée |
+| `moodEmoji` | une humeur n'est pas une scène — le champ n'a pas d'emploi ici |
+
+> **Une différence de cardinalité n'est pas une divergence.** Le corps d'une story
+> est plus court parce que la scène porte ce que le post met à plat, et unifier
+> les deux ajouterait au chemin story six champs structurellement redondants — un
+> second endroit où écrire le lieu, avec la question « lequel gagne ? » en prime.
+
+Ce que la réunion des cinq symboles doit viser est donc **un corps unique dont les
+champs de mise à plat sont optionnels**, pas la fusion des deux formes à
+l'identique. La distinction se perd facilement : elle ne se voit qu'en demandant,
+pour chaque champ absent, *où va cette information quand elle existe* — et pas en
+comparant deux listes.
+
+### Le piège : une capacité absente derrière un vocabulaire qui la suggère
+
+Le lot #5018 a buté sur une absence que rien ne signalait : **aucun verbe ne
+disait « pose cet objet là ».** L'absence était masquée par un trio qui en a
+l'air — `beginDrag` / `updateDrag` / `endDrag`. Ces trois-là ne portent qu'un
+état ÉPHÉMÈRE (`activeDrag`), et `endDrag()` se contente de le remettre à `nil` :
+**il ne commite aucune position.** Un appelant qui cherche « comment déplacer »
+trouve trois fonctions de glissement et conclut que le sujet est couvert.
+
+> **Une capacité absente derrière un vocabulaire qui la suggère coûte plus cher
+> qu'une capacité absente tout court : on ne la cherche pas deux fois.** Le
+> premier jet du correctif a donc essayé d'écrire directement dans
+> `currentEffects` — refusé par le compilateur, et à juste titre.
+
+`moveElement(id:to:)` comble le trou
+(`StoryComposerViewModel+Placement.swift`). Il borne la position à [0, 1] : un
+objet posé hors cadre serait injoignable, ce qui est pire que mal placé.
+
+### Ce que cette mesure ne dit pas
+
+Elle ne dit pas si les ~42 verbes sont les BONS, ni s'il en manque d'autres. Elle
+dit qu'il en manquait au moins un, et que son absence était invisible depuis
+l'app. La question « quel geste de l'app n'a pas son verbe ? » se pose surface
+par surface, et n'a été posée qu'une fois.
+
+## 6 quater. Qui REND ce que le composer produit (méthode et résultats, 2026-09-03)
+
+Le § 6 bis mesure où la structure d'une publication est connue ; le § 6 ter, comment
+on la modifie. Celui-ci répond à la troisième question, et c'est celle qui a rendu
+le plus : **un champ que le composer PRODUIT est-il rendu par les trois lecteurs ?**
+
+### La méthode
+
+Pour chaque champ du contrat, trois questions dans cet ordre — et l'ordre compte,
+parce que chacune peut clore l'enquête :
+
+1. **le contrat le porte-t-il ?** (`canvas-v3.ts`)
+2. **un client le PRODUIT-il ?** — sans producteur, l'absence de rendu ne gêne personne
+3. **chaque client le REND-il ?** — c'est la seule question qui décrit ce que l'utilisateur voit
+
+> Le crible par comptage de fichiers (`grep -ril <champ> | wc -l`) **repère les
+> zéros, jamais les présences.** Un `opening` compte douze fichiers côté web
+> alors que le web ne peint aucune transition de scène : `webComposerOpening`,
+> « opening tag » et le reste polluent le compte. **Un zéro mérite une enquête ;
+> un non-zéro ne prouve rien.**
+
+### Ce que la méthode a trouvé
+
+**Les transitions de scène (#5043).** `opening` / `closing` sont produites par le
+composer iOS et transportées par le contrat. iOS les REND ; Android les PROJETTE
+puis les jette (aucune vue ne les consomme) ; le web ne les rend pas et déclare
+le report avec une condition — « tant qu'aucun lecteur ne le rendra » — **qui est
+fausse depuis qu'iOS les rend**. Un auteur qui pose une ouverture « reveal » la
+voit sur un client sur trois.
+
+**Le `thumbHash` (#5047).** Le contrat le décrit comme « le placeholder que quatre
+surfaces affichent avant l'arrivée du média ». iOS et Android le peignent ; le web
+ne le connaît pas — et n'a **aucun** état de chargement dans `CanvasV3Scene`, dont
+le rendu se garde par `if (media.url && …)`. Média absent, rien n'est peint. Comme
+la passerelle refuse tout ce qui n'est pas v3, c'est le chemin de TOUTES les
+stories du web.
+
+### Ce que ces deux cas ont en commun
+
+Aucun des deux n'est une panne : rien ne casse, rien ne remonte, aucun témoin ne
+tombe. **Le contrat accepte, le client ignore, l'auteur ne sait pas.** C'est la
+forme que le Prisme a déjà payée trois fois — et elle se répète ici parce que la
+même cause est en place : **une valeur transportée sans que personne ne réponde de
+son rendu.**
+
+Un vocabulaire partagé (§ #5043) ne suffirait pas à lui seul : il ferait que les
+clients parlent de la même chose, pas qu'ils la peignent. Ce qui manque en propre
+est une matrice **champ × client × rendu**, tenue, et dont une case vide soit une
+DÉCISION écrite plutôt qu'un oubli.
+
+## 6 quinquies. iOS et web : DEUX structures, UNE loi (mesure 2026-09-04)
+
+Le composer existe des deux côtés, et leurs fichiers ne se ressemblent pas — 73
+sources iOS contre 9 web. **Le compte ne dit rien** : ce qu'il faut mesurer est
+si la même LOI produit le même comportement, pas si les mêmes fichiers existent.
+
+### Ce qui DIVERGE, et qui n'est qu'un nom
+
+| surface | iOS | web |
+|---|---|---|
+| document | `ComposerDocumentSurface.swift` | `ComposerDocumentSurface.tsx` |
+| humeur | `ComposerMoodSurface.swift` | `ComposerMoodSurface.tsx` |
+| **scène** | `ComposerSceneSurface.swift` | **`v2/StoryComposer.tsx`** — autre nom, autre lignée |
+| repost | *aucune* — passe par le MEUBLE (`e7052cc6e3`) | `ComposerRepostSurface.tsx` — surface dédiée |
+
+Le mot « scène » est **absent** du composer web. Il faut le savoir avant de
+conclure, comme j'ai failli le faire, que le web ne compose pas de scènes : il en
+compose, et #4913 le dit (« alors que le composer web en produit »). C'est une
+divergence de VOCABULAIRE, pas de capacité — et elle vit dans une lignée `v2/`
+que le milestone de parité (#56) suit déjà.
+
+### Ce qui CONVERGE, et c'est le point important
+
+La loi 5 du repost — *« le repost miroite ; changer de format est l'ANCRAGE »* —
+est tenue des DEUX côtés, par deux structures opposées :
+
+- **web** : une surface dédiée qui remplace `RepostModal`, laquelle n'offrait
+  aucun choix de format ;
+- **iOS** : le meuble, avec la loi écrite dans `ComposerIntent` (« Le format d'un
+  repost MIROITE celui de sa source ») et ses témoins nommés
+  (`test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint`).
+
+> **Une loi partagée sous deux structures est saine ; deux structures sans loi
+> partagée ne le sont pas.** La question à poser d'un composer à l'autre n'est
+> donc pas « ont-ils les mêmes fichiers ? » mais « la même règle produit-elle le
+> même comportement ? ». Le premier critère aurait signalé une divergence là où
+> il n'y en a pas, et l'aurait ratée là où elle compte.
+
+## 6 sexies. Android ÉCRIT aussi — et son port a dérivé (mesure 2026-09-04)
+
+Les mesures précédentes regardaient Android en LECTURE. Il écrit également :
+`PostApi.createStory(@Body CreateStoryRequest)`, appelé par `PostRepository` et
+par le videur d'outbox hors ligne.
+
+Son type se déclare **« port of `CreateStoryRequest` (ServiceModels.swift) »** —
+et il lui manque **cinq** champs : `mentions` · `visibilityUserIds` ·
+`mediaAlt` · `mediaCaption` · `allowSoundExtraction`. (Il en porte trois que
+Swift range ailleurs — `effectFlags`, `moodEmoji`, `parentId` — ce qui est une
+autre découpe, pas un manque.)
+
+**Le coût actuel est nul** : Android n'a ni sélecteur d'audience nommée pour une
+publication, ni mentions de publication (les siennes ne servent que les
+commentaires). Rien ne se perd aujourd'hui.
+
+> **Ce qui rend la dérive coûteuse est sa DÉCLARATION, pas son effet.** Qui
+> ajoutera un jour une audience nommée à Android lira « port », supposera la
+> parité, et ne rencontrera **aucune erreur de compilation** — le champ n'existe
+> pas pour être passé. La valeur disparaîtra entre le composer et le fil, sans un
+> mot. Une seule des cinq est rattrapée en aval (`visibilityUserIds`, refusé par
+> la passerelle sans liste) ; les quatre autres partiraient en silence, dont le
+> texte alternatif.
+
+Détail et critères : #5078.
 
 ## 7. Correspondance avec ce qui existe
 

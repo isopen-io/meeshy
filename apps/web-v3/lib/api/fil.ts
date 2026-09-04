@@ -484,6 +484,7 @@ export const fil = async ({
   langues,
   limite = 40,
   avant,
+  autour,
   base,
   origine,
   recuperer,
@@ -495,6 +496,16 @@ export const fil = async ({
   readonly limite?: number;
   /** L'identifiant du message le plus ancien déjà lu — la page servie s'arrête AVANT lui. */
   readonly avant?: string | null;
+  /**
+   * L'identifiant du message AUTOUR duquel servir la tranche (`around=`,
+   * `routes/conversations/messages-list.ts:400-450` — la moitié avant, la
+   * cible, la moitié après). C'est ce qui rend une pièce ATTEIGNABLE à
+   * n'importe quelle profondeur d'historique : sans lui, `?media=` d'un
+   * message ancien re-servait la tranche par défaut, où la pièce n'est pas.
+   * La passerelle ignore `around` dès que `before` est posé : la porte ne
+   * demande jamais les deux.
+   */
+  readonly autour?: string | null;
   /** L'adresse que le SERVEUR appelle — interne au réseau du conteneur. */
   readonly base?: string;
   /** L'origine que le NAVIGATEUR suit pour une pièce jointe — publique. */
@@ -503,7 +514,14 @@ export const fil = async ({
 }): Promise<Issue> => {
   const racine = `${base ?? baseDeLaPasserelle()}/api/v1/conversations/${encodeURIComponent(cle)}`;
   const originePublique = origine ?? baseDeLaPasserellePublique();
-  const curseur = avant === undefined || avant === null ? '' : `&before=${encodeURIComponent(avant)}`;
+  // `before` l'emporte sur `around` chez la passerelle (`around && !before`) :
+  // la porte n'en demande donc qu'UN — la tranche est nommée d'une seule façon.
+  const curseur =
+    avant !== undefined && avant !== null
+      ? `&before=${encodeURIComponent(avant)}`
+      : autour === undefined || autour === null
+        ? ''
+        : `&around=${encodeURIComponent(autour)}`;
 
   const [detail, liste] = await Promise.all([
     demande(racine, creance, recuperer),

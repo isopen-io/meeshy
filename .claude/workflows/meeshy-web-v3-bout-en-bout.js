@@ -303,6 +303,23 @@ et sur le cadrage qui les a soulevees. Ne les rediscute pas : applique-les.
      dans cet ordre, apres le fil et la liste — aucune route ni critere de fin ne change, seul
      l'ORDRE d'attaque change ;
    - rien de tout cela n'ajoute un octet de JS hors ce que § 12.4 autorise deja.
+
+3. LE COMPOSEUR ENREGISTRE UN VOCAL ET PARTAGE LA POSITION (#5061, directive du porteur,
+   2026-09-03) — comme le legacy (apps/web/components/v2/MessageComposer.tsx:162-327), dans le
+   MEME composeur partage entre /chat/:lien et /chats/:cle (fil-vue.ts + fil-porte.ts, aucune
+   jumelle) :
+   - vocal : MediaRecorder, bouton micro >= 44 px a cote du bouton piece jointe, gouverne par le
+     meme droit que les pieces jointes audio (canSendFiles / allowAnonymousFiles pour l'invite),
+     etat d'enregistrement visible, annulation possible, envoi optimiste comme les autres
+     messages ; l'upload passe par POST /attachments/upload (deja utilise par lib/api/fil.ts) ;
+   - position : bouton position >= 44 px, navigator.geolocation, etat de refus explicite
+     (permission refusee, indisponible) sans jamais planter le composeur, poste un champ
+     location: { latitude, longitude } au premier niveau de POST /conversations/:id/messages —
+     la passerelle le valide et le persiste DEJA (parseSharedPlace(),
+     services/gateway/src/services/location/sharedPlace.ts ; messageType 'location') : AUCUN
+     diff serveur, la v3 relaie ce que le contrat expose ;
+   - les deux sont des AMELIORATIONS PROGRESSIVES (comme le reste du § 12.4) : le chemin sans JS
+     (texte, piece jointe classique) reste vert sans elles.
 `
 
 
@@ -1135,8 +1152,12 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
    N'ecris aucun nom de modele ailleurs dans le message.
 3. \`git push -u origin ${BRANCHE}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
-   Sur rejet non-reseau (non fast-forward) : \`git pull --rebase origin ${BRANCHE}\` puis rejoue
-   type-check + test, puis push ; si le conflit demande un arbitrage, arrete-toi et dis-le.
+   Sur rejet non-reseau (non fast-forward) : \`git fetch origin ${BRANCHE} && git merge origin/${BRANCHE}\`
+   — JAMAIS \`git pull --rebase\` ni \`git rebase\` (lecon 324 du depot : le rebase aplatit un commit
+   de fusion et pousse un etat partiel). Un conflit se resout en gardant les DEUX apports quand les
+   fichiers le permettent (design, lecons) ou en reconciliant le CODE par sa logique (jamais en
+   prenant un cote au hasard) ; rejoue type-check + lint + test, puis pousse a nouveau. Si le
+   conflit demande un arbitrage produit, arrete-toi et dis-le.
 3 bis. ${PR ? `LA PR, SANS INTERVENTION (directive du porteur) : la branche \`${BRANCHE}\` doit avoir une PR
    OUVERTE vers \`${BASE}\`. ToolSearch({query: "select:mcp__github__list_pull_requests,mcp__github__create_pull_request,mcp__github__enable_pr_auto_merge,mcp__github__pull_request_read,mcp__github__update_pull_request", max_results: 5}).
    (a) Cherche une PR ouverte dont head = \`${BRANCHE}\` (list_pull_requests, state open). Si elle existe,

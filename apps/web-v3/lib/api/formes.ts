@@ -31,13 +31,22 @@ export type FormeDePiece = {
   readonly glyphe: string;
   /** Le lecteur natif que le genre demande, `null` quand la pièce ne se lit pas. */
   readonly lecteur: 'audio' | 'video' | null;
+  /**
+   * CE QUE LE TAP OUVRE depuis la ligne (§ 12.10.1) : le PLEIN ÉCRAN — un ÉTAT
+   * de l'adresse hôte (`?media=`), où l'image s'affiche en grand, où la vidéo
+   * se joue, où la transcription d'un vocal se lit ENTIÈRE — ou le FICHIER
+   * lui-même, dans un onglet. Un genre que rien ne saurait montrer en grand (un
+   * PDF, une archive) n'a pas de plein écran : lui en offrir un rendrait un
+   * cadre vide, c'est-à-dire un contrôle sans effet (charte règle 7).
+   */
+  readonly ouvre: 'plein' | 'fichier';
 };
 
 export const FORME_PAR_GENRE: Readonly<Record<GenreDePiece, FormeDePiece>> = {
-  image: { glyphe: 'ph-image', lecteur: null },
-  video: { glyphe: 'ph-video-camera', lecteur: 'video' },
-  audio: { glyphe: 'ph-microphone', lecteur: 'audio' },
-  fichier: { glyphe: 'ph-file', lecteur: null },
+  image: { glyphe: 'ph-image', lecteur: null, ouvre: 'plein' },
+  video: { glyphe: 'ph-video-camera', lecteur: 'video', ouvre: 'plein' },
+  audio: { glyphe: 'ph-microphone', lecteur: 'audio', ouvre: 'plein' },
+  fichier: { glyphe: 'ph-file', lecteur: null, ouvre: 'fichier' },
 };
 
 /** Les genres, dans l'ordre de la table — ce que les gabarits énumèrent, jamais une seconde liste. */
@@ -48,8 +57,29 @@ export const formeDePiece = (genre: GenreDePiece): FormeDePiece => FORME_PAR_GEN
 /** La pièce SE LIT : elle porte un lecteur natif, et annonce sa durée. */
 export const seLit = (genre: GenreDePiece): boolean => FORME_PAR_GENRE[genre].lecteur !== null;
 
-/** La piste JOUÉE suit la langue du texte servi — un vocal, et lui seul. */
-export const pisteSuitLaLangue = (genre: GenreDePiece): boolean => FORME_PAR_GENRE[genre].lecteur === 'audio';
+/**
+ * LA PIÈCE S'ÉCOUTE SUR PLACE — un vocal, et lui seul : un `<details>` qui ne
+ * coûte aucun octet avant la pression tient dans une ligne, là où une vidéo
+ * demanderait une boîte que ni le fil ni la grille ne peuvent montrer sans
+ * octets. Le prédicat vivait en `const` privée dans `app/connecte/medias-vue.ts` ;
+ * la ligne du fil en est le SECOND lecteur (§ 3.1 (B) : une règle remonte dès sa
+ * seconde surface), et le recopier aurait fait deux façons de décider où un
+ * vocal se joue.
+ */
+export const sEcouteSurPlace = (genre: GenreDePiece): boolean => FORME_PAR_GENRE[genre].lecteur === 'audio';
+
+/**
+ * La piste JOUÉE suit la langue du texte servi — un vocal, et lui seul.
+ * MÊME question que `sEcouteSurPlace` aujourd'hui (les deux ne valent que pour
+ * l'audio), mais une question DISTINCTE : un genre futur pourrait s'écouter
+ * sur place sans que sa piste suive une langue (un GIF sonore muet, par
+ * exemple). L'alias tient les deux noms lisibles à leur site d'appel sans
+ * garder un second drapeau à synchroniser (« tout dérive de `lecteur` »).
+ */
+export const pisteSuitLaLangue = sEcouteSurPlace;
+
+/** Le genre a un PLEIN ÉCRAN — l'image, la vidéo, la fiche d'un vocal. */
+export const sOuvreEnPlein = (genre: GenreDePiece): boolean => FORME_PAR_GENRE[genre].ouvre === 'plein';
 
 /**
  * DE QUEL GENRE EST UN FICHIER — la MÊME table, interrogée par son type MIME.

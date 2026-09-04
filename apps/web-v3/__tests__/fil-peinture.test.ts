@@ -8,6 +8,7 @@ import {
   bullesDuDocument,
   choisisUneReaction,
   peins,
+  peinsLaPresence,
   peintre,
   recale,
   recaleLesHeures,
@@ -42,9 +43,16 @@ const etatServi = (): EtatDuFil => ({
   brouillon: '',
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
+  plein: null,
+  profil: null,
   tempsReel: {
     passerelle: 'https://gate.test',
-    actifs: { participate: { nom: 'p.js', url: '/__v3/rt/p.js', corps: '' }, socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' } },
+    actifs: {
+      participate: { nom: 'p.js', url: '/__v3/rt/p.js', corps: '' },
+      liste: { nom: 'l.js', url: '/__v3/rt/l.js', corps: '' },
+      feed: { nom: 'feed.l.js', url: '/__v3/rt/feed.l.js', corps: '' },
+      socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' },
+    },
   },
 });
 
@@ -93,6 +101,44 @@ describe('l’état initial vient du document servi', () => {
     // Dans le DOM — servi du plus récent au plus ancien —, le jour SUIT la première ligne de son jour.
     expect(jour.previousElementSibling?.getAttribute('data-id')).toBe('m1');
     expect(p.liste.querySelectorAll('li.jour')).toHaveLength(1);
+  });
+});
+
+/**
+ * LA FENTE DE PRÉSENCE, SERVIE PUIS REPEINTE — la même phrase des deux côtés,
+ * séparateur compris. La directive § 12.10.2 a rendu ce séparateur VARIABLE :
+ * dans une conversation à DEUX, le compte de participants se tait, et rien ne
+ * précède plus « N en ligne ». Sans la source unique (`presenceServie`), le
+ * module repeignait « · 1 en ligne » sur un sous-titre vide — un point médian
+ * orphelin, à la première présence reçue.
+ */
+describe('la présence de l’en-tête — servie et repeinte disent la même chose', () => {
+  it('ne pose aucun séparateur quand rien ne la précède (conversation à deux)', () => {
+    const { main, p } = monte();
+    const fente = main.querySelector<HTMLElement>('.fil-tete .en-ligne')!;
+    expect(fente.dataset.sep).toBe('0');
+    peinsLaPresence(p, 1);
+    expect(fente.textContent).toBe(`1 ${FIL.enLigne}`);
+    expect(main.querySelector('.fil-tete .sous')?.textContent).toBe(`1 ${FIL.enLigne}`);
+  });
+
+  it('le pose quand le compte de participants le précède (trois et plus)', () => {
+    document.open();
+    const etat = etatServi();
+    document.write(documentDuFil({ ...etat, fil: { ...etat.fil, membres: 4 } }));
+    document.close();
+    const main = document.querySelector<HTMLElement>('main')!;
+    const p = peintre(main)!;
+    const fente = main.querySelector<HTMLElement>('.fil-tete .en-ligne')!;
+    expect(fente.dataset.sep).toBe('1');
+    peinsLaPresence(p, 2);
+    expect(main.querySelector('.fil-tete .sous')?.textContent).toBe(`4 ${FIL.participants} · 2 ${FIL.enLigne}`);
+  });
+
+  it('se tait à zéro, des deux côtés', () => {
+    const { main, p } = monte();
+    peinsLaPresence(p, 0);
+    expect(main.querySelector<HTMLElement>('.fil-tete .en-ligne')?.hidden).toBe(true);
   });
 });
 
@@ -331,6 +377,12 @@ describe('la ligne du lecteur', () => {
  * comme le serveur le fait.
  */
 describe('la présence dans l’en-tête', () => {
+  /**
+   * La conversation du harnais compte DEUX membres : depuis la directive
+   * § 12.10.2, son compte de participants se tait, donc rien ne précède la
+   * fente et la phrase n'a pas de séparateur (cf. le témoin de parité, plus
+   * haut, qui oppose les deux cas).
+   */
   it('repeint « N en ligne » depuis l’état, et le cache à zéro', () => {
     const { main, p } = monte();
     const fente = main.querySelector<HTMLElement>('.fil-tete .en-ligne')!;
@@ -338,7 +390,7 @@ describe('la présence dans l’en-tête', () => {
     const etat = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
     peins(p, presence(etat, ['u2'], { id: 'u2', enLigne: true }), 0);
     expect(fente.hidden).toBe(false);
-    expect(fente.textContent).toBe(` · 1 ${FIL.enLigne}`);
+    expect(fente.textContent).toBe(`1 ${FIL.enLigne}`);
     peins(p, etat, 0);
     expect(fente.hidden).toBe(true);
   });
@@ -386,9 +438,70 @@ describe('une bulle riche qui arrive', () => {
     expect(item.querySelector('details.transcrit-original p')?.textContent).toBe('Mo n mú àwọn nọ́mbà');
     expect(ligne.querySelector<HTMLElement>('.meta .langue')?.hidden).toBe(false);
     expect(ligne.querySelector('.meta .langue .code')?.textContent).toBe('yo');
+    // La FICHE mène à la tranche qui porte le vocal, jamais à l'adresse nue.
+    expect(item.querySelector<HTMLAnchorElement>('a.fiche')?.getAttribute('href')).toBe('/chats/c1?autour=m2&media=a1');
   });
 
-  it('peint une vidéo : un lecteur vidéo, et AUCUNE promesse de sous-titres', () => {
+  /**
+   * LA PUCE « FICHE » N'EXISTE QUE S'IL Y A UNE FICHE. La transcription arrive
+   * APRÈS le vocal (Whisper, puis NLLB) : peindre la puce dès l'arrivée du
+   * message ouvrait, pendant tout ce temps, une fiche VIDE — un contrôle sans
+   * effet portant le nom de ce qu'il ne livre pas (charte règle 7).
+   */
+  it('ne peint AUCUNE fiche sur un vocal dont la transcription n’est pas revenue', () => {
+    const { ligne } = peinsUne({
+      content: '',
+      translations: [],
+      attachments: [{ ...PIECE_AUDIO, transcription: undefined, translations: {} }],
+    });
+    const item = ligne.querySelector<HTMLLIElement>('ul.pieces > li')!;
+    expect(item.dataset.genre).toBe('audio');
+    expect(item.querySelector('details.lecteur')).not.toBeNull();
+    expect(item.querySelector('a.fiche')).toBeNull();
+    expect(item.querySelector('.transcription')).toBeNull();
+  });
+
+  /**
+   * UNE PIÈCE LOCALE N'OUVRE RIEN. La bulle optimiste porte ses pièces NOMMÉES
+   * et PESÉES, sans adresse (`piecesLocales`) : tant que rien n'est parti, il
+   * n'y a ni fichier à ouvrir ni plein écran à servir — et un lien sans `href`
+   * n'est pas un contrôle (charte règle 7).
+   */
+  it('ne pose aucun lien sur la pièce d’une bulle qui n’est pas encore partie', () => {
+    const { p } = monte();
+    const locale = {
+      ...bulleOptimiste({ clientMessageId: 'cid-1', texte: '', auteur: 'Amina', auteurId: 'u1', langue: 'fr', horsLigne: false, maintenant: 0 }),
+      pieces: [
+        {
+          id: 'cid-1:0',
+          genre: 'image' as const,
+          nom: 'photo.jpg',
+          url: '',
+          piste: '',
+          octets: 96_000,
+          dureeMs: null,
+          largeur: null,
+          hauteur: null,
+          transcription: null,
+          transcriptionOriginale: null,
+          langueDeTranscription: null,
+          langueServie: null,
+        },
+      ],
+    };
+    peins(p, insere({ bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, locale), 0);
+    const affiche = p.liste.querySelector<HTMLAnchorElement>('li[data-cid="cid-1"] a.media');
+    expect(affiche).not.toBeNull();
+    expect(affiche?.getAttribute('href')).toBeNull();
+  });
+
+  /**
+   * UNE VIDÉO EST UNE AFFICHE QUI MÈNE AU PLEIN ÉCRAN (§ 12.10.1) — plus un
+   * lecteur posé dans la ligne : c'est la surimpression `?media=` qui la joue,
+   * et la ligne n'embarque donc AUCUN `<video>`. Le Prisme, lui, reste dit dans
+   * la ligne, et rien n'y promet des sous-titres que la passerelle n'expose pas.
+   */
+  it('peint une vidéo : une affiche vers le plein écran, et AUCUNE promesse de sous-titres', () => {
     const { ligne } = peinsUne({
       content: '',
       translations: [],
@@ -397,7 +510,12 @@ describe('une bulle riche qui arrive', () => {
     const item = ligne.querySelector<HTMLLIElement>('ul.pieces > li')!;
     expect(item.dataset.genre).toBe('video');
     expect(item.querySelector('audio')).toBeNull();
-    expect(item.querySelector<HTMLVideoElement>('video')).not.toBeNull();
+    expect(item.querySelector('video')).toBeNull();
+    // L'adresse nomme la TRANCHE autant que la pièce : la ligne PEINTE mène là
+    // où mène la ligne servie, et la pièce s'ouvre quelle que soit la
+    // profondeur d'historique où le module l'a posée.
+    expect(item.querySelector<HTMLAnchorElement>('a.media')?.getAttribute('href')).toBe('/chats/c1?autour=m2&media=a2');
+    expect(item.querySelector<HTMLAnchorElement>('a.media')?.getAttribute('target')).toBeNull();
     expect(item.querySelector('.transcrit')?.textContent).toBe(FIL.transcrit('yo', 'fr'));
     expect(ligne.innerHTML).not.toContain('Sous-titres');
     expect(item.querySelector('track')).toBeNull();

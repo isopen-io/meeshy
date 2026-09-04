@@ -76,9 +76,19 @@ const ouvreLeFil = async (contexte: BrowserContext): Promise<Page> => {
   return page;
 };
 
-/** Le module de participation est là, authentifié, dans la room : le point d'état le dit. */
+/**
+ * Le module de participation est là, authentifié, dans la room : le point
+ * d'état le dit — par son attribut ET par son NOM.
+ *
+ * Le nom est vérifié ICI, dans le harnais que toutes les épreuves du fil
+ * traversent, parce que c'est le seul endroit où sa DIVERGENCE se voit : le
+ * document naît en « pas encore actif », et sans cette assertion un module qui
+ * poserait l'attribut sans toucher au libellé laisserait la page annoncer,
+ * pour toujours, l'exact contraire de ce qu'elle montre.
+ */
 const attendLeTempsReel = async (page: Page): Promise<void> => {
   await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'connecte', { timeout: 15_000 });
+  await expect(page.locator('.etat .hors-ecran')).toHaveText('Temps réel : actif');
 };
 
 const messageDIbrahim = (
@@ -664,6 +674,12 @@ test.describe('la room', () => {
     const coupe = async (): Promise<void> => {
       await contexte.setOffline(true);
       await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'hors-ligne');
+      // L'attribut ET son NOM. Le libellé hors-écran est ce qu'un lecteur
+      // d'écran entend et la seule chose qu'un `aria-live` puisse annoncer :
+      // servi rempli par le serveur, il restait figé sur « pas encore actif »
+      // pour toute la vie de la page, y compris ici — hors ligne, sur un fil
+      // qui venait d'être vivant.
+      await expect(page.locator('.etat .hors-ecran')).toHaveText('Temps réel : hors ligne');
       await avance(contexte, 5 * 60_000);
       await contexte.setOffline(false);
       await attendLeTempsReel(page);
@@ -828,9 +844,35 @@ test.describe('un fil long — le dernier bout est le bon, sans script et sans s
   let longue: PasserelleDeBouchon;
   let serveur: ServeurV3;
   const MESSAGES_AJOUTES = 40;
+  const PHOTO_ANCIENNE = 'mvieux';
 
   test.beforeAll(async () => {
     longue = await passerelleDeBouchon();
+    // UNE PHOTO HORS DE LA TRANCHE PAR DÉFAUT — le cas nominal d'une
+    // conversation vivante : la quasi-totalité des médias sont plus anciens que
+    // les quarante derniers messages.
+    longue.ajouteUnMessage({
+      ...chargeDeMessage({
+        id: PHOTO_ANCIENNE,
+        conversationId: CONVERSATION_DU_LECTEUR.id,
+        senderId: PAIR_ANGLOPHONE.id,
+        content: 'La photo de janvier.',
+        sender: { id: 'p-ibrahim', displayName: PAIR_ANGLOPHONE.nom, userId: PAIR_ANGLOPHONE.id },
+        attachments: [
+          {
+            id: 'piece-ancienne',
+            fileUrl: '/api/v1/attachments/file/2026/janvier.jpg',
+            originalName: 'janvier.jpg',
+            mimeType: 'image/jpeg',
+            fileSize: 96_000,
+            width: 1200,
+            height: 900,
+          },
+        ],
+        createdAt: new Date(Date.now() - 400 * 60_000).toISOString(),
+      }),
+      senderParticipantId: 'p-ibrahim',
+    });
     for (let rang = 0; rang < MESSAGES_AJOUTES; rang += 1) {
       longue.ajouteUnMessage({
         ...chargeDeMessage({
@@ -871,7 +913,7 @@ test.describe('un fil long — le dernier bout est le bon, sans script et sans s
     await page.goto(adresse(), { waitUntil: 'load' });
     const hauteur = page.viewportSize()?.height ?? 0;
 
-    // Une page de 40 sur 44 : la suite est au-dessus, derrière « Messages plus anciens ».
+    // Une page de 40 : la suite est au-dessus, derrière « Messages plus anciens ».
     await expect(page.locator('li.ligne')).toHaveCount(40);
     await expect(page.locator('a.plus-ancien')).toHaveCount(1);
     // Le DOM va du plus récent au plus ancien : la PREMIÈRE ligne est la dernière écrite.
@@ -910,6 +952,60 @@ test.describe('un fil long — le dernier bout est le bon, sans script et sans s
     await page.waitForTimeout(DELAI_D_OBSERVATION_MS);
     expect(await position()).toEqual({ zone: 0, page: 0 });
     expect(dansLeCadre(await page.locator('li.ligne').first().boundingBox(), hauteur)).toBe(true);
+    await contexte.close();
+  });
+
+  /**
+   * UNE PHOTO TROUVÉE DANS L'HISTORIQUE S'OUVRE — et fermer rend la tranche qui
+   * la porte, cadrée sur son message. Mesuré AVANT : le lien d'un média ne
+   * portait que `?media=<pièce>`, sans nommer sa tranche ; la porte re-servait
+   * les quarante derniers messages, la pièce n'y était pas, AUCUNE surimpression
+   * n'était rendue — et le lecteur avait perdu la page qu'il lisait. Un contrôle
+   * sans effet (charte règle 7) sur la quasi-totalité des médias d'une
+   * conversation vivante, qu'aucun témoin ne visitait : ils ne mesuraient tous
+   * que la tranche la plus récente.
+   */
+  test('sans JavaScript — une photo de l’HISTORIQUE s’ouvre en plein écran, et fermer rend sa tranche', async ({ browser }) => {
+    const contexte = await contexteLong(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(adresse(), { waitUntil: 'load' });
+
+    // La tranche par défaut ne la porte pas : c'est bien l'historique qu'on visite.
+    await expect(page.locator('a.media')).toHaveCount(0);
+    await page.locator('a.plus-ancien').click();
+    await expect(page.locator(`li[data-id="${PHOTO_ANCIENNE}"]`)).toHaveCount(1);
+
+    await page.locator('a.media').first().click();
+    const plein = page.locator('dialog.plein');
+    await expect(plein).toHaveCount(1);
+    await expect(plein.locator('img.media-plein')).toHaveAttribute('src', /janvier\.jpg$/);
+    await expect(page.locator('main#main-content')).toHaveAttribute('inert', '');
+
+    await plein.locator('a.fermer').click();
+    await expect(page.locator('dialog.plein')).toHaveCount(0);
+    // La MÊME tranche : le message d'où la photo vient est là, et l'adresse le cadre.
+    await expect(page.locator(`li[data-id="${PHOTO_ANCIENNE}"]`)).toHaveCount(1);
+    expect(page.url()).toContain(`#m-${PHOTO_ANCIENNE}`);
+    await contexte.close();
+  });
+
+  /**
+   * AVEC JavaScript, l'historique est chargé EN PLACE par le module
+   * (`participate.ts`) : la photo n'appartient alors à AUCUNE tranche nommée par
+   * l'adresse. C'est le second chemin où le geste était mort, et c'est pourquoi
+   * le lien porte le MESSAGE (`?autour=`) plutôt que le curseur de la page.
+   */
+  test('avec JavaScript — une photo chargée en place par le module s’ouvre aussi', async ({ browser }) => {
+    const contexte = await contexteLong(browser);
+    const page = await contexte.newPage();
+    await page.goto(adresse(), { waitUntil: 'load' });
+    await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'connecte', { timeout: 15_000 });
+
+    await page.locator('a.plus-ancien').evaluate((lien) => (lien as HTMLElement).click());
+    await expect(page.locator(`li[data-id="${PHOTO_ANCIENNE}"] a.media`)).toHaveCount(1);
+
+    await page.locator(`li[data-id="${PHOTO_ANCIENNE}"] a.media`).click();
+    await expect(page.locator('dialog.plein img.media-plein')).toHaveAttribute('src', /janvier\.jpg$/);
     await contexte.close();
   });
 

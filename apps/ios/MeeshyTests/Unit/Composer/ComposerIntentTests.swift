@@ -176,11 +176,27 @@ final class ComposerIntentTests: XCTestCase {
             profil(.repost(ofPostId: "s", sourceFormat: .status)).routesToLegacy,
             "Le repost d'un MOOD est servi par le meuble : sa surface existe, son envoi est celui du mood."
         )
-        for format: ComposerFormat in [.story, .post, .reel] {
+        // **#5053 — la STORY rejoint le mood sur le meuble.** Les trois manques
+        // que ce test citait sont soldés : `ComposerHydration` donne au meuble
+        // sa graine `StoryItem` ET le plafond de la loi 10 (les deux ensemble,
+        // pour qu'on ne puisse pas passer l'une sans l'autre) ; le troisième —
+        // « son canal de scène ne porte pas `repostOfId` » — n'en était pas un :
+        // `onPublishAllInBackground` est une fermeture fournie par la porte, qui
+        // CAPTURE l'identifiant de la source.
+        XCTAssertNil(
+            profil(.repost(ofPostId: "s", sourceFormat: .story)).routesToLegacy,
+            "Le repost d'une STORY est servi par le meuble depuis #5053 : `StoryRepublishComposer` "
+            + "l'hydrate par `ComposerHydration.repostingStory`, qui porte AUSSI son plafond d'audience."
+        )
+        // `.post` et `.reel` restent déclarés sur l'historique, et c'est une
+        // ABSTENTION, pas un verdict : aucun site du dépôt ne les construit
+        // (mesuré). Les router vers le meuble affirmerait qu'il les sert, ce
+        // que rien ne vérifierait.
+        for format: ComposerFormat in [.post, .reel] {
             XCTAssertEqual(
                 profil(.repost(ofPostId: "s", sourceFormat: format)).routesToLegacy, .repostComposer,
-                "Le repost d'un \(nom(format)) garde son composer : sa graine est un StoryItem que le meuble ne "
-                + "sait pas adopter, et son plafond d'audience n'a aucun chemin jusqu'à l'atelier."
+                "Le repost d'un \(nom(format)) reste DÉCLARÉ sur l'historique : aucune porte du dépôt "
+                + "ne le construit, donc rien ne prouverait que le meuble le sert."
             )
         }
     }
@@ -526,12 +542,23 @@ final class ComposerIntentTests: XCTestCase {
         // `test_aucunePorte_neRetombeSurLeComposerDeMood` serait inécrivable, et
         // le retour du routage passerait sans un mot.
         case .statusComposer: return nil
-        case .repostComposer: return .repost(ofPostId: "post-source", sourceFormat: .story)
-        // Lot 7.8 : `.storyEdit` désigne `storyEditComposerCover`, et donc
-        // l'édition d'une STORY — c'est le format qui l'atteint, pas la porte.
-        // La table rendait ce cas pour les quatre formats ; l'écrire ici en
-        // `.post` était la moitié test du même mensonge.
-        case .storyEdit: return .edit(postId: "story-a-moi", documentFormat: .story)
+        // **#5053 — les deux cas rejoignent `.statusComposer` dans l'orphelinat.**
+        //
+        // `.repostComposer` : le repost d'une STORY (le seul du corpus) monte
+        // `StoryRepublishComposer`, donc le meuble. Le repost d'un POST ou d'un
+        // RÉEL y route encore dans la TABLE, mais aucune porte du dépôt ne les
+        // construit — une valeur déclarée pour une origine que personne
+        // n'instancie n'est pas une porte, et ce test compte les PORTES.
+        //
+        // `.storyEdit` : `storyEditComposerCover` existe toujours, aux mêmes
+        // quatre montages, mais il présente `StoryEditComposer` — le meuble.
+        //
+        // Les deux cas RESTENT dans `LegacyComposer`, pour la raison déjà écrite
+        // au-dessus de `.statusComposer` : une garde négative privée du symbole
+        // qu'elle cherche passe au vert en perdant sa protection, et le retour
+        // du routage passerait alors sans un mot.
+        case .repostComposer: return nil
+        case .storyEdit: return nil
         case .editPostSheet: return .edit(postId: "post-a-moi", documentFormat: .post)
         case .feedComposer: return nil
         // T3.3 : l'overlay inline iPad, désormais NOMMÉ, n'a aucune porte qui y
@@ -582,9 +609,13 @@ final class ComposerIntentTests: XCTestCase {
         let routes = Self.toutesLesOrigines.compactMap { profil($0).routesToLegacy }
 
         XCTAssertEqual(
-            routes.count, 2,
-            "Lot 4.6 : exactement DEUX portes du corpus routent encore vers l'historique — le repost (de "
-            + "STORY, le seul du corpus) et l'édition. Les sept autres sont servies par le meuble."
+            routes.count, 1,
+            "#5053 : il ne reste QU'UNE porte du corpus sur un composer historique — l'édition d'un "
+            + "DOCUMENT (`.edit(documentFormat: .post)` → `EditPostSheet`, cinq montages de "
+            + "production, la seule surface du dépôt qui bascule POST vers RÉEL). Le repost de story "
+            + "(`StoryRepublishComposer`) et l'édition de STORY (`StoryEditComposer`) montent "
+            + "désormais le meuble. Les valeurs de `LegacyComposer` restent déclarées pour les "
+            + "formats qu'aucun site ne construit : c'est une abstention, pas une porte."
         )
     }
 
@@ -603,10 +634,12 @@ final class ComposerIntentTests: XCTestCase {
 
         XCTAssertEqual(
             serviesParLeMeuble,
-            ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia"],
-            "Périmètre après le lot 4.6 : le tray, LE FIL, les réels (profil défini, câblage hors v1), LE "
-            + "MOOD, le brouillon, le partage et le média de conversation (câblage lot G). Le repost de "
-            + "story/post/réel et l'édition gardent leur composer actuel."
+            ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia", "repost"],
+            "Périmètre après #5053 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
+            + "média de conversation — et le REPOST, qui rejoint la liste. `edit` n'y figure pas parce "
+            + "que le corpus l'instancie sur un format de DOCUMENT (post/réel), toujours servi par "
+            + "`EditPostSheet` ; l'édition d'une STORY, elle, monte le meuble — c'est "
+            + "`test_lEdition_routeParFORMAT…` qui tient cette moitié, format par format."
         )
     }
 

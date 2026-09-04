@@ -27,6 +27,10 @@ const ETAT = {
     systemLanguage: 'fr',
     regionalLanguage: null,
     customDestinationLanguage: null,
+      nom: null,
+      bio: null,
+      email: null,
+      telephone: null,
   },
   conversations: [
     {
@@ -37,6 +41,12 @@ const ETAT = {
       membres: 12,
       nonLus: 3,
       dernierMessageA: '2026-09-01T12:00:00.000Z',
+      apercu: 'On se cale à 15 h pour la revue ?',
+      apercuTraductions: null,
+      apercuLangueOriginale: 'fr',
+      sourdine: false,
+      archivee: false,
+      participantsInscrits: [],
     },
   ],
   total: 4,

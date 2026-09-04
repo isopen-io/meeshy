@@ -696,6 +696,15 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// **Concatène des pistes DÉJÀ ENCODÉES quand elles le permettent** — le
+    /// contrat de la vue `4b`, pas une optimisation : « valider concatène des
+    /// pistes déjà encodées, ce qui rend la sortie quasi instantanée quelle que
+    /// soit la durée ». Le preset est décidé par `CameraSegmentMergePolicy`
+    /// d'après les formats RÉELLEMENT lus : passthrough sur des segments
+    /// homogènes (le cas nominal — plusieurs `MAINTENIR` sur la même caméra),
+    /// ré-encodage quand une bascule de caméra a produit des dimensions
+    /// différentes, où le passthrough rendrait `nil` et perdrait la prise.
+    ///
     /// Concatenates ordered video segments (each a camera-switch boundary) into
     /// one continuous file via `AVMutableComposition` + export. `nonisolated`
     /// so the composition/export work (CPU-bound, can take a few seconds for
@@ -717,6 +726,11 @@ final class CameraModel: NSObject, ObservableObject {
         else { return nil }
 
         var cursor = CMTime.zero
+        // Les formats des pistes insérées — ce qui décide d'un passthrough
+        // (vue 4b : « concatène des pistes DÉJÀ ENCODÉES »). Voir
+        // `CameraSegmentMergePolicy`.
+        var videoFormats: [SegmentVideoFormat] = []
+        var insertedSegmentCount = 0
         for url in urls {
             let asset = AVURLAsset(url: url)
             let duration: CMTime
@@ -728,9 +742,13 @@ final class CameraModel: NSObject, ObservableObject {
             }
             guard duration.isValid, duration > .zero else { continue }
             let range = CMTimeRange(start: .zero, duration: duration)
+            insertedSegmentCount += 1
             do {
                 if let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first {
                     try videoTrack.insertTimeRange(range, of: assetVideoTrack, at: cursor)
+                    if let description = try await assetVideoTrack.load(.formatDescriptions).first {
+                        videoFormats.append(SegmentVideoFormat(formatDescription: description))
+                    }
                 }
             } catch {
                 Logger.media.error("Failed to insert the video track of a recording segment: \(error.localizedDescription, privacy: .public)")
@@ -744,8 +762,10 @@ final class CameraModel: NSObject, ObservableObject {
             }
             cursor = cursor + duration
         }
+        let preset = CameraSegmentMergePolicy.preset(formats: videoFormats,
+                                                     readableSegmentCount: insertedSegmentCount)
         guard cursor > .zero,
-              let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+              let exportSession = AVAssetExportSession(asset: composition, presetName: preset)
         else { return nil }
 
         let outputURL = FileManager.default.temporaryDirectory

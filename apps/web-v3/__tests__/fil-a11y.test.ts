@@ -2,6 +2,7 @@ import { axe } from 'jest-axe';
 
 import { documentDuChoix } from '@/app/(public)/chat/[lien]/choix-vue';
 import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
+import { ETATS_DU_TEMPS_REEL } from '@/lib/contenu/fil';
 import { message } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
 
@@ -35,6 +36,8 @@ const TEMPS_REEL = {
   passerelle: 'https://gate.test',
   actifs: {
     participate: { nom: 'participate.a.js', url: '/__v3/rt/participate.a.js', corps: '' },
+    liste: { nom: 'liste.a.js', url: '/__v3/rt/liste.a.js', corps: '' },
+    feed: { nom: 'feed.a.js', url: '/__v3/rt/feed.a.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };
@@ -48,6 +51,8 @@ const etat = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: TEMPS_REEL,
+  plein: null,
+  profil: null,
   ...attributs,
 });
 
@@ -119,6 +124,31 @@ describe('le fil face à axe', () => {
     expect(await graves()).toEqual([]);
   });
 
+  /**
+   * LE PLEIN ÉCRAN (§ 12.10.1) est un `<dialog open>` SERVI — donc dans le même
+   * document que le fil qu'il recouvre, et jugé avec lui : une image nommée par
+   * son `alt`, un titre qui étiquette la surimpression, une croix qui ferme.
+   * Les trois genres qui en ont un sont regardés, l'image (`<img alt>`), la
+   * vidéo et le vocal (`<video>` / `<audio controls>`).
+   */
+  it.each([
+    ['a1', 'image'],
+    ['a2', 'vidéo'],
+    ['a3', 'vocal'],
+  ])('ne porte aucune violation grave — plein écran ouvert sur %s (%s)', async (piece) => {
+    ecris(
+      documentDuFil(
+        etat({
+          fil: { id: 'c1', titre: 'Types de messages', membres: 4, presence: { participants: [], presents: [] }, messages: RICHES, plusAncien: null },
+          plein: piece,
+        }),
+      ),
+    );
+    // NON VACUEUX : sans surimpression rendue, le témoin jugerait le fil seul.
+    expect(document.querySelector('dialog.plein')).not.toBeNull();
+    expect(await graves()).toEqual([]);
+  });
+
   it('ne porte aucune violation grave — état CHOIX, modale ouverte sur le cadre inerte', async () => {
     ecris(
       documentDuChoix({
@@ -132,6 +162,30 @@ describe('le fil face à axe', () => {
       }),
     );
     expect(await graves()).toEqual([]);
+  });
+
+  /**
+   * LE POINT D'ÉTAT DIT CE QU'IL MONTRE — et il le dit DÈS LE SERVEUR.
+   *
+   * Il naît en `inconnu` : le module de participation n'est pas encore arrivé,
+   * et c'est vrai. Mais son libellé hors-écran était VIDE, et le module ne
+   * l'écrivait jamais : un `aria-live` sans texte n'annonce rien, et un lecteur
+   * d'écran n'avait aucun moyen de savoir si le fil était vivant.
+   *
+   * Le défaut se voyait aussi à l'œil, autrement : `inconnu` et `creux`
+   * partageaient le MÊME rendu — un point creux —, donc « le temps réel n'est
+   * jamais arrivé » était indiscernable de « il respire ». C'est ce qui a rendu
+   * un module absent en staging invisible pendant tout un tour : la page se
+   * dégradait en Post/Redirect/Get sans qu'aucun témoin, à l'écran ou dans
+   * l'arbre d'accessibilité, ne dise pourquoi.
+   */
+  it('nomme son état AVANT que le module arrive — un aria-live vide n’annonce rien', () => {
+    ecris(documentDuFil(etat()));
+
+    const point = document.querySelector('.etat');
+    expect(point?.getAttribute('data-etat')).toBe('inconnu');
+    expect(point?.textContent?.trim()).toBe(ETATS_DU_TEMPS_REEL.inconnu);
+    expect(point?.textContent?.trim()).not.toBe('');
   });
 
   it('rougit sur un document dont la structure est fautive', async () => {

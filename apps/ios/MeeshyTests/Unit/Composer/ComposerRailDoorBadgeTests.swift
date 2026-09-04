@@ -42,14 +42,12 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
                         hashtags: Int = 0,
                         description: String = "",
                         mentions: Int = 0,
-                        location: Bool = false,
-                        background: Bool = false) -> ComposerRailMatter {
+                        location: Bool = false) -> ComposerRailMatter {
         ComposerRailDoorBadge.matter(slide: slide,
                                      hashtags: hashtags,
                                      description: description,
                                      mentions: mentions,
-                                     hasDocumentLocation: location,
-                                     hasDocumentBackground: background)
+                                     hasDocumentLocation: location)
     }
 
     // MARK: - Zéro ⇒ rien de peint
@@ -94,8 +92,7 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
                             hashtags: 2,
                             description: "un mot",
                             mentions: 2,
-                            location: true,
-                            background: true)
+                            location: true)
 
         XCTAssertEqual(ComposerRailDoorBadge.count(.text, in: relevé), 3)
         XCTAssertEqual(ComposerRailDoorBadge.count(.media, in: relevé), 2)
@@ -104,7 +101,6 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
         XCTAssertEqual(ComposerRailDoorBadge.count(.drawing, in: relevé), 7)
         XCTAssertEqual(ComposerRailDoorBadge.count(.mention, in: relevé), 2)
         XCTAssertEqual(ComposerRailDoorBadge.count(.description, in: relevé), 1)
-        XCTAssertEqual(ComposerRailDoorBadge.count(.background, in: relevé), 1)
         // La pastille de scène ET le lieu de la publication : la porte sert les
         // deux niveaux selon le format, son compte les additionne.
         XCTAssertEqual(ComposerRailDoorBadge.count(.place, in: relevé), 2)
@@ -113,20 +109,47 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
 
     // MARK: - Le fond n'est pas un objet posé
 
-    /// **La distinction n'est visible que sur une scène QUI A un fond** — la
-    /// même leçon que `ComposerSceneObjectCount` a payée : compter le fond
-    /// promettrait à la porte média un objet dont l'auteur ne trouverait jamais
-    /// le dernier.
-    func test_unMédiaDeFond_neCompteJamaisCommeMédiaDePremierPlan() {
-        let s = slide { e in
+    /// **Le fond COMPTE sur la porte image** (#5014, directive porteur
+    /// 2026-09-03 : « l'image de fond ou la vidéo de fond d'une scène compte
+    /// comme un élément dans outils image »).
+    ///
+    /// Ce témoin affirmait l'inverse jusqu'au #5014, et il avait raison sous la
+    /// règle d'alors — il suivait `ComposerSceneObjectCount`, qui exclut le
+    /// fond parce qu'il n'est pas un objet POSÉ. La directive renverse la
+    /// règle, pas le code : **deux règles voisines peuvent compter la même
+    /// famille et devoir diverger, parce que ce n'est pas la MATIÈRE qui décide
+    /// du filtre mais la QUESTION.**
+    ///
+    /// La scène qui n'a QU'un fond reste le cas discriminant — c'est le seul où
+    /// l'ancienne règle et la nouvelle rendent des verdicts différents.
+    func test_unMédiaDeFond_compteSurLaPorteImage() {
+        let deuxDontUnFond = slide { e in
             e.mediaObjects = [StoryMediaObject(id: "m1", aspectRatio: 1),
                               StoryMediaObject(id: "fond", aspectRatio: 1.777, isBackground: true)]
         }
-        let relevé = matter(s)
-        XCTAssertEqual(ComposerRailDoorBadge.count(.media, in: relevé), 1)
-        // Il compte en revanche comme FOND — sinon la porte du fond resterait
-        // muette sur une scène qui en porte un.
-        XCTAssertEqual(ComposerRailDoorBadge.count(.background, in: relevé), 1)
+        XCTAssertEqual(ComposerRailDoorBadge.count(.media, in: matter(deuxDontUnFond)), 2)
+
+        let fondSeul = slide { e in
+            e.mediaObjects = [StoryMediaObject(id: "fond", aspectRatio: 1.777, isBackground: true)]
+        }
+        XCTAssertEqual(ComposerRailDoorBadge.count(.media, in: matter(fondSeul)), 1,
+                       "une scène qui n'a qu'un fond porte bien UNE image")
+    }
+
+    /// **La porte du FOND ne porte AUCUNE pastille** (#5014) — et c'est une
+    /// réponse, pas un oubli.
+    ///
+    /// Le fond étant compté par la porte image, l'annoncer ici l'afficherait
+    /// deux fois sur deux icônes voisines du même rail : une scène qui n'a
+    /// qu'un fond dirait « une image » ET « un fond », que l'auteur lit comme
+    /// deux images. Et le signal n'est pas perdu — le fond remplit la carte,
+    /// c'est la seule matière qu'on ne peut pas manquer à l'écran.
+    func test_laPorteDuFond_nePorteAucunePastille() {
+        let avecFond = slide { e in
+            e.mediaObjects = [StoryMediaObject(id: "fond", aspectRatio: 1.777, isBackground: true)]
+        }
+        XCTAssertNil(ComposerRailDoorBadge.count(.background, in: matter(avecFond)))
+        XCTAssertNil(ComposerRailDoorBadge.count(.background, in: matter(slide { _ in })))
     }
 
     /// Le son de FOND compte : la porte `sound` ouvre la feuille des deux
@@ -143,10 +166,13 @@ final class ComposerRailDoorBadgeTests: XCTestCase {
                                                  in: matter(slide { _ in }, description: "   \n ")))
     }
 
-    /// Un fond de COULEUR seul suffit : la porte n'attend pas un média.
-    func test_unFondDeCouleurSeul_allumeLaPorteDuFond() {
-        XCTAssertEqual(ComposerRailDoorBadge.count(.background,
-                                                   in: matter(slide { _ in }, background: true)), 1)
+    /// **Un fond de COULEUR n'est pas une image.** La porte image sert des
+    /// médias ; une couleur choisie dans la palette n'en est pas un, et la
+    /// compter ferait promettre une image que l'auteur ne trouverait pas.
+    func test_unFondDeCouleur_neCompteSurAucuneDesDeuxPortes() {
+        let relevé = matter(slide { _ in })
+        XCTAssertNil(ComposerRailDoorBadge.count(.media, in: relevé))
+        XCTAssertNil(ComposerRailDoorBadge.count(.background, in: relevé))
     }
 
     // MARK: - La carte servie au rail

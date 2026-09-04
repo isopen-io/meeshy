@@ -37,7 +37,7 @@ final class FocalAudioRoutingTests: XCTestCase {
             isBlurred: false,
             isViewOnce: false,
             isPinned: false,
-            isForwarded: false,
+            forwardAttribution: nil,
             editedAt: nil,
             isEditSaving: false,
             hasEditHistory: false,

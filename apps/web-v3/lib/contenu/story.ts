@@ -1,3 +1,5 @@
+import { deLaLangue } from './langues';
+
 /**
  * LA COPIE DE LA STORY — ce que l'écran DIT, hors de ce qu'il compose.
  *
@@ -6,13 +8,12 @@
  * sous `lib/` parce que la vue ET la porte la lisent — la porte compose le
  * refus, la vue le peint.
  *
- * `traduitDe` prend le nom NATIF de la langue (`getLanguageInfo(code)
- * .nativeName`), pas sa traduction française : la table des langues de
- * `@meeshy/shared` porte un nom anglais et un nom natif, et rien d'autre.
- * Écrire « traduit de l'anglais » comme la planche le dessine demanderait une
- * table de noms de langues EN FRANÇAIS, c'est-à-dire une seconde table
- * (§ 3.2 corollaire 2). L'écart de formulation avec `cible/story.png` est
- * ASSUMÉ ; la conformité porte sur la disposition, pas sur la déclinaison.
+ * `traduitDe` prend le nom de la langue tel que `lib/contenu/langues.ts` le
+ * rend — en FRANÇAIS, décliné par `deLaLangue`. Cette phrase disait
+ * « Traduit de Español » : le nom natif, faute d'une table française, écart
+ * alors ASSUMÉ. Il ne l'est plus — `Intl.DisplayNames` est cette table, la
+ * plateforme la fournit, et « Traduit de Español » n'est pas une langue mais
+ * une faute. La cible (`cible/story.png`) dessinait déjà la forme française.
  */
 
 export const STORY = {
@@ -25,7 +26,7 @@ export const STORY = {
   suivante: 'Story suivante',
   langues: 'Changer la langue',
   langue: (nom: string): string => `Lire en ${nom}`,
-  traduitDe: (langue: string): string => `Traduit de ${langue}`,
+  traduitDe: (langue: string): string => `Traduit ${deLaLangue(langue)}`,
   original: 'Voir l’original',
   scene: 'Contenu de la story',
   /** Une story sans texte NI média : la passerelle en sert, la vue ne fabrique rien. */
@@ -55,3 +56,33 @@ export const STORY = {
 
 /** Le plafond de `CreateCommentSchema.content` (`services/gateway/src/routes/posts/types.ts:406`). */
 export const LONGUEUR_MAX_DE_LA_REPONSE = 2000;
+
+/**
+ * ÉLARGIR les littéraux d'un `as const` sans perdre sa FORME.
+ *
+ * `typeof STORY` fige chaque phrase en type littéral (`'Story'`, et non
+ * `string`) : dérivé tel quel, il n'accepterait qu'une copie disant exactement
+ * les mêmes mots — c'est-à-dire aucune autre. Ce type garde les CLÉS et la
+ * structure, et ne relâche que les chaînes. Les fonctions sont laissées
+ * intactes : mapper sur leurs propriétés les détruirait.
+ */
+type Elargi<T> = {
+  readonly [K in keyof T]: T[K] extends (...args: never[]) => unknown
+    ? T[K]
+    : T[K] extends string
+      ? string
+      : T[K] extends object
+        ? Elargi<T[K]>
+        : T[K];
+};
+
+/**
+ * LA FORME de la copie d'un écran de PARTAGE — story, réel, humeur.
+ *
+ * Les trois écrans sont le MÊME lecteur (#4929 : « rendu par le MÊME composant
+ * lecteur que post/story/reel ») ; ce qui les sépare est leur vocabulaire, et
+ * un vocabulaire se paramètre. Le type se DÉRIVE de `STORY` plutôt que d'être
+ * écrit à côté : ajouter une phrase à l'un oblige les trois, et l'oubli est un
+ * échec de compilation plutôt qu'un trou à l'écran.
+ */
+export type CopieDuPartage = Elargi<typeof STORY>;

@@ -201,6 +201,8 @@ const ETAT = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  plein: null,
+  profil: null,
   ...attributs,
 });
 
@@ -209,6 +211,8 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
   passerelle: 'https://gate.test',
   actifs: {
     participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
+    liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+    feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
@@ -265,6 +269,8 @@ describe('le fil rendu', () => {
           passerelle: 'https://gate.test',
           actifs: {
             participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
+            liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+            feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
             socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
           },
         },
@@ -317,10 +323,10 @@ describe('le fil rendu', () => {
    */
   it('dit qui est en ligne dans l’en-tête, dans une fente que le module repeint — et le tait à zéro', () => {
     const vivant = documentDuFil(ETAT({ tempsReel: TEMPS_REEL, fil: { ...FIL, presence: { participants: ['u2', 'p9'], presents: ['u2'] } } }));
-    expect(vivant).toContain('<p class="sous">4 participants<span class="en-ligne"> · 1 en ligne</span></p>');
+    expect(vivant).toContain('<p class="sous">4 participants<span class="en-ligne" data-sep="1"> · 1 en ligne</span></p>');
     expect(vivant).toContain(' data-participants="u2,p9"');
     expect(vivant).toContain(' data-presents="u2"');
-    expect(doc).toContain('<p class="sous">4 participants<span class="en-ligne" hidden> · 0 en ligne</span></p>');
+    expect(doc).toContain('<p class="sous">4 participants<span class="en-ligne" data-sep="1" hidden> · 0 en ligne</span></p>');
     // Sans module, aucune fente à repeindre : la liste des participants ne part pas.
     expect(documentDuFil(ETAT({ tempsReel: null }))).not.toContain('data-participants');
   });
@@ -581,6 +587,55 @@ describe('ce que la passerelle refuse', () => {
       expect(lu.fil.presence).toEqual({ participants: ['u2', 'p9'], presents: ['u2'] });
       expect(lu.fil.id).toBe('c');
     }
+  });
+
+  /**
+   * LA TRANCHE NOMMÉE PAR UN MESSAGE (`around=`, `routes/conversations/
+   * messages-list.ts:400-450`) — ce que porte le lien d'un média et le retour de
+   * sa surimpression. Sans elle, `?media=` d'un message plus ancien que la
+   * tranche par défaut re-servait les quarante derniers messages, où la pièce
+   * n'est pas : le tap n'ouvrait RIEN.
+   */
+  it('demande la tranche AUTOUR d’un message avec `around`', async () => {
+    const urls: string[] = [];
+    await fil({
+      cle: 'c',
+      creance: { genre: 'membre', jeton: 'j' },
+      moi: null,
+      langues: ['fr'],
+      autour: 'vieux-message',
+      base: 'https://gate.test',
+      recuperer: async (url) => {
+        urls.push(url);
+        return new Response(JSON.stringify({ success: true, data: [], cursorPagination: { hasMore: false, nextCursor: null } }));
+      },
+    });
+    expect(urls.some((url) => url.endsWith('/messages?limit=40&around=vieux-message'))).toBe(true);
+  });
+
+  /**
+   * `before` L'EMPORTE CHEZ LA PASSERELLE (`around && !before`) : la porte n'en
+   * demande donc jamais deux — une tranche se nomme d'UNE façon, sinon le
+   * paramètre servi n'est pas celui qu'on croit avoir demandé.
+   */
+  it('ne demande jamais `around` et `before` ensemble', async () => {
+    const urls: string[] = [];
+    await fil({
+      cle: 'c',
+      creance: { genre: 'membre', jeton: 'j' },
+      moi: null,
+      langues: ['fr'],
+      avant: 'm40',
+      autour: 'vieux-message',
+      base: 'https://gate.test',
+      recuperer: async (url) => {
+        urls.push(url);
+        return new Response(JSON.stringify({ success: true, data: [], cursorPagination: { hasMore: false, nextCursor: null } }));
+      },
+    });
+    const liste = urls.find((url) => url.includes('/messages'));
+    expect(liste).toContain('before=m40');
+    expect(liste).not.toContain('around=');
   });
 
   /**

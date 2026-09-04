@@ -20,6 +20,22 @@ struct ComposerSceneCardLeadingKey: PreferenceKey {
     }
 }
 
+/// **Le letterbox BAS du dessin, remonté aux frères** (#5036) — la jumelle
+/// verticale de `ComposerSceneCardLeadingKey`, et pour la même raison.
+///
+/// La carte se centre dans la hauteur qu'on lui donne : le vide sous elle
+/// n'est pas une marge, c'est une CONSÉQUENCE du ratio et de la place. Un
+/// frère de la pile ne peut pas le calculer — seulement le recevoir.
+///
+/// `max` en réduction, comme sa jumelle : une seule vue le publie, et un zéro
+/// venu d'un frère muet ne doit pas écraser la mesure.
+struct ComposerSceneCardBottomKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 // MARK: - Le son de fond, EN TÊTE de la scène (#5001, dépouillé au #5011)
 
 /// **La note, le spectre, le crédit et la durée — sans capsule.**
@@ -73,14 +89,20 @@ struct ComposerSceneSoundHeader: View {
     /// EMPRUNTÉ, dont `ComposerSoundColumn.opensEditor` protège le crédit.
     var onEdit: (() -> Void)?
 
-    /// Le RETRAIT, par appui long (#4930). `nil` ⇒ aucun menu.
+    /// Le RETRAIT, par appui long (#4930). `nil` ⇒ l'entrée disparaît.
     var onDelete: (() -> Void)?
+
+    /// **Sortir le son du FOND pour le poser sur la scène** (#5018), par le même
+    /// appui long. `nil` ⇒ l'entrée disparaît — c'est le cas de la surface
+    /// DOCUMENT, qui n'a aucune scène où poser une puce, et celui d'un fond
+    /// LEGACY, qu'aucun objet ne porte.
+    var onPromote: (() -> Void)?
 
     var body: some View {
         if let trace = ComposerSceneSoundTrace.served(background: backgroundSound,
                                                       toolIsOpen: toolIsOpen) {
             ligne(trace)
-                .modifier(ComposerSoundDeletionMenu(supprimer: onDelete))
+                .modifier(ComposerSoundActionsMenu(supprimer: onDelete, promouvoir: onPromote))
                 .padding(.leading, leadingInset)
                 .padding(.trailing, leadingInset)
                 .padding(.bottom, 6)
