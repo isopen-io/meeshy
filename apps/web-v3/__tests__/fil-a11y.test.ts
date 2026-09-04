@@ -42,6 +42,7 @@ const TEMPS_REEL = {
     contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
     recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
     liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
+    commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };

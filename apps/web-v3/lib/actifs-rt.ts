@@ -12,10 +12,11 @@ import { lisLActif, memo } from './actifs';
  * `participate.<hash>.js` (le fil), `liste.<hash>.js` (`/chats`),
  * `feed.<hash>.js` (`/feed`, #5031), `notifs.<hash>.js` (`/notifications`,
  * #4898), `contacts.<hash>.js` (`/contacts`, #4921) et `recherche.<hash>.js`
- * (`/search`, #4897) et `liens.<hash>.js` (`/links`, #5090) sont les SEPT
- * modules de participation
+ * (`/search`, #4897), `liens.<hash>.js` (`/links`, #5090) et
+ * `commentaires.<hash>.js` (`/post/:id`, #5091) sont les HUIT modules de
+ * participation
  * compilés par `scripts/build-participate.mjs` (bun build, AVANT `next
- * build`) — sept fichiers parce qu'un écran ne doit télécharger que ce qu'il
+ * build`) — huit fichiers parce qu'un écran ne doit télécharger que ce qu'il
  * exécute (la liste n'a ni composeur, ni réserve, ni plein écran ; le fil
  * social n'a ni l'un ni l'autre, et pas de socket non plus — aimer et
  * reposter sont des allers simples, § `lib/realtime/feed.ts`) ;
@@ -57,6 +58,7 @@ export type ActifsTempsReel = {
   readonly contacts: ActifTempsReel;
   readonly recherche: ActifTempsReel;
   readonly liens: ActifTempsReel;
+  readonly commentaires: ActifTempsReel;
   readonly socket: ActifTempsReel;
 };
 
@@ -98,6 +100,7 @@ export const actifsTempsReel = memo(
     contacts: actif('contacts', lisLeModule('contacts')),
     recherche: actif('recherche', lisLeModule('recherche')),
     liens: actif('liens', lisLeModule('liens')),
+    commentaires: actif('commentaires', lisLeModule('commentaires')),
     socket: actif(
       'socket.io',
       lisFichier(join(process.cwd(), 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js')),
@@ -109,7 +112,7 @@ export const actifsTempsReel = memo(
 export const actifParNom = (nom: string): ActifTempsReel | null => {
   const actifs = actifsTempsReel();
   return (
-    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.recherche, actifs.liens, actifs.socket].find(
+    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.recherche, actifs.liens, actifs.commentaires, actifs.socket].find(
       (candidat) => candidat.nom === nom && candidat.corps !== '',
     ) ?? null
   );

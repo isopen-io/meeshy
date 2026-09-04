@@ -16,6 +16,7 @@ import { nomDeLangue } from '@/lib/contenu/langues';
 import { FEUILLE_DES_COMMENTAIRES } from './commentaires-feuille';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
+import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
 import { documentPleinEcran } from './fil-vue';
 import { documentDeMessage } from '@/app/enveloppe/vue';
 import { carteVide, quand } from './vue';
@@ -62,6 +63,8 @@ export type EtatDesCommentaires = {
   /** La saisie TENUE par le serveur quand il refuse — perdre un texte tapé est le défaut le plus cher d'un formulaire. */
   readonly saisieTenue?: string;
   readonly motif?: string | null;
+  /** Ce que le document porte pour son module (§ 12.4, #5091) — même origine, aucune passerelle. */
+  readonly tempsReel?: { readonly module: string } | null;
 };
 
 /**
@@ -199,6 +202,7 @@ const ecrire = ({ saisieTenue, motif, avis }: EtatDesCommentaires): string =>
     ? `<p class="avis" role="status">${svgDuSprite('ph-check-circle')}${echappe(COMMENTAIRES.publie)}</p>`
     : '') +
   '<form class="ecrire" method="post">' +
+  '<p class="voix-du-geste" role="status" hidden></p>' +
   (motif === null || motif === undefined ? '' : `<p class="motif" role="alert">${echappe(motif)}</p>`) +
   `<label class="hors-ecran" for="contenu-du-commentaire">${echappe(COMMENTAIRES.ecrire)}</label>` +
   `<textarea id="contenu-du-commentaire" name="contenu" rows="2" maxlength="2000" required placeholder="${echappe(
@@ -208,12 +212,17 @@ const ecrire = ({ saisieTenue, motif, avis }: EtatDesCommentaires): string =>
   '</form>';
 
 const corps = (etat: EtatDesCommentaires): string => {
-  const { publication, commentaires, encore, maintenant } = etat;
+  const { publication, commentaires, encore, maintenant, tempsReel } = etat;
+  const participation =
+    tempsReel === null || tempsReel === undefined
+      ? ''
+      : ` data-participation="commentaires" data-module="${echappe(tempsReel.module)}"`;
   return (
-    '<main id="main-content" class="commentaires-ecran">' +
+    `<main id="main-content" class="commentaires-ecran"${participation}>` +
     enTete(publication) +
     puces(publication.genre) +
     cartePublication(publication) +
+    '<div id="fil-des-commentaires">' +
     (commentaires.length === 0
       ? carteVide({
           glyphe: 'ph-chat-circle',
@@ -223,6 +232,7 @@ const corps = (etat: EtatDesCommentaires): string => {
       : `<ul class="commentaires">${commentaires.map((k) => ligne(k, maintenant)).join('')}</ul>`) +
     (encore ? `<p class="encore">${echappe(COMMENTAIRES.encore)}</p>` : '') +
     ecrire(etat) +
+    '</div>' +
     '</main>'
   );
 };
@@ -233,6 +243,7 @@ export const documentDesCommentaires = (etat: EtatDesCommentaires): string =>
     description: etat.publication.titre ?? COMMENTAIRES.titre,
     corps: corps(etat),
     feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_COMMENTAIRES,
+    script: etat.tempsReel === null || etat.tempsReel === undefined ? '' : CHARGEUR_DE_PARTICIPATION,
   });
 
 /**

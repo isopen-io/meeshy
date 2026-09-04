@@ -110,6 +110,8 @@ export type EtatDuCompteDeBouchon = {
   readonly conversationsCreees: { id: string; titre: string }[];
   /** La boîte de notifications du lecteur — servie par `GET /notifications`, mutée par `read-all`. */
   readonly boite: BoiteDeNotifsDeBouchon;
+  /** Le fil de commentaires d'une publication — écrit par le POST, relu par le GET (#5091). */
+  readonly filDeCommentaires: FilDeCommentairesDeBouchon;
 };
 
 /**
@@ -297,6 +299,45 @@ const PUBLICATION_DU_BOUCHON = {
  * Sans les trois, `color-contrast` ne verrait ni la ligne du Prisme ni les
  * gestes d'auteur, et l'audit serait vert par vacuité sur la moitié de l'écran.
  */
+/**
+ * LE FIL DE COMMENTAIRES, MUTABLE (#5091) — écrit par `POST /posts/:id/comments`
+ * et RELU par le GET : un bouchon qui répond 200 sans écrire fait passer un
+ * client qui n'a rien changé. `remets()` restaure l'état initial entre témoins.
+ */
+export type FilDeCommentairesDeBouchon = {
+  lignes: Record<string, unknown>[];
+  readonly ajoute: (contenu: string) => Record<string, unknown>;
+  readonly remets: () => void;
+};
+
+export const filDeCommentairesDeBouchon = (): FilDeCommentairesDeBouchon => {
+  const initiales = (): Record<string, unknown>[] => COMMENTAIRES_DU_BOUCHON.map((k) => ({ ...k }));
+  let suivant = 0;
+  const fil: FilDeCommentairesDeBouchon = {
+    lignes: initiales(),
+    ajoute: (contenu) => {
+      suivant += 1;
+      const ligne = {
+        id: `k-neuf-${suivant}`,
+        content: contenu,
+        originalLanguage: 'fr',
+        translations: {},
+        likeCount: 0,
+        replyCount: 0,
+        createdAt: new Date().toISOString(),
+        author: { id: MEMBRE.id, username: 'amina', displayName: MEMBRE.nom },
+      };
+      fil.lignes = [...fil.lignes, ligne];
+      return ligne;
+    },
+    remets: () => {
+      fil.lignes = initiales();
+      suivant = 0;
+    },
+  };
+  return fil;
+};
+
 const COMMENTAIRES_DU_BOUCHON = [
   {
     id: 'k-marta',
@@ -686,9 +727,21 @@ export const routesDuCompte =
     // distingue ces deux routes par leur chemin complet, et un bouchon qui
     // teste des préfixes ordonne du plus PRÉCIS au plus général.
     if (/^\/api\/v1\/posts\/[^/]+\/comments/.test(chemin)) {
+      if (requete.method === 'POST') {
+        // `CreateCommentSchema` : `content` ≤ 2000. Le magasin ÉCRIT, comme la
+        // base — la re-serve suivante porte le commentaire neuf.
+        const poste = JSON.parse(corps.toString('utf8') || '{}') as { content?: string };
+        const contenu = (poste.content ?? '').toString();
+        if (contenu.length > 2000) {
+          json({ success: false, error: { message: 'content too long' } }, 400);
+          return true;
+        }
+        json({ success: true, data: etat.filDeCommentaires.ajoute(contenu) }, 201);
+        return true;
+      }
       json({
         success: true,
-        data: COMMENTAIRES_DU_BOUCHON,
+        data: etat.filDeCommentaires.lignes,
         pagination: { limit: 30, hasMore: false, nextCursor: null },
         meta: { mentionedUsers: [] },
       });

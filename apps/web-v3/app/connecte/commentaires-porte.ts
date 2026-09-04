@@ -1,5 +1,6 @@
 import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
+import { actifsTempsReel } from '@/lib/actifs-rt';
 import { moi } from '@/lib/api/compte';
 import {
   chargeDeLaStory,
@@ -43,6 +44,17 @@ import { documentDePanne } from './vue';
  * moi », et l'écran n'offre aucun geste d'auteur plutôt que d'en offrir un que
  * la passerelle refuserait.
  */
+
+/**
+ * LE SOCLE DU MODULE (#5091) — `null` tant que l'actif compilé est absent : le
+ * Post/Redirect/Get reste alors le seul chemin (§ 12.4). Même origine, aucune
+ * passerelle côté navigateur.
+ */
+const moduleDeParticipation = (): { readonly module: string } | null => {
+  const actifs = actifsTempsReel();
+  if (actifs.commentaires.corps === '') return null;
+  return { module: actifs.commentaires.url };
+};
 
 export const COMMENTAIRES_SERVIS = async ({
   requete,
@@ -104,6 +116,7 @@ export const COMMENTAIRES_SERVIS = async ({
       avis: new URL(requete.url).searchParams.has(TEMOIN_DU_COMMENTAIRE) ? 'commente' : null,
       saisieTenue: refus?.saisieTenue,
       motif: refus?.motif ?? null,
+      tempsReel: moduleDeParticipation(),
     }),
   );
 };

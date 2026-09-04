@@ -9,8 +9,10 @@ import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-
 import {
   APPAREILS_DU_BOUCHON,
   boiteDeNotifsDeBouchon,
+  filDeCommentairesDeBouchon,
   routesDuCompte,
   type BoiteDeNotifsDeBouchon,
+  type FilDeCommentairesDeBouchon,
 } from './bouchon-compte';
 import {
   placeDeLInvite,
@@ -136,6 +138,8 @@ export type PasserelleDeBouchon = {
   readonly socket: BouchonSocket;
   /** La boîte de notifications du lecteur (#4898) — `remets()` la restaure entre deux témoins. */
   readonly boite: BoiteDeNotifsDeBouchon;
+  /** Le fil de commentaires (#5091) — écrit par le POST, `remets()` entre témoins. */
+  readonly filDeCommentaires: FilDeCommentairesDeBouchon;
   /** Les sessions invitées dont la place est ACTIVE : en retirer une, c'est `isActive:false` en base (état F). */
   readonly placesActives: Set<string>;
   /**
@@ -306,6 +310,7 @@ export const passerelleDeBouchon = async (options?: {
   const liensCrees: Record<string, unknown>[] = [];
   const conversationsCreees: { id: string; titre: string }[] = [];
   const boite = boiteDeNotifsDeBouchon(conversationId);
+  const filDeCommentaires = filDeCommentairesDeBouchon();
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -316,6 +321,7 @@ export const passerelleDeBouchon = async (options?: {
     liensCrees,
     conversationsCreees,
     boite,
+    filDeCommentaires,
   });
 
   const serveur = createServer(async (requete, reponse) => {
@@ -407,6 +413,7 @@ export const passerelleDeBouchon = async (options?: {
     },
     socket: bouchon,
     boite,
+    filDeCommentaires,
     placesActives,
     sessionsRevoquees,
     place,
