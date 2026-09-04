@@ -163,6 +163,39 @@ describe('la boîte du lecteur', () => {
     expect(boite.total).toBe(0);
   });
 
+  it('rend le curseur SUIVANT quand `hasMore` est vrai — #5087', async () => {
+    const recuperer = servi(
+      enveloppe([ligne()], { pagination: { total: 42, offset: 0, limit: 30, hasMore: true, nextCursor: 'c2', form: 'offset' } }),
+    );
+
+    const boite = await boiteDuLecteur({ jeton: JETON, base: BASE, recuperer });
+    if (boite.genre !== 'liste') throw new Error('liste attendue');
+
+    expect(boite.curseurSuivant).toBe('c2');
+  });
+
+  it('ne rend AUCUN curseur suivant quand `hasMore` est faux, même si `nextCursor` traîne', async () => {
+    const recuperer = servi(
+      enveloppe([ligne()], { pagination: { total: 1, offset: 0, limit: 30, hasMore: false, nextCursor: 'c2', form: 'offset' } }),
+    );
+
+    const boite = await boiteDuLecteur({ jeton: JETON, base: BASE, recuperer });
+    if (boite.genre !== 'liste') throw new Error('liste attendue');
+
+    expect(boite.curseurSuivant).toBeNull();
+  });
+
+  it('relaie le curseur demandé à la passerelle', async () => {
+    const recuperer = servi(enveloppe([]));
+
+    await boiteDuLecteur({ jeton: JETON, base: BASE, curseur: 'c1', recuperer });
+
+    expect(recuperer).toHaveBeenCalledWith(
+      `${BASE}/api/v1/notifications?limit=30&cursor=c1`,
+      expect.objectContaining({ headers: expect.objectContaining({ authorization: `Bearer ${JETON}` }) }),
+    );
+  });
+
   it('rend « session expirée » sur un 401, jamais une panne', async () => {
     const recuperer = servi({ success: false }, 401);
 

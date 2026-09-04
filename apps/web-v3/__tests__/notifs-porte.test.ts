@@ -3,6 +3,7 @@
  */
 
 import { BOITE, TOUT_LIRE } from '@/app/connecte/notifs-porte';
+import { NOTIFS } from '@/lib/contenu/notifs';
 
 /**
  * CE QUE CES TÉMOINS ÉPROUVENT — la PORTE, c'est-à-dire les décisions que
@@ -132,6 +133,39 @@ describe('la porte de /notifications', () => {
 
     expect(reponse.status).toBe(302);
     expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2Fnotifications');
+  });
+
+  it('relaie `cursor` à la passerelle et sert le lien « Plus anciennes » quand `nextCursor` existe — #5087', async () => {
+    const { recuperer, vus } = passerelle({
+      '/auth/me': () => json({ success: true, data: { id: 'u1', displayName: 'Moi' } }),
+      '/notifications': () =>
+        json({
+          success: true,
+          data: BOITE_SERVIE.data,
+          pagination: { total: 60, offset: 0, limit: 30, hasMore: true, nextCursor: 'c2', form: 'offset' },
+          unreadCount: 1,
+        }),
+    });
+
+    const html = await (
+      await BOITE(requete('https://meeshy.test/notifications?cursor=c1'), recuperer)
+    ).text();
+
+    expect(vus.find((url) => url.includes('/notifications?'))).toContain('cursor=c1');
+    expect(html).toContain('href="/notifications?cursor=c2"');
+    expect(html).toContain('Notifications plus anciennes');
+  });
+
+  it('ne sert AUCUN lien « Plus anciennes » quand `nextCursor` n’existe pas', async () => {
+    const { recuperer } = NOMINALE();
+
+    const html = await (await BOITE(requete('https://meeshy.test/notifications'), recuperer)).text();
+
+    // La feuille de style porte `.plus-ancien` (partagée avec le fil et les
+    // médias) même quand aucun lien n'est rendu — c'est le CONTRÔLE, pas la
+    // règle CSS, qui doit être absent.
+    expect(html).not.toContain('class="plus-ancien');
+    expect(html).not.toContain(NOTIFS.plusAnciennes);
   });
 
   it('dessine la panne plutôt qu’une page blanche quand la passerelle se tait', async () => {

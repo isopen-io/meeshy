@@ -61,6 +61,15 @@ export type EtatDesNotifs = {
   /** Vrai au retour du POST « tout lire » : l'action DIT ce qu'elle a fait. */
   readonly toutLu: boolean;
   readonly tempsReel: TempsReelDesNotifs | null;
+  /**
+   * Le curseur de la page SUIVANTE, ou `null` — même patron que
+   * `EtatDuFilSocial.curseurSuivant` (`social-vue.ts`) : `corps()` sert ALORS
+   * `<a href="/notifications?cursor=…">`, jamais un bouton sans cible (charte
+   * règle 7). La trentième notification n'était jusqu'ici accessible par
+   * AUCUN contrôle (#5087) — la porte sert `pagination.nextCursor`, rien ne
+   * le lisait.
+   */
+  readonly curseurSuivant: string | null;
 };
 
 const enTete = (nonLues: number): string =>
@@ -149,7 +158,19 @@ const gabarit = (): string =>
   '</li>' +
   '</template>';
 
-const corps = ({ notifications, nonLues, maintenant, toutLu }: EtatDesNotifs, participation: string): string =>
+/**
+ * LE LIEN DE PAGE SUIVANTE — même patron que `listeDesMessages` (`fil-vue.ts`)
+ * et `documentDesMedias` (`medias-vue.ts`) : un `<a class="plus-ancien">`, dont
+ * la feuille est déjà importée par ce document (`FEUILLE_DU_FIL`). Sans
+ * JavaScript, un rechargement suffit ; le module du direct n'y change rien —
+ * la page suivante est de la lecture froide, jamais tenue par le socket.
+ */
+const plusAnciennes = (curseurSuivant: string | null): string =>
+  curseurSuivant === null
+    ? ''
+    : `<a class="plus-ancien action discrete" href="/notifications?cursor=${echappe(encodeURIComponent(curseurSuivant))}">${echappe(NOTIFS.plusAnciennes)}</a>`;
+
+const corps = ({ notifications, nonLues, maintenant, toutLu, curseurSuivant }: EtatDesNotifs, participation: string): string =>
   `<main id="main-content" class="notifs-ecran" data-nonlues="${nonLues}"${participation}>` +
   enTete(nonLues) +
   avis(toutLu) +
@@ -162,6 +183,7 @@ const corps = ({ notifications, nonLues, maintenant, toutLu }: EtatDesNotifs, pa
   `<ul class="notifs" aria-label="${echappe(NOTIFS.liste)}"${notifications.length === 0 ? ' hidden' : ''}>${notifications
     .map((n) => ligne(n, maintenant))
     .join('')}</ul>` +
+  plusAnciennes(curseurSuivant) +
   gabarit() +
   '</main>';
 
