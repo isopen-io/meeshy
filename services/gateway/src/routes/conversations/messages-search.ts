@@ -32,7 +32,7 @@ import {
   type MessagesDeRefusDAcces
 } from './utils/access-control';
 import type { ConversationParams } from './types';
-import { sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
@@ -107,6 +107,11 @@ export function registerMessageSearchRoute(
         },
         401: errorResponseSchema,
         403: errorResponseSchema,
+        // #4856 — un identifiant qui ne résout à AUCUNE conversation est un
+        // « je ne trouve pas », pas un refus d'accès : même verdict que la
+        // vérification jumelle de `threads.ts` et `messages-read-status.ts`
+        // pour ce même appel à `resolveConversationId`.
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -129,7 +134,14 @@ export function registerMessageSearchRoute(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendForbidden(reply, 'Conversation not found');
+        // #4856 — le statut disait « refusé » pendant que le texte disait
+        // « absent » : l'un des deux mentait. `resolveConversationId` ne rend
+        // `null` que pour un identifiant qui ne résout à AUCUNE conversation
+        // (un ObjectId valide passe tel quel, existence non vérifiée ici) —
+        // ce n'est pas une décision anti-énumération, c'est un « je ne
+        // trouve pas », comme le rendent déjà `threads.ts` et
+        // `messages-read-status.ts` pour le même appel.
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
