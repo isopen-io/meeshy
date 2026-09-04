@@ -2004,10 +2004,12 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S0",
+        "S1",
         "S2",
         "S3"
       ],
-      "securityBasisKey": "authenticated-only",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
