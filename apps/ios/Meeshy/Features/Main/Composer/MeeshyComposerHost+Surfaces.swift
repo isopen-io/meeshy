@@ -59,7 +59,21 @@ extension MeeshyComposerHost {
             publishTargetType: selectedFormat.postType,
             onPublishAllInBackground: onPublishAllInBackground,
             onPreview: onPreview,
-            onDismiss: onDismiss
+            onDismiss: onDismiss,
+            // **La vignette d'une slide ouvre son FOND** (#5041, directive
+            // porteur : « Longpress editer sur la miniature des slide permet
+            // d'ouvrir le background »).
+            //
+            // Le MÊME site que toutes les autres portes de l'éditeur d'objet —
+            // `openObjectEditor` est l'unique façon d'ouvrir un objet, quelle
+            // que soit la porte, et recopier ici ce qu'il contient est
+            // exactement ce qui a fait diverger deux chemins au #4634.
+            //
+            // Sa PRÉSENCE gouverne l'affordance : `SlideThumbEditAffordance` lit
+            // `onEditSceneObject != nil` pour décider si l'entrée existe. Un
+            // hôte qui ne le branche pas ne voit aucun « Éditer le fond »,
+            // plutôt qu'une entrée qui aurait l'air de marcher jusqu'au tap.
+            onEditSceneObject: { openObjectEditor($0) }
         )
         .storyLocationPickerProvided()
         .storyCameraCaptureProvided()
