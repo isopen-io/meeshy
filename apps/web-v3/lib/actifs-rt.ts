@@ -10,10 +10,10 @@ import { lisLActif, memo } from './actifs';
  * (conception § 12.4).
  *
  * `participate.<hash>.js` (le fil), `liste.<hash>.js` (`/chats`),
- * `feed.<hash>.js` (`/feed`, #5031) et `notifs.<hash>.js` (`/notifications`,
- * #4898) sont les QUATRE modules de participation
+ * `feed.<hash>.js` (`/feed`, #5031), `notifs.<hash>.js` (`/notifications`,
+ * #4898) et `contacts.<hash>.js` (`/contacts`, #4921) sont les CINQ modules de participation
  * compilés par `scripts/build-participate.mjs` (bun build, AVANT `next
- * build`) — quatre fichiers parce qu'un écran ne doit télécharger que ce qu'il
+ * build`) — cinq fichiers parce qu'un écran ne doit télécharger que ce qu'il
  * exécute (la liste n'a ni composeur, ni réserve, ni plein écran ; le fil
  * social n'a ni l'un ni l'autre, et pas de socket non plus — aimer et
  * reposter sont des allers simples, § `lib/realtime/feed.ts`) ;
@@ -52,6 +52,7 @@ export type ActifsTempsReel = {
   readonly liste: ActifTempsReel;
   readonly feed: ActifTempsReel;
   readonly notifs: ActifTempsReel;
+  readonly contacts: ActifTempsReel;
   readonly socket: ActifTempsReel;
 };
 
@@ -90,6 +91,7 @@ export const actifsTempsReel = memo(
     liste: actif('liste', lisLeModule('liste')),
     feed: actif('feed', lisLeModule('feed')),
     notifs: actif('notifs', lisLeModule('notifs')),
+    contacts: actif('contacts', lisLeModule('contacts')),
     socket: actif(
       'socket.io',
       lisFichier(join(process.cwd(), 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js')),
@@ -101,7 +103,7 @@ export const actifsTempsReel = memo(
 export const actifParNom = (nom: string): ActifTempsReel | null => {
   const actifs = actifsTempsReel();
   return (
-    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.socket].find(
+    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.socket].find(
       (candidat) => candidat.nom === nom && candidat.corps !== '',
     ) ?? null
   );

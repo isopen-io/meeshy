@@ -21,6 +21,7 @@ const TEMPS_REEL = {
     liste: { nom: 'liste.a.js', url: '/__v3/rt/liste.a.js', corps: '' },
     feed: { nom: 'feed.a.js', url: '/__v3/rt/feed.a.js', corps: '' },
     notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
+    contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };

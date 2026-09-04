@@ -32,6 +32,8 @@ export const CONTACTS = {
   /** Ce que l'action DIT une fois faite — un contrôle muet laisse le doute qu'il prétendait lever. */
   acceptee: 'Demande acceptée',
   refusee: 'Demande refusée',
+  /** Le retour en arrière du refus optimiste, tant que sa fenêtre est ouverte. */
+  annuler: 'Annuler',
   echouee: 'La demande n’a pas pu être traitée. Réessayez dans un instant.',
 
   vide: 'Aucun contact',

@@ -120,6 +120,7 @@ const nextConfig: NextConfig = {
       './.rt/liste.js',
       './.rt/feed.js',
       './.rt/notifs.js',
+      './.rt/contacts.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },

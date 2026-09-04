@@ -69,12 +69,13 @@ const restrictedImportPatterns = forbiddenModules.map(({ root, message }) => ({
 // `app/` compose des documents ; `participate` n'y a aucune place. Et
 // `socket.io-client` n'a qu'UN importateur : le module lui-même, dynamiquement.
 const PARTICIPATION_DYNAMIQUE =
-  "Les modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed, lib/realtime/notifs.ts pour /notifications) se chargent par `await import()` d'une adresse servie (`lib/actifs-rt.ts`), après le premier pixel — jamais par un import statique (§ 12.4).";
+  "Les modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed, lib/realtime/notifs.ts pour /notifications, lib/realtime/contacts.ts pour /contacts) se chargent par `await import()` d'une adresse servie (`lib/actifs-rt.ts`), après le premier pixel — jamais par un import statique (§ 12.4).";
 const restrictedParticipationPatterns = [
   { group: ['**/realtime/participate', '**/realtime/participate.ts'], message: PARTICIPATION_DYNAMIQUE },
   { group: ['**/realtime/liste', '**/realtime/liste.ts'], message: PARTICIPATION_DYNAMIQUE },
   { group: ['**/realtime/feed', '**/realtime/feed.ts'], message: PARTICIPATION_DYNAMIQUE },
   { group: ['**/realtime/notifs', '**/realtime/notifs.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/contacts', '**/realtime/contacts.ts'], message: PARTICIPATION_DYNAMIQUE },
   { group: ['socket.io-client', 'socket.io-client/**'], message: PARTICIPATION_DYNAMIQUE },
 ];
 

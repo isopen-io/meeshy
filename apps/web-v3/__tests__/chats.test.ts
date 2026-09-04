@@ -293,6 +293,7 @@ describe('la greffe du temps réel', () => {
       liste: { nom: 'liste.b.js', url: '/__v3/rt/liste.b.js', corps: '' },
       feed: { nom: 'feed.b.js', url: '/__v3/rt/feed.b.js', corps: '' },
       notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
+      contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
       socket: { nom: 'socket.io.c.js', url: '/__v3/rt/socket.io.c.js', corps: '' },
     },
   };
