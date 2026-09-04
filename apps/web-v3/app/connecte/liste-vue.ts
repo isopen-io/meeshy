@@ -19,6 +19,8 @@ import type { Contact } from '@/lib/api/contacts';
 
 import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
+import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
+import { REGION_DE_LA_BANNIERE } from './banniere-vue';
 import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
 import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
 import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from './liste-feuille';
@@ -462,12 +464,15 @@ export const documentDesChats = (etat: EtatDesChats): string => {
       FEUILLE_CONNECTEE +
       FEUILLE_DE_LA_LISTE +
       FEUILLE_DES_FLOTTANTES +
+      (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
       (surimpose === dessus && dessus !== '' ? FEUILLE_DU_PROFIL : '') +
       (surimpose === creation && creation !== '' ? FEUILLE_DE_LA_NOUVELLE_CONV : '') +
       (espace === '' ? '' : FEUILLE_DE_L_ESPACE),
     corps: corps(etat),
     retour: true,
     surimpression: surimpose,
+    // Voir `documentDuFil` : la région suit le module, jamais l'écran.
+    banniere: etat.tempsReel === null ? '' : REGION_DE_LA_BANNIERE,
     attributsDuMain: attributsDeParticipation(etat),
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });

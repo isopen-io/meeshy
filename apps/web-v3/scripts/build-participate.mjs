@@ -97,7 +97,7 @@ const ecrisLaMesure = (poids) => {
     commande: 'cd apps/web-v3 && node scripts/build-participate.mjs --mesure',
     date: new Date().toISOString().slice(0, 10),
   };
-  writeFileSync(MESURES, `${JSON.stringify(mesures, null, 1)}\n`);
+  writeFileSync(MESURES, `${JSON.stringify(mesures, null, 2)}\n`);
 };
 
 const main = () => {

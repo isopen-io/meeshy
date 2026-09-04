@@ -14,6 +14,7 @@ import { cleDeLien, cleDuLien, effaceLaPlace, jetonDuCookie, poseSession, type C
 import { rafraichis, raisonDeFermeture, type Droits } from '@/lib/api/invite';
 import { BANDEAUX, ETATS_DU_TEMPS_REEL, FIL } from '@/lib/contenu/fil';
 
+import { brancheLaBanniere } from './banniere';
 import { prendsLeComposeur, type ControleurDuComposeur } from './composeur';
 import { defilement, type Defilement } from './defilement';
 import { droitsDuChangement, oublieLaJonctionFraiche, peinsLesDroits, peinsLeTrombone } from './droits-peinture';
@@ -853,6 +854,11 @@ const connecte = async (ctx: Contexte): Promise<void> => {
   });
   ctx.socket = socket;
   branche(ctx, socket);
+  // LA BANNIÈRE (#4454) — branchée ICI, sur le socket qui vient d'être ouvert,
+  // et jamais ailleurs : cet écran en tient DÉJÀ un, donc le toast ne coûte
+  // aucune connexion. La région est cherchée une fois ; absente (un document
+  // servi sans temps réel), la porte ne fait rien.
+  brancheLaBanniere({ socket, region: document.querySelector<HTMLElement>('.banniere') });
   if (!ctx.cache && ctx.enLigne) socket.connect();
 };
 
