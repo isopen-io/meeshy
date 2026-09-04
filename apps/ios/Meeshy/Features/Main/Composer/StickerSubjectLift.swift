@@ -78,7 +78,7 @@ nonisolated enum StickerSubjectLift {
             throw Failure.unreadable
         }
         let request = VNGenerateForegroundInstanceMaskRequest()
-        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: source.cgOrientation)
+        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: cgOrientation(of: source))
         try handler.perform([request])
         guard let observation = request.results?.first,
               let principal = observation.allInstances.first else {
@@ -125,14 +125,20 @@ nonisolated enum StickerSubjectLift {
             lifted.draw(in: CGRect(origin: .zero, size: target))
         }
     }
-}
 
-private extension UIImage {
     /// L'orientation EXIF que Vision attend. Sans elle, une photo prise en
     /// portrait est analysée couchée : Vision y trouve un sujet différent, ou
     /// aucun — et l'utilisateur voit « aucun sujet » sur une photo qui en a un.
-    var cgOrientation: CGImagePropertyOrientation {
-        switch imageOrientation {
+    ///
+    /// **Membre de l'énumération, jamais une extension sur `UIImage`.** La cible
+    /// app compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` : le
+    /// `nonisolated` du type ne couvre PAS une extension déclarée à côté de lui,
+    /// qui repart donc sur le MainActor — et devient inatteignable depuis
+    /// `lift(imageData:)`, qui doit rester nonisolated pour tourner hors du
+    /// thread principal. Le rendre membre supprime la question au lieu de la
+    /// re-résoudre.
+    private static func cgOrientation(of image: UIImage) -> CGImagePropertyOrientation {
+        switch image.imageOrientation {
         case .up: return .up
         case .down: return .down
         case .left: return .left

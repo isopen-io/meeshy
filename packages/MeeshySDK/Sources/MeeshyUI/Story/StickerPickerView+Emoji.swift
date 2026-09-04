@@ -50,7 +50,16 @@ extension StickerPickerView {
     /// intégrée (`postMediaId`) : taper une vignette la POSE sur le canevas, la
     /// bibliothèque n'est plus une collection sans sortie.
     var libraryTab: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // Valeurs `@MainActor` (bundle localisé) hissées hors de la closure de
+        // label de `PhotosPicker`, qui est inférée `@Sendable` — même correctif
+        // que `ConversationSettingsView.visualSection`, et pour la même raison :
+        // `.module` y est « main actor-isolated property referenced from a
+        // nonisolated context ».
+        let liftLabel = String(localized: "story.sticker.library.lift",
+                               defaultValue: "Détourer", bundle: .module)
+        let liftA11y = String(localized: "story.sticker.library.lift.a11y",
+                              defaultValue: "Détourer le sujet d'une photo", bundle: .module)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Spacer()
                 if let stickerLibrary {
@@ -60,22 +69,12 @@ extension StickerPickerView {
                     // du projet est 16 (loi 4 : absent, jamais grisé).
                     if stickerLibrary.canLift {
                         PhotosPicker(selection: $liftSelection, matching: .images) {
-                            Label {
-                                Text(String(localized: "story.sticker.library.lift",
-                                            defaultValue: "Détourer",
-                                            bundle: .module))
-                            } icon: {
-                                Image(systemName: "person.and.background.dotted")
-                            }
+                            Label(liftLabel, systemImage: "person.and.background.dotted")
                         }
                         .labelStyle(.iconOnly)
                         .buttonBorderShape(.capsule)
                         .frame(minHeight: 32)
-                        .accessibilityLabel(String(
-                            localized: "story.sticker.library.lift.a11y",
-                            defaultValue: "Détourer le sujet d'une photo",
-                            bundle: .module
-                        ))
+                        .accessibilityLabel(liftA11y)
                     }
                     PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
                         Task { libraryItems = await stickerLibrary.paste(providers) }

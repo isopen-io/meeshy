@@ -331,16 +331,23 @@ extension View {
     /// appel, la section « Mes stickers » de `StickerPickerView` n'est pas
     /// rendue (loi 4).
     func storyStickerLibraryProvided() -> some View {
-        environment(\.storyStickerLibrary, StoryStickerLibraryProvider(
+        // **La capacité est TYPÉE avant d'être passée.** Un ternaire entre une
+        // closure littérale et `nil` n'est pas inférable : le compilateur rend
+        // « type of expression is ambiguous » sur l'appel ENTIER, à quinze
+        // lignes de la ligne fautive. La constante annotée résout l'inférence là
+        // où la décision se prend.
+        //
+        // `nil` sur iOS 16 : l'entrée « détourer » n'est alors PAS rendue
+        // (loi 4). Le prédicat vit dans le service, pas ici — un second
+        // `#available` écrit au site d'injection divergerait du premier au jour
+        // où le plancher monte.
+        let lift: StoryStickerLibraryProvider.Lift? = StickerSubjectLift.isAvailable
+            ? { data in await StickerLibraryLift.lift(imageData: data) }
+            : nil
+        return environment(\.storyStickerLibrary, StoryStickerLibraryProvider(
             recents: { await StickerLibraryPaste.recents() },
             paste: { providers in await StickerLibraryPaste.paste(providers) },
-            // `nil` sur iOS 16 : l'entrée « détourer » n'est alors PAS rendue
-            // (loi 4). Le prédicat vit dans le service, pas ici — un second
-            // `#available` écrit au site d'injection divergerait du premier au
-            // jour où le plancher monte.
-            lift: StickerSubjectLift.isAvailable
-                ? { data in await StickerLibraryLift.lift(imageData: data) }
-                : nil
+            lift: lift
         ))
     }
 }
