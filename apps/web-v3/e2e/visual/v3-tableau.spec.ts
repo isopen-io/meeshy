@@ -106,17 +106,22 @@ test.describe('le tableau de bord garni', () => {
 
   /**
    * Charte règle 6 — un rond flottant est un `<a href>` vers une route SERVIE.
-   * La v3 ne sert aujourd'hui ni compte (`sheet:member`) ni réglages
-   * (`settings`) : l'écran n'en rend AUCUN, ce qui est le comportement voulu —
-   * jamais une puce inerte.
+   *
+   * **SA PRÉMISSE A BOUGÉ, PAS LA RÈGLE** (#5093). Ce témoin gardait « aucun
+   * rond » pour la raison qu'il portait écrite : « la v3 ne sert aujourd'hui ni
+   * compte ni réglages ». Elle sert désormais les six écrans de `/settings`,
+   * `/feed`, `/contacts`, `/notifications`, `/search` et `/links` — donc la
+   * règle 6 veut que les ronds soient RENDUS. Ce qu'elle interdit — une cible
+   * inerte, un `href="#"`, un `onclick` — est gardé ligne pour ligne.
    */
-  test('ne rend aucun rond flottant, aucune cible inerte', async ({ browser }) => {
+  test('rend les deux ronds vers des routes servies, et aucune cible inerte', async ({ browser }) => {
     const contexte = await browser.newContext();
     await contexte.addCookies(cookiesDuLecteur(v3.base));
     const page = await contexte.newPage();
     await page.goto(`${v3.base}/`, { waitUntil: 'domcontentloaded' });
 
-    expect(await page.locator('a.flottant').count()).toBe(0);
+    await expect(page.locator('a.flottante.gauche')).toHaveAttribute('href', '/feed');
+    await expect(page.locator('a.flottante.droite')).toHaveAttribute('href', '/?espace');
     expect(await page.locator('[href="#"], [onclick]').count()).toBe(0);
     await contexte.close();
   });

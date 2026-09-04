@@ -44,3 +44,53 @@ nonisolated enum ComposerCaptureOrientation {
         }
     }
 }
+
+/// **Ce qu'on ÉCRIT d'une capture — les octets reçus, sinon un repli** (#4080).
+///
+/// > « la prise de la photo doit avoir les exif et metadata » — porteur,
+/// > 2026-09-04
+///
+/// La règle tient en une phrase : **on ne reconstruit pas ce qu'on a reçu.**
+/// `AVCapturePhoto.fileDataRepresentation()` rend un fichier complet — EXIF,
+/// TIFF, marque et modèle, date de prise, temps de pose, focale, orientation,
+/// et la position quand l'app y a droit. Ré-encoder depuis l'`UIImage` jette
+/// tout cela, et c'est ce qui faisait aussi arriver la photo COUCHÉE : une
+/// seule correction ferme les deux défauts.
+///
+/// Le repli existe parce que la source n'est pas toujours un objectif — un
+/// écran de test, un chemin futur, un fournisseur qui ne rend qu'une image.
+/// Il redresse alors le tampon, faute d'EXIF pour le faire.
+nonisolated enum ComposerCapturePayload {
+
+    /// Le format des octets reçus se LIT dans leurs premiers octets, jamais
+    /// dans une extension qu'on aurait choisie : l'appareil rend du HEIC ou du
+    /// JPEG selon les réglages, et les nommer tous `.jpg` ferait mentir le nom
+    /// sur le contenu — ce qu'un `MimeTypeResolver` par extension propagerait.
+    static func fileExtension(of data: Data) -> String {
+        // JPEG : FF D8 FF · HEIC : la boîte `ftyp` en octets 4-7 · PNG : 89 50
+        if data.count >= 3, data[0] == 0xFF, data[1] == 0xD8, data[2] == 0xFF { return "jpg" }
+        if data.count >= 12,
+           data[4] == 0x66, data[5] == 0x74, data[6] == 0x79, data[7] == 0x70 { return "heic" }
+        if data.count >= 2, data[0] == 0x89, data[1] == 0x50 { return "png" }
+        return "jpg"
+    }
+
+    static func mime(for suffixe: String) -> String {
+        switch suffixe {
+        case "heic": return "image/heic"
+        case "png":  return "image/png"
+        default:     return "image/jpeg"
+        }
+    }
+
+    /// - Returns: les octets à écrire et leur extension. `nil` si même le repli
+    ///   échoue — une image sans pixels encodables, cas où écrire un fichier
+    ///   vide serait pire que ne rien poser.
+    static func bytes(original: Data?, fallback: UIImage) -> (Data?, String) {
+        if let original, !original.isEmpty {
+            return (original, fileExtension(of: original))
+        }
+        return (ComposerCaptureOrientation.upright(fallback)
+            .jpegData(compressionQuality: 0.9), "jpg")
+    }
+}

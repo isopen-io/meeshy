@@ -6,7 +6,21 @@ import MeeshySDK
 import MeeshyUI
 
 enum CameraResult {
-    case photo(UIImage)
+    /// **La photo, ET ses octets d'origine** (directive porteur 2026-09-04 :
+    /// « la prise de la photo doit avoir les exif et metadata »).
+    ///
+    /// `AVCapturePhoto.fileDataRepresentation()` rend un fichier COMPLET :
+    /// EXIF, TIFF, marque et modèle de l'appareil, date de prise, temps de
+    /// pose, focale, orientation — et la position si l'app y a droit. Une
+    /// `UIImage` n'en garde RIEN : elle porte des pixels et une orientation, et
+    /// tout le reste est perdu à la construction.
+    ///
+    /// Les octets voyagent donc À CÔTÉ de l'image, `nil` quand la source n'en
+    /// a pas. La sauvegarde en photothèque suivait déjà cette doctrine — « les
+    /// octets ORIGINAUX, pas une `UIImage` ré-encodée » — mais elle vivait dans
+    /// le délégué et ne sortait pas de lui : les quatre consommateurs de ce
+    /// type ré-encodaient tous, chacun de son côté.
+    case photo(UIImage, data: Data?)
     case video(URL)
 }
 
@@ -101,7 +115,7 @@ struct CameraView: View {
         .onDisappear { camera.stop() }
         .onReceive(camera.$capturedPhotoId) { id in
             guard id != nil, let image = camera.capturedPhoto else { return }
-            onCapture(.photo(image))
+            onCapture(.photo(image, data: camera.capturedPhotoData))
             dismiss()
         }
         .onReceive(camera.$capturedVideoId) { id in
@@ -316,6 +330,9 @@ final class CameraModel: NSObject, ObservableObject {
     nonisolated deinit {}
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
+    /// Les octets tels que l'appareil les a produits — EXIF compris. `nil`
+    /// tant qu'aucune photo n'a été prise.
+    var capturedPhotoData: Data?
     var capturedVideoURL: URL?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
@@ -750,6 +767,9 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image
+            // Les octets D'ORIGINE, publiés à côté de l'image : c'est eux qui
+            // portent l'EXIF, et une `UIImage` ne le rend pas.
+            self.capturedPhotoData = data
             self.capturedPhotoId = UUID().uuidString
         }
         // Persist the ORIGINAL encoded bytes (HEIC/JPEG as captured), not a
@@ -844,7 +864,12 @@ extension View {
         environment(\.storyCameraCapture, StoryCameraCaptureProvider { onCapture in
             AnyView(CameraView { result in
                 switch result {
-                case .photo(let image): onCapture(.photo(image))
+                // Le pont vers le SDK PERD l'EXIF, et c'est son CONTRAT qui
+                // l'impose : `StoryCameraCaptureProvider.photo` ne porte qu'une
+                // `UIImage`. Les octets d'origine s'arrêtent donc ici — ce
+                // chemin sert l'amorce « Caméra » de la page blanche du SDK, pas
+                // le viseur en scène (#4080), qui lit `capturedPhotoData`.
+                case .photo(let image, _): onCapture(.photo(image))
                 case .video(let url):   onCapture(.video(url))
                 }
             })

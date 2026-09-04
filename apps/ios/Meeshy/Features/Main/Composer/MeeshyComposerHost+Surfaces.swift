@@ -432,26 +432,15 @@ extension MeeshyComposerHost {
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             onBackgroundLongPressed: { handleSceneCaptureLongPress() },
-            // **La session est REMISE, jamais construite par la surface**
-            // (#4080) : deux sessions concurrentes sur le même objectif rendent
-            // un aperçu noir sans que rien n'échoue.
-            cameraSession: sceneCameraStage == .off ? nil : sceneCamera.session,
+            // **Le viseur n'est plus remis à la surface — il est MONTÉ par le
+            // meuble** (directive porteur 2026-09-04, `sceneCameraViewfinder`).
+            //
+            // La surface ne reçoit plus que l'ÉTAPE, qu'elle lit pour effacer
+            // la zone de description pendant qu'on cadre. Session, permission,
+            // taille, mode, flash, segments et leurs onze rappels sont partis
+            // avec la vue qui les peignait : le socle étant le FRÈRE de la
+            // surface, aucun overlay posé sur elle ne pouvait le couvrir.
             cameraStage: sceneCameraStage,
-            cameraPermission: sceneCamera.permission,
-            cameraSize: sceneCameraSize,
-            onToggleCameraSize: { sceneCameraSize = sceneCameraSize.toggled },
-            cameraMode: sceneCameraMode ?? .photo,
-            onCameraPhoto: { takeScenePhoto() },
-            onCameraStartFilming: { startSceneFilming() },
-            onCameraLock: { lockSceneTake() },
-            onCameraCloseTake: { closeSceneTake() },
-            cameraFlash: sceneCameraFlash,
-            onCycleCameraFlash: { sceneCameraFlash = ComposerCameraFlash.next(after: sceneCameraFlash) },
-            onFlipCamera: { sceneCamera.switchCamera() },
-            onDisarmCamera: { disarmSceneCamera() },
-            cameraSegments: sceneSegments,
-            onDropLastSegment: { dropLastSceneSegment() },
-            onValidateSegments: { validateSceneSegments() },
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
@@ -696,7 +685,9 @@ extension MeeshyComposerHost {
         .onReceive(sceneCamera.$capturedPhotoId) { id in
             guard id != nil, sceneCameraStage != .off,
                   let image = sceneCamera.capturedPhoto else { return }
-            poseSceneCapture(.photo(image))
+            // Les octets D'ORIGINE voyagent avec l'image : c'est eux qui
+            // portent l'EXIF, et une `UIImage` ne le rend pas.
+            poseSceneCapture(.photo(image, data: sceneCamera.capturedPhotoData))
         }
         // **Une vidéo s'ACCUMULE, une photo se POSE** (#4099). C'est la seule
         // divergence avec la feuille, et elle est la vue `4b` tout entière :

@@ -351,6 +351,21 @@ struct MeeshyComposerHost: View {
     /// l'écran n'annonce — même raison que `pendingCameraMode`.
     @State var sceneCameraSize: ComposerSceneCameraSize = .card
 
+    /// **La course du glissement qui coupe la caméra**, en points, pendant que
+    /// le doigt est posé (directive porteur 2026-09-04 : « lorsqu'on swipe vers
+    /// le bas sur la scène avec la caméra activée, ça arrête la caméra »).
+    ///
+    /// Elle est ici et non dans l'extension parce qu'un `@State` est une
+    /// propriété STOCKÉE : Swift ne permet pas d'en déclarer dans une
+    /// extension. Elle n'est pas `private` pour la raison inverse — un
+    /// `@State private` est inaccessible depuis un fichier d'extension du même
+    /// type, et c'est `MeeshyComposerHost+Viewfinder.swift` qui la lit.
+    ///
+    /// Remise à zéro à la levée : ce qu'elle porte est le GESTE en cours, pas
+    /// un état du viseur. La décision, elle, est prise par
+    /// `ComposerSceneCameraFrame.dismisses(translationY:)`.
+    @State var sceneCameraDismissDrag: CGFloat = 0
+
     /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
     ///
     /// `@StateObject` et non `.shared` : un bake appartient à CETTE
@@ -812,207 +827,12 @@ struct MeeshyComposerHost: View {
         )
     }
 
-    /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, #4851 —
-    /// porteur 2026-09-03 ; planche `2b`).
-    ///
-    /// C'est ce geste qui tient désormais la promesse de la porte, à la place
-    /// du viseur présenté au montage. Trois choses vivent ailleurs, exprès :
-    ///
-    /// - **si** le geste est offert — `ComposerSceneCaptureGesture.offersCapture`,
-    ///   qui lit la clause « scène vide ou à fond vide » de la directive ;
-    /// - **quel** viseur — la même règle, où le FORMAT prime la porte ;
-    /// - **comment** il s'ouvre — `presentCamera(mode:)`, le site unique.
-    ///
-    /// L'hôte ne fait que les composer. Un `if` écrit ici aurait remis la
-    /// décision dans un corps de vue, où une garde de source ne la lit pas.
-    func handleSceneCaptureLongPress() {
-        guard ComposerSceneCaptureGesture.offersCapture(
-            backgroundIsEmpty: !viewModel.currentSlide.effects.hasVisualBackgroundMedia,
-            format: selectedFormat
-        ) else { return }
-        HapticFeedback.medium()
-        armSceneCamera()
-    }
 
-    /// **Le viseur s'ARME dans la scène — il ne se PRÉSENTE plus** (#4080).
-    ///
-    /// Le geste et sa règle n'ont pas bougé d'une ligne ; c'est sa DESTINATION
-    /// qui change. `presentCamera(mode:)` posait `presentedPortal = .camera`,
-    /// donc une feuille modale par-dessus le composer — la scène disparaissait
-    /// au moment précis où l'auteur cadrait ce qu'il allait y poser.
-    ///
-    /// > « La caméra est une entrée, pas un mode. » — planche `2b`
-    ///
-    /// Le mode d'ouverture vient de `ComposerSceneCamera`, jamais d'un littéral :
-    /// c'est le premier SERVI par le format, donc jamais une pastille que la
-    /// rangée ne montrerait pas.
-    func armSceneCamera() {
-        guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
-        sceneCameraMode = mode
-        sceneCameraStage = .armed
-        sceneCameraSize = .card
-        // **Ce que le viseur prend appartient à la SCÈNE** (#4080, planche
-        // `2b` : « ce qu'elle rend est posé dans la scène courante »).
-        //
-        // Sans cette ligne, la prise partait dans `documentLocalMedia` sans
-        // marque de rail, donc `syncPostMediaIntoSlides` la classait « rangée
-        // du document » — une slide à elle. Symptômes signalés par le porteur :
-        // la scène reste NOIRE après la prise, et la pastille du rail ne
-        // compte pas. Deux manifestations d'un seul fait — le média n'était
-        // jamais arrivé sur la slide courante.
-        //
-        // Le marquage se fait à l'ARMEMENT et non à la pose : `ingestIntoDocument`
-        // consomme le drapeau AVANT d'écrire (#4879), et l'observateur qui lit
-        // `railPosedMediaURLs` tourne sur l'écriture. Le poser plus tard le
-        // ferait arriver après lui.
-        railPosesNextMedia = true
-        // `configure()` demande la permission PUIS ouvre la session — c'est le
-        // même point d'entrée que la feuille, et il rend un panneau explicatif
-        // plutôt qu'un aperçu noir si l'accès est refusé.
-        sceneCamera.configure()
-    }
-
-    /// **Un appui bref PREND une photo** (#4080, directive porteur 2026-09-04 :
-    /// le mode se lit du geste, pas d'un bouton).
-    func takeScenePhoto() {
-        guard sceneCameraStage == .armed else { return }
-        sceneCameraMode = .photo
-        HapticFeedback.medium()
-        sceneCamera.takePhoto(flash: sceneCameraFlash)
-    }
-
-    /// **Le doigt a TENU : la prise commence.** Le seuil vit dans
-    /// `ComposerShutterGesture`, et la vue le compte — elle seule voit le doigt.
-    func startSceneFilming() {
-        guard sceneCameraStage == .armed else { return }
-        sceneCameraMode = ComposerShutterGesture.mode(locked: false)
-        sceneCameraStage = .recording
-        Task {
-            await sceneCamera.enableAudioCaptureIfNeeded()
-            sceneCamera.startRecording()
-        }
-    }
-
-    /// **Le doigt a remonté sans relâcher : la prise continue sans lui.** Rien
-    /// ne change à ce qui s'écrit — seul le mode change, et avec lui ce que le
-    /// relâchement fera.
-    func lockSceneTake() {
-        guard sceneCameraStage == .recording else { return }
-        sceneCameraMode = ComposerShutterGesture.mode(locked: true)
-    }
-
-    /// **La prise se clôt** — relâchement d'une prise tenue, ou appui sur une
-    /// prise verrouillée. La durée est saisie AVANT l'arrêt : le modèle remet
-    /// son horloge à zéro au démarrage suivant, et le fichier n'arrive
-    /// qu'après.
-    func closeSceneTake() {
-        guard sceneCameraStage == .recording else { return }
-        sceneCameraStage = .armed
-        pendingSegmentDuration = sceneCamera.recordingDuration
-        sceneCamera.stopRecording()
-        HapticFeedback.medium()
-    }
-
-    /// **Une vidéo prise au viseur en scène s'ACCUMULE, elle ne se pose pas**
-    /// (#4099, vue `4b`).
-    ///
-    /// > « relâcher pour clore le segment · ✓ pour poser dans la scène »
-    ///
-    /// C'est la seule différence de fond avec la feuille, et elle est délibérée :
-    /// la feuille pose à chaque prise, le viseur en scène laisse l'auteur en
-    /// enchaîner plusieurs avant de valider. Une PHOTO, elle, se pose tout de
-    /// suite — il n'y a rien à concaténer, et l'y faire attendre un `✓`
-    /// ajouterait un geste à l'usage le plus courant.
-    func collectSceneSegment(_ url: URL) {
-        sceneSegments.append(ComposerCaptureSegment(
-            url: url, duration: pendingSegmentDuration))
-        pendingSegmentDuration = 0
-    }
-
-    /// **Retirer le dernier segment supprime son FICHIER.** La règle dit lequel ;
-    /// l'effacement se fait ici, seul endroit qui a le droit de toucher au
-    /// disque. Sans lui, chaque essai abandonné laisserait un fichier dans le
-    /// dossier temporaire jusqu'au prochain vidage du système.
-    func dropLastSceneSegment() {
-        let (gardés, orphelin) = ComposerCaptureSegments.droppingLast(sceneSegments)
-        sceneSegments = gardés
-        if let orphelin {
-            FileManager.default.removeItemLogging(
-                at: orphelin, context: "segment de prise retiré par l'auteur", logger: .media)
-        }
-        HapticFeedback.light()
-    }
-
-    /// **`✓` concatène et pose.** Un segment unique EST le fichier final : le
-    /// passer au concaténateur le ré-écrirait pour rien, quand la planche
-    /// promet « quasi instantané quelle que soit la durée ».
-    func validateSceneSegments() {
-        let segments = sceneSegments
-        guard ComposerCaptureSegments.canValidate(segments) else { return }
-        sceneSegments = []
-        Task {
-            let finale: URL?
-            if ComposerCaptureSegments.needsMerge(segments) {
-                finale = await CameraModel.mergeSegments(segments.map(\.url))
-            } else {
-                finale = segments.first?.url
-            }
-            // Repli DOUX sur le dernier segment : une concaténation qui échoue
-            // ne doit pas perdre la prise entière — même règle que la feuille,
-            // et pour la même raison.
-            guard let url = finale ?? segments.last?.url else { return }
-            poseSceneCapture(.video(url))
-        }
-    }
-
-    /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
-    /// entrée, pas un mode »).
-    ///
-    /// Rester armé après une pose ferait de la caméra un état du composer, et
-    /// l'auteur n'aurait plus de scène à regarder pour juger ce qu'il vient d'y
-    /// mettre. L'étape d'arrivée vient de la loi
-    /// (`ComposerSceneCamera.stageAfterCapture`), jamais d'un `.off` écrit ici.
-    func poseSceneCapture(_ result: CameraResult) {
-        sceneCameraStage = ComposerSceneCamera.stageAfterCapture
-        sceneCameraMode = nil
-        sceneCamera.stop()
-        HapticFeedback.success()
-        Task { await ingestCameraCapture(result) }
-    }
-
-    /// **Désarmer REND la scène**, et ferme la session dans le même geste : une
-    /// caméra qu'on laisse tourner derrière une scène rendue est un voyant
-    /// allumé que rien à l'écran n'explique.
-    func disarmSceneCamera() {
-        sceneCameraStage = .off
-        sceneCameraSize = .card
-        sceneCameraMode = nil
-        // Quitter sans prendre RETIRE la marque : laissée posée, elle
-        // classerait sur la scène le prochain média venu d'une AUTRE porte —
-        // un lot suivant qui n'a rien demandé.
-        railPosesNextMedia = false
-        // **Les segments abandonnés emportent leurs FICHIERS** (#4099). Sans
-        // cette purge, quitter le viseur après trois essais laisserait trois
-        // .mov dans le dossier temporaire jusqu'au prochain vidage du système
-        // — et la prise suivante repartirait AVEC eux, ce qui poserait dans la
-        // scène des segments que l'auteur croyait avoir jetés.
-        discardSceneSegments()
-        sceneCamera.stop()
-    }
-
-    /// Efface les segments en attente ET leurs fichiers. Appelé au
-    /// désarmement ; la validation, elle, vide la liste sans effacer — les
-    /// fichiers y sont consommés par la concaténation.
-    func discardSceneSegments() {
-        for segment in sceneSegments {
-            FileManager.default.removeItemLogging(
-                at: segment.url, context: "segment de prise abandonné", logger: .media)
-        }
-        sceneSegments = []
-        pendingSegmentDuration = 0
-    }
-
-    var body: some View {
+    /// La pile du meuble — plateau, surface, socle. Extraite du `body` le
+    /// 2026-09-04 pour que le viseur puisse l'ENVELOPPER : ce qui doit couvrir
+    /// le socle ne peut pas être un modificateur posé après lui.
+    @ViewBuilder
+    var composerStack: some View {
         VStack(spacing: 0) {
             // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
             // règle de placement. Il vivait dans `composerSurface`, ce qui le
@@ -1055,7 +875,19 @@ struct MeeshyComposerHost: View {
                 socle
             }
         }
+    }
+
+    var body: some View {
+        // **Le viseur ENVELOPPE le meuble entier, socle compris** (directive
+        // porteur 2026-09-04). Une enveloppe, et non un `.overlay` posé plus
+        // bas : le socle — audience · aperçu · publier — est le FRÈRE de la
+        // surface dans `composerStack`, et un overlay ne couvre jamais son
+        // frère. C'est ce qui laissait la rangée visible en plein écran, quelle
+        // que soit la couche employée — la géométrie de la composition, pas un
+        // ordre de z.
+        withSceneCameraViewfinder(composerStack)
         .background(tint.color.ignoresSafeArea())
+
         // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du
         // meuble et non en `.sheet` : une feuille système laisse voir la scène
         // NETTE derrière son bord arrondi et impose sa propre poignée, alors que

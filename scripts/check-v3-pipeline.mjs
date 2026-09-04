@@ -747,12 +747,36 @@ const noSourceFileOfTheV3IsGitIgnored = (world) =>
  * si un script invoqué par ci.yml la nomme, ou si elle appartient au projet
  * qu'il lance — `pages` par sa liste, `chaines` par le complément de cette même
  * liste (`testIgnore`), qui est ce qui fait entrer d'office toute suite neuve.
+ *
+ * **CE CONTRÔLE A ÉTÉ AVEUGLE UNE CINQUIÈME FOIS, ET C'EST SA PROPRE LECTURE
+ * QUI L'AVEUGLAIT** (2026-09-04, #5093). `SUITES_DE_PAGE` a cessé d'être un
+ * littéral le jour où `SUITES_QUI_IMPORTENT_LA_LOI` s'est mise à RELEVER les
+ * suites sur le DISQUE — une amélioration, et la bonne. Mais le `matchAll` ci-
+ * dessous ne voit d'un `[...SPREAD, 'a.spec.ts', 'b.spec.ts']` que les deux
+ * littéraux : il croyait donc que `pages` ne contenait QUE ces deux-là, et que
+ * `chaines`, son complément, ramassait tout le reste. Il ramassait, en vrai,
+ * neuf suites de MOINS — `v3-nouvelle-conversation`, `v3-nouveau-lien` et les
+ * sept `*-a11y` que ci.yml ne nommait pas —, et la garde les déclarait
+ * atteintes.
+ *
+ * **UN CONTRÔLE NE DOIT PAS DEVINER CE QU'IL NE PEUT PAS LIRE.** Il ne
+ * reconstruit pas la règle de `playwright.config.ts` — ce serait la jumelle qui
+ * diverge au premier changement de critère. Il DÉTECTE que la liste est
+ * calculée, et cesse alors de répartir les suites entre les deux projets :
+ * quand la frontière lui est illisible, la seule couverture qu'il sait prouver
+ * est celle des DEUX projets lancés EN ENTIER. C'est aussi la seule qui ne
+ * dépende pas de ce que cette garde arrive à lire — donc la seule qui survive
+ * au prochain raffinement du critère.
  */
 const everyV3SuiteIsLaunched = (world) => {
   const listeDePages = /const SUITES_DE_PAGE\s*=\s*\[([^\]]*)\]/.exec(world.playwright);
   if (listeDePages === null) {
     return ["playwright.config.ts ne déclare plus SUITES_DE_PAGE : la couverture par projet n'est plus calculable"];
   }
+  // La liste est-elle ENTIÈREMENT lisible ici ? Un `...` dit que non : une
+  // partie du projet `pages` est relevée ailleurs, et le COMPLÉMENT que
+  // `chaines` exécute ne se calcule plus depuis ce fichier.
+  const listeCalculee = listeDePages[1].includes('...');
   const suitesDePage = new Set(
     [...listeDePages[1].matchAll(/([A-Za-z0-9._-]+\.spec\.ts)/g)].map((m) => m[1]),
   );
@@ -772,16 +796,23 @@ const everyV3SuiteIsLaunched = (world) => {
   );
 
   const atteintes = new Set();
-  for (const [, corps] of lances) {
+  const corpsLances = lances.map(([, corps]) => corps);
+  for (const corps of corpsLances) {
     for (const suite of world.suites) {
       if (corps.includes(suite)) atteintes.add(suite);
     }
-    if (/--project=pages/.test(corps)) {
-      for (const suite of world.suites) if (suitesDePage.has(suite)) atteintes.add(suite);
-    }
-    if (/--project=chaines/.test(corps)) {
-      for (const suite of world.suites) if (!suitesDePage.has(suite)) atteintes.add(suite);
-    }
+  }
+
+  const lancePages = corpsLances.some((corps) => /--project=pages/.test(corps));
+  const lanceChaines = corpsLances.some((corps) => /--project=chaines/.test(corps));
+
+  if (listeCalculee) {
+    // Frontière illisible : les deux projets ensemble couvrent la totalité, et
+    // rien de moins ne se prouve depuis ce fichier.
+    if (lancePages && lanceChaines) for (const suite of world.suites) atteintes.add(suite);
+  } else {
+    if (lancePages) for (const suite of world.suites) if (suitesDePage.has(suite)) atteintes.add(suite);
+    if (lanceChaines) for (const suite of world.suites) if (!suitesDePage.has(suite)) atteintes.add(suite);
   }
 
   return world.suites

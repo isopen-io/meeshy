@@ -874,7 +874,9 @@ extension MeeshyComposerHost {
         for item in items {
             switch item {
             case .image(let image):
-                Task { await ingestCameraCapture(.photo(image)) }
+                // Une image venue du presse-papier n'a pas d'octets d'origine
+                // à nous remettre : le repli redresse et ré-encode.
+                Task { await ingestCameraCapture(.photo(image, data: nil)) }
             case .video(let url):
                 Task { await ingestCameraCapture(.video(url)) }
             case .audio(let url):
@@ -901,19 +903,27 @@ extension MeeshyComposerHost {
 
     func ingestCameraCapture(_ result: CameraResult) async {
         switch result {
-        case .photo(let image):
-            // **Redressée AVANT l'encodage** (#4080) : `jpegData` écrit le
-            // tampon de pixels tel quel, sans appliquer `imageOrientation` ni
-            // écrire d'EXIF. L'appareil rend toujours un tampon en PAYSAGE, et
-            // c'est l'orientation — perdue ici — qui le redressait à l'écran.
-            // Le défaut naît à l'écriture et ne se voit qu'un cran plus loin,
-            // chez le consommateur du fichier.
-            let redressée = ComposerCaptureOrientation.upright(image)
-            guard let data = redressée.jpegData(compressionQuality: 0.9) else { return }
+        case .photo(let image, let originaux):
+            // **Les octets D'ORIGINE quand on les a** (directive porteur
+            // 2026-09-04 : « la prise de la photo doit avoir les exif et
+            // metadata »).
+            //
+            // `AVCapturePhoto.fileDataRepresentation()` rend un fichier
+            // COMPLET — EXIF, TIFF, appareil, date, temps de pose, focale,
+            // orientation. Les ré-encoder depuis l'`UIImage` jetait tout cela :
+            // `jpegData` n'écrit ni EXIF ni orientation, et c'est ce qui
+            // faisait aussi arriver la photo COUCHÉE. Une seule correction
+            // ferme les deux défauts, et elle est la bonne pour une raison de
+            // fond : on ne reconstruit pas ce qu'on a reçu.
+            let (octets, suffixe) = ComposerCapturePayload.bytes(
+                original: originaux, fallback: image)
+            guard let octets else { return }
             let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
-            guard (try? data.write(to: url)) != nil else { return }
-            ingestIntoDocument([ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg")])
+                .appendingPathComponent("composer_camera_\(UUID().uuidString).\(suffixe)")
+            guard (try? octets.write(to: url)) != nil else { return }
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(
+                url: url,
+                declaredMimeType: ComposerCapturePayload.mime(for: suffixe))])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
             ingestIntoDocument([ComposerDocumentMediaFactory.media(
