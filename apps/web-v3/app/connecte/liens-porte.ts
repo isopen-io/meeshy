@@ -1,5 +1,6 @@
 import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
+import { actifsTempsReel } from '@/lib/actifs-rt';
 import { carnetDeLiens, creeUnLien, type LienACreer, type Recuperateur } from '@/lib/api/compte';
 import { ECHEANCES, NOUVEAU_LIEN, type Echeance } from '@/lib/contenu/liens';
 
@@ -31,6 +32,17 @@ import { documentDePanne } from './vue';
  * connecter — le cas NOMINAL d'un retour après quelques jours — et un silence
  * dessine la panne plutôt qu'une page blanche.
  */
+
+/**
+ * LE SOCLE DU MODULE (#5090) — `null` tant que l'actif compilé est absent : le
+ * Post/Redirect/Get reste alors le seul chemin (§ 12.4). Même origine, aucune
+ * passerelle : le module poste au document et échange sa région.
+ */
+const moduleDeParticipation = (): { readonly module: string } | null => {
+  const actifs = actifsTempsReel();
+  if (actifs.liens.corps === '') return null;
+  return { module: actifs.liens.url };
+};
 
 const CHEMIN = '/links';
 
@@ -77,6 +89,7 @@ const sert = async ({
       avis: parametres.has('cree') ? 'cree' : null,
       saisie,
       motif: motif ?? null,
+      tempsReel: moduleDeParticipation(),
     }),
     statut,
   );

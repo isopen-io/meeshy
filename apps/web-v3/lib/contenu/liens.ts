@@ -69,6 +69,10 @@ export const GLYPHE_LIEN = 'ph-link-simple';
  * bouts partagent.
  */
 export const NOUVEAU_LIEN = {
+  /** Le bouton pendant l'envoi du module — l'attente se DIT, elle ne se devine pas. */
+  enCours: 'Création…',
+  /** La passerelle injoignable, dit DANS la feuille — les champs tapés ne bougent pas. */
+  echec: 'Le lien n’a pas pu être créé. Vérifiez la connexion et réessayez.',
   ouvrir: 'Nouveau lien',
   titre: 'Nouveau lien de partage',
   fermer: 'Fermer',

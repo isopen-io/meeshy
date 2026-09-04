@@ -122,7 +122,7 @@
   }
  },
  "participate": {
-  "quoi": "Le poids des CINQ modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.",
+  "quoi": "Le poids des CINQ modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.",
   "participate_brut_octets": 89558,
   "participate_gzip_9_octets": 26582,
   "liste_brut_octets": 49835,
@@ -135,6 +135,8 @@
   "contacts_gzip_9_octets": 3328,
   "recherche_brut_octets": 1154,
   "recherche_gzip_9_octets": 618,
+  "liens_brut_octets": 2557,
+  "liens_gzip_9_octets": 1277,
   "socket_io_client_brut_octets": 40435,
   "socket_io_client_gzip_9_octets": 12849,
   "commande": "cd apps/web-v3 && node scripts/build-participate.mjs --mesure",

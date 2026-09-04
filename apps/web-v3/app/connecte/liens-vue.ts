@@ -6,6 +6,7 @@ import { GLYPHE_LIEN, LIENS, NOUVEAU_LIEN, type Echeance } from '@/lib/contenu/l
 import { adresseDuLien } from './contenu';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
+import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
 import { documentPleinEcran } from './fil-vue';
 import { FEUILLE_DES_LIENS, FEUILLE_DU_NOUVEAU_LIEN } from './liens-feuille';
 import { carteVide } from './vue';
@@ -57,6 +58,8 @@ export type EtatDesLiens = {
   readonly motif?: string | null;
   /** Ce que le lecteur venait de taper, reposé après un refus. */
   readonly saisie?: SaisieDuLien;
+  /** Ce que le document porte pour son module (§ 12.4, #5090) — même origine, aucune passerelle. */
+  readonly tempsReel: { readonly module: string } | null;
 };
 
 /**
@@ -196,6 +199,10 @@ const nouveauLien = ({ saisie, motif }: { readonly saisie: SaisieDuLien; readonl
       ? ''
       : `<p class="alerte" role="alert">${echappe(motif === '' ? NOUVEAU_LIEN.refuse : `${NOUVEAU_LIEN.refuse} ${motif}`)}</p>`) +
     '<form method="post">' +
+    // LA VOIX DE LA FEUILLE — servie muette : le module y dit une passerelle
+    // injoignable SANS toucher aux champs (une région créée après coup n'est
+    // annoncée par aucun lecteur d'écran).
+    '<p class="avis-feuille" role="status" hidden></p>' +
     '<p class="champ">' +
     `<label for="l-conversation">${echappe(NOUVEAU_LIEN.conversation)}</label>` +
     `<input id="l-conversation" name="${CHAMPS_DU_NOUVEAU_LIEN.conversation}" type="text" required value="${echappe(saisie.conversation)}" autocomplete="off">` +
@@ -237,9 +244,15 @@ const enTete = (actifs: number): string =>
   `<a class="action discrete" href="/links?nouveau">${svgDuSprite('ph-plus')}${echappe(NOUVEAU_LIEN.ouvrir)}</a>` +
   '</header>';
 
-const corps = ({ liens, actifs, avis }: EtatDesLiens): string =>
-  '<main id="main-content" class="liens-ecran">' +
+/**
+ * LA RÉGION QUE LE MODULE ÉCHANGE (#5090) — l'avis ET le carnet, ensemble :
+ * le document redemandé après une création porte les deux, et les échanger
+ * d'un bloc fait dire à la région de statut ce que la liste vient de gagner.
+ */
+const corps = ({ liens, actifs, avis }: EtatDesLiens, participation: string): string =>
+  `<main id="main-content" class="liens-ecran"${participation}>` +
   enTete(actifs) +
+  '<div id="carnet">' +
   (avis === 'cree' ? `<p class="avis" role="status">${svgDuSprite('ph-check-circle')}${echappe(NOUVEAU_LIEN.cree)}</p>` : '') +
   (liens.length === 0
     ? carteVide({
@@ -249,6 +262,7 @@ const corps = ({ liens, actifs, avis }: EtatDesLiens): string =>
         action: { libelle: NOUVEAU_LIEN.ouvrir, href: '/links?nouveau' },
       })
     : `<ul class="liens" aria-label="${echappe(LIENS.liste)}">${liens.map(ligne).join('')}</ul>`) +
+  '</div>' +
   '</main>';
 
 /**
@@ -270,16 +284,24 @@ export const documentDesLiens = (etat: EtatDesLiens): string => {
       ? nouveauLien({ saisie: etat.saisie ?? SAISIE_NEUVE, motif: etat.motif ?? null })
       : '';
 
+  const participation =
+    etat.tempsReel === null
+      ? ''
+      : ` data-participation="liens" data-module="${echappe(etat.tempsReel.module)}"`;
+
   return documentPleinEcran({
     titre: etat.nouveau === true ? NOUVEAU_LIEN.titre : LIENS.titre,
     description: etat.actifs === 0 ? LIENS.titre : LIENS.actifs(etat.actifs),
     corps:
       surimpression +
-      (surimpression === '' ? corps(etat) : corps(etat).replace('<main ', '<main inert ')),
+      (surimpression === ''
+        ? corps(etat, participation)
+        : corps(etat, participation).replace('<main ', '<main inert ')),
     feuille:
       FEUILLE_CONNECTEE +
       FEUILLE_DU_FIL +
       FEUILLE_DES_LIENS +
       (surimpression === '' ? '' : FEUILLE_DU_NOUVEAU_LIEN),
+    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });
 };
