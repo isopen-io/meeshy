@@ -27,6 +27,8 @@ export const NOTIFS = {
   nonLues: (n: number): string => (n <= 1 ? `${n} non lue` : `${n} non lues`),
   vide: 'Aucune notification',
   videPrecision: 'Ce qui vous concerne apparaîtra ici — réponses, mentions, demandes de contact.',
+  /** Le lien de page suivante — même patron que `FIL.plusAnciens` / `MEDIAS.plusAnciens`. */
+  plusAnciennes: 'Notifications plus anciennes',
   /** Le refus de la passerelle sur « Tout lire » — dit dans la même région de statut que la réussite. */
   echec: 'L’action n’a pas abouti. Réessayez.',
   /** L'écran de panne partage la phrase des autres surfaces connectées : une seule voix pour un même incident. */

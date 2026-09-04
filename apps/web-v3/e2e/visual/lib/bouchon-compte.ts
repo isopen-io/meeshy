@@ -121,9 +121,14 @@ export type EtatDuCompteDeBouchon = {
  * écrit sa base : un bouchon qui répond 200 sans écrire fait passer un client
  * qui n'a rien changé. `remets()` restaure l'état initial entre deux témoins.
  */
+/** Le curseur de la page suivante — le témoin #5087 le demande sans y lire une forme réelle. */
+export const CURSEUR_DE_LA_BOITE_SUIVANTE = 'page-2';
+
 export type BoiteDeNotifsDeBouchon = {
   lignes: Record<string, unknown>[];
   nonLues: number;
+  /** La page SUIVANTE, ou `null` — la première page ne l'annonce que si elle existe (#5087). */
+  pageSuivante: Record<string, unknown>[] | null;
   readonly litTout: () => void;
   readonly remets: () => void;
 };
@@ -156,6 +161,7 @@ export const boiteDeNotifsDeBouchon = (conversationId: string): BoiteDeNotifsDeB
   const boite: BoiteDeNotifsDeBouchon = {
     lignes: initiales(),
     nonLues: 1,
+    pageSuivante: null,
     litTout: () => {
       boite.lignes = boite.lignes.map((ligne) => ({
         ...ligne,
@@ -166,6 +172,7 @@ export const boiteDeNotifsDeBouchon = (conversationId: string): BoiteDeNotifsDeB
     remets: () => {
       boite.lignes = initiales();
       boite.nonLues = 1;
+      boite.pageSuivante = null;
     },
   };
   return boite;
@@ -623,10 +630,27 @@ export const routesDuCompte =
       return true;
     }
     if (chemin === '/api/v1/notifications' && (requete.method ?? 'GET') === 'GET') {
+      // Même patron que `/api/v1/social/posts` (`CURSEUR_DU_SECOND_REEL`) : un
+      // curseur SENTINELLE, jamais une forme opaque réelle — le bouchon n'a
+      // qu'une page à offrir derrière lui (#5087).
+      const auCurseur = url.searchParams.get('cursor') === CURSEUR_DE_LA_BOITE_SUIVANTE;
+      if (auCurseur && etat.boite.pageSuivante !== null) {
+        json({
+          success: true,
+          data: etat.boite.pageSuivante,
+          pagination: { total: etat.boite.lignes.length + etat.boite.pageSuivante.length, hasMore: false, nextCursor: null },
+          unreadCount: etat.boite.nonLues,
+        });
+        return true;
+      }
       json({
         success: true,
         data: etat.boite.lignes,
-        pagination: { total: etat.boite.lignes.length },
+        pagination: {
+          total: etat.boite.lignes.length + (etat.boite.pageSuivante?.length ?? 0),
+          hasMore: etat.boite.pageSuivante !== null,
+          nextCursor: etat.boite.pageSuivante !== null ? CURSEUR_DE_LA_BOITE_SUIVANTE : null,
+        },
         unreadCount: etat.boite.nonLues,
       });
       return true;

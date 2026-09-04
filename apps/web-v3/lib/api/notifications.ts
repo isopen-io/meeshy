@@ -83,6 +83,15 @@ export type Boite =
       readonly notifications: readonly Notification[];
       readonly nonLues: number;
       readonly total: number;
+      /**
+       * Le curseur de la page SUIVANTE, ou `null` — même dérivation que
+       * `filSocial().curseurSuivant` (`lib/api/social.ts`) : depuis
+       * `pagination.hasMore`, pas la seule présence de `nextCursor`. La
+       * passerelle rend déjà `null` sur une page finale
+       * (`NotificationFormatter.nextCursorFrom`), mais la porte n'a pas à en
+       * dépendre pour rester correcte.
+       */
+      readonly curseurSuivant: string | null;
     }
   | { readonly genre: 'session-expiree' }
   | { readonly genre: 'panne' };
@@ -165,15 +174,19 @@ export const notificationServie = (brut: unknown): Notification | null => {
 export const boiteDuLecteur = async ({
   jeton,
   limite = 30,
+  curseur,
   base,
   recuperer,
 }: {
   readonly jeton: string;
   readonly limite?: number;
+  readonly curseur?: string;
   readonly base?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Boite> => {
-  const url = `${base ?? baseDeLaPasserelle()}${CHEMIN_NOTIFICATIONS}?limit=${limite}`;
+  const url =
+    `${base ?? baseDeLaPasserelle()}${CHEMIN_NOTIFICATIONS}?limit=${limite}` +
+    (curseur === undefined ? '' : `&cursor=${encodeURIComponent(curseur)}`);
   const reponse = await demande(url, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
@@ -209,6 +222,7 @@ export const boiteDuLecteur = async ({
     notifications,
     nonLues: entier(enveloppe.unreadCount),
     total: entier(pagination?.total),
+    curseurSuivant: pagination?.hasMore === true ? (chaine(pagination.nextCursor) ?? null) : null,
   };
 };
 
