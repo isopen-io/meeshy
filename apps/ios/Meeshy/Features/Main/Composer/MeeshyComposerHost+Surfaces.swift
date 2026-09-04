@@ -431,6 +431,11 @@ extension MeeshyComposerHost {
             },
             onBackgroundTapped: { handleSceneBackgroundTap() },
             onBackgroundLongPressed: { handleSceneCaptureLongPress() },
+            // **La session est REMISE, jamais construite par la surface**
+            // (#4080) : deux sessions concurrentes sur le même objectif rendent
+            // un aperçu noir sans que rien n'échoue.
+            cameraSession: sceneCameraStage == .off ? nil : sceneCamera.session,
+            cameraStage: sceneCameraStage,
             // Les portes que CE meuble sert — l'ensemble vit dans
             // `ComposerSceneCapabilities`, jamais en littéral ici : un `Set`
             // écrit dans un corps de vue ne s'interroge qu'à la garde de
