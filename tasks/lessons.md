@@ -27654,7 +27654,7 @@ lisant son journal — que le harnais Playwright avale (`stdio: 'ignore'`).
 
 ---
 
-## Leçon 501 — Un « site unique » à portée `private` n'est unique que dans son fichier
+## Leçon 501 bis — Un « site unique » à portée `private` n'est unique que dans son fichier
 
 **Contexte** : #5059. Le prédicat qui décide de détacher une story citée vivait
 en `private var detachedStoryCitation` dans `BubbleStandardLayout`. Son propre
