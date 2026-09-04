@@ -418,30 +418,28 @@ jobs:
       # `playwright.config.ts` lève lui-même `next start` (webServer) : la
       # preuve d'un build se prend sur le serveur de production, jamais sur
       # `next dev`.
-      - name: Gate axe — 0 violation serious/critical sur les routes (public)
+      #
+      # LE PROJET ENTIER, JAMAIS TROIS SUITES NOMMÉES — et c'est la CINQUIÈME
+      # fois que cette leçon se paie ici (2026-09-04, #5093). Cette étape
+      # lançait `test:a11y`, `test:cibles` et `test:fil-a11y`, c'est-à-dire
+      # TROIS des ONZE suites du projet `pages`. Les huit autres —
+      # `v3-nouvelle-conversation`, `v3-nouveau-lien` et les six `*-a11y` de
+      # commentaires, contacts, feed, liens, recherche et réglages — n'étaient
+      # lancées par AUCUN job : `test:chaines` les ignore par construction
+      # (`testIgnore`), et aucune étape ne les nommait. Elles portent les
+      # critères de fin de huit issues qu'aucun gate ne pouvait donc prouver.
+      #
+      # `check-v3-pipeline.mjs` était censé l'attraper et ne le voyait pas : sa
+      # lecture de `SUITES_DE_PAGE` ne sait pas lire un `...SPREAD`, et la liste
+      # a cessé d'être un littéral le jour où elle s'est mise à RELEVER ses
+      # suites sur le disque. La garde est corrigée dans le même lot ; le
+      # correctif de fond, lui, est ici : **une étape lance un PROJET, pas une
+      # énumération** — c'est la seule forme qui fasse entrer d'office la suite
+      # écrite demain.
+      - name: Gate pages — axe, cibles tactiles, surimpressions (projet ENTIER)
         run: |
           cd apps/web-v3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:a11y
-
-      # Les DEUX autres suites de PAGE (`SUITES_DE_PAGE`, playwright.config.ts) —
-      # les cibles tactiles de la charte (§ 12.5 règles 4 et 6) et axe sur la
-      # page VIVANTE du fil, module de participation greffé — étaient déclarées
-      # et jamais lancées : `test:chaines` les ignore par construction
-      # (`testIgnore`), et aucun job ne les nommait. Quatrième fois que la leçon
-      # se paie ici ; `scripts/check-v3-pipeline.mjs` (« toute suite e2e de la
-      # v3 est LANCÉE ») les rougissait, et le rapport de l'écran ne le disait
-      # pas. Elles vivent dans CE job parce qu'elles mesurent une PAGE servie
-      # par le `webServer` de la config — et que les cibles sont un gate
-      # d'accessibilité (WCAG 2.5.8), pas un gate de chaîne.
-      - name: Gate cibles — 0 cible sous 44 px, action primaire à 56
-        run: |
-          cd apps/web-v3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:cibles
-
-      - name: Gate axe — la page VIVANTE du fil, module de participation greffé
-        run: |
-          cd apps/web-v3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:fil-a11y
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:pages
 
       # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
       # étape nommant la v3 en porte un, et le job est de toute façon déjà rouge
