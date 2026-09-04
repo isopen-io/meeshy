@@ -154,6 +154,42 @@ struct FocalQuotedReplyView: View, Equatable {
         QuotedReplyPresentation.title(author: authorName)
     }
 
+    /// **La taille de texte du lecteur décide du budget de la citation** (#5103),
+    /// comme dans la bulle. Sans elle, la coupure par mot serait faite sur un
+    /// nombre de signes fixe, et `lineLimit` reprendrait la main au milieu d'un
+    /// mot dès que le lecteur grossit son texte.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// **Le nom, son deux-points, puis le texte — UN seul paragraphe** (#5103).
+    ///
+    /// Jumelle exacte de `BubbleQuotedReply.quotedFlow` : `MessageTextRenderer`
+    /// rend un `Text`, donc les deux se CONCATÈNENT et coulent dans le même
+    /// paragraphe. C'est ce que #4946 demande — une citation ne se lit pas
+    /// autrement selon la peau.
+    private func quotedFlow() -> Text {
+        let fallback = attachmentKind?.shortLabel
+            ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
+        let brut = reference.previewText.isEmpty ? fallback : reference.previewText
+        let coupe = QuotedReplyPresentation.wordTruncated(
+            brut,
+            maxCharacters: QuotedReplyPresentation.previewCharacterBudget(
+                for: .focal, dynamicTypeSize: dynamicTypeSize))
+
+        return Text(title)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+            .foregroundColor(titleColor)
+            + Text(" ")
+            + MessageTextRenderer.render(
+                coupe,
+                fontSize: 12,
+                color: previewColor,
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                accentColor: previewColor,
+                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+            )
+    }
+
     /// « 1024×768 · 0:42 · 1,2 Mo » — les faits du média cité, ou `nil` quand
     /// aucun n'est connu ET pour tout média PROTÉGÉ : la règle partagée refuse
     /// d'un seul endroit ce qui décrirait le secret par la bande.
@@ -232,59 +268,27 @@ struct FocalQuotedReplyView: View, Equatable {
                 .fill(railColor)
                 .frame(width: FocalMetrics.Quote.railWidth)
 
-            // ZONE 2 — miniature du média cité (image/vidéo/story), bouton
-            // play par-dessus la vidéo. Tap : le média EN PLEIN ÉCRAN, pas le
-            // saut. Le repli `jumpToOriginal` ne sert qu'à la story, dont le
-            // viewer EST le plein écran demandé : aucune capacité n'y diverge.
-            if let thumbnailURL {
-                CachedAsyncImage(
-                    url: thumbnailURL.absoluteString,
-                    // Le flou instantané plutôt qu'un carré de couleur unie le
-                    // temps du réseau. `nil` pour un média protégé — un flou
-                    // EST une image (règle partagée, site unique).
-                    thumbHash: QuotedReplyPresentation.thumbHash(for: reference)
-                ) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(railColor.opacity(0.18))
-                }
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay {
-                    // Le GENRE résolu, jamais la chaîne brute. `attachmentType`
-                    // porte le MIME (« video/mp4 ») sur le chemin de rendu réel
-                    // — `MessagePersistenceActor` y grave `mimeType`, et le
-                    // cache le rend tel quel : une comparaison à « video » n'y
-                    // est vraie que sur la bulle OPTIMISTE, qui pose le
-                    // rawValue court. Le bouton play disparaissait donc dès que
-                    // le serveur accusait, pour ne plus jamais revenir.
-                    // `hasTimebasedTrack` couvre en outre l'audio cité, dont la
-                    // demande produit réclame l'icône de lecture au même titre.
-                    if attachmentKind?.hasTimebasedTrack == true {
-                        // Même glyphe que la zone média sans miniature : UN
-                        // seul vocabulaire visuel pour « ceci se joue ».
-                        Image(systemName: "play.circle.fill")
-                            .font(MeeshyFont.relative(16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .shadow(radius: 2)
-                            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                // **Le texte part du deux-points de l'auteur** (#5103). Le nom
+                // occupait sa ligne, l'aperçu la suivante : deux lignes pour ce
+                // qui en demandait une. Mood et story gardent leur aperçu
+                // dédié — ils ne rendent pas `previewText`.
+                if reference.moodEmoji != nil || reference.isStoryReply {
+                    titleLine
+
+                    previewLine
+                        .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))
+                } else {
+                    HStack(alignment: .top, spacing: 5) {
+                        authorGate
+
+                        quotedFlow()
+                            .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))
+                            .tint(previewColor)
                     }
                 }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if hasTappableMedia {
-                        onQuotedMediaTap?(reference)
-                    } else {
-                        jumpToOriginal()
-                    }
-                }
-                .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
-            }
 
-            VStack(alignment: .leading, spacing: 1) {
-                titleLine
-
-                previewLine
-                    .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))
+                quotedThumbnail
 
                 // « 1024×768 · 0:42 · 1,2 Mo ». La rangée plate est dense :
                 // la ligne n'apparaît que lorsqu'un fait existe, et jamais
@@ -316,22 +320,87 @@ struct FocalQuotedReplyView: View, Equatable {
     ///
     /// Pas de `presenceState`, de `storyState` ni de `moodEmoji` : une
     /// citation est une trace figée du passé, pas une carte de présence.
+    /// ZONE 2 — la miniature du média cité. **Sous l'auteur depuis #5103**,
+    /// comme dans la bulle : la directive déplace la géographie commune aux
+    /// trois peaux, elle ne l'abandonne pas (#4946).
+    @ViewBuilder
+    private var quotedThumbnail: some View {
+        // ZONE 2 — miniature du média cité (image/vidéo/story), bouton
+        // play par-dessus la vidéo. Tap : le média EN PLEIN ÉCRAN, pas le
+        // saut. Le repli `jumpToOriginal` ne sert qu'à la story, dont le
+        // viewer EST le plein écran demandé : aucune capacité n'y diverge.
+        if let thumbnailURL {
+            CachedAsyncImage(
+                url: thumbnailURL.absoluteString,
+                // Le flou instantané plutôt qu'un carré de couleur unie le
+                // temps du réseau. `nil` pour un média protégé — un flou
+                // EST une image (règle partagée, site unique).
+                thumbHash: QuotedReplyPresentation.thumbHash(for: reference)
+            ) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(railColor.opacity(0.18))
+            }
+            .frame(width: 36, height: 36)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay {
+                // Le GENRE résolu, jamais la chaîne brute. `attachmentType`
+                // porte le MIME (« video/mp4 ») sur le chemin de rendu réel
+                // — `MessagePersistenceActor` y grave `mimeType`, et le
+                // cache le rend tel quel : une comparaison à « video » n'y
+                // est vraie que sur la bulle OPTIMISTE, qui pose le
+                // rawValue court. Le bouton play disparaissait donc dès que
+                // le serveur accusait, pour ne plus jamais revenir.
+                // `hasTimebasedTrack` couvre en outre l'audio cité, dont la
+                // demande produit réclame l'icône de lecture au même titre.
+                if attachmentKind?.hasTimebasedTrack == true {
+                    // Même glyphe que la zone média sans miniature : UN
+                    // seul vocabulaire visuel pour « ceci se joue ».
+                    Image(systemName: "play.circle.fill")
+                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(radius: 2)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if hasTappableMedia {
+                    onQuotedMediaTap?(reference)
+                } else {
+                    jumpToOriginal()
+                }
+            }
+            .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+        }
+    }
+
+    /// ZONE 1 — l'avatar, seule porte vers le profil de l'auteur cité.
+    ///
+    /// Extraite de `titleLine` au #5103 parce que la branche STANDARD ne monte
+    /// plus cette ligne : elle fait couler le nom dans le paragraphe du texte.
+    /// Deux branches, une seule porte — la recopier en aurait fait deux à
+    /// tenir d'accord.
+    @ViewBuilder
+    private var authorGate: some View {
+        if showsAuthorGate {
+            MeeshyAvatar(
+                name: authorName,
+                context: .custom(FocalMetrics.Avatar.size),
+                accentColor: authorHex,
+                avatarURL: reference.authorAvatarUrl,
+                enablePulse: false,
+                isDark: isDark,
+                onTap: { onQuotedAuthorTap?(reference) }
+            )
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main))
+        }
+    }
+
     @ViewBuilder
     private var titleLine: some View {
         HStack(spacing: 5) {
-            if showsAuthorGate {
-                MeeshyAvatar(
-                    name: authorName,
-                    context: .custom(FocalMetrics.Avatar.size),
-                    accentColor: authorHex,
-                    avatarURL: reference.authorAvatarUrl,
-                    enablePulse: false,
-                    isDark: isDark,
-                    onTap: { onQuotedAuthorTap?(reference) }
-                )
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main))
-            }
+            authorGate
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
