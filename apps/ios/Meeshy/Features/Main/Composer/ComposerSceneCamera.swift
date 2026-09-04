@@ -106,3 +106,46 @@ nonisolated enum ComposerSceneCamera {
         }
     }
 }
+
+/// **Ce que le viseur OCCUPE, et ce qu'il laisse** (#4080).
+///
+/// Le chrome du viseur vit désormais DANS la carte (directive porteur
+/// 2026-09-04). Il y rencontre donc les meubles que la carte peint déjà —
+/// et mesuré au simulateur, le déclencheur (y 569–665) tombait exactement sur
+/// le volet de description (y 610–648).
+///
+/// ## Trois meubles, trois réponses — c'est ce qui fait de ceci une règle
+///
+/// Une fonction qui rendrait « tout cède » en ignorant son paramètre ne
+/// déciderait rien. Celle-ci décide l'APPARTENANCE : ce que le viseur occupe
+/// n'est pas « le bas de l'écran », c'est **la carte**.
+nonisolated enum ComposerSceneCameraOverlay {
+
+    enum Furniture: String, CaseIterable, Sendable {
+        /// Le volet de description, ancré au bas du DESSIN (#4993) — donc
+        /// exactement là où le déclencheur se pose.
+        case description
+        /// La trace du son de fond, ancrée AU-DESSUS du dessin (#5017). Le
+        /// viseur ne monte pas jusque-là.
+        case soundTrace
+        /// Les deux rails, dans les COULOIRS du plateau (#4561). Le viseur est
+        /// borné au dessin ; il ne les atteint pas, et les cacher priverait
+        /// l'auteur de sa sortie autant que de ses portes.
+        case rails
+    }
+
+    static func yieldsToViewfinder(_ furniture: Furniture) -> Bool {
+        switch furniture {
+        case .description: return true
+        case .soundTrace:  return false
+        case .rails:       return false
+        }
+    }
+
+    /// La question que les sites de montage posent — ils n'écrivent pas
+    /// `cameraStage != .off`, ils demandent si LEUR meuble est servi.
+    static func isServed(_ furniture: Furniture,
+                         stage: ComposerSceneCameraStage) -> Bool {
+        !(stage != .off && yieldsToViewfinder(furniture))
+    }
+}

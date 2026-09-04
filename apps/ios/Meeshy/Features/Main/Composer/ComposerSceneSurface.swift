@@ -789,7 +789,16 @@ struct ComposerSceneSurface: View {
                 // carte de la moitié de la hauteur perdue dès que le ratio
                 // n'est pas plein (#4119).
                 .overlay(alignment: .bottom) {
-                    ancreAuDessin(descriptionOverlay, alignment: .bottom)
+                    // **Le volet CÈDE au viseur** (#4080) : il est ancré au bas
+                    // du dessin, c'est-à-dire exactement là où le déclencheur se
+                    // pose — mesuré au simulateur, ils se chevauchaient de
+                    // quarante points. La question passe par la règle, jamais
+                    // par un `cameraStage != .off` écrit ici : les trois meubles
+                    // de la carte n'ont pas la même réponse, et c'est ce qui en
+                    // fait une décision.
+                    if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage) {
+                        ancreAuDessin(descriptionOverlay, alignment: .bottom)
+                    }
                 }
                 // **Le chrome du viseur vit DANS la carte** (#4080, directive
                 // porteur 2026-09-04 : « tout doit être dans la scène »).
