@@ -185,6 +185,29 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
             "hasGap dit que l'absence dépasse ce que /sync sait rejouer : la vérité serveur reprend la main")
     }
 
+    // MARK: - Le trou de séquence déclenche la resynchronisation (#4172 critère 3)
+
+    func test_gapDetecte_declencheLeDeltaViaSync() async throws {
+        _ = await semeLeCache()
+        mockSync.scripte = .inchange
+        await engine.startSocketRelay()
+        // L'état du singleton est REMIS avant ET après : un traqueur partagé
+        // qui garde le seq d'un témoin fait mentir le suivant.
+        await SyncSeqTracker.shared.reset()
+        defer { Task { await SyncSeqTracker.shared.reset() } }
+
+        // 1 puis 5 : le saut émet sur `gapDetected`.
+        await SyncSeqTracker.shared.observe(1)
+        await SyncSeqTracker.shared.observe(5)
+
+        // L'abonnement relaie par Task : on attend l'EFFET, jamais une minuterie aveugle.
+        for _ in 0..<50 where mockSync.demandes.isEmpty {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertFalse(mockSync.demandes.isEmpty,
+            "un trou de séquence doit déclencher la resynchronisation /sync — le socket ne rejouera rien")
+    }
+
     // MARK: - La fusion, à l'unité
 
     func test_fusionneLigneDeSync_ligneNeuve_passeTelleQuelle() {

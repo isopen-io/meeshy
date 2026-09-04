@@ -11,6 +11,20 @@ extension ConversationSyncEngine {
     public func startSocketRelay() async {
         socketSubscriptions.removeAll()
 
+        // UN TROU DE SÉQUENCE DÉCLENCHE LA RESYNCHRONISATION `/sync` (#4172
+        // critère 3). `SyncSeqTracker.observe` émet quand un `_seq` saute — des
+        // événements ont été MANQUÉS, et le socket ne rejouera rien. La réponse
+        // est le delta nominal (`syncSinceLastCheckpoint` → `/sync`, `hasGap`
+        // escaladant vers `fullSync` si l'absence dépasse ce que la fenêtre
+        // sait rejouer). Les rafales sont absorbées par `deltaSyncCooldown` —
+        // le même amortisseur que les reconnexions.
+        SyncSeqTracker.shared.gapDetected.publisher
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { await self.syncSinceLastCheckpoint() }
+            }
+            .store(in: &socketSubscriptions)
+
         // Message events
         messageSocket.messageReceived
             .sink { [weak self] apiMessage in
