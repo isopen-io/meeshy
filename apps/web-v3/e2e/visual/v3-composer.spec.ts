@@ -193,17 +193,24 @@ test('publier le vide se refuse à l’écran, sans rien envoyer', async ({ brow
 });
 
 /**
- * DEUX ONGLETS, ET AUCUNE CIBLE INERTE. « Réel » exigerait un téléversement que
- * cet écran ne fait pas ; « Story » mène à une route qui n'existe pas encore
- * (#5033). Les rendre grisés serait le contrôle sans effet de la règle 7.
+ * TROIS ONGLETS, DEUX NATURES, ET AUCUNE CIBLE INERTE.
+ *
+ * « Post » et « Humeur » sont des FORMATS de ce formulaire (`?format=`) ;
+ * « Story » est un ÉCRAN, et son onglet MÈNE ailleurs — publier une story
+ * demande un autre défaut d'audience et une durée de vie à annoncer (#5033).
+ * « Réel » reste absent : il exigerait un téléversement que cet écran ne fait
+ * pas, et le griser serait le contrôle sans effet de la règle 7.
  */
-test('ne rend que les formats publiables, et aucune cible inerte', async ({ browser }) => {
+test('rend deux formats et un lien vers la story, sans cible inerte', async ({ browser }) => {
   const ctx = await contexte(browser);
   const page = await ctx.newPage();
 
   await page.goto(`${v3.base}/composer`);
 
-  await expect(page.locator('.onglets a')).toHaveCount(2);
+  await expect(page.locator('.onglets a')).toHaveCount(3);
+  await expect(page.locator('.onglets a[href^="/composer?format="]')).toHaveCount(2);
+  await expect(page.locator('.onglets a[href="/stories/new"]')).toHaveCount(1);
+  await expect(page.locator('.onglets a[href*="reel"]')).toHaveCount(0);
   expect(await page.locator('[href="#"], [onclick], [aria-disabled="true"]').count()).toBe(0);
 
   await ctx.close();

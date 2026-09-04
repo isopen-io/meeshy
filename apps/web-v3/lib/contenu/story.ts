@@ -1,4 +1,14 @@
 import { deLaLangue } from './langues';
+import { HEURES_DE_VIE_D_UNE_STORY } from './story-neuve';
+
+/**
+ * LA DURÉE DE VIE SERVIE À UN LECTEUR VENAIT D'UN LITTÉRAL FAUX (#5033). Cette
+ * phrase disait « 24 h » ; la passerelle applique 20 h
+ * (`EPHEMERAL_POST_TTL_HOURS.STORY`). Le nombre venait de la cible
+ * (`MeeshyWebV3.dc.html`, ligne « Expire dans »), et un document de design
+ * arrêté à sa date ne peut pas décider d'une durée que le serveur applique.
+ * Elle vient désormais de la seule constante du dépôt qui la porte côté v3.
+ */
 
 /**
  * LA COPIE DE LA STORY — ce que l'écran DIT, hors de ce qu'il compose.
@@ -41,7 +51,7 @@ export const STORY = {
   indisponible: {
     titre: 'Story indisponible',
     corps:
-      'Cette story n’existe plus, ou elle ne vous est pas ouverte. Les stories restent visibles 24 h après leur publication.',
+      `Cette story n’existe plus, ou elle ne vous est pas ouverte. Les stories restent visibles ${HEURES_DE_VIE_D_UNE_STORY} h après leur publication.`,
     action: 'Retour à l’accueil',
   },
   invitation: {
