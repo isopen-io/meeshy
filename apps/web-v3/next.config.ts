@@ -130,6 +130,7 @@ const nextConfig: NextConfig = {
       './.rt/recherche.js',
       './.rt/liens.js',
       './.rt/commentaires.js',
+      './.rt/navigateur.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },

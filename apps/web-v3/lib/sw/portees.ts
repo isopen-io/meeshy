@@ -21,3 +21,12 @@ export const porteesDuTravailleur = (brut: string | undefined): readonly string[
     .split(',')
     .map((portee) => portee.trim())
     .filter((portee) => portee.startsWith('/') && portee !== '/');
+
+/**
+ * LA LISTE NAVIGABLE (#5106) partage la grammaire ET le refus de `/` : ce que
+ * `V3_NAVIGABLE` déclare — les chemins entre lesquels le navigateur de zone
+ * échange les documents — obéit aux mêmes lois que les portées du travailleur
+ * (chemins de la zone, jamais l'origine entière, jamais un hôte étranger), et
+ * son témoin des deux faces vit au même endroit (`sw-registration.test.ts`).
+ */
+export const listeDeCheminsDeZone = porteesDuTravailleur;

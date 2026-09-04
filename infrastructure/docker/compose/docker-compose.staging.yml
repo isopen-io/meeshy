@@ -332,6 +332,12 @@ services:
       # worker legacy. Jamais '/' avant l'étape 7 du § 4.9. Retirer la variable
       # désarme toute registration — le retour arrière du worker de zone.
       - V3_SW_PORTEES=/l/,/chats,/chat/
+      # Le périmètre NAVIGABLE du navigateur de zone (#5106) — les chemins
+      # entre lesquels la navigation douce échange les documents. Même loi que
+      # V3_SW_PORTEES : chaque entrée capturée par la règle du routeur
+      # ci-dessous (témoin : sw-registration.test.ts), jamais '/'. Retirer la
+      # variable rend chaque lien à la navigation native.
+      - V3_NAVIGABLE=/chats,/chat/,/feed,/links,/notifications,/contacts,/search
       - NEXT_PUBLIC_STATIC_URL=https://static.staging.${DOMAIN:-meeshy.me}
       - NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=${NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION:-true}
       - NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=${NEXT_PUBLIC_USE_API_TRANSLATION_ONLY:-true}

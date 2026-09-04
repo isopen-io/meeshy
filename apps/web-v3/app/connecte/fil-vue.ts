@@ -10,7 +10,7 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
  * leurs lecteurs historiques.
  */
 export { type TempsReel } from './chargeur';
-import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR, blocDuNavigateur, type TempsReel } from './chargeur';
 import { porteesDuTravailleur } from '@/lib/sw/portees';
 export { CHARGEUR_DE_PARTICIPATION };
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
@@ -617,7 +617,7 @@ export const documentPleinEcran = ({
   // (#4472/#4473) s'enregistre — pour TOUT document plein écran, la lecture
   // partagée comprise : c'est elle, `/l/`, que son cache sert en premier. Sans
   // `V3_SW_PORTEES` dans l'environnement, le script n'existe pas.
-  `<body>${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}${SCRIPT_DU_TRAVAILLEUR(porteesDuTravailleur(process.env['V3_SW_PORTEES']))}</body>` +
+  `<body>${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}${SCRIPT_DU_TRAVAILLEUR(porteesDuTravailleur(process.env['V3_SW_PORTEES']))}${blocDuNavigateur()}</body>` +
   '</html>';
 
 /**

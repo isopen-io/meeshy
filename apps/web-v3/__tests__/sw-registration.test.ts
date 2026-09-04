@@ -70,14 +70,16 @@ describe('SCRIPT_DU_TRAVAILLEUR — la registration que le document sert', () =>
 describe('les deux faces de la frontière — le compose de staging ne peut pas mentir', () => {
   const compose = fs.readFileSync(path.join(RACINE_DU_DEPOT, 'docker-compose.staging.yml'), 'utf8');
 
-  const porteesDuCompose = (): readonly string[] => {
+  const listeDuCompose = (variable: string): readonly string[] => {
     const ligne = compose
       .split('\n')
       .map((l) => l.trim())
-      .find((l) => l.startsWith('- V3_SW_PORTEES='));
-    if (ligne === undefined) throw new Error('V3_SW_PORTEES absente du compose de staging');
-    return porteesDuTravailleur(ligne.slice('- V3_SW_PORTEES='.length));
+      .find((l) => l.startsWith(`- ${variable}=`));
+    if (ligne === undefined) throw new Error(`${variable} absente du compose de staging`);
+    return porteesDuTravailleur(ligne.slice(`- ${variable}=`.length));
   };
+
+  const porteesDuCompose = (): readonly string[] => listeDuCompose('V3_SW_PORTEES');
 
   const regleDuRouteurDeStaging = (): string => {
     const ligne = compose
@@ -90,6 +92,23 @@ describe('les deux faces de la frontière — le compose de staging ne peut pas 
 
   it('déclare au moins la lecture partagée — le rôle premier que #4473 cible', () => {
     expect(porteesDuCompose()).toContain('/l/');
+  });
+
+  it('le périmètre NAVIGABLE (#5106) obéit aux mêmes lois : chaque chemin capturé par la règle, jamais la racine', () => {
+    const navigable = listeDuCompose('V3_NAVIGABLE');
+    expect(navigable.length).toBeGreaterThan(0);
+    expect(navigable).not.toContain('/');
+    const regle = regleDuRouteurDeStaging();
+    const reclamations = [...regle.matchAll(/(PathPrefix|Path)\(`([^`]+)`\)/g)].map(
+      ([, matcher, valeur]) => ({ matcher, valeur }),
+    );
+    for (const chemin of navigable) {
+      const temoin = chemin.endsWith('/') ? `${chemin}temoin` : chemin;
+      const capture = reclamations.some(({ matcher, valeur }) =>
+        matcher === 'Path' ? temoin === valeur : temoin.startsWith(String(valeur)),
+      );
+      expect({ chemin, capture }).toEqual({ chemin, capture: true });
+    }
   });
 
   it('chaque portée est CAPTURÉE par la règle Traefik du même routeur — le worker ne revendique jamais un chemin que la zone ne sert pas', () => {

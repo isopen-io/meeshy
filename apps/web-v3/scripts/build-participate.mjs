@@ -44,6 +44,7 @@ const SOURCES = [
   { base: 'recherche', chemin: join(RACINE, 'lib', 'realtime', 'recherche.ts') },
   { base: 'liens', chemin: join(RACINE, 'lib', 'realtime', 'liens.ts') },
   { base: 'commentaires', chemin: join(RACINE, 'lib', 'realtime', 'commentaires.ts') },
+  { base: 'navigateur', chemin: join(RACINE, 'lib', 'realtime', 'navigateur.ts') },
 ];
 const DOSSIER = join(RACINE, '.rt');
 const SOCKET = join(RACINE, 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js');

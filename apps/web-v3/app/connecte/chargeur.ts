@@ -1,4 +1,5 @@
-import type { ActifsTempsReel } from '@/lib/actifs-rt';
+import { actifsTempsReel, type ActifsTempsReel } from '@/lib/actifs-rt';
+import { listeDeCheminsDeZone } from '@/lib/sw/portees';
 
 /**
  * CE QU'UN DOCUMENT DE PARTICIPATION PORTE POUR SON MODULE — et le chargeur
@@ -37,18 +38,34 @@ export type TempsReel = {
  * document qui NOMME son module, et c'est ainsi qu'un même chargeur sert le fil
  * et la liste sans savoir lequel il charge.
  */
-export const CHARGEUR_DE_PARTICIPATION =
+const scriptDifere = (charge: string): string =>
   '<script type="module">' +
-  'const m=document.querySelector("main[data-module]");' +
-  'if(m){const u=m.dataset.module;let parti=false;' +
-  'const l=()=>{if(parti)return;parti=true;import(u).catch(()=>{})};' +
+  'let parti=false;' +
+  `const l=()=>{if(parti)return;parti=true;${charge}};` +
   'const i=()=>{"requestIdleCallback"in window?requestIdleCallback(l,{timeout:1500}):setTimeout(l,1)};' +
   'const peint=()=>performance.getEntriesByName("first-contentful-paint").length>0;' +
   'const p=()=>{if(peint()){i();return}' +
   'try{new PerformanceObserver((e,o)=>{if(e.getEntriesByName("first-contentful-paint").length>0){o.disconnect();i()}}).observe({type:"paint",buffered:true})}catch{i()}' +
   'setTimeout(l,4000)};' +
-  'document.readyState==="complete"?p():addEventListener("load",p,{once:true})}' +
+  'document.readyState==="complete"?p():addEventListener("load",p,{once:true})' +
   '</script>';
+
+export const CHARGEUR_DE_PARTICIPATION = scriptDifere(
+  'const m=document.querySelector("main[data-module]");if(m)import(m.dataset.module).catch(()=>{})',
+);
+
+/**
+ * LE CHARGEUR DU NAVIGATEUR DE ZONE (#5106) — même attente (premier pixel,
+ * puis oisiveté), autre cible : le bloc `#zone-navigation` que
+ * `documentPleinEcran` sert quand `V3_NAVIGABLE` déclare un périmètre. Il est
+ * SÉPARÉ du chargeur de participation parce qu'il ne vit pas la même vie : un
+ * écran sans module d'écran (la galerie, les réglages) a quand même droit à
+ * la navigation douce.
+ */
+export const CHARGEUR_DU_NAVIGATEUR = scriptDifere(
+  'const z=document.getElementById("zone-navigation");' +
+    'if(z)try{import(JSON.parse(z.textContent).module).catch(()=>{})}catch{}',
+);
 
 /**
  * LES HUBS PRÉCHARGEABLES (#5104) — une liste FERMÉE d'adresses EXACTES, et
@@ -109,6 +126,35 @@ export const SCRIPT_DU_TRAVAILLEUR = (portees: readonly string[]): string => {
     "'requestIdleCallback'in window?requestIdleCallback(l,{timeout:3000}):setTimeout(l,1500)" +
     '},{once:true})}' +
     '</script>'
+  );
+};
+
+/**
+ * LE BLOC DU NAVIGATEUR DE ZONE (#5106) — servi quand le déploiement déclare
+ * un périmètre navigable (`V3_NAVIGABLE`, même motif que les portées du
+ * travailleur : l'image est unique, le périmètre appartient au compose).
+ * Trois pièces, ensemble ou rien : le cadre (`#zone-navigation`, du JSON
+ * inerte — la liste et l'adresse hashée du module), la région de statut que
+ * le module remplit pour le lecteur d'écran, et le chargeur différé. Sans
+ * l'artefact compilé, rien n'est servi : une adresse morte ne se compose pas.
+ *
+ * Il vit ICI parce qu'il a DEUX familles de consommateurs : les documents
+ * PLEIN ÉCRAN (`documentPleinEcran`, qui le sert d'office) et les écrans
+ * connectés composés par `documentDuSite` — la liste, le tableau de bord, le
+ * fil du membre — qui le passent EXPLICITEMENT dans leur `script:`. La
+ * vitrine et les écrans d'accès ne le servent pas : leurs liens sortent du
+ * périmètre navigable, et 2 Ko de module pour aucun échange serait l'inverse
+ * de l'économie du § 12.6.
+ */
+export const blocDuNavigateur = (): string => {
+  const navigable = listeDeCheminsDeZone(process.env['V3_NAVIGABLE']);
+  if (navigable.length === 0) return '';
+  const actifDuNavigateur = actifsTempsReel().navigateur;
+  if (actifDuNavigateur.corps === '') return '';
+  return (
+    `<script type="application/json" id="zone-navigation">${JSON.stringify({ navigable, module: actifDuNavigateur.url })}</script>` +
+    '<p id="annonce-de-zone" role="status" class="hors-ecran"></p>' +
+    CHARGEUR_DU_NAVIGATEUR
   );
 };
 
