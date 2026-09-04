@@ -108,6 +108,12 @@ export type EtatDuCompteDeBouchon = {
   readonly liensCrees: Record<string, unknown>[];
   /** Les conversations de GROUPE créées pendant la session — relues par la liste. */
   readonly conversationsCreees: { id: string; titre: string }[];
+  /**
+   * LES CORPS DE `POST /api/v1/posts` REÇUS (#4966) — le critère de fin du
+   * composer porte sur ce qui PART, pas sur ce que le document montre : une
+   * audience se vérifie sur la charge envoyée, jamais sur le `<select>` rendu.
+   */
+  readonly publicationsRecues: Record<string, unknown>[];
   /** La boîte de notifications du lecteur — servie par `GET /notifications`, mutée par `read-all`. */
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires d'une publication — écrit par le POST, relu par le GET (#5091). */
@@ -571,6 +577,12 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/conversations') ||
         chemin.startsWith('/api/v1/links') ||
         chemin.startsWith('/api/v1/directory/') ||
+        // LA CRÉATION EST `/api/v1/posts` NU — sans barre finale, donc invisible
+        // du `startsWith('/api/v1/posts/')` ci-dessous. Le bouchon rendait 404
+        // et le composer restait sur son formulaire : mesuré au navigateur, le
+        // 2026-09-04. Une liste d'admission qui n'admet QUE des sous-chemins
+        // ferme la racine sans le dire.
+        chemin === '/api/v1/posts' ||
         chemin.startsWith('/api/v1/posts/') ||
         chemin.startsWith('/api/v1/social/') ||
         chemin.startsWith('/api/v1/users/me') ||
@@ -749,6 +761,28 @@ export const routesDuCompte =
      * les neuf autres scopes hors `author`/`community` : la garde est déjà
      * passée plus haut (`creanceDe`), donc ce bouchon ne la rejoue pas.
      */
+    /**
+     * PUBLIER — `POST /api/v1/posts` (`routes/posts/core.ts:365`,
+     * `requiredAuth`). Le bouchon RETIENT le corps reçu : le critère de fin du
+     * composer (#4966) porte sur ce qui PART — l'audience choisie, l'emoji
+     * d'une humeur, la langue revendiquée —, jamais sur ce que le document
+     * affiche. Un bouchon qui répondrait 201 sans regarder ferait passer un
+     * client qui n'envoie rien.
+     */
+    if (chemin === '/api/v1/posts' && requete.method === 'POST') {
+      etat.publicationsRecues.push(
+        ((): Record<string, unknown> => {
+          try {
+            return JSON.parse(corps.toString('utf8')) as Record<string, unknown>;
+          } catch {
+            return {};
+          }
+        })(),
+      );
+      json({ success: true, data: { id: 'p-neuf' } }, 201);
+      return true;
+    }
+
     if (chemin.startsWith('/api/v1/social/posts')) {
       const scope = url.searchParams.get('scope');
       if (scope === 'stories') {

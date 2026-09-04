@@ -20,6 +20,15 @@ export const FIL_SOCIAL = {
    * suit celui qui l'a écrite.
    */
   reels: 'Réels',
+  /**
+   * LA PORTE DU COMPOSER (#4966) — le « champ » que la table de navigation de
+   * la planche pose sur cet écran (`MeeshyWebV3.dc.html:870` : « feed →
+   * composer, Composer, champ »). Un LIEN, pas un `<input>` : la saisie vit
+   * sur `/composer`, qui la sert avec son format, son audience et sa
+   * publication — un champ ici ferait taper deux fois, exactement comme la
+   * recherche du tableau de bord.
+   */
+  composer: 'Quoi de neuf ?',
 
   rail: 'Les stories, de la plus récente à la plus ancienne',
   publications: 'Les publications, du plus récent au plus ancien',

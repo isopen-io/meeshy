@@ -241,8 +241,17 @@ const cartePost = (post: PostDuFil, maintenant: number, langueDuDocument: string
   );
 };
 
+/**
+ * LE CHAMP « QUOI DE NEUF ? » — la porte du composer (`:870`), posée en tête du
+ * fil comme la cible la dessine. Un `<a>`, jamais un `<input>` : ce qu'on tape
+ * ici serait perdu au moment d'aller sur l'écran qui sait le publier.
+ */
+const versLeComposer = (): string =>
+  `<a class="chercher" href="/composer">${svgDuSprite('ph-note-pencil')}${echappe(FIL_SOCIAL.composer)}</a>`;
+
 const corps = (etat: EtatDuFilSocial, langueDuDocument: string): string =>
   sautDeRail(etat.stories) +
+  versLeComposer() +
   rail(etat.stories) +
   '<p class="hors-ecran" id="journal-des-gestes" role="status" aria-live="polite">' +
   (etat.fait === null ? '' : CONFIRMATIONS[etat.fait]) +

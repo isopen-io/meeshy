@@ -749,13 +749,20 @@ export const filDeLaPublication = async ({
  * caractères et exige qu'au moins un porteur de contenu soit présent
  * (`hasAnyContentCarrier`).
  *
- * `visibility` EST UN PARAMÈTRE, PAS UNE CONSTANTE — depuis #5033
- * (`/stories/new`), qui en fait un contrôle RÉEL (trois valeurs, mutant la
- * charge envoyée : c'est le critère de fin de cet écran). Composer
- * (`/composer`, post/réel/humeur, #4966) ne le fournit toujours pas : le
- * défaut `'PUBLIC'` préserve son comportement à l'octet près — sa ligne
- * « Audience » reste INFORMATIVE (comme « Traduction »), la ligne ne DEVIENT
- * un contrôle que pour l'écran qui la câble.
+ * `visibility` EST UN PARAMÈTRE, PAS UNE CONSTANTE — et les DEUX écrans qui
+ * publient le fournissent.
+ *
+ * Ce paragraphe annonçait l'inverse pour `/composer` (« sa ligne Audience reste
+ * INFORMATIVE »), et l'écriture de l'écran l'a démenti : sur un écran de
+ * CRÉATION, une ligne qui affiche « Public » sans qu'on puisse en changer est
+ * exactement le contrôle qui ment que la charte règle 7 interdit. Les trois
+ * valeurs sont acceptées sans champ de plus ; il n'y avait aucune raison de ne
+ * pas les servir. Le défaut `'PUBLIC'` reste, pour l'appelant qui ne choisit
+ * pas — jamais comme une politique d'écran.
+ *
+ * La ligne « Traduction », elle, reste informative, et c'est DIFFÉRENT : il n'y
+ * a rien à y choisir. La v3 REVENDIQUE la langue d'écriture
+ * (`originalLanguage`) et le Prisme de chaque LECTEUR décide du reste.
  *
  * `originalLanguage` — `CreatePostSchema.originalLanguage`
  * (`routes/posts/types.ts:249-251`) — EST LA REVENDICATION DU CLIENT (§ Prisme,
@@ -780,6 +787,7 @@ export const publie = async ({
   type,
   texte,
   visibility = 'PUBLIC',
+  emoji = null,
   langue = null,
   cmid = null,
   base,
@@ -790,6 +798,14 @@ export const publie = async ({
   readonly texte: string;
   /** `CreatePostSchema.visibility` — `'PUBLIC'` pour composer, la valeur RÉELLEMENT choisie pour une story (#5033). */
   readonly visibility?: 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+  /**
+   * `moodEmoji` — `CreatePostSchema.moodEmoji`, `z.string().max(10)`
+   * (`routes/posts/types.ts:246`). Il n'a de sens que pour un `STATUS` : c'est
+   * l'humeur ELLE-MÊME, et le texte n'en est que le commentaire. `null` — le
+   * cas de tous les autres types — ne pose AUCUNE clé dans le corps : une
+   * chaîne vide serait un emoji vide, pas une absence d'emoji.
+   */
+  readonly emoji?: string | null;
   /** `originalLanguage` — la revendication du client. `null` : rien à revendiquer, la passerelle devine. */
   readonly langue?: string | null;
   /**
@@ -815,6 +831,7 @@ export const publie = async ({
       type,
       content: texte,
       visibility,
+      ...(emoji === null ? {} : { moodEmoji: emoji }),
       ...(langue === null ? {} : { originalLanguage: langue }),
     }),
   });

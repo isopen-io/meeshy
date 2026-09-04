@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { CHAMP_D_APPEL } from './atomes-feuille';
+
 /**
  * LES RADIOS DE LANGUE SONT `.hors-ecran` (clip-path) — leur `label` associé
  * porte donc SEUL l'état coché et le focus visibles. Un radio et son label ne
@@ -60,6 +62,7 @@ const parRang = (etat: 'checked' | 'focus-visible'): string =>
  * qui n'est pas un espacement de DESIGN. Témoin : `__tests__/charte.test.ts`.
  */
 export const FEUILLE_DU_FIL_SOCIAL = compacte(`
+${CHAMP_D_APPEL}
 ${parRang('checked')}{background:var(--color-primary);border-color:var(--color-primary);color:var(--color-on-primary);font-weight:var(--font-weight-semibold)}
 ${parRang('focus-visible')}{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:var(--stroke-strong)}
 .fil-social{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
