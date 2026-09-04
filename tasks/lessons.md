@@ -11973,6 +11973,34 @@ navigation prise pour un masquage. **Un seul et même défaut de raisonnement, s
 quatre instruments différents** — ce qui explique qu'armer l'un n'apprenne rien
 sur les autres.
 
+### « Glyphe ou libellé » était la mauvaise question — la bonne est : le nom est-il REPRIS ailleurs ?
+
+Trois décisions du composer semblaient se contredire :
+
+| surface | forme | |
+|---|---|---|
+| rail de l'éditeur d'objet | glyphes NUS | noms retirés sur directive (#5029) |
+| rangée d'outils du Post | tuiles ÉTIQUETÉES | libellés ajoutés sur mesure (#4071) |
+| barre de prise de vue | pastilles ÉTIQUETÉES | délibéré (#4080) |
+
+Posées comme un choix de style, elles obligent à trancher au cas par cas — et
+l'on finit par transposer la décision d'une surface à l'autre, ce qui défait un
+lot livré. J'ai failli le faire en portant les outils du Post à gauche : les
+mettre en glyphes nus « comme la scène » aurait rejoué les huit glyphes muets que
+#4071 avait corrigés.
+
+> **Le discriminant n'est pas la forme, c'est la REDONDANCE : le nom est-il
+> repris ailleurs à l'écran ?** Sur la scène, ouvrir un outil fait apparaître un
+> panneau dont le titre redit son nom — le glyphe peut rester nu. Le Post n'a
+> aucun panneau ; la barre de prise de vue non plus. Les deux étiquettent, pour
+> la même raison, et le rail de l'éditeur cesse d'être une exception.
+
+Une règle qui unifie trois décisions vaut mieux que trois décisions défendues
+séparément : elle se transporte à la quatrième surface sans qu'on ait à
+redemander. (Formulation de `v2-meeshy-dc`, meilleure que la mienne — je
+défendais « étiqueter tant qu'il n'y a pas de panneau », ce qui est le cas
+particulier et non la règle.)
+
 ### Un extracteur borné par un NOMBRE DE LIGNES ne connaît pas les bornes de ce qu'il extrait
 
 En comparant `CreatePostRequest` entre Swift et Kotlin, j'ai compté **17** champs
