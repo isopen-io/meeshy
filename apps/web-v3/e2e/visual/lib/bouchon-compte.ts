@@ -106,6 +106,8 @@ export type EtatDuCompteDeBouchon = {
    * d'avant : le témoin serait vert sur une création qui ne crée rien.
    */
   readonly liensCrees: Record<string, unknown>[];
+  /** Les conversations de GROUPE créées pendant la session — relues par la liste. */
+  readonly conversationsCreees: { id: string; titre: string }[];
 };
 
 /** Une partie de demande — `demandeAvecPresenceSchema`, présence MASQUÉE par la loi. */
@@ -733,7 +735,34 @@ export const routesDuCompte =
      * panneau de profil (§ 12.10.3 point 5). AVANT le `GET` générique
      * ci-dessous : même préfixe, méthode distincte.
      */
+    /**
+     * `POST /api/v1/conversations` (`routes/conversations/core-lifecycle.ts:73`).
+     *
+     * DEUX APPELANTS, DEUX TYPES, DEUX IDENTIFIANTS. Le panneau de profil crée
+     * un TÊTE-À-TÊTE (§ 12.10.3) ; la feuille « nouvelle conversation »
+     * (#5072) crée un GROUPE. Rendre le même identifiant pour les deux ferait
+     * passer un témoin qui vérifierait la mauvaise destination.
+     *
+     * Le bouchon REFUSE qu'on s'inclue dans `participantIds` — la passerelle le
+     * refuse (« Vous ne devez pas vous inclure dans la liste des
+     * participants »), et un bouchon plus permissif que la passerelle laisse
+     * passer ce que la production rejettera.
+     */
     if (chemin === '/api/v1/conversations' && requete.method === 'POST') {
+      const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
+      const invites = Array.isArray(soumis.participantIds) ? soumis.participantIds : [];
+      if (invites.includes(MEMBRE.id)) {
+        json(
+          { success: false, error: { message: 'Vous ne devez pas vous inclure dans la liste des participants' } },
+          400,
+        );
+        return true;
+      }
+      if (soumis.type === 'group') {
+        etat.conversationsCreees.push({ id: 'c-neuve-groupe', titre: String(soumis.title ?? '') });
+        json({ success: true, data: { id: 'c-neuve-groupe', type: 'group', title: soumis.title } });
+        return true;
+      }
       json({ success: true, data: { id: 'c-neuve-marta', type: 'direct' } });
       return true;
     }

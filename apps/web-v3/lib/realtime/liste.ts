@@ -11,6 +11,7 @@ import {
 
 import { prendsLeBalayage } from './balayage';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
+import { prendsLePleinEcran } from './plein-ecran';
 import * as L from './liste-etat';
 import { etatDuDocument, montreLeTrou, peins, peintre, type Peintre } from './liste-peinture';
 import { doitRattraper, POLITIQUE_DE_RECONNEXION } from './reconnect-policy';
@@ -494,6 +495,21 @@ const surTransition = (ctx: Contexte) => (transition: TransitionDeCycle): void =
 };
 
 const demarre = async (): Promise<void> => {
+  // TOUTE SURIMPRESSION SERVIE EST ÉLEVÉE EN MODALE, AVANT TOUT LE RESTE.
+  //
+  // `/chats` en sert DEUX — le profil d'un participant (`?profil=`, § 12.10.3)
+  // et la feuille « nouvelle conversation » (`?nouvelle`, #5072) — et n'en
+  // élevait AUCUNE : ce module ne l'appelait pas, seul celui du fil le faisait.
+  // Les deux doc-comments l'annonçaient pourtant, et le témoin navigateur de la
+  // feuille l'a démenti (Échap ne fermait rien). Une capacité annoncée par deux
+  // sites et appliquée par zéro.
+  //
+  // ELLE COURT AVANT LES QUATRE REPLIS CI-DESSOUS, et c'est délibéré : une
+  // surimpression doit se fermer à Échap même sur une liste dont la
+  // configuration manque ou dont le jeton a disparu. Ce que ces replis
+  // protègent, c'est le temps réel — jamais le clavier.
+  prendsLePleinEcran();
+
   const main = document.querySelector<HTMLElement>('main[data-participation="liste"]');
   if (main === null) return;
   const config = configuration(main);
