@@ -11973,6 +11973,34 @@ navigation prise pour un masquage. **Un seul et même défaut de raisonnement, s
 quatre instruments différents** — ce qui explique qu'armer l'un n'apprenne rien
 sur les autres.
 
+### Un extracteur borné par un NOMBRE DE LIGNES ne connaît pas les bornes de ce qu'il extrait
+
+En comparant `CreatePostRequest` entre Swift et Kotlin, j'ai compté **17** champs
+côté Kotlin et signalé six champs « présents chez Kotlin seul ». **Cinq
+n'existaient pas dans cette classe** : `grep -A 30` avait débordé sur la classe
+voisine, une charge de transcription. Le vrai chiffre est 12.
+
+Ce qui rend l'erreur dangereuse est la **plausibilité du résultat** : des noms de
+champs bien formés, dans le bon fichier, dans le bon langage. Rien, dans ce que
+l'extracteur rend, ne dit qu'il a franchi une frontière — contrairement à un
+`grep` vide, qui au moins signale qu'on n'a rien trouvé.
+
+> **Borner par la SYNTAXE, jamais par une distance.** Une classe Kotlin s'arrête
+> à sa parenthèse fermante en début de ligne ; une `struct` Swift à la déclaration
+> de haut niveau suivante. Un `-A <n>` est une supposition sur la taille de ce
+> qu'on lit, et cette supposition n'est vérifiée par personne.
+
+Le contrôle qui l'attrape est le même que pour les autres pièges de la journée, et
+il est ici presque gratuit : **le résultat contient-il quelque chose qui n'a rien
+à faire là ?** `confidence`, `durationMs`, `segments` dans un corps de requête de
+publication — les mots eux-mêmes disaient qu'ils venaient d'ailleurs. J'avais la
+réponse sous les yeux avant d'avoir la mesure.
+
+Parenté : c'est la variante « faux POSITIF » des leçons voisines, qui portent
+toutes sur des faux négatifs. Un instrument mal borné peut aussi bien inventer
+que rater — et l'invention est plus difficile à soupçonner, parce qu'elle donne
+quelque chose à voir.
+
 ### Un outil qui n'énumère pas ce qu'il ne traverse pas rend un faux négatif en forme d'INVENTAIRE
 
 Sixième erreur de mesure du 2026-09-03, et la plus coûteuse : j'ai ouvert une issue
@@ -13681,9 +13709,6 @@ Devant une donnée de cette famille — provenance, intention, contexte de geste
 réponse commande le reste : elle s'écrit là, ou elle est perdue. Un lot qui la
 transporte sans l'écrire à la source déplace le problème en le rendant plus
 difficile à voir.
-
----
-
 
 ---
 
@@ -27501,9 +27526,43 @@ Sites : `apps/web-v3/app/theme-script.tsx` (les trois valeurs et la recopie),
 (`cookieDuTheme`). Témoins : `__tests__/theme-script.test.ts` § « `system` l'emporte sur ce que le
 miroir a laissé », `e2e/visual/v3-reglages-a11y.spec.ts` § « choisir un thème CHANGE l'apparence ».
 
+## Leçon 502 — Avant de bâtir une feature, tirer `dev` et lire ses derniers titres : une session voisine l'a peut-être LIVRÉE pendant l'analyse
+
+**Date** : 2026-09-04 · **Contexte** : finalisation de `feat/web-v3-surimpressions` (#5073, le socle
+de la feuille « nouveau lien » sans consommateur) · **Coût** : ~500 lignes écrites puis JETÉES
+(vue, feuille, porte, 15 témoins — tous verts), et un porteur obligé d'écrire « pull dev encore
+pour t'aligner correctement ».
+
+J'ai mesuré le manque (grep des quatre exports : zéro consommateur), lu l'issue #5071, posé les
+témoins RED, implémenté GREEN, committé — un TDD impeccable sur un travail qui existait déjà.
+`651a41b010 feat(web-v3): la feuille « nouveau lien »` était sur `origin/dev` AVANT que je pose ma
+première ligne, avec en plus le correctif Échap et un témoin navigateur de 173 lignes que je n'avais
+pas. Mon `git fetch` datait du début de l'analyse ; la livraison voisine est arrivée pendant.
+
+> **Dans un dépôt à sessions parallèles, la question « quelqu'un l'a-t-il déjà fait ? » se pose au
+> moment d'ÉCRIRE, pas au moment d'ANALYSER.** L'analyse peut durer une heure ; la fenêtre de
+> péremption d'un `fetch` se mesure en minutes. Et le signal ne coûte rien à lire : les TITRES des
+> derniers commits de `origin/dev` nomment leurs features.
+
+Le réflexe, avant le premier fichier d'une feature (pas d'un correctif local) :
+
+```sh
+git fetch origin && git log --oneline HEAD..origin/dev | head -20   # quelqu'un a-t-il livré MON lot ?
+```
+
+Et à l'arbitrage du doublon : **celle qui est SUR dev gagne**, sauf delta mesuré — comparer
+feature par feature avant de jeter (ici : leur version avait Échap + e2e ; la mienne n'apportait
+que l'horloge injectée, que leur témoin n'exigeait pas car il encadre l'horloge réelle par
+`avant = Date.now()` — une assertion RELATIVE, qui n'est pas une bombe datée). Jeter la sienne
+n'est pas un échec : c'est le geste qui évite la troisième implémentation divergente.
+
+Parenté : « PR routine doublons » (`feedback_routine_prs_duplicate_same_fix`), « deux PR vertes
+même fonction » — même famille, mais ici le doublon naît en MINUTES entre sessions vivantes, pas
+en jours entre PR.
+
 ---
 
-## Leçon 502 — Un manque ÉCRIT dans un document peut être une destruction, pas une absence
+## Leçon 503 — Un manque ÉCRIT dans un document peut être une destruction, pas une absence
 
 **Le fait.** La planche du composer rangeait « GIF / stickers animés » dans les manques assumés
 avec, en colonne « État Meeshy », trois mots : *absent (collage = image fixe)*. La ligne a survécu à
@@ -27546,7 +27605,7 @@ branche synchrone), `apps/ios/MeeshyTests/Unit/Composer/AnimatedStickerChainGuar
 
 ---
 
-## Leçon 503 — L'optimisation posée en QUEUE de fonction annule la feature ajoutée dans son corps
+## Leçon 504 — L'optimisation posée en QUEUE de fonction annule la feature ajoutée dans son corps
 
 **Le fait.** `StoryStickerLayer.configure` se termine par
 `shouldRasterize = mode == .play && sticker.isStatic`. Rasteriser une couche, c'est peindre son
