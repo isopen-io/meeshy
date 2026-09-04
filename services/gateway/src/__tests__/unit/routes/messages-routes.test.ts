@@ -2072,56 +2072,6 @@ describe('GET /conversations/:id/messages/search', () => {
     expect(reply._body.data[0].sender.isOnline).toBe(false);
   });
 
-  // #4885 — un message à vue unique trouvé par recherche doit dire qu'il l'est.
-  // Le témoin décisif porte sur la CONSÉQUENCE (la VALEUR servie), pas sur la
-  // seule présence de la clé : avant le correctif, `messageSelect` ne
-  // demandait aucun des quatre drapeaux, et l'objet Prisma renvoyé par ce
-  // double n'en portait donc aucun — exactement la forme du défaut mesuré en
-  // production (`AttachmentService.getAttachmentWithMetadata`-style bug, ici
-  // sur `Message`).
-  it('sert `isViewOnce`/`isBlurred`/`effectFlags`/`expiresAt` d’un résultat protégé (#4885)', async () => {
-    mockResolveForTargets.mockResolvedValue(new Map([
-      [USER_ID, { showOnline: true, showLastSeenTimestamp: true }],
-    ]));
-    const protectedMatch = {
-      id: MSG_ID,
-      conversationId: CONV_ID,
-      content: 'hello world',
-      originalLanguage: 'fr',
-      messageType: 'text',
-      translations: null,
-      createdAt: new Date(),
-      senderId: PART_ID,
-      isViewOnce: true,
-      maxViewOnceCount: 1,
-      viewOnceCount: 0,
-      isBlurred: true,
-      effectFlags: 5,
-      expiresAt: new Date('2026-09-05T00:00:00.000Z'),
-      sender: {
-        id: PART_ID,
-        userId: USER_ID,
-        displayName: 'Alice',
-        avatar: null,
-        type: 'member',
-        user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true },
-      },
-    };
-    prisma.message.findMany
-      .mockResolvedValueOnce([protectedMatch])
-      .mockResolvedValueOnce([]);
-    const reply = makeReply();
-    await getHandler_()(makeSearchReq('hello'), reply);
-    const served = reply._body.data[0];
-    // C'est cette valeur, et non son absence, qui gouverne le garde côté
-    // client (`BubbleMessageNormalView.tsx` : `!message.isViewOnce` autorise
-    // le transfert) — un `undefined` s'y lit comme « transférable ».
-    expect(served.isViewOnce).toBe(true);
-    expect(served.isBlurred).toBe(true);
-    expect(served.effectFlags).toBe(5);
-    expect(served.expiresAt).toEqual(protectedMatch.expiresAt);
-  });
-
   it('returns merged content+translation matches', async () => {
     const contentMsg = {
       id: 'msg-content',

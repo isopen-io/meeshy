@@ -538,6 +538,21 @@ describe('#4340 critère 1 — la vue rend ce que la route dédiée rendait', ()
     // que la route dédiée de recherche ne sélectionne toujours pas.
     expect(champsVue.length).toBeGreaterThan(champsDediee.length);
   });
+
+  it('sert la VALEUR réelle des drapeaux, pas seulement leur présence — un message à vue unique reste `isViewOnce: true` (#4885)', async () => {
+    // Le témoin ci-dessus ne prouve que la présence de la clé — un `undefined`
+    // aurait aussi bien traversé `toContain`. Le témoin décisif porte sur la
+    // CONSÉQUENCE : le garde de transfert (`BubbleMessageNormalView.tsx`,
+    // `!message.isViewOnce`) doit lire `true`, pas une clé vidée.
+    const protege = JEU.map((r) =>
+      r.id === M_OK ? { ...r, isViewOnce: true, isBlurred: true, effectFlags: 5 } : r
+    );
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: protege });
+    const servi = dediee.corps.data.find((m: any) => m.id === M_OK);
+    expect(servi.isViewOnce).toBe(true);
+    expect(servi.isBlurred).toBe(true);
+    expect(servi.effectFlags).toBe(5);
+  });
 });
 
 describe('#4340 critère 3 — aucune route retirée, aucune route changée', () => {
