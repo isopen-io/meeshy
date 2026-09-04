@@ -64,6 +64,7 @@ export const urlDeSync = ({
   scope,
   seq,
   collections = ['messages'],
+  fields,
 }: {
   readonly base: string;
   /** Le dernier `checkpoint` reçu, ou l'instant du dernier message peint au premier tour. */
@@ -78,10 +79,18 @@ export const urlDeSync = ({
   readonly seq?: number;
   /** `messages` pour le fil, `conversations` pour la liste — le vocabulaire de `SYNC_FIELD_VOCABULARY`. */
   readonly collections?: readonly string[];
+  /**
+   * Les champs demandés, forme `collection.champ` (#4173, #5088) — la REQUÊTE
+   * Prisma rétrécit côté passerelle, pas seulement la réponse. Absent ⇒ le
+   * défaut du serveur, la ligne entière : nommer ses champs est le geste de
+   * l'appelant qui SAIT ce qu'il lit.
+   */
+  readonly fields?: readonly string[];
 }): string =>
   `${base}/api/v1/sync?since=${encodeURIComponent(depuis)}&collections=${encodeURIComponent(collections.join(','))}` +
   (scope === undefined ? '' : `&scope=${encodeURIComponent(scope)}`) +
-  (seq === undefined ? '' : `&seq=${seq}`);
+  (seq === undefined ? '' : `&seq=${seq}`) +
+  (fields === undefined || fields.length === 0 ? '' : `&fields=${encodeURIComponent(fields.join(','))}`);
 
 /**
  * CE QU'UN APPEL DE `/sync` REND, en TROIS formes — parce que trois choses
@@ -126,6 +135,7 @@ export const demandeLeDelta = async ({
   scope,
   seq,
   collections,
+  fields,
   validateur,
   entetes,
   recuperer = fetch,
@@ -136,6 +146,8 @@ export const demandeLeDelta = async ({
   /** Le dernier curseur GLOBAL connu — omis tant que le lecteur n'en a jamais vu. */
   readonly seq?: number | null;
   readonly collections?: readonly string[];
+  /** Voir `urlDeSync` — les champs que l'appelant lit, et donc les seuls qu'il demande. */
+  readonly fields?: readonly string[];
   /** Le dernier `ETag` LU — `null` quand il n'a pas pu l'être. */
   readonly validateur?: string | null;
   /** La créance, telle que la surface la porte (`Bearer`, ou la session de l'invité). */
@@ -148,6 +160,7 @@ export const demandeLeDelta = async ({
     ...(scope === undefined ? {} : { scope }),
     ...(seq === undefined || seq === null ? {} : { seq }),
     ...(collections === undefined ? {} : { collections }),
+    ...(fields === undefined ? {} : { fields }),
   });
   const reponse = await recuperer(url, {
     headers: {

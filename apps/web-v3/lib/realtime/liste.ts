@@ -13,6 +13,7 @@ import { prendsLeBalayage } from './balayage';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
 import { prendsLePleinEcran } from './plein-ecran';
 import * as L from './liste-etat';
+import { CHAMPS_DU_RATTRAPAGE } from './liste-etat';
 import { etatDuDocument, montreLeTrou, peins, peintre, type Peintre } from './liste-peinture';
 import { doitRattraper, POLITIQUE_DE_RECONNEXION } from './reconnect-policy';
 import { demandeLeDelta } from './sync/delta-client';
@@ -363,6 +364,9 @@ const rattrape = async (ctx: Contexte): Promise<void> => {
     base: ctx.config.passerelle,
     depuis,
     collections: ['conversations'],
+    // SES champs, et rien d'autre (#5088) : le rattrapage corrige le RANG, et
+    // la passerelle rétrécit sa requête autant que sa réponse (#4173).
+    fields: CHAMPS_DU_RATTRAPAGE,
     // LE CURSEUR PART AVEC LA DEMANDE : c'est la condition pour que la
     // passerelle puisse répondre `hasGap` (`routes/sync/index.ts:360`).
     seq: ctx.seq,

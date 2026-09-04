@@ -326,6 +326,19 @@ test.describe('la liste des conversations', () => {
       new URL(appel.chemin, 'http://bouchon').searchParams.get('seq');
     expect(seq(sync[0]!)).toBeNull();
     expect(seq(sync[sync.length - 1]!)).not.toBeNull();
+    /**
+     * ET SEULS SES CHAMPS PARTENT (#5088). Le rattrapage corrige le RANG : il
+     * lit l'identifiant et l'instant, la passerelle rétrécit sa requête autant
+     * que sa réponse (`SYNC_FIELD_VOCABULARY`, #4173). Sans ce paramètre,
+     * chaque retour de focus repayait les ~12 colonnes de
+     * `syncConversationSelect` — description, avatar, banner — pour n'en lire
+     * que deux.
+     */
+    sync.forEach((appel) => {
+      expect(new URL(appel.chemin, 'http://bouchon').searchParams.get('fields')).toBe(
+        'conversations.id,conversations.lastMessageAt',
+      );
+    });
     // La collection DEMANDÉE est `conversations`, et elle seule : la liste n'a
     // que faire des messages, et les demander ferait payer au retour de focus
     // ce que le fil paie déjà de son côté.
