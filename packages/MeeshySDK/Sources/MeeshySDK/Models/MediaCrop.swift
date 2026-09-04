@@ -61,9 +61,21 @@ public enum MediaCropRule {
     /// autres clients et jusqu'au renderer d'export, où un décodeur plus strict
     /// ou une multiplication par la taille réelle peut en faire autre chose.
     /// Même raison que la normalisation de `StoryMediaRotation`.
+    ///
+    /// **L'ORIGINE est bornée pour que le plancher TIENNE.** L'écriture
+    /// naïve — origine bornée à `1`, puis dimension bornée à `1 - origine` —
+    /// laisse la seconde borne DÉFAIRE la première : à `y == 1`,
+    /// `min(max(0.01, h), 0)` rend `0`, c'est-à-dire exactement le média
+    /// invisible que le plancher existe pour empêcher.
+    ///
+    /// Le défaut a vécu ici jusqu'au 2026-09-04, et c'est le portage
+    /// TypeScript (#5085) qui l'a trouvé : le témoin qui l'attrape doit porter
+    /// sur une origine EN DÉBORDEMENT, et les témoins Swift n'éprouvaient que
+    /// des rectangles valides — où les deux écritures s'accordent.
     public static func clamped(_ rect: MediaCropRect) -> MediaCropRect {
-        let l = min(max(0, rect.x), 1)
-        let h = min(max(0, rect.y), 1)
+        let place = 1 - minimumSide
+        let l = min(max(0, rect.x), place)
+        let h = min(max(0, rect.y), place)
         // Une largeur nulle rendrait un média INVISIBLE sans rien signaler ;
         // le plancher garde une bande étroite plutôt qu'un vide.
         let w = min(max(minimumSide, rect.width), 1 - l)

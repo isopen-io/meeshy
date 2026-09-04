@@ -4,6 +4,12 @@ import { Component, useEffect, useRef, type ReactNode } from 'react';
 import type { CanvasV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import {
+  effectiveMediaRatio,
+  mediaCropStyle,
+  readMediaCrop,
+  type MediaCropRect,
+} from '@meeshy/shared/utils/media-crop';
+import {
   resolveKeyframeState,
   resolveClipTransitionOpacity,
   safeBackgroundImageUrl,
@@ -397,6 +403,15 @@ type ResolvedMedia = {
   aspectRatio?: number;
   isBackground: boolean;
   alt?: string;
+  /**
+   * **Les bornes de recadrage, en fractions de la source** (#5085).
+   *
+   * Elles voyagent depuis iOS sous `cropX/cropY/cropW/cropH` et n'étaient
+   * lues par PERSONNE : `payload` est `z.record(z.unknown())` — permissif par
+   * contrat — donc la clé passait la validation, arrivait ici, et une image
+   * recadrée se rendait ENTIÈRE sans qu'un seul test ne rougisse.
+   */
+  crop: MediaCropRect | null;
 };
 
 function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResolution>): ResolvedMedia {
@@ -410,6 +425,10 @@ function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResoluti
     aspectRatio: numeric(o.payload.aspectRatio) ?? entry?.aspectRatio,
     isBackground: o.payload.isBackground === true,
     alt: entry?.alt,
+    // La LECTURE vit dans `@meeshy/shared` et non ici : trois clients
+    // projettent la même forme de fil, et une boucle réécrite par surface est
+    // ce qui a produit trois familles divergentes de Prisme en trois cycles.
+    crop: readMediaCrop(o.payload),
   };
 }
 
@@ -489,6 +508,45 @@ function MediaObject({
       zIndex: PLANE_Z[o.plane] + o.z,
       opacity: anim?.opacity ?? o.transform.opacity,
     };
+    /**
+     * **Un fond RECADRÉ ne peut pas rester en `inset-0`** : il faut agrandir
+     * le média à l'inverse de la bande et le décaler, sous un conteneur qui
+     * coupe. C'est ce que `CALayer.contentsRect` fait en interne côté iOS —
+     * d'où l'identité du rendu, et le fait qu'aucun pixel n'est retouché ni
+     * ici ni là. Le web n'a pas d'équivalent direct.
+     */
+    if (media.crop) {
+      return (
+        <div
+          data-testid={`canvas-v3-object-${o.id}`}
+          data-kind="media"
+          className="absolute inset-0 overflow-hidden"
+          style={fullBleed}
+        >
+          {media.kind === 'video' ? (
+            <video
+              data-testid={`canvas-v3-media-${o.id}`}
+              src={media.url}
+              className="absolute max-w-none object-cover"
+              style={mediaCropStyle(media.crop)}
+              muted={muted}
+              loop
+              autoPlay
+              playsInline
+              {...videoGateHandlers}
+            />
+          ) : (
+            <img
+              data-testid={`canvas-v3-media-${o.id}`}
+              src={media.url}
+              alt={media.alt ?? ''}
+              className="absolute max-w-none object-cover"
+              style={mediaCropStyle(media.crop)}
+            />
+          )}
+        </div>
+      );
+    }
     return media.kind === 'video' ? (
       <video
         data-testid={`canvas-v3-object-${o.id}`}
@@ -524,14 +582,22 @@ function MediaObject({
         width: POSED_MEDIA_WIDTH,
         maxWidth: '100%',
         maxHeight: '100%',
-        aspectRatio: media.aspectRatio !== undefined ? `${media.aspectRatio}` : undefined,
+        // **Un média recadré n'a plus les proportions de son FICHIER.** Poser
+        // `aspectRatio` brut laisserait la carte à la forme de la source et
+        // letterboxerait la bande dedans — le recadrage se verrait alors comme
+        // une marge, pas comme un cadrage.
+        aspectRatio:
+          media.aspectRatio !== undefined
+            ? `${effectiveMediaRatio(media.aspectRatio, media.crop)}`
+            : undefined,
       }}
     >
       {media.url && media.kind === 'video' && (
         <video
           data-testid={`canvas-v3-media-${o.id}`}
           src={media.url}
-          className="h-full w-full object-contain"
+          className={media.crop ? 'absolute max-w-none object-cover' : 'h-full w-full object-contain'}
+          style={media.crop ? mediaCropStyle(media.crop) : undefined}
           muted
           loop
           autoPlay
@@ -540,7 +606,13 @@ function MediaObject({
         />
       )}
       {media.url && media.kind === 'image' && (
-        <img data-testid={`canvas-v3-media-${o.id}`} src={media.url} alt="" className="h-full w-full object-contain" />
+        <img
+          data-testid={`canvas-v3-media-${o.id}`}
+          src={media.url}
+          alt=""
+          className={media.crop ? 'absolute max-w-none object-cover' : 'h-full w-full object-contain'}
+          style={media.crop ? mediaCropStyle(media.crop) : undefined}
+        />
       )}
     </div>
   );

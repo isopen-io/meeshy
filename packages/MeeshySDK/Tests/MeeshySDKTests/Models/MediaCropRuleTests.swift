@@ -31,6 +31,24 @@ final class MediaCropRuleTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(r.height, MediaCropRule.minimumSide)
     }
 
+    /// **Le plancher tient AUSSI quand l'ORIGINE déborde** — et c'est le cas
+    /// que le témoin voisin ne pouvait pas attraper.
+    ///
+    /// Écrit naïvement, `clamped` borne l'origine à `1` puis la dimension à
+    /// `1 - origine` : la seconde borne DÉFAIT la première, et `min(max(0.01,
+    /// h), 0)` rend `0` — le média invisible que le plancher existe pour
+    /// empêcher. Sur une origine INTERNE (`0,5`), les deux écritures
+    /// s'accordent : le témoin ne peut donc pas se poser là, et c'est pour ça
+    /// que le défaut a vécu jusqu'au 2026-09-04, trouvé par le portage
+    /// TypeScript de la même loi (#5085).
+    func test_lePlancher_tientQuandLOrigineDéborde() {
+        let r = MediaCropRule.clamped(MediaCropRect(x: 5, y: 5, width: 0.5, height: 0.5))
+        XCTAssertGreaterThanOrEqual(r.width, MediaCropRule.minimumSide)
+        XCTAssertGreaterThanOrEqual(r.height, MediaCropRule.minimumSide)
+        XCTAssertLessThanOrEqual(r.x + r.width, 1.0001)
+        XCTAssertLessThanOrEqual(r.y + r.height, 1.0001)
+    }
+
     /// `LIBRE` n'impose aucune forme — c'est la seule des quatre qui laisse
     /// l'auteur décider, donc elle rend le cadre entier.
     func test_libre_neRecadrePas() {
