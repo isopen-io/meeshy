@@ -36,6 +36,19 @@ const DETENTEUR = join('lib', 'api', 'guest-session.ts');
 const DETENTEURS_DE_STOCKAGE: readonly (readonly [string, string])[] = [
   [DETENTEUR, 'le jeton invité, une entrée par lien (§ 6.3 état E)'],
   [join('app', 'theme-script.tsx'), 'la préférence de thème, clé meeshy-theme (§ 2)'],
+  /**
+   * LE BROUILLON DU COMPOSER (#4966) — et l'entrée porte sa raison de STOCKAGE,
+   * pas seulement sa clé, parce que c'est le stockage qui a été l'arbitrage.
+   *
+   * `sessionStorage`, jamais `localStorage` : le brouillon est le texte NON
+   * PUBLIÉ de quelqu'un, exactement ce que le `no-store` du document refuse de
+   * laisser resservir par le bouton « précédent ». `localStorage` recréerait
+   * cette exposition sans borne de temps, lisible par la personne SUIVANTE qui
+   * ouvre l'écran sur le même appareil — et la v3 n'a pas encore de route de
+   * déconnexion pour l'effacer. Un onglet fermé emporte le brouillon, et c'est
+   * la propriété qu'on veut.
+   */
+  [join('lib', 'realtime', 'composer.ts'), 'le brouillon du composer, clé meeshy.v3.brouillon.<format>, en sessionStorage (#4966)'],
 ];
 
 const ZONES = ['app', 'components', 'lib', 'scripts'];

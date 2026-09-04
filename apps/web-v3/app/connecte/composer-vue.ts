@@ -1,4 +1,5 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
+import { CHARGEUR_DE_PARTICIPATION } from '@/app/connecte/chargeur';
 import { documentPleinEcran } from '@/app/connecte/fil-vue';
 import { echappe } from '@/app/socle';
 
@@ -65,6 +66,17 @@ export type EtatDuComposer = {
   readonly publie: boolean;
   /** Le refus de la passerelle, rendu TEL QUEL — jamais recomposé ici. */
   readonly erreur: string | null;
+  /**
+   * LE MODULE DU BROUILLON (#4966), `null` tant que l'actif n'est pas compilé.
+   *
+   * **IL N'Y A NI PASSERELLE NI SOCKET ICI**, et c'est ce qui distingue ce
+   * `tempsReel` des huit autres : le module de cet écran ne parle à personne.
+   * Il tient la saisie dans `sessionStorage` — ce que le `no-store` du document
+   * ne peut pas tenir à sa place, et ce que le bfcache lui refuse pour la même
+   * raison. Le champ garde son nom pour que le chargeur différé, qui vise
+   * `main[data-module]`, n'ait rien à savoir de plus.
+   */
+  readonly tempsReel: { readonly module: string } | null;
 };
 
 const enTete = (): string =>
@@ -177,10 +189,23 @@ const corps = (etat: EtatDuComposer): string =>
   `<button type="submit" class="action primaire publier">${echappe(COMPOSER.publier)}</button>` +
   '</form>';
 
+/**
+ * Ce que le `<main>` porte pour son module — le chargeur différé vise
+ * `main[data-module]`, et le module se reconnaît à `data-participation`.
+ * Aucune adresse de passerelle : il n'en joint aucune.
+ */
+const attributsDuBrouillon = (etat: EtatDuComposer): string =>
+  etat.tempsReel === null
+    ? ''
+    : ` data-participation="composer" data-module="${echappe(etat.tempsReel.module)}"`;
+
 export const documentDuComposer = (etat: EtatDuComposer): string =>
   documentPleinEcran({
     titre: `${COMPOSER.titre} — Meeshy`,
     description: COMPOSER.sousTitre,
-    corps: `<main id="main-content" class="reglages composer">${enTete()}${corps(etat)}</main>`,
+    corps:
+      `<main id="main-content" class="reglages composer"${attributsDuBrouillon(etat)}>` +
+      `${enTete()}${corps(etat)}</main>`,
     feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_REGLAGES + FEUILLE_DU_COMPOSER,
+    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });

@@ -13,7 +13,9 @@ import { lisLActif, memo } from './actifs';
  * `feed.<hash>.js` (`/feed`, #5031), `notifs.<hash>.js` (`/notifications`,
  * #4898), `contacts.<hash>.js` (`/contacts`, #4921) et `recherche.<hash>.js`
  * (`/search`, #4897), `liens.<hash>.js` (`/links`, #5090) et
- * `commentaires.<hash>.js` (`/post/:id`, #5091) sont les HUIT modules de
+ * `commentaires.<hash>.js` (`/post/:id`, #5091) et `composer.<hash>.js`
+ * (`/composer`, #4966 — le seul qui ne parle à personne : il tient un
+ * BROUILLON dans `sessionStorage`) sont les NEUF modules de
  * participation
  * compilés par `scripts/build-participate.mjs` (bun build, AVANT `next
  * build`) — huit fichiers parce qu'un écran ne doit télécharger que ce qu'il
@@ -60,6 +62,7 @@ export type ActifsTempsReel = {
   readonly liens: ActifTempsReel;
   readonly commentaires: ActifTempsReel;
   readonly navigateur: ActifTempsReel;
+  readonly composer: ActifTempsReel;
   readonly socket: ActifTempsReel;
 };
 
@@ -103,6 +106,7 @@ export const actifsTempsReel = memo(
     liens: actif('liens', lisLeModule('liens')),
     commentaires: actif('commentaires', lisLeModule('commentaires')),
     navigateur: actif('navigateur', lisLeModule('navigateur')),
+    composer: actif('composer', lisLeModule('composer')),
     socket: actif(
       'socket.io',
       lisFichier(join(process.cwd(), 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js')),
