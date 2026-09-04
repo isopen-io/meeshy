@@ -1,6 +1,7 @@
 import Foundation
 import MeeshySDK
 import MeeshyUI
+import SwiftUI
 
 /// **Les sections de l'éditeur d'objet — dix depuis l'EFFET (#4870) — et
 /// laquelle est OUVERTE** (#4842).
@@ -357,5 +358,38 @@ nonisolated enum ComposerEdgeBackGesture {
         guard startX <= stripWidth else { return false }
         guard translation.width >= minimumTranslation else { return false }
         return abs(translation.width) > abs(translation.height)
+    }
+}
+
+/// **La hauteur SERVIE au panneau d'options** (#5083) — le contenu, plafonné.
+///
+/// Écrite hors du corps de vue pour être éprouvable : c'est une règle à deux
+/// bornes, et chacune répond à un défaut distinct.
+///
+/// Le PLAFOND est celui de #4997 : au-delà, les options mangeraient la carte.
+/// Le PLANCHER à 1 est plus subtil — la hauteur mesurée vaut zéro à la première
+/// passe de layout, avant que la préférence ne remonte. Servie telle quelle,
+/// elle ferait disparaître le panneau une frame, ce qui se voit comme un
+/// clignotement à chaque ouverture d'outil.
+nonisolated enum ComposerObjectEditorOptions {
+    static func height(content: CGFloat, cap: CGFloat) -> CGFloat {
+        min(max(content, 1), cap)
+    }
+}
+
+/// **La hauteur du contenu du panneau d'options** (#5083).
+///
+/// Jumelle verticale de ce que `ComposerSceneCardLeadingKey` fait pour le bord
+/// gauche de la scène : une vue ne peut pas calculer ce que son enfant mesure,
+/// elle ne peut que le RECEVOIR. Sans elle, le panneau prend les 260 points
+/// qu'on l'autorise à prendre — un `ScrollView` est glouton dans son axe — et
+/// laisse un vide qui ressemble à une marge voulue.
+///
+/// `max` en réduction : une seule vue publie, et un zéro venu d'une passe de
+/// layout intermédiaire ne doit pas écraser la mesure.
+struct ComposerObjectEditorOptionsHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
