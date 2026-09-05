@@ -160,7 +160,7 @@ describe('le fil face à axe', () => {
     ecris(
       documentDuChoix({
         segment: 'lagos-q1',
-        apercu: { lien: 'mshy_lagos' as CleDeLien, nom: 'Équipe Lagos', description: 'Le canal.', conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: [], participants: 12 },
+        apercu: { lien: 'mshy_lagos' as CleDeLien, nom: 'Équipe Lagos', description: 'Le canal.', conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: [], participants: 12, droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true } },
         langueProposee: 'fr',
         saisie: { pseudo: '', courriel: '', naissance: '' },
         refus: null,
