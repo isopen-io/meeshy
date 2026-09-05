@@ -243,4 +243,31 @@ class StoryDrawingBoardTest {
         val after = board.recolorSelected("445566")
         assertThat(after.canRedo).isTrue()
     }
+
+    // MARK: resyncedTo
+
+    @Test
+    fun `resyncedTo is a no-op when the given strokes already match — redo and selection survive`() {
+        val board = boardOf("a", "b").undo().select("a") // strokes: [a], redo holds "b"
+        val after = board.resyncedTo(board.strokes)
+        assertThat(after).isSameInstanceAs(board)
+    }
+
+    @Test
+    fun `resyncedTo rebuilds a fresh board with no redo history when the strokes diverge`() {
+        val board = boardOf("a", "b").undo().select("a") // redo holds "b"
+        val otherSlideStrokes = listOf(stroke("z"))
+
+        val after = board.resyncedTo(otherSlideStrokes)
+
+        assertThat(after.strokes).isEqualTo(otherSlideStrokes)
+        assertThat(after.canRedo).isFalse()
+        assertThat(after.selectedStrokeId).isNull()
+    }
+
+    @Test
+    fun `resyncedTo an empty list clears the board — switching to a blank slide`() {
+        val board = boardOf("a")
+        assertThat(board.resyncedTo(emptyList()).isEmpty).isTrue()
+    }
 }

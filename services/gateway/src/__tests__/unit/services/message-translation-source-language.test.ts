@@ -170,6 +170,53 @@ describe('MessageTranslationService — source language sent to the translator',
     expect(requests[0].sourceLanguage).toBe('auto');
   });
 
+  it('strips the region of an out-of-catalog region-tagged source (fil-PH → fil)', async () => {
+    // Filipino is not in the catalogue, so `normalizeLanguageCode` returns
+    // undefined and the dedup fallback decides. The inline
+    // `?? originalLanguage.toLowerCase()` sent `'fil-ph'` — which the
+    // translator's `LANGUAGE_MAPPINGS.get(src, 'eng_Latn')` cannot resolve,
+    // silently falling back to English. The SSOT `normalizeLanguageForDedup`
+    // strips the region to `'fil'`, the same canonical form the store keys use.
+    const prisma = {
+      message: {
+        findUnique: jest.fn(async () => ({ originalLanguage: 'fil-PH', translations: {} })),
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const { zmq, requests } = makeZmqMock();
+    injectZmq(svc, zmq);
+
+    await (svc as unknown as {
+      _processTranslationsAsync(message: unknown, targetLanguage?: string): Promise<void>;
+    })._processTranslationsAsync(
+      { id: 'm5', content: 'Kumusta?', originalLanguage: 'fil-PH', conversationId: 'c5' },
+      'en',
+    );
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].sourceLanguage).toBe('fil');
+  });
+
+  it('filters a target that equals a region-tagged out-of-catalog source (no self-translation)', () => {
+    // `_resolveTargetLanguages` removes the source language to avoid an NLLB
+    // self-translation (`fil → fil`), which would store a corrupted copy of
+    // the user's own message. The comparison must canonicalise BOTH sides with
+    // the same SSOT: with the inline fallback the source was `'fil-ph'` and the
+    // target `'fil'`, so `'fil'` escaped the filter and a `fil → fil` job was
+    // requested. `normalizeLanguageForDedup` folds both to `'fil'`.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService({} as any);
+    const resolved = (svc as unknown as {
+      _resolveTargetLanguages(
+        originalLanguage: string | null | undefined,
+        targetLanguages: readonly string[],
+      ): string[];
+    })._resolveTargetLanguages('fil-PH', ['fil', 'en']);
+
+    expect(resolved).toEqual(['en']);
+  });
+
   it('leaves an already-canonical source language untouched (fr → fr)', async () => {
     const prisma = {
       message: {

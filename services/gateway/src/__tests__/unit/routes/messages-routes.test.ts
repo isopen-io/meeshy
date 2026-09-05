@@ -85,13 +85,13 @@ jest.mock('../../../middleware/auth', () => ({
     return mockParticipantAuthMiddleware;
   },
 }));
-// Seul `canAccessConversation` est doublé. `resolveCallerParticipant` reste RÉEL
-// et interroge le double Prisma de ce fichier : un mock de module complet le
-// rendrait `undefined`, et surtout il masquerait la règle d'identité qu'il porte.
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
-  canAccessConversation: (...args: any[]) => mockCanAccessConversation(...args),
-}));
+// Seule la DÉCISION d'accès est doublée, sous ses DEUX formes depuis #4792 (noyau à
+// trois états + projection booléenne, `helpers/acces-conversation-double`). Le module
+// est PROLONGÉ : `resolveCallerParticipant` reste RÉEL sur le double Prisma du fichier.
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: any[]) => mockCanAccessConversation(...args)));
 jest.mock('../../../utils/response', () => ({
   sendSuccess: (...args: any[]) => mockSendSuccess(...args),
   sendBadRequest: (...args: any[]) => mockSendBadRequest(...args),
@@ -868,21 +868,21 @@ describe('GET /conversations/:id/messages', () => {
     );
   });
 
-  it('shareLink with max-uses exceeded → 403 SHARE_LINK_MAX_USES', async () => {
+  // #4827 — `maxUses` borne l'ADMISSION, jamais la LECTURE. `maxUses:1, currentUses:1` = le lien personnel
+  // JUSTE après son unique invité ; les compteurs restent dans la charge pour que ce témoin TOMBE si la garde revenait.
+  it('un participant admis par un lien PLEIN lit toujours le fil (#4827)', async () => {
     prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, joinedAt: new Date(), shareLinkId: 'link-1' });
     prisma.conversationShareLink.findFirst.mockResolvedValue({
       allowViewHistory: true,
       expiresAt: null,
-      maxUses: 5,
-      currentUses: 5,
+      maxUses: 1,
+      currentUses: 1,
     });
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.message.count.mockResolvedValue(0);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringContaining('usage limit'),
-      expect.objectContaining({ code: 'SHARE_LINK_MAX_USES' }),
-    );
+    expect({ success: reply._body.success, code: reply._body.code, data: reply._body.data }).toEqual({ success: true, code: undefined, data: [] });
   });
 
   it('shareLink without view history → historyStartDate set to joinedAt', async () => {
@@ -1235,23 +1235,23 @@ describe('GET /conversations/:id/messages', () => {
     }
   });
 
-  // #4177 — même famille que le témoin `reaction.findMany` ci-dessus :
-  // `currentUserConsumption` n'est déclaré dans AUCUN schéma
-  // (`messageAttachmentSchema` ne le porte pas), donc jamais servi — le
-  // `attachmentStatusEntry.findMany` qui l'alimentait était payé pour rien à
-  // CHAQUE page portant une pièce jointe. Retiré ; ce témoin prouve
-  // maintenant l'absence de la requête et du champ.
-  it("sans consommateur possible, attachmentStatusEntry.findMany n'est plus appelé", async () => {
+  // #3909 — thèse INVERSÉE : sous #4177 ce témoin prouvait l'ABSENCE de la
+  // requête, `currentUserConsumption` n'étant déclaré nulle part donc jamais
+  // servi. `messageAttachmentSchema` le DÉCLARE : le trou gelé est fermé exprès.
+  // Reste la moitié vraie des deux côtés — servi à `null`, jamais `undefined`,
+  // que `fast-json-stringify` retirerait (« jamais consommé » = « serveur muet »).
+  it("sert currentUserConsumption à null quand le participant n'a rien consommé", async () => {
     const msg = makeMessage({
       attachments: [{ id: 'att-1', mimeType: 'audio/mp3', fileUrl: 'http://x.com/a.mp3', reactions: [], translations: null, transcription: null }],
     });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
+    prisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(prisma.attachmentStatusEntry.findMany).not.toHaveBeenCalled();
+    expect(prisma.attachmentStatusEntry.findMany).toHaveBeenCalled();
     const att = reply._body.data[0].attachments[0];
-    expect(att.currentUserConsumption).toBeUndefined();
+    expect(att.currentUserConsumption).toBeNull();
   });
 });
 
@@ -1508,11 +1508,11 @@ describe('POST /conversations/:id/mark-unread', () => {
     expect(mockSendForbidden).toHaveBeenCalled();
   });
 
-  it('returns 403 when no participant', async () => {
+  it('returns 404 when no participant (#4856)', async () => {
     prisma.participant.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalled();
   });
 
   it('no other-user messages → { unreadCount: 0 }', async () => {
@@ -1991,11 +1991,11 @@ describe('GET /conversations/:id/messages/search', () => {
   const makeSearchReq = (q = 'hello', extra: any = {}) =>
     makeRequest({ query: { q, ...extra } });
 
-  it('403 when conversationId not found', async () => {
+  it('404 when conversationId not found (#4856)', async () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
   it('403 when no access', async () => {
@@ -2757,7 +2757,7 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     prisma.participant.findFirst.mockResolvedValueOnce(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'Participant not found in this conversation');
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Participant not found in this conversation'); // #4856
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
     expect(prisma.participant.findFirst).toHaveBeenCalledTimes(1);
   });

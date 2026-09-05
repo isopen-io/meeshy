@@ -21,14 +21,53 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
 
     /// L'emplacement (slot) ne doit JAMAIS s'effondrer — directive du
     /// 2026-05-28 (bug « on ne voit pas le bouton envoyer ») déjà gardée par
-    /// `ComposerTransparentAndConditionalSendSourceGuardTests` : le
-    /// `.frame(width: 44, height: 44)` doit rester appliqué UNE SEULE fois,
-    /// à l'extérieur du if/else qui bascule le contenu — jamais dupliqué par
-    /// branche (ce qui romprait l'invariant si une seule branche l'avait).
+    /// `ComposerTransparentAndConditionalSendSourceGuardTests` : le cadre doit
+    /// rester appliqué UNE SEULE fois, à l'extérieur du if/else qui bascule le
+    /// contenu — jamais dupliqué par branche (ce qui romprait l'invariant si
+    /// une seule branche l'avait).
     func test_actionButtonBlock_frameIsAppliedOnceOutsideTheBranch() throws {
         let block = try Self.actionButtonBlock()
-        let occurrences = block.components(separatedBy: ".frame(width: 44, height: 44)").count - 1
-        XCTAssertEqual(occurrences, 1, "le cadre fixe doit envelopper le if/else UNE seule fois — trouvé \(occurrences)")
+        let occurrences = block.components(separatedBy: ".frame(width:").count - 1
+        XCTAssertEqual(occurrences, 1, "le cadre doit envelopper le if/else UNE seule fois — trouvé \(occurrences)")
+    }
+
+    /// **Le slot s'ÉLARGIT pour deux cibles, il ne les COMPRIME pas**
+    /// (demande porteur 2026-08-31).
+    ///
+    /// Il avait été taillé pour UN bouton (44), et la bascule vers deux emojis
+    /// y a serré 2×30 + gouttière dans la même largeur — des pastilles sous le
+    /// minimum tactile de 44 pt, pour la seule raison que la largeur du slot
+    /// n'avait pas suivi son contenu. La hauteur, elle, reste fixe : c'est elle
+    /// qui portait l'invariant « le slot ne s'effondre pas ».
+    func test_actionButtonSlot_widensForTwoTargetsInsteadOfSqueezingThem() throws {
+        let block = try Self.actionButtonBlock()
+        XCTAssertTrue(
+            block.contains("quickEmojiSlotWidth"),
+            "la largeur du slot doit suivre son contenu — une constante NOMMÉE pour le cas deux-emojis"
+        )
+        XCTAssertTrue(
+            block.contains("sendSlotWidth"),
+            "et revenir à la largeur d'un seul bouton dès qu'il y a quelque chose à envoyer"
+        )
+        XCTAssertTrue(
+            block.contains("height: 44"),
+            "la HAUTEUR reste fixe — c'est elle qui garde l'invariant « le slot ne s'effondre jamais »"
+        )
+    }
+
+    /// Une cible tactile fait 44 pt (dimension 5 du `CLAUDE.md` racine), et la
+    /// contre-épreuve nomme la valeur d'AVANT : `30` ne doit plus décrire une
+    /// pastille d'emoji rapide.
+    func test_quickEmojiButtons_meetTheFortyFourPointTouchTarget() throws {
+        let block = try Self.propertyBlock(anchor: "var quickEmojiButtons: some View {")
+        XCTAssertTrue(
+            block.contains(".frame(width: 44, height: 44)"),
+            "chaque emoji rapide doit occuper une cible de 44 pt — 30 pt était sous le minimum tactile"
+        )
+        XCTAssertFalse(
+            block.contains("width: 30"),
+            "la pastille de 30 pt doit avoir disparu, pas cohabiter avec la neuve"
+        )
     }
 
     func test_actionButtonBlock_hidesQuickEmojiInEditModeAndWhenEmojiDisabled() throws {

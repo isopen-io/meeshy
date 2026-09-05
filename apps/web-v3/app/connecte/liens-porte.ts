@@ -1,0 +1,237 @@
+import { origineEtrangere, refusDOrigine } from '@/app/provenance';
+import { jetonDuLecteur } from '@/app/session';
+import { actifsTempsReel } from '@/lib/actifs-rt';
+import { carnetDeLiens, creeUnLien, fermeUnLien, type LienACreer, type Recuperateur } from '@/lib/api/compte';
+import { FERMETURE, NOUVEAU_LIEN, traduisLeMotifDuLien } from '@/lib/contenu/liens';
+
+import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
+import { documentDesLiens } from './liens-vue';
+import { champsCommuns, saisieSoumise } from './nouveau-lien-porte';
+import type { SaisieDuLien } from './nouveau-lien-vue';
+import { documentDePanne } from './vue';
+
+/**
+ * LA PORTE DE `/links` — un seul appel, et c'est tout ce dont l'écran a besoin.
+ *
+ * NI `/auth/me` NI `/conversations`. La zone connectée demande toujours les
+ * deux ; cet écran ne rend ni le nom du lecteur ni ses conversations, et son
+ * unique appel lui dit déjà tout — y compris si le jeton vaut encore. Deux
+ * aller-retours économisés sur une 3G rurale, sur un écran qui n'aurait rien su
+ * en faire.
+ *
+ * C'est le même raisonnement que `/notifications` et `/contacts`, poussé d'un
+ * cran : là-bas `/auth/me` restait nécessaire — pour le chrome de la boîte,
+ * pour CLASSER les demandes des contacts. Ici, rien.
+ *
+ * LES TROIS QUESTIONS SONT LES MÊMES, dans le même ordre : un jeton ? la
+ * passerelle l'accepte-t-elle ? a-t-elle répondu ? Un 401 renvoie se
+ * connecter — le cas NOMINAL d'un retour après quelques jours — et un silence
+ * dessine la panne plutôt qu'une page blanche.
+ */
+
+/**
+ * LE SOCLE DU MODULE (#5090) — `null` tant que l'actif compilé est absent : le
+ * Post/Redirect/Get reste alors le seul chemin (§ 12.4). Même origine, aucune
+ * passerelle : le module poste au document et échange sa région.
+ */
+const moduleDeParticipation = (): { readonly module: string } | null => {
+  const actifs = actifsTempsReel();
+  if (actifs.liens.corps === '') return null;
+  return { module: actifs.liens.url };
+};
+
+const CHEMIN = '/links';
+
+const versLaConnexion = (): Response =>
+  new Response(null, {
+    status: 302,
+    headers: {
+      location: `/login?returnUrl=${encodeURIComponent(CHEMIN)}`,
+      'cache-control': CACHE_PRIVE,
+    },
+  });
+
+/**
+ * SERVIR LE CARNET, dans l'état que l'adresse déclare. `?nouveau` ouvre la
+ * feuille de création, `?cree` et `?ferme` portent le compte rendu du POST —
+ * trois états d'ADRESSE, donc partageables, rechargeables et annulables par le
+ * bouton « précédent », ce qu'aucun état de JavaScript n'offre.
+ *
+ * `refusFermeture` NE VIENT JAMAIS DE L'ADRESSE (contrairement à `motif`, qui
+ * accompagne `?nouveau` après un refus de CRÉATION) : un refus de fermeture ne
+ * redirige pas (§ `FERMER_UN_LIEN`), donc il n'a pas d'état d'adresse à porter
+ * — il vient de l'appelant, pour CE rendu, une fois.
+ */
+const sert = async ({
+  jeton,
+  requete,
+  recuperer,
+  saisie,
+  motif,
+  refusFermeture,
+  statut = 200,
+}: {
+  readonly jeton: string;
+  readonly requete: Request;
+  readonly recuperer?: Recuperateur;
+  readonly saisie?: SaisieDuLien;
+  readonly motif?: string | null;
+  readonly refusFermeture?: string | null;
+  readonly statut?: number;
+}): Promise<Response> => {
+  const carnet = await carnetDeLiens({ jeton, recuperer });
+  if (carnet.genre === 'session-expiree') return versLaConnexion();
+  if (carnet.genre === 'panne') return rendu(documentDePanne(), 503);
+
+  const parametres = new URL(requete.url).searchParams;
+  const avis = parametres.has('cree') ? 'cree' : parametres.has('ferme') ? 'ferme' : null;
+  return rendu(
+    documentDesLiens({
+      liens: carnet.liens,
+      actifs: carnet.actifs,
+      nouveau: parametres.has('nouveau') || saisie !== undefined,
+      avis,
+      saisie,
+      motif: motif ?? null,
+      refusFermeture: refusFermeture ?? null,
+      tempsReel: moduleDeParticipation(),
+    }),
+    statut,
+  );
+};
+
+export const CARNET_DE_LIENS = async (
+  requete: Request,
+  recuperer?: Recuperateur,
+): Promise<Response> => {
+  const jeton = jetonDuLecteur(requete);
+  if (jeton === null) return versLaConnexion();
+
+  return sert({ jeton, requete, recuperer });
+};
+
+/** Ce que le formulaire de FERMETURE a posté sous `nom` — la lecture générique de la création vit dans `saisieSoumise`. */
+const texte = (formulaire: FormData, nom: string): string => {
+  const valeur = formulaire.get(nom);
+  return typeof valeur === 'string' ? valeur.trim() : '';
+};
+
+/**
+ * `saisieSoumise` (lire le formulaire) et `champsCommuns` (composer ce que
+ * `createLinkSchema` attend, hors la CIBLE) vivent dans `./nouveau-lien-porte`
+ * depuis que la feuille a un SECOND hôte (#5034, le fil du membre) : les
+ * deux portes lisent le même formulaire et composent les mêmes champs, seule
+ * la cible diffère — `newConversation` ici, `conversationId` là-bas.
+ */
+const lienASoumettre = (saisie: SaisieDuLien, maintenant: number): LienACreer => ({
+  newConversation: { title: saisie.conversation },
+  ...champsCommuns(saisie, maintenant),
+});
+
+/**
+ * CRÉER LE LIEN — Post/Redirect/Get, et la garde d'origine AVANT tout.
+ *
+ * Sans la redirection, un rechargement créerait un SECOND lien et une seconde
+ * conversation ; sans la garde, un autre site ferait ouvrir au lecteur une
+ * conversation publique à son insu, avec un lien que lui seul croit privé.
+ *
+ * LE REFUS NE REDIRIGE PAS : rien n'a été écrit, donc il n'y a rien à protéger
+ * du rejeu, et une redirection coûterait la saisie — un nom de conversation et
+ * six cases qu'aucune URL ne peut porter sans les exposer.
+ */
+export const CREE_UN_LIEN = async (
+  requete: Request,
+  recuperer?: Recuperateur,
+  formulaireDeja?: FormData,
+): Promise<Response> => {
+  if (origineEtrangere(requete)) return refusDOrigine(requete);
+
+  const jeton = jetonDuLecteur(requete);
+  if (jeton === null) return versLaConnexion();
+
+  const formulaire = formulaireDeja ?? (await requete.formData().catch(() => null));
+  if (formulaire === null) return redirection(`${CHEMIN}?nouveau`, { 'cache-control': CACHE_PRIVE });
+
+  const saisie = saisieSoumise(formulaire);
+  // SANS NOM DE CONVERSATION, RIEN NE PART. La passerelle le refuserait
+  // (`title: z.string().min(1)`), mais son message parlerait anglais d'un
+  // champ que le lecteur n'a pas nommé ainsi.
+  if (saisie.conversation === '') {
+    return sert({ jeton, requete, recuperer, saisie, motif: NOUVEAU_LIEN.sansTitre, statut: 422 });
+  }
+
+  const issue = await creeUnLien({ jeton, champs: lienASoumettre(saisie, Date.now()), recuperer });
+  if (issue.genre === 'session-expiree') return versLaConnexion();
+  if (issue.genre === 'fait') return redirection(`${CHEMIN}?cree`, { 'cache-control': CACHE_PRIVE });
+
+  return sert({
+    jeton,
+    requete,
+    recuperer,
+    saisie,
+    motif: issue.genre === 'refus' ? traduisLeMotifDuLien(issue.message) : '',
+    statut: issue.genre === 'panne' ? 503 : 422,
+  });
+};
+
+/**
+ * FERMER LE LIEN (#4933) — jamais de PRG sur un refus.
+ *
+ * `sansTitre`/`saisie` N'ONT PAS DE SENS ICI : fermer un lien ne recueille
+ * aucune saisie à reposer. Le seul champ que le formulaire porte, `lien`, est
+ * la clé de la ligne — et elle est absente de la redirection de succès : le
+ * carnet entier se relit, la ligne visée y apparaît FERMÉE.
+ *
+ * LE REFUS NE REDIRIGE PAS, la même raison que `CREE_UN_LIEN` retournée :
+ * un 403/404 doit garder la ligne SOUS LES YEUX du lecteur, avec son motif —
+ * une redirection vers `?ferme` mentirait sur ce qui vient de se passer.
+ */
+export const FERMER_UN_LIEN = async (
+  requete: Request,
+  recuperer?: Recuperateur,
+  formulaireDeja?: FormData,
+): Promise<Response> => {
+  if (origineEtrangere(requete)) return refusDOrigine(requete);
+
+  const jeton = jetonDuLecteur(requete);
+  if (jeton === null) return versLaConnexion();
+
+  const formulaire = formulaireDeja ?? (await requete.formData().catch(() => null));
+  const identifiant = formulaire === null ? '' : texte(formulaire, 'lien');
+  if (identifiant === '') return redirection(CHEMIN, { 'cache-control': CACHE_PRIVE });
+
+  const issue = await fermeUnLien({ jeton, identifiant, recuperer });
+  if (issue.genre === 'session-expiree') return versLaConnexion();
+  if (issue.genre === 'fait') return redirection(`${CHEMIN}?ferme`, { 'cache-control': CACHE_PRIVE });
+
+  return sert({
+    jeton,
+    requete,
+    recuperer,
+    refusFermeture: issue.genre === 'refus' ? issue.message : FERMETURE.echec,
+    statut: issue.genre === 'refus' ? issue.statut : 503,
+  });
+};
+
+/**
+ * L'UNIQUE VERBE D'ÉCRITURE DE `/links` — câblé par `app/links/route.ts`.
+ *
+ * DEUX GESTES, UN SEUL CHAMP QUI LES DISTINGUE : la présence de `geste`. Un
+ * POST de CRÉATION (`conversation=…`) ne le porte jamais — `saisieSoumise` ne
+ * le lit pas — donc l'absence du champ suffit à router vers `CREE_UN_LIEN`,
+ * sans qu'un troisième formulaire n'ait à se coordonner avec les deux autres.
+ *
+ * LE CORPS EST LU UNE SEULE FOIS ICI, et PASSÉ aux deux portes : un
+ * `ReadableStream` de requête ne se relit pas deux fois, et chaque porte reste
+ * appelable seule (les témoins existants de `CREE_UN_LIEN` n'en pâtissent
+ * pas — `formulaireDeja` est optionnel).
+ */
+export const POST_SUR_LES_LIENS = async (requete: Request, recuperer?: Recuperateur): Promise<Response> => {
+  if (origineEtrangere(requete)) return refusDOrigine(requete);
+
+  const formulaire = await requete.formData().catch(() => null);
+  if (formulaire !== null && formulaire.has('geste')) {
+    return FERMER_UN_LIEN(requete, recuperer, formulaire);
+  }
+  return CREE_UN_LIEN(requete, recuperer, formulaire ?? undefined);
+};

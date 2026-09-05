@@ -10,6 +10,14 @@ public final class MeeshyConfig: @unchecked Sendable {
     /// Le segment sous lequel la passerelle sert un fichier, RELATIF au préfixe
     /// d'API — jamais préfixé ici : `apiBaseURL` porte déjà l'hôte et la version.
     private static let attachmentFileRoute = "/attachments/file/"
+
+    /// Le schéma qui déclare qu'une clé vient du magasin STATIQUE (#4625).
+    ///
+    /// Miroir Swift de `STATIC_STORE_SCHEME` (`packages/shared/api/media-ref.ts`)
+    /// et de `MediaUrlResolver.STATIC_STORE_SCHEME` (Android). Les trois lisent
+    /// la même donnée : le changer ici seul servirait les avatars d'un seul
+    /// client.
+    private static let staticStoreScheme = "static:"
     private static let environmentKey = "meeshy_selected_environment"
     private static let customHostKey = "meeshy_custom_host"
 
@@ -76,6 +84,25 @@ public final class MeeshyConfig: @unchecked Sendable {
         return "\(scheme)://\(webHost)"
     }
 
+    /// L'origine du magasin STATIQUE — `static.<domaine web>` (#4625).
+    ///
+    /// Dérivée de `webOrigin`, jamais configurée à part : c'est le même
+    /// déploiement, et un second réglage à tenir à jour finirait par diverger
+    /// exactement comme les adresses figées en base que cette issue retire.
+    /// `gate.meeshy.me` → `static.meeshy.me` ; `gate.staging.meeshy.me` →
+    /// `static.staging.meeshy.me`.
+    ///
+    /// En développement, Next sert `public/` à la RACINE de son origine
+    /// (`http://localhost:3100/u/i/…`) : il n'y a pas de sous-domaine à poser,
+    /// et `webOrigin` est déjà la bonne réponse — port compris, ce qu'un
+    /// `URL.host` aurait perdu.
+    public var staticOrigin: String {
+        let web = webOrigin
+        guard let url = URL(string: web), let scheme = url.scheme, let host = url.host else { return web }
+        if Self.isLocalhost(host.lowercased()) { return web }
+        return "\(scheme)://static.\(host)"
+    }
+
     public var appBundleId: String = "me.meeshy.app"
 
     /// Base64-encoded SHA-256 hashes of pinned SubjectPublicKeyInfo (SPKI)
@@ -110,7 +137,23 @@ public final class MeeshyConfig: @unchecked Sendable {
             return fileURL
         }
         let resolved: String
-        if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
+        if urlString.hasPrefix(Self.staticStoreScheme) {
+            // Le magasin se DÉCLARE dans la donnée (#4625). Il le fallait :
+            // aucune FORME de clé ne dit d'où elle vient — `u/i/2025/11/a.jpg`
+            // (statique) et `avatars/user/<id>.jpg` (passerelle) se ressemblent
+            // trop pour qu'un consommateur les sépare à vue, et chacun de ceux
+            // qui essayaient inventait sa propre règle.
+            //
+            // Sans cette branche, les 272 avatars du magasin statique, réduits à
+            // leur clé, partaient se chercher sur la passerelle — où ils ne sont
+            // pas. Ils ne s'affichaient jusqu'ici QUE parce qu'ils portaient
+            // encore leur hôte.
+            let brut = String(urlString.dropFirst(Self.staticStoreScheme.count))
+            let cle = brut.drop(while: { $0 == "/" })
+            guard !cle.isEmpty else { return nil }
+            let encodee = cle.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(cle)
+            resolved = shared.staticOrigin + "/" + encodee
+        } else if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
             resolved = urlString
         } else if urlString.hasPrefix("/") {
             resolved = shared.serverOrigin + urlString

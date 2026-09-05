@@ -17,6 +17,7 @@ const mockSendForbidden = jest.fn<any>((reply: any, msg: any, extra?: any) => {
   reply._body = { success: false, error: msg };
   return reply;
 });
+const mockSendUnauthorized = jest.fn<any>((reply: any, msg: any) => Object.assign(reply, { _body: { success: false, error: msg } }));
 const mockSendNotFound = jest.fn<any>((reply: any, msg: any) => {
   reply._body = { success: false, error: msg };
   return reply;
@@ -65,6 +66,7 @@ jest.mock('../../../utils/response', () => ({
   sendSuccess: (...args: any[]) => mockSendSuccess(...args),
   sendBadRequest: (...args: any[]) => mockSendBadRequest(...args),
   sendForbidden: (...args: any[]) => mockSendForbidden(...args),
+  sendUnauthorized: (...args: any[]) => mockSendUnauthorized(...args),
   sendNotFound: (...args: any[]) => mockSendNotFound(...args),
   sendInternalError: (...args: any[]) => mockSendInternalError(...args),
   sendError: (...args: any[]) => mockSendError(...args),
@@ -230,7 +232,7 @@ const makePrisma = (): any => ({
   },
   agentAnalysisSnapshot: {
     findMany: jest.fn().mockResolvedValue([]),
-  },
+  }, conversationShareLink: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) }, $transaction: jest.fn((ops: any) => Promise.all(ops)), // #3740
 });
 
 type Routes = Record<string, Record<string, Function>>;
@@ -583,13 +585,12 @@ describe('registerCoreRoutes', () => {
       });
     });
 
-    it('returns sendForbidden when not authenticated', async () => {
+    it('rend 401 UNAUTHORIZED quand il n’y a pas de session (#4789)', async () => {
       const req = makeRequest({ authContext: { isAuthenticated: false, userId: null } });
       const reply = makeReply();
-
       await getListHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendUnauthorized).toHaveBeenCalledWith(reply, expect.any(String), { code: 'UNAUTHORIZED' });
+      expect(mockSendForbidden).not.toHaveBeenCalled();
     });
 
     // ── memberCount : compté par la base, jamais lu dans la colonne ──────────
@@ -1862,13 +1863,12 @@ describe('registerCoreRoutes', () => {
       ...overrides,
     });
 
-    it('returns sendForbidden when not authenticated', async () => {
+    it('rend 401 UNAUTHORIZED quand il n’y a pas de session (#4789)', async () => {
       const req = makeRequest({ authContext: { isAuthenticated: false, userId: null } });
       const reply = makeReply();
-
       await getDetailHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(mockSendUnauthorized).toHaveBeenCalledWith(reply, expect.any(String), { code: 'UNAUTHORIZED' });
+      expect(mockSendForbidden).not.toHaveBeenCalled();
     });
 
     it('returns sendNotFound when resolveConversationId returns null', async () => {

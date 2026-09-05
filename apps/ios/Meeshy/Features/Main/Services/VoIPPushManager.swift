@@ -16,7 +16,7 @@ protocol VoIPTokenRegistering {
 struct APIVoIPTokenRegistrar: VoIPTokenRegistering {
     func register(_ body: RegisterDeviceTokenRequest) async throws {
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
-            endpoint: "/users/register-device-token",
+            UsersEndpoint.registerDeviceToken,
             body: body
         )
     }

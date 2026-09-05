@@ -287,7 +287,14 @@ describe('Admin content routes — GET /share-links', () => {
   // rendu — un `select` qui le redéclarerait romprait ce témoin AVANT même
   // qu'une ligne n'atteigne le sérialiseur (`additionalProperties: true`
   // laisserait passer n'importe quel champ présent, y compris celui-ci).
-  it('ne demande plus linkId à Prisma, même pour BIGBOSS (#4157)', async () => {
+  //
+  // #4692 — la ligne `toHaveProperty('identifier', true)` que ce témoin portait
+  // GELAIT le défaut : `identifier` est la JUMELLE de `linkId` — les deux
+  // ouvrent `findShareLinkByKey`, indifféremment — et le témoin ATTESTAIT
+  // qu'elle est servie. Un témoin qui nomme correctement la moitié qu'il garde
+  // (« plus de `linkId` ») rend l'autre moitié illisible : elle se relit comme
+  // le reste de la phrase, pas comme une affirmation à instruire.
+  it('ne demande aucune clé de jointure à Prisma, même pour BIGBOSS (#4157, #4692)', async () => {
     app = buildApp('BIGBOSS');
     await app.ready();
 
@@ -297,8 +304,10 @@ describe('Admin content routes — GET /share-links', () => {
     expect(mockPrisma.conversationShareLink.findMany).toHaveBeenCalledTimes(1);
     const { select } = mockPrisma.conversationShareLink.findMany.mock.calls[0][0];
     expect(select).not.toHaveProperty('linkId');
+    expect(select).not.toHaveProperty('identifier');
+    // `id` reste servi : c'est la référence sur laquelle la console AGIT, et
+    // #4692 l'a rendue OPAQUE en la retirant de `SHARE_LINK_JOIN_KEY_COLUMNS`.
     expect(select).toHaveProperty('id', true);
-    expect(select).toHaveProperty('identifier', true);
   });
 });
 
@@ -314,7 +323,8 @@ describe('Admin content routes — POST /share-links/:id/reveal', () => {
     jest.clearAllMocks();
     mockPrisma.conversationShareLink.findUnique.mockResolvedValue({
       id: LINK_ID,
-      linkId: 'secret-join-token-abc123',
+      linkId: 'mshy_Kd8Qz3Wb',
+      identifier: 'mshy_Rt5Xn9Cv',
     });
     mockPrisma.adminAuditLog.create.mockResolvedValue({});
   });
@@ -352,7 +362,15 @@ describe('Admin content routes — POST /share-links/:id/reveal', () => {
     expect(mockPrisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
   });
 
-  it('révèle le linkId pour BIGBOSS avec un motif écrit, et écrit la trace d\'audit', async () => {
+  /**
+   * #4692 — le geste rend les DEUX clés de jointure, pas seulement `linkId`.
+   *
+   * `findShareLinkByKey` accepte `linkId` ET `identifier` : n'en révéler qu'une
+   * laissait le rang souverain incapable de nommer un lien que l'`identifier`
+   * seul désigne, alors même que la liste ne sert plus ni l'une ni l'autre.
+   * Un geste de révélation doit rendre tout ce que la liste retient.
+   */
+  it('révèle les DEUX clés de jointure pour BIGBOSS avec un motif écrit, et écrit la trace', async () => {
     app = buildApp('BIGBOSS');
     await app.ready();
 
@@ -365,7 +383,13 @@ describe('Admin content routes — POST /share-links/:id/reveal', () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
     expect(body.success).toBe(true);
-    expect(body.data.linkId).toBe('secret-join-token-abc123');
+    expect(body.data.linkId).toBe('mshy_Kd8Qz3Wb');
+    expect(body.data.identifier).toBe('mshy_Rt5Xn9Cv');
+
+    // Et la requête les DEMANDE : un `select` qui n'en ramène qu'une servirait
+    // `undefined`, que fast-json-stringify retire en silence.
+    const { select } = mockPrisma.conversationShareLink.findUnique.mock.calls[0][0];
+    expect(select).toEqual({ id: true, linkId: true, identifier: true });
 
     expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledTimes(1);
     const auditData = mockPrisma.adminAuditLog.create.mock.calls[0][0].data;

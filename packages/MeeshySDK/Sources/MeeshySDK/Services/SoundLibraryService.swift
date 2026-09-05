@@ -56,7 +56,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
             items.append(URLQueryItem(name: "cursor", value: soundCursorFormatter().string(from: cursor)))
         }
         let response: PaginatedSoundResponse = try await api.request(
-            endpoint: "/sounds/mine", method: "GET", body: nil, queryItems: items
+            SoundsEndpoint.mine, method: "GET", body: nil, queryItems: items
         )
         let filtered = Self.filterLocally(response.data, query: query)
         return SoundPage(sounds: filtered, nextCursor: response.pagination?.nextCursorDate)
@@ -69,7 +69,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
             items.append(URLQueryItem(name: "q", value: query))
         }
         let response: APIResponse<[APISound]> = try await api.request(
-            endpoint: "/stories/audio", method: "GET", body: nil, queryItems: items
+            StoriesEndpoint.audio, method: "GET", body: nil, queryItems: items
         )
         return response.data
     }
@@ -81,7 +81,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
     /// administrateur coupe le son entier.
     public func rename(soundId: String, title: String) async throws -> APISound {
         let response: APIResponse<APISound> = try await api.patch(
-            endpoint: "/sounds/\(soundId)",
+            SoundsEndpoint.byId(id: soundId),
             body: ["title": title]
         )
         return response.data
@@ -100,7 +100,7 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
             items.append(URLQueryItem(name: "cursor", value: soundCursorFormatter().string(from: cursor)))
         }
         let response: PaginatedSoundPostResponse = try await api.request(
-            endpoint: "/sounds/\(soundId)/posts", method: "GET", body: nil, queryItems: items
+            SoundsEndpoint.byIdPosts(id: soundId), method: "GET", body: nil, queryItems: items
         )
         return SoundPostPage(posts: response.data, nextCursor: response.pagination?.nextCursorDate)
     }

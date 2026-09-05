@@ -329,6 +329,37 @@ final class ReelsViewModel: ObservableObject {
 
     // MARK: - Interactions (optimistic)
 
+    /// **Poser un émoji AUTRE que le cœur** (décision porteur 2026-09-02 —
+    /// « la palette d'emoji partout, comme sur les stories »).
+    ///
+    /// Le cœur garde `toggleLike` : il porte l'état `isLiked`, le compteur
+    /// affiché, la réconciliation optimiste et son repli REST — tout un
+    /// appareil que le serveur alimente par l'événement canonique `post:liked`.
+    /// Un émoji quelconque n'a rien de tout cela : il n'existe pas de
+    /// « isLaughed » ni de compteur par émoji dans cette vue.
+    ///
+    /// Le geste est donc ADDITIF, jamais un basculement : poser 😂 ne retire
+    /// pas ❤️ et ne se dé-pose pas d'un second appui — ce serait promettre un
+    /// état que la vue ne sait ni afficher ni réconcilier. Le retrait passe par
+    /// les surfaces qui montrent le détail des réactions.
+    ///
+    /// Aucun rollback optimiste : rien n'est peint localement, donc rien à
+    /// défaire. L'échec est silencieux ici et le restera tant que le rail
+    /// n'affichera pas les réactions autres que le cœur.
+    func react(_ post: FeedPost, emoji: String) {
+        guard emoji != MeeshyQuickReactions.heart else {
+            toggleLike(post)
+            return
+        }
+        EngagementTracker.shared.recordAction(.reacted, surface: .reels)
+        Task {
+            try? await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
+                _ = try await SocialSocketManager.shared.addPostReaction(
+                    postId: post.id, emoji: emoji)
+            }
+        }
+    }
+
     func toggleLike(_ post: FeedPost) {
         let id = post.id
         guard !heartInFlight.contains(id) else { return }

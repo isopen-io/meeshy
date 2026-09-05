@@ -155,14 +155,17 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
     expect(text).toBeDefined();
     expect(text?.plane).toBe('fg');
     expect(text?.anchor).toEqual({ t: 'free', x: 0.5, y: 0.5 });
-    expect(text?.payload).toMatchObject({ text: 'Bonjour', textStyle: 'neon' });
+    // « Ne » est un PRESET : la police « neon » ET la lueur que ce composer
+    // montre à l'auteur — écrite sur l'axe EFFET (#4870), pour que ce qu'il a
+    // vu soit ce qui part, sur iOS aussi.
+    expect(text?.payload).toMatchObject({ text: 'Bonjour', textStyle: 'neon', textEffect: 'glow' });
 
     const reference = objectsOf(fixture('minimal-text'))[0];
     const referenceKeys = Object.keys(reference).filter((k) => k !== 'locale').sort();
     expect(Object.keys(text ?? {}).sort()).toEqual(referenceKeys);
   });
 
-  it('never guesses a locale on the root text object - DoD rejection of F7d (constat 4 BLOQUANT) : a client-guessed `locale` becomes `sourceLanguage` server-side and is PREFERRED over text detection, and short-circuits the reader Prisme (`CanvasV3Scene.tsx` `sameLanguage(language, o.locale)`) - a wrong guess mistranslates AND mis-ranks. The web composer has no explicit language picker (unlike iOS), so it can never emit an HONEST `locale` here - closing the Prisme rule 3 gap is done at READ time instead (`postToStoryData`, `withOriginLocale`, `lib/story-transforms.ts`), backfilling from the server-DETECTED `post.originalLanguage`, never guessed client-side', () => {
+  it('never guesses a locale on the root text object - DoD rejection of F7d (constat 4 BLOQUANT) : a client-guessed `locale` becomes `sourceLanguage` server-side and is PREFERRED over text detection, and short-circuits the reader Prisme (`CanvasV3Scene.tsx` `isSameLanguage(language, o.locale)`) - a wrong guess mistranslates AND mis-ranks. The web composer has no explicit language picker (unlike iOS), so it can never emit an HONEST `locale` here - closing the Prisme rule 3 gap is done at READ time instead (`postToStoryData`, `withOriginLocale`, `lib/story-transforms.ts`), backfilling from the server-DETECTED `post.originalLanguage`, never guessed client-side', () => {
     const { published } = renderComposer();
     typeContent('Hello there');
     clickPublish();

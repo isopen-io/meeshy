@@ -330,4 +330,50 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
       expect(served).not.toHaveProperty('deletedAt');
     });
   });
+
+  // #4885 — `getConversationMessagesWithDetails` charge la ligne `Message`
+  // ENTIÈRE (`include` sans `select` racine) : `isViewOnce`/`isBlurred`/
+  // `effectFlags`/`expiresAt` étaient déjà dans l'objet Prisma, mais ni ce
+  // formateur ni `messageSchema` ne les recopiaient/déclaraient. Un visiteur
+  // SANS COMPTE lisant un lien de partage — la population la plus exposée —
+  // recevait un message à vue unique / flouté / éphémère sans aucun moyen de
+  // le savoir.
+  describe('drapeaux de protection du message (#4885)', () => {
+    it('sert `isViewOnce`/`isBlurred`/`effectFlags`/`expiresAt` d’un message protégé', async () => {
+      const raw = {
+        ...makeRawMessage(anonymousParticipant),
+        isViewOnce: true,
+        maxViewOnceCount: 1,
+        viewOnceCount: 0,
+        isBlurred: true,
+        effectFlags: 5,
+        expiresAt: new Date('2026-09-05T00:00:00.000Z'),
+      };
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.isViewOnce).toBe(true);
+      expect(served.isBlurred).toBe(true);
+      expect(served.effectFlags).toBe(5);
+      expect(served.expiresAt).toBe('2026-09-05T00:00:00.000Z');
+    });
+
+    it("sert `isViewOnce: false` sur un message ordinaire — pas d'omission ambiguë", async () => {
+      const raw = {
+        ...makeRawMessage(anonymousParticipant),
+        isViewOnce: false,
+        maxViewOnceCount: null,
+        viewOnceCount: 0,
+        isBlurred: false,
+        effectFlags: 0,
+        expiresAt: null,
+      };
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.isViewOnce).toBe(false);
+      expect(served.isBlurred).toBe(false);
+      expect(served.expiresAt).toBeNull();
+    });
+  });
 });

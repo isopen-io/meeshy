@@ -11,6 +11,7 @@
  * `messages.ts` pour le composeur (`registerMessagesRoutes`).
  */
 import { FastifyInstance } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 // #4349 — le dimensionnement de debit de l'accuse vient de la collection
@@ -103,7 +104,7 @@ export function registerMarkReadRoute(
     onRequest: depreciee({
       depuis: '2026-08-30',
       successeur: (request) =>
-        `/api/v1/conversations/${encodeURIComponent((request.params as ConversationParams).id)}/receipts`,
+        `${apiPath('/conversations')}/${encodeURIComponent((request.params as ConversationParams).id)}/receipts`,
     }),
     schema: {
       description: 'Mark all messages in a conversation as read for the authenticated user',
@@ -214,7 +215,14 @@ export function registerMarkUnreadRoute(
       const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!currentParticipant) {
-        return sendForbidden(reply, 'Participant not found in this conversation');
+        // #4856 — un 403 sous ce texte annulait la protection qu'il visait :
+        // l'appelant a déjà PROUVÉ son accès à la conversation via
+        // `canAccessConversation` deux lignes plus haut, donc distinguer
+        // « absent » d'« interdit » ici ne renseigne aucun attaquant qui ne
+        // le saurait déjà. C'est un « je ne trouve pas », comme les autres
+        // sites qui protègent la même incohérence (participant introuvable
+        // pour un accès pourtant accordé).
+        return sendNotFound(reply, 'Participant not found in this conversation');
       }
 
       // Find the latest message in the conversation (not sent by the user)

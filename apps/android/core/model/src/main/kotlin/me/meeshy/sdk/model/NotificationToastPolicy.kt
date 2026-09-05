@@ -47,10 +47,13 @@ public object NotificationToastPolicy {
         now: LocalDateTime,
     ): NotificationToastDecision {
         val context = notification.context
-        val matchesActiveConversation = context?.conversationId != null &&
-            context.conversationId == activeConversationId
-        val matchesActivePost = context?.postId != null && context.postId == activePostId
-        if (matchesActiveConversation || matchesActivePost) {
+        val matchesActiveScreen = ActiveContextMatch.matches(
+            contentConversationId = context?.conversationId,
+            contentPostId = context?.postId,
+            activeConversationId = activeConversationId,
+            activePostId = activePostId,
+        )
+        if (matchesActiveScreen) {
             return NotificationToastDecision.SuppressedActiveScreen
         }
         if (isDuplicateDelivery) return NotificationToastDecision.Deduplicated

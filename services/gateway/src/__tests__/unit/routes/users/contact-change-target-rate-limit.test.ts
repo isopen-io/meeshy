@@ -48,9 +48,9 @@ jest.mock('../../../../services/EmailService', () => ({
 jest.mock('../../../../services/SmsService', () => ({
   smsService: { sendVerificationCode: jest.fn<any>().mockResolvedValue({ success: true, provider: 'test' }) },
 }));
-jest.mock('bcryptjs', () => ({
-  default: { compare: jest.fn<any>().mockResolvedValue(true) },
-  compare: jest.fn<any>().mockResolvedValue(true),
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: jest.fn<any>().mockResolvedValue(true),
 }));
 
 /** Un cache STATEFUL, partagé par les DEUX routes — comme en production. */

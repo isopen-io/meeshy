@@ -13,7 +13,18 @@ import MeeshyUI
 /// commentaire ne pouvait structurellement afficher aucune légende — pas même
 /// la sienne. (`FeedMedia` ne déclarait d'ailleurs pas `caption` : le décodeur
 /// jetait `PostMedia.caption` avant qu'aucune vue puisse la demander.)
-enum SocialMediaCaption {
+/// **`nonisolated` — une règle sur des VALEURS n'appartient à aucun acteur.**
+///
+/// L'isolation par défaut de l'app est `MainActor` ; sans cette annotation, ces
+/// deux fonctions PURES — qui ne touchent ni vue, ni singleton, ni état — ne
+/// pouvaient être appelées que depuis le fil principal, et leurs témoins ne
+/// compilaient pas. Le geste réflexe aurait été d'annoter la classe de test ;
+/// c'est la règle qui était mal placée, pas le témoin (leçon 473 : l'annotation
+/// est une SONDE avant d'être un correctif).
+///
+/// Aucun site d'appel ne change : du code `MainActor` appelle librement une
+/// fonction `nonisolated`.
+nonisolated enum SocialMediaCaption {
     /// 1) la légende propre du média ; 2) à défaut le texte du porteur, mais
     /// SEULEMENT s'il n'a qu'un seul visuel — au-delà, ce texte décrit le LOT et
     /// le coller sous chaque pièce ferait mentir la légende.
@@ -35,6 +46,116 @@ enum SocialMediaCaption {
             if !trimmed.isEmpty { return trimmed }
         }
         return nil
+    }
+}
+
+/// **Le TEXTE du porteur, avec ses autres langues** (#4934).
+///
+/// Ce que le plein écran doit recevoir n'est pas une chaîne mais une chaîne ET
+/// ses alternatives — sans quoi la bascule de langue que la carte offre est
+/// perdue dès qu'on agrandit le contenu.
+nonisolated struct SocialCarrierText {
+    /// Le texte servi par le Prisme — celui que la carte affiche aujourd'hui.
+    let served: String
+    /// `langue → texte`, l'ORIGINAL compris. Vide ⇒ aucune bascule possible.
+    let byLanguage: [String: String]
+
+    static let none = SocialCarrierText(served: "", byLanguage: [:])
+
+    /// **Depuis un POST — le seul porteur qui transporte ses traductions.**
+    ///
+    /// `FeedPost.translations` est une carte `langue → texte` complète, et
+    /// `content` + `originalLanguage` en fournissent la clé manquante : celle de
+    /// l'original, qui n'est jamais dans la carte des traductions.
+    ///
+    /// Sans `originalLanguage`, l'original n'entre PAS dans la carte : une
+    /// entrée sous une clé inventée serait un drapeau qui ment sur ce qu'il
+    /// sert. Mieux vaut une bascule qui ignore l'original qu'une bascule qui
+    /// l'étiquette au hasard.
+    static func from(post: FeedPost) -> SocialCarrierText {
+        var carte = (post.translations ?? [:]).mapValues(\.text)
+        if let origine = post.originalLanguage?.lowercased(), !origine.isEmpty {
+            carte[origine] = post.content
+        }
+        return SocialCarrierText(served: post.displayContent, byLanguage: carte)
+    }
+
+    /// **Un COMMENTAIRE n'offre AUCUNE bascule, et ce n'est pas un oubli.**
+    ///
+    /// `FeedComment` ne transporte pas de carte de traductions : il porte
+    /// `content`, `translatedContent` et `originalLanguage` — c'est-à-dire le
+    /// texte d'ORIGINE et le texte SERVI, sans jamais dire dans quelle langue ce
+    /// dernier est écrit. Le fil ne permet donc pas de nommer la seconde langue,
+    /// et un drapeau sans nom sûr est un drapeau qui ment.
+    ///
+    /// > La bascule d'un commentaire n'est pas « à faire côté client » : elle
+    /// > demande que le fil transporte `translations`, comme le post. Tant que
+    /// > ce n'est pas le cas, la déclarer impossible est plus honnête que de
+    /// > deviner la langue du texte servi.
+    static func from(comment: FeedComment) -> SocialCarrierText {
+        SocialCarrierText(served: comment.displayContent, byLanguage: [:])
+    }
+}
+
+/// **Ce qu'une légende de plein écran SERT, et ce qu'elle pourrait servir**
+/// (#4934).
+///
+/// Les deux voyagent ensemble parce qu'ils sont **deux projections d'une seule
+/// décision** : quel texte est la légende de ce média. Les calculer séparément
+/// ferait diverger « ce qui s'affiche » et « ce qu'on peut afficher », et le
+/// contrôle proposerait des langues pour un texte qui n'est pas celui qu'on lit
+/// — le défaut que le § Prisme du `CLAUDE.md` racine décrit au cycle 123.
+nonisolated struct SocialMediaCaptionServing: Equatable {
+    let text: String
+    /// `langue → texte`. **VIDE ⇒ aucun contrôle de langue n'est peint**
+    /// (loi 4 : un contrôle sans effet est ABSENT, jamais grisé).
+    let alternatives: [String: String]
+}
+
+nonisolated extension SocialMediaCaption {
+
+    /// **La descente UNIQUE** dont `map(for:carrierText:)` est la projection
+    /// pauvre.
+    ///
+    /// ## Pourquoi les alternatives sont si souvent VIDES, et pourquoi c'est juste
+    ///
+    /// Une légende a deux provenances, et une seule est traduisible :
+    ///
+    /// | provenance | traduisible ? |
+    /// |---|---|
+    /// | le TEXTE DU PORTEUR, servi quand le porteur n'a qu'UN visuel | **oui** — `FeedPost.translations` existe |
+    /// | la légende PROPRE du média (`PostMedia.caption`) | **non** — rien ne la traduit (#4904) |
+    ///
+    /// Servir la traduction du POST sur la légende propre d'un média serait pire
+    /// que ne rien servir : ce serait afficher un texte qui ne décrit pas ce
+    /// média. **Le Prisme sert un contenu traduit, jamais un contenu VOISIN
+    /// traduit.**
+    ///
+    /// La portée de la bascule est donc bornée par #4904, et c'est déclaré
+    /// plutôt que caché : un post à trois photos garde trois légendes non
+    /// traduites et AUCUN contrôle — le comportement juste, pas un manque
+    /// silencieux.
+    static func serving(for media: [FeedMedia],
+                        carrier: SocialCarrierText) -> [String: SocialMediaCaptionServing] {
+        let visuals = media.filter { CommentMediaGallery.isPageable($0) }
+        // La MÊME condition que `map(for:carrierText:)` : au-delà d'un visuel,
+        // le texte du porteur décrit le LOT et le coller sous chaque pièce
+        // ferait mentir la légende.
+        let carrierApplies = visuals.count == 1
+        let fallback = carrierApplies ? carrier.served : nil
+
+        return visuals.reduce(into: [String: SocialMediaCaptionServing]()) { result, item in
+            guard let texte = resolve(own: item.caption, carrierText: fallback) else { return }
+            // Les alternatives n'existent QUE si le texte servi EST celui du
+            // porteur. Une légende propre non vide gagne sur le porteur, donc
+            // sort du champ des traductions — et le contrôle disparaît avec
+            // elle, ce qui est le comportement juste.
+            let ownIsServed = (item.caption ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            let alternatives = (carrierApplies && !ownIsServed && carrier.byLanguage.count > 1)
+                ? carrier.byLanguage
+                : [:]
+            result[item.id] = SocialMediaCaptionServing(text: texte, alternatives: alternatives)
+        }
     }
 }
 
@@ -68,9 +189,17 @@ enum CommentMediaGallery {
     /// (`AudioFullscreenView`, file de lecture coordonnée) et le document n'est
     /// pas dans le périmètre commentaire — même filtre que `mediaCaptionMap`
     /// côté conversation et que le plein écran d'un post.
-    private static let pageableTypes: Set<FeedMediaType> = [.image, .video]
+    ///
+    /// **`nonisolated` sur les DEUX** (#4934) : un ensemble de types est une
+    /// valeur, et « ce média est-il feuilletable ? » est un prédicat pur. Les
+    /// laisser sur le `MainActor` — ce que fait l'isolation par défaut de l'app
+    /// — empêchait `SocialMediaCaption.serving` d'être elle-même pure, et donc
+    /// d'être éprouvée sans monter une vue. L'isolation se propage vers le HAUT
+    /// par les appels : une seule feuille restée sur l'acteur y ramène tout ce
+    /// qui l'appelle.
+    nonisolated private static let pageableTypes: Set<FeedMediaType> = [.image, .video]
 
-    static func isPageable(_ media: FeedMedia) -> Bool { pageableTypes.contains(media.type) }
+    nonisolated static func isPageable(_ media: FeedMedia) -> Bool { pageableTypes.contains(media.type) }
 
     /// Les médias visuels de TOUS les commentaires fournis, dans leur ordre,
     /// avec la légende et l'auteur de chacun.

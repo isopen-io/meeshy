@@ -12,7 +12,8 @@ public final class CommunityLinkService: @unchecked Sendable {
     /// formatées comme des CommunityLinks (avec leur URL de partage).
     public func listCommunityLinks() async throws -> [CommunityLink] {
         let response: APIResponse<[APICommunityMini]> = try await api.request(
-            endpoint: "/communities/mine?role=admin,moderator"
+            CommunitiesEndpoint.mine,
+            queryItems: [URLQueryItem(name: "role", value: "admin,moderator")]
         )
         let baseUrl = MeeshyConfig.shared.webOrigin
         return response.data.map { community in

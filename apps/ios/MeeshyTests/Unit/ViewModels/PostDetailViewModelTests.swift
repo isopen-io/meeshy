@@ -224,7 +224,10 @@ final class PostDetailViewModelTests: XCTestCase {
 
         await sut.loadComments(postId) // .fresh cache hit — no network call
         XCTAssertEqual(sut.comments.count, 3)
-        XCTAssertTrue(sut.hasMoreComments)
+        // Après un cache FRAIS, rien n'a été chargé : l'état est « je ne sais
+        // pas encore » (#4868). L'assertion mesure ce qui compte — la pagination
+        // n'est pas BLOQUÉE — sans affirmer qu'on sait qu'il y a une suite.
+        XCTAssertNotEqual(sut.hasMoreComments, false)
         XCTAssertEqual(mock.getCommentsCallCount, 0)
 
         mock.getCommentsResult = .success(Self.makePaginatedComments(comments: [Self.stubComment], hasMore: true, nextCursor: "next-page"))

@@ -241,6 +241,46 @@ export function resolveLastMessagePreview(params: {
  * `preferredLanguages` doit être ordonnée — c'est la sortie de
  * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
  */
+/**
+ * Dépouille la carte des traductions d'un MESSAGE
+ * (`{ language|targetLanguage, content|translatedContent }[]`) en
+ * `Record<langue → texte>` — la forme qu'attend {@link resolvePrismTranslation}.
+ *
+ * IL VIT ICI, ET PLUS DANS `apps/web`. Il y a été écrit d'abord, avec la
+ * mention « SSOT UNIQUE de cet adaptateur CÔTÉ WEB » — une portée qui était
+ * juste tant qu'une seule application lisait des messages. `apps/web-v3` en est
+ * la seconde : l'y recopier aurait fabriqué la jumelle que le § Prisme du
+ * `CLAUDE.md` racine passe son temps à démonter, et une jumelle d'ADAPTATEUR est
+ * la plus sournoise — elle ne dit pas la règle, elle décide seulement quelles
+ * traductions le résolveur VOIT. Une clé oubliée d'un côté ne fait pas servir
+ * une mauvaise langue : elle fait servir l'ORIGINAL, ce qui ressemble à une
+ * traduction absente.
+ *
+ * `apps/web/utils/translation-record.ts` le réexporte, pour que ses consommateurs
+ * n'aient pas à changer d'adresse.
+ *
+ * La clé rendue est la langue VERBATIM : la comparaison qui suit la normalise
+ * (`normalizeLanguageForDedup`), donc la canonicaliser ici serait la faire deux
+ * fois — et masquerait laquelle des deux fait foi.
+ */
+export function buildTranslationRecord(translations: unknown): Record<string, string> {
+  const record: Record<string, string> = {};
+  if (!Array.isArray(translations)) return record;
+  for (const entry of translations as ReadonlyArray<{
+    language?: string;
+    targetLanguage?: string;
+    content?: string;
+    translatedContent?: string;
+  }>) {
+    const key = entry?.language || entry?.targetLanguage;
+    const text = entry?.content ?? entry?.translatedContent;
+    if (typeof key === 'string' && key.trim() !== '' && typeof text === 'string' && text.trim() !== '') {
+      record[key] = text;
+    }
+  }
+  return record;
+}
+
 export function resolvePrismTranslation(params: {
   translations?: Readonly<Record<string, string>> | null;
   originalLanguage?: string | null;

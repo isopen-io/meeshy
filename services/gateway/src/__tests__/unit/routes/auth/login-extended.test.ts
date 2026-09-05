@@ -5,7 +5,13 @@
  * - POST /login notification .catch fires when createLoginNewDeviceNotification rejects
  * - POST /login/2fa empty twoFactorToken → explicit 400 guard (line 220)
  * - POST /login/2fa untrusted session → notification block (lines 237-251)
- * - POST /login/2fa rememberDevice: true → markSessionTrusted (lines 259-269)
+ * - POST /login/2fa préférence RETENUE à l'étape 1 → markSessionTrusted
+ *
+ * Les trois derniers passaient `rememberDevice: true` dans le CORPS de
+ * `/login/2fa`. Ce champ n'y est plus lu (#4471) : la préférence est celle
+ * exprimée à `POST /login` et retenue côté serveur. Les faire passer par le
+ * corps les rendrait VERTS sur une branche que plus rien n'atteint — ils
+ * arment donc la préférence comme la production le fait, par l'étape 1.
  *
  * @jest-environment node
  */
@@ -107,11 +113,26 @@ function makeAuthService(overrides: Record<string, any> = {}) {
   } as any;
 }
 
+/** Mémoire de service réelle, pour la préférence retenue entre les deux étapes. */
+function makeMemoryStore() {
+  const entries = new Map<string, string>();
+  return {
+    get: jest.fn<any>(async (key: string) => entries.get(key) ?? null),
+    set: jest.fn<any>(async (key: string, value: string) => { entries.set(key, value); }),
+    del: jest.fn<any>(async (key: string) => { entries.delete(key); }),
+  };
+}
+
 async function buildApp(opts: {
   authService?: ReturnType<typeof makeAuthService>;
   notificationServiceImpl?: Record<string, any> | null;
+  cacheStore?: unknown;
 } = {}): Promise<{ app: FastifyInstance; authService: ReturnType<typeof makeAuthService> }> {
-  const { authService = makeAuthService(), notificationServiceImpl = null } = opts;
+  const {
+    authService = makeAuthService(),
+    notificationServiceImpl = null,
+    cacheStore = makeMemoryStore(),
+  } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
@@ -130,7 +151,7 @@ async function buildApp(opts: {
     prisma: null,
     phoneTransferService: {} as any,
     smsService: {} as any,
-    cacheStore: {} as any,
+    cacheStore,
   };
 
   registerLoginRoutes(context as any);
@@ -316,17 +337,40 @@ describe('POST /login/2fa — untrusted session, notification rejects (catch bra
   });
 });
 
-// ─── POST /login/2fa — rememberDevice: true markSessionTrusted (lines 259-269) ─
+// ─── POST /login/2fa — la préférence RETENUE à l'étape 1 → markSessionTrusted ─
 
-describe('POST /login/2fa — rememberDevice true, markSessionTrusted succeeds', () => {
+/**
+ * Arme la préférence comme la production : un `POST /login` qui répond
+ * `requires2FA` la retient côté serveur, et `POST /login/2fa` la retrouve.
+ * Le corps de la seconde étape ne la porte JAMAIS (#4471).
+ */
+async function buildAppWithPendingTrust() {
+  const authService = makeAuthService({
+    authenticate: jest.fn<any>().mockResolvedValue({
+      user: mockUser,
+      sessionToken: '',
+      session: { ...mockSession, id: '' },
+      requires2FA: true,
+      twoFactorToken: 'tok',
+    }),
+  });
+  const { app } = await buildApp({ authService });
+  await app.inject({
+    method: 'POST', url: '/login',
+    payload: { username: 'alice', password: 'secret123', rememberDevice: true },
+  });
+  return app;
+}
+
+describe('POST /login/2fa — préférence retenue, markSessionTrusted succeeds', () => {
   beforeEach(() => { mockMarkSessionTrusted.mockReset(); });
 
   it('returns 200 and fires markSessionTrusted after 2FA', async () => {
     mockMarkSessionTrusted.mockResolvedValue(true);
-    const { app } = await buildApp();
+    const app = await buildAppWithPendingTrust();
     const res = await app.inject({
       method: 'POST', url: '/login/2fa',
-      payload: { twoFactorToken: 'tok', code: '123456', rememberDevice: true },
+      payload: { twoFactorToken: 'tok', code: '123456' },
     });
     expect(res.statusCode).toBe(200);
     await Promise.resolve();
@@ -335,34 +379,36 @@ describe('POST /login/2fa — rememberDevice true, markSessionTrusted succeeds',
   });
 });
 
-describe('POST /login/2fa — rememberDevice true, markSessionTrusted returns false (warn branch)', () => {
+describe('POST /login/2fa — préférence retenue, markSessionTrusted returns false (warn branch)', () => {
   beforeEach(() => { mockMarkSessionTrusted.mockReset(); });
 
   it('returns 200 and logs warning when markSessionTrusted returns false after 2FA', async () => {
     mockMarkSessionTrusted.mockResolvedValue(false);
-    const { app } = await buildApp();
+    const app = await buildAppWithPendingTrust();
     const res = await app.inject({
       method: 'POST', url: '/login/2fa',
-      payload: { twoFactorToken: 'tok', code: '123456', rememberDevice: true },
+      payload: { twoFactorToken: 'tok', code: '123456' },
     });
     expect(res.statusCode).toBe(200);
     await Promise.resolve();
+    expect(mockMarkSessionTrusted).toHaveBeenCalled();
     await app.close();
   });
 });
 
-describe('POST /login/2fa — rememberDevice true, markSessionTrusted throws (catch branch)', () => {
+describe('POST /login/2fa — préférence retenue, markSessionTrusted throws (catch branch)', () => {
   beforeEach(() => { mockMarkSessionTrusted.mockReset(); });
 
   it('returns 200 even when markSessionTrusted rejects after 2FA', async () => {
     mockMarkSessionTrusted.mockRejectedValue(new Error('DB unavailable'));
-    const { app } = await buildApp();
+    const app = await buildAppWithPendingTrust();
     const res = await app.inject({
       method: 'POST', url: '/login/2fa',
-      payload: { twoFactorToken: 'tok', code: '123456', rememberDevice: true },
+      payload: { twoFactorToken: 'tok', code: '123456' },
     });
     expect(res.statusCode).toBe(200);
     await Promise.resolve();
+    expect(mockMarkSessionTrusted).toHaveBeenCalled();
     await app.close();
   });
 });

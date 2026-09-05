@@ -37,10 +37,40 @@ nonisolated enum ComposerMountedView: Equatable, CaseIterable {
     /// règle : l'atelier EST une scène (la question ne se pose pas), et un mood
     /// n'en a pas (la poser lui ferait porter une exception qu'il n'a pas — ce
     /// que la tâche 4.3 lui a précisément retiré).
-    static func mounted(surface: ComposerSurfaceKind, hasScene: Bool) -> ComposerMountedView {
+    ///
+    static func mounted(surface: ComposerSurfaceKind,
+                        hasScene: Bool) -> ComposerMountedView {
         switch surface {
         case .scene:    return .atelier
         case .mood:     return .mood
+        // **RESTAURÉ le 2026-09-02, sur retour porteur.** Cette ligne a valu
+        // `hasScene && editsScene` pendant quelques heures, ce qui envoyait une
+        // scène non éditée vers `ComposerDocumentSurface` — donc SANS les deux
+        // rails. C'était une erreur de lecture de la cible, et le porteur l'a
+        // corrigée : « vous n'avez pas maintenu l'architecture qui met les
+        // contrôleurs de la scène à gauche et ceux qui gèrent la structure et
+        // l'état de la publication à droite ? […] je vois que tu supprimes des
+        // features qui existent et qui COMPLÈTENT la cible au lieu de les
+        // laisser et agréger plutôt ».
+        //
+        // > Une cible MUETTE sur une dimension ne l'interdit pas. La cible `1b`
+        // > ne dessine pas les rails ; elle ne dit pas de les retirer. Lire une
+        // > absence comme une prescription transforme une lacune du document en
+        // > régression du produit — et fait perdre une SÉMANTIQUE que le
+        // > document n'avait simplement pas exprimée.
+        //
+        // L'architecture des rails porte une distinction que la cible n'énonce
+        // nulle part : à GAUCHE ce qu'on POSE sur la scène (média, son, texte,
+        // dessin, slides) ; à DROITE ce qui structure la PUBLICATION (ajouter
+        // une unité, annuler). Ce qui reste juste de la cible — la scène
+        // incrustée plutôt que plein écran — se compose avec elles : c'est la
+        // HAUTEUR du canvas qui doit céder, pas le chrome qui l'entoure.
+        //
+        // Ce que la sélection d'un objet change reste à faire, et ce n'est pas
+        // un écran : d'après le porteur, c'est la RANGÉE BASSE qui devient
+        // dynamique — l'inspecteur de l'objet courant. Un paramètre de routage
+        // aurait été le mauvais outil pour cela, et c'est pourquoi il est
+        // retiré plutôt que gardé sans effet.
         case .document: return hasScene ? .scene : .document
         }
     }

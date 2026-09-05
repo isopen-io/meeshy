@@ -106,7 +106,7 @@ final class ComposerMoodGateTests: XCTestCase {
     /// l'avoir demandé publierait un format que sa chaîne ne sait pas produire.
     func test_aucuneAutrePorte_neGagneLeMood_quandLeGateEstOuvert() {
         let autres: [ComposerOrigin] = [
-            .storyTray, .reelTab, .moodChip,
+            .storyTray, .moodChip,
             .repost(ofPostId: "p1", sourceFormat: .story),
             .edit(postId: "p2", documentFormat: .post),
             .draft(id: "d1"), .share,

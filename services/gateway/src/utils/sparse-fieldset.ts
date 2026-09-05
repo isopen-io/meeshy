@@ -187,3 +187,173 @@ export function selectForFields<S extends Record<string, unknown>>(plan: ColumnP
   }
   return reduit as S;
 }
+
+/* ===========================================================================
+ * La SECONDE règle de l'inconnu — le vocabulaire FERMÉ (#4173)
+ * =========================================================================== */
+
+/**
+ * ## Pourquoi une seconde règle, et pourquoi ICI
+ *
+ * Le doc-comment de tête tient une règle de l'inconnu — l'IGNORER — et dit
+ * pourquoi elle est juste : « sur un vocabulaire ouvert, refuser casse un
+ * client plus récent que le serveur ». Il dit aussi, dans la même phrase, que
+ * l'autre règle est juste de son côté : « sur un vocabulaire FERMÉ, ignorer une
+ * faute de frappe sert une réponse partielle qui a l'air d'une vérité ».
+ *
+ * #4173 apporte les deux ressources qui ont un vocabulaire FERMÉ
+ * (`/conversations/{id}`, `/sync`), dont le critère 1 exige « 400 explicite
+ * [sur] tout champ ou relation non déclaré ». La règle stricte rejoint donc la
+ * LOI, et n'est pas réécrite dans deux routes — ce que
+ * `sparse-fieldset-single-law-guard.test.ts` interdit précisément.
+ *
+ * **Ce n'est pas la même grammaire pour autant** : les deux règles cohabitent
+ * dans ce module sous des NOMS différents, et une route déclare laquelle elle
+ * applique. Les fondre en une seule fonction à drapeau en trahirait une —
+ * `parseFieldList` reste le chemin des vocabulaires OUVERTS (les clés d'un
+ * objet servi, qu'un client plus récent peut nommer avant le serveur).
+ *
+ * ## Ce que cette extension NE ramène PAS
+ *
+ * `routes/me/preferences/preference-selection.ts` reste dehors, et la troisième
+ * raison de son doc-comment est la seule qui décide : son second niveau nomme
+ * des clés **à l'intérieur d'une colonne JSON**, que Prisma ne sait pas
+ * projeter — sa réduction s'arrête à la catégorie. Les deux premières raisons
+ * (vocabulaire fermé, deux niveaux) sont désormais SERVIES ici ; la troisième
+ * ne l'est pas, et ne peut pas l'être.
+ *
+ * ## Le refus se teste `=== false`, jamais `!resultat.ok`
+ *
+ * Le gateway compile en `strictNullChecks: false` (`tsconfig.json`), et sous ce
+ * réglage TypeScript ne RÉTRÉCIT PAS une union discriminée par la TRUTHINESS
+ * d'un littéral booléen : `if (!r.ok)` laisse `r` non narrowé, et la branche
+ * d'erreur ne compile pas. `if (r.ok === false)` narrowe. Le dépôt écrit déjà
+ * la même forme (`routes/me/preferences/unified-routes.ts:198`) ; la répéter
+ * ici évite qu'on la redécouvre par un `tsc` rouge — que `ts-jest` ne montre
+ * pas, puisqu'il ignore 2339.
+ */
+export type StrictFieldResult =
+  | { readonly ok: true; readonly fields: FieldSet }
+  | { readonly ok: false; readonly unknown: readonly string[] };
+
+/**
+ * {@link parseFieldList} sur un vocabulaire FERMÉ : un champ non déclaré est un
+ * REFUS, jamais un silence.
+ *
+ * Le refus NOMME les jetons fautifs — tous, pas seulement le premier. Un client
+ * qui reçoit « champ inconnu » sans savoir lequel ne peut pas se corriger, et
+ * c'est la faute de frappe qu'on veut lui rendre lisible.
+ *
+ * L'ABSENCE et la liste VIDE gardent le sens qu'elles ont dans la règle laxiste
+ * — aucune restriction. Fermer le vocabulaire ne change pas ce que veut dire ne
+ * rien demander : « zéro champ servi » resterait une réponse vide qui a l'air
+ * d'une vérité.
+ */
+export function parseStrictFieldList(raw: unknown, known: readonly string[]): StrictFieldResult {
+  const list = tokens(raw);
+  if (list.length === 0) return { ok: true, fields: null };
+  const inconnus = [...new Set(list.filter((token) => !known.includes(token)))];
+  if (inconnus.length > 0) return { ok: false, unknown: inconnus };
+  return { ok: true, fields: new Set(list) };
+}
+
+export type StrictTokenResult<T extends string> =
+  | { readonly ok: true; readonly tokens: readonly T[] }
+  | { readonly ok: false; readonly unknown: readonly string[] };
+
+/**
+ * {@link parseTokenList} sur un vocabulaire FERMÉ — l'ordre de la DEMANDE est
+ * conservé, comme chez son jumeau laxiste, et un jeton hors vocabulaire refuse
+ * le lot entier plutôt que de servir une réponse amputée du bloc demandé.
+ */
+export function parseStrictTokenList<T extends string>(
+  raw: unknown,
+  known: readonly T[],
+): StrictTokenResult<T> {
+  const list = tokens(raw);
+  const inconnus = [...new Set(list.filter((token) => !(known as readonly string[]).includes(token)))];
+  if (inconnus.length > 0) return { ok: false, unknown: inconnus };
+  return { ok: true, tokens: [...new Set(list)] as T[] };
+}
+
+/**
+ * Pourquoi un refus PORTÉ : les trois formes qu'une demande peut rater ne se
+ * réparent pas de la même façon, et un code unique obligerait le client à
+ * deviner laquelle.
+ */
+export type ScopedFieldFailure =
+  | { readonly kind: 'unscoped'; readonly tokens: readonly string[] }
+  | { readonly kind: 'unknown-scope'; readonly tokens: readonly string[] }
+  | { readonly kind: 'unknown-field'; readonly tokens: readonly string[] };
+
+export type ScopedFieldResult<S extends string> =
+  | { readonly ok: true; readonly byScope: ReadonlyMap<S, FieldSet> }
+  | { readonly ok: false; readonly failure: ScopedFieldFailure };
+
+/**
+ * La MÊME grammaire à un niveau, appliquée PAR PORTÉE : `portée.champ`.
+ *
+ * Elle existe pour les ressources MULTIPLES — `/sync` sert quatre collections
+ * dans une réponse, donc un `?fields=` plat ne dirait pas de laquelle il parle.
+ * Le point n'introduit aucune profondeur nouvelle : à droite du séparateur, on
+ * retrouve exactement la liste à UN niveau de {@link parseStrictFieldList},
+ * dont chaque portée a la sienne.
+ *
+ * Un jeton SANS point est refusé (`unscoped`) plutôt qu'appliqué partout : « ce
+ * champ, dans toutes les collections » serait une demande qu'aucun appelant ne
+ * formule, et l'arbitrer silencieusement servirait une projection que personne
+ * n'a voulue.
+ *
+ * Une portée ABSENTE de la carte rendue vaut « aucune restriction » pour elle —
+ * jamais « aucun champ ». C'est la même distinction que `null` chez son jumeau
+ * à un niveau, portée ici par l'absence de clé.
+ */
+export function parseScopedFieldList<S extends string>(
+  raw: unknown,
+  vocabulary: Readonly<Record<S, readonly string[]>>,
+): ScopedFieldResult<S> {
+  const list = tokens(raw);
+  if (list.length === 0) return { ok: true, byScope: new Map() };
+
+  const sansPortee: string[] = [];
+  const porteesInconnues: string[] = [];
+  const champsInconnus: string[] = [];
+  const parPortee = new Map<S, Set<string>>();
+
+  for (const token of list) {
+    const separateur = token.indexOf('.');
+    if (separateur === -1) {
+      sansPortee.push(token);
+      continue;
+    }
+    const portee = token.slice(0, separateur) as S;
+    const champ = token.slice(separateur + 1);
+    const connus = vocabulary[portee];
+    if (connus === undefined) {
+      porteesInconnues.push(portee);
+      continue;
+    }
+    if (!connus.includes(champ)) {
+      champsInconnus.push(token);
+      continue;
+    }
+    const retenus = parPortee.get(portee) ?? new Set<string>();
+    retenus.add(champ);
+    parPortee.set(portee, retenus);
+  }
+
+  // L'ordre des trois refus est celui de la RÉPARATION : un jeton sans portée
+  // ne peut même pas être rangé, une portée inconnue rend son second niveau
+  // ininterprétable, un champ inconnu est la faute la plus fine.
+  if (sansPortee.length > 0) return { ok: false, failure: { kind: 'unscoped', tokens: [...new Set(sansPortee)] } };
+  if (porteesInconnues.length > 0) {
+    return { ok: false, failure: { kind: 'unknown-scope', tokens: [...new Set(porteesInconnues)] } };
+  }
+  if (champsInconnus.length > 0) {
+    return { ok: false, failure: { kind: 'unknown-field', tokens: [...new Set(champsInconnus)] } };
+  }
+
+  const byScope = new Map<S, FieldSet>();
+  for (const [portee, champs] of parPortee) byScope.set(portee, champs);
+  return { ok: true, byScope };
+}

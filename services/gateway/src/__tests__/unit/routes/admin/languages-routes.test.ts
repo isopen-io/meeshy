@@ -98,6 +98,50 @@ describe('Admin languages routes — DB-side aggregation', () => {
       expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
     });
 
+    // #5146 — systemLanguage est persisté verbatim (région/casse variables selon
+    // le client) ; usersByLanguage doit replier chaque variante sur son code
+    // canonique via normalizeLanguageForDedup, et ADDITIONNER les comptes.
+    it('folds region/case variants of systemLanguage onto their canonical code and sums counts', async () => {
+      mockPrisma.message.groupBy
+        .mockResolvedValueOnce([{ originalLanguage: 'fr', _count: { id: 1 } }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.message.aggregateRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      mockPrisma.user.groupBy.mockResolvedValueOnce([
+        { systemLanguage: 'fr', _count: { id: 100 } },
+        { systemLanguage: 'fr-FR', _count: { id: 5 } },
+        { systemLanguage: 'FR', _count: { id: 2 } },
+        { systemLanguage: 'fr_FR', _count: { id: 3 } },
+        { systemLanguage: 'en-US', _count: { id: 7 } },
+      ]);
+
+      const response = await app.inject({ method: 'GET', url: '/stats' });
+
+      const body = JSON.parse(response.body);
+      expect(body.data.usersByLanguage).toEqual({ fr: 110, en: 7 });
+    });
+
+    it('is idempotent when systemLanguage is already stored as a canonical code', async () => {
+      mockPrisma.message.groupBy
+        .mockResolvedValueOnce([{ originalLanguage: 'fr', _count: { id: 1 } }])
+        .mockResolvedValueOnce([]);
+      mockPrisma.message.aggregateRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      mockPrisma.user.groupBy.mockResolvedValueOnce([
+        { systemLanguage: 'fr', _count: { id: 42 } },
+        { systemLanguage: 'en', _count: { id: 8 } },
+      ]);
+
+      const response = await app.inject({ method: 'GET', url: '/stats' });
+
+      const body = JSON.parse(response.body);
+      expect(body.data.usersByLanguage).toEqual({ fr: 42, en: 8 });
+    });
+
     it('counts distinct users per language through a Participant lookup pipeline', async () => {
       mockPrisma.message.groupBy
         .mockResolvedValueOnce([{ originalLanguage: 'fr', _count: { id: 1 } }])

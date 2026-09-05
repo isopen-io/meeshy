@@ -1,3 +1,4 @@
+import Foundation
 import MeeshySDK
 import os
 
@@ -97,11 +98,16 @@ actor ParticipantService {
 
     private func fetchNextPage(for conversationId: String) async throws -> [PaginatedParticipant] {
         let cursor = paginationState[conversationId]?.nextCursor
-        var endpoint = "/conversations/\(conversationId)/participants?limit=\(pageSize)"
-        if let cursor { endpoint += "&cursor=\(cursor)" }
+        // #4282 — le chemin était CONSTRUIT par concaténation, requête comprise.
+        // Ni la migration ni l'audit ne le voyaient : ils cherchent un littéral,
+        // et ici il n'y en avait pas un seul complet. La pagination passe en
+        // `queryItems`, où elle appartient — l'adresse est une adresse.
+        var queryItems = [URLQueryItem(name: "limit", value: String(pageSize))]
+        if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: cursor)) }
 
         let response: PaginatedParticipantsResponse = try await apiClient.request(
-            endpoint: endpoint, method: "GET", body: nil, queryItems: nil
+            ConversationsEndpoint.byIdParticipants(id: conversationId),
+            method: "GET", body: nil, queryItems: queryItems
         )
         guard response.success else {
             // Server reported a failure: surface the current cached page

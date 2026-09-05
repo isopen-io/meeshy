@@ -67,12 +67,71 @@ public struct TusUploadResult: Decodable, Sendable {
     }
 }
 
+/// Transcription faite SUR L'APPAREIL d'un audio, transportée avec sa
+/// création TUS (clé `transcription` d'`Upload-Metadata`, JSON en base64)
+/// pour que le gateway la range dans `MessageAttachment.metadata.transcription`
+/// — ce que `MessageProcessor` remet au translator en passthrough. Forme du
+/// fil : `text`, `language` (code court), `confidence`, `durationMs`,
+/// `segments[{text,startMs,endMs}]` — celle que le translator lit.
+public struct TusUploadTranscriptionMetadata: Codable, Sendable, Equatable {
+    public struct Segment: Codable, Sendable, Equatable {
+        public let text: String
+        public let startMs: Int
+        public let endMs: Int
+
+        public init(text: String, startMs: Int, endMs: Int) {
+            self.text = text; self.startMs = startMs; self.endMs = endMs
+        }
+    }
+
+    /// Plafond de la charge ENCODÉE (JSON, AVANT base64).
+    ///
+    /// **Un en-tête HTTP n'est pas un corps, et le budget est celui de la
+    /// LIGNE d'en-tête, pas celui du JSON** : le base64 enfle de 4/3, et
+    /// `Upload-Metadata` porte déjà `filename`, `filetype`, `uploadcontext` et
+    /// `thumbhash`. 4 Kio de JSON tiennent en ~5,5 Kio de base64 — sous le
+    /// buffer de 8 Kio d'un frontal nginx et très en deçà des 16 Kio
+    /// d'en-têtes que Node accepte par défaut. Un plafond posé sur la taille
+    /// du JSON SEUL (16 Kio, la borne défensive du gateway) aurait produit une
+    /// ligne de ~22 Kio : l'upload aurait ÉCHOUÉ, alors que la transcription
+    /// est facultative et ne doit jamais coûter le vocal.
+    ///
+    /// Au-delà, les segments cèdent d'abord, puis le texte lui-même ne voyage
+    /// pas — le serveur transcrit alors comme avant.
+    public static let maxEncodedBytes = 4 * 1024
+
+    public let text: String
+    public let language: String
+    public let confidence: Double?
+    public let durationMs: Int?
+    public let segments: [Segment]?
+
+    public init(text: String, language: String, confidence: Double?, durationMs: Int?, segments: [Segment]?) {
+        self.text = text; self.language = language; self.confidence = confidence
+        self.durationMs = durationMs; self.segments = segments
+    }
+
+    /// Valeur base64 prête pour `Upload-Metadata`, `nil` si même sans
+    /// segments la charge dépasse `maxEncodedBytes`.
+    public func uploadMetadataValue() -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let full = try? encoder.encode(self) else { return nil }
+        if full.count <= Self.maxEncodedBytes { return full.base64EncodedString() }
+        let withoutSegments = TusUploadTranscriptionMetadata(
+            text: text, language: language, confidence: confidence, durationMs: durationMs, segments: nil
+        )
+        guard let reduced = try? encoder.encode(withoutSegments), reduced.count <= Self.maxEncodedBytes else { return nil }
+        return reduced.base64EncodedString()
+    }
+}
+
 public actor TusUploadManager {
     private let baseURL: URL
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, CheckedContinuation<TusUploadResult, Error>)] = []
+    nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, TusUploadTranscriptionMetadata?, CheckedContinuation<TusUploadResult, Error>)] = []
     private var progressMap: [String: FileUploadProgress] = [:]
     nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
     private let urlSession: URLSession
@@ -104,7 +163,7 @@ public actor TusUploadManager {
     }
 
     deinit {
-        for (_, _, _, _, _, continuation) in queue {
+        for (_, _, _, _, _, _, continuation) in queue {
             continuation.resume(throwing: CancellationError())
         }
     }
@@ -114,7 +173,11 @@ public actor TusUploadManager {
     /// les invités de lien partagé — alors que le gateway accepte
     /// explicitement leurs pièces jointes de MESSAGE (`tus-handler.ts`, la
     /// branche `x-session-token`).
-    public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
+    ///
+    /// `transcription` : transcription faite sur l'appareil (vocal de
+    /// conversation), transportée à la CRÉATION de la session — une reprise
+    /// (checkpoint) rejoue une session dont le serveur la tient déjà.
+    public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil) async throws -> TusUploadResult {
         let fileId = UUID().uuidString
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
@@ -127,7 +190,7 @@ public actor TusUploadManager {
         emitProgress()
 
         return try await withCheckedThrowingContinuation { continuation in
-            queue.append((fileURL, mimeType, credential, uploadContext, thumbHash, continuation))
+            queue.append((fileURL, mimeType, credential, uploadContext, thumbHash, transcription, continuation))
             processQueue()
         }
     }
@@ -149,12 +212,12 @@ public actor TusUploadManager {
 
     private func processQueue() {
         while activeCount < maxConcurrent, !queue.isEmpty {
-            let (fileURL, mimeType, credential, uploadContext, thumbHash, continuation) = queue.removeFirst()
+            let (fileURL, mimeType, credential, uploadContext, thumbHash, transcription, continuation) = queue.removeFirst()
             activeCount += 1
             Task {
                 do {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
-                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash)
+                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription)
                     }
                     // Local-first : copie le fichier qu'on vient d'uploader dans le
                     // cache média typé, keyé par l'URL canonique serveur. L'auteur
@@ -222,7 +285,7 @@ public actor TusUploadManager {
     /// state machine directly — the same rationale as `sha256Hex` below:
     /// a pure-enough I/O sequence exercised without going through
     /// `uploadFile`'s queue/background-task ceremony.
-    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
+    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil) async throws -> TusUploadResult {
         var credential = credential
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
@@ -269,7 +332,8 @@ public actor TusUploadManager {
                 mimeType: mimeType,
                 credential: credential,
                 uploadContext: uploadContext,
-                thumbHash: thumbHash
+                thumbHash: thumbHash,
+                transcription: transcription
             )
             guard let url = URL(string: location, relativeTo: baseURL) else {
                 throw URLError(.badURL)
@@ -445,7 +509,8 @@ public actor TusUploadManager {
         mimeType: String,
         credential: MeeshyRequestCredential,
         uploadContext: String?,
-        thumbHash: String?
+        thumbHash: String?,
+        transcription: TusUploadTranscriptionMetadata?
     ) async throws -> String {
         let uploadURL = baseURL.appendingPathComponent("api/v1/uploads")
         var createReq = URLRequest(url: uploadURL)
@@ -465,6 +530,9 @@ public actor TusUploadManager {
         if let hash = thumbHash {
             let encodedHash = Data(hash.utf8).base64EncodedString()
             metadataValue += ",thumbhash \(encodedHash)"
+        }
+        if let encodedTranscription = transcription?.uploadMetadataValue() {
+            metadataValue += ",transcription \(encodedTranscription)"
         }
         createReq.setValue(metadataValue, forHTTPHeaderField: "Upload-Metadata")
 

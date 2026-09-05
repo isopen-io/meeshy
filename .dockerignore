@@ -78,6 +78,23 @@ docker-compose*.yml
 # === Scripts (except entrypoint) ===
 **/scripts/
 **/*.sh
+
+# ... SAUF ceux de la v3, dont son BUILD dépend (#4630).
+#
+# `apps/web-v3` a son script de build en trois temps —
+# `next build && node scripts/check-app-router-built.mjs && node
+# scripts/check-bundle-budget.mjs` — et son `e2e/visual/lib/a11y.ts` importe
+# `scripts/lib/routes-emises.mjs`, que le `**/*.ts` du tsconfig fait
+# type-checker par `next build`.
+#
+# La règle générique ci-dessus les retirait tous les trois de l'image. Le
+# symptôme visible était le plus trompeur des deux : « Cannot find module
+# '../../../scripts/lib/routes-emises.mjs' » désigne un chemin JUSTE, vers un
+# fichier qui EXISTE dans le dépôt — rien dans le message ne dit qu'il a été
+# filtré à l'entrée du contexte de build. Les deux gates du script `build`
+# auraient échoué juste après, pour la même raison.
+!apps/web-v3/scripts
+!apps/web-v3/scripts/**
 !services/gateway/docker-entrypoint.sh
 !services/translator/docker-entrypoint.sh
 !services/translator/docker-entrypoint-mongodb.sh
@@ -85,6 +102,13 @@ docker-compose*.yml
 !infrastructure/docker/images/web/entrypoint.sh
 !apps/web/docker-entrypoint.sh
 !scripts/generate-notification-sounds.js
+# La v3 a BESOIN de ses scripts pour se construire (#4627) : `next build`
+# type-checke `e2e/visual/lib/a11y.ts`, qui importe `scripts/lib/routes-emises.mjs`,
+# et le script `build` enchaîne `node scripts/check-app-router-built.mjs` puis
+# `check-bundle-budget.mjs`. L'image FINALE n'en porte rien — l'étage `runner`
+# ne copie que `.next/standalone` et `.next/static`.
+!apps/web-v3/scripts
+!apps/web-v3/scripts/**
 
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/

@@ -134,6 +134,45 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Le corps d'une déclaration, borné par SES accolades — jamais par un
+    /// nombre de caractères (2026-09-02).
+    ///
+    /// `prefix(900)` mesurait la distance entre `bottomOverlay` et la pellicule
+    /// sur le fichier d'AVANT `9480fbaa` (dev, 2026-09-02) : le commentaire qui
+    /// explique pourquoi déplier la légende efface l'auteur a poussé la
+    /// pellicule à ~1 050 caractères de l'ancre. Le stripper retire le TEXTE des
+    /// commentaires mais garde leurs retraits, donc une fenêtre fixe se remplit
+    /// de blancs et rougit sur un code juste — la forme exacte de
+    /// `reference_source_guard_fixed_char_windows_rot`. Des accolades appariées
+    /// suivent le corps quelle que soit sa longueur, et n'attrapent jamais le
+    /// voisin : ce que la garde affirme (l'ordre auteur → pellicule DANS le bloc
+    /// bas) reste mesuré sur le bloc bas, et rien d'autre.
+    private func declarationBody(startingAt marker: String, in code: String) -> String? {
+        guard let start = code.range(of: marker),
+              let open = code[start.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var insideString = false
+        var escaped = false
+        var index = open
+        while index < code.endIndex {
+            let character = code[index]
+            if insideString {
+                if escaped { escaped = false }
+                else if character == "\\" { escaped = true }
+                else if character == "\"" { insideString = false }
+            } else if character == "\"" {
+                insideString = true
+            } else if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 { return String(code[start.lowerBound...index]) }
+            }
+            index = code.index(after: index)
+        }
+        return nil
+    }
+
     private static let gallery = "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift"
     private static let filmstrip = "Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift"
 
@@ -203,10 +242,9 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// il y a plus d'un média à parcourir.
     func test_filmstrip_isMountedBelowTheAuthorRow_whenThereIsMoreThanOneMedium() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
-        guard let start = code.range(of: "private var bottomOverlay") else {
+        guard let body = declarationBody(startingAt: "private var bottomOverlay", in: code) else {
             XCTFail("bottomOverlay introuvable"); return
         }
-        let body = String(code[start.lowerBound...].prefix(900))
 
         guard let author = body.range(of: "bottomMetadataOverlay(att)"),
               let strip = body.range(of: "ConversationMediaFilmstrip(")

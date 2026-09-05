@@ -18,17 +18,24 @@ import { toast } from 'sonner';
 // (`packages/shared/api/endpoints.ts`, régénérée depuis le manifeste de
 // routes) ont toutes deux atterri PENDANT l'écriture de ce correctif —
 // preuve que ce chantier réparti sur plusieurs sessions parallèles converge.
-// `VOICE_CLONING_CONSENT_PURPOSE` et `CONSENT_POLICY_VERSION` ci-dessous sont
-// recopiés de `routes/me/consents.ts` (`CONSENT_PURPOSES` et
-// `CONSENT_POLICY_VERSION`, lus le 2026-08-30) plutôt que devinés.
-// `pushUnifiedVoiceConsent` reste néanmoins best-effort (voir son
-// commentaire) : au moment de ce correctif, la route n'est pas encore
-// mergée sur `dev` — un déploiement de ce fichier seul, avant que la session
-// gateway ne pousse la sienne, la trouverait indisponible en production.
-const CONSENT_POLICY_VERSION = '2026-08-30';
+//
+// #4487 — les deux constantes étaient RECOPIÉES de `routes/me/consents.ts`.
+// Elles viennent désormais de `@meeshy/shared/types/consents`, site UNIQUE des
+// deux côtés de la frontière. La recopie n'était pas théorique : `PUT
+// /me/consents/{purpose}` répond **409** sur une version différente, et tout
+// déploiement posant l'override `CONSENT_POLICY_VERSION` aurait transformé
+// chaque écriture d'ici en 409 — avalé par le `console.warn` ci-dessous, donc
+// invisible à l'utilisateur comme au développeur.
+//
+// `pushUnifiedVoiceConsent` reste best-effort (voir son commentaire) : la
+// route peut être indisponible sur un déploiement en retard.
+import {
+  CONSENT_POLICY_VERSION_DEFAULT,
+  type ConsentPurpose,
+} from '@meeshy/shared/types/consents';
 
-/** Purpose de la surface unifiée pour le clonage vocal (`CONSENT_PURPOSES`, `routes/me/consents.ts`) — kebab-case, pas la colonne Prisma. */
-const VOICE_CLONING_CONSENT_PURPOSE = 'voice-cloning';
+/** Purpose de la surface unifiée pour le clonage vocal — TYPÉ, plus une chaîne libre. */
+const VOICE_CLONING_CONSENT_PURPOSE: ConsentPurpose = 'voice-cloning';
 
 interface ConsentPutRequestBody {
   readonly granted: boolean;
@@ -48,7 +55,7 @@ interface ConsentPutRequestBody {
 async function pushUnifiedVoiceConsent(granted: boolean): Promise<void> {
   try {
     const endpoint = API_ENDPOINTS.me.consentsByPurpose(VOICE_CLONING_CONSENT_PURPOSE);
-    const body: ConsentPutRequestBody = { granted, policyVersion: CONSENT_POLICY_VERSION };
+    const body: ConsentPutRequestBody = { granted, policyVersion: CONSENT_POLICY_VERSION_DEFAULT };
     await apiService.put<{ success: boolean }>(endpoint, body);
   } catch (err) {
     console.warn('[VoiceProfile] PUT /me/consents unavailable yet (#4348 gateway pending):', err);

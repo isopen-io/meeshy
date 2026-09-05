@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 @testable import MeeshySDK
 @testable import MeeshyUI
@@ -196,5 +197,69 @@ final class BackgroundSoundBadgeTests: XCTestCase {
 
     func test_announcement_nilEffects_isNone() {
         XCTAssertEqual(BackgroundSoundBadge.announcement(for: nil), .none)
+    }
+}
+
+// MARK: - La teinte servie (#4078 — vue `1h`)
+
+/// **Le crédit du son se lit sur la carte du fil.**
+///
+/// Mesuré au simulateur le 2026-09-01 (`Meeshy-Reader`, mode CLAIR) : le trait
+/// du texte « … · 5:09 » sortait à `(236,235,249)` sur un fond de carte à
+/// `(241,239,251)` — **1,03:1**. Invisible. Son voisin de rangée, « Miroir »,
+/// sortait à `(101,92,212)` : deux couleurs sur une seule ligne.
+///
+/// La cause n'était pas une couleur mal choisie mais une couleur **jamais
+/// consultée**. `FeedPostCard.backgroundSoundAccentHex` porte depuis toujours
+/// la garde AA (`theme.mode.isDark ? accent : indigo600`) — et la branche
+/// `.credit` déléguait à `AudioChipMarquee`, dont le blanc EN DUR est juste
+/// sur un média (viewer story, réel plein écran) et faux sur une carte thémée.
+/// L'accent calculé n'atteignait que l'icône ♪ de la branche `.original`.
+///
+/// > Une garde calculée, passée, et consultée par UNE branche sur deux ne
+/// > garde qu'une branche. Le témoin s'écrit sur celle qui la RATE.
+final class BackgroundSoundBadgeServedTintTests: XCTestCase {
+
+    func test_leCredit_sertLAccentDeLHote_commeLIcone() {
+        let accent = "4F46E5"
+        XCTAssertEqual(
+            BackgroundSoundBadge.servedTintHex(
+                for: .credit(title: "Nuits blanches", username: "lume", duration: 28),
+                accentHex: accent),
+            accent,
+            "La branche .credit doit servir l'accent de l'hôte, pas un blanc d'atome.")
+        XCTAssertEqual(
+            BackgroundSoundBadge.servedTintHex(for: .original, accentHex: accent),
+            accent,
+            "Les deux branches servent LA MÊME attribution — donc la même teinte.")
+    }
+
+    func test_sansPiste_aucuneTeinte_carAucuneLigne() {
+        XCTAssertNil(BackgroundSoundBadge.servedTintHex(for: .none, accentHex: "4F46E5"))
+    }
+
+    /// Le témoin qui nomme le DOMMAGE, pas seulement la plomberie : sur la
+    /// carte claire, la teinte servie doit rester lisible. 11 pt semi-gras =
+    /// petit texte au sens WCAG 1.4.3 ⇒ plancher 4.5:1.
+    func test_surCarteCLAIRE_leCreditAtteintLeContrasteAA() {
+        let carteClaire = Color(hex: "F8F7FF")           // theme.backgroundSecondary, clair
+        let servi = BackgroundSoundBadge.servedTintHex(
+            for: .credit(title: "Nuits blanches", username: "lume", duration: 28),
+            accentHex: MeeshyColors.indigo600Hex)        // ce que l'hôte sert en clair
+        let ratio = CallBannerContrast.contrastRatio(Color(hex: try! XCTUnwrap(servi)), carteClaire)
+        XCTAssertGreaterThanOrEqual(ratio, 4.5,
+            "Le crédit du son doit atteindre AA sur la carte claire — mesuré à 1,03:1 avant #4078.")
+    }
+
+    /// La DÉCISION ci-dessus ne prouve rien si la vue ne la consulte pas
+    /// (leçon : une garde de source prouve qu'une ligne existe, pas qu'elle
+    /// s'exécute — ici elle sert de LIEN entre la règle pure et le rendu).
+    func test_laBrancheCredit_passeBienLaTeinteAuMarquee() throws {
+        let src = try MyStoriesSourceCorpus.text(
+            of: "Meeshy/Features/Main/Components/BackgroundSoundBadge.swift")
+        let creditBranch = try XCTUnwrap(src.range(of: "case .credit"))
+        let queue = String(src[creditBranch.upperBound...])
+        XCTAssertTrue(queue.contains("tint:"),
+            "La branche .credit doit passer `tint:` à AudioChipMarquee — sans quoi l'atome repeint en blanc.")
     }
 }

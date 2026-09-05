@@ -215,6 +215,11 @@ public struct MeeshyScenePlayer: View {
                                  playerProvider: playerProvider,
                                  mute: Self.hostMute(config: config,
                                                      requestedMute: requestedMute),
+                                 // Le VERROU descend avec l'état : sans lui, il
+                                 // n'existait qu'au niveau du prop, et une
+                                 // notification diffusée relevait le muet d'une
+                                 // carte de fil avant la passe de rendu (#4084).
+                                 locksMute: config.locksMute,
                                  isPaused: Self.hostIsPaused(config: config,
                                                              hasAppeared: hasAppeared,
                                                              isPlaying: isPlaying),

@@ -14,6 +14,7 @@ import { createContactChangeRateLimitConfig } from '../../middleware/rate-limite
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -37,11 +38,11 @@ const ANNONCE_CONTACT_CHANGE: Record<
   'changeEmail' | 'changePhone' | 'verifyEmail' | 'verifyPhone' | 'resendEmail',
   AdresseDepreciee
 > = {
-  changeEmail: { depuis: DEPUIS_CONTACT_CHANGES, successeur: '/api/v1/users/me/contact-changes' },
-  changePhone: { depuis: DEPUIS_CONTACT_CHANGES, successeur: '/api/v1/users/me/contact-changes' },
-  verifyEmail: { depuis: DEPUIS_CONTACT_CHANGES, successeur: '/api/v1/users/me/contact-changes/email/verify' },
-  verifyPhone: { depuis: DEPUIS_CONTACT_CHANGES, successeur: '/api/v1/users/me/contact-changes/phone/verify' },
-  resendEmail: { depuis: DEPUIS_CONTACT_CHANGES, successeur: '/api/v1/users/me/contact-changes/email/resend' },
+  changeEmail: { depuis: DEPUIS_CONTACT_CHANGES, successeur: apiPath('/users/me/contact-changes') },
+  changePhone: { depuis: DEPUIS_CONTACT_CHANGES, successeur: apiPath('/users/me/contact-changes') },
+  verifyEmail: { depuis: DEPUIS_CONTACT_CHANGES, successeur: apiPath('/users/me/contact-changes/email/verify') },
+  verifyPhone: { depuis: DEPUIS_CONTACT_CHANGES, successeur: apiPath('/users/me/contact-changes/phone/verify') },
+  resendEmail: { depuis: DEPUIS_CONTACT_CHANGES, successeur: apiPath('/users/me/contact-changes/email/resend') },
 };
 
 /**

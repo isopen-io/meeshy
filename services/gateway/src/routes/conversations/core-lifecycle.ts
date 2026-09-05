@@ -38,6 +38,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
+import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
@@ -853,11 +854,18 @@ export function registerDeleteConversationRoute(
       // Les participants sont ramenés PAR l'écriture : le fan-out ci-dessous a
       // besoin de nommer leurs rooms personnelles, et une seconde requête pour
       // les lire pourrait tomber sur un état déjà modifié.
-      const closedConversation = await prisma.conversation.update({
-        where: { id: conversationId },
-        data: { isActive: false, closedAt: now, closedBy: userId },
-        include: { participants: { select: { id: true, userId: true, isActive: true } } }
-      });
+      //
+      // #3740 — la clôture éteint aussi les liens de partage encore actifs de
+      // ce fil, dans la MÊME transaction : un lien qui reste actif après un
+      // 410 est un contrôle qui ment (voir `shareLinkClosure.ts`).
+      const [closedConversation] = await prisma.$transaction([
+        prisma.conversation.update({
+          where: { id: conversationId },
+          data: { isActive: false, closedAt: now, closedBy: userId },
+          include: { participants: { select: { id: true, userId: true, isActive: true } } }
+        }),
+        deactivateShareLinksOnClose(prisma, conversationId),
+      ]);
 
       // Broadcast closure to all members — ce que le commentaire annonçait sans
       // que le code le fasse. Adressée à la seule room de conversation, la

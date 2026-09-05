@@ -308,14 +308,6 @@ public struct APIMessageAttachment: Decodable, Sendable {
     }
 }
 
-public struct APIMessageReplyTo: Decodable, Sendable {
-    public let id: String
-    public let content: String?
-    public let senderId: String?
-    public let sender: APIMessageSender?
-    public let attachments: [APIMessageAttachment]?
-}
-
 public struct APIForwardedFrom: Decodable, Sendable {
     public let id: String
     public let content: String?
@@ -446,6 +438,13 @@ public struct APIMessage: Sendable {
     /// ci-dessous, pour rester source-compatible avec le memberwise init déjà
     /// utilisé par les tests existants sans devoir y ajouter ce paramètre.
     public var location: SharedPlace? = nil
+    /// Sticker porté par le message (#4823), hissé par le gateway depuis
+    /// `metadata.sticker` sur ses deux producteurs (REST et `message:new`) ;
+    /// repli sur l'enveloppe `metadata` pour une charge qui ne le hisse pas.
+    /// Toujours RENDABLE quand non nil (`MessageSticker.ifRenderable`) — un
+    /// sticker vide sur le fil vaut absence. Même patron `var`/`= nil` que
+    /// `location` pour garder l'init memberwise source-compatible.
+    public var sticker: MessageSticker? = nil
     public let isEncrypted: Bool?
     public let encryptionMode: String?
     public let createdAt: Date
@@ -498,7 +497,7 @@ extension APIMessage: Decodable {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, editedAt, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
-        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, location
+        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, location, sticker
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
@@ -516,6 +515,14 @@ extension APIMessage: Decodable {
     /// whole message decode.
     private struct MessageMetadataEnvelope: Decodable {
         let trackingLinks: [TrackedLink]?
+    }
+
+    /// Enveloppe SÉPARÉE pour `metadata.sticker` : deux lectures tolérantes
+    /// de la même clé plutôt qu'une, pour qu'un `sticker` malformé ne fasse
+    /// pas perdre `trackingLinks` (et réciproquement) — chaque champ tombe
+    /// seul.
+    private struct MessageStickerEnvelope: Decodable {
+        let sticker: MessageSticker?
     }
 
     public init(from decoder: Decoder) throws {
@@ -550,6 +557,13 @@ extension APIMessage: Decodable {
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        // Sticker : la racine d'abord (les deux producteurs le hissent), sinon
+        // l'enveloppe `metadata`. Les deux lectures sont tolérantes — une forme
+        // inattendue laisse le champ nil sans faire tomber le message — et un
+        // sticker non rendable vaut absence (règle de `MessageSticker`).
+        let rootSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
+        let metadataSticker: MessageSticker? = (try? c.decodeIfPresent(MessageStickerEnvelope.self, forKey: .metadata))?.sticker
+        sticker = rootSticker?.ifRenderable ?? metadataSticker?.ifRenderable
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -641,8 +655,14 @@ public struct SendMessageRequest: Encodable, Sendable {
     /// `docs/superpowers/plans/2026-08-19-forward-reach.md` Task 5.
     /// L'encodage synthétisé omet les optionnels nil.
     public var copyAttachmentsFromMessageId: String?
+    /// Sticker du message (#4823) — clé JSON `sticker`, que le gateway range
+    /// sous `metadata.sticker` et ressert hissée. Le PNG rendu voyage à part,
+    /// en pièce jointe image ordinaire (`attachmentIds`). L'encodage
+    /// synthétisé omet les optionnels nil : un `sticker` nil n'apparaît PAS
+    /// dans le corps envoyé.
+    public var sticker: MessageSticker?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil, sticker: MessageSticker? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
@@ -653,6 +673,7 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.location = location
         self.copyAttachmentsFromMessageId = copyAttachmentsFromMessageId
+        self.sticker = sticker
     }
 }
 
@@ -685,10 +706,15 @@ extension APIMessage {
         return f
     }()
 
+    /// `preferredLanguages` — le prisme ORDONNÉ du lecteur
+    /// (`MeeshyUser.preferredContentLanguages`), par lequel la CITATION descend
+    /// le Prisme au moment où elle est gravée. Vide ⇒ l'original, comme pour
+    /// un participant anonyme.
     public func toMessage(
         currentUserId: String,
         currentUsername: String? = nil,
-        currentUserDisplayName: String? = nil
+        currentUserDisplayName: String? = nil,
+        preferredLanguages: [String] = []
     ) -> MeeshyMessage {
         let msgType: MeeshyMessage.MessageType = {
             switch messageType?.lowercased() {
@@ -786,38 +812,10 @@ extension APIMessage {
 
         let uiReplyTo: ReplyReference? = {
             if let reply = replyTo {
-                let isReplyMe = reply.senderId == currentUserId
-                let authorName = reply.sender?.name ?? "?"
-                // Média REPRÉSENTATIF : le premier attachement HORS localisation
-                // (mimeType `application/x-location`, même discriminant que
-                // `MeeshyMessageAttachment.type` et que `openQuotedMedia`). Avant,
-                // `.first` pouvait désigner une localisation posée devant l'image/
-                // vidéo — l'icône de la citation décrivait alors une pièce jointe
-                // et le plein écran en ouvrait une autre (2026-08-27).
-                let firstAtt = reply.attachments?.first(where: { $0.mimeType != "application/x-location" })
-                    ?? reply.attachments?.first
-                // Single source of truth for mime → category: AttachmentKind
-                // (see `AttachmentKind.swift`). Pre-fix this stored the raw
-                // MIME (`"image/jpeg"`) which broke the reply-preview icon
-                // resolution — consumers expect a short kind (`"image"`,
-                // `"video"`, ...) matching `AttachmentKind.rawValue`.
-                let kindRaw = firstAtt?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
-                return ReplyReference(
-                    messageId: reply.id, authorName: authorName,
-                    previewText: reply.content ?? "", isMe: isReplyMe,
-                    // L'avatar de l'auteur cite est DEJA sur le fil (le gateway
-                    // selectionne `replyTo.sender.avatar` et `…sender.user.avatar`
-                    // sur les trois chemins) — il etait simplement jete ici.
-                    // Meme cascade que partout ailleurs : `resolvedAvatar`.
-                    authorAvatarUrl: reply.sender?.resolvedAvatar,
-                    attachmentType: kindRaw,
-                    attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
-                    // La vignette voyage sans condition ; la PROTECTION doit
-                    // voyager avec elle, sinon la citation d'un média à vue
-                    // unique affiche son contenu sous un bouton play que
-                    // l'hôte refuse ensuite d'honorer.
-                    attachmentIsProtected: firstAtt?.declaredProtection
-                )
+                // Site UNIQUE, partagé avec le jumeau CACHE
+                // (`MessagePersistenceActor.replyToJson`) : média représentatif,
+                // protection, Prisme et faits gravés y sont décidés une fois.
+                return reply.toReplyReference(currentUserId: currentUserId, preferredLanguages: preferredLanguages)
             }
             // Snapshot figé du post cité (vignette + compteurs like/commentaire/
             // partage + date, ou emoji+contenu+date pour un mood) — la citation
@@ -942,6 +940,7 @@ extension APIMessage {
             recipientCount: recipientCount ?? 0,
             callSummary: callSummary,
             joinNotice: joinNotice,
+            sticker: sticker,
             trackedLinkMap: trackedLinkMap
         )
     }

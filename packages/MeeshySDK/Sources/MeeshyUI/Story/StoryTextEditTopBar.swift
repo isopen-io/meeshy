@@ -78,6 +78,8 @@ struct StoryTextEditTopBar: View {
             return "\(Int(width)) pt"
         case .style:
             return text.parsedTextStyle.displayName
+        case .effect:
+            return TextEditLabels.title(for: text.parsedTextEffect)
         case .language:
             return (TextEditToolOptions.normalisedCode(text.sourceLanguage) ?? "fr").uppercased()
         case .color, .background:

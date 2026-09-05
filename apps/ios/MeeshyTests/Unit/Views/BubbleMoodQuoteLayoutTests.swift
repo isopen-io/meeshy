@@ -1,4 +1,5 @@
 import XCTest
+@testable import Meeshy
 
 /// Garde de composition de la citation d'un mood.
 ///
@@ -65,10 +66,20 @@ final class BubbleMoodQuoteLayoutTests: XCTestCase {
         )
     }
 
+    /// Le budget de lignes ne s'écrit plus SUR PLACE : il vient de la règle
+    /// partagée (`QuotedReplyPresentation.previewLineLimit(for:)`), et une
+    /// garde de source du même lot INTERDIT tout `.lineLimit(` littéral dans la
+    /// peau bulle. Ancrer sur `lineLimit(3)` faisait donc s'annuler deux gardes
+    /// du dépôt. L'INTENTION — « au moins trois lignes » — se mesure alors à
+    /// l'exécution, là où elle vit désormais, plutôt que de s'épeler.
     func test_moodPreview_allowsMoreThanTwoLinesOfContent() throws {
         let preview = try renderBody(of: "BubbleMoodReplyPreview", in: sourceWithoutComments())
         XCTAssertTrue(
-            preview.contains("lineLimit(3)"),
+            preview.contains("lineLimit(QuotedReplyPresentation.previewLineLimit(for: .bubble))"),
+            "Le budget de lignes du mood vient de la règle partagée, jamais d'un littéral local"
+        )
+        XCTAssertGreaterThanOrEqual(
+            QuotedReplyPresentation.previewLineLimit(for: .bubble), 3,
             "Le contenu du mood récupère la largeur libérée par la date : 3 lignes"
         )
     }

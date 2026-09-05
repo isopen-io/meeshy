@@ -254,10 +254,9 @@ const theAgentPortEntersNoBrowserOriginList = (world) => {
 //
 // CE QUE CETTE RÈGLE FAIT VRAIMENT AUJOURD'HUI — mesuré, à ne pas romancer.
 // Elle n'empêche AUCUN refus actuel : la passerelle court-circuite sa propre
-// liste en dév. `services/gateway/src/server.ts:403` pose
-// `origin: config.isDev ? true : (…)` (avec `isDev = nodeEnv === 'development'`,
-// :84) et `services/gateway/src/socketio/MeeshySocketIOManager.ts:383` pose
-// `origin: process.env.NODE_ENV === 'development' ? true : (…)` — donc en dév
+// liste en dév. `services/gateway/src/config/cors-origins.ts` porte depuis #4480
+// la règle UNIQUE des deux portes (CORS HTTP et Socket.IO), et son court-circuit
+// `everyOriginIsAllowed` rend `true` sur le mot EXACT `development` — donc en dév
 // TOUTE origine passe et ni `CORS_ORIGINS` ni `ALLOWED_ORIGINS` ne sont lus. Or
 // chacun des chemins balayés ici pose précisément `NODE_ENV=development` dans le
 // MÊME fichier que la liste (`Makefile` :311, :1122, :1451 ;
@@ -269,9 +268,10 @@ const theAgentPortEntersNoBrowserOriginList = (world) => {
 // garde protège est l'OUBLI de cette provision quand une liste est retouchée —
 // rien de plus. Écrire ici « sans la liste, la passerelle refuse la v3 » serait
 // installer dans le dépôt une justification fausse qu'un futur lecteur croirait.
-// Le témoin qui prouverait un EFFET est côté passerelle (une origine :3300
-// acceptée hors `development`) et n'existe pas encore : il est porté par
-// l'issue #4480, pas simulé ici.
+// Le témoin qui prouve l'EFFET vit désormais côté passerelle (#4480) :
+// `services/gateway/src/__tests__/unit/config/cors-origins.test.ts` fait servir
+// une origine :3300 déclarée dans `CORS_ORIGINS` aux DEUX portes, aux rangs
+// `production` ET `staging`, et refuse ce qui n'est pas déclaré.
 const originsWithoutWebV3 = (world) =>
   browserOriginListsOf(world)
     .filter(({ list }) => !list.includes(`:${V3_PORT}`))

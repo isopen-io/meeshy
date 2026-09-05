@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -80,7 +81,10 @@ fun GlobalSearchScreen(
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     MeeshyBackground {
-        Column(modifier = Modifier.fillMaxSize()) {
+        // Cet ecran n'a pas de Scaffold : il pose lui-meme son inset depuis que le
+        // Scaffold racine ne reserve plus les barres systeme (MeeshyApp.kt). Le fond
+        // reste plein ecran, seul le contenu est retreci.
+        Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
             SearchHeader(
                 query = state.query,
                 onQueryChange = viewModel::setQuery,

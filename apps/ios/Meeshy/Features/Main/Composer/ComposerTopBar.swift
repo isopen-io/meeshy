@@ -21,7 +21,10 @@ import MeeshyUI
 /// pas une réécriture. Les décisions qu'elle portait restent écrites ici.
 struct ComposerTopBar: View {
 
-    /// Les vignettes du rail — une par `MeeshySlide`. Vide ⇒ pas de rail.
+    /// Les vignettes du rail — une par `MeeshySlide`, ce qui veut dire une par
+    /// média posé en FOND (#4724). L'hôte filtre (`headerTileMedia`) : ce que
+    /// cette barre reçoit est déjà la liste des pages, jamais l'inventaire des
+    /// pièces jointes. Vide ⇒ pas de rail.
     let localMedia: [ComposerDocumentMedia]
     let selectedMediaURL: URL?
     let selectableMediaURLs: Set<URL>
@@ -76,6 +79,13 @@ struct ComposerTopBar: View {
     /// bande à hauteur nulle, pas un rail de zéro chip : un document sans média
     /// n'a qu'une slide, et un rail d'un seul élément ne navigue vers rien
     /// (loi 4).
+    ///
+    /// **Une tuile dit le FOND d'une slide, et rien d'autre** (#4724). Le rail
+    /// recevait la liste ENTIÈRE des médias du document et montrait donc une
+    /// tuile pour un son, un PDF, une image posée sur la scène — trois choses
+    /// qui ne sont aucune page. Le filtre vit chez l'hôte, qui seul tient
+    /// l'index des fondations ; cette vue reste sans avis, comme le reste de
+    /// la barre.
     ///
     /// **Aucun `＋` en v1, et c'est une RÉPONSE.** La planche en dessine un,
     /// mais en Post une slide EST un média : un `＋` y créerait une slide VIDE,

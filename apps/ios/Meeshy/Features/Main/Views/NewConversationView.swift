@@ -129,7 +129,7 @@ struct NewConversationView: View {
 
             Spacer()
 
-            Text(String(localized: "Nouvelle conversation", defaultValue: "Nouvelle conversation"))
+            Text(String(localized: "conversation.new.title", defaultValue: "Nouvelle conversation"))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -144,7 +144,7 @@ struct NewConversationView: View {
                         ProgressView()
                             .tint(MeeshyColors.indigo400)
                     } else {
-                        Text(String(localized: "Creer", defaultValue: "Cr\u{00E9}er"))
+                        Text(String(localized: "common.create", defaultValue: "Créer"))
                             .font(MeeshyFont.relative(14, weight: .bold))
                             .foregroundColor(MeeshyColors.indigo400)
                     }
@@ -167,7 +167,7 @@ struct NewConversationView: View {
                 .foregroundColor(MeeshyColors.indigo600)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "Nom du groupe", defaultValue: "Nom du groupe"), text: $groupTitle)
+            TextField(String(localized: "conversation.new.group-name", defaultValue: "Nom du groupe"), text: $groupTitle)
                 .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
@@ -255,7 +255,7 @@ struct NewConversationView: View {
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "Rechercher un utilisateur...", defaultValue: "Rechercher un utilisateur..."), text: $searchQuery)
+            TextField(String(localized: "conversation.new.search-placeholder", defaultValue: "Rechercher un utilisateur…"), text: $searchQuery)
                 .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
@@ -335,7 +335,7 @@ struct NewConversationView: View {
                 .foregroundColor(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
 
-            Text(String(localized: "Aucun utilisateur trouve", defaultValue: "Aucun utilisateur trouv\u{00E9}"))
+            Text(String(localized: "conversation.new.no-user-found", defaultValue: "Aucun utilisateur trouvé"))
                 .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }

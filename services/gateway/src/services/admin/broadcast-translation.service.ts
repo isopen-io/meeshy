@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'BroadcastTranslationService' });
@@ -31,8 +32,22 @@ export class BroadcastTranslationService {
     const subjects: Record<string, string> = { [sourceLanguage]: subject };
     const bodies: Record<string, string> = { [sourceLanguage]: body };
 
-    // Filter out source language
-    const langsToTranslate = targetLanguages.filter(l => l !== sourceLanguage);
+    // Les `targetLanguages` arrivent VERBATIM des `systemLanguage` des destinataires
+    // ('pt-BR', 'FR', 'fr_FR', 'en-US') : NLLB n'accepte que les codes canoniques,
+    // les variantes de région/casse dédupliquent comme des langues distinctes, et
+    // une cible région-taguée égale à la source échappe au filtre. On canonicalise
+    // via la SSOT `normalizeLanguageForDedup` (cf. itération 286,
+    // `PostService.audienceLanguages`), on filtre la source (elle aussi
+    // canonicalisée) puis on déduplique par LANGUE réelle en préservant l'ordre.
+    const canonicalSource = normalizeLanguageForDedup(sourceLanguage);
+    const langsToTranslate = [
+      ...new Set(
+        targetLanguages
+          .filter((l): l is string => !!l)
+          .map(normalizeLanguageForDedup)
+          .filter((l) => l !== '' && l !== canonicalSource)
+      ),
+    ];
 
     if (langsToTranslate.length === 0) {
       return { subjects, bodies };

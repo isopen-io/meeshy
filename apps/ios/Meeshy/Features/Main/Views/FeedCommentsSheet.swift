@@ -1737,7 +1737,12 @@ struct CommentsSheetView: View {
             for item in items {
                 let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
                 guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                let ext = isVideo ? "mov" : "jpg"
+                // **L'extension se lit dans les OCTETS** (#4925) — la même règle
+                // que `CommentComposerStaging.photoAttachments`, dont ce bloc est
+                // la jumelle. Un GIF écrit sous un nom `.jpg` a perdu son
+                // animation avant d'être envoyé : le mimeType se dérive ensuite
+                // de l'extension.
+                let ext = isVideo ? "mov" : await CommentComposerStaging.imageFileExtension(for: data)
                 let url = FileManager.default.temporaryDirectory
                     .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
                 guard (try? data.write(to: url)) != nil else { continue }
@@ -2363,6 +2368,7 @@ struct CommentRowView: View, Equatable {
                         accentColor: accentColor,
                         commentId: comment.id,
                         carrierText: comment.displayContent,
+                        carrierOriginalLanguage: comment.originalLanguage,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,

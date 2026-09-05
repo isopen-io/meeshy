@@ -14,9 +14,9 @@ import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { verifyPassword } from '../utils/password-hash.js';
 
 const logger = enhancedLogger.child({ module: 'TwoFactorService' });
-import bcrypt from 'bcryptjs';
 
 // Constants
 const APP_NAME = 'Meeshy';
@@ -259,8 +259,10 @@ export class TwoFactorService {
         return { success: false, error: '2FA n\'est pas activé sur ce compte' };
       }
 
-      // Vérifier le mot de passe
-      const passwordValid = await bcrypt.compare(password, user.password);
+      // Vérifier le mot de passe — `verifyPassword` (`utils/password-hash`),
+      // SITE UNIQUE du hachage de mot de passe (#5216), jamais un
+      // `bcrypt.compare` direct (#5235).
+      const passwordValid = await verifyPassword(password, user.password);
       if (!passwordValid) {
         return { success: false, error: 'Mot de passe incorrect' };
       }

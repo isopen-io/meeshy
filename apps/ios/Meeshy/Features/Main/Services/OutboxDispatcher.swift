@@ -14,9 +14,14 @@ import os
 /// to the in-memory queues.
 struct OutboxDispatcher: OutboxDispatching {
 
-    private let logger = Logger(subsystem: "com.meeshy.ios", category: "outbox-dispatcher")
+    let logger = Logger(subsystem: "com.meeshy.ios", category: "outbox-dispatcher")
 
-    private let decoder: JSONDecoder = {
+    // `internal` et non `private` : la famille « messages » vit dans
+    // `OutboxDispatcher+Messages.swift` depuis l'extraction du budget, et une
+    // propriété `private` n'est visible que dans SON fichier — pas dans une
+    // extension du même type ailleurs. C'est la frontière invisible que toute
+    // extraction franchit, et qui ne se voit qu'à la compilation.
+    let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         return d
@@ -141,7 +146,7 @@ struct OutboxDispatcher: OutboxDispatching {
         // comme un échec 4xx non transitoire, et l'enregistrement mourait en
         // `.exhausted` alors que le serveur avait écrit ce qu'il fallait.
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/directory/blocks/\(payload.targetUserId)",
+            DirectoryEndpoint.blocksByUserId(userId: payload.targetUserId),
             method: "PUT",
             body: try JSONEncoder().encode([String: String]()),
             queryItems: nil,
@@ -169,7 +174,7 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchUnblockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UnblockUserPayload.self)
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/directory/blocks/\(payload.targetUserId)",
+            DirectoryEndpoint.blocksByUserId(userId: payload.targetUserId),
             method: "DELETE",
             body: nil,
             queryItems: nil,
@@ -192,7 +197,7 @@ struct OutboxDispatcher: OutboxDispatching {
             // rend la migration urgente : le rejeu hors ligne rejoue des
             // mutations enregistrées AVANT la mise à jour, et une bascule
             // partielle les enverrait sur une famille éteinte.
-            endpoint: "/directory/friend-requests",
+            DirectoryEndpoint.friendRequests,
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -217,7 +222,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let status = payload.action == .accept ? "accept" : "reject"
         let body = RespondBody(action: status)
         let _: APIResponse<FriendRequest> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/directory/friend-requests/\(payload.friendRequestId)",
+            DirectoryEndpoint.friendRequestsById(id: payload.friendRequestId),
             method: "PATCH",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -239,7 +244,7 @@ struct OutboxDispatcher: OutboxDispatching {
 
         if let avatarUrl = payload.avatarUrl {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/users/me/avatar",
+                UsersEndpoint.meAvatar,
                 method: "PATCH",
                 body: try JSONEncoder().encode(UpdateProfileAvatarBody(avatar: avatarUrl)),
                 queryItems: nil,
@@ -262,7 +267,7 @@ struct OutboxDispatcher: OutboxDispatching {
         // result (caller refreshes via AuthManager.checkExistingSession()
         // after enqueue), so decode the envelope shape loosely as a dictionary.
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/users/me",
+            UsersEndpoint.me,
             method: "PATCH",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -289,7 +294,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let payload = try decodePayload(record, as: MarkStoryViewedPayload.self)
         do {
             let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                endpoint: "/posts/\(payload.storyId)/view",
+                PostsEndpoint.byPostIdView(postId: payload.storyId),
                 method: "POST",
                 body: nil,
                 queryItems: nil
@@ -319,7 +324,7 @@ struct OutboxDispatcher: OutboxDispatching {
         )
         do {
             let _: APIResponse<[String: String]> = try await APIClient.shared.post(
-                endpoint: "/attachments/\(payload.attachmentId)/status",
+                AttachmentsEndpoint.byAttachmentIdStatus(attachmentId: payload.attachmentId),
                 body: body
             )
             logger.info("reportAttachmentStatus dispatched att=\(payload.attachmentId, privacy: .public) action=\(payload.action, privacy: .public)")
@@ -361,7 +366,7 @@ struct OutboxDispatcher: OutboxDispatching {
             // an otherwise-successful 2xx — the read receipt looked like a
             // failure and was retried until exhausted for nothing.
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(payload.conversationId)/mark-read",
+                ConversationsEndpoint.byIdMarkRead(id: payload.conversationId),
                 method: "POST",
                 body: body,
                 queryItems: nil
@@ -394,7 +399,7 @@ struct OutboxDispatcher: OutboxDispatching {
             participantIds: payload.participantIds
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -430,7 +435,7 @@ struct OutboxDispatcher: OutboxDispatching {
         )
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/conversations/\(payload.conversationId)",
+                ConversationsEndpoint.byId(id: payload.conversationId),
                 method: "PUT",
                 body: try JSONEncoder().encode(body),
                 queryItems: nil,
@@ -449,8 +454,19 @@ struct OutboxDispatcher: OutboxDispatching {
     /// by the caller at enqueue time.
     private func dispatchUpdateSettings(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UpdateSettingsPayload.self)
+        // La catégorie arrive d'un enregistrement PERSISTÉ : elle peut porter
+        // n'importe quelle chaîne, y compris celle d'une version antérieure de
+        // l'app. L'interpoler telle quelle produisait un 404 SILENCIEUX au
+        // rejeu — l'action était consommée, la préférence jamais écrite.
+        // La convertir fait de ce cas une erreur qui se voit.
+        guard let category = PreferenceCategory(rawValue: payload.category) else {
+            throw MeeshyError.server(
+                statusCode: 0,
+                message: "Catégorie de préférences inconnue « \(payload.category) » — "
+                    + "aucune adresse ne la sert, l'action ne peut pas être rejouée.")
+        }
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/me/preferences/\(payload.category)",
+            category.endpoint,
             method: "PATCH",
             body: payload.body,
             queryItems: nil,
@@ -471,6 +487,17 @@ struct OutboxDispatcher: OutboxDispatching {
         // mid-upload resumes from the saved offset.
         var resolvedMediaIds = payload.attachmentIds
         var uploadedLocalPaths: [String] = []
+        // **Hissés hors du bloc**, comme `uploadedLocalPaths` juste au-dessus :
+        // la jointure « position d'origine → id serveur » se lit APRÈS l'upload,
+        // pour le corps de la requête (#4756).
+        var uploadedIds: [String] = []
+        // **L'URL SERVIE voyage avec l'id** (#5280). Le canvas ne référence
+        // pas seulement une ligne `PostMedia` : il porte aussi l'URL qu'il
+        // affiche. Adopter l'id sans l'URL laisserait le lecteur devant un
+        // `file://` que l'assainisseur annule — une scène sans image, pour un
+        // canvas pourtant cohérent.
+        var uploadedUrls: [String] = []
+        var uploadedSourceIndexes: [Int] = []
         if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
             guard let baseURL = URL(string: serverOrigin),
@@ -482,7 +509,6 @@ struct OutboxDispatcher: OutboxDispatching {
                 )
             }
             let uploader = TusUploadManager(baseURL: baseURL)
-            var uploadedIds: [String] = []
             for (index, stored) in pendingMediaPaths.enumerated() {
                 let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
                 guard FileManager.default.fileExists(atPath: absolutePath) else {
@@ -519,7 +545,21 @@ struct OutboxDispatcher: OutboxDispatching {
                         uploadContext: "post"
                     )
                     uploadedIds.append(tusResult.id)
+                    uploadedUrls.append(tusResult.fileUrl)
                     uploadedLocalPaths.append(absolutePath)
+                    // **L'INDEX D'ORIGINE voyage avec l'id** (#4756). C'est la
+                    // seule jointure possible entre ce que l'auteur a composé
+                    // et ce que le serveur vient de créer : la légende, l'alt
+                    // et les objets média du canvas sont tous clés par la
+                    // POSITION du fichier, jamais par un id qui n'existait pas
+                    // encore à la composition.
+                    //
+                    // Un upload qui ÉCHOUE est sauté (best-effort, `catch`
+                    // ci-dessous) : l'alignement avec `payload.localMediaPaths`
+                    // est alors rompu, et c'est précisément pourquoi l'index
+                    // s'enregistre ici plutôt que de se déduire de la longueur
+                    // des tableaux.
+                    uploadedSourceIndexes.append(index)
                 } catch {
                     logger.error("Post media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
                 }
@@ -533,6 +573,28 @@ struct OutboxDispatcher: OutboxDispatching {
             }
             resolvedMediaIds = uploadedIds + payload.attachmentIds
         }
+
+        // **La carte « position d'origine → id serveur »** (#4756) — construite
+        // une fois, lue par les deux consommateurs ci-dessous. Vide quand rien
+        // n'a été téléversé (post texte, ou pièces déjà en ligne), et les deux
+        // lectures rendent alors ce qu'elles avaient.
+        let idParIndexSource = Dictionary(
+            uniqueKeysWithValues: zip(uploadedSourceIndexes, uploadedIds)
+        )
+        let urlParIndexSource = Dictionary(
+            uniqueKeysWithValues: zip(uploadedSourceIndexes, uploadedUrls)
+        )
+        let legendesServeur = serverKeyedTexts(
+            payload.mediaCaptions, idsBySourceIndex: idParIndexSource
+        )
+        // **Le même réalignement, sur l'autre texte** (2026-09-05). Deux
+        // appels à UNE fonction, jamais deux fonctions : la carte des ids
+        // (`idParIndexSource`) est la même, et c'est elle qui porte le seul
+        // fait délicat — un upload sauté rompt l'alignement, donc l'index
+        // s'enregistre au lieu de se déduire d'une longueur.
+        let altsServeur = serverKeyedTexts(
+            payload.mediaAlts, idsBySourceIndex: idParIndexSource
+        )
 
         let body = CreatePostBody(
             content: payload.content,
@@ -548,10 +610,55 @@ struct OutboxDispatcher: OutboxDispatching {
             mentions: payload.mentions,
             discoverabilityPrecision: payload.discoverabilityPrecision,
             repostOfId: payload.repostOfId,
-            mobileTranscription: payload.mobileTranscription
+            mobileTranscription: payload.mobileTranscription,
+            // **ASSAINI avant de partir** (#4756). Le blob composé porte des
+            // `mediaURL` LOCALES tant que l'upload n'a pas eu lieu ; le
+            // sanitizer les annule et le journalise, plutôt que de publier une
+            // scène qui référence un `file://` illisible par quiconque.
+            //
+            // Ce que ce lot ne fait PAS : relier les objets média du canvas aux
+            // `PostMedia` que la boucle ci-dessus vient de créer
+            // (`postMediaId`). Un canvas dont le FOND est un fichier local part
+            // donc sans son image — suivi ouvert et nommé, jamais masqué par ce
+            // correctif.
+            // **Le canvas ADOPTE les médias que le post vient de créer**
+            // (#5280, 2026-09-05). Avant cette ligne, il désignait la ligne
+            // `PostMedia` de la PRÉ-MONTÉE — celle faite au moment où la photo
+            // a été posée sur la scène — et le lecteur cherchait un id absent
+            // de `post.media` : la scène se peignait VIDE, sur toute la carte.
+            //
+            // L'adoption se fait ICI parce que c'est le seul étage qui tienne
+            // les deux bouts : la carte `position → id serveur` (construite
+            // ci-dessus, et déjà lue par les légendes et les alternatives) et
+            // le canvas lui-même. Plus haut, les ids serveur n'existent pas ;
+            // plus bas, il n'y a plus de canvas.
+            //
+            // L'ASSAINISSEMENT vient APRÈS, et l'ordre compte : il annule les
+            // `file://` restés locaux, et une adoption réussie n'en laisse
+            // aucun. Assainir d'abord effacerait l'URL que l'adoption doit
+            // remplacer, et le sanitizer journaliserait un défaut que le lot
+            // vient de corriger.
+            storyEffects: CanvasMediaAdoption
+                .adopting(payload.storyEffects,
+                          objectIdsBySourceIndex: payload.mediaObjectIds,
+                          idsBySourceIndex: idParIndexSource,
+                          urlsBySourceIndex: urlParIndexSource)?
+                .sanitizedForServerPublish(),
+            // **La légende atteint enfin son destinataire** (#4756). Elle était
+            // saisie, affichée, relue — et mourait ici, faute d'une clé que le
+            // gateway sache reconnaître : `PostService.applyMediaText` filtre en
+            // SILENCE les ids qu'il ignore, si bien qu'une carte mal clée se
+            // perd sans erreur.
+            mediaCaption: legendesServeur.isEmpty ? nil : legendesServeur,
+            // **L'alternative textuelle atteint enfin son destinataire.**
+            // `CreatePostSchema.mediaAlt` l'attendait depuis toujours côté
+            // gateway ; côté client, la carte s'arrêtait au meuble. Un média
+            // partait donc muet pour un lecteur d'écran, alors que l'auteur
+            // avait rempli le champ « Décrire » et l'avait relu.
+            mediaAlt: altsServeur.isEmpty ? nil : altsServeur
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/posts",
+            PostsEndpoint.root,
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -574,7 +681,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let body = try ToggleLikePostBody.encoded(for: payload)
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/posts/\(payload.postId)/like",
+                PostsEndpoint.byPostIdLike(postId: payload.postId),
                 method: method,
                 body: body,
                 queryItems: nil,
@@ -618,7 +725,7 @@ struct OutboxDispatcher: OutboxDispatching {
             visibility: payload.visibility
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/posts/\(payload.postId)/repost",
+            PostsEndpoint.byPostIdRepost(postId: payload.postId),
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -658,7 +765,7 @@ struct OutboxDispatcher: OutboxDispatching {
             effectFlags: payload.effectFlags
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/posts/\(payload.postId)/comments",
+            PostsEndpoint.byPostIdComments(postId: payload.postId),
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -687,7 +794,7 @@ struct OutboxDispatcher: OutboxDispatching {
         }
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/posts/\(postId)/comments/\(payload.commentId)",
+                PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: payload.commentId),
                 method: "DELETE",
                 body: nil,
                 queryItems: nil,
@@ -715,7 +822,7 @@ struct OutboxDispatcher: OutboxDispatching {
         let method = payload.liked ? "POST" : "DELETE"
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-                endpoint: "/posts/\(postId)/comments/\(payload.commentId)/like",
+                PostsEndpoint.byPostIdCommentsByCommentIdLike(postId: postId, commentId: payload.commentId),
                 method: method,
                 body: nil,
                 queryItems: nil,
@@ -727,496 +834,6 @@ struct OutboxDispatcher: OutboxDispatching {
         }
     }
 
-    // MARK: - Send Message
-
-    /// Durably reconciles a successful message send — independent of whether a
-    /// `ConversationViewModel` is currently alive for the conversation.
-    ///
-    /// Without this, the optimistic→server transition (`serverAck`) only ran
-    /// from `ConversationViewModel`'s `retrySucceeded` Combine sink. When a
-    /// flush completed while the user was outside the conversation, that
-    /// transient `PassthroughSubject` event was dropped, the optimistic GRDB
-    /// row stayed `.sending`, and a cold reload duplicated it against the real
-    /// server message. Applying the `serverAck` here — at the always-alive
-    /// dispatcher — guarantees the row flips to `.sent` and a `PendingIdRecord`
-    /// is written regardless of UI state. When a VM IS alive its sink runs the
-    /// same `applyEvent` again as a harmless no-op on the already-`.sent` row.
-    private func reconcileSuccessfulMessageSend(
-        clientMessageId: String,
-        serverId: String,
-        conversationId: String
-    ) async {
-        let persistence = await DependencyContainer.shared.messagePersistence
-        do {
-            _ = try await persistence.applyEvent(
-                localId: clientMessageId,
-                event: .serverAck(serverId: serverId, at: Date())
-            )
-        } catch {
-            // Le serveur a accepté le message mais la ligne locale n'est pas
-            // passée `.sent` : la bulle reste « en cours d'envoi » jusqu'au
-            // prochain resync.
-            logger.error("Server ACK not applied for \(clientMessageId, privacy: .public), bubble stays 'sending': \(error.localizedDescription, privacy: .public)")
-        }
-        await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
-            cached.filter { $0.id != clientMessageId }
-        }
-        OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
-            clientMessageId: clientMessageId,
-            serverId: serverId,
-            conversationId: conversationId,
-            kind: .sendMessage
-        ))
-    }
-
-    /// Résout `copyAttachmentsFromMessageId` pour CETTE ligne — un partage
-    /// multi-destinataires COPIE les pièces jointes du message porté par
-    /// l'origine, jamais un transfert (voir `ShareFanoutOriginResolver`).
-    ///
-    /// Sortie anticipée sur `item.copyAttachmentsFromClientMessageId == nil`
-    /// (round 1 de revue, Minor) : un message ORDINAIRE — l'écrasante
-    /// majorité — ne paie plus une lecture GRDB sur la clé `""` dont le
-    /// résultat était de toute façon ignoré.
-    ///
-    /// L'origine non encore acquittée lève `OutboxDeferralError
-    /// .waitingForFanoutOrigin` — erreur TYPÉE, pas un `NSError` générique —
-    /// pour qu'`OutboxFlusher` la reconnaisse (`isWaitingForFanoutOrigin`) et
-    /// replanifie la ligne SANS consommer `attempts`, borné par
-    /// `OutboxFlusher.fanoutOriginWaitTimeout` : partir maintenant livrerait
-    /// un message VIDE de pièces jointes, mais un simple `NSError` (round 1
-    /// précédent) épuisait le budget de tentatives en ~30s — exactement le
-    /// délai qu'un upload photo/vidéo sur réseau médiocre dépasse en usage
-    /// nominal.
-    ///
-    /// **`item.copyAttachmentsFromServerMessageId` court-circuite la
-    /// résolution GRDB quand il est déjà connu** (défaut bloquant corrigé) :
-    /// une origine servie par l'extension de partage n'a JAMAIS de ligne
-    /// locale (l'extension poste en REST sans dépendance SDK), donc
-    /// `resolveServerId(for: originClientMessageId)` résout `nil` pour
-    /// TOUJOURS dans ce cas — la ligne se reporterait indéfiniment jusqu'à
-    /// épuiser son budget. `SharePendingSendConsumer` lit alors l'identifiant
-    /// serveur déjà écrit sur la fiche (`PendingTarget.serverMessageId`) et
-    /// le transmet ici tel quel. Une origine partie par l'app (chemin
-    /// existant, non régressé) ne pose jamais ce champ : la résolution
-    /// GRDB ci-dessous s'applique alors normalement.
-    private func resolveCopyAttachmentsFromMessageId(for item: OfflineQueueItem) async throws -> String? {
-        guard let originClientMessageId = item.copyAttachmentsFromClientMessageId else { return nil }
-        let resolvedServerId: String?
-        if let known = item.copyAttachmentsFromServerMessageId, !known.isEmpty {
-            resolvedServerId = known
-        } else {
-            resolvedServerId = try? await DependencyContainer.shared.messagePersistence
-                .resolveServerId(for: originClientMessageId)
-        }
-        let fanout = ShareFanoutOriginResolver.resolve(
-            copyAttachmentsFromClientMessageId: originClientMessageId,
-            resolvedServerId: resolvedServerId
-        )
-        switch fanout {
-        case .notAFanout:
-            return nil
-        case .ready(let serverMessageId):
-            return serverMessageId
-        case .waitingForOrigin(let clientMessageId):
-            throw OutboxDeferralError.waitingForFanoutOrigin(clientMessageId: clientMessageId)
-        }
-    }
-
-    private func dispatchSendMessage(_ record: OutboxRecord) async throws {
-        if record.id.hasPrefix("ofq_") {
-            let item: OfflineQueueItem
-            do {
-                item = try decoder.decode(OfflineQueueItem.self, from: record.payload)
-            } catch {
-                // Corrupt payload — accept to let the flusher remove the row.
-                logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-
-            // Multi-track audio offline replay. The canonical field is
-            // `localAudioPaths` (array); legacy rows may still carry only
-            // `localAudioPath` (scalar). Both are resolved so the dispatcher
-            // handles every row shape. Each track is uploaded via TUS
-            // independently; missing or failed tracks are skipped
-            // (best-effort). All uploaded ids go out in a single
-            // `message:send-with-attachments` socket event.
-            let pendingAudioPaths: [String] = {
-                if let many = item.localAudioPaths, !many.isEmpty { return many }
-                if let one = item.localAudioPath, !one.isEmpty { return [one] }
-                return []
-            }()
-
-            // Round 1 de revue (Important 3) : `sendWithAttachmentsAsync` —
-            // donc les deux branches socket ci-dessous (rejeu audio/média
-            // hors-ligne) — n'a AUCUN moyen de transmettre
-            // `copyAttachmentsFromMessageId`. Le handler gateway
-            // `handleMessageSendWithAttachments` ne le lit pas non plus (seul
-            // `message:send`, le path texte, le fait —
-            // `SocketMessageSendWithAttachmentsSchema` côté gateway ne
-            // déclare pas le champ, Zod le supprimerait en silence). Aucune
-            // cible non-origine ne porte de média local aujourd'hui
-            // (`SharePendingSendConsumer.enqueue` ne pose
-            // `copyAttachmentsFromClientMessageId` QUE sur les lignes SANS
-            // média local) : cette combinaison n'arrive jamais en pratique,
-            // mais rien ne l'empêchait STRUCTURELLEMENT, et le champ aurait
-            // disparu EN SILENCE. Échoue fort plutôt que de laisser partir un
-            // message vide de la promesse de copie.
-            let hasLocalMediaToReplay = !pendingAudioPaths.isEmpty || !(item.localMediaPaths?.isEmpty ?? true)
-            if hasLocalMediaToReplay, let unsupportedOriginId = item.copyAttachmentsFromClientMessageId {
-                throw NSError(
-                    domain: "OutboxDispatcher",
-                    code: 501,
-                    userInfo: [NSLocalizedDescriptionKey:
-                        "Fan-out de partage (\(unsupportedOriginId)) non supporté sur le chemin socket média/audio local"]
-                )
-            }
-
-            if !pendingAudioPaths.isEmpty {
-                let serverOrigin = MeeshyConfig.shared.serverOrigin
-                // Rejeu d'une pièce jointe de MESSAGE : accessible à un
-                // invité de lien partagé, contrairement aux médias de post.
-                guard let baseURL = URL(string: serverOrigin),
-                      let credential = APIClient.shared.requestCredential else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 401,
-                        userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload audio"]
-                    )
-                }
-
-                let uploader = TusUploadManager(baseURL: baseURL)
-                var uploadedIds: [String] = []
-                var uploadedPaths: [String] = []
-
-                for stored in pendingAudioPaths {
-                    let absolutePath = OfflineQueue.absoluteAudioPath(forStored: stored)
-                    guard FileManager.default.fileExists(atPath: absolutePath) else {
-                        logger.error("Audio file missing on dispatch, path=\(stored, privacy: .public)")
-                        continue
-                    }
-                    do {
-                        let tusResult = try await uploader.uploadFile(
-                            fileURL: URL(fileURLWithPath: absolutePath),
-                            mimeType: "audio/mp4",
-                            credential: credential
-                        )
-                        uploadedIds.append(tusResult.id)
-                        uploadedPaths.append(absolutePath)
-                    } catch {
-                        logger.error("Audio track TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-
-                guard !uploadedIds.isEmpty else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 503,
-                        userInfo: [NSLocalizedDescriptionKey: "No audio track uploaded for offline audio dispatch"]
-                    )
-                }
-
-                let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
-                    conversationId: item.conversationId,
-                    content: item.content.isEmpty ? nil : item.content,
-                    attachmentIds: uploadedIds,
-                    replyToId: item.replyToId,
-                    storyReplyToId: nil,
-                    originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId,
-                    // Lieu partagé rejoué au renvoi — le canal socket porte la
-                    // même clé `location` que le corps REST.
-                    location: item.location
-                )
-                guard let ack else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 502,
-                        userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline audio dispatch"]
-                    )
-                }
-
-                // Best-effort cleanup of uploaded tracks. Failure here is
-                // benign — skipped (failed-but-present) track files are
-                // reclaimed by `OutboxFlusher.cleanupLocalFiles(for:)` when
-                // the outbox record terminates (applied or exhausted), which
-                // now sweeps both `localAudioPath` and `localAudioPaths`.
-                for path in uploadedPaths {
-                    do { try FileManager.default.removeItem(atPath: path) } catch {
-                        logger.warning("audio dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-
-                await reconcileSuccessfulMessageSend(
-                    clientMessageId: item.clientMessageId,
-                    serverId: ack.messageId,
-                    conversationId: item.conversationId
-                )
-                return
-            }
-
-            // Offline visual-media (photo/video) replay. Each pending file
-            // (relocated under Documents/pending-media/ by enqueueMedia) is
-            // uploaded via TUS with a MIME derived from its extension (unlike
-            // the audio branch which hardcodes audio/mp4), then all ids go out
-            // in one message:send-with-attachments. TUS checkpoint resume fires
-            // on re-upload (same sha256 key), so a kill mid-upload resumes from
-            // the saved offset.
-            if let pendingMediaPaths = item.localMediaPaths, !pendingMediaPaths.isEmpty {
-                let serverOrigin = MeeshyConfig.shared.serverOrigin
-                // Rejeu d'une pièce jointe de MESSAGE : accessible à un
-                // invité de lien partagé, contrairement aux médias de post.
-                guard let baseURL = URL(string: serverOrigin),
-                      let credential = APIClient.shared.requestCredential else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 401,
-                        userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload media"]
-                    )
-                }
-
-                let uploader = TusUploadManager(baseURL: baseURL)
-                var uploadedIds: [String] = []
-                var uploadedPaths: [String] = []
-
-                for stored in pendingMediaPaths {
-                    let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
-                    guard FileManager.default.fileExists(atPath: absolutePath) else {
-                        logger.error("Media file missing on dispatch, path=\(stored, privacy: .public)")
-                        continue
-                    }
-                    do {
-                        let mime = MimeTypeResolver.mimeType(
-                            forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
-                        let tusResult = try await uploader.uploadFile(
-                            fileURL: URL(fileURLWithPath: absolutePath),
-                            mimeType: mime,
-                            credential: credential
-                        )
-                        uploadedIds.append(tusResult.id)
-                        uploadedPaths.append(absolutePath)
-                    } catch {
-                        logger.error("Media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-
-                guard !uploadedIds.isEmpty else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 503,
-                        userInfo: [NSLocalizedDescriptionKey: "No media uploaded for offline media dispatch"]
-                    )
-                }
-
-                let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
-                    conversationId: item.conversationId,
-                    content: item.content.isEmpty ? nil : item.content,
-                    attachmentIds: uploadedIds,
-                    replyToId: item.replyToId,
-                    storyReplyToId: nil,
-                    originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId,
-                    // Lieu partagé rejoué au renvoi — même clé `location` que
-                    // le corps REST.
-                    location: item.location
-                )
-                guard let ack else {
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 502,
-                        userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline media dispatch"]
-                    )
-                }
-
-                for path in uploadedPaths {
-                    do { try FileManager.default.removeItem(atPath: path) } catch {
-                        logger.warning("media dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
-
-                await reconcileSuccessfulMessageSend(
-                    clientMessageId: item.clientMessageId,
-                    serverId: ack.messageId,
-                    conversationId: item.conversationId
-                )
-                return
-            }
-
-            // Fan-out de partage : les cibles 2..N réclament une COPIE des
-            // pièces jointes du message porté par la première — jamais un
-            // transfert, qui ferait afficher « Transféré depuis <conversation
-            // source> » au destinataire (décision user, invariant produit).
-            let copyAttachmentsFromMessageId = try await resolveCopyAttachmentsFromMessageId(for: item)
-
-            let request = SendMessageRequest(
-                content: item.content,
-                replyToId: item.replyToId,
-                forwardedFromId: item.forwardedFromId,
-                forwardedFromConversationId: item.forwardedFromConversationId,
-                attachmentIds: item.attachmentIds,
-                clientMessageId: item.clientMessageId,
-                // Lieu partagé rejoué au renvoi, comme pour un post et un
-                // commentaire : clé top-level `location`, omise quand nil.
-                location: item.location,
-                copyAttachmentsFromMessageId: copyAttachmentsFromMessageId
-            )
-            let response = try await MessageService.shared.send(
-                conversationId: item.conversationId, request: request
-            )
-            // Reconcile the optimistic clientMessageId durably (GRDB row +
-            // PendingIdRecord + cache) so neither a `message:new` socket echo
-            // nor a cold reload duplicates the row.
-            await reconcileSuccessfulMessageSend(
-                clientMessageId: item.clientMessageId,
-                serverId: response.id,
-                conversationId: item.conversationId
-            )
-
-        } else if record.id.hasPrefix("mrq_") {
-            // `MessageRetryQueue` was removed but legacy `mrq_*` rows may
-            // still live on devices that upgraded mid-queue. The payload
-            // format was a strict superset of the fields needed for replay;
-            // we hand-roll a minimal struct here instead of keeping the
-            // deleted public types around just for legacy decoding.
-            //
-            // Decoded rows are sent through the same unified
-            // `OfflineQueue.shared.retrySucceeded` signal as `ofq_*` rows
-            // so ConversationViewModel reconciles via a single subscription.
-            struct LegacyMrqPayload: Decodable {
-                let conversationId: String
-                let content: String
-                let originalLanguage: String?
-                let replyToId: String?
-                let attachmentIds: [String]?
-                let clientMessageId: String?
-            }
-            let item: LegacyMrqPayload
-            do {
-                item = try decoder.decode(LegacyMrqPayload.self, from: record.payload)
-            } catch {
-                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-            guard let clientMessageId = item.clientMessageId else {
-                logger.error("Legacy mrq_* payload without clientMessageId for record \(record.id, privacy: .public), dropping")
-                return
-            }
-            let request = SendMessageRequest(
-                content: item.content,
-                originalLanguage: item.originalLanguage ?? "fr",
-                replyToId: item.replyToId,
-                attachmentIds: item.attachmentIds,
-                clientMessageId: clientMessageId
-            )
-            let response = try await MessageService.shared.send(
-                conversationId: item.conversationId, request: request
-            )
-            await reconcileSuccessfulMessageSend(
-                clientMessageId: clientMessageId,
-                serverId: response.id,
-                conversationId: item.conversationId
-            )
-        }
-        // Unknown namespace prefix — stale row, accept so the flusher removes it.
-    }
-
-    // MARK: - Edit Message
-
-    private func dispatchEditMessage(_ record: OutboxRecord) async throws {
-        let payload: OfflineEditPayload
-        do {
-            payload = try decoder.decode(OfflineEditPayload.self, from: record.payload)
-        } catch {
-            logger.error("Corrupt OfflineEditPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        _ = try await MessageService.shared.edit(
-            messageId: payload.messageId,
-            content: payload.content
-        )
-        logger.info("Edit dispatched for message \(payload.messageId, privacy: .public)")
-    }
-
-    // MARK: - Delete Message
-
-    private func dispatchDeleteMessage(_ record: OutboxRecord) async throws {
-        let payload: OfflineDeletePayload
-        do {
-            payload = try decoder.decode(OfflineDeletePayload.self, from: record.payload)
-        } catch {
-            logger.error("Corrupt OfflineDeletePayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        try await MessageService.shared.delete(
-            conversationId: payload.conversationId,
-            messageId: payload.messageId
-        )
-        logger.info("Delete dispatched for message \(payload.messageId, privacy: .public)")
-    }
-
-    // MARK: - Send Reaction
-
-    private func dispatchSendReaction(_ record: OutboxRecord) async throws {
-        let payload: ReactionOutboxPayload
-        do {
-            payload = try decoder.decode(ReactionOutboxPayload.self, from: record.payload)
-        } catch {
-            logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        do {
-            switch payload.action {
-            case .add:
-                try await ReactionService.shared.add(
-                    messageId: payload.messageId,
-                    emoji: payload.emoji
-                )
-            case .remove:
-                try await ReactionService.shared.remove(
-                    messageId: payload.messageId,
-                    emoji: payload.emoji
-                )
-            }
-            logger.info("Reaction \(payload.action.rawValue, privacy: .public) \(payload.emoji, privacy: .public) dispatched for message \(payload.messageId, privacy: .public)")
-            // Reactions have no server-assigned id (the gateway broadcasts
-            // `reaction:added` / `reaction:removed` over the socket), but
-            // the success signal still carries enough context for any
-            // pending-indicator UI to clear its hint. `serverId` is set to
-            // `clientMessageId` as a stable non-empty placeholder.
-            OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
-                clientMessageId: payload.clientMessageId,
-                serverId: payload.clientMessageId,
-                conversationId: payload.conversationId,
-                kind: .sendReaction,
-                reaction: OfflineRetrySuccess.ReactionContext(
-                    messageId: payload.messageId,
-                    emoji: payload.emoji,
-                    action: payload.action
-                )
-            ))
-        } catch APIError.serverError(let code, _) where code == 404 || code == 409 || code == 410 {
-            // Permanent rejection — 404/410 (message gone) and 409 (state
-            // conflict: already reacted / already removed). Replaying the
-            // same request would bounce forever, so we treat the row as
-            // exhausted right now, emit the unified signal so the optimistic
-            // UI rolls back, and return success so the flusher deletes the
-            // row instead of retrying.
-            logger.warning("Reaction \(payload.action.rawValue, privacy: .public) \(payload.emoji, privacy: .public) on \(payload.messageId, privacy: .public) rejected (\(code, privacy: .public)) — dropping")
-            OfflineQueue.shared.retryExhausted.send(OfflineRetryExhausted(
-                kind: .sendReaction,
-                clientMessageId: payload.clientMessageId,
-                conversationId: payload.conversationId,
-                reaction: OfflineRetrySuccess.ReactionContext(
-                    messageId: payload.messageId,
-                    emoji: payload.emoji,
-                    action: payload.action
-                ),
-                lastError: "HTTP \(code)"
-            ))
-            // Returning normally drains the row. The flusher.deleteOne path
-            // is the same as for a true success — gateway dedup means the
-            // server-side outcome is already terminal regardless.
-        }
-    }
 }
 
 // MARK: - toggleLikePost wire body
@@ -1425,6 +1042,47 @@ final class OutboxRetryScheduler {
 /// `nonisolated` : l'app compile sous `defaultIsolation(MainActor)`, et une
 /// conformance `Encodable` isolée ne peut pas servir depuis le dispatch, qui
 /// hérite de l'isolation de son appelant.
+/// **La traduction des LÉGENDES, de la position d'origine vers l'id serveur**
+/// (#4756).
+///
+/// Les deux identités ne coexistent qu'à cet étage : la légende est composée
+/// quand le fichier n'a qu'une position, et servie quand il n'a plus qu'un id.
+/// Écrire cette carte plus tôt aurait produit une charge dont aucune clé
+/// n'existe chez le destinataire — et `PostService.applyMediaText` filtre en
+/// SILENCE ce qu'il ne reconnaît pas.
+///
+/// Une position dont l'upload a ÉCHOUÉ n'a pas d'entrée : sa légende est
+/// OMISE plutôt que posée sur le voisin. C'est la même règle que
+/// `StoryMediaTextMapping.serverKeyed` applique sur l'autre voie — un texte
+/// sans destinataire ne s'invente pas un porteur.
+///
+/// Une légende vide ou blanche est omise aussi : une clé présente à valeur vide
+/// poserait une légende BLANCHE sur le média, le contraire de « pas de
+/// légende » (`ComposerSlideTextRole.applyCaption`, même distinction).
+/// **La traduction « position d'origine → id serveur », pour TOUT texte par
+/// média.**
+///
+/// Elle s'appelait `serverKeyedCaptions` et ne servait qu'aux légendes. Le nom
+/// disait le premier appelant, jamais la règle — et le second appelant (le
+/// texte alternatif, 2026-09-05) aurait eu le choix entre appeler une fonction
+/// qui prétend faire autre chose, ou en écrire une jumelle. Les deux réponses
+/// sont mauvaises ; renommer coûte une ligne.
+///
+/// > Un nom qui décrit l'APPELANT plutôt que la règle fabrique une jumelle au
+/// > deuxième usage.
+nonisolated func serverKeyedTexts(
+    _ byIndex: [String?]?,
+    idsBySourceIndex: [Int: String]
+) -> [String: String] {
+    guard let byIndex else { return [:] }
+    return byIndex.enumerated().reduce(into: [String: String]()) { keyed, entree in
+        let (index, texte) = entree
+        guard let texte, !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let id = idsBySourceIndex[index] else { return }
+        keyed[id] = texte
+    }
+}
+
 nonisolated struct CreatePostBody: Encodable {
     let content: String?
     let mediaIds: [String]?
@@ -1469,6 +1127,30 @@ nonisolated struct CreatePostBody: Encodable {
     /// Sa graphie (`duration_ms`, `speaker_id`) est portée par les
     /// `CodingKeys` du type lui-même — ne pas la réécrire ici.
     let mobileTranscription: MobileTranscriptionPayload?
+    /// **LE CANVAS** — même clé top-level `storyEffects` que le chemin direct
+    /// (`CreatePostRequest`, `PostService.createCanvasPost`), et même schéma
+    /// gateway (`CreatePostSchema`).
+    ///
+    /// Sans elle ICI, la scène survivait jusqu'au décodage de
+    /// `CreatePostPayload` puis était jetée en silence à l'ultime saut réseau :
+    /// exactement le défaut que `location`, `discoverabilityPrecision` et
+    /// `repostOfId` ont payé avant elle, sur le chemin que prend **tout** post
+    /// du meuble.
+    ///
+    /// > Trois champs ont déjà été perdus à ce même mètre du fil, et chacun
+    /// > porte son commentaire disant pourquoi. Ce type est un INVENTAIRE
+    /// > recopié à la main : rien n'y signale un champ absent — ni le
+    /// > compilateur, ni le schéma, ni le serveur, qui publie sans lui.
+    let storyEffects: StoryEffects?
+    /// **Les LÉGENDES par média** — même clé top-level `mediaCaption` que le
+    /// chemin direct (`CreatePostRequest`, `PostService.createCanvasPost`).
+    /// Clée par `PostMedia.id`, la seule que le gateway reconnaisse : il filtre
+    /// le reste sans rien dire.
+    let mediaCaption: [String: String]?
+
+    /// Le texte ALTERNATIF par média, keyé `PostMedia.id` — champ distinct de
+    /// la légende dans `CreatePostSchema`, et jamais son repli.
+    let mediaAlt: [String: String]?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -1498,11 +1180,26 @@ nonisolated struct CreatePostBody: Encodable {
         if let mobileTranscription {
             try container.encode(mobileTranscription, forKey: .mobileTranscription)
         }
+        // Encodé seulement quand il existe : un post TEXTE n'a pas de scène, et
+        // un blob vide affirmerait une scène composée puis effacée.
+        if let storyEffects {
+            try container.encode(storyEffects, forKey: .storyEffects)
+        }
+        // Vide vaut absent : une carte vide n'efface rien à la CRÉATION, et le
+        // schéma n'attend pas de verdict ici.
+        if let mediaCaption, !mediaCaption.isEmpty {
+            try container.encode(mediaCaption, forKey: .mediaCaption)
+        }
+        if let mediaAlt, !mediaAlt.isEmpty {
+            try container.encode(mediaAlt, forKey: .mediaAlt)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case content, mediaIds, visibility, originalLanguage, type
         case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
-        case discoverabilityPrecision, repostOfId, mobileTranscription
+        case discoverabilityPrecision, repostOfId, mobileTranscription, storyEffects
+        case mediaCaption
+        case mediaAlt
     }
 }

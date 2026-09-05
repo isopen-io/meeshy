@@ -627,14 +627,16 @@ struct AudioMediaView: View, Equatable {
             && lhs.contactColor == rhs.contactColor
             && lhs.activeAudioLanguageOverride == rhs.activeAudioLanguageOverride
             && lhs.footerModel == rhs.footerModel
-            && lhs.replyReference?.messageId == rhs.replyReference?.messageId
-            && lhs.replyReference?.previewText == rhs.replyReference?.previewText
-            && lhs.replyReference?.attachmentThumbnailUrl == rhs.replyReference?.attachmentThumbnailUrl
-            // L'avatar de l'auteur cité arrive APRÈS coup (refresh serveur,
-            // hydratation du cache). Ce `==` est le seul filtre d'invalidation
-            // de la cellule : sans cette ligne, la citation hébergée par le
-            // widget audio resterait figée sur son rendu initial.
-            && lhs.replyReference?.authorAvatarUrl == rhs.replyReference?.authorAvatarUrl
+            // La citation ENTIÈRE, jamais une projection : ce `==` est le seul
+            // filtre d'invalidation de la cellule, et la projection qu'il
+            // portait (id, aperçu, vignette, avatar) ignorait la PROTECTION et
+            // les sept faits du média cité. Sur un vocal qui héberge une
+            // citation, la vignette d'un média à vue unique restait donc
+            // affichée si la protection arrivait après le premier rendu, et le
+            // flou ThumbHash comme la ligne « 1024×768 · 0:42 · 1,2 Mo »
+            // n'apparaissaient jamais. `ReplyReference` est `Equatable` pour
+            // que cette liste ne puisse plus se périmer.
+            && lhs.replyReference == rhs.replyReference
             && lhs.replyIsStory == rhs.replyIsStory
             && lhs.parentIsMe == rhs.parentIsMe
             && lhs.embedsCaptionInWidget == rhs.embedsCaptionInWidget

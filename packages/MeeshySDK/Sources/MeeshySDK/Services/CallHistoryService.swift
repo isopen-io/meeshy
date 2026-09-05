@@ -52,7 +52,7 @@ public final class CallHistoryService: CallHistoryServiceProviding, @unchecked S
         }
 
         let response: PaginatedAPIResponse<[APICallRecord]> = try await api.request(
-            endpoint: "/calls/history",
+            CallsEndpoint.history,
             queryItems: queryItems
         )
 

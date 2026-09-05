@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.Build
+import androidx.annotation.RequiresApi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -53,6 +55,7 @@ class WebRtcCallCoordinator @Inject constructor(
 
     /** `true` between a mid-call ICE stall and its recovery; gates the reconnect signalling. */
     private var stalled: Boolean = false
+    private var audioRouted: Boolean = false
 
     /** 1-based count of stall cycles this call, carried on `call:reconnecting`. */
     private var reconnectAttempt: Int = 0
@@ -78,7 +81,11 @@ class WebRtcCallCoordinator @Inject constructor(
         isVideo: Boolean,
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit = {},
-    ) = begin(scope, callId, iceServers, peerId, selfId, isVideo, isCaller = true, onMediaConnected, onMediaStalled)
+        speakerOn: Boolean = isVideo,
+    ) = begin(
+        scope, callId, iceServers, peerId, selfId, isVideo, isCaller = true,
+        onMediaConnected, onMediaStalled, speakerOn,
+    )
 
     /** Callee: opens the connection now; the remote offer arrives via [incomingSignals]. */
     fun startIncoming(
@@ -90,7 +97,11 @@ class WebRtcCallCoordinator @Inject constructor(
         isVideo: Boolean,
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit = {},
-    ) = begin(scope, callId, iceServers, peerId, selfId, isVideo, isCaller = false, onMediaConnected, onMediaStalled)
+        speakerOn: Boolean = isVideo,
+    ) = begin(
+        scope, callId, iceServers, peerId, selfId, isVideo, isCaller = false,
+        onMediaConnected, onMediaStalled, speakerOn,
+    )
 
     private fun begin(
         scope: CoroutineScope,
@@ -102,6 +113,7 @@ class WebRtcCallCoordinator @Inject constructor(
         isCaller: Boolean,
         onMediaConnected: () -> Unit,
         onMediaStalled: () -> Unit,
+        speakerOn: Boolean,
     ) {
         end()
         this.callId = callId
@@ -116,7 +128,12 @@ class WebRtcCallCoordinator @Inject constructor(
         this.onMediaStalled = onMediaStalled
         val cs = scope + SupervisorJob(scope.coroutineContext[Job])
         callScope = cs
-        routeAudioToCall()
+        // Parity iOS `CallManager` (`isSpeaker = isVideo`): a video call defaults to
+        // the loudspeaker (the phone is held away from the ear), an audio call to
+        // the earpiece — but the CALLER'S current intent wins over that default when
+        // it is already known (e.g. the user toggled the speaker button while
+        // `accept()` was still awaiting the join ACK, before this ran).
+        routeAudioToCall(speakerOn = speakerOn)
         engine.createConnection(iceServers, enableVideo = isVideo)
         observe(cs)
     }
@@ -138,6 +155,9 @@ class WebRtcCallCoordinator @Inject constructor(
     fun setMuted(muted: Boolean) = engine.setAudioEnabled(!muted)
 
     fun setCameraEnabled(enabled: Boolean) = engine.setVideoEnabled(enabled)
+
+    /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
+    fun setSpeakerEnabled(enabled: Boolean) = applySpeakerRoute(enabled)
 
     fun end() {
         callScope?.cancel()
@@ -305,12 +325,65 @@ class WebRtcCallCoordinator @Inject constructor(
         return true
     }
 
-    private fun routeAudioToCall() {
+    private fun routeAudioToCall(speakerOn: Boolean) {
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        applySpeakerRoute(speakerOn)
+        audioRouted = true
     }
 
+    /**
+     * Undoes [routeAudioToCall] symmetrically: the speaker route must be cleared
+     * BEFORE the mode drops back to NORMAL — a mode change alone does not release
+     * a selected communication device (API 31+) or the legacy speakerphone flag
+     * (below it), so without this the call's speaker route silently survived the
+     * call and leaked onto the next audio played (e.g. a voice message at ear
+     * volume coming out of the loudspeaker).
+     */
     private fun restoreAudio() {
+        if (!audioRouted) return
+        audioRouted = false
+        applySpeakerRoute(speakerOn = false)
         audioManager.mode = AudioManager.MODE_NORMAL
+    }
+
+    /**
+     * Executes the pure [CallAudioRoute.actionFor] decision — `setCommunicationDevice`
+     * on API 31+ (the non-deprecated routing API, absent below it), `setSpeakerphoneOn`
+     * as the minSdk-26 repli. A missing built-in-speaker device (no such hardware, or
+     * the platform not yet reporting it) leaves the current route untouched rather
+     * than crash — the toggle stays inert instead of throwing mid-call.
+     */
+    private fun applySpeakerRoute(speakerOn: Boolean) {
+        when (val action = CallAudioRoute.actionFor(Build.VERSION.SDK_INT, speakerOn)) {
+            is CallAudioAction.SelectCommunicationDevice -> applyCommunicationDevice(action)
+            CallAudioAction.ClearCommunicationDevice -> clearCommunicationDevice()
+            is CallAudioAction.SetSpeakerphoneOn -> {
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = action.on
+            }
+        }
+    }
+
+    /**
+     * The API 31+ branches of [applySpeakerRoute], extracted so the `@RequiresApi`
+     * guard is LOCAL and syntactic — lint's NewApi detector cannot follow a
+     * decision made in [CallAudioRoute.actionFor] (a plain function returning a
+     * sealed interface, not a boolean/threshold check it recognizes), so calling
+     * `availableCommunicationDevices`/`setCommunicationDevice`/
+     * `clearCommunicationDevice` straight from the `when` above trips
+     * `lintVitalRelease` even though [CallAudioRoute.actionFor] only ever produces
+     * these actions on API 31+.
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun applyCommunicationDevice(action: CallAudioAction.SelectCommunicationDevice) {
+        audioManager.availableCommunicationDevices
+            .firstOrNull { it.type == action.deviceType }
+            ?.let(audioManager::setCommunicationDevice)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun clearCommunicationDevice() {
+        audioManager.clearCommunicationDevice()
     }
 
     private companion object {

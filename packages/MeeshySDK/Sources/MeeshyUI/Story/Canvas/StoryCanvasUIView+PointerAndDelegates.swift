@@ -88,4 +88,26 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
         noteEditInteraction()
         return super.gestureRecognizerShouldBegin(gestureRecognizer)
     }
+
+    /// **Le champ de saisie possède ses touches** (#5099).
+    ///
+    /// Sans ce refus, le `singleTapRecognizer` posé sur le canvas se reconnaît
+    /// sur un tap tombé dans le `StoryInlineTextEditor` et — `cancelsTouchesInView`
+    /// valant `true` par défaut — **annule** ce tap pour le `UITextView`. Le
+    /// champ ne devenait donc jamais premier répondeur au doigt : toucher le
+    /// texte, ou son placeholder quand il est vide, ne levait pas le clavier.
+    ///
+    /// La règle est PURE et vit à côté (`StoryCanvasInlineEditTouchPolicy`) : ce
+    /// qu'elle décide se mesure sans monter une scène, et son doc-comment porte
+    /// la raison de comparer par DESCENDANCE plutôt que par identité — `touch.view`
+    /// n'est presque jamais le `UITextView` lui-même.
+    ///
+    /// Aucun geste n'est retiré : une touche posée AILLEURS que sur le champ
+    /// arrive au canvas exactement comme avant, y compris celle qui désigne un
+    /// autre objet pendant qu'on écrit.
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                                  shouldReceive touch: UITouch) -> Bool {
+        StoryCanvasInlineEditTouchPolicy.canvasReceives(touched: touch.view,
+                                                        inlineEditor: inlineEditor)
+    }
 }

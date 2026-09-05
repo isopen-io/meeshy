@@ -17,6 +17,7 @@ class MessageActionMenuTest {
         canEdit: Boolean = false,
         canDeleteForEveryone: Boolean = false,
         pinAction: PinAction = PinAction.Pin,
+        hasOpenableFile: Boolean = false,
     ) = MessageActionContext(
         isDeleted = isDeleted,
         isPending = isPending,
@@ -28,6 +29,7 @@ class MessageActionMenuTest {
         canEdit = canEdit,
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
+        hasOpenableFile = hasOpenableFile,
     )
 
     // MARK: - isActionable derivation
@@ -263,5 +265,41 @@ class MessageActionMenuTest {
     fun copy_survives_on_a_non_actionable_message_that_is_not_deleted() {
         val actions = MessageActionMenu.actions(ctx(isFailed = true))
         assertThat(actions).contains(MessageAction.Copy)
+    }
+
+    // MARK: - file attachment branch
+
+    @Test
+    fun a_message_with_an_openable_file_offers_open_and_share_right_after_copy() {
+        assertThat(MessageActionMenu.actions(ctx(hasOpenableFile = true))).containsExactly(
+            MessageAction.Reply,
+            MessageAction.Forward,
+            MessageAction.Copy,
+            MessageAction.OpenFile,
+            MessageAction.ShareFile,
+            MessageAction.Pin,
+            MessageAction.Star,
+            MessageAction.DeleteForMe,
+            MessageAction.Report,
+        ).inOrder()
+    }
+
+    @Test
+    fun a_message_without_an_openable_file_offers_neither_open_nor_share() {
+        val actions = MessageActionMenu.actions(ctx(hasOpenableFile = false))
+        assertThat(actions).containsNoneOf(MessageAction.OpenFile, MessageAction.ShareFile)
+    }
+
+    @Test
+    fun a_pending_send_with_a_file_still_offers_open_and_share() {
+        // Opening/sharing a file doesn't depend on this message's own send state —
+        // unlike reply/forward/star/delete, which require `isActionable`.
+        val actions = MessageActionMenu.actions(ctx(isPending = true, hasOpenableFile = true))
+        assertThat(actions).containsExactly(
+            MessageAction.Copy,
+            MessageAction.OpenFile,
+            MessageAction.ShareFile,
+            MessageAction.Pin,
+        ).inOrder()
     }
 }

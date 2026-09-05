@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryBackgroundValue
+import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StorySlideDuration
@@ -29,6 +30,7 @@ data class StorySlide(
     val transform: StoryCanvasTransform = StoryCanvasTransform.IDENTITY,
     val elements: List<StoryTextElement> = emptyList(),
     val stickers: List<StoryStickerElement> = emptyList(),
+    val strokes: List<StoryDrawingStroke> = emptyList(),
     val filter: StoryFilter? = null,
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
     val durationSecondsPin: Double? = null,
@@ -88,18 +90,23 @@ data class StorySlideDeck(
     /** At least one slide carries a publishable (non-blank emoji) on-canvas sticker. */
     val hasStickers: Boolean get() = slides.any { slide -> slide.stickers.any { it.isPublishable } }
 
+    /** At least one slide carries a freehand-drawn stroke. */
+    val hasDrawing: Boolean get() = slides.any { it.strokes.isNotEmpty() }
+
     /**
      * The slides that would each become a published story — those carrying real
      * content (non-blank text **or** attached media **or** a publishable text
-     * element **or** a publishable sticker), in order. A media-only, text-element-only,
-     * or sticker-only slide publishes; a slide with none of these is skipped.
+     * element **or** a publishable sticker **or** a drawn stroke), in order. A
+     * media-only, text-element-only, sticker-only, or drawing-only slide publishes;
+     * a slide with none of these is skipped.
      */
     val publishableSlides: List<StorySlide>
         get() = slides.filter { slide ->
             slide.text.isNotBlank() ||
                 slide.mediaIds.isNotEmpty() ||
                 slide.elements.any { it.isPublishable } ||
-                slide.stickers.any { it.isPublishable }
+                slide.stickers.any { it.isPublishable } ||
+                slide.strokes.isNotEmpty()
         }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
@@ -512,6 +519,23 @@ data class StorySlideDeck(
             if (i == index) slide.copy(backgroundLoop = loop) else slide
         }
         return copy(slides = slidesNext)
+    }
+
+    /**
+     * Replaces the **selected** slide's freehand [strokes] wholesale, leaving every
+     * other slide and the selection untouched. The composer's drawing tool binds
+     * here after every board mutation (commit / undo / redo / clear), so the
+     * per-slide undo/redo reducer ([StoryDrawingBoard]) stays the single source of
+     * the committed strokes and this deck only mirrors its output. Inert (same
+     * instance) when [strokes] already equals the slide's strokes, so a mutation
+     * that resolves to a no-op (e.g. undoing with nothing to undo) never churns
+     * recomposition.
+     */
+    fun setSelectedStrokes(strokes: List<StoryDrawingStroke>): StorySlideDeck {
+        if (selectedSlide.strokes == strokes) return this
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(strokes = strokes) else slide }
+        return copy(slides = next)
     }
 
     /**

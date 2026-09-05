@@ -1,0 +1,548 @@
+import XCTest
+@testable import Meeshy
+
+/// **Le lecteur du son de contenu est bien MONTÉ, et dans la branche SANS
+/// canvas** (directive porteur 2026-09-01, #4657).
+///
+/// `ComposerForegroundSound` a sa suite de règle ; celle-ci prouve le dernier
+/// maillon — que la surface l'ASSEMBLE, et à l'endroit dit. Trois affirmations
+/// distinctes, et la deuxième est celle qui se perdrait en silence : déplacer
+/// la carte hors de `textOnlyContent` la ferait paraître AUSSI sur la scène,
+/// où un son de premier plan est déjà un objet posé sur le canvas.
+///
+/// Même patron que `ComposerDocumentSurfaceMentionMountGuardTests` — ancrage
+/// par le CORPS de la déclaration (équilibrage d'accolades), jamais par un
+/// comptage global, qui ne dirait pas si l'appel est au bon endroit.
+final class ComposerForegroundSoundMountGuardTests: XCTestCase {
+
+    /// `dossier` par défaut : le Composer. La feuille audio vit sous `Views/`,
+    /// et une garde qui ne sait pas y aller ne peut pas mesurer ce que la
+    /// feuille rend — or c'est là que la description se rédige.
+    private func source(_ chemin: String,
+                        dossier: String = "Meeshy/Features/Main/Composer") throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Composer
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("\(dossier)/\(chemin)")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func corps(_ ancre: String, dans code: String) -> String? {
+        guard let debut = code.range(of: ancre) else { return nil }
+        var profondeur = 0
+        var resultat = ""
+        for caractere in code[debut.lowerBound...] {
+            resultat.append(caractere)
+            if caractere == "{" { profondeur += 1 }
+            if caractere == "}" {
+                profondeur -= 1
+                if profondeur == 0 { return resultat }
+            }
+        }
+        return nil
+    }
+
+    /// La carte se monte DANS la disposition texte-seul — la seule branche que
+    /// `content` rend quand `showsScene` est faux. C'est cette structure, et
+    /// elle seule, qui tient le « sans canvas » de la directive : une seconde
+    /// garde écrite dans la règle de résolution se tairait le jour où celle-ci
+    /// changerait.
+    func test_laCarte_estMontéeDansLaBrancheSANSCanvas() throws {
+        let surface = try source("ComposerDocumentSurface.swift")
+        guard let texteSeul = corps("private var textOnlyContent: some View {", dans: surface) else {
+            return XCTFail("`textOnlyContent` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            texteSeul.contains("foregroundSoundCard"),
+            "`textOnlyContent` ne monte plus la carte du son de contenu : le son placé en contenu de "
+                + "publication redeviendrait une vignette muette dans le rail."
+        )
+        guard let carte = corps("private var foregroundSoundCard: some View {", dans: surface) else {
+            return XCTFail("`foregroundSoundCard` introuvable.")
+        }
+        XCTAssertTrue(
+            carte.contains("MeeshyAudioTranscriptPlayer("),
+            "La carte doit monter le lecteur du SDK, jamais une bande réécrite ici."
+        )
+        // **UNE carte par son** (#4672). Une seule se montait, celle du DERNIER
+        // fichier ; les précédents partaient à la publication sans que rien à
+        // l'écran ne dise qu'ils existaient.
+        XCTAssertTrue(
+            carte.contains("ForEach(foregroundSounds)"),
+            "La carte doit se répéter sur TOUS les sons de contenu : un `if let` n'en montre "
+                + "qu'un, et les autres partent quand même à la publication."
+        )
+        XCTAssertTrue(
+            carte.contains("rappel(son)"),
+            "…et le tap doit désigner LE son touché : un rappel sans argument ouvrirait "
+                + "toujours le même, un contrôle qui a l'air de répondre et vise son voisin."
+        )
+    }
+
+    /// **La branche à SCÈNE ne la monte pas.** Contre-épreuve : sans elle, la
+    /// première assertion resterait verte si la carte était montée dans les
+    /// DEUX branches — c'est-à-dire précisément le défaut que la directive
+    /// exclut (« sans canvas »).
+    func test_laBrancheÀSCÈNE_neLaMontePas() throws {
+        let surface = try source("ComposerDocumentSurface.swift")
+        guard let contenu = corps("private var content: some View {", dans: surface),
+              let scene = contenu.range(of: "EmbeddedSceneCanvas(") else {
+            return XCTFail("`content` ou sa scène introuvables.")
+        }
+        let brancheScene = contenu[scene.lowerBound...]
+        XCTAssertFalse(
+            brancheScene.contains("foregroundSoundCard"),
+            "La carte ne doit pas paraître sous la scène : un son de premier plan y est déjà un objet "
+                + "posé sur le canvas, et le montrer deux fois ferait deux contrôles pour un son."
+        )
+    }
+
+    /// **Toucher la carte doit MENER quelque part** (loi 4). Le meuble sert la
+    /// fermeture d'édition, et elle rouvre bien le portail du son — sans quoi
+    /// la carte serait un contrôle inerte à l'air parfaitement vivant.
+    func test_leMeuble_câbleLÉdition_versLaFeuilleDeCréationAudio() throws {
+        // `documentSurface` a quitté `+Surfaces` pour `+DocumentSurface` au
+        // #5069 — le fichier d'origine dépassait le plafond de 1200 lignes. La
+        // garde SUIT le membre : elle épingle une règle de montage, pas un
+        // chemin de fichier, et un chemin périmé la ferait échouer sur
+        // « introuvable » là où la règle est intacte.
+        let surfaces = try source("MeeshyComposerHost+DocumentSurface.swift")
+        guard let document = corps("var documentSurface: some View {", dans: surfaces) else {
+            return XCTFail("`documentSurface` introuvable.")
+        }
+        XCTAssertTrue(document.contains("foregroundSounds: foregroundSounds"),
+                      "La surface ne reçoit plus les sons de contenu.")
+        XCTAssertTrue(document.contains("editForegroundSound(son)"),
+                      "Le tap de la carte n'est plus câblé : il ne ferait rien.")
+
+        let son = try source("MeeshyComposerHost+Sound.swift")
+        guard let edition = corps("func editForegroundSound(", dans: son) else {
+            return XCTFail("`editForegroundSound` introuvable.")
+        }
+        // **Repointé au #4684** : l'ouverture est passée par un site UNIQUE
+        // (`openSoundSheet`), qui pose le placement ET renouvelle l'identité de
+        // la feuille. Épingler les deux lignes d'avant ferait rougir la garde
+        // sur le correctif qu'elle devrait protéger.
+        XCTAssertTrue(edition.contains("openSoundSheet(placement: .foreground)"),
+                      "L'édition doit rouvrir « Création audio » par le site unique, sur la "
+                      + "moitié du commutateur que le geste vient de désigner.")
+
+        guard let feuille = corps("var composerSoundSheet: some View {", dans: son) else {
+            return XCTFail("`composerSoundSheet` introuvable.")
+        }
+        XCTAssertTrue(
+            feuille.contains("initialAudio:"),
+            "La feuille doit s'ouvrir SUR le son édité — sans `initialAudio`, « modifier » rouvrirait un "
+                + "enregistreur vierge et l'auteur perdrait sa prise."
+        )
+    }
+
+    // MARK: - La pastille du son de FOND (#4668/#4669)
+
+    /// **Le plancher de 44 pt a SUIVI le son.**
+    ///
+    /// `ComposerSocleDensityTests` le gardait sur la pastille du socle, qui a
+    /// été retirée (#4669). La pastille de l'avatar en hérite en devenant
+    /// bouton (#4668) : sans ce témoin, retirer l'ancre du socle aurait rendu
+    /// la protection à un contrôle sans la lui redonner ailleurs — un cliquet
+    /// éteint en croyant le déplacer.
+    func test_laPastilleDeLAvatar_gardeUneCibleDeQuaranteQuatrePoints() throws {
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        XCTAssertTrue(
+            badge.contains(".frame(minHeight: 44)"),
+            "Devenue bouton, la pastille du son de fond doit la cible de 44 pt : sa hauteur de "
+                + "lecture (28 pt) n'est pas une cible tactile."
+        )
+    }
+
+    /// **Elle ne s'annonce comme bouton que si elle OUVRE quelque chose.**
+    ///
+    /// La loi 4 dans les deux sens : un `.isButton` posé inconditionnellement
+    /// promettrait une action à VoiceOver sur un son emprunté, que
+    /// `ComposerSoundColumn.opensEditor` refuse justement d'ouvrir.
+    func test_laPastille_neSAnnoncePasBouton_sansAction() throws {
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        guard let corpsVue = corps("var body: some View {", dans: badge) else {
+            return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(corpsVue.contains("if let onTap"),
+                      "La forme bouton doit être CONDITIONNÉE par la présence d'une action.")
+        XCTAssertTrue(corpsVue.contains(".accessibilityAddTraits(.isButton)"),
+                      "…et la branche qui ouvre doit le DIRE au lecteur d'écran.")
+    }
+
+    /// **La durée survit à la troncature** (#4676).
+    ///
+    /// Attribution et durée sont DEUX `Text` : le premier cède la largeur, le
+    /// second ne la cède jamais. Les refondre en un seul rendrait « Feel the
+    /// pulse · @jcnm · 2… », ce que la vérification simulateur a mesuré.
+    ///
+    /// **Le site a changé au #5011, la règle non.** Les deux `Text` vivent
+    /// désormais dans `ComposerSoundTraceRow`, que les DEUX traces montent — la
+    /// capsule du document et la ligne nue en tête de scène. Ce témoin RE-VISE :
+    /// une garde de source ancre sur une PLACE et ne distingue pas d'elle-même
+    /// « la protection a disparu » de « la protection a déménagé ».
+    ///
+    /// Et il gagne l'assertion qui manquait : la capsule ne recompose plus la
+    /// rangée elle-même. Sans elle, le déménagement serait vert avec deux
+    /// compositions concurrentes — celle qu'on garde, et celle qu'on a oublié
+    /// de retirer.
+    func test_laDureeDeLaPastille_neSeTronqueJamais() throws {
+        let rangee = try source("ComposerSoundTraceRow.swift")
+        XCTAssertTrue(rangee.contains("StoryAudioIdentity.attribution(of: sound)"),
+                      "le titre et l'auteur viennent de la moitié TRONQUABLE — et de la règle UNIQUE")
+        XCTAssertTrue(rangee.contains("ComposerSoundCredit.durationLabel(for: sound)"),
+                      "…et la durée de la sienne, rendue à part")
+        XCTAssertFalse(rangee.contains("ComposerSoundCredit.label(for: sound)"),
+                       "le libellé COMPLET dans un seul `Text` est exactement ce qui tronquait la durée")
+
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        XCTAssertTrue(badge.contains("ComposerSoundTraceRow("),
+                      "la capsule MONTE la rangée partagée")
+        XCTAssertFalse(badge.contains("ComposerSoundCredit.durationLabel(for: sound)"),
+                       "…et ne recompose pas la sienne à côté — deux compositions divergeraient")
+    }
+
+    /// **L'onde ne se peint que pour un ENREGISTREMENT** (fusion 2026-09-01).
+    ///
+    /// La pastille montait `wave` inconditionnellement pendant que
+    /// `StoryAudioIdentity` disait, dans le même dépôt, qu'un emprunt n'en a
+    /// pas — deux règles pour une question, dont une seule était appliquée à
+    /// l'écran. La garde épingle la CONDITION, pas l'appel : `showsWaveform`
+    /// pouvait être importé sans que rien n'en dépende.
+    ///
+    /// Et la NOTE reste hors de toute condition : c'est elle qui porte le
+    /// toucher qui ouvre « Création audio ». La conditionner retirerait le seul
+    /// chemin vers l'éditeur pour la moitié des pistes.
+    /// **Re-visé au #5011, et la garde en dit PLUS qu'avant** — parce que la
+    /// règle a gagné une exception, et qu'une exception non bordée est une règle
+    /// perdue.
+    ///
+    /// La ligne en tête de scène garde l'onde même pour un son EMPRUNTÉ : la
+    /// contrainte de #4669 était la PLACE dans une capsule, et elle disparaît en
+    /// pleine largeur. Trois choses doivent donc rester vraies, et la troisième
+    /// est celle que le déménagement rendait facile à perdre :
+    ///
+    /// 1. la rangée CONSULTE toujours `StoryAudioIdentity.showsWaveform` — la
+    ///    règle n'est jamais court-circuitée, seulement élargie ;
+    /// 2. l'élargissement porte un NOM explicite, jamais un booléen anonyme ;
+    /// 3. **la capsule du document ne s'en sert pas** — #4669 tient là où la
+    ///    place manque, et c'est le seul endroit où la nouvelle liberté ferait
+    ///    disparaître le crédit d'un auteur.
+    func test_lOnde_estCONDITIONNÉE_maisJamaisLaNote() throws {
+        let rangee = try source("ComposerSoundTraceRow.swift")
+        XCTAssertTrue(rangee.contains("StoryAudioIdentity.showsWaveform(for: sound)"),
+                      "l'onde doit rester posée SOUS la règle, pas à côté d'elle")
+        XCTAssertTrue(rangee.contains("showsWaveformEvenWhenBorrowed"),
+                      "l'élargissement doit être NOMMÉ — un booléen anonyme se recopie sans sa raison")
+        guard let corpsRangee = corps("var body: some View {", dans: rangee) else {
+            return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
+        }
+        guard let avantOnde = corpsRangee.components(separatedBy: "if showsWaveform").first else {
+            return XCTFail("découpe impossible")
+        }
+        XCTAssertTrue(avantOnde.contains("Image(systemName: \"music.note\")"),
+                      "la note se peint AVANT toute condition — elle porte le toucher qui édite")
+
+        let badge = try source("ComposerAvatarSoundBadge.swift")
+        XCTAssertFalse(badge.contains("showsWaveformEvenWhenBorrowed"),
+                       "la capsule du document garde #4669 : l'onde y prendrait la place du crédit")
+    }
+
+    /// **Poser un son en FOND passe par le remplacement, jamais en direct**
+    /// (#4676). Un appel nu à `attachPastedAudio(role: .background)` ajouterait
+    /// un second fond que personne ne regarde.
+    ///
+    /// La règle appelée a CHANGÉ le 2026-09-01, et c'est le fond du correctif :
+    /// `supersededId` disait seulement QUI part ; `ComposerSupersededBackground.fate`
+    /// dit ce qu'il DEVIENT — il descend en son de contenu plutôt que d'être
+    /// détruit, pour que deux vocaux rendent bien deux cartes.
+    func test_poserUnFond_passeParLeRemplacement() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("ComposerSupersededBackground.fate("),
+                      "la règle doit être APPELÉE, pas réécrite dans l'hôte")
+        XCTAssertTrue(sons.contains("case .demoteToContent(let id, let url):"),
+                      "le cas nominal est la DESCENTE — sans lui, remplacer redevient détruire")
+        guard let poseur = corps("func attachBackgroundSound(url: URL) {", dans: sons) else {
+            return XCTFail("`attachBackgroundSound` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(poseur.contains("retireLeSonDeFondActuel()"),
+                      "le retrait précède la pose : `addAudioObject` ne remplace pas, il ajoute")
+        guard let emprunt = corps("func attachBorrowedBackgroundSound(", dans: sons) else {
+            return XCTFail("`attachBorrowedBackgroundSound` introuvable.")
+        }
+        XCTAssertTrue(emprunt.contains("retireLeSonDeFondActuel()"),
+                      "…et l'emprunt aussi : sans lui, `addBorrowedSound` en fait un PREMIER PLAN")
+    }
+
+    /// **Éditer une carte ne la DÉPLACE pas** (directive porteur 2026-09-01).
+    ///
+    /// `removeAll` + `append` disaient « supprime et repose » là où l'auteur
+    /// avait dit « modifie » : rouvrir la première carte et valider sans rien
+    /// changer la renvoyait en dernière position. Le témoin de comportement vit
+    /// dans `ComposerSoundDispositionTests` ; celui-ci garde le CÂBLAGE, qui est
+    /// ce qui se perdrait — la règle peut rester juste pendant que l'hôte cesse
+    /// de l'appeler.
+    func test_editerUnSonDeContenu_neLeDeplacePas() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("ComposerMediaOrder.replacing("),
+                      "la pose et l'édition passent par la MÊME règle d'ordre")
+        XCTAssertFalse(sons.contains("documentLocalMedia.removeAll"),
+                       "le couple removeAll/append est exactement le défaut corrigé")
+    }
+
+    /// **Un son posé se SUPPRIME** (directive porteur 2026-09-01 : « mettre un
+    /// (x) pour supprimer les éléments »).
+    ///
+    /// Le geste doit exister ET être offert : la fermeture nulle en création est
+    /// ce qui retire le bouton, et c'est elle qui rendrait le contrôle inerte si
+    /// elle devenait inconditionnelle.
+    func test_unSonEdite_peutEtreSupprime() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("onDelete: deleteEditedSoundAction"),
+                      "la feuille doit RECEVOIR la suppression, sinon le bouton ne se monte pas")
+        guard let action = corps("var deleteEditedSoundAction: (() -> Void)? {", dans: sons) else {
+            return XCTFail("`deleteEditedSoundAction` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(action.contains("else { return nil }"),
+                      "une feuille de CRÉATION n'a rien à supprimer — le bouton ne doit pas s'y monter")
+    }
+
+    /// **La description se rédige TOUJOURS** (directive porteur 2026-09-01).
+    ///
+    /// L'éditeur manuel était monté par `errorPanel` : « Rédiger » n'existait
+    /// donc que si la reconnaissance avait ÉCHOUÉ. Une transcription réussie
+    /// n'était pas corrigeable, et un son rouvert n'affichait rien du tout.
+    func test_laRedactionDeLaDescription_neDependPasDUnEchec() throws {
+        let transcription = try source("AudioPostComposerView+Transcription.swift",
+                                       dossier: "Meeshy/Features/Main/Views")
+        guard let panneau = corps("var contentPanel: some View {", dans: transcription) else {
+            return XCTFail("`contentPanel` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(panneau.contains(".sheet(isPresented: $showManualTranscription)"),
+                      "la feuille de rédaction se monte AU-DESSUS des deux branches")
+        guard let erreur = corps("func errorPanel(_ error: String) -> some View {",
+                                 dans: transcription) else {
+            return XCTFail("`errorPanel` introuvable.")
+        }
+        XCTAssertFalse(erreur.contains(".sheet(isPresented: $showManualTranscription)"),
+                       "posée sur le panneau d'ERREUR, elle disparaissait avec lui")
+    }
+
+    /// **« Refaire » DEMANDE avant de détruire** (#4702).
+    ///
+    /// L'asymétrie que la vérification simulateur a nommée : supprimer un son
+    /// demande « Supprimer ce son ? », alors que « Refaire » effaçait le MÊME
+    /// contenu — fichier compris, `resetToIdle` appelant `removeItem` — sans
+    /// rien demander. Et la barre d'action flotte au-dessus du défilement : 35
+    /// pt sur 72 de la bande de rognage tombent dessus, poignées comprises.
+    ///
+    /// La garde tient les DEUX moitiés : le bouton passe par la demande, et la
+    /// demande s'efface quand il n'y a rien à perdre — une confirmation posée
+    /// sur un geste sans conséquence apprend à valider sans lire.
+    func test_refaire_demandeAvantDeDetruire() throws {
+        let feuille = try source("AudioPostComposerView.swift",
+                                 dossier: "Meeshy/Features/Main/Views")
+        XCTAssertTrue(feuille.contains("Button(action: demanderRefaire)"),
+                      "« Refaire » ne doit plus appeler `resetToIdle` en direct")
+        XCTAssertTrue(feuille.contains("redoConfirmation(actionBar)"),
+                      "la confirmation se monte sur la BARRE, pas sur une branche de `phase`")
+        let destructif = try source("AudioPostComposerView+Deletion.swift",
+                                    dossier: "Meeshy/Features/Main/Views")
+        guard let demande = corps("func demanderRefaire() {", dans: destructif) else {
+            return XCTFail("`demanderRefaire` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(demande.contains("guard recordedURL != nil || borrowedSound != nil else {"),
+                      "sans prise, rien a perdre — et rien a demander")
+        XCTAssertTrue(demande.contains("resetToIdle()"),
+                      "le chemin sans prise doit rester IMMEDIAT")
+    }
+
+    /// **La transcription SERVIE est la dernière qui EXISTE, pas la dernière
+    /// carte** (#4695).
+    ///
+    /// Depuis que le fond remplacé descend en contenu, la dernière carte peut
+    /// être un son muet — un fond n'a pas de transcription. `foregroundSounds.last`
+    /// aurait alors rendu `nil` et effacé, en silence, le texte qu'un son
+    /// précédent portait. Le défaut naît d'un lot qui ne touche PAS cette ligne :
+    /// c'est ce qui le rend invisible à sa propre relecture.
+    func test_laTranscriptionServie_estLaDerniereQuiEXISTE() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        guard let servie = corps("var documentTranscription: MobileTranscriptionPayload? {",
+                                 dans: sons) else {
+            return XCTFail("`documentTranscription` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(servie.contains("compactMap"),
+                      "il faut CHERCHER la dernière transcription, pas lire la dernière carte")
+        XCTAssertFalse(servie.contains("foregroundSounds.last"),
+                       "la dernière carte peut être un son de fond rétrogradé, donc muet")
+    }
+
+    /// **Un son rouvert emporte son TEXTE.** Sans ce champ, la feuille s'ouvrait
+    /// muette sur une transcription qui existait — et un rognage la perdait,
+    /// `survivingTranscription` ne gardant l'ancienne qu'à URL inchangée.
+    func test_unSonRouvert_emporteSaTranscription() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("transcription: documentTranscriptions[son.url]"),
+                      "la piste rouverte doit porter le texte déjà écrit")
+    }
+
+    /// **Une ouverture, une feuille NEUVE** (#4684).
+    ///
+    /// `.sheet(item:)` reconstruit sur changement d'ITEM ; deux ouvertures
+    /// portent la même valeur `.sound`, donc SwiftUI peut réutiliser la vue et
+    /// tout son `@State`. Observé une fois au simulateur : la feuille rendait la
+    /// carte d'après-enregistrement au lieu de celle de réouverture, et valider
+    /// déplaçait le son de fond vers le contenu, en silence.
+    ///
+    /// Le témoin garde les DEUX moitiés : l'identité posée sur la feuille, et le
+    /// fait qu'aucun site n'ouvre le portail par un chemin qui la contournerait.
+    /// La seconde est celle qui se perdrait — un cinquième site d'appel ne
+    /// rougirait nulle part, le défaut ne se voyant qu'à la SECONDE ouverture.
+    func test_laFeuilleAudio_estNEUVE_aChaqueOuverture() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains(".id(soundSheetSession)"),
+                      "sans identité renouvelée, SwiftUI réutilise la feuille et son état")
+        guard let ouverture = corps("func openSoundSheet(placement: ComposerAudioRole?) {",
+                                    dans: sons) else {
+            return XCTFail("`openSoundSheet` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(ouverture.contains("soundSheetSession = UUID()"),
+                      "l'ouverture doit RENOUVELER l'identité")
+        XCTAssertTrue(ouverture.contains("presentedPortal = .sound"),
+                      "…et présenter le portail, les deux dans le même geste")
+
+        for nom in ["MeeshyComposerHost+Sound.swift",
+                    "MeeshyComposerHost+Intake.swift",
+                    "MeeshyComposerHost+Socle.swift",
+                    "MeeshyComposerHost+Surfaces.swift",
+                    "MeeshyComposerHost+Portals.swift"] {
+            let code = try source(nom)
+            // **`.sound` est le PRÉFIXE de `.soundLibrary`.** Compté nu, ce
+            // fragment attribuait à la feuille audio une ouverture de
+            // l'ÉTAGÈRE — un faux positif qui a fait rougir cette garde à sa
+            // première exécution. Les deux portails se comptent donc, et l'un
+            // se retranche de l'autre.
+            let ouvertures = occurrences(of: "presentedPortal = .sound", dans: code)
+                - occurrences(of: "presentedPortal = .soundLibrary", dans: code)
+            let attendu = (nom == "MeeshyComposerHost+Sound.swift") ? 1 : 0
+            XCTAssertEqual(ouvertures, attendu,
+                           "\(nom) ouvre la feuille audio hors de `openSoundSheet` : "
+                           + "l'identité ne serait pas renouvelée, et la feuille se "
+                           + "re-présenterait périmée.")
+        }
+    }
+
+    private func occurrences(of fragment: String, dans code: String) -> Int {
+        code.components(separatedBy: fragment).count - 1
+    }
+
+    // MARK: - La pastille audio du CANVAS (#4671)
+
+    /// **Toucher une pastille audio du canvas l'ouvre — le TAP, pas le
+    /// double-tap.** Le mot de la directive est « toucher ».
+    ///
+    /// Avant ce lot, le geste faisait le CONTRAIRE : `itemKind(forId:)` ignorait
+    /// `audioPlayerObjects`, donc `handleSingleTap` retombait sur sa branche
+    /// « fond » et DÉSÉLECTIONNAIT. Pas un contrôle inerte — un contrôle qui
+    /// fait l'inverse de ce qu'on attend.
+    func test_toucherUnePastilleAudio_ouvreLaFeuille() throws {
+        let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
+        guard let tap = corps("onItemTapped: { id, kind in", dans: surfaces) else {
+            return XCTFail("`onItemTapped` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(tap.contains("if kind == .audio { editSceneSound(id) }"),
+                      "le tap simple doit ouvrir « Création audio » sur la pastille touchée")
+    }
+
+    /// **Elle n'offre AUCUN placement, et se remplace à sa place.**
+    ///
+    /// Les deux moitiés du commutateur désignent le fond de la slide et la
+    /// pièce jointe du post ; une pastille du canvas n'est ni l'un ni l'autre.
+    /// L'offrir laisserait l'auteur DÉPLACER son objet en croyant le rogner —
+    /// et, sans troisième valeur, il ne pourrait jamais le remettre.
+    func test_lePlacement_nEstPasOffertAUnePastilleDuCanvas() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("placement: editedSceneChipId == nil ? $chosenSoundPlacement : nil"),
+                      "la feuille ne doit rendre aucun choix qu'elle ne saurait honorer")
+        guard let pose = corps("func applyCreatedAudio(", dans: sons) else {
+            return XCTFail("`applyCreatedAudio` introuvable.")
+        }
+        let avantSwitch = pose.components(separatedBy: "switch chosenSoundPlacement").first ?? ""
+        XCTAssertTrue(avantSwitch.contains("if let pastille = editedSceneChipId"),
+                      "le remplacement en place se décide AVANT le `switch` : sinon un placement "
+                      + "choisi lors d'une AUTRE ouverture ferait déménager l'objet")
+    }
+
+    /// **Un son emprunté, ou sans fichier local, ne s'ouvre pas.** Le premier
+    /// pour ne pas voler son crédit, le second parce qu'il n'y aurait rien à
+    /// faire écouter. Le tap reste alors une sélection — un geste qui fait
+    /// moins, jamais un bouton muet.
+    func test_unePastille_quOnNePeutPasEditer_neSOuvrePas() throws {
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        guard let edition = corps("func editSceneSound(_ id: String) {", dans: sons) else {
+            return XCTFail("`editSceneSound` introuvable.")
+        }
+        XCTAssertTrue(edition.contains("ComposerSoundColumn.opensEditor(objet)"),
+                      "la loi du crédit est APPELÉE, pas réécrite")
+        XCTAssertTrue(edition.contains("viewModel.loadedAudioURLs[id] != nil"),
+                      "sans fichier local, la feuille n'aurait rien à faire viser")
+    }
+
+    /// **La pastille est alimentée par la LOI, jamais par la lecture directe.**
+    ///
+    /// `viewModel.currentEffects.resolvedBackgroundAudio` passé tel quel à la
+    /// surface était le motif d'avant #4670 : correct tant qu'aucun chemin ne
+    /// posait le même fichier des deux côtés, et muet le jour où l'un le ferait.
+    func test_laSurface_recoitLeSonDeLaLoi_jamaisDuViewModelEnDirect() throws {
+        let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
+        XCTAssertTrue(surfaces.contains("backgroundSound: avatarBadgeSound"),
+                      "La surface doit recevoir ce que `ComposerSoundColumn` autorise.")
+        let sons = try source("MeeshyComposerHost+Sound.swift")
+        XCTAssertTrue(sons.contains("ComposerSoundColumn.avatarBadge("),
+                      "…et la résolution doit APPELER la loi, pas la réécrire.")
+    }
+}
+
+/// **Un son placé en CONTENU n'est pas AUSSI la bande-son de la scène**
+/// (directive porteur 2026-09-01, #4657).
+///
+/// Le commutateur de placement dit deux choses différentes — « Se joue pendant
+/// la lecture, sans lecteur visible » d'un côté, « Pièce jointe du post, avec
+/// son lecteur » de l'autre. `syncPostMediaIntoSlides` posait
+/// `applyContentAudio` sur TOUT audio du document, si bien que le second choix
+/// produisait aussi le premier : la pastille de l'avatar annonçait « Son de
+/// fond, 5 secondes » au-dessus d'une carte de contenu portant le même son.
+/// Mesuré au simulateur `Meeshy-iOS26`, reproductible.
+///
+/// Garde NÉGATIVE : elle rougit à la RÉINTRODUCTION de l'appel, pas à la
+/// disparition du fichier — `test_leSiteDeSynchronisationExisteToujours` en
+/// répond.
+final class ComposerContentSoundIsNotSceneAudioGuardTests: XCTestCase {
+
+    private func intake() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(
+                "Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    func test_leSiteDeSynchronisationExisteToujours() throws {
+        XCTAssertTrue(try intake().contains("func syncPostMediaIntoSlides()"),
+                      "La garde ci-dessous ne mesurerait rien sans son site.")
+    }
+
+    func test_laSynchronisationNeVerseAucunAudioDansLaBandeSonDeLaScène() throws {
+        XCTAssertFalse(
+            try intake().contains("applyContentAudio"),
+            "Un son de la liste média du document est un son de CONTENU — le placement « fond » ne "
+                + "passe jamais par là (`applyCreatedAudio` et `ingestSoundFiles` vont droit à la "
+                + "scène). Le reverser en bande-son fait dire à la pastille de l'avatar « Son de "
+                + "fond » au-dessus de la carte de contenu qui porte le même son."
+        )
+    }
+}

@@ -50,7 +50,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_willDisplay_whenReadingModeIsRiver_emitsNoReadReceipt() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Le montage en mode rendu a déjà ACQUIS les cellules visibles ; F1 veut
         // qu'elles PARTENT même sous un pane (drain jamais gardé). On draine donc
@@ -68,7 +68,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_willDisplay_whenReadingModeIsSummary_emitsNoReadReceipt() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Le montage en mode rendu a déjà ACQUIS les cellules visibles ; F1 veut
         // qu'elles PARTENT même sous un pane (drain jamais gardé). On draine donc
@@ -89,7 +89,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_willDisplay_inARenderedMode_stillEmitsTheReadReceipt() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         noteFirstItemAppeared(on: vc)
         vc.flushSeenNow()
@@ -106,7 +106,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
         // déduplique par id (`reported`).
         let vc = try await makeMountedSUT(initialMode: .river)
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         noteFirstItemAppeared(on: vc)
         vc.flushSeenNow()
@@ -126,7 +126,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_returningToARenderedMode_reNotesAlreadyVisibleCells() async throws {
         let vc = try await makeMountedSUT(initialMode: .river)
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         let visible = vc.focalCollectionViewForTesting?.indexPathsForVisibleItems ?? []
         try XCTSkipIf(visible.isEmpty, "UIKit n'a réalisé aucune cellule : rien à re-noter, le témoin serait vide de sens")
@@ -145,7 +145,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_reNoteVisibleCellsAsSeen_underAnOpaquePane_notesNothing() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Le montage en mode rendu a déjà ACQUIS les cellules visibles ; F1 veut
         // qu'elles PARTENT même sous un pane (drain jamais gardé). On draine donc
@@ -194,7 +194,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
     func test_readsAcquiredBeforeSwitchingToRiver_areStillFlushedAtDismantle() async throws {
         let vc = try await makeMountedSUT()
         var emitted: [[String]] = []
-        vc.onMessagesSeen = { emitted.append($0) }
+        vc.onMessagesSeen = { seen, _ in emitted.append(seen) }
 
         // Acquiert la lecture en Bulles : apparition puis disparition
         // séparées de plus de `dwellMs` (300 ms par défaut,
@@ -311,7 +311,69 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
         vc.collectionView(probe, willDisplay: UICollectionViewCell(), forItemAt: IndexPath(item: 0, section: 0))
     }
 
-    private func makeMountedSUT(initialMode: ConversationReadingMode? = nil) async throws -> MessageListViewController {
+    /// `stopsTracking: false` laisse l'horloge telle que le montage l'a
+    /// laissée — indispensable aux témoins de VEILLE ci-dessous, qui
+    /// interrogent précisément son état.
+    // MARK: - Veille de l'HORLOGE (#3947)
+
+    /// **Une veille de RENDU n'est pas une veille d'HORLOGE.**
+    ///
+    /// `vc.view.isHidden` arrête la composition et le solveur self-sizing ;
+    /// un `Timer` posé sur le RunLoop principal ignore complètement la
+    /// visibilité de la vue. Masquée ou non, l'horloge de suivi se réveillait
+    /// quatre fois par seconde, indéfiniment.
+    ///
+    /// Ces témoins interrogent l'ÉTAT de l'horloge, pas la présence d'une
+    /// ligne de source — et c'est ce qui a trouvé le trou du montage direct
+    /// ci-dessous, qu'aucune garde de source ne pouvait voir.
+    func test_openingDirectlyInRiver_neverStartsTheClock() async throws {
+        let vc = try await makeMountedSUT(initialMode: .river, stopsTracking: false)
+        XCTAssertNil(
+            vc.seenTimer,
+            "Le mode de lecture est PERSISTANT et arrive AVANT `viewDidLoad`, dont le `didSet` "
+            + "sort sur `isViewLoaded`. Une conversation ouverte DIRECTEMENT en Rivière est le "
+            + "cas nominal, pas un cas limite : si `viewDidLoad` démarre l'horloge sans consulter "
+            + "le mode, plus rien ne l'arrêtera de toute la session."
+        )
+    }
+
+    func test_openingInARenderedMode_startsTheClock() async throws {
+        let vc = try await makeMountedSUT(initialMode: .bubbles, stopsTracking: false)
+        XCTAssertNotNil(vc.seenTimer, "En Bulles, le suivi de lecture DOIT tourner.")
+    }
+
+    /// L'aller ET le retour. Ne garder que l'aller livrerait un défaut PIRE
+    /// que celui qu'on corrige : le suivi de lecture serait mort pour le reste
+    /// de la conversation.
+    func test_theClockStopsUnderAnOpaquePane_andComesBack() async throws {
+        let vc = try await makeMountedSUT(initialMode: .bubbles, stopsTracking: false)
+        XCTAssertNotNil(vc.seenTimer)
+
+        vc.readingMode = .river
+        XCTAssertNil(vc.seenTimer, "La Rivière couvre le fil : l'horloge s'arrête.")
+
+        vc.readingMode = .summary
+        XCTAssertNil(vc.seenTimer, "Le Résumé aussi — passer d'un pane à l'autre ne réveille rien.")
+
+        vc.readingMode = .focal
+        XCTAssertNotNil(vc.seenTimer, "Au retour vers un mode RENDU, l'horloge repart.")
+    }
+
+    /// Repartir ne doit pas EMPILER : `startSeenTracking()` invalide bien
+    /// l'ancien avant d'en poser un neuf, mais la veille ne doit pas non plus
+    /// le recréer à chaque passage entre deux modes rendus.
+    func test_switchingBetweenRenderedModes_keepsASingleClock() async throws {
+        let vc = try await makeMountedSUT(initialMode: .bubbles, stopsTracking: false)
+        let premier = vc.seenTimer
+        vc.readingMode = .script
+        XCTAssertTrue(vc.seenTimer === premier,
+                      "Deux modes rendus se succèdent sans que l'horloge soit recréée — la "
+                      + "veille ne fait rien quand rien ne change.")
+        XCTAssertTrue(vc.seenTimer?.isValid ?? false, "et elle est toujours valide")
+    }
+
+    private func makeMountedSUT(initialMode: ConversationReadingMode? = nil,
+                                stopsTracking: Bool = true) async throws -> MessageListViewController {
         let store = try await makeSeededStore()
         let vc = MessageListViewController(
             store: store,
@@ -339,7 +401,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
         // retient ce qu'il a déjà rendu (`reported`), si bien qu'un drain de
         // mise en scène rendrait SOURD tout `appeared` ultérieur du même
         // identifiant — les témoins passeraient au vert par surdité.
-        vc.stopSeenTracking()
+        if stopsTracking { vc.stopSeenTracking() }
         return vc
     }
 

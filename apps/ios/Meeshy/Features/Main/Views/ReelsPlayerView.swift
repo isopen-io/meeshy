@@ -503,20 +503,27 @@ enum ReelWatchAttachmentPolicy {
 /// auto-switched to whichever TTS translation the payload listed first
 /// (e.g. English), because the original-language short-circuit didn't exist
 /// and the preferred-language priority order was never honored.
+///
+/// **Ce type n'est plus une loi — c'est une PROJECTION** (#4926). Son corps
+/// réécrivait mot pour mot le parcours de rang d'`AudioTrackLanguageResolver` :
+/// même règle, même exactitude, deux implémentations. Deux lois JUSTES qui
+/// disent la même chose ne rougissent nulle part le jour où l'une évolue, et le
+/// § Prisme du `CLAUDE.md` racine nomme ce motif comme la cause de trois
+/// familles de résolveurs divergentes en trois cycles.
+///
+/// Il reste, parce que son NOM dit ce que le réel demande et que ses témoins
+/// gardent le comportement depuis la surface qui l'emploie. Il ne calcule plus.
 enum ReelAudioLanguageResolver {
     nonisolated static func preferredAudioLanguage(
         original: String?,
         preferredLanguages: [String],
         availableLanguages: [String]
     ) -> String? {
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        let origLang = original?.lowercased()
-        let available = Set(availableLanguages.map { $0.lowercased() })
-        for lang in preferred {
-            if let origLang, origLang == lang { return nil }
-            if available.contains(lang) { return lang }
-        }
-        return nil
+        AudioTrackLanguageResolver.resolve(
+            originalLanguage: original ?? "",
+            preferredLanguages: preferredLanguages,
+            availableLanguages: availableLanguages
+        )
     }
 }
 
@@ -547,13 +554,20 @@ struct ReelPageView: View {
     /// Avatar tap → story (if active) else profile.
     var onTapAvatar: () -> Void
 
-    @State private var descriptionExpanded = false
+    @State var descriptionExpanded = false
     @State private var audioFullscreen: AudioFullscreenSource?
+    /// Le plein écran qui FEUILLETTE les médias du réel (#4927) — la même
+    /// galerie que la carte du fil, le détail d'un post et un commentaire.
+    @State private var showMediaGallery = false
+    /// Le média que le carrousel montre EN CE MOMENT. `nil` avant qu'il ne se
+    /// prononce — la pastille retombe alors sur le média primaire, jamais sur
+    /// un rang inventé.
+    @State private var visibleCarouselMediaId: String?
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
-    @State private var reelFullscreenPlace: BubbleFullscreenPlace?
+    @State var reelFullscreenPlace: BubbleFullscreenPlace?
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
-    @State private var selectedLanguage: String?
+    @State var selectedLanguage: String?
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
@@ -563,16 +577,16 @@ struct ReelPageView: View {
     /// transcript (`ReelAudioView` → `MediaTranscriptionView`) so the karaoke
     /// highlight tracks the SAME position the user scrubs/plays. One engine per
     /// page; only the active audio reel ever plays.
-    @StateObject private var audioPlayer = AudioPlaybackManager()
+    @StateObject var audioPlayer = AudioPlaybackManager()
     /// Flux « Enregistrer en local » du menu « … » du rail d'actions.
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
-    private var accentColor: String { reel.authorColor }
+    var accentColor: String { reel.authorColor }
 
     /// Description text for the currently-explored language (Prisme): preferred
     /// by default, the original when the translate toggle is on, or a specific
     /// available translation when a flag is tapped.
-    private var displayedDescription: String {
+    var displayedDescription: String {
         guard let sel = selectedLanguage?.lowercased() else { return reel.displayContent }
         if sel == reel.originalLanguage?.lowercased() { return reel.content }
         if let t = reel.translations?.first(where: { $0.key.lowercased() == sel })?.value {
@@ -589,7 +603,7 @@ struct ReelPageView: View {
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
     /// transcript hero + the audio control + audio-language flag strip.
-    private var audioMedia: FeedMedia? {
+    var audioMedia: FeedMedia? {
         guard let media = reel.primaryReelDisplayMedia, media.type == .audio else { return nil }
         return media
     }
@@ -600,7 +614,7 @@ struct ReelPageView: View {
     /// (`soundId` + `mediaURL` serveur). Limité au cas sans média — un réel
     /// vidéo+fond musical passe par le lecteur de composition (StoryItem), pas
     /// par cette page.
-    private var borrowedSoundTrack: StoryAudioPlayerObject? {
+    var borrowedSoundTrack: StoryAudioPlayerObject? {
         guard reel.primaryReelDisplayMedia == nil, let effects = reel.storyEffects else { return nil }
         let track = effects.resolvedBackgroundAudio
             ?? effects.audioPlayerObjects?.first(where: { !($0.mediaURL ?? "").isEmpty })
@@ -611,7 +625,7 @@ struct ReelPageView: View {
     /// The "original" language for the meta-row flag strip: the audio
     /// transcription language for an audio reel, else the post's original
     /// language. Listed first in the strip.
-    private var metaOriginalLanguage: String? {
+    var metaOriginalLanguage: String? {
         if let audioMedia { return audioMedia.transcription?.language ?? reel.originalLanguage }
         return reel.originalLanguage
     }
@@ -619,7 +633,7 @@ struct ReelPageView: View {
     /// The translation languages for the meta-row flag strip: the translated
     /// audio (TTS) target languages for an audio reel, else the post-body
     /// translation languages.
-    private var metaTranslationLanguages: [String] {
+    var metaTranslationLanguages: [String] {
         if let audioMedia { return audioMedia.translatedAudios.map(\.targetLanguage) }
         return Array(reel.translations?.keys ?? Dictionary<String, PostTranslation>().keys)
     }
@@ -655,6 +669,33 @@ struct ReelPageView: View {
             )
             .ignoresSafeArea()
             .allowsHitTesting(false)
+
+            // **Le seul chemin vers les AUTRES médias d'un réel** (#4927).
+            // `mediaLayer` aiguille sur le média primaire — la vidéo gagne — donc
+            // un réel « une vidéo + deux photos » ne servait jamais les photos.
+            // La pastille n'apparaît que lorsqu'il y a vraiment plusieurs médias
+            // (loi 4 : un contrôle sans effet est ABSENT, jamais grisé) et fade
+            // avec le reste du chrome, en mode immersif comme les autres.
+            if galleryMediaCount > 1 {
+                VStack {
+                    HStack {
+                        Spacer()
+                        ReelMediaCountBadge(
+                            total: galleryMediaCount,
+                            currentIndex: galleryStartIndex
+                        ) {
+                            HapticFeedback.light()
+                            showMediaGallery = true
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .padding(.trailing, 8)
+                .opacity(chromeHidden ? 0 : 1)
+                .allowsHitTesting(!chromeHidden)
+                .animation(.easeInOut(duration: 0.25), value: chromeHidden)
+            }
 
             VStack {
                 Spacer()
@@ -762,6 +803,42 @@ struct ReelPageView: View {
             )
         }
         .mediaSaveFlow(mediaSaveCoordinator)
+        // Site UNIQUE de la composition (`socialMediaGallery`) : la sélection des
+        // médias, l'auteur servi à chaque page et la LÉGENDE sont les mêmes que
+        // sur les trois autres surfaces sociales, parce qu'elles viennent du même
+        // endroit.
+        .socialMediaGallery(
+            post: reel,
+            isPresented: $showMediaGallery,
+            startMediaId: galleryStartMediaId,
+            accentColor: reel.authorColor
+        )
+    }
+
+    // MARK: Galerie plein écran
+
+    /// Les médias VISUELS du réel — ceux que la galerie sait feuilleter. Un
+    /// audio en est exclu : il a son propre plein écran, avec sa transcription.
+    private var galleryMedia: [FeedMedia] {
+        reel.reelDisplayMedia.filter { $0.type == .image || $0.type == .video }
+    }
+
+    private var galleryMediaCount: Int { galleryMedia.count }
+
+    /// Le rang du média AFFICHÉ, pour que la pastille dise « 2 / 3 » quand c'est
+    /// la deuxième pièce qui est à l'écran plutôt que toujours « 1 / 3 ».
+    private var galleryStartIndex: Int {
+        guard let id = galleryStartMediaId,
+              let index = galleryMedia.firstIndex(where: { $0.id == id }) else { return 0 }
+        return index
+    }
+
+    /// Le média par lequel la galerie s'OUVRE : celui qu'on regarde, sinon le
+    /// primaire. Une pastille qui annonce « 1 / 3 » pendant qu'on lit la
+    /// deuxième image serait un contrôle qui ment — plus coûteux qu'un contrôle
+    /// absent, parce qu'on le croit.
+    private var galleryStartMediaId: String? {
+        visibleCarouselMediaId ?? reel.primaryReelDisplayMedia?.id
     }
 
     // MARK: Audio open-autostart (WS3.1)
@@ -837,13 +914,13 @@ struct ReelPageView: View {
         .padding(.vertical, 7)
         .background(Capsule().fill(.ultraThinMaterial))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel(String(localized: "Son utilisé", defaultValue: "Son utilis\u{00E9}"))
+        .accessibilityLabel(String(localized: "media.sound.used", defaultValue: "Son utilisé"))
         .accessibilityValue(borrowedSoundLabel(track))
     }
 
     private func borrowedSoundLabel(_ track: StoryAudioPlayerObject) -> String {
         let authored = track.name.flatMap { $0.isEmpty ? nil : $0 }
-        let title = authored ?? String(localized: "Son original", defaultValue: "Son original")
+        let title = authored ?? String(localized: "media.sound.original", defaultValue: "Son original")
         if let author = track.soundAuthorUsername, !author.isEmpty {
             return "\(title) · @\(author)"
         }
@@ -905,7 +982,7 @@ struct ReelPageView: View {
             case .video:
                 ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
             case .image:
-                ReelImageView(reel: reel)
+                ReelImageView(reel: reel) { visibleCarouselMediaId = $0 }
             case .audio:
                 ReelAudioView(media: media, accentColor: accentColor, selectedLanguage: $selectedLanguage, player: audioPlayer)
             default:
@@ -929,7 +1006,7 @@ struct ReelPageView: View {
 
     /// True when the signed-in user authored this reel — gates the private reach
     /// stats (impressions + views) shown only to the author.
-    private var isAuthor: Bool {
+    var isAuthor: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
         return me == reel.authorId
     }
@@ -937,177 +1014,6 @@ struct ReelPageView: View {
     /// Username, then (AUTHOR ONLY) impressions then views, middle-dot separated:
     /// "@pseudo · 📊 1.2k · 👁 3.4k". Mirrors the feed reel card.
     @ViewBuilder
-    private var authorMetaLine: some View {
-        HStack(spacing: 5) {
-            if let username = reel.authorUsername, !username.isEmpty {
-                Text("@\(username)").font(.caption).foregroundColor(.white.opacity(0.7))
-            }
-            if isAuthor {
-                if reel.authorUsername?.isEmpty == false { metaDot }
-                statInline(icon: "chart.bar.fill", count: reel.impressionCount,
-                           a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                metaDot
-                statInline(icon: "eye.fill", count: reel.viewCount,
-                           a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
-            }
-
-            // Annonce du fond (B3.3-5), résolveur unique partagé avec la
-            // carte de post et le viewer story (E1) — BackgroundSoundBadge
-            // rend EmptyView sans piste (B3.5). Résolue UNE fois : le bouton
-            // muet (B3.6, Task E2) juste après partage la MÊME valeur — un
-            // seul prédicat, jamais une seconde résolution qui pourrait
-            // diverger.
-            let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
-            BackgroundSoundBadge(announcement: announcement, accentHex: accentColor)
-                .equatable()
-
-            // Muet LOCAL du fond storyEffects — distinct de l'audio NATIF du
-            // réel (toujours actif, `drive()` réaffirme `manager.isMuted =
-            // false`, non touché ici). Gate renforcée (correctif revue DoD,
-            // BLOQUANT #1) : le bouton ne se monte QUE si un lecteur LOCAL
-            // existe réellement pour le piloter (`borrowedSoundTrack`,
-            // chargé dans `audioPlayer` par `startBorrowedSoundIfNeeded()`)
-            // — l'annonce seule peut être vraie sans qu'aucun moteur pilotable
-            // ne joue localement (ex. audio incrusté dans une vidéo). Le tap
-            // pilote RÉELLEMENT `audioPlayer` (pause/reprise, position
-            // conservée) — l'icône et le libellé a11y suivent
-            // `audioPlayer.isPlaying`, jamais un état local séparé qui
-            // pourrait diverger du son réellement audible.
-            if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
-                Button {
-                    audioPlayer.togglePlayPause()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
-                        .font(MeeshyFont.relative(10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.85))
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(audioPlayer.isPlaying
-                    ? String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
-                    : String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main))
-            }
-        }
-    }
-
-    private var metaDot: some View {
-        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
-    }
-
-    private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
-        ReachMetricLabel(
-            icon: icon,
-            count: count,
-            label: a11yLabel,
-            tint: .white.opacity(0.85),
-            iconFont: MeeshyFont.relative(10, weight: .semibold)
-        )
-    }
-
-    /// Légende du reel rendue par `MessageTextRenderer` pour teinter `@mention`
-    /// et `#hashtag`. Fond TOUJOURS sombre (vidéo plein écran) : on épingle les
-    /// variantes `isDark: true` plutôt que de suivre le thème de l'app — les
-    /// variantes light (indigo600/800) seraient illisibles sur la vidéo.
-    /// Les URLs restent blanches + soulignées (convention plein écran).
-    private var reelDescriptionText: some View {
-        MessageTextRenderer.render(
-            displayedDescription,
-            fontSize: 15,
-            color: .white,
-            mentionColor: MeeshyColors.mentionColor(isDark: true),
-            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
-            accentColor: .white,
-            usesRelativeFont: true
-        )
-        .tint(.white)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var infoOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                // Avatar tap → author's story (if active) else profile.
-                Button(action: onTapAvatar) {
-                    MeeshyAvatar(
-                        name: reel.author,
-                        context: .postAuthor,
-                        accentColor: accentColor,
-                        avatarURL: reel.authorAvatarURL
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "reels.author.avatar", defaultValue: "Story de l'auteur", bundle: .main))
-
-                // Name tap → author profile.
-                Button(action: onTapAuthorName) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(reel.author)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
-                        authorMetaLine
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "reels.author.profile", defaultValue: "Profil de l'auteur", bundle: .main))
-            }
-
-            // Audio reels show the post caption only when it adds something
-            // beyond the transcript hero; text/image reels always show it.
-            // Collapsed: 3 lines + tap to expand. Expanded: a height-bounded
-            // ScrollView so a long caption stays fully readable AND scrollable
-            // instead of overflowing off the top of the screen (the previous
-            // `lineLimit(nil)` + `fixedSize` grew unbounded and clipped).
-            if audioMedia == nil, !displayedDescription.isEmpty {
-                if descriptionExpanded {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        reelDescriptionText
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 240)
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
-                    }
-                } else {
-                    reelDescriptionText
-                        .lineLimit(3)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
-                        }
-                }
-            }
-
-            // Indicateur de position type sticker (constat user 2026-07-30) —
-            // même pill que la story/le feed, cliquable → carte plein écran.
-            if let place = reel.location {
-                FeedPostLocationSticker(place: place) {
-                    reelFullscreenPlace = BubbleFullscreenPlace(place: place)
-                }
-            }
-
-            // Prisme Linguistique — meta row mirroring the message-bubble footer:
-            // timestamp, then the translate toggle, then the available-language
-            // flag pills (tap a flag to read that language; the active one is
-            // underlined). Inline next to the date, as in conversation bubbles.
-            // For an AUDIO reel the flags switch the AUDIO (transcript + TTS) —
-            // the original transcription language + every translated-audio target
-            // language — instead of the post-body text. For text/image reels they
-            // switch the post-body translation.
-            ReelMetaRow(
-                timestamp: RelativeTimeFormatter.shortString(for: reel.timestamp),
-                originalLanguage: metaOriginalLanguage,
-                translationLanguages: metaTranslationLanguages,
-                selectedLanguage: selectedLanguage,
-                onSelectLanguage: { code in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedLanguage = (selectedLanguage?.lowercased() == code.lowercased()) ? nil : code
-                    }
-                }
-            )
-        }
-        .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     // MARK: Action rail
 
@@ -1159,6 +1065,8 @@ private struct ReelActionRail: View {
     /// présenter la sheet de destination).
     var onSaveMedia: () -> Void
 
+    @State private var showsReactionPalette = false
+
     private var isOwnReel: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
         return me == reel.authorId
@@ -1177,6 +1085,12 @@ private struct ReelActionRail: View {
                 action: { viewModel.toggleLike(reel) }
             )
             .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
+            // Appui bref = ❤️ ; appui long = la palette. Le GESTE est ici, le
+            // CADRE sur le rail entier : un overlay ancré à un bouton s'y
+            // trouve comprimé et la rangée d'émojis s'ouvre vide — mesuré au
+            // simulateur sur le détail d'un post, et le rail est plus étroit
+            // encore.
+            .reactionPaletteTrigger(isPresented: $showsReactionPalette)
 
             // Vues/impressions : désormais privées (auteur-only) dans la ligne meta
             // sous le nom — plus de compteur de vues public ici.
@@ -1219,6 +1133,14 @@ private struct ReelActionRail: View {
 
             moreOptionsMenu
         }
+        // Le CADRE sur le rail ENTIER, pas sur le bouton : la rangée d'émojis
+        // s'ouvre vers la GAUCHE (le rail est collé au bord droit de l'écran),
+        // au niveau du cœur. Ancrée au bouton, elle s'ouvrait comprimée et
+        // hors cadre — mesuré au simulateur sur le détail d'un post.
+        .reactionPaletteFrame(isPresented: $showsReactionPalette,
+                              isDark: true,
+                              anchor: .topTrailing,
+                              offsetX: -56) { viewModel.react(reel, emoji: $0) }
     }
 
     /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard`/`ReelFeedCard`
@@ -1356,7 +1278,7 @@ private struct ReelActionButton: View {
 /// The translate toggle flips between the viewer's preferred translation and the
 /// original. (Per-language is a LOCAL switch over the post's pre-loaded
 /// translations — iOS has no on-demand post-translation request path.)
-private struct ReelMetaRow: View {
+struct ReelMetaRow: View {
     let timestamp: String
     let originalLanguage: String?
     let translationLanguages: [String]
@@ -1487,264 +1409,6 @@ private struct ReelScrubBar: View {
     }
 }
 
-// MARK: - Reel Video
-
-/// Plays a reel video full-bleed through the single shared engine
-/// (`SharedAVPlayerManager`). Because the manager holds one player, only the
-/// active reel ever plays — moving to the next reel loads its URL and the
-/// previous one is released. The poster (thumbHash → thumbnail) stays visible
-/// underneath until the first frame is ready. Tap toggles play/pause.
-private struct ReelVideoView: View {
-    let media: FeedMedia
-    let isActive: Bool
-    /// Gate: the first reel's playback starts only once the liquid reveal disc
-    /// has reached full screen. Until then the poster (first frame) stays
-    /// visible PAUSED. Subsequent reels (paged to after the reveal) see this as
-    /// already `true`, so they play normally.
-    let revealCompleted: Bool
-
-    // Plain reference (NOT @ObservedObject): only `player` identity and
-    // `activeURL` matter for this page wrapper (backdrop + poster +
-    // GeometryReader) — `ReelScrubBar` is the one view that legitimately needs
-    // the 5-10Hz `currentTime` ticks. Observing the singleton here re-rendered
-    // the WHOLE page on every tick. Scoped via onReceive($activeURL/$player).
-    private let manager = SharedAVPlayerManager.shared
-    @State private var activeURL: String = SharedAVPlayerManager.shared.activeURL
-    @State private var player: AVPlayer?
-
-    private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
-    private var isShowingThis: Bool {
-        player != nil && activeURL == attachment.fileUrl
-    }
-
-    var body: some View {
-        VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, _ in
-            content(ready: availability == .ready)
-        }
-        .onReceive(manager.$activeURL) { activeURL = $0 }
-        .onReceive(manager.$player) { player = $0 }
-    }
-
-    /// Ratio du média, 9:16 par défaut quand les dimensions manquent — le même
-    /// repli que `ReelImageView.mediaAspect`, pour que poster et image ne
-    /// puissent pas diverger sur un média sans dimensions.
-    private var mediaAspect: CGFloat {
-        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 9.0 / 16.0 }
-        return CGFloat(w) / CGFloat(h)
-    }
-
-    /// La plus grande boîte au ratio du média qui tient dans `container`.
-    /// Garde un conteneur nul (première passe de layout) en le rendant tel quel.
-    private func posterFit(in container: CGSize) -> CGSize {
-        guard container.width > 0, container.height > 0 else { return container }
-        let containerAspect = container.width / container.height
-        if mediaAspect > containerAspect {
-            return CGSize(width: container.width, height: container.width / mediaAspect)
-        }
-        return CGSize(width: container.height * mediaAspect, height: container.height)
-    }
-
-    @ViewBuilder
-    private func content(ready: Bool) -> some View {
-        // GeometryReader reports the REAL finite allocated size; an explicit
-        // `.frame(width:height:)` from it pins the video surface to the screen.
-        // A layer-backed `UIViewRepresentable` otherwise reports the video's
-        // aspect-fill intrinsic width (e.g. 1561pt for 16:9) and `.frame(maxWidth:
-        // .infinity)` does NOT clamp it — that inflated the page ZStack to the
-        // video width and pushed the action rail / info / scrub bar off-screen.
-        GeometryReader { geo in
-            ZStack {
-                // Blurred ambient fill behind the `.fit` poster/video so the WHOLE
-                // reel is visible (letterboxed), never cropped and never black
-                // bars — mirrors the `.fit` image carousel (`ReelImageBackdrop`).
-                ReelImageBackdrop(media: media).equatable()
-
-                // Le poster est CADRÉ à la boîte du réel, jamais laissé
-                // s'étendre (directive porteur 2026-08-30 : « le réel en plein
-                // écran a en fond une image SANS FLOU »).
-                //
-                // `contentMode: .fit` ne suffisait pas : `ReelPoster` pose
-                // ensuite `.frame(maxWidth: .infinity, maxHeight: .infinity)`,
-                // et `ProgressiveCachedImage` n'a aucun ratio intrinsèque avant
-                // le chargement — le poster prenait donc TOUTE la surface et
-                // recouvrait le fond flou du thumbHash par le thumbnail NET.
-                // Le fond ThumbHash était bien monté ; on ne le voyait pas.
-                //
-                // Même remède que le chemin IMAGE (`fittedSize(in:)` de
-                // `ReelImageView`) : une frame explicite calculée depuis les
-                // dimensions du média, qui laisse le fond flou visible autour.
-                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor, contentMode: .fit)
-                    .equatable()
-                    .frame(width: posterFit(in: geo.size).width, height: posterFit(in: geo.size).height)
-                    .clipped()
-
-                // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
-                // so this surface stays gesture-free to avoid swallowing scrub/rail
-                // touches.
-                if isActive, ready, isShowingThis, let player {
-                    ReelVideoSurface(player: player, videoGravity: .resizeAspect, enablesPip: true)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                } else if isActive, !ready {
-                    ProgressView()
-                        .tint(.white)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-            .onAppear { drive(ready: ready) }
-            .adaptiveOnChange(of: isActive) { _, active in
-                // Page away → pause this reel's video at once (don't wait for the
-                // delayed onDisappear during paging) so its sound doesn't bleed.
-                if active { drive(ready: ready) }
-                else if isShowingThis { manager.pause() }
-            }
-            .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
-            .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
-            // F3 — re-drive the video when a call ENDS. The call-start (true) edge
-            // pauses via `ReelsPlayerView`'s `$callState` subscription; the
-            // in-process WebRTC teardown posts no system interruption-ended, so a
-            // reel opened during a call would stay frozen on its poster. `drive`
-            // is gated on `!isCallActive` + a no-op once already playing.
-            // `.receive(on: .main)` so `isCallActive` is already cleared when the
-            // guard re-checks it.
-            .onReceive(
-                CallManager.shared.$callState
-                    .map(\.isActive)
-                    .removeDuplicates()
-                    .receive(on: DispatchQueue.main)
-            ) { callActive in
-                if !callActive { drive(ready: ready) }
-            }
-            .onDisappear {
-                // Releasing only when this page actually owns the engine avoids
-                // tearing down the next reel that has already loaded during paging.
-                //
-                // `!revealCompleted` : NE PAS détruire l'engine sur le disappear
-                // TRANSITOIRE de l'ouverture. À t≈duration le masque tombe
-                // (`reelsRevealMasked → false`), ce qui fait basculer
-                // `ReelsRevealMaskModifier` de `content.mask(...)` vers `content`
-                // (branches d'identité différentes) → SwiftUI recrée cette vue.
-                // Détruire ici le player qui vient de démarrer (playLead) forçait un
-                // reload + `play()` depuis 0 → le réel jouait DEUX fois. La vraie
-                // fermeture passe par `closeReels()` qui met `revealCompleted = false`
-                // d'abord, donc le teardown légitime fire toujours.
-                if isShowingThis, !revealCompleted { manager.stop() }
-            }
-        }
-        .ignoresSafeArea()
-    }
-
-    private func drive(ready: Bool) {
-        // Défense en profondeur call-aware (miroir de `ReelFeedVideoSurface.drive`) :
-        // ne jamais (re)lancer un réel pendant un appel — la session audio appartient
-        // à l'appel. La mise en pause immédiate au démarrage d'un appel est gérée par
-        // l'abonnement `CallManager.$callState` dans `ReelsPlayerView`.
-        guard isActive, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
-        if manager.activeURL != attachment.fileUrl {
-            manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
-        }
-        // Le viewer plein écran joue TOUJOURS avec le son. La surface de fond du
-        // feed (`ReelFeedVideoSurface`) exprime maintenant son silence via
-        // `isForceMuted` (intention PAR SURFACE, transitoire) plutôt que la
-        // préférence globale `isMuted` — elle se relâche d'elle-même en perdant
-        // l'activité, mais on la réaffirme ici en défense en profondeur : sur
-        // l'entrée depuis le feed pour la MÊME url, le court-circuit
-        // `activeURL == fileUrl` ci-dessus saute `load()` (qui l'aurait sinon
-        // réinitialisée via `cleanup()`), et l'ordre exact des transitions
-        // `isActive` entre le feed et le viewer n'est pas garanti.
-        manager.isForceMuted = false
-        // `isMuted` reste réaffirmé inconditionnellement : c'est la préférence
-        // utilisateur globale (persistée entre vidéos par design), mais le
-        // viewer plein écran est le contexte où le son est TOUJOURS attendu.
-        manager.isMuted = false
-        // Looping MUST be (re)asserted AFTER `load()`. `load()` calls
-        // `cleanup()` internally, which resets `shouldLoop = false`; setting it
-        // before `load()` is silently clobbered, so the very first end-of-item
-        // takes the tear-down branch and the reel never replays (the "scrub bar
-        // dead after one play-through" bug). Re-asserting here every drive pass
-        // also keeps it true across the reveal transition's disappear/reappear.
-        manager.shouldLoop = true
-        // Hold on the poster (PAUSED) until the liquid reveal completes; start
-        // playback only when the disc has reached full screen.
-        guard revealCompleted else { return }
-        manager.play()
-    }
-}
-
-/// Full-bleed video surface backed DIRECTLY by an `AVPlayerLayer` (not
-/// `AVPlayerViewController`). A plain layer-backed `UIView` composites correctly
-/// BENEATH the SwiftUI overlays in the ZStack; `AVPlayerViewController` instead
-/// renders its video ABOVE same-level SwiftUI siblings, which was hiding the
-/// action rail / info / scrub bar. The player is owned by `SharedAVPlayerManager`;
-/// this only renders it. Mirrors the SDK's `_AVPlayerLayerView` (Story player).
-/// `internal` (not `private`) so the feed-card surface (`ReelFeedVideoSurface`)
-/// can reuse the same chrome-free render path for muted background playback.
-struct ReelVideoSurface: UIViewRepresentable {
-    let player: AVPlayer
-    /// `.resizeAspectFill` (default) crops the video edge-to-edge — kept for the
-    /// feed-card surface. The fullscreen viewer passes `.resizeAspect` so the
-    /// WHOLE video is visible, letterboxed over the blurred ambient backdrop
-    /// (mirrors the `.fit` image carousel — never a cropped reel).
-    var videoGravity: AVLayerVideoGravity = .resizeAspectFill
-    /// Le viewer plein écran opte pour le Picture-in-Picture : quitter l'app
-    /// pendant la lecture bascule le réel en fenêtre PiP (auto-start système)
-    /// au lieu de laisser sa bande-son jouer invisible en arrière-plan ;
-    /// fermer la fenêtre arrête la vidéo. La surface muette du feed
-    /// (`ReelFeedVideoSurface`) reste hors PiP — un autoplay silencieux ne
-    /// doit jamais ouvrir de fenêtre.
-    var enablesPip: Bool = false
-
-    func makeUIView(context: Context) -> ReelPlayerLayerView {
-        let view = ReelPlayerLayerView()
-        // Transparent (was black): under `.resizeAspect` the letterbox bars must
-        // reveal the blurred backdrop behind the surface, not a black band.
-        view.backgroundColor = .clear
-        view.playerLayer.player = player
-        view.playerLayer.videoGravity = videoGravity
-        if enablesPip {
-            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
-        }
-        return view
-    }
-
-    func updateUIView(_ view: ReelPlayerLayerView, context: Context) {
-        if view.playerLayer.player !== player {
-            view.playerLayer.player = player
-        }
-        if view.playerLayer.videoGravity != videoGravity {
-            view.playerLayer.videoGravity = videoGravity
-        }
-        if enablesPip {
-            // Idempotent (garde d'identité de layer dans `configurePip`) —
-            // ré-attache après le remount que provoque la chute du masque de
-            // reveal (`ReelsRevealMaskModifier` change de branche d'identité).
-            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
-        }
-    }
-
-    /// Pin the surface to the proposed size. Without this a layer-backed
-    /// `UIViewRepresentable` reports the video's aspect-fill intrinsic size,
-    /// inflating the enclosing ZStack and pushing the SwiftUI overlays off-screen.
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ReelPlayerLayerView, context: Context) -> CGSize? {
-        proposal.replacingUnspecifiedDimensions()
-    }
-}
-
-/// Layer-backed `UIView` whose backing layer IS an `AVPlayerLayer` — GPU-composited
-/// video that respects SwiftUI ZStack z-ordering (overlays stay on top).
-/// `internal` (not `private`) because the now-`internal` `ReelVideoSurface`
-/// exposes it through its representable methods (shared with `ReelFeedVideoSurface`).
-final class ReelPlayerLayerView: UIView {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    override static var layerClass: AnyClass { AVPlayerLayer.self }
-    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
-}
-
 // MARK: - Reel Media Layout
 
 /// Pure classification of a reel's media into the surface that should render it.
@@ -1796,182 +1460,6 @@ enum ReelMediaLayout: Equatable {
         default:
             return false
         }
-    }
-}
-
-// MARK: - Reel Image Carousel
-
-/// Image reel: a single image, or a horizontal page-snapping carousel of images
-/// (orthogonal to the vertical reel paging) with dots.
-///
-/// Mirrors the proven `ConversationMediaGalleryView` composition to fix three
-/// carousel defects: ONE `.ignoresSafeArea()` at the pager level (never per
-/// cell), each page pinned to the EXACT viewport so the paging stride equals the
-/// page width (no half-shown image), and the visible index seeded SYNCHRONOUSLY
-/// at init (the first image is present from the first frame — not set in
-/// `.onAppear`, which raced `scrollPosition(id:)` and could open scrolled past
-/// the first image).
-private struct ReelImageView: View {
-    let reel: FeedPost
-    private let images: [FeedMedia]
-    @State private var currentImageId: String?
-
-    init(reel: FeedPost) {
-        self.reel = reel
-        // Repost-aware: a republished reel's images live on the reposted reel.
-        let imgs = reel.reelDisplayMedia.filter { $0.type == .image }
-        self.images = imgs
-        _currentImageId = State(initialValue: imgs.first?.id)
-    }
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            if images.count <= 1 {
-                if let media = images.first {
-                    ReelImageCell(media: media)
-                } else {
-                    Color.black
-                }
-            } else {
-                AdaptiveHorizontalPager(items: images, currentPageID: $currentImageId, fillVertical: true) { _, media in
-                    ReelImageCell(media: media)
-                }
-                dots
-                    .padding(.bottom, 150)
-            }
-        }
-        .ignoresSafeArea()
-    }
-
-    private var dots: some View {
-        HStack(spacing: 6) {
-            ForEach(images) { media in
-                Circle()
-                    .fill(Color.white.opacity(media.id == currentImageId ? 0.95 : 0.4))
-                    .frame(width: 6, height: 6)
-            }
-        }
-        // Decorative dots → expose the position to VoiceOver ("2 / 5") instead of
-        // announcing each anonymous circle.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
-        // Le séparateur « / » reste : sa forme EST la donnée (« 3 / 10 » se lit
-        // comme une seule position), et 239i l'a explicitement distingué de la
-        // puce de mise en page qu'elle bannissait. Seuls les CHIFFRES changent.
-        .accessibilityValue(
-            LocalizedNumber.exact((images.firstIndex { $0.id == currentImageId } ?? 0) + 1)
-            + " / " + LocalizedNumber.exact(images.count)
-        )
-    }
-}
-
-/// One carousel page: the whole image, centred (`.fit`), over a blurred ambient
-/// backdrop of itself. A ~9:16 image fills the screen (its `.fit` foreground
-/// covers the backdrop); any other ratio shows the WHOLE image centred over the
-/// blurred backdrop — never black bars, never a cropped/off-centre image.
-///
-/// The page is already sized to the viewport by the pager (one
-/// `.ignoresSafeArea()` + `fillVertical`), so the image is fit/filled with a
-/// plain `.frame(maxWidth/maxHeight: .infinity)` — no per-cell `GeometryReader`
-/// (which under the iOS 16 `TabView` fallback can report `.zero` on the first
-/// pass). Mirrors `ConversationMediaGalleryView` / `ReelPoster`.
-private struct ReelImageCell: View {
-    let media: FeedMedia
-
-    /// Explicit ratio from the media dimensions so `.fit` actually constrains the
-    /// frame (ProgressiveCachedImage has no intrinsic ratio at first render — its
-    /// placeholder is `Color.clear` — so a `.aspectRatio(contentMode:)` alone
-    /// established a full-screen frame and the loaded image then stretched/filled
-    /// it). With an explicit ratio the whole image shows, letterboxed over the
-    /// blurred backdrop. Falls back to 9:16 when dimensions are missing.
-    private var mediaAspect: CGFloat {
-        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 9.0 / 16.0 }
-        return CGFloat(w) / CGFloat(h)
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            // Exact fitted size from the media ratio — bulletproof: the image is
-            // framed to its computed fit box (≤ viewport in both axes), so it can
-            // NEVER overflow the viewport. The blurred backdrop fills behind.
-            let fit = fittedSize(in: geo.size)
-            ZStack {
-                ReelImageBackdrop(media: media).equatable()
-
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl ?? media.url,
-                    fullUrl: media.url ?? media.thumbnailUrl,
-                    autoLoad: true
-                ) {
-                    Color.clear
-                }
-                .frame(width: fit.width, height: fit.height)
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-        }
-    }
-
-    /// Largest box with `mediaAspect` that fits inside `container` (letterbox).
-    /// Guards a zero container (first layout pass) by returning it unchanged.
-    private func fittedSize(in container: CGSize) -> CGSize {
-        guard container.width > 0, container.height > 0 else { return container }
-        let containerAspect = container.width / container.height
-        if mediaAspect > containerAspect {
-            return CGSize(width: container.width, height: container.width / mediaAspect)
-        } else {
-            return CGSize(width: container.height * mediaAspect, height: container.height)
-        }
-    }
-}
-
-/// Ambient blurred fill behind a `.fit` carousel image/video — the media's
-/// **thumbHash** decoded locally, scaled to fill, blurred and slightly dimmed.
-/// Falls back to the media's tint colour when no thumbHash exists.
-///
-/// Deliberately renders ONLY the thumbHash (via `UIImage.fromThumbHash`) — it
-/// NEVER loads the thumbnail URL. A sharp thumbnail popping into the blurred
-/// letterbox fill reads as a rendering glitch (user report 2026-07-08 : « le
-/// thumbnail donne l'impression d'un bogue »). This mirrors the story letterbox
-/// backdrop (`storyBlurredBackdrop`), which is thumbHash-only too. The full
-/// image is already fetched by the `.fit` foreground; a 60pt blur over the
-/// upscaled thumbHash hides its low resolution at zero extra network cost.
-private struct ReelImageBackdrop: View, Equatable {
-    let media: FeedMedia
-
-    /// Decoded lazily inside `body` (≈16×16 → upscaled, < 0.5 ms). Because the
-    /// view is `.equatable()`, `body` — and thus this decode — only runs when the
-    /// media identity / thumbHash actually changes, not on the parent's 10 Hz
-    /// playback-time re-renders (the real GPU/CPU heat win).
-    private var backdropImage: UIImage? {
-        guard let hash = media.thumbHash, !hash.isEmpty else { return nil }
-        return UIImage.fromThumbHash(hash)
-    }
-
-    static func == (lhs: ReelImageBackdrop, rhs: ReelImageBackdrop) -> Bool {
-        lhs.media.id == rhs.media.id
-            && lhs.media.thumbHash == rhs.media.thumbHash
-            && lhs.media.thumbnailColor == rhs.media.thumbnailColor
-    }
-
-    var body: some View {
-        ZStack {
-            Color(hex: media.thumbnailColor)
-            if let img = backdropImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .interpolation(.low)
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scaleEffect(1.18)
-                    .blur(radius: 60)
-                    .opacity(0.85)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-        .overlay(Color.black.opacity(0.22))
     }
 }
 

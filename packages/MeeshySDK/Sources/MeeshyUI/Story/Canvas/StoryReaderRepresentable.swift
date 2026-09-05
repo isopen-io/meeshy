@@ -18,6 +18,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     let storyItem: StoryItem
     public internal(set) var preferredLanguages: [String]
     public internal(set) var mute: Bool
+    /// **Le muet de cette surface est-il VERROUILLÉ ?** (#4084) — `mute` dit
+    /// l'état, celui-ci dit s'il a le droit de changer. Projection de
+    /// `ScenePlayerConfig.locksMute` jusqu'au canvas, qui seul peut refuser une
+    /// notification diffusée.
+    public internal(set) var locksMute: Bool = false
     /// Drives `StoryCanvasUIView.setPaused(_:)` — gels la timeline canvas
     /// (displayLink + AVPlayer + audioMixer) en phase avec la progress bar
     /// du viewer parent. Sans ça, ouvrir un sheet pendant la lecture laissait
@@ -81,6 +86,13 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     let preloadedImages: [String: UIImage]
     let preloadedVideoURLs: [String: URL]
     let preloadedAudioURLs: [String: URL]
+    /// Lecteur d'images que l'hôte a déjà en main, transmis tel quel au
+    /// `StoryReaderContext` quand aucune image n'est préchargée (#4852). Les
+    /// couches (fond, média, sticker image) l'interrogent AVANT le resolver ;
+    /// `nil` — le défaut de toutes les surfaces de lecture — les laisse sur
+    /// `resolver` + `CacheCoordinator.shared.images`, qui suffit à un asset
+    /// publié.
+    let imageCache: (any ImageCacheReader)?
 
     // MARK: - Primary init
 
@@ -91,8 +103,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
+                imageCache: (any ImageCacheReader)? = nil,
                 playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                 mute: Bool = false,
+                locksMute: Bool = false,
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
@@ -110,6 +124,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.preferredLanguages = chain
         self.playerProvider = playerProvider
         self.mute = mute
+        self.locksMute = locksMute
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
         self.onCompletion = onCompletion
@@ -120,6 +135,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
+        self.imageCache = imageCache
     }
 
     // MARK: - UIViewRepresentable
@@ -171,10 +187,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // The background-image branch of `StoryBackgroundLayer.configure`
         // only consults the resolver when `imageCache` is non-nil. Supply a
         // file-backed cache reader so preloaded images reach the resolver path;
-        // it stays `nil` when no images were preloaded so the live viewer is
-        // unaffected.
+        // it falls back to the host's own reader (`nil` on every live surface)
+        // when no images were preloaded so the live viewer is unaffected.
         let imageCache: ImageCacheReader? = imageURLs.isEmpty
-            ? nil
+            ? self.imageCache
             : PreloadedImageCacheReader(fileURLs: imageURLs)
 
         view.onContentReady = { contentReady?() }
@@ -201,7 +217,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             postMediaURLResolver: resolver,
             imageCache: imageCache,
             localAudioURLResolver: localAudioResolver,
-            playerProvider: playerProvider
+            playerProvider: playerProvider,
+            locksMute: locksMute
         ))
         return view
     }

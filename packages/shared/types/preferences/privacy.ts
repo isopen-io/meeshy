@@ -27,7 +27,25 @@ export const PrivacyPreferenceSchema = z.object({
 
   // Données et analytics
   saveMediaToGallery: z.boolean().default(false),
-  allowAnalytics: z.boolean().default(true),
+  /**
+   * `false` par défaut depuis #4578, et ce n'est pas un durcissement gratuit.
+   *
+   * Cette préférence est GARDÉE par `dataProcessingConsentAt`
+   * (`ConsentValidationService.validatePrivacyPreferences`) et n'a AUCUN
+   * lecteur d'usage dans le dépôt — mesuré : hors schémas, tests et interface,
+   * les seules occurrences sont la garde elle-même. Sa valeur stockée est donc
+   * la seule chose qui existe, et un défaut `true` faisait affirmer par le
+   * système, pour un compte qui n'a rien consenti, exactement ce que la garde
+   * refuse. L'état PAR DÉFAUT violait le modèle de consentement.
+   *
+   * Conséquence directe, mesurée sur staging : la catégorie `privacy`
+   * était INACCESSIBLE à un compte neuf — un `PATCH {"profileVisibility":"private"}` était
+   * refusé en nommant ce champ-ci.
+   *
+   * Un consentement s'accorde, il ne se présume pas : c'est aussi ce que le
+   * RGPD attend d'un traitement analytique.
+   */
+  allowAnalytics: z.boolean().default(false),
   shareUsageData: z.boolean().default(false),
 
   // Blocage et filtrage
@@ -38,7 +56,29 @@ export const PrivacyPreferenceSchema = z.object({
   encryptionPreference: z.enum(['disabled', 'optional', 'always']).default('optional'),
   autoEncryptNewConversations: z.boolean().default(false),
   showEncryptionStatus: z.boolean().default(true),
-  warnOnUnencrypted: z.boolean().default(false)
+  warnOnUnencrypted: z.boolean().default(false),
+
+  /**
+   * Le canal de COMPATIBILITÉ ASCENDANTE, déclaré (#4589).
+   *
+   * Les sept blocs de préférences du SDK iOS le portent
+   * (`PreferenceModels.swift`), et iOS encode le bloc ENTIER comme corps de
+   * requête (`UserPreferencesManager`, `try encoder.encode(privacy)`). Il
+   * arrivait donc sur chaque écriture, et le mode *strip* de Zod le retirait :
+   * mesuré sur staging le 2026-08-31, un `PATCH {"extras":{"sonde":"4589"}}`
+   * rendait `success: true` et la relecture ne rendait RIEN. Le canal de
+   * compatibilité ascendante d'iOS n'a jamais fonctionné.
+   *
+   * Le déclarer a deux effets, et le second est celui qui compte : il rend au
+   * client son aller-retour, et il permet à la frontière de REFUSER tout le
+   * reste (`.strict()` dans `submittedFrom`) sans casser les trois clients.
+   * Une porte de sortie nommée est ce qui autorise à fermer les autres.
+   *
+   * Facultatif et SANS défaut : il ne doit apparaître dans un document servi
+   * que si quelque chose y a été stocké — sinon les sept catégories gagneraient
+   * un `extras: {}` que ni le web ni Android n'attendent.
+   */
+  extras: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type PrivacyPreference = z.infer<typeof PrivacyPreferenceSchema>;
@@ -53,7 +93,7 @@ export const PRIVACY_PREFERENCE_DEFAULTS: PrivacyPreference = {
   allowGroupInvites: true,
   allowCallsFromNonContacts: false,
   saveMediaToGallery: false,
-  allowAnalytics: true,
+  allowAnalytics: false,
   shareUsageData: false,
   blockScreenshots: false,
   hideProfileFromSearch: false,

@@ -66,6 +66,66 @@ export const PARTICIPANT_RIGHT_NAMES = [
 export type ParticipantRightName = (typeof PARTICIPANT_RIGHT_NAMES)[number];
 
 /**
+ * Ce qu'un NOUVEAU MEMBRE reçoit, quelle que soit la porte qui l'ajoute.
+ *
+ * Deux portes écrivaient deux tables (#4174) : `POST …/invite`
+ * (`routes/conversations/sharing.ts`) posait `canSendVideos: false,
+ * canSendAudios: false`, `POST …/participants`
+ * (`routes/conversations/participants-writes.ts`) posait les deux à `true`.
+ * **Le même utilisateur, ajouté au même groupe, recevait des droits
+ * différents selon le bouton employé** — et rien dans le produit ne
+ * distinguait les deux gestes : les deux passent par le même résolveur
+ * d'admission, produisent la même ligne de rôle `member`, et sont déclenchées
+ * par le même écran.
+ *
+ * ## Pourquoi la table PERMISSIVE l'emporte
+ *
+ * Ce n'est pas « la plus généreuse gagne ». La variante restrictive
+ * **ne restreignait rien** : elle fermait `canSendVideos` et `canSendAudios`
+ * en laissant `canSendFiles` ouvert. Or un fichier peut être une vidéo ou un
+ * enregistrement — la même personne envoyait la même vidéo, par l'autre
+ * bouton, sans qu'aucune garde ne la retienne. Une restriction qu'un geste
+ * voisin contourne n'est pas une politique de sécurité : c'est une gêne pour
+ * l'utilisateur honnête et un faux témoignage pour le lecteur du code.
+ *
+ * `canSendLocations` et `canSendLinks` restent FERMÉS, et les deux portes en
+ * convenaient déjà : ils n'ouvrent pas un média de plus, ils exposent une
+ * position et une destination — deux choses qu'un arrivant n'a pas de raison
+ * d'émettre avant d'avoir été admis par un geste explicite.
+ *
+ * `canViewHistory: false` est également commun aux deux : un membre ajouté
+ * après coup lit depuis son arrivée, et un administrateur lui ouvre l'avant
+ * par date (`historyVisibleFrom`).
+ *
+ * ## Ce que cette constante n'est PAS
+ *
+ * Elle ne gouverne que l'ADMISSION D'UN MEMBRE NOMMÉ par un modérateur. Les
+ * entrées par LIEN de partage (`routes/links/utils/share-link-mint.ts`,
+ * `routes/conversations/link-admission.ts`) recopient les droits du LIEN, qui
+ * sont le sujet de leur propre décision — les aligner ici les ouvrirait pour
+ * des visiteurs que personne n'a nommés.
+ *
+ * Elle n'est pas RÉTROACTIVE : les lignes `Participant` déjà écrites gardent
+ * leur table. Un membre entré par `invite` avant #4174 conserve donc
+ * `canSendVideos: false` jusqu'à ce qu'un hôte le lui ouvre par
+ * `PATCH …/rights`.
+ *
+ * `Object.freeze` n'est pas décoratif : les deux appelants étalent cet objet
+ * dans un `data` Prisma, et un appelant qui muterait le littéral partagé
+ * changerait les droits du membre SUIVANT.
+ */
+export const NEW_MEMBER_PERMISSIONS: Readonly<ParticipantPermissions> = Object.freeze({
+  canSendMessages: true,
+  canSendFiles: true,
+  canSendImages: true,
+  canSendVideos: true,
+  canSendAudios: true,
+  canSendLocations: false,
+  canSendLinks: false,
+  canViewHistory: false,
+});
+
+/**
  * Les droits d'entrée résolus, `canViewHistory` compris, tels qu'une fiche ou un
  * événement doivent les énoncer.
  *
@@ -153,4 +213,23 @@ export function resolveParticipantRights(
     canSendLocations: rights.canSendLocations ?? permissions.canSendLocations,
     canSendLinks: rights.canSendLinks ?? permissions.canSendLinks,
   };
+}
+
+/**
+ * Le droit de PIÈCE JOINTE qui gouverne un type MIME donné (#5151).
+ *
+ * `canSendFiles`/`canSendImages`/`canSendVideos`/`canSendAudios` partagent la
+ * même table de droits mais gouvernent des CONTENUS différents — contrairement
+ * à `canSendMessages`, qui est un gate binaire unique, trancher lequel
+ * s'applique exige de connaître le type de la pièce. `canSendFiles` est le
+ * repli générique : tout ce qui n'est ni image, ni vidéo, ni audio (document,
+ * type absent ou non reconnu) — jamais un laissez-passer implicite pour les
+ * trois autres, qui restent gouvernés par leur propre droit même quand
+ * `canSendFiles` est ouvert.
+ */
+export function attachmentSendRightForMimeType(mimeType?: string | null): ParticipantRightName {
+  if (mimeType?.startsWith('image/')) return 'canSendImages';
+  if (mimeType?.startsWith('video/')) return 'canSendVideos';
+  if (mimeType?.startsWith('audio/')) return 'canSendAudios';
+  return 'canSendFiles';
 }

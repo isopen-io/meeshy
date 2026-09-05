@@ -96,8 +96,12 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     /// `meeshy.me/l/…` est ouvrable par n'importe qui, donc lui seul garde le
     /// gate).
     func test_theThreeShareForms_liveOutsideTheIsPublicGate_onlyExternalShareStaysInside() throws {
+        // #4084 — les trois formes de partage vivent dans le MENU D'OPTIONS,
+        // parti avec l'en-tête dans son propre fichier. La garde prouve une
+        // CONTENANCE : elle doit donc lire le fichier qui contient le gate,
+        // sinon elle ne prouve plus rien — elle échoue à le trouver.
         let sidebar = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+            try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift"))
 
         // Le gate de la branche NON-auteur est le dernier `if story.isPublic`
         // du fichier (celui de la branche auteur le précède).

@@ -110,8 +110,13 @@ final class StoryTrayWiringGuardTests: XCTestCase {
             actions.contains("draftId: viewModel.pendingDraftId"),
             "Le cover racine doit REMETTRE au meuble le brouillon à reprendre — sans lui, le meuble ouvre une session neuve et le brouillon repris reste orphelin"
         )
+        // **L'APPEL, jamais le nom du local qui le nourrit** : le meuble lit
+        // depuis #4611 la graine de la porte en repli du paramètre
+        // (`draftId ?? intent.origin.resumedDraftId`), ce qui a renommé la
+        // variable. Épingler `adoptDraft(id: draftId)` faisait tomber cette
+        // garde sur un changement qui ne touchait ni l'appel ni son rôle.
         XCTAssertTrue(
-            host.contains("composer.adoptDraft(id: draftId)"),
+            host.contains("composer.adoptDraft(id:"),
             "Le meuble doit adopter le brouillon reçu — sans adoption, l'autosave écrit sous un id neuf et duplique le brouillon"
         )
         XCTAssertTrue(

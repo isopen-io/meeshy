@@ -42,19 +42,60 @@
  *     formes rangeraient DEUX entrées pour une seule place, et le témoin le
  *     prouve sur les deux portes : le 201 du `join` et l'aperçu du lien.
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
 import { canalDuLien } from '../lib/realtime/lifecycle';
 import {
   cleDeLien,
   cleDuLien,
+  cookiesDEffacementDesPlaces,
   effaceSession,
+  effaceToutesLesPlaces,
   estLaCleDu,
+  jetonsDesCookies,
   lienDeLaCle,
   lireSession,
+  nomsDesCookiesInvites,
   poseSession,
   sessionDepuisLaValeur,
   type CleDeLien,
   type SessionInvitee,
 } from '../lib/api/guest-session';
+
+/**
+ * LE TYPE MARQUÉ N'EST HABITÉ QUE PAR SA FABRIQUE. `route.ts` promouvait un
+ * segment d'adresse en `CleDeLien` (`segment as CleDeLien`) pour peindre un
+ * lien clos — exactement l'assertion que le type existe pour interdire, et
+ * c'est elle qui rendait « lagos-q1 » en titre d'écran. Le code de production
+ * n'écrit `as CleDeLien` qu'à UN endroit : la fabrique.
+ */
+const RACINE = join(__dirname, '..');
+const DOSSIERS_DE_PRODUCTION = ['app', 'lib', 'components', 'scripts'] as const;
+
+const sourcesDeProduction = (): readonly string[] =>
+  DOSSIERS_DE_PRODUCTION.flatMap((dossier) => {
+    try {
+      return readdirSync(join(RACINE, dossier), { recursive: true, withFileTypes: true })
+        .filter((entree) => entree.isFile() && /\.(ts|tsx|mts|cts)$/.test(entree.name) && !entree.name.endsWith('.d.ts'))
+        .map((entree) => join(entree.parentPath ?? entree.path, entree.name));
+    } catch {
+      return [];
+    }
+  });
+
+describe('le type marqué n’est habité que par sa fabrique', () => {
+  it('trouve bien du code à garder', () => {
+    expect(sourcesDeProduction().length).toBeGreaterThan(20);
+  });
+
+  it("n'écrit `as CleDeLien` nulle part hors de lib/api/guest-session.ts", () => {
+    const coupables = sourcesDeProduction()
+      .filter((chemin) => /\bas CleDeLien\b/.test(readFileSync(chemin, 'utf8')))
+      .map((chemin) => relative(RACINE, chemin));
+    expect(coupables).toEqual([join('lib', 'api', 'guest-session.ts')]);
+  });
+});
 
 /** La seule fabrique autorisée, dépliée pour la lisibilité des témoins. */
 const lienDe = (linkId: string): CleDeLien => {
@@ -230,6 +271,114 @@ describe('la clé de lien est celle que le SERVEUR sert', () => {
     expect(cleDeLien(servi)).toBeNull();
   });
 
+});
+
+/**
+ * Les jetons que le NAVIGATEUR présente — la valeur de chaque cookie
+ * `meeshy_guest_<lien>`, sans que le nom soit promu en clé : la place se
+ * reconnaît auprès du serveur (`reconnais`, `lib/api/invite.ts`).
+ */
+describe('les jetons invités portés par un en-tête Cookie', () => {
+  it('rend la valeur de chaque cookie de place, décodée, une fois chacune, dans l’ordre', () => {
+    expect(jetonsDesCookies('meeshy_session=x; meeshy_guest_mshy_a=S1; meeshy_auth=J; meeshy_guest_mshy_b=S%202; meeshy_guest_mshy_c=S1')).toEqual(['S1', 'S 2']);
+  });
+
+  it('ignore un cookie de place sans valeur, sans signe égal, ou un en-tête absent', () => {
+    expect(jetonsDesCookies('meeshy_guest_mshy_a=; meeshy_guest_mshy_b; theme=dark')).toEqual([]);
+    expect(jetonsDesCookies(null)).toEqual([]);
+    expect(jetonsDesCookies('')).toEqual([]);
+  });
+
+  it('ne compte que le préfixe EXACT de la place — meeshy_guest, jamais meeshy_guestbook', () => {
+    expect(jetonsDesCookies('meeshy_guestbook=x; meeshy_guest_mshy_a=S1')).toEqual(['S1']);
+  });
+});
+
+/**
+ * LES NOMS des cookies invités — la JUMELLE de `jetonsDesCookies` (qui rend
+ * les VALEURS). La déconnexion (#5095) en a besoin pour expirer chaque place
+ * détenue, sans connaître le lien : un `Set-Cookie` d'effacement se rédige
+ * avec un NOM.
+ */
+describe('les NOMS des cookies invités portés par un en-tête Cookie', () => {
+  it('rend chaque nom, dédupliqué, préfixe EXACT', () => {
+    expect(
+      nomsDesCookiesInvites('meeshy_guest_mshy_a=x; autre=y; meeshy_guest_mshy_a=x2; meeshy_guest_mshy_b=z'),
+    ).toEqual(['meeshy_guest_mshy_a', 'meeshy_guest_mshy_b']);
+  });
+
+  it('ignore un en-tête absent, une place sans valeur, et meeshy_guestbook', () => {
+    expect(nomsDesCookiesInvites(null)).toEqual([]);
+    expect(nomsDesCookiesInvites('meeshy_guest_mshy_a=')).toEqual([]);
+    expect(nomsDesCookiesInvites('meeshy_guestbook=x')).toEqual([]);
+  });
+});
+
+describe('les Set-Cookie qui ferment toutes les places — mêmes attributs que la pose', () => {
+  it('un Set-Cookie par nom présenté, Path=/chat, SameSite=Lax', () => {
+    expect(
+      cookiesDEffacementDesPlaces('meeshy_guest_mshy_a=t1; meeshy_guest_mshy_b=t2', false),
+    ).toEqual([
+      'meeshy_guest_mshy_a=; Max-Age=0; Path=/chat; SameSite=Lax',
+      'meeshy_guest_mshy_b=; Max-Age=0; Path=/chat; SameSite=Lax',
+    ]);
+  });
+
+  it('ajoute Secure quand le canal l’est', () => {
+    expect(cookiesDEffacementDesPlaces('meeshy_guest_mshy_a=t1', true)).toEqual([
+      'meeshy_guest_mshy_a=; Max-Age=0; Path=/chat; SameSite=Lax; Secure',
+    ]);
+  });
+
+  it('aucun jeton présenté ⇒ aucun Set-Cookie', () => {
+    expect(cookiesDEffacementDesPlaces(null, false)).toEqual([]);
+  });
+});
+
+describe('effaceToutesLesPlaces — la sortie NAVIGATEUR de toutes les places à la fois', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.cookie.split(';').forEach((morceau) => {
+      const nom = morceau.split('=')[0]?.trim();
+      if (nom) document.cookie = `${nom}=; Max-Age=0; Path=/`;
+    });
+  });
+
+  it('efface CHAQUE entrée meeshy.guest.* du stockage, et rien d’autre', () => {
+    localStorage.setItem(cleDuLien(LIEN_A), JSON.stringify(sessionDe('a')));
+    localStorage.setItem(cleDuLien(lienDe('mshy_BBB222')), JSON.stringify(sessionDe('b')));
+    localStorage.setItem('autre-clef', 'intacte');
+
+    effaceToutesLesPlaces();
+
+    expect(localStorage.getItem(cleDuLien(LIEN_A))).toBeNull();
+    expect(localStorage.getItem(cleDuLien(lienDe('mshy_BBB222')))).toBeNull();
+    expect(localStorage.getItem('autre-clef')).toBe('intacte');
+  });
+
+  it('expire chaque cookie meeshy_guest_* de document.cookie', () => {
+    document.cookie = 'meeshy_guest_mshy_a=t1; Path=/chat';
+    document.cookie = 'meeshy_guest_mshy_b=t2; Path=/chat';
+
+    effaceToutesLesPlaces();
+
+    expect(document.cookie).not.toContain('meeshy_guest_mshy_a');
+    expect(document.cookie).not.toContain('meeshy_guest_mshy_b');
+  });
+
+  it('ne jette jamais — un stockage indisponible n’interrompt pas la sortie', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new Error('bloqué');
+      },
+    });
+
+    expect(() => effaceToutesLesPlaces()).not.toThrow();
+
+    if (original) Object.defineProperty(window, 'localStorage', original);
+  });
 });
 
 describe('poser, lire, effacer une session invitée', () => {

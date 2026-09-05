@@ -18,11 +18,19 @@ interface NotificationApi {
      * The gateway returns `{ success, data: [...], pagination, unreadCount }` —
      * structurally an [ApiResponse] whose `data` is the notification list.
      */
+    /**
+     * `cursor` (#4901) : l'ancre KEYSET que la page précédente a servie
+     * (`pagination.nextCursor`), relayée VERBATIM — le serveur tranche APRÈS
+     * elle, insensible aux insertions en tête. `offset` reste formulable
+     * (repli face à un gateway antérieur) ; le curseur GAGNE côté appelant :
+     * quand il est donné, `offset` part nul.
+     */
     @GET("notifications")
     suspend fun list(
         @Query("offset") offset: Int? = null,
         @Query("limit") limit: Int? = null,
         @Query("unreadOnly") unreadOnly: Boolean? = null,
+        @Query("cursor") cursor: String? = null,
     ): ApiResponse<List<ApiNotification>>
 
     /** Returns `{ success, count }` — no `data` envelope. */

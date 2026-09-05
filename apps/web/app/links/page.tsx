@@ -100,7 +100,10 @@ export default function LinksPage() {
   const [showCreateTrackingLinkModal, setShowCreateTrackingLinkModal] = useState(false);
 
   // Pagination state
-  const [shareLinksOffset, setShareLinksOffset] = useState(0);
+  // #4351 — la liste des liens pagine par CURSEUR. L'offset sautait des
+  // lignes dès qu'un lien était créé pendant la pagination : sur un tri par
+  // date décroissante, toute insertion décale les pages suivantes d'un cran.
+  const [shareLinksCursor, setShareLinksCursor] = useState<string | null>(null);
   const [trackingLinksOffset, setTrackingLinksOffset] = useState(0);
   const [hasMoreShareLinks, setHasMoreShareLinks] = useState(false);
   const [hasMoreTrackingLinks, setHasMoreTrackingLinks] = useState(false);
@@ -144,20 +147,22 @@ export default function LinksPage() {
       }
 
       const token = authManager.getAuthToken();
-      const offset = append ? shareLinksOffset : 0;
+      const cursor = append ? shareLinksCursor : null;
 
       // Fonction interne pour charger les share links
       //
       // #4170 critère 1/8 — `GET /links/my-links` absorbé par `GET /links`
-      // (`links/user.ts`) : mêmes bornes de pagination par `?offset=`/`?limit=`
+      // (`links/user.ts`) : mêmes bornes de pagination par `?cursor=`/`?limit=`
       // (l'ancienne route bornait à 50, la nouvelle à 100 — cette page ne
       // demande jamais plus que `LINKS_PER_PAGE`, donc aucune régression),
       // `?expand=conversation` restitue `conversation.{id,title,type,description}`
       // que le filtre de recherche (`link.conversation.title`, plus bas) et le
-      // reste de cette page lisent. `pagination.hasMore` — déjà le même champ
-      // sur les deux routes — continue de gouverner `hasMoreShareLinks`.
+      // reste de cette page lisent. C'est `cursorPagination.hasMore` qui
+      // gouverne désormais `hasMoreShareLinks` (#4351).
       const fetchShareLinks = async () => {
-        const shareLinksEndpoint = `${API_ENDPOINTS.links.root}?limit=${LINKS_PER_PAGE}&offset=${offset}&expand=conversation`;
+        const shareLinksEndpoint =
+          `${API_ENDPOINTS.links.root}?limit=${LINKS_PER_PAGE}&expand=conversation` +
+          (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
         const shareLinksResponse = await fetch(
           buildApiUrl(shareLinksEndpoint),
           {
@@ -172,8 +177,12 @@ export default function LinksPage() {
           } else {
             setLinks(data.data || []);
           }
-          setHasMoreShareLinks(data.pagination?.hasMore || false);
-          setShareLinksOffset(offset + (data.data?.length || 0));
+          // `cursorPagination`, et non `pagination` : depuis #4351 la
+          // passerelle ne sert QU'UNE forme par réponse, celle qui a été
+          // demandée. Lire l'autre rendrait `undefined` — donc `hasMore` faux,
+          // donc une liste tronquée à la première page, en silence.
+          setHasMoreShareLinks(data.cursorPagination?.hasMore || false);
+          setShareLinksCursor(data.cursorPagination?.nextCursor ?? null);
         } else {
           toast.error(t('errors.loadFailed'));
         }

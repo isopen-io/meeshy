@@ -95,10 +95,30 @@ export function sendError(
 /**
  * Send a 400 Bad Request error
  */
+/**
+ * 400 Bad Request.
+ *
+ * `violations` porte les erreurs PAR CHAMP, et l'oubli de cette option dans la
+ * signature avait une conséquence bien à elle (#4487) : `sendError` l'accepte,
+ * `errorResponseSchema` la déclare, mais l'aide spécialisée que tout le monde
+ * appelle ne l'offrait pas. Les routes se rabattaient donc sur
+ * `details: { issues }` — étalé à la RACINE, non déclaré au schéma, et **retiré
+ * en silence par `fast-json-stringify`**. Le détail était calculé, sérialisé,
+ * puis jeté au dernier mètre.
+ *
+ * L'asymétrie qui l'avait rendu invisible mérite d'être dite : `sendForbidden`
+ * portait `violations` et pas `sendBadRequest` — c'est-à-dire l'inverse de
+ * l'usage, les violations par champ appartenant bien plus à un refus de
+ * VALIDATION qu'à un refus de DROIT.
+ *
+ * > Une aide spécialisée qui offre MOINS que l'aide générale qu'elle enveloppe
+ * > détourne ses appelants vers un contournement — et le contournement, lui,
+ * > n'a pas de schéma.
+ */
 export function sendBadRequest(
   reply: FastifyReply,
   error: string,
-  options?: { message?: string; code?: string; details?: Record<string, unknown> }
+  options?: { message?: string; code?: string; details?: Record<string, unknown>; violations?: unknown[] }
 ): void {
   sendError(reply, 400, error, options);
 }

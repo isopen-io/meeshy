@@ -39,7 +39,7 @@ final class ConversationCreator: ConversationCreating {
     ) async throws -> Conversation {
         let body = CreateDirectBody(type: "direct", participantIds: [userId])
         let response: APIResponse<APIConversation> = try await api.post(
-            endpoint: "/conversations",
+            ConversationsEndpoint.root,
             body: body
         )
         return response.data.toConversation(currentUserId: currentUserId)

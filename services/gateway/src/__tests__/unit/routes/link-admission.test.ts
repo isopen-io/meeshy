@@ -333,6 +333,71 @@ describe('PATCH /guest-sessions/me', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data.participant.id).toBe('p1');
   });
+
+  /**
+   * LE TÉMOIN SE POSE LÀ OÙ LA SURCHARGE ET L'INSTANTANÉ DIVERGENT — un témoin
+   * qui ne mesure que le cas nominal ne peut pas tomber (leçon 261 : un témoin
+   * de RANG s'écrit sur un rang AUTRE que le premier).
+   *
+   * `participantConversationPayload` lisait `participant.permissions.*` BRUT,
+   * quand la loi unique du dépôt (`resolveParticipantRights` /
+   * `resolveEntryRights`) classe `anonymousSession.rights` AU-DESSUS. La charge
+   * annonçait donc « vous pouvez écrire » à quelqu'un à qui `middleware/auth.ts`
+   * refuse chaque envoi depuis que l'hôte a employé `PATCH …/rights`.
+   */
+  it('sert les droits RÉSOLUS, jamais l’instantané que la surcharge de l’hôte contredit', async () => {
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'p1', isActive: true, displayName: 'ano_ana', language: 'fr', avatar: null,
+      // L'instantané figé au join : le lien était ouvert en écriture.
+      permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canViewHistory: true },
+      anonymousSession: {
+        shareLinkId: SHARE_LINK_DB_ID,
+        profile: { firstName: 'A', lastName: 'B', username: 'ano_ana' },
+        session: {},
+        // Ce que l'hôte a retiré depuis, par `PATCH …/participants/:id/rights`.
+        rights: { canSendMessages: false, canViewHistory: false },
+      },
+    });
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+      ...mockShareLink, allowViewHistory: true,
+    });
+
+    const res = await app.inject({ method: 'PATCH', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+
+    expect(res.statusCode).toBe(200);
+    const { participant, conversation } = res.json().data;
+    expect(participant.canSendMessages).toBe(false);
+    // Ce que la surcharge ne NOMME pas suit l'instantané — `??` distingue une
+    // abstention d'un refus.
+    expect(participant.canSendFiles).toBe(true);
+    expect(participant.canSendImages).toBe(true);
+    // Le droit du PARTICIPANT et la colonne du LIEN divergent, et les deux sont
+    // servis : c'est le premier que `historyFloorFor` applique à la lecture.
+    expect(participant.canViewHistory).toBe(false);
+    expect(conversation.allowViewHistory).toBe(true);
+  });
+
+  /**
+   * SANS AUCUNE SURCHARGE, LE DROIT D'HISTORIQUE EST CELUI QUI EST FIGÉ — pas la
+   * valeur COURANTE du lien. Une re-jonction (cookie perdu) et une modification
+   * du lien entre-temps suffisent à les séparer, et c'est la valeur figée que la
+   * lecture des messages respecte.
+   */
+  it('sert le droit d’historique FIGÉ du participant, pas la valeur courante du lien', async () => {
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'p1', isActive: true, displayName: 'ano_ana', language: 'fr', avatar: null,
+      permissions: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: false },
+      anonymousSession: { shareLinkId: SHARE_LINK_DB_ID, profile: { username: 'ano_ana' }, session: {} },
+    });
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+      ...mockShareLink, allowViewHistory: true,
+    });
+
+    const res = await app.inject({ method: 'PATCH', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+
+    expect(res.json().data.participant.canViewHistory).toBe(false);
+    expect(res.json().data.conversation.allowViewHistory).toBe(true);
+  });
 });
 
 // ─── DELETE /guest-sessions/me — idempotence (critère 4 + critère 6) ─────────

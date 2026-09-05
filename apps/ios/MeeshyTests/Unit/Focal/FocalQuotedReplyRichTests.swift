@@ -125,7 +125,23 @@ final class FocalQuotedReplyRichTests: XCTestCase {
     /// un tap dessus traverse jusqu'à la zone 3 et retourne au message cité.
     func test_loiDesZones_leNomNEstPlusUneZoneTactile() throws {
         let code = try anchoredQuotedReplySource()
-        let nameSlice = try slice(of: code, from: "Text(title)", to: "private var previewGlyph")
+        // **L'ancre a bougé sous la garde** (#5103). Elle partait de
+        // `Text(title)` ; le NOM se rend désormais à DEUX endroits — dans
+        // `quotedFlow()`, qui le fait couler avec le texte, et dans `titleLine`,
+        // que seuls mood et story montent. `quotedFlow` étant déclaré AVANT,
+        // la tranche partait de lui et avalait `quotedThumbnail` et
+        // `authorGate` — deux zones tactiles LÉGITIMES (2 et 1).
+        //
+        // La garde rougissait donc sur un déplacement, pas sur une infraction.
+        // Elle interroge maintenant les DEUX rendus du nom, chacun borné par sa
+        // propre déclaration : c'est la loi qu'elle voulait dire.
+        // La borne de fin est la DÉCLARATION suivante, jamais un lexème qui
+        // réapparaît plus loin : `@ViewBuilder` ne revient qu'à 150 lignes
+        // d'ici, et la tranche avalait tout le `body` — dont le tap de la
+        // ZONE 3, parfaitement légitime.
+        let flowSlice = try slice(of: code, from: "private func quotedFlow()", to: "var body: some View")
+        let titleSlice = try slice(of: code, from: "private var titleLine", to: "private var previewGlyph")
+        let nameSlice = flowSlice + titleSlice
 
         var offenders: [String] = []
         for lexeme in Self.tapLexemes where nameSlice.contains(lexeme) {
@@ -210,8 +226,14 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "La miniature doit lire les URL DÉJÀ portées par ReplyReference — jamais une seconde résolution d'attachment."
         )
         XCTAssertTrue(
-            code.contains("CachedAsyncImage(url: thumbnailURL.absoluteString)"),
+            code.contains("CachedAsyncImage(") && code.contains("url: thumbnailURL.absoluteString"),
             "La vignette passe par CachedAsyncImage (3-tier) — jamais un AsyncImage nu qui re-télécharge à chaque réutilisation de cellule."
+        )
+        XCTAssertTrue(
+            code.contains("thumbHash: QuotedReplyPresentation.thumbHash(for: reference)"),
+            "L'appel a gagné un SECOND argument (#4946) : le flou ThumbHash instantané, refusé par la règle " +
+            "pour un média protégé. La forme mono-ligne d'origine n'est donc plus celle du fichier — c'est " +
+            "l'ajout qui a fait bouger cette assertion, pas un déplacement du composant."
         )
         XCTAssertTrue(
             code.contains("attachmentKind?.hasTimebasedTrack == true"),

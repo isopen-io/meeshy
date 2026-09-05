@@ -29,10 +29,14 @@ jest.mock('../../../../middleware/admin-permissions.middleware', () => ({
   requireAnalyticsPermission: jest.fn(),
 }));
 
+// `additionalProperties: true` — un schéma d'erreur mocké avec `properties: {}`
+// nu STRIPPERAIT tout ce que `sendError` pose (`code` compris) au sérialiseur,
+// un schéma sans `properties` effaçant par défaut (voir CLAUDE.md gateway,
+// « un schéma de réponse sans `properties` EFFACE »).
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   trackingLinkSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: {} },
-  validationErrorResponseSchema: { type: 'object', properties: {} },
+  errorResponseSchema: { type: 'object', additionalProperties: true },
+  validationErrorResponseSchema: { type: 'object', additionalProperties: true },
 }));
 
 // Mutable auth state so individual tests can control isRegisteredUser
@@ -151,10 +155,11 @@ describe('GET /tracking-links/:token', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when not the creator (anon)', async () => {
+  it('returns 401 for a visitor with no session at all (#5212)', async () => {
     mockGetByToken.mockResolvedValueOnce({ ...mockLink, createdBy: 'other-user' });
     const res = await app.inject({ method: 'GET', url: '/tracking-links/' + TOKEN });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('UNAUTHORIZED');
   });
 
   it('returns 200 when link has no createdBy (public link)', async () => {
@@ -187,6 +192,7 @@ describe('GET /tracking-links/:token (as registered creator)', () => {
     mockGetByToken.mockResolvedValueOnce({ ...mockLink, createdBy: 'other-user' });
     const res = await app.inject({ method: 'GET', url: '/tracking-links/' + TOKEN });
     expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('TRACKING_LINK_ACCESS_DENIED');
   });
 });
 

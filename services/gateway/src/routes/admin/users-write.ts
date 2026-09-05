@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { z } from 'zod';
 import { UserRoleEnum, UserAuditAction, type AuditChange } from '@meeshy/shared/types';
 import { updateUserProfileValidationSchema } from '@meeshy/shared/types/validation/admin-user';
@@ -72,7 +73,7 @@ const DEPUIS = '2026-08-29';
  * que le client ne peut pas suivre tel quel n'indique aucune migration.
  */
 const versLaFicheDe = (suffixe: string) => (request: FastifyRequest): string =>
-  `/api/v1/admin/users/${encodeURIComponent((request.params as { userId: string }).userId)}${suffixe}`;
+  `${apiPath('/admin/users')}/${encodeURIComponent((request.params as { userId: string }).userId)}${suffixe}`;
 
 const ANNONCE = {
   compte: { depuis: DEPUIS, successeur: versLaFicheDe(''), retraitLe: dateDeRetrait(DEPUIS) },

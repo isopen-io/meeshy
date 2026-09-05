@@ -27,33 +27,14 @@ extension ConversationView {
     }
 
     func triggerReply(for msg: Message) {
-        // Le média REPRÉSENTATIF (premier hors localisation) — la MÊME règle
-        // que l'ouverture `openQuotedMedia`, pour que l'icône de la bannière
-        // désigne la pièce jointe que le plein écran ouvrira (2026-08-27).
-        let firstAttachment = msg.attachments.quotedRepresentative
-        let preview = msg.content.isEmpty
-            ? (firstAttachment.map { "[\($0.type.rawValue.capitalized)]" } ?? "")
-            : msg.content
-        let attType = firstAttachment?.type.rawValue
-        let attThumb = firstAttachment?.thumbnailUrl ?? (firstAttachment?.type == .image ? firstAttachment?.fileUrl : nil)
-        composerState.pendingReplyReference = ReplyReference(
-            messageId: msg.id,
-            authorName: msg.senderName ?? "?",
-            previewText: preview,
-            isMe: msg.isMe,
-            authorColor: msg.senderColor,
-            // Le message cite est sous le doigt de l'utilisateur : son avatar
-            // est deja resolu. On le grave pour que la citation nee de ce geste
-            // le porte de bout en bout, banniere du composeur comprise.
-            authorAvatarUrl: msg.senderAvatarURL,
-            attachmentType: attType,
-            attachmentThumbnailUrl: attThumb,
-            // Le message cite est sous le doigt : sa protection est CONNUE.
-            // La banniere du composeur repond de la meme loi que la citation
-            // rendue dans le fil — un media a vue unique n'y montre pas plus sa
-            // vignette qu'ailleurs.
-            attachmentIsProtected: firstAttachment.map { $0.isViewOnce || $0.isBlurred }
-        )
+        // La citation naît de la fabrique UNIQUE du ViewModel — la même que la
+        // bulle optimiste (#4945). Ce geste composait la sienne à la main,
+        // pauvre de trois champs : sans miniature ThumbHash, sans durée, en
+        // langue d'ORIGINE et sans placeholder pour un message protégé — puis
+        // la bulle qui en naissait affichait autre chose. Le message cité est
+        // sous le doigt de l'utilisateur : tout ce que la fabrique grave (avatar,
+        // faits du média, texte élu par le Prisme, protection) est déjà connu.
+        composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg)
         isTyping = true
         HapticFeedback.medium()
     }

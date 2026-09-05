@@ -27,9 +27,21 @@ jest.mock('../../../services/GeoIPService', () => ({
   getRequestContext: (...a: any[]) => mockGetRequestContext(...a),
 }));
 
+// Le double d'un limiteur porte les TROIS méthodes que la route emploie, pas
+// seulement `middleware` : depuis #5216 un 400 REND la tentative comptée
+// (`keyFor` + `refund`). Un double partiel n'aurait pas fait rougir un témoin de
+// remboursement — il aurait fait tomber la route en 500 sur `refund is not a
+// function`, très loin du contrat mesuré (§ « un double PARTIEL perd en silence
+// ce que le module gagne »).
+const doubleDeLimiteur = () => ({
+  middleware: jest.fn(() => async () => {}),
+  refund: jest.fn(async () => {}),
+  keyFor: jest.fn(() => 'ip:test'),
+});
+
 jest.mock('../../../utils/rate-limiter.js', () => ({
-  createRegisterRateLimiter: () => ({ middleware: () => async () => {} }),
-  createAuthGlobalRateLimiter: () => ({ middleware: () => async () => {} }),
+  createRegisterRateLimiter: jest.fn(() => doubleDeLimiteur()),
+  createAuthGlobalRateLimiter: jest.fn(() => doubleDeLimiteur()),
 }));
 
 const mockFormatUserResponse = jest.fn<any>((user: any) => ({ ...user, formatted: true }));
@@ -38,11 +50,18 @@ jest.mock('../../../routes/auth/types', () => ({
   formatUserResponse: (...a: any[]) => mockFormatUserResponse(...a),
 }));
 
+// `routes/auth/register.ts` importe ses schemas du BARIL `@meeshy/shared/types`,
+// donc le double se pose la ; mais les VALEURS viennent du vrai module de
+// schemas (#4649). Reecrire `errorResponseSchema` a la main remplacait le
+// contrat que les cinq assertions de corps d'erreur ci-dessous pretendent
+// mesurer. `api-schemas` plutot que le baril entier : meme objets (le baril le
+// re-exporte), 72 ms au lieu de 388 ms de chargement.
+//
+// `registerRequestSchema` reste permissif — un schema de REQUETE reel deplace
+// le refus dans AJV, avant le handler : autre sujet, autre temoin (#4649).
 jest.mock('@meeshy/shared/types', () => ({
-  userSchema: { type: 'object', additionalProperties: true },
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   registerRequestSchema: { type: 'object', additionalProperties: true },
-  validationErrorResponseSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' } } },
 }));
 
 const mockNormalizePhoneWithCountry = jest.fn<any>();
@@ -266,71 +285,62 @@ describe('POST /register — phone transfer fails after registration', () => {
   });
 });
 
-describe('POST /register — duplicate field error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('Email déjà utilisé')) }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
+// Quatre `describe` vivaient ici — « duplicate field », « invalid email »,
+// « invalid password », « invalid username » — et les quatre simulaient un
+// `reject(new Error('…'))` dont la route lisait le TEXTE pour choisir un code.
+// **La production n'a jamais produit ces rejets** : `AuthService.register`
+// rattrapait tout et rendait `null`, donc les branches étaient inatteignables et
+// les témoins attestaient un comportement absent (#5216).
+//
+// Le refus est désormais une valeur TYPÉE, et le témoin porte sur ce que le
+// client lit : le code, le statut, le champ.
 
-  it('returns 400 for duplicate field error', async () => {
+describe('POST /register — un refus TYPÉ sert son code, son statut et son champ', () => {
+  const refus = (code: string, status: number, field: string, extra: Record<string, unknown> = {}) =>
+    Object.assign(new Error(`refus ${code}`), { code, status, field, ...extra });
+
+  const inscrireAvecRefus = async (erreur: Error) => {
+    const app = await buildApp({
+      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(erreur) }),
+    });
     mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
     const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('utilisé');
-  });
-});
+    await app.close();
+    return res;
+  };
 
-describe('POST /register — invalid email error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('Email invalide')) }),
+  it('409 USERNAME_TAKEN, avec le champ et les remplaçants SERVIS', async () => {
+    const res = await inscrireAvecRefus(
+      refus('USERNAME_TAKEN', 409, 'username', { suggestions: ['alice1', 'alice7'] }),
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      code: 'USERNAME_TAKEN',
+      field: 'username',
+      suggestions: ['alice1', 'alice7'],
     });
   });
-  afterAll(async () => { await app.close(); });
 
-  it('returns 400 for invalid email error', async () => {
-    mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
-    const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
+  it('409 EMAIL_TAKEN, avec son champ', async () => {
+    const res = await inscrireAvecRefus(refus('EMAIL_TAKEN', 409, 'email'));
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'EMAIL_TAKEN', field: 'email' });
+  });
+
+  it('400 PHONE_INVALID, avec son champ', async () => {
+    const res = await inscrireAvecRefus(refus('PHONE_INVALID', 400, 'phoneNumber'));
+
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('invalide');
+    expect(res.json()).toMatchObject({ code: 'PHONE_INVALID', field: 'phoneNumber' });
   });
-});
 
-describe('POST /register — invalid password error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('mot de passe trop court')) }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
+  it("une erreur NON typée reste une panne — le texte ne décide plus du statut", async () => {
+    const res = await inscrireAvecRefus(new Error('Email déjà utilisé'));
 
-  it('returns 400 for invalid password error', async () => {
-    mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
-    const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('mot de passe');
-  });
-});
-
-describe('POST /register — invalid username error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({
-      authService: makeAuthService({ register: jest.fn<any>().mockRejectedValue(new Error('username trop court')) }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 for invalid username error', async () => {
-    mockValidateSchema.mockReturnValueOnce(REGISTER_BODY);
-    const res = await app.inject({ method: 'POST', url: '/register', payload: REGISTER_BODY });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('username');
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('REGISTRATION_ERROR');
   });
 });
 

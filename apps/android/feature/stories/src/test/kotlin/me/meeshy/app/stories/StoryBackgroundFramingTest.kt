@@ -119,6 +119,6 @@ class StoryBackgroundFramingTest {
 
         assertThat(readBack.offsetXFraction.toDouble()).isWithin(1e-6).of(270.0 / W)
         assertThat(readBack.offsetYFraction.toDouble()).isWithin(1e-6).of(-480.0 / H)
-        assertThat(readBack.scale.toDouble()).isWithin(1e-6).of(2.5)
+        assertThat(readBack.scaleX.toDouble()).isWithin(1e-6).of(2.5)
     }
 }

@@ -1271,7 +1271,7 @@ struct ConversationListView: View {
             HStack(spacing: 8) {
                 ForEach(ConversationFilter.allCases) { filter in
                     ThemedFilterChip(
-                        title: filter.rawValue,
+                        title: filter.displayName,
                         color: filter.color,
                         isSelected: conversationViewModel.selectedFilters.contains(filter),
                         isCompact: true
@@ -1539,10 +1539,10 @@ struct ConversationListView: View {
     /// .pendingOpenFeedComposer`, consommé par le flux), invitation
     /// (`AffiliateCreateView`, lien de parrainage), lien raccourci
     /// (`CreateTrackingLinkView`, `/l/<token>`).
-    private func quickActions(isEmptyState: Bool, minHeight: CGFloat = 0) -> some View {
+    private func quickActions(isEmptyState: Bool, conversationCount: Int, minHeight: CGFloat = 0) -> some View {
         ConversationListQuickActions(
             isDark: theme.mode.isDark,
-            isEmptyState: isEmptyState,
+            isEmptyState: isEmptyState, conversationCount: conversationCount,
             minHeight: minHeight,
             onAction: { action in
                 switch action {
@@ -1570,7 +1570,7 @@ struct ConversationListView: View {
     @ViewBuilder
     private var listTail: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            quickActions(isEmptyState: false, minHeight: listTailMinHeight)
+            quickActions(isEmptyState: false, conversationCount: conversationViewModel.conversations.count, minHeight: listTailMinHeight)
         } else {
             Color.clear.frame(height: 60)
         }
@@ -1784,7 +1784,7 @@ struct ConversationListView: View {
                                     // État vide = les MÊMES accès rapides que la
                                     // queue de liste (2026-08-21) : tout commence
                                     // ici — message, story, mood, post, invitation.
-                                    quickActions(isEmptyState: true)
+                                    quickActions(isEmptyState: true, conversationCount: 0)
                                 } else {
                                     EmptyStateView(
                                         icon: "bubble.left.and.bubble.right",

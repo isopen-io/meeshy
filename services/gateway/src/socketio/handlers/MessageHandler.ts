@@ -53,11 +53,10 @@ import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
+import { fetchParticipantSuperset } from '../participant-superset';
 import {
-  PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
   toIsoOrNull,
-  type PreviewPrismParticipant,
 } from '../utils/lastMessagePreviewPrism';
 import { validateMessageLength } from '../../config/message-limits';
 import {
@@ -72,12 +71,10 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
-import { resolveForwardSourceForBroadcast } from '../../services/preferences/forward-source-visibility.js';
-import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import {
-  carriesForwardSource,
-  withoutForwardSource,
-} from '@meeshy/shared/utils/forward-source-visibility';
+  resolveForwardSourceBroadcastPayload,
+  withoutForwardSourceOrItsPath,
+} from '../../services/preferences/forward-source-visibility.js';
 import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
@@ -85,7 +82,12 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types/messaging';
-import type { SocketIOMessage, SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type {
+  SocketIOMessage,
+  SocketIOResponse,
+  MessageSendData,
+  MessageSendWithAttachmentsData,
+} from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from '../messageNewPayload';
 import { buildMessageEditedCore } from '../messageEditedPayload';
@@ -167,29 +169,6 @@ export interface MessageHandlerDependencies {
   trackingLinkService?: LinkReconciler | null;
 }
 
-/**
- * Le retrait COMPLET d'une source de transfert : le nom ET le chemin.
- *
- * `withoutForwardSource` (shared, pur) retire `forwardedFrom` et
- * `forwardedFromConversation`. Il ne peut pas faire plus : la seconde fuite ne
- * vit pas dans ces champs mais dans `attachments[].fileUrl`, où le chemin de
- * stockage de la copie porte le `User.id` de l'auteur d'origine — un transfert
- * réutilise le fichier plutôt que de le recopier.
- *
- * Les trois émissions qui masquent une source passent par ici, et non par le
- * seul `withoutForwardSource` : masquer sur un canal en laissant l'autre ouvert
- * ne masque rien. La porte REST ferme la même fuite avec le même helper.
- */
-const withoutForwardSourceOrItsPath = <T extends object>(payload: T): T => {
-  const stripped = withoutForwardSource(payload) as T & { attachments?: unknown };
-  if (!Array.isArray(stripped.attachments)) return stripped;
-
-  return {
-    ...stripped,
-    attachments: redactForwardedAttachmentUrlsIn(stripped.attachments as never[]),
-  } as T;
-};
-
 export class MessageHandler {
   private io: MeeshyIOServer;
   private prisma: PrismaClient;
@@ -268,16 +247,10 @@ export class MessageHandler {
    */
   async handleMessageSend(
     socket: MeeshySocket,
-    data: {
-      conversationId: string;
-      content: string;
-      originalLanguage?: string;
-      messageType?: string;
-      replyToId?: string;
-      forwardedFromId?: string;
-      forwardedFromConversationId?: string;
-      location?: unknown;
-    },
+    // Le contrat de fil PARTAGÉ, pas une transcription locale : une forme
+    // recopiée ici retenait chaque champ ajouté au contrat (`sticker`, #4823)
+    // sans qu'aucun témoin rougisse — la validation réelle est Zod, ci-dessous.
+    data: MessageSendData,
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
@@ -436,9 +409,11 @@ export class MessageHandler {
         isViewOnce: validated.isViewOnce,
         maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
-        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
-        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        // Lieu partagé et sticker (#4823) — champs dédiés transmis tels quels ;
+        // validés et écrits dans `metadata.location` / `metadata.sticker` par
+        // `MessageProcessor.saveMessage`.
         location: validated.location,
+        sticker: validated.sticker,
         // Mentionnés nommés par l'ÉMETTEUR — parité avec POST /messages, qui
         // les honore depuis toujours. Sans cette propagation, la résolution
         // retombe sur l'extraction des `@` du CONTENU : un repli suffisant tant
@@ -519,16 +494,8 @@ export class MessageHandler {
    */
   async handleMessageSendWithAttachments(
     socket: MeeshySocket,
-    data: {
-      conversationId: string;
-      content: string;
-      originalLanguage?: string;
-      attachmentIds: readonly string[];
-      replyToId?: string;
-      forwardedFromId?: string;
-      forwardedFromConversationId?: string;
-      location?: unknown;
-    },
+    // Même contrat partagé que `handleMessageSend` — même raison.
+    data: MessageSendWithAttachmentsData,
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
     try {
@@ -674,8 +641,10 @@ export class MessageHandler {
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
-        // Lieu partagé — même contrat que handleMessageSend ci-dessus.
+        // Lieu partagé et sticker — même contrat que handleMessageSend ci-dessus.
+        // Ce chemin est le NOMINAL du sticker : PNG rendu joint + descripteur.
         location: validated.location,
+        sticker: validated.sticker,
         // Mentionnés nommés par l'émetteur — même contrat que handleMessageSend.
         // Ce path porte TOUT l'audio : la légende d'un média y est souvent le
         // seul texte, et c'est là qu'un `@` a le plus de chances de manquer.
@@ -1383,35 +1352,12 @@ export class MessageHandler {
         ...locationParts,
       };
 
-      // Single participant query shared between the `message:new` fan-out,
-      // CONVERSATION_UPDATED and CONVERSATION_UNREAD_UPDATED to avoid
-      // duplicate DB round-trips. Lue AVANT la diffusion : la réciprocité
-      // des sources de transfert a besoin des lecteurs du salon pour
-      // décider qui a droit à la provenance — une liste, un lecteur.
-      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
-      // satisfies both callers — `user` (préférences de langue) est le Prisme
-      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
-      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
-      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
-      // qui charge le même superset pour la même raison.
-      //
-      // `undefined` — jamais `[]` — quand la requête tombe. Les deux formes se
-      // lisent pareil au site d'appel et ne disent pas la même chose : `[]`
-      // AFFIRME que la conversation n'a aucun participant, `undefined` avoue
-      // qu'on ne sait pas. `enqueueForOfflineParticipants` distingue les deux
-      // (`params.participants ?? sa propre requête`), et c'est la seule des
-      // trois consommatrices dont l'abandon soit DESTRUCTIF : un `[]` lui
-      // faisait enfiler pour PERSONNE, donc perdre le message pour tous les
-      // absents, pendant que ce journal n'annonçait que deux pertes cosmétiques.
-      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
-      try {
-        sharedParticipants = await this.prisma.participant.findMany({
-          where: { conversationId: normalizedId, isActive: true },
-          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-        });
-      } catch (err) {
-        handlerLogger.warn('participant fetch failed — CONVERSATION_UPDATED + unread sautés, la file hors ligne refait sa propre requête', { error: err });
-      }
+      // Site UNIQUE, partagé avec le chemin REST/ZMQ : `participant-superset.ts`
+      // (le `select`, la sémantique `undefined` ≠ `[]`, et pourquoi). Lue AVANT
+      // la diffusion : la réciprocité des sources de transfert a besoin des
+      // lecteurs du salon pour décider qui a droit à la provenance — une
+      // liste, un lecteur.
+      const sharedParticipants = await fetchParticipantSuperset(this.prisma, normalizedId, 'socket');
 
       const room = ROOMS.conversation(normalizedId);
 
@@ -1447,42 +1393,18 @@ export class MessageHandler {
       // original language is always kept (Prisme source fallback). The sender's
       // own devices still receive the full, cid-aware `senderPayload`.
 
-      // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23).
-      //
-      // `visible ⇔ auteur ET lecteur`. L'auteur du transfert est FIXE pour ce
-      // message : son refus tranche pour tout le salon d'un coup. Son accord ne
-      // laisse que la moitié « lecteur », qui partage les destinataires en
-      // exactement DEUX groupes — jamais plus. C'est ce qui rend la règle
-      // finançable sur une diffusion de salon.
-      //
-      // Le découpage passe par les SALONS UTILISATEUR : l'adaptateur Redis les
-      // propage, donc un destinataire connecté à un AUTRE nœud est exclu comme
-      // il faut. Surtout PAS le motif de `_emitMessageNewByLanguage`, qui
-      // énumère des socket ids locaux et dont le repli multi-nœud rediffuse le
-      // payload COMPLET au salon : reproduire ce motif ici ferait fuiter le nom
-      // sur tout déploiement multi-nœud, en silence.
-      //
-      // Rien n'est payé quand le message ne nomme aucune source — c'est
-      // l'immense majorité des envois.
-      let peerPayload = broadcastPayload;
-      let forwardSourceHiddenRooms: string[] = [];
-      let forwardSourceHiddenUserIds: ReadonlySet<string> = new Set<string>();
-      if (carriesForwardSource(broadcastPayload)) {
-        const verdict = await resolveForwardSourceForBroadcast(
-          this.prisma,
+      // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23) —
+      // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
+      // inconnue. Extrait dans `resolveForwardSourceBroadcastPayload`
+      // (services/preferences/forward-source-visibility.ts), qui documente le
+      // découpage par SALONS UTILISATEUR et le fail-closed en détail.
+      const { peerPayload, forwardSourceHiddenRooms, forwardSourceHiddenUserIds } =
+        await resolveForwardSourceBroadcastPayload(this.prisma, {
           senderUserId,
-          (sharedParticipants ?? []).map((participant) => participant.userId)
-        );
-        if (!verdict.forwarderAllows) {
-          // L'auteur s'est retiré : plus personne n'apprend la provenance —
-          // sauf lui-même, servi par `senderPayload` (se cacher des autres
-          // n'est pas s'aveugler).
-          peerPayload = withoutForwardSourceOrItsPath(broadcastPayload);
-        } else {
-          forwardSourceHiddenUserIds = verdict.refusingReaderIds;
-          forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
-        }
-      }
+          sharedParticipants,
+          broadcastPayload,
+          userRoom: (userId) => ROOMS.user(userId),
+        });
 
       // Opt-in (OFF by default) — flip per-deploy after staging measurement.
       //

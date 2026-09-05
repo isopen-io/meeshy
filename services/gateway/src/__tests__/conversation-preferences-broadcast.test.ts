@@ -91,7 +91,6 @@ describe('conversation-preferences routes — socket emissions (Phase 1 contract
       orderInCategory: null,
       customName: null,
       reaction: null,
-      deletedForUserAt: null,
       clearHistoryBefore: null,
       version: 4,
       createdAt: new Date('2026-05-22T00:00:00Z'),
@@ -339,7 +338,6 @@ describe('conversation-preferences routes — version monotonicity across a rese
       orderInCategory: null,
       customName: null,
       reaction: null,
-      deletedForUserAt: null,
       clearHistoryBefore: null,
     });
   });

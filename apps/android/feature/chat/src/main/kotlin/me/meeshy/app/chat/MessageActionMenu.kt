@@ -16,6 +16,12 @@ enum class MessageAction {
     ShowTranslation,
     ExploreLanguages,
     Copy,
+    /** Downloads (if needed) and opens the message's FILE attachment via `ACTION_VIEW`.
+     * Android's counterpart to iOS's `.saveMedia` for `saveableAttachmentCount == 1` —
+     * except Android opens rather than saves, since there is no gallery-equivalent
+     * destination for a document/code/archive. */
+    OpenFile,
+    ShareFile,
     Pin,
     Unpin,
     Star,
@@ -42,6 +48,11 @@ data class MessageActionContext(
     val canEdit: Boolean,
     val canDeleteForEveryone: Boolean,
     val pinAction: PinAction,
+    /** The message carries at least one non-image/location/audio (FILE) attachment —
+     * `BubbleContent.files.isNotEmpty()`. Gates [MessageAction.OpenFile] / [MessageAction.ShareFile]
+     * independently of [isActionable]: opening/sharing a received file doesn't depend on this
+     * message's own send state. */
+    val hasOpenableFile: Boolean = false,
 ) {
     /**
      * A message is "actionable" — eligible for reply / forward / star / edit / delete —
@@ -70,6 +81,10 @@ object MessageActionMenu {
         }
         if (!ctx.isDeleted) {
             add(MessageAction.Copy)
+        }
+        if (ctx.hasOpenableFile) {
+            add(MessageAction.OpenFile)
+            add(MessageAction.ShareFile)
         }
         when (ctx.pinAction) {
             PinAction.Pin -> add(MessageAction.Pin)

@@ -5,6 +5,44 @@ import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
+/// **Une cible tactile se pense autour d'un GLYPHE, jamais autour de sa
+/// police** (#4086, mesuré le 2026-09-02).
+///
+/// Relevé sur la rangée d'actions du détail :
+///
+/// ```
+/// 32 × 17   Je n'aime plus
+/// 22 × 19   Commentaires
+/// 25 × 17   Republier
+/// 17 × 20   Ajouter aux favoris
+/// ```
+///
+/// Soit environ le TIERS du minimum d'Apple (44 pt) dans chaque dimension.
+/// `EngagementGlyph` ne pose que `.font(MeeshyFont.relative(size))` — aucun
+/// cadre, aucune forme de contact — donc le bouton fait exactement la taille de
+/// ses caractères. Personne n'a « choisi » 17 pt : c'est la hauteur du glyphe.
+///
+/// > La règle des 44 pt s'applique là où elle est CONVOQUÉE — autour d'une
+/// > icône qu'on encadre. Un label qui se dimensionne tout seul, glyphe ou mot,
+/// > ne la convoque jamais : elle n'est pas violée, elle est absente.
+///
+/// L'agrandissement ne déplace RIEN : le retrait qui étend la zone est annulé
+/// par un retrait négatif de même valeur. Même patron que
+/// `captionAffordanceHitArea` (`MediaCaptionOverlay`), même raison.
+private extension View {
+    func engagementHitArea() -> some View {
+        // 14 et non 13 : le plus PETIT glyphe de la rangée fait 17 pt
+        // (`EngagementGlyph(size: 17)` par défaut), et 17 + 2 × 13 = 43 — un
+        // point sous le minimum. Mesuré à l'écran, pas calculé : deux des cinq
+        // cibles sortaient à 43 après le premier réglage.
+        self.padding(.vertical, 14)
+            .padding(.horizontal, 14)
+            .contentShape(Rectangle())
+            .padding(.vertical, -14)
+            .padding(.horizontal, -14)
+    }
+}
+
 struct PostDetailView: View {
     let postId: String
     var initialPost: FeedPost?
@@ -16,12 +54,19 @@ struct PostDetailView: View {
     /// du parent puis défile jusqu'à ce fil (la réponse y apparaît).
     var targetParentCommentId: String?
 
-    @StateObject private var viewModel = PostDetailViewModel()
+    // `internal` et non `private` : les deux écrans d'absence vivent dans
+    // `PostDetailView+AbsenceStates.swift`, et un `private` de portée FICHIER
+    // les rendrait inaccessibles depuis une extension frère (piège documenté
+    // dans `apps/ios/CLAUDE.md`, déjà payé sur `composerFocusTrigger`).
+    @State private var showsReactionPalette = false
+    @StateObject var viewModel = PostDetailViewModel()
     /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
     /// donc le backend suggère l'auteur du post, les personnes ayant commenté, puis
     /// les contacts (parité avec `FeedCommentsSheet`).
     @StateObject private var mentionController: MentionComposerController
-    private var theme: ThemeManager { ThemeManager.shared }
+    // internal : lu par `PostDetailView+Canvas.swift` (#4086) — un membre
+    // `private` d'une View n'est PAS visible depuis un fichier d'extension.
+    var theme: ThemeManager { ThemeManager.shared }
 
     init(
         postId: String,
@@ -40,7 +85,7 @@ struct PostDetailView: View {
     }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject private var router: Router
+    @EnvironmentObject var router: Router
     @State private var showTranslationSheet = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var likeScale: CGFloat = 1.0
@@ -50,12 +95,12 @@ struct PostDetailView: View {
     @State private var showFullscreenGallery = false
     @State private var audioFullscreen: AudioFullscreenSource?
     /// Lieu du post ouvert plein écran (sticker / carte de la page Detail).
-    @State private var detailFullscreenPlace: BubbleFullscreenPlace?
+    @State var detailFullscreenPlace: BubbleFullscreenPlace?
     /// Muet LOCAL du canvas story inline (natif OU repost-de-story, RF3) —
     /// B3.6, Task E2. Pilote `mute:` aux DEUX sites `StoryReaderRepresentable`
     /// (mutuellement exclusifs — un seul rend à la fois). Jamais
     /// `isGlobalMuted` du viewer story : surfaces indépendantes.
-    @State private var isCanvasMuted = false
+    @State var isCanvasMuted = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -92,10 +137,10 @@ struct PostDetailView: View {
     @State private var isTextExpanded = false
     @State private var headerScrollRelay = ScrollOffsetRelay()
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
-    @State private var storyCanvasVisible: Bool = true
-    @State private var isCallActive: Bool = false
-    @State private var scrollViewportHeight: CGFloat = 0
-    private static let scrollSpace = "postDetailScroll"
+    @State var storyCanvasVisible: Bool = true
+    @State var isCallActive: Bool = false
+    @State var scrollViewportHeight: CGFloat = 0
+    static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
     /// as this becomes non-nil and clears it on dismiss.
@@ -177,7 +222,11 @@ struct PostDetailView: View {
     // MARK: - Post Heart Toggle (socket-driven, post detail)
 
     @MainActor
-    private func toggleDetailPostHeart() {
+    // `internal` : `sendDetailReaction` vit dans `PostDetailView+Reactions`
+    // et retombe sur le cœur quand l'émoji choisi EST le cœur. Un `private`
+    // de portée fichier le lui interdirait — même piège que `viewModel`,
+    // documenté dans `apps/ios/CLAUDE.md`.
+    func toggleDetailPostHeart() {
         Task {
             guard !postHeartInFlightIds.contains(postId) else { return }
             postHeartInFlightIds.insert(postId)
@@ -229,7 +278,7 @@ struct PostDetailView: View {
     private func postLikeViaREST(like: Bool) async -> Bool {
         do {
             let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/like",
+                PostsEndpoint.byPostIdLike(postId: postId),
                 method: like ? "POST" : "DELETE"
             )
             return true
@@ -251,7 +300,7 @@ struct PostDetailView: View {
             let ok: Bool = await {
                 do {
                     let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        endpoint: "/posts/\(postId)/bookmark",
+                        PostsEndpoint.byPostIdBookmark(postId: postId),
                         method: wasBookmarked ? "DELETE" : "POST"
                     )
                     return true
@@ -318,7 +367,7 @@ struct PostDetailView: View {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
                 try await RepostPublisher.shared.publish(intention)
-                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "post.repost.label", defaultValue: "Repartage"))
             } catch {
                 isPostReposted = false
                 FeedbackToastManager.shared.showError(String(localized: "post.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
@@ -440,7 +489,8 @@ struct PostDetailView: View {
     // type-checker stays within budget — inlining the threaded-comment
     // ForEach made `body` exceed the reasonable type-check time.
     @ViewBuilder
-    private func postDetailContent(_ post: FeedPost) -> some View {
+    private func postDetailContent(_ post: FeedPost,
+                                   scrollProxy: ScrollViewProxy) -> some View {
         // ZONE 1: Text
         textZone(post)
 
@@ -500,12 +550,12 @@ struct PostDetailView: View {
             if post.isStory && isSharedStory {
                 storyRepostAttributionRow(repost)
             } else {
-                repostEmbed(repost)
+                repostEmbed(repost, renderedItem: renderedItem)
             }
         }
 
         // Actions bar
-        actionsBar(post, renderedItem: renderedItem)
+        actionsBar(post, renderedItem: renderedItem, scrollProxy: scrollProxy)
 
         // Separator + Comments (ZONE 3)
         Rectangle()
@@ -589,7 +639,23 @@ struct PostDetailView: View {
                 .padding()
         }
 
-        if viewModel.hasMoreComments && !viewModel.isLoadingComments {
+        // **`hasMoreComments` vaut « je ne sais pas encore », pas « il y en a
+        // plus ».** Il est initialisé à `true` À DESSEIN — sans quoi la
+        // pagination se bloquerait pour la session (cf. `loadMoreComments`) —
+        // mais cet état d'IGNORANCE affichait « Charger plus » sous un
+        // « Commentaires (0) », mesuré au simulateur le 2026-09-02. Un bouton
+        // qui propose de charger ce qui n'existe pas est un contrôle sans
+        // matière (loi 4).
+        //
+        // > Un booléen initialisé à `true` pour ne rien bloquer porte DEUX sens
+        // > — « inconnu » et « oui » — et l'affichage lit toujours le second.
+        // > Ce qui manque n'est pas une garde de plus : c'est que le tri-état
+        // > ait été écrasé en booléen à sa déclaration.
+        //
+        // La liste VIDE tranche sans toucher à la pagination : « charger PLUS »
+        // n'a de sens qu'après un premier lot. Le chargement initial est
+        // automatique, donc une liste vide après lui signifie zéro.
+        if viewModel.hasMoreComments == true && !viewModel.isLoadingComments && !viewModel.comments.isEmpty {
             Button {
                 Task { await viewModel.loadMoreComments(postId) }
             } label: {
@@ -670,43 +736,6 @@ struct PostDetailView: View {
         }
     }
 
-    /// Contenu introuvable : expiré, retiré, ou jamais accessible à cette
-    /// personne. On ne distingue pas — le serveur répond la même chose dans les
-    /// trois cas, et prétendre le contraire serait inventer.
-    private var unavailableState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "clock.badge.xmark")
-                .font(.system(size: 40))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "feed.post.detail.unavailable.title",
-                        defaultValue: "Ce contenu n'est plus disponible", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .multilineTextAlignment(.center)
-            Text(String(localized: "feed.post.detail.unavailable.body",
-                        defaultValue: "Il a peut-être expiré ou été retiré par son auteur.", bundle: .main))
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-            Button {
-                // Même geste que la flèche de l'en-tête (`postDetailHeader`) —
-                // et le seul disponible ici : l'en-tête ne se rend qu'avec un
-                // post, donc cette branche n'en a aucun.
-                HapticFeedback.light()
-                router.pop()
-            } label: {
-                Text(String(localized: "feed.post.detail.unavailable.back",
-                            defaultValue: "Retour", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
-            .padding(.top, 4)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -721,7 +750,7 @@ struct PostDetailView: View {
                                 Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
                                 LazyVStack(spacing: 0) {
-                                    postDetailContent(post)
+                                    postDetailContent(post, scrollProxy: scrollProxy)
                                 }
                                 .padding(.bottom, 80)
                             }
@@ -784,15 +813,25 @@ struct PostDetailView: View {
                 ProgressView()
                 Spacer()
             } else {
-                // Ni post, ni chargement : la cible n'existe plus. Cette branche
-                // n'existait pas — l'écran rendait une PAGE BLANCHE surmontée
-                // d'un composeur de commentaire, sans en-tête donc sans bouton
-                // retour. C'est exactement où atterrit un `/l/<token>` de story
-                // expirée, le cas le plus fréquent de ces liens (toute story
-                // meurt à 24 h) : le lien ouvre enfin la bonne destination, il
-                // fallait encore que la destination dise quelque chose.
+                // Ni post, ni chargement. Cette branche n'existait pas —
+                // l'écran rendait une PAGE BLANCHE surmontée d'un composeur de
+                // commentaire, sans en-tête donc sans bouton retour. C'est
+                // exactement où atterrit un `/l/<token>` de story expirée, le
+                // cas le plus fréquent de ces liens (toute story meurt à 24 h).
+                //
+                // Elle disait ensuite « ce contenu n'est plus disponible » pour
+                // les DEUX causes : la cible a disparu, ou la requête a échoué.
+                // Le second cas est un MENSONGE — l'écran affirme une
+                // suppression qui n'a pas eu lieu et n'offre que « Retour »,
+                // retirant la seule action utile : réessayer (#4903).
                 Spacer()
-                unavailableState
+                if PostDetailAbsenceReason.resolve(hasPost: false,
+                                                   isLoading: false,
+                                                   error: viewModel.error) == .loadFailed {
+                    loadFailedState
+                } else {
+                    unavailableState
+                }
                 Spacer()
             }
 
@@ -1023,6 +1062,7 @@ struct PostDetailView: View {
                     allAttachments: attachments,
                     startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
                     accentColor: accentColor,
+                    captionServings: Self.captionServings(for: post),
                     captionMap: SocialMediaCaption.map(
                         for: post.media, carrierText: post.displayContent
                     ),
@@ -1419,313 +1459,16 @@ struct PostDetailView: View {
 
     // MARK: - Repost Embed
 
-    @State private var repostSecondaryLangCode: String? = nil
-    @State private var repostActiveDisplayLangCode: String? = nil
+    @State var repostSecondaryLangCode: String? = nil
+    @State var repostActiveDisplayLangCode: String? = nil
 
-    /// Attribution compacte d'une STORY republiée en story : icône repost +
-    /// « @auteur » (SANS « via » — l'icône dit déjà la republication, même
-    /// règle que le header du viewer, directive user 2026-07-13) tappable
-    /// vers l'original. Remplace l'embed canvas complet (qui doublait le
-    /// contenu sous le canvas principal — IMG_1161, 2026-07-13).
-    private func storyRepostAttributionRow(_ repost: RepostContent) -> some View {
-        Button {
-            HapticFeedback.light()
-            router.push(.postDetail(repost.id))
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.2.squarepath")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
-                Text("@\(repost.authorUsername ?? repost.author)")
-                    .font(.footnote)
-                    .foregroundColor(theme.accentText(repost.authorColor))
-                Spacer()
-                Image(systemName: "chevron.forward")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
-        .accessibilityHint(String(localized: "a11y.post.repost_author.hint", defaultValue: "Ouvre la publication d'origine", bundle: .main))
-    }
-
-    @ViewBuilder
-    private func repostEmbed(_ repost: RepostContent) -> some View {
-        let isStoryRepost = (repost.type ?? "").uppercased() == "STORY"
-
-        VStack(alignment: .leading, spacing: 0) {
-            // Author header — always tappable to navigate
-            Button {
-                HapticFeedback.light()
-                router.push(.postDetail(repost.id))
-            } label: {
-                HStack(spacing: 8) {
-                    MeeshyAvatar(
-                        name: repost.author,
-                        context: .postComment,
-                        accentColor: repost.authorColor,
-                        avatarURL: repost.authorAvatarURL
-                    )
-                    .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(repost.author)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(theme.accentText(repost.authorColor))
-                        HStack(spacing: 4) {
-                            Text(repost.timestamp, style: .relative)
-                                .font(.caption2)
-                                .foregroundColor(theme.textMuted)
-                            // Language flags for repost translations
-                            if let translations = repost.translations, !translations.isEmpty {
-                                repostLanguageFlags(repost)
-                                    .accessibilityHidden(true)
-                            }
-                        }
-                    }
-                    Spacer()
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
-            .accessibilityElement(children: .ignore)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
-            .accessibilityHint(String(localized: "a11y.post.repost_author.hint", defaultValue: "Ouvre la publication d'origine", bundle: .main))
-
-            // Text content with translation support.
-            // For STORY reposts the caption lives inside the canvas overlays
-            // (rendered below via StoryReaderRepresentable) — suppress the
-            // plain body here to avoid showing the same text twice, mirroring
-            // the main-post guard (`if !post.isStory`) and `StoryRepostEmbedCell`.
-            if !isStoryRepost, !repost.content.isEmpty {
-                let repostDisplayContent = repostEffectiveContent(repost)
-                Text(repostDisplayContent)
-                    .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(6)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
-                    .accessibilityLabel(String(format: String(localized: "a11y.post.repost_content", defaultValue: "Contenu repartagé : %@", bundle: .main), repostDisplayContent))
-
-                // Inline secondary translation for repost
-                if let code = repostSecondaryLangCode,
-                   let secondaryText = repostSecondaryContent(repost, code: code) {
-                    let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-                    let display = LanguageDisplay.from(code: code)
-                    VStack(spacing: 0) {
-                        HStack(spacing: 6) {
-                            Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                            Circle().fill(langColor).frame(width: 3, height: 3)
-                            Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                        }
-                        VStack(alignment: .leading, spacing: 3) {
-                            if let display {
-                                HStack(spacing: 3) {
-                                    Text(display.flag).font(.caption2)
-                                    Text(display.name)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundColor(langColor)
-                                }
-                            }
-                            Text(secondaryText)
-                                .font(.footnote)
-                                .foregroundColor(theme.textPrimary.opacity(0.8))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(langColor.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-
-            // Story-type repost — render the canvas. Unmuted by default to match
-            // the native story detail (RF3); a local mute toggle in the actions
-            // bar (B3.6, Task E2) can silence it — `isCanvasMuted`. The SHARED
-            // `storyCanvasContainer` brings the SAME off-screen + call-aware
-            // pause wiring, so the repost canvas can't play with sound while
-            // scrolled off-screen.
-            if isStoryRepost {
-                storyCanvasContainer(
-                    StoryReaderRepresentable(
-                        repost: repost,
-                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                        mute: isCanvasMuted,
-                        isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
-                    )
-                )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-            } else if !repost.media.isEmpty {
-                // Standard media attachments — owner is the CITED repost, not
-                // the outer post: its audio's Now Playing card must show the
-                // quoted author's name/avatar, not the outer post's.
-                detailMediaSection(repost.media, owner: DetailMediaAuthor(repost: repost))
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
-            }
-
-            // Lieu du post SOURCE — sticker cliquable, même surface plein
-            // écran que le lieu du post porteur.
-            if let place = repost.location {
-                FeedPostLocationSticker(place: place) {
-                    detailFullscreenPlace = BubbleFullscreenPlace(place: place)
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-            }
-
-            // Audio URL (legacy story audio)
-            if let audioUrl = repost.audioUrl, !audioUrl.isEmpty, !isStoryRepost {
-                let repostAudio = MeeshyMessageAttachment(
-                    id: "repost-audio-\(repost.id)",
-                    fileName: "audio.mp3",
-                    originalName: "audio.mp3",
-                    mimeType: "audio/mpeg",
-                    fileSize: 0,
-                    fileUrl: audioUrl,
-                    thumbnailColor: repost.authorColor
-                )
-                AudioAvailabilityResolver(attachment: repostAudio, autoDownload: true) { availability, onDownload in
-                    CoordinatedAudioPlayer(
-                        attachmentId: repostAudio.id,
-                        nowPlayingName: repost.author,
-                        nowPlayingArtworkURL: repost.authorAvatarURL,
-                        makeQueuedAudio: {
-                            QueuedAudio(
-                                attachmentId: repostAudio.id,
-                                messageId: repost.id,
-                                conversationId: repost.id,
-                                fileUrl: repostAudio.fileUrl,
-                                durationMs: repostAudio.duration ?? 0,
-                                senderName: repost.author,
-                                senderAvatarURL: repost.authorAvatarURL,
-                                receivedAt: repost.timestamp
-                            )
-                        }
-                    ) { external, onPlay in
-                        AudioPlayerView(
-                            attachment: repostAudio,
-                            context: .feedPost,
-                            accentColor: repost.authorColor,
-                            transcription: nil,
-                            availability: availability,
-                            onDownload: onDownload,
-                            externalPlayer: external,
-                            onPlayRequest: onPlay
-                        )
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-            }
-
-            // Stats row
-            HStack(spacing: 12) {
-                if repost.likes > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "heart.fill")
-                            .font(.caption2)
-                        Text("\(repost.likes)")
-                            .font(.caption2.weight(.medium))
-                    }
-                    .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
-                    .accessibilityValue(LocalizedNumber.exact(repost.likes))
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(theme.surfaceGradient(tint: repost.authorColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
-
-    // MARK: - Repost Language Support
-
-    private func repostEffectiveContent(_ repost: RepostContent) -> String {
-        let code = repostActiveDisplayLangCode ?? AuthManager.shared.currentUser?.preferredContentLanguages.first(where: { lang in
-            repost.translations?.keys.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
-        })?.lowercased() ?? repost.originalLanguage?.lowercased() ?? "fr"
-        if code == repost.originalLanguage?.lowercased() { return repost.content }
-        if let translation = repost.translations?[code] ?? repost.translations?.first(where: { $0.key.lowercased() == code })?.value {
-            return translation.text
-        }
-        return repost.content
-    }
-
-    private func repostSecondaryContent(_ repost: RepostContent, code: String) -> String? {
-        if code == repost.originalLanguage?.lowercased() { return repost.content }
-        return repost.translations?.first(where: { $0.key.lowercased() == code })?.value.text
-    }
-
-    @ViewBuilder
-    private func repostLanguageFlags(_ repost: RepostContent) -> some View {
-        let origLang = repost.originalLanguage?.lowercased() ?? ""
-        let activeLang = repostActiveDisplayLangCode ?? origLang
-        let user = AuthManager.shared.currentUser
-        let flags: [String] = {
-            var all: [String] = origLang.isEmpty ? [] : [origLang]
-            var seen = Set(all)
-            for lang in user?.preferredContentLanguages ?? [] {
-                let l = lang.lowercased()
-                if !seen.contains(l), repost.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
-                    all.append(l); seen.insert(l)
-                }
-            }
-            return all.filter { $0 != activeLang }
-        }()
-
-        if !flags.isEmpty {
-            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-            ForEach(flags, id: \.self) { code in
-                LanguageFlagChip(code: code, isActive: code == repostSecondaryLangCode) {
-                    if code == origLang {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            repostActiveDisplayLangCode = code
-                            repostSecondaryLangCode = nil
-                        }
-                    } else {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            repostSecondaryLangCode = repostSecondaryLangCode == code ? nil : code
-                        }
-                    }
-                }
-            }
-            // Décorative ici : le repartage n'ouvre pas la liste des langues,
-            // et les drapeaux voisins portent déjà l'information « traduit ».
-            TranslationsBadge()
-        }
-    }
 
     // MARK: - Actions Bar
 
     @ViewBuilder
-    private func actionsBar(_ post: FeedPost, renderedItem: StoryItem) -> some View {
+    private func actionsBar(_ post: FeedPost,
+                            renderedItem: StoryItem,
+                            scrollProxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
             // Heart button — socket-driven (joins post room on appear, leaves on disappear)
             Button {
@@ -1763,6 +1506,7 @@ EngagementGlyph(
                         .contentTransition(.numericText())
                 }
             }
+            .engagementHitArea()
             .disabled(postHeartInFlightIds.contains(postId))
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
@@ -1771,6 +1515,60 @@ EngagementGlyph(
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
             .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
+            // Le GESTE vit sur le bouton, la PALETTE sur la barre entière : un
+            // overlay ancré à un bouton de 28 pt s'y trouve comprimé, et la
+            // rangée d'émojis n'a pas la place de se dessiner — mesuré au
+            // simulateur, elle s'ouvrait en pilule vide. La cible du geste et
+            // le cadre du contenu ne sont pas le même objet.
+            .reactionPaletteTrigger(isPresented: $showsReactionPalette)
+
+            Spacer()
+
+            // **Commentaires — le deuxieme item de la cible `2h`** (#4086).
+            //
+            // La rangee du detail n'en portait que trois (coeur, repost,
+            // signet) la ou la carte du fil en porte cinq et la cible quatre.
+            // Le lecteur qui cherchait le nombre de commentaires devait
+            // defiler dans un cas et pas dans l'autre — meme publication, deux
+            // rangees.
+            //
+            // Il AGIT : le tap amene a la section, deja ancree
+            // `.id("commentsSection")` et deja visee par
+            // `attemptScrollToTargetComment`. Un item de comptage sans effet
+            // aurait fait mentir la rangee entiere (loi 4) — les trois autres
+            // agissent.
+            Button {
+                HapticFeedback.light()
+                withAnimation { scrollProxy.scrollTo("commentsSection", anchor: .top) }
+            } label: {
+                HStack(spacing: 5) {
+                    let n = displayPost?.commentCount ?? 0
+                    EngagementGlyph(
+                        outline: "bubble.right",
+                        filled: "bubble.right.fill",
+                        participated: false,
+                        accentHex: accentColor,
+                        activeTint: Color(hex: accentColor),
+                        inactiveTint: n > 0 ? Color(hex: accentColor) : theme.textSecondary,
+                        filledWhenInactive: n > 0,
+                        size: 18
+                    )
+                    if n > 0 {
+                        Text("\(n)")
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(Color(hex: accentColor))
+                            .contentTransition(.numericText())
+                    }
+                }
+            }
+            .engagementHitArea()
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(String(localized: "a11y.post.comments",
+                                       defaultValue: "Commentaires", bundle: .main))
+            .accessibilityValue(LocalizedNumber.exact(displayPost?.commentCount ?? 0))
+            .accessibilityHint(String(localized: "a11y.post.comments.hint",
+                                      defaultValue: "Aller aux commentaires", bundle: .main))
 
             Spacer()
 
@@ -1802,6 +1600,7 @@ EngagementGlyph(
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostReposted)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
+            .engagementHitArea()
             .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "a11y.post.repost", defaultValue: "Republier", bundle: .main))
             .accessibilityValue(isPostReposted ? String(localized: "a11y.post.reposted", defaultValue: "Republié", bundle: .main) : "")
@@ -1836,6 +1635,7 @@ EngagementGlyph(
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostBookmarked)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            .engagementHitArea()
             .disabled(isBookmarkInFlight)
             .accessibilityLabel(isPostBookmarked
                 ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
@@ -1863,6 +1663,7 @@ EngagementGlyph(
                         .font(.body)
                         .foregroundColor(theme.textSecondary)
                 }
+                .engagementHitArea()
                 .accessibilityLabel(isCanvasMuted
                     ? String(localized: "a11y.feed.post.sound.unmute", defaultValue: "Réactiver le son du fond", bundle: .main)
                     : String(localized: "a11y.feed.post.sound.mute", defaultValue: "Couper le son du fond", bundle: .main))
@@ -1870,76 +1671,13 @@ EngagementGlyph(
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-    }
-
-    // MARK: - Story Canvas (inline reader)
-
-    /// Renders a story post's canvas inline via `StoryReaderRepresentable`
-    /// (audio active by default; local mute toggle in the actions bar,
-    /// B3.6, Task E2 — `isCanvasMuted`). Pauses when scrolled off-screen or
-    /// during a call. Empty guard covers an expired/asset-less story (no
-    /// black box).
-    @ViewBuilder
-    private func storyCanvasSection(_ post: FeedPost, renderedItem: StoryItem) -> some View {
-        // Le garde « indisponible » s'évalue sur la conversion ENRICHIE
-        // (`StoryItem(feedPost:)` retombe sur la source d'une republication) :
-        // une story-repost sans ajouts propres a `storyEffects`/`media` nil
-        // côté post mais un contenu complet côté source — elle doit rendre
-        // son canvas, pas le placeholder. `renderedItem` est HISSÉ par
-        // l'appelant (`postDetailContent`), partagé avec la porte du bouton
-        // muet (correctif revue mineur #8) — pas reconstruit ici.
-        if renderedItem.storyEffects == nil && renderedItem.media.isEmpty {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles.rectangle.stack")
-                Text(String(localized: "feed.post.detail.story_unavailable", defaultValue: "Story indisponible", bundle: .main))
-            }
-            .font(.footnote)
-            .foregroundColor(theme.textMuted)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
-        } else {
-            // Réutilise `renderedItem` construit pour la garde ci-dessus au
-            // lieu de laisser `StoryReaderRepresentable(feedPost:)` reconvertir
-            // le même `FeedPost` — évite une 2e conversion par évaluation de
-            // body (ce panneau réévalue à chaque frame de scroll via
-            // `storyCanvasVisible`) ET garantit que la garde et le rendu
-            // voient EXACTEMENT le même item (post-revue 2026-07-13 : la
-            // double construction pouvait diverger si la cascade de fallback
-            // changeait d'un côté sans l'autre).
-            storyCanvasContainer(
-                StoryReaderRepresentable(
-                    story: renderedItem,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                    mute: isCanvasMuted,
-                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
-                )
-            )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-        }
-    }
-
-    /// Shared canvas wrapper for BOTH the native story and the STORY-repost paths
-    /// (RF3): identical sizing + the GeometryReader/`StoryCanvasFrameKey`/
-    /// `onPreferenceChange` visibility tracking that updates `storyCanvasVisible`.
-    /// Extracting it guarantees the off-screen pause wiring can't exist on one path
-    /// and be missing on the other (which would leak audio on the repost path).
-    private func storyCanvasContainer(_ reader: StoryReaderRepresentable) -> some View {
-        reader
-            .aspectRatio(9.0 / 16.0, contentMode: .fit)
-            .frame(maxWidth: 460)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .background(
-                GeometryReader { geo in
-                    Color.clear.preference(key: StoryCanvasFrameKey.self,
-                                           value: geo.frame(in: .named(Self.scrollSpace)))
-                }
-            )
-            .onPreferenceChange(StoryCanvasFrameKey.self) { frame in
-                let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
-                storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
-            }
+        // Le CADRE de la palette est ici, sur la barre ENTIÈRE : elle a la
+        // largeur qu'une rangée de six émojis demande. Le geste, lui, reste
+        // sur le bouton — cible petite et précise, cadre large et libre.
+        .reactionPaletteFrame(isPresented: $showsReactionPalette,
+                              isDark: theme.mode.isDark,
+                              anchor: .bottomLeading,
+                              offsetY: -46) { sendDetailReaction($0) }
     }
 
     // MARK: - Media Views
@@ -1953,25 +1691,45 @@ EngagementGlyph(
     /// métadonnées Now Playing (nom/avatar/date/id) au post EXTÉRIEUR — même
     /// famille de bug que le snapshot d'auteur figé côté citation (commit
     /// `656d0b7e4`, "fix(gateway): fige l'auteur dans le snapshot d'un post cité").
-    private struct DetailMediaAuthor {
+    /// **#4934 — même bascule qu'en carte** : un même contenu ne peut pas offrir
+    /// une langue dans le fil et la perdre au détail.
+    ///
+    /// EXTRAIT du corps de vue, et pas par goût : posée en ligne dans le
+    /// `fullScreenCover`, l'expression faisait dépasser le vérificateur de types
+    /// (« unable to type-check this expression in reasonable time »). `body` est
+    /// déjà l'une des plus grosses expressions du fichier ; tout ce qu'on peut
+    /// en sortir doit en sortir.
+    static func captionServings(for post: FeedPost) -> [String: SocialMediaCaptionServing] {
+        SocialMediaCaption.serving(for: post.media, carrier: .from(post: post))
+    }
+
+    struct DetailMediaAuthor {
         let id: String
         let author: String
         let authorAvatarURL: String?
         let timestamp: Date
+        /// Langue d'origine du PORTEUR — repli du Prisme audio (#4926) quand le
+        /// média n'a pas encore de transcription. Portée ici parce que les deux
+        /// porteurs possibles l'ont (`FeedPost` et `RepostContent`) et que le
+        /// site de lecture ne sait pas lequel il tient : c'est très exactement
+        /// ce que ce type existe pour absorber.
+        let originalLanguage: String?
 
         init(post: FeedPost) {
             id = post.id; author = post.author
             authorAvatarURL = post.authorAvatarURL; timestamp = post.timestamp
+            originalLanguage = post.originalLanguage
         }
 
         init(repost: RepostContent) {
             id = repost.id; author = repost.author
             authorAvatarURL = repost.authorAvatarURL; timestamp = repost.timestamp
+            originalLanguage = repost.originalLanguage
         }
     }
 
     @ViewBuilder
-    private func detailMediaSection(_ mediaList: [FeedMedia], owner: DetailMediaAuthor?) -> some View {
+    func detailMediaSection(_ mediaList: [FeedMedia], owner: DetailMediaAuthor?) -> some View {
         let visualMedia = mediaList.filter { $0.type == .image || $0.type == .video }
         let audioMedia = mediaList.filter { $0.type == .audio }
         let docMedia = mediaList.filter { $0.type == .document }
@@ -2099,6 +1857,16 @@ EngagementGlyph(
                         accentColor: media.thumbnailColor,
                         transcription: media.transcription,
                         translatedAudios: media.translatedAudios,
+                        // Prisme AUDIO (#4926) — même élection que la carte du
+                        // fil : le même vocal ne peut pas se jouer dans deux
+                        // langues selon l'écran par lequel on l'ouvre.
+                        initialTranscriptionLanguage: SocialAudioTrack.servedLanguage(
+                            originalLanguage: SocialAudioTrack.originalLanguage(
+                                transcription: media.transcription,
+                                carrier: resolvedOwner?.originalLanguage
+                            ),
+                            translatedAudios: media.translatedAudios
+                        ),
                         onFullscreen: {
                             guard let post = displayPost else { return }
                             audioFullscreen = .fromFeed(
@@ -2561,7 +2329,7 @@ EngagementGlyph(
 
 // MARK: - Story canvas visibility preference keys
 
-private struct StoryCanvasFrameKey: PreferenceKey {
+struct StoryCanvasFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }

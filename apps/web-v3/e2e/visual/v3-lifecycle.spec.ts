@@ -26,26 +26,47 @@ import {
   BATTEMENT,
   CHEMIN_DE_LA_PAGE_FABRIQUEE,
   CHEMIN_DU_SCENARIO,
-  INSTANT_DE_DEPART,
-  MARGE_DE_CHARGEMENT_MS,
   SCENARIO_CONFORME,
   SCENARIO_QUI_BAT_PAR_ONGLET,
   SCENARIO_QUI_BAT_TROP_SOUVENT,
   SCENARIO_QUI_MUTE_CACHE,
   SCENARIO_QUI_NE_SUSPEND_PAS,
   casAPorter,
+  casPortes,
   estBattement,
   mutationsPendantOngletCache,
   pageFabriquee,
   plafondDeBattements,
   rapporteRequetesInterdites,
   requetesPendantOngletCache,
+  estMutante,
   verdictDeBattement,
   type EntreeDeJournal,
-  type FenetreCachee,
   type FenetreFabriquee,
   type ScenarioFabrique,
 } from './lib/lifecycle';
+import {
+  avance,
+  avanceDeLaFenetreDeRecette,
+  bascule,
+  DELAI_D_OBSERVATION_MS,
+  DELAI_DE_REPOS_MS,
+  enregistre,
+  figeLHorloge,
+  installeLHorloge,
+  occulte,
+  revele,
+} from './lib/navigateur-cycle';
+import { porteInvitee } from './lib/porte-invitee';
+import {
+  CONVERSATION_DU_LECTEUR,
+  IDENTIFIANT_DU_LIEN_PARTAGE,
+  INVITE,
+  passerelleDeBouchon,
+  serveurDeLaV3,
+  type PasserelleDeBouchon,
+  type ServeurV3,
+} from './lib/serveurs';
 
 // LE TEMPS DE LA PAGE EST VIRTUEL, ET C'EST CE QUI REND LE GATE VOYANT.
 //
@@ -67,50 +88,39 @@ import {
 // événement ni par une minuterie (une réponse réseau qui en enchaîne une autre, par exemple) ne
 // tombe pas dans cette fenêtre. La classe minutée, elle, y est désormais entière.
 
-// Le temps machine qu'on laisse aux requêtes émises pendant la fenêtre virtuelle pour remonter au
-// processus de test. Un gate qui asserte une ABSENCE ne peut pas attendre un événement : il attend
-// une durée, et celle-ci n'a plus à couvrir la PÉRIODE du battement — seulement le trajet d'un
-// `fetch` vers une route interceptée (quelques millisecondes).
-const DELAI_D_OBSERVATION_MS = 500;
+// Les gestes de navigateur — occulter, figer l'horloge, lire ce qui part — vivent dans
+// `lib/navigateur-cycle.ts`, partagés avec l'écran réel (`v3-fil-invite.spec.ts`).
 
-// Le temps laissé au réseau du chargement pour retomber avant qu'on ouvre la fenêtre d'occultation.
-// Sans lui, une requête de chargement encore en vol serait imputée à l'occultation — un gate rouge
-// sur un comportement juste, ce qui est la pire des deux erreurs.
-const DELAI_DE_REPOS_MS = 250;
+// LA CHAÎNE RÉELLE, pour les six cas C→H : le serveur de la v3 tel que `next build` l'a émis,
+// la passerelle de bouchon et le bouchon socket — montés une fois pour le fichier, sur des ports
+// libres. Le scénario fabriqué, lui, ne les touche pas : il est servi par l'interception.
+let passerelle: PasserelleDeBouchon;
+let v3: ServeurV3;
+
+const porte = porteInvitee({ passerelle: () => passerelle, v3: () => v3 });
+
+test.beforeAll(async () => {
+  passerelle = await passerelleDeBouchon();
+  v3 = await serveurDeLaV3(passerelle.base);
+});
+
+test.afterAll(async () => {
+  await v3?.ferme();
+  await passerelle?.ferme();
+});
+
+// Chaque cas repart d'une place ACTIVE, d'un lien OUVERT, d'un `/sync` sans trou et d'un journal
+// vide : les cas D, F et G mutent l'un ou l'autre, et un ordre de tests ne doit rien décider.
+test.beforeEach(() => {
+  passerelle.placesActives.add(INVITE.session);
+  passerelle.lien.actif = true;
+  passerelle.sync.curseur = 0;
+  passerelle.oublie();
+});
 
 const ONGLETS = 2;
 
 const UN_SEUL_ONGLET = 1;
-
-type Journal = () => readonly EntreeDeJournal[];
-
-const enregistre = (contexte: BrowserContext): Journal => {
-  const entrees: EntreeDeJournal[] = [];
-  contexte.on('request', (requete) => {
-    entrees.push({ methode: requete.method(), url: requete.url(), emiseA: Date.now() });
-  });
-  return () => [...entrees];
-};
-
-// L'HORLOGE EST CELLE DU CONTEXTE, PAS D'UNE PAGE — et c'est le modèle juste : deux onglets d'un
-// même navigateur partagent UN temps, comme les deux onglets d'une personne réelle. `page.clock`
-// délègue au contexte ; l'installer une fois par onglet la RÉINITIALISE pour tout le monde, et
-// `runFor` appelé par onglet avance la même horloge autant de fois qu'il y a d'onglets (mesuré :
-// 900 000 ms au lieu de 660 000, donc 3 battements par onglet là où la période n'en autorise 2 —
-// un gate ROUGE sur un scénario conforme, la pire des deux erreurs).
-//
-// Elle s'installe AVANT toute navigation (une minuterie posée au chargement doit être créée par
-// l'horloge virtuelle) et ne se FIGE qu'après : `install()` seul laisse le temps couler, ce qui est
-// voulu — c'est ce qui permet aux pages de se charger — et ce qui rendrait le compte dépendant de
-// la machine si on s'y arrêtait.
-const installeLHorloge = (contexte: BrowserContext): Promise<void> =>
-  contexte.clock.install({ time: INSTANT_DE_DEPART });
-
-const figeLHorloge = (contexte: BrowserContext): Promise<void> =>
-  contexte.clock.pauseAt(INSTANT_DE_DEPART + MARGE_DE_CHARGEMENT_MS);
-
-const avanceDeLaFenetreDeRecette = (contexte: BrowserContext): Promise<void> =>
-  contexte.clock.runFor(BATTEMENT.fenetreDeRecetteMs);
 
 // Le scénario est SERVI PAR L'INTERCEPTION, jamais par le serveur : il n'est donc ni une route
 // émise, ni une page que `budgets.json` doit réclamer, ni quoi que ce soit qu'un autre gate
@@ -141,46 +151,6 @@ const ouvreUnOnglet = async (
   await sert(page, scenario);
   await figeLHorloge(contexte);
   return page;
-};
-
-// `visibilitychange` ne s'émule pas par une option de contexte : Playwright n'expose aucun réglage
-// de visibilité de document. On pose donc l'état que le navigateur poserait, puis on émet
-// l'événement — et on le REND au retour, sinon toute la suite du test lit un onglet caché.
-const occulte = async (page: Page): Promise<void> => {
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
-};
-
-const revele = async (page: Page): Promise<void> => {
-  await page.evaluate(() => {
-    Reflect.deleteProperty(document, 'visibilityState');
-    Reflect.deleteProperty(document, 'hidden');
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
-};
-
-// La borne GAUCHE est stampée AVANT l'aller-retour d'`evaluate`, jamais après. Le choix n'est pas
-// neutre : l'événement `request` remonte au processus de test de façon asynchrone, et une requête
-// partie du gestionnaire `visibilitychange` peut arriver avant que la promesse d'`evaluate` ne se
-// résolve. Stamper après ferait donc RATER la fuite — un faux vert. Stamper avant peut, au pire,
-// imputer à l'occultation une requête partie quelques millisecondes plus tôt : un faux rouge, que
-// le repos de `sert()` rend improbable. Entre les deux erreurs, un gate se ferme du côté du lecteur.
-// L'onglet reste caché la FENÊTRE DE RECETTE ENTIÈRE — les 10 minutes que le § 8.5 et le cas E du
-// § 6.5 nomment — et non les 500 ms qu'un temps machine pouvait payer. `runFor` fait battre toutes
-// les minuteries dues, là où `fastForward` n'en réveillerait qu'une : c'est bien une page laissée
-// en arrière-plan qu'on joue, pas un couvercle rabattu.
-const bascule = async (contexte: BrowserContext, page: Page): Promise<FenetreCachee> => {
-  const debut = Date.now();
-  await occulte(page);
-  await avanceDeLaFenetreDeRecette(contexte);
-  await page.waitForTimeout(DELAI_D_OBSERVATION_MS);
-  const fin = Date.now();
-  await revele(page);
-  await page.waitForTimeout(DELAI_D_OBSERVATION_MS);
-  return { debut, fin };
 };
 
 const porteur = (page: Page): Promise<boolean> =>
@@ -235,7 +205,7 @@ test.describe('§ 6.5 — `visibilitychange:hidden` seul ⇒ ZÉRO requête muta
     ).toBe(plafondDeBattements({ dureeMs: BATTEMENT.fenetreDeRecetteMs, periodeMs: BATTEMENT.periodeMs }));
     expect(pendant.every(estBattement), 'la fuite vue n’est pas le battement fabriqué').toBe(true);
     expect(rapporteRequetesInterdites('scénario qui ne suspend pas', pendant, fenetres)).toContain(
-      'anonymous/refresh',
+      'guest-sessions/me',
     );
   });
 
@@ -360,11 +330,286 @@ test.describe('§ 8.5 — 1 seule requête de battement pour N onglets sur 10 mi
   });
 });
 
-// CE QUE CET INSTRUMENT NE PORTE PAS ENCORE — dit au lecteur du rapport, jamais passé sous silence.
-//
-// Cinq des six cas de la recette du § 6.5 exigent un écran qui tienne une session invitée : ils
-// arrivent avec `thread` (L2). Un gate qui laisserait croire qu'il les porte rendrait un vert sur
-// cinq cas que personne n'a joués — c'est la forme exacte du défaut que l'issue #4442 corrige.
-test('§ 6.5 — les cas C, D, F, G et H attendent l’écran thread (L2)', () => {
-  expect(casAPorter().map((cas) => cas.id)).toEqual(['C', 'D', 'F', 'G', 'H']);
+test.describe('§ 6.5 — les six cas sur l’écran thread', () => {
+  test('cas C — 10 min en arrière-plan puis retour : rien ne part, aucune modale, aucun re-join, et le message reçu pendant l’absence apparaît', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    await installeLHorloge(contexte);
+    const page = await porte.ouvre(contexte);
+    await figeLHorloge(contexte);
+    await page.waitForTimeout(DELAI_DE_REPOS_MS);
+    passerelle.oublie();
+    const journal = enregistre(contexte);
+
+    const fenetres = [
+      await bascule(contexte, page, () => {
+        // Un autre a écrit pendant l'absence : la liste ET `/sync` le servent, le socket ne le rejoue pas.
+        passerelle.ajouteUnMessage(porte.messageDIbrahim('m301', 'Écrit pendant votre absence'));
+      }),
+    ];
+
+    const pendant = requetesPendantOngletCache({ journal: journal(), fenetres });
+    expect(pendant, rapporteRequetesInterdites('cas C — onglet caché 10 min', pendant, fenetres)).toEqual([]);
+
+    await expect(page.locator('li[data-id="m301"]')).toBeVisible({ timeout: 10_000 });
+    expect(await page.locator('dialog').count()).toBe(0);
+    await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'connecte', { timeout: 10_000 });
+
+    // Au retour, dans l'ordre du § 6.3.C : `refresh`, puis `GET /sync` depuis le curseur — une fois chacun.
+    const apres = journal().filter((e) => e.emiseA >= (fenetres[0]?.fin ?? 0));
+    expect(apres.filter(estBattement)).toHaveLength(1);
+    expect(apres.filter((e) => e.url.includes('/api/v1/sync'))).toHaveLength(1);
+    expect(apres.filter(estMutante).map((e) => new URL(e.url).pathname)).toEqual(['/api/v1/guest-sessions/me']);
+    expect(porte.aucuneJonction()).toBe(true);
+    await contexte.close();
+  });
+
+  test('cas D — réseau coupé 5 min, deux messages écrits hors ligne : ils partent dans l’ordre, GET /sync rattrape depuis le curseur — sans trou, la passerelle n’en mesure aucun pour une session anonyme —, le jeton est le même', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    await installeLHorloge(contexte);
+    const page = await porte.ouvre(contexte);
+    await figeLHorloge(contexte);
+    const jetonAvant = (await porte.cookieDeLaPlace(contexte))?.value;
+    const miensAvant = await page.locator('li.mien[data-id]').count();
+    passerelle.oublie();
+
+    await contexte.setOffline(true);
+    await expect(page.locator('#bandeau-hors-ligne')).toBeVisible();
+    await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'hors-ligne');
+
+    await porte.ecrit(page, 'Premier');
+    await porte.ecrit(page, 'Second');
+    const enFile = page.locator('li.mien.envoi-hors-ligne');
+    await expect(enFile).toHaveCount(2);
+    // Optimiste, avec son horloge — et le composeur reste actif.
+    await expect(enFile.first().locator('.attente')).toBeVisible();
+    await expect(page.locator('form.composeur')).toBeVisible();
+
+    // Le curseur du compte est creusé au-delà de `GAP_THRESHOLD` pendant l'absence.
+    // Pour un MEMBRE qui annonce son `seq`, le prochain `/sync` rendrait `hasGap`
+    // (gagé par `v3-fil.spec.ts`) ; pour une session ANONYME, `checkpointSeq` vaut
+    // 0 par la loi de la passerelle (`routes/sync/index.ts:274-279`) et aucun trou
+    // n'existe — un bouchon qui en peignait un ici racontait une chaîne que la
+    // production ne produit jamais.
+    passerelle.creuseUnTrou();
+    await avance(contexte, 5 * 60_000);
+    // Hors ligne : aucun appel, aucune destruction de jeton (§ 7).
+    expect(passerelle.journal.filter((a) => a.methode === 'POST')).toEqual([]);
+    expect((await porte.cookieDeLaPlace(contexte))?.value).toBe(jetonAvant);
+
+    await contexte.setOffline(false);
+    await expect(page.locator('#bandeau-hors-ligne')).toBeHidden();
+    await expect(page.locator('li.mien.envoi-hors-ligne')).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.locator('li.mien.envoi-echec')).toHaveCount(0);
+    await expect(page.locator('li.mien[data-id]')).toHaveCount(miensAvant + 2);
+
+    // Dans l'ORDRE d'écriture, par le transport qui était là (socket ou REST).
+    const envois = [
+      ...passerelle.journal
+        .filter((a) => a.methode === 'POST' && a.chemin.includes('/messages'))
+        .map((a) => ({ a: a.a, texte: String(JSON.parse(a.corps).content) })),
+      ...passerelle.socket.recus
+        .filter((e) => e.evenement === 'message:send')
+        .map((e) => ({ a: e.a, texte: String((e.charge as { content: string }).content) })),
+    ]
+      .sort((x, y) => x.a - y.a)
+      .map((e) => e.texte);
+    expect(envois).toEqual(['Premier', 'Second']);
+
+    // Le rattrapage est parti depuis le curseur, avec la session — et rien n'a été inventé.
+    const rattrapages = passerelle.journal.filter((a) => a.chemin.startsWith('/api/v1/sync'));
+    expect(rattrapages).toHaveLength(1);
+    expect(new URL(rattrapages[0]?.chemin ?? '', 'http://bouchon').searchParams.get('since')).not.toBeNull();
+    expect(await page.locator('li.trou').count()).toBe(0);
+    expect((await porte.cookieDeLaPlace(contexte))?.value).toBe(jetonAvant);
+    expect(porte.aucuneJonction()).toBe(true);
+    await contexte.close();
+  });
+
+  test('cas E — deux onglets sur le même lien : un seul porteur bat sur 10 min ; l’onglet qui reste émet et reçoit après la fermeture de l’autre', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    await installeLHorloge(contexte);
+    const a = await porte.ouvre(contexte);
+    const b = await porte.ouvre(contexte);
+    await figeLHorloge(contexte);
+    await a.waitForTimeout(DELAI_DE_REPOS_MS);
+    const journal = enregistre(contexte);
+    passerelle.oublie();
+    expect(passerelle.socket.connectes()).toBe(2);
+
+    await avance(contexte, BATTEMENT.fenetreDeRecetteMs);
+    await a.waitForTimeout(DELAI_D_OBSERVATION_MS);
+    const verdict = verdictDeBattement({
+      battements: battements(journal()),
+      onglets: 2,
+      dureeMs: BATTEMENT.fenetreDeRecetteMs,
+      periodeMs: BATTEMENT.periodeMs,
+    });
+    expect(verdict.conforme, verdict.raison ?? '').toBe(true);
+    // Le porteur unique émet EXACTEMENT le plafond, jamais moins : un vert obtenu par un
+    // battement qui ne part pas serait le bail que le serveur libère sous les pieds de l'invité.
+    expect(verdict.observes).toBe(verdict.plafond);
+    // Dix minutes de page ont passé, et les DEUX transports sont restés vivants : aucune
+    // reconnexion, aucun `conversation:join` de plus. Un harnais qui laissait tomber le
+    // socket sous l'horloge virtuelle (#4836) faisait ici une tempête de reconnexions que
+    // seule la chance refermait — l'onglet restait « creux » une fois sur trois.
+    expect(passerelle.socket.connectes()).toBe(2);
+    expect(passerelle.socket.recus.filter((e) => e.evenement === 'conversation:join')).toHaveLength(0);
+
+    passerelle.oublie();
+    await b.close();
+    // L'onglet qui reste est DANS la room, sans rien avoir à reprendre.
+    await expect(a.locator('.etat')).toHaveAttribute('data-etat', 'connecte');
+    await expect.poll(() => passerelle.socket.connectes(), { timeout: 15_000 }).toBe(1);
+
+    passerelle.socket.emets(CONVERSATION_DU_LECTEUR.id, 'message:new', porte.messageDIbrahim('m401', 'Toujours là ?'));
+    await expect(a.locator('li[data-id="m401"]')).toBeVisible({ timeout: 10_000 });
+    await porte.ecrit(a, 'Toujours là.');
+    await expect.poll(() => passerelle.socket.recus.filter((e) => e.evenement === 'message:send').length, { timeout: 10_000 }).toBe(1);
+    expect(porte.cheminsRecus().some((c) => c.includes('/anonymous/leave'))).toBe(false);
+    await contexte.close();
+  });
+
+  test('cas F — la place fermée en base : bandeau à BOUTON, la lecture reste, AUCUNE re-jonction sans clic', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    await installeLHorloge(contexte);
+    const page = await porte.ouvre(contexte);
+    await figeLHorloge(contexte);
+    const lues = await page.locator('li.ligne').count();
+
+    passerelle.placesActives.delete(INVITE.session);
+    passerelle.oublie();
+    const journal = enregistre(contexte);
+    await avance(contexte, BATTEMENT.periodeMs);
+
+    await expect(page.locator('#bandeau-place-fermee')).toBeVisible({ timeout: 10_000 });
+    const bouton = page.locator('#bandeau-place-fermee a.action');
+    await expect(bouton).toBeVisible();
+    expect(await bouton.getAttribute('href')).toBe(`/chat/${IDENTIFIANT_DU_LIEN_PARTAGE}?pseudo=Tolu`);
+    await expect(page.locator('form.composeur')).toBeHidden();
+    await expect(page.locator('#composeur-ferme')).toBeVisible();
+    expect(await page.locator('li.ligne').count()).toBe(lues);
+
+    // Le battement, puis son CONTRÔLE — et rien d'autre de mutant.
+    expect(journal().filter(estBattement)).toHaveLength(2);
+    expect(journal().filter(estMutante).every(estBattement)).toBe(true);
+    expect(porte.aucuneJonction()).toBe(true);
+    expect(await porte.cookieDeLaPlace(contexte)).toBeUndefined();
+
+    // Le bouton refait le CHOIX, pseudo pré-rempli — sur un CLIC, jamais avant.
+    await bouton.click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('dialog[open] #pseudo')).toHaveValue('Tolu');
+    expect(porte.aucuneJonction()).toBe(true);
+    await contexte.close();
+  });
+
+  /**
+   * CAS F, À DEUX ONGLETS — la place a DEUX projections (§ 12.3) : le cookie, que le
+   * serveur lit, et le stockage `meeshy.guest.<lien>`, que les onglets voisins écoutent.
+   * Le porteur bat, constate la place fermée, l'efface sur les deux supports ; l'onglet
+   * qui ne bat JAMAIS (il n'est pas porteur) apprend la fermeture par `storage`
+   * (`jeton-externe`, valeur nulle) — bandeau à bouton, composeur fermé, lecture
+   * conservée — sans un battement de plus, sans jonction. Avant ce témoin, rien
+   * n'écrivait la projection de stockage : la transition était un chemin mort.
+   */
+  test('cas F bis — deux onglets, la place fermée : le porteur bat, l’autre apprend par le stockage — deux battements en tout, aucune jonction', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    await installeLHorloge(contexte);
+    const a = await porte.ouvre(contexte);
+    const b = await porte.ouvre(contexte);
+    await figeLHorloge(contexte);
+    const luesDansA = await a.locator('li.ligne').count();
+
+    passerelle.placesActives.delete(INVITE.session);
+    passerelle.oublie();
+    const journal = enregistre(contexte);
+    await avance(contexte, BATTEMENT.periodeMs);
+
+    await expect(a.locator('#bandeau-place-fermee')).toBeVisible({ timeout: 10_000 });
+    await expect(b.locator('#bandeau-place-fermee')).toBeVisible({ timeout: 10_000 });
+    await expect(a.locator('form.composeur')).toBeHidden();
+    await expect(b.locator('form.composeur')).toBeHidden();
+    expect(await a.locator('li.ligne').count()).toBe(luesDansA);
+
+    expect(journal().filter(estBattement)).toHaveLength(2);
+    expect(journal().filter(estMutante).every(estBattement)).toBe(true);
+    expect(porte.aucuneJonction()).toBe(true);
+    expect(await porte.cookieDeLaPlace(contexte)).toBeUndefined();
+    await contexte.close();
+  });
+
+  test('cas G — le lien désactivé pendant la lecture : composeur fermé avec sa raison, contenu conservé, file annulée et VISIBLE', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    await installeLHorloge(contexte);
+    const page = await porte.ouvre(contexte);
+    await figeLHorloge(contexte);
+    const lues = await page.locator('li.ligne').count();
+
+    await contexte.setOffline(true);
+    await expect(page.locator('#bandeau-hors-ligne')).toBeVisible();
+    await porte.ecrit(page, 'Parti trop tard');
+    await expect(page.locator('li.mien.envoi-hors-ligne')).toHaveCount(1);
+
+    passerelle.lien.actif = false;
+    passerelle.oublie();
+    await contexte.setOffline(false);
+
+    await expect(page.locator('#composeur-ferme')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#composeur-ferme .raison')).toHaveText('Ce lien a été fermé par son auteur.');
+    await expect(page.locator('form.composeur')).toBeHidden();
+    const echouee = page.locator('li.mien.envoi-echec');
+    await expect(echouee).toHaveCount(1);
+    await expect(echouee.locator('.echec .raison')).toHaveText('Ce lien a été fermé par son auteur.');
+    await expect(echouee.locator('.echec')).toBeVisible();
+    expect(await page.locator('li.ligne').count()).toBe(lues + 1);
+    // Aucune redirection : un lecteur au milieu d'un message ne voit pas son écran changer sous lui.
+    expect(page.url()).toBe(porte.adresse);
+    expect(passerelle.journal.filter((a) => a.methode === 'POST' && a.chemin.includes('/messages'))).toEqual([]);
+    await contexte.close();
+  });
+
+  test('cas H — fermer l’onglet : zéro POST /anonymous/leave ; la place est libérée par le SERVEUR (§ 6.4, passerelle)', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    const page = await porte.ouvre(contexte);
+    passerelle.oublie();
+    const journal = enregistre(contexte);
+
+    await page.close({ runBeforeUnload: true });
+    await expect.poll(() => passerelle.socket.connectes(), { timeout: 10_000 }).toBe(0);
+    await new Promise((resoud) => setTimeout(resoud, DELAI_D_OBSERVATION_MS));
+
+    expect(journal().filter((e) => e.url.includes('/anonymous/leave'))).toEqual([]);
+    expect(journal().filter(estMutante)).toEqual([]);
+    expect(porte.cheminsRecus().some((c) => c.includes('/anonymous/leave'))).toBe(false);
+    // « la place se libère après N minutes » est le bail SERVEUR du § 6.4 — une transition
+    // compare-and-set de la passerelle, hors de portée de ce spec, dite ici plutôt que tue.
+    await contexte.close();
+  });
+
+  test('anti-régression — visibilitychange:hidden seul ⇒ ZÉRO requête mutante, sur l’écran réel', async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser);
+    const page = await porte.ouvre(contexte);
+    await page.waitForTimeout(DELAI_DE_REPOS_MS);
+    const journal = enregistre(contexte);
+
+    const debut = Date.now();
+    await occulte(page);
+    await page.waitForTimeout(DELAI_D_OBSERVATION_MS);
+    const fin = Date.now();
+    await revele(page);
+
+    const fenetres = [{ debut, fin }];
+    const pendant = requetesPendantOngletCache({ journal: journal(), fenetres });
+    expect(pendant, rapporteRequetesInterdites('écran réel, onglet caché', pendant, fenetres)).toEqual([]);
+    await contexte.close();
+  });
+});
+
+// CE QUE CET INSTRUMENT PORTE — dit au lecteur du rapport : les six cas du § 6.5 ont leur sujet, le
+// fil (`thread`) à sa porte d'invité, et ils sont joués ci-dessus, sur la chaîne réelle (serveur de
+// la v3 + passerelle de bouchon + bouchon socket). Le scénario fabriqué reste le témoin de contrôle
+// de la ligne anti-régression et du rapport de battement.
+test('§ 6.5 — les six cas C→H sont portés par l’écran thread', () => {
+  expect(casAPorter()).toEqual([]);
+  expect(casPortes().map((cas) => cas.id)).toEqual(['C', 'D', 'E', 'F', 'G', 'H']);
 });

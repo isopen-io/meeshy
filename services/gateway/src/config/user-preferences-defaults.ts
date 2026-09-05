@@ -223,7 +223,7 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
 
   // Data settings
   saveMediaToGallery: false, // disabled by default for privacy
-  allowAnalytics: true,
+  allowAnalytics: false, // #4578 — gardée par un consentement, donc jamais vraie par défaut
 };
 
 /**

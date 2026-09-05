@@ -57,7 +57,7 @@ public final class CallTranscriptRemoteService: CallTranscriptRemoteServiceProvi
 
     public func transcript(callId: String) async throws -> APICallTranscript {
         let response: APIResponse<APICallTranscript> = try await api.request(
-            endpoint: "/calls/\(callId)/transcript",
+            CallsEndpoint.byCallIdTranscript(callId: callId),
             method: "GET",
             body: nil,
             queryItems: nil

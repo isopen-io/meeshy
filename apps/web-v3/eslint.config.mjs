@@ -1,9 +1,37 @@
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { FlatCompat } from '@eslint/eslintrc';
 
-const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta.url)) });
+import { frontiereDeZone } from './eslint/frontiere-de-zone.mjs';
+import { litLePerimetreSiPresent } from './scripts/lib/perimetre-de-zone.mjs';
+
+const ICI = dirname(fileURLToPath(import.meta.url));
+
+const compat = new FlatCompat({ baseDirectory: ICI });
+
+// Le périmètre de NAVIGATION servi par la v3, lu au seul endroit qui le décide : la règle Traefik
+// du routeur `frontend-v3`. Il grandit à chaque étape du § 4.9 — la config n'en tient aucune
+// copie. « Navigation » n'est pas un synonyme de « réclamé » : `/__v3/_next` est la zone d'ACTIFS
+// (`assetPrefix`), pas une route qu'un humain visite, et la confondre avec une route faisait
+// conseiller `<Link>` sur une URL de bundle. Aujourd'hui, ce périmètre est donc VIDE — c'est
+// exactement ce que dit l'étape 1 : « zéro trafic humain, seuls ses bundles sont joignables ».
+// `null` quand le compose est hors du contexte — le cas de l'image Docker, dont l'étage builder
+// ne copie que `apps/web-v3/`. `next build` charge cette config : sans ce repli, sa passe de lint
+// rendait « ⨯ ESLint: ENOENT … docker-compose.prod.yml » et ne lintait RIEN, tout en sortant en
+// RC=0 (mesuré). Le contrat de `__tests__/workspace-contract.test.ts` — « le build ne masque
+// aucune erreur ESLint » — était alors tenu sur le papier et VIDE dans l'image.
+const PERIMETRE_V3 = litLePerimetreSiPresent(join(ICI, '..', '..'));
+
+// `@next/next/no-html-link-for-pages` est écrit pour une application Next UNIQUE : tout chemin
+// qu'un routeur Next sert lui paraît joignable côté client, donc tout `<a>` vers ce chemin lui
+// paraît fautif. Dans une ZONE, c'est faux dans les deux sens — et coûteux dans un seul. La règle
+// pousse vers `<Link>` précisément là où `<Link>` est cassé : `/` est servi par le legacy jusqu'à
+// l'étape 7 du § 4.9, et la navigation client de la v3 ne l'atteindra jamais. Le lot L-0.5 avait
+// contourné en retirant le lien de `not-found.tsx` — un 404 sans issue. Elle est remplacée par
+// les deux règles de `eslint/frontiere-de-zone.mjs`, qui posent la MÊME question en tenant compte
+// de la frontière : ce que la v3 sert, et ce qu'elle ne sert pas.
+const REGLE_ECRITE_POUR_UNE_ZONE_UNIQUE = '@next/next/no-html-link-for-pages';
 
 const SPRITE_ONLY = "La v3 n'utilise que le sprite Phosphor de packages/icons.";
 const ONE_THEME_ENGINE = 'Le thème de la v3 a un seul moteur : app/theme-script.tsx.';
@@ -33,6 +61,27 @@ const restrictedImportPatterns = forbiddenModules.map(({ root, message }) => ({
   group: [root, `${root}/**`],
   message,
 }));
+
+// Le temps réel de PARTICIPATION (§ 3.2 corollaire 1, § 12.4) n'entre dans un
+// document que par `await import()` d'une adresse hachée, APRÈS le premier
+// pixel — jamais par un import statique, qui ferait entrer le socket dans le
+// chunk d'un écran et rendrait le chemin sans JavaScript dépendant de lui.
+// `app/` compose des documents ; `participate` n'y a aucune place. Et
+// `socket.io-client` n'a qu'UN importateur : le module lui-même, dynamiquement.
+const PARTICIPATION_DYNAMIQUE =
+  "Les modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed, lib/realtime/notifs.ts pour /notifications, lib/realtime/contacts.ts pour /contacts, lib/realtime/recherche.ts pour /search, lib/realtime/liens.ts pour /links, lib/realtime/commentaires.ts pour /post/:id, lib/realtime/navigateur.ts — le navigateur de zone, sur tout écran connecté) se chargent par `await import()` d'une adresse servie (`lib/actifs-rt.ts`), après le premier pixel — jamais par un import statique (§ 12.4).";
+const restrictedParticipationPatterns = [
+  { group: ['**/realtime/participate', '**/realtime/participate.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/liste', '**/realtime/liste.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/feed', '**/realtime/feed.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/notifs', '**/realtime/notifs.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/contacts', '**/realtime/contacts.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/recherche', '**/realtime/recherche.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/liens', '**/realtime/liens.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/commentaires', '**/realtime/commentaires.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['**/realtime/navigateur', '**/realtime/navigateur.ts'], message: PARTICIPATION_DYNAMIQUE },
+  { group: ['socket.io-client', 'socket.io-client/**'], message: PARTICIPATION_DYNAMIQUE },
+];
 
 // Les sept événements du cycle de vie (§ 6.2) n'ont qu'UN point d'écoute :
 // `lib/realtime/lifecycle.ts`. Un écran qui les attache lui-même se
@@ -76,15 +125,56 @@ const JETON_INVITE =
   "Le jeton invité a un seul détenteur : lib/api/guest-session.ts (une entrée meeshy.guest.<lien> PAR LIEN, § 6.3). Une clé composée ailleurs, ou un accès direct au stockage, rouvre le défaut mesuré au § 6.1 point 7 — un second lien écrase le premier.";
 const DETENTEUR_DU_JETON = 'lib/api/guest-session.ts';
 
-const restrictedStorageSyntax = [
-  'Literal[value=/meeshy\\.guest/]',
-  'TemplateElement[value.raw=/meeshy\\.guest/]',
+// DEUX MOITIÉS, DÉSORMAIS SÉPARÉES — et la séparation a une raison précise.
+//
+// La CLÉ du jeton invité et l'ACCÈS au stockage étaient une seule liste tant
+// qu'un seul fichier avait le droit de toucher au stockage : lever l'une
+// levait l'autre, et c'était sans conséquence. Le brouillon du composer
+// (#4966) est le SECOND détenteur, et il n'a aucune raison d'écrire
+// `meeshy.guest` — lui rendre les deux moitiés d'un coup lui ouvrirait un
+// défaut qui ne le concerne pas.
+//
+// Une exemption doit lever exactement ce qu'elle a été relue pour lever.
+const cleDuJetonInvite = ['Literal[value=/meeshy\\.guest/]', 'TemplateElement[value.raw=/meeshy\\.guest/]'].map(
+  (selector) => ({ selector, message: JETON_INVITE }),
+);
+
+const accesAuStockage = [
   // `localStorage.x` et `window.localStorage.x` — l'identité seule
   // (`evenement.storageArea !== window.localStorage`) n'est PAS un accès et
   // reste écrivable : ce qui est barré, c'est la LECTURE et l'ÉCRITURE.
   "MemberExpression[object.name=/^(localStorage|sessionStorage)$/]",
   "MemberExpression[object.property.name=/^(localStorage|sessionStorage)$/]",
 ].map((selector) => ({ selector, message: JETON_INVITE }));
+
+const restrictedStorageSyntax = [...cleDuJetonInvite, ...accesAuStockage];
+
+/**
+ * LE SECOND DÉTENTEUR DE STOCKAGE (#4966) — le brouillon du composer.
+ *
+ * Il tient la saisie dans `sessionStorage`, sous `meeshy.v3.brouillon.<format>`.
+ * `sessionStorage` et non `localStorage` : le brouillon est le texte NON PUBLIÉ
+ * de quelqu'un, exactement ce que le `no-store` du document refuse de laisser
+ * resservir par le bouton « précédent ». Un onglet fermé l'emporte, et c'est la
+ * propriété qu'on veut — la v3 n'a pas de route de déconnexion qui l'effacerait.
+ *
+ * L'exemption ne lève QUE l'accès au stockage : la clé du jeton invité lui
+ * reste barrée, et le cycle de vie aussi.
+ */
+const DETENTEUR_DU_BROUILLON = 'lib/realtime/composer.ts';
+
+/**
+ * LE TROISIÈME DÉTENTEUR DE STOCKAGE (#5095) — la session LEGACY.
+ *
+ * `lib/api/session-legacy.ts` lit et efface les trois clés `localStorage` que
+ * `apps/web` relit (`meeshy_auth_token`, `meeshy_session_token`,
+ * `meeshy_user_data`) — la déconnexion en a besoin pour relayer le jeton de
+ * session au formulaire et pour vider la session à la sortie. Même exemption
+ * que le brouillon : SEUL l'accès au stockage est levé, la clé du jeton
+ * invité (`meeshy.guest`) reste barrée — ce fichier n'a aucune raison de la
+ * composer.
+ */
+const DETENTEUR_DE_LA_SESSION_LEGACY = 'lib/api/session-legacy.ts';
 
 const evenementsDuCycle = ['visibilitychange', 'pageshow', 'pagehide', 'online', 'offline', 'storage'];
 const evenementsDeFausseVisibilite = ['focus', 'blur'];
@@ -121,17 +211,34 @@ const restrictedLifecycleSyntax = [
 const zoneDuCycleDeVie = ['app/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}', 'lib/**/*.{ts,tsx}'];
 
 const config = [
-  { ignores: ['.next/**', 'node_modules/**', 'coverage/**', 'next-env.d.ts'] },
+  // `.rt/` est la SORTIE de `scripts/build-participate.mjs` (le module compilé), pas une source.
+  { ignores: ['.next/**', '.rt/**', 'node_modules/**', 'coverage/**', 'next-env.d.ts'] },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   // `no-restricted-syntax` porte UN nom : le dernier bloc qui s'applique à un
   // fichier remplace les précédents, il ne s'y ajoute pas. Les adieux sont donc
   // répétés dans les trois blocs — c'est ce qui les rend inévitables, y compris
   // là où le reste de la règle est levé.
   {
+    plugins: { zone: frontiereDeZone },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
-      'no-restricted-imports': ['error', { patterns: restrictedImportPatterns }],
+      'no-restricted-imports': ['error', { patterns: [...restrictedImportPatterns, ...restrictedParticipationPatterns] }],
       'no-restricted-syntax': ['error', ...syntaxeDesAdieux],
+      [REGLE_ECRITE_POUR_UNE_ZONE_UNIQUE]: 'off',
+      // Les deux règles de zone ne s'arment QUE si le périmètre a pu être lu. Sans lui, elles
+      // n'ont aucun verdict à rendre : un périmètre VIDE est une affirmation (« la v3 ne sert
+      // aucune route humaine ») qui, appliquée par défaut, rendrait fautif tout `<Link>` de
+      // l'application à l'étape 7 du § 4.9 — celle où `<Link>` devient universel. Se taire est
+      // ici la seule lecture juste, et elle ne coûte rien : le lieu d'APPLICATION de ces règles
+      // est la CI, qui a le dépôt entier (`ci.yml`, « Lint (apps/web-v3 — blocking) »), jamais
+      // le build de l'image. Tout le RESTE du lint continue de s'appliquer là-bas — c'est ce que
+      // le contrat « le build ne masque aucune erreur ESLint » veut vraiment dire.
+      ...(PERIMETRE_V3 === null
+        ? {}
+        : {
+            'zone/lien-sortant-en-navigation-client': ['error', { perimetre: PERIMETRE_V3 }],
+            'zone/lien-interne-en-rechargement': ['warn', { perimetre: PERIMETRE_V3 }],
+          }),
     },
   },
   {
@@ -150,6 +257,18 @@ const config = [
   {
     files: [SITE_UNIQUE_DU_CYCLE],
     rules: { 'no-restricted-syntax': ['error', ...syntaxeDesAdieux, ...restrictedStorageSyntax] },
+  },
+  // Le brouillon garde TOUT le cycle de vie et la clé du jeton ; il ne lève que
+  // l'accès au stockage, qui est sa raison d'exister.
+  {
+    files: [DETENTEUR_DU_BROUILLON],
+    rules: { 'no-restricted-syntax': ['error', ...restrictedLifecycleSyntax, ...cleDuJetonInvite] },
+  },
+  // Même levée, même raison : le stockage est sa raison d'exister, le jeton
+  // invité n'est pas son sujet.
+  {
+    files: [DETENTEUR_DE_LA_SESSION_LEGACY],
+    rules: { 'no-restricted-syntax': ['error', ...restrictedLifecycleSyntax, ...cleDuJetonInvite] },
   },
 ];
 

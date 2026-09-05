@@ -626,6 +626,19 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// écrivain sans mémoire oublierait le choix à la fermeture (loi 10) ; une
     /// liste de niveaux recopiée divergerait de celle du SDK ; un `ONLY` sans
     /// sélecteur nominatif partirait vide, et le gateway le rejetterait.
+    ///
+    /// **Re-ancrée le 2026-09-02** : la pastille n'est plus un `Menu` depuis
+    /// #4636 (directive porteur 2026-08-31 — « au lieu du menu contextuel, une
+    /// feuille comme en `2l` »). Elle est un `Button` qui ouvre la feuille par
+    /// `presentedPortal = .audience`, et c'est la FEUILLE qui reçoit l'offre
+    /// (`offered: offeredAudiences`). Les deux assertions qui exigeaient le
+    /// menu et l'offre DANS la pastille contredisaient la garde qui fait foi,
+    /// `ComposerAudienceAndHashtagTests.test_laPastilleDAudience_ouvreLaFeuille_etNonUnMenu`
+    /// (et `test_laFeuille_sertLesTypesDeLApplication` pour l'offre). Elles sont
+    /// retournées, pas retirées : la pastille reste un CONTRÔLE — le témoin
+    /// `Label` d'avant le lot 4.9 rougirait toujours ici — et l'offre reste
+    /// lue une fois, chez la feuille. Ce que le lot 4.9 gardait (l'écrivain, la
+    /// mémoire, le sélecteur nominatif, l'absence de liste recopiée) est intact.
     func test_lAudienceDuSocle_estUnVraiSelecteur_etEcritSaMemoire() throws {
         guard let bloc = declarationBody(startingAt: "var audienceChip", in: try hostCode()) else {
             return XCTFail("L'audience du socle doit être une propriété nommée `audienceChip` — la garde s'ancre dessus")
@@ -633,16 +646,20 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let corps = compact(bloc)
 
         XCTAssertTrue(
+            corps.contains("Button{") && corps.contains("presentedPortal=.audience"),
+            "L'audience du socle est un BOUTON qui ouvre la feuille `2l` (#4636) — ni le `Label` témoin "
+                + "d'avant le lot 4.9, ni un contrôle qui n'ouvrirait rien."
+        )
+        XCTAssertFalse(
             corps.contains("Menu{"),
-            "L'audience du socle est un MENU qui se replie en capsule — la forme de la rangée haute de "
-                + "l'atelier. Le ruban de six chips du mood mangerait la largeur du socle et repousserait la "
-                + "flèche hors de l'écran."
+            "Le menu contextuel est revenu dans la pastille : #4636 l'a remplacé par la feuille, qui seule "
+                + "montre les CONSÉQUENCES d'un choix (voir `ComposerAudienceAndHashtagTests`)."
         )
         XCTAssertTrue(
-            corps.contains("offeredAudiences"),
-            "Les niveaux viennent de l'OFFRE (`ComposerAudienceOffer`), jamais de `composerSelectableCases` "
-                + "en bloc : sous une republication, deux des six niveaux sont des contrôles sans effet — le "
-                + "serveur y remplace la liste nominative par celle de la source."
+            compact(try hostCode()).contains("offered:offeredAudiences"),
+            "Les niveaux viennent de l'OFFRE (`ComposerAudienceOffer`) et sont remis à la FEUILLE, jamais "
+                + "de `composerSelectableCases` en bloc : sous une republication, deux des six niveaux sont "
+                + "des contrôles sans effet — le serveur y remplace la liste nominative par celle de la source."
         )
         XCTAssertFalse(
             corps.contains("PostVisibility.composerSelectableCases"),
@@ -1093,7 +1110,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
         let long = String(repeating: "a", count: 300)
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
 
         XCTAssertEqual(brouillon.text?.count, 300)
@@ -1105,7 +1122,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
@@ -1136,12 +1153,31 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "ce qu'elle mesure."
         )
         XCTAssertTrue(
-            compacte.contains(compact(".disabled(!canPublishDocument)")),
-            "Un bouton sans gate de matière publierait une page blanche depuis le socle."
-        )
-        XCTAssertTrue(
             compacte.contains("performSoclePublish()"),
             "… et un bouton qui ne déclenche rien est l'affordance sans effet que ce chantier retire partout."
+        )
+        // **Le GATE a déménagé dans l'habillage partagé le 2026-09-03**
+        // (#4995) : les deux flèches — socle et en-tête du mood — passent par
+        // `publishCapsule(_:)`, qui porte le verre proéminent, l'opacité du
+        // refus, le nom accessible et le `.disabled`. La garde suit son objet
+        // plutôt que de rougir sur une factorisation qui la RENFORCE : un gate
+        // écrit une fois ne peut pas être oublié au second site.
+        //
+        // Les deux moitiés sont exigées : que la flèche passe par l'habillage,
+        // ET que l'habillage porte le gate. Vérifier la seconde seule
+        // laisserait une flèche s'en écarter en silence.
+        XCTAssertTrue(
+            compacte.contains("publishCapsule("),
+            "La flèche doit passer par l'habillage PARTAGÉ : c'est lui qui porte le gate, et s'en écarter "
+                + "rendrait à ce bouton la possibilité de publier une page blanche."
+        )
+        guard let habillage = declarationBody(startingAt: "func publishCapsule<Contenu: View>",
+                                              in: try hostCode()) else {
+            return XCTFail("L'habillage de la flèche est introuvable — la garde ne mesurerait RIEN")
+        }
+        XCTAssertTrue(
+            compact(habillage).contains(compact(".disabled(!canPublishDocument)")),
+            "Un bouton sans gate de matière publierait une page blanche depuis le socle."
         )
         // #4135 — la flèche presse désormais un AIGUILLAGE, pas un chemin, et
         // l'aiguillage est une DÉCLARATION VOISINE : la garde va l'y lire plutôt
@@ -1167,9 +1203,39 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "… avec ses personnes nommées : un mode sans sa liste publierait vers un ensemble que "
                 + "personne n'a choisi."
         )
+        // **Re-ancrée le 2026-09-02** sur l'aiguillage du #4700 (a7136904,
+        // directive porteur 2026-09-01) : la story est ROUTÉE sur `.document`
+        // mais ne part pas par le brouillon — `ComposerDocumentDraft` ne porte
+        // aucune slide, et l'y faire passer publierait une story VIDE. Sous le
+        // document et le mood, la flèche presse donc `publishStoryScene()` pour
+        // la story, `publishDocument()` pour tout le reste. La forme complète
+        // est exigée, pas ses deux appels séparément : un `else` qui
+        // disparaîtrait, ou une condition qui glisserait sur `.reel`, rougirait.
         XCTAssertTrue(
+            branche.contains("case.document,.mood:switchComposerPublishChannel.channel(for:selectedFormat)"),
+            "… et sous les deux autres surfaces, le routage est une RÈGLE (#4869), plus une liste "
+                + "de formats écrite dans le corps du publieur."
+        )
+        // **Cette garde épinglait le défaut qu'elle avertissait de surveiller.**
+        //
+        // Sa forme précédente exigeait `ifselectedFormat==.story{…}else{…}`, en
+        // écrivant qu'« une condition qui glisserait sur `.reel` rougirait ».
+        // C'est exactement ce qui s'était produit : le réel tombait dans le
+        // `else`, descendait sur `DocumentComposerDoor` qui le refuse, et ne
+        // partait JAMAIS — flèche peinte, sans effet.
+        //
+        // > Une garde qui fige une CONDITION fige aussi ce que la condition
+        // > oublie. Épingler la règle (`ComposerPublishChannel`) plutôt que sa
+        // > forme laisse le `switch` exhaustif refuser de compiler quand un
+        // > cinquième format arrive — ce qu'aucune chaîne de `if` ne fait.
+        XCTAssertTrue(
+            branche.contains("case.unsupported:refuseUnsupportedFormat()"),
+            "Un format sans canal se REFUSE à voix haute. Le silence est ce qui a laissé le réel "
+                + "ne jamais partir, et un refus muet se relit comme une flèche cassée."
+        )
+        XCTAssertFalse(
             branche.contains("case.document,.mood:publishDocument()"),
-            "… et les deux autres surfaces gardent leur chemin de brouillon."
+            "L'ancien aiguillage ferait passer une story par `ComposerDocumentDraft`, qui n'a pas de slides."
         )
     }
 
@@ -1303,6 +1369,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// resterait intact à côté — le doublon exact que `adoptDraft` existe pour
     /// éviter. Et l'ADOPTION doit venir APRÈS la graine : un brouillon que
     /// l'auteur vient de désigner l'emporte sur ce qu'une porte sème.
+    ///
+    /// > **La garde épinglait `adoptDraft(id: draftId)` — le nom d'une VARIABLE
+    /// > LOCALE**, qui ne fait pas partie de la règle qu'elle protège. Elle est
+    /// > tombée au #4611, quand le meuble s'est mis à lire la graine de la porte
+    /// > en repli du paramètre (`draftId ?? intent.origin.resumedDraftId`) et
+    /// > que le local a changé de nom. Une garde de source sur-spécifiée punit
+    /// > un renommage sans rien protéger de plus : elle n'épingle plus que
+    /// > l'APPEL et son ORDRE, ce que la règle dit vraiment.
     func test_leMeuble_construitUnSeulAtelier_etAdopteApresAvoirSeme() throws {
         let compacte = try hostCompact()
 
@@ -1312,7 +1386,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "la porte sèmerait dans le vide."
         )
         let graine = compacte.range(of: compact("StoryComposerViewModel(seeding: mediaSeed)"))
-        let adoption = compacte.range(of: compact("composer.adoptDraft(id: draftId)"))
+        let adoption = compacte.range(of: compact("composer.adoptDraft(id:"))
         XCTAssertNotNil(adoption, "L'adoption d'un brouillon a disparu du meuble.")
         if let graine, let adoption {
             XCTAssertTrue(
@@ -1379,7 +1453,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertFalse(sitesVus.isEmpty, "Aucun site ne monte le meuble — la garde ne mesurerait RIEN.")
         XCTAssertEqual(
             Set(sitesVus),
-            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "ComposerDocumentSurface.swift",
+            // `DocumentComposerDoor.swift` **remplace** `ComposerDocumentSurface.swift`
+            // depuis `70b04d2aeb` : le découpage au budget a sorti la PORTE de la
+            // surface, et le montage du meuble l'a suivie. Ce cliquet est le
+            // septième laissé derrière par cette extraction — un nom de FICHIER
+            // écrit dans une garde ne suit pas le code qui déménage.
+            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
              "ConversationMediaComposerDoor.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
@@ -1544,9 +1623,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// l'écran et RE-VISÉ cette suite-là sur ce même bouton, où elle mesure
     /// désormais ce que celle-ci ne mesure pas : le NOM que la flèche garde
     /// pendant l'envoi.
+    ///
+    /// **Re-ancrée le 2026-09-03 (#4995)** sur `publishCapsule(_:)`, l'habillage
+    /// que les DEUX flèches partagent désormais. La suite y mesure exactement
+    /// ce qu'elle mesurait, pour deux boutons au lieu d'un — et la garde
+    /// voisine (`…estUnBouton_gateEtBranche`) exige que chaque flèche y passe,
+    /// sans quoi ce déménagement lui coûterait la moitié de sa portée.
     func test_laFlecheDuSocle_porteSonEtatAccessible() throws {
-        guard let bloc = declarationBody(startingAt: "var publishButton", in: try hostCode()) else {
-            return XCTFail("La zone de publication du socle est introuvable — la garde ne mesurerait RIEN")
+        guard let bloc = declarationBody(startingAt: "func publishCapsule<Contenu: View>",
+                                         in: try hostCode()) else {
+            return XCTFail("L'habillage de la flèche est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
 
@@ -1567,36 +1653,72 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// **La porte du tray n'atteint AUCUNE surface qui publie par le socle**, et
-    /// c'est ce qui rend son `onPublishDocument: { _ in false }` honnête plutôt
-    /// que dangereux.
+    /// **RETOURNÉE le 2026-09-01 (#4751), à la condition de levée qu'elle
+    /// nommait elle-même.**
     ///
-    /// `.storyTray` ouvre sur `.cameraReady`, que `ComposerSurfaceRouting` route
-    /// TOUJOURS vers la scène, quel que soit le format ensuite choisi. Le socle
-    /// n'y est donc jamais peint. Le jour où cette ouverture changerait, ce refus
-    /// deviendrait une flèche qui ne publie rien — en silence. Cette garde est le
-    /// bruit qui manquerait alors.
-    func test_laPorteDuTray_nAtteintAucuneSurfaceQuiPublieParLeSocle() {
+    /// Elle affirmait « la porte du tray n'atteint AUCUNE surface qui publie par
+    /// le socle », ce qui rendait son `onPublishDocument: { _ in false }`
+    /// honnête plutôt que dangereux — `.cameraReady` routant TOUJOURS vers la
+    /// scène. Et elle disait, en toutes lettres : « le jour où cette ouverture
+    /// changerait, ce refus deviendrait une flèche qui ne publie rien, en
+    /// silence. Cette garde est le bruit qui manquerait alors. »
+    ///
+    /// C'est ce jour-là, et le bruit a été entendu : la porte atteint le socle
+    /// dès que l'auteur bascule l'éventail sur « Post » sans avoir rien posé sur
+    /// la scène — la slide SEMÉE ne compte pas comme matière, `ComposerScenePresence`
+    /// comptant ce que la scène CONTIENT et non ce qui l'a fait naître.
+    ///
+    /// > Une garde qui énonce sa propre condition de péremption vaut plus que
+    /// > la règle qu'elle protège : sans cette phrase, la bascule de routage
+    /// > aurait livré une flèche d'envoi inerte, et le témoin qui l'aurait dit
+    /// > n'existait nulle part.
+    ///
+    /// Ce qu'elle garde désormais est l'INVERSE, et c'est le seul énoncé qui
+    /// tienne dans les deux mondes : **une porte qui peut monter le socle doit
+    /// pouvoir publier par lui.** Elle mesure donc la vue MONTÉE — jamais le
+    /// `ComposerSurfaceKind` seul, qui ne sait rien de la scène — et exige un
+    /// publieur au site de montage.
+    func test_laPorteDuTray_quiAtteintLeSocle_saitPublierParLui() throws {
         let profil = ComposerProfile.profile(for: .storyTray, compositionQualifiesAsReel: true)
         XCTAssertFalse(profil.offeredFormats.isEmpty, "Le tray offre au moins un format — sinon la boucle ne mesure rien.")
 
+        var atteintLeSocle = false
         for format in profil.offeredFormats {
             let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format)
-            XCTAssertEqual(
-                surface, .scene,
-                "Le tray atteint la surface \(surface) en \(format) : son `onPublishDocument` REFUSE, et cette "
-                    + "flèche ne publierait donc rien. Lui donner un vrai publieur, ou re-router la porte."
+            // La vue réellement montée, `hasScene: false` — l'état d'une
+            // composition que l'auteur vient d'ouvrir sans rien y poser.
+            let montee = ComposerMountedView.mounted(
+                surface: surface,
+                hasScene: ComposerStoryCanvas.showsCanvas(format: format, documentHasScene: false)
             )
-            // **RETOURNÉ au #4135.** La garde exigeait un socle VIDE sous la
-            // scène, parce que l'atelier y peignait les trois commandes. Il
-            // n'en peint plus aucune : c'est le socle qui les porte, et un
-            // socle vide serait maintenant une scène SANS chemin de départ.
+            if montee == .document { atteintLeSocle = true }
+
             XCTAssertTrue(
                 ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
-                "… et le socle doit y peindre sa flèche : depuis #4135 l'atelier n'assemble plus que le `⋯`, "
+                "… et le socle doit peindre sa flèche : depuis #4135 l'atelier n'assemble plus que le `⋯`, "
                     + "un socle vide laisserait la composition sans aucun chemin de départ."
             )
         }
+
+        XCTAssertTrue(
+            atteintLeSocle,
+            "Aucun format du tray ne monte le document : la garde ci-dessous ne mesurerait plus rien, "
+                + "et il faudrait la RETOURNER — pas la laisser verte par omission."
+        )
+
+        let porte = compact(AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryTrayActions.swift")))
+
+        XCTAssertFalse(
+            porte.contains(compact("onPublishDocument: { _ in")),
+            "La porte du tray atteint le socle : un `onPublishDocument` qui IGNORE son brouillon "
+                + "ne peut rien publier, et sa flèche serait inerte."
+        )
+        XCTAssertTrue(
+            porte.contains(compact("await ComposerDocumentDurablePublisher.publish(draft)")),
+            "Elle doit publier par le publieur DURABLE — le seul chemin qui ne demande pas de "
+                + "`FeedViewModel`, qu'aucune des deux racines appliquant ce cover ne tient."
+        )
     }
 
     // MARK: - Aucune UI morte : rien à l'écran sans raison (loi 4)
@@ -2318,18 +2440,75 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// Garde NÉGATIVE : elle rougit à la RÉINTRODUCTION de l'un de ces appels
     /// dans le host, pas à la disparition d'un fichier —
     /// `test_theGuardsReadANonEmptySource` en répond.
+    ///
+    /// **Re-ancrée le 2026-09-02** : depuis #4700 (a7136904, directive porteur
+    /// 2026-09-01), l'atelier n'est plus monté là où l'auteur choisit son
+    /// format, et une story part par le canal de la SCÈNE pressé PAR LE MEUBLE
+    /// — `publishStoryScene()` appelle `onPublishAllInBackground`, la fermeture
+    /// que le site de montage a fournie. Interdire le littéral revenait à
+    /// interdire ce que la directive ordonne. Ce que la doctrine interdit n'a
+    /// pas changé : UN chemin par format, et le meuble TRANSMET sans jamais
+    /// publier. La garde distingue donc désormais **relayer par la fermeture
+    /// injectée** (autorisé, à UN site, sur le modèle de vue que l'atelier
+    /// lisait déjà) d'**appeler un service** (interdit partout) :
+    /// - les services, files et endpoints restent bannis de toute l'unité ;
+    /// - `onPublishAllInBackground(` n'a qu'UN appel, et il vit dans
+    ///   `publishStoryScene` — un second serait le second chemin ;
+    /// - ce relais lit ses unités sur `viewModel.*` — le meuble ne recalcule
+    ///   ni ne reconstitue le paquet que `publishAllSlides` rabattait ;
+    /// - la story n'y est pressée que sous `selectedFormat == .story`, ce que
+    ///   `test_laFlecheDuSocle_estUnBouton_gateEtBranche` lit sur l'aiguillage.
     func test_host_opensNoSecondPublicationPath() throws {
         let code = try hostCode()
-        for forbidden in ["onPublishAllInBackground(",
-                         "publishStoryInBackground(",
+        for forbidden in ["publishStoryInBackground(",
                          "updateStoryInBackground(",
                          "PostService",
                          "StoryPublishService"] {
             XCTAssertFalse(
                 code.contains(forbidden),
-                "Le host appelle « \(forbidden) » : c'est un SECOND chemin de publication. Le seul publieur est la barre du SDK."
+                "Le host appelle « \(forbidden) » : c'est un SECOND chemin de publication. Le meuble transmet, il ne publie pas."
             )
         }
+
+        let compacte = compact(code)
+        XCTAssertEqual(
+            occurrences(of: "onPublishAllInBackground(", in: compacte), 1,
+            "La fermeture de la scène se presse à UN site — `publishStoryScene` — ou pas du tout. "
+                + "Un second appel est un second chemin d'envoi, quel que soit le nom qu'il porte."
+        )
+        guard let relais = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
+            return XCTFail("`publishStoryScene` est introuvable dans le meuble — la garde ne mesurerait RIEN")
+        }
+        let corps = compact(relais)
+        XCTAssertTrue(
+            corps.contains("onPublishAllInBackground("),
+            "L'unique appel de la fermeture doit vivre dans `publishStoryScene`, pas ailleurs dans l'unité."
+        )
+        for interdit in ["StatusService", "PostService", "StoryPublishService", "APIClient",
+                         "OutboxFlusher", "TusUploadManager", "ComposerDocumentSendRouting",
+                         "StoryComposerView", "publishAllSlides", "handoffSlides"] {
+            XCTAssertFalse(
+                corps.contains(interdit),
+                "Le relais de la story touche « \(interdit) » : relayer une fermeture injectée est permis, "
+                    + "appeler un service ou reconstituer le paquet de l'atelier ne l'est pas."
+            )
+        }
+        for lu in ["viewModel.slides", "viewModel.slideImages", "viewModel.loadedImages",
+                   "viewModel.loadedVideoURLs", "viewModel.loadedAudioURLs", "viewModel.draftId"] {
+            XCTAssertTrue(
+                corps.contains(lu),
+                "Le relais doit lire « \(lu) » sur le MÊME modèle de vue que l'atelier : une unité "
+                    + "recalculée ici serait un second assemblage de la story."
+            )
+        }
+        XCTAssertTrue(
+            corps.contains("composerVisibility.rawValue") && corps.contains("composerVisibilityUserIds"),
+            "La story part sous l'audience choisie AU SOCLE, avec ses personnes nommées."
+        )
+        XCTAssertTrue(
+            corps.contains("ifaccepted{onDismiss()}"),
+            "La sortie n'est acquise que sur une ACCEPTATION — comme `publishDocument`."
+        )
     }
 
     /// Le gate du réel était écrit DEUX fois en dur (`compositionQualifiesAsReel: false`,
@@ -2938,8 +3117,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let end = rest.range(of: "case .")?.lowerBound ?? rest.endIndex
         let branche = String(rest[..<end])
 
+        // **Le mécanisme a changé de FORME, pas d'intention.** Les drapeaux
+        // `showsAudioComposer` / `showsReferencePicker` ont fusionné en un
+        // `presentedPortal` — une seule feuille ouverte à la fois, par
+        // construction plutôt que par discipline. La garde nommait l'ancien
+        // drapeau ; elle nomme désormais le portail, et continue de mesurer la
+        // MÊME chose : le bouton ouvre la feuille.
         XCTAssertTrue(
-            branche.contains("showsReferencePicker = true"),
+            branche.contains("presentedPortal = .reference"),
             "la branche doit OUVRIR la feuille de choix"
         )
         XCTAssertFalse(

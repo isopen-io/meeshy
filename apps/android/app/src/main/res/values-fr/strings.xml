@@ -6,13 +6,12 @@
     <string name="brand_signature_credit">Services CEO</string>
 
     <!-- Navigation tabs -->
-    <string name="tab_messages">Messages</string>
     <string name="tab_feed">Fil d\'actualité</string>
-    <string name="tab_activity">Activité</string>
     <string name="tab_profile">Profil</string>
     <string name="tab_calls">Appels</string>
-    <string name="menu_new_conversation">Nouveau</string>
-    <string name="menu_reels">Réels</string>
+    <string name="menu_my_links">Mes liens</string>
+    <string name="menu_notifications">Notifications</string>
+    <string name="menu_discover">Découvrir</string>
     <string name="menu_contacts">Contacts</string>
     <string name="menu_settings">Réglages</string>
 
@@ -62,6 +61,9 @@
     <string name="call_incoming_audio">Appel entrant</string>
     <string name="call_incoming_video">Appel vidéo entrant</string>
     <string name="a11y_floating_menu">Menu de navigation</string>
+    <string name="a11y_floating_menu_unread">Menu, %1$d notifications en attente</string>
+    <string name="a11y_state_open">Ouvert</string>
+    <string name="a11y_edit_profile">Modifier le profil</string>
 
     <!-- Widget écran d'accueil : compteur de non-lus -->
     <string name="widget_unread_count_title">Messages non lus</string>

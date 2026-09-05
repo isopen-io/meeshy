@@ -178,3 +178,63 @@ export function normalizeLanguageForDedup(code: string): string {
   const primary = code.trim().split(/[-_]/)[0]?.toLowerCase();
   return primary ? primary : code.toLowerCase();
 }
+
+/**
+ * Égalité de langue conforme au Prisme Linguistique : deux codes désignent la
+ * MÊME langue s'ils canonicalisent vers la même clé de déduplication.
+ *
+ * SSOT unique de cette comparaison côté clients TypeScript. Les codes comparés
+ * (`currentDisplayLanguage`, `originalLanguage`, clés de traduction
+ * `language`/`targetLanguage`) sont verbatim et peuvent être région-tagués
+ * (`'en-US'`, `'fr_FR'`), casse-mixte (`'FR'`), 3-lettres (`'fra'`) ou legacy
+ * (`'iw'`). Une comparaison brute `===` traiterait `'en'` et `'en-US'` comme deux
+ * langues distinctes — un message réputé « hors langue affichée » alors qu'il y
+ * est, une traduction keyée `'en-US'` jamais retrouvée pour la langue affichée
+ * `'en'`, un contrôle de traduction qui ment sur son état.
+ *
+ * Renvoie `false` dès qu'un code est vide, `null` ou `undefined` (aucune langue
+ * à comparer). S'appuie sur {@link normalizeLanguageForDedup}.
+ *
+ * Remplace les copies locales de `sameLanguage` d'apps/web (use-message-display,
+ * messages-display, TranslationToggle, use-stream-translation, CanvasV3Scene).
+ */
+export function isSameLanguage(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  return !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
+}
+
+/**
+ * Construit un prédicat d'appartenance à un ensemble de langues DEMANDÉES,
+ * conforme au Prisme : une clé de traduction STOCKÉE matche une langue demandée
+ * si les deux canonicalisent ({@link normalizeLanguageForDedup}) vers la même
+ * clé. Rend `null` quand la liste demandée est absente ou n'a aucune entrée
+ * exploitable — le caller sert alors TOUTES les langues (comportement historique
+ * du filtre bande-passante opt-in).
+ *
+ * SSOT unique du filtre « ne servir que les langues du lecteur », partagée par
+ * les trois surfaces qui restreignaient les traductions à un `.toLowerCase()`
+ * verbatim : traductions texte REST (`transformTranslationsToArray`), pistes
+ * audio du Prisme REST (`cleanAttachmentsForApi`) et filtre socket
+ * (`filterMessagePayloadForLanguages`).
+ *
+ * Les DEUX côtés sont canonicalisés — c'est la moitié symétrique de #5108, qui
+ * n'avait canonicalisé que les codes DEMANDÉS à la frontière. La clé STOCKÉE
+ * pouvait rester régionale sur un document legacy (`'pt-BR'`, `'zh-Hant-HK'` —
+ * `MessageTranslationService` les lit déjà via `?? translations[normalizedTarget]`),
+ * si bien qu'un lecteur demandant le canonique `'pt'` voyait sa traduction
+ * `'pt-BR'` PRUNÉE et retombait sur l'original : violation directe du Prisme.
+ */
+export function makeLanguageFilter(
+  requested: Iterable<string> | null | undefined
+): ((code: string) => boolean) | null {
+  if (!requested) return null;
+  const canonical = new Set<string>();
+  for (const code of requested) {
+    if (code) canonical.add(normalizeLanguageForDedup(code));
+  }
+  if (canonical.size === 0) return null;
+  return (code: string): boolean =>
+    !!code && canonical.has(normalizeLanguageForDedup(code));
+}

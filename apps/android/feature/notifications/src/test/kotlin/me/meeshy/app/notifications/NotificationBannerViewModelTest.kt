@@ -16,9 +16,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.BannerHeadline
+import me.meeshy.sdk.model.NotificationActor
 import me.meeshy.sdk.model.NotificationContext
 import me.meeshy.sdk.model.UserNotificationPreferences
+import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
 import me.meeshy.sdk.socket.MessageSocketManager
 import org.junit.After
@@ -46,7 +50,7 @@ class NotificationBannerViewModelTest {
     }
 
     private val conversationRepository = mockk<ConversationRepository>(relaxed = true).also {
-        every { it.cachedConversations() } returns flowOf(emptyList<ApiConversation>())
+        every { it.conversationStream(any()) } returns flowOf(null)
     }
 
     private class FakeClock(
@@ -87,6 +91,7 @@ class NotificationBannerViewModelTest {
         preferencesStore = InMemoryNotificationPreferencesStore(preferences),
         conversationRepository = conversationRepository,
         clock = clock,
+        activeConversationStore = ActiveConversationStore(),
     )
 
     @Test
@@ -235,6 +240,147 @@ class NotificationBannerViewModelTest {
         advanceTimeBy(1_001)
 
         assertThat(vm.banner.value?.notificationId).isEqualTo("n2")
+    }
+
+    @Test
+    fun openingTheShownBannersConversationDismissesIt() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+
+        vm.setActiveContext(conversationId = "c1", postId = null)
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun openingADifferentConversationLeavesTheShownBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+
+        vm.setActiveContext(conversationId = "c2", postId = null)
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun openingTheShownBannersPostDismissesIt() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = null, postId = "p1"))
+        runCurrent()
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+
+        vm.setActiveContext(conversationId = null, postId = "p1")
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun leavingAllScreensDoesNotDismissAShownBanner() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(notification(id = "n1", conversationId = "c1"))
+        runCurrent()
+
+        vm.setActiveContext(conversationId = null, postId = null)
+
+        assertThat(vm.banner.value?.notificationId).isEqualTo("n1")
+    }
+
+    @Test
+    fun settingActiveContextWithNoBannerShownIsInert() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        vm.setActiveContext(conversationId = "c1", postId = null)
+
+        assertThat(vm.banner.value).isNull()
+    }
+
+    @Test
+    fun theGroupBannerLeadsTheLocalNameWithItsFavoriteEmoji() = runTest(dispatcher.scheduler) {
+        // The local rename + favorite emoji live only on the device (iOS composedSubtitle):
+        // the banner headline must read "<actor> dans <emoji> <renamed name>", not the bare title.
+        every { conversationRepository.conversationStream("c1") } returns flowOf(
+            ApiConversation(
+                id = "c1",
+                type = "group",
+                title = "Équipe Tech",
+                preferences = ApiConversationPreferences(
+                    customName = "Mon équipe à moi",
+                    reaction = "😴",
+                ),
+            ),
+        )
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                context = NotificationContext(conversationId = "c1", conversationType = "group"),
+            ),
+        )
+        runCurrent()
+
+        val headline = vm.banner.value?.presentation?.headline
+        assertThat(headline).isInstanceOf(BannerHeadline.InConversation::class.java)
+        val inConversation = headline as BannerHeadline.InConversation
+        assertThat(inConversation.actor).isEqualTo("Alice")
+        assertThat(inConversation.groupName).isEqualTo("😴 Mon équipe à moi")
+    }
+
+    @Test
+    fun showPreviewOffHidesTheBannerContent() = runTest(dispatcher.scheduler) {
+        val vm = viewModel(UserNotificationPreferences(showPreview = false))
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                content = "Dinner at 8?",
+                context = NotificationContext(conversationId = "c1"),
+            ),
+        )
+        runCurrent()
+
+        val banner = vm.banner.value
+        assertThat(banner?.previewHidden).isTrue()
+        assertThat(banner?.presentation?.body).isNull()
+    }
+
+    @Test
+    fun showPreviewOnLeavesTheBannerContentVisible() = runTest(dispatcher.scheduler) {
+        val vm = viewModel(UserNotificationPreferences(showPreview = true))
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                content = "Dinner at 8?",
+                context = NotificationContext(conversationId = "c1"),
+            ),
+        )
+        runCurrent()
+
+        val banner = vm.banner.value
+        assertThat(banner?.previewHidden).isFalse()
+        assertThat(banner?.presentation?.body).isEqualTo("Dinner at 8?")
     }
 
     @Test

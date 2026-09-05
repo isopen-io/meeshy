@@ -2,9 +2,30 @@
  * Rate Limiting Middleware for Meeshy Gateway
  *
  * Protects against:
- * - Message spam (max 20 messages/minute)
  * - Mention abuse (max 50 mentions/message, max 5 mentions/minute per recipient)
  * - API abuse (max 300 requests/minute)
+ *
+ * ## Ce que ce fichier n'enregistre PLUS, et pourquoi (#4687)
+ *
+ * `registerMessageRateLimiter` (20 messages/min, clé `msg:${userId}`) a vécu
+ * ici sans qu'AUCUN appelant de production ne l'invoque — mesuré, et déjà
+ * constaté par `docs/superpowers/specs/2026-07-29-architecture-transport-services.md`
+ * (« jamais branché ») et `docs/product/api-simplification/messaging.md` (« la
+ * limite de 20 messages/minute annoncée dans le CLAUDE.md n'existe pas »).
+ *
+ * Il est SUPPRIMÉ plutôt que laissé, parce qu'un enregistreur mort n'est pas
+ * neutre : c'est un PATRON à copier. Le sien annonçait une clé par compte
+ * (`msg:${authContext.userId}`) et rendait l'adresse — son `keyGenerator`
+ * tournait au hook `onRequest` du plugin, avant toute authentification de
+ * route. C'est exactement la forme qui, recopiée sous `config.rateLimit`, a
+ * produit les défauts de #4347, #4359 et #4429, un site à la fois.
+ *
+ * Le remonter n'était pas une option : il enregistre le plugin en GLOBAL
+ * (défaut du plugin) avec `max: 20`, ce qui plafonnerait TOUTE l'API à 20
+ * requêtes/minute — et un second enregistrement global entrerait en conflit
+ * avec `registerGlobalRateLimiter` ci-dessous. Un plafond par compte sur
+ * l'envoi de message se pose au niveau de la ROUTE, là où l'appelant est
+ * connu, comme le font `createPostRouteRateLimitConfig` et ses sœurs.
  */
 
 import { apiPath } from '@meeshy/shared/api/prefix';
@@ -12,48 +33,6 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { UnifiedAuthRequest } from './auth';
 import { getCacheStore } from '../services/CacheStore';
-
-/**
- * Rate limiter pour les messages
- * Max 20 messages par minute par utilisateur
- */
-export async function registerMessageRateLimiter(fastify: FastifyInstance) {
-  await fastify.register(rateLimit, {
-    max: 20,
-    timeWindow: '1 minute',
-    // RedisStore natif du plugin via l'option `redis`. NE PAS passer une
-    // instance à `store` : @fastify/rate-limit fait `new Store(opts)` dessus
-    // (index.js) → `new <instance>()` crashe au boot dès que Redis est présent
-    // (ex. staging ; en dev sans Redis `makeRedisStore` renvoyait undefined,
-    // donc ça ne pétait pas). `skipOnError: true` = fail-open (Redis KO → on
-    // laisse passer), comme l'ancien store custom.
-    redis: getCacheStore().getNativeClient() ?? undefined,
-    skipOnError: true,
-    keyGenerator: (request: FastifyRequest) => {
-      // Rate limit par utilisateur
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (authContext && authContext.userId) {
-        return `msg:${authContext.userId}`;
-      }
-      // Fallback sur IP si pas d'auth
-      return `msg:ip:${request.ip}`;
-    },
-    errorResponseBuilder: (request, context) => {
-      return {
-        success: false,
-        error: 'Trop de messages envoyés. Veuillez patienter avant de réessayer.',
-        retryAfter: context.ttl,
-        statusCode: 429
-      };
-    },
-    // Ne pas ajouter les headers X-RateLimit-* dans la réponse
-    addHeaders: {
-      'x-ratelimit-limit': false,
-      'x-ratelimit-remaining': false,
-      'x-ratelimit-reset': false
-    }
-  });
-}
 
 /**
  * Rate limiter global pour toutes les routes API
@@ -64,8 +43,11 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     global: true,
     max: 300, // Augmenté de 100 à 300 pour l'édition de liens
     timeWindow: '1 minute',
-    // RedisStore natif via `redis` (cf. registerMessageRateLimiter). Passer une
-    // instance à `store` crashait le boot en staging (plugin fait `new store()`).
+    // RedisStore natif du plugin via l'option `redis`. NE PAS passer une
+    // instance à `store` : @fastify/rate-limit fait `new Store(opts)` dessus
+    // (index.js:146) → `new <instance>()` crashe au boot dès que Redis est
+    // présent (ex. staging ; en dev sans Redis, `makeRedisStore` rendait
+    // `undefined`, donc ça ne pétait pas).
     redis: getCacheStore().getNativeClient() ?? undefined,
     // `request.ip` porte l'adresse de l'APPELANT depuis #4137 (`trustProxy`,
     // cf. `config/trust-proxy.ts`). Avant cela, c'était l'adresse du conteneur

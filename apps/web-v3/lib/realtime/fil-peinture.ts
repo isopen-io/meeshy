@@ -1,0 +1,887 @@
+import { adresseDuPlein, adresseDuProfil, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
+import { annonceDeLaPiece, annonceDuPrisme, type Accuse, type Citation, type PieceJointe, type Reaction } from '@/lib/api/fil';
+import { peutModifier, peutRetirer } from '@/lib/api/fil-mutations';
+import { formeDePiece, sEcouteSurPlace } from '@/lib/api/formes';
+import { adresseCarte, adresseGeo, lieuDeGeoUri, type Lieu } from '@/lib/api/lieu';
+import { initiales, TEINTES, teinteDeLAvatar } from '@/lib/avatar';
+import { FIL, libelleDeCitation, presenceServie } from '@/lib/contenu/fil';
+import { metaDePiece } from '@/lib/poids';
+import { cleDuJour, heureLocale, libelleDuJour } from '@/lib/temps';
+
+import type { Bulle, EtatDuFil, Frappeur } from './fil-etat';
+
+/**
+ * LA PEINTURE DU FIL — ce que le module de participation fait au DOM, et rien
+ * d'autre : il REMPLIT des fentes dans un balisage que le serveur a écrit
+ * (`app/connecte/fil-lignes.ts` rend chaque ligne ET les `<template>` que ce
+ * module clone — la ligne, le séparateur de jour, la palette de réactions).
+ * Aucune balise n'est composée ici : une ligne peinte en direct et une ligne
+ * rechargée sont le même HTML, parce qu'elles viennent de la même fonction ;
+ * les initiales, la teinte, les libellés et les jours viennent des mêmes
+ * modules (`lib/avatar.ts`, `lib/contenu/fil.ts`, `lib/temps.ts`) que le
+ * serveur lit.
+ *
+ * LA LISTE EST SERVIE DU PLUS RÉCENT AU PLUS ANCIEN et affichée à l'envers
+ * (`column-reverse`, feuille du fil) : le premier `<li>` du DOM est le message
+ * du bas. Insérer, regrouper, poser les jours se font donc en parcourant le
+ * DOM À REBOURS — l'ordre chronologique —, et un séparateur de jour se pose
+ * APRÈS la première ligne de son jour dans le DOM, c'est-à-dire au-dessus
+ * d'elle à l'écran.
+ *
+ * Ce que ce module ajoute au document, parce que seul le navigateur peut le
+ * savoir : l'HEURE LOCALE (le serveur rend un relatif, il ignore le fuseau)
+ * et les JOURS dans le fuseau du lecteur ; le compte des « nouveaux messages »
+ * quand le lecteur lit plus haut ; le nom de qui écrit ; le bouton « Réagir »
+ * de chaque ligne, cloné du gabarit — jamais servi inerte.
+ *
+ * Il ne SAIT rien de l'état : `EtatDuFil` (`fil-etat.ts`) est calculé ailleurs,
+ * pur ; ici on le projette. La projection est IDEMPOTENTE : repeindre le même
+ * état ne touche pas un nœud — c'est ce qui garde le défilement et la sélection
+ * à leur place (Instant App Principles, « zero unnecessary re-render »).
+ */
+
+export type Peintre = {
+  readonly liste: HTMLOListElement;
+  readonly gabarit: HTMLTemplateElement;
+  readonly gabaritDeJour: HTMLTemplateElement | null;
+  readonly gabaritDePalette: HTMLTemplateElement | null;
+  readonly frappe: HTMLElement | null;
+  /** La fente « N en ligne » de l'en-tête — servie au membre, absente chez l'invité (`fil-vue.ts`). */
+  readonly enLigne: HTMLElement | null;
+  /**
+   * Le nom sous lequel le lecteur écrit — celui que le document a servi
+   * (`data-nom`). Une ligne du lecteur porte « Vous » à la place du nom, et
+   * c'est SON nom, pas ce mot, qui donne ses initiales et sa teinte.
+   */
+  readonly nomDuLecteur: string;
+  readonly langueDuDocument: string;
+  /**
+   * L'adresse de la PORTE (`data-adresse`), telle que le document l'a servie :
+   * ce qui préfixe l'état plein écran d'une pièce (`?media=`). Le peintre ne la
+   * compose pas — deux compositions feraient mener la ligne peinte ailleurs que
+   * la ligne servie.
+   */
+  readonly adresse: string;
+};
+
+export const peintre = (main: HTMLElement): Peintre | null => {
+  const liste = main.querySelector<HTMLOListElement>('ol.lignes');
+  const gabarit = main.querySelector<HTMLTemplateElement>('template#gabarit-ligne');
+  if (liste === null || gabarit === null) return null;
+  return {
+    liste,
+    gabarit,
+    gabaritDeJour: main.querySelector<HTMLTemplateElement>('template#gabarit-jour'),
+    gabaritDePalette: main.querySelector<HTMLTemplateElement>('template#gabarit-palette'),
+    frappe: main.querySelector<HTMLElement>('#frappe'),
+    enLigne: main.querySelector<HTMLElement>('.fil-tete .en-ligne'),
+    nomDuLecteur: main.dataset.nom ?? FIL.vous,
+    langueDuDocument: document.documentElement.lang || 'fr',
+    adresse: main.dataset.adresse ?? '',
+  };
+};
+
+const texte = (racine: ParentNode, selecteur: string, valeur: string): void => {
+  const noeud = racine.querySelector<HTMLElement>(selecteur);
+  if (noeud !== null && noeud.textContent !== valeur) noeud.textContent = valeur;
+};
+
+const montre = (racine: ParentNode, selecteur: string, visible: boolean): void => {
+  const noeud = racine.querySelector<HTMLElement>(selecteur);
+  if (noeud !== null && noeud.hidden === visible) noeud.hidden = !visible;
+};
+
+const poseLang = (noeud: HTMLElement | null, langue: string | null, langueDuDocument: string): void => {
+  if (noeud === null) return;
+  const voulu = langue !== null && langue !== langueDuDocument ? langue : '';
+  if (voulu === '') noeud.removeAttribute('lang');
+  else if (noeud.getAttribute('lang') !== voulu) noeud.setAttribute('lang', voulu);
+};
+
+const classe = (noeud: HTMLElement, nom: string, actif: boolean): void => {
+  if (noeud.classList.contains(nom) !== actif) noeud.classList.toggle(nom, actif);
+};
+
+const CLASSES_D_ENVOI: readonly string[] = ['envoi-attente', 'envoi-hors-ligne', 'envoi-echec'];
+
+const classeDEnvoi = (bulle: Bulle): string | null =>
+  bulle.envoi === 'en-attente'
+    ? 'envoi-attente'
+    : bulle.envoi === 'hors-ligne'
+      ? 'envoi-hors-ligne'
+      : bulle.envoi === 'en-echec'
+        ? 'envoi-echec'
+        : null;
+
+const clone = <T extends Element>(gabarit: HTMLTemplateElement | null, selecteur: string): T | null => {
+  const modele = gabarit?.content.querySelector<T>(selecteur) ?? null;
+  return modele === null ? null : (modele.cloneNode(true) as T);
+};
+
+const poseAuDebut = <T extends HTMLElement>(ligne: HTMLElement, hote: string, noeud: T | null): T | null => {
+  const parent = ligne.querySelector<HTMLElement>(hote);
+  if (parent === null || noeud === null) return null;
+  parent.prepend(noeud);
+  return noeud;
+};
+
+const poseApres = <T extends HTMLElement>(ligne: HTMLElement, voisin: string, noeud: T | null): T | null => {
+  const avant = ligne.querySelector<HTMLElement>(voisin);
+  if (avant === null || noeud === null) return null;
+  avant.after(noeud);
+  return noeud;
+};
+
+/**
+ * LES DEUX CLIQUABLES VERS LE PROFIL D'UN AUTEUR (§ 12.10.3, #5030) — la MÊME
+ * règle que la ligne servie (`handleDeLAuteur`, `app/connecte/fil-lignes.ts`) :
+ * une ligne système ne cite personne, un auteur anonyme n'a pas de compte —
+ * lui-même compris —, et un auteur sans identifiant n'a pas de handle. Dans ces
+ * trois cas, le `href` est RETIRÉ : un `<a>` sans `href` n'est ni focusable ni
+ * cliquable, exactement comme la ligne servie qui ne rend pas de balise du
+ * tout. Même patron que la fiche d'un vocal (`peinsUnePiece`) : le gabarit
+ * porte la fente, le module décide si elle mène quelque part.
+ *
+ * `p.adresse` est l'adresse de la PORTE (`data-adresse`), donc `?profil=` s'y
+ * pose comme le serveur le pose — par `adresseDuProfil`, jamais par une
+ * concaténation d'ici.
+ */
+const remplisLesLiensDuProfil = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
+  const handle = bulle.systeme || bulle.anonyme ? null : bulle.auteurId;
+  const avatar = ligne.querySelector<HTMLAnchorElement>('a.avatar-lien');
+  const nom = ligne.querySelector<HTMLAnchorElement>('a.nom-lien');
+  if (handle === null || p.adresse === '') {
+    [avatar, nom].forEach((lien) => lien?.removeAttribute('href'));
+    avatar?.removeAttribute('aria-label');
+    return;
+  }
+  const cible = adresseDuProfil(p.adresse, handle);
+  [avatar, nom].forEach((lien) => lien?.setAttribute('href', cible));
+  avatar?.setAttribute('aria-label', bulle.deMoi ? FIL.voirVotreProfil : FIL.voirLeProfil(bulle.auteur));
+};
+
+const remplisLAvatar = (ligne: HTMLElement, bulle: Bulle): void => {
+  const initiale = ligne.querySelector<HTMLElement>('.avatar:not(.fantome)');
+  const fantome = ligne.querySelector<HTMLElement>('.avatar.fantome');
+  if (initiale !== null) initiale.hidden = bulle.anonyme && fantome !== null;
+  if (fantome !== null) fantome.hidden = !bulle.anonyme;
+  if (initiale === null || bulle.anonyme) return;
+  const voulues = initiales(bulle.auteur);
+  if (initiale.textContent !== voulues) initiale.textContent = voulues;
+  const teinte = teinteDeLAvatar(bulle.auteur);
+  TEINTES.forEach((t) => classe(initiale, t, t === teinte));
+};
+
+/**
+ * LES PIÈCES PEINTES — le même balisage que la ligne servie, cloné du gabarit,
+ * puis DÉPOUILLÉ de ce que le genre ne demande pas. Le gabarit porte les deux
+ * blocs (l'affiche et le lecteur) et les deux médias natifs ; ce module en
+ * RETIRE, il n'en compose aucun — `formeDePiece` (`lib/api/formes.ts`) décide,
+ * exactement comme pour la ligne servie. Écrite ici en comparaisons littérales
+ * de genre (`piece.genre !== 'audio'`, `piece.genre === 'video'`…), la règle
+ * était une SECONDE table : donner un lecteur à un genre neuf changeait la
+ * ligne servie sans changer la ligne peinte.
+ *
+ * LA GARDE DE TÊTE NE SORT PLUS SUR UNE LISTE VIDE. `bullesDuDocument` pose
+ * `pieces: []` sur toute ligne SERVIE ; sortir avant l'estampille laissait
+ * `data-empreinte` indéfini, si bien que le PREMIER
+ * `audio:transcription-ready` d'un vocal déjà servi tombait dans la branche
+ * d'ADOPTION — il estampillait l'empreinte NEUVE et rendait sans rien peindre.
+ * La transcription n'apparaissait jamais et le lecteur continuait d'entendre la
+ * piste ORIGINALE, alors que le module avait bien calculé la française
+ * (cycle 128, « on entend ce qu'on lit »). Seul un SECOND événement peignait.
+ * `remplisLesCitations`, juste dessous, était juste : la garde y sort après
+ * l'estampille, et c'est elle qu'on suit.
+ */
+const empreinteDesPieces = (pieces: readonly PieceJointe[]): string =>
+  pieces
+    .map((piece) => `${piece.id}:${piece.url}:${piece.piste}:${piece.transcription ?? ''}:${piece.transcriptionOriginale ?? ''}:${piece.langueServie ?? ''}`)
+    .join('|');
+
+/** Le nœud que la pièce ne demande pas SORT ; celui qu'elle demande perd son `hidden` de gabarit. */
+const retireSauf = (racine: ParentNode, selecteur: string, garde: boolean): void => {
+  const noeud = racine.querySelector<HTMLElement>(selecteur);
+  if (noeud === null) return;
+  if (garde) noeud.hidden = false;
+  else noeud.remove();
+};
+
+const peinsUnePiece = (noeud: HTMLLIElement, piece: PieceJointe, langueDuDocument: string, adresse: string, messageId: string): void => {
+  const forme = formeDePiece(piece.genre);
+  const surPlace = sEcouteSurPlace(piece.genre);
+  const meta = metaDePiece(piece);
+  noeud.dataset.piece = piece.id;
+  noeud.dataset.genre = piece.genre;
+
+  // Le bloc que le genre ne demande pas SORT du clone : une pièce peinte et une
+  // pièce servie portent alors le même balisage, au nœud près. C'est la MÊME
+  // table qui décide des deux côtés (`sEcouteSurPlace`) — un genre à qui l'on
+  // donnerait un lecteur changerait les deux d'un coup.
+  noeud.querySelector(surPlace ? 'a.media' : 'details.lecteur')?.remove();
+
+  const lien = noeud.querySelector<HTMLAnchorElement>('a.media');
+  if (lien !== null) {
+    // CE QUE LE TAP OUVRE vient de la table (`ouvre`) : le plein écran de
+    // l'adresse hôte, ou le fichier dans un onglet. Une pièce LOCALE — celle
+    // d'une bulle optimiste, que rien n'a encore téléversée — n'a PAS d'adresse
+    // (`url === ''`, `participate.ts` › `piecesLocales`) : elle n'ouvre donc
+    // rien, pas même un plein écran, dont le serveur ne saurait pas quoi
+    // rendre. Un lien sans `href` n'est pas un contrôle (charte règle 7).
+    const plein = forme.ouvre === 'plein';
+    const cible = piece.url === '' || adresse === '' ? '' : plein ? adresseDuPlein(adresse, messageId, piece.id) : piece.url;
+    if (cible === '') lien.removeAttribute('href');
+    else lien.setAttribute('href', cible);
+    if (plein) {
+      lien.removeAttribute('target');
+      lien.removeAttribute('rel');
+    } else {
+      lien.setAttribute('target', '_blank');
+      lien.setAttribute('rel', 'noopener');
+    }
+    lien.setAttribute('aria-label', plein ? FIL.pleinEcran(piece.nom, meta) : FIL.telecharger(piece.nom, meta));
+  }
+
+  // LA FICHE — la transcription entière en plein écran, pour ce qui s'écoute
+  // sur place et pour lui seul (§ 12.10.1), ET SEULEMENT quand il y a une fiche
+  // à lire : un vocal dont la transcription n'est pas encore revenue (le cas
+  // nominal des secondes qui suivent l'envoi) ouvrait une fiche VIDE. La
+  // transcription arrive par `audio:transcription-ready`, qui repeint la pièce :
+  // la puce apparaît à ce moment-là — c'est l'effet juste. Même règle que la
+  // ligne servie (`aFiche`, `app/connecte/fil-lignes.ts`).
+  const fiche = noeud.querySelector<HTMLAnchorElement>('a.fiche');
+  if (fiche !== null && !(surPlace && piece.transcription !== null)) fiche.remove();
+  else if (fiche !== null) {
+    if (piece.url === '' || adresse === '') fiche.removeAttribute('href');
+    else fiche.setAttribute('href', adresseDuPlein(adresse, messageId, piece.id));
+    fiche.setAttribute('aria-label', FIL.fiche(piece.nom));
+  }
+  // Le lecteur joue la PISTE — celle que la langue du texte servi a élue
+  // (cycle 128) —, jamais l'adresse de téléchargement.
+  const media = noeud.querySelector<HTMLMediaElement>('audio, video');
+  if (media !== null && piece.piste !== '') media.src = piece.piste;
+  texte(noeud, 'details.lecteur > summary > .hors-ecran', FIL.lire(piece.nom, meta));
+
+  texte(noeud, '.nom-de-piece', piece.nom);
+  texte(noeud, '.poids', meta);
+  montre(noeud, '.poids', meta !== '');
+
+  // Ce que la pièce ne DIT pas sort du clone, comme le bloc qu'elle ne demande
+  // pas : une pièce sans transcription porte alors le même balisage servie que
+  // peinte, au nœud près — c'est ce que le témoin des quatre genres oppose.
+  const annonce = piece.transcription === null ? null : annonceDeLaPiece(piece);
+  const original = annonce !== null && piece.transcriptionOriginale !== null;
+  retireSauf(noeud, '.transcription', piece.transcription !== null);
+  retireSauf(noeud, '.transcrit', annonce !== null);
+  retireSauf(noeud, 'details.transcrit-original', original);
+
+  texte(noeud, '.texte-transcrit', piece.transcription ?? '');
+  poseLang(noeud.querySelector<HTMLElement>('.transcription'), piece.langueServie ?? piece.langueDeTranscription, langueDuDocument);
+  if (annonce !== null) texte(noeud, '.transcrit', FIL.transcrit(annonce.origine, annonce.servie));
+  if (original) {
+    texte(noeud, 'details.transcrit-original p', piece.transcriptionOriginale ?? '');
+    poseLang(noeud.querySelector<HTMLElement>('details.transcrit-original p'), annonce?.origine ?? null, langueDuDocument);
+  }
+};
+
+const remplisLesPieces = (
+  ligne: HTMLElement,
+  pieces: readonly PieceJointe[],
+  gabarit: HTMLTemplateElement,
+  langueDuDocument: string,
+  adresse: string,
+  messageId: string,
+): void => {
+  const liste = ligne.querySelector<HTMLUListElement>('ul.pieces');
+  if (liste === null) return;
+  const empreinte = empreinteDesPieces(pieces);
+  if (liste.dataset.empreinte === empreinte) return;
+  if (liste.dataset.empreinte === undefined && liste.querySelector('li[data-piece]:not([data-piece=""])') !== null) {
+    liste.dataset.empreinte = empreinte;
+    return;
+  }
+  liste.dataset.empreinte = empreinte;
+
+  liste.replaceChildren(
+    ...pieces.map((piece) => {
+      const noeud = clone<HTMLLIElement>(gabarit, 'ul.pieces > li') ?? document.createElement('li');
+      peinsUnePiece(noeud, piece, langueDuDocument, adresse, messageId);
+      return noeud;
+    }),
+  );
+  liste.hidden = pieces.length === 0;
+};
+
+/**
+ * LES CITATIONS PEINTES — le même balisage que la ligne servie, cloné du
+ * gabarit : le module remplit `.quoi` (le libellé, composé par le SITE UNIQUE
+ * `libelleDeCitation`) et `.apercu` (avec sa langue), et `data-genre` élit le
+ * glyphe dans la feuille. Aucune balise n'est composée ici.
+ *
+ * Une ligne SERVIE porte déjà ses citations, que l'état relu du document ne
+ * reconstruit pas (`bullesDuDocument`) : au premier passage, on les ADOPTE
+ * plutôt que de les effacer. `data-cite` distingue une citation servie du
+ * gabarit, dont la cible est vide — le même discriminant que `data-piece`.
+ */
+const empreinteDesCitations = (citations: readonly Citation[]): string =>
+  citations.map((c) => `${c.genre}:${c.cible}:${c.source ?? ''}:${c.apercu}:${c.langue ?? ''}`).join('|');
+
+/**
+ * EXPORTÉE depuis l'issue #5163 : le bandeau de citation du composeur armé
+ * en RÉPONSE (`lib/realtime/composeur.ts`) remplit `#contexte-du-composeur`
+ * par ce MÊME site — `ligne` y est le conteneur du bandeau, qui porte lui
+ * aussi un `ul.citations`, jamais une jumelle de cette fonction.
+ */
+export const remplisLesCitations = (ligne: HTMLElement, citations: readonly Citation[], gabarit: HTMLTemplateElement | null, langueDuDocument: string): void => {
+  const liste = ligne.querySelector<HTMLUListElement>('ul.citations');
+  if (liste === null) return;
+  const empreinte = empreinteDesCitations(citations);
+  if (liste.dataset.empreinte === empreinte) return;
+  if (liste.dataset.empreinte === undefined && liste.querySelector('li.citation:not([data-cite=""])') !== null) {
+    liste.dataset.empreinte = empreinte;
+    return;
+  }
+  liste.dataset.empreinte = empreinte;
+
+  liste.replaceChildren(
+    ...citations.map((citation) => {
+      const noeud = clone<HTMLLIElement>(gabarit, 'ul.citations > li.citation') ?? document.createElement('li');
+      noeud.dataset.genre = citation.genre;
+      noeud.dataset.cite = citation.cible;
+      // LE SAUT n'existe que si la cible est dans la page — un fait établi par
+      // `citationsDeLaPage` (`lib/api/citations.ts`), jamais recalculé ici :
+      // deux calculs feraient une citation cliquable servie et morte peinte.
+      const saut = noeud.querySelector<HTMLAnchorElement>('a.saut');
+      if (saut !== null) {
+        if (citation.surLaPage) saut.setAttribute('href', ancreDuMessage(citation.cible));
+        else saut.removeAttribute('href');
+        montre(saut, '.hors-ecran', citation.surLaPage);
+      }
+      texte(noeud, '.quoi', libelleDeCitation(citation));
+      texte(noeud, '.apercu', citation.apercu);
+      montre(noeud, '.apercu', citation.apercu !== '');
+      poseLang(noeud.querySelector<HTMLElement>('.apercu'), citation.langue, langueDuDocument);
+      return noeud;
+    }),
+  );
+  liste.hidden = citations.length === 0;
+};
+
+/**
+ * UN LIEU PARTAGÉ (#5061) — le même balisage que la ligne servie, cloné du
+ * gabarit : le module remplit `.lieu-lien` (`href="geo:…"`, sans aucune
+ * tuile téléchargée, § 12.6) et `.lieu-carte` (le repli, ouvert dans un
+ * onglet). UN LIEU NE DISPARAÎT JAMAIS : contrairement aux pièces et aux
+ * citations, ce module ne le RETIRE pas quand `bulle.lieu` vaut `null` — la
+ * même règle que la pastille de langue (`piecesConnues`, plus haut) :
+ * `bullesDuDocument` ne reconstruit le lieu d'une ligne SERVIE que si son
+ * `.lieu-lien` porte un `geo:` lisible, mais l'état ne le sait pas encore
+ * tant que ce premier repeint n'est pas passé — sortir plus tôt effacerait
+ * un lieu que le serveur a bien rendu.
+ */
+const remplisLeLieu = (ligne: HTMLElement, bulle: Bulle, gabarit: HTMLTemplateElement): void => {
+  const lieu = bulle.lieu;
+  if (lieu === null || lieu === undefined) return;
+  let noeud = ligne.querySelector<HTMLElement>('.lieu');
+  if (noeud === null) {
+    const clone_ = clone<HTMLElement>(gabarit, 'p.lieu');
+    noeud = poseApres(ligne, 'ul.pieces', clone_) ?? poseApres(ligne, '.qui', clone_);
+  }
+  if (noeud === null) return;
+  noeud.hidden = false;
+  const nom = lieu.nom ?? FIL.lieuPartage;
+  const lien = noeud.querySelector<HTMLAnchorElement>('.lieu-lien');
+  if (lien !== null) {
+    const cible = adresseGeo(lieu);
+    if (lien.getAttribute('href') !== cible) lien.setAttribute('href', cible);
+    lien.setAttribute('aria-label', FIL.ouvrirLeLieu(nom));
+  }
+  texte(noeud, '.nom-du-lieu', nom);
+  montre(noeud, '.adresse-du-lieu', lieu.adresse !== null);
+  if (lieu.adresse !== null) texte(noeud, '.adresse-du-lieu', lieu.adresse);
+  const carte = noeud.querySelector<HTMLAnchorElement>('.lieu-carte');
+  if (carte !== null) {
+    const cibleCarte = adresseCarte(lieu);
+    if (carte.getAttribute('href') !== cibleCarte) carte.setAttribute('href', cibleCarte);
+    if (carte.textContent !== FIL.voirSurCarte) carte.textContent = FIL.voirSurCarte;
+  }
+};
+
+const empreinteDesReactions = (reactions: readonly Reaction[]): string =>
+  reactions.map((r) => `${r.emoji}:${r.nombre}:${r.mienne ? 1 : 0}`).join('|');
+
+/**
+ * Les pastilles sont des FORMULAIRES, clonés du gabarit : le même balisage que
+ * la pastille servie, `aria-pressed` en plus quand elle est la mienne.
+ */
+const remplisLesReactions = (ligne: HTMLElement, bulle: Bulle, gabarit: HTMLTemplateElement): void => {
+  const liste = ligne.querySelector<HTMLUListElement>('ul.reactions');
+  if (liste === null) return;
+  const attendu = empreinteDesReactions(bulle.reactions);
+  if (liste.dataset.empreinte === attendu) return;
+  liste.dataset.empreinte = attendu;
+  liste.replaceChildren(
+    ...bulle.reactions.map((reaction) => {
+      const item = clone<HTMLLIElement>(gabarit, 'ul.reactions > li') ?? document.createElement('li');
+      item.dataset.emoji = reaction.emoji;
+      const emoji = item.querySelector<HTMLInputElement>('input[name="reaction"]');
+      const cible = item.querySelector<HTMLInputElement>('input[name="message"]');
+      if (emoji !== null) emoji.value = reaction.emoji;
+      if (cible !== null) cible.value = bulle.id;
+      const bouton = item.querySelector<HTMLButtonElement>('button.reaction');
+      if (bouton !== null) {
+        bouton.dataset.emoji = reaction.emoji;
+        bouton.setAttribute('aria-pressed', reaction.mienne ? 'true' : 'false');
+      }
+      texte(item, '.emoji', reaction.emoji);
+      texte(item, '.nombre', String(reaction.nombre));
+      return item;
+    }),
+  );
+  liste.hidden = bulle.reactions.length === 0;
+};
+
+/**
+ * Le bouton « Réagir », cloné dans la PLACE que chaque ligne servie lui réserve
+ * (`.reagir-slot`, `fil-lignes.ts`) : il arrive sans déplacer l'heure ni
+ * l'accusé. Une ligne servie n'en porte aucun ; une ligne clonée l'a déjà.
+ */
+const poseLeBoutonReagir = (ligne: HTMLElement, bulle: Bulle, gabarit: HTMLTemplateElement): void => {
+  if (bulle.systeme || bulle.supprime || bulle.protege || ligne.querySelector('.reagir') !== null) return;
+  const place = ligne.querySelector<HTMLElement>('.reagir-slot');
+  const bouton = clone<HTMLButtonElement>(gabarit, 'button.reagir');
+  if (place !== null && bouton !== null) place.append(bouton);
+};
+
+/** Retirer les contrôles de réaction — quand la porte se ferme (410, place fermée, session expirée). La place reste : rien ne bouge. */
+export const retireLesControlesDeReaction = (p: Peintre): void => {
+  p.liste.querySelectorAll('button.reagir').forEach((bouton) => bouton.remove());
+};
+
+/** Retirer les menus d'une ligne — le MÊME moment que les contrôles de réaction (§ 12.10.1, issue #5163). Toggle, jamais destructeur. */
+export const retireLesMenus = (p: Peintre): void => {
+  p.liste.querySelectorAll<HTMLElement>('details.actions').forEach((menu) => {
+    menu.hidden = true;
+  });
+};
+
+/**
+ * CE QUE LE MENU D'UNE LIGNE GOUVERNE (issue #5163) — le composeur est-il
+ * ouvert (« Répondre »), le lecteur est-il un INVITÉ (jamais « Modifier » ni
+ * « Retirer », régime 3), et l'HORLOGE du navigateur (la fenêtre de 24 h,
+ * `peutModifier`). Un membre a `estInvite: false` sur les DEUX portes — la
+ * distinction ne dépend que du régime d'authentification, jamais de la porte
+ * qui sert cette ligne précise.
+ */
+export type ContexteMenu = { readonly composeurOuvert: boolean; readonly estInvite: boolean };
+
+/** Le contexte par défaut — celui d'un membre au composeur ouvert : le cas de la quasi-totalité des lignes peintes. */
+export const CONTEXTE_MENU_PAR_DEFAUT: ContexteMenu = { composeurOuvert: true, estInvite: false };
+
+/**
+ * LE MENU D'UNE LIGNE — jamais composé, TOGGLÉ (`hidden`) : une bulle qui
+ * passe de « en attente » à « servi » (l'accusé d'un envoi) ou qu'un
+ * `retabli` restaure après un refus doit pouvoir RETROUVER son menu, et un
+ * droit RENDU par l'hôte (`participant:rights-updated`) doit faire
+ * RÉAPPARAÎTRE « Répondre » sans qu'un nœud détruit ne l'en empêche.
+ *
+ * UNE LIGNE SERVIE SANS AUCUN GESTE ADMIS N'A PAS DE `.actions` DU TOUT — le
+ * serveur ne le rend pas (charte règle 7). Si l'un des trois gestes devient
+ * possible en direct (un droit rendu), le module CLONE le menu du gabarit et
+ * le pose comme sibling de `.datation`, exactement le patron de
+ * `poseLeBoutonReagir` / `poseApres` (`details.original`).
+ */
+const remplisLeMenu = (ligne: HTMLElement, bulle: Bulle, p: Peintre, { composeurOuvert, estInvite }: ContexteMenu, maintenant: number): void => {
+  const admetTout = !bulle.systeme && !bulle.supprime && !bulle.protege && bulle.envoi === 'servi';
+  const candidat = { deMoi: bulle.deMoi, systeme: bulle.systeme, supprime: bulle.supprime, protege: bulle.protege, ecritA: bulle.ecritA, envoi: bulle.envoi };
+  const admetRepondre = admetTout && composeurOuvert;
+  const admetModifier = admetTout && !estInvite && peutModifier({ ...candidat, maintenant });
+  const admetRetirer = admetTout && !estInvite && peutRetirer(candidat);
+  const rien = !admetRepondre && !admetModifier && !admetRetirer;
+
+  let menu = ligne.querySelector<HTMLElement>('details.actions');
+  if (menu === null) {
+    if (rien) return;
+    menu = poseApres(ligne, '.datation', clone<HTMLElement>(p.gabarit, 'details.actions'));
+    if (menu === null) return;
+  }
+
+  const menuTrouve = menu;
+  // LE NOM ET L'ACTION SE POSENT À CHAQUE FOIS, jamais au seul clonage. Une
+  // ligne PEINTE naît d'un clone du gabarit, qui porte DÉJÀ son `details` :
+  // elle n'entrait donc pas dans la branche ci-dessus, et son `<summary>`
+  // restait SANS NOM — « Summary elements must have discernible text », une
+  // violation axe SERIOUS sur chaque message reçu en direct. Et le nom suit
+  // l'AUTEUR : une ligne recyclée par la peinture peut en changer.
+  texte(menuTrouve, 'summary .hors-ecran', bulle.deMoi ? FIL.actionsSurMonMessage : FIL.actionsSurLeMessage(bulle.auteur));
+  const formulaire = menuTrouve.querySelector<HTMLFormElement>('form');
+  if (formulaire !== null && p.adresse !== '' && formulaire.getAttribute('action') !== p.adresse) {
+    formulaire.setAttribute('action', p.adresse);
+  }
+  const gouverne = (nom: string, admis: boolean): void => {
+    const bouton = menuTrouve.querySelector<HTMLButtonElement>(`button[name="${nom}"]`);
+    if (bouton === null) return;
+    if (bouton.value !== bulle.id) bouton.value = bulle.id;
+    if (bouton.hidden !== !admis) bouton.hidden = !admis;
+  };
+  gouverne('repondre', admetRepondre);
+  gouverne('modifier', admetModifier);
+  gouverne('retirer', admetRetirer);
+  if (menuTrouve.hidden !== rien) menuTrouve.hidden = rien;
+};
+
+/**
+ * Remplir les FENTES d'une ligne — la même pour une ligne servie et pour un
+ * clone du gabarit. Tout ce qui ne change pas n'est pas touché.
+ *
+ * `menu` et `maintenant` gouvernent le menu (§ 12.10.1, issue #5163) — le
+ * contexte par défaut (`CONTEXTE_MENU_PAR_DEFAUT`) couvre le cas d'un membre
+ * au composeur ouvert, celui de la quasi-totalité des appelants existants.
+ */
+export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre, menu: ContexteMenu = CONTEXTE_MENU_PAR_DEFAUT, maintenant: number = Date.now()): void => {
+  ligne.dataset.id = bulle.id;
+  // L'identifiant DOM vient de son SITE UNIQUE : c'est lui que l'ancre d'une
+  // citation vise (`ancreDuMessage`), et une seconde écriture du même préfixe
+  // ferait sauter le lien à côté de la ligne au premier changement de forme.
+  ligne.id = identifiantDuMessage(bulle.id);
+  if (bulle.clientMessageId !== null) ligne.dataset.cid = bulle.clientMessageId;
+  if (bulle.auteurId !== null) ligne.dataset.auteur = bulle.auteurId;
+  if (bulle.ecritA !== null) ligne.dataset.ecrit = bulle.ecritA;
+  if (bulle.langueServie !== null) ligne.dataset.servie = bulle.langueServie;
+  else delete ligne.dataset.servie;
+
+  classe(ligne, 'mien', bulle.deMoi);
+  classe(ligne, 'systeme', bulle.systeme);
+  classe(ligne, 'supprime', bulle.supprime);
+  classe(ligne, 'protege', bulle.protege);
+  CLASSES_D_ENVOI.forEach((nom) => classe(ligne, nom, classeDEnvoi(bulle) === nom));
+
+  remplisLAvatar(ligne, bulle);
+  remplisLesLiensDuProfil(ligne, bulle, p);
+  texte(ligne, '.nom', bulle.deMoi ? FIL.vous : bulle.auteur);
+  montre(ligne, '.anonyme', bulle.anonyme);
+
+  // Une parole RETIRÉE ne reste pas sous les yeux : la mention remplace le
+  // texte — la même que celle que le serveur sert (`fil-lignes.ts`) — et tout
+  // ce qui la citait (original, langue, pièces, réactions) s'efface avec elle.
+  const corps = ligne.querySelector<HTMLElement>('.texte');
+  if (corps !== null) {
+    const voulu = bulle.supprime ? FIL.supprime : bulle.texte;
+    if (corps.textContent !== voulu) corps.textContent = voulu;
+    poseLang(corps, bulle.supprime ? null : (bulle.langueServie ?? bulle.langueOriginale), p.langueDuDocument);
+  }
+
+  // Une ligne SERVIE ne porte NI la pastille NI « Voir l'original » tant que
+  // rien n'est traduit — les rendre à vide coûterait un tracé par ligne, sur
+  // une 3G rurale. Quand une traduction ARRIVE, la fente manque donc : le
+  // module la CLONE du gabarit, exactement comme le bouton « Réagir ».
+  const visibleOriginal = bulle.langueServie !== null && !bulle.protege && !bulle.supprime;
+  const original = ligne.querySelector<HTMLDetailsElement>('details.original') ?? (visibleOriginal ? poseApres(ligne, '.texte', clone<HTMLDetailsElement>(p.gabarit, 'details.original')) : null);
+  if (original !== null) {
+    original.hidden = !visibleOriginal;
+    if (visibleOriginal) {
+      const paragraphe = original.querySelector<HTMLElement>('p');
+      texte(original, 'p', bulle.texteOriginal);
+      poseLang(paragraphe, bulle.langueOriginale, p.langueDuDocument);
+    }
+  }
+
+  // La pastille annonce ce qui a été RÉSOLU — le texte d'abord, puis ce que le
+  // message PORTE : sur un vocal sans texte, elle disparaissait avec le texte
+  // absent (`lib/api/fil.ts`, `annonceDuPrisme`).
+  // LA PASTILLE DIT CE QUI A ÉTÉ RÉSOLU — le texte d'abord, puis ce que le
+  // message PORTE (`annonceDuPrisme`) : sur un vocal sans texte, elle
+  // disparaissait avec le texte absent.
+  //
+  // Et elle ne CONTREDIT pas le document quand l'état n'en sait pas assez :
+  // `bullesDuDocument` ne reconstruit PAS les pièces (`pieces: []`), donc une
+  // pastille dont la source est un vocal traduit serait effacée au premier
+  // repeint. On ne décide donc que lorsque les pièces sont CONNUES de l'état —
+  // soit qu'il les porte, soit que la ligne n'en ait aucune.
+  const annonce = bulle.supprime ? null : annonceDuPrisme(bulle);
+  const piecesConnues =
+    bulle.pieces.length > 0 || ligne.querySelector('ul.pieces > li[data-piece]:not([data-piece=""])') === null;
+  const pastille = ligne.querySelector<HTMLElement>('.meta .langue') ?? (annonce === null ? null : poseAuDebut(ligne, '.meta', clone<HTMLElement>(p.gabarit, '.meta .langue')));
+  if (pastille !== null && (annonce !== null || piecesConnues)) {
+    pastille.hidden = annonce === null;
+    if (annonce !== null) texte(pastille, '.code', annonce.origine);
+  }
+
+  // « modifié » — la MÊME manœuvre que la pastille de langue juste au-dessus :
+  // la ligne SERVIE ne porte ce nœud que si le message était DÉJÀ édité
+  // (`fil-lignes.ts`, la mention est conditionnelle), donc `montre()` seul ne
+  // révélait rien — une édition reçue en direct, ou faite par le lecteur,
+  // changeait le texte SANS jamais dire qu'il avait changé. Le nœud manquant
+  // est cloné du gabarit et posé à sa place : après la pastille, avant la
+  // place réservée du bouton « Réagir ».
+  const mentionDeModification =
+    ligne.querySelector<HTMLElement>('.meta .modifie') ??
+    (bulle.edite && !bulle.supprime
+      ? (poseApres(ligne, '.meta .langue', clone<HTMLElement>(p.gabarit, '.meta .modifie')) ??
+        poseAuDebut(ligne, '.meta', clone<HTMLElement>(p.gabarit, '.meta .modifie')))
+      : null);
+  if (mentionDeModification !== null) mentionDeModification.hidden = !(bulle.edite && !bulle.supprime);
+  texte(ligne, '.etat-envoi', bulle.envoi === 'hors-ligne' ? FIL.horsLigne : FIL.enAttente);
+  if (bulle.raison !== null) texte(ligne, '.echec .raison', bulle.raison);
+
+  const heure = ligne.querySelector<HTMLTimeElement>('time');
+  if (heure !== null && bulle.ecritA !== null) {
+    if (heure.dateTime !== bulle.ecritA) heure.dateTime = bulle.ecritA;
+    const locale = heureLocale(bulle.ecritA, p.langueDuDocument);
+    if (heure.textContent !== locale) heure.textContent = locale;
+  }
+
+  const accuse = ligne.querySelector<HTMLElement>('.accuse');
+  if (accuse !== null) {
+    accuse.hidden = !(bulle.deMoi && !bulle.systeme);
+    if (accuse.dataset.accuse !== bulle.accuse) {
+      accuse.dataset.accuse = bulle.accuse;
+      accuse.title = FIL.accuse[bulle.accuse];
+      texte(accuse, '.hors-ecran', FIL.accuse[bulle.accuse]);
+    }
+  }
+
+  const pieces = ligne.querySelector<HTMLElement>('ul.pieces');
+  const citations = ligne.querySelector<HTMLElement>('ul.citations');
+  const lieuNoeud = ligne.querySelector<HTMLElement>('.lieu');
+  if (bulle.supprime) {
+    if (pieces !== null) pieces.hidden = true;
+    if (citations !== null) citations.hidden = true;
+    if (lieuNoeud !== null) lieuNoeud.hidden = true;
+  } else {
+    remplisLesPieces(ligne, bulle.pieces, p.gabarit, p.langueDuDocument, p.adresse, bulle.id);
+    remplisLesCitations(ligne, bulle.citations, p.gabarit, p.langueDuDocument);
+    remplisLeLieu(ligne, bulle, p.gabarit);
+  }
+  if (bulle.supprime) {
+    const reactions = ligne.querySelector<HTMLElement>('ul.reactions');
+    if (reactions !== null) reactions.hidden = true;
+    ligne.querySelector('.reagir')?.remove();
+  } else {
+    remplisLesReactions(ligne, bulle, p.gabarit);
+    poseLeBoutonReagir(ligne, bulle, p.gabarit);
+  }
+  remplisLeMenu(ligne, bulle, p, menu, maintenant);
+};
+
+// Une valeur d'attribut entre guillemets : seuls `\\` et `"` s'y échappent
+// (`CSS.escape` manque à jsdom, et n'apporte rien de plus ici).
+const attribut = (valeur: string): string => valeur.replace(/["\\]/g, '\\$&');
+
+const trouve = (p: Peintre, bulle: Bulle): HTMLElement | null =>
+  p.liste.querySelector<HTMLElement>(`li[data-id="${attribut(bulle.id)}"]`) ??
+  (bulle.clientMessageId === null
+    ? null
+    : p.liste.querySelector<HTMLElement>(`li[data-cid="${attribut(bulle.clientMessageId)}"]`));
+
+const instantDe = (noeud: HTMLElement): number => Date.parse(noeud.dataset.ecrit ?? '') || 0;
+
+/** Les lignes dans l'ordre CHRONOLOGIQUE — l'inverse du DOM, qui va du plus récent au plus ancien. */
+const lignesChronologiques = (p: Peintre): readonly HTMLElement[] =>
+  [...p.liste.querySelectorAll<HTMLElement>('li.ligne')].reverse();
+
+/**
+ * Insérer À SA PLACE dans l'ordre d'écriture — jamais un saut de position. Le
+ * DOM va du plus récent au plus ancien : la ligne se pose AVANT la première
+ * ligne plus ancienne qu'elle, ou en fin de liste si elle est la plus ancienne.
+ */
+const insereEnOrdre = (p: Peintre, ligne: HTMLElement, bulle: Bulle): void => {
+  const instant = bulle.ecritA === null ? Number.MAX_SAFE_INTEGER : Date.parse(bulle.ecritA);
+  const plusAncienne = [...p.liste.querySelectorAll<HTMLElement>('li.ligne')].find((candidat) => instantDe(candidat) <= instant);
+  if (plusAncienne === undefined) p.liste.append(ligne);
+  else p.liste.insertBefore(ligne, plusAncienne);
+};
+
+const estUneSuite = (ligne: HTMLElement, precedente: HTMLElement | null): boolean =>
+  precedente !== null &&
+  !ligne.classList.contains('systeme') &&
+  !precedente.classList.contains('systeme') &&
+  (ligne.dataset.auteur ?? '') !== '' &&
+  ligne.dataset.auteur === precedente.dataset.auteur &&
+  instantDe(ligne) - instantDe(precedente) < 5 * 60_000;
+
+/**
+ * Les séparateurs de jour, et le regroupement — recalculés sur l'ordre
+ * CHRONOLOGIQUE, dans le fuseau du lecteur. Un séparateur est cloné du gabarit
+ * et posé APRÈS la première ligne de son jour dans le DOM (au-dessus d'elle à
+ * l'écran) ; ceux que le serveur avait posés dans le sien sont retirés d'abord.
+ */
+export const recale = (p: Peintre, maintenant: number): void => {
+  p.liste.querySelectorAll('li.jour').forEach((jour) => jour.remove());
+
+  let precedente: HTMLElement | null = null;
+  let jourPrecedent = '';
+  lignesChronologiques(p).forEach((ligne) => {
+    const ecrit = ligne.dataset.ecrit ?? '';
+    const jour = ecrit === '' ? jourPrecedent : cleDuJour(ecrit);
+    if (jour !== jourPrecedent) {
+      const separateur = clone<HTMLLIElement>(p.gabaritDeJour, 'li.jour');
+      if (separateur !== null) {
+        separateur.dataset.jour = jour;
+        const heure = separateur.querySelector<HTMLTimeElement>('time');
+        if (heure !== null) {
+          heure.dateTime = ecrit;
+          heure.textContent = libelleDuJour(ecrit, maintenant, p.langueDuDocument);
+        }
+        ligne.after(separateur);
+      }
+      jourPrecedent = jour;
+      precedente = null;
+    }
+    classe(ligne, 'suite', estUneSuite(ligne, precedente));
+    precedente = ligne;
+  });
+};
+
+/** Les heures servies en relatif par le serveur passent en heure LOCALE — une fois, au chargement. */
+export const recaleLesHeures = (p: Peintre): void => {
+  p.liste.querySelectorAll<HTMLTimeElement>('li.ligne time[datetime]').forEach((heure) => {
+    const locale = heureLocale(heure.dateTime, p.langueDuDocument);
+    if (locale !== '' && heure.textContent !== locale) heure.textContent = locale;
+  });
+};
+
+/**
+ * Projeter l'état sur le DOM, et rendre les lignes qui viennent d'être créées.
+ * PEINDRE n'est pas SIGNALER : une page d'historique chargée par le haut, une
+ * file hors ligne relue à l'ouverture et un message qui ARRIVE passent tous
+ * ici, et seul le dernier est une arrivée — c'est l'appelant qui la teinte
+ * (`neuve`) et qui retire la teinte ; mesuré avant, vingt-quatre lignes
+ * d'historique restaient surlignées jusqu'au rechargement.
+ */
+export const peins = (
+  p: Peintre,
+  etat: EtatDuFil,
+  maintenant: number,
+  menu: ContexteMenu = CONTEXTE_MENU_PAR_DEFAUT,
+): readonly HTMLElement[] => {
+  const neuves: HTMLElement[] = [];
+
+  // Une ligne OPTIMISTE que l'état ne porte plus s'efface : sa bulle servie
+  // est déjà là sous un autre nœud (`fil-etat.ts`, `confirme`). Une ligne
+  // servie, elle, n'est jamais retirée — supprimée, elle garde sa mention.
+  const connues = new Set(etat.bulles.flatMap((bulle) => (bulle.clientMessageId === null ? [bulle.id] : [bulle.id, bulle.clientMessageId])));
+  p.liste.querySelectorAll<HTMLElement>('li.ligne[data-cid]').forEach((ligne) => {
+    if (!connues.has(ligne.dataset.cid ?? '') && !connues.has(ligne.dataset.id ?? '')) ligne.remove();
+  });
+
+  etat.bulles.forEach((bulle) => {
+    const existante = trouve(p, bulle);
+    if (existante !== null) {
+      remplis(existante, bulle, p, menu, maintenant);
+      return;
+    }
+    const ligne = clone<HTMLElement>(p.gabarit, 'li.ligne');
+    if (ligne === null) return;
+    remplis(ligne, bulle, p, menu, maintenant);
+    insereEnOrdre(p, ligne, bulle);
+    neuves.push(ligne);
+  });
+
+  if (neuves.length > 0) recale(p, maintenant);
+  peinsLaFrappe(p, etat.frappeurs);
+  peinsLaPresence(p, etat.presents.length);
+  return neuves;
+};
+
+export const peinsLaFrappe = (p: Peintre, frappeurs: readonly Frappeur[]): void => {
+  if (p.frappe === null) return;
+  const noms = frappeurs.map((f) => f.nom);
+  const phrase = noms.length === 0 ? '' : `${noms.join(', ')} ${FIL.frappe}`;
+  if (p.frappe.textContent !== phrase) p.frappe.textContent = phrase;
+  p.frappe.hidden = phrase === '';
+};
+
+/**
+ * « N en ligne », dans la fente servie — la MÊME phrase que le serveur, tue à
+ * zéro comme lui, séparateur compris : la fente DÉCLARE ce qui la précède
+ * (`data-sep`), que la directive § 12.10.2 a rendu variable en faisant taire le
+ * compte de participants d'une conversation à deux.
+ */
+export const peinsLaPresence = (p: Peintre, presents: number): void => {
+  if (p.enLigne === null) return;
+  const phrase = presenceServie({ presents, avecSeparateur: p.enLigne.dataset.sep === '1' });
+  if (p.enLigne.textContent !== phrase) p.enLigne.textContent = phrase;
+  p.enLigne.hidden = presents === 0;
+};
+
+/**
+ * LA PALETTE — un `<dialog>` cloné du gabarit UNE fois, ouvert en modal (Échap
+ * le ferme, le focus y est tenu) ; la promesse rend l'emoji choisi, ou `''`.
+ */
+export const choisisUneReaction = (p: Peintre): Promise<string> => {
+  const existante = document.querySelector<HTMLDialogElement>('dialog.palette');
+  const palette = existante ?? clone<HTMLDialogElement>(p.gabaritDePalette, 'dialog.palette');
+  if (palette === null) return Promise.resolve('');
+  if (existante === null) document.body.append(palette);
+  return new Promise((resoud) => {
+    palette.returnValue = '';
+    palette.addEventListener('close', () => resoud(palette.returnValue), { once: true });
+    palette.showModal();
+  });
+};
+
+/**
+ * LE LIEU D'UNE LIGNE SERVIE (#5061) — relu depuis le `geo:` que
+ * `remplisLeLieu`/`lieuHtml` posent, jamais recalculé : c'est le SEUL nombre
+ * que `geo:` porte, donc le SEUL site qui puisse reconstruire l'état initial
+ * sans un second appel réseau. `FIL.lieuPartage` est le nom GÉNÉRIQUE que le
+ * serveur sert quand la passerelle n'a reçu aucun nom (`lieuHtml`) — le relire
+ * comme nom vaudrait fabriquer un nom que la passerelle n'a jamais servi.
+ */
+const lieuDuDocument = (ligne: HTMLElement): Lieu | null => {
+  const lien = ligne.querySelector<HTMLAnchorElement>('.lieu-lien');
+  if (lien === null) return null;
+  const coordonnees = lieuDeGeoUri(lien.getAttribute('href') ?? '');
+  if (coordonnees === null) return null;
+  const nomServi = ligne.querySelector('.nom-du-lieu')?.textContent ?? null;
+  const adresseServie = ligne.querySelector<HTMLElement>('.adresse-du-lieu');
+  return {
+    ...coordonnees,
+    nom: nomServi === null || nomServi === FIL.lieuPartage ? null : nomServi,
+    adresse: adresseServie === null || adresseServie.hidden ? null : (adresseServie.textContent ?? null),
+  };
+};
+
+/**
+ * L'état INITIAL, lu dans ce que le serveur a servi — jamais un second
+ * chargement : la page qui vient d'arriver EST le cache (Cache-First). Rendu
+ * dans l'ordre chronologique, comme `fil-etat.ts` le tient.
+ */
+export const bullesDuDocument = (p: Peintre): readonly Bulle[] =>
+  lignesChronologiques(p).map((ligne) => {
+    const servie = ligne.dataset.servie ?? null;
+    const texteServi = ligne.querySelector('.texte')?.textContent ?? '';
+    const original = ligne.querySelector('details.original p')?.textContent ?? texteServi;
+    const accuse = (ligne.querySelector<HTMLElement>('.accuse')?.dataset.accuse ?? 'envoye') as Accuse;
+    const deMoi = ligne.classList.contains('mien');
+    return {
+      id: ligne.dataset.id ?? '',
+      clientMessageId: ligne.dataset.cid ?? null,
+      // Ma ligne dit « Vous » : son auteur est le lecteur, dont le document a servi le nom.
+      auteur: deMoi ? p.nomDuLecteur : (ligne.querySelector('.nom')?.textContent ?? ''),
+      auteurId: ligne.dataset.auteur ?? null,
+      anonyme: ligne.querySelector('.anonyme') !== null && !ligne.querySelector<HTMLElement>('.anonyme')!.hidden,
+      deMoi,
+      systeme: ligne.classList.contains('systeme'),
+      texte: texteServi,
+      texteOriginal: original,
+      langueServie: servie,
+      langueOriginale: ligne.dataset.origine ?? null,
+      traductions: servie === null ? {} : { [servie]: texteServi },
+      ecritA: ligne.dataset.ecrit ?? null,
+      protege: ligne.classList.contains('protege'),
+      edite: ligne.querySelector('.modifie') !== null && !ligne.querySelector<HTMLElement>('.modifie')!.hidden,
+      supprime: ligne.classList.contains('supprime'),
+      pieces: [],
+      lieu: lieuDuDocument(ligne),
+      citations: [],
+      reactions: [...ligne.querySelectorAll<HTMLElement>('ul.reactions li')].map((item) => ({
+        emoji: item.dataset.emoji ?? '',
+        nombre: Number(item.querySelector('.nombre')?.textContent ?? '0') || 0,
+        mienne: item.querySelector('button.reaction')?.getAttribute('aria-pressed') === 'true',
+      })),
+      accuse,
+      envoi: 'servi' as const,
+      raison: null,
+    };
+  });

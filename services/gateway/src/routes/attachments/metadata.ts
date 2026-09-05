@@ -18,10 +18,70 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
-import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../../services/historyFloor';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
+import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
+
+/**
+ * Le contrat SERVI par `GET /conversations/:conversationId/attachments`.
+ *
+ * Il ÉPAND `messageAttachmentMinimalSchema` — il ne le remplace pas : le
+ * minimal reste la base, et tout champ qu'il gagnera arrivera ici sans que
+ * personne ait à y penser. (Un double partiel d'un schéma partagé perd en
+ * silence tout ce que le schéma GAGNE — cf. `services/gateway/CLAUDE.md`,
+ * cycles 91/93/104. La règle vaut pour la production autant que pour un
+ * harnais.)
+ *
+ * POURQUOI ICI ET PAS DANS LE MINIMAL PARTAGÉ (#4887, critère 2). Le grain
+ * juste est celui qui CHARGE : cette liste est le seul consommateur du minimal
+ * dans tout le dépôt, et six champs de plus n'ont aucune raison d'atterrir sur
+ * les réponses d'un futur appelant qui, lui, n'en veut pas. « Le schéma
+ * partagé ne grossit pas pour deux appelants » — a fortiori pour un seul.
+ *
+ * LES SIX CHAMPS, ET POURQUOI ILS SONT SERVIS. `AttachmentGallery.tsx` rend
+ * `messageId`, `originalName`, `uploadedBy`, `createdAt`, `width` et `height`.
+ * Deux d'entre eux ne sont pas décoratifs : `uploadedBy` décide si le bouton
+ * « supprimer » EXISTE (`uploadedBy === currentUserId`), et `messageId` est
+ * l'argument de « aller au message ». Aucun n'étant déclaré, `fast-json-
+ * stringify` les supprimait tous : panneau d'information vide, bouton de
+ * suppression jamais rendu, navigation cassée.
+ *
+ * L'alternative — retirer ces champs de la galerie — reviendrait à supprimer
+ * la navigation vers le message, la suppression par son propriétaire, le nom
+ * du fichier, sa date et ses dimensions. On ne renonce pas à cinq affordances
+ * pour éviter six lignes de schéma.
+ *
+ * ET ILS ONT LE DROIT D'ÊTRE VUS (règle du cycle 84 : rendre une donnée
+ * visible oblige à décider, dans le MÊME lot, si elle a le droit de l'être).
+ * La galerie est un SECOND LECTEUR des messages de la conversation ; le
+ * PREMIER — `GET /conversations/:id/messages`, dont `messageSchema.attachments`
+ * est `messageAttachmentSchema` — sert déjà les six au même lecteur, borné par
+ * les mêmes exclusions (plancher de lien de partage, masquage personnel,
+ * tombstone `deletedAt`), et le fil temps réel les sert aussi
+ * (`serializeAttachmentForSocket`). Le lot n'ouvre donc aucune surface : il
+ * rend au second lecteur ce que le premier rendait déjà.
+ *
+ * CE QUI N'ENTRE PAS : `transcription` et `translations`. Elles ne sont plus
+ * chargées du tout (#4887, défaut 3) — le retrait se fait au `select`, jamais
+ * par un élargissement du schéma. La distinction liste / détail établie par
+ * #4392 tient : le DÉTAIL (`GET /attachments/:id/metadata`,
+ * `messageAttachmentSchema`) reste le seul à les servir.
+ */
+const conversationAttachmentListItemSchema = {
+  ...messageAttachmentMinimalSchema,
+  description: 'Attachment data served to the conversation gallery',
+  properties: {
+    ...messageAttachmentMinimalSchema.properties,
+    messageId: { type: 'string', nullable: true, description: 'Message this attachment belongs to — target of « go to message »' },
+    originalName: { type: 'string', description: 'Original filename, as displayed' },
+    uploadedBy: { type: 'string', description: 'Uploader id — gates the delete affordance' },
+    createdAt: { type: 'string', description: 'Upload date (ISO 8601)' },
+    width: { type: 'number', nullable: true, description: 'Image/video width (px)' },
+    height: { type: 'number', nullable: true, description: 'Image/video height (px)' },
+  },
+} as const;
 
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
@@ -32,15 +92,91 @@ export async function registerMetadataRoutes(
   const attachmentService = new AttachmentService(prisma);
 
   /**
+   * #4923 — le DÉTAIL exige désormais les MÊMES bornes que la LISTE, plus bas
+   * dans ce fichier : appartenance à la conversation (résolue sous les DEUX
+   * colonnes, `userId` pour un inscrit et `id` pour un invité de lien —
+   * `socketio/utils/participant-resolver.ts`), plancher d'historique du lien
+   * partagé, masquage personnel, et cycle de vie du message porteur
+   * (`carrierMessageStillServesBytes`, partagée avec `GET /attachments/:id`,
+   * `services/attachments/attachmentReadVerdict.ts`).
+   *
+   * Rend un BOOLÉEN, jamais un motif : un id hors périmètre (existe, mais
+   * ailleurs) et un id inexistant doivent rendre la MÊME réponse au site
+   * d'appel, sinon la route redevient un oracle d'existence de pièce jointe —
+   * le défaut que #4150 a fermé sur les impressions.
+   */
+  async function attachmentDetailIsVisible(
+    request: FastifyRequest,
+    attachment: { messageId: string | null; uploadedBy: string | null }
+  ): Promise<boolean> {
+    const authContext = (request as UnifiedAuthRequest).authContext;
+
+    if (!attachment.messageId) {
+      // Pas encore rattachée à un message (envoi en cours) : seul le
+      // déposant y accède. Même repli que `resolveAttachmentReadVerdict`.
+      const caller = authContext.isAnonymous ? authContext.participantId : authContext.userId;
+      return Boolean(caller) && caller === attachment.uploadedBy;
+    }
+
+    const message = await prisma.message.findUnique({
+      where: { id: attachment.messageId },
+      select: { id: true, conversationId: true, deletedAt: true, expiresAt: true },
+    });
+    if (!message) return false;
+
+    // Même discriminant et même projection que la LISTE ci-dessous : un
+    // participant sans ligne `User` (invité de lien) se résout par `id`,
+    // jamais par `userId`.
+    const isAnonymous = Boolean(authContext.isAnonymous && authContext.participantId);
+    const participantSelect = { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT } as const;
+    const participant = isAnonymous
+      ? await prisma.participant.findUnique({ where: { id: authContext.participantId }, select: participantSelect })
+      : await prisma.participant.findFirst({
+          where: { conversationId: message.conversationId, userId: authContext.userId, isActive: true },
+          select: participantSelect,
+        });
+
+    if (!participant || participant.conversationId !== message.conversationId) return false;
+
+    // Les octets suivent la vie du message porteur — rappelé, expiré, ou
+    // brûlure de vue unique consommée (cf. `carrierMessageLifecycle.ts`).
+    if (!carrierMessageStillServesBytes(message, new Date())) return false;
+
+    const [historyFloor, personalHiding] = await Promise.all([
+      loadHistoryFloor(prisma, participant),
+      loadPersonalHistoryHiding(prisma, {
+        userId: isAnonymous ? null : authContext.userId,
+        conversationId: message.conversationId,
+      }),
+    ]);
+
+    // Une seule requête referme À LA FOIS le plancher d'historique et le
+    // masquage personnel — le même idiome que la LISTE, appliqué à un message
+    // NOMMÉ plutôt qu'à une page.
+    const visible = await prisma.message.findFirst({
+      where: applyPersonalHistoryHiding(
+        applyHistoryFloor({ id: message.id, conversationId: message.conversationId }, historyFloor),
+        personalHiding
+      ),
+      select: { id: true },
+    });
+    return visible !== null;
+  }
+
+  /**
    * GET /attachments/:attachmentId/metadata
    * Get attachment metadata including transcription, translations, and voice analysis
    */
   fastify.get(
     '/attachments/:attachmentId/metadata',
     {
-      preHandler: authRequired,
+      // #4923 — `authRequired` (JWT seul) excluait tout invité de lien
+      // partagé du chemin nominal AVANT même la question d'appartenance.
+      // `authOptional` + la garde manuelle ci-dessous couvrent les deux
+      // natures d'appelant, comme la LISTE voisine.
+      onRequest: [authOptional],
       schema: {
-        description: 'Get comprehensive attachment metadata including transcription (with voice quality analysis), translated audios, and all metadata fields. Returns the complete attachment object with all relations.',
+        description: 'Get comprehensive attachment metadata including transcription (with voice quality analysis), translated audios, and all metadata fields. Returns the complete attachment object with all relations. Caller must be an active member of the conversation the attachment belongs to.',
         tags: ['attachments'],
         summary: 'Get attachment metadata',
         params: {
@@ -67,8 +203,14 @@ export async function registerMetadataRoutes(
               }
             }
           },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          // #4923 — sert aussi le cas « existe, mais hors de la portée de
+          // l'appelant » : voir `attachmentDetailIsVisible`.
           404: {
-            description: 'Attachment not found',
+            description: 'Attachment not found (or not visible to this caller)',
             ...errorResponseSchema
           },
           500: {
@@ -80,10 +222,15 @@ export async function registerMetadataRoutes(
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        const authContext = (request as UnifiedAuthRequest).authContext;
+        if (!authContext || !authContext.isAuthenticated) {
+          return sendUnauthorized(reply, 'Authentication required');
+        }
+
         const { attachmentId } = request.params as AttachmentParams;
 
         const attachment = await attachmentService.getAttachmentWithMetadata(attachmentId);
-        if (!attachment) {
+        if (!attachment || !(await attachmentDetailIsVisible(request, attachment))) {
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
@@ -207,6 +354,39 @@ export async function registerMetadataRoutes(
   /**
    * GET /conversations/:conversationId/attachments
    * Récupère les attachments d'une conversation (support authentifiés ET anonymes)
+   *
+   * Ce que cette LISTE sert, et pourquoi (#4392, critère 3 : « pour que le
+   * prochain lot n'ait pas à reposer la question » ; #4887, critères 2 et 3).
+   *
+   * SERVI : les TREIZE clés de `conversationAttachmentListItemSchema` (voir son
+   * doc-comment) — les sept de `messageAttachmentMinimalSchema` qu'il épand,
+   * plus les six que la galerie REND. Et rien d'autre : `fast-json-stringify`
+   * supprime toute clé qu'aucun schéma ne déclare.
+   *
+   * NI CHARGÉ NI SERVI : `transcription` et `translations`. #4392 avait mesuré
+   * que `AttachmentService.getConversationAttachments` les demandait à MongoDB
+   * pour chaque pièce de la page — jusqu'à 100 — et que le sérialiseur les
+   * jetait ; l'issue #4392 les portait comme « servies systématiquement », la
+   * mesure disait CHARGÉES, jamais servies. Le comptage des lecteurs rendait
+   * zéro par CONSTRUCTION, et zéro aussi en balayant les clients : web —
+   * `apps/web/components/attachments/AttachmentGallery.tsx`, qui ne cite ni
+   * l'une ni l'autre ; iOS/SDK — `ConversationsEndpoint.byConversationIdAttachments`
+   * est DÉCLARÉ et jamais appelé ; Android — aucun endpoint.
+   *
+   * #4887 a soldé ce travail mort au sens exact de #4177 : le service lit
+   * désormais `attachmentServiceRowSelect` (27 colonnes, sans les deux
+   * lourdes) et rend un `Attachment`. Le retrait s'est fait au `select`,
+   * JAMAIS par un élargissement du schéma — la distinction liste / détail
+   * établie par #4392 tient : le DÉTAIL (`GET /attachments/:id/metadata`,
+   * `messageAttachmentSchema`) reste le seul à servir ces deux colonnes.
+   *
+   * Deux témoins gardent l'ensemble, et ils gardent deux choses différentes :
+   * `__tests__/unit/routes/attachments/conversation-attachments-served-keys.test.ts`
+   * gèle le jeu de clés SERVI (la réponse), et
+   * `__tests__/unit/services/attachments/conversation-attachments-select.test.ts`
+   * gèle les colonnes DEMANDÉES (la requête) — un double Prisma rend ce qu'on
+   * lui dit quel que soit le `select`, donc seul l'argument passé à `findMany`
+   * peut attester d'un retrait de colonne.
    */
   fastify.get(
     '/conversations/:conversationId/attachments',
@@ -260,7 +440,7 @@ export async function registerMetadataRoutes(
                 properties: {
                   attachments: {
                     type: 'array',
-                    items: messageAttachmentMinimalSchema
+                    items: conversationAttachmentListItemSchema
                   }
                 }
               }
@@ -272,6 +452,14 @@ export async function registerMetadataRoutes(
           },
           403: {
             description: 'Access denied to this conversation',
+            ...errorResponseSchema
+          },
+          // #4856 — un invité anonyme dont le `participantId` de session ne
+          // résout plus à aucune ligne (retiré entretemps) est un « je ne
+          // trouve pas » sur SA PROPRE identité, pas un refus d'accès à un
+          // tiers : rien à cacher.
+          404: {
+            description: 'The anonymous participant this session was authenticated as no longer exists',
             ...errorResponseSchema
           },
           500: {
@@ -333,7 +521,17 @@ export async function registerMetadataRoutes(
             });
 
         if (!participant) {
-          return sendForbidden(reply, isAnonymous ? 'Participant not found' : 'Access denied to this conversation');
+          // #4856 — les deux branches n'étaient pas le même refus : la
+          // branche anonyme cherche la ligne `Participant` de SA PROPRE
+          // session (son `participantId` de jeton), jamais celle d'un tiers
+          // — son absence est un « je ne trouve pas ». La branche inscrite,
+          // elle, cherche un membership sous l'identité de l'appelant dans
+          // CETTE conversation : rien ne distingue ici « pas membre » de
+          // « conversation inexistante », donc le 403 anti-énumération reste
+          // le bon statut, inchangé.
+          return isAnonymous
+            ? sendNotFound(reply, 'Participant not found')
+            : sendForbidden(reply, 'Access denied to this conversation');
         }
 
         if (isAnonymous && participant.conversationId !== conversationId) {

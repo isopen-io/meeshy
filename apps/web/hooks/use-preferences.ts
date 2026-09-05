@@ -46,6 +46,25 @@ import type {
 
 const STALE_TIME = Infinity;
 
+/**
+ * Ce que `onMutate` restitue à `onError` (et `onSuccess`/`onSettled`) — le
+ * cliché de la valeur PRÉCÉDENTE, seule donnée dont un rollback a besoin.
+ *
+ * Fournie comme 4ᵉ paramètre générique de `useMutation` (`TOnMutateResult`
+ * dans `@tanstack/query-core@5.101.4` — le contexte interne de la
+ * librairie, `MutationFunctionContext`, occupe désormais une place à part,
+ * au 4ᵉ paramètre POSITIONNEL des callbacks), cette forme retire la classe
+ * de défaut #4504 : `onMutate` ne peut plus renvoyer autre chose que ce
+ * cliché — vérifié par `tsc`, plus par une assertion `as` en sortie — et le
+ * 3ᵉ paramètre positionnel d'`onError` le porte alors NOMMÉ. Lire le 4ᵉ
+ * paramètre en le croyant `previousData` échoue désormais à la
+ * compilation : `MutationFunctionContext` n'a que `client`, `meta`,
+ * `mutationKey`.
+ */
+type PreferenceMutationSnapshot<C extends PreferenceCategory> = {
+  previousData: PreferenceDataType<C> | undefined;
+};
+
 function getPreferenceQueryKey(category: PreferenceCategory): readonly string[] {
   return queryKeys.preferences.category(category);
 }
@@ -88,7 +107,7 @@ function checkConsentError(error: unknown): ConsentViolation[] | null {
  * const { data, updatePreferences, isLoading } = usePreferences('privacy');
  *
  * // Avec gestion du consentement
- * const { data, updatePreferences, consentViolations } = usePreferences('translation', {
+ * const { data, updatePreferences, consentViolations } = usePreferences('audio', {
  *   onConsentRequired: (violations) => {
  *     // Afficher le dialogue de consentement
  *     showConsentDialog(violations);
@@ -180,7 +199,8 @@ export function usePreferences<C extends PreferenceCategory>(
   const updateMutation = useMutation<
     PreferenceDataType<C>,
     Error,
-    Partial<PreferenceDataType<C>>
+    Partial<PreferenceDataType<C>>,
+    PreferenceMutationSnapshot<C>
   >({
     mutationFn: async (updates) => {
       // `mode=merge` (défaut) : la réponse reprend la forme du GET, complétée
@@ -220,13 +240,15 @@ export function usePreferences<C extends PreferenceCategory>(
         });
       }
 
-      return { previousData } as { previousData: PreferenceDataType<C> | undefined };
+      return { previousData };
     },
-    onError: (err: Error, variables: Partial<PreferenceDataType<C>>, _onMutateResult: unknown, context: unknown) => {
-      const ctx = context as { previousData?: PreferenceDataType<C> } | undefined;
-      // Rollback en cas d'erreur
-      if (ctx?.previousData) {
-        queryClient.setQueryData(queryKey, ctx.previousData);
+    onError: (
+      err: Error,
+      variables: Partial<PreferenceDataType<C>>,
+      onMutateResult: PreferenceMutationSnapshot<C> | undefined
+    ) => {
+      if (onMutateResult?.previousData) {
+        queryClient.setQueryData(queryKey, onMutateResult.previousData);
       }
 
       // Vérifier si c'est une erreur de consentement
@@ -251,7 +273,8 @@ export function usePreferences<C extends PreferenceCategory>(
   const replaceMutation = useMutation<
     PreferenceDataType<C>,
     Error,
-    PreferenceDataType<C>
+    PreferenceDataType<C>,
+    PreferenceMutationSnapshot<C>
   >({
     mutationFn: async (newData) => {
       // `mode=replace` : la route unifiée n'a plus de PUT (#4181, critère 1).
@@ -285,12 +308,15 @@ export function usePreferences<C extends PreferenceCategory>(
       // Optimistic update avec remplacement complet
       queryClient.setQueryData<PreferenceDataType<C>>(queryKey, newData);
 
-      return { previousData } as { previousData: PreferenceDataType<C> | undefined };
+      return { previousData };
     },
-    onError: (err: Error, variables: PreferenceDataType<C>, _onMutateResult: unknown, context: unknown) => {
-      const ctx = context as { previousData?: PreferenceDataType<C> } | undefined;
-      if (ctx?.previousData) {
-        queryClient.setQueryData(queryKey, ctx.previousData);
+    onError: (
+      err: Error,
+      variables: PreferenceDataType<C>,
+      onMutateResult: PreferenceMutationSnapshot<C> | undefined
+    ) => {
+      if (onMutateResult?.previousData) {
+        queryClient.setQueryData(queryKey, onMutateResult.previousData);
       }
 
       const violations = checkConsentError(err);
