@@ -245,9 +245,9 @@ describe('isSameLanguage', () => {
     expect(isSameLanguage('', 'en')).toBe(false);
     expect(isSameLanguage('en', '')).toBe(false);
     expect(isSameLanguage(null, null)).toBe(false);
+  });
 
   it('matches a code against itself', () => {
     expect(isSameLanguage('fr', 'fr')).toBe(true);
-  });
   });
 });
