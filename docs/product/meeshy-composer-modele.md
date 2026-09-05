@@ -815,13 +815,40 @@ dont **cinq à la main sans aucun type** (web ×3, web-v3 ×1, outbox iOS ×1).
 | 5 | `CreatePostBody` (le fil) | 15 | 11 témoins champ par champ, aucun recensement |
 | 6 | `CreatePostSchema` (passerelle) | 19 | — |
 
-**Sept champs ont déjà été perdus à ces maillons.** Cinq sont réparés et portent
+**Sept champs ont déjà été perdus à ces maillons.** SIX sont réparés et portent
 chacun le commentaire disant pourquoi ils manquaient : `location`,
-`discoverabilityPrecision`, `repostOfId`, `mobileTranscription`, `storyEffects`.
-**Deux ne le sont pas encore** : `mediaAlt` et `mediaCaption` — présents dans
-`CreatePostRequest`, absents des maillons 4 et 5, donc **un post publié par la
-file durable perd le texte alternatif d'accessibilité et la légende de chacun de
-ses médias** (#5196, avec `allowSoundExtraction`).
+`discoverabilityPrecision`, `repostOfId`, `mobileTranscription`, `storyEffects`,
+et `mediaCaption` depuis le 2026-09-05 — **vérifié à l'écran, trois photos et
+trois légendes distinctes affichées en plein écran** (`Média 2 sur 3` →
+`LEGENDE-DEUX`), qui était le critère de fin de #4890.
+
+**`mediaAlt` et `allowSoundExtraction` restent absents des maillons 4 et 5 — mais
+ils ne se PERDENT pas : sur cette voie, rien ne peut les écrire.** La mesure du
+2026-09-05 :
+
+| | qui l'écrit | où ce panneau est monté |
+|---|---|---|
+| `mediaAlt` | `MediaAccessibilityPanel` (SDK) | `ComposerToolPanelHost` → `ComposerBottomBand` → `ComposerControlsLayer` → `StoryComposerView` — **l'ATELIER seul** |
+| `allowSoundExtraction` | `SoundExtractionToggle` (SDK) | idem |
+
+Or un post du meuble monte `ComposerSceneSurface` ou `ComposerDocumentSurface`,
+jamais l'atelier (`ComposerMountedView.mounted` : seul `surface == .scene` y
+mène, c'est-à-dire les ouvertures `.videoCameraReady`, `.resume`,
+`.mediaSeeded`). Et l'atelier publie EN DIRECT — `publishStoryInBackground` →
+`createCanvasPost`, sans passer par la file — donc ce qu'il collecte n'est
+jamais perdu.
+
+> **La distinction n'est pas une nuance de vocabulaire, elle change le
+> correctif.** « Le champ se perd » demande de le transporter ; « rien ne peut
+> l'écrire » demande d'ouvrir une PORTE, puis de transporter. Porter le champ
+> seul fabriquerait un champ INERTE — celui qu'aucun geste n'alimente et que le
+> prochain lecteur croira tenu.
+
+Le précédent pour cette porte existe et n'est pas à inventer :
+`MediaAccessibilityPanel` apparie déjà l'alt et la légende dans UN panneau,
+« parce qu'elle a le même porteur et le même cycle de vie ». Sur la voie du
+meuble, la légende se saisit dans le volet de description ; l'alt lui revient à
+côté. Reste à trancher où exactement — décision produit, #5196.
 
 `CreatePostBody` porte son propre diagnostic, et il est juste :
 
