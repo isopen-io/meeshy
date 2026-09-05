@@ -102,17 +102,38 @@ self.addEventListener('install', () => {
 // immuables se re-téléchargent au prochain fetch, sans coût de fraîcheur.
 // Le préfixe est celui du canal 3 (`NAMESPACE`) : jamais celui du legacy, ni
 // un cache d'un tiers.
+//
+// LA FENÊTRE DE SUPPRESSION (mesuré au gate e2e, #5095) : `deconnexion.ts`
+// poste ce signal à CHAQUE registration active — plusieurs, dans un
+// navigateur réel — pendant qu'un `fetch` d'actif immuable resté EN VOL
+// depuis la page qu'on quitte peut encore atteindre ce gestionnaire APRÈS la
+// purge. Or `caches.open(CACHE_NAME)` seul — MÊME SANS AUCUN `.put()` derrière
+// — RECRÉE l'entrée dans l'index que `caches.keys()` lit : la spec du Cache
+// Storage crée le cache nommé s'il n'existe pas encore, à l'OUVERTURE, pas à
+// l'écriture. Garder l'écriture derrière un drapeau (comme une première
+// version de ce lot le faisait) laissait donc la résurrection intacte —
+// l'ouverture suffisait. La fenêtre ci-dessous fait donc BYPASSER le Cache
+// Storage EN BLOC (`caches.open` compris) pendant un court délai après le
+// signal : la requête part au réseau nu, jamais au cache, ce qui ferme la
+// course à sa source plutôt que de la rejouer. Mesuré ~1 fois sur 3 en
+// Chromium réel sans cette garde ; jamais dans le harnais simulé de ce
+// fichier, qui n'a pas de fetch concurrent à rejouer.
+const DUREE_DE_SUPPRESSION_MS = 3000;
+let cacheSuspenduJusqua = 0;
+
+const cacheAutorise = () => Date.now() >= cacheSuspenduJusqua;
+
+const purgeLeNamespace = async () => {
+  const noms = await caches.keys();
+  const cibles = noms.filter((nom) => nom.startsWith(NAMESPACE));
+  await Promise.all(cibles.map((nom) => caches.delete(nom)));
+};
+
 self.addEventListener('message', (event) => {
-  console.log('[sw] message received', JSON.stringify(event.data), 'waitUntil?', typeof event.waitUntil);
   const donnees = event.data;
   if (typeof donnees !== 'object' || donnees === null || donnees.type !== 'meeshy-v3:deconnexion') return;
-  const purge = (async () => {
-    const noms = await caches.keys();
-    console.log('[sw] purge start', JSON.stringify(noms));
-    await Promise.all(noms.filter((nom) => nom.startsWith(NAMESPACE)).map((nom) => caches.delete(nom)));
-    console.log('[sw] purge done');
-  })();
-  if (event.waitUntil) event.waitUntil(purge);
+  cacheSuspenduJusqua = Date.now() + DUREE_DE_SUPPRESSION_MS;
+  if (event.waitUntil) event.waitUntil(purgeLeNamespace());
 });
 
 self.addEventListener('activate', (event) => {
@@ -141,6 +162,13 @@ self.addEventListener('fetch', (event) => {
   // gateway — un échec réseau relayé par le worker casserait le <img>.
   if (url.pathname.startsWith('/socket.io')) return;
   if (url.pathname.includes('/attachments/file/')) return;
+
+  // LA FENÊTRE DE SUPPRESSION (voir plus haut) : pendant les quelques secondes
+  // qui suivent un signal de déconnexion, le Cache Storage est BYPASSÉ EN BLOC
+  // — `caches.open()` n'est même pas appelé — pour qu'aucun fetch en vol ne
+  // puisse ressusciter le cache que la purge vient de vider. La requête part
+  // au réseau nu ; c'est un dégradé temporaire, jamais un défaut permanent.
+  if (!cacheAutorise()) return;
 
   // Actifs immuables : le hash dans le nom EST la garantie de fraîcheur —
   // cache d'abord, le réseau ne sert qu'à la première rencontre.
