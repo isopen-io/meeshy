@@ -637,97 +637,10 @@ describe('POST /conversations/:id/new-link', () => {
 // de `type` (aucun client ne l'envoie, et la changer déplace les invariants
 // d'admission d'écriture sans que rien ne les recalcule).
 
-describe('GET /conversations/:conversationId/links', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  function getLinksRoute() {
-    const { fastify, prisma, reply } = setup();
-    const route = getRoute(fastify, 'GET', '/links');
-    return { prisma, reply, route };
-  }
-
-  it('returns 403 when user is not a member', async () => {
-    const { prisma, reply, route } = getLinksRoute();
-    prisma.participant.findFirst.mockResolvedValue(null);
-    const req = makeRequest({ params: { conversationId: CONV_ID } });
-    await route.handler(req, reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('moderator sees all links (aucun filtre createdBy)', async () => {
-    const { prisma, reply, route } = getLinksRoute();
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'moderator' }));
-    const mockLinks = [{ id: 'link1', currentUses: 5 }, { id: 'link2', currentUses: 2 }];
-    prisma.conversationShareLink.findMany.mockResolvedValue(mockLinks);
-    const req = makeRequest({ params: { conversationId: CONV_ID } });
-    await route.handler(req, reply);
-    const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    expect(findCall.where).not.toHaveProperty('createdBy');
-    expect(reply._body).toMatchObject({
-      success: true,
-      isModerator: true,
-      data: [
-        expect.objectContaining({ id: 'link1', participantCount: 5 }),
-        expect.objectContaining({ id: 'link2', participantCount: 2 }),
-      ],
-    });
-  });
-
-  it('admin role also gets all links', async () => {
-    const { prisma, reply, route } = getLinksRoute();
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'admin' }));
-    prisma.conversationShareLink.findMany.mockResolvedValue([]);
-    const req = makeRequest({ params: { conversationId: CONV_ID } });
-    await route.handler(req, reply);
-    const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    expect(findCall.where).not.toHaveProperty('createdBy');
-    expect(reply._body).toMatchObject({ isModerator: true });
-  });
-
-  it('creator role also gets all links', async () => {
-    const { prisma, reply, route } = getLinksRoute();
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.conversationShareLink.findMany.mockResolvedValue([]);
-    const req = makeRequest({ params: { conversationId: CONV_ID } });
-    await route.handler(req, reply);
-    const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    expect(findCall.where).not.toHaveProperty('createdBy');
-  });
-
-  it('regular member sees only own links (filtre createdBy applique)', async () => {
-    const { prisma, reply, route } = getLinksRoute();
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
-    prisma.conversationShareLink.findMany.mockResolvedValue([{ id: 'link1', currentUses: 1 }]);
-    const req = makeRequest({ params: { conversationId: CONV_ID } });
-    await route.handler(req, reply);
-    const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    // #4170 -- ce temoin assertait `creatorId`, une colonne qui N'EXISTE PAS sur
-    // ConversationShareLink (le schema declare `createdBy`). Le Prisma mocke ne
-    // valide aucun nom de colonne, donc le test restait VERT sur du code qui levait
-    // en production et tombait dans le catch-all : 500 sur toute lecture par un
-    // membre non-moderateur. Un temoin qui asserte l'IMPLEMENTATION plutot que le
-    // COMPORTEMENT peut verrouiller un defaut au lieu de le prevenir.
-    expect(findCall.where).toHaveProperty('createdBy', USER_ID);
-    expect(reply._body).toMatchObject({ isModerator: false });
-  });
-
-  it('maps currentUses to participantCount in response', async () => {
-    const { prisma, reply, route } = getLinksRoute();
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
-    prisma.conversationShareLink.findMany.mockResolvedValue([{ id: 'l1', currentUses: 7 }]);
-    const req = makeRequest({ params: { conversationId: CONV_ID } });
-    await route.handler(req, reply);
-    expect(reply._body.data[0]).toMatchObject({ id: 'l1', currentUses: 7, participantCount: 7 });
-  });
-
-  it('sends internal error on unexpected exception', async () => {
-    const { prisma, reply, route } = getLinksRoute();
-    prisma.participant.findFirst.mockRejectedValue(new Error('DB error'));
-    const req = makeRequest({ params: { conversationId: CONV_ID } });
-    await route.handler(req, reply);
-    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-});
+// `GET /conversations/:conversationId/links` a été EXTRAIT vers
+// `conversation-sharing-links-read.test.ts` (#5191) : ce fichier dépassait le
+// budget de taille (1258 lignes, plafond dur 1200), et la directive interdit
+// d'y ajouter le témoin de garde plate avant d'en extraire.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /conversations/:id/invite — Invite user
