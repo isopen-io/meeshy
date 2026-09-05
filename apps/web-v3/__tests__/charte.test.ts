@@ -431,6 +431,16 @@ describe('règle 18 — l’encre de la phrase de l’état vide est --color-tex
  * avant, carte d'état vide. » `.heros` et `.carte-vide` portaient encore
  * `--radius-lg` — le rayon des CARTES, pas celui que le tour 3 leur donne en
  * propre.
+ *
+ * `--radius-md` EST RETIRÉ DES RAYONS AUTORISÉS (#5123) : la règle le déclare
+ * « hors des cinq rôles », et huit sites l'écrivaient encore — les champs de
+ * formulaire (`.champ input/textarea/select`, `.chercher input`) sont passés à
+ * `--radius-lg` (rôle « champs »), les tuiles d'icône (`.marque .tuile`,
+ * `.atouts .tuile`, `.carte .tuile`, `dialog.espace .rangee .tuile`) ont rejoint
+ * `--radius-lg` (rôle « tuile de liste », déjà celui de `.tuile` dans
+ * `medias-feuille.ts`), et `.saut` (le lien d'évitement) a rejoint
+ * `--radius-pill` (rôle « raccourcis »). Absent de `AUTORISES`, le premier
+ * témoin ci-dessous rougit désormais sur toute réintroduction.
  */
 describe('règle 9 — cinq rayons, un rôle chacun', () => {
   // Les coins HAUTS de la feuille modale (règle 9 : « `2xl` feuille modale »)
@@ -438,7 +448,6 @@ describe('règle 9 — cinq rayons, un rôle chacun', () => {
   const AUTORISES = new Set([
     'var(--radius-pill)',
     'var(--radius-lg)',
-    'var(--radius-md)',
     'var(--radius-xl)',
     'var(--radius-xs)',
     'var(--radius-2xl) var(--radius-2xl) 0 0',
@@ -458,6 +467,10 @@ describe('règle 9 — cinq rayons, un rôle chacun', () => {
     expect(heros?.corps).toContain('border-radius:var(--radius-xl)');
     expect(carteVide?.corps).toContain('border-radius:var(--radius-xl)');
     expect(`${heros?.corps ?? ''};${carteVide?.corps ?? ''}`).not.toMatch(/border-radius:var\(--radius-(?:lg|md)\)/);
+  });
+
+  it('ne pose --radius-md nulle part (#5123) — les champs et les tuiles vivent en --radius-lg', () => {
+    expect(TOUTES).not.toContain('var(--radius-md)');
   });
 });
 

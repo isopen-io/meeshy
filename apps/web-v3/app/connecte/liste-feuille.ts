@@ -126,7 +126,7 @@ dialog.nouvelle-conv .fermer svg{width:var(--glyph);height:var(--glyph)}
 dialog.nouvelle-conv form{display:flex;flex-direction:column;gap:var(--space-4);margin:var(--space-4) 0 0}
 dialog.nouvelle-conv .champ{display:flex;flex-direction:column;gap:var(--space-2)}
 dialog.nouvelle-conv .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
-dialog.nouvelle-conv .champ input{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text);font:inherit}
+dialog.nouvelle-conv .champ input{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}
 dialog.nouvelle-conv .aide{font-size:var(--text-sm);color:var(--color-text-muted)}
 dialog.nouvelle-conv .groupe{display:flex;flex-direction:column;gap:var(--space-2);margin:0;padding:0;border:0}
 dialog.nouvelle-conv legend{padding:0;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--color-text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide)}
