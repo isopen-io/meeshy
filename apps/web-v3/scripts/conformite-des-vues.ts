@@ -81,8 +81,20 @@ const enrichitLaGalerie = (passerelle: PasserelleDeBouchon): void => {
   passerelle.ajouteUnMessage(messageProtege(CONVERSATION_DU_LECTEUR.id));
 };
 
+/**
+ * `/calls` VISE TROIS LIGNES, PAS TRENTE ET UNE. `bouchon-appels.ts` en garde
+ * 31 par défaut pour que la pagination reste atteignable ailleurs (§ son
+ * commentaire `REMPLISSAGE`) — mais `cible/calls.png` n'en dessine que trois,
+ * et un `page.screenshot()` sans `fullPage` capture le viewport tel quel :
+ * 31 lignes en cartes remplissent l'écran de bien plus que 3 rangées et
+ * poussent les deux boutons flottants hors cadre. Sans ce repli, l'outil
+ * mesure un volume de contenu que la cible ne montre jamais, jamais une
+ * disposition hors cible.
+ */
+export const doitReduireLesAppels = (demandees: readonly string[]): boolean => demandees.includes('calls');
+
 const principal = async (): Promise<number> => {
-  const passerelle = await passerelleDeBouchon();
+  const passerelle = await passerelleDeBouchon({ appelsReduits: doitReduireLesAppels(vues) });
   if (doitEnrichirLaGalerie(vues)) enrichitLaGalerie(passerelle);
   const v3 = await serveurDeLaV3(passerelle.base);
   try {

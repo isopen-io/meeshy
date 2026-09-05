@@ -147,7 +147,10 @@ const ligneServie = (l: LigneDAppelDeBouchon) => ({
 });
 
 export const routesDesAppels =
-  (creanceDe: (requete: IncomingMessage) => Identite | null, options: { readonly vide: () => boolean } = { vide: () => false }) =>
+  (
+    creanceDe: (requete: IncomingMessage) => Identite | null,
+    options: { readonly vide: () => boolean; readonly reduit?: () => boolean } = { vide: () => false },
+  ) =>
   ({ requete, url, json }: { readonly requete: IncomingMessage; readonly url: URL; readonly json: Reponse }): boolean => {
     if (url.pathname !== '/api/v1/calls/history') return false;
 
@@ -164,6 +167,21 @@ export const routesDesAppels =
 
     if (options.vide()) {
       json({ success: true, data: [], pagination: { limit: 30, hasMore: false } });
+      return true;
+    }
+
+    /**
+     * TROIS LIGNES, SANS REMPLISSAGE — la matière EXACTE de `cible/calls.png`
+     * (manqué, audio, vidéo), `hasMore:false` : rien à paginer. Distinct de
+     * `vide()` (aucune ligne) — un troisième état de fixture, comme
+     * `communautesVides` / `appelsVides` le sont déjà l'un de l'autre.
+     * `conformite-des-vues.ts` le demande UNIQUEMENT quand `calls` est parmi
+     * les vues comparées : les 31 lignes restent le défaut de tout autre
+     * appelant (la pagination doit rester ATTEIGNABLE ailleurs, voir le
+     * commentaire de `REMPLISSAGE` ci-dessus).
+     */
+    if (options.reduit?.()) {
+      json({ success: true, data: NOMMEES.slice(0, 3).map(ligneServie), pagination: { limit: 30, hasMore: false } });
       return true;
     }
 

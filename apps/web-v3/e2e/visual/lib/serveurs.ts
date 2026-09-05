@@ -283,6 +283,12 @@ export const passerelleDeBouchon = async (options?: {
   readonly lecteurSansRien?: boolean;
   /** `/calls` sans aucun appel — l'état VIDE de l'historique, distinct du lecteur sans rien. */
   readonly appelsVides?: boolean;
+  /**
+   * `/calls` réduit aux TROIS appels nommés — la matière de `cible/calls.png`,
+   * sans les 27 lignes de remplissage qui rendent la pagination atteignable
+   * ailleurs (§ `bouchon-appels.ts`). Distinct de `appelsVides` (aucune ligne).
+   */
+  readonly appelsReduits?: boolean;
   /** `/communities` sans aucune communauté — l'état VIDE du carnet, distinct du lecteur sans rien. */
   readonly communautesVides?: boolean;
 }): Promise<PasserelleDeBouchon> => {
@@ -420,7 +426,10 @@ export const passerelleDeBouchon = async (options?: {
     lien,
     carnet,
   );
-  const desAppels = routesDesAppels(creanceDe, { vide: () => options?.appelsVides ?? false });
+  const desAppels = routesDesAppels(creanceDe, {
+    vide: () => options?.appelsVides ?? false,
+    reduit: () => options?.appelsReduits ?? false,
+  });
   const communautesCreees: CommunauteDeBouchon[] = [];
   const desCommunautes = routesDesCommunautes(creanceDe, communautesCreees, {
     vide: () => options?.communautesVides ?? false,
