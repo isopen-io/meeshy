@@ -1,5 +1,29 @@
 /**
  * Utilitaires pour la gestion des identifiants de liens de partage
+ *
+ * ## Décision produit — l'ObjectId reste une clé de résolution, jamais une clé PUBLIQUE (#5299, point 1)
+ *
+ * `analyzeLinkIdentifier`/`isValidForApiRequest` classent un ObjectId brut
+ * (24 hex) comme `conversationShareLinkId`, VALIDE pour `GET /links/:identifier`
+ * et `GET /anonymous/link/:identifier` (§ commentaire de ces deux routes,
+ * gateway) — les deux seules routes qui acceptent linkId/identifier/ObjectId
+ * indifféremment en entrée. Mesuré (#5299) : **aucun site du web ne CONSTRUIT
+ * de lien public (copie, QR, métadonnées OG, `/chat/:id`) avec un ObjectId** —
+ * `lib/conversations/share-link-url.ts` (`buildShareLinkPath`/`buildShareLinkUrl`,
+ * seule source de vérité pour ces URLs, 7+ appelants) ne prend et n'a jamais pris
+ * que `linkId`. L'ObjectId ne sert ici qu'à VALIDER un identifiant déjà présent
+ * dans l'URL courante (un lien collé à la main, un ancien format) avant de le
+ * transmettre tel quel au résolveur du gateway, qui sait déjà l'accepter.
+ *
+ * Décision : ne rien changer ici. Retirer `conversationShareLinkId` de
+ * `isValidForApiRequest` romprait la résolution d'un ObjectId collé à la main
+ * sans qu'aucun appelant web n'en bénéficie — la classification n'est pas la
+ * porte qui distribue l'ObjectId, elle est celle qui le laisse encore
+ * FONCTIONNER quand il arrive par une voie que le web ne contrôle pas
+ * (partage manuel, lien historique). Restreindre l'ACCEPTATION de l'ObjectId
+ * par les deux routes elles-mêmes est une question distincte, à trancher au
+ * niveau du gateway une fois les appelants iOS/Android mesurés — hors
+ * périmètre de #5299, qui ne portait que sur le web.
  */
 
 import { isValidObjectId } from './object-id';

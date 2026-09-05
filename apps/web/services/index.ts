@@ -28,7 +28,7 @@ export type {
 
 export type { UserStats, UpdateUserDto } from './users.service';
 export type { MentionSuggestionsParams, MentionSuggestionsResponse, MentionItem, UserMention } from './mentions.service';
-export type { DashboardStats, DashboardData, ShareLink } from './dashboard.service';
+export type { DashboardStats, DashboardData } from './dashboard.service';
 
 // Service de traduction unifié
 export { translationService, default as TranslationService } from './translation.service';
