@@ -312,6 +312,28 @@ export type ChangementDeDroits = {
 
 const chaine = (valeur: unknown): string | null => (typeof valeur === 'string' && valeur !== '' ? valeur : null);
 
+/**
+ * UN LIEU PARTAGÉ (#5061) — MIME `parseSharedPlace`
+ * (`services/location/sharedPlace.ts:52-66`) : coordonnées NUMÉRIQUES dans
+ * leurs bornes (`latitude ∈ [-90, 90]`, `longitude ∈ [-180, 180]`), `null`
+ * sur tout le reste — un `location` invalide est IGNORÉ par la passerelle
+ * (`clientDeclaredMetadata.ts:33-41`, « un bloc refusé n'existe pas »),
+ * jamais une 400/un refus socket. Site UNIQUE : REST (`bouchon-fil.ts`) et
+ * socket (`message:send`, juste plus bas) partagent la même validation.
+ */
+export const lieuValide = (brut: unknown): { readonly latitude: number; readonly longitude: number; readonly name?: string; readonly address?: string } | null => {
+  if (typeof brut !== 'object' || brut === null || Array.isArray(brut)) return null;
+  const { latitude, longitude, name, address } = brut as Record<string, unknown>;
+  if (typeof latitude !== 'number' || latitude < -90 || latitude > 90) return null;
+  if (typeof longitude !== 'number' || longitude < -180 || longitude > 180) return null;
+  return {
+    latitude,
+    longitude,
+    ...(typeof name === 'string' && name.trim() !== '' ? { name: name.trim().slice(0, 200) } : {}),
+    ...(typeof address === 'string' && address.trim() !== '' ? { address: address.trim().slice(0, 200) } : {}),
+  };
+};
+
 /** Un message tel que `buildMessageNewPayload` le compose (`messageNewPayload.ts:126-176`), servi par le bouchon. */
 export const chargeDeMessage = ({
   id,
@@ -324,6 +346,9 @@ export const chargeDeMessage = ({
   translations = [],
   attachments = [],
   createdAt = new Date().toISOString(),
+  replyToId,
+  replyTo,
+  location,
 }: {
   readonly id: string;
   readonly conversationId: string;
@@ -335,6 +360,17 @@ export const chargeDeMessage = ({
   readonly translations?: readonly { readonly language: string; readonly content: string }[];
   readonly attachments?: readonly Record<string, unknown>[];
   readonly createdAt?: string;
+  /** Le message auquel on répond (`replyToId`, `messages-send.ts:60`) — issue #5163. */
+  readonly replyToId?: string;
+  /** Le SNAPSHOT de la cible (`messageNewPayload.ts:164-176`) — le texte, sa langue, son auteur, au moment de la réponse. */
+  readonly replyTo?: Record<string, unknown>;
+  /**
+   * UN LIEU PARTAGÉ (#5061) — hissé en champ `location` de premier niveau,
+   * comme `sharedPlaceFromMetadata` le fait pour la liste REST ET
+   * `message:new` (`services/location/sharedPlace.ts`, `messages-list.ts:
+   * 679-684`, `MessageHandler.ts:1356-1378`).
+   */
+  readonly location?: { readonly latitude: number; readonly longitude: number; readonly name?: string | null; readonly address?: string | null };
 }) => ({
   id,
   conversationId,
@@ -353,6 +389,8 @@ export const chargeDeMessage = ({
   translations,
   sender: { type: 'user', ...sender },
   attachments,
+  ...(replyToId === undefined ? {} : { replyToId, replyTo }),
+  ...(location === undefined ? {} : { location }),
 });
 
 /**
@@ -369,6 +407,9 @@ export const bouchonSocket = ({
   reactions,
   presences,
   conversationsDuMembre,
+  messages = () => [],
+  modifieUnMessage,
+  retireUnMessage,
 }: {
   readonly serveur: ServeurHttp;
   /** Les sessions invitées dont la place est ACTIVE — retirer une clé, c'est `isActive:false`. */
@@ -379,6 +420,12 @@ export const bouchonSocket = ({
   readonly reactions: MagasinDeReactions;
   /** La présence des pairs — `connectedUsers` —, partagée avec la fiche de conversation que la passerelle HTTP sert. */
   readonly presences: Map<string, boolean>;
+  /** Les messages DU FIL, partagés avec la passerelle HTTP — la source du snapshot `replyTo` (issue #5163). */
+  readonly messages?: () => readonly Record<string, unknown>[];
+  /** `message:edit` — même mutateur que `PUT /messages/:id` (`serveurs.ts`), jamais une seconde écriture. */
+  readonly modifieUnMessage?: (id: string, content: string) => Record<string, unknown> | null;
+  /** `message:delete` — même mutateur que `DELETE /messages/:id`. */
+  readonly retireUnMessage?: (id: string) => Record<string, unknown> | null;
   /**
    * LES CONVERSATIONS DU LECTEUR, rejointes À L'AUTHENTIFICATION — comme
    * `AuthHandler._joinUserConversations` (`:724-741`) le fait pour de vrai.
@@ -570,7 +617,10 @@ export const bouchonSocket = ({
         accuse?.({ success: false, error: 'User not authenticated' });
         return;
       }
-      if (conversationId === null || content === null) {
+      // CINQUIÈME porteur : une géolocalisation SEULE (`MessageHandler.ts:
+      // 356-367`) — ni texte ni pièce jointe n'est alors exigé (#5061 § 2.1).
+      const location = lieuValide(brut.location);
+      if (conversationId === null || (content === null && location === null)) {
         accuse?.({ success: false, error: 'Validation error' });
         return;
       }
@@ -578,31 +628,99 @@ export const bouchonSocket = ({
       // `handleMessageSend` (`MessageHandler.ts:362-370`) : au-delà du plafond,
       // `_sendError` accuse `{ success: false, error }` avec la phrase du serveur
       // et émet `error { message }` (`:2272-2284`).
-      if (content.length > LONGUEUR_MAX_DU_CONTENU) {
-        const message = `Le message ne peut pas dépasser ${LONGUEUR_MAX_DU_CONTENU} caractères (${content.length} caractères fournis)`;
+      const texte = content ?? '';
+      if (texte.length > LONGUEUR_MAX_DU_CONTENU) {
+        const message = `Le message ne peut pas dépasser ${LONGUEUR_MAX_DU_CONTENU} caractères (${texte.length} caractères fournis)`;
         accuse?.({ success: false, error: message });
         socket.emit('error', { message });
         return;
       }
       const id = identifiants.suivant();
       accuse?.({ success: true, data: { messageId: id } });
+      // `replyToId` (issue #5163) — la cible RÉSOLUE contre ce qui est déjà
+      // servi, comme `MessageValidator` la relit côté passerelle : un
+      // identifiant qui ne correspond à rien ne compose aucun `replyTo`.
+      const replyToId = chaine(brut.replyToId) ?? undefined;
+      const cible = replyToId === undefined ? undefined : messages().find((m) => m.id === replyToId);
       const message = chargeDeMessage({
         id,
         conversationId,
         senderId: qui.id,
-        content,
+        content: texte,
         originalLanguage: chaine(brut.originalLanguage) ?? 'fr',
         clientMessageId: chaine(brut.clientMessageId) ?? undefined,
+        ...(location === null ? {} : { location }),
         sender: {
           id: participantDe(qui),
           displayName: qui.genre === 'invite' ? 'Tolu' : 'Amina Diallo',
           type: qui.genre === 'invite' ? 'anonymous' : 'user',
           ...(qui.genre === 'membre' ? { userId: qui.id } : {}),
         },
+        ...(cible === undefined ? {} : { replyToId, replyTo: cible }),
       });
       // Les pairs reçoivent la charge SANS `clientMessageId` ; l'expéditeur, avec.
       socket.to(room(conversationId)).emit('message:new', pourLesPairs(message));
       socket.emit('message:new', message);
+    });
+
+    /**
+     * `message:edit` (issue #5163) — `MessageHandler.handleMessageEdit`
+     * (`MeeshySocketIOManager.ts:1754-1755`) : refuse un ANONYME
+     * (`Authentication required to edit messages`), accuse `{ success, data:
+     * { messageId } }`, diffuse `message:edited` à la room ENTIÈRE — l'auteur
+     * COMPRIS (§ 2 de la spécification : la retraduction suit par
+     * `message:translation`, hors du périmètre de ce bouchon).
+     */
+    socket.on('message:edit', (charge: unknown, accuse?: (reponse: unknown) => void) => {
+      recus.push({ evenement: 'message:edit', charge, a: Date.now() });
+      const brut = (charge ?? {}) as Record<string, unknown>;
+      const messageId = chaine(brut.messageId);
+      const content = chaine(brut.content);
+      const qui = identite();
+      if (qui === null || qui.genre === 'invite') {
+        accuse?.({ success: false, error: 'Authentication required to edit messages' });
+        return;
+      }
+      if (messageId === null || content === null) {
+        accuse?.({ success: false, error: 'Validation error' });
+        return;
+      }
+      const edite = modifieUnMessage?.(messageId, content) ?? null;
+      if (edite === null) {
+        accuse?.({ success: false, error: 'Message not found or you are not authorized to modify it' });
+        return;
+      }
+      accuse?.({ success: true, data: { messageId } });
+      io.to(room(edite.conversationId as string)).emit('message:edited', edite);
+    });
+
+    /**
+     * `message:delete` (issue #5163) — `handleMessageDelete`
+     * (`MeeshySocketIOManager.ts:1758-1759`) : refuse un ANONYME
+     * (`Authentication required to delete messages`), accuse `{ success,
+     * data: { messageId } }`, diffuse `message:deleted { messageId,
+     * conversationId }`.
+     */
+    socket.on('message:delete', (charge: unknown, accuse?: (reponse: unknown) => void) => {
+      recus.push({ evenement: 'message:delete', charge, a: Date.now() });
+      const brut = (charge ?? {}) as Record<string, unknown>;
+      const messageId = chaine(brut.messageId);
+      const qui = identite();
+      if (qui === null || qui.genre === 'invite') {
+        accuse?.({ success: false, error: 'Authentication required to delete messages' });
+        return;
+      }
+      if (messageId === null) {
+        accuse?.({ success: false, error: 'Validation error' });
+        return;
+      }
+      const retire = retireUnMessage?.(messageId) ?? null;
+      if (retire === null) {
+        accuse?.({ success: false, error: 'Message not found' });
+        return;
+      }
+      accuse?.({ success: true, data: { messageId } });
+      io.to(room(retire.conversationId as string)).emit('message:deleted', { messageId, conversationId: retire.conversationId });
     });
 
     (['reaction:add', 'reaction:remove'] as const).forEach((evenement) => {

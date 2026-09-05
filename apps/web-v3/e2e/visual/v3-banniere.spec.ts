@@ -145,16 +145,20 @@ test.describe('la bannière en application', () => {
   });
 
   /**
-   * LA RÈGLE 7 b/c — un élément fixe ne couvre AUCUN contrôle AU REPOS. La
+   * LA RÈGLE 8 b/c — un élément fixe ne couvre AUCUN contrôle AU REPOS. La
    * bannière est en haut, donc au-dessus de l'en-tête ; masquée, elle ne doit
-   * intercepter aucun clic. Le témoin le prouve par le geste : le retour du fil
-   * reste cliquable pendant que la région est là mais muette.
+   * intercepter aucun clic. Le témoin le prouve par le geste : un contrôle de
+   * l'en-tête reste cliquable pendant que la région est là mais muette —
+   * `/chats` (ECRANS[1]) sert désormais le raccourci d'en-tête vers l'espace
+   * membre, JAMAIS le rond flottant `.flottante.droite` que la règle 8 en a
+   * retiré (revue de #5164, la mesure ayant trouvé le rail couvrant le pied
+   * sur CET écran).
    */
-  test('masquée, elle n’intercepte rien — la règle 7 b/c au repos', async ({ browser }) => {
+  test('masquée, elle n’intercepte rien — la règle 8 b/c au repos', async ({ browser }) => {
     const page = await ouvre(browser, ECRANS[1]);
 
     await expect(page.locator('output.banniere')).toBeHidden();
-    await page.locator('.flottante.droite').click();
+    await page.locator('.raccourcis-entete a[href="/chats?espace"]').click();
     await expect(page.locator('dialog.espace')).toBeVisible();
   });
 

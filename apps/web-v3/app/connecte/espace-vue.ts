@@ -5,8 +5,8 @@ import type { Lecteur } from '@/lib/api/compte';
 import { ESPACE, RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
 
 /**
- * L'ESPACE MEMBRE — les deux actions flottantes et la feuille qu'elles
- * ouvrent, servies par le TABLEAU DE BORD (`/`) et par `/chats`.
+ * L'ESPACE MEMBRE — les deux raccourcis d'en-tête et la feuille qu'ils
+ * ouvrent, servis par le TABLEAU DE BORD (`/`) et par `/chats`.
  *
  * UN ÉTAT D'ADRESSE, PAS UN ÉTAT DE CLIENT. `?espace` est ce qui rend la
  * feuille ; le lien de retour est l'adresse NUE de l'écran hôte. C'est le même
@@ -25,7 +25,7 @@ export const espaceDemande = (requete: Request): boolean =>
 export const versLEspace = (hote: string): string => `${hote}?${PARAMETRE_DE_L_ESPACE}`;
 
 /**
- * LES DEUX RONDS, AUX DEUX COINS — gauche vers le fil, droite vers l'espace
+ * LES DEUX RACCOURCIS D'EN-TÊTE — gauche vers le fil, droite vers l'espace
  * membre (`MeeshyWebV3.dc.html:550-556`, table de navigation `:867-868`).
  *
  * **CHACUNE EST UN `<a href>` VERS UNE ROUTE SERVIE**, et c'est le mot de la
@@ -36,16 +36,38 @@ export const versLEspace = (hote: string): string => `${hote}?${PARAMETRE_DE_L_E
  * `app/**\/route.ts` réellement émis, pour que cet invariant ne se rouvre pas
  * en silence.
  *
- * LE `<nav>` EST NOMMÉ. Deux liens sans texte visible, posés hors du flux du
+ * **CE N'EST PLUS UN RAIL `position:fixed`** (correction de revue de #5164,
+ * charte règle 8 b/c) — c'était le `<nav class="flottantes">` d'origine, DEUX
+ * ronds ancrés au coin bas de la fenêtre, quel que soit le défilement. La
+ * mesure a d'abord trouvé le rail couvrant le pied de l'enveloppe sur
+ * `/chats` (le rail y a été remplacé par ce même `raccourcisEntete`) ; une
+ * seconde mesure, à la revue suivante, l'a trouvé couvrant la carte de
+ * conversation « mise en avant » du TABLEAU DE BORD dès que la liste sert
+ * plus de deux lignes — À N'IMPORTE QUEL DÉFILEMENT, pas seulement au repos :
+ * un rond `fixed` reste ancré au coin de la fenêtre quoi que le document
+ * fasse en dessous, et RÉSERVER UNE BANDE en fin de flux (l'ancienne
+ * `FEUILLE_DES_FLOTTANTES`) ne protège que le DÉFILEMENT TOUT EN BAS — dès que
+ * le contenu réel dépasse une fenêtre, le bas de l'écran AU REPOS (défilement
+ * à 0) montre déjà du contenu réel, jamais la bande réservée. La seule sortie
+ * qui tienne à N'IMPORTE QUELLE longueur de contenu est de sortir les deux
+ * cibles du flottant : `raccourcisEntete` les pose DANS le flux, en tête de
+ * document, où rien ne peut plus jamais les faire recouvrir un contrôle.
+ *
+ * **UN SEUL SITE POUR LES DEUX ÉCRANS.** `/chats` (`liste-vue.ts`) et le
+ * TABLEAU DE BORD (`vue.ts`) l'appellent tous deux — les mêmes destinations,
+ * les mêmes noms accessibles (`ESPACE.fil`, `ESPACE.ouvrir`) qu'avant : un
+ * lecteur qui cherche « Ouvrir l'espace membre » le trouve, que l'écran ait
+ * jadis rendu un rond ou toujours rendu ce raccourci.
+ *
+ * LE `<nav>` EST NOMMÉ. Deux liens sans texte visible, posés en tête de
  * document, ne se rattachent à rien : sans son nom, un lecteur d'écran annonce
- * deux liens orphelins à la fin de la page. Chaque rond porte le sien —
- * `aria-label`, puisque le glyphe est décoratif.
+ * deux liens orphelins. Chacun porte le sien — `aria-label`, puisque le
+ * glyphe est décoratif.
  */
-export const actionsFlottantes = (hote: string): string =>
-  `<nav class="flottantes" aria-label="${echappe(ESPACE.titre)}">` +
-  `<a class="flottante gauche" href="/feed" aria-label="${echappe(ESPACE.fil)}">${svgDuSprite('ph-squares-four')}</a>` +
-  `<a class="flottante droite" href="${echappe(versLEspace(hote))}" aria-label="${echappe(ESPACE.ouvrir)}">` +
-  `${svgDuSprite('ph-user-circle')}</a>` +
+export const raccourcisEntete = (hote: string): string =>
+  `<nav class="raccourcis-entete" aria-label="${echappe(ESPACE.titre)}">` +
+  `<a class="raccourci" href="/feed" aria-label="${echappe(ESPACE.fil)}">${svgDuSprite('ph-squares-four')}</a>` +
+  `<a class="raccourci" href="${echappe(versLEspace(hote))}" aria-label="${echappe(ESPACE.ouvrir)}">${svgDuSprite('ph-user-circle')}</a>` +
   '</nav>';
 
 /**

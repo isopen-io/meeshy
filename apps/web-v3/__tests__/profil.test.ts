@@ -201,6 +201,7 @@ describe('langueDeLAuteurDansLeFil — la langue vient du FIL, jamais du profil'
     edite: false,
     supprime: false,
     pieces: [],
+    lieu: null,
     citations: [],
     reactions: [],
     accuse: 'lu',

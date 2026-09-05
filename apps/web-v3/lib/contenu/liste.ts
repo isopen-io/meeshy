@@ -13,8 +13,20 @@
  */
 
 export const CHATS = {
-  titre: 'Conversations',
-  accroche: 'Vos conversations, la plus récente en premier.',
+  /**
+   * LE TITRE ET LE SOUS-TITRE — « Chats » / « Liste des conversations »
+   * (cible `chats.png`, `vues.json#chats`), depuis la disposition #5164. Le
+   * `<h1>` du corps, `<section aria-label>` et `<title>` du document en
+   * dérivent tous les trois : un seul mot, jamais deux à tenir à jour.
+   */
+  titre: 'Chats',
+  accroche: 'Liste des conversations',
+  /** Le nom de la région qui porte les deux puces d'action — un mot d'INTERFACE, donc ici et non dans la vue. */
+  actionsRapides: 'Actions rapides',
+  /** Le libellé de la première puce d'action — mène à `/links?nouveau`. */
+  actionLien: 'Créer un lien',
+  /** Le libellé de la seconde — mène à `/chats?nouvelle`. Plus court que `NOUVELLE_CONVERSATION.ouvrir` : les deux puces se partagent 390 px. */
+  actionConversation: 'Conversation',
   vide: 'Aucune conversation',
   videPrecision: 'Démarrez une nouvelle conversation pour discuter avec vos amis !',
   participants: 'participants',
@@ -30,6 +42,24 @@ export const CHATS = {
   /** Le nom accessible de l'avatar d'une ligne, quand il ouvre le profil de l'AUTRE personne d'un tête-à-tête (§ 12.10.3). */
   voirLeProfil: (nom: string): string => `Voir le profil de ${nom}`,
 } as const;
+
+/**
+ * LA CONVERSATION MISE EN AVANT (#5164) — la PREMIÈRE non lue dans l'ORDRE
+ * SERVI, jamais la plus non lue ni la première tout court (`cible/chats.png`).
+ *
+ * PURE, SANS DOM, PARTAGÉE PAR LES DEUX AUTEURS DE CETTE LISTE : le serveur
+ * l'appelle sur les `Conversation[]` qu'il vient de servir (déjà triées par la
+ * passerelle, `lastMessageAt desc`), et le module de participation l'appelle
+ * sur `ordonnees(etat)` — la même fonction, deux entrées qui ont chacune la
+ * forme `{ id, nonLus }`. Un candidat RETIRÉ (`retiree`, § 12.10.4) n'entre pas
+ * dans la liste que l'appelant passe : c'est à l'appelant de le filtrer, parce
+ * que seul lui sait ce que « retiré » veut dire dans son propre état — le
+ * serveur n'a pas cette notion.
+ */
+export type CandidatVedette = { readonly id: string; readonly nonLus: number };
+
+export const vedetteDe = (candidats: readonly CandidatVedette[]): string | null =>
+  candidats.find((candidat) => candidat.nonLus > 0)?.id ?? null;
 
 /**
  * LES TROIS GESTES D'UNE LIGNE — leur nom, leur verbe, et leur route.

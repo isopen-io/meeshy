@@ -256,10 +256,19 @@ describe('la lecture de GET /communities/:id/conversations', () => {
     // doit PAS traverser, c'est la LISTE `participants[]` elle-même et ses
     // profils : `userId`, `displayName`, `role`, `isOnline`, `lastActiveAt`.
     const projection = JSON.stringify(ouverture.conversations);
-    expect(projection).not.toContain('userId');
-    expect(projection).not.toContain('displayName');
+    // `participants` RESTE — c'est le COMPTE (le témoin voisin le nomme :
+    // « COMPTE de participants … jamais la liste participants[] »), et un
+    // AGRÉGAT SANS IDENTITÉ n'est pas visé par la règle de présence
+    // (CLAUDE.md § Visibilité de la présence). Ce qu'on interdit est la LISTE
+    // et tout ce qu'elle transporte. Bannir la sous-chaîne `participants`
+    // rendait la garde INCAPABLE de passer — un rouge permanent n'apprend
+    // plus rien à personne, et c'est ainsi qu'une garde cesse d'être lue.
+    expect(typeof ouverture.conversations[0]?.participants).toBe('number');
     expect(projection).not.toContain('isOnline');
     expect(projection).not.toContain('lastActiveAt');
+    expect(projection).not.toContain('userId');
+    expect(projection).not.toContain('displayName');
+    expect(projection).not.toContain('u2');
     expect(ouverture.conversations).toEqual([{ id: 'conv-1', titre: 'Annonces', participants: 12, dernierMessageA: '2026-09-04T18:00:00.000Z' }]);
   });
 

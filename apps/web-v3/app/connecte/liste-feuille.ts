@@ -1,6 +1,14 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { apercuDeLigne, feuilleQuiMonte, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
+import {
+  apercuDeLigne,
+  feuilleQuiMonte,
+  MENU_DE_LIGNE,
+  PASTILLE_DE_LANGUE,
+  PUCE_DU_PRISME,
+  RACCOURCIS_D_ENTETE,
+  TRACE_DE_FRAPPE,
+} from './atomes-feuille';
 
 /**
  * LA FEUILLE DE `/chats` — la liste des conversations, et elle seule.
@@ -13,9 +21,59 @@ import { apercuDeLigne, feuilleQuiMonte, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, TRAC
  *
  * CE QUE LA CIBLE (`cible/chats.png`) DEMANDE, ET QUE LA CHARTE TRANCHE :
  *
+ *   • DEUX PUCES D'ACTION, de même rang (`.action.contour`, 52 px), côte à
+ *     côte — « Créer un lien » et « Conversation » — remplacent l'action
+ *     primaire unique d'avant #5164 : deux effets distincts méritent deux
+ *     contrôles distincts (règle 11 : un contrôle qui n'a qu'un effet ne se
+ *     déguise pas en deux) ;
+ *   • LA PUCE DU PRISME est posée à GAUCHE, au-dessus de la liste — l'atome
+ *     `PUCE_DU_PRISME` (`atomes-feuille.ts`) est PARTAGÉ avec le fil, seule sa
+ *     disposition diffère (le fil la centre, la liste l'aligne à gauche) ;
+ *   • LA PREMIÈRE CONVERSATION NON LUE, DANS L'ORDRE SERVI, EST UNE CARTE
+ *     mise en avant (`li.vedette` : fond `--color-surface`, rayon
+ *     `--radius-xl`, aperçu sur deux lignes — l'avatar garde `--avatar`, la
+ *     cible ne l'agrandit pas) — les autres restent des lignes
+ *     PLATES. La règle qui l'élit (`vedetteDe`, `lib/contenu/liste.ts`) est
+ *     PARTAGÉE avec le module de participation (`lib/realtime/liste-peinture.ts`) :
+ *     une conversation qui remonte en tête AVEC des non-lus la devient EN
+ *     DIRECT, sans qu'aucune règle ne soit réécrite au repeint ;
+ *
+ * CE QUE LA CARTE MISE EN AVANT CHANGE, ET CE QU'ELLE NE CHANGE PAS :
+ *
+ *   • le FOND (`--color-surface`), le RAYON (`--radius-xl`), la hauteur de la
+ *     ligne, et surtout L'APERÇU SUR SA PROPRE LIGNE, pleine largeur, qui se
+ *     lit sur DEUX lignes plutôt que de couper à trois mots — voilà la mise en
+ *     avant. La ligne passe pour cela en GRILLE : `.corps` en `display:contents`
+ *     rend ses trois fentes (`.tete`, `.meta`, `.apercu`) directement
+ *     positionnables, sans qu'un seul nœud ne change dans le document servi ni
+ *     dans ce que le module repeint. Une ligne PLATE, elle, reste en flex ;
+ *   • l'AVATAR NE GROSSIT PAS. `cible/chats.png` est capturée à
+ *     `deviceScaleFactor: 2` (`compare-rendu.js:194-195`) : le disque « ÉL »
+ *     y mesure 92 px D'APPAREIL, soit 46 px CSS — `--avatar` (48 px), le même
+ *     que les lignes plates. Le chiffre BRUT lu comme des pixels CSS avait
+ *     produit un jeton `--avatar-large: 96px` et un avatar DEUX FOIS trop
+ *     grand, qui écrasait l'aperçu en colonne étroite ;
+ *   • l'HEURE se tait (`.quand`) : la carte met en avant le CONTENU, pas la
+ *     récence. `data-quand` reste posé sur le `li` — le re-tri du module ne
+ *     lit rien de ce que la feuille cache ;
+ *   • la GOUTTIÈRE est portée par la GLISSIÈRE, jamais par le `li` : les deux
+ *     pistes du balayage sont `inset:0` sur le `li`, donc un `padding` posé là
+ *     leur laissait peindre leurs teintes dans les deux marges de la carte AU
+ *     REPOS (mesuré sur `rendu/chats.dark.png`) ;
+ *   • aucun FILET au-dessus d'elle : le filet haut de `.liste>ul` n'existe que
+ *     pour une première ligne PLATE.
+ *
+ * ET LE SÉLECTEUR DE LA RÉGION DU PRISME EST `.puces` NU : cette région est
+ * servie AVANT `<section class="liste">`, jamais dedans — `.liste .puces` ne
+ * désignait rien, et l'alignement à gauche n'était que le défaut d'un
+ * conteneur sans règle.
+ *
  *   • la ligne porte DEUX étages — nom + méta, puis l'aperçu du dernier message
  *     avec sa pastille de langue. C'est ce second étage qui fait la différence
- *     entre une liste de noms et une liste de CONVERSATIONS ;
+ *     entre une liste de noms et une liste de CONVERSATIONS ; l'aperçu prend
+ *     l'ENCRE PLEINE (`--color-text`, règle 18) sur les deux dispositions —
+ *     `apercuDeLigne` le pose sur `.liste` ET sur `.carte` (`app/connecte/
+ *     feuille.ts`) depuis le même site, jamais deux fois ;
  *   • la pastille de langue et la trace de frappe viennent des ATOMES partagés
  *     avec le fil (`atomes-feuille.ts`) : le même code, la même forme, sur les
  *     deux écrans qu'un tap sépare ;
@@ -43,6 +101,16 @@ import { apercuDeLigne, feuilleQuiMonte, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, TRAC
  *     ouvrait un trou d'une LIGNE entière entre l'accroche et la première
  *     conversation, mesuré à 390 × 844.
  *
+ * `RACCOURCIS_D_ENTETE` (`.entete-chats` / `.raccourcis-entete` /
+ * `.raccourci`, atome partagé avec le TABLEAU DE BORD depuis la revue
+ * suivante — `atomes-feuille.ts`) — remplace les deux ronds flottants par
+ * deux raccourcis de 44 px DANS l'en-tête, parce que la mesure a trouvé les
+ * liens du pied de l'enveloppe couverts par le rail au repos ET à
+ * mi-défilement. `.entete-chats` met le titre et les deux raccourcis sur la
+ * même ligne ; `.raccourci` est tertiaire (`--target-min`, règle 7), un
+ * cercle à filet — la même géométrie qu'un rond flottant, jamais
+ * `position:fixed`.
+ *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (règle 1 / § 3.2 corollaire 2).
  * Témoin : `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
  */
@@ -50,9 +118,33 @@ export const FEUILLE_DE_LA_LISTE = compacte(`
 ${PASTILLE_DE_LANGUE}
 ${TRACE_DE_FRAPPE}
 ${MENU_DE_LIGNE}
-.liste{margin-top:var(--space-6)}
+${PUCE_DU_PRISME}
+${RACCOURCIS_D_ENTETE}
+
+.actions-rapides{display:flex;gap:var(--space-3);margin-top:var(--space-5)}
+.actions-rapides .action{flex:1;width:auto;padding:0 var(--space-3);font-size:var(--text-sm);white-space:nowrap}
+.actions-rapides svg{flex:none;width:var(--glyph);height:var(--glyph)}
+
+.puces{display:flex;justify-content:flex-start;margin:var(--space-5) 0 0}
+
+.liste{margin-top:var(--space-4)}
 .liste>ul{margin:0;padding:0;list-style:none;border-top:var(--stroke-hair) solid var(--color-border-strong)}
+.liste>ul:has(>li.vedette:first-child){border-top:0}
 .liste>ul>li{position:relative;border-bottom:var(--stroke-hair) solid var(--color-border-strong);overflow:hidden}
+
+.liste>ul>li.vedette{margin-bottom:var(--space-4);border-bottom:0;border-radius:var(--radius-xl);background:var(--color-surface)}
+.liste>ul>li.vedette .glissiere{padding:0 var(--space-3);background:var(--color-surface)}
+.liste>ul>li.vedette a.ligne{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--space-3);row-gap:var(--space-1);align-items:center;padding:var(--space-4) 0}
+.liste>ul>li.vedette .corps{display:contents}
+.liste>ul>li.vedette .avatar{grid-area:1/1/3/2;align-self:center}
+.liste>ul>li.vedette .tete{grid-area:1/2/2/3}
+.liste>ul>li.vedette .meta{grid-area:2/2/3/3;margin-top:0}
+.liste>ul>li.vedette .compte{grid-area:1/3/3/4}
+.liste>ul>li.vedette .apercu{grid-area:3/1/4/4;margin-top:var(--space-2)}
+.liste>ul>li.vedette .frappe{grid-area:4/1/5/4}
+.liste>ul>li.vedette .nom{font-size:var(--text-md)}
+.liste>ul>li.vedette .quand{display:none}
+.liste>ul>li.vedette .apercu .texte{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
 .piste{position:absolute;inset:0;display:flex;align-items:center;padding:0 var(--space-4);font-size:var(--text-sm);font-weight:var(--font-weight-semibold)}
 .piste.avant{justify-content:flex-start;background:var(--color-tint-primary);color:var(--color-text)}

@@ -30,7 +30,7 @@ import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import { ESPACE, RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
-import { actionsFlottantes, feuilleDeLEspace, versLEspace } from '@/app/connecte/espace-vue';
+import { feuilleDeLEspace, raccourcisEntete, versLEspace } from '@/app/connecte/espace-vue';
 import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 
 const RACINE = join(__dirname, '..', 'app');
@@ -56,7 +56,7 @@ const adresseServie = (fichier: string): string => {
 
 const ROUTES_SERVIES: readonly string[] = fichiersDeRoute(RACINE).map(adresseServie);
 
-/** Les destinations que le lot promet — les deux ronds, les rangées, le champ du tableau. */
+/** Les destinations que le lot promet — les deux raccourcis, les rangées, le champ du tableau. */
 const DESTINATIONS: readonly string[] = [
   '/feed',
   ...RANGEES_DE_L_ESPACE.map((rangee) => rangee.href),
@@ -95,9 +95,22 @@ describe('l’espace membre n’ouvre que sur des routes que la v3 SERT', () => 
     expect(DESTINATIONS).toContain('/communities');
   });
 
+  /**
+   * LA SENTINELLE — une route que la v3 ne sert PAS, pour prouver que
+   * `ROUTES_SERVIES` distingue vraiment. Sans elle, une liste qui rendrait
+   * TOUT passerait les témoins ci-dessus au vert sans rien vérifier.
+   *
+   * C'ÉTAIT `/communities`, et l'écran est désormais SERVI (le témoin
+   * ci-dessus le dit) : la sentinelle serait devenue un rouge permanent.
+   * Elle ne vise pas `/moods` non plus — la v3 sert `/moods/[id]`, donc le
+   * témoin ne passerait que par la chance d'une comparaison EXACTE, et
+   * tomberait le jour d'une page d'index. `/groups` est servi par le LEGACY
+   * et jamais repris par la v3 : le jour où elle le servira, ce témoin le
+   * DIRA au lieu de mentir.
+   */
   it('rougirait sur une destination hors zone', () => {
-    expect(ROUTES_SERVIES).not.toContain('/moods');
-    expect(DESTINATIONS).not.toContain('/moods');
+    expect(ROUTES_SERVIES).not.toContain('/groups');
+    expect(DESTINATIONS).not.toContain('/groups');
   });
 });
 
@@ -127,7 +140,7 @@ describe('la feuille se ferme sans un octet de JavaScript', () => {
   it('ouvre depuis l’hôte, et y revient', () => {
     expect(versLEspace('/')).toBe('/?espace');
     expect(versLEspace('/chats')).toBe('/chats?espace');
-    expect(actionsFlottantes('/chats')).toContain('href="/chats?espace"');
+    expect(raccourcisEntete('/chats')).toContain('href="/chats?espace"');
   });
 });
 

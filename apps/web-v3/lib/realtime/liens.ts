@@ -1,4 +1,6 @@
-import { FERMETURE, NOUVEAU_LIEN } from '@/lib/contenu/liens';
+import { FERMETURE } from '@/lib/contenu/liens';
+
+import { armeLaFeuilleDeLien, corpsDuFormulaire } from './feuille-de-lien';
 
 /**
  * LE MODULE DE PARTICIPATION DE `/links` (issue #5090, fermeture #4933) — le
@@ -48,106 +50,34 @@ import { FERMETURE, NOUVEAU_LIEN } from '@/lib/contenu/liens';
  * rend sur son sommaire — jamais sur `<body>`.
  */
 
-const CHAMP_À_REPRENDRE = 'input, select, textarea';
+/**
+ * LA SOUMISSION DE LA FEUILLE DE CRÉATION — `soumetsLaFeuille`
+ * (`./feuille-de-lien`, #5034), paramétrée par la région propre à CET hôte
+ * (`#carnet`, la liste ENTIÈRE) et le contrôle à refocaliser (« Nouveau
+ * lien », l'ouvreur de l'en-tête). Le SECOND hôte, le fil, paramètre le MÊME
+ * site avec SA région (`#lien-cree`) et SON ouvreur (`a.partager`) —
+ * `lib/realtime/participate.ts`.
+ */
+const CIBLE_DU_CARNET = { region: '#carnet', ouvreur: 'a[href="/links?nouveau"]' } as const;
 
 /**
- * LE CORPS D'UN FORMULAIRE, POSTÉ COMME LE NAVIGATEUR LE POSTERAIT — un site
- * unique pour les DEUX gestes de l'écran. Il s'écrivait `new FormData(f) as
- * unknown as Record<string, string>` : une double assertion qui MENT au
- * compilateur (une `FormData` porte aussi des `File`) là où une boucle dit la
- * vérité et ne coûte rien.
+ * LA RÉGION DU CARNET, ÉCHANGÉE APRÈS UNE FERMETURE RÉUSSIE — même geste que
+ * `soumetsLaFeuille` fait pour la création, gardé ICI parce que fermer un lien
+ * reste PROPRE à `/links` (le fil ne ferme aucun lien depuis son fil).
  */
-const corpsDuFormulaire = (formulaire: HTMLFormElement): URLSearchParams => {
-  const paires = new URLSearchParams();
-  new FormData(formulaire).forEach((valeur, nom) => {
-    if (typeof valeur === 'string') paires.append(nom, valeur);
-  });
-  return paires;
-};
-
-const feuille = (): HTMLDialogElement | null => document.querySelector<HTMLDialogElement>('dialog.nouveau-lien');
-
-const disLaFeuille = (formulaire: HTMLFormElement, phrase: string): void => {
-  const region = formulaire.querySelector<HTMLElement>('.avis-feuille');
-  if (region === null) return;
-  region.textContent = phrase;
-  region.hidden = false;
-};
-
 const poseLeCarnet = (recu: Document, adresse: string): boolean => {
   const carnet = document.querySelector<HTMLElement>('#carnet');
   const frais = recu.querySelector('#carnet');
   if (carnet === null || frais === null) return false;
 
   carnet.replaceChildren(...frais.children);
-  // LA FEUILLE, C'EST DEUX NŒUDS — le `<dialog>` ET le `<a class="voile">`
-  // qui le précède (`liens-vue.ts` › `nouveauLien`) : `/links` peint son voile
-  // lui-même, faute de `::backdrop` sur un dialogue non élevé. Retirer le seul
-  // dialogue laissait derrière un `position:fixed;inset:0` qui AVALAIT tous les
-  // clics du carnet frais — l'écran avait l'air rendu et n'obéissait plus
-  // (contre-revue de #4933).
-  feuille()?.remove();
+  document.querySelector('dialog.nouveau-lien')?.remove();
   document.querySelector('a.voile')?.remove();
   const main = document.querySelector<HTMLElement>('main');
   main?.removeAttribute('inert');
   history.replaceState(null, '', adresse);
-  // Le focus revient au contrôle d'où la feuille s'était ouverte — jamais sur <body>.
   main?.querySelector<HTMLElement>('a[href="/links?nouveau"]')?.focus();
   return true;
-};
-
-const poseLaFeuilleRefusee = (recu: Document): boolean => {
-  const fraiche = recu.querySelector('dialog.nouveau-lien');
-  const courante = feuille();
-  if (fraiche === null || courante === null) return false;
-
-  courante.replaceWith(fraiche.cloneNode(true));
-  const posee = feuille();
-  // Le motif est un `role="alert"` : il s'annonce tout seul. Le clavier, lui,
-  // reprend au premier champ — là où la correction commence.
-  posee?.querySelector<HTMLElement>(CHAMP_À_REPRENDRE)?.focus();
-  return true;
-};
-
-const soumets = async (formulaire: HTMLFormElement): Promise<void> => {
-  const bouton = formulaire.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const libelle = bouton?.textContent ?? '';
-  if (bouton !== null) {
-    bouton.disabled = true;
-    bouton.textContent = NOUVEAU_LIEN.enCours;
-  }
-  const rends = (): void => {
-    if (bouton !== null) {
-      bouton.disabled = false;
-      bouton.textContent = libelle;
-    }
-  };
-
-  const reponse = await fetch(window.location.pathname + window.location.search, {
-    method: 'POST',
-    body: corpsDuFormulaire(formulaire),
-    headers: { accept: 'text/html' },
-    redirect: 'follow',
-  }).catch(() => null);
-  const corps = reponse === null ? null : await reponse.text().catch(() => null);
-  if (corps === null) {
-    rends();
-    disLaFeuille(formulaire, NOUVEAU_LIEN.echec);
-    return;
-  }
-
-  const recu = new DOMParser().parseFromString(corps, 'text/html');
-  const adresse = reponse === null ? window.location.pathname : new URL(reponse.url).pathname + new URL(reponse.url).search;
-
-  if (recu.querySelector('dialog.nouveau-lien') !== null) {
-    if (!poseLaFeuilleRefusee(recu)) rends();
-    return;
-  }
-  if (poseLeCarnet(recu, adresse)) return;
-
-  // Ni carnet ni feuille : une panne servie. La feuille reste, sa voix le dit.
-  rends();
-  disLaFeuille(formulaire, NOUVEAU_LIEN.echec);
 };
 
 /** Un `<span class="lien">` (lien sans conversation) n'est pas focusable de nature : il le devient pour ce geste. */
@@ -265,24 +195,19 @@ const demarre = (): void => {
   const main = document.querySelector<HTMLElement>('main[data-participation="liens"]');
   if (main === null) return;
 
-  // La feuille vit HORS de `main` (qui est `inert` sous elle) : l'écoute se
-  // pose au document, et retient les DEUX formulaires — celui de la feuille de
-  // création, celui du menu d'une ligne.
+  // LA CRÉATION est armée par le SITE PARTAGÉ (`feuille-de-lien.ts`), qui
+  // tient l'écoute UNIQUE des deux hôtes : l'armer ici DÉTACHE celle que le
+  // fil aurait laissée derrière lui après une navigation douce, et réciproquement.
+  armeLaFeuilleDeLien(CIBLE_DU_CARNET);
+
+  // LA FERMETURE reste PROPRE à cet écran (`/links` seul ferme un lien depuis
+  // sa liste) : son formulaire vit DANS `#carnet`, pas dans une feuille.
   document.addEventListener('submit', (evenement) => {
     const cible = evenement.target as HTMLElement | null;
-
-    const creation = cible?.closest<HTMLFormElement>('dialog.nouveau-lien form');
-    if (creation !== null && creation !== undefined) {
-      evenement.preventDefault();
-      void soumets(creation);
-      return;
-    }
-
     const fermeture = cible?.closest<HTMLFormElement>('li.ligne-lien form');
-    if (fermeture !== null && fermeture !== undefined) {
-      evenement.preventDefault();
-      void fermer(fermeture);
-    }
+    if (fermeture === null || fermeture === undefined) return;
+    evenement.preventDefault();
+    void fermer(fermeture);
   });
 
   /**
