@@ -1,6 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { MENU_DE_LIGNE, PASTILLE_DE_LANGUE, PUCE_DU_PRISME, TRACE_DE_FRAPPE } from './atomes-feuille';
+import { avisDEcran, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, PUCE_DU_PRISME, TRACE_DE_FRAPPE } from './atomes-feuille';
 
 /**
  * LA FEUILLE DU FIL — le même module pour les deux portes (`/chats/:cle`,
@@ -151,10 +151,8 @@ export const FEUILLE_DU_FIL = compacte(`
 .fil-ecran[inert]{filter:blur(var(--frame-blur))}
 
 .fil-tete{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--color-bg);border-bottom:var(--stroke-hair) solid var(--color-border-strong)}
-.fil-tete .retour{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}
-.fil-tete .retour svg{width:var(--glyph);height:var(--glyph)}
-.fil-tete .medias{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}
-.fil-tete .medias svg{width:var(--glyph);height:var(--glyph)}
+.fil-tete .retour,.fil-tete .medias,.fil-tete .partager{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}
+.fil-tete .retour svg,.fil-tete .medias svg,.fil-tete .partager svg{width:var(--glyph);height:var(--glyph)}
 .fil-tete .titre{flex:1;min-width:0}
 .fil-tete h1{margin:0;font-size:var(--text-xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fil-tete .sous{margin:0;min-height:calc(var(--text-sm) * var(--leading-normal));font-size:var(--text-sm);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -425,6 +423,36 @@ export const FEUILLE_DE_LA_CAPTURE = compacte(`
 .nom-du-lieu{overflow-wrap:anywhere}
 .adresse-du-lieu{font-size:var(--text-sm);font-weight:var(--font-weight-regular);color:var(--color-text-muted);overflow-wrap:anywhere}
 `);
+
+/**
+ * CRÉER UN LIEN DE PARTAGE DEPUIS CE FIL (#5034, § 12.10.5) — servie par
+ * `documentDuFil` SEUL, comme `FEUILLE_DE_LA_CAPTURE` juste au-dessus et pour
+ * la MÊME raison : l'avis « lien créé » n'a aucun sens sur la GALERIE
+ * (`medias-vue.ts`, qui inline `FEUILLE_DU_FIL` pour son en-tête, jamais le
+ * corps du fil) — l'y inliner ferait payer à cet écran des classes qu'il ne
+ * rend jamais, quand sa marge sous le plafond dur `documents.document_o`
+ * (9 216 o) se compte en dizaines d'octets.
+ *
+ * LE ROND DE LA PUCE « PARTAGER » N'EST PAS ICI : il est GROUPÉ avec ceux de
+ * « Retour » et de « Médias » dans `FEUILLE_DU_FIL`, sous un seul corps de
+ * règle. Le recopier ici en aurait fait la TROISIÈME copie — celle qui diverge
+ * (`atomes-feuille.ts`) —, et le groupement RETIRE plus d'octets à la galerie
+ * qu'un sélecteur de plus ne lui en coûte (mesuré : `galerie_o` baisse).
+ *
+ * L'avis « lien créé » prend sa géométrie à l'ATOME `avisDEcran`, comme les
+ * trois écrans qui le rendaient déjà (`contacts`, `notifs`, `composer`) : une
+ * quatrième copie du même corps de règle était le défaut que cet atome existe
+ * pour empêcher. Ne reste ICI que ce qui lui est PROPRE — l'adresse du lien,
+ * qui se COUPE plutôt qu'elle ne déborde (une adresse longue élargirait sinon
+ * la page) et se SÉLECTIONNE D'UN GESTE (`user-select:all`) : sans bouton
+ * « Copier » — un contrôle qui n'existerait qu'avec JavaScript, refusé sur les
+ * deux hôtes —, c'est le seul moyen d'emporter le lien qu'on vient de créer.
+ */
+export const FEUILLE_DU_LIEN_DEPUIS_LE_FIL = compacte(
+  `${avisDEcran('.fil-ecran')}
+.fil-ecran>.avis .adresse{user-select:all;overflow-wrap:anywhere;color:var(--color-text)}
+`,
+);
 
 /** Émise par le document APRÈS `</ol>` : la dernière ligne, désormais complète, se montre. */
 export const REVELE_LA_DERNIERE_LIGNE = compacte(`.lignes>li:not(:has(~li)){visibility:visible}`);

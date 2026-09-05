@@ -6,6 +6,8 @@ import {
   ancreDemandee,
   CACHE_PRIVE,
   curseurDemande,
+  feuilleDeLienDemandee,
+  lienCreeDemande,
   lisLeFormulaire,
   modificationDemandee,
   pleinDemande,
@@ -16,9 +18,11 @@ import {
   resoutLeContexte,
   soumissionDuFil,
   tempsReelDuDocument,
+  traiteLaCreationDuLien,
   traiteLaSoumission,
 } from '@/app/connecte/fil-porte';
 import { adresseDeLaPorte, documentDuFil, documentIntrouvable } from '@/app/connecte/fil-vue';
+import { saisieDuFil, type SaisieDuLien } from '@/app/connecte/nouveau-lien-vue';
 import { chargeLeProfilSiDemande, traiteLActionDeProfil } from '@/app/connecte/profil-porte';
 import { documentDePanne } from '@/app/connecte/vue';
 import { chargementSpeculatif, origineEtrangere, refusDOrigine, sansEffet } from '@/app/provenance';
@@ -72,6 +76,10 @@ const charge = async ({
   plein = null,
   idReponse = null,
   idModification = null,
+  lienDemande = false,
+  lienSaisie,
+  lienMotif = null,
+  lienCree = null,
   erreur,
   brouillon,
   statut = 200,
@@ -88,6 +96,14 @@ const charge = async ({
   readonly idReponse?: string | null;
   /** `?modifier=` — ou le contexte CONSERVÉ d'un refus de modification. */
   readonly idModification?: string | null;
+  /** `?lien` — la feuille « nouveau lien de partage » est-elle ouverte (#5034) ? */
+  readonly lienDemande?: boolean;
+  /** La saisie REPOSÉE après un refus de création — sinon le défaut (conversation verrouillée, nom = titre du fil). */
+  readonly lienSaisie?: SaisieDuLien;
+  /** Le motif du refus de la passerelle à la création, rendu TEL QUEL. */
+  readonly lienMotif?: string | null;
+  /** `?cree=<identifiant>` — le compte rendu du Post/Redirect/Get qui vient de créer un lien. */
+  readonly lienCree?: string | null;
   readonly erreur: string | null;
   readonly brouillon: string;
   readonly statut?: number;
@@ -117,6 +133,9 @@ const charge = async ({
   // `?repondre=` / `?modifier=` (§ 12.10.1, issue #5163) — résolus contre CE
   // qui vient d'être servi : une cible hors tranche n'arme rien.
   const contexte = resoutLeContexte({ idReponse, idModification, fil: issue.fil, maintenant, composeurOuvert: true, estInvite: false });
+  // `?lien` (#5034, § 12.10.5) — la saisie REPOSÉE après un refus, ou le
+  // défaut (conversation VERROUILLÉE sur `cle`, nom PRÉREMPLI du titre du fil).
+  const lien = lienDemande ? { saisie: lienSaisie ?? saisieDuFil(cle, issue.fil.titre), motif: lienMotif } : null;
 
   return rendu(
     documentDuFil({
@@ -131,8 +150,16 @@ const charge = async ({
       contexte,
       plein,
       profil,
+      lien,
+      lienCree,
     }),
-    erreur === null ? 200 : statut,
+    // LE STATUT VIENT DE `statut` DIRECTEMENT (défaut 200) — pas de `erreur`,
+    // depuis que la création d'un lien (#5034) peut refuser (422/503) SANS
+    // poser `erreur` (son motif se dit DANS la feuille, jamais dans la bannière
+    // générale du fil). Tous les appels PRÉEXISTANTS posaient déjà `statut` en
+    // même temps qu'`erreur` non nul, ou aucun des deux : ce changement ne leur
+    // fait rien.
+    statut,
   );
 };
 
@@ -161,6 +188,8 @@ export const GET = async (
     plein: pleinDemande(requete),
     idReponse,
     idModification,
+    lienDemande: feuilleDeLienDemandee(requete),
+    lienCree: lienCreeDemande(requete),
     erreur: null,
     brouillon: '',
   });
@@ -183,6 +212,27 @@ export const POST = async (
   const adresseHote = adresseDeLaPorte({ genre: 'membre', cle });
   const actionDeProfil = await traiteLActionDeProfil({ formulaire, jeton, adresseHote });
   if (actionDeProfil !== null) return actionDeProfil;
+
+  // LA CRÉATION D'UN LIEN DE PARTAGE (#5034, § 12.10.5) — vérifiée APRÈS le
+  // profil, AVANT le composeur : le même ordre de lecture qu'un formulaire de
+  // plus (§ 4 étape 2 de la spécification #5163), sur le MÊME `FormData`.
+  const issueDeLien = await traiteLaCreationDuLien({ formulaire, jeton, conversation: cle, adresseHote });
+  if (issueDeLien !== null) {
+    if (issueDeLien.genre === 'session-expiree') return versLaConnexion(cle);
+    if (issueDeLien.genre === 'redirection') return redirection(issueDeLien.vers);
+    return charge({
+      requete,
+      jeton,
+      cle,
+      avant: null,
+      lienDemande: true,
+      lienSaisie: issueDeLien.saisie,
+      lienMotif: issueDeLien.motif,
+      erreur: null,
+      brouillon: '',
+      statut: issueDeLien.statut,
+    });
+  }
 
   const soumission = soumissionDuFil(formulaire);
   const issue = await traiteLaSoumission({

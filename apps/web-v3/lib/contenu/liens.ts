@@ -101,6 +101,14 @@ export const NOUVEAU_LIEN = {
   cree: 'Votre lien est créé.',
   refuse: 'Le lien n’a pas été créé.',
   sansTitre: 'Donnez un nom à la conversation.',
+
+  /**
+   * LE SECOND HÔTE (#5034) — le fil du membre (`?lien`) : la conversation y
+   * est déjà ouverte, ce que le sous-titre de la feuille annonce, et l'en-tête
+   * du fil porte un bouton qui y mène.
+   */
+  depuisLeFil: 'Créer un lien de partage depuis cette conversation',
+  pour: (nomDeLaConversation: string): string => `Pour « ${nomDeLaConversation} » · conversation déjà ouverte`,
 } as const;
 
 /**

@@ -29,6 +29,7 @@ import {
 } from './fil-peinture';
 import { memoriseHorsLigne, oublieHorsLigne, piecesLocales, relisLaFile } from './fil-reserve';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
+import { armeLaFeuilleDeLien } from './feuille-de-lien';
 import { prendsLePleinEcran } from './plein-ecran';
 import {
   doitRattraper,
@@ -735,12 +736,23 @@ const surTransition = (ctx: Contexte) => (transition: TransitionDeCycle): void =
     ctx.composeur?.detruit();
     ctx.gestes?.detruit();
     ctx.capture?.detruit();
+    ctx.feuilleDeLien?.();
     return;
   }
   if (transition.type === 'jeton-externe' && ctx.creance.genre === 'invite' && transition.valeur === null) {
     ferme(ctx, BANDEAUX.placeFermee.titre, 'bandeau-place-fermee');
   }
 };
+
+/**
+ * LA CIBLE DE LA FEUILLE « NOUVEAU LIEN » DEPUIS CE FIL (#5034, § 12.10.5) —
+ * la région propre à cet hôte (`#lien-cree`, l'avis SEUL — jamais tout
+ * `#main-content`, dont le remplacement perdrait l'état vivant du fil : les
+ * bulles déjà peintes, le socket, les écouteurs) et le contrôle qui reprend
+ * le focus. `/links` paramètre le MÊME site (`lib/realtime/liens.ts`) avec SA
+ * région (`#carnet`, la liste ENTIÈRE — elle n'a pas d'état vivant à perdre).
+ */
+const CIBLE_DU_LIEN = { region: '#lien-cree', ouvreur: 'a.partager' } as const;
 
 const demarre = async (): Promise<void> => {
   const main = document.querySelector<HTMLElement>('main[data-participation="fil"]');
@@ -781,6 +793,10 @@ const demarre = async (): Promise<void> => {
     composeur: null,
     gestes: null,
     capture: null,
+    // L'ÉCOUTE DE LA FEUILLE « NOUVEAU LIEN » — armée ici, RENDUE à
+    // `destruction` : l'écoute se pose au document, qui survit à une
+    // navigation douce, et le site partagé n'en tolère qu'UNE à la fois.
+    feuilleDeLien: armeLaFeuilleDeLien(CIBLE_DU_LIEN),
     enLigne: true,
     cache: false,
     deconnecteDepuis: null,

@@ -668,15 +668,26 @@ export const carnetDeLiens = async ({
  * ferait cocher une restriction qui ne restreint rien — le champ décoratif que
  * le critère de fin de `sheet:link` interdit nommément.
  *
- * LA CONVERSATION NAÎT AVEC LE LIEN. Depuis `/links` il n'y a aucune
+ * LA CONVERSATION NAÎT AVEC LE LIEN, DEPUIS `/links` — il n'y a aucune
  * conversation à désigner ; `newConversation.title` en crée une, et c'est la
  * branche que la passerelle prévoit pour ce cas (« If conversationId is not
  * provided, a new public conversation will be created »).
+ *
+ * DEPUIS LE FIL (`?lien`, #5034), LA CONVERSATION EST DÉJÀ OUVERTE — c'est
+ * l'AUTRE branche de la même route (`mintConversationShareLink`,
+ * `routes/links/utils/share-link-mint.ts:150-212`) : `conversationId` porte
+ * la clé de la conversation servie, jamais `newConversation`. Les deux champs
+ * sont donc optionnels ICI, et c'est à l'appelant de n'en poser qu'un — la
+ * passerelle refuserait de toute façon `conversationId` ET `newConversation`
+ * à la fois pour un lecteur qui n'a droit qu'à l'un des deux (§ 5 de la
+ * spécification #5034).
  */
 
 /** Les champs de `createLinkSchema` que la feuille sert — aucun autre ne part. */
 export type LienACreer = {
-  readonly newConversation: { readonly title: string };
+  readonly newConversation?: { readonly title: string };
+  /** La conversation OUVERTE dont ce lien hérite (`?lien`, #5034) — jamais posé avec `newConversation`. */
+  readonly conversationId?: string;
   readonly name?: string;
   readonly description?: string;
   readonly expiresAt?: string;

@@ -330,3 +330,32 @@ describe('le nom d’une langue', () => {
     expect(vue).not.toContain('getLanguageInfo');
   });
 });
+
+/**
+ * LA FEUILLE « NOUVEAU LIEN DE PARTAGE » A UN SEUL SITE (#5034) — le même
+ * patron que `pleinEcran` juste au-dessus : deux hôtes (`/links?nouveau`,
+ * `/chats/:cle?lien`), un seul balisage (`app/connecte/nouveau-lien-vue.ts`).
+ */
+describe('la feuille « nouveau lien » a un seul site', () => {
+  const LIENS_VUE = 'app/connecte/liens-vue.ts';
+  const NOUVEAU_LIEN_VUE = 'app/connecte/nouveau-lien-vue.ts';
+
+  it('liens-vue.ts et fil-vue.ts importent tous deux nouveauLien de nouveau-lien-vue.ts, aucun ne le déclare', () => {
+    [LIENS_VUE, VUE_DU_FIL].forEach((chemin) => {
+      expect(source(chemin)).toMatch(/import\s*\{[^}]*\bnouveauLien\b[^}]*\}\s*from\s*'\.\/nouveau-lien-vue'/);
+      expect(source(chemin)).not.toMatch(/const nouveauLien\s*=/);
+    });
+  });
+
+  it('la lecture du formulaire (saisieSoumise, champsCommuns) a elle aussi un seul site — nouveau-lien-porte.ts', () => {
+    ['app/connecte/liens-porte.ts', 'app/connecte/fil-porte.ts'].forEach((chemin) => {
+      expect(source(chemin)).toMatch(/from '\.\/nouveau-lien-porte'/);
+      expect(source(chemin)).not.toMatch(/const saisieSoumise\s*=/);
+      expect(source(chemin)).not.toMatch(/const champsCommuns\s*=/);
+    });
+  });
+
+  it('nouveau-lien-vue.ts exporte nouveauLien, et rien ne le recopie', () => {
+    expect(source(NOUVEAU_LIEN_VUE)).toMatch(/export const nouveauLien\s*=/);
+  });
+});

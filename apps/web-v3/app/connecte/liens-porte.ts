@@ -2,16 +2,12 @@ import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
 import { actifsTempsReel } from '@/lib/actifs-rt';
 import { carnetDeLiens, creeUnLien, fermeUnLien, type LienACreer, type Recuperateur } from '@/lib/api/compte';
-import { ECHEANCES, FERMETURE, NOUVEAU_LIEN, type Echeance } from '@/lib/contenu/liens';
+import { FERMETURE, NOUVEAU_LIEN } from '@/lib/contenu/liens';
 
 import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
-import {
-  CHAMPS_DU_NOUVEAU_LIEN,
-  PERMISSIONS_DU_LIEN,
-  SAISIE_NEUVE,
-  documentDesLiens,
-  type SaisieDuLien,
-} from './liens-vue';
+import { documentDesLiens } from './liens-vue';
+import { champsCommuns, saisieSoumise } from './nouveau-lien-porte';
+import type { SaisieDuLien } from './nouveau-lien-vue';
 import { documentDePanne } from './vue';
 
 /**
@@ -114,48 +110,23 @@ export const CARNET_DE_LIENS = async (
   return sert({ jeton, requete, recuperer });
 };
 
+/** Ce que le formulaire de FERMETURE a posté sous `nom` — la lecture générique de la création vit dans `saisieSoumise`. */
 const texte = (formulaire: FormData, nom: string): string => {
   const valeur = formulaire.get(nom);
   return typeof valeur === 'string' ? valeur.trim() : '';
 };
 
-const echeanceSoumise = (formulaire: FormData): Echeance => {
-  const valeur = formulaire.get(CHAMPS_DU_NOUVEAU_LIEN.echeance);
-  return (Object.keys(ECHEANCES) as readonly Echeance[]).find((cle) => cle === valeur) ?? SAISIE_NEUVE.echeance;
-};
-
-const saisieSoumise = (formulaire: FormData): SaisieDuLien => ({
-  conversation: texte(formulaire, CHAMPS_DU_NOUVEAU_LIEN.conversation),
-  nom: texte(formulaire, CHAMPS_DU_NOUVEAU_LIEN.nom),
-  echeance: echeanceSoumise(formulaire),
-  capacite: texte(formulaire, CHAMPS_DU_NOUVEAU_LIEN.capacite),
-  permissions: new Set(PERMISSIONS_DU_LIEN.map(({ champ }) => champ).filter((champ) => formulaire.has(champ))),
-});
-
 /**
- * UNE CASE NON COCHÉE N'ENVOIE RIEN, et c'est pourquoi chaque permission part
- * en booléen EXPLICITE. Omettre le champ laisserait la passerelle poser son
- * propre défaut : décocher « Joindre des fichiers » n'aurait alors aucun
- * effet — le contrôle mentirait.
- *
- * L'ÉCHÉANCE EST CALCULÉE ICI, sur l'horloge du SERVEUR. Celle du navigateur
- * peut avoir des heures de retard, et une date d'expiration fausse ne se
- * découvre qu'au moment où le lien meurt trop tôt.
+ * `saisieSoumise` (lire le formulaire) et `champsCommuns` (composer ce que
+ * `createLinkSchema` attend, hors la CIBLE) vivent dans `./nouveau-lien-porte`
+ * depuis que la feuille a un SECOND hôte (#5034, le fil du membre) : les
+ * deux portes lisent le même formulaire et composent les mêmes champs, seule
+ * la cible diffère — `newConversation` ici, `conversationId` là-bas.
  */
-const lienASoumettre = (saisie: SaisieDuLien, maintenant: number): LienACreer => {
-  const duree = ECHEANCES[saisie.echeance];
-  const capacite = Number.parseInt(saisie.capacite, 10);
-
-  return {
-    newConversation: { title: saisie.conversation },
-    ...(saisie.nom === '' ? {} : { name: saisie.nom }),
-    ...(duree === null ? {} : { expiresAt: new Date(maintenant + duree).toISOString() }),
-    ...(Number.isFinite(capacite) && capacite > 0 ? { maxUses: capacite } : {}),
-    ...Object.fromEntries(
-      PERMISSIONS_DU_LIEN.map(({ champ }) => [champ, saisie.permissions.has(champ)]),
-    ),
-  };
-};
+const lienASoumettre = (saisie: SaisieDuLien, maintenant: number): LienACreer => ({
+  newConversation: { title: saisie.conversation },
+  ...champsCommuns(saisie, maintenant),
+});
 
 /**
  * CRÉER LE LIEN — Post/Redirect/Get, et la garde d'origine AVANT tout.

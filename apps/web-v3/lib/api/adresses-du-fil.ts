@@ -108,3 +108,28 @@ export const adresseDuPlein = (adresse: string, messageId: string, pieceId: stri
 /** La fermeture : la MÊME tranche, cadrée sur le message d'où la pièce vient. */
 export const adresseDuRetourDuPlein = (adresse: string, messageId: string): string =>
   adresseDuMessage(adresseAutourDuMessage(adresse, messageId), messageId);
+
+/**
+ * CRÉER UN LIEN DE PARTAGE DEPUIS LE FIL DU MEMBRE EST UN ÉTAT DE PLUS DE LA
+ * MÊME ADRESSE (`?lien`, issue #5034, § 12.10.5) — la même famille que
+ * `?media=` et `?profil=` : un lien SANS JavaScript qui ouvre la feuille, et
+ * la CROIX qui la ferme rend l'adresse NUE, jamais une route à elle (`/chat/
+ * :lien/...` n'existe pas — directive du porteur).
+ *
+ * `?cree=<identifiant>` PORTE LE COMPTE RENDU DU POST (Post/Redirect/Get) —
+ * le même patron que `?cree`/`?ferme` de `/links` (`liens-porte.ts`), sauf
+ * qu'ici l'identifiant du lien fraîchement créé voyage AVEC l'état, pour que
+ * l'avis rendu sur le fil (« Votre lien est créé », son adresse) survive un
+ * rechargement de la même page — chose qu'un état de session ne permettrait
+ * pas sans un second aller-retour.
+ */
+export const PARAM_DU_LIEN = 'lien';
+
+/** L'ouverture de la feuille : l'adresse de l'hôte, plus `?lien`. */
+export const adresseDeLaFeuilleDeLien = (adresseHote: string): string => `${adresseHote}?${PARAM_DU_LIEN}`;
+
+export const PARAM_DU_LIEN_CREE = 'cree';
+
+/** Le retour du Post/Redirect/Get, portant l'identifiant du lien qui vient d'être créé. */
+export const adresseDuLienCree = (adresseHote: string, identifiant: string): string =>
+  `${adresseHote}?${PARAM_DU_LIEN_CREE}=${encodeURIComponent(identifiant)}`;

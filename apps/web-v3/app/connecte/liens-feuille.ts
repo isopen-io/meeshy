@@ -81,8 +81,10 @@ ${MENU_DE_LIGNE}
 `);
 
 /**
- * LA FEUILLE « NOUVEAU LIEN » (`sheet:link`, #5071) — servie SEULEMENT dans
- * l'état `/links?nouveau`.
+ * LA FEUILLE « NOUVEAU LIEN » (`sheet:link`, #5071) — servie dans l'état
+ * `/links?nouveau` ET, depuis #5034, dans l'état `/chats/:cle?lien` : DEUX
+ * hôtes, UN balisage (`app/connecte/nouveau-lien-vue.ts`), donc une seule
+ * feuille. Chacun ne la sert que dans SON état.
  *
  * Elle n'est pas dans `FEUILLE_DES_LIENS` : la charte règle 7 dit que ce qu'un
  * écran n'affiche pas, il ne le paie pas, et `/links` sans état ne rend aucune
@@ -100,7 +102,7 @@ ${MENU_DE_LIGNE}
  * ne fait que la retirer. Sans le `<a class="voile">` servi, la feuille
  * flotterait sur un carnet nu, et le troisième chemin de fermeture n'existerait
  * pas. Corollaire : ce voile est le SECOND nœud de la feuille — qui la retire
- * les retire TOUS LES DEUX (`lib/realtime/liens.ts` › `poseLeCarnet`).
+ * les retire TOUS LES DEUX (`lib/realtime/feuille-de-lien.ts` › `poseLaRegion`).
  *
  * CE QUI LUI EST PROPRE :
  *
@@ -119,6 +121,7 @@ export const FEUILLE_DU_NOUVEAU_LIEN = feuilleQuiMonte('nouveau-lien') + compact
 dialog.nouveau-lien h2{margin:0 0 var(--space-1);font-size:var(--text-xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
 dialog.nouveau-lien .tete{display:flex;align-items:flex-start;gap:var(--space-3)}
 dialog.nouveau-lien .tete .dit{flex:1;min-width:0}
+dialog.nouveau-lien .sous{margin:0;font-size:var(--text-sm);line-height:var(--leading-normal);color:var(--color-text-muted)}
 dialog.nouveau-lien .fermer{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);border:var(--stroke-hair) solid var(--color-border-strong);color:var(--color-text)}
 dialog.nouveau-lien .fermer svg{width:var(--glyph);height:var(--glyph)}
 dialog.nouveau-lien form{display:flex;flex-direction:column;gap:var(--space-4);margin:var(--space-4) 0 0}
