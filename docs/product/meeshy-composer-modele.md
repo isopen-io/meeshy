@@ -907,7 +907,7 @@ répond à la question qu'il laissait ouverte, et qu'aucun document ne traitait 
 |---|---|---|---|---|
 | **SCÈNE** | l'atelier de story (`StoryViewModel+PublicationUpload`) | `CreateStoryRequest` | 12 | **oui** |
 | **DOCUMENT en ligne** | `PostService.create` | `CreatePostRequest` | 18 | **oui** |
-| **DOCUMENT durable** — celle que prend TOUT post du meuble, en ligne comme hors ligne | `FeedViewModel.publish` → `OutboxDispatcher` | **`CreatePostBody`** | 15 | **oui depuis #4756** (`4ea147fc80`) |
+| **DOCUMENT durable** — celle que prend TOUT post du meuble, en ligne comme hors ligne | `FeedViewModel.publish` → `OutboxDispatcher` | **`CreatePostBody`** | 16 | **oui depuis #4756** (`4ea147fc80`) |
 | **ANCRAGE / repost cité** | `StoryRepublishComposer.ancrer` | `RepostIntent` → `POST /posts/:id/repost` | — | **NON** (#5201) |
 
 > **Le troisième corps n'était compté nulle part** — ni ici, ni dans
@@ -926,6 +926,38 @@ sont deux types SWIFT reçus par un seul contrat.
 Repo entier, en production : **12 sites** construisent un corps de `POST /posts`,
 dont **cinq à la main sans aucun type** (web ×3, web-v3 ×1, outbox iOS ×1).
 
+#### Le 19e champ du contrat n'est dans AUCUN des deux corps (2026-09-05)
+
+Les trois comptes — 19 au contrat, 18 sur la voie en ligne, 16 sur la voie
+durable — figuraient déjà côte à côte dans ce document. Personne n'avait demandé
+**lequel** manquait. Mesuré :
+
+| inventaire | champs | ce qui lui manque du contrat |
+|---|---|---|
+| `CreatePostSchema` (contrat) | 19 | — |
+| `CreatePostRequest` (EN LIGNE) | 18 | `communityId` |
+| `CreatePostBody` (DURABLE) | 16 | `communityId`, `mediaAlt`, `allowSoundExtraction` |
+
+`communityId` n'apparaît **nulle part** dans le code de publication iOS — les
+seules occurrences Swift sont en LECTURE (`ConversationListView`, `RootView`,
+navigation). **Un iPhone ne peut publier dans aucune communauté, par aucune des
+deux voies.**
+
+> **Un recensement compare ce qu'on lui donne à comparer.** `PublishChainCensusTests`
+> immunise contre la divergence des deux voies ; un champ absent des DEUX est,
+> pour lui, un non-événement — les inventaires concordent parfaitement. Deux
+> clients qui se recensent mutuellement prouvent qu'ils sont d'accord, **pas
+> qu'ils ont raison** : le tiers qui tranche est le CONTRAT, et il n'était dans
+> aucune des deux colonnes.
+
+C'est la forme du défaut que #5196 a corrigé un cran plus bas, rejouée un cran
+plus haut — et, comme toujours, invisible depuis le correctif. Suivi : #5239, qui
+pose le témoin AVANT de trancher `communityId` : le champ est peut-être mort côté
+contrat (mesuré : `apps/web/services/posts.service.ts` ne l'envoie pas non plus
+dans le corps de `POST /posts`, il ne sert qu'en lecture via
+`GET /posts/community/:communityId`). Une exemption est une DÉCISION, jamais un
+constat.
+
 ### La voie durable traverse SIX inventaires recopiés à la main
 
 | # | maillon | champs | ce qui rougirait si un champ manquait |
@@ -934,7 +966,7 @@ dont **cinq à la main sans aucun type** (web ×3, web-v3 ×1, outbox iOS ×1).
 | 2 | `PublishIntent` (`Services/PublishIntent.swift`) | 13 | une garde de SOURCE interdit les défauts dans la liste de paramètres — elle **ne vérifie la présence d'aucun champ** |
 | 3 | `OfflineQueue.enqueuePostMedia` | 13 paramètres → 14 des 18 champs du payload | **rien** |
 | 4 | `CreatePostPayload` (format ON-DISK) | 18, dont **10 avec défaut** | 6 témoins champ par champ, aucun recensement |
-| 5 | `CreatePostBody` (le fil) | 15 | 11 témoins champ par champ, aucun recensement |
+| 5 | `CreatePostBody` (le fil) | 16 | 11 témoins champ par champ **+ `PublishChainCensusTests`** (#5196) — mais il compare les deux voies iOS ENTRE ELLES, jamais au contrat (voir ci-dessous) |
 | 6 | `CreatePostSchema` (passerelle) | 19 | — |
 
 **Sept champs ont déjà été perdus à ces maillons.** SIX sont réparés et portent
@@ -1160,7 +1192,7 @@ grep -h "public func" packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerVie
 > sérialisée, ≤ 256 Ko.
 >
 > Et **il y a un TROISIÈME type de corps côté iOS**, que ni ce document ni
-> `social.md` ne comptent : `CreatePostBody` (`OutboxDispatcher.swift:965`, 15
+> `social.md` ne comptent : `CreatePostBody` (`OutboxDispatcher.swift:965`, 16
 > champs, `encode(to:)` écrit à la main) — le corps de la voie DURABLE, celle que
 > prend tout post du meuble. Repo entier, en production : **12 sites** construisent
 > ce corps, dont cinq à la main sans aucun type (web ×3, web-v3 ×1, outbox iOS ×1).
