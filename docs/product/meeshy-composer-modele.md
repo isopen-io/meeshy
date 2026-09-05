@@ -660,7 +660,8 @@ côté elle se pose (§ « Le composer met ses portes SUR LE PLATEAU », `apps/i
 
 | inventaire | ce qu'il énumère | contenu mesuré |
 |---|---|---|
-| **`ComposerRailDoor`** (11) | les portes qui posent ou règlent quelque chose | `description` · `content` · `media` · `sound` · `sticker` · `mention` · `place` · `drawing` · `text` · `hashtag` · `background` |
+| **`ComposerRailDoor`** — les CAS déclarés (11) | les portes qui posent ou règlent quelque chose | `description` · `content` · `media` · `sound` · `sticker` · `mention` · `place` · `drawing` · `text` · `hashtag` · `background` |
+| **`ComposerRailDoor.canonicalRail`** — les entrées SERVIES | ce que la rangée du bas de scène propose vraiment | **11 au 2026-09-05, et ce n'est pas une constante** — voir l'encadré ci-dessous |
 | **`ComposerRailLevel`** (4) | ce que la porte VISE — et donc où elle se pose | `publication` · `slide` · `object` · `scene` |
 | **`ComposerOrigin`** (8) | par où l'on ENTRE dans le composer | `storyTray` · `feedComposer` · `moodChip` · `repost` · `edit` · `draft` · `share` · `conversationMedia` |
 | `ComposerDocumentTool.canonicalRow` (7) | les outils d'attache du document | `photo` · `camera` · `emoji` · `document` · `place` · `microphone` · `mention` |
@@ -722,6 +723,34 @@ EOF
 
 La vérité reste le fichier source. Un chiffre recopié ici sans sa commande serait
 une décoration — et ce document en a déjà porté trois qui ne tombaient pas juste.
+
+#### Ce type a DEUX inventaires, et la commande ci-dessus n'en compte qu'un
+
+`ComposerRailDoor` déclare ses cas ; `ComposerRailDoor.canonicalRail` déclare
+**lesquels la rangée SERT**. Les deux listes coïncident au 2026-09-05 — 11 et 11 —
+et c'est précisément ce qui rendait le défaut invisible : **deux inventaires qui
+coïncident ont l'air d'un seul.** La commande publiée plus haut compte les CAS ;
+elle continuerait d'afficher 11 pendant que la rangée n'en sert que 10.
+
+La commande de l'inventaire SERVI, à rejouer avec l'autre et jamais à sa place :
+
+```bash
+sed -n '/static let canonicalRail/,/^    \]/p' \
+    apps/ios/Meeshy/Features/Main/Composer/ComposerRailDoor.swift
+```
+
+> **Un cas retiré de la RANGÉE n'est pas un cas retiré de l'ENUM**, et c'est
+> voulu : une porte peut rester classée — garder son niveau, son glyphe, son
+> libellé, et les `switch` exhaustifs qui la décrivent — sans être offerte. La
+> retirer de l'énuméré ferait tomber `level(for:)`, le badge et les `switch`
+> ; la retirer de la rangée ne retire qu'une entrée. **Publier un seul nombre
+> pour les deux, c'est promettre que la porte offerte est la porte déclarée.**
+
+*Directive porteur en vol au 2026-09-05* : `.description` quitte la rangée (le
+volet sous la scène, #4993, est déjà son moyen et il se peint par-dessus le média
+décrit) tout en restant un cas classé `.slide`. La rangée passera donc à **10
+entrées pour 11 cas** — le premier écart entre les deux inventaires, et la raison
+pour laquelle ce paragraphe existe avant le commit plutôt qu'après.
 
 ### Les mots du chrome qui n'ont aucune autorité sémantique
 
