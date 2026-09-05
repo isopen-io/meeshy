@@ -150,9 +150,9 @@
   },
   "documents_du_fil": {
     "quoi": "Ce que le fil REMET EN UNE FOIS — le HTML, la table de jetons, la feuille et les symboles qu'il inline —, et ce que l'ÉTAT `?media=` (§ 12.10.1) y ajoute. Mesuré sur une tranche FIXE — image, vidéo, vocal transcrit, fichier, temps réel armé — pour que le chiffre suive le CODE et non les données. Historique détaillé (atome de langue, compte de participants tu à deux, profilMembre §12.10.3, cookie de thème, règles de spéculation #5104 puis leur correction sous `@media (scripting: enabled)`, bannière en application #4454, travailleur de zone #4472/#4473, navigateur de zone #5106, portage de `.carte-vide` à la charte du tour 3 #5115, datation en colonne #5136 jumelle iOS #5135) : voir les relevés précédents dans l'historique git de ce fichier. Relevé le 2026-09-04 (revue de #4525/#5024, l'extraction du plein écran en site unique `app/connecte/plein-vue.ts`) : `gesteDePiece`, `aFiche` et `ficheDePiece` quittent `fil-lignes.ts` pour le module que la galerie partage. Relevé le même jour après #5030 (l'avatar de SOI mène à son compte) : le GABARIT que le module clone porte désormais les deux cliquables du profil (avatar-lien, nom-lien — `gabaritDeLigne`), à l'intérieur de `.corps.colonnes` › `.bulle` (#5136) ; `fil-feuille.ts` gagne un `min-width` sur `a.nom-lien` (règle 4 de la charte, « Vous » tombant à 40×44 px) et un `display:contents` sur un `<a>` sans `href`. Relevé le même jour (issue #4967, storyFail) : `.carte-vide h3` devient `.carte-vide h1,.carte-vide h3` dans `FEUILLE_CONNECTEE` pour que `documentDeMessage` puisse dessiner un `<h1>`. Les chiffres ci-dessous sont REMESURÉS après la fusion de TOUS ces apports (bannière, spéculation, travailleur, navigateur, datation en colonne, plein écran en site unique, profil de soi, storyFail) — jamais la somme de relevés séparés, deux ajouts qui partagent des motifs ne se compressant pas comme la somme de leurs coûts isolés.",
-    "fil_o": 0,
-    "fil_media_o": 0,
-    "surcout_du_plein_ecran_o": 0,
+    "fil_o": 12638,
+    "fil_media_o": 13149,
+    "surcout_du_plein_ecran_o": 511,
     "unite": "octets gzip (niveau 9) du document HTML servi",
     "commande": "cd apps/web-v3 && bunx jest __tests__/fil-plein.test.ts -t 'grossir en silence' (la ligne « [mesure] document du fil … » porte les trois valeurs)",
     "date": "2026-09-04",
@@ -168,13 +168,13 @@
     "temoin": "apps/web-v3/__tests__/story-fail.test.ts § « le poids du document de refus » — un RATCHET : toute valeur au-dessus de celle enregistrée ici rend rouge, et la faire monter exige un diff relu."
   },
   "documents_de_la_galerie": {
-    "quoi": "Ce que la GALERIE (`/chats/:cle/medias`, #4525) REMET EN UNE FOIS, et ce que l'ÉTAT `?media=` (le plein écran d'une pièce) y ajoute — la même paire de mesures que `documents_du_fil`, sur son propre document. RATCHETÉ de la même façon.",
-    "galerie_o": 9101,
-    "galerie_media_o": 9641,
-    "surcout_du_plein_ecran_o": 540,
+    "quoi": "Ce que la GALERIE (`/chats/:cle/medias`, #4525) REMET EN UNE FOIS, et ce que l'ÉTAT `?media=` (le plein écran d'une pièce) y ajoute — la même paire de mesures que `documents_du_fil`, sur son propre document. RATCHETÉ de la même façon. Remesuré le 2026-09-05 à la fusion de `dev` (datation en colonne #5136, jumelle iOS #5135) : +86 o gzip sur les deux variantes (9101→9187 ; 9641→9725) — la galerie partage le même gabarit de ligne que le fil (`fil-lignes.ts`), donc le même surcoût de balisage (`.corps.colonnes` › `.bulle` + `.datation`) que celui documenté dans `documents_du_fil`.",
+    "galerie_o": 9187,
+    "galerie_media_o": 9725,
+    "surcout_du_plein_ecran_o": 538,
     "unite": "octets gzip (niveau 9) du document HTML servi",
     "commande": "cd apps/web-v3 && bunx jest __tests__/medias-plein.test.ts -t 'grossir en silence' (la ligne « [mesure] document de la galerie … » porte les trois valeurs)",
-    "date": "2026-09-04",
+    "date": "2026-09-05",
     "temoin": "apps/web-v3/__tests__/medias-plein.test.ts § « le poids du document de la galerie, et le surcoût de l'état `?media=` » — un RATCHET : toute valeur au-dessus de celle enregistrée ici rend rouge, et la faire monter exige un diff relu."
   },
   "documents_du_feed": {
