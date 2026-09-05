@@ -3,9 +3,8 @@ import { jetonDuLecteur } from '@/app/session';
 import { actifsTempsReel } from '@/lib/actifs-rt';
 import type { Recuperateur } from '@/lib/api/compte';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
-import { basculeUnePreference, preferencesDeNotification } from '@/lib/api/preferences';
+import { basculeUnePreference, preferencesDeNotification, type DocumentDeNotification } from '@/lib/api/preferences';
 import { CLES_DE_PREFS, estUneCleDePrefs, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
-import type { NotificationPreference } from '@meeshy/shared/types/preferences';
 
 import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
 import { documentDesPrefs, type EtatDesPrefs } from './prefs-vue';
@@ -62,8 +61,16 @@ const moduleDeParticipation = (): EtatDesPrefs['tempsReel'] => {
 
 const DND_PAR_DEFAUT = { debut: '22:00', fin: '08:00' } as const;
 
+/**
+ * LE DOCUMENT SERVI DEVIENT UN ÉTAT — et c'est ICI, au seul endroit qui les
+ * connaisse, que ses valeurs descendent au type de l'écran : `Boolean()` pour
+ * les treize bascules, `typeof … === 'string'` pour la fenêtre DND. Le client
+ * (`lib/api/preferences.ts`) rend un `DocumentDeNotification` — des valeurs
+ * INCONNUES, parce qu'aucun schéma ne les a relues — et ces coercitions en
+ * sont l'unique contrôle, jamais une redondance.
+ */
 const etatDepuisDocument = (
-  reglages: NotificationPreference,
+  reglages: DocumentDeNotification,
   options: { readonly regleAppliquee: CleDePreference | null; readonly echec: boolean },
 ): EtatDesPrefs => ({
   reglages: Object.fromEntries(CLES_DE_PREFS.map((cle) => [cle, Boolean(reglages[cle])])) as Record<

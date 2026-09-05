@@ -1,6 +1,6 @@
 import { basculeUnePreference } from '@/lib/api/preferences';
 import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
-import { PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
+import { estUneCleDePrefs, PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
 import { annule, bascule, reconcilie, type EtatDePrefs } from './prefs-etat';
 
@@ -38,21 +38,47 @@ type Contexte = {
   readonly jeton: string;
 };
 
+/**
+ * LA CLÉ D'UNE RANGÉE — opposée à `estUneCleDePrefs` (`lib/contenu/prefs-de-
+ * notif.ts`, site UNIQUE de la table), exactement comme la porte y oppose la
+ * clé POSTÉE. L'affirmer par une assertion de type reviendrait à décider,
+ * depuis le navigateur, qu'un attribut du document EST une clé du schéma —
+ * c'est-à-dire à croire le DOM sur parole là où le chemin sans JavaScript,
+ * lui, vérifie. Une rangée dont la clé n'appartient pas à la table ne part
+ * donc pas : le geste est ignoré, et le document reste ce que le serveur a
+ * servi.
+ */
 const cleDuFormulaire = (formulaire: HTMLFormElement): CleDePreference | null => {
-  const valeur = (formulaire.elements.namedItem('cle') as HTMLInputElement | null)?.value;
-  return valeur === undefined || valeur === '' ? null : (valeur as CleDePreference);
+  const valeur = formulaire.querySelector<HTMLInputElement>('input[name="cle"]')?.value;
+  return valeur === undefined || !estUneCleDePrefs(valeur) ? null : valeur;
 };
+
+const champDeLaValeur = (formulaire: HTMLFormElement): HTMLInputElement | null =>
+  formulaire.querySelector<HTMLInputElement>('input[name="valeur"]');
 
 const boutonDuFormulaire = (formulaire: HTMLFormElement): HTMLButtonElement | null =>
   formulaire.querySelector<HTMLButtonElement>('button[role="switch"]');
 
 const etatDuBouton = (bouton: HTMLButtonElement): boolean => bouton.getAttribute('aria-checked') === 'true';
 
-/** LA PEINTURE D'UNE RANGÉE — `aria-checked` gouverne la piste (feuille) ET le mot annoncé. */
-const peinsLaRangee = (bouton: HTMLButtonElement, valeur: boolean): void => {
+/**
+ * LA PEINTURE D'UNE RANGÉE — `aria-checked` gouverne la piste (feuille) ET le
+ * mot annoncé.
+ *
+ * ET LE FORMULAIRE SUIT. Le champ caché `valeur` porte l'INVERSE de l'état
+ * affiché : c'est LUI que le chemin sans JavaScript enverrait. Le laisser sur
+ * la valeur calculée AU RENDU ferait diverger le contrôle de ce qu'il montre
+ * dès la première bascule optimiste — une rangée peinte « Désactivé » qui,
+ * soumise par le navigateur (module en échec, script coupé en cours de
+ * session), redemanderait « Désactivé ». Les deux moitiés d'une même rangée
+ * ne peuvent pas dire deux choses.
+ */
+const peinsLaRangee = (formulaire: HTMLFormElement, bouton: HTMLButtonElement, valeur: boolean): void => {
   bouton.setAttribute('aria-checked', valeur ? 'true' : 'false');
   const horsEcran = bouton.querySelector<HTMLElement>('.hors-ecran');
   if (horsEcran !== null) horsEcran.textContent = valeur ? PREFS.activee : PREFS.desactivee;
+  const champ = champDeLaValeur(formulaire);
+  if (champ !== null) champ.value = valeur ? 'false' : 'true';
 };
 
 const montreLaReussite = (ctx: Contexte, libelle: string): void => {
@@ -74,11 +100,22 @@ const montreLEchec = (ctx: Contexte): void => {
 };
 
 /**
+ * LA VALEUR D'UNE CLÉ, LUE DANS UN ÉTAT PARTIEL — jamais un index nu :
+ * `EtatDePrefs.reglages` est `Partial` (`prefs-etat.ts`, doc-comment de tête),
+ * et ce module n'écrit une clé qu'en même temps qu'il la LIT ici, donc elle
+ * est TOUJOURS présente en pratique ; `Boolean()` le dit sans une assertion
+ * de type.
+ */
+const valeurDe = (etat: EtatDePrefs, cle: CleDePreference): boolean => Boolean(etat.reglages[cle]);
+
+/**
  * BASCULE, OPTIMISTE, RÉCONCILIÉE SUR LE SERVEUR. `bascule`/`reconcilie`/
- * `annule` (`prefs-etat.ts`) opèrent sur un état PUR d'une seule clé — porté
- * ici par un `EtatDePrefs` réduit à cette rangée, jamais aux treize : les
- * douze autres rangées ne bougent pas, ce PATCH `mode=merge` n'en touche
- * aucune (`lib/api/preferences.ts`).
+ * `annule` (`prefs-etat.ts`) opèrent sur un état PUR — un `EtatDePrefs` réduit
+ * à la clé de CETTE rangée, jamais aux treize : les douze autres ne bougent
+ * pas, ce `PATCH` en mode `merge` n'en touche aucune
+ * (`lib/api/preferences.ts`). L'état PUR traverse les trois moments (avant →
+ * optimiste → réconcilié/annulé) ; la peinture ne fait que LIRE ce que chaque
+ * fonction a décidé, jamais recalculer.
  */
 const surBascule = (ctx: Contexte, formulaire: HTMLFormElement, libelle: string): void => {
   const cle = cleDuFormulaire(formulaire);
@@ -86,27 +123,25 @@ const surBascule = (ctx: Contexte, formulaire: HTMLFormElement, libelle: string)
   if (cle === null || bouton === null) return;
 
   const avant = etatDuBouton(bouton);
-  const etatAvant: EtatDePrefs = { reglages: { [cle]: avant } };
-  const { etat: etatOptimiste, mutation } = bascule(etatAvant, cle);
+  const { etat: etatOptimiste } = bascule({ reglages: { [cle]: avant } }, cle);
 
-  peinsLaRangee(bouton, mutation.valeur);
+  peinsLaRangee(formulaire, bouton, valeurDe(etatOptimiste, cle));
 
-  void basculeUnePreference({ jeton: ctx.jeton, cle, valeur: mutation.valeur, base: ctx.passerelle })
+  void basculeUnePreference({ jeton: ctx.jeton, cle, valeur: valeurDe(etatOptimiste, cle), base: ctx.passerelle })
     .then((issue) => {
       if (issue.genre === 'document') {
-        const valeurServie = Boolean(issue.reglages[cle]);
-        reconcilie(etatOptimiste, { [cle]: valeurServie });
-        peinsLaRangee(bouton, valeurServie);
+        const etatReconcilie = reconcilie(etatOptimiste, { [cle]: Boolean(issue.reglages[cle]) });
+        peinsLaRangee(formulaire, bouton, valeurDe(etatReconcilie, cle));
         montreLaReussite(ctx, libelle);
         return;
       }
-      annule(etatOptimiste, cle, avant);
-      peinsLaRangee(bouton, avant);
+      const { etat: etatAnnule } = annule(etatOptimiste, cle, avant);
+      peinsLaRangee(formulaire, bouton, valeurDe(etatAnnule, cle));
       montreLEchec(ctx);
     })
     .catch(() => {
-      const { etat } = annule(etatOptimiste, cle, avant);
-      peinsLaRangee(bouton, etat.reglages[cle]);
+      const { etat: etatAnnule } = annule(etatOptimiste, cle, avant);
+      peinsLaRangee(formulaire, bouton, valeurDe(etatAnnule, cle));
       montreLEchec(ctx);
     });
 };

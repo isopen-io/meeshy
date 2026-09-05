@@ -105,7 +105,9 @@ describe('la porte de /notifications/preferences — GET', () => {
     ).text();
 
     expect(html).toMatch(/<p class="avis" role="status">/);
-    expect(html).toContain('pushEnabled'.length > 0 ? 'réglage enregistré' : '');
+    // L'avis NOMME la rangée réglée — sans quoi, treize rangées identiques,
+    // il dirait « c'est enregistré » sans dire QUOI.
+    expect(html).toContain('Notifications push : réglage enregistré.');
   });
 });
 
@@ -161,7 +163,7 @@ describe('la porte de /notifications/preferences — POST', () => {
 
   it('re-sert le document, RELU du serveur, avec un bandeau d’échec — quand le PATCH échoue', async () => {
     const { recuperer } = passerelle({
-      '/api/v1/me/preferences': (url, options) =>
+      '/api/v1/me/preferences': (_url, options) =>
         options.method === 'PATCH' ? json({ success: false }, 500) : json({ success: true, data: { notification: DOCUMENT_SERVI } }),
     });
 

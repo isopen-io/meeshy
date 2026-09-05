@@ -3,7 +3,7 @@
  */
 
 import { documentDesPrefs } from '@/app/connecte/prefs-vue';
-import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS } from '@/lib/contenu/prefs-de-notif';
+import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
 /**
  * `app/connecte/prefs-vue.ts` — LA VUE DE `/notifications/preferences`
@@ -21,9 +21,11 @@ import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS } from '@/lib/contenu/prefs-de-not
  *   - la rangée DND affiche la fenêtre comme VALEUR, sans contrôle d'édition.
  */
 
+// `Object.fromEntries` ne peut pas préserver les clés LITTÉRALES : l'assertion
+// ci-dessous porte sur une fixture de test, jamais sur une donnée servie.
 const REGLAGES_SERVIS = Object.fromEntries(
   BASCULES_DE_PREFS.map((b) => [b.cle, b.cle !== 'reactionEnabled']),
-) as Record<string, boolean>;
+) as Record<CleDePreference, boolean>;
 
 const ETAT_NOMINAL = {
   reglages: REGLAGES_SERVIS,

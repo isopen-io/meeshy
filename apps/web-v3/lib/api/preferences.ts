@@ -1,5 +1,4 @@
 import type { CleDePreference } from '@/lib/contenu/prefs-de-notif';
-import type { NotificationPreference } from '@meeshy/shared/types/preferences';
 
 import { baseDeLaPasserelle } from './links';
 import { DELAI_DE_REPONSE_MS } from './passerelle';
@@ -130,20 +129,33 @@ export const supprimePourMoi = async ({ jeton, conversation, base, recuperer }: 
  * complet, comme le `GET` — l'appelant (la porte, le module de participation)
  * réconcilie SUR CE QUE LA PASSERELLE A ÉCRIT, jamais sur ce qu'il a envoyé.
  * Les deux fonctions rendent donc la MÊME forme d'issue.
+ *
+ * CE QUI REVIENT DU FIL EST UN DOCUMENT, PAS ENCORE UN RÉGLAGE. Le type
+ * `NotificationPreference` est celui du SCHÉMA (`@meeshy/shared`) — le
+ * DÉCLARER sur une charge qu'aucun schéma n'a relue serait une affirmation que
+ * ce module ne peut pas tenir : la passerelle sert trente-trois clés plus les
+ * métadonnées de la ligne, et rien ici ne les valide. `DocumentDeNotification`
+ * dit donc ce qu'on SAIT — un objet dont les valeurs sont inconnues — et ce
+ * sont les lecteurs (`prefs-porte.ts` par `Boolean()` / `typeof`, le module de
+ * participation de même) qui font descendre chaque clé au type qu'ils
+ * attendent. Sans cela, les coercitions qu'ils écrivent auraient l'air
+ * redondantes, alors qu'elles sont le SEUL contrôle de la charge.
  */
+export type DocumentDeNotification = Readonly<Record<string, unknown>>;
+
 export type IssueDePreferences =
-  | { readonly genre: 'document'; readonly reglages: NotificationPreference }
+  | { readonly genre: 'document'; readonly reglages: DocumentDeNotification }
   | { readonly genre: 'session-expiree' }
   | { readonly genre: 'refus'; readonly statut: number }
   | { readonly genre: 'panne' };
 
-const corpsDeNotification = (valeur: unknown): NotificationPreference | null => {
+const corpsDeNotification = (valeur: unknown): DocumentDeNotification | null => {
   if (typeof valeur !== 'object' || valeur === null || Array.isArray(valeur)) return null;
   const data = (valeur as { readonly data?: unknown }).data;
   if (typeof data !== 'object' || data === null) return null;
   const notification = (data as { readonly notification?: unknown }).notification;
-  if (typeof notification !== 'object' || notification === null) return null;
-  return notification as NotificationPreference;
+  if (typeof notification !== 'object' || notification === null || Array.isArray(notification)) return null;
+  return notification as DocumentDeNotification;
 };
 
 const issueDePreferences = async (reponse: Response | null): Promise<IssueDePreferences> => {
