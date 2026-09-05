@@ -163,6 +163,19 @@ const restrictedStorageSyntax = [...cleDuJetonInvite, ...accesAuStockage];
  */
 const DETENTEUR_DU_BROUILLON = 'lib/realtime/composer.ts';
 
+/**
+ * LE TROISIÈME DÉTENTEUR DE STOCKAGE (#5095) — la session LEGACY.
+ *
+ * `lib/api/session-legacy.ts` lit et efface les trois clés `localStorage` que
+ * `apps/web` relit (`meeshy_auth_token`, `meeshy_session_token`,
+ * `meeshy_user_data`) — la déconnexion en a besoin pour relayer le jeton de
+ * session au formulaire et pour vider la session à la sortie. Même exemption
+ * que le brouillon : SEUL l'accès au stockage est levé, la clé du jeton
+ * invité (`meeshy.guest`) reste barrée — ce fichier n'a aucune raison de la
+ * composer.
+ */
+const DETENTEUR_DE_LA_SESSION_LEGACY = 'lib/api/session-legacy.ts';
+
 const evenementsDuCycle = ['visibilitychange', 'pageshow', 'pagehide', 'online', 'offline', 'storage'];
 const evenementsDeFausseVisibilite = ['focus', 'blur'];
 const evenementsDAdieu = ['beforeunload', 'unload'];
@@ -249,6 +262,12 @@ const config = [
   // l'accès au stockage, qui est sa raison d'exister.
   {
     files: [DETENTEUR_DU_BROUILLON],
+    rules: { 'no-restricted-syntax': ['error', ...restrictedLifecycleSyntax, ...cleDuJetonInvite] },
+  },
+  // Même levée, même raison : le stockage est sa raison d'exister, le jeton
+  // invité n'est pas son sujet.
+  {
+    files: [DETENTEUR_DE_LA_SESSION_LEGACY],
     rules: { 'no-restricted-syntax': ['error', ...restrictedLifecycleSyntax, ...cleDuJetonInvite] },
   },
 ];

@@ -31,7 +31,6 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.first
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.conversations.LastMessagePreviewLabels
@@ -59,7 +58,7 @@ internal class RecentConversationsWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
-        val conversations = entryPoint.conversationRepository().cachedConversations().first()
+        val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
         val labels = LastMessagePreviewLabels(
             photo = context.getString(ConversationsR.string.conversations_preview_photo),

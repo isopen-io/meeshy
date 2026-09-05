@@ -891,7 +891,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
         let urls = [URL(fileURLWithPath: "/tmp/a.jpg"), URL(fileURLWithPath: "/tmp/b.mp4")]
 
-        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en", mobileTranscription: nil)
+        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en", mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil)
 
         // Optimistic post with a local-media preview, keyed by the cmid.
         XCTAssertEqual(sut.posts.count, 1)
@@ -924,7 +924,9 @@ final class FeedViewModelTests: XCTestCase {
             content: "My reel",
             originalLanguage: "en",
             type: "REEL",
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         // The optimistic post is a REEL so it surfaces on the reel pager
@@ -952,7 +954,9 @@ final class FeedViewModelTests: XCTestCase {
             localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")],
             content: "Vue depuis le toit",
             location: place,
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
@@ -965,7 +969,7 @@ final class FeedViewModelTests: XCTestCase {
         queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed", mobileTranscription: nil)
+        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed", mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil)
 
         XCTAssertTrue(sut.posts.isEmpty, "optimistic media post must be removed when the outbox refuses the row")
         XCTAssertNotNil(sut.publishError)
@@ -976,7 +980,7 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text", mobileTranscription: nil)
+        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text", mobileTranscription: nil, storyEffects: nil, mediaCaptions: nil)
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 0, "no media → no media enqueue")
         XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
@@ -1004,7 +1008,9 @@ final class FeedViewModelTests: XCTestCase {
             content: "Pour vous deux",
             visibility: "ONLY",
             visibilityUserIds: ["u1", "u2"],
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         let payload = queue.lastPayload as? CreatePostPayload

@@ -126,4 +126,23 @@ export const feuilleDeLEspace = ({ lecteur, hote }: { readonly lecteur: Lecteur 
   `<ul class="rangs" aria-label="${echappe(ESPACE.titre)}">` +
   RANGEES_DE_L_ESPACE.map(rangee).join('') +
   '</ul>' +
+  formulaireDeSortie() +
   '</dialog>';
+
+/**
+ * LE CONTRÔLE DE SORTIE (#5095) — un `<form method="post">` RÉEL, jamais un
+ * lien : une déconnexion est une MUTATION (elle expire des cookies), et
+ * `app/provenance.ts` ne garde que les formulaires. `<button type="submit">`
+ * est un contrôle NATIF — atteignable au clavier et au lecteur d'écran par
+ * construction, sans `tabindex` ni `role` à poser.
+ *
+ * LE CHAMP CACHÉ `session` PART VIDE : le formulaire fonctionne SANS
+ * JavaScript (§ 2.1 de la spécification — l'appel part alors avec le seul
+ * jeton porteur). `lib/realtime/deconnexion.ts` le REMPLIT à la soumission
+ * depuis `localStorage`, en amélioration progressive.
+ */
+const formulaireDeSortie = (): string =>
+  '<form class="sortie" method="post" action="/deconnexion">' +
+  '<input type="hidden" name="session" value="" />' +
+  `<button type="submit">${echappe(ESPACE.deconnecter)}</button>` +
+  '</form>';

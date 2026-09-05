@@ -139,6 +139,36 @@ describe('la sélection que `--vues` demande', () => {
     expect(selection.comparables.map((c) => c.chemin)).toEqual(['/l/vivant', '/l/expire']);
   });
 
+  // « / » sert deux écrans (conception § ROUTES) : la vitrine sans session, le
+  // tableau de bord AVEC — la même route, séparée par un ÉTAT DE SESSION plutôt
+  // que par un jeton de route, exactement comme `linkRedirect`/`linkExpired` se
+  // séparent par un jeton. Sans ce cas, `vues.json` réel refuse « home » ET
+  // « vitrine » dès qu'aucun `--vues` ne les filtre — c'est ce que
+  // `v3-rapport.mjs` a mesuré (« conformité du rendu » restait NON EXÉCUTÉE).
+  it('deux vues de la MÊME route ne collisionnent pas quand leurs sessions diffèrent', () => {
+    const selection = selectionComparable({
+      vues: [vue('vitrine', '/'), vue('home', '/', { '@session': 'membre' })],
+      demandees: ['vitrine', 'home'],
+    });
+
+    expect(selection.refus).toEqual([]);
+    expect(selection.comparables.map((c) => c.id)).toEqual(['vitrine', 'home']);
+  });
+
+  it('deux vues de la MÊME route ET de la MÊME session restent refusées', () => {
+    const selection = selectionComparable({
+      vues: [
+        vue('vitrine', '/', { '@session': 'membre' }),
+        vue('home', '/', { '@session': 'membre' }),
+      ],
+      demandees: ['vitrine', 'home'],
+    });
+
+    expect(selection.comparables).toEqual([]);
+    expect(selection.refus.map((r) => r.id)).toEqual(['vitrine', 'home']);
+    selection.refus.forEach((r) => expect(r.raison).toContain('/'));
+  });
+
   it('sans `--vues`, écarte les routes paramétrées et DIT lesquelles', () => {
     const selection = selectionComparable({
       vues: [vue('feed', '/feed'), vue('linkRedirect', '/l/:token')],

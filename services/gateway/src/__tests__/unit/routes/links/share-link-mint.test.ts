@@ -8,8 +8,9 @@
  * @jest-environment node
  */
 
-import { describe, it, expect } from '@jest/globals';
-import { mayMintShareLink } from '../../../../routes/links/utils/share-link-mint';
+import { describe, it, expect, jest } from '@jest/globals';
+import { mayMintShareLink, mintConversationShareLink } from '../../../../routes/links/utils/share-link-mint';
+import { findFirstHonouringWhere } from '../../../helpers/find-first-honouring-where';
 
 describe('mayMintShareLink', () => {
   describe('conversation type: public', () => {
@@ -97,5 +98,77 @@ describe('mayMintShareLink', () => {
     it('would allow a creator — c\'est le refus ABSOLU en amont (type direct) qui protège, pas ce prédicat', () => {
       expect(mayMintShareLink({ conversationRole: 'creator', platformRole: 'USER' }, { type: 'direct' })).toBe(true);
     });
+  });
+});
+
+/**
+ * #5191 — `mintConversationShareLink` résout l'appartenance/le rang de
+ * l'appelant par un `where` PLAT : `{ conversationId, userId, isActive: true }`
+ * (`share-link-mint.ts`, branche « conversation existante »). Les deux portes
+ * qui l'appellent (`POST /links`, `POST /conversations/:id/new-link`)
+ * doublaient ce `participant.findFirst` par un `mockResolvedValue` inconditionnel
+ * — retirer `userId` du filtre de production ne faisait tomber aucun de leurs
+ * témoins.
+ *
+ * L'INTRUS — un autre membre RÉEL de la même conversation, dont le rang ne
+ * suffit PAS à fabriquer un lien — est semé EN PREMIER : si `userId` disparaît
+ * du `where`, `findFirstHonouringWhere` rend cette ligne, et
+ * `mayMintShareLink` refuse un appelant qui devrait pourtant être admis.
+ */
+describe('mintConversationShareLink — la garde plate (#5191)', () => {
+  const CONVERSATION_ID = '507f1f77bcf86cd799439099';
+  const USER_ID = 'user-moderator';
+  const OTHER_USER_ID = 'user-plain-member';
+
+  function makePrisma() {
+    return {
+      conversation: {
+        findUnique: jest.fn<any>().mockResolvedValue({
+          id: CONVERSATION_ID, type: 'group', title: 'Groupe', isActive: true, closedAt: null
+        })
+      },
+      participant: {
+        // L'intrus (simple membre, rang insuffisant) AVANT la ligne du modérateur.
+        findFirst: jest.fn<any>(
+          findFirstHonouringWhere([
+            { id: 'part-other', userId: OTHER_USER_ID, conversationId: CONVERSATION_ID, isActive: true, role: 'member' },
+            { id: 'part-mine', userId: USER_ID, conversationId: CONVERSATION_ID, isActive: true, role: 'moderator' }
+          ])
+        ),
+        findMany: jest.fn<any>().mockResolvedValue([])
+      },
+      conversationShareLink: {
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        create: jest.fn<any>().mockResolvedValue({
+          id: 'link-1', linkId: 'mshy_abc123', conversationId: CONVERSATION_ID
+        })
+      }
+    } as any;
+  }
+
+  function makeReply() {
+    const reply: any = { send: jest.fn() };
+    reply.status = jest.fn().mockReturnValue(reply);
+    return reply;
+  }
+
+  it('fabrique le lien pour le MODÉRATEUR authentique, jamais pour le premier participant trouvé', async () => {
+    const prisma = makePrisma();
+    const reply = makeReply();
+
+    const result = await mintConversationShareLink({
+      prisma,
+      reply,
+      log: { error: jest.fn() },
+      notificationService: undefined,
+      socketIOHandler: undefined,
+      userId: USER_ID,
+      userRole: 'USER',
+      input: { conversationId: CONVERSATION_ID }
+    });
+
+    expect(result).not.toBeNull();
+    expect(prisma.conversationShareLink.create).toHaveBeenCalledTimes(1);
+    expect(reply.send).not.toHaveBeenCalled();
   });
 });

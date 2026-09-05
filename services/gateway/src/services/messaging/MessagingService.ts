@@ -26,7 +26,7 @@ import {
   isConversationWriteRefused,
   describeConversationWriteRefusal
 } from './conversationWriteAdmission';
-import { resolveParticipantRights } from '../participantRights';
+import { resolveParticipantRights, attachmentSendRightForMimeType } from '../participantRights';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -266,6 +266,32 @@ export class MessagingService {
           'Vous n\'êtes pas autorisé à envoyer des messages',
           'WRITE_NOT_PERMITTED'
         );
+      }
+
+      // 3.8. Droits DE PIÈCE JOINTE (#5151) — distincts de `canSendMessages`
+      //      ci-dessus : ce qu'on a le droit de JOINDRE, pas d'ÉCRIRE. Un hôte
+      //      peut laisser un invité écrire (`canSendMessages: true`) sans le
+      //      laisser illustrer (`canSendImages: false`) — `upload.ts` ne garde
+      //      que le TÉLÉVERSEMENT du fichier, jamais son admission au moment
+      //      où il est RATTACHÉ à un message envoyé par ce transport. Le droit
+      //      dépend du TYPE de chaque pièce (`attachmentSendRightForMimeType`,
+      //      même table que `senderRights` ci-dessus) — d'où la lecture
+      //      supplémentaire, minimale (id + mimeType uniquement).
+      if (senderRights && request.attachmentIds && request.attachmentIds.length > 0) {
+        const attachments = await this.prisma.messageAttachment.findMany({
+          where: { id: { in: [...request.attachmentIds] } },
+          select: { mimeType: true }
+        });
+        const deniedRight = attachments
+          .map(a => attachmentSendRightForMimeType(a.mimeType))
+          .find(right => senderRights![right] === false);
+        if (deniedRight) {
+          logger.info('participant attachment right denied', { ...corr, conversationId, right: deniedRight });
+          return this.createErrorResponse(
+            'Vous n\'êtes pas autorisé à envoyer ce type de pièce jointe',
+            'ATTACHMENT_RIGHT_NOT_PERMITTED'
+          );
+        }
       }
 
       // 4. Détection de langue — trust the client's `originalLanguage` when

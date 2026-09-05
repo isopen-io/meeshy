@@ -4,6 +4,7 @@ import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { echappe } from '@/app/socle';
 
 import { documentDeMessage, documentDuSite } from '@/app/enveloppe/vue';
+import { adresseDuFil } from '@/lib/api/adresses-du-fil';
 import { apercuServi, type ApercuServi, type Conversation, type Lecteur, type LiensDuLecteur } from '@/lib/api/compte';
 import { languesDuLecteur } from '@/lib/api/fil';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
@@ -49,7 +50,7 @@ import { quand } from '@/lib/temps';
  * manquer ni bouger. Une adresse partagée par un lecteur doit survivre au
  * renommage de la conversation.
  */
-export const versLeFil = (conversation: Conversation): string => `/chats/${conversation.id}`;
+export const versLeFil = (conversation: Conversation): string => adresseDuFil(conversation.id);
 
 /**
  * LA TEINTE ET LES INITIALES vivent dans `lib/avatar.ts`, le site UNIQUE des

@@ -8,7 +8,7 @@ import CoreGraphics
 ///
 /// ## Le manque
 ///
-/// La planche du composer emploie `MeeshyObject` 78 fois. Le modèle n'avait ni
+/// La planche du composer emploie `MeeshySceneObject` 78 fois. Le modèle n'avait ni
 /// protocole ni type somme : les objets vivaient — et vivent toujours — dans
 /// **cinq tableaux séparés** (`textObjects`, `mediaObjects`, `stickerObjects`,
 /// `locationObjects`, `audioPlayerObjects`).

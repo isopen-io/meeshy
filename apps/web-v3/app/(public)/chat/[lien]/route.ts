@@ -35,7 +35,7 @@ import { adresseDeLaPorte, documentDuFil, type Composeur } from '@/app/connecte/
 import { chargeLeProfilSiDemande, traiteLActionDeProfil } from '@/app/connecte/profil-porte';
 import { documentDePanne } from '@/app/connecte/vue';
 import { chargementSpeculatif, navigationEtrangere, origineEtrangere, refusDOrigine, sansEffet } from '@/app/provenance';
-import { jetonDuLecteur } from '@/app/session';
+import { estSecurisee, jetonDuLecteur } from '@/app/session';
 
 import {
   CHAMP_DE_LA_LANGUE,
@@ -158,10 +158,6 @@ export const dynamic = 'force-dynamic';
 type Contexte = { readonly params: Promise<{ lien: string }> };
 
 const segmentDe = async (contexte: Contexte): Promise<string> => (await contexte.params).lien;
-
-const estSecurisee = (requete: Request): boolean =>
-  new URL(requete.url).protocol === 'https:' ||
-  (requete.headers.get('x-forwarded-proto') ?? '').split(',')[0]?.trim() === 'https';
 
 /**
  * L'adresse du VISITEUR, telle que le proxy qui précède la v3 l'a écrite —

@@ -304,6 +304,7 @@ describe('la greffe du temps réel', () => {
       plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
       navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
       composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+      prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
       socket: { nom: 'socket.io.c.js', url: '/__v3/rt/socket.io.c.js', corps: '' },
     },
   };

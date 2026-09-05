@@ -92,6 +92,26 @@ self.addEventListener('install', () => {
   // (§ 8.5), et un précache de documents rejouerait la décision 2 à l'envers.
 });
 
+// LA PURGE À LA DÉCONNEXION (#5095) — le lot que la décision 2 du haut de ce
+// fichier annonçait. `lib/realtime/deconnexion.ts` poste ce message à CHAQUE
+// registration active du navigateur ; le travailleur purge alors SES caches
+// EN BLOC, statiques compris. Une purge PARTIELLE (les seules entrées d'API)
+// aurait dû réécrire `cleSegmentee` à l'envers pour retrouver les clés
+// segmentées par jeton ; purger le NAMESPACE entier est la seule garantie
+// simple que « plus aucune entrée d'API » après le signal — et les actifs
+// immuables se re-téléchargent au prochain fetch, sans coût de fraîcheur.
+// Le préfixe est celui du canal 3 (`NAMESPACE`) : jamais celui du legacy, ni
+// un cache d'un tiers.
+self.addEventListener('message', (event) => {
+  const donnees = event.data;
+  if (typeof donnees !== 'object' || donnees === null || donnees.type !== 'meeshy-v3:deconnexion') return;
+  const purge = (async () => {
+    const noms = await caches.keys();
+    await Promise.all(noms.filter((nom) => nom.startsWith(NAMESPACE)).map((nom) => caches.delete(nom)));
+  })();
+  if (event.waitUntil) event.waitUntil(purge);
+});
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {

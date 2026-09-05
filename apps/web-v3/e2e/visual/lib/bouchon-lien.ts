@@ -477,6 +477,13 @@ export const routesDuLien =
           requireEmail: lien.requireEmail,
           requireBirthday: lien.requireBirthday,
           allowedLanguages: lien.allowedLanguages,
+          // Les quatre droits que ce lien ouvre (`routes/anonymous.ts:691-694`,
+          // #4522) — la MÊME ligne que la jonction et le battement lisent
+          // (`invite.place.lien`, `bouchon-fil.ts`), jamais une copie séparée.
+          allowAnonymousMessages: invite.place.lien.allowAnonymousMessages,
+          allowAnonymousFiles: invite.place.lien.allowAnonymousFiles,
+          allowAnonymousImages: invite.place.lien.allowAnonymousImages,
+          allowViewHistory: invite.place.lien.allowViewHistory,
           creator: { id: 'u1', username: CREATEUR_DU_LIEN, email: `${CREATEUR_DU_LIEN}@example.com` },
           conversation: { id: etat.conversationId, title: NOM_DU_LIEN, description: DESCRIPTION_DU_LIEN, type: 'group' },
           stats: { totalParticipants: CONVERSATION_DU_LECTEUR.membres, memberCount: 8, anonymousCount: 4, languageCount: 3, spokenLanguages: ['fr', 'en', 'es'] },

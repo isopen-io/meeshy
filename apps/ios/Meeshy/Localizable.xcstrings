@@ -114202,53 +114202,6 @@
         }
       }
     },
-    "feed.post.scene.muted_paused": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مشهد · صامت، متوقف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Szene · stumm, pausiert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "scene · muted, paused"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "escena · en silencio, en pausa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "scène · muette, en pause"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "scena · muta, in pausa"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cena · sem som, pausada"
-          }
-        }
-      }
-    },
     "feed.post.share": {
       "extractionState": "manual",
       "localizations": {

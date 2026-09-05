@@ -24,6 +24,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
@@ -153,6 +154,32 @@ export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Da
   const d = new Date(after);
   if (isNaN(d.getTime())) return null;
   return { createdAt: { gt: d } };
+}
+
+/**
+ * Bandwidth opt-in `?languages=` — restreint les traductions servies (texte
+ * `transformTranslationsToArray`, message cité `servedQuotedMessage`, pistes
+ * audio du Prisme `cleanAttachmentsForApi`) aux seules langues demandées.
+ * Canonicalise via {@link normalizeLanguageForDedup} (SSOT) : les codes
+ * arrivent VERBATIM du client — locale appareil (`en_US`/`pt_BR`, rang 4 du
+ * Prisme) sur iOS, `Accept-Language` (`en-US`/`pt-BR`) sur le web — quand les
+ * traductions sont stockées sous des clés canoniques 2 lettres (`'pt'`).
+ * Symétrique du chemin socket (`normalizeGroupLanguage` →
+ * `normalizeLanguageCode`, `socketio/utils/message-payload-filter.ts`).
+ *
+ * Absent/vide → `undefined` (comportement historique : toutes les langues).
+ * Dédupliqué (un même code sous deux graphies ne compte qu'une fois) et borné
+ * à 20 entrées.
+ */
+export function parseLanguageFilterParam(languagesStr?: string): string[] | undefined {
+  if (!languagesStr) return undefined;
+  const parsed = Array.from(new Set(
+    languagesStr.split(',')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map(normalizeLanguageForDedup)
+  )).slice(0, 20);
+  return parsed.length > 0 ? parsed : undefined;
 }
 
 /**

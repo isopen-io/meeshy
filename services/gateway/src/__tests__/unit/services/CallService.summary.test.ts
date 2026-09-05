@@ -24,6 +24,7 @@ jest.mock('../../../services/TURNCredentialService', () => ({
 
 import { CallService } from '../../../services/CallService';
 import { Prisma } from '@meeshy/shared/prisma/client';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 type MockFn = jest.Mock<any>;
 
@@ -49,6 +50,30 @@ const CALL_ID = '6650000000000000000000aa';
 const CONVERSATION_ID = '6650000000000000000000bb';
 const INITIATOR_USER_ID = '6650000000000000000000cc';
 const INITIATOR_PARTICIPANT_ID = '6650000000000000000000dd';
+const OTHER_PARTY_USER_ID = '6650000000000000000000ee';
+const OTHER_PARTY_PARTICIPANT_ID = '6650000000000000000000ff';
+
+/**
+ * Le résumé d'appel attribue `senderId` par
+ * `where: { userId: call.initiatorId, conversationId: call.conversationId }`
+ * (`CallService.ts`) — la SEULE ligne de tête, sans `include`/relation. Un
+ * `mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID })` inconditionnel rend
+ * la même ligne quel que soit le `where` demandé : retirer `userId` du filtre
+ * de production laisserait les 12 témoins de ce fichier verts (#5191).
+ *
+ * L'INTRUS — l'autre partie de l'appel, un participant RÉEL de la même
+ * conversation — est semé EN PREMIER : si `userId` disparaît du `where`,
+ * `findFirstHonouringWhere` rend cette ligne-là, et le résumé s'attribuerait
+ * au mauvais participant plutôt qu'à l'initiateur.
+ */
+function seedInitiatorParticipant(prisma: ReturnType<typeof createMockPrisma>): void {
+  prisma.participant.findFirst.mockImplementation(
+    findFirstHonouringWhere([
+      { id: OTHER_PARTY_PARTICIPANT_ID, userId: OTHER_PARTY_USER_ID, conversationId: CONVERSATION_ID },
+      { id: INITIATOR_PARTICIPANT_ID, userId: INITIATOR_USER_ID, conversationId: CONVERSATION_ID }
+    ])
+  );
+}
 
 const makeSession = (overrides: Record<string, unknown> = {}) => ({
   id: CALL_ID,
@@ -73,7 +98,7 @@ describe('CallService.createCallSummaryMessage', () => {
   it('posts a completed-audio summary attributed to the initiator participant', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession());
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
 
     const result = await sut.createCallSummaryMessage(CALL_ID);
@@ -96,7 +121,7 @@ describe('CallService.createCallSummaryMessage', () => {
     prisma.callSession.findUnique.mockResolvedValue(
       makeSession({ metadata: { type: 'video' }, duration: 272, bytesSent: 1_000_000, bytesReceived: 1_400_000, networkQuality: 'good' })
     );
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
 
     await sut.createCallSummaryMessage(CALL_ID);
@@ -118,7 +143,7 @@ describe('CallService.createCallSummaryMessage', () => {
   it('labels a completed video call from metadata.type', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession({ metadata: { type: 'video' }, duration: 65 }));
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm2' });
 
     await sut.createCallSummaryMessage(CALL_ID);
@@ -131,7 +156,7 @@ describe('CallService.createCallSummaryMessage', () => {
     prisma.callSession.findUnique.mockResolvedValue(
       makeSession({ status: 'rejected', endReason: 'rejected', duration: 0, metadata: { type: 'video' } })
     );
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm3' });
 
     await sut.createCallSummaryMessage(CALL_ID);
@@ -179,7 +204,7 @@ describe('CallService.createCallSummaryMessage', () => {
   it('is idempotent: swallows the P2002 duplicate from a concurrent terminal path', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession());
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
         code: 'P2002',
@@ -195,10 +220,29 @@ describe('CallService.createCallSummaryMessage', () => {
   it('rethrows non-P2002 prisma errors', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession());
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockRejectedValue(new Error('db down'));
 
     await expect(sut.createCallSummaryMessage(CALL_ID)).rejects.toThrow('db down');
+  });
+
+  /**
+   * #5191 — la garde PLATE : `where: { userId: call.initiatorId, conversationId }`
+   * EST l'attribution. Un intrus (l'autre partie de l'appel, `seedInitiatorParticipant`)
+   * est semé avant l'initiateur : si le filtre `userId` disparaissait de la
+   * production, ce témoin attribuerait le résumé au mauvais participant.
+   */
+  it('attribue le résumé au participant dont le `userId` est celui de l’initiateur, jamais au premier trouvé', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    seedInitiatorParticipant(prisma);
+    prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const arg = prisma.message.create.mock.calls[0][0] as any;
+    expect(arg.data.senderId).toBe(INITIATOR_PARTICIPANT_ID);
+    expect(arg.data.senderId).not.toBe(OTHER_PARTY_PARTICIPANT_ID);
   });
 
   /**
@@ -211,7 +255,7 @@ describe('CallService.createCallSummaryMessage', () => {
   it('marks the call summary message as live so the deletedAt:null readers match it', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession());
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
 
     await sut.createCallSummaryMessage(CALL_ID);
@@ -287,7 +331,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
   it('anti-freeze : P2002 au create → re-findFirst → update du live fraîchement commité', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession());
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     // 1er lookup : rien ; le create live commite pendant la course ; 2e lookup : le live.
     prisma.message.findFirst
       .mockResolvedValueOnce(null)
@@ -309,7 +353,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
   it('P2002 au create puis re-lookup terminal → null (l\'autre terminal a gagné)', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession());
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'm-final', metadata: { ...LIVE_MESSAGE.metadata, kind: 'call' } });
@@ -380,7 +424,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
       answeredAt: null,
       metadata: { type: 'audio', endedBy: INITIATOR_USER_ID }
     }));
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm1' });
 
     await sut.createCallSummaryMessage(CALL_ID);
@@ -398,7 +442,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
       answeredAt: null,
       metadata: { type: 'audio', endedBy: 'someone-else' }
     }));
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm1' });
 
     await sut.createCallSummaryMessage(CALL_ID);
@@ -417,7 +461,7 @@ describe('CallService.createCallSummaryMessage — upsert du message vivant', ()
       answeredAt: new Date('2026-07-11T10:00:00Z'),
       metadata: { type: 'audio', endedBy: INITIATOR_USER_ID }
     }));
-    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    seedInitiatorParticipant(prisma);
     prisma.message.create.mockResolvedValue({ id: 'm1' });
 
     await sut.createCallSummaryMessage(CALL_ID);

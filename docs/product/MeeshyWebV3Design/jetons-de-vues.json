@@ -78,6 +78,9 @@
   }
  },
  "jetons": {
+  "home": {
+   "@session": "membre"
+  },
   "linkRedirect": {
    "token": "lien-vivant"
   },

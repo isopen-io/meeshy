@@ -39,6 +39,7 @@ jest.mock('../../../services/admin/report.service', () => ({
 
 import { reportCreationRoutes } from '../../../routes/reports';
 import { reportRoutes } from '../../../routes/admin/reports';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const MESSAGE_ID = '507f1f77bcf86cd799439012';
@@ -55,6 +56,10 @@ const base = {
   message: null as { conversationId: string } | null,
   participe: true,
   utilisateur: null as { id: string } | null,
+  post: null as { authorId: string; visibility: string; visibilityUserIds: string[]; deletedAt: Date | null } | null,
+  // Lignes `FriendRequest` pour la porte de signalement d'un post (#4866) —
+  // le double HONORE le `where` réel d'`amitieAcceptee`, jamais un booléen.
+  demandesAmitie: [] as ReadonlyArray<Record<string, unknown>>,
 };
 
 function prismaDouble() {
@@ -62,6 +67,8 @@ function prismaDouble() {
     message: { findUnique: async () => base.message },
     participant: { findFirst: async () => (base.participe ? { id: 'p1' } : null) },
     user: { findUnique: async () => base.utilisateur },
+    post: { findUnique: async () => base.post },
+    friendRequest: { findFirst: (args?: unknown) => findFirstHonouringWhere(base.demandesAmitie)(args) },
   } as any;
 }
 
@@ -239,6 +246,49 @@ describe('POST /reports — la cible doit exister et avoir été atteignable', (
 
     expect(res.statusCode).toBe(404);
     expect(createReport).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+});
+
+describe("POST /reports — signaler un post FRIENDS respecte la loi d'amitié (#4866)", () => {
+  const AUTHOR_ID = '507f1f77bcf86cd799439055';
+  const POST_ID = '507f1f77bcf86cd799439066';
+  const CORPS_POST = { reportedType: 'post', reportedEntityId: POST_ID, reportType: 'spam' } as const;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    base.post = { authorId: AUTHOR_ID, visibility: 'FRIENDS', visibilityUserIds: [], deletedAt: null };
+    base.demandesAmitie = [];
+    createReport.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+  });
+
+  it("refuse de signaler un post FRIENDS quand la seule relation avec l'auteur est PENDING/REJECTED — le verdict de la loi atteint la réponse servie", async () => {
+    base.demandesAmitie = [
+      { id: 'fr-pending', senderId: USER_ID, receiverId: AUTHOR_ID, status: 'pending' },
+      { id: 'fr-rejected', senderId: AUTHOR_ID, receiverId: USER_ID, status: 'rejected' },
+    ];
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS_POST });
+
+    expect(res.statusCode).toBe(404);
+    expect(createReport).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it("autorise le signalement d'un post FRIENDS quand une demande ACCEPTÉE existe, même à côté du bruit pending/rejected", async () => {
+    base.demandesAmitie = [
+      { id: 'fr-pending', senderId: USER_ID, receiverId: AUTHOR_ID, status: 'pending' },
+      { id: 'fr-accepted', senderId: AUTHOR_ID, receiverId: USER_ID, status: 'accepted' },
+    ];
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/reports', payload: CORPS_POST });
+
+    expect(res.statusCode).toBe(201);
+    expect(createReport).toHaveBeenCalledTimes(1);
 
     await app.close();
   });

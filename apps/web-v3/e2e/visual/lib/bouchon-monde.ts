@@ -436,3 +436,60 @@ export const messagesRiches = (conversationId: string): MessageServi[] => [
     },
   },
 ];
+
+/**
+ * UN PDF — le quatrième genre de la table (`GENRES_DE_PIECE`), que
+ * `messagesRiches` ne porte pas : `v3-medias.spec.ts` en a besoin pour
+ * couvrir l'onglet « Fichiers » de la galerie, et `media` (`cible/media.png`)
+ * en a besoin pour la même raison — exporté ici plutôt que recopié, sous
+ * peine de jumelle au premier champ qui dérive.
+ */
+export const messageDeFichier = (conversationId: string): MessageServi => ({
+  ...chargeDeMessage({
+    id: 'r7',
+    conversationId,
+    senderId: INVITE.id,
+    content: '',
+    originalLanguage: 'fr',
+    sender: { id: INVITE.id, displayName: INVITE.nom, type: 'anonymous' },
+    attachments: [
+      {
+        id: 'ar7',
+        fileUrl: '2026/09/ar7/budget.pdf',
+        originalName: 'budget.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1_258_291,
+      },
+    ],
+    createdAt: ilYA(17),
+  }),
+  senderParticipantId: INVITE.id,
+});
+
+/**
+ * UN MESSAGE PROTÉGÉ QUI PORTE UNE PHOTO — le témoin du cycle 125 (CLAUDE.md,
+ * § Prisme) posé sur la galerie : elle ne doit JAMAIS servir l'URL d'une pièce
+ * à vue unique. Même provenance que `messageDeFichier` ci-dessus.
+ */
+export const messageProtege = (conversationId: string): MessageServi => ({
+  ...chargeDeMessage({
+    id: 'r8',
+    conversationId,
+    senderId: INVITE.id,
+    content: '',
+    originalLanguage: 'fr',
+    sender: { id: INVITE.id, displayName: INVITE.nom, type: 'anonymous' },
+    attachments: [
+      {
+        id: 'ar8',
+        fileUrl: '/api/v1/attachments/file/2026/secret-vue-unique.jpg',
+        originalName: 'secret-vue-unique.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 512_000,
+      },
+    ],
+    createdAt: ilYA(16),
+  }),
+  senderParticipantId: INVITE.id,
+  isViewOnce: true,
+});

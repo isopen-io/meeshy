@@ -46,6 +46,7 @@ const TEMPS_REEL = {
     plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
     navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
     composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+    prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };
@@ -188,7 +189,7 @@ describe('le fil face à axe', () => {
     ecris(
       documentDuChoix({
         segment: 'lagos-q1',
-        apercu: { lien: 'mshy_lagos' as CleDeLien, nom: 'Équipe Lagos', description: 'Le canal.', conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: [], participants: 12 },
+        apercu: { lien: 'mshy_lagos' as CleDeLien, nom: 'Équipe Lagos', description: 'Le canal.', conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: [], participants: 12, droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true } },
         langueProposee: 'fr',
         saisie: { pseudo: '', courriel: '', naissance: '' },
         refus: null,

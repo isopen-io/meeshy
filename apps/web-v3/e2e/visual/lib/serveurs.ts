@@ -17,6 +17,7 @@ import {
   type FilSocialDeBouchon,
 } from './bouchon-compte';
 import { carnetDeBouchon, routesDuCarnet, type CarnetDeBouchon } from './bouchon-carnet';
+import { routesDeLaRecherche } from './bouchon-recherche';
 import {
   placeDeLInvite,
   porteDeLHote,
@@ -95,6 +96,8 @@ export {
   INVITE,
   LIEN_DU_FIL,
   MEMBRE,
+  messageDeFichier,
+  messageProtege,
   messagesRiches,
   NOM_DU_LIEN,
   PAIR_ANGLOPHONE,
@@ -377,6 +380,7 @@ export const passerelleDeBouchon = async (options?: {
   const filDeCommentaires = filDeCommentairesDeBouchon();
   const deLaStory = routesDeLaStory({ creanceDe });
   const filSocial = filSocialDeBouchon();
+  const deLaRecherche = routesDeLaRecherche(creanceDe);
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -475,6 +479,10 @@ export const passerelleDeBouchon = async (options?: {
     // absorbe `/api/v1/links/:key/members` (la jonction), `duCarnet` le
     // reste de `/api/v1/links` (`GET`, `POST`, `PATCH /:linkId`).
     if (await duCarnet({ requete, url, corps: octets, json })) return;
+    // La RECHERCHE, avant `/api/v1/conversations` et `/api/v1/directory/`
+    // nues : Fastify distingue ces routes par leur chemin complet, et un
+    // bouchon qui teste des préfixes ordonne du plus PRÉCIS au plus général.
+    if (deLaRecherche({ requete, url, json })) return;
     if (duCompte({ requete, url, corps: octets, json })) return;
 
     json({ success: true, data: { clickId: 'clic-1' } });
@@ -569,6 +577,25 @@ const attend = async (url: string, jusqua: number): Promise<void> => {
 };
 
 /**
+ * Tue le GROUPE de processus d'un enfant lancé `detached: true` — pas
+ * seulement l'enfant direct. `next dev`/`next start` forke un `next-server`
+ * qui, sans cela, survit reparenté à PID 1 et s'accumule d'une session à
+ * l'autre (mesuré côté #5118 : 71 orphelins à ~250 Mo). `detached: true` fait
+ * de l'enfant le CHEF d'un groupe dont son PID est l'identifiant ; viser le PID
+ * NÉGATIF atteint TOUT le groupe, `next-server` forké compris.
+ *
+ * Site unique de ce geste, et la raison pour laquelle il est extrait : `ferme()`
+ * le répétait à l'identique et n'était donc éprouvable par aucun témoin.
+ */
+export const tueLeGroupeDeProcessus = (pid: number, signal: NodeJS.Signals = 'SIGTERM'): void => {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // Le groupe n'existe déjà plus (l'enfant est mort seul, ou jamais démarré) — rien à faire.
+  }
+};
+
+/**
  * Le serveur de la v3, tel que la production le lance — l'artefact de `next
  * build`, pas le mode développement, dont les octets et les requêtes n'ont
  * rien à voir avec ceux du § 8.3.
@@ -632,21 +659,13 @@ export const serveurDeLaV3 = async (
         const fini = setTimeout(() => {
           // Le filet : ce que SIGTERM n'a pas fermé en trois secondes, on
           // l'abat — un orphelin de plus coûte plus cher qu'un arrêt brutal.
-          try {
-            process.kill(-groupe, 'SIGKILL');
-          } catch {
-            /* le groupe est déjà parti */
-          }
+          tueLeGroupeDeProcessus(groupe, 'SIGKILL');
           resoud();
         }, 3_000);
         fini.unref();
         enfant.once('exit', () => {
           clearTimeout(fini);
-          try {
-            process.kill(-groupe, 'SIGKILL');
-          } catch {
-            /* le groupe est déjà parti */
-          }
+          tueLeGroupeDeProcessus(groupe, 'SIGKILL');
           resoud();
         });
         try {

@@ -647,6 +647,68 @@ export const carnetDeLiens = async ({
   };
 };
 
+export type LiensDeLaRecherche =
+  | { readonly genre: 'liens'; readonly liens: readonly LienDePartage[]; readonly encore: boolean }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+/**
+ * LES LIENS TROUVÉS PAR LE GROUPE « Liens » DE `/search` (#5171) — la MÊME
+ * route que `liensDuLecteur`/`carnetDeLiens`, une QUATRIÈME question.
+ *
+ * `?q=` COMPOSE APRÈS le scope `{ createdBy: userId }` que la passerelle pose
+ * SANS `conversationId` (`routes/links/user.ts:480-521`) : aucun autre
+ * utilisateur ne peut apparaître dans ce groupe, quel que soit le terme tapé.
+ * `?expand=conversation` reste requis pour la même raison qu'ailleurs — sans
+ * lui, une rangée ne mène nulle part (règle 7).
+ *
+ * `?include=summary` N'EST PAS DEMANDÉ : aucun agrégat n'est affiché sur cet
+ * écran, et le payer à chaque frappe serait un calcul serveur pour rien.
+ *
+ * `lienDePartage` EST RÉUTILISÉ, jamais réimplémenté : c'est la même carte que
+ * `liensDuLecteur` et `carnetDeLiens` projettent, et une seconde projection en
+ * deviendrait la jumelle qui diverge au premier champ ajouté.
+ */
+export const liensTrouves = async ({
+  jeton,
+  requete,
+  limite = 20,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly requete: string;
+  readonly limite?: number;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LiensDeLaRecherche> => {
+  const terme = requete.trim();
+  if (terme === '') return { genre: 'liens', liens: [], encore: false };
+
+  const url = `${base ?? baseDeLaPasserelle()}/api/v1/links?q=${encodeURIComponent(terme)}&expand=conversation&limit=${limite}`;
+  const reponse = await demande(url, jeton, recuperer);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'panne' };
+
+  return {
+    genre: 'liens',
+    liens: enveloppe.data
+      .map((brut) => objet(brut))
+      .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+      .map(lienDePartage)
+      .filter((lien): lien is LienDePartage => lien !== null),
+    // Pagination OFFSET — la forme que `/links?q=` sert SANS `?cursor=`
+    // (`createPaginationMeta`, `services/gateway/src/utils/response.ts:254`) :
+    // `{ total, offset, limit, hasMore }`. Seul `hasMore` est relayé, même
+    // règle que `liensDuLecteur`/`carnetDeLiens` sur leur propre pagination.
+    encore: objet(enveloppe.pagination)?.hasMore === true,
+  };
+};
+
 /**
  * CRÉER UN LIEN DE PARTAGE — `POST /links`
  * (`services/gateway/src/routes/links/creation.ts:29`, `requireAuth: true,

@@ -49,6 +49,10 @@ const DETENTEURS_DE_STOCKAGE: readonly (readonly [string, string])[] = [
    * la propriété qu'on veut.
    */
   [join('lib', 'realtime', 'composer.ts'), 'le brouillon du composer, clé meeshy.v3.brouillon.<format>, en sessionStorage (#4966)'],
+  [
+    join('lib', 'api', 'session-legacy.ts'),
+    'les trois clés de la session legacy (meeshy_auth_token, meeshy_session_token, meeshy_user_data), lues et effacées à la déconnexion (#5095)',
+  ],
 ];
 
 const ZONES = ['app', 'components', 'lib', 'scripts'];

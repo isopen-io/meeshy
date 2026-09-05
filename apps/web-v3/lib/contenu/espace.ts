@@ -51,6 +51,8 @@ export const ESPACE = {
   fil: 'Le fil',
   /** Le champ de recherche du tableau de bord (planche : « Rechercher partout »). */
   rechercher: 'Rechercher partout',
+  /** Le contrôle de sortie (#5095) — un `<form method=post>`, pas un lien. */
+  deconnecter: 'Se déconnecter',
 } as const;
 
 /**
