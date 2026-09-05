@@ -234,10 +234,52 @@ extension BackgroundSoundBadge {
         isCanvasPost(post) && canvasHasContent(renderedItem)
     }
 
-    /// Ce post rend-il un canvas, par sa NATURE ? Une story native, ou la
-    /// republication d'une story.
+    /// **Ce post rend-il SON PROPRE canvas, en ligne ?**
+    ///
+    /// Deux façons d'en porter un, et la seconde a été ajoutée le 2026-09-06
+    /// sur un constat porteur : « la vue détail ne montre pas la scène sans
+    /// média intégré… pourtant en feed on voit bien la scène ».
+    ///
+    /// Le fil et le détail ne posaient pas la même question :
+    ///
+    /// | | ce qu'il demandait |
+    /// |---|---|
+    /// | fil (`FeedPostCard.cardSceneDocument`) | `post.storyEffects?.canvasV3 != nil` |
+    /// | détail (`postDetailContent`) | `post.isStory` |
+    ///
+    /// Or un POST porte désormais une scène — mesuré sur le fil de production :
+    /// des lignes `type: POST` avec `storyEffects` de forme v3 (`scenes`, `v`).
+    /// Le fil les peignait, le détail rendait un écran VIDE : ni canvas, ni
+    /// média, ni même le repli « Story indisponible », puisque la section
+    /// n'était pas appelée du tout.
+    ///
+    /// > **Un `isStory` employé comme « porte-t-il une scène ? » était juste
+    /// > tant que seules les stories en portaient.** Ce n'est plus une
+    /// > question de TYPE mais de CONTENU, et le type ne rougit pas quand le
+    /// > contenu déménage.
+    ///
+    /// **Et le discriminant est `canvasV3`, jamais `storyEffects` seul** —
+    /// c'est ce que dit déjà `detailCanvasIsRendered` ci-dessus : un post
+    /// NON-story portant son propre fond audio emprunté
+    /// (`BorrowedSoundPost.effects(for:)`) a des `storyEffects` non-nil sans
+    /// qu'aucun canvas ne rende nulle part. Le fil interroge `canvasV3` pour
+    /// cette raison ; le détail le fait maintenant aussi, avec le MÊME champ.
+    static func rendersOwnCanvas(_ post: FeedPost) -> Bool {
+        post.isStory || post.storyEffects?.canvasV3 != nil
+    }
+
+    /// Ce post rend-il un canvas, par sa NATURE ou par son CONTENU ? Son
+    /// propre canvas (`rendersOwnCanvas`), ou celui d'une story republiée que
+    /// `repostEmbed` rend à sa place.
+    ///
+    /// C'est l'UNION des deux sites qui rendent un canvas dans le détail, et
+    /// c'est pourquoi la porte du bouton muet la consulte : le bouton doit
+    /// paraître dès qu'un canvas est peint, peu importe lequel des deux
+    /// chemins l'a peint. La règle du fichier — « la porte du bouton est le
+    /// même prédicat que celui du rendu » — se lit ici comme une union, pas
+    /// comme une égalité avec un seul rendu.
     static func isCanvasPost(_ post: FeedPost) -> Bool {
-        post.isStory || (post.repost?.type ?? "").uppercased() == "STORY"
+        rendersOwnCanvas(post) || (post.repost?.type ?? "").uppercased() == "STORY"
     }
 
     /// **Y a-t-il quelque chose à rendre ?** La règle UNIQUE dont

@@ -507,7 +507,13 @@ struct PostDetailView: View {
         // panneau réévalue à chaque frame de scroll via storyCanvasVisible),
         // ET garantit que la porte et le rendu voient EXACTEMENT le même item.
         let renderedItem = StoryItem(feedPost: post)
-        if post.isStory {
+        // **La scène se rend parce que le post en PORTE une, pas parce qu'il
+        // est une story** (constat porteur 2026-09-06). `post.isStory` était
+        // ici une question de TYPE là où le fil pose, lui, une question de
+        // CONTENU (`post.storyEffects?.canvasV3`) — d'où un POST à scène
+        // peint dans le fil et ABSENT du détail. Le prédicat est partagé avec
+        // la porte du bouton muet : voir `BackgroundSoundBadge`.
+        if BackgroundSoundBadge.rendersOwnCanvas(post) {
             storyCanvasSection(post, renderedItem: renderedItem)
         } else if post.hasMedia, !isSharedStory {
             detailMediaSection(post.media, owner: DetailMediaAuthor(post: post))

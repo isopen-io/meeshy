@@ -454,6 +454,25 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     // site réel : carte/détail → galerie → VideoTransportControls (SDK) →
     // `manager.isMuted`.
 
+    /// **La chaîne a gagné un maillon le 2026-09-06, la garde le suit.**
+    ///
+    /// `FeedPostCard` ne montait plus `ConversationMediaGalleryView(` en
+    /// direct : la présentation a été EXTRAITE dans
+    /// `SocialMediaGalleryPresentation.swift` (commit `7984317954`), et la
+    /// carte l'appelle par le modificateur `.socialMediaGallery(`. La galerie
+    /// était donc toujours montée — une indirection plus loin — et la garde
+    /// rougissait sur un littéral qui avait légitimement déménagé.
+    ///
+    /// > **Une garde qui épingle un SITE D'APPEL rougit à chaque extraction,
+    /// > et ne dit rien de la capacité.** Elle est pourtant utile : c'est elle
+    /// > qui a signalé le déménagement. Le correctif n'est donc pas de
+    /// > l'affaiblir mais de lui faire suivre le maillon — la remonte
+    /// > « carte/détail → galerie → VideoTransportControls » que son propre
+    /// > commentaire revendique.
+    ///
+    /// Chaque hôte doit donc atteindre la galerie, DIRECTEMENT ou par le
+    /// modificateur ; et le fichier qui porte le modificateur doit, lui,
+    /// monter la vraie vue — sans quoi l'indirection pourrait devenir vide.
     func test_postFullscreenGallery_stillMountedByCardAndDetail_noRegression() throws {
         for path in [
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
@@ -461,10 +480,19 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         ] {
             let text = try source(path)
             XCTAssertTrue(
-                text.contains("ConversationMediaGalleryView("),
+                text.contains("ConversationMediaGalleryView(")
+                    || text.contains(".socialMediaGallery("),
                 "\(path) : la galerie plein écran ne doit pas régresser — 3e surface de B3.6."
             )
         }
+
+        // Le maillon d'indirection ne peut pas être creux.
+        let presentation = try source("Meeshy/Features/Main/Views/SocialMediaGalleryPresentation.swift")
+        XCTAssertTrue(
+            presentation.contains("ConversationMediaGalleryView("),
+            "`.socialMediaGallery` doit monter la VRAIE galerie — sinon les hôtes "
+            + "appellent une indirection qui ne présente rien."
+        )
     }
 
     func test_postFullscreenGallery_mountsVideoTransportControls_noRegression() throws {
@@ -603,5 +631,99 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
             buttonBlock.contains(".contentShape(Rectangle())"),
             "Zone de hit non élargie au rectangle complet sur le bouton muet du réel."
         )
+    }
+
+    // MARK: - Un POST porte une SCÈNE (constat porteur 2026-09-06)
+
+    private func postAScene(type: String = "POST") -> FeedPost {
+        var effets = StoryEffects()
+        effets.canvasV3 = CanvasV3(scenes: [SceneV3(id: "s1", objects: [])])
+        var post = FeedPost(author: "alice", authorId: "a1", type: type, content: "")
+        post.storyEffects = effets
+        return post
+    }
+
+    /// **LE témoin du défaut.** « La vue détail ne montre pas la scène sans
+    /// média intégré… pourtant en feed on voit bien la scène. »
+    ///
+    /// Le fil et le détail ne posaient pas la même question :
+    ///
+    /// | | ce qu'il demandait |
+    /// |---|---|
+    /// | fil (`cardSceneDocument`) | `post.storyEffects?.canvasV3 != nil` |
+    /// | détail (`postDetailContent`) | `post.isStory` |
+    ///
+    /// Un POST à scène était donc peint dans le fil et ABSENT du détail — pas
+    /// même le repli « Story indisponible », puisque la section n'était pas
+    /// appelée du tout. Mesuré sur le fil de production : des lignes
+    /// `type: POST` avec des `storyEffects` de forme v3.
+    ///
+    /// > Un `isStory` employé comme « porte-t-il une scène ? » était juste
+    /// > tant que seules les stories en portaient. Ce n'est plus une question
+    /// > de TYPE mais de CONTENU — et le type ne rougit pas quand le contenu
+    /// > déménage.
+    func test_unPostPortantUneScene_rendSonPropreCanvas() {
+        XCTAssertTrue(BackgroundSoundBadge.rendersOwnCanvas(postAScene()),
+                      "Le fil le peint ; le détail doit le peindre aussi.")
+    }
+
+    /// …et le bouton muet suit, puisque la porte est l'UNION des rendus.
+    func test_unPostPortantUneScene_monteLeBoutonMuet() {
+        let post = postAScene()
+        XCTAssertTrue(BackgroundSoundBadge.detailCanvasIsRendered(
+            post: post, renderedItem: StoryItem(feedPost: post)))
+    }
+
+    /// **La borne qui protège le correctif.** Un post NON-story portant un son
+    /// EMPRUNTÉ a des `storyEffects` non-nil et AUCUN canvas. Élargir la porte
+    /// à `storyEffects != nil` aurait donc remonté un bouton inerte — le
+    /// défaut du commit rejeté que ce fichier documente plus haut.
+    ///
+    /// Le discriminant est `canvasV3`, jamais `storyEffects` : c'est le champ
+    /// que le fil interroge, et c'est celui qui distingue « il y a une scène »
+    /// de « il y a un réglage de scène ».
+    func test_unSonEmprunteSansCanvas_neRendToujoursAucunCanvas() {
+        var post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "")
+        post.storyEffects = StoryEffects(backgroundAudioId: "lib-sound-9")
+        XCTAssertFalse(BackgroundSoundBadge.rendersOwnCanvas(post),
+                       "`storyEffects` non-nil ne suffit pas — il faut un `canvasV3`.")
+    }
+
+    /// Une story reste une story : le type suffit encore, même sans canvasV3
+    /// (son canvas peut venir de ses médias, cf. `canvasHasContent`).
+    func test_uneStorySansCanvasV3_rendQuandMemeSonPropreCanvas() {
+        let post = FeedPost(author: "alice", authorId: "a1", type: "STORY", content: "")
+        XCTAssertTrue(BackgroundSoundBadge.rendersOwnCanvas(post))
+    }
+
+    /// **Un post qui REPOSTE une story ne rend pas son PROPRE canvas** — c'est
+    /// `repostEmbed` qui rend celui de la source. La distinction porte tout le
+    /// correctif : monter les deux rendrait le contenu DEUX FOIS, le défaut
+    /// IMG_1161 que `postDetailContent` documente.
+    func test_unRepostDeStory_neRendPasSonPROPRECanvas() {
+        let repost = RepostContent(author: "bob", authorId: "b1", content: "", type: "STORY",
+                                   storyEffects: StoryEffects(backgroundAudioId: "lib-sound-9"))
+        let post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "", repost: repost)
+        XCTAssertFalse(BackgroundSoundBadge.rendersOwnCanvas(post),
+                       "Son canvas est rendu par `repostEmbed`, pas par `storyCanvasSection`.")
+        XCTAssertTrue(BackgroundSoundBadge.isCanvasPost(post),
+                      "…mais l'UNION reste vraie : un canvas est bien peint.")
+    }
+
+    /// **La porte du détail CONSULTE la règle, elle ne la recopie pas.** Sans
+    /// ce témoin, un `post.isStory` pourrait revenir en place à la faveur d'un
+    /// lot voisin, et seul un œil sur le simulateur s'en apercevrait.
+    func test_laPorteDuDetail_appelleLaRegleEtNonIsStory() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/PostDetailView.swift")
+        let texte = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            texte.contains("if BackgroundSoundBadge.rendersOwnCanvas(post) {"),
+            "La porte du canvas du détail doit appeler la règle partagée.")
+        XCTAssertFalse(
+            texte.contains("if post.isStory {\n            storyCanvasSection"),
+            "…et ne pas retomber sur une question de TYPE.")
     }
 }
