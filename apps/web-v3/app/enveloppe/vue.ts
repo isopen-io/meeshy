@@ -110,6 +110,20 @@ export type ParametresDuDocument = {
    * là où le fil n'a que son `<main>`.
    */
   readonly surimpression?: string;
+  /**
+   * L'APERÇU SOCIAL — `og:*` et `twitter:card`. VRAI par défaut : une adresse
+   * qu'on PARTAGE doit se déplier dans la messagerie où on la colle, et c'est
+   * le cas des pages du site comme des deux INVITATIONS de la zone (un
+   * visiteur sans session — donc un robot d'aperçu — reçoit l'invitation,
+   * jamais le contenu).
+   *
+   * FAUX sur un REFUS, et là seulement (`documentIndisponible`, issue #4967) :
+   * une carte sociale y aurait porté le titre et la description du refus, un
+   * SECOND CANAL pour ce que le § 5.1 ferme déjà à l'écran — et, sur un
+   * document qui doit rester indistinguable d'un contenu inexistant, un
+   * aperçu qui se déplie est en soi une réponse.
+   */
+  readonly ogEtTwitter?: boolean;
 };
 
 export type ParametresDeTete = {
@@ -118,6 +132,8 @@ export type ParametresDeTete = {
   readonly feuille: string;
   /** `index, follow` pour le site ; `noindex, nofollow` pour ce qui appartient à un lecteur. */
   readonly robots?: string;
+  /** Voir `ParametresDuDocument.ogEtTwitter` — VRAI par défaut. */
+  readonly ogEtTwitter?: boolean;
 };
 
 /**
@@ -129,7 +145,13 @@ export type ParametresDeTete = {
  * script du thème, la table de jetons et le socle. Le recopier là-bas aurait
  * fait deux têtes qui dérivent au premier `<meta>` ajouté.
  */
-export const teteDuDocument = ({ titre, description, feuille, robots = 'index, follow' }: ParametresDeTete): string =>
+export const teteDuDocument = ({
+  titre,
+  description,
+  feuille,
+  robots = 'index, follow',
+  ogEtTwitter = true,
+}: ParametresDeTete): string =>
   '<head>' +
   '<meta charset="utf-8"/>' +
   '<meta name="viewport" content="width=device-width, initial-scale=1"/>' +
@@ -141,11 +163,13 @@ export const teteDuDocument = ({ titre, description, feuille, robots = 'index, f
   `<title>${echappe(titre)}</title>` +
   `<meta name="description" content="${echappe(description)}"/>` +
   `<meta name="robots" content="${echappe(robots)}"/>` +
-  '<meta property="og:type" content="website"/>' +
-  `<meta property="og:site_name" content="${echappe(MARQUE)}"/>` +
-  `<meta property="og:title" content="${echappe(titre)}"/>` +
-  `<meta property="og:description" content="${echappe(description)}"/>` +
-  '<meta name="twitter:card" content="summary"/>' +
+  (ogEtTwitter
+    ? '<meta property="og:type" content="website"/>' +
+      `<meta property="og:site_name" content="${echappe(MARQUE)}"/>` +
+      `<meta property="og:title" content="${echappe(titre)}"/>` +
+      `<meta property="og:description" content="${echappe(description)}"/>` +
+      '<meta name="twitter:card" content="summary"/>'
+    : '') +
   `<style>${tableDeJetons()}${SOCLE_DU_DOCUMENT}${FEUILLE_DU_CHROME}${feuille}</style>` +
   '</head>';
 
@@ -159,11 +183,12 @@ export const documentDuSite = ({
   attributsDuMain = '',
   script = '',
   surimpression = '',
+  ogEtTwitter,
   banniere = '',
 }: ParametresDuDocument): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
-  teteDuDocument({ titre, description, feuille, robots }) +
+  teteDuDocument({ titre, description, feuille, robots, ogEtTwitter }) +
   '<body>' +
   banniere +
   // LA SURIMPRESSION AVANT L'ENVELOPPE, INERTE DERRIÈRE ELLE — l'ordre et
@@ -198,6 +223,24 @@ export const documentDuSite = ({
  *
  * `actions` VIDE ne rend pas la section — un `<nav>` sans lien serait un
  * repère d'orientation qui ne mène nulle part.
+ *
+ * `glyphe`, ABSENT par défaut, dessine `.bonjour` en `.carte-vide` — le
+ * contour pointillé et le glyphe de 40 px de la charte (règle 16), la MÊME
+ * classe que `carteVide()` (`app/connecte/vue.ts`) pose pour une carte au
+ * milieu d'une liste. Présent, c'est qu'il n'y a PAS de contenu à cette
+ * adresse — l'indisponible d'une story (§ 5.1, issue #4967), pas une panne ni
+ * une invitation, qui restent le bloc `.bonjour` nu : une panne est un ÉTAT
+ * TEMPORAIRE de la passerelle, pas une absence de contenu.
+ *
+ * `ogEtTwitter` est RELAYÉ, jamais décidé ici — et c'est un correctif (revue
+ * de #4967). Le poser à `false` pour toute la famille aurait retiré l'aperçu
+ * social des DEUX INVITATIONS de la zone (`documentDeLInvitation` d'une story,
+ * d'un réel ou d'une humeur ; `documentDInvitation` de `/post/:id`), qui sont
+ * précisément ce qu'un robot d'aperçu SANS session reçoit quand on partage un
+ * de ces liens dans une messagerie : leur carte est le seul aperçu que ces
+ * adresses produisent, et elle ne porte aucune donnée du contenu (la v3 n'a
+ * rien demandé à la passerelle). Seul le REFUS la retire — voir
+ * `documentIndisponible` (`app/(public)/partage-vue.ts`).
  */
 export type ActionDuMessage = {
   readonly libelle: string;
@@ -215,6 +258,8 @@ export const documentDeMessage = ({
   robots = 'noindex, nofollow',
   retour = true,
   description,
+  glyphe,
+  ogEtTwitter,
 }: {
   readonly titre: string;
   readonly paragraphes: readonly string[];
@@ -224,15 +269,22 @@ export const documentDeMessage = ({
   readonly retour?: boolean;
   /** Par défaut le PREMIER paragraphe : la description d'une page qui dit une chose est ce qu'elle dit. */
   readonly description?: string;
-}): string =>
-  documentDuSite({
+  /** Voir le doc-comment ci-dessus — dessine le bloc en état vide de la charte. */
+  readonly glyphe?: string;
+  /** Voir le doc-comment ci-dessus — VRAI par défaut ; seul un REFUS le pose à faux. */
+  readonly ogEtTwitter?: boolean;
+}): string => {
+  const classe = glyphe === undefined ? 'bonjour' : 'carte-vide';
+  return documentDuSite({
     titre: `${titre} — ${MARQUE}`,
     description: description ?? paragraphes[0] ?? titre,
     feuille,
     robots,
     retour,
+    ogEtTwitter,
     corps:
-      '<div class="bonjour">' +
+      `<div class="${classe}">` +
+      (glyphe === undefined ? '' : svgDuSprite(glyphe)) +
       `<h1>${echappe(titre)}</h1>` +
       paragraphes.map((texte) => `<p>${echappe(texte)}</p>`).join('') +
       '</div>' +
@@ -241,14 +293,15 @@ export const documentDeMessage = ({
         : `<section class="acces" aria-label="${echappe(actions[0]?.libelle ?? '')}"><nav>` +
           actions
             .map(
-              ({ libelle, href, ton = 'primaire', glyphe }) =>
+              ({ libelle, href, ton = 'primaire', glyphe: glypheAction }) =>
                 `<a class="action ${ton}" href="${echappe(href)}">` +
-                (glyphe === undefined ? '' : svgDuSprite(glyphe)) +
+                (glypheAction === undefined ? '' : svgDuSprite(glypheAction)) +
                 `${echappe(libelle)}</a>`,
             )
             .join('') +
           '</nav></section>'),
   });
+};
 
 /**
  * LA RÉPONSE, et sa politique de cache.

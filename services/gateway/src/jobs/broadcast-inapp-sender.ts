@@ -43,7 +43,7 @@ export class BroadcastInAppSenderJob {
         return;
       }
 
-      const filter = buildBroadcastRecipientFilter((broadcast.targeting ?? {}) as BroadcastTargeting);
+      const filter = await buildBroadcastRecipientFilter(this.prisma, (broadcast.targeting ?? {}) as BroadcastTargeting);
       const totalRecipients = await this.prisma.user.count({ where: filter });
       const translatedSubjects = broadcast.translatedSubjects as Record<string, string> | null;
       const translatedBodies = broadcast.translatedBodies as Record<string, string> | null;

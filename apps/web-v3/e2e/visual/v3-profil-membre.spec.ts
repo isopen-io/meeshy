@@ -6,9 +6,16 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { porteInvitee } from './lib/porte-invitee';
+import AxeBuilder from '@axe-core/playwright';
+
+import { THEME_STORAGE_KEY } from '../../app/theme-script';
+import { ADRESSE_DE_MON_COMPTE } from '../../lib/contenu/espace';
+import { ACTION_SECONDAIRE, TARGET_MIN } from './lib/cibles';
+import { COLONNES_DE_THEME, violationsBloquantes } from './lib/verdict-axe';
 import {
   CONVERSATION_DU_LECTEUR,
   INVITE,
+  MEMBRE,
   PAIR_HISPANOPHONE,
   passerelleDeBouchon,
   RACINE_V3,
@@ -200,6 +207,107 @@ test.describe('depuis /chats/:cle — sans JavaScript', () => {
   });
 });
 
+/**
+ * SON PROPRE AVATAR MÈNE À SON COMPTE (#5030) — `m4` est le message d'Amina
+ * (`bouchon-monde.ts`, `senderId: MEMBRE.id`). La passerelle de bouchon rend
+ * `{ relation:'self', isSelf:true }` sur ce handle parce qu'elle copie
+ * `relationAvec` (`services/gateway/src/routes/directory/person.ts:78`) —
+ * elle servait `none` à tout appelant avant ce lot, et un vert obtenu contre
+ * elle n'aurait rien prouvé de cette branche.
+ */
+test.describe('son propre avatar mène à son compte — sans JavaScript', () => {
+  const ADRESSE_DE_SOI = (): string => `${FIL()}?profil=${MEMBRE.id}`;
+
+  test("« Vous » et l'avatar de SES messages ouvrent la branche « c'est vous »", async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(FIL(), { waitUntil: 'load' });
+
+    const avatar = page.locator('li[data-id="m4"] a.avatar-lien');
+    await expect(avatar).toHaveAttribute('href', `/chats/${CONVERSATION_DU_LECTEUR.id}?profil=${MEMBRE.id}`);
+    await expect(page.locator('li[data-id="m4"] a.nom-lien')).toHaveText('Vous');
+
+    await cliqueEtNavigue(page, 'li[data-id="m4"] a.avatar-lien', (u) => u.searchParams.get('profil') === MEMBRE.id);
+
+    const dialogue = page.locator('dialog.profil');
+    await expect(dialogue).toBeVisible();
+    await expect(dialogue.locator('.relation')).toHaveAttribute('data-relation', 'self');
+    await expect(dialogue.locator('.relation')).toHaveText('C’est vous');
+    await expect(dialogue.locator('h2')).toHaveText(MEMBRE.nom);
+
+    // UNE action, et une seule : « Mon compte » — aucune des trois d'autrui.
+    const actions = dialogue.locator('.actions-profil a, .actions-profil button');
+    await expect(actions).toHaveCount(1);
+    await expect(actions).toHaveAttribute('href', ADRESSE_DE_MON_COMPTE);
+    await expect(dialogue.locator('form')).toHaveCount(0);
+    await expect(dialogue.getByText('Ajouter en ami')).toHaveCount(0);
+    await expect(dialogue.getByText('Bloquer ou signaler')).toHaveCount(0);
+    await expect(dialogue.getByText('Écrire à')).toHaveCount(0);
+
+    const requetesJs = passerelle.journal.filter((appel) => appel.chemin.endsWith('.js'));
+    expect(requetesJs).toEqual([]);
+    await contexte.close();
+  });
+
+  test('« Mon compte » est une CIBLE, et elle MÈNE quelque part — /settings/profile répond', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+    const page = await contexte.newPage();
+    await page.goto(ADRESSE_DE_SOI(), { waitUntil: 'load' });
+
+    const boite = await page.locator('dialog.profil .actions-profil a').boundingBox();
+    expect(boite).not.toBeNull();
+    expect(boite?.height ?? 0).toBeGreaterThanOrEqual(ACTION_SECONDAIRE);
+    expect(boite?.width ?? 0).toBeGreaterThanOrEqual(TARGET_MIN);
+
+    await cliqueEtNavigue(page, 'dialog.profil .actions-profil a', (u) => u.pathname === ADRESSE_DE_MON_COMPTE);
+    await expect(page.locator('main')).toBeVisible();
+    await contexte.close();
+  });
+
+  test('la croix, le voile et la poignée rendent /chats/:cle SANS ?profil=', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    const sansProfil = (u: URL): boolean => u.search === '';
+
+    for (const chemin of ['dialog.profil .fermer', 'dialog.profil .poignee'] as const) {
+      await page.goto(ADRESSE_DE_SOI(), { waitUntil: 'load' });
+      await cliqueEtNavigue(page, chemin, sansProfil);
+      await expect(page.locator('dialog.profil')).toHaveCount(0);
+    }
+
+    await page.goto(ADRESSE_DE_SOI(), { waitUntil: 'load' });
+    await cliqueEtNavigue(page, 'a.voile', sansProfil, { x: 8, y: 8 });
+    await expect(page.locator('li[data-id="m4"]')).toBeVisible();
+    await contexte.close();
+  });
+
+  COLONNES_DE_THEME.forEach((theme) => {
+    test(`0 violation grave sur la branche de soi (${theme.id})`, async ({ browser }) => {
+      const contexte = await contexteDuMembre(browser, { colorScheme: theme.colorScheme, viewport: { width: 390, height: 844 } });
+      const page = await contexte.newPage();
+      if (theme.stockage !== null) {
+        await page.addInitScript(
+          ([cle, valeur]) => {
+            try {
+              window.localStorage.setItem(cle, valeur);
+            } catch {
+              /* le script anti-flash retombe sur la préférence système, la colonne le dira */
+            }
+          },
+          [THEME_STORAGE_KEY, theme.stockage] as const,
+        );
+      }
+      await page.goto(ADRESSE_DE_SOI(), { waitUntil: 'load' });
+      await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${theme.classeAttendue}\\b`));
+      await expect(page.locator('dialog.profil .relation')).toHaveAttribute('data-relation', 'self');
+
+      const rapport = await new AxeBuilder({ page }).analyze();
+      expect(violationsBloquantes(rapport.violations)).toEqual([]);
+      await contexte.close();
+    });
+  });
+});
+
 test.describe('depuis /chat/:lien (invité) — sans JavaScript', () => {
   const porte = porteInvitee({ passerelle: () => passerelle, v3: () => v3 });
 
@@ -220,6 +328,30 @@ test.describe('depuis /chat/:lien (invité) — sans JavaScript', () => {
     expect(await page.locator('dialog.profil .action.primaire').count()).toBe(0);
 
     await cliqueEtNavigue(page, 'dialog.profil .fermer', (u) => u.search === '');
+    await contexte.close();
+  });
+
+  /**
+   * L'INVITÉ N'A PAS DE COMPTE : son propre nom n'est donc PAS un lien (#5030,
+   * charte règle 7). `m2` est SON message (`bouchon-monde.ts`, `senderId:
+   * INVITE.id`, `sender.type:'anonymous'`) — le seul de ce fil qui porte
+   * « Vous » à sa porte. Le témoin oppose `m2` à `m4`, le message d'un MEMBRE,
+   * qui reste un lien pour lui : c'est l'absence de COMPTE qui décide, jamais
+   * le fait d'être l'auteur.
+   */
+  test("« Vous » n'est PAS un lien pour l'invité — il n'a pas de compte à ouvrir", async ({ browser }) => {
+    const contexte = await porte.contexteDeLInvite(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(porte.adresse, { waitUntil: 'load' });
+
+    const sien = page.locator('li[data-id="m2"]');
+    await expect(sien).toBeVisible();
+    await expect(sien.locator('.nom')).toHaveText('Vous');
+    await expect(sien.locator('a.avatar-lien')).toHaveCount(0);
+    await expect(sien.locator('a.nom-lien')).toHaveCount(0);
+
+    // Le message d'un MEMBRE reste un lien, à la même porte.
+    await expect(page.locator('li[data-id="m4"] a.avatar-lien')).toHaveAttribute('href', new RegExp(`^/chat/[^?]+\\?profil=${MEMBRE.id}$`));
     await contexte.close();
   });
 });
@@ -270,6 +402,11 @@ test.describe('les rendus que le rapport regarde', () => {
       await page.goto(`${FIL()}?profil=${PAIR_HISPANOPHONE.id}`, { waitUntil: 'load' });
       await expect(page.locator('dialog.profil')).toBeVisible();
       await page.screenshot({ path: join(DOSSIER_DES_RENDUS, `profilMembre-${schema}.png`) });
+
+      // La branche SOI (#5030) — « C'est vous » et son unique action.
+      await page.goto(`${FIL()}?profil=${MEMBRE.id}`, { waitUntil: 'load' });
+      await expect(page.locator('dialog.profil .relation')).toHaveAttribute('data-relation', 'self');
+      await page.screenshot({ path: join(DOSSIER_DES_RENDUS, `profilMembre-soi-${schema}.png`) });
       await contexte.close();
     }
   });

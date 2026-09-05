@@ -6,7 +6,7 @@
  * - Swift app  : ConversationLanguagePreferences.normalize (apps/ios)
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeLanguageCode, normalizeLanguageForDedup } from '../utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup, isSameLanguage } from '../utils/language-normalize';
 
 describe('normalizeLanguageCode', () => {
   it('returns ISO 639-1 for plain code', () => {
@@ -197,5 +197,42 @@ describe('normalizeLanguageForDedup', () => {
     expect(normalizeLanguageForDedup('-US')).toBe('-us');
     expect(normalizeLanguageForDedup('@@@')).toBe('@@@');
     expect(normalizeLanguageForDedup('')).toBe('');
+  });
+});
+
+describe('isSameLanguage', () => {
+  it('matches a code against itself', () => {
+    expect(isSameLanguage('fr', 'fr')).toBe(true);
+  });
+
+  it('matches a plain code against its region-tagged form (dash or underscore)', () => {
+    expect(isSameLanguage('en', 'en-US')).toBe(true);
+    expect(isSameLanguage('fr_FR', 'fr')).toBe(true);
+  });
+
+  it('matches a plain code against its ISO 639-3 form', () => {
+    expect(isSameLanguage('fr', 'fra')).toBe(true);
+    expect(isSameLanguage('en', 'eng')).toBe(true);
+  });
+
+  it('matches a deprecated legacy code against its current code', () => {
+    expect(isSameLanguage('he', 'iw')).toBe(true);
+  });
+
+  it('does not match distinct languages', () => {
+    expect(isSameLanguage('fr', 'en')).toBe(false);
+    expect(isSameLanguage('fil', 'fi')).toBe(false);
+  });
+
+  it('is case-insensitive', () => {
+    expect(isSameLanguage('FR', 'fr-FR')).toBe(true);
+  });
+
+  it('returns false when either code is missing or empty', () => {
+    expect(isSameLanguage(undefined, 'fr')).toBe(false);
+    expect(isSameLanguage('fr', undefined)).toBe(false);
+    expect(isSameLanguage(null, 'fr')).toBe(false);
+    expect(isSameLanguage('', 'fr')).toBe(false);
+    expect(isSameLanguage(undefined, undefined)).toBe(false);
   });
 });

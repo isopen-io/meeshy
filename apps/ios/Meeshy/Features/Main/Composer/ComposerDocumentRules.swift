@@ -770,6 +770,33 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// La langue DÉCLARÉE du contenu. `nil` ⇒ le serveur détecte.
     let originalLanguage: String?
 
+    /// **LE CANVAS composé sur la scène** (#4756).
+    ///
+    /// Ce type portait déjà « du texte, des pièces jointes, un lieu » — et le
+    /// commentaire de `DocumentComposerDoor` affirmait qu'il ne pouvait PAS
+    /// porter de scène : « il n'a ni slides, ni effets, ni images chargées ».
+    /// C'était vrai de ses slides ; ça ne l'était pas de ses EFFETS, qui sont un
+    /// blob que `CreatePostSchema` accepte depuis toujours.
+    ///
+    /// Mesuré au simulateur le 2026-09-04 : un post composé avec un fond et un
+    /// objet texte publiait une carte de TEXTE NU. Le canvas ne s'arrêtait pas
+    /// faute de modèle — il s'arrêtait faute de champ.
+    ///
+    /// `nil` pour un mood et pour tout post sans scène. Un blob vide à sa place
+    /// ferait croire à une scène composée puis effacée.
+    let storyEffects: StoryEffects?
+
+    /// **Les LÉGENDES par média, clées par URL locale** (#4756).
+    ///
+    /// Écrites par le volet de description en profil Post
+    /// (`ComposerSlideTextRole.applyCaption`), elles n'avaient jusqu'ici aucun
+    /// lecteur sur la voie DOCUMENT — celle que prend tout post du meuble. La
+    /// légende s'affichait dans le composer, se relisait d'une ouverture à
+    /// l'autre, et mourait à l'envoi.
+    ///
+    /// Vide pour un mood, qui n'a pas de média.
+    let mediaCaptions: ComposerMediaCaptions
+
     /// **T2.4 — l'interrupteur POST ↔ RÉEL.** `ReelComposition.defaultType`
     /// élit `"REEL"` dès qu'une vidéo, un audio ≥ 3 s ou ≥ 2 images qualifient
     /// (`qualifiesAsReel`) ; ce champ, quand `true`, retient un POST simple
@@ -839,6 +866,13 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             // Un mood ne porte jamais de média local (`localMedia: []`
             // au-dessus) : il ne peut donc jamais qualifier comme réel, et ce
             // champ n'a pas besoin d'un paramètre pour ce geste.
+            // Un mood n'a pas de SCÈNE : sa surface est une grille de dix
+            // emojis et 122 caractères (`ComposerSurfaceKind.mood`). Aucun
+            // geste ne peut alimenter ce champ pour ce format — même raison,
+            // même forme que `mobileTranscription` plus bas.
+            storyEffects: nil,
+            // Un mood n'a pas de média, donc aucune légende par média.
+            mediaCaptions: [:],
             forcePlainPost: false,
             // Un mood n'a pas d'outil micro (rangée du document seule, T2.6) :
             // aucun geste ne peut jamais alimenter ce champ pour ce format.
@@ -917,7 +951,11 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         discoverabilityPrecision: DiscoverabilityPrecision?,
         originalLanguage: String?,
         mobileTranscription: MobileTranscriptionPayload?,
-        references: [ComposerReference]
+        references: [ComposerReference],
+        /// Le canvas de la slide courante, ou `nil` sans scène (#4756).
+        storyEffects: StoryEffects?,
+        /// Les légendes par média saisies dans le composer (#4756).
+        mediaCaptions: ComposerMediaCaptions
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -937,6 +975,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
             originalLanguage: originalLanguage,
+            storyEffects: storyEffects,
+            mediaCaptions: mediaCaptions,
             forcePlainPost: forcePlainPost,
             mobileTranscription: mobileTranscription
         )

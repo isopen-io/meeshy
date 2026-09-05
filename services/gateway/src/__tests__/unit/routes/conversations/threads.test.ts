@@ -331,3 +331,58 @@ describe('GET threads — format des traductions', () => {
     await app.close();
   });
 });
+
+// ─── #4885 — le fil sert les drapeaux de PROTECTION du message ────────────────
+//
+// `threadMessageSelect` ne demandait ni `isViewOnce`, ni `isBlurred`, ni
+// `effectFlags`, ni `expiresAt` : un message à vue unique ouvert par son fil
+// de réponses arrivait sans le dire, donc restait FORWARDABLE côté client
+// (`BubbleMessageNormalView.tsx` / `FocalRow.tsx` lisent `isViewOnce` pour
+// interdire le transfert). Le fix source unique avec la liste et la
+// recherche : `MESSAGE_PROTECTION_SELECT` (`messages-list-query.ts`).
+
+describe('GET threads — drapeaux de protection (#4885)', () => {
+  it('sert `isViewOnce`/`isBlurred`/`effectFlags`/`expiresAt` sur le message racine', async () => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue({
+          ...mockParentMessage,
+          isViewOnce: true,
+          maxViewOnceCount: 1,
+          viewOnceCount: 0,
+          isBlurred: true,
+          effectFlags: 3,
+          expiresAt: new Date('2026-09-05T00:00:00Z'),
+        }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const { parent } = res.json().data;
+    // La CONSÉQUENCE, pas seulement la présence : un client lit `isViewOnce`
+    // pour refuser le transfert, et il doit lire la vraie valeur, pas `undefined`.
+    expect(parent.isViewOnce).toBe(true);
+    expect(parent.isBlurred).toBe(true);
+    expect(parent.effectFlags).toBe(3);
+    expect(parent.expiresAt).toBe('2026-09-05T00:00:00.000Z');
+    await app.close();
+  });
+
+  it('sert les mêmes drapeaux sur une réponse du fil', async () => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>()
+          .mockResolvedValueOnce([{ ...mockReplyMessage, isViewOnce: true, isBlurred: false, effectFlags: 1, expiresAt: null }])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const reply = res.json().data.replies[0];
+    expect(reply.isViewOnce).toBe(true);
+    expect(reply.effectFlags).toBe(1);
+    await app.close();
+  });
+});

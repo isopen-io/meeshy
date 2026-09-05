@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
 import { requirePermission } from '../../middleware/authorize';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
 // Les agrégations lourdes (utilisateurs distincts, paires de traduction, timeline)
 // sont exécutées côté MongoDB via aggregateRaw : seuls les agrégats traversent le
@@ -206,12 +206,9 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // `systemLanguage` est persisté VERBATIM : les variantes région-taguées /
-      // casse mixte (`fr-FR`, `FR`, `fr_FR`) forment autant de buckets distincts
-      // que `groupBy` recopierait tels quels. On replie chaque bucket sur son code
-      // canonique via la SSOT `normalizeLanguageForDedup` et on ADDITIONNE les
-      // comptes — sinon la langue dominante est sous-comptée et le graphe se
-      // fragmente en variantes. Idempotent sur des codes déjà canoniques.
+      // #5146 — systemLanguage est persisté VERBATIM (région/casse variables selon
+      // le client) ; replier chaque bucket sur son code canonique et ADDITIONNER
+      // les comptes qui convergent, plutôt que d'écraser le dernier bucket lu.
       const usersLanguageMap = usersByLanguage.reduce((acc, item) => {
         if (item.systemLanguage) {
           const canonical = normalizeLanguageForDedup(item.systemLanguage);

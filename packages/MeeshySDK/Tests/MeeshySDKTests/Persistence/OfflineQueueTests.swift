@@ -547,7 +547,13 @@ final class OfflineQueueTests: XCTestCase {
             content: "Photo post",
             visibility: "PUBLIC",
             originalLanguage: "fr",
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            // Ces trois témoins portent sur les CHEMINS et les MIMES d'un post
+            // média : aucun ne compose de scène, et `nil` le dit. Le paramètre
+            // est sans défaut (#4756) précisément pour que ce choix soit
+            // ÉCRIT — un défaut aurait laissé ces témoins muets sur un champ
+            // qui voyage désormais avec chaque post.
+            storyEffects: nil
         )
 
         XCTAssertEqual(result.localMediaPaths.count, 2)
@@ -602,7 +608,13 @@ final class OfflineQueueTests: XCTestCase {
             clientMutationId: cmid,
             content: nil,
             visibility: "PUBLIC",
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            // Ces trois témoins portent sur les CHEMINS et les MIMES d'un post
+            // média : aucun ne compose de scène, et `nil` le dit. Le paramètre
+            // est sans défaut (#4756) précisément pour que ce choix soit
+            // ÉCRIT — un défaut aurait laissé ces témoins muets sur un champ
+            // qui voyage désormais avec chaque post.
+            storyEffects: nil
         )
 
         let maybePool = await queue.outboxPoolForTesting
@@ -633,7 +645,13 @@ final class OfflineQueueTests: XCTestCase {
             visibility: "PUBLIC",
             originalLanguage: "en",
             type: "REEL",
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            // Ces trois témoins portent sur les CHEMINS et les MIMES d'un post
+            // média : aucun ne compose de scène, et `nil` le dit. Le paramètre
+            // est sans défaut (#4756) précisément pour que ce choix soit
+            // ÉCRIT — un défaut aurait laissé ces témoins muets sur un champ
+            // qui voyage désormais avec chaque post.
+            storyEffects: nil
         )
 
         // The durable row must carry the REEL type so the dispatcher creates the

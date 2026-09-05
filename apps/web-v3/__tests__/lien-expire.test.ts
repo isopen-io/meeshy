@@ -319,9 +319,60 @@ describe('linkExpired — un lien fermé dit pourquoi', () => {
       params: Promise.resolve({ token: JETON }),
     });
 
-    expect(reponse.status).toBe(200);
+    expect(reponse.status).toBe(410);
     expect(reponse.headers.get('content-type')).toContain('text/html');
     expect(reponse.headers.get('cache-control')).toBe('no-store');
     expect((await reponse.text()).startsWith('<!doctype html>')).toBe(true);
+  });
+
+  /**
+   * LE STATUT SUIT LA CAUSE (#4933, critère de fin de `links` : « GET /l/:token
+   * du lien révoqué rend 410 … là où il rendait 302 avant »). Un lien fermé
+   * n'a plus rien à servir — le HTTP doit le dire lui-même, pas seulement le
+   * `<h1>`.
+   */
+  it.each([
+    ['LINK_EXPIRED'],
+    ['LINK_INACTIVE'],
+    ['LINK_MAX_USES'],
+    ['CONVERSATION_CLOSED'],
+  ])('rend 410 pour une invitation refusée par %s', async (code) => {
+    globalThis.fetch = invitationRefusee(code);
+    const reponse = await GET(new Request(`https://meeshy.me/l/${JETON}/expired`), {
+      params: Promise.resolve({ token: JETON }),
+    });
+    expect(reponse.status).toBe(410);
+  });
+
+  it('rend 410 pour un lien de TRACKING fermé et pour un jeton inconnu — jamais un oracle', async () => {
+    globalThis.fetch = trackingFerme(null);
+    const ferme = await GET(new Request(`https://meeshy.me/l/jeton-story/expired`), {
+      params: Promise.resolve({ token: 'jeton-story' }),
+    });
+    expect(ferme.status).toBe(410);
+
+    globalThis.fetch = invitationRefusee('LINK_EXPIRED');
+    const inconnu = await GET(new Request(`https://meeshy.me/l/../../secret/expired`), {
+      params: Promise.resolve({ token: '../../secret' }),
+    });
+    expect(inconnu.status).toBe(410);
+  });
+
+  /**
+   * `verification-impossible` (§ 7, « erreur réseau ≠ refus ») est la SEULE
+   * cause qui ne rende PAS un lien mort : la passerelle n'a simplement pas pu
+   * être consultée. La confondre avec un 410 affirmerait une fermeture qu'on
+   * n'a pas pu constater.
+   */
+  it('rend 503 quand la passerelle est injoignable — ce n’est pas un refus', async () => {
+    globalThis.fetch = (async () => {
+      throw new Error('réseau coupé');
+    }) as typeof fetch;
+
+    const reponse = await GET(new Request(`https://meeshy.me/l/${JETON}/expired`), {
+      params: Promise.resolve({ token: JETON }),
+    });
+
+    expect(reponse.status).toBe(503);
   });
 });

@@ -1,6 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { feuilleQuiMonte } from './atomes-feuille';
+import { feuilleQuiMonte, MENU_DE_LIGNE } from './atomes-feuille';
 
 /**
  * LA FEUILLE DES LIENS — ce que `cible/links.png` dessine, et rien de plus.
@@ -23,17 +23,46 @@ import { feuilleQuiMonte } from './atomes-feuille';
  * 4. **La méta est une rangée qui PEUT passer à la ligne** (`flex-wrap`) :
  *    « 4 ont rejoint · 4 / 50 · Expire le … » tient sur un grand écran et
  *    s'empile sur un petit, sans jamais pousser quoi que ce soit dehors.
+ * 5. **Le menu de fermeture (#4933) est le MÊME atome que celui de `/chats`**
+ *    (`MENU_DE_LIGNE`) : un `<details class="actions">` par ligne ACTIVE, posé
+ *    en FRÈRE du `.lien` — jamais un `<form>` dans un `<a>` (HTML invalide, et
+ *    un clic sur « Fermer ce lien » ouvrirait la conversation au passage).
+ * 6. **Le menu OUVERT DESCEND, il ne pousse pas la ligne de côté** — une
+ *    surcharge propre à cet écran. L'atome pose le `<form>` EN FLUX, ce qui
+ *    convient à `/chats` : là, les trois gestes sont des mots seuls dans une
+ *    ligne qui occupe déjà toute la largeur. Ici le `<details>` est le FRÈRE
+ *    du `.lien` dans une rangée : ouvert, son formulaire — qui porte un
+ *    PARAGRAPHE (`FERMETURE.aide`) — prenait sa part de la rangée et écrasait
+ *    l'adresse à quelques caractères par ligne (capture à 390 px : « 127.0.0.
+ *    1:44637/chat/ms hy_lago s »). Le rendre seulement rétrécissable ne
+ *    suffisait pas : le paragraphe et l'adresse se disputent la MÊME rangée.
+ *    Le formulaire sort donc du flux et pend SOUS le sommaire, aligné au
+ *    BORD DE FIN de ligne, dans la largeur de la ligne — le patron de menu
+ *    que le `<li>` (`position:relative`) et l'atome (`.actions{position:
+ *    relative}`) préparaient déjà. `inset-inline-end`, jamais `right` : un
+ *    panneau ancré par une propriété PHYSIQUE pendrait du mauvais côté, hors
+ *    du viewport, dès que le document passe `dir="rtl"` — une propriété
+ *    LOGIQUE fait le travail sans une seconde règle. Sans JavaScript :
+ *    `<details>` natif, aucun changement.
+ *    AUCUNE OMBRE ne l'en détache (règles 14 et 16 : la seule du dépôt est
+ *    l'anneau de focus du socle, et `charte.test.ts` les compte) — ce qui le
+ *    pose au-dessus est son FOND opaque et son filet, les deux que l'atome
+ *    donne déjà.
  *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
  */
 export const FEUILLE_DES_LIENS = compacte(`
+${MENU_DE_LIGNE}
 .liens-ecran{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
 .liens-ecran>.fil-tete{flex:none}
 
 .liens{flex:1 1 0;min-height:0;overflow-y:auto;display:grid;gap:var(--space-2);margin:0;padding:0 var(--space-4) var(--space-9);list-style:none}
+.liens>li{position:relative;display:flex;align-items:center;gap:var(--space-2)}
+.liens .actions{position:static}
+.liens .actions form{position:absolute;z-index:1;top:calc(100% + var(--space-1));inset-inline-end:0;width:min(22rem,100%);margin:0}
 
-.lien{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:inherit;text-decoration:none}
+.lien{display:flex;flex:1 1 auto;align-items:center;gap:var(--space-3);min-width:0;min-height:var(--target-min);padding:var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:inherit;text-decoration:none}
 .lien .tuile{display:flex;align-items:center;justify-content:center;flex:none;line-height:0;color:var(--color-text-muted)}
 .lien .tuile svg{width:var(--glyph);height:var(--glyph)}
 
@@ -44,6 +73,11 @@ export const FEUILLE_DES_LIENS = compacte(`
 .lien.ferme{background:var(--color-bg-sunken)}
 .lien.ferme .adresse{color:var(--color-text-muted)}
 .lien .etat{flex:none;padding:0 var(--space-2);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-pill);font-size:var(--text-sm);color:var(--color-text-muted)}
+
+#carnet>.avis{display:flex;align-items:center;gap:var(--space-2);margin:0 var(--space-4) var(--space-3);padding:var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
+#carnet>.avis svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}
+#carnet>.avis .motif{min-width:0;overflow-wrap:anywhere}
+#carnet>.avis.alerte{border:var(--stroke-hair) solid var(--color-danger);border-radius:var(--radius-lg);color:var(--color-danger)}
 `);
 
 /**
@@ -60,10 +94,13 @@ export const FEUILLE_DES_LIENS = compacte(`
  * aurait fait une troisième copie — celle qui diverge.
  *
  * LE VOILE EST DESSINÉ, ET IL LE FAUT ICI. Sur le panneau de profil, un module
- * élève le dialogue en modale et `::backdrop` peint le voile ; `/links` n'a
- * aucun module, donc aucun `::backdrop` — sans le `<a class="voile">` servi, la
- * feuille flotterait sur un carnet nu, et le troisième chemin de fermeture
- * n'existerait pas.
+ * élève le dialogue en modale et `::backdrop` peint le voile ; ici la feuille est
+ * SERVIE ouverte (`<dialog open>`, jamais `showModal()`), donc sans
+ * `::backdrop` — et le module de `/links` (#5090) ne l'élève pas non plus, il
+ * ne fait que la retirer. Sans le `<a class="voile">` servi, la feuille
+ * flotterait sur un carnet nu, et le troisième chemin de fermeture n'existerait
+ * pas. Corollaire : ce voile est le SECOND nœud de la feuille — qui la retire
+ * les retire TOUS LES DEUX (`lib/realtime/liens.ts` › `poseLeCarnet`).
  *
  * CE QUI LUI EST PROPRE :
  *
@@ -89,7 +126,7 @@ dialog.nouveau-lien .groupe{display:flex;flex-direction:column;gap:var(--space-2
 dialog.nouveau-lien legend{padding:0;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--color-text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide)}
 dialog.nouveau-lien .champ{display:flex;flex-direction:column;gap:var(--space-2)}
 dialog.nouveau-lien .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
-dialog.nouveau-lien .champ input{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text);font:inherit}
+dialog.nouveau-lien .champ input{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}
 dialog.nouveau-lien .aide{font-size:var(--text-sm);color:var(--color-text-muted)}
 dialog.nouveau-lien .coche{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg)}
 dialog.nouveau-lien .pied{position:sticky;bottom:0;padding:var(--space-3) 0 0;background:var(--color-surface-raised)}

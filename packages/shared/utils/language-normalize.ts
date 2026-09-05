@@ -178,3 +178,23 @@ export function normalizeLanguageForDedup(code: string): string {
   const primary = code.trim().split(/[-_]/)[0]?.toLowerCase();
   return primary ? primary : code.toLowerCase();
 }
+
+/**
+ * Égalité de langue conforme au Prisme Linguistique : deux codes verbatim
+ * peuvent être région-tagués (`en-US`, `fr_FR`), 3-lettres (`fra`) ou legacy
+ * (`iw`) et désigner la même langue. Un `===` brut les traite comme des
+ * langues distinctes — cf. § « Le drapeau original/traduit … ignorent la
+ * canonicalisation du Prisme » (CLAUDE.md racine).
+ *
+ * SSOT unique de cette comparaison : avant cette fonction, cinq copies
+ * locales identiques coexistaient dans `apps/web` (`use-message-display.ts`,
+ * `messages-display.tsx`, `TranslationToggle.tsx`, `use-stream-translation.ts`,
+ * `CanvasV3Scene.tsx`), et un sixième site (`MessageActionsBar.tsx`) n'en avait
+ * aucune et comparait en `===` brut.
+ *
+ * Retourne `false` si l'un des deux codes est absent/vide — un code manquant
+ * ne "matche" jamais, y compris lui-même.
+ */
+export function isSameLanguage(a?: string | null, b?: string | null): boolean {
+  return !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
+}

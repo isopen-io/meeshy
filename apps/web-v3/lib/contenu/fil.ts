@@ -67,6 +67,8 @@ export const FIL = {
   vous: 'Vous',
   /** Le nom accessible de l'avatar d'un auteur, quand il ouvre son profil (§ 12.10.3). */
   voirLeProfil: (nom: string): string => `Voir le profil de ${nom}`,
+  /** Le nom accessible de l'avatar de soi, quand il ouvre son profil (branche « C'est vous »). */
+  voirVotreProfil: 'Voir votre profil',
   systeme: 'Message système',
   original: 'Voir l’original',
   traduitDepuis: 'Traduit depuis cette langue',

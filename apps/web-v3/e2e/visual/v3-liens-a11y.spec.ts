@@ -94,7 +94,68 @@ test('un seul appel, et l’adresse publique n’est pas la destination de la li
 
   // Le lien FERMÉ du bouchon n'a pas de conversation étendue : sa ligne n'est
   // donc pas cliquable du tout, plutôt qu'un lien mort (charte règle 7).
-  await expect(page.locator('li.lien.ferme')).toBeVisible();
+  // #4933 : le `<li>` porte le geste (`ligne-lien`), le `<span>` la teinte
+  // (`lien`) — deux éléments, jamais un seul portant les deux vocabulaires.
+  await expect(page.locator('li.ligne-lien.ferme .lien.ferme')).toBeVisible();
+
+  await contexte.close();
+});
+
+/**
+ * #4933, critère (6) — LE MENU DE FERMETURE, OUVERT, PASSE AUSSI L'AUDIT.
+ * Un `<details>` fermé masque son `<form>` du DOM d'axe : sans l'ouvrir,
+ * `color-contrast` et les autres règles ne jugeraient jamais le contenu que
+ * le lecteur voit réellement une fois le menu déplié.
+ */
+(['light', 'dark'] as const).forEach((schema) => {
+  test(`0 violation axe serious/critical — le menu de fermeture OUVERT (${schema})`, async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, schema);
+    const page = await contexte.newPage();
+
+    await page.goto(`${v3.base}/links`);
+    await page.locator('li.ligne-lien:not(.ferme) details.actions summary').first().click();
+    await expect(page.locator('li.ligne-lien:not(.ferme) details.actions[open]')).toBeVisible();
+
+    const { violations } = await new AxeBuilder({ page }).analyze();
+    const bloquantes = violationsBloquantes(violations);
+    expect(bloquantes, rapporteViolations(`/links, menu ouvert (${schema})`, bloquantes)).toEqual([]);
+
+    await contexte.close();
+  });
+});
+
+test('chaque cible du geste de fermeture mesure au moins 44 px, à 360 et à 390', async ({ browser }) => {
+  for (const largeur of [360, 390]) {
+    const contexte = await browser.newContext({ viewport: { width: largeur, height: 844 } });
+    await contexte.addCookies([{ name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3.base }]);
+    const page = await contexte.newPage();
+
+    await page.goto(`${v3.base}/links`);
+    const ligne = page.locator('li.ligne-lien:not(.ferme)').first();
+    await ligne.locator('details.actions summary').click();
+
+    const cibles = [
+      ligne.locator('details.actions summary'),
+      ligne.locator('button[type="submit"]'),
+      page.locator('a.lien').first(),
+    ];
+    for (const cible of cibles) {
+      const boite = await cible.boundingBox();
+      expect(boite).not.toBeNull();
+      expect(boite!.width).toBeGreaterThanOrEqual(44);
+      expect(boite!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    await contexte.close();
+  }
+});
+
+test('?ferme rend l’avis de succès, visible', async ({ browser }) => {
+  const contexte = await contexteDuMembre(browser, 'light');
+  const page = await contexte.newPage();
+
+  await page.goto(`${v3.base}/links?ferme`);
+  await expect(page.locator('.avis[role="status"]')).toBeVisible();
 
   await contexte.close();
 });

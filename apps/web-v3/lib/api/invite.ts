@@ -12,7 +12,11 @@ import { baseDeLaPasserelle, DELAI_DE_REPONSE_MS } from './passerelle';
  *     (`services/gateway/src/routes/anonymous.ts:442`, aucune authentification) :
  *     200 avec `linkId`, `name`, `description`, les quatre exigences du lien
  *     (`requireAccount`, `requireNickname`, `requireEmail`, `requireBirthday`,
- *     `:672-675`), `allowedLanguages` et la conversation ; 404 quand le lien
+ *     `:672-675`), `allowedLanguages`, la conversation et — depuis #4522 —
+ *     les quatre droits que le lien OUVRE (`allowAnonymousMessages`,
+ *     `allowAnonymousFiles`, `allowAnonymousImages`, `allowViewHistory`,
+ *     `:691-694`) : ce que la modale de jonction peut annoncer par son
+ *     VERDICT (#4830), et non plus seulement par son nom ; 404 quand le lien
  *     n'existe pas (`:592`, `:597`) ; 410 `LINK_INACTIVE` / `LINK_EXPIRED` /
  *     `LINK_MAX_USES` quand il est clos (`:603-613`). La charge sert l'identité
  *     COMPLÈTE du créateur (§ 5.1, ⚠️ fuite) : elle est PROJETÉE ici, avant
@@ -109,6 +113,8 @@ export type ApercuDeJonction = {
   readonly requireBirthday: boolean;
   readonly languesAutorisees: readonly string[];
   readonly participants: number | null;
+  /** Les quatre droits que CE lien ouvre — servis par l'aperçu depuis #4522, projetés par la MÊME `droitsDe` que la jonction et le battement (#4830). */
+  readonly droits: Droits;
 };
 
 export type IssueDApercu =
@@ -225,6 +231,14 @@ export const apercuServi = (data: unknown): ApercuServi | null => {
     requireBirthday: donnee.requireBirthday === true,
     languesAutorisees: chaines(donnee.allowedLanguages),
     participants: nombre(objet(donnee.stats)?.totalParticipants),
+    droits: droitsDe(
+      {
+        canSendMessages: donnee.allowAnonymousMessages,
+        canSendFiles: donnee.allowAnonymousFiles,
+        canSendImages: donnee.allowAnonymousImages,
+      },
+      donnee.allowViewHistory,
+    ),
   };
 };
 
