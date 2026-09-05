@@ -99,7 +99,7 @@ final class TopLevelCommentCell: UICollectionViewCell {
     static func accessibilityLabel(name: String, content: String, time: String) -> String {
         String(
             localized: "comments.comment.a11yLabel",
-            defaultValue: "\(name), comment. \(content). \(time)",
+            defaultValue: "\(name), commentaire. \(content). \(time)",
             bundle: .main
         )
     }

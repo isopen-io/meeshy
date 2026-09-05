@@ -12,12 +12,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.model.ActiveContextMatch
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.ConversationBannerName
 import me.meeshy.sdk.model.NotificationBannerFraming
 import me.meeshy.sdk.model.NotificationBannerPresentation
 import me.meeshy.sdk.model.NotificationToastDecision
 import me.meeshy.sdk.model.NotificationToastPolicy
 import me.meeshy.sdk.model.ToastDedupWindow
+import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.socket.MessageSocketManager
 
@@ -29,6 +32,14 @@ data class InAppBanner(
     val avatarUrl: String?,
     val conversationId: String?,
     val postId: String?,
+    /**
+     * `UserNotificationPreferences.showPreview` coupé (#4818) : [presentation] a déjà son
+     * contenu masqué ([NotificationBannerPresentation.appliedPreviewSetting]), et ce drapeau
+     * dit à [NotificationBannerHost] de peindre le libellé générique à la place — un `body`
+     * naturellement vide (headline de relation, contenu sans texte) ne doit PAS déclencher
+     * le même libellé, d'où le drapeau explicite plutôt qu'une inférence sur `body == null`.
+     */
+    val previewHidden: Boolean = false,
 )
 
 /**
@@ -60,6 +71,7 @@ class NotificationBannerViewModel @Inject constructor(
     private val preferencesStore: NotificationPreferencesStore,
     private val conversationRepository: ConversationRepository,
     private val clock: NotificationToastClock,
+    private val activeConversationStore: ActiveConversationStore,
 ) : ViewModel() {
 
     private val _banner = MutableStateFlow<InAppBanner?>(null)
@@ -101,6 +113,23 @@ class NotificationBannerViewModel @Inject constructor(
     fun setActiveContext(conversationId: String?, postId: String?) {
         activeConversationId = conversationId
         activePostId = postId
+        // Publish the on-screen thread process-wide so the FCM push service — which has no
+        // ViewModel — can suppress a foreground banner for the conversation being read.
+        activeConversationStore.setActive(conversationId)
+        // A banner already on screen for the thread the reader just opened has said its piece —
+        // the reader now sees the content in the fil, so pull it down (iOS
+        // NotificationToastManager.onConversationOpened / onPostOpened). The SAME pure predicate
+        // that silences a FRESH notification for the open thread (NotificationToastPolicy).
+        val shown = _banner.value ?: return
+        if (ActiveContextMatch.matches(
+                contentConversationId = shown.conversationId,
+                contentPostId = shown.postId,
+                activeConversationId = conversationId,
+                activePostId = postId,
+            )
+        ) {
+            dismiss()
+        }
     }
 
     fun dismiss() {
@@ -112,21 +141,22 @@ class NotificationBannerViewModel @Inject constructor(
     private suspend fun handle(notification: ApiNotification) {
         val admit = dedupWindow.admit(notification.id, clock.nowMillis())
         dedupWindow = admit.window
+        val prefs = preferencesStore.preferences.value
         val decision = NotificationToastPolicy.decide(
             notification = notification,
             activeConversationId = activeConversationId,
             activePostId = activePostId,
             isDuplicateDelivery = admit.isDuplicate,
-            preferences = preferencesStore.preferences.value,
+            preferences = prefs,
             now = clock.localDateTime(),
         )
         val shown = (decision as? NotificationToastDecision.Show)?.notification ?: return
 
         val conversationId = shown.context?.conversationId
         val conversation = conversationId?.let { id ->
-            runCatching { conversationRepository.cachedConversations().first() }
-                .getOrNull()
-                ?.firstOrNull { it.id == id }
+            // #5190 — a single bounded `WHERE id = :id` lookup instead of decoding
+            // the ENTIRE cached conversation table just to find one row by id.
+            runCatching { conversationRepository.conversationStream(id).first() }.getOrNull()
         }
 
         dismissJob?.cancel()
@@ -134,16 +164,20 @@ class NotificationBannerViewModel @Inject constructor(
             notificationId = shown.id,
             presentation = NotificationBannerFraming.present(
                 notification = shown,
-                groupName = conversation?.preferences?.customName?.takeIf { it.isNotBlank() }
-                    ?: conversation?.title,
+                groupName = ConversationBannerName.composed(
+                    customName = conversation?.preferences?.customName,
+                    title = conversation?.title,
+                    favoriteEmoji = conversation?.preferences?.reaction,
+                ),
                 isDirect = (conversation?.type ?: shown.context?.conversationType)
                     .equals("direct", ignoreCase = true),
-            ),
+            ).appliedPreviewSetting(showPreview = prefs.showPreview),
             avatarName = shown.actor?.displayName?.takeIf { it.isNotBlank() }
                 ?: shown.actor?.username.orEmpty(),
             avatarUrl = shown.actor?.avatar ?: shown.context?.conversationAvatar,
             conversationId = conversationId,
             postId = shown.context?.postId ?: shown.metadata?.postId,
+            previewHidden = !prefs.showPreview,
         )
         dismissJob = viewModelScope.launch {
             delay(VISIBLE_MS)

@@ -229,14 +229,18 @@ describe('ConsentValidationService', () => {
       expect(status.canUseVoiceCloning).toBe(false);
     });
 
-    it('hasThirdPartyServicesConsent requires thirdPartyServicesConsentAt + dataProcessingConsent', async () => {
+    // #4343 — le statut ne porte plus ce champ. La fixture pose
+    // délibérément le blob que l'ancien test croyait suffisant : il ne
+    // l'était pas (Zod le strippait avant d'atteindre Mongo), et il ne
+    // produit désormais plus rien du tout.
+    it('le statut ne porte plus hasThirdPartyServicesConsent (#4343)', async () => {
       const prisma = makePrisma(
         { dataProcessingConsentAt: NOW },
         { application: { thirdPartyServicesConsentAt: NOW } }
       );
       const status = await makeSut(prisma).getConsentStatus('u1');
 
-      expect(status.hasThirdPartyServicesConsent).toBe(true);
+      expect(status).not.toHaveProperty('hasThirdPartyServicesConsent');
     });
   });
 
@@ -373,12 +377,16 @@ describe('ConsentValidationService', () => {
   // ── validateDocumentPreferences ──────────────────────────────────────────
 
   describe('validateDocumentPreferences', () => {
-    it('returns violation for scanFilesForMalware without thirdPartyServicesConsent', async () => {
+    // #4343 — garde retirée (option b) : aucun scanner tiers n'existe, et
+    // cette préférence vaut `true` PAR DÉFAUT au schéma. La violation
+    // frappait donc tout utilisateur qui enregistrait ses préférences sans
+    // rien y changer.
+    it('scanFilesForMalware ne produit plus aucune violation (#4343)', async () => {
       const sut = makeSut(makePrisma());
 
       const violations = await sut.validateDocumentPreferences('u1', { scanFilesForMalware: true });
 
-      expect(violations.some(v => v.field === 'scanFilesForMalware')).toBe(true);
+      expect(violations).toHaveLength(0);
     });
   });
 
@@ -393,12 +401,16 @@ describe('ConsentValidationService', () => {
       expect(violations.some(v => v.field === 'telemetryEnabled')).toBe(true);
     });
 
-    it('returns violation for betaFeaturesEnabled without thirdPartyServicesConsent', async () => {
+    // #4343 — garde retirée : un drapeau de fonctionnalité n'envoie rien.
+    // Le témoin voisin (`telemetryEnabled`, juste au-dessus) reste rouge
+    // sans consentement : c'est lui qui prouve que le retrait est CIBLÉ et
+    // non un affaiblissement de toute la méthode.
+    it('betaFeaturesEnabled ne produit plus aucune violation (#4343)', async () => {
       const sut = makeSut(makePrisma());
 
       const violations = await sut.validateApplicationPreferences('u1', { betaFeaturesEnabled: true });
 
-      expect(violations.some(v => v.field === 'betaFeaturesEnabled')).toBe(true);
+      expect(violations).toHaveLength(0);
     });
 
     // #4180 — l'octroi "same-request" est SUPPRIMÉ : passer
@@ -458,12 +470,20 @@ describe('ConsentValidationService', () => {
       expect(Array.isArray(violations)).toBe(true);
     });
 
+    // #4343 — l'aiguillage vers `document` ne peut plus se PROUVER par une
+    // violation : `validateDocumentPreferences` n'en produit plus aucune
+    // depuis le retrait de la garde `scanFilesForMalware`. Un témoin qui
+    // attendrait un tableau vide ne distinguerait pas « aiguillé vers
+    // document » de « tombé dans le `default` », donc ne garderait rien. On
+    // observe donc l'APPEL lui-même — la seule chose que ce test a jamais
+    // voulu dire.
     it('dispatches "document" category', async () => {
       const sut = makeSut(makePrisma());
+      const spy = jest.spyOn(sut, 'validateDocumentPreferences');
 
-      const violations = await sut.validatePreferences('u1', 'document', { scanFilesForMalware: true });
+      await sut.validatePreferences('u1', 'document', { scanFilesForMalware: true });
 
-      expect(violations.some(v => v.field === 'scanFilesForMalware')).toBe(true);
+      expect(spy).toHaveBeenCalledWith('u1', { scanFilesForMalware: true });
     });
 
     it('dispatches "application" category', async () => {

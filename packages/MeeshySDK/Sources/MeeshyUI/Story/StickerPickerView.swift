@@ -1,244 +1,329 @@
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 import MeeshySDK
 
 // MARK: - Sticker Picker View
 
+/// **La palette de CONSTRUCTIONS** (#4579, directive porteur 2026-08-31).
+///
+/// Cette feuille n'est plus un clavier d'emoji : elle propose ce qui se POSE
+/// sur la scène — des décorations d'amour, l'heure qu'il est, un lieu alentour,
+/// ses propres stickers. C'est ce qui évite de multiplier les icônes du rail :
+/// une porte, cinq constructions, et un point d'extension pour la suivante.
+///
+/// ## Ce que la feuille ne décide pas
+///
+/// Ni la localisation (permission, `CLLocationManager`), ni le magasin de
+/// « Mes stickers » (budget, éviction, disque). Les deux sont **injectés par
+/// l'app** ; sans injection leur onglet est **absent**, jamais grisé — loi 4.
+///
+/// ## Le gel
+///
+/// L'heure est lue **une fois, à l'ouverture**, et figée dans les emplacements
+/// du gabarit à la pose. Rien en aval ne relit l'horloge : tout lecteur voit
+/// l'heure que l'auteur a composée, et une story archivée garde son sens.
 public struct StickerPickerView: View {
+
     public var onStickerSelected: (String) -> Void
     /// Ce que fait un tap sur une vignette de « Mes stickers ». Requis, sans
     /// défaut : une bibliothèque peinte dont les vignettes ne mènent nulle part
-    /// est une affordance inerte (loi 4). La section reste, elle, gouvernée par
-    /// la seule présence du magasin (`\.storyStickerLibrary`).
+    /// est une affordance inerte (loi 4).
     public var onLibraryStickerSelected: (StoryStickerLibraryItem) -> Void
+    /// Ce que fait un tap sur une décoration d'AMOUR ou d'HEURE : poser un
+    /// `StorySticker` de nature `.template`, avec ses emplacements déjà figés.
+    ///
+    /// **Requis, sans défaut** — même règle que `onLibraryStickerSelected` : un
+    /// rappel par défaut vide ferait de la grille une affordance INERTE, qui
+    /// vibre sous le doigt et ne pose rien (loi 4). Sans défaut, tout site de
+    /// montage doit dire ce qu'il fait de la décoration.
+    public var onTemplateSelected: (StickerTemplate, [String: String]) -> Void
+    /// Ce que fait un tap sur une décoration de LIEU : poser un
+    /// `StoryLocationObject` — la famille qui porte la donnée géographique que
+    /// la plateforme LIT, jamais un sticker jumeau.
+    public var onLocationTemplateSelected: (SharedPlace, StickerTemplate) -> Void
 
-    @State private var selectedCategory: StickerCategory = .smileys
-    @State private var searchText = ""
-    @Environment(\.colorScheme) private var colorScheme
+    /// **L'ONGLET choisi** (directive porteur 2026-09-05) — il remplace
+    /// `selectedNature`, l'interrupteur à deux positions de #5012.
+    ///
+    /// La nature répondait à « qu'est-ce que c'est ? » ; l'onglet répond à
+    /// « qu'est-ce que je cherche ? », question qui vient AVANT. Le
+    /// raisonnement complet vit dans `StickerSheetTab`, avec ce que le
+    /// remplacement corrige : dix-huit sections toutes également lointaines,
+    /// où la deuxième visite coûtait autant que la première.
+    @State var selectedTab: StickerSheetTab = .search
+    /// Les mots tapés dans l'onglet RECHERCHE — ils filtrent le catalogue à la
+    /// frappe (loi 7), et ne survivent pas à la fermeture : une recherche est
+    /// une intention du moment, pas une préférence.
+    @State var searchQuery: String = ""
+    @Environment(\.colorScheme) var colorScheme
+    /// **Fermer la feuille.** `@Environment(\.dismiss)` plutôt qu'un rappel au
+    /// contrat : les trois hôtes la présentent en `.sheet`, et un rappel de
+    /// plus aurait obligé chacun à redire ce que le système sait déjà faire.
+    @Environment(\.dismiss) var dismiss
+    /// Les favoris et les récents. Le magasin est un STORE DE PRÉFÉRENCES,
+    /// donc SDK — il retient, il rend, il borne, il ne décide de rien.
+    @ObservedObject var usage: StickerUsageStore = .shared
 
     /// V3-5 — « Mes stickers ». `nil` tant que l'app n'a pas injecté
-    /// `.storyStickerLibraryProvided()` : la section entière est alors ABSENTE
-    /// (loi 4), jamais un rail grisé sans magasin derrière.
-    @Environment(\.storyStickerLibrary) private var stickerLibrary
-    @State private var libraryItems: [StoryStickerLibraryItem] = []
+    /// `.storyStickerLibraryProvided()`.
+    @Environment(\.storyStickerLibrary) var stickerLibrary
+    /// #4579 — les lieux alentour. `nil` tant que l'app n'a pas injecté son
+    /// fournisseur : l'onglet « Lieu » n'existe alors pas.
+    @Environment(\.stickerNearbyPlaces) var nearbyPlaces
+    @Environment(\.stickerPaletteClock) private var clock
+
+    @State var libraryItems: [StoryStickerLibraryItem] = []
+    /// La photo choisie pour un DÉTOURAGE (#3955) — remise à `nil` dès que
+    /// la tâche l'a consommée, sinon rouvrir l'onglet re-détourerait la
+    /// même image.
+    @State var liftSelection: PhotosPickerItem?
+    /// Le sélecteur de lieu, injecté par l'app (`storyLocationPickerProvided`).
+    /// `nil` ⇒ la puce « Ma position… » n'est pas peinte : elle ouvrirait le
+    /// vide, et un chip qui ouvre le vide est pire que pas de chip.
+    @Environment(\.storyLocationPicker) var storyLocationPicker
+    /// La feuille du sélecteur est-elle ouverte ? (2026-09-05)
+    @State var showsPlacePicker = false
+    @State var places: [SharedPlace] = []
+    @State var selectedPlaceIndex: Int = 0
+    /// L'instant lu à l'OUVERTURE. Une seule lecture, figée ensuite : relire
+    /// l'horloge à chaque rendu ferait bouger les vignettes sous le doigt.
+    @State var openedAt: Date = .distantPast
+    /// Les mots que l'auteur tape dans l'onglet Texte (#4822) — les vignettes
+    /// se redessinent à la frappe (loi 7), et la pose les fige.
+    @State var typedStickerText: String = ""
 
     public init(onStickerSelected: @escaping (String) -> Void,
-                onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void) {
+                onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void,
+                onTemplateSelected: @escaping (StickerTemplate, [String: String]) -> Void,
+                onLocationTemplateSelected: @escaping (SharedPlace, StickerTemplate) -> Void) {
         self.onStickerSelected = onStickerSelected
         self.onLibraryStickerSelected = onLibraryStickerSelected
+        self.onTemplateSelected = onTemplateSelected
+        self.onLocationTemplateSelected = onLocationTemplateSelected
     }
 
-    private var filteredEmojis: [String] {
-        guard !searchText.isEmpty else { return selectedCategory.emojis }
-        let all = StickerCategory.allCases.flatMap(\.emojis)
-        return all.filter { $0.unicodeScalars.contains { scalar in
-            String(scalar).localizedCaseInsensitiveContains(searchText)
-        }}
+    /// Les onglets réellement servis — la loi 4, résolue par une fonction pure
+    /// que son propre témoin exerce (`StickerPaletteTab.offered`).
+    var offeredTabs: [StickerPaletteTab] {
+        StickerPaletteTab.offered(hasLibrary: stickerLibrary != nil,
+                                  hasNearbyPlaces: nearbyPlaces != nil)
     }
 
+    /// **La feuille est PLATE, et elle a l'anatomie de la fiche de création
+    /// audio** (directive porteur 2026-09-05).
+    ///
+    /// > « Il faut refonder la fiche des stickers pour ressembler à la fiche de
+    /// > création d'audio, tout aplatir sur la feuille, des sections sans
+    /// > cadre ! En somme une vue moderne. »
+    ///
+    /// ## Ce que la refonte retire, et pourquoi ça se voyait
+    ///
+    /// Le contenu vivait dans une CARTE — `.padding(16)` + `.ultraThinMaterial`
+    /// + un rayon de 16 — posée à l'intérieur d'une feuille qui a déjà son
+    /// propre fond et son propre arrondi. Deux boîtes concentriques, dont
+    /// l'intérieure rognait seize points de chaque côté d'un écran qui n'en a
+    /// que 402, et dont les coins arrondis répétaient ceux de la feuille à
+    /// quelques points près. Le contenu paraissait FLOTTER dans une fenêtre
+    /// plutôt que d'occuper l'écran.
+    ///
+    /// > Une carte à l'intérieur d'une feuille n'ajoute aucune information : la
+    /// > feuille dit déjà « ceci est un calque au-dessus ». Elle ne fait que
+    /// > répéter la frontière, et facturer la répétition en largeur.
+    ///
+    /// Les en-têtes de section perdent leur `.ultraThinMaterial` et leur
+    /// épinglage : un titre encadré au-dessus d'une grille encadrée dans une
+    /// carte encadrée fait trois cadres pour une seule chose à lire. Ce qui
+    /// sépare deux sections est désormais l'ESPACE — `MeeshySpacing.xxl` — et
+    /// la graisse du titre.
+    ///
+    /// ## Ce qu'elle reprend de la fiche audio
+    ///
+    /// Le dégradé pleine feuille (`background`), le défilement unique, la
+    /// respiration de 24 points entre blocs, la marge de 20. C'est
+    /// littéralement l'anatomie d'`AudioPostComposerView` : deux feuilles du
+    /// même composer qui ne se ressemblaient pas obligeaient l'auteur à
+    /// réapprendre où regarder à chaque ouverture (dimension 6).
+    ///
+    /// **Le plafond de 420 pt est parti avec la carte.** Il bornait la liste à
+    /// l'intérieur de son cadre ; sans cadre, c'est la feuille qui borne, et
+    /// elle le fait à la taille de l'écran plutôt qu'à un nombre écrit à la
+    /// main.
     public var body: some View {
-        VStack(spacing: 0) {
-            panelHeader
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-            categoryTabs
-            emojiGrid
-            if stickerLibrary != nil {
-                myStickersSection
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+        ZStack {
+            background
+            VStack(spacing: 0) {
+                panelHeader
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.md)
+                StickerSheetTabBar(selection: $selectedTab)
+                    .padding(.bottom, MeeshySpacing.sm)
+                tabbedContent
             }
         }
-        .padding(16)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
-        // L'identité (`nil` ou non) ne change pas après le montage — seul le
-        // PREMIER rendu doit charger les récents ; les pastes suivants mettent
-        // `libraryItems` à jour directement depuis leur propre résultat.
-        .task(id: stickerLibrary == nil) {
-            guard let stickerLibrary else { return }
-            libraryItems = await stickerLibrary.recents()
-        }
-    }
-
-    // MARK: - « Mes stickers » (V3-5)
-
-    /// Le déclencheur naturel de C8 : coller une image PENDANT que ce panneau
-    /// est ouvert la retient, plutôt que de laisser 126 lignes de magasin sans
-    /// aucun appelant. Depuis S1, `StorySticker` porte une image intégrée
-    /// (`postMediaId`) : taper une vignette la POSE sur le canevas, la
-    /// bibliothèque n'est plus une collection sans sortie.
-    private var myStickersSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(String(localized: "story.sticker.library.title", defaultValue: "Mes stickers", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.85) : MeeshyColors.indigo950.opacity(0.85))
-                Spacer()
-                if let stickerLibrary {
-                    PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
-                        Task { libraryItems = await stickerLibrary.paste(providers) }
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonBorderShape(.capsule)
-                    .frame(minHeight: 32)
+        // **Le sélecteur de position exacte** (2026-09-05). Il est monté ICI,
+        // sur la feuille entière, et non dans la puce : une feuille présentée
+        // depuis une branche conditionnelle disparaît avec elle, et la puce vit
+        // dans un `ScrollView` horizontal que le moindre changement d'état
+        // reconstruit.
+        .sheet(isPresented: $showsPlacePicker) {
+            if let storyLocationPicker {
+                storyLocationPicker.makeView { lieu in
+                    showsPlacePicker = false
+                    adopterLieuChoisi(lieu)
                 }
             }
-            if libraryItems.isEmpty {
-                Text(String(
-                    localized: "story.sticker.library.empty",
-                    defaultValue: "Collez une image pour commencer votre bibliothèque",
-                    bundle: .module
-                ))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(libraryItems) { item in
-                            Button {
-                                onLibraryStickerSelected(item)
-                                HapticFeedback.medium()
-                            } label: {
-                                Image(uiImage: item.thumbnail)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 52, height: 52)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)  // cf. note des onglets
-                            .accessibilityLabel(String(
-                                localized: "story.sticker.library.a11y",
-                                defaultValue: "Autocollant de votre bibliothèque",
-                                bundle: .module
-                            ))
-                        }
-                    }
-                }
-                .frame(height: 52)
+        }
+        .task {
+            // Une seule lecture de l'horloge, à l'ouverture (cf. doc de type).
+            if openedAt == .distantPast { openedAt = clock() }
+            if let stickerLibrary, libraryItems.isEmpty {
+                libraryItems = await stickerLibrary.recents()
             }
         }
     }
 
-    // MARK: - Panel Header
+    // MARK: - Le fond
 
+    /// **Le même dégradé que la fiche de création audio**, aux mêmes jetons de
+    /// marque. Deux feuilles du même composer qui n'auraient pas le même fond
+    /// se liraient comme deux applications.
+    ///
+    /// `.ignoresSafeArea()` : le dégradé descend sous l'indicateur d'accueil et
+    /// remonte sous la poignée de la feuille, sans quoi une bande du fond
+    /// SYSTÈME apparaîtrait aux deux bouts — précisément le liseré que la
+    /// directive appelle « cadre ».
+    private var background: some View {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [MeeshyColors.indigo950, Color.black.opacity(0.92), MeeshyColors.indigo950.opacity(0.85)]
+                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(0.55)],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+    }
+
+    // MARK: - En-tête
+
+    /// Le glyphe de la feuille — **le même que celui de la porte qui l'ouvre**
+    /// (`ComposerRailDoor.sticker`). Une feuille dont l'en-tête ne ressemble pas
+    /// au bouton qui vient de la faire monter est une rupture de continuité
+    /// visuelle : l'utilisateur perd la trace de ce qu'il a touché.
+    ///
+    /// Aucun glyphe Apple ne s'appelle « sticker » ni « peel » (vérifié dans
+    /// `CoreGlyphs.bundle`) ; celui-ci dit le geste — la feuille qui se décolle.
+    /// iOS 16.0 = le plancher du projet.
+    static let sheetSymbolName = "rectangle.portrait.on.rectangle.portrait.angled"
+
+    /// **L'en-tête : le `✕` en verre, puis le logo et le titre — tous à
+    /// GAUCHE** (directive porteur 2026-09-05).
+    ///
+    /// > « Rendre un header propre avec (X) en liquidglass et le titre et logo
+    /// > Stickers à gauche »
+    ///
+    /// ## Le `✕` n'existait pas, et son absence n'était pas une décision
+    ///
+    /// La feuille se fermait par le GLISSEMENT, seul geste offert. Il marche —
+    /// et il est invisible : rien sur l'écran ne dit qu'il existe, et un auteur
+    /// qui ne le connaît pas n'a aucune sortie. Une feuille dont la seule
+    /// fermeture est un geste appris ailleurs est fermée pour qui ne l'a pas
+    /// appris.
+    ///
+    /// ## Pourquoi le titre reste à GAUCHE du `✕`, et non centré
+    ///
+    /// Un titre centré cède la moitié de sa largeur aux deux marges qui
+    /// l'équilibrent, pour une feuille qui n'a qu'UNE action d'en-tête. Groupés
+    /// à gauche, le glyphe, le mot et la croix se lisent dans l'ordre du regard
+    /// et laissent la droite libre — c'est ce que la directive demande, et
+    /// c'est aussi ce qui laisse la place à une action future sans rien
+    /// déplacer.
+    ///
+    /// **`adaptiveGlass` et non `glassEffect`** : l'enrobage du SDK rend le vrai
+    /// Liquid Glass sur iOS 26 et un matériau translucide en dessous. Le
+    /// plancher du projet est iOS 16, et un appel direct ne compilerait pas
+    /// sans une garde de version que ce site n'a pas à porter.
     private var panelHeader: some View {
-        HStack {
-            Image(systemName: "face.smiling")
+        HStack(spacing: 10) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                    // 32 pt de DESSIN dans une cible de 44 — le plancher
+                    // tactile (dimension 5) porte sur ce que le doigt vise,
+                    // jamais sur ce que l'œil voit.
+                    .frame(width: 32, height: 32)
+                    .adaptiveGlass(in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "sticker.sheet.close",
+                                       defaultValue: "Fermer", bundle: .module))
+
+            Image(systemName: Self.sheetSymbolName)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
-            Spacer()
+            Spacer(minLength: 0)
         }
+        // Le titre et le glyphe DISENT la même chose que le bouton qui a ouvert
+        // la feuille ; les fusionner évite à VoiceOver de lire deux éléments
+        // pour un seul en-tête, et le trait dit au rotor que c'en est un.
+        .accessibilityElement(children: .contain)
     }
 
-    // MARK: - Category Tabs
+    // MARK: - Les onglets
 
-    private var categoryTabs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(StickerCategory.allCases, id: \.self) { category in
-                    Button {
-                        withAnimation(.spring(response: 0.25)) { selectedCategory = category }
-                        HapticFeedback.light()
-                    } label: {
-                        Text(category.icon)
-                            .font(.system(size: 22))
-                            .frame(width: 40, height: 36)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedCategory == category ? Color.white.opacity(0.2) : Color.clear)
-                            )
-                    }
-                    // .plain obligatoire : le style par défaut rend les
-                    // glyphes emoji INVISIBLES dans la sheet (vécu it.72 —
-                    // onglets et grille vides à la 1re mise en service).
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-    }
-
-    // MARK: - Emoji Grid
-
-    private var emojiGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 8) {
-                ForEach(filteredEmojis, id: \.self) { emoji in
-                    Button {
-                        onStickerSelected(emoji)
-                        HapticFeedback.medium()
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 30))
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)  // cf. note des onglets (emoji invisibles sinon)
-                    .accessibilityLabel(String(localized: "story.sticker.a11y", defaultValue: "Autocollant \(emoji)", bundle: .module))
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-        // Cède de la place à la section « Mes stickers » quand elle est
-        // rendue — sans quoi les deux réclament leur plein espace sur une
-        // sheet en `.medium` (hauteur fixe, pas de detent `.large` de repli)
-        // et la seconde déborderait sur les petits écrans.
-        .frame(maxHeight: stickerLibrary == nil ? 260 : 200)
-    }
-}
-
-// MARK: - Sticker Category
-
-public enum StickerCategory: String, CaseIterable {
-    case smileys, animals, food, activities, travel, objects, symbols, flags
-
-    public var icon: String {
-        switch self {
-        case .smileys: return "\u{1F600}"
-        case .animals: return "\u{1F43E}"
-        case .food: return "\u{1F354}"
-        case .activities: return "\u{26BD}"
-        case .travel: return "\u{2708}\u{FE0F}"
-        case .objects: return "\u{1F4A1}"
-        case .symbols: return "\u{2764}\u{FE0F}"
-        case .flags: return "\u{1F3F3}\u{FE0F}"
-        }
-    }
-
-    public var emojis: [String] {
-        switch self {
-        case .smileys:
-            return ["\u{1F600}", "\u{1F602}", "\u{1F60D}", "\u{1F60E}", "\u{1F61C}", "\u{1F60A}", "\u{1F609}",
-                    "\u{1F622}", "\u{1F621}", "\u{1F633}", "\u{1F914}", "\u{1F92F}", "\u{1F970}", "\u{1F973}",
-                    "\u{1F60B}", "\u{1F92D}", "\u{1F971}", "\u{1F976}", "\u{1F975}", "\u{1F47B}", "\u{1F4A9}"]
-        case .animals:
-            return ["\u{1F436}", "\u{1F431}", "\u{1F43B}", "\u{1F98A}", "\u{1F981}", "\u{1F42F}", "\u{1F984}",
-                    "\u{1F40D}", "\u{1F41D}", "\u{1F98B}", "\u{1F427}", "\u{1F989}", "\u{1F99C}", "\u{1F433}"]
+    static func tabTitle(_ onglet: StickerPaletteTab) -> String {
+        switch onglet {
+        case .emoji:
+            return String(localized: "sticker.tab.emoji", defaultValue: "Emoji", bundle: .module)
+        case .text:
+            return String(localized: "sticker.tab.text", defaultValue: "Texte", bundle: .module)
+        case .love:
+            return String(localized: "sticker.tab.love", defaultValue: "Amour", bundle: .module)
+        case .time:
+            return String(localized: "sticker.tab.time", defaultValue: "Heure", bundle: .module)
+        case .weather:
+            return String(localized: "sticker.tab.weather", defaultValue: "Météo", bundle: .module)
+        case .joy:
+            return String(localized: "sticker.tab.joy", defaultValue: "Joie", bundle: .module)
+        case .surprise:
+            return String(localized: "sticker.tab.surprise", defaultValue: "Stupeur", bundle: .module)
+        case .mood:
+            return String(localized: "sticker.tab.mood", defaultValue: "Humeur", bundle: .module)
+        case .greeting:
+            return String(localized: "sticker.tab.greeting", defaultValue: "Salut", bundle: .module)
+        case .reaction:
+            return String(localized: "sticker.tab.reaction", defaultValue: "Réactions", bundle: .module)
+        case .party:
+            return String(localized: "sticker.tab.party", defaultValue: "Fête", bundle: .module)
+        case .availability:
+            return String(localized: "sticker.tab.availability", defaultValue: "Dispo", bundle: .module)
+        case .nature:
+            return String(localized: "sticker.tab.nature", defaultValue: "Nature", bundle: .module)
+        case .cheer:
+            return String(localized: "sticker.tab.cheer", defaultValue: "Bravo", bundle: .module)
+        case .answer:
+            return String(localized: "sticker.tab.answer", defaultValue: "Réponses", bundle: .module)
         case .food:
-            return ["\u{1F355}", "\u{1F354}", "\u{1F32E}", "\u{1F363}", "\u{1F370}", "\u{1F369}", "\u{1F366}",
-                    "\u{2615}", "\u{1F377}", "\u{1F37A}", "\u{1F353}", "\u{1F34E}", "\u{1F34C}", "\u{1F951}"]
-        case .activities:
-            return ["\u{26BD}", "\u{1F3C0}", "\u{1F3C8}", "\u{26BE}", "\u{1F3BE}", "\u{1F3B1}", "\u{1F3AE}",
-                    "\u{1F3B5}", "\u{1F3B8}", "\u{1F3A4}", "\u{1F3AC}", "\u{1F3A8}", "\u{1F3AD}", "\u{1F3AA}"]
+            return String(localized: "sticker.tab.food", defaultValue: "Gourmand", bundle: .module)
+        case .sport:
+            return String(localized: "sticker.tab.sport", defaultValue: "Sport", bundle: .module)
         case .travel:
-            return ["\u{2708}\u{FE0F}", "\u{1F680}", "\u{1F3D6}\u{FE0F}", "\u{1F3D4}\u{FE0F}", "\u{1F30D}", "\u{1F5FC}", "\u{1F3E0}",
-                    "\u{1F697}", "\u{1F6B2}", "\u{1F6F3}\u{FE0F}", "\u{26F2}", "\u{1F3A2}", "\u{26FA}", "\u{1F30C}"]
-        case .objects:
-            return ["\u{1F4A1}", "\u{1F4F7}", "\u{1F4F1}", "\u{1F4BB}", "\u{2328}\u{FE0F}", "\u{1F3A7}", "\u{1F50D}",
-                    "\u{1F4DA}", "\u{270F}\u{FE0F}", "\u{1F4E6}", "\u{1F513}", "\u{2699}\u{FE0F}", "\u{1F4CE}", "\u{2702}\u{FE0F}"]
-        case .symbols:
-            return ["\u{2764}\u{FE0F}", "\u{1F525}", "\u{2B50}", "\u{1F4AF}", "\u{26A1}", "\u{1F31F}", "\u{1F4A5}",
-                    "\u{2728}", "\u{1F308}", "\u{1F389}", "\u{1F388}", "\u{1F381}", "\u{1F3C6}", "\u{1F48E}"]
-        case .flags:
-            return ["\u{1F1EB}\u{1F1F7}", "\u{1F1FA}\u{1F1F8}", "\u{1F1EC}\u{1F1E7}", "\u{1F1EA}\u{1F1F8}", "\u{1F1E9}\u{1F1EA}", "\u{1F1EE}\u{1F1F9}", "\u{1F1EF}\u{1F1F5}",
-                    "\u{1F1E7}\u{1F1F7}", "\u{1F1E8}\u{1F1E6}", "\u{1F1E6}\u{1F1FA}", "\u{1F1F0}\u{1F1F7}", "\u{1F1F2}\u{1F1FD}", "\u{1F1EE}\u{1F1F3}", "\u{1F1F7}\u{1F1FA}"]
+            return String(localized: "sticker.tab.travel", defaultValue: "Voyage", bundle: .module)
+        case .work:
+            return String(localized: "sticker.tab.work", defaultValue: "Travail", bundle: .module)
+        case .music:
+            return String(localized: "sticker.tab.music", defaultValue: "Musique", bundle: .module)
+        case .place:
+            return String(localized: "sticker.tab.place", defaultValue: "Lieu", bundle: .module)
+        case .library:
+            return String(localized: "story.sticker.library.title",
+                          defaultValue: "Mes stickers", bundle: .module)
         }
     }
 }

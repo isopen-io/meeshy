@@ -74,10 +74,10 @@ extension UniversalComposerBar {
         .onAppear {
             isMinimized = startMinimized
         }
-        .onDisappear {
-            recordingTimer?.invalidate()
-            recordingTimer = nil
-        }
+        // **Le ménage disparaît avec ce qu'il nettoyait** (#4560) : le `Timer`
+        // qui vivait ici n'enregistrait rien — il comptait des secondes pour un
+        // vocal qui n'existait pas. La prise appartient au parent, qui possède
+        // son `AVAudioRecorder` et son propre cycle de vie.
     }
 
     // MARK: - Minimized Floating Button
@@ -287,7 +287,7 @@ extension UniversalComposerBar {
         }
         .adaptiveOnChange(of: storyId) { oldId, newId in
             if let oldId {
-                if isRecording { forceStopRecording() }
+                if effectiveIsRecording { forceStopRecording() }
                 onSaveDraft?(oldId, text, attachments)
             }
             if let newId, let draft = getDraft?(newId) {

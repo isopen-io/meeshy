@@ -174,6 +174,15 @@ export interface MessageRequest {
    * (`services/location/sharedPlace.ts`), pas dans ce type partagé.
    */
   readonly location?: unknown;
+
+  /**
+   * Sticker (décoration de story ou emoji), champ dédié — même doctrine que
+   * `location` : jamais fusionné dans `metadata` côté client, validé et écrit
+   * dans `Message.metadata.sticker` par la seule passerelle
+   * (`services/stickers/messageSticker.ts`). Forme non typée ici pour la
+   * même raison : la validation stricte vit côté gateway.
+   */
+  readonly sticker?: unknown;
 }
 
 // ===== RÉPONSE UNIFIÉE =====

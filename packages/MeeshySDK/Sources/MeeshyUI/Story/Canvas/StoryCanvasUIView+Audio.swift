@@ -398,14 +398,34 @@ extension StoryCanvasUIView {
         lastAppliedMutedSet = next
     }
 
+    /// **Une notification DIFFUSÉE ne franchit pas un muet verrouillé (#4084).**
+    ///
+    /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` sont postées
+    /// `object: nil` : TOUS les `StoryCanvasUIView` montés les reçoivent, y
+    /// compris les cartes de fil restées vivantes derrière un
+    /// `fullScreenCover`. Relever le muet au rail du viewer story coupait donc
+    /// aussi celui du fil — exactement ce que la vue `2f` interdit : « le muet
+    /// reste local à la surface, le couper ici ne coupe rien dans le fil ».
+    ///
+    /// Le verrou existait déjà (`ScenePlayerConfig.locksMute`), il était testé,
+    /// et il était CONTOURNABLE : il vivait sur le prop, et n'atteignait le
+    /// canvas qu'à la passe de rendu suivante. **Un champ de service qui
+    /// DÉCLARE une restriction ne la fait pas respecter** — il faut que le site
+    /// qui mute la lise.
     @objc func handleComposerMute() {
+        guard !muteIsLocked else { return }
         isAudioMuted = true
         audioMixer.setMute(true)
         forEachMediaLayer { $0.isMuted = true }
         backgroundLayer.isMuted = true
     }
 
+    /// Jumelle de `handleComposerMute` — même verrou, et il faut les DEUX : un
+    /// canvas verrouillé muet qu'on laisserait se faire muter resterait
+    /// cohérent par accident, jusqu'au jour où le verrou servira une surface
+    /// verrouillée SONORE.
     @objc func handleComposerUnmute() {
+        guard !muteIsLocked else { return }
         isAudioMuted = false
         audioMixer.setMute(false)
         forEachMediaLayer { $0.isMuted = false }

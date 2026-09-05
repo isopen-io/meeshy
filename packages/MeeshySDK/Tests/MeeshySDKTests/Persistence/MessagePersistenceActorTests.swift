@@ -1461,7 +1461,9 @@ final class MessagePersistenceActorTests: XCTestCase {
         await actor.start()
         let apiMsg = makeAPIMessage(id: "srv_buf_1", conversationId: "conv_buf", content: "Buffered")
 
-        await actor.bufferIncomingAPIMessages([apiMsg])
+        // Le prisme voyage AVEC l'opération : il est résolu par le producteur,
+        // jamais lu depuis la boucle d'écriture (qui attendrait le MainActor).
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
 
         var rows: [MessageRecord] = []
         for _ in 0..<60 {

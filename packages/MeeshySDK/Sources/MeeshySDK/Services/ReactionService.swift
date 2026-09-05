@@ -23,19 +23,19 @@ public final class ReactionService: ReactionServiceProviding, @unchecked Sendabl
         // strict precedent levait un `DecodingError` sur une reponse 2xx
         // pourtant valide — l'envoi etait donc compte comme un echec. La mise
         // a jour fait foi via le broadcast socket `reaction:added`.
-        let _: APIResponse<DiscardedReactionResponse> = try await api.post(endpoint: "/reactions", body: body)
+        let _: APIResponse<DiscardedReactionResponse> = try await api.post(ReactionsEndpoint.root, body: body)
     }
 
     public func remove(messageId: String, emoji: String) async throws {
         let encoded = emoji.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? emoji
         let _: APIResponse<DiscardedReactionResponse> = try await api.request(
-            endpoint: "/reactions/\(messageId)/\(encoded)", method: "DELETE"
+            ReactionsEndpoint.byMessageIdByEmoji(messageId: messageId, emoji: encoded), method: "DELETE"
         )
     }
 
     public func fetchDetails(messageId: String) async throws -> ReactionSyncResponse {
         let response: APIResponse<ReactionSyncResponse> = try await api.request(
-            endpoint: "/reactions/\(messageId)"
+            ReactionsEndpoint.byMessageId(messageId: messageId)
         )
         return response.data
     }

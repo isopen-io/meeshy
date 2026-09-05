@@ -26,11 +26,40 @@ fun AudioTrackSurface(
     isActive: Boolean,
     loop: Boolean = true,
     volume: Float = 1f,
+    /**
+     * Fenêtre de lecture DANS la source, en millisecondes (#5129) — `null` quand
+     * la source joue en entier. Les deux ou aucune : l'appelant a déjà tranché
+     * (`StorySourceWindow.clippingMs`), cette surface ne redécide rien.
+     *
+     * **Un vocal rogné compte autant qu'une vidéo rognée** : iOS écrit les deux
+     * bornes sur les deux familles, et les servir pour la seule image laisserait
+     * un son coupé jouer en entier.
+     */
+    sourceStartMs: Long? = null,
+    sourceEndMs: Long? = null,
 ) {
     val context = LocalContext.current
-    val player = remember(mediaUrl) {
+    val player = remember(mediaUrl, sourceStartMs, sourceEndMs) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(mediaUrl))
+            // La fenêtre est portée par le MediaItem, jamais par un `seekTo`
+            // suivi d'une surveillance : ExoPlayer coupe la source lui-même, la
+            // position 0 EST le début de la fenêtre, et la boucle reboucle
+            // dessus sans qu'aucun code n'observe la tête de lecture.
+            setMediaItem(
+                MediaItem.Builder()
+                    .setUri(mediaUrl)
+                    .apply {
+                        if (sourceStartMs != null && sourceEndMs != null) {
+                            setClippingConfiguration(
+                                MediaItem.ClippingConfiguration.Builder()
+                                    .setStartPositionMs(sourceStartMs)
+                                    .setEndPositionMs(sourceEndMs)
+                                    .build(),
+                            )
+                        }
+                    }
+                    .build(),
+            )
             repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             this.volume = volume
             playWhenReady = false

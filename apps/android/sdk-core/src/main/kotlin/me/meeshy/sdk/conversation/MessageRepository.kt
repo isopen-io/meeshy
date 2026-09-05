@@ -1,7 +1,9 @@
 package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
@@ -52,6 +54,25 @@ class MessageRepository @Inject constructor(
     private val outboxRepository: OutboxRepository,
     private val clock: CacheClock,
 ) {
+    /**
+     * #5189 — the nominal-flow observe window, per conversation: how many of
+     * the newest rows [MessageCacheSource.observe] is bounded to. Starts at
+     * [INITIAL_HISTORY_WINDOW] (bigger than the server's own default
+     * recent-window fetch — `limitStr = '20'`, `services/gateway/src/routes/
+     * conversations/messages-list.ts:189` — so a fresh sync never overflows
+     * it) and grows by exactly as many rows as [loadOlder] actually pages
+     * in, so a row that becomes cached stays observable — scroll-back is
+     * never truncated by the bound. Held HERE rather than on a
+     * [MessageCacheSource] instance: [cacheSource] builds a fresh one on
+     * every call (see [messagesStream], [refresh]), and [loadOlder] never
+     * touches a cache source at all — a per-instance field would reset on
+     * every call and never see [loadOlder]'s growth.
+     */
+    private val historyWindowSizes = ConcurrentHashMap<String, MutableStateFlow<Int>>()
+
+    private fun historyWindow(conversationId: String): MutableStateFlow<Int> =
+        historyWindowSizes.getOrPut(conversationId) { MutableStateFlow(INITIAL_HISTORY_WINDOW) }
+
     /**
      * Cache-first message list for a conversation (ARCHITECTURE.md §4): the
      * cached messages (including optimistic local rows) are served immediately
@@ -105,13 +126,34 @@ class MessageRepository @Inject constructor(
         database.withTransaction {
             messageDao.upsertAll(page.map { it.toCachedEntity(now) })
         }
+        // #5189 — grow the observe window by exactly what was just paged in,
+        // so these older rows (now cached) are not immediately hidden again
+        // by messagesStream's bound.
+        if (page.isNotEmpty()) {
+            val window = historyWindow(conversationId)
+            window.value += page.size
+        }
         return response.pagination?.hasMore ?: (page.size >= pageSize)
     }
 
     /**
      * Optimistic send (ARCHITECTURE.md §5): the message appears instantly as a
      * `SENDING` bubble backed by Room, and a `SEND_MESSAGE` mutation is queued
-     * on the conversation's FIFO outbox lane. Returns the bubble's `cmid`.
+     * on the conversation's FIFO outbox lane. Returns the bubble's id.
+     *
+     * **Cet identifiant est un `cid_`, jamais un `cmid_`** (#4624). Il porte
+     * QUATRE roles, et ils ne sont pas separables : id de la ligne Room, corps
+     * `clientMessageId` envoye au gateway, cle de la ligne d'outbox (que
+     * `reconcileSent` reinjecte dans `deleteByIds`) et — le role qui les scelle
+     * — identifiant LOCAL par lequel `MessageCacheSource.persist` purge la
+     * bulle optimiste, en lisant le `clientMessageId` que le SERVEUR renvoie.
+     * Les quatre partagent donc une valeur, et le serveur impose son format :
+     * `^cid_<uuid v4 minuscule>` aux trois portes (REST, socket, lien
+     * anonyme). `OutboxIds.cmid()` produisait un prefixe que les trois
+     * rejetaient en 400 — aucun message ne partait d'Android.
+     *
+     * Le `cmid` reste la cle des mutations qui ne sont PAS des messages (amis,
+     * preferences, televersements de media) : il ne voyage pas sur ce fil-ci.
      */
     suspend fun sendOptimistic(
         conversationId: String,
@@ -119,6 +161,7 @@ class MessageRepository @Inject constructor(
         originalLanguage: String,
         sender: MeeshyUser,
         replyToId: String? = null,
+        storyReplyToId: String? = null,
         forwardedFromId: String? = null,
         forwardedFromConversationId: String? = null,
         effects: MessageEffects = MessageEffects(),
@@ -126,7 +169,7 @@ class MessageRepository @Inject constructor(
         attachmentUploadCmids: List<String> = emptyList(),
         attachments: List<ApiMessageAttachment> = emptyList(),
     ): String {
-        val cmid = OutboxIds.cmid()
+        val cid = OutboxIds.cid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
         // A queued send references each prerequisite upload by its cmid until the
@@ -134,13 +177,14 @@ class MessageRepository @Inject constructor(
         // list keeps a text-only send exactly as before (null attachmentIds).
         val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
         val optimistic = ApiMessage(
-            id = cmid,
+            id = cid,
             conversationId = conversationId,
             senderId = sender.id,
             content = content,
             messageType = messageType,
             originalLanguage = originalLanguage,
             replyToId = replyToId,
+            storyReplyToId = storyReplyToId,
             createdAt = Instant.ofEpochMilli(now).toString(),
             sender = ApiMessageSender(
                 userId = sender.id,
@@ -148,7 +192,7 @@ class MessageRepository @Inject constructor(
                 username = sender.username,
                 avatar = sender.avatar,
             ),
-            clientMessageId = cmid,
+            clientMessageId = cid,
             attachments = attachments,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
@@ -162,7 +206,8 @@ class MessageRepository @Inject constructor(
             originalLanguage = originalLanguage,
             messageType = messageType,
             replyToId = replyToId,
-            clientMessageId = cmid,
+            storyReplyToId = storyReplyToId,
+            clientMessageId = cid,
             attachmentIds = placeholderIds.ifEmpty { null },
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
@@ -183,10 +228,10 @@ class MessageRepository @Inject constructor(
                 targetId = conversationId,
                 payload = MeeshyApi.json.encodeToString(request),
                 dependsOn = placeholderIds.toSet(),
-                cmid = cmid,
+                cmid = cid,
             ),
         )
-        return cmid
+        return cid
     }
 
     /**
@@ -238,6 +283,7 @@ class MessageRepository @Inject constructor(
                         originalLanguage = message.originalLanguage
                             ?: LanguageResolver.FALLBACK_LANGUAGE,
                         replyToId = message.replyToId,
+                        storyReplyToId = message.storyReplyToId,
                         clientMessageId = cmid,
                         forwardedFromId = message.forwardedFromId,
                         forwardedFromConversationId = message.forwardedFromConversationId,
@@ -560,6 +606,16 @@ class MessageRepository @Inject constructor(
 
     private companion object {
         const val OLDER_PAGE_SIZE = 30
+
+        /**
+         * #5189 — the nominal observe window's starting size (see
+         * [historyWindowSizes]'s doc-comment): comfortably above the
+         * server's own default recent-window fetch (20 rows) so a fresh
+         * sync is never trimmed on first render, and matches
+         * [OLDER_PAGE_SIZE] — the one "screen's worth" size this client
+         * already reasons in.
+         */
+        const val INITIAL_HISTORY_WINDOW = OLDER_PAGE_SIZE
         const val PREVIEW_LIMIT = 5
         const val RANK_SENT = 0
         const val RANK_DELIVERED = 1
@@ -573,5 +629,6 @@ class MessageRepository @Inject constructor(
         syncMetaDao = syncMetaDao,
         messageApi = messageApi,
         clock = clock,
+        historyWindow = historyWindow(conversationId),
     )
 }

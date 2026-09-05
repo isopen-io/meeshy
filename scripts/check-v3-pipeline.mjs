@@ -4,7 +4,9 @@
 // POURQUOI IL VIT À LA RACINE, ET PAS DANS apps/web-v3/__tests__
 //
 // L'invariant porte sur `.github/workflows/ci.yml`, `.github/workflows/docker.yml`
-// et `docker-compose.prod.yml` — trois fichiers de la RACINE. Sa surface est le
+// et les composes de DÉPLOIEMENT (`docker-compose.prod.yml`,
+// `docker-compose.staging.yml` — cf. DEPLOIEMENTS) : des fichiers de la RACINE.
+// Sa surface est le
 // dépôt (règle de placement (B) de la conception), donc il est appelé par le job
 // `quality` de `ci.yml`, à côté de `check-type-debt.sh`, `check-lockfile-alignment.mjs`
 // et `check-makefile-workspaces.mjs`. Un garde de la CI écrit DANS la matrice de
@@ -90,7 +92,7 @@
 // aucun `next build` local ne pouvait les rendre.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -102,8 +104,27 @@ import {
   declaredWorkspaceDependencies,
   escapingRequests,
   filesUnder,
+  runtimeEnvChains,
   splitName,
 } from './lib/v3-disque.mjs';
+
+// La règle Traefik du routeur `frontend-v3` n'a qu'UN parseur, et il vit du côté
+// CONTRAINT — l'invariant (i) ci-dessous interdit à `apps/web-v3/` d'atteindre
+// `scripts/` par un chemin relatif, alors que ce garde descend sans rien casser.
+// Ce fichier en portait un second (`claimedPathsOf` + `captures`) : les deux ne
+// dupliquaient pas seulement la lecture, ils se CONTREDISAIENT — celui d'en face
+// jetait `Path(…)` en silence et cassait sur `PathPrefix(`/`)`, c'est-à-dire à
+// l'étape 7 du § 4.9 [revue #4414].
+import {
+  cheminsServisParReecriture,
+  PREFIXE_DE_ZONE,
+  ZONE_DACTIFS,
+} from '../apps/web-v3/scripts/lib/perimetre-de-zone.mjs';
+// Les invariants de ROUTAGE — la règle Traefik, le worker legacy, ce que la zone sert et ce
+// qu'elle lit de son environnement — vivent à côté (`scripts/lib/v3-routage.mjs`) : ce fichier
+// les déroule par déploiement et les prouve par ses sondes, il ne les écrit plus.
+import { invariantsDeRoutage } from './lib/v3-routage.mjs';
+import { sondesDuGarde } from './lib/v3-sondes.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -112,11 +133,57 @@ const V3_DIRECTORY = 'apps/web-v3';
 const V3_IMAGE = 'meeshy-web-v3';
 const V3_PORT = '3300';
 const V3_ROUTER = 'frontend-v3';
-const V3_PATH_PREFIX = '/__v3';
-const V3_ASSET_ZONE = `${V3_PATH_PREFIX}/_next`;
+// Le préfixe de la zone et sa part d'ACTIFS viennent du même site unique que le
+// parseur : trois déclarations de la même donnée valent une jumelle de plus.
+const V3_PATH_PREFIX = PREFIXE_DE_ZONE;
+const V3_ASSET_ZONE = ZONE_DACTIFS;
 const V3_APP_DIRECTORY = `${V3_DIRECTORY}/app`;
 const V3_PUBLIC_DIRECTORY = `${V3_DIRECTORY}/public`;
 const LEGACY_ROUTER = 'frontend';
+
+// Le SECOND aiguilleur de l'origine. `apps/web` enregistre ce worker sur
+// `scope: '/'`, donc sur l'origine ENTIÈRE, zone v3 comprise.
+const WORKER_LEGACY = 'apps/web/public/sw.js';
+
+// L'App Router du LEGACY — ce que la zone peut lui VOLER sans le vouloir.
+const LEGACY_APP_DIRECTORY = 'apps/web/app';
+
+/**
+ * **Les DEUX déploiements qui servent la zone.**
+ *
+ * Ce garde n'a longtemps connu que `docker-compose.prod.yml`, et son en-tête le
+ * disait — « trois fichiers de la RACINE ». Il était vert, et il avait raison
+ * sur ce qu'il regardait : la v3 n'était simplement déployée sur AUCUN staging
+ * (#4630), donc aucune de ses issues ne pouvait satisfaire la règle « on ne
+ * ferme que si les tests sur staging sont concluants ».
+ *
+ * C'est la forme classique — une énumération de sites porte deux affirmations :
+ * « ces sites tiennent l'invariant » (vérifiable, et vérifiée) et « ce sont les
+ * sites où l'invariant s'applique » (jamais vérifiée). Les invariants de
+ * routage valent pour TOUT déploiement qui sert la zone ; ils sont donc
+ * paramétrés par le déploiement plutôt que recopiés, sans quoi le troisième
+ * repartirait du même angle mort.
+ */
+const DEPLOIEMENTS = [
+  {
+    fichier: 'docker-compose.prod.yml',
+    source: (world) => world.prod,
+    v3: V3_ROUTER,
+    legacy: LEGACY_ROUTER,
+    // La production ne sert que les ACTIFS de la v3 : aucun écran n'y bascule
+    // tant que le porteur ne l'a pas prononcé (2026-09-03 : « non, pas
+    // encore »). L'exemption est DÉCLARÉE ici plutôt que subie dans un gate
+    // silencieux — la retirer fera rougir jusqu'à ce que la règle liste les
+    // écrans, ce qui est exactement le service qu'on lui demande.
+    serviceUniquementDesActifs: true,
+  },
+  {
+    fichier: 'docker-compose.staging.yml',
+    source: (world) => world.staging,
+    v3: `${V3_ROUTER}-staging`,
+    legacy: `${LEGACY_ROUTER}-staging`,
+  },
+];
 
 // --- ce que la zone SERT, lu sur le disque -----------------------------------
 
@@ -220,11 +287,20 @@ const gitIgnoredSources = (root) => {
     });
 };
 
-const zoneInventory = (root) => ({
-  ...appUrls(root),
-  publicFiles: filesUnder(join(root, V3_PUBLIC_DIRECTORY)).map((relative) => `/${relative}`),
-  gitIgnoredSources: gitIgnoredSources(root),
-});
+// Ce que la zone sert PAR RÉÉCRITURE s'inventorie avec ce que `app/` sert : un
+// chemin de `app/` que Next ignore (segment `_…`) n'est pas une route, et la
+// réécriture est le seul moyen de servir sous `/__v3/` autre chose que les
+// bundles. La déclaration vit dans `perimetre-de-zone.mjs`, lue ici comme par
+// `next.config.ts`.
+const zoneInventory = (root) => {
+  const urls = appUrls(root);
+  return {
+    ...urls,
+    rewrittenUrls: [...cheminsServisParReecriture(urls.routeUrls)],
+    publicFiles: filesUnder(join(root, V3_PUBLIC_DIRECTORY)).map((relative) => `/${relative}`),
+    gitIgnoredSources: gitIgnoredSources(root),
+  };
+};
 
 
 const readWorld = async (root) => ({
@@ -232,11 +308,25 @@ const readWorld = async (root) => ({
   ci: await readFile(join(root, '.github/workflows/ci.yml'), 'utf8'),
   docker: await readFile(join(root, '.github/workflows/docker.yml'), 'utf8'),
   prod: await readFile(join(root, 'docker-compose.prod.yml'), 'utf8'),
+  staging: await readFile(join(root, 'docker-compose.staging.yml'), 'utf8'),
+  worker: await readFile(join(root, WORKER_LEGACY), 'utf8'),
+  legacyRoutes: readdirSync(join(root, LEGACY_APP_DIRECTORY), { withFileTypes: true })
+    .filter(
+      (entree) =>
+        entree.isDirectory() && !entree.name.startsWith('(') && !entree.name.startsWith('_'),
+    )
+    .map((entree) => `/${entree.name}`),
   typeDebt: await readFile(join(root, 'scripts/check-type-debt.sh'), 'utf8'),
   dockerfile: await readFile(join(root, `${V3_DIRECTORY}/Dockerfile`), 'utf8'),
   zone: zoneInventory(root),
   outside: declaredWorkspaceDependencies(root, V3_DIRECTORY),
   escapes: escapingRequests(root, V3_DIRECTORY),
+  envChains: runtimeEnvChains(root, V3_DIRECTORY),
+  v3Package: await readFile(join(root, `${V3_DIRECTORY}/package.json`), 'utf8'),
+  v3TsConfig: await readFile(join(root, `${V3_DIRECTORY}/tsconfig.json`), 'utf8'),
+  playwright: await readFile(join(root, `${V3_DIRECTORY}/playwright.config.ts`), 'utf8'),
+  suites: readdirSync(join(root, `${V3_DIRECTORY}/e2e/visual`))
+    .filter((nom) => nom.endsWith('.spec.ts')),
 });
 
 // --- lecture structurée du peu de YAML dont ce garde a besoin ----------------
@@ -569,79 +659,49 @@ const theV3ImageIsNeverBuiltForTheLegacyAlone = (world) => {
     : [];
 };
 
-const labelsOf = (compose, service) => {
-  const block = blockOf(compose, `  ${service}:`);
-  return block === null ? null : listValues(block, '    labels:');
-};
+const routage = invariantsDeRoutage({
+  constantes: {
+    V3_PATH_PREFIX,
+    V3_ASSET_ZONE,
+    V3_DIRECTORY,
+    V3_APP_DIRECTORY,
+    V3_PUBLIC_DIRECTORY,
+    V3_PORT,
+    V3_IMAGE,
+    WORKER_LEGACY,
+    LEGACY_APP_DIRECTORY,
+  },
+  blockOf,
+  listValues,
+});
 
-const v3RuleOf = (world) => {
-  const labels = labelsOf(world.prod, V3_ROUTER);
-  const rule = labels?.find((label) =>
-    label.startsWith(`traefik.http.routers.${V3_ROUTER}.rule=`),
-  );
-  return rule === undefined ? null : rule.slice(rule.indexOf('=') + 1);
-};
+const COPIE_DE_PAQUET = /^COPY\s+packages\/([\w.-]+)\/\s+\.\/packages\//gm;
 
-const claimedPathsOf = (rule) =>
-  [...rule.matchAll(/(PathPrefix|Path)\(`([^`]+)`\)/g)].map(([, matcher, value]) => ({
-    matcher,
-    value,
-  }));
+const lesPaquetsCopiesSortentDuTypeCheck = (world) => {
+  const copies = [...world.dockerfile.matchAll(COPIE_DE_PAQUET)].map(([, nom]) => nom);
+  if (copies.length === 0) return [];
 
-const captures = ({ matcher, value }, url) =>
-  matcher === 'Path'
-    ? url === value
-    : url === value || url.startsWith(value.endsWith('/') ? value : `${value}/`);
+  const exclus = (() => {
+    const bloc = world.v3TsConfig.match(/"exclude"\s*:\s*\[([^\]]*)\]/);
+    return bloc === null ? [] : [...bloc[1].matchAll(/"([^"]+)"/g)].map(([, valeur]) => valeur);
+  })();
 
-// SENS (a) — rien de ce que la zone sert à la RACINE n'échappe à la règle.
-const noRootServedAssetEscapesTheZone = (world) => {
-  const rule = v3RuleOf(world);
-  if (rule === null) return [];
-  const claimed = claimedPathsOf(rule);
-  const remedy =
-    `l'ajouter nommément à la règle du routeur ${V3_ROUTER} (il est alors VOLÉ au legacy), ` +
-    `ou le faire passer par le pipeline webpack pour qu'il atterrisse sous ${V3_ASSET_ZONE}/static/media/`;
-  return [
-    ...world.zone.publicFiles.map((url) => [
-      url,
-      `${V3_PUBLIC_DIRECTORY}${url} est servi à la RACINE`,
-    ]),
-    ...world.zone.metadataUrls.map((url) => [
-      url,
-      `${url} est un fichier de métadonnées servi à la RACINE`,
-    ]),
-  ]
-    .filter(([url]) => !claimed.some((claim) => captures(claim, url)))
+  const couvre = (nom) =>
+    exclus.some((motif) => motif === 'packages' || motif.startsWith(`packages/${nom}`));
+
+  return [...new Set(copies)]
+    .filter((nom) => !couvre(nom))
     .map(
-      ([url, constat]) =>
-        `${constat} de l'URL — assetPrefix ne préfixe que ${V3_ASSET_ZONE} — donc derrière Traefik ` +
-        `c'est le LEGACY qui répond à ${url}. Remède : ${remedy}.`,
+      (nom) =>
+        `${V3_DIRECTORY}/Dockerfile copie packages/${nom}/ SOUS la racine de l'application, et ` +
+        `${V3_DIRECTORY}/tsconfig.json ne l'exclut pas : dans l'image — et dans l'image seulement ` +
+        `— le glob des sources balaie ses fichiers comme si ils étaient ceux de la v3. ` +
+        `next build type-checkera des fichiers du paquet (scripts de migration, seeds, outils) ` +
+        `avec la configuration de la v3, et échouera sur ce qu'ils importent. Remède : ajouter ` +
+        `"packages" à "exclude"`,
     );
 };
 
-// SENS (b) — la règle ne réclame au legacy que des chemins que la zone SERT.
-const theRouterClaimsNothingTheZoneDoesNotServe = (world) => {
-  const rule = v3RuleOf(world);
-  if (rule === null) return [];
-  const served = [
-    ...world.zone.routeUrls,
-    ...world.zone.metadataUrls,
-    ...world.zone.publicFiles,
-  ];
-  return claimedPathsOf(rule)
-    .filter((claim) => !claim.value.startsWith(V3_ASSET_ZONE))
-    .filter((claim) => !served.some((url) => captures(claim, url)))
-    .map((claim) =>
-      claim.value === V3_PATH_PREFIX
-        ? `la règle réclame ${V3_PATH_PREFIX} nu alors que la zone n'y sert que ${V3_ASSET_ZONE} : ` +
-          `tout autre chemin sous ${V3_PATH_PREFIX} répondrait le 404 anglais du routeur Pages ` +
-          `(sans <html lang>, sans le script anti-flash de thème)`
-        : `la règle réclame ${claim.value}, que rien dans ${V3_DIRECTORY}/app ne sert : ` +
-          `ce chemin est pris au legacy pour y répondre 404`,
-    );
-};
-
-// Le COPY du runner et l'existence de public/ vont ENSEMBLE, dans les deux sens.
 const theRunnerShipsWhatPublicHolds = (world) => {
   const copies = /^COPY --from=builder[^\n]*\/app\/public\s+\.\/public\s*$/m.test(world.dockerfile);
   const held = world.zone.publicFiles.length;
@@ -668,68 +728,120 @@ const noSourceFileOfTheV3IsGitIgnored = (world) =>
       `demander cet ignore depuis ${V3_DIRECTORY}/.gitignore si le fichier est vraiment un artefact`,
   );
 
-const theProdComposeRoutesTheV3 = (world) => {
-  const labels = labelsOf(world.prod, V3_ROUTER);
-  if (labels === null) {
-    return [`docker-compose.prod.yml ne déclare aucun service ${V3_ROUTER}`];
+/**
+ * **Une suite e2e qui existe est une suite e2e LANCÉE.**
+ *
+ * Le dépôt a payé cette leçon deux fois — les commentaires des jobs `a11y-v3`
+ * et `lifecycle-v3` la portent mot pour mot : « un instrument déclaré n'est pas
+ * un instrument lancé ». Elle n'avait pourtant pas été appliquée à la troisième
+ * famille : `v3-network-vitals.spec.ts` et `v3-lien-expire.spec.ts` vivaient
+ * dans le dépôt, passaient (19/19 en local), et AUCUN job ne les lançait. Elles
+ * portent les critères de fin de #4495 et #4496 — deux issues qu'aucun gate ne
+ * pouvait donc prouver.
+ *
+ * Ce contrôle ne compte pas les suites : il les DÉRIVE du disque et vérifie que
+ * chacune est atteinte. Une énumération aurait rejoué le défaut au premier
+ * fichier suivant.
+ *
+ * La couverture se calcule comme Playwright la calcule : une suite est atteinte
+ * si un script invoqué par ci.yml la nomme, ou si elle appartient au projet
+ * qu'il lance — `pages` par sa liste, `chaines` par le complément de cette même
+ * liste (`testIgnore`), qui est ce qui fait entrer d'office toute suite neuve.
+ *
+ * **CE CONTRÔLE A ÉTÉ AVEUGLE UNE CINQUIÈME FOIS, ET C'EST SA PROPRE LECTURE
+ * QUI L'AVEUGLAIT** (2026-09-04, #5093). `SUITES_DE_PAGE` a cessé d'être un
+ * littéral le jour où `SUITES_QUI_IMPORTENT_LA_LOI` s'est mise à RELEVER les
+ * suites sur le DISQUE — une amélioration, et la bonne. Mais le `matchAll` ci-
+ * dessous ne voit d'un `[...SPREAD, 'a.spec.ts', 'b.spec.ts']` que les deux
+ * littéraux : il croyait donc que `pages` ne contenait QUE ces deux-là, et que
+ * `chaines`, son complément, ramassait tout le reste. Il ramassait, en vrai,
+ * neuf suites de MOINS — `v3-nouvelle-conversation`, `v3-nouveau-lien` et les
+ * sept `*-a11y` que ci.yml ne nommait pas —, et la garde les déclarait
+ * atteintes.
+ *
+ * **UN CONTRÔLE NE DOIT PAS DEVINER CE QU'IL NE PEUT PAS LIRE.** Il ne
+ * reconstruit pas la règle de `playwright.config.ts` — ce serait la jumelle qui
+ * diverge au premier changement de critère. Il DÉTECTE que la liste est
+ * calculée, et cesse alors de répartir les suites entre les deux projets :
+ * quand la frontière lui est illisible, la seule couverture qu'il sait prouver
+ * est celle des DEUX projets lancés EN ENTIER. C'est aussi la seule qui ne
+ * dépende pas de ce que cette garde arrive à lire — donc la seule qui survive
+ * au prochain raffinement du critère.
+ */
+const everyV3SuiteIsLaunched = (world) => {
+  const listeDePages = /const SUITES_DE_PAGE\s*=\s*\[([^\]]*)\]/.exec(world.playwright);
+  if (listeDePages === null) {
+    return ["playwright.config.ts ne déclare plus SUITES_DE_PAGE : la couverture par projet n'est plus calculable"];
   }
-  const rule = labels.find((label) =>
-    label.startsWith(`traefik.http.routers.${V3_ROUTER}.rule=`),
+  // La liste est-elle ENTIÈREMENT lisible ici ? Un `...` dit que non : une
+  // partie du projet `pages` est relevée ailleurs, et le COMPLÉMENT que
+  // `chaines` exécute ne se calcule plus depuis ce fichier.
+  const listeCalculee = listeDePages[1].includes('...');
+  const suitesDePage = new Set(
+    [...listeDePages[1].matchAll(/([A-Za-z0-9._-]+\.spec\.ts)/g)].map((m) => m[1]),
   );
-  const failures = [];
-  if (rule === undefined || !rule.includes(`PathPrefix(\`${V3_ASSET_ZONE}\`)`)) {
-    failures.push(`le routeur ${V3_ROUTER} ne porte pas PathPrefix(\`${V3_ASSET_ZONE}\`)`);
+  if (world.suites.length === 0) {
+    return ['aucune suite e2e trouvée sous e2e/visual : le contrôle garderait le vide'];
   }
-  if (!labels.includes(`traefik.http.routers.${V3_ROUTER}.priority=100`)) {
-    failures.push(`le routeur ${V3_ROUTER} ne prend pas le pas sur le plancher legacy`);
+
+  const scripts = JSON.parse(world.v3Package).scripts ?? {};
+  // Les CORPS D'ÉTAPES, jamais le fichier entier : le commentaire du job
+  // `chaines-v3` nomme `test:chaines` pour expliquer pourquoi il existe, et un
+  // `world.ci.includes(...)` le prenait pour une invocation. Ce contrôle est
+  // né mort à sa première écriture, et c'est son propre doc-comment qui
+  // l'aveuglait — vérifié en retirant l'invocation : la garde restait verte.
+  const etapes = stepsOf(world.ci);
+  const lances = Object.entries(scripts).filter(
+    ([nom, corps]) => /playwright|run e2e/.test(corps) && etapes.some((e) => e.body.includes(nom)),
+  );
+
+  const atteintes = new Set();
+  const corpsLances = lances.map(([, corps]) => corps);
+  for (const corps of corpsLances) {
+    for (const suite of world.suites) {
+      if (corps.includes(suite)) atteintes.add(suite);
+    }
   }
-  if (
-    !labels.includes(
-      `traefik.http.services.${V3_ROUTER}.loadbalancer.server.port=${V3_PORT}`,
-    )
-  ) {
-    failures.push(`le service ${V3_ROUTER} n'est pas servi sur le port ${V3_PORT}`);
+
+  const lancePages = corpsLances.some((corps) => /--project=pages/.test(corps));
+  const lanceChaines = corpsLances.some((corps) => /--project=chaines/.test(corps));
+
+  if (listeCalculee) {
+    // Frontière illisible : les deux projets ensemble couvrent la totalité, et
+    // rien de moins ne se prouve depuis ce fichier.
+    if (lancePages && lanceChaines) for (const suite of world.suites) atteintes.add(suite);
+  } else {
+    if (lancePages) for (const suite of world.suites) if (suitesDePage.has(suite)) atteintes.add(suite);
+    if (lanceChaines) for (const suite of world.suites) if (!suitesDePage.has(suite)) atteintes.add(suite);
   }
-  if (!labels.includes(`traefik.http.routers.${V3_ROUTER}.entrypoints=websecure`)) {
-    failures.push(`le routeur ${V3_ROUTER} n'entre pas par websecure`);
-  }
-  return failures;
+
+  return world.suites
+    .filter((suite) => !atteintes.has(suite))
+    .map((suite) => `la suite e2e ${suite} n'est lancée par aucune étape de ci.yml`);
 };
 
-const theLegacyRouterKeepsItsFloor = (world) => {
-  const labels = labelsOf(world.prod, LEGACY_ROUTER);
-  if (labels === null) {
-    return [`docker-compose.prod.yml ne déclare plus le service ${LEGACY_ROUTER}`];
-  }
-  const rule = labels.find((label) =>
-    label.startsWith(`traefik.http.routers.${LEGACY_ROUTER}.rule=`),
+// L'IMAGE DE LA V3 NE FIGE AUCUNE VARIABLE PUBLIQUE AU BUILD.
+//
+// Next inline toute variable `NEXT_PUBLIC_*` PRÉSENTE au moment du `next build`
+// — jusque dans le code serveur (mesuré : absente au build, `process.env.NEXT_PUBLIC_API_URL`
+// reste une lecture d'exécution dans `.next/server`, et c'est ce qui permet au
+// compose de la poser). La v3 tient ses deux origines de l'ENVIRONNEMENT du
+// conteneur, staging et prod partageant la même image : un `ARG` ou un `ENV`
+// `NEXT_PUBLIC_*` dans le Dockerfile figerait la valeur d'UN déploiement dans
+// l'image de tous, et la valeur du compose serait ignorée sans qu'aucun témoin
+// ne rougisse. Le legacy vit avec ce piège (placeholders `__RUNTIME_*__`
+// réécrits au démarrage) ; la v3 s'en garde à la source.
+const theV3ImageFreezesNoPublicVariable = (world) =>
+  [...world.dockerfile.matchAll(/^\s*(?:ARG|ENV)\s+(NEXT_PUBLIC_[A-Z0-9_]*)/gm)].map(
+    ([, name]) =>
+      `${V3_DIRECTORY}/Dockerfile déclare ${name} au build : Next l'inlinerait dans l'image et la ` +
+      `valeur du compose serait ignorée`,
   );
-  const failures = [];
-  if (!labels.includes(`traefik.http.routers.${LEGACY_ROUTER}.priority=1`)) {
-    failures.push(`le routeur ${LEGACY_ROUTER} a perdu sa priorité de plancher (1)`);
-  }
-  if (rule !== undefined && rule.includes('PathPrefix')) {
-    failures.push(`le routeur ${LEGACY_ROUTER} restreint ses chemins — il doit rester attrape-tout`);
-  }
-  return failures;
-};
-
-const theV3ContainerIsDisjointFromTheLegacy = (world) => {
-  const block = blockOf(world.prod, `  ${V3_ROUTER}:`);
-  if (block === null) return [];
-  const failures = [];
-  if (!new RegExp(`^\\s*image:.*${V3_IMAGE}`, 'm').test(block)) {
-    failures.push(`le service ${V3_ROUTER} ne tire pas l'image ${V3_IMAGE}`);
-  }
-  if (!new RegExp(`^\\s*container_name:\\s*meeshy-${V3_ROUTER}\\s*$`, 'm').test(block)) {
-    failures.push(`le service ${V3_ROUTER} ne porte pas son propre nom de conteneur`);
-  }
-  return failures;
-};
 
 const CHECKS = [
   ['le type-check de la v3 est BLOQUANT', theV3TypeCheckIsBlocking],
   ['le lint de la v3 est BLOQUANT', theV3LintIsBlocking],
+  ['toute suite e2e de la v3 est LANCÉE', everyV3SuiteIsLaunched],
   ["aucune étape nommant la v3 n'est amnistiée", noV3StepIsAmnestied],
   ['le ratchet de dette ne connaît pas la v3', theDebtRatchetIgnoresTheV3],
   ['la matrice de tests porte la v3', theTestMatrixCarriesTheV3],
@@ -746,11 +858,26 @@ const CHECKS = [
   ['chaque option du dispatch sélectionne un service', everyDispatchOptionSelectsAService],
   ["l'image de la v3 se construit depuis un Dockerfile existant", theV3ImageIsBuiltFromAnExistingDockerfile],
   ["l'image de la v3 ne se construit pas pour le legacy seul", theV3ImageIsNeverBuiltForTheLegacyAlone],
-  ['la production route la v3 derrière son PathPrefix', theProdComposeRoutesTheV3],
-  ['le routeur legacy garde son plancher attrape-tout', theLegacyRouterKeepsItsFloor],
-  ['le conteneur de la v3 est disjoint du legacy', theV3ContainerIsDisjointFromTheLegacy],
-  ["aucun actif servi à la racine n'échappe à la zone", noRootServedAssetEscapesTheZone],
-  ['la règle ne réclame que des chemins servis', theRouterClaimsNothingTheZoneDoesNotServe],
+  ["l'image de la v3 ne fige aucune variable NEXT_PUBLIC_ au build", theV3ImageFreezesNoPublicVariable],
+  // Les invariants de ROUTAGE, une fois par déploiement qui sert la zone.
+  // Déroulés plutôt que recopiés : c'est la recopie qui avait laissé staging
+  // hors surface (#4630), et un troisième déploiement repartirait du même
+  // angle mort.
+  ...DEPLOIEMENTS.flatMap((dep) => [
+    [`${dep.fichier} route la v3 derrière son PathPrefix`, routage.leDeploiementRouteLaV3(dep)],
+    [`${dep.fichier} : le routeur legacy garde son plancher attrape-tout`, routage.theLegacyRouterKeepsItsFloor(dep)],
+    [`${dep.fichier} : le conteneur de la v3 est disjoint du legacy`, routage.theV3ContainerIsDisjointFromTheLegacy(dep)],
+    [`${dep.fichier} : le service de la v3 déclare ce que son code lit`, routage.theV3ServiceDeclaresWhatItsCodeReads(dep)],
+    [`${dep.fichier} : au-delà des actifs de zone, le service déclare la navigation de zone`, routage.theV3ServiceDeclaresZoneNavigationWhenItRoutesBeyondAssets(dep)],
+    [`${dep.fichier} : l'origine publique de la passerelle est joignable par un navigateur`, routage.lOriginePubliqueEstJoignableParUnNavigateur(dep)],
+    [`${dep.fichier} : aucun actif servi à la racine n'échappe à la zone`, routage.noRootServedAssetEscapesTheZone(dep)],
+    [`${dep.fichier} : la règle ne réclame que des chemins servis`, routage.theRouterClaimsNothingTheZoneDoesNotServe(dep)],
+    [`${dep.fichier} : le worker legacy s'efface devant ce que la règle réclame`, routage.leWorkerLegacySEfface(dep)],
+    [`${dep.fichier} : aucun PathPrefix ne vole une route voisine du legacy`, routage.aucunPrefixeNeVoleUneRouteVoisine(dep)],
+  ]),
+  ['chaque réécriture de zone part de la zone et atterrit sur une route servie', routage.everyZoneRewriteLandsOnAServedRoute],
+  ['le worker legacy connaît TOUT ce que la zone sert', routage.leWorkerConnaitToutCeQueLaZoneSert],
+  ['les paquets copiés sous la racine sortent du type-check', lesPaquetsCopiesSortentDuTypeCheck],
   ["l'image embarque ce que public/ contient", theRunnerShipsWhatPublicHolds],
   ["aucun fichier source de la v3 n'est ignoré par git", noSourceFileOfTheV3IsGitIgnored],
 ];
@@ -776,202 +903,11 @@ const replaceIn = (world, key, needle, replacement) => {
   world[key] = world[key].replace(needle, replacement);
 };
 
-const MUTATIONS = [
-  [
-    'le type-check de la v3 retiré de ci.yml',
-    (world) =>
-      replaceIn(world, 'ci', /^\s*run:.*type-check.*$/m, (line) =>
-        line.replace(` --filter=${V3_WORKSPACE}`, ''),
-      ),
-    `aucune étape de ci.yml ne lance le type-check de ${V3_WORKSPACE}`,
-  ],
-  [
-    'le type-check de la v3 amnistié',
-    (world) =>
-      replaceIn(
-        world,
-        'ci',
-        /( +)- name: (Type-check[^\n]*blocking[^\n]*)\n/,
-        '$1- name: $2\n$1  continue-on-error: true\n',
-      ),
-    'type-checke la v3 avec continue-on-error: true',
-  ],
-  [
-    'le lint de la v3 rendu à l\'amnistie du legacy',
-    (world) =>
-      replaceIn(world, 'ci', /^ +- name: Lint \(apps\/web-v3[^\n]*\n +run:[^\n]*\n/m, ''),
-    `aucune étape de ci.yml ne lint ${V3_WORKSPACE}`,
-  ],
-  [
-    'la v3 glissée dans le ratchet de dette',
-    (world) =>
-      replaceIn(
-        world,
-        'ci',
-        'bash scripts/check-type-debt.sh --self-test',
-        `bash scripts/check-type-debt.sh --self-test ${V3_DIRECTORY}`,
-      ),
-    'fait entrer la v3 dans le ratchet de dette',
-  ],
-  [
-    'la v3 retirée de la matrice de tests',
-    (world) => replaceIn(world, 'ci', `filter: '${V3_WORKSPACE}'`, "filter: '@meeshy/zz'"),
-    `aucune entrée de la matrice de tests ne porte filter: '${V3_WORKSPACE}'`,
-  ],
-  [
-    'le glob de la v3 retiré des paths de docker.yml',
-    (world) => replaceIn(world, 'docker', "      - 'apps/web-v3/**'\n", ''),
-    'le filtre paths de docker.yml ne couvre pas la v3',
-  ],
-  [
-    'la table de jetons ré-importée par chemin relatif hors du paquet',
-    (world) =>
-      world.escapes.push({
-        file: `${V3_DIRECTORY}/app/globals.css`,
-        request: '../../../packages/design-tokens/tokens.css',
-        target: 'packages/design-tokens/tokens.css',
-      }),
-    'par le chemin relatif',
-  ],
-  [
-    'le paquet déclaré retiré du Dockerfile',
-    (world) => replaceIn(world, 'dockerfile', /^COPY packages\/[^\n]*\n/m, ''),
-    "n'entre jamais dans l'image",
-  ],
-  [
-    'le paquet déclaré retiré des paths de docker.yml',
-    (world) => replaceIn(world, 'docker', /^ +- 'packages\/design-tokens\/\*\*'\n/m, ''),
-    'le filtre paths de docker.yml ne couvre pas packages/design-tokens/**',
-  ],
-  [
-    'le détecteur de push aveugle au paquet déclaré',
-    (world) => replaceIn(world, 'docker', /\*"packages\/design-tokens\/"\*/g, '*"packages/zz/"*'),
-    'un push ne touchant que packages/design-tokens/',
-  ],
-  [
-    'le détecteur de push aveugle à la v3',
-    (world) => replaceIn(world, 'docker', /\*"apps\/web-v3\/"\*/g, '*"apps/zz-absent/"*'),
-    'un push ne touchant que apps/web-v3/',
-  ],
-  [
-    'la sélection du dispatch revenue à la sous-chaîne',
-    (world) => replaceIn(world, 'docker', /\*",web,"\*/g, '*"web"*'),
-    'un dispatch « web-v3 »',
-  ],
-  [
-    "l'entrée d'image de la v3 retirée de la matrice",
-    (world) => replaceIn(world, 'docker', new RegExp(`"image":"${V3_IMAGE}"`, 'g'), '"image":"zz"'),
-    `la matrice d'images de docker.yml ne produit aucune entrée ${V3_IMAGE}`,
-  ],
-  [
-    'la v3 construite depuis un Dockerfile absent',
-    (world) =>
-      replaceIn(
-        world,
-        'docker',
-        `./${V3_DIRECTORY}/Dockerfile`,
-        `./${V3_DIRECTORY}/Dockerfile.absent`,
-      ),
-    "qui n'existe pas",
-  ],
-  [
-    'le PathPrefix de la v3 retiré du routeur de production',
-    (world) => replaceIn(world, 'prod', ` && (PathPrefix(\`${V3_ASSET_ZONE}\`))`, ''),
-    `le routeur ${V3_ROUTER} ne porte pas PathPrefix`,
-  ],
-  [
-    "un actif déposé dans public/ sans être réclamé par la règle",
-    (world) => world.zone.publicFiles.push('/sprite.svg'),
-    `${V3_PUBLIC_DIRECTORY}/sprite.svg est servi à la RACINE`,
-  ],
-  [
-    "un actif déposé dans public/ sans entrer dans l'image",
-    (world) => world.zone.publicFiles.push('/sprite.svg'),
-    "n'entrent pas dans l'image",
-  ],
-  [
-    "un fichier de métadonnées de l'App Router ajouté hors de la règle",
-    (world) => world.zone.metadataUrls.push('/robots.txt'),
-    '/robots.txt est un fichier de métadonnées servi à la RACINE',
-  ],
-  [
-    'la règle élargie au /__v3 nu, que rien ne sert',
-    (world) =>
-      replaceIn(
-        world,
-        'prod',
-        `PathPrefix(\`${V3_ASSET_ZONE}\`)`,
-        `PathPrefix(\`${V3_PATH_PREFIX}\`)`,
-      ),
-    `la règle réclame ${V3_PATH_PREFIX} nu`,
-  ],
-  [
-    'un chemin humain réclamé avant que la zone ne le serve',
-    (world) =>
-      replaceIn(
-        world,
-        'prod',
-        `(PathPrefix(\`${V3_ASSET_ZONE}\`))`,
-        `(PathPrefix(\`${V3_ASSET_ZONE}\`) || PathPrefix(\`/l\`))`,
-      ),
-    'la règle réclame /l, que rien dans',
-  ],
-  [
-    "une déclaration de types de la v3 emportée par un ignore de la racine",
-    (world) =>
-      world.zone.gitIgnoredSources.push({
-        path: `${V3_DIRECTORY}/scripts/check-app-router-built.d.mts`,
-        source: '.gitignore',
-        pattern: '**/*/*.d.*',
-      }),
-    'il manque au clone, et c\'est le type-check BLOQUANT',
-  ],
-  [
-    'le COPY du public ajouté alors que la v3 n\'a pas de public/',
-    (world) =>
-      replaceIn(
-        world,
-        'dockerfile',
-        'COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static',
-        'COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static\n' +
-          'COPY --from=builder --chown=nextjs:nodejs /app/public ./public',
-      ),
-    'le docker build échouera sur ce COPY',
-  ],
-  [
-    'la v3 rendue à la priorité du plancher',
-    (world) =>
-      replaceIn(
-        world,
-        'prod',
-        `traefik.http.routers.${V3_ROUTER}.priority=100`,
-        `traefik.http.routers.${V3_ROUTER}.priority=1`,
-      ),
-    `le routeur ${V3_ROUTER} ne prend pas le pas sur le plancher legacy`,
-  ],
-  [
-    'le routeur legacy restreint à un préfixe',
-    (world) =>
-      replaceIn(
-        world,
-        'prod',
-        `traefik.http.routers.${LEGACY_ROUTER}.rule=Host(\`\${DOMAIN:-localhost}\`)`,
-        `traefik.http.routers.${LEGACY_ROUTER}.rule=PathPrefix(\`/legacy\`) && Host(\`\${DOMAIN:-localhost}\`)`,
-      ),
-    'il doit rester attrape-tout',
-  ],
-  [
-    'le service v3 servi sur le port du legacy',
-    (world) =>
-      replaceIn(
-        world,
-        'prod',
-        `traefik.http.services.${V3_ROUTER}.loadbalancer.server.port=${V3_PORT}`,
-        `traefik.http.services.${V3_ROUTER}.loadbalancer.server.port=3100`,
-      ),
-    `n'est pas servi sur le port ${V3_PORT}`,
-  ],
-];
+// Les sondes vivent dans `scripts/lib/v3-sondes.mjs` — de la DONNÉE, remise aux constantes du garde.
+const MUTATIONS = sondesDuGarde({
+  constantes: { V3_WORKSPACE, V3_DIRECTORY, V3_IMAGE, V3_PORT, V3_ROUTER, V3_PATH_PREFIX, V3_ASSET_ZONE, V3_PUBLIC_DIRECTORY, LEGACY_ROUTER },
+  replaceIn,
+});
 
 const selfTest = (world) => {
   const standing = inspect(world);
@@ -1010,7 +946,8 @@ const main = async () => {
     return 1;
   }
   console.log(
-    `${V3_DIRECTORY} : ${CHECKS.length} invariants tenus sur ci.yml, docker.yml et docker-compose.prod.yml.`,
+    `${V3_DIRECTORY} : ${CHECKS.length} invariants tenus sur ci.yml, docker.yml, ` +
+      `${DEPLOIEMENTS.map((dep) => dep.fichier).join(' et ')}.`,
   );
   return 0;
 };

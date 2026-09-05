@@ -7,6 +7,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { attachmentTranslateSelect } from '../../services/attachments/attachmentIncludes';
+import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -310,11 +311,11 @@ export async function registerTranslationRoutes(
             ...errorResponseSchema
           },
           403: {
-            description: 'Feature not enabled',
+            description: 'Feature not enabled, or access denied to this attachment (caller is not a member of its conversation)',
             ...errorResponseSchema
           },
           404: {
-            description: 'Attachment not found',
+            description: 'Attachment not found (or its carrier message is gone — recalled, expired, or view-once burned)',
             ...errorResponseSchema
           },
           503: {
@@ -347,11 +348,20 @@ export async function registerTranslationRoutes(
 
         const attachment = await prisma.messageAttachment.findUnique({
           where: { id: attachmentId },
-          select: { id: true, mimeType: true, uploadedBy: true }
+          select: { id: true, messageId: true, mimeType: true, uploadedBy: true }
         });
 
         if (!attachment) {
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
+        }
+
+        // #5152 — cette route déclenchait une transcription Whisper (coût de
+        // calcul) sur une pièce jointe de n'importe quelle conversation, sans
+        // vérifier l'appartenance : `uploadedBy` était chargé et jamais lu.
+        // Même verdict que le détail (#4923) et les octets, source unique.
+        const verdict = await resolveAttachmentReadVerdict(request, attachment, prisma);
+        if (verdict !== 'allow') {
+          return denyAttachmentRead(reply, verdict, 'Attachment not found');
         }
 
         if (!attachment.mimeType?.startsWith('audio/')) {

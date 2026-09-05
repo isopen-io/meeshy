@@ -7,8 +7,8 @@ import {
   UnifiedAuthRequest
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
-import { viewerFromRequest } from '../users/presence-gate';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import {
@@ -271,7 +271,14 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       // s'applique : « personne ne doit savoir ma dernière connexion si on
       // n'est pas ami », et un visiteur d'un lien public n'est jamais un ami.
       const viewer = viewerFromRequest(request);
-      const anonymousPresenceVisible = !!viewer && isGlobalAdmin(viewer.role);
+      // Le verdict d'une cible que le résolveur ne sait pas résoudre est CELUI
+      // DE LA LOI (`presenceMissingEntryPolicy` : `'reveal'` pour ADMIN/BIGBOSS,
+      // `'hide'` sinon), jamais un prédicat de rôle réécrit ici — « aucun site
+      // de service ne réécrit la boucle amitié/rôle ». Le site en tire les deux
+      // formes dont il a besoin : la POLITIQUE, qui gouverne la projection de
+      // chaque ligne, et le BOOLÉEN, qui décide si l'agrégat vaut une requête.
+      const anonymousPresence = presenceMissingEntryPolicy(viewer);
+      const anonymousPresenceVisible = anonymousPresence === 'reveal';
 
       // BORNÉ (#4165). `shareLinkIncludeStructure` chargeait `participants`
       // SANS `take` : sur "meeshy" (voir plus haut), cette route servait
@@ -298,21 +305,26 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       // l'autre ne masque rien. La valeur servie à l'ADMIN est la dernière
       // activité RÉELLE (`Participant.lastActiveAt`, écrite par `StatusService`),
       // jamais `joinedAt` : une date d'arrivée n'est pas une dernière activité.
-      const gatedAnonymousParticipants = anonymousParticipantRows.map(participant => ({
-          id: participant.id,
-          username: participant.anonymousSession?.profile?.username ?? null,
-          firstName: participant.anonymousSession?.profile?.firstName ?? null,
-          lastName: participant.anonymousSession?.profile?.lastName ?? null,
-          displayName: participant.displayName,
-          avatar: participant.avatar,
-          language: participant.language,
-          isOnline: anonymousPresenceVisible ? participant.isOnline : false,
-          lastActiveAt: anonymousPresenceVisible ? participant.lastActiveAt : null,
-          joinedAt: participant.joinedAt,
-          canSendMessages: participant.permissions?.canSendMessages ?? false,
-          canSendFiles: participant.permissions?.canSendFiles ?? false,
-          canSendImages: participant.permissions?.canSendImages ?? false
-        }));
+      const gatedAnonymousParticipants = anonymousParticipantRows.map(participant =>
+        applyPresenceVisibilityAsOffline(
+          {
+            id: participant.id,
+            username: participant.anonymousSession?.profile?.username ?? null,
+            firstName: participant.anonymousSession?.profile?.firstName ?? null,
+            lastName: participant.anonymousSession?.profile?.lastName ?? null,
+            displayName: participant.displayName,
+            avatar: participant.avatar,
+            language: participant.language,
+            isOnline: participant.isOnline,
+            lastActiveAt: participant.lastActiveAt,
+            joinedAt: participant.joinedAt,
+            canSendMessages: participant.permissions?.canSendMessages ?? false,
+            canSendFiles: participant.permissions?.canSendFiles ?? false,
+            canSendImages: participant.permissions?.canSendImages ?? false
+          },
+          undefined,
+          { onMissingEntry: anonymousPresence }
+        ));
 
       const stats = {
         totalMessages,

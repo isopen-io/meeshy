@@ -263,7 +263,7 @@ struct MessageReactionsDetailView: View {
         }
         do {
             let response: APIResponse<ReactionSyncResponse> = try await APIClient.shared.request(
-                endpoint: "/reactions/\(message.id)"
+                ReactionsEndpoint.byMessageId(messageId: message.id)
             )
             if response.success {
                 reactionGroups = response.data.reactions

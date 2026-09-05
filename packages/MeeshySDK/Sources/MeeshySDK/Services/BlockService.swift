@@ -60,7 +60,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     /// enregistrées avant une mise à jour.
     public func blockUser(userId: String) async throws {
         let _: APIResponse<BlockActionResponse> = try await api.request(
-            endpoint: "/directory/blocks/\(userId)",
+            DirectoryEndpoint.blocksByUserId(userId: userId),
             method: "PUT",
             body: try JSONEncoder().encode([String: String]()),
             queryItems: nil
@@ -72,7 +72,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
 
     public func unblockUser(userId: String) async throws {
         let _: APIResponse<BlockActionResponse> = try await api.request(
-            endpoint: "/directory/blocks/\(userId)",
+            DirectoryEndpoint.blocksByUserId(userId: userId),
             method: "DELETE",
             body: nil,
             queryItems: nil
@@ -91,7 +91,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     /// pas une liste sans fin.
     public func listBlockedUsers() async throws -> [BlockedUser] {
         let response: APIResponse<[BlockedUser]> = try await api.request(
-            endpoint: "/directory/blocks"
+            DirectoryEndpoint.blocks
         )
         let users = response.data
         await MainActor.run { blockedUserIds = Set(users.map(\.id)) }

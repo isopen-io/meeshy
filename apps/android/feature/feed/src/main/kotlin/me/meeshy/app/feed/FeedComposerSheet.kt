@@ -1,18 +1,13 @@
 package me.meeshy.app.feed
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
-import android.os.Looper
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -77,10 +72,9 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.location.awaitFreshLocationFix
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ComposerLanguage
 import me.meeshy.sdk.model.SharedPlace
@@ -100,7 +94,6 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.io.File
-import kotlin.coroutines.resume
 
 /**
  * The feed-post composer — the "texte seul" first sub-slice of feature-parity
@@ -475,8 +468,7 @@ fun FeedComposerSheet(
         if (isCapturingLocation) return
         scope.launch {
             isCapturingLocation = true
-            val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-            val fix = manager?.awaitFreshFix()
+            val fix = context.awaitFreshLocationFix()
             isCapturingLocation = false
             if (fix != null) {
                 draft = draft.withLocation(SharedPlace(latitude = fix.latitude, longitude = fix.longitude))
@@ -647,42 +639,6 @@ private fun Context.grantCaptureWritePermission(action: String, uri: Uri) {
                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
         }
-}
-
-/**
- * Requests a single fresh location fix from the best currently-enabled provider (GPS
- * preferred, network fallback), or `null` when neither provider is enabled or no fix
- * arrives within [timeoutMs]. The caller must already hold `ACCESS_FINE_LOCATION` or
- * `ACCESS_COARSE_LOCATION` — checked by [FeedComposerSheet.requestDeviceLocation]
- * before this is ever invoked, never by this function itself. Android-runtime glue,
- * exempt from JVM coverage per `TDD-COVERAGE.md`: "which provider is enabled right
- * now" is inherently a live system-state read with no further pure decision to
- * extract, the same rationale [readMediaUploadItem] and [startVoiceRecording] already
- * document for this composer's other runtime glue.
- */
-@SuppressLint("MissingPermission")
-private suspend fun LocationManager.awaitFreshFix(timeoutMs: Long = 12_000): Location? {
-    val provider = when {
-        isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-        isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-        else -> return null
-    }
-    return withTimeoutOrNull(timeoutMs) {
-        suspendCancellableCoroutine { continuation ->
-            val listener = object : LocationListener {
-                override fun onLocationChanged(location: Location) {
-                    removeUpdates(this)
-                    if (continuation.isActive) continuation.resume(location)
-                }
-                @Deprecated("Deprecated in Java")
-                override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
-                override fun onProviderEnabled(provider: String) {}
-                override fun onProviderDisabled(provider: String) {}
-            }
-            continuation.invokeOnCancellation { removeUpdates(listener) }
-            requestLocationUpdates(provider, 0L, 0f, listener, Looper.getMainLooper())
-        }
-    }
 }
 
 /**

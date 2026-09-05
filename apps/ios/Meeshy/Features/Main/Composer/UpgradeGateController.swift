@@ -26,7 +26,7 @@ final class AppVersionFloorService: AppVersionFloorProviding {
 
     func minVersion() async throws -> String {
         let response: APIResponse<Floor> = try await api.request(
-            endpoint: "/app/min-version",
+            AppEndpoint.minVersion,
             method: "GET",
             body: nil,
             queryItems: nil

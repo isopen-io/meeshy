@@ -298,7 +298,10 @@ describe('POST /posts/:postId/impression — l’unitaire cesse d’être un ora
     expect(missing.statusCode).toBe(404);
     expect(missing.statusCode).toBe(hidden.statusCode);
     expect(missing.json()).toEqual(hidden.json());
-    expect(prisma.postImpression.create).not.toHaveBeenCalled();
+    // #4150 — l'alias délègue au point d'ingestion, qui écrit ses occurrences
+    // en LOT : c'est `createMany` qu'il faut interroger, `create` n'étant plus
+    // appelé par aucun chemin (donc trivialement « jamais appelé »).
+    expect(prisma.postImpression.createMany).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -312,8 +315,8 @@ describe('POST /posts/:postId/impression — l’unitaire cesse d’être un ora
 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
-    expect(prisma.postImpression.create).toHaveBeenCalledWith({
-      data: { postId: PUBLIC_ID, userId: VIEWER_ID, source: 'detail' },
+    expect(prisma.postImpression.createMany).toHaveBeenCalledWith({
+      data: [{ postId: PUBLIC_ID, userId: VIEWER_ID, source: 'detail' }],
     });
     await app.close();
   });

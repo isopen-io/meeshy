@@ -206,6 +206,18 @@ public struct OffsetPagination: Decodable, Sendable {
     public let hasMore: Bool?
     public let limit: Int?
     public let offset: Int?
+    /// LA RAMPE DE #4175/#4901 : la page 1 servie AU RANG porte l'ancre de la
+    /// suite AU CURSEUR. Sans cette clé, le curseur servi était JETÉ au
+    /// décodage et aucun client ne pouvait emprunter la rampe.
+    public let nextCursor: String?
+
+    public init(total: Int?, hasMore: Bool?, limit: Int?, offset: Int?, nextCursor: String? = nil) {
+        self.total = total
+        self.hasMore = hasMore
+        self.limit = limit
+        self.offset = offset
+        self.nextCursor = nextCursor
+    }
 }
 
 public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
@@ -262,70 +274,6 @@ public enum APIError: Error, LocalizedError {
 
 // MARK: - API Client Protocol
 
-public protocol APIClientProviding: Sendable {
-    var baseURL: String { get }
-    var authToken: String? { get set }
-    var anonymousSessionToken: String? { get set }
-    func request<T: Decodable>(endpoint: String, method: String, body: Data?, queryItems: [URLQueryItem]?) async throws -> T
-    /// Wave 1 Task 3.x — variant that lets callers (the offline outbox dispatcher)
-    /// inject extra request headers such as `X-Client-Mutation-Id`. Default
-    /// implementation falls through to the headerless `request` so existing
-    /// mocks/conformers stay binary-compatible without code changes.
-    func requestWithHeaders<T: Decodable>(endpoint: String, method: String, body: Data?, queryItems: [URLQueryItem]?, headers: [String: String]?) async throws -> T
-    func paginatedRequest<T: Decodable>(endpoint: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[T]>
-    func offsetPaginatedRequest<T: Decodable>(endpoint: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
-    func post<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
-    func put<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
-    func patch<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
-    func delete(endpoint: String) async throws -> APIResponse<[String: Bool]>
-    func delete<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
-}
-
-extension APIClientProviding {
-    /// Default implementation drops `headers` and falls through to the
-    /// headerless `request`. Real `APIClient` overrides this to forward
-    /// the headers onto the underlying `URLRequest`. Test mocks can
-    /// either rely on this default (and skip header verification) or
-    /// override locally if they want to assert header presence.
-    public func requestWithHeaders<T: Decodable>(
-        endpoint: String,
-        method: String,
-        body: Data?,
-        queryItems: [URLQueryItem]?,
-        headers: [String: String]?
-    ) async throws -> T {
-        try await request(endpoint: endpoint, method: method, body: body, queryItems: queryItems)
-    }
-
-    public func request<T: Decodable>(endpoint: String) async throws -> T {
-        try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: nil)
-    }
-
-    public func request<T: Decodable>(endpoint: String, method: String) async throws -> T {
-        try await request(endpoint: endpoint, method: method, body: nil, queryItems: nil)
-    }
-
-    public func request<T: Decodable>(endpoint: String, method: String, body: Data?) async throws -> T {
-        try await request(endpoint: endpoint, method: method, body: body, queryItems: nil)
-    }
-
-    public func request<T: Decodable>(endpoint: String, queryItems: [URLQueryItem]?) async throws -> T {
-        try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: queryItems)
-    }
-
-    public func request<T: Decodable>(endpoint: String, method: String, queryItems: [URLQueryItem]?) async throws -> T {
-        try await request(endpoint: endpoint, method: method, body: nil, queryItems: queryItems)
-    }
-
-    public func paginatedRequest<T: Decodable>(endpoint: String) async throws -> PaginatedAPIResponse<[T]> {
-        try await paginatedRequest(endpoint: endpoint, cursor: nil, limit: 20)
-    }
-
-    public func offsetPaginatedRequest<T: Decodable>(endpoint: String) async throws -> OffsetPaginatedAPIResponse<[T]> {
-        try await offsetPaginatedRequest(endpoint: endpoint, offset: 0, limit: 15)
-    }
-}
-
 // MARK: - API Client
 
 public final class APIClient: APIClientProviding, @unchecked Sendable {
@@ -359,8 +307,53 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     /// call sites in either file). Including them here would be scope creep
     /// beyond the audited root cause (wrong password / 2FA code).
     nonisolated static func mapUnauthorized(endpoint: String, serverMessage: String?) -> UnauthorizedMapping {
-        guard endpoint.hasPrefix("/auth/login") else { return .sessionExpired }
+        mapUnauthorized(authKind: MeeshyEndpointPolicy.authKind(forLegacyPath: endpoint),
+                        serverMessage: serverMessage)
+    }
+
+    /// La même règle, lue sur la politique DÉCLARÉE plutôt que déduite du
+    /// chemin. C'est cette forme que le pipeline consomme : une adresse typée
+    /// n'a pas à repasser par une comparaison de préfixe pour dire ce qu'elle
+    /// sait déjà d'elle-même.
+    nonisolated static func mapUnauthorized(
+        authKind: MeeshyEndpointAuthKind, serverMessage: String?
+    ) -> UnauthorizedMapping {
+        guard authKind == .credentials else { return .sessionExpired }
         return .invalidCredentials(message: serverMessage ?? "Identifiants invalides")
+    }
+
+    // MARK: - Ce que le pipeline a besoin de savoir d'une adresse (#4282)
+
+    /// L'adresse RÉSOLUE : l'URL absolue, l'étiquette de journal, et les deux
+    /// politiques. Le pipeline ne voit plus de chemin — donc il ne peut plus en
+    /// déduire quoi que ce soit par comparaison de chaîne.
+    ///
+    /// Les deux façons de la construire coexistent pendant la migration : par
+    /// CHEMIN pour les sites d'appel non encore typés (les politiques sont
+    /// alors déduites), par ADRESSE TYPÉE pour les autres (elles sont lues).
+    /// `MeeshyEndpointPolicy` garantit que les deux rendent le même verdict.
+    struct ResolvedEndpoint {
+        let urlString: String
+        let logLabel: String
+        let authKind: MeeshyEndpointAuthKind
+        let retryPolicy: MeeshyEndpointRetryPolicy
+        let rejectionPolicy: MeeshyEndpointRejectionPolicy
+
+        init(legacyPath: String, baseURL: String) {
+            self.urlString = "\(baseURL)\(legacyPath)"
+            self.logLabel = legacyPath
+            self.authKind = MeeshyEndpointPolicy.authKind(forLegacyPath: legacyPath)
+            self.retryPolicy = MeeshyEndpointPolicy.retryPolicy(forLegacyPath: legacyPath)
+            self.rejectionPolicy = MeeshyEndpointPolicy.rejectionPolicy(forLegacyPath: legacyPath)
+        }
+
+        init(endpoint: any MeeshyEndpoint) {
+            self.urlString = endpoint.absoluteURLString
+            self.logLabel = endpoint.path
+            self.authKind = endpoint.authKind
+            self.retryPolicy = endpoint.retryPolicy
+            self.rejectionPolicy = endpoint.rejectionPolicy
+        }
     }
 
     public var baseURL: String {
@@ -568,35 +561,77 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
     // MARK: - Generic Request
 
-    public func request<T: Decodable>(
-        endpoint: String,
-        method: String = "GET",
-        body: Data? = nil,
-        queryItems: [URLQueryItem]? = nil
-    ) async throws -> T {
-        try await requestWithHeaders(
-            endpoint: endpoint,
-            method: method,
-            body: body,
-            queryItems: queryItems,
-            headers: nil
-        )
-    }
-
     /// Header-aware variant — see `APIClientProviding.requestWithHeaders`.
     /// Used by the offline outbox dispatcher to inject `X-Client-Mutation-Id`
     /// so the gateway `MutationLog` can dedup replayed mutations. Caller-
     /// provided headers OVERRIDE auth/content-type headers if the keys collide,
     /// so the dispatcher should not set `Authorization` or `Content-Type`.
-    public func requestWithHeaders<T: Decodable>(
+    /// Le seul point où une CHAÎNE entre dans le pipeline.
+    ///
+    /// Interne, et sans jumelle publique : les verbes typés y arrivent par
+    /// `legacyPath(for:)`, le rejeu hors-ligne par `replayPersistedRequest`.
+    /// Aucun site d'appel ne peut l'atteindre depuis l'extérieur du module,
+    /// donc aucun ne peut y passer un littéral.
+    func stringRequest<T: Decodable>(
         endpoint: String,
+        method: String = "GET",
+        body: Data? = nil,
+        queryItems: [URLQueryItem]? = nil,
+        headers: [String: String]? = nil
+    ) async throws -> T {
+        try await requestWithHeaders(
+            resolved: ResolvedEndpoint(legacyPath: endpoint, baseURL: baseURL),
+            method: method, body: body, queryItems: queryItems, headers: headers
+        )
+    }
+
+    /// **La seule entrée qui part encore d'une chaîne, et la seule qui doive.**
+    ///
+    /// `SettingsActionQueue` persiste des actions hors-ligne et les rejoue à la
+    /// reconnexion. Le chemin qu'elle a stocké a été écrit par une version
+    /// ANTÉRIEURE de l'app : aucun type ne lui survit, puisqu'un type n'existe
+    /// qu'à la compilation et que l'enregistrement, lui, est sur le disque.
+    ///
+    /// Nommer l'exception vaut mieux que laisser un trou général. Qui appelle
+    /// ceci pour une requête ordinaire lit, dans le nom, qu'il fait autre chose
+    /// que ce qu'il croit — et une garde peut compter ses appelants.
+    public func replayPersistedRequest<T: Decodable>(
+        persistedPath: String,
+        method: String,
+        body: Data?,
+        queryItems: [URLQueryItem]? = nil,
+        headers: [String: String]? = nil
+    ) async throws -> T {
+        try await requestWithHeaders(
+            resolved: ResolvedEndpoint(legacyPath: persistedPath, baseURL: baseURL),
+            method: method, body: body, queryItems: queryItems, headers: headers
+        )
+    }
+
+    /// La variante TYPÉE (#4282) — l'adresse porte son chemin complet et ses
+    /// politiques, donc rien n'est déduit d'une chaîne.
+    public func requestWithHeaders<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint,
+        method: String = "GET",
+        body: Data? = nil,
+        queryItems: [URLQueryItem]? = nil,
+        headers: [String: String]? = nil
+    ) async throws -> T {
+        try await requestWithHeaders(
+            resolved: ResolvedEndpoint(endpoint: endpoint),
+            method: method, body: body, queryItems: queryItems, headers: headers
+        )
+    }
+
+    func requestWithHeaders<T: Decodable>(
+        resolved: ResolvedEndpoint,
         method: String,
         body: Data?,
         queryItems: [URLQueryItem]?,
         headers: [String: String]?
     ) async throws -> T {
         var hasRefreshedOn401 = false
-        guard var components = URLComponents(string: "\(baseURL)\(endpoint)") else {
+        guard var components = URLComponents(string: resolved.urlString) else {
             throw MeeshyError.server(statusCode: 0, message: "URL invalide")
         }
 
@@ -605,7 +640,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }
 
         // We declare isRefreshOrAuth and shouldAttemptRefresh here because they are needed for both proactive and reactive refresh
-        let isRefreshOrAuth = endpoint == "/auth/refresh" || endpoint.hasPrefix("/auth/login") || endpoint.hasPrefix("/auth/register") || endpoint.hasPrefix("/auth/magic-link")
+        // #4282 — la politique a un NOM et un témoin. Elle vivait ici en
+        // comparaisons de préfixe : une comparaison ne rougit jamais quand une
+        // route bouge, elle cesse de matcher et la règle disparaît en silence.
+        let isRefreshOrAuth = resolved.authKind != .bearer
         let shouldAttemptRefresh = !isRefreshOrAuth
 
         guard let url = components.url else {
@@ -670,7 +708,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             // retrying just burns the 2 s + 4 s back-off and can never
             // succeed. Opt them out of the retry loop so the caller fails
             // fast and falls back (e.g. a plaintext message send).
-            let endpointAllowsRetry = !endpoint.hasPrefix("/signal/")
+            let endpointAllowsRetry = resolved.retryPolicy == .standard
 
             for attempt in 0..<(Self.maxRetryAttempts + 1) {
                 if attempt > 0 {
@@ -678,7 +716,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                           let delay = retryDelay(statusCode: lastStatusCode, attempt: attempt, response: previousResponse) else {
                         break
                     }
-                    logger.warning("Retryable status \(lastStatusCode) on \(method) \(endpoint), retry \(attempt)/\(Self.maxRetryAttempts) after \(String(format: "%.1f", delay))s")
+                    logger.warning("Retryable status \(lastStatusCode) on \(method) \(resolved.logLabel), retry \(attempt)/\(Self.maxRetryAttempts) after \(String(format: "%.1f", delay))s")
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     guard !Task.isCancelled else { throw CancellationError() }
                 }
@@ -714,8 +752,31 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         throw MeeshyError.server(statusCode: 426, message: errorMsg ?? "Mise a jour requise")
                     }
 
+                    // Refus TYPÉ (#5218) : `code` et `field` vivent à la RACINE
+                    // de l'enveloppe (`sendError`, gateway) et n'étaient lus par
+                    // personne — un écran de formulaire ne recevait qu'une
+                    // phrase, donc ne pouvait la poser QUE en bandeau. Réservé
+                    // aux adresses qui le DÉCLARENT (`rejectionPolicy`) :
+                    // partout ailleurs, la forme d'erreur ne bouge pas d'un iota.
+                    //
+                    // Quatre codes restent HORS de cette porte, et chacun pour sa
+                    // raison : 426 (rupture de binaire, traité juste au-dessus —
+                    // la porte de mise à jour doit se montrer), 401 (session /
+                    // identifiants, le rafraîchissement en dépend), 403 (accès à
+                    // une ressource, la purge en dépend) et 429 (débit). Aucun ne
+                    // parle d'une SAISIE, qui est tout ce que ce refus décrit.
+                    if resolved.rejectionPolicy == .structured,
+                       (400...499).contains(statusCode),
+                       ![401, 403, 429].contains(statusCode) {
+                        let envelope = try? decoder.decode(APIRejectionEnvelope.self, from: data)
+                        throw MeeshyError.rejected(
+                            envelope?.rejection(statusCode: statusCode, fallbackMessage: errorMsg ?? "Erreur inconnue")
+                                ?? APIRejection(statusCode: statusCode, message: errorMsg ?? "Erreur inconnue")
+                        )
+                    }
+
                     if statusCode == 401 {
-                        if case .invalidCredentials(let message) = Self.mapUnauthorized(endpoint: endpoint, serverMessage: errorMsg) {
+                        if case .invalidCredentials(let message) = Self.mapUnauthorized(authKind: resolved.authKind, serverMessage: errorMsg) {
                             // P1 — wrong password / 2FA code / stale magic
                             // link. There is no active session here, so we
                             // must NOT call `handleUnauthorized()` (which
@@ -793,7 +854,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     // Without it, a runaway pagination loop is invisible —
                     // every line looks like the same endpoint.
                     let qs = url.query.map { "?\($0)" } ?? ""
-                    logger.warning("Slow request: \(method) \(endpoint)\(qs) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
+                    logger.warning("Slow request: \(method) \(resolved.logLabel)\(qs) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
                 }
                 return result
             }
@@ -818,7 +879,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             // Endpoint + method are logged so a `DecodingError` line is
             // self-sufficient to locate the failing call — without it a
             // `data.message` mismatch could be any of a dozen requests.
-            logger.error("DecodingError on \(method, privacy: .public) \(endpoint, privacy: .public): \(debugInfo)")
+            logger.error("DecodingError on \(method, privacy: .public) \(resolved.logLabel, privacy: .public): \(debugInfo)")
             throw MeeshyError.server(statusCode: 0, message: debugInfo)
         } catch let error as URLError {
             switch error.code {
@@ -838,7 +899,22 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
     // MARK: - Paginated Request (cursor-based)
 
+    /// Les deux paginées TYPÉES — elles composent l'URL comme les autres verbes
+    /// et délèguent la pagination à leur jumelle interne, qui n'est plus
+    /// accessible depuis l'extérieur du module.
     public func paginatedRequest<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint, cursor: String? = nil, limit: Int = 20
+    ) async throws -> PaginatedAPIResponse<[T]> {
+        try await paginatedRequest(endpoint: legacyPath(for: endpoint), cursor: cursor, limit: limit)
+    }
+
+    public func offsetPaginatedRequest<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint, offset: Int = 0, limit: Int = 15
+    ) async throws -> OffsetPaginatedAPIResponse<[T]> {
+        try await offsetPaginatedRequest(endpoint: legacyPath(for: endpoint), offset: offset, limit: limit)
+    }
+
+    func paginatedRequest<T: Decodable>(
         endpoint: String,
         cursor: String? = nil,
         limit: Int = 20
@@ -847,12 +923,12 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         if let cursor {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
-        return try await request(endpoint: endpoint, queryItems: queryItems)
+        return try await stringRequest(endpoint: endpoint, queryItems: queryItems)
     }
 
     // MARK: - Offset Paginated Request
 
-    public func offsetPaginatedRequest<T: Decodable>(
+    func offsetPaginatedRequest<T: Decodable>(
         endpoint: String,
         offset: Int = 0,
         limit: Int = 15
@@ -861,7 +937,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "offset", value: "\(offset)"),
         ]
-        return try await request(endpoint: endpoint, queryItems: queryItems)
+        return try await stringRequest(endpoint: endpoint, queryItems: queryItems)
     }
 
     // MARK: - JSON Encoder (shared, ISO 8601 dates)
@@ -874,48 +950,97 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
     // MARK: - POST with Encodable body
 
-    public func post<T: Decodable, U: Encodable>(
+    func post<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
         let data = try APIClient.jsonEncoder.encode(body)
-        return try await request(endpoint: endpoint, method: "POST", body: data)
+        return try await stringRequest(endpoint: endpoint, method: "POST", body: data)
     }
 
     // MARK: - PUT with Encodable body
 
-    public func put<T: Decodable, U: Encodable>(
+    func put<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
         let data = try APIClient.jsonEncoder.encode(body)
-        return try await request(endpoint: endpoint, method: "PUT", body: data)
+        return try await stringRequest(endpoint: endpoint, method: "PUT", body: data)
     }
 
     // MARK: - PATCH with Encodable body
 
-    public func patch<T: Decodable, U: Encodable>(
+    func patch<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
         let data = try APIClient.jsonEncoder.encode(body)
-        return try await request(endpoint: endpoint, method: "PATCH", body: data)
+        return try await stringRequest(endpoint: endpoint, method: "PATCH", body: data)
     }
 
     // MARK: - DELETE
 
-    public func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
-        return try await request(endpoint: endpoint, method: "DELETE")
+    func delete(endpoint: String) async throws -> APIResponse<[String: Bool]> {
+        return try await stringRequest(endpoint: endpoint, method: "DELETE")
     }
 
     // MARK: - DELETE with Encodable body
 
-    public func delete<T: Decodable, U: Encodable>(
+    func delete<T: Decodable, U: Encodable>(
         endpoint: String,
         body: U
     ) async throws -> APIResponse<T> {
         let data = try APIClient.jsonEncoder.encode(body)
-        return try await request(endpoint: endpoint, method: "DELETE", body: data)
+        return try await stringRequest(endpoint: endpoint, method: "DELETE", body: data)
+    }
+
+    // MARK: - Les mêmes verbes, sur une adresse TYPÉE (#4282)
+    //
+    // Les jumelles à `String` ci-dessus disparaîtront quand le dernier des 348
+    // sites d'appel sera migré : c'est LEUR SUPPRESSION, et non une garde, qui
+    // rendra un littéral impossible à passer — le compilateur devient le
+    // cliquet. Elles restent tant qu'un seul site en dépend, sinon la migration
+    // devrait tenir dans un commit unique de 348 fichiers.
+
+    public func request<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint,
+        method: String = "GET",
+        body: Data? = nil,
+        queryItems: [URLQueryItem]? = nil
+    ) async throws -> T {
+        try await requestWithHeaders(endpoint, method: method, body: body, queryItems: queryItems)
+    }
+
+    public func post<T: Decodable, U: Encodable>(
+        _ endpoint: any MeeshyEndpoint,
+        body: U
+    ) async throws -> APIResponse<T> {
+        try await request(endpoint, method: "POST", body: try APIClient.jsonEncoder.encode(body))
+    }
+
+    public func put<T: Decodable, U: Encodable>(
+        _ endpoint: any MeeshyEndpoint,
+        body: U
+    ) async throws -> APIResponse<T> {
+        try await request(endpoint, method: "PUT", body: try APIClient.jsonEncoder.encode(body))
+    }
+
+    public func patch<T: Decodable, U: Encodable>(
+        _ endpoint: any MeeshyEndpoint,
+        body: U
+    ) async throws -> APIResponse<T> {
+        try await request(endpoint, method: "PATCH", body: try APIClient.jsonEncoder.encode(body))
+    }
+
+    public func delete(_ endpoint: any MeeshyEndpoint) async throws -> APIResponse<[String: Bool]> {
+        try await request(endpoint, method: "DELETE")
+    }
+
+    public func delete<T: Decodable, U: Encodable>(
+        _ endpoint: any MeeshyEndpoint,
+        body: U
+    ) async throws -> APIResponse<T> {
+        try await request(endpoint, method: "DELETE", body: try APIClient.jsonEncoder.encode(body))
     }
 }
 

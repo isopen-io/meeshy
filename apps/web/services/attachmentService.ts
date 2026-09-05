@@ -18,6 +18,7 @@ import { buildApiUrl } from '@/lib/config';
 import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 import { apiService } from '@/services/api.service';
+import type { ApiResponse } from '@meeshy/shared/types/api-responses';
 
 export class AttachmentService {
   /**
@@ -216,9 +217,16 @@ export class AttachmentService {
   }
 
   /**
-   * Crée un attachment texte
+   * Crée un attachment texte.
+   *
+   * `POST /attachments/upload-text` répond par `sendSuccess(reply, {
+   * attachment })` : la charge vit sous `data`, comme pour TOUTE réponse du
+   * gateway (`ApiResponse<T>`, seul producteur `utils/response.ts`). Ce
+   * service la HISSE — il ne rendait auparavant que `response.json()` sous un
+   * type qui promettait `attachment` à la racine, donc `undefined` sur chaque
+   * succès (#4887, jumelle du défaut 1).
    */
-  static async uploadText(content: string, token?: string): Promise<{ success: boolean; attachment: UploadedAttachmentResponse }> {
+  static async uploadText(content: string, token?: string): Promise<{ success: boolean; attachment?: UploadedAttachmentResponse }> {
     const authHeaders = createAuthHeaders(token);
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -237,11 +245,23 @@ export class AttachmentService {
       throw new Error(error.error || 'Failed to create text attachment');
     }
 
-    return response.json();
+    const result: ApiResponse<{ attachment?: UploadedAttachmentResponse }> = await response.json();
+    return { success: result.success, attachment: result.data?.attachment };
   }
 
   /**
-   * Récupère les attachments d'une conversation
+   * Récupère les attachments d'une conversation.
+   *
+   * `GET /conversations/:id/attachments` répond `sendSuccess(reply, {
+   * attachments })` — donc `{ success, data: { attachments } }`. Ce service
+   * rendait `response.json()` TEL QUEL sous un type annonçant `attachments` à
+   * la racine : `response.attachments` valait `undefined`, la garde de
+   * `AttachmentGallery` ne passait jamais et son chargement propre était
+   * inerte depuis toujours (#4887, défaut 1).
+   *
+   * L'absence d'enveloppe rend une liste VIDE, jamais `undefined` : « rien à
+   * montrer » est un état, « la garde de l'appelant ne se déclenche pas » n'en
+   * est pas un.
    */
   static async getConversationAttachments(
     conversationId: string,
@@ -273,8 +293,8 @@ export class AttachmentService {
       throw new Error(errorData.error || errorData.message || 'Failed to fetch attachments');
     }
 
-    const result = await response.json();
-    return result;
+    const result: ApiResponse<{ attachments?: Attachment[] }> = await response.json();
+    return { success: result.success, attachments: result.data?.attachments ?? [] };
   }
 
   /**

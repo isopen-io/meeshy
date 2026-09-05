@@ -3,8 +3,13 @@
  *
  * Covers pure functions: validateMentionCount, messageValidationHook,
  * createPostRouteRateLimitConfig, createSignalProtocolRateLimitConfig.
- * Also covers registerMessageRateLimiter and registerGlobalRateLimiter
- * with a mocked Fastify to exercise all plugin option callbacks.
+ * Also covers registerGlobalRateLimiter with a mocked Fastify to exercise all
+ * plugin option callbacks.
+ *
+ * `registerMessageRateLimiter` a été SUPPRIMÉ par #4687 : enregistreur global
+ * (20 msg/min) qu'aucun appelant de production n'invoquait, dont le
+ * `keyGenerator` annonçait `msg:${userId}` et rendait l'adresse — un patron à
+ * copier, pas un limiteur. Ses témoins partent avec lui.
  *
  * @jest-environment node
  */
@@ -30,7 +35,6 @@ import {
   createPostRouteRateLimitConfig,
   createContactChangeRateLimitConfig,
   createSignalProtocolRateLimitConfig,
-  registerMessageRateLimiter,
   registerGlobalRateLimiter,
 } from '../../../middleware/rate-limiter';
 
@@ -229,57 +233,6 @@ describe('createSignalProtocolRateLimitConfig', () => {
     const cfg = createSignalProtocolRateLimitConfig('session_establish') as any;
     const body = cfg.errorResponseBuilder();
     expect(body.error).toContain('session');
-  });
-});
-
-// ─── registerMessageRateLimiter ───────────────────────────────────────────────
-
-describe('registerMessageRateLimiter', () => {
-  it('registers the @fastify/rate-limit plugin', async () => {
-    const fastify = makeFastify();
-    await registerMessageRateLimiter(fastify as any);
-    expect(fastify.register).toHaveBeenCalledTimes(1);
-  });
-
-  describe('registered options callbacks', () => {
-    async function getOpts() {
-      const fastify = makeFastify();
-      await registerMessageRateLimiter(fastify as any);
-      return (fastify.register as jest.Mock).mock.calls[0][1] as Record<string, any>;
-    }
-
-    it('max is 20 and timeWindow is 1 minute', async () => {
-      const opts = await getOpts();
-      expect(opts.max).toBe(20);
-      expect(opts.timeWindow).toBe('1 minute');
-    });
-
-    it('keyGenerator uses userId from authContext', async () => {
-      const opts = await getOpts();
-      const req = { authContext: { userId: 'u-99' }, ip: '5.5.5.5' };
-      expect(opts.keyGenerator(req)).toBe('msg:u-99');
-    });
-
-    it('keyGenerator falls back to IP when no authContext', async () => {
-      const opts = await getOpts();
-      const req = { ip: '6.6.6.6' };
-      expect(opts.keyGenerator(req)).toBe('msg:ip:6.6.6.6');
-    });
-
-    it('errorResponseBuilder returns 429 shape with retryAfter', async () => {
-      const opts = await getOpts();
-      const body = opts.errorResponseBuilder({}, { ttl: 30 });
-      expect(body.success).toBe(false);
-      expect(body.statusCode).toBe(429);
-      expect(body.retryAfter).toBe(30);
-    });
-
-    it('addHeaders hides x-ratelimit headers', async () => {
-      const opts = await getOpts();
-      expect(opts.addHeaders?.['x-ratelimit-limit']).toBe(false);
-      expect(opts.addHeaders?.['x-ratelimit-remaining']).toBe(false);
-      expect(opts.addHeaders?.['x-ratelimit-reset']).toBe(false);
-    });
   });
 });
 

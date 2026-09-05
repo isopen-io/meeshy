@@ -4,9 +4,22 @@
  *
  *   node docs/product/MeeshyWebV3Design/capture-cibles.js [dossier-de-sortie]
  *
+ * Cet outil n'honore AUCUN drapeau : tout premier argument commencant par `-`
+ * est refuse (code 2). Sans ce refus, `--vues linkRedirect` etait pris pour un
+ * dossier et creait `--vues/` a la racine du depot. La loi vit dans
+ * `apps/web-v3/scripts/lib/arguments-de-ligne.mjs`, avec ses temoins.
+ *
  * Sortie par defaut : docs/product/MeeshyWebV3Design/cible/
  * Chaque .png est la CIBLE d'implementation d'une vue ; vues.json en porte
  * le titre, le sous-titre et la ROUTE web. vues.md en est l'index lisible.
+ *
+ * CE QUE CETTE CAPTURE N'ECRIT PAS : jetons-de-vues.json. La planche dessine
+ * `/l/:token`, jamais `/l/lien-vivant` — elle ne connait aucun jeton, donc ce
+ * generateur n'a rien a en dire. Un `jetons` porte par vues.json vivrait jusqu'a
+ * la prochaine passe puis disparaitrait SANS UN MOT, et le refus qui suivrait
+ * ressemblerait a un refus legitime. La regeneration ne peut pas effacer ce
+ * qu'elle n'ecrit pas : loi et temoins dans
+ * apps/web-v3/scripts/lib/index-des-vues.mjs.
  *
  * Ce fichier est une SOURCE, pas un tableau de bord : l'etat d'implementation
  * de chaque vue vit dans son issue GitHub, jamais ici.
@@ -24,11 +37,11 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const { pathToFileURL } = require('url');
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, '../../..');
 const DOC = 'MeeshyWebV3.dc.html';
-const OUT = process.argv[2] || path.join(HERE, 'cible');
 const { CACHE, NODE_MODULES: NM, ensureVendor, chromiumPath, vendorRequire } =
   require(path.join(ROOT, 'scripts/lib/navigateur.cjs'));
 
@@ -76,6 +89,17 @@ function serve() {
 }
 
 (async () => {
+  const { dossierDeSortie } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/arguments-de-ligne.mjs')).href);
+  const { ecrisLIndex } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/index-des-vues.mjs')).href);
+  const demande = dossierDeSortie(process.argv.slice(2), path.join(HERE, 'cible'));
+  if (!demande.ok) {
+    process.stderr.write(`[capture] ARGUMENT REFUSE — ${demande.raison}\n`);
+    process.exit(2);
+  }
+  const OUT = demande.dossier;
+
   ensureVendor(m => process.stderr.write(m));
   const { chromium } = vendorRequire('playwright-core');
   const executablePath = chromiumPath();
@@ -221,33 +245,7 @@ function serve() {
     }
   }
 
-  fs.writeFileSync(path.join(HERE, 'vues.json'), JSON.stringify({ source: DOC, count: meta.length, vues: meta }, null, 1) + '\n');
-
-  const groups = [];
-  for (const m of meta) {
-    let g = groups.find(x => x.name === m.group);
-    if (!g) groups.push(g = { name: m.group, items: [] });
-    g.items.push(m);
-  }
-  const esc = s => String(s).replace(/\|/g, '\\|');
-  const md = [
-    '# Meeshy web v3 — les vues cibles',
-    '',
-    "> **Ce fichier est une SOURCE, pas un tableau de bord.** L'etat d'implementation de chaque vue vit",
-    '> dans son issue GitHub, jamais ici. Regenere par `capture-cibles.js` — ne pas editer a la main.',
-    '',
-    `La planche \`${DOC}\` porte **${meta.length} ecrans**, chacun avec sa route web.`,
-    '',
-    ...groups.flatMap(g => [
-      `## ${g.name}`,
-      '',
-      '| Vue | Route | Titre | Capture |',
-      '|---|---|---|---|',
-      ...g.items.map(m => `| ${esc(m.label)} | \`${esc(m.route)}\` | ${esc(m.title)} | ![${m.id}](${m.png}) |`),
-      '',
-    ]),
-  ].join('\n');
-  fs.writeFileSync(path.join(HERE, 'vues.md'), md);
+  ecrisLIndex({ dossier: HERE, source: DOC, vues: meta });
 
   await browser.close();
   server.close();

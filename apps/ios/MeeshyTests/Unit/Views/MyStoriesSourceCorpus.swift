@@ -30,14 +30,27 @@ enum MyStoriesSourceCorpus {
         "Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
     ]
 
-    /// Racine `apps/ios/`, dérivée du chemin de ce fichier
-    /// (`apps/ios/MeeshyTests/Unit/Views/…`).
+    /// Racine `apps/ios/`, dérivée du chemin du fichier APPELANT.
+    ///
+    /// **Elle REMONTE jusqu'à `MeeshyTests`, elle ne compte plus les crans.**
+    /// La forme d'origine retirait quatre composants, ce qui suppose que tout
+    /// appelant vit exactement à `MeeshyTests/Unit/Views/`. `file` valant
+    /// `#filePath` par DÉFAUT, c'est le chemin de l'appelant qui décide — et
+    /// la première garde rangée un cran plus profond
+    /// (`Unit/Views/Bubble/`, #4098) a obtenu `apps/ios/MeeshyTests` pour
+    /// racine, puis dix erreurs « no such file » sur des fichiers bien
+    /// présents.
+    ///
+    /// Le mode de panne bruyant est le CAS HEUREUX : si la mauvaise racine
+    /// avait contenu un fichier de même nom, la garde aurait lu le MAUVAIS
+    /// fichier et serait passée au vert. Une racine se REMONTE jusqu'à un
+    /// repère nommé ; elle ne se compte pas.
     static func appRoot(file: StaticString = #filePath) -> URL {
-        URL(fileURLWithPath: String(describing: file))
-            .deletingLastPathComponent()   // Views
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // ios
+        var url = URL(fileURLWithPath: String(describing: file)).deletingLastPathComponent()
+        while url.lastPathComponent != "MeeshyTests", url.pathComponents.count > 1 {
+            url = url.deletingLastPathComponent()
+        }
+        return url.deletingLastPathComponent()   // ios
     }
 
     /// Le corpus concaténé, commentaires RETIRÉS.

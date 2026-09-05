@@ -149,8 +149,11 @@ final class ForwardPickerComposeEntryTests: XCTestCase {
     func test_lHote_promeutLaMemeCible_queLappuiLong() throws {
         let code = try hostCode()
 
+        // `ConversationComposerState` vit dans son propre fichier depuis #4823
+        // (dette de taille de l'hôte) : le garde-fou lit la DÉCLARATION de la
+        // vue, la seule chose que l'extraction ne peut pas emporter.
         XCTAssertTrue(
-            code.contains("struct ConversationComposerState"),
+            code.contains("struct ConversationView: View"),
             "Garde-fou : la source lue n'est pas celle de l'hôte."
         )
         XCTAssertEqual(

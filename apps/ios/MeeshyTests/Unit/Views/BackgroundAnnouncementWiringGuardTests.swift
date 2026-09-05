@@ -35,11 +35,19 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     /// résolveur SDK EN DIRECT (en contournant `announcement(for:)`) n'aurait
     /// jamais été détectée. Balaie les TROIS surfaces de lecture elles-mêmes.
     func test_readingSurfaces_neverCallSDKResolverDirectly() throws {
+        // #4084 — les trois surfaces ont été DÉCOUPÉES depuis que cette liste
+        // a été écrite, et une garde NÉGATIVE qui reste sur l'ancien chemin ne
+        // rougit pas : elle passe au vert en ne regardant plus rien. Les hôtes
+        // ET leurs extractions sont donc balayés ENSEMBLE — l'appel interdit se
+        // logerait précisément dans la moitié qui a bougé.
         let surfaces = [
             "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
+            "Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
             "Meeshy/Features/Main/Views/StoryViewerView.swift",
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
+            "Meeshy/Features/Main/Views/FeedPostCard+Header.swift",
             "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            "Meeshy/Features/Main/Views/ReelPageView+Info.swift",
         ]
         for path in surfaces {
             let text = try source(path)
@@ -55,7 +63,8 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     // MARK: - « Trois surfaces »
 
     func test_storyHeader_mountsBackgroundSoundBadge() throws {
-        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        // #4084 — l'en-tête a quitté `+Sidebar` pour son propre fichier.
+        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge("),
             "Le header de story doit monter BackgroundSoundBadge — la vue commune E1."
@@ -150,14 +159,19 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
         )
     }
 
+    /// #4078 — le MONTAGE et la RÉSOLUTION ne vivent plus dans le même fichier :
+    /// l'en-tête a été extrait, la valeur est restée chez l'hôte. Deux
+    /// assertions, deux sources — les fusionner ferait passer la garde sur la
+    /// simple présence de l'une des deux.
     func test_feedPostCard_mountsBackgroundSoundBadge() throws {
-        let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
         XCTAssertTrue(
-            text.contains("BackgroundSoundBadge("),
+            try source("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
+                .contains("BackgroundSoundBadge("),
             "La carte de post doit monter BackgroundSoundBadge."
         )
         XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.announcement(for: post.storyEffects)"),
+            try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
+                .contains("BackgroundSoundBadge.announcement(for: post.storyEffects)"),
             "L'annonce doit être résolue via le helper partagé sur post.storyEffects — " +
             "les mêmes champs que le viewer, rien d'inventé."
         )
@@ -183,7 +197,9 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
     }
 
     func test_reelsPlayerView_mountsBackgroundSoundBadge() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        // #4484 — la rangée d'info du réel a quitté `ReelsPlayerView.swift`
+        // pour `ReelPageView+Info.swift` (elle appartient à `ReelPageView`).
+        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge("),
             "Le plein écran réel doit monter BackgroundSoundBadge."

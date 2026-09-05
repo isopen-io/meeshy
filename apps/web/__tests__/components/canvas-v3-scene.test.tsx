@@ -9,6 +9,7 @@
  * (`canvas-v3-scene-animation`, `canvas-v3-scene-parity`).
  */
 import { render, screen } from '@testing-library/react';
+import { TEXT_EFFECTS } from '@/lib/story-text-effect';
 import React from 'react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -79,16 +80,17 @@ describe('CanvasV3Scene — la scène v3 (F1)', () => {
     expect(bottom.style.bottom).toBe('6%');
   });
 
-  it('maps the 18 text styles, neon glowing, poster condensed-bold, italic slanted', () => {
+  it('maps the 18 text styles, poster condensed-bold, italic slanted — and none glows by itself (#4870)', () => {
     for (const style of ALL_STYLES) {
       const { unmount } = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: style })} />);
-      expect(screen.getByTestId('canvas-v3-object-t1').style.fontFamily).not.toBe('');
+      const el = screen.getByTestId('canvas-v3-object-t1');
+      expect(el.style.fontFamily).not.toBe('');
+      // Un style est une POLICE : la lueur vit sur l'axe EFFET, jamais sur une
+      // famille — « neon » brillait ici sans briller sur iOS, où la story est
+      // composée.
+      expect(el.style.textShadow).not.toContain('currentColor');
       unmount();
     }
-
-    const neon = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'neon' })} />);
-    expect(screen.getByTestId('canvas-v3-object-t1').style.textShadow).toContain('currentColor');
-    neon.unmount();
 
     const poster = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'poster' })} />);
     const posterEl = screen.getByTestId('canvas-v3-object-t1');
@@ -198,5 +200,72 @@ describe('CanvasV3Scene — la scène v3 (F1)', () => {
     const noMatch = render(<CanvasV3Scene doc={doc} preferredLanguages={['de']} />);
     expect(screen.getByTestId('canvas-v3-object-t1')).toHaveTextContent('Hello');
     noMatch.unmount();
+  });
+});
+
+/// L'axe EFFET (#4870) — `payload.textEffect`, lu par le MÊME helper que le
+/// chemin legacy de `StoryViewer` (`lib/story-text-effect.ts`).
+describe('CanvasV3Scene — l\'axe EFFET du texte (#4870)', () => {
+  const shadowOf = (payload: Record<string, unknown>): string => {
+    const { unmount } = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'bold', ...payload })} />);
+    const shadow = screen.getByTestId('canvas-v3-object-t1').style.textShadow;
+    unmount();
+    return shadow;
+  };
+
+  it('glow is a centered halo in the text colour, in em so it follows the font size', () => {
+    const shadow = shadowOf({ textEffect: 'glow' });
+    expect(shadow).toContain('currentColor');
+    expect(shadow).toContain('0.36em');
+  });
+
+  it('shadow is a soft black drop shadow offset downwards', () => {
+    const shadow = shadowOf({ textEffect: 'shadow' });
+    expect(shadow).toContain('0.06em');
+    expect(shadow).toContain('0.16em');
+    expect(shadow).not.toContain('currentColor');
+  });
+
+  it('relief is a hard offset shadow — no blur', () => {
+    const shadow = shadowOf({ textEffect: 'relief' });
+    expect(shadow).toContain('0.05em 0.05em 0 ');
+  });
+
+  it('an absent or unknown effect keeps the readability veil, never throws', () => {
+    expect(shadowOf({})).toContain('1px 4px');
+    expect(shadowOf({ textEffect: 'effect-from-the-future' })).toContain('1px 4px');
+  });
+
+  it('the neon FONT plus the glow EFFECT glows exactly once — the axes are orthogonal', () => {
+    const shadow = shadowOf({ textStyle: 'neon', textEffect: 'glow' });
+    expect(shadow.split('currentColor').length - 1).toBe(1);
+  });
+
+  /// #5244 — dix effets de plus, et une encre CLAIRE que le booléen d'origine
+  /// ne savait pas dire ; six de plus le 2026-09-05, l'axe portant vingt noms.
+  it('the twenty-five effects all render, and none falls back to the veil', () => {
+    for (const effect of TEXT_EFFECTS) {
+      expect(shadowOf({ textEffect: effect })).not.toContain('1px 4px');
+    }
+    expect(TEXT_EFFECTS).toHaveLength(24); // les vingt-cinq moins « aucun », qui est l'absence
+  });
+
+  it('a light-ink relief paints WHITE — what "text colour or black" could not say', () => {
+    for (const effect of ['emboss', 'letterpress']) {
+      expect(shadowOf({ textEffect: effect })).toContain('255,255,255');
+    }
+  });
+
+  /// **`currentColor` ne porte pas d'alpha.** Tant que la seule encre `text`
+  /// était `glow` (opacité 1), personne ne pouvait le voir ; `glowSoft` (0,55)
+  /// et `echo` (0,35) se seraient rendus PLEINS ici et translucides sur les
+  /// deux clients natifs — une divergence introduite par l'élargissement
+  /// lui-même.
+  it('a translucent text-ink effect carries its alpha, not a bare currentColor', () => {
+    for (const [effect, pourcent] of [['glowSoft', '55%'], ['echo', '35%']] as const) {
+      const shadow = shadowOf({ textEffect: effect });
+      expect(shadow).toContain('color-mix');
+      expect(shadow).toContain(pourcent);
+    }
   });
 });

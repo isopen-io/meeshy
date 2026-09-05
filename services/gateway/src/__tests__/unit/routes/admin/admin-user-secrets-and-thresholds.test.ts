@@ -21,6 +21,28 @@
  *   `affiliateToken.token` à des rôles pour qui `canViewSensitiveData` est
  *   `false`.
  *
+ * ## Ce que #4694 corrige DANS CE FICHIER
+ *
+ * La fixture de `trackingLink` valait `shortUrl: 'https://s'`. En PRODUCTION
+ * `shortUrl` vaut `/l/${token}` (`TrackingLinkService:148` et `:926` ;
+ * `schema.prisma` : « URL courte générée (meeshy.me/l/<token>) ») — **le champ
+ * retiré était contenu dans le champ conservé**, et c'est la fixture, pas la
+ * route, qui empêchait le témoin de tomber.
+ *
+ * > Un témoin dont la fixture n'a pas la forme de la production atteste une
+ * > protection que la production n'a pas. Ici il a validé, puis GELÉ, un
+ * > correctif sans effet.
+ *
+ * Sortie retenue, sur la MESURE des routes clefées par `:token` : ce jeton est
+ * une clé de ROUTAGE publique (`GET /l/:token` redirige publiquement,
+ * `GET /tracking-links/:token/resolve` est publique par design,
+ * `POST …/:token/click` est en `authOptional`, `POST …/:token/redirect-status`
+ * n'a aucun hook), et tout ce qui MUTE ou lit les stats est `authRequired` +
+ * propriétaire. On l'ASSUME donc : `token` revient au `select`, le commentaire
+ * qui prétendait le protéger est retiré, et le témoin ci-dessous atteste la
+ * décision au lieu de la contredire. `affiliateToken.token` reste retiré — lui
+ * consomme une place de `maxUses` sur `POST /affiliate/register`.
+ *
  * - `GET /admin/users/:id/reports` se contentait de `canViewUsers` quand
  *   `GET /admin/reports` exige `canModerateContent` : DEUX seuils sur la même
  *   table, donc le plus bas décide.
@@ -127,7 +149,7 @@ const prisma: Record<string, Record<string, jest.Mock>> = {
   conversationShareLink: {
     findMany: jest.fn(async (args: { select?: unknown }) => {
       selects.conversationShareLink = args?.select;
-      return [projeter({ id: 'sl1', linkId: 'mshy_SECRET', identifier: 'ident', name: 'n', description: null,
+      return [projeter({ id: 'sl1', linkId: 'mshy_SECRET', identifier: 'mshy_IDENT', name: 'n', description: null,
                 maxUses: null, currentUses: 0, maxConcurrentUsers: null, currentConcurrentUsers: 0,
                 isActive: true, expiresAt: null, createdAt: new Date(), conversation: { id: 'c1', identifier: 'ci' } }, args?.select)];
     }),
@@ -136,7 +158,7 @@ const prisma: Record<string, Record<string, jest.Mock>> = {
     findMany: jest.fn(async (args: { select?: unknown }) => {
       selects.trackingLink = args?.select;
       return [projeter({ id: 'tl1', token: 'TOKEN_TRACK', name: 'n', campaign: null, source: null, medium: null,
-                originalUrl: 'https://x', shortUrl: 'https://s', totalClicks: 0, uniqueClicks: 0,
+                originalUrl: 'https://x', shortUrl: '/l/TOKEN_TRACK', totalClicks: 0, uniqueClicks: 0,
                 isActive: true, expiresAt: null, createdAt: new Date(), lastClickedAt: null }, args?.select)];
     }),
   },
@@ -218,7 +240,7 @@ describe('#4157 R3 — un média protégé ne sort pas par la porte d\'administr
 });
 
 describe("#4157 R4 — aucun secret d'accès ne voyage dans l'activité", () => {
-  it('ne sert ni linkId, ni token de suivi, ni token d\'affiliation', async () => {
+  it("ne sert ni clé de jointure, ni token d'affiliation", async () => {
     const app = monter();
     const res = await app.inject({ method: 'GET', url: '/admin/users/u1/activity' });
 
@@ -226,8 +248,33 @@ describe("#4157 R4 — aucun secret d'accès ne voyage dans l'activité", () => 
     const brut = res.payload;
 
     expect(brut).not.toContain('mshy_SECRET');
-    expect(brut).not.toContain('TOKEN_TRACK');
     expect(brut).not.toContain('TOKEN_AFFIL');
+    // #4692 — `identifier` est la JUMELLE de `linkId` : les deux ouvrent
+    // `findShareLinkByKey`. Le lot #4157 n'avait retiré que la première.
+    expect(brut).not.toContain('mshy_IDENT');
+
+    await app.close();
+  });
+
+  /**
+   * #4694 — le jeton de suivi est SERVI, et c'est une décision.
+   *
+   * `shortUrl` le contient (`/l/<token>`) : le retirer du `select` ne le
+   * retirait pas de la charge. Plutôt qu'un masquage qui coûterait à la console
+   * le libellé d'un lien sans nom sans rien fermer, on assume que ce jeton est
+   * une clé de routage publique (cf. § doc-tête). Ce témoin gèle la décision :
+   * il tombe si quelqu'un retire `token` sans retirer aussi `shortUrl`, c'est-
+   * à-dire s'il refait le correctif sans effet de #4157 c.3.
+   */
+  it('sert le jeton de suivi — et le sert DÉJÀ à travers shortUrl', async () => {
+    const app = monter();
+    const res = await app.inject({ method: 'GET', url: '/admin/users/u1/activity' });
+
+    const suivi = (res.json().data as { trackingLinks: Array<Record<string, unknown>> })
+      .trackingLinks[0];
+
+    expect(suivi?.shortUrl).toBe('/l/TOKEN_TRACK');
+    expect(suivi?.token).toBe('TOKEN_TRACK');
 
     await app.close();
   });
@@ -243,7 +290,7 @@ describe("#4157 R4 — aucun secret d'accès ne voyage dans l'activité", () => 
     await app.inject({ method: 'GET', url: '/admin/users/u1/activity' });
 
     expect((selects.conversationShareLink as Record<string, unknown>)?.linkId).toBeUndefined();
-    expect((selects.trackingLink as Record<string, unknown>)?.token).toBeUndefined();
+    expect((selects.conversationShareLink as Record<string, unknown>)?.identifier).toBeUndefined();
     expect((selects.affiliateToken as Record<string, unknown>)?.token).toBeUndefined();
 
     await app.close();

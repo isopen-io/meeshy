@@ -20,9 +20,35 @@
  */
 
 export type SchemaValidationErrorResponse = {
+  /**
+   * Le champ que tout client teste EN PREMIER — et le seul que ce producteur
+   * omettait (#4688).
+   *
+   * `validationErrorResponseSchema` le DÉCLARE, le format de réponse du dépôt
+   * est `{ success, data?, error? }`, et la branche voisine du même
+   * gestionnaire (`TypedErrorBody`) le pose depuis toujours : une
+   * `ValidationError` LEVÉE et un refus d'Ajv sortaient donc sous le même
+   * statut, le même `code` et le même schéma, avec deux enveloppes
+   * différentes. `if (!body.success)` s'en tirait par accident sur
+   * `undefined` ; `if (body.success === false)` — la forme qu'un contrat typé
+   * encourage — ne reconnaissait pas le refus.
+   */
+  readonly success: false;
   readonly error: 'Validation Error';
   readonly message: string;
   readonly code: 'VALIDATION_ERROR';
+  /**
+   * Le canal de retour du STATUT, jamais un champ de fil.
+   *
+   * `validationErrorResponseSchema` ne le déclare pas, et c'est sans
+   * conséquence : le gestionnaire l'EXTRAIT du corps avant d'envoyer
+   * (`const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal`) et
+   * s'en sert comme statut HTTP — exactement comme `TypedErrorBody.statusCode`.
+   * Le retirer priverait `server.ts` de son statut ; le déclarer dans
+   * `packages/shared` le ferait voyager sur les 595 déclarations de statut que
+   * #4689 vient de nettoyer. Mesuré, pas affirmé :
+   * `__tests__/unit/routes/schema-refusal-carries-success-flag.test.ts`.
+   */
   readonly statusCode: 400;
   /** Une entrée par violation — le formulaire peut surligner chaque champ. */
   readonly details: readonly { readonly field: string; readonly message: string }[];
@@ -59,6 +85,7 @@ export function schemaValidationErrorResponse(error: unknown): SchemaValidationE
   }));
 
   return {
+    success: false,
     error: 'Validation Error',
     // Le message de Fastify nomme déjà le champ (`body/password must NOT have
     // fewer than 6 characters`) : on le garde tel quel plutôt que d'en

@@ -17,7 +17,7 @@ final class FocalRowInputEquatableTests: XCTestCase {
         BubbleContent(
             messageId: messageId, kind: .standard, text: nil, translation: nil, reply: nil,
             attachments: .none, location: nil, ephemeral: nil, isBlurred: false,
-            isViewOnce: false, isPinned: false, isForwarded: false, editedAt: nil,
+            isViewOnce: false, isPinned: false, forwardAttribution: nil, editedAt: nil,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: timeString, deliveryStatus: nil),
             isMe: false, senderName: "Ali", callNotice: nil, joinNotice: nil

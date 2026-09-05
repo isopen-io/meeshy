@@ -36,6 +36,23 @@ extension UniversalComposerBar {
     /// La bascule entre les deux contenus, et l'apparition/disparition du
     /// bouton d'envoi lui-même, passent par `tourbillonTransition` — un
     /// grossissement/rotation à l'arrivée, l'inverse au départ.
+    /// **Le slot s'ÉLARGIT pour deux cibles, il ne les comprime pas**
+    /// (demande porteur 2026-08-31).
+    ///
+    /// Il avait été taillé pour UN bouton — 44 pt — et la bascule de #3927 y a
+    /// serré deux pastilles et leur gouttière : mesuré au simulateur, chacune
+    /// rendait 30×30, sous le minimum tactile de 44 pt (dimension 5). La cause
+    /// n'était pas la taille des pastilles mais celle du SLOT, restée celle
+    /// d'avant leur arrivée.
+    ///
+    /// Ce que le champ de texte cède, il ne le cède QUE tant qu'il est vide :
+    /// `showsQuickEmoji` retombe à la première frappe, le slot revient à 44 et
+    /// le champ reprend sa largeur. La réduction porte donc exactement sur
+    /// l'état où le champ n'a rien à montrer.
+    static let sendSlotWidth: CGFloat = 44
+    /// Deux cibles de 44 et la gouttière de 8 qui les sépare.
+    static let quickEmojiSlotWidth: CGFloat = 96
+
     @ViewBuilder
     var actionButton: some View {
         let isReady = (effectiveIsRecording || hasContent) && !externalIsSending
@@ -52,7 +69,7 @@ extension UniversalComposerBar {
                     .transition(tourbillonTransition)
             }
         }
-        .frame(width: 44, height: 44)
+        .frame(width: showsQuickEmoji ? Self.quickEmojiSlotWidth : Self.sendSlotWidth, height: 44)
         .animation(.spring(response: 0.35, dampingFraction: 0.62), value: showsQuickEmoji)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
@@ -108,14 +125,14 @@ extension UniversalComposerBar {
 
     @ViewBuilder
     private var quickEmojiButtons: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             ForEach(quickSendEmojis, id: \.self) { emoji in
                 Button {
                     sendQuickEmoji(emoji)
                 } label: {
                     Text(emoji)
-                        .font(.system(size: 16))
-                        .frame(width: 30, height: 30)
+                        .font(.system(size: 24))
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(mutedColor.opacity(0.12)))
                 }
                 .accessibilityLabel(

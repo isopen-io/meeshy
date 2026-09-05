@@ -67,6 +67,51 @@ export const escapingRequests = (root, packageDirectory) =>
       });
     });
 
+// --- ce que le code d'EXÉCUTION de la v3 lit dans son environnement ----------
+
+// Les deux arbres dont le code TOURNE dans le conteneur. `scripts/`, `e2e/` et
+// `__tests__/` en sont exclus : ils tournent sur une machine de développement ou
+// dans un job de CI, où l'environnement est celui du poste et non celui de
+// l'image.
+const RUNTIME_TREES = ['app', 'lib'];
+
+// Une CHAÎNE de replis, pas une variable isolée : `A ?? B ?? 'défaut'` se lit en
+// une fois, parce que la question posée en aval est « au moins l'une d'elles
+// est-elle déclarée ? ». Découpée en variables indépendantes, la lecture
+// réclamerait la déclaration des DEUX, ce qui est faux — l'une est l'alternative
+// de l'autre.
+//
+// DEUX NOTATIONS, UN SEUL TERME. `process.env.NOM` et `process.env['NOM']`
+// lisent la MÊME chose — la seconde s'écrit quand `NOM` doit rester une
+// chaîne calculable (`blocDuNavigateur` et `SCRIPT_DU_TRAVAILLEUR` la
+// choisissent pour ça). Un terme qui ne reconnaît que le point est aveugle à
+// la moitié des lectures : `V3_NAVIGABLE` (`app/connecte/chargeur.ts`) et
+// `V3_SW_PORTEES` (`app/connecte/fil-vue.ts`) ne matchaient JAMAIS, et
+// `theV3ServiceDeclaresWhatItsCodeReads` ne les voyait donc jamais manquer —
+// la garde était aveugle à 100 % des variables lues en crochets du dépôt.
+const ENV_TERM = /process\.env(?:\.[A-Z][A-Z0-9_]*|\['[A-Z][A-Z0-9_]*'\])/;
+
+const ENV_CHAIN = new RegExp(
+  `${ENV_TERM.source}(?:\\s*\\?\\?\\s*${ENV_TERM.source})*`,
+  'g',
+);
+
+const ENV_NAME = /process\.env(?:\.([A-Z][A-Z0-9_]*)|\['([A-Z][A-Z0-9_]*)'\])/g;
+
+export const runtimeEnvChains = (root, packageDirectory) =>
+  RUNTIME_TREES.flatMap((tree) =>
+    filesUnder(join(root, packageDirectory, tree))
+      .filter((relative) => !relative.split('/').some((segment) => SKIPPED_TREES.has(segment)))
+      .filter((relative) => MODULE_EXTENSIONS.has(splitName(relative).extension))
+      .flatMap((relative) => {
+        const source = readFileSync(join(root, packageDirectory, tree, relative), 'utf8');
+        return [...source.matchAll(ENV_CHAIN)].map((match) => ({
+          file: `${packageDirectory}/${tree}/${relative}`,
+          variables: [...match[0].matchAll(ENV_NAME)].map(([, dotted, bracketed]) => dotted ?? bracketed),
+        }));
+      }),
+  );
+
 // Le graphe que la racine gouverne, lu depuis ses globs — la même entrée que
 // `scripts/check-lockfile-alignment.mjs`, et pour la même raison : un parcours
 // du disque ramasserait des manifestes que bun n'installe jamais.

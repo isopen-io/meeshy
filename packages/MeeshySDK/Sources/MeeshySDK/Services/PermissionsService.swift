@@ -84,7 +84,7 @@ public final class PermissionsService: PermissionsServiceProviding, @unchecked S
 
     public func myPermissions() async throws -> MyPermissions {
         let response: APIResponse<MyPermissions> = try await api.request(
-            endpoint: "/admin/me/permissions"
+            AdminEndpoint.mePermissions
         )
         return response.data
     }

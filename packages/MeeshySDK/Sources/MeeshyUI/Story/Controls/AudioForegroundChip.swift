@@ -113,6 +113,19 @@ public final class StoryReaderPlayheadState: ObservableObject {
 @MainActor
 public struct AudioForegroundChip: View {
 
+    /// **Ce qui suspend l'animation de la puce** (#3915) — DEUX raisons, et
+    /// elles ne se remplacent pas.
+    ///
+    /// La sourdine est une décision de l'AUTEUR : elle survit à l'inactivité et
+    /// se voit (l'icône change, l'opacité tombe). Le repos de l'écran est une
+    /// décision de l'APPAREIL : il ne change rien à ce que la puce dit, il
+    /// arrête seulement de le redessiner. Les confondre en un seul drapeau
+    /// ferait qu'un réveil rallumerait le son d'une piste que l'auteur a coupée.
+    public nonisolated static func animationIsPaused(isUserMuted: Bool,
+                                                     isEditClockThrottled: Bool) -> Bool {
+        isUserMuted || isEditClockThrottled
+    }
+
     public enum Mode: Sendable {
         case composer
         case reader
@@ -123,6 +136,20 @@ public struct AudioForegroundChip: View {
     public let mode: Mode
     public let isSelected: Bool
     public let isUserMuted: Bool
+    /// **L'écran est-il au repos ?** (#3915)
+    ///
+    /// `StoryCanvasUIView` met son horloge d'édition en veille après une
+    /// fenêtre d'inactivité (`EditClockThrottle`, #3906). Ce ralenti ne
+    /// touchait PAS cette puce : ses deux `TimelineView(.animation(…))`
+    /// tournent sur l'horloge d'ANIMATION propre de SwiftUI, indépendante de
+    /// `editDisplayLink`. Une piste non mise en sourdine — le cas courant
+    /// d'une musique de fond — redessinait donc à 30 fps indéfiniment sur un
+    /// écran que personne ne touche.
+    ///
+    /// > Mettre une horloge en veille n'endort pas les autres. Une veille se
+    /// > mesure sur ce qui continue de se réveiller tout seul par-dessous,
+    /// > jamais sur celle qu'on vient d'arrêter.
+    public let isEditClockThrottled: Bool
     public let onDragEnd: () -> Void
     public let onTap: () -> Void
     /// Tap sur l'icône (mode `.composer`) → coupe / réactive le son de cette
@@ -135,6 +162,11 @@ public struct AudioForegroundChip: View {
     public let slideDuration: TimeInterval?
 
     @GestureState private var dragOffset: CGSize = .zero
+    /// **Le facteur du pinch EN COURS** (#4722), éphémère comme `dragOffset` et
+    /// pour la même raison : le modèle n'est écrit qu'au relâchement, sinon
+    /// chaque tick du geste republierait la slide et ferait re-rendre tout ce
+    /// qui l'observe.
+    @GestureState private var pinchScale: CGFloat = 1
     @Environment(\.colorScheme) private var colorScheme
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
@@ -142,6 +174,7 @@ public struct AudioForegroundChip: View {
                 mode: Mode = .composer,
                 isSelected: Bool = false,
                 isUserMuted: Bool = false,
+                isEditClockThrottled: Bool = false,
                 slideDuration: TimeInterval? = nil,
                 onDragEnd: @escaping () -> Void = {},
                 onTap: @escaping () -> Void = {},
@@ -151,6 +184,7 @@ public struct AudioForegroundChip: View {
         self.mode = mode
         self.isSelected = isSelected
         self.isUserMuted = isUserMuted
+        self.isEditClockThrottled = isEditClockThrottled
         self.slideDuration = slideDuration
         self.onDragEnd = onDragEnd
         self.onTap = onTap
@@ -161,15 +195,49 @@ public struct AudioForegroundChip: View {
         Group {
             switch mode {
             case .composer:
-                positionedChip.gesture(dragGesture)
+                // **Les deux gestes SIMULTANÉMENT** (#4722). Chaînés par
+                // `.gesture()` successifs, SwiftUI n'en reconnaît qu'un : le
+                // pinch, à deux doigts, commence toujours par un déplacement
+                // que le drag revendique d'abord — la puce se déplaçait au
+                // lieu de grandir.
+                positionedChip
+                    .gesture(dragGesture.simultaneously(with: pinchGesture))
+                    // **Posées ICI et non dans `positionedChip`** : le lecteur
+                    // n'a pas de geste de taille, et une action nommée qui
+                    // n'agirait pas y serait un contrôle inerte annoncé à
+                    // VoiceOver — la loi 4 dans la forme où elle coûte le plus,
+                    // puisque seule une personne qui n'entend pas la promesse
+                    // échouer la découvrirait.
+                    .accessibilityAction(named: Text(Self.enlargeActionLabel)) {
+                        stepScale(by: Self.accessibilityScaleStep)
+                    }
+                    .accessibilityAction(named: Text(Self.shrinkActionLabel)) {
+                        stepScale(by: 1 / Self.accessibilityScaleStep)
+                    }
             case .reader:
                 positionedChip
             }
         }
     }
 
+    /// **La taille RENDUE** — celle du modèle, multipliée par le geste en cours
+    /// (#4722).
+    ///
+    /// En `.reader`, le pinch n'existe pas et `pinchScale` vaut son état de
+    /// repos : la même expression sert les deux modes sans les distinguer, ce
+    /// qui garantit qu'une puce publiée se lit exactement à la taille où
+    /// l'auteur l'a laissée.
+    private var renderedScale: CGFloat {
+        CGFloat(SceneObjectScalePolicy.clamped(audioObject.scale ?? 1)) * pinchScale
+    }
+
     private var positionedChip: some View {
         chipContent
+            // AVANT `.position` : le modificateur de position place le CENTRE
+            // du contenu, que l'échelle ne déplace pas. Appliqué après, il
+            // mettrait la coordonnée elle-même à l'échelle — une puce à droite
+            // de la scène partirait hors cadre en grandissant.
+            .scaleEffect(renderedScale)
             .position(
                 x: max(0, min(canvasSize.width, audioObject.x * canvasSize.width)) + dragOffset.width,
                 y: max(0, min(canvasSize.height, audioObject.y * canvasSize.height)) + dragOffset.height
@@ -205,12 +273,16 @@ public struct AudioForegroundChip: View {
             )) {
             case .marquee(let text):
                 AudioChipMarquee(text: text,
-                                 paused: isUserMuted,
+                                 paused: Self.animationIsPaused(
+                                    isUserMuted: isUserMuted,
+                                    isEditClockThrottled: isEditClockThrottled),
                                  window: readerPlaybackWindow)
                     .frame(width: readerPlaybackWindow == nil ? 92 : 124, height: 18)
                     .opacity(isUserMuted ? 0.55 : 1.0)
             case .waveform:
-                AudioForegroundSineWave(paused: isUserMuted)
+                AudioForegroundSineWave(paused: Self.animationIsPaused(
+                    isUserMuted: isUserMuted,
+                    isEditClockThrottled: isEditClockThrottled))
                     .frame(width: 54, height: 18)
                     .opacity(isUserMuted ? 0.35 : 1.0)
             }
@@ -295,7 +367,9 @@ public struct AudioForegroundChip: View {
     private var accessibilityHintLabel: String {
         switch mode {
         case .composer:
-            return String(localized: "story.audio.chip.hint.composer", defaultValue: "Double tap pour sélectionner. Faites glisser pour déplacer.", bundle: .module)
+            return String(localized: "story.audio.chip.hint.composer",
+                          defaultValue: "Double tap pour sélectionner. Faites glisser pour déplacer, pincez pour redimensionner.",
+                          bundle: .module)
         case .reader:
             return String(localized: "story.audio.chip.hint.reader", defaultValue: "Double tap pour couper ou activer cette piste audio.", bundle: .module)
         }
@@ -312,6 +386,54 @@ public struct AudioForegroundChip: View {
                 audioObject.y = min(1, max(0, nextY))
                 onDragEnd()
             }
+    }
+
+    /// **Pincer redimensionne la puce** (#4722, directive porteur 2026-09-01 :
+    /// « en chip resizable sur la scène »).
+    ///
+    /// `MagnificationGesture` et non `MagnifyGesture` : la seconde est iOS 17+,
+    /// et le plancher de l'app est iOS 16. La dépréciation ne retire rien —
+    /// elle nomme le successeur qu'on prendra le jour où le plancher montera.
+    ///
+    /// Le modèle n'est écrit qu'au relâchement, comme pour le déplacement : la
+    /// slide est un `@Binding` que la scène entière observe, et la republier à
+    /// chaque tick du geste ferait re-rendre le canvas pendant qu'on pince —
+    /// exactement l'image perdue que la dimension 4 interdit.
+    private var pinchGesture: some Gesture {
+        MagnificationGesture()
+            .updating($pinchScale) { value, state, _ in state = value }
+            .onEnded { value in
+                audioObject.scale = SceneObjectScalePolicy.settled(
+                    base: audioObject.scale ?? 1, gestureScale: Double(value))
+                onDragEnd()
+            }
+    }
+
+    /// **Le pas des actions d'accessibilité** — un cran qui SE VOIT sans
+    /// traverser la plage en deux pressions.
+    ///
+    /// VoiceOver ne pince pas : sans ces deux actions, le redimensionnement
+    /// serait une capacité réservée à qui voit l'écran et pose deux doigts
+    /// dessus. `1.25` donne dix crans entre les bornes — assez fin pour viser,
+    /// assez franc pour que chaque pression change quelque chose.
+    private static let accessibilityScaleStep: Double = 1.25
+
+    static var enlargeActionLabel: String {
+        String(localized: "story.audio.chip.action.enlarge",
+               defaultValue: "Agrandir la puce", bundle: .module)
+    }
+
+    static var shrinkActionLabel: String {
+        String(localized: "story.audio.chip.action.shrink",
+               defaultValue: "Réduire la puce", bundle: .module)
+    }
+
+    /// Applique un cran d'échelle. Passe par la MÊME règle que le pinch : deux
+    /// chemins vers une grandeur, une seule borne.
+    private func stepScale(by factor: Double) {
+        audioObject.scale = SceneObjectScalePolicy.settled(
+            base: audioObject.scale ?? 1, gestureScale: factor)
+        onDragEnd()
     }
 }
 

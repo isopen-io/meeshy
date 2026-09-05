@@ -55,12 +55,12 @@ actor PendingStatusQueue {
 
         var remaining: [PendingAction] = []
         for action in actions {
-            let endpoint = action.type == "read"
-                ? "/conversations/\(action.conversationId)/mark-as-read"
-                : "/conversations/\(action.conversationId)/mark-as-received"
+            let endpoint: any MeeshyEndpoint = action.type == "read"
+                ? ConversationsEndpoint.byConversationIdMarkAsRead(conversationId: action.conversationId)
+                : ConversationsEndpoint.byConversationIdMarkAsReceived(conversationId: action.conversationId)
             do {
                 let _: APIResponse<[String: String]> = try await apiClient.request(
-                    endpoint: endpoint, method: "POST"
+                    endpoint, method: "POST"
                 )
             } catch {
                 remaining.append(action)

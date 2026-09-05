@@ -57,6 +57,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.socket.TypingPresenceRelay
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
@@ -109,6 +110,13 @@ class ConversationListViewModelTest {
             every { this@mockk.presenceSnapshot } returns presenceSnapshot
             every { this@mockk.typingStarted } returns typingStarted
             every { this@mockk.typingStopped } returns typingStopped
+        }
+
+    private fun typingPresenceRelay(
+        forcedOnline: MutableSharedFlow<UserStatusEvent> = MutableSharedFlow(),
+    ): TypingPresenceRelay =
+        mockk<TypingPresenceRelay> {
+            every { this@mockk.forcedOnline } returns forcedOnline
         }
 
     private fun connectionSocket(
@@ -172,6 +180,7 @@ class ConversationListViewModelTest {
         connection: SocketManager = connectionSocket(),
         draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
         socket: MessageSocketManager = socketManager(),
+        relay: TypingPresenceRelay = typingPresenceRelay(),
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
@@ -182,7 +191,7 @@ class ConversationListViewModelTest {
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
         statusBarCache: StatusBarCache = statusBarCache(),
     ) = ConversationListViewModel(
-        repo, messageRepo, socket, workManager, draftStore, starredStore,
+        repo, messageRepo, socket, relay, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
         storyRepository, statusBarCache,
     )
@@ -333,6 +342,19 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         userStatusFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()
+    }
+
+    @Test
+    fun a_forced_online_event_from_a_typing_frame_is_stored_in_presence_by_user_id() = runTest(dispatcher) {
+        val forcedOnlineFlow = MutableSharedFlow<UserStatusEvent>()
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo, relay = typingPresenceRelay(forcedOnline = forcedOnlineFlow))
+        advanceUntilIdle()
+
+        forcedOnlineFlow.emit(UserStatusEvent(userId = "other", isOnline = true, lastActiveAt = null))
         advanceUntilIdle()
 
         assertThat(vm.state.value.presenceByUserId["other"]?.isOnline).isTrue()

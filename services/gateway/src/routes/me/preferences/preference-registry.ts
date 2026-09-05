@@ -84,6 +84,14 @@ export type PreferenceDocument = Record<string, unknown>;
 export type PreferenceSchema = {
   readonly parse: (input: unknown) => PreferenceDocument;
   readonly partial: () => { readonly parse: (input: unknown) => PreferenceDocument };
+  /**
+   * `.strict()` — le même objet, mais qui LÈVE sur une clé non déclarée.
+   *
+   * Déclaré ici parce que la rigueur est une propriété de la FRONTIÈRE, pas du
+   * type (#4589) : le schéma exporté reste permissif pour ses lecteurs, et
+   * c'est le point d'entrée d'une écriture qui décide de refuser.
+   */
+  readonly strict: () => PreferenceSchema;
 };
 
 /**
@@ -291,7 +299,23 @@ export async function resolveCompleteCategories(
  * reste absente du document écrit, au lieu de revenir à son défaut Zod.
  */
 export function submittedFrom(schema: PreferenceSchema, body: unknown): PreferenceDocument {
-  return submittedKeysOnly(schema.partial().parse(body), body);
+  // `.strict()` avant `.partial()` (#4589) : une clé que le schéma ne déclare
+  // pas LÈVE au lieu d'être retirée en silence.
+  //
+  // Le mode *strip* de Zod — le défaut d'un `z.object()` nu — transformait une
+  // erreur d'appelant en SUCCÈS : `PATCH /me/preferences/privacy
+  // {"profileVisibility":"private"}` rendait `200 {"success":true}` et
+  // n'écrivait RIEN (mesuré sur staging le 2026-08-31). Le client croit avoir
+  // transmis ; la valeur revient au rechargement suivant ; rien nulle part ne
+  // dit pourquoi. C'est le pire des deux mondes, et c'est le même mécanisme
+  // qui avait masqué `thirdPartyServicesConsentAt` sous #4343.
+  //
+  // La rigueur vit ICI, au point d'entrée, et NON sur le schéma exporté : une
+  // frontière de confiance décide de ce qu'elle accepte, un type ne décide de
+  // rien. Les LECTURES (`resolveComplete`) continuent donc de traverser des
+  // documents stockés qui peuvent porter des clés héritées — un `.strict()`
+  // posé sur le type les ferait lever au chargement.
+  return submittedKeysOnly(schema.strict().partial().parse(body), body);
 }
 
 /** La même règle, pour un appelant qui ne connaît que le NOM de la catégorie. */

@@ -117,8 +117,15 @@ export class MessagesService {
         throw new Error('REQUEST_CANCELLED');
       }
 
+      // Un échec réseau (401/500/timeout) n'est PAS une liste vide : le
+      // rendre comme telle enregistre un succès React Query à zéro message,
+      // qui ne réessaie jamais (`retry` ne voit aucune erreur) et se fige
+      // derrière `staleTime: Infinity`, écrasant silencieusement le cache
+      // jusqu'au prochain focus. L'erreur est propagée pour que la requête
+      // passe en état `error` — React Query retry ensuite selon sa politique
+      // globale (query-client.ts) et conserve la dernière page connue.
       logger.error('[Messages]', 'Erreur lors du chargement des messages', { error });
-      return MessagesService.EMPTY_MESSAGES_RESPONSE;
+      throw error;
     }
   }
 

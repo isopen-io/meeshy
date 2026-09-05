@@ -137,6 +137,8 @@ data class StoryTextObject(
     val backgroundStyle: StoryTextBackgroundStyle? = null,
     val borderColor: String? = null,
     val borderWidth: Double? = null,
+    /** The EFFECT axis (#4870) — [StoryTextEffect.wire]; absent ⇒ none. A string, like `textStyle`, so a newer client's value decodes. */
+    val textEffect: String? = null,
     val translations: Map<String, String>? = null,
     val sourceLanguage: String? = null,
     val startTime: Double? = null,
@@ -172,9 +174,30 @@ data class StoryMediaObject(
     val intrinsicDuration: Double? = null,
     val isBackground: Boolean = false,
     val loop: Boolean = false,
+    /**
+     * Crop bounds in fractions of the source (#5085) — `null` when the whole media is
+     * shown. The v1 wire nests them under `crop`; the canvas-v3 payload flattens them
+     * to `cropX`/`cropY`/`cropW`/`cropH`, projected by [CanvasV3Projection].
+     *
+     * They travelled from iOS with **no Android reader at all** until 2026-09-04: an
+     * image cropped by the author rendered WHOLE here, and no test could turn red —
+     * the field simply never reached a decoder.
+     */
+    val crop: StoryMediaCrop? = null,
     val zIndex: Int = 0,
     val startTime: Double? = null,
     val duration: Double? = null,
+    /**
+     * Playback bounds INSIDE the source, in seconds (#5129) — `null` when the whole
+     * source plays. Distinct from [startTime]/[duration], which say WHEN the object is
+     * on screen; these say WHICH PART of the file plays once it is. Both travel or
+     * neither does (see [StorySourceWindow]).
+     *
+     * They travelled from iOS with no Android reader at all until 2026-09-04: a clip
+     * trimmed to seconds 3 → 8 of a thirty-second video played all thirty here.
+     */
+    val sourceStart: Double? = null,
+    val sourceEnd: Double? = null,
     val fadeIn: Double? = null,
     val fadeOut: Double? = null,
     val sourceLanguage: String? = null,
@@ -204,6 +227,9 @@ data class StoryAudioPlayerObject(
     val zIndex: Int? = null,
     val startTime: Float? = null,
     val duration: Float? = null,
+    /** Playback bounds inside the source, in seconds (#5129). See [StorySourceWindow]. */
+    val sourceStart: Float? = null,
+    val sourceEnd: Float? = null,
     val loop: Boolean? = null,
     val fadeIn: Float? = null,
     val fadeOut: Float? = null,

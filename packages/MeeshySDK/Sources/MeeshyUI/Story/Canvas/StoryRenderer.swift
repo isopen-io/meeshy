@@ -54,15 +54,21 @@ extension StoryTextObject: RenderableItem {}
 extension StoryMediaObject: RenderableItem {}
 extension StorySticker: RenderableItem {}
 
-/// La pastille de lieu est hors timeline par design (voir doc `StoryLocationObject`
-/// dans MeeshySDK) : `nil` pour les quatre champs de timing en fait un item
-/// `isStatic` toujours visible, jamais gouverné par une fenêtre de lecture.
-extension StoryLocationObject: RenderableItem {
-    public var startTime: Double? { nil }
-    public var duration: Double? { nil }
-    public var fadeIn: Double? { nil }
-    public var fadeOut: Double? { nil }
-}
+/// **La pastille de lieu porte ses quatre champs de timing comme ses trois
+/// sœurs** (directive porteur 2026-08-31, #4591) — donc la conformité est vide,
+/// comme les leurs.
+///
+/// > Elle fabriquait ici quatre `nil` EN DUR, justifiés par le doc-comment du
+/// > modèle qui affirmait « hors timeline par design ». C'était le site le plus
+/// > dangereux du cercle : `MeeshyUI` compile en `defaultIsolation(MainActor)`,
+/// > donc ces quatre calculées OMBRAIENT les propriétés stockées dans tout le
+/// > module. Les champs ajoutés au modèle n'auraient gouverné **aucun pixel** du
+/// > canvas, et rien n'aurait rougi — c'est l'isolation, pas la logique, qui a
+/// > fini par le dire.
+///
+/// **Un repli qui rend `nil` sans condition n'est pas une valeur par défaut :
+/// c'est une réponse qui empêche la question d'être posée.**
+extension StoryLocationObject: RenderableItem {}
 
 extension RenderableItem {
     /// A static item has no timing windows, no fades, no keyframes — its rendered
@@ -124,7 +130,8 @@ public enum StoryRenderer {
                               backdropProvider: BackdropProvider? = nil,
                               mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                               contentsScale: CGFloat = UIScreen.main.scale,
-                              suppressDrawingOverlay: Bool = false) -> CALayer {
+                              suppressDrawingOverlay: Bool = false,
+                              reduceMotion: Bool = UIAccessibility.isReduceMotionEnabled) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
@@ -282,6 +289,27 @@ public enum StoryRenderer {
             if mode == .play, !(item is StoryMediaObject),
                let resolved = resolvedNonMediaOpacity(item: item, at: time.seconds) {
                 layer.opacity = Float(resolved)
+            }
+
+            // #4821 — la POSE d'une décoration animée : une fonction PURE du
+            // temps depuis son apparition, réappliquée à chaque tick par la
+            // même post-passe que les fondus — donc identique au lecteur (60 Hz)
+            // et dans l'export (30 fps), que `layer.render(in:)` ne saurait pas
+            // animer autrement. Hors signature du cache, comme le fondu : la
+            // transformation ET l'opacité sont reposées en ABSOLU, jamais
+            // multipliées en place, sinon une couche réutilisée cumulerait.
+            //
+            // `reduceMotion` : le lecteur perd le mouvement, pas la décoration.
+            // L'export le reçoit à `false` — un fichier ne dépend pas du
+            // réglage d'accessibilité de l'appareil qui l'a fabriqué.
+            if mode == .play, !reduceMotion,
+               let sticker = item as? StorySticker,
+               let animation = sticker.animation,
+               let stickerLayer = layer as? StoryStickerLayer {
+                let pose = animation.pose(at: time.seconds - (sticker.startTime ?? 0))
+                stickerLayer.applyAnimationPose(pose, baseRotationDegrees: sticker.rotation)
+                let base = resolvedNonMediaOpacity(item: sticker, at: time.seconds) ?? 1.0
+                layer.opacity = Float(base * pose.opacity)
             }
 
             // A cached layer might still be attached to the previous frame's
@@ -492,7 +520,7 @@ public enum StoryRenderer {
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
             layer.configure(with: sticker, geometry: geometry, mode: mode,
-                            renderScale: contentsScale)
+                            renderScale: contentsScale, imageCache: imageCache, resolver: resolver)
             // Snapshot fadeIn/fadeOut envelope at the current playhead.
             // StorySticker has no `keyframes` field (per StoryModels.swift),
             // so fades are the only animation channel for stickers.

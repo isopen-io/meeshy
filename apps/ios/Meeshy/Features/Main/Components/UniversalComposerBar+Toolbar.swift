@@ -144,8 +144,8 @@ extension UniversalComposerBar {
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
         }
-        .disabled(isRecording)
-        .opacity(isRecording ? 0.4 : 1)
+        .disabled(effectiveIsRecording)
+        .opacity(effectiveIsRecording ? 0.4 : 1)
     }
 
     // ========================================================================

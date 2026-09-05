@@ -15,7 +15,13 @@ import SwiftUI
 ///
 /// Dimensions source absentes ou nulles → repli sur le plancher (`minRatio`),
 /// cohérent avec l'ancien défaut 16:9 du lecteur vidéo, lui aussi sous plancher.
-func postCardMediaHeight(
+/// `nonisolated` (#4096) : arithmétique pure sur des entiers. La cible app
+/// compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, donc l'isolation
+/// était le DÉFAUT et non une décision — et elle rendait la règle inappelable
+/// depuis la forme du carrousel, elle-même pure, comme depuis tout test
+/// synchrone. Une règle qu'on ne peut pas interroger hors du fil principal
+/// finit recopiée ailleurs : c'est ainsi qu'un site unique cesse d'en être un.
+nonisolated func postCardMediaHeight(
     mediaWidth: Int?,
     mediaHeight: Int?,
     cardWidth: CGFloat,

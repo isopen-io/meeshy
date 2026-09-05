@@ -48,6 +48,9 @@ export * from './affiliate.js';
 // Export des types unifiés Phase 4 - Tracking Links
 export * from './tracking-link.js';
 
+// Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
+export * from './message-sticker.js';
+
 // Export des types unifiés Phase 5 - Attachments
 export * from './attachment.js';
 // V2: Remplacé par attachment-audio.js qui utilise JSON intégré dans MessageAttachment
@@ -68,6 +71,14 @@ export * from './push-notification.js';
 
 // Export des types posts/stories/statuts
 export * from './post.js';
+
+// **Le contrat de SCÈNE, atteignable par l'index comme tout le reste.**
+// Il était joignable uniquement par chemin profond
+// (`@meeshy/shared/types/canvas-v3`), que cinq fichiers web importaient déjà —
+// donc utilisé, mais invisible à qui parcourt la surface du paquet. Un contrat
+// qu'on ne trouve pas se réinvente : `Post.storyEffects` est encore `unknown`
+// ci-dessus, et chaque consommateur revalide pour son compte.
+export * from './canvas-v3.js';
 
 // Export des types communauté
 export * from './community.js';

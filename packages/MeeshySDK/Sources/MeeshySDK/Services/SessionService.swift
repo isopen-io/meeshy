@@ -44,15 +44,15 @@ public final class SessionService: SessionServiceProviding, @unchecked Sendable 
     }
 
     public func listSessions() async throws -> [UserSession] {
-        let response: APIResponse<SessionsListData> = try await api.request(endpoint: "/auth/sessions")
+        let response: APIResponse<SessionsListData> = try await api.request(AuthEndpoint.sessions)
         return response.data.sessions
     }
 
     public func revokeSession(sessionId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/auth/sessions/\(sessionId)")
+        let _: APIResponse<[String: Bool]> = try await api.delete(AuthEndpoint.sessionsBySessionId(sessionId: sessionId))
     }
 
     public func revokeAllOtherSessions() async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/auth/sessions")
+        let _: APIResponse<[String: Bool]> = try await api.delete(AuthEndpoint.sessions)
     }
 }

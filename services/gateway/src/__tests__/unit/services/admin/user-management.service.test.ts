@@ -7,17 +7,24 @@ import { describe, it, expect, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UserFilters } from '@meeshy/shared/types';
 
-jest.mock('bcrypt', () => ({
-  hash: jest.fn().mockResolvedValue('hashed_password'),
-  compare: jest.fn().mockResolvedValue(true),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216, et le
+// SEUL endroit qui connaisse encore le facteur de coût. Ce service posait 10 là
+// où les trois autres portes posaient 12 : un compte créé par un administrateur
+// repartait avec un hash quatre fois moins cher à casser, sans que rien ne le
+// signale (#3629, soldé). Le coût ayant quitté le site d'appel, ce qui s'assert
+// ici est l'APPEL — et le coût s'assert sur la constante partagée.
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  hashPassword: jest.fn().mockResolvedValue('hashed_password'),
+  verifyPassword: jest.fn().mockResolvedValue(true),
 }));
 
 import { UserManagementService } from '../../../../services/admin/user-management.service';
-import * as bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword, BCRYPT_COST } from '../../../../utils/password-hash';
 import { logger } from '../../../../utils/logger';
 
-const mockHash = bcrypt.hash as jest.Mock;
-const mockCompare = bcrypt.compare as jest.Mock;
+const mockHash = hashPassword as jest.Mock;
+const mockCompare = verifyPassword as jest.Mock;
 
 function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -414,7 +421,9 @@ describe('UserManagementService.createUser', () => {
       phoneNumber: null,
     }, 'creator-id');
 
-    expect(mockHash).toHaveBeenCalledWith('plaintext', 10);
+    expect(mockHash).toHaveBeenCalledWith('plaintext');
+    // Le coût UNIQUE du dépôt : ce service posait 10, les autres portes 12.
+    expect(BCRYPT_COST).toBe(12);
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.password).toBe('hashed_password');
     expect(callData.isActive).toBe(true);
@@ -672,7 +681,8 @@ describe('UserManagementService.resetPassword', () => {
 
     await svc.resetPassword('user-id', { newPassword: 'newpass' }, 'resetter');
 
-    expect(mockHash).toHaveBeenCalledWith('newpass', 10);
+    expect(mockHash).toHaveBeenCalledWith('newpass');
+    expect(BCRYPT_COST).toBe(12);
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ password: 'hashed_password' }),
     }));

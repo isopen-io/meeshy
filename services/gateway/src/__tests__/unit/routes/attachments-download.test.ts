@@ -24,10 +24,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
-}));
-
 jest.mock('../../../services/attachments', () => ({
   AttachmentService: jest.fn().mockImplementation(() => ({
     getAttachment: (...a: any[]) => mockGetAttachment(...a),

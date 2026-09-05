@@ -241,6 +241,36 @@ nonisolated enum RiverConversationMapping {
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
                 groupPosition: positions[bubble.messageId] ?? .solo,
+                // **#5058 — l'attribution d'un transfert, résolue par la
+                // PROJECTION.** La rivière n'affichait aucun badge : le seul des
+                // quatre modes où la feature n'existait pas du tout.
+                //
+                // Les deux moitiés sont lues ENSEMBLE : `forwardedFromId` dit
+                // QUE c'est un transfert, `ForwardBadgePolicy` dit QUI on a le
+                // droit de nommer. Lire la seconde sans la première rendrait
+                // `.anonymous` sur tout message ordinaire — un badge
+                // « Transféré » sous chaque bulle de la rivière.
+                forwardAttribution: message.forwardedFromId == nil
+                    ? nil
+                    : ForwardBadgePolicy.attribution(for: message.forwardedFrom),
+                // **#5059 — la story citée reste une SCÈNE.**
+                //
+                // Le prédicat n'est pas réécrit : c'est celui de
+                // `BubbleContent.detachedStoryCitation`, appliqué aux faits que
+                // la rivière connaît. Les deux hôtes de média valent `false` par
+                // CONSTRUCTION et non par défaut : la bulle de rivière rend un
+                // `Text` et rien d'autre — elle n'a ni conteneur média ni
+                // lecteur audio qui pourrait déjà loger la citation. Le jour où
+                // elle en aurait un, ce littéral devra suivre, et c'est
+                // pourquoi il est écrit ici plutôt que sous-entendu.
+                storyCitation: message.replyTo.flatMap { reference in
+                    StoryCitationPlacement.isDetached(
+                        isStoryReply: reference.isStoryReply,
+                        hasMoodEmoji: reference.moodEmoji != nil,
+                        visualHostsReply: false,
+                        audioHostsReply: false
+                    ) ? reference : nil
+                },
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
@@ -333,6 +363,72 @@ nonisolated enum RiverConversationMapping {
     struct Fingerprint: Equatable {
         let count: Int
         let digest: Int
+    }
+
+    /// **Ce qui rendrait un rendu de bulles PÉRIMÉ, et rien d'autre** (#3946).
+    ///
+    /// `contents` était rejoué à CHAQUE passe de `body` de la Rivière — un
+    /// dictionnaire de tous les messages, puis par bulle : nom d'affichage,
+    /// heure, texte, aperçu de réponse, avis système et `ProfileSheetUser`.
+    /// La Rivière fait beaucoup de passes : la republication des cadres
+    /// réévalue la racine (pistes 1 et 2 de #3946).
+    ///
+    /// Mémoïser demande de dire ce qui INVALIDE. Trois entrées changent sans
+    /// que la liste des messages bouge, et l'empreinte ne les voit pas —
+    /// elle ne hache que des identifiants :
+    ///
+    ///   • `text` — le PRISME. Une traduction qui arrive ne change ni le
+    ///     nombre de messages ni leurs identifiants. Une clé posée sur la
+    ///     seule empreinte servirait « Hello » alors que « Bonjour » vient
+    ///     d'arriver : c'est le pire des trois, parce que c'est le principe
+    ///     produit lui-même ;
+    ///   • `presence` — la pastille vivante, qui décroît sur une horloge
+    ///     (règle 1/3/5) étrangère aux messages ;
+    ///   • `storyRing` — l'anneau, qui passe de `unread` à `read` sans
+    ///     qu'aucun message ne soit touché.
+    ///
+    /// La clé porte leurs RÉSULTATS, jamais les closures : une closure change
+    /// d'identité à chaque rendu du parent, ce qui ferait un cache qui ne
+    /// mémoïse rien. Elle porte aussi la géométrie, dont dépend l'ordre.
+    ///
+    /// Le balayage se fait sur `messages` plutôt que sur `geometry.bubbles`
+    /// pour n'avoir pas à reconstruire le dictionnaire d'index à chaque
+    /// passe : c'est un SUR-ensemble (les supprimés n'ont pas de bulle), donc
+    /// au pire on invalide un peu trop, jamais trop peu.
+    struct ContentsKey: Equatable {
+        let geometry: RiverLaneResolver.RiverGeometry
+        let viewerId: String
+        let texts: [String]
+        let presences: [PresenceState?]
+        let rings: [StoryRingState]
+    }
+
+    static func contentsKey(
+        geometry: RiverLaneResolver.RiverGeometry,
+        messages: [MeeshyMessage],
+        viewerId: String,
+        text: (MeeshyMessage) -> String,
+        presence: (MeeshyMessage) -> PresenceState? = { _ in nil },
+        storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
+    ) -> ContentsKey {
+        var texts: [String] = []
+        var presences: [PresenceState?] = []
+        var rings: [StoryRingState] = []
+        texts.reserveCapacity(messages.count)
+        presences.reserveCapacity(messages.count)
+        rings.reserveCapacity(messages.count)
+        for message in messages {
+            texts.append(text(message))
+            presences.append(presence(message))
+            rings.append(storyRing(message))
+        }
+        return ContentsKey(
+            geometry: geometry,
+            viewerId: viewerId,
+            texts: texts,
+            presences: presences,
+            rings: rings
+        )
     }
 
     static func fingerprint(messages: [MeeshyMessage]) -> Fingerprint {

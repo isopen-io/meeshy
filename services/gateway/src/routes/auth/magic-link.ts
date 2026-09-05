@@ -23,6 +23,7 @@ import {
 } from '../../services/auth/session-jwt';
 import { depreciee, dateDeRetrait } from '../../utils/deprecation';
 import { handleGetMe, meRouteSharedOptions } from '../me/get-me';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -50,7 +51,7 @@ const logger = enhancedLogger.child({ module: 'magic-link' });
  */
 const ALIAS_LECTURE_DE_SOI = {
   depuis: '2026-08-29',
-  successeur: '/api/v1/me',
+  successeur: apiPath('/me'),
   retraitLe: dateDeRetrait('2026-08-29'),
 } as const;
 

@@ -16,12 +16,25 @@ import {
   createTrackingLinkSchema,
   enrichTrackingLink
 } from './types';
+import { refuserAccesConversation, verdictAccesConversation, type MessagesDeRefusDAcces } from '../conversations/utils/access-control';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { isHttpUrl } from '@meeshy/shared/utils/validation';
 import { permissionsService } from '../../services/admin/permissions.service';
 import { UserRoleEnum } from '@meeshy/shared/types';
+
+/**
+ * LES DEUX REFUS DU RATTACHEMENT NE SONT PAS LE MÊME REFUS (#4792). `nonMembre`
+ * garde la phrase servie ; le 401 est neuf. La route est montée en `authOptional`
+ * — une garde qui ne refuse rien — et son schéma ne déclare que `200 · 201 · 400
+ * · 500` : Fastify sérialise donc ses deux refus SANS schéma, corps complet, et
+ * le changement de statut ne peut rien y tronquer (le défaut de #4689). MESURÉ.
+ */
+const REFUS_DE_RATTACHEMENT: MessagesDeRefusDAcces = {
+  sansSession: 'Authentication required to attach a tracking link to this conversation',
+  nonMembre: 'Access denied to this conversation'
+};
 
 /**
  * Routes de création et gestion des liens de tracking
@@ -172,18 +185,18 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       // cette route, un appelant anonyme rattachait un lien de suivi à
       // n'importe quelle conversation. Rattacher exige désormais d'y
       // participer ; créer un lien sans rattachement reste ouvert.
+      // (#4792) La règle n'est plus RÉPLIQUÉE ici : ce ternaire était la JUMELLE
+      // de `canAccessConversation` — mêmes colonnes, même précédence — écrasant
+      // lui aussi les deux refus dans un seul `null`, et servant le verbe
+      // d'AUTORISATION à un appelant dont on ignorait l'identité. Le noyau rend
+      // en prime la garde `bannedAt` que la réplique n'avait jamais eue : un
+      // invité BANNI rattachait encore ses liens.
       if (body.conversationId) {
-        const ctx = request.authContext;
-        const where = ctx?.isAnonymous && ctx.participantId
-          ? { id: ctx.participantId, conversationId: body.conversationId, isActive: true }
-          : { userId: ctx?.userId, conversationId: body.conversationId, isActive: true };
+        const acces = await verdictAccesConversation(
+          fastify.prisma, request.authContext, body.conversationId, body.conversationId);
 
-        const participant = ctx?.isAuthenticated
-          ? await fastify.prisma.participant.findFirst({ where, select: { id: true } })
-          : null;
-
-        if (!participant) {
-          return sendForbidden(reply, 'Access denied to this conversation');
+        if (acces.genre !== 'ok') {
+          return refuserAccesConversation(reply, acces, REFUS_DE_RATTACHEMENT);
         }
       }
 
@@ -263,8 +276,12 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             }
           }
         },
+        401: {
+          description: 'No session at all — a visitor with no identity to check ownership against (#5212)',
+          ...errorResponseSchema
+        },
         403: {
-          description: 'Access denied - only creator can view details',
+          description: 'Authenticated, but not the creator of this link',
           ...errorResponseSchema
         },
         404: {
@@ -288,9 +305,27 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       if (trackingLink.createdBy) {
+        /**
+         * DEUX REFUS, PAS UN (#5212, suite de #4792). `!isRegisteredUser(...)`
+         * était vrai à la fois pour un visiteur SANS SESSION et pour un
+         * utilisateur enregistré qui n'est pas le créateur — les deux
+         * rendaient le même 403 « Accès non autorisé ». Ici la question est
+         * une question de PROPRIÉTÉ (créateur du lien), pas d'appartenance à
+         * une conversation : `verdictAccesConversation` ne s'applique pas,
+         * mais la distinction de statut est la même — absence de session ⇒
+         * 401, identité connue et non-créatrice ⇒ 403.
+         */
+        if (!request.authContext?.isAuthenticated) {
+          return sendUnauthorized(reply, 'Authentification requise pour consulter ce lien', {
+            code: 'UNAUTHORIZED'
+          });
+        }
+
         if (!isRegisteredUser(request.authContext) ||
             request.authContext.registeredUser!.id !== trackingLink.createdBy) {
-          return sendForbidden(reply, 'Accès non autorisé');
+          return sendForbidden(reply, 'Accès non autorisé', {
+            code: 'TRACKING_LINK_ACCESS_DENIED'
+          });
         }
       }
 

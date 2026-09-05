@@ -13,6 +13,7 @@ struct SettingsView: View {
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var showLogoutConfirm = false
+    @State private var showSwitchAccountConfirm = false
     /// Choix explicite de langue d'interface — `nil` = suit la langue
     /// principale du compte. Lu une fois au montage depuis `UILanguageOverride`.
     @State private var interfaceLanguageChoice: String? = UILanguageOverride.explicitChoice
@@ -76,6 +77,28 @@ struct SettingsView: View {
         } message: {
             Text(String(localized: "settings.interface_language.restart.message",
                         defaultValue: "L'interface passera dans cette langue au prochain démarrage de Meeshy.",
+                        bundle: .main))
+        }
+        .alert(String(localized: "settings.switchAccount.title",
+                      defaultValue: "Changer de compte", bundle: .main),
+               isPresented: $showSwitchAccountConfirm) {
+            Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
+            Button(String(localized: "settings.switchAccount.title",
+                          defaultValue: "Changer de compte", bundle: .main)) {
+                // Même quiesce-then-purge que la déconnexion — seule l'entrée
+                // du sélecteur survit (`forgettingAccount: false`), pour que
+                // l'écran de connexion propose encore ce compte. Le mot de
+                // passe reste exigé : `attemptAccountLogin` appelle
+                // `login(username:password:)`.
+                isLoggingOut = true
+                Task {
+                    await authManager.logout(forgettingAccount: false)
+                    isLoggingOut = false
+                }
+            }
+        } message: {
+            Text(String(localized: "settings.switchAccount.message",
+                        defaultValue: "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé.",
                         bundle: .main))
         }
         .alert(String(localized: "settings.logout.title", bundle: .main), isPresented: $showLogoutConfirm) {
@@ -189,6 +212,7 @@ struct SettingsView: View {
                 betaSection
                 supportSection
                 aboutSection
+                switchAccountSection
                 logoutSection
 
                 Spacer().frame(height: 40)
@@ -792,6 +816,44 @@ struct SettingsView: View {
                     .foregroundColor(theme.textMuted)
             }
         }
+    }
+
+    // MARK: - Switch Account Section
+
+    /// **Quitter un compte sans l'oublier.**
+    ///
+    /// La déconnexion efface l'entrée du sélecteur (`removeFromSavedAccounts`) :
+    /// revenir sur le compte imposait donc de retaper son identifiant. Cette
+    /// rangée fait la même chose SAUF cela — d'où un habit neutre, et non celui
+    /// de la destruction : rien n'est perdu qu'une session.
+    private var switchAccountSection: some View {
+        Button {
+            HapticFeedback.light()
+            showSwitchAccountConfirm = true
+        } label: {
+            HStack {
+                Image(systemName: "person.2.arrow.trianglehead.counterclockwise")
+                    .font(MeeshyFont.relative(16, weight: .semibold))
+                Text(String(localized: "settings.switchAccount.title",
+                            defaultValue: "Changer de compte", bundle: .main))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+            }
+            .foregroundColor(theme.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, MeeshySpacing.md + 2)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                            .stroke(theme.textMuted.opacity(0.25), lineWidth: 1)
+                    )
+            )
+        }
+        .disabled(isLoggingOut)
+        .accessibilityHint(String(localized: "settings.switchAccount.message",
+                                  defaultValue: "Vous reviendrez à l’écran de connexion. Ce compte restera proposé, et son mot de passe vous sera redemandé.",
+                                  bundle: .main))
     }
 
     // MARK: - Logout Section

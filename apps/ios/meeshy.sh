@@ -11,7 +11,39 @@ APP_NAME="Meeshy"
 BUNDLE_ID="me.meeshy.app"
 SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
-DERIVED_DATA="Build"
+# Chemin de DerivedData, surchargeable par l'environnement.
+#
+# Deux sessions qui bâtissent dans le MÊME `-derivedDataPath` se disputent
+# `Intermediates.noindex/XCBuildData/build.db`, et xcodebuild rend alors
+# « database is locked » avec un code 65. Le danger n'est pas la minute perdue :
+# `test-without-building` rejoue ensuite le bundle PRÉCÉDENT, avec des chiffres
+# plausibles et EXIT=0 — donc une certification de l'arbre d'AVANT le diff.
+# Sérialiser à coups de `pgrep` ne suffit pas : entre la lecture et le
+# lancement, l'autre peut démarrer. La séparation, elle, n'a pas de fenêtre.
+#
+#   MEESHY_DERIVED_DATA=/chemin/hors/depot ./apps/ios/meeshy.sh build
+#
+# ATTENTION — `-derivedDataPath` NE SUFFIT PAS sur ce projet, et le croire est
+# pire que ne rien faire. `Meeshy.xcodeproj/project.xcworkspace/xcshareddata/
+# WorkspaceSettings.xcsettings` déclare :
+#
+#     DerivedDataLocationStyle   = WorkspaceRelativePath
+#     DerivedDataCustomLocation  = Build
+#
+# ce qui FORCE `SYMROOT`/`OBJROOT`/`BUILD_DIR` vers `apps/ios/Build` quel que
+# soit le `-derivedDataPath` passé. Mesuré par `-showBuildSettings` : deux
+# sessions qui croyaient bâtir séparément se disputaient toujours le même
+# `build.db`, avec la précaution en place. Les trois surcharges ci-dessous sont
+# ce qui rend la séparation RÉELLE.
+DERIVED_DATA="${MEESHY_DERIVED_DATA:-Build}"
+if [ -n "${MEESHY_DERIVED_DATA:-}" ]; then
+    BUILD_LOCATION_OVERRIDES=(
+        "SYMROOT=${MEESHY_DERIVED_DATA}/Products"
+        "OBJROOT=${MEESHY_DERIVED_DATA}/Intermediates.noindex"
+    )
+else
+    BUILD_LOCATION_OVERRIDES=()
+fi
 
 # Apple Developer Team — required for device code-signing under automatic
 # provisioning (CODE_SIGN_STYLE=Automatic in project.yml). Without it,
@@ -471,6 +503,7 @@ do_device_deploy_only() {
         -configuration "$CONFIGURATION" \
         -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
         -derivedDataPath "$DERIVED_DATA" \
+        ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"} \
         "${XCODE_PKG_FLAGS[@]}" \
         -allowProvisioningUpdates \
         -allowProvisioningDeviceRegistration \
@@ -806,6 +839,7 @@ do_build() {
         -configuration "$CONFIGURATION" \
         -destination "$(build_destination)" \
         -derivedDataPath "$DERIVED_DATA" \
+        ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"} \
         "${XCODE_PKG_FLAGS[@]}" \
         "${mac_flags[@]}" \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
@@ -1682,6 +1716,7 @@ do_test() {
         -destination "$destination"
         -configuration Debug
         -derivedDataPath "$DERIVED_DATA"
+        ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"}
         "${XCODE_PKG_FLAGS[@]}"
         -enableCodeCoverage "$coverage_flag"
     )
@@ -1801,6 +1836,7 @@ do_test() {
             -destination "$destination" \
             -configuration Debug \
             -derivedDataPath "$DERIVED_DATA" \
+            ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"} \
             "${XCODE_PKG_FLAGS[@]}" \
             -resultBundlePath "$TEST_OUTPUT_DIR/ui-tests.xcresult" \
             -only-testing:MeeshyUITests \

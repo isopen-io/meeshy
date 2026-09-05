@@ -30,14 +30,6 @@ jest.mock('../../../utils/session-token', () => ({
   generateSessionToken: jest.fn(() => 'anon_test_session_token'),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: { type: 'object', properties: {} },
-  anonymousParticipantSchema: { type: 'object', additionalProperties: true },
-  conversationLinkSchema: { type: 'object', additionalProperties: true },
-  conversationMinimalSchema: { type: 'object', additionalProperties: true },
-  userMinimalSchema: { type: 'object', additionalProperties: true },
-}));
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { anonymousRoutes } from '../../../routes/anonymous';
@@ -307,5 +299,74 @@ describe('GET /anonymous/link/:identifier — expired link', () => {
   it('returns 410 when link has expired', async () => {
     const res = await app.inject({ method: 'GET', url: `/anonymous/link/${SHARE_LINK_DB_ID}` });
     expect(res.statusCode).toBe(410);
+  });
+});
+
+// ─── LINK: les trois refus 410 servent le linkId canonique (#4829) ───────────
+//
+// Un client qui range la session invitée PAR LIEN (cookie
+// `meeshy_guest_<linkId>`, conception v3 § 6.3.E) a besoin du `linkId`
+// CANONIQUE pour retrouver sa place quand l'aperçu refuse en 410 — exactement
+// le cas où le lien est clos, échu ou plein. `sendError` étale `details` À LA
+// RACINE (`utils/response.ts`) ; le champ ne survit à la sérialisation QUE si
+// le schéma LOCAL du 410 de cette route le déclare — sinon
+// `fast-json-stringify` le retire en silence (`additionalProperties: false`
+// par défaut). Ce fichier NE MOCKE PAS `@meeshy/shared/types/api-schemas`
+// (contrairement à `anonymous.test.ts`) : les témoins ci-dessous traversent
+// donc la VRAIE sérialisation, sur la vraie route, avec les vrais schémas.
+
+describe('GET /anonymous/link/:identifier — les trois refus 410 servent linkId (#4829)', () => {
+  const buildLinkPreviewApp = async (overrides: Record<string, unknown>) => {
+    const app = await buildApp();
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValue({
+      ...mockShareLink,
+      ...overrides,
+      // Un aperçu de lien clos ne doit RIEN dire de la conversation qu'il
+      // referme : un titre/description distinctifs font tomber l'assertion
+      // « rien d'autre ne part à côté » si la charge se met à fuiter.
+      conversation: { id: CONV_ID, title: 'Titre de conversation secret', description: 'Description secrète', type: 'group', createdAt: new Date() },
+    });
+    return app;
+  };
+
+  it('LINK_INACTIVE sert le linkId canonique, et rien d’autre que success/error/message', async () => {
+    const app = await buildLinkPreviewApp({ isActive: false });
+    const res = await app.inject({ method: 'GET', url: `/anonymous/link/${LINK_ID}` });
+
+    expect(res.statusCode).toBe(410);
+    const body = res.json();
+    expect(body.error).toBe('LINK_INACTIVE');
+    expect(body.linkId).toBe(LINK_ID);
+    // Contrat exact de la charge servie : aucune clé de la conversation
+    // (title, description, members, dernier message…) ne doit s'y glisser.
+    expect(Object.keys(body).sort()).toEqual(['error', 'linkId', 'message', 'success']);
+
+    await app.close();
+  });
+
+  it('LINK_EXPIRED sert le linkId canonique', async () => {
+    const app = await buildLinkPreviewApp({ isActive: true, expiresAt: new Date('2020-01-01') });
+    const res = await app.inject({ method: 'GET', url: `/anonymous/link/${LINK_ID}` });
+
+    expect(res.statusCode).toBe(410);
+    const body = res.json();
+    expect(body.error).toBe('LINK_EXPIRED');
+    expect(body.linkId).toBe(LINK_ID);
+    expect(Object.keys(body).sort()).toEqual(['error', 'linkId', 'message', 'success']);
+
+    await app.close();
+  });
+
+  it('LINK_MAX_USES sert le linkId canonique', async () => {
+    const app = await buildLinkPreviewApp({ isActive: true, expiresAt: null, maxUses: 5, currentUses: 5 });
+    const res = await app.inject({ method: 'GET', url: `/anonymous/link/${LINK_ID}` });
+
+    expect(res.statusCode).toBe(410);
+    const body = res.json();
+    expect(body.error).toBe('LINK_MAX_USES');
+    expect(body.linkId).toBe(LINK_ID);
+    expect(Object.keys(body).sort()).toEqual(['error', 'linkId', 'message', 'success']);
+
+    await app.close();
   });
 });

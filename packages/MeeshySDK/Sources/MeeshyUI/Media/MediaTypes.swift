@@ -611,6 +611,26 @@ public func formatMediaDurationMs(_ ms: Int) -> String {
 /// upload progress each hand-rolled a decimal (1000-based)
 /// `.formatted(.byteCount(style: .file))` — two divergent algorithms behind
 /// a comment claiming parity. `.file` matches Finder's decimal convention.
-nonisolated public func formatMediaFileSize(_ bytes: Int64) -> String {
-    bytes.formatted(.byteCount(style: .file))
+///
+/// ## Deux paramètres ajoutés le 2026-09-04, et aucun n'est un confort
+///
+/// - `locale` — **sans lui, une suite juge la locale du SIMULATEUR** : verte
+///   chez qui l'écrit, rouge en CI ou chez le voisin. C'est la règle devenue
+///   idiomatique depuis 234i (`LocalizedNumber.exact` la porte mot pour mot),
+///   et ce helper y échappait parce que `ByteCountFormatter` — l'API que la
+///   pré-montée avait employée à côté — **n'expose aucune propriété `locale`**.
+///   Une signature qui en déclare une sans pouvoir la tenir est PIRE qu'une
+///   absence : elle éteint la question chez le prochain lecteur.
+/// - `allowedUnits` — pour qu'un appelant qui affiche DEUX nombres puisse
+///   imposer la même échelle aux deux. Sans lui, « 12,0 ko / 14,2 Mo » : deux
+///   nombres qui se comparent à l'œil et ne se comparent pas.
+///
+/// Les deux gardent leur valeur par défaut, donc aucun des appelants existants
+/// ne change de rendu.
+nonisolated public func formatMediaFileSize(
+    _ bytes: Int64,
+    allowedUnits: ByteCountFormatStyle.Units = .default,
+    locale: Locale = .current
+) -> String {
+    bytes.formatted(.byteCount(style: .file, allowedUnits: allowedUnits).locale(locale))
 }

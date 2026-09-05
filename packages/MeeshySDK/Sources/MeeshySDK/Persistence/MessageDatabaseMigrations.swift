@@ -321,5 +321,15 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "joinNoticeJson", .blob)
             }
         }
+
+        // Sticker du message (JSON `MessageSticker`, #4823) — même convention
+        // nullable que `locationJson` : les lignes existantes valent NULL, donc
+        // `nil`, jamais un échec de lecture ; et sans cette colonne le sticker
+        // d'une bulle disparaîtrait au relaunch.
+        migrator.registerMigration("messages_sticker") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "stickerJson", .text)
+            }
+        }
     }
 }

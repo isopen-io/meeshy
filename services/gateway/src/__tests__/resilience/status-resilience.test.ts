@@ -13,25 +13,55 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { Server as HTTPServer, createServer } from 'http';
 import { AddressInfo } from 'net';
 import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { MeeshySocketIOManager } from '../../socketio/MeeshySocketIOManager';
 import { MaintenanceService } from '../../services/MaintenanceService';
 import { AttachmentService } from '../../services/attachments';
+import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import jwt from 'jsonwebtoken';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Fixture minimale d'un `User` pour cette suite. `firstName`/`lastName` sont
+ * devenus requis par le schéma Prisma après le dernier passage vert de cette
+ * suite (Jest 30 l'a laissée hors gate, cf. #4490) : les centraliser ici évite
+ * de les répéter — et risquer d'en oublier un — sur chacun des dix sites de
+ * création.
+ */
+type UserFixtureOverrides = Pick<Prisma.UserCreateInput, 'username' | 'email'> &
+  Partial<Omit<Prisma.UserCreateInput, 'username' | 'email'>>;
+
+function userFixtureData(overrides: UserFixtureOverrides): Prisma.UserCreateInput {
+  return {
+    password: 'hashed-password',
+    firstName: 'Resilience',
+    lastName: 'Test',
+    systemLanguage: 'fr',
+    regionalLanguage: 'fr',
+    ...overrides
+  };
+}
 
 describe('Status System - Resilience Tests', () => {
   let httpServer: HTTPServer;
   let socketIOManager: MeeshySocketIOManager;
   let prisma: PrismaClient;
+  let translationService: MessageTranslationService;
   let serverPort: number;
 
   beforeAll(async () => {
     prisma = new PrismaClient();
+    // Le manager exige un service de traduction depuis son passage à trois
+    // arguments (MeeshySocketIOManager.ts:296, production : server.ts). Cette
+    // suite construit un vrai PrismaClient (pas un double) : lui donner une
+    // vraie instance plutôt qu'un mock reprend le même patron que
+    // src/__tests__/e2ee/encryption-full-flow.test.ts et
+    // src/__tests__/integration/translation-service.integration.test.ts.
+    translationService = new MessageTranslationService(prisma);
 
     httpServer = createServer();
-    socketIOManager = new MeeshySocketIOManager(httpServer, prisma);
+    socketIOManager = new MeeshySocketIOManager(httpServer, prisma, translationService);
     await socketIOManager.initialize();
 
     await new Promise<void>((resolve) => {
@@ -56,15 +86,12 @@ describe('Status System - Resilience Tests', () => {
   describe('WebSocket Failure Handling', () => {
     it('should calculate status locally when WebSocket is down', async () => {
       const testUser = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `resilience-ws-${Date.now()}`,
           email: `resilience-ws-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr',
           isOnline: true,
           lastActiveAt: new Date()
-        }
+        })
       });
 
       try {
@@ -96,13 +123,10 @@ describe('Status System - Resilience Tests', () => {
 
     it('should reconnect and sync status after WebSocket recovery', async () => {
       const testUser = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `resilience-reconnect-${Date.now()}`,
-          email: `resilience-reconnect-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr'
-        }
+          email: `resilience-reconnect-${Date.now()}@example.com`
+        })
       });
 
       const token = jwt.sign(
@@ -176,15 +200,12 @@ describe('Status System - Resilience Tests', () => {
       zombieTime.setMinutes(zombieTime.getMinutes() - 10);
 
       const zombieUser = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `zombie-recovery-${Date.now()}`,
           email: `zombie-recovery-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr',
           isOnline: true,
           lastActiveAt: zombieTime
-        }
+        })
       });
 
       try {
@@ -257,13 +278,10 @@ describe('Status System - Resilience Tests', () => {
       // In production, should use connection pooling and retries
 
       const testUser = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `db-error-test-${Date.now()}`,
-          email: `db-error-test-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr'
-        }
+          email: `db-error-test-${Date.now()}@example.com`
+        })
       });
 
       try {
@@ -292,27 +310,21 @@ describe('Status System - Resilience Tests', () => {
     it('should maintain status consistency after DB reconnection', async () => {
       // Create users
       const user1 = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `consistency-1-${Date.now()}`,
           email: `consistency-1-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr',
           isOnline: true,
           lastActiveAt: new Date()
-        }
+        })
       });
 
       const user2 = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `consistency-2-${Date.now()}`,
           email: `consistency-2-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr',
           isOnline: false,
           lastActiveAt: new Date(Date.now() - 600000) // 10 min ago
-        }
+        })
       });
 
       try {
@@ -350,14 +362,11 @@ describe('Status System - Resilience Tests', () => {
   describe('Race Condition Handling', () => {
     it('should handle simultaneous status updates correctly', async () => {
       const testUser = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `race-condition-${Date.now()}`,
           email: `race-condition-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr',
           isOnline: false
-        }
+        })
       });
 
       try {
@@ -390,13 +399,10 @@ describe('Status System - Resilience Tests', () => {
 
     it('should handle connect/disconnect race conditions', async () => {
       const testUser = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `connect-race-${Date.now()}`,
-          email: `connect-race-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr'
-        }
+          email: `connect-race-${Date.now()}@example.com`
+        })
       });
 
       const token = jwt.sign(
@@ -451,13 +457,10 @@ describe('Status System - Resilience Tests', () => {
   describe('Data Integrity', () => {
     it('should maintain accurate lastActiveAt timestamps', async () => {
       const testUser = await prisma.user.create({
-        data: {
+        data: userFixtureData({
           username: `timestamp-test-${Date.now()}`,
-          email: `timestamp-test-${Date.now()}@example.com`,
-          password: 'hashed-password',
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr'
-        }
+          email: `timestamp-test-${Date.now()}@example.com`
+        })
       });
 
       try {
@@ -490,15 +493,12 @@ describe('Status System - Resilience Tests', () => {
         // Create users
         for (let i = 0; i < userCount; i++) {
           const user = await prisma.user.create({
-            data: {
+            data: userFixtureData({
               username: `concurrent-${Date.now()}-${i}`,
               email: `concurrent-${Date.now()}-${i}@example.com`,
-              password: 'hashed-password',
-              systemLanguage: 'fr',
-              regionalLanguage: 'fr',
               isOnline: true,
               lastActiveAt: new Date()
-            }
+            })
           });
           users.push(user);
         }

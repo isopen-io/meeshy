@@ -497,12 +497,53 @@ describe('GET /links — pagination', () => {
     );
   });
 
-  it('la réponse porte pagination (offset) ET cursorPagination — les deux formes, jamais une seule', async () => {
+  // #4351 critère 3 — remplace « la réponse porte les DEUX formes, jamais une
+  // seule », qui gardait exactement ce que l'issue appelle le défaut : deux
+  // objets de pagination côte à côte dans un même corps, sans que l'appelant
+  // puisse savoir lequel fait foi. Ce n'est pas le SUPPORT de l'offset qui
+  // devait disparaître — `?offset=` reste accepté, le témoin ci-dessus le
+  // garde — c'est leur COHABITATION.
+  it('sans curseur : `pagination` SEUL — `cursorPagination` est absent du corps', async () => {
     const res = await app.inject({ method: 'GET', url: '/links' });
     const body = res.json();
     expect(body.pagination).toEqual(expect.objectContaining({ total: 1, offset: 0, limit: 50 }));
-    expect(body.cursorPagination).toBeDefined();
-    expect(body.cursorPagination.nextCursor).toBe(mockLink.id);
+    expect(body.cursorPagination).toBeUndefined();
+  });
+
+  it('avec `?cursor=` : `cursorPagination` SEUL — `pagination` est absent du corps', async () => {
+    prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ createdAt: new Date('2025-06-01') });
+    const res = await app.inject({ method: 'GET', url: `/links?cursor=${mockLink.id}` });
+    const body = res.json();
+    // Ce témoin garde la SÉLECTION DE FORME (`cursorPagination` seul, `pagination`
+    // absent). Le mock ne rend qu'UN lien (< limit) : c'est une page finale, donc
+    // `hasMore` est faux et `nextCursor` est `null` — un curseur rendu sur une
+    // dernière page forcerait un aller-retour vide (cf. `buildCursorPaginationMeta`,
+    // aligné sur `sliceByIdCursor` et le `cursorPage` canonique).
+    expect(body.cursorPagination).toEqual(
+      expect.objectContaining({ limit: 50, hasMore: false, nextCursor: null })
+    );
+    expect(body.pagination).toBeUndefined();
+  });
+
+  it('et un curseur ne paie AUCUN comptage de toute la collection', async () => {
+    // Le `count()` partait sur chaque appel, curseur compris, pour alimenter
+    // un `total` que la pagination par curseur ne porte pas. Ce témoin
+    // n'assertit pas la RÉPONSE — elle serait identique dans les deux cas —
+    // mais le travail SERVEUR, seul endroit où la dépense se voit.
+    prisma.conversationShareLink.count.mockClear();
+    prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ createdAt: new Date('2025-06-01') });
+
+    await app.inject({ method: 'GET', url: `/links?cursor=${mockLink.id}` });
+
+    expect(prisma.conversationShareLink.count).not.toHaveBeenCalled();
+  });
+
+  it('alors que sans curseur, il le paie — sinon `total` serait fabriqué', async () => {
+    prisma.conversationShareLink.count.mockClear();
+
+    await app.inject({ method: 'GET', url: '/links' });
+
+    expect(prisma.conversationShareLink.count).toHaveBeenCalled();
   });
 
   it('?cursor=<id> résout la date de création du curseur et filtre createdAt < elle, sans `skip`', async () => {
@@ -511,6 +552,131 @@ describe('GET /links — pagination', () => {
     const call = prisma.conversationShareLink.findMany.mock.calls.at(-1)[0];
     expect(call.where.createdAt).toEqual({ lt: new Date('2025-06-01') });
     expect(call.skip).toBeUndefined();
+  });
+});
+
+// ─── GET /links?q= — #4962 : filtre name/identifier, compose avec le scope ──
+
+describe('GET /links?q= — filtre name/identifier', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma();
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma);
+    await registerUserRoutes(app);
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sans conversationId : `q` compose avec le scope `createdBy` (jamais un contournement)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/links?q=test' });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          createdBy: USER_ID,
+          OR: [
+            { name: { contains: 'test', mode: 'insensitive' } },
+            { identifier: { contains: 'test', mode: 'insensitive' } },
+          ],
+        },
+      })
+    );
+  });
+
+  it('filtre aussi le comptage de pagination (`total` reflète le `q`, jamais toute la collection)', async () => {
+    await app.inject({ method: 'GET', url: '/links?q=test' });
+    expect(prisma.conversationShareLink.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { name: { contains: 'test', mode: 'insensitive' } },
+            { identifier: { contains: 'test', mode: 'insensitive' } },
+          ],
+        }),
+      })
+    );
+  });
+
+  it('un `q` vide ou fait de blancs n\'ajoute aucun filtre (traité comme absent)', async () => {
+    await app.inject({ method: 'GET', url: '/links?q=%20%20' });
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { createdBy: USER_ID } })
+    );
+  });
+
+  it('sans `q`, aucune clause `OR` — non-régression du chemin nominal', async () => {
+    await app.inject({ method: 'GET', url: '/links' });
+    const call = prisma.conversationShareLink.findMany.mock.calls.at(-1)[0];
+    expect(call.where.OR).toBeUndefined();
+  });
+});
+
+describe('GET /links?q=&conversationId= — compose avec le scope conversation', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+
+  it('membre non-modérateur : `q` s\'ajoute à `{conversationId, createdBy}`, ne l\'élargit jamais', async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma({
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'member' }) },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma);
+    await registerUserRoutes(app);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}&q=abc` });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId: CONV_ID,
+          createdBy: USER_ID,
+          OR: [
+            { name: { contains: 'abc', mode: 'insensitive' } },
+            { identifier: { contains: 'abc', mode: 'insensitive' } },
+          ],
+        },
+      })
+    );
+    await app.close();
+  });
+
+  it('modérateur : `q` s\'ajoute à `{conversationId}` seul (portée déjà élargie par le rôle, pas par `q`)', async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma({
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'moderator' }) },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma);
+    await registerUserRoutes(app);
+    await app.ready();
+
+    await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}&q=abc` });
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId: CONV_ID,
+          OR: [
+            { name: { contains: 'abc', mode: 'insensitive' } },
+            { identifier: { contains: 'abc', mode: 'insensitive' } },
+          ],
+        },
+      })
+    );
+    await app.close();
   });
 });
 

@@ -89,6 +89,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Published State
 
     @Published public var isAuthenticated = false
+    /// D'OÙ vient la session courante. `nil` tant qu'aucune n'a été appliquée.
+    ///
+    /// Sans elle, l'app n'a que `isAuthenticated`, qui vaut `true` de la même
+    /// façon après une connexion et après une inscription. Deux moments qui
+    /// n'autorisent pourtant pas la même chose : #5218 diffère la demande de
+    /// permission de notification quand le compte VIENT D'ÊTRE CRÉÉ, pour ne
+    /// pas poser une alerte système devant quelqu'un qui n'a encore rien
+    /// envoyé.
+    @Published public private(set) var sessionOrigin: SessionOrigin?
     @Published public var currentUser: MeeshyUser?
     @Published public var isLoading = false
     @Published public var errorMessage: String?
@@ -295,7 +304,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 self.requires2FA = true
                 self.twoFactorToken = data.twoFactorToken
             } else if let token = data.token, let user = data.user {
-                applySession(token: token, sessionToken: data.sessionToken, user: user)
+                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -326,7 +335,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             if let token = data.token, let user = data.user {
                 self.requires2FA = false
                 self.twoFactorToken = nil
-                applySession(token: token, sessionToken: data.sessionToken, user: user)
+                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -346,6 +355,46 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Register
 
+    /// La variante LEVANTE de `register(request:)` — la seule qui rende un refus
+    /// TYPÉ à son appelant.
+    ///
+    /// `register(request:)` avale toute erreur dans `errorMessage: String?`, ce
+    /// qui suffit à un bandeau et à rien d'autre : un écran de formulaire qui
+    /// doit poser « cette adresse est déjà utilisée » SOUS le champ e-mail a
+    /// besoin du `code` et du `field`, pas d'une phrase. Elle lève donc :
+    ///
+    /// - `MeeshyError.rejected(APIRejection)` — 400/409 typés (`VALIDATION_ERROR`,
+    ///   `PHONE_INVALID`, `USERNAME_TAKEN`, `EMAIL_TAKEN`), parce que
+    ///   `AuthEndpoint.register` déclare `rejectionPolicy == .structured` ;
+    /// - `PhoneOwnershipConflict` — le refus servi en 200 sans compte créé ;
+    /// - `MeeshyError.network(…)` — réseau indisponible.
+    ///
+    /// Elle tient les mêmes drapeaux (`isLoading`, `errorMessage`) que sa
+    /// jumelle, pour qu'un écran branché sur l'un ou l'autre voie le même
+    /// `AuthManager`.
+    public func registerThrowing(request: RegisterRequest) async throws {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let data = try await authService.register(request: request)
+            // Le conflit de numéro est un 200 qui n'a RIEN créé : le tester
+            // avant `token`/`user` évite de le rendre comme une réponse
+            // tronquée — et c'est le seul refus dont l'écran connaît le remède.
+            if data.phoneOwnershipConflict == true {
+                throw PhoneOwnershipConflict()
+            }
+            guard let token = data.token, let user = data.user else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
+            applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            throw error
+        }
+    }
+
     public func register(request: RegisterRequest) async {
         isLoading = true
         errorMessage = nil
@@ -353,7 +402,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         do {
             let data = try await authService.register(request: request)
             if let token = data.token, let user = data.user {
-                applySession(token: token, sessionToken: data.sessionToken, user: user)
+                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -403,7 +452,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         do {
             let data = try await authService.validateMagicLink(token: token)
             if let token = data.token, let user = data.user {
-                applySession(token: token, sessionToken: data.sessionToken, user: user)
+                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -448,7 +497,31 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Logout
 
+    /// Déconnexion COMPLÈTE : la session finit et le compte disparaît du
+    /// sélecteur de l'écran de connexion.
     public func logout() async {
+        await logout(forgettingAccount: true)
+    }
+
+    /// Déconnexion, en choisissant si le compte est OUBLIÉ.
+    ///
+    /// `forgettingAccount: false` sert le « changer de compte » : la session
+    /// se termine exactement comme une déconnexion — jeton, jeton de session,
+    /// profil et caches par compte sont effacés du trousseau et de la mémoire —
+    /// mais l'entrée du SÉLECTEUR survit, si bien que l'écran de connexion
+    /// propose encore le compte au lieu d'exiger de retaper son identifiant.
+    ///
+    /// **Ce n'est pas un affaiblissement.** Une `SavedAccount` ne porte que
+    /// l'identité (nom, avatar, dernière activité) : `attemptAccountLogin`
+    /// appelle `login(username:password:)`, donc revenir sur le compte
+    /// redemande le mot de passe, exactement comme avant. Ce que le drapeau
+    /// épargne est la SAISIE de l'identifiant, jamais l'authentification.
+    ///
+    /// Le paramètre ne remonte pas dans `AuthManaging` : son unique
+    /// consommateur est l'écran de réglages, qui tient le type concret en
+    /// `@EnvironmentObject`, et l'ajouter au protocole casserait les mocks de
+    /// tous ses autres conformants sans servir personne.
+    public func logout(forgettingAccount: Bool) async {
         // U3 — drop any in-flight optimistic profile guard so it can't leak onto
         // the next user's profile after a re-login.
         pendingOptimisticProfile = nil
@@ -538,7 +611,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: userKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
-        removeFromSavedAccounts(userId: userId)
+        // Le SEUL geste que « changer de compte » épargne : l'entrée du
+        // sélecteur. Tout ce qui précède — trousseau, caches, files — est
+        // effacé dans les deux cas.
+        if forgettingAccount {
+            removeFromSavedAccounts(userId: userId)
+        }
 
         activeUserId = nil
         currentUser = nil
@@ -656,6 +734,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // un contexte non isolé, et sans lui aucune révocation ne peut viser
         // ce socket-ci plutôt qu'un autre.
         APIClient.shared.registeredSessionToken = currentSessionToken
+        sessionOrigin = .restored
         isAuthenticated = true
         warmSessionScopedCaches()
 
@@ -703,7 +782,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 switch error {
                 case .auth:
                     self.requireReauthentication(userId: userId)
-                case .network, .server, .message, .media, .forbidden, .unknown:
+                case .network, .server, .message, .media, .forbidden, .rejected, .unknown:
                     // Transient — keep session, retry on next 401 / launch.
                     break
                 }
@@ -735,7 +814,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             switch error {
             case .auth:
                 requireReauthentication(userId: userId)
-            case .network, .server, .message, .media, .forbidden, .unknown:
+            case .network, .server, .message, .media, .forbidden, .rejected, .unknown:
                 // Transient — keep session, retry on next foreground / launch.
                 break
             }
@@ -807,7 +886,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentlyAuthenticated && currentActiveUserId == newUserId
     }
 
-    internal func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
+    /// `origin` par défaut à `.restored` : un renouvellement de jeton (la
+    /// rotation, plus bas) est bien une session REPRISE, et les suites qui
+    /// posent une session à la main n'ont pas d'origine à déclarer.
+    internal func applySession(
+        token: String,
+        sessionToken: String?,
+        user: MeeshyUser,
+        origin: SessionOrigin = .restored
+    ) {
         let userId = user.id
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the
@@ -864,6 +951,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
             pendingOptimisticProfile = nil
             clearPendingProfileFromKeychain(userId: userId)
         }
+        // Posée AVANT `isAuthenticated` : l'observateur de `MeeshyApp` lit les
+        // deux dans la même passe, et la lire après ferait décider le bascule
+        // sur l'origine de la session PRÉCÉDENTE.
+        sessionOrigin = origin
         isAuthenticated = true
         // Hydrate session-scoped caches not carried by the auth payload (block
         // list). Skip on token rotation — already warm.

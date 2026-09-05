@@ -202,9 +202,17 @@ final class ComposerIntakePortalsTests: XCTestCase {
 
     /// Et cette feuille est pilotée par un ITEM, jamais par un booléen : c'est
     /// ce qui rend l'état invalide irreprésentable plutôt que seulement rare.
+    ///
+    /// **Le fragment s'arrête au `item:`, et c'est délibéré** (#4632). Il
+    /// épinglait `.sheet(item:$presentedPortal)` — parenthèse fermante comprise
+    /// — et a rougi le jour où la feuille a gagné un `onDismiss:` parfaitement
+    /// légitime. Un témoin doit épingler ce qu'il AFFIRME (« un item, pas un
+    /// booléen ») et rien de plus : tout caractère de trop transforme une garde
+    /// de comportement en garde de mise en forme, qui punit le premier
+    /// changement innocent.
     func test_laFeuilleUnique_estPiloteeParUnItem() throws {
         let code = compact(try hostSource())
-        XCTAssertTrue(code.contains(".sheet(item:$presentedPortal)"))
+        XCTAssertTrue(code.contains(".sheet(item:$presentedPortal"))
         XCTAssertFalse(code.contains(".sheet(isPresented:"),
                        "Un booléen par feuille laisse deux feuilles s'ouvrir ensemble ; "
                         + "un item ne porte qu'une valeur.")

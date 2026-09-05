@@ -27,7 +27,8 @@ final class ConversationSyncEngineTests: XCTestCase {
             messageService: mockMsgService,
             messageSocket: mockMessageSocket,
             socialSocket: mockSocialSocket,
-            api: mockAPI
+            api: mockAPI,
+            syncDelta: MockSyncDeltaMuet()
         )
     }
 
@@ -67,7 +68,8 @@ final class ConversationSyncEngineTests: XCTestCase {
             messageService: MockMessageService(),
             messageSocket: MockMessageSocket(),
             socialSocket: MockSocialSocket(),
-            api: MockAPIClient()
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
         )
 
         let ok = await engine.fullSync()
@@ -1619,6 +1621,19 @@ final class ConversationSyncEngineTests: XCTestCase {
 }
 
 // MARK: - Mock ConversationService
+
+/// LA SOURDINE `/sync` DES HARNAIS HISTORIQUES (#4172) : depuis que `fullSync`
+/// tente la voie `/sync` EN TÊTE, un moteur de test SANS `syncDelta` injecté
+/// fabriquerait le client RÉEL — et chaque plein paierait 15 s de timeout
+/// réseau avant son repli. `muet` sur la première page = repli immédiat vers
+/// le chemin historique, celui que ces harnais mesurent.
+final class MockSyncDeltaMuet: SyncDeltaClientProviding, @unchecked Sendable {
+    func demandeLeDelta<Row: Decodable & Sendable>(
+        _ demande: SyncDeltaRequest,
+        creance _: SyncDeltaCredential,
+        rangeant _: Row.Type
+    ) async -> SyncDeltaOutcome<Row> { .muet }
+}
 
 final class MockConversationService: ConversationServiceProviding, @unchecked Sendable {
     var listResult: Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error> = .success(

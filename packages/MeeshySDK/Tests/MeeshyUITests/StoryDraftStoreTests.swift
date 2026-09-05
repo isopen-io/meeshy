@@ -412,12 +412,19 @@ final class StoryDraftStoreTests: XCTestCase {
         XCTAssertEqual(audio.soundAuthorUsername, "sam")
         XCTAssertEqual(audio.name, "Pluie en forêt")
         XCTAssertEqual(audio.volume, 0.35, accuracy: 0.0001)
-        // waveformSamples : ligne héritée de B8b, TRANCHÉE par B8f (addendum,
-        // bloc B8f) — ni le golden partagé ni `storyEffectsV3.ts` ne le
-        // logent encore côté v3, la reconstruction retombe donc à son défaut
-        // d'init. Hors périmètre de B8d (fichiers : StoryDraftStore.swift
-        // seul).
-        XCTAssertEqual(audio.waveformSamples, [])
+        // **La forme d'onde SURVIT désormais** (#4833, 2026-09-02). La ligne
+        // attendait `[]`, et son commentaire disait exactement pourquoi : « ni
+        // le golden partagé ni `storyEffectsV3.ts` ne le logent encore côté
+        // v3 ». C'était un CONSTAT daté, hors périmètre de son lot — pas une
+        // décision que la forme d'onde ne doive pas voyager. Les trois sites
+        // qu'il nommait la portent maintenant, donc la reconstruction ne
+        // retombe plus sur le défaut d'init.
+        //
+        // Sans elle, `StoryAudioPlayerView` sortait sur son
+        // `guard !samples.isEmpty` et ne dessinait RIEN : une bande vide sous
+        // la puce d'une note vocale, chez tout lecteur.
+        XCTAssertEqual(audio.waveformSamples, [0.1, 0.6, 0.9, 0.4],
+                       "Le nom de ce témoin dit qu'il ne doit RIEN perdre — la forme d'onde comprise.")
 
         XCTAssertEqual(effects.backgroundAudioVariants?.count, 2)
         XCTAssertEqual(effects.backgroundAudioVariants?.first?.language, "fr")

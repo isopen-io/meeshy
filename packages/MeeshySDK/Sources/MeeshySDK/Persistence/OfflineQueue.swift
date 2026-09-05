@@ -60,6 +60,13 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// disque des utilisateurs continuent à décoder sans migration (même
     /// convention que `attachmentKinds` / `localAudioPaths`).
     public let location: SharedPlace?
+    /// Sticker du message (#4823) — ce que le PNG rejoué REPRÉSENTE, rejoué
+    /// par le dispatcher sous la clé `sticker` (REST et socket) à côté des
+    /// pièces jointes remontées. `nil` pour un message sans sticker ET pour
+    /// les lignes écrites avant ce champ — même convention `decodeIfPresent`
+    /// que `location`, pour que les payloads déjà sur disque décodent sans
+    /// migration.
+    public let sticker: MessageSticker?
     /// Fan-out de partage — le `clientMessageId` LOCAL de la cible qui porte
     /// les octets. Au moment de l'enfilage, cette cible n'a pas encore été
     /// envoyée : son identifiant SERVEUR n'existe pas. `OutboxDispatcher` le
@@ -99,6 +106,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
         location: SharedPlace? = nil,
+        sticker: MessageSticker? = nil,
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil
     ) {
@@ -116,6 +124,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
         self.location = location
+        self.sticker = sticker
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.createdAt = Date()
@@ -138,6 +147,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
         location: SharedPlace? = nil,
+        sticker: MessageSticker? = nil,
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil,
         createdAt: Date
@@ -156,6 +166,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
         self.location = location
+        self.sticker = sticker
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.createdAt = createdAt
@@ -176,6 +187,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case localAudioPaths
         case localMediaPaths
         case location
+        case sticker
         case copyAttachmentsFromClientMessageId
         case copyAttachmentsFromServerMessageId
         case createdAt
@@ -198,6 +210,9 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
         // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
         self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        // Même tolérance : un sticker non rendable (clé présente mais vide)
+        // vaut absent, comme partout où `MessageSticker` est relu.
+        self.sticker = try c.decodeIfPresent(MessageSticker.self, forKey: .sticker)?.ifRenderable
         self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
         self.copyAttachmentsFromServerMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromServerMessageId)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -219,6 +234,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(localAudioPaths, forKey: .localAudioPaths)
         try c.encodeIfPresent(localMediaPaths, forKey: .localMediaPaths)
         try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(sticker, forKey: .sticker)
         try c.encodeIfPresent(copyAttachmentsFromClientMessageId, forKey: .copyAttachmentsFromClientMessageId)
         try c.encodeIfPresent(copyAttachmentsFromServerMessageId, forKey: .copyAttachmentsFromServerMessageId)
         try c.encode(createdAt, forKey: .createdAt)
@@ -535,7 +551,22 @@ public protocol OfflineQueueing: Sendable {
         /// compilation, ce qui est exactement le mécanisme par lequel
         /// `CreatePostPayload` avait perdu trois champs sur la branche hors
         /// ligne de `setStatus`.
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        /// Le canvas composé sur la scène (#4756) — sans défaut, comme
+        /// `mobileTranscription` : chaque appelant DÉCLARE s'il en a un.
+        storyEffects: StoryEffects?,
+        /// Les légendes par fichier, alignées par INDEX sur `sourceMediaURLs`
+        /// (#4756). Sans défaut, même raison.
+        mediaCaptions: [String?]?,
+        /// Les alternatives textuelles, même alignement et même discipline —
+        /// un défaut les ferait disparaître d'un site d'appel sans casser la
+        /// moindre compilation, et un média resterait muet pour un lecteur
+        /// d'écran sans que personne ne l'apprenne.
+        mediaAlts: [String?]?,
+        /// L'identifiant d'objet de canvas de chaque fichier, même alignement.
+        /// Sans défaut, même discipline : il ne sert à rien de le porter à
+        /// moitié.
+        mediaObjectIds: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -676,9 +707,51 @@ public protocol OfflineMessageQueueing: Sendable {
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         copyAttachmentsFromClientMessageId: String?,
+        /// Sticker du message (#4823) — sur l'EXIGENCE, comme `location` :
+        /// un PNG de sticker enfilé hors ligne doit repartir avec ce qu'il
+        /// représente, sinon le destinataire reçoit une image muette.
+        sticker: MessageSticker?,
         deletesSourceFiles: Bool,
         createdAt: Date?
     ) async throws -> OfflineQueue.EnqueueMediaResult
+}
+
+extension OfflineMessageQueueing {
+    /// Shim de compatibilité source pour les appelants antérieurs au sticker
+    /// (#4823) : même signature qu'avant l'ajout de `sticker` à l'exigence,
+    /// délègue avec `sticker: nil`. Sur l'extension du PROTOCOLE, pas sur
+    /// l'implémentation concrète : un mock voit toujours passer la valeur.
+    @discardableResult
+    public func enqueueMedia(
+        sourceMediaURLs: [URL],
+        kinds: [String],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String?,
+        replyToId: String?,
+        forwardedFromId: String?,
+        forwardedFromConversationId: String?,
+        copyAttachmentsFromClientMessageId: String?,
+        deletesSourceFiles: Bool,
+        createdAt: Date?
+    ) async throws -> OfflineQueue.EnqueueMediaResult {
+        try await enqueueMedia(
+            sourceMediaURLs: sourceMediaURLs,
+            kinds: kinds,
+            conversationId: conversationId,
+            content: content,
+            clientMessageId: clientMessageId,
+            originalLanguage: originalLanguage,
+            replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId,
+            copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
+            sticker: nil,
+            deletesSourceFiles: deletesSourceFiles,
+            createdAt: createdAt
+        )
+    }
 }
 
 extension OfflineQueue: OfflineMessageQueueing {}
@@ -1825,6 +1898,7 @@ public actor OfflineQueue {
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
         copyAttachmentsFromClientMessageId: String? = nil,
+        sticker: MessageSticker? = nil,
         deletesSourceFiles: Bool = true,
         createdAt: Date? = nil
     ) async throws -> EnqueueMediaResult {
@@ -1854,6 +1928,7 @@ public actor OfflineQueue {
             localAudioPath: nil,
             localAudioPaths: nil,
             localMediaPaths: relativePaths,
+            sticker: sticker,
             copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
             createdAt: now
         )
@@ -1994,7 +2069,23 @@ public actor OfflineQueue {
         /// SANS défaut, délibérément — voir la REQUIREMENT du protocole. Tout
         /// appelant DÉCLARE s'il a une transcription embarquée ou non ; un
         /// média visuel passe `nil` en toutes lettres.
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        /// **Le canvas** (#4756). SANS défaut, pour la même raison que
+        /// `mobileTranscription` juste au-dessus : un appelant qui n'a pas de
+        /// scène écrit `nil` en toutes lettres. Un défaut ferait disparaître le
+        /// canvas d'un site d'appel sans casser la moindre compilation — le
+        /// mode de panne exact que ce champ vient de payer une fois.
+        storyEffects: StoryEffects?,
+        /// Les légendes par fichier, alignées par INDEX sur `sourceMediaURLs`
+        /// (#4756) — l'index est la seule identité qui survive à la
+        /// relocalisation des fichiers.
+        mediaCaptions: [String?]?,
+        /// Les alternatives textuelles, sur le même index et pour la même
+        /// raison : c'est la seule identité qui survive à la relocalisation.
+        mediaAlts: [String?]?,
+        /// L'identifiant d'objet de canvas de chaque fichier — le chaînon de
+        /// l'adoption (#5280).
+        mediaObjectIds: [String?]?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -2015,7 +2106,11 @@ public actor OfflineQueue {
             mentions: mentions,
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: mobileTranscription,
-            localMediaMimeTypes: sourceMediaMimeTypes
+            localMediaMimeTypes: sourceMediaMimeTypes,
+            storyEffects: storyEffects,
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the
@@ -2141,6 +2236,8 @@ public actor OfflineQueue {
                         // L'édition ne porte que le texte : le lieu du send en
                         // attente est conservé, pas silencieusement perdu.
                         location: item.location,
+                        // Et le sticker : le PNG rejoué garde ce qu'il représente.
+                        sticker: item.sticker,
                         // Idem pour le fan-out de partage : éditer un envoi en
                         // attente ne doit pas lui faire perdre sa copie de
                         // pièces jointes.

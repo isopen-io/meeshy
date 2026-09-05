@@ -32,6 +32,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 // ─── Module-level mock controls ───────────────────────────────────────────────
 
@@ -71,21 +72,19 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Les schemas de REPONSE sont le SUJET de ce temoin : ils viennent du vrai
+// module (#4649). Un bouchon d'`errorResponseSchema` remplace le contrat qu'on
+// pretend mesurer — fast-json-stringify supprime alors, en silence, tout champ
+// que le bouchon ne declare pas.
+//
+// Les deux schemas de REQUETE restent permissifs, et c'est une DECISION : les
+// rendre reels ferait refuser le corps par AJV AVANT le handler, ce qui change
+// le sujet du temoin (le refus mesure ici est celui du `safeParse` du handler)
+// et decouvre un autre defaut — voir le rapport de #4649.
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-  signalPreKeyBundleSchema: { type: 'object', additionalProperties: true },
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   generatePreKeyBundleRequestSchema: { type: 'object', additionalProperties: true },
-  generatePreKeyBundleResponseSchema: { type: 'object', additionalProperties: true },
-  getPreKeyBundleResponseSchema: { type: 'object', additionalProperties: true },
   establishSessionRequestSchema: { type: 'object', additionalProperties: true },
-  establishSessionResponseSchema: { type: 'object', additionalProperties: true },
 }));
 
 // ─── Import under test ────────────────────────────────────────────────────────
@@ -266,6 +265,50 @@ describe('GET /signal/keys/:userId', () => {
 
   it('returns 200 with bundle when authorized via friendship (no shared conversation)', async () => {
     const app = await buildApp({ sharedParticipant: null, areFriends: { senderId: USER_ID } });
+    const res = await app.inject({ method: 'GET', url: `/signal/keys/${TARGET_ID}`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("refuse le paquet de pré-clés quand la seule relation entre les deux comptes est une demande PENDING/REJECTED (#4866) — le double honore le where", async () => {
+    // `makePrisma` double `friendRequest.findFirst` de façon INCONDITIONNELLE
+    // (booléen `areFriends`) : il ne peut pas distinguer une demande acceptée
+    // d'une pending/rejected. Ici le double HONORE le `where` réel de
+    // `amitieAcceptee`, avec le bruit que la loi doit écarter entre les deux
+    // mêmes comptes — la preuve que le verdict de la loi ATTEINT la réponse
+    // servie (403), pas seulement une variable interne.
+    const prisma = {
+      ...makePrisma({ sharedParticipant: null }),
+      friendRequest: {
+        findFirst: jest.fn<any>(findFirstHonouringWhere([
+          { id: 'fr-pending', senderId: USER_ID, receiverId: TARGET_ID, status: 'pending' },
+          { id: 'fr-rejected', senderId: TARGET_ID, receiverId: USER_ID, status: 'rejected' },
+        ])),
+      },
+    };
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as unknown);
+    await app.register(signalProtocolRoutes);
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: `/signal/keys/${TARGET_ID}`, headers: AUTH });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('sert le paquet de pré-clés quand une demande ACCEPTÉE existe, même à côté du bruit pending/rejected (#4866)', async () => {
+    const prisma = {
+      ...makePrisma({ sharedParticipant: null }),
+      friendRequest: {
+        findFirst: jest.fn<any>(findFirstHonouringWhere([
+          { id: 'fr-pending', senderId: USER_ID, receiverId: TARGET_ID, status: 'pending' },
+          { id: 'fr-accepted', senderId: TARGET_ID, receiverId: USER_ID, status: 'accepted' },
+        ])),
+      },
+    };
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as unknown);
+    await app.register(signalProtocolRoutes);
+    await app.ready();
     const res = await app.inject({ method: 'GET', url: `/signal/keys/${TARGET_ID}`, headers: AUTH });
     expect(res.statusCode).toBe(200);
     await app.close();

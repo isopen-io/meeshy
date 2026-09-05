@@ -31,7 +31,7 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
   type PostReplyTo,
 } from './postReplySnapshot';
-import { parseSharedPlace } from '../location/sharedPlace';
+import { clientDeclaredMetadata } from './clientDeclaredMetadata';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
@@ -305,6 +305,8 @@ export class MessageProcessor {
     clientMessageId?: string;
     /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
     location?: unknown;
+    /** Sticker (#4823) — champ dédié, même doctrine. Validé par `parseMessageSticker`. */
+    sticker?: unknown;
   }): Promise<Message> {
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
@@ -385,18 +387,13 @@ export class MessageProcessor {
       ? []
       : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, linkAuthorUserId);
 
-    // Partage de position : le client transporte un champ `location` DÉDIÉ
-    // (jamais un `metadata` brut — voir sharedPlace.ts). `parseSharedPlace`
-    // revalide les coordonnées côté serveur avant écriture. Chiffrement :
-    // stockage EN CLAIR dans `metadata.location`, décision assumée (cf.
-    // commentaire de tête de sharedPlace.ts) — au même régime que
-    // `postReplyTo` / `trackingLinks` ci-dessus.
-    const sharedPlace = parseSharedPlace(data.location);
-
-    const messageMetadata: Record<string, unknown> = {};
-    if (postReplyTo) messageMetadata.postReplyTo = postReplyTo;
-    if (trackingLinks.length > 0) messageMetadata.trackingLinks = trackingLinks;
-    if (sharedPlace) messageMetadata.location = sharedPlace;
+    // Les blocs que le CLIENT déclare (`location`, `sticker`) passent par leurs
+    // parseurs dédiés — jamais un `metadata` brut, cf. `clientDeclaredMetadata.ts`.
+    const messageMetadata: Record<string, unknown> = {
+      ...(postReplyTo ? { postReplyTo } : {}),
+      ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
+      ...clientDeclaredMetadata(data),
+    };
 
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //

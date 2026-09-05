@@ -379,6 +379,17 @@ export interface UploadedAttachmentResponse {
   readonly isAnonymous: boolean;
   readonly createdAt: string;
   /**
+   * #3909 — la progression PERSONNELLE de lecture, quand la charge en vient.
+   *
+   * OPTIONNEL parce que ce type fait double emploi (cf. la dette déclarée sur
+   * `messageId` plus haut) : il décrit la réponse d'un UPLOAD, qui n'en a
+   * jamais, ET la forme que les lecteurs audio/vidéo reçoivent depuis la LISTE
+   * DE MESSAGES, qui la sert. Déclarer le champ requis mentirait sur le premier
+   * chemin ; ne pas le déclarer du tout rendait le second illisible sans un
+   * cast. L'optionnel dit la vérité des deux.
+   */
+  readonly currentUserConsumption?: CurrentUserAttachmentConsumption | null;
+  /**
    * Metadata JSON contenant des données additionnelles (audioEffectsTimeline, etc.)
    */
   readonly metadata?: {

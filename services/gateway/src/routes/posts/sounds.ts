@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -335,7 +336,7 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     onRequest: depreciee({
       depuis: SOUND_SCOPE_DEPUIS,
       successeur: (request) =>
-        `/api/v1/social/posts?scope=sound&soundId=${encodeURIComponent((request.params as { id: string }).id)}`,
+        `${apiPath('/social/posts')}?scope=sound&soundId=${encodeURIComponent((request.params as { id: string }).id)}`,
     }),
     preValidation: [requiredAuth],
     config: { rateLimit: createSoundRouteRateLimitConfig('detail') },

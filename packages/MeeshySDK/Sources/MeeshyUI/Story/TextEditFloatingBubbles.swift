@@ -22,10 +22,11 @@ struct TextEditFloatingBubbles: View {
     let onOpenPanel: (TextEditTool) -> Void
 
     var body: some View {
-        // Sept bulles tiennent sur l'écran le plus étroit supporté (300 pt
-        // demandés pour 343 disponibles). Le défilement est un filet : il
-        // garantit qu'un huitième outil déborde VISIBLEMENT au lieu de se
-        // faire couper en silence, ce qui est le défaut qui avait imposé la
+        // Huit bulles tiennent sur l'écran le plus étroit supporté (337 pt
+        // demandés pour 343 disponibles, depuis #4870 — l'espacement est passé
+        // de 8 à 7 pt pour la huitième). Le défilement est un filet : il
+        // garantit qu'une neuvième déborde VISIBLEMENT au lieu de se faire
+        // couper en silence, ce qui est le défaut qui avait imposé la
         // séparation en deux rangées.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: TextEditToolbarMetrics.spacing) {
@@ -64,6 +65,15 @@ struct TextEditFloatingBubbles: View {
             Text(letter)
                 .font(storyFont(for: style, size: 15))
                 .glassControlForeground()
+        case .effectGlyph(let letter, let effect):
+            // L'ombre suit la lettre témoin, en blanc : c'est la couleur que
+            // la bulle rend, quelle que soit celle du texte — une bulle de
+            // 36 pt ne peut pas montrer l'effet ET la couleur, et la bulle
+            // Couleur montre déjà la sienne.
+            Text(letter)
+                .font(.system(size: 15, weight: .bold))
+                .glassControlForeground()
+                .storyTextEffect(effect, fontSize: 15, textColor: .white)
         case .colorDot(let hex):
             Circle()
                 .fill(Color(hex: hex))

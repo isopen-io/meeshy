@@ -105,16 +105,47 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
     // MARK: - Le tap y mène (gardes de source POSITIVES)
 
     /// Une vignette qui ne déclenche rien est une affordance inerte (loi 4).
-    /// La garde vise le BLOC de la section « Mes stickers », pas le fichier —
-    /// et lit du code décommenté (`ComposerSourceGuard`), sans quoi le
-    /// commentaire d'intention au-dessus suffirait à la faire passer.
+    /// La garde vise le BLOC qui peint « Mes stickers », et lit du code
+    /// décommenté (`ComposerSourceGuard`), sans quoi le commentaire d'intention
+    /// au-dessus suffirait à la faire passer.
+    ///
+    /// **Elle ne nomme plus son fichier.** Au #4579 la section est devenue
+    /// l'onglet `libraryTab` d'une palette à cinq onglets et a changé de
+    /// fichier : la garde, qui nommait `StickerPickerView.swift`, a rougi pour
+    /// un DÉPLACEMENT — pas pour une perte de comportement. Balayer les sources
+    /// du composer la rend indifférente au prochain découpage.
     func test_theLibraryThumbnails_areTappable() throws {
-        let code = try ComposerSourceGuard.source("StickerPickerView.swift")
+        let sections = try ComposerSourceGuard.allStorySources()
+            .compactMap { ComposerSourceGuard.functionBody(named: "var libraryTab", in: $0.code) }
         let section = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "private var myStickersSection", in: code))
+            sections.first,
+            "Le bloc « Mes stickers » (`var libraryTab`) est introuvable dans les sources du composer.")
 
         XCTAssertTrue(section.contains("onLibraryStickerSelected(item)"),
                       "Taper une vignette de « Mes stickers » ne pose rien : la section est inerte.")
+    }
+
+    /// **Les DEUX autres constructions de la palette mènent quelque part** —
+    /// même loi, sur les grilles ajoutées au #4579. Une vignette de décoration
+    /// qui vibre sans rien poser coûte plus qu'une vignette absente.
+    func test_theTemplateThumbnails_areTappable() throws {
+        // `templateTab` est devenue `templateGrid` au #5012 : elle a perdu son
+        // `ScrollView` pour devenir une section d'une liste verticale. Le
+        // témoin suit le nom ; la règle qu'il garde est la même.
+        let grilles = try ComposerSourceGuard.allStorySources()
+            .compactMap { ComposerSourceGuard.functionBody(named: "func templateGrid(", in: $0.code) }
+        let grille = try XCTUnwrap(grilles.first, "La grille de gabarits est introuvable.")
+        XCTAssertTrue(grille.contains("pose(gabarit,"),
+                      "Taper une décoration ne pose rien : la grille est inerte.")
+
+        // Et la pose AIGUILLE selon la famille : un lieu doit devenir un
+        // `StoryLocationObject`, jamais un sticker qui perdrait ses coordonnées.
+        let poseurs = try ComposerSourceGuard.allStorySources()
+            .compactMap { ComposerSourceGuard.functionBody(named: "private func pose(", in: $0.code) }
+        let poseur = try XCTUnwrap(poseurs.first, "Le poseur de décoration est introuvable.")
+        XCTAssertTrue(poseur.contains("onLocationTemplateSelected("),
+                      "Une décoration de LIEU se poserait en sticker et perdrait sa donnée géographique.")
+        XCTAssertTrue(poseur.contains("onTemplateSelected("))
     }
 
     /// Le composer branche ce tap sur le poseur du VM — sans quoi la vignette

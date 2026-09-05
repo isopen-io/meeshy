@@ -16,6 +16,16 @@
  * comportement de chaque route (ami ⇒ servie, non-ami ⇒ cachée, ADMIN ⇒ servie,
  * MODERATOR ⇒ cachée, anonyme ⇒ cachée).
  *
+ * SECONDE CLAUSE — le TRI. La même directive ajoute : « une SÉLECTION ou un ORDRE
+ * qui dépend de la présence révèle autant que le champ ». Un ordre ne se garde donc
+ * pas en masquant la colonne à la sortie : il se garde à l'ENTRÉE, en fermant
+ * l'ensemble des clés qu'un client peut demander. Le garde rougit sur la forme qui
+ * laisse cet ensemble OUVERT — une clé de tri LIÉE DIRECTEMENT à un champ de la
+ * requête (`sortBy: query.sortBy`), sans résolveur entre les deux. Il ne prétend pas
+ * juger la liste : il exige qu'il y en ait une. `routes/admin/users.ts`
+ * (`PRESENCE_SORT_KEYS`) et `services/admin/user-management.service.ts`
+ * (`resolveUserSortKey`) montrent les deux formes déjà tenues du dépôt.
+ *
  * Une garde NÉGATIVE meurt en silence : elle reste verte si son balayage rend `[]`
  * (répertoire déplacé, filtre d'extension trop étroit, motif qui ne matche plus
  * rien). Les témoins POSITIFS ci-dessous prouvent que le balayage atteint bien les
@@ -37,6 +47,15 @@ const SCANNED_ROOTS: readonly string[] = [
   join(SHARED_ROOT, 'types'),
 ];
 const FORBIDDEN = /\bresolvePrefsOnly\b/;
+
+/**
+ * Une clé de tri liée DIRECTEMENT à un champ homonyme de la requête —
+ * `sortBy: query.sortBy`, `sortOrder: q.sortOrder ?? 'desc'`. Le défaut ne vit pas
+ * dans l'opérateur de repli (`||`, `??`) mais dans l'absence de RÉSOLVEUR : la
+ * valeur du client devient la clé. Un appel entre les deux
+ * (`sortBy: resolveReportSortKey(query.sortBy)`) ferme l'ensemble et ne matche pas.
+ */
+const FORBIDDEN_RAW_SORT_KEY = /\bsort(?:By|Order)\s*:\s*[A-Za-z_$][\w$]*\.sort(?:By|Order)\b/;
 const SKIPPED_DIRS = new Set(['__tests__', 'node_modules', 'dist']);
 
 function sourceFiles(dir: string): readonly string[] {
@@ -71,6 +90,35 @@ describe('garde — résolution de présence viewer-aware', () => {
   it('aucun `resolvePrefsOnly` ne subsiste hors tests — ni défini, ni appelé, ni cité', () => {
     const offenders = scannedFiles()
       .filter((file) => FORBIDDEN.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(REPO_ROOT, file));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('garde — un ORDRE demandé par le client passe par une liste close', () => {
+  it('balaie bien les routes où une clé de tri peut entrer', () => {
+    const files = scannedFiles();
+
+    expect(files.length).toBeGreaterThan(200);
+    expect(files.some((f) => f.endsWith('routes/admin/reports.ts'))).toBe(true);
+    expect(files.some((f) => f.endsWith('routes/admin/users.ts'))).toBe(true);
+    expect(files.some((f) => f.endsWith('services/admin/report.service.ts'))).toBe(true);
+  });
+
+  it('interdit bien la liaison directe, et seulement elle', () => {
+    expect(FORBIDDEN_RAW_SORT_KEY.test("sortBy: query.sortBy || 'createdAt',")).toBe(true);
+    expect(FORBIDDEN_RAW_SORT_KEY.test("sortOrder: query.sortOrder || 'desc'")).toBe(true);
+    expect(FORBIDDEN_RAW_SORT_KEY.test('sortBy: q.sortBy ?? undefined')).toBe(true);
+
+    expect(FORBIDDEN_RAW_SORT_KEY.test('sortBy: resolveReportSortKey(query.sortBy),')).toBe(false);
+    expect(FORBIDDEN_RAW_SORT_KEY.test("sortBy: 'createdAt',")).toBe(false);
+    expect(FORBIDDEN_RAW_SORT_KEY.test('const sortBy = filters.sortBy || \'createdAt\';')).toBe(false);
+  });
+
+  it('aucune clé de tri ne se lie directement à la requête, hors tests', () => {
+    const offenders = scannedFiles()
+      .filter((file) => FORBIDDEN_RAW_SORT_KEY.test(readFileSync(file, 'utf8')))
       .map((file) => relative(REPO_ROOT, file));
 
     expect(offenders).toEqual([]);

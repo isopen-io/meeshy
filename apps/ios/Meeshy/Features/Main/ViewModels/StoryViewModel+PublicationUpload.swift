@@ -32,22 +32,46 @@ extension StoryViewModel {
     /// Téléverse l'image d'un sticker par le chemin commun (TUS → `PostMedia`),
     /// pour le publish comme pour l'édition.
     ///
-    /// PNG et non JPEG : un sticker est une image détourée et le JPEG n'a pas
-    /// de canal alpha — le réencoder ainsi publierait un rectangle opaque à la
-    /// place du découpage. La bibliothèque borne déjà la taille à l'écriture
-    /// (`PasteDestination.maxSide`), il n'y a rien à sous-échantillonner ici.
+    /// **Les octets ANIMÉS priment, quand il y en a** (#3956). Ré-encoder un GIF
+    /// en PNG ici publierait un sticker figé après l'avoir composé animé : le
+    /// composer aurait dit vrai, la publication non, et rien nulle part
+    /// n'aurait rougi — la perte se voit seulement chez le LECTEUR, une fois
+    /// l'original détruit.
+    ///
+    /// PNG et non JPEG sur le chemin fixe : un sticker est une image détourée et
+    /// le JPEG n'a pas de canal alpha — le réencoder ainsi publierait un
+    /// rectangle opaque à la place du découpage. La bibliothèque borne déjà la
+    /// taille à l'écriture (`PasteDestination.maxSide`), il n'y a rien à
+    /// sous-échantillonner ici.
+    ///
+    /// Le `thumbHash` vient de l'image FIXE dans les deux cas : c'est un aperçu
+    /// de chargement, et l'aperçu d'un GIF est sa première image.
     private func uploadStickerImage(
         _ image: UIImage,
+        animatedData: Data? = nil,
         uploader: TusUploadManager,
         token: String
     ) async throws -> TusUploadResult {
-        guard let data = image.pngData() else { throw StoryStickerImageNotEncodable() }
+        // Le CONTENEUR décide du mime et de l'extension : téléverser un GIF sous
+        // `image/png` le ferait arriver mal étiqueté chez les trois clients —
+        // l'animation survivrait au disque et mourrait à l'en-tête.
+        let animated = animatedData.flatMap { bytes in
+            AnimatedImageEligibility.container(bytes).map { (bytes: bytes, container: $0) }
+        }
+        let payload: (data: Data, mimeType: String, fileExtension: String)
+        if let animated {
+            payload = (animated.bytes, animated.container.mimeType, animated.container.filenameExtension)
+        } else if let png = image.pngData() {
+            payload = (png, "image/png", "png")
+        } else {
+            throw StoryStickerImageNotEncodable()
+        }
         let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sticker_\(UUID().uuidString).png")
-        try data.write(to: tempURL)
+            .appendingPathComponent("sticker_\(UUID().uuidString).\(payload.fileExtension)")
+        try payload.data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
         let result = try await uploader.uploadFile(
-            fileURL: tempURL, mimeType: "image/png",
+            fileURL: tempURL, mimeType: payload.mimeType,
             credential: .bearer(token), uploadContext: "story", thumbHash: image.toThumbHash()
         )
         // Même réconciliation que les autres images : le lecteur — l'auteur en
@@ -183,6 +207,38 @@ extension StoryViewModel {
                     let mediaProgress = Double(mediaIdx) / Double(max(1, mediaCount))
                     onProgress(baseProgress + (0.30 + mediaProgress * 0.50) * slideShare)
                 }
+
+                // **L'ADOPTION du fond** (#5280, 2026-09-05).
+                //
+                // Le fond de la slide vient d'être téléversé plus haut : son
+                // `id` et son `fileUrl` partent dans `allMediaIds`, donc dans
+                // les médias du POST. Rien ne les écrivait dans l'objet du
+                // CANVAS, qui gardait l'identité de la PRÉ-MONTÉE — celle
+                // faite au moment où la photo a été posée sur la scène.
+                //
+                // Mesuré sur staging, post `6a9c52e3…` : deux lignes
+                // `PostMedia` et deux fichiers pour UNE photo, le canvas
+                // désignant celle qui n'appartient pas au post
+                // (`postMediaId` `…52c2…8d9` contre `media[0].id`
+                // `…52e3…8da`). Le lecteur cherche un id absent de
+                // `post.media` : la scène se peint VIDE, sur toute la carte.
+                //
+                // > **Le cache, lui, adoptait déjà** — `adoptImage(localFile:
+                // > for: result.fileUrl)`, douze lignes plus haut. C'est ce
+                // > qui rend l'oubli difficile à voir : la moitié qui sert la
+                // > VITESSE a été écrite, la moitié qui sert la CORRECTION ne
+                // > l'a pas été, et les deux vivent dans la même fonction.
+                //
+                // La boucle ci-dessus ne pouvait pas s'en charger : elle est
+                // gardée par `postMediaId.isEmpty` — juste, puisqu'elle
+                // téléverse ce qui n'a pas encore d'identité — et un fond
+                // pré-monté en a une. C'est exactement ce qui la lui fait
+                // sauter.
+                if let fond = uploadResult,
+                   let index = mediaObjects.firstIndex(where: { $0.isBackground }) {
+                    mediaObjects[index].postMediaId = fond.id
+                    mediaObjects[index].mediaURL = fond.fileUrl
+                }
                 updatedEffects.mediaObjects = mediaObjects
             }
 
@@ -198,7 +254,10 @@ extension StoryViewModel {
                     guard !Task.isCancelled else { return newPostIds }
                     guard let image = upload.loadedImages[stickerId] else { continue }
                     do {
-                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        let result = try await uploadStickerImage(
+                            image,
+                            animatedData: upload.loadedStickerAnimations[stickerId],
+                            uploader: uploader, token: token)
                         uploadedStickers[stickerId] = result.id
                         foregroundMediaIds.append(result.id)
                     } catch {
@@ -271,8 +330,13 @@ extension StoryViewModel {
                 "publish createStory slide=\(slide.id, privacy: .public) audioInPayload=\(postAudioCount) details=[\(postAudioIds, privacy: .public)]"
             )
 
+            // **CETTE slide, et pas le composer** (#4068). Une slide EST une
+            // publication en profil Story : elle n'emporte que les mentions qui
+            // lui sont attachées. La liste plate reste le repli — formats à
+            // publication unique, et rows de file écrites avant ce lot.
+            let declaredForSlide = upload.mentionsBySlide[slide.id] ?? upload.declaredMentions
             let canvasMentions = Self.declaredMentions(
-                declared: upload.declaredMentions, effects: updatedEffects
+                declared: declaredForSlide, effects: updatedEffects
             )
 
             // Le texte alternatif est collecté sous les ids d'élément du
@@ -369,6 +433,9 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
+        /// Les octets animés des stickers collés (#3956) — sans eux, éditer une
+        /// story remplacerait un GIF déjà publié par sa première image.
+        loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
@@ -401,7 +468,9 @@ extension StoryViewModel {
             await self?.runStoryUpdate(
                 edit: edit, slide: slide, slideImages: slideImages,
                 loadedImages: loadedImages, loadedVideoURLs: loadedVideoURLs,
-                loadedAudioURLs: loadedAudioURLs, originalLanguage: originalLanguage,
+                loadedAudioURLs: loadedAudioURLs,
+                loadedStickerAnimations: loadedStickerAnimations,
+                originalLanguage: originalLanguage,
                 visibility: visibility, visibilityUserIds: visibilityUserIds,
                 draftId: draftId,
                 references: references,
@@ -424,6 +493,7 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
+        loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String?,
         visibility: String,
         visibilityUserIds: [String],
@@ -551,7 +621,10 @@ extension StoryViewModel {
                 for stickerId in pendingStickerIds {
                     guard let image = loadedImages[stickerId] else { continue }
                     do {
-                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        let result = try await uploadStickerImage(
+                            image,
+                            animatedData: loadedStickerAnimations[stickerId],
+                            uploader: uploader, token: token)
                         uploadedStickers[stickerId] = result.id
                         newMediaIds.append(result.id)
                     } catch {

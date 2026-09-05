@@ -171,6 +171,34 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Troisième jumeau de `playsVideoInEditMode` et `playsAudioInEditMode`,
+    /// pour les DÉCORATIONS (#4999, directive porteur 2026-09-03 : « sur la
+    /// scène les stickers doivent être vivants tout comme les vidéos et
+    /// audios »). Posé à `true` par le seul canvas composer ; le prefetcher
+    /// hors-écran, lui aussi en `.edit`, ne le lève jamais. Sans effet en
+    /// `.play`, où `StoryRenderer` applique déjà la pose à chaque tick.
+    ///
+    /// Éteint en cours de route, il rend aux décorations la pose de l'auteur
+    /// plutôt que de les abandonner à leur dernière image.
+    public var playsStickerMotionInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsStickerMotionInEditMode else { return }
+            guard !playsStickerMotionInEditMode else { return }
+            // Rendre la pose plutôt que reconstruire : `rebuildLayers()`
+            // recyclerait des couches du cache, qui porteraient encore la
+            // dernière pose. On DÉFAIT ce qu'on a posé, c'est la seule forme
+            // qui ne dépende pas de ce que le cache a gardé.
+            restStickerMotion(animatedStickers)
+            stickerMotionClock = StoryStickerMotionClock()
+        }
+    }
+
+    /// L'horloge du mouvement en composition — un temps ÉCOULÉ, jamais un
+    /// playhead. Elle vit ici parce qu'elle survit aux reconstructions de
+    /// couches : la phase d'une décoration ne doit pas repartir de zéro parce
+    /// qu'on a déplacé sa voisine.
+    var stickerMotionClock = StoryStickerMotionClock()
+
     // MARK: - Reader context (Task 5)
 
     var readerContext: StoryReaderContext = .empty
@@ -181,8 +209,38 @@ public final class StoryCanvasUIView: UIView {
 
     /// Classifies an item that was hit by a gesture so the parent can route to
     /// the correct editor (text panel vs media editor sheet vs sticker UX).
-    public enum CanvasItemKind: Sendable, Equatable {
-        case text, media, sticker, location
+    public nonisolated enum CanvasItemKind: Sendable, Equatable, Hashable, CaseIterable {
+        case text, media, sticker, place, audio
+    }
+
+    /// **Les kinds dont l'hôte sait RÉELLEMENT ouvrir un éditeur** (#4074).
+    ///
+    /// `onItemDoubleTapped != nil` répond à « l'hôte a-t-il câblé un éditeur ? ».
+    /// C'est une question de CANVAS, et « Modifier » est une décision par
+    /// OBJET : l'atelier câble le rappel, puis fait `case .sticker, .location:
+    /// break` — le menu offrait donc « Modifier » sur un sticker, et rien ne se
+    /// produisait.
+    ///
+    /// > **Un booléen de canvas ne peut pas répondre à une question par objet.**
+    /// > Le menu a la `kind` sous la main (`contextMenu(for:kind:)`) ; ce qui
+    /// > manquait était de la CONSULTER.
+    ///
+    /// Défaut `[.text, .media]` — ce que le rappel de l'atelier traite
+    /// réellement. Un hôte qui n'en sait éditer qu'un le restreint (la scène
+    /// incrustée sert `[.text]` tant qu'aucun éditeur média n'y est monté).
+    public var editableKinds: Set<CanvasItemKind> = [.text, .media]
+
+    /// **Le site UNIQUE de la question « cet objet a-t-il un éditeur ? »**, lu
+    /// par le menu visuel ET par les actions VoiceOver.
+    ///
+    /// Les deux avaient déjà DIVERGÉ : l'accessibilité restreignait à
+    /// `kind == .text || kind == .media` en local, le menu visuel non — pendant
+    /// que le doc-comment de l'accessibilité affirmait appliquer « la MÊME règle
+    /// que le menu long-press ». Une règle déclarée partagée et écrite deux fois
+    /// diverge sans que rien ne le voie : chaque copie reste cohérente avec
+    /// elle-même.
+    func hasEditor(for kind: CanvasItemKind) -> Bool {
+        onItemDoubleTapped != nil && editableKinds.contains(kind)
     }
 
     /// Called when the user single-taps an item on the canvas. Used by the
@@ -258,6 +316,25 @@ public final class StoryCanvasUIView: UIView {
     let rootLayer = CALayer()
     let itemsContainer = CALayer()
     let editOverlayLayer = CALayer()
+
+    /// **L'objet SÉLECTIONNÉ, et ce qu'on en dit** (#4073, vue `1c`).
+    ///
+    /// Le doc-comment de `editOverlayLayer` promettait « snap guides, selection
+    /// markers » depuis toujours ; seuls les guides existaient. Le canvas
+    /// n'avait AUCUNE notion d'objet sélectionné — la scène du composer
+    /// affichait donc son inspecteur, ses contrôleurs et son menu contextuel
+    /// sans jamais montrer SUR QUOI ils portaient.
+    ///
+    /// > Un commentaire qui décrit un mécanisme absent ne se fait contredire
+    /// > par rien (leçon 335). Celui-ci a survécu à toutes les passes parce
+    /// > qu'il énonçait la bonne intention au bon endroit.
+    ///
+    /// Le libellé du badge vient de l'HÔTE : ce que dit « TEXT · PLAN FG · z 2 »
+    /// est du vocabulaire produit, pas une donnée du canvas. Le canvas tient la
+    /// GÉOMÉTRIE, l'app tient les MOTS.
+    var selectionMarkerId: String?
+    var selectionMarkerBadge: String?
+    var selectionMarkerLayers: [CALayer] = []
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
     /// `internal` (not private) so test seams can introspect transform during live drag tests.
@@ -412,6 +489,10 @@ public final class StoryCanvasUIView: UIView {
     var rotationRecognizer: UIRotationGestureRecognizer!
     var singleTapRecognizer: UITapGestureRecognizer!
     var doubleTapRecognizer: UITapGestureRecognizer!
+    /// **L'appui long sur le FOND** — jamais sur un objet, où
+    /// `UIContextMenuInteraction` règne déjà (`hitTestItem` y rend un id, et
+    /// le menu se configure ; sur le fond il rend `nil`, laissant la place).
+    var backgroundLongPressRecognizer: UILongPressGestureRecognizer!
     /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
     /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette
     /// séparation, un pinch sur un élément faisait aussi scaler le conteneur
@@ -484,6 +565,20 @@ public final class StoryCanvasUIView: UIView {
     /// commandes inadéquates pour la couche courante.
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
 
+    /// **Le canvas DIT quand il s'endort** (#3915).
+    ///
+    /// `isEditClockThrottled` vivait en UIKit et n'en sortait pas : la couche
+    /// SwiftUI posée par-dessus — la puce audio de premier plan et ses deux
+    /// `TimelineView(.animation(…))` — continuait donc de redessiner à 30 fps
+    /// sur un écran au repos, sur l'horloge d'ANIMATION de SwiftUI, que la mise
+    /// en veille d'`editDisplayLink` n'atteint pas.
+    ///
+    /// Appelé aux DEUX bascules (`idleDownEditClock`, `resumeEditClockFromIdle`)
+    /// et à elles seules : c'est ce qui garantit qu'un réveil n'attend aucune
+    /// frame — l'interaction qui réveille l'horloge réveille l'animation dans le
+    /// même tour.
+    public var onEditClockThrottleChanged: ((Bool) -> Void)?
+
     /// Notifié pendant un pinch à 3 doigts (zoom du viewport). Le composer
     /// SwiftUI s'y abonne pour piloter `canvasScale` + l'overlay éphémère
     /// `viewportPinchDelta` sans avoir besoin d'un `MagnificationGesture`
@@ -499,6 +594,14 @@ public final class StoryCanvasUIView: UIView {
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public internal(set) var isAudioMuted: Bool = false
+
+    /// **Le muet de CE canvas est-il verrouillé ?** (#4084)
+    ///
+    /// Posé par `setReaderContext` depuis `ScenePlayerConfig.locksMute`. Une
+    /// carte de fil est muette PAR CONSTRUCTION ; sans ce champ, le verrou
+    /// n'existait qu'au niveau du prop et n'atteignait le canvas qu'à la passe
+    /// de rendu suivante. Entre les deux, une notification DIFFUSÉE gagnait.
+    public internal(set) var muteIsLocked: Bool = false
     /// `slideAudioRevision` contre laquelle `audioMixer` a été configuré la
     /// dernière fois. Permet à `reconfigureAudioForPlayback()` de sauter le
     /// rechargement (coûteux) des `AVAudioFile` tant que la COMPOSITION de la
@@ -633,6 +736,54 @@ public final class StoryCanvasUIView: UIView {
 
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
+
+    /// **Appui long sur une zone VIDE du canvas.**
+    ///
+    /// Le SDK dit ce qui a été touché ; l'hôte décide de ce que cela
+    /// déclenche. C'est la même répartition que `onBackgroundTapped`, et
+    /// c'est ce qui permet au composer d'y ouvrir la caméra (#4036) sans
+    /// que l'atelier plein écran, qui ne branche rien, change de
+    /// comportement.
+    ///
+    /// > Un geste ajouté à un composant PARTAGÉ doit être inerte chez qui
+    /// > ne le branche pas. Une closure optionnelle le garantit par
+    /// > construction — un booléen de configuration ne l'aurait pas fait.
+    public var onBackgroundLongPressed: (() -> Void)?
+
+    /// **L'appui long sur un média DE FOND demande son menu** (#5041).
+    ///
+    /// Distinct de `onBackgroundLongPressed`, qui appartient au viseur : la
+    /// scène qui porte un fond n'est pas vide, et le geste y ouvre supprimer /
+    /// ramener en avant / éditer — les mêmes verbes que le menu contextuel d'un
+    /// objet de premier plan, pour que le geste ait un seul sens.
+    ///
+    /// **Sa présence est un FAIT que la règle lit** : tant que l'hôte ne le
+    /// branche pas, `StoryCanvasBackgroundLongPress` retombe sur le viseur
+    /// plutôt que de rendre le geste muet. Un composant partagé reste inerte
+    /// chez qui ne le branche pas — le doc-comment ci-dessus le dit déjà de son
+    /// jumeau, et la même construction le garantit ici.
+    public var onBackgroundMediaLongPressed: ((String) -> Void)?
+
+    /// **La LEVÉE d'un appui long armé sur une scène vide** (#5041).
+    ///
+    /// L'appui long n'émettait que son `.began` : de quoi ouvrir un viseur,
+    /// jamais de quoi tenir une prise. Ces deux rappels donnent au geste sa
+    /// durée — la translation pendant qu'on tient, puis le relâchement.
+    ///
+    /// **Ils ne sont émis que si le `.began` a passé les trois gardes.** Sans
+    /// cette condition, relâcher un appui long REFUSÉ (en lecture, sur un objet,
+    /// pendant une saisie) déclencherait la fin d'une prise que rien n'avait
+    /// armée.
+    public var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+
+    /// Le relâchement — ou l'annulation, qui doit rendre le même verdict : un
+    /// geste interrompu par le système laisserait sinon la prise ouverte.
+    public var onBackgroundLongPressEnded: (() -> Void)?
+
+    /// Le point où l'appui long ARMÉ a commencé, `nil` quand rien n'est armé.
+    /// C'est lui qui porte la condition ci-dessus : sa présence EST la preuve
+    /// que `.began` est passé, et sa remise à `nil` désarme.
+    var backgroundLongPressOrigin: CGPoint?
 
     /// Miroir du zoom viewport SwiftUI (`canvasScale != 1`). Quand `true`,
     /// un double-tap sur le fond demande un reset du viewport — prioritaire

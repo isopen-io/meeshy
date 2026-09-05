@@ -69,6 +69,11 @@ export const SocketMessageSendSchema = z.object({
   // validation stricte des coordonnées / longueurs vit dans
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
   location: z.unknown().optional(),
+  // Sticker (#4823) — même doctrine que `location` : champ dédié, forme
+  // validée par `parseMessageSticker` côté `MessageProcessor.saveMessage`.
+  // Non déclaré ici, `z.object` le stripperait en silence — et iOS ne verrait
+  // jamais la décoration animée, seulement le PNG de repli.
+  sticker: z.unknown().optional(),
   // Liste EXPLICITE de mentionnés — déclarée dans `mention-list.ts`, la MÊME
   // que celle de `POST /messages`. Elle était strippée ici, et le repli par
   // extraction des `@` du contenu ne la remplace que tant que le contenu porte
@@ -109,6 +114,9 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   maxViewOnceCount: z.number().int().optional(),
   // Lieu partagé — même contrat que SocketMessageSendSchema ci-dessus.
   location: z.unknown().optional(),
+  // Sticker — même contrat que SocketMessageSendSchema ci-dessus. C'est CE
+  // chemin qui porte le sticker nominal (PNG rendu + descripteur).
+  sticker: z.unknown().optional(),
   // Liste explicite de mentionnés — même unité que le path texte ci-dessus. Un
   // message porteur d'une pièce jointe nomme quelqu'un exactement comme un
   // message de texte, et ce path-ci est celui de TOUT l'audio : sa légende est

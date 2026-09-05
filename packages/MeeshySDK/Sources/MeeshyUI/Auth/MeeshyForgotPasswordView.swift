@@ -330,7 +330,7 @@ public struct MeeshyForgotPasswordView: View {
 
             let fullPhone = selectedCountry.dialCode + phoneNumber
             let res: APIResponse<LookupRes> = try await APIClient.shared.post(
-                endpoint: "/auth/forgot-password/phone/lookup",
+                AuthEndpoint.forgotPasswordPhoneLookup,
                 body: LookupReq(phoneNumber: fullPhone, countryCode: selectedCountry.id)
             )
             tokenId = res.data.tokenId
@@ -353,7 +353,7 @@ public struct MeeshyForgotPasswordView: View {
             struct VerifyRes: Decodable { let codeSent: Bool }
 
             let _: APIResponse<VerifyRes> = try await APIClient.shared.post(
-                endpoint: "/auth/forgot-password/phone/verify-identity",
+                AuthEndpoint.forgotPasswordPhoneVerifyIdentity,
                 body: VerifyReq(tokenId: tokenId, fullUsername: fullUsername, fullEmail: fullEmail)
             )
             phoneStep = .verifyCode
@@ -370,7 +370,7 @@ public struct MeeshyForgotPasswordView: View {
             struct CodeRes: Decodable { let resetToken: String }
 
             let res: APIResponse<CodeRes> = try await APIClient.shared.post(
-                endpoint: "/auth/forgot-password/phone/verify-code",
+                AuthEndpoint.forgotPasswordPhoneVerifyCode,
                 body: CodeReq(tokenId: tokenId, code: verificationCode)
             )
             resetToken = res.data.resetToken
@@ -390,7 +390,7 @@ public struct MeeshyForgotPasswordView: View {
         do {
             struct ResetReq: Encodable { let token: String; let newPassword: String; let confirmPassword: String }
             let _: APIResponse<[String: String]> = try await APIClient.shared.post(
-                endpoint: "/auth/reset-password",
+                AuthEndpoint.resetPassword,
                 body: ResetReq(token: resetToken, newPassword: newPassword, confirmPassword: confirmPassword)
             )
             resetSuccess = true

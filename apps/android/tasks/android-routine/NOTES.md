@@ -5,6 +5,69 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-09-01 — a deferred follow-up is only closed when EVERY named site is wired (slice `engagement-consent-gate-surfaces`)
+The prior slice `engagement-consent-gate-detail` shipped the pure consent gate on `EngagementSessions.begin` but
+wired only the DETAIL surface, deferring reels/status/story as "three thin per-surface slices". This slice did all
+three at once — the wire is one injected `PrivacyPreferencesStore` + one `consentGranted = preferences.value.allowAnalytics`
+argument per `begin` call site. Lessons:
+- **A privacy gate is not "shipped" while any of its surfaces still bypass it.** The detail slice closed the gate on
+  ONE of four surfaces; the toggle stayed 3/4 dead. Dimension-1 completeness is per-surface: enumerate every call site
+  of the gated primitive (`grep EngagementSurface`) and confirm each passes the flag, not just the one you touched.
+- **Grouping identical one-line wires into one slice is coherent when they share the exact concept.** Three surfaces,
+  one pattern, one privacy invariant — a single slice with one behavioural test per surface reads better than three
+  near-duplicate PRs, and the reviewer scope gate (apps/android-only) is unchanged.
+- **Two direct test-constructor call sites hid behind the `viewModel()` helper.** `StoryViewerViewModelTest` built the
+  VM inline in two tests (failed-load, isOwnStory) that don't use the helper — adding a ctor param breaks them silently
+  until compile. `grep 'StoryViewerViewModel('` in the test file caught both; pass `InMemoryPrivacyPreferencesStore()`
+  (default = consent granted) there so their behaviour is unchanged.
+- **Reels/story have NO bare-impression `viewPost` — only status does.** So the withheld-consent assertion differs by
+  surface: reels/story assert the specific dwell duration is absent (no impression to coexist with); status asserts the
+  dwell duration absent AND the bare `viewPost(id)` impression still fires (the un-gated accounting tier).
+
+## 2026-09-01 — a REDUCED port can silently drop a SECURITY tier; and "any()" matches a defaulted-null arg (slice `engagement-consent-gate-detail`)
+Android's `EngagementSessions` was a deliberately-thin port of iOS `EngagementTracker` — it kept the dwell state
+machine and the qualification threshold, and dropped everything else (micro-actions, watch samples, the outbox…). Fine,
+except one of the dropped pieces was iOS's `begin` `guard consentProvider()`: the reader's `allowAnalytics` toggle. So
+Android reported dwell/watch analytics regardless of consent, and `PrivacyToggle.ALLOW_ANALYTICS` — persisted,
+round-tripped — governed nothing. Lessons:
+- **When you port a reduced version of a rich source, enumerate what you dropped and ask which drops were RULES, not
+  just features.** A dropped micro-action recorder is a feature gap; a dropped consent guard is a privacy regression. The
+  reduction note ("faithfully narrower") hid a dimension-1 hole in plain sight for four surfaces.
+- **The first surface you should re-read on any "we ported X" is the SECURITY/consent tier of the original.** iOS gated
+  ALL engagement at one `guard` in `begin`; the port scattered the machine across per-VM callers and lost the guard
+  because it lived in the ONE place the port collapsed.
+- **Two-tier telemetry: gate the analytics tier, NOT the accounting tier.** iOS fires the deduplicated `viewPost`
+  impression unconditionally (a view-count credit) and gates only the engagement SESSION. Port both tiers with their
+  DIFFERENT consent posture — gating the impression too would under-count views; leaving the session un-gated leaks
+  analytics. Read the original to learn WHICH calls each tier makes before deciding what the gate covers.
+- **Put the gate on the one machine every surface shares, guard-FIRST.** `EngagementSessions.begin` returns inert before
+  `pauseTop` when consent is withheld — so a non-consented overlay doesn't disturb the consented session underneath
+  (proven by the 1200-vs-1000 ms nesting test). One tested site beats four per-VM `if (!allow) return`s.
+- **MockK gotcha: `verify { f("p1", any()) }` MATCHES a call that used the parameter's DEFAULT (`null`).** `viewPost(postId:
+  String, duration: Int? = null)` is ONE function; the impression `viewPost("p1")` records as `viewPost("p1", null)`, and
+  `any()` matches null. To assert "no dwell record", assert the SPECIFIC non-null duration is absent (`viewPost("p1", 10000)`
+  exactly 0) — mirror the existing `viewPost("p1", 999)` pattern, don't reach for `any()`. The first draft failed exactly
+  because `any()` caught the impression.
+
+## 2026-09-01 — a doc-comment that PROMISES a behaviour is where to look for the half the code forgot (slice `banner-group-name-favorite-emoji`)
+`NotificationBannerViewModel`'s class doc said, in plain words, "Le nom LOCAL du groupe est résolu ici … renommage
+(`customName`) et emoji favori" — but the code twelve lines down resolved `groupName = customName ?: title` and never
+touched the favorite emoji. The intent was documented, the SSOT field (`ApiConversationPreferences.reaction`) existed
+and was already consumed by `ConversationFilter.FAVORITES`, and the iOS parity (`composedSubtitle`) was one function —
+yet the banner shipped naming a starred/classified thread by a bare name. Lessons:
+- **A doc-comment that names TWO inputs but the code reads ONE is a live gap, not just stale prose.** When a comment
+  promises "A + B" and the implementation carries only A, trust the comment's INTENT over the code and check whether B
+  was ever wired. It's the cheapest place to find an omission: the author already told you what should be there.
+- **iOS "presentation" types split resolution across a stored `name` and a computed accessor — port BOTH halves.**
+  `ConversationPresentation.name` is `customName ?? title` (set far away in `WidgetDataManager`); `composedSubtitle`
+  prepends the favorite. A faithful Android port folds both into one pure `composed(customName, title, favoriteEmoji)`
+  so the fallback AND the prefix are one tested SSOT — don't port only the accessor and leave the name resolution
+  scattered in the caller (which is exactly how the emoji got dropped).
+- **When you fix ONE surface of a shared concept, name the sibling that still has it.** The banner now resolves the
+  local-first name; the TOAST (`notificationToastSubtitle`) still reads the raw server title because its VM holds no
+  conversation snapshot. Different mechanism, larger fix — recorded in feature-parity §M + PROGRESS "Next" rather than
+  silently widened into this slice. (Same shape as the Prisme "which OTHER content type resolves this?" question.)
+
 ## 2026-08-31 — a "blocked, needs an SDK look" surface can be unblocked by asking what the sink ALREADY is (slice `story-viewer-dwell`)
 The story-viewer dwell surface sat deferred for three slices with the note "`markViewed(slideId)` carries no
 duration arg → needs an SDK look first." The SDK look took ten minutes and unblocked it entirely: **`StoryApi
@@ -2851,3 +2914,55 @@ Lessons:
 - A cheap guard against re-doing a merged slice: for any candidate, `grep -rl <TypeName>` under `apps/android`
   BEFORE designing it. Here `NotificationTypeToggle`, `NotificationFilterCategory` and the toast dedup window all
   already existed — the whole §M notification area is done through #4493.
+
+## 2026-08-31 — AGP 8.13 wants `android-37`, the SDK only publishes `android-37.0` → local gate is CI-only (slice `conversation-stats-client-fallback`)
+The container's manual SDK bootstrap (cmdline-tools 11076708 AND the newer 13114758, `build-tools;35.0.0`,
+`platforms;android-37.0`) could NOT run any Gradle task: **`Failed to find target with hash string 'android-37'`**.
+AGP 8.13.0 maps `compileSdk = 37` to the bare hash `android-37`, but since the minor-SDK releases (36.1, 37.0,
+37.1…) the API-37 platform is published ONLY as the minor-versioned `platforms;android-37.0` (`sdkmanager
+"platforms;android-37"` → "Failed to find package"). None of these bridged it: a symlink `android-37 → android-37.0`
+("Observed package id … in inconsistent location"); a path-patched copy (`<localPackage path>` + `<api-level>` →
+37, offline so nothing reinstalls — AGP simply doesn't list it); a fresh reinstall via newer cmdline-tools.
+- **CI still resolves it** — `.github/workflows/android.yml` uses `android-actions/setup-android@v4`, and `main`
+  is green on this exact AGP, so the merge gate is real; only the CONTAINER's manual toolchain is the problem.
+  This is precisely ROUTINE §"CI reality": local gate unavailable ⇒ push, open the PR, the **Android** check is
+  the compiler. Don't burn a run trying to out-hack the platform table — verify by adversarial diff-read + CI.
+- A prior run (`notification-center-category-filter`) DID build locally via an `android-37 → android-37.0`
+  symlink; that was before `main` moved ~780 commits. If AGP or the SDK snapshot bumped since, the symlink trick
+  is dead — reach for CI, not another sed of `package.xml`.
+
+## 2026-08-31 — server-first with a client fallback is the stats-dashboard shape of cache-first (slice `conversation-stats-client-fallback`)
+The pattern that unlocked a whole maturity arm: **a screen fed by a server aggregation should compute the same
+figures from the data it ALREADY holds, project BOTH through one path, and keep the local snapshot when the
+network fails.** iOS does this implicitly (`serverStats?.x ?? clientComputed.x`); Android had server-only and
+blanked to an error on `NetworkResult.Failure`. The elegant port: `clientComputed(...)` returns the SAME
+`ConversationMessageStatsResponse` the server does, so the existing `project()` renders either — no divergent
+render path, and the failure branch is a one-liner (`if (fallback != null) keep else error`).
+- **A single richer input beats twin inputs.** The ViewModel took `List<String>` (sentiment only); the fallback
+  needs sender/attachments/day too. Rather than pass both a string list AND a message list (divergent twins),
+  the load signature became one `List<ClientStatMessage>` and sentiment derives from `it.content`.
+- **Grouping keys expose data-shape gaps.** iOS groups participants by display name (two "Sam"s merge); keying
+  by id is a free SOTA win in the pure port. But the Android bubble layer carries NO author id and NO video
+  flag — so the `BubbleContent → ClientStatMessage` mapper coarsens (own→`__me__`, video→image). Keep such
+  coarsening in the WIRING mapper, never in the pure core, and document it: the server split stays authoritative.
+
+## 2026-08-31 — "a preference is only real where it is APPLIED, and a message has more than one delivery path" (slice `push-foreground-presentation-gate`)
+The in-app toast (`NotificationToastPolicy`) already honoured push-master / quiet-hours / per-type toggles, so the
+notification preferences LOOKED done. But the SAME message reaches the user by a SECOND path — a FCM banner — and
+`MeeshyFcmService.handleMessagePush` posted one for every foreground push with ZERO gate: a muted type, quiet hours,
+even the conversation on screen still buzzed, and a socket-delivered event double-showed (banner + toast). iOS had
+lived this exact bug and fixed it with `NotificationPresentationResolver`.
+- **The lesson generalises the Prisme "who AFFICHE / what travels À CÔTÉ" family to PREFERENCES:** the question to a
+  preference is not "is it read somewhere?" but "is it read on EVERY path that surfaces the thing it governs?". A
+  toggle honoured on one delivery path and ignored on another is a control without full effect (loi 4).
+- **Reuse beat re-derivation:** the gate is `DndWindow.isActive` + `NotificationTypeToggle.isEnabled` composed with
+  two new branches (on-screen thread, socket-alive dedup) — NOT a second copy of the DND/type logic. A divergent
+  second gate is how the toast and the banner would drift apart the next time a type is added.
+- **A background component needs a process-level seam for nav truth.** The active-thread id lived only inside a
+  ViewModel; the FCM service has none. A `@Singleton ActiveConversationStore` written at the ONE existing nav-truth
+  site (the banner host's active-context effect) carries it across the process boundary — cheaper and safer than
+  threading it through the push payload. Deferred (tracked): fold the toast/banner VMs' own per-instance tracking
+  onto this store so there is a single active-thread SSOT.
+- **`.badge` is an iOS-only presentation option.** Android's app-icon badge is a side effect of a posted
+  notification, not an independent option, so "badge only" collapses to Suppress. Documented in the policy, not
+  silently dropped.

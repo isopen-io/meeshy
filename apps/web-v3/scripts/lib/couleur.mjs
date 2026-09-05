@@ -54,17 +54,53 @@ export const contraste = (a, b) => {
 
 const ALIAS = /^var\(\s*(--[\w-]+)\s*\)$/;
 
+// UN VOILE — `color-mix(in srgb, A p%, B)`. La charte (§ 12.5 règle 11) fait
+// entrer quatre jetons de cette forme dans la table, et un fond qu'on ne sait
+// pas CALCULER est un fond qu'on ne sait pas MESURER : `contrastesInsuffisants`
+// rendait alors « paire non résolue », c'est-à-dire une infraction permanente,
+// pour un jeton parfaitement lisible. La seule interpolation reconnue est
+// `srgb` — c'est celle que les feuilles écrivent, et interpoler dans un espace
+// perceptuel demanderait une conversion dont aucune valeur de la table n'a
+// besoin. Tout autre espace rend `null` : « je n'ai pas su », jamais un chiffre
+// approché.
+const MELANGE = /^color-mix\(\s*in\s+srgb\s*,\s*(.+?)\s+([\d.]+)%\s*,\s*(.+?)\s*\)$/;
+
+const canal = (a, b, part) => Math.round(a * part + b * (1 - part));
+
+const enHex = (octets) =>
+  `#${octets.map((octet) => octet.toString(16).padStart(2, '0')).join('')}`;
+
 // Bornée par le nombre de jetons de la table : au-delà, la chaîne d'alias se
 // mord la queue et il vaut mieux rendre `null` que boucler.
 export const resout = (table, nom) => {
   let valeur = table[nom];
   for (let saut = 0; saut <= Object.keys(table).length; saut += 1) {
     if (valeur === undefined) return null;
-    const alias = ALIAS.exec(valeur.trim());
-    if (alias === null) return estHex(valeur) ? valeur.trim().toLowerCase() : null;
+    const texte = valeur.trim();
+    const melange = MELANGE.exec(texte);
+    if (melange !== null) return melangeResolu(table, melange);
+    const alias = ALIAS.exec(texte);
+    if (alias === null) return estHex(texte) ? texte.toLowerCase() : null;
     valeur = table[alias[1]];
   }
   return null;
+};
+
+// Les deux termes d'un voile sont eux-mêmes des jetons : ils se résolvent par le
+// même chemin, ce qui rend un voile POSÉ SUR un voile calculable sans cas
+// particulier.
+const terme = (table, texte) => {
+  const alias = ALIAS.exec(texte.trim());
+  if (alias !== null) return resout(table, alias[1]);
+  return estHex(texte) ? texte.trim().toLowerCase() : null;
+};
+
+const melangeResolu = (table, [, premier, pourcentage, second]) => {
+  const [a, b] = [terme(table, premier), terme(table, second)];
+  if (a === null || b === null) return null;
+  const part = Number(pourcentage) / 100;
+  const [octetsA, octetsB] = [octets(a), octets(b)];
+  return enHex(octetsA.map((valeur, rang) => canal(valeur, octetsB[rang], part)));
 };
 
 export const arrondi = (rapport) => Math.round(rapport * 100) / 100;

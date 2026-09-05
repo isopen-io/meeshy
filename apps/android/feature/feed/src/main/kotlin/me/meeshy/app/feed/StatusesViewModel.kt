@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.status.StatusBarCache
@@ -67,6 +68,7 @@ class StatusesViewModel @Inject constructor(
     private val statusBarCacheRepository: StatusBarCacheRepository,
     private val socialSocket: SocialSocketManager,
     private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
@@ -185,7 +187,12 @@ class StatusesViewModel @Inject constructor(
      */
     fun markStatusViewed(statusId: String) {
         if (statusId.isBlank()) return
-        sessions = sessions.begin(EngagementSurface.STATUS_BUBBLE, statusId, clock.nowMillis())
+        sessions = sessions.begin(
+            EngagementSurface.STATUS_BUBBLE,
+            statusId,
+            clock.nowMillis(),
+            consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+        )
         viewModelScope.launch {
             try {
                 postRepository.viewPost(statusId)

@@ -106,7 +106,7 @@ struct PhonebookListView: View {
             let base = String(localized: "contacts.phonebook.filter.meeshy", defaultValue: "Sur Meeshy", bundle: .main)
             return count > 0 ? "\(base) (\(count))" : base
         case .invitable:
-            return String(localized: "contacts.phonebook.filter.invitable", defaultValue: "A inviter", bundle: .main)
+            return String(localized: "contacts.phonebook.filter.invitable", defaultValue: "À inviter", bundle: .main)
         }
     }
 
@@ -155,7 +155,7 @@ struct PhonebookListView: View {
     private var platformSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(String(localized: "contacts.phonebook.platform-results", defaultValue: "Sur Meeshy, hors de ton repertoire", bundle: .main))
+                Text(String(localized: "contacts.phonebook.platform-results", defaultValue: "Sur Meeshy, hors de ton répertoire", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
 
@@ -192,7 +192,7 @@ struct PhonebookListView: View {
         EmptyStateView(
             icon: "person.crop.circle.badge.questionmark",
             title: viewModel.isEmpty
-                ? String(localized: "contacts.phonebook.empty", defaultValue: "Repertoire vide", bundle: .main)
+                ? String(localized: "contacts.phonebook.empty", defaultValue: "Répertoire vide", bundle: .main)
                 : String(localized: "contacts.phonebook.no-results", defaultValue: "Aucun résultat", bundle: .main),
             subtitle: viewModel.isEmpty
                 ? String(localized: "contacts.phonebook.empty-hint", defaultValue: "Synchronise ton carnet d'adresses pour retrouver tes contacts sur Meeshy", bundle: .main)
@@ -227,7 +227,7 @@ struct PhonebookListView: View {
         }
         guard let phoneNumber = contact.invitablePhoneNumber else {
             FeedbackToastManager.shared.showError(
-                String(localized: "contacts.phonebook.invite-no-number", defaultValue: "Ce contact n'a pas de numero", bundle: .main)
+                String(localized: "contacts.phonebook.invite-no-number", defaultValue: "Ce contact n'a pas de numéro", bundle: .main)
             )
             return
         }

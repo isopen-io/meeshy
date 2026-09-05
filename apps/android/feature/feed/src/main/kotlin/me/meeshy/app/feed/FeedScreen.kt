@@ -64,8 +64,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -125,7 +123,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 fun FeedScreen(
     onPostClick: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
-    onOpenSaved: () -> Unit = {},
+    onOpenReels: () -> Unit = {},
+    onOpenNearby: () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -141,24 +140,10 @@ fun FeedScreen(
     MeeshyBackground {
     Scaffold(
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                    titleContentColor = MeeshyTheme.tokens.textPrimary,
-                ),
-                title = {
-                    Text(stringResource(R.string.feed_title), fontWeight = FontWeight.Bold)
-                },
-                actions = {
-                    IconButton(onClick = onOpenSaved) {
-                        Icon(
-                            imageVector = Icons.Outlined.BookmarkBorder,
-                            contentDescription = stringResource(R.string.bookmarks_title),
-                            tint = MeeshyTheme.tokens.textPrimary,
-                        )
-                    }
-                },
+            FeedHeader(
+                listState = listState,
+                onOpenReels = onOpenReels,
+                onOpenNearby = onOpenNearby,
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },

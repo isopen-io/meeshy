@@ -1,0 +1,264 @@
+import SwiftUI
+import PhotosUI
+import MeeshySDK
+import MeeshyUI
+
+/// **Les présentations du meuble — une feuille nommée, et les sélecteurs
+/// système qui n'en sont pas.**
+///
+/// Extrait de `MeeshyComposerHost.swift` le 2026-08-31 (#4632), qui franchissait
+/// le plafond de 1 100 lignes. Le nom suit le motif `MeeshyComposerHost+*` :
+/// c'est ce qui garde le fichier DANS l'unité que `AppSourceGuard` lit, et donc
+/// l'inventaire des portails vivant.
+extension MeeshyComposerHost {
+
+    /// **Les PORTAILS d'ingestion appartiennent au MEUBLE, jamais à une
+    /// surface** (#4120).
+    ///
+    /// Ils vécurent attachés à l'expression `documentSurface` — et le
+    /// doc-comment du bloc affirmait déjà la bonne règle sans que le code la
+    /// tienne : « trois sélecteurs montés ICI, **sur le meuble**, jamais dans
+    /// `ComposerDocumentSurface` ». « Ici » désignait la surface, pas le meuble,
+    /// et la différence n'a coûté RIEN tant qu'il n'y eut qu'une vue à monter.
+    ///
+    /// #4070 en a monté quatre. Les quatre portes du rail *leading* posaient
+    /// alors `showsPhotoPicker = true` / `showsLocationPicker` /
+    /// `showsAudioComposer` / `showsReferencePicker` **sans qu'aucune vue à
+    /// l'écran ne les lise** : chaque maillon correct, et la chaîne ne
+    /// transportait personne.
+    ///
+    /// La règle est donc géographique, et c'est ce qui la rend gardable : un
+    /// portail se monte **au-dessus de l'aiguillage**, là où les quatre vues
+    /// passent. `ComposerIntakePortalsTests` en tient l'INVENTAIRE — tout
+    /// `@State private var shows…` du meuble doit avoir son lecteur ici, sans
+    /// quoi le contrôle qui l'écrit est inerte sur trois surfaces sur quatre.
+    ///
+    /// Le contrôle de découvrabilité y est aussi, et pour la même raison : un
+    /// lieu posé depuis la scène doit pouvoir se retirer.
+    var surfaceWithIntakePortals: some View {
+        surface
+        // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
+        // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
+        // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
+        // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
+        // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
+        // et des notices — bien plus large qu'une capsule, il ne doit
+        // recouvrir ni le texte ni la rangée d'outils. Gaté sur
+        // `documentOffersNearbyDiscoverability`, jamais sur `documentLocation
+        // != nil` seul : l'audience compte autant que le lieu.
+        .safeAreaInset(edge: .bottom) {
+            // **#4034 — le composant se monte sur le LIEU, plus sur l'opt-in.**
+            // Il était gaté par `documentOffersNearbyDiscoverability` (lieu ET
+            // audience publique) à l'époque où le nom du lieu vivait ailleurs,
+            // dans un chip de la rangée d'outils. Ce chip est retiré — l'info
+            // vit dans l'entête du composant —, si bien que garder l'ancienne
+            // garde aurait fait DISPARAÎTRE de l'écran le lieu d'un post privé,
+            // avec le seul moyen de le retirer. La découvrabilité, elle, reste
+            // gouvernée par sa règle : c'est `offersDiscoverability` qui la
+            // porte À L'INTÉRIEUR du composant.
+            if let place = documentLocation {
+                NearbyDiscoverabilityControl(
+                    choice: $documentDiscoverability,
+                    accentColor: MeeshyColors.brandPrimaryHex,
+                    placeName: MediaKindLabel.placeTitle(name: place.name, address: place.address),
+                    offersDiscoverability: documentOffersNearbyDiscoverability,
+                    onRemovePlace: { documentLocation = nil }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
+        }
+        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
+        .confirmationDialog(ComposerMediaSourcePolicy.chooserTitle,
+                            isPresented: $showsMediaSourceChooser,
+                            titleVisibility: .visible) {
+            // Les boutons SORTENT de la règle : les écrire à la main ferait de
+            // ce bloc une seconde liste, que `allowsCapture` cesserait de
+            // gouverner au premier oubli.
+            ForEach(ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture),
+                    id: \.self) { source in
+                Button(ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool(source))) {
+                    presentMediaIntake(source)
+                }
+            }
+            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { }
+        }
+        // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
+        // sur la surface qui l'affiche. Un instantané pris seulement pendant
+        // que la scène est montée perdrait tout ce que le document a posé
+        // avant elle — un fond choisi, un média attaché —, si bien que le
+        // premier « annuler » sauterait par-dessus les gestes que l'auteur
+        // vient de faire. Ce qui est SCÈNE-seul, c'est le CONTRÔLE, pas la
+        // collecte.
+        //
+        // `historyTrigger` est déjà débouncé côté SDK ; la dédup du store fait
+        // qu'un cycle sans changement réel des slides est un no-op.
+        .onReceive(viewModel.historyTrigger) { _ in
+            viewModel.pushHistorySnapshot()
+        }
+        // La trajectoire part de l'état d'OUVERTURE : sans ce premier
+        // instantané, le plus ancien « annuler » ramènerait au premier geste
+        // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
+        // tout défaire.
+        .task { viewModel.seedHistory() }
+        // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
+        // acceptés que la bande du document, par la même source. Deux
+        // chargements auraient donné deux listes à faire diverger, et deux
+        // moments où « aucun ami » se lit différemment.
+        .task { await sceneMentionBox.loadCandidates() }
+        // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
+        // ici disait « montés ICI, sur le meuble, jamais dans
+        // `ComposerDocumentSurface` » — et « ici » désignait l'expression
+        // `documentSurface`. La phrase était juste, le placement ne l'était
+        // pas : c'est ce demi-pas qui a rendu les quatre portes du rail
+        // inertes (#4120). Ils sont désormais où la phrase les mettait.
+        // **LA feuille du meuble — une seule, et c'est le correctif de #4467.**
+        //
+        // Le `switch` est exhaustif : un neuvième portail ne compile pas tant
+        // qu'il n'a pas dit ce qu'il montre. C'est la même discipline que les
+        // portes du rail, appliquée à la présentation — et elle remplace huit
+        // modificateurs que rien n'empêchait de s'activer ensemble.
+        // **`onDismiss` est le point de reprise d'un sélecteur SYSTÈME** (#4632).
+        // Un `.fileImporter` ne peut pas s'ouvrir tant que cette feuille occupe
+        // le présentateur ; la porte « Fichiers » ferme donc le portail et pose
+        // son intention, que la fermeture EFFECTIVE consomme ici. Poser les deux
+        // dans la même transaction est exactement ce qui rendait le bouton
+        // inerte — sans crash ni trace, l'état invalide n'étant pas représentable
+        // côté `ComposerPortal` mais parfaitement représentable en travers de lui.
+        // Le contexte d'édition d'un son s'éteint À LA FERMETURE, jamais
+        // seulement au retour de « Valider » : la feuille se referme aussi d'un
+        // glissement, et un contexte survivant ferait rouvrir « Création audio »
+        // sur le son précédent, prêt à le remplacer sans l'avoir demandé.
+        // **Les DEUX contextes s'éteignent ici** — celui du son de contenu
+        // (#4657) et celui du son de fond (#4668). N'en éteindre qu'un ferait
+        // survivre l'autre, et `applyCreatedAudio` supprimerait au retour un
+        // objet que l'auteur n'avait pas ouvert.
+        // **LES SIX MAGASINS DE LA COMPOSITION — posés ICI, au-dessus du
+        // `.sheet`** (régression mesurée au simulateur le 2026-09-05, directive
+        // porteur : « la vue de sticker n'a plus les offres de sticker de
+        // position alors que j'en avais construit il y a peu »).
+        //
+        // ## Le défaut, et pourquoi rien ne rougissait
+        //
+        // Ils vivaient sur `composerSurface`, qui est un DESCENDANT de cette
+        // expression. L'environnement SwiftUI descend : une feuille présentée
+        // ici hérite de l'environnement de CE point, jamais de celui d'un
+        // enfant. `StickerPickerView`, montée par le `.sheet` ci-dessous,
+        // lisait donc `\.stickerNearbyPlaces` et `\.storyStickerLibrary` à
+        // `nil` — et `StickerPaletteTab.offered(hasLibrary:hasNearbyPlaces:)`
+        // faisait exactement ce qu'on lui demande : elle retirait les deux
+        // sections.
+        //
+        // > **Deux décisions justes, et un signal orphelin entre les deux.**
+        // > Injecter au plus près de ce qui consomme est une bonne règle ;
+        // > présenter TOUS les portails à un seul endroit (#4467) en est une
+        // > autre. Leur somme place l'injecteur SOUS le présentateur, et une
+        // > somme n'a pas de site où rougir : la loi 4 était tenue à la lettre
+        // > — un onglet non servi est absent — sur une capacité qui n'était
+        // > pas absente.
+        //
+        // La question qui l'attrape n'est pas « l'injecteur est-il posé ? »
+        // mais **« est-il posé AU-DESSUS de tout ce qui le lit ? »** — et la
+        // réponse se lit dans l'arbre de vues, jamais dans le fichier qui
+        // porte l'injecteur.
+        //
+        // Les six voyagent ENSEMBLE et non un par un : ils partagent la même
+        // condition d'être vus (être au-dessus du présentateur), et les
+        // séparer rejouerait le défaut sur celui qu'on aurait oublié. Cinq des
+        // six alimentent une feuille ; `storyPaste` alimente AUSSI le canvas,
+        // qui est plus bas — un injecteur posé haut sert les deux, l'inverse
+        // n'est pas vrai.
+        .storyLocationPickerProvided()
+        .storyCameraCaptureProvided()
+        .storyRecentCameraRollProvided()
+        .storyPasteProvided()
+        .storyStickerLibraryProvided()
+        // L'onglet « Lieu » de la palette (#4579). Absent — jamais grisé —
+        // quand l'autorisation de localisation est refusée : c'est l'injecteur
+        // qui le décide, pas la feuille.
+        .stickerNearbyPlacesProvided()
+        .sheet(item: $presentedPortal,
+               onDismiss: { forgetEditedSound(); resumePendingPresentation() }) { portail in
+            switch portail {
+            case .location:     documentLocationPickerSheet
+            case .emoji:        emojiPickerSheet
+            case .sticker:      stickerPickerSheet
+            case .sound:        composerSoundSheet
+            case .soundLibrary: soundLibrarySheet
+            case .reference:    referencePickerSheet
+            case .language:     documentLanguagePickerSheet
+            case .camera:       documentCameraSheet
+            case .hashtag:      composerHashtagSheet
+            case .audience:     composerAudienceSheet
+            }
+        }
+        // **L'éditeur d'objet plein écran** (#4634). Il vit AU-DESSUS de
+        // l'aiguillage pour la même raison que les portails : ouvert depuis la
+        // scène, il doit survivre à un changement de surface.
+        //
+        // `fullScreenCover` et `.sheet` sont deux présentations du MÊME
+        // présentateur — SwiftUI n'en honore qu'une. L'exclusion est tenue à la
+        // SOURCE (`openObjectEditor` ferme le portail avant d'ouvrir) plutôt
+        // qu'ici : une garde posée sur le lecteur laisserait l'état invalide se
+        // former, quand la fermer chez l'écrivain le rend impossible.
+        .fullScreenCover(item: $editedObject) { objet in
+            ComposerObjectEditorView(
+                viewModel: viewModel,
+                // La MÊME boîte que la surface du dessous : le portail charge
+                // ses candidats une fois (`.task` plus bas), et l'écran modal
+                // — où la frappe a réellement lieu depuis #4634 — la reçoit.
+                mentionBox: sceneMentionBox,
+                objectId: objet.id,
+                aspectRatio: viewModel.currentCanvasRatio,
+                plateauTint: tint.color,
+                sceneImages: viewModel.loadedImages,
+                sceneStickerAnimations: viewModel.loadedStickerAnimations,
+                sceneImagesVersion: viewModel.loadedImagesVersion,
+                onClose: { closeObjectEditor() },
+                // Le plan 2D peut désigner un autre objet : c'est le MEUBLE qui
+                // possède « quel objet est ouvert », et deux sources pour ce
+                // fait divergeraient au premier tap sur une barre voisine.
+                onSelectObject: { id in editedObject = ComposerEditedObject(id: id) },
+                // **La carte vit au MEUBLE** (#4756) : c'est lui qui greffe la
+                // charge d'accessibilité sur ce que l'atelier remet au publieur
+                // (`accessibilityCarryingComposerCaptions`). Un magasin tenu par
+                // l'éditeur mourrait à sa fermeture — le défaut que la légende a
+                // payé avant #4890.
+                mediaAltText: mediaAltBinding(for: objet.id),
+                // **La section par laquelle on ENTRE** (2026-09-05). Un jeton
+                // de l'inspecteur nomme un réglage précis ; l'écran s'ouvre
+                // dessus au lieu de le faire rechercher. `nil` pour les autres
+                // portes — appui long, création, plan 2D — qui ne désignent
+                // rien.
+                //
+                // L'ordre des arguments SUIT la déclaration : cette vue n'a pas
+                // d'`init` écrit à la main, donc son init memberwise impose
+                // l'ordre des propriétés.
+                initialSection: objet.section
+            )
+        }
+        .photosPicker(
+            isPresented: $showsPhotoPicker,
+            selection: $pickedPhotoLibraryItems,
+            maxSelectionCount: 10,
+            matching: .any(of: [.images, .videos])
+        )
+        .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
+            guard !items.isEmpty else { return }
+            let picked = items
+            pickedPhotoLibraryItems = []
+            Task { await ingestPhotoLibraryItems(picked) }
+        }
+        .fileImporter(
+            isPresented: $showsFileImporter,
+            // **Le filtre et la destination suivent l'INTENTION** (#4632). Un
+            // `.item` figé laissait choisir un PDF pour un son de fond, et
+            // l'ingestion versait tout dans la liste média du document — un
+            // audio choisi pour la scène n'y arrivait jamais comme son.
+            allowedContentTypes: fileImportIntent.contentTypes,
+            allowsMultipleSelection: fileImportIntent.allowsMultipleSelection
+        ) { result in
+            Task { await ingestFileImporterResult(result) }
+        }
+    }
+}

@@ -58,17 +58,19 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
 
     /// Le sélecteur de lieu — MapKit, permissions, app-side.
     case location
-    /// Le composeur d'audio : enregistrer un vocal, le transcrire.
-    case audio
     /// Le sélecteur d'emoji — il INSÈRE dans le texte du document.
     case emoji
     /// La bibliothèque de stickers — elle POSE un objet sur la scène.
     case sticker
-    /// L'étagère des sons : emprunter une piste.
-    /// **LA feuille du son (#4483).** Elle remplace un choix à deux options qui
-    /// n'atterrissait pas au même endroit selon la branche : emprunter posait un
-    /// son SUR LA SCÈNE, enregistrer le versait dans la liste média du DOCUMENT.
-    /// Une porte, une feuille, une destination.
+    /// **LA feuille de CRÉATION AUDIO (#4483, fusionnée #4657).**
+    ///
+    /// #4483 avait déjà remplacé un choix à deux options qui n'atterrissait pas
+    /// au même endroit selon la branche. #4657 ferme le dernier doublon : le
+    /// portail `.audio`, qu'ouvrait l'outil « Vocal », montait une SECONDE vue
+    /// d'enregistrement dont tout — capture, import, étagère, transcription —
+    /// existait déjà ici. Les deux entrées ouvrent désormais cette feuille ; ce
+    /// qui les distinguait, la DESTINATION, s'y choisit au lieu de se deviner
+    /// au bouton pressé.
     case sound
     /// L'étagère seule, ouverte DEPUIS la feuille du son.
     case soundLibrary
@@ -78,6 +80,20 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
     case language
     /// La caméra.
     case camera
+
+    /// **Le sélecteur de HASHTAGS** (#4636). Il n'ajoute pas à une liste : il
+    /// écrit dans le texte de la publication, seule source des balises
+    /// (`ComposerHashtags`).
+    case hashtag
+
+    /// **L'AUDIENCE — la vue `2l`, en feuille.**
+    ///
+    /// Elle était un `Menu` posé sur la pastille du socle : six entrées sans
+    /// compteur, sans les mentions qu'elles gouvernent, sans les hashtags qui
+    /// partent avec, et sans dire que l'audience appartient à la PUBLICATION.
+    /// Un menu contextuel peut lister des choix ; il ne peut pas montrer leurs
+    /// conséquences, et c'est tout ce que cet écran a à faire.
+    case audience
 
     public var id: String { rawValue }
 }

@@ -173,8 +173,14 @@ struct LoginView: View {
                 .environmentObject(authManager)
         }
         .fullScreenCover(isPresented: $showRegister) {
-            OnboardingFlowView(onComplete: { showRegister = false })
-                .environmentObject(authManager)
+            // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
+            // se contente de refermer : la session est déjà appliquée par
+            // `AuthManager.registerThrowing`, et `MeeshyApp` bascule sur
+            // `AdaptiveRootView` à l'instant où `isAuthenticated` passe.
+            SignupView(
+                onComplete: { showRegister = false },
+                onSwitchToLogin: { showRegister = false }
+            )
         }
         .onAppear {
             // Halo décoratif, même traitement que l'écran de démarrage : sous

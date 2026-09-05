@@ -3154,6 +3154,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       it survives a fetch failure); `ConversationStatsSheet` renders the three emoji/percent columns
       + a segmented success/warning/error bar. Strings en/fr/es/pt. Box now `[x]`. (The `AI
       participant persona` box below, same `/analysis` endpoint, shipped separately 2026-08-22.)
+      **Client-side fallback landed 2026-08-31** (slice `conversation-stats-client-fallback`) — the
+      dashboard was SERVER-ONLY: a failed/lagging `/stats` fetch showed an error screen even though the
+      loaded page already holds the messages to compute the same figures (iOS's `clientComputed*`
+      fallback). New pure `ConversationStatsProjection.clientComputed(...)` (+ `ClientStatMessage` /
+      `ClientAttachmentKind`) reduces the on-screen messages into the SAME `ConversationMessageStatsResponse`
+      the server returns — messages, words, characters, content-type counts, per-participant shares
+      (grouped by **id**, SOTA over iOS's group-by-display-name), and per-day activity — so a single
+      projection path renders either source. The ViewModel now seeds the sheet from that snapshot
+      INSTANTLY (cache-first, no spinner) and, on a fetch failure, KEEPS it instead of erroring
+      (offline graceful degradation). `BubbleContent → ClientStatMessage` mapping extracted to its own
+      file (a video thumbnail folds into the IMAGE tally — the bubble layer carries no video/author-id;
+      the server split stays authoritative). Matures dimensions 2/8/13 (performance, UX offline, complétude).
 - [x] AI participant persona profiles + trait bars — **shipped 2026-08-22** (slice
       `conversation-analysis-personas`). The `ParticipantProfile`/`ParticipantTraits` model tree shipped
       orphaned (grep-confirmed zero consumers); this slice turns it real. Pure
@@ -3204,9 +3216,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation (RED proof): dropping the reduction-target re-validation (`… && reduced in supportedCodeSet` →
       `… reduced`) fails **exactly** `normalize_rejectsReductionWhoseTargetIsNotSupported` (14 run, 1 failed,
       no collateral). `:core:model` + `:sdk-ui` + all feature-module `testDebugUnitTest` green; full
-      `:app:assembleDebug` → BUILD SUCCESSFUL. **Follow-up:** app-side device-locale sourcing — inject
-      `Locale.getDefault()` into the resolution context + send the `X-Device-Locale` header (iOS parity) so
-      the gateway persists it; the pure resolution + API-decoded field are complete.
+      `:app:assembleDebug` → BUILD SUCCESSFUL. **Header sourcing shipped 2026-09-01** (slice
+      `device-locale-header`): the client now SENDS `X-Device-Locale` on every request, closing the loop so
+      the 4th-priority arm — dead until now on Android (nothing ever fed `User.deviceLocale`) — actually
+      fires. New pure `:core:model` `DeviceLocaleTag.of(locale) → String?`: the RAW BCP-47 tag
+      (`Locale.getDefault().toLanguageTag()`, so `"fr-FR"`/`"zh-Hant-HK"` travel intact for the gateway to
+      reduce, exactly as iOS's `Locale.current.identifier`), or `null` when there is no usable language subtag
+      (`Locale.ROOT`/region-only → `"und"`/`"und-FR"`, or an ill-formed subtag → `"und"`) so the header is
+      omitted rather than sending `"und"` on every call. New `:core:network` `DeviceLocaleInterceptor` (twin
+      of `ClientCapabilitiesInterceptor`): reads the locale per request through an injectable provider, adds
+      the header, never clobbers a caller-set one, sends nothing for an unusable locale; registered in
+      `MeeshyApi`'s OkHttp chain. +12 tests (8 `DeviceLocaleTagTest` — region tag / bare language / script+
+      region verbatim / regional variant / root omitted / region-only omitted / ill-formed omitted / legacy→
+      modern; 4 `DeviceLocaleInterceptorTest` — announced / unusable→no-header / caller-header-wins / read-
+      per-request). Mutation (RED proof): dropping the `und` guard fails **exactly** the ill-formed-subtag
+      test (14 run, 1 failed, no collateral). **Remaining follow-up:** injecting the LIVE `Locale.getDefault()`
+      straight into the client-side resolution context (an optimisation over iOS, which resolves off the
+      persisted `User.deviceLocale`) is deliberately deferred to avoid diverging from the server-persisted
+      value — tracked as a separate note, not a gap.
 - [~] Original exploration: long-press → « Voir l'original / la traduction »
       (toggle par message, builder Prisme-aware) ; flag strip read-only shipped
       (slice `chat-translation-language-strip`, 2026-07-10) ; **tap-to-switch active language shipped**
@@ -5214,6 +5241,32 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       a same-slide re-emit does not restart the dwell clock; dismissing ends the current dwell; a failed
       dwell record does not crash or disturb the viewer. RED-proven by mutation: neutralising the `begin`
       fails EXACTLY the 6 dwell-recording tests while the 2 assert-no-record tests stay green.
+      **Analytics-consent gate shipped 2026-09-01** (slice `engagement-consent-gate-detail`): the four
+      dwell surfaces reported watch-time regardless of the reader's `allowAnalytics` privacy toggle,
+      while iOS gates ALL engagement at `EngagementTracker.begin`'s `guard consentProvider()` — a
+      dimension-1 (Sécurité/privacy) parity gap and a dead privacy control. The gate now lives on the
+      one machine every surface shares: `EngagementSessions.begin` gained a `consentGranted: Boolean`
+      (default `true`, the domain default) whose `false` arm returns inert BEFORE the topmost-owns-the-clock
+      pause — no session opens, so `end` reports nothing, and a non-consented overlay never pauses the
+      consented session underneath (the guard-first placement mirrors iOS returning before `pauseTop`).
+      The deduplicated `viewPost` impression stays **un-gated** — it is a view-count credit, not analytics
+      telemetry, exactly as iOS fires `viewPost` regardless of consent. **PostDetail wired this slice**
+      (`PrivacyPreferencesStore` injected; `beginDwell` passes `preferences.value.allowAnalytics`). +3
+      pure `EngagementSessionsTest` (non-consented begin opens no session / reports nothing; non-consented
+      begin does not pause the running session underneath — 1200 ms vs the consented 1000; explicit
+      `consentGranted=true` parity) + 3 `PostDetailViewModelTest` (consent withheld → no dwell record but
+      impression still credited; consent granted → dwell records). RED-proven by mutation: neutralising the
+      guard fails EXACTLY the 2 consent pure tests. **All four dwell surfaces now obey the toggle
+      (slice `engagement-consent-gate-surfaces`, 2026-09-01):** `ReelsViewModel`, `StatusesViewModel`
+      and `StoryViewerViewModel` each inject the existing Hilt-provided `PrivacyPreferencesStore` and
+      pass `consentGranted = preferences.value.allowAnalytics` into their `begin` call, closing the
+      dimension-1 gap the detail slice opened — the privacy toggle is now live across reels / post
+      detail / status bubble / story viewer. Each surface's un-gated impression stays un-gated (status
+      still fires `viewPost(id)` on open; story still fires `storyRepository.markViewed`). +4 behavioural
+      tests (reels: withheld consent → no dwell record; status: withheld → no dwell but impression still
+      credits + a second test the impression fires; story: withheld → no dwell record), RED-proven by
+      mutation: stripping the reels wiring fails EXACTLY that surface's consent test (1 of 18), the other
+      17 green.
       **Still open (deferred, deliberately narrower than iOS):**
       watch-time samples + completion from the reels player (the `end` params exist, fed dwell-only for
       now — Android reels loop `REPEAT_MODE_ONE`, so completion is not meaningful there), micro-action
@@ -6552,6 +6605,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS's `notifToggle` helper carries no such dependency for any of its rows, and email is a
       genuinely independent delivery channel. +1 test (`setEmailEnabled_persists`). 1 new string
       across EN/FR/ES/PT.
+      **Foreground-push presentation gate landed 2026-08-31** (slice `push-foreground-presentation-gate`)
+      — those preferences (push master · quiet hours · per-type toggles) were HONOURED by the in-app toast
+      (`NotificationToastPolicy`) but IGNORED by the FCM banner: `MeeshyFcmService.handleMessagePush` raised
+      a system banner for EVERY foreground push with no gate — push disabled, inside quiet hours, a muted
+      type, or the very conversation on screen still buzzed (the iOS pre-`NotificationPresentationResolver`
+      bug). New pure `:core:model` `PushPresentationPolicy.decide(...)` → `PushPresentationDecision`
+      (`Suppress` | `Alert(playSound)`): on-screen thread → suppress; socket alive → suppress (the toast
+      already surfaces it, no double banner); socket down → gate exactly as a background push
+      (`pushEnabled` → `DndWindow.isActive` → `NotificationTypeToggle.isEnabled`, all REUSED, no
+      re-implementation); a raised banner follows `soundEnabled` via `setSilent`. New `:sdk-core`
+      `@Singleton ActiveConversationStore` carries the one on-screen-thread nav truth across the process
+      boundary (written at the root banner host's active-context effect, read by the service). +15 pure
+      tests, RED-proven. Matures dimensions 1/5/8/13 (right people/attention, accessibility of quiet hours,
+      offline-first delivery doctrine, completeness). iOS `.badge` presentation option has no Android analog
+      (the app-icon badge is a side effect of a posted notification) — deliberately not modelled.
 - [x] Privacy settings (visibility, contacts, media/data, encryption preference) — **shipped**
       (slice `settings-privacy-preferences`, 2026-07-11). Port of iOS `PrivacySettingsView` +
       the visibility/contacts/media legs of `PrivacyPreferences`. **Reuses the existing**
@@ -6847,9 +6915,45 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Still open (§M) — the deeper twin:** two orchestrators (`NotificationBannerViewModel` LIVE
       vs `NotificationToastViewModel` orphan) still wrap the SAME `MeeshyNotificationToast` atom off
       the SAME socket seam. Dedup + clock are now shared, but the two VMs+Hosts should collapse into
-      ONE (the banner's framing+navigation is the superset; the toast's `onConversationOpened/Closed`/
-      `onPostOpened/Closed` hooks are richer than the banner's `setActiveContext`). A product-level
-      merge (retire the toast host, fold its hooks into the banner, then wire it) is a separate slice.
+      ONE (the banner's framing+navigation is the superset). A product-level merge (retire the toast
+      host, fold its remaining hooks into the banner, then wire it) is a separate slice.
+- [x] In-app banner pulls down when the reader opens its thread — **shipped 2026-08-31** (slice
+      `banner-active-context-dismiss`): the LIVE `NotificationBannerViewModel.setActiveContext` set the
+      on-screen context (and published it process-wide for the FCM gate) but did NOT dismiss a banner
+      already on screen for the very conversation/post the reader just opened — iOS
+      `NotificationToastManager.onConversationOpened`/`onPostOpened` do exactly that (`if currentToast.
+      conversationId == conversationId { dismissToast() }`), and the orphan toast VM did too, so the
+      live surface was the poorer one (dimension 8 UX + dimension 13 complétude: a banner about thread X
+      kept counting down over the reader's face while they read thread X). This slice closes it AND makes
+      the "belongs to the open thread?" test a single SSOT: new pure `:core:model` `ActiveContextMatch.
+      matches(contentConversationId, contentPostId, activeConversationId, activePostId)` (a null active id
+      never matches — an empty screen silences nothing), which `NotificationToastPolicy` now calls for the
+      FRESH-notification active-screen suppression (behaviour identical — its inline null-guarded pair was
+      the same predicate) and `setActiveContext` calls for the ALREADY-SHOWN banner. +17 tests (11
+      `ActiveContextMatch` covering both arms true/false, both null guards, the OR, all-null; 6
+      `NotificationBannerViewModel`: opening the shown banner's conversation/post dismisses it, a different
+      conversation leaves it, leaving all screens leaves it, no-banner is inert). RED-proven (stripping the
+      predicate's null guards fails 6 predicate + 9 `NotificationToastPolicy` tests — proving the policy
+      genuinely consults it; removing the dismiss wiring fails exactly the two open-the-thread tests).
+      **Local-first group name shipped 2026-09-01** (slice `banner-group-name-favorite-emoji`): the banner's
+      "X dans <groupe>" framing named the group by `customName ?: title` and DROPPED the favorite-classification
+      emoji — the VM doc-comment promised "renommage + emoji favori" but the code only carried the rename, so a
+      thread the reader had starred (⭐️) or classified (🔥) showed a bare name where iOS
+      `NotificationToastManager.ConversationPresentation.composedSubtitle` leads with the favorite (dimension 6
+      Cohérence + dimension 13 Complétude gap; the emoji + local rename live ONLY on the device, the one piece the
+      gateway cannot compose). New pure `:core:model` `ConversationBannerName.composed(customName, title,
+      favoriteEmoji) → String?` (port of iOS `composedSubtitle` + its `name = customName ?? title` resolution):
+      `<favorite> <name>` favorite-first, `<name>` alone with no favorite, blank/whitespace favorite treated as
+      absent (iOS `trimmingCharacters` guard), the rename winning over the server title, and `null` when the device
+      knows no local name at all so `NotificationBannerFraming.present` falls back to the server title (the Android
+      addition over iOS's pure surface). Wired into `NotificationBannerViewModel` (the sole local-name resolver).
+      +11 tests (10 `ConversationBannerNameTest` — favorite-first / no-favorite / blank-favorite / whitespace-favorite
+      trimmed / rename-wins / blank-rename→title still favorite-first / title-only / both-blank→null / both-absent→null
+      / whitespace-name trimmed; +1 `NotificationBannerViewModelTest` — a group banner leads its headline with the
+      local rename + favorite emoji). RED-proven by mutation (dropping the favorite prepend fails exactly the 4
+      favorite-prepend tests, the 6 no-favorite/null tests stay green). **Still open (§M):** the in-app TOAST surface
+      (`NotificationToastHost.notificationToastSubtitle`) still reads the RAW server `conversationTitle` with no
+      local-first name at all (its VM holds no conversation snapshot) — a larger, separate local-first gap.
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only

@@ -19,11 +19,13 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Comment
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +60,9 @@ import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
+/** How many reels from the end of the thread trigger the next cursor page. */
+private const val LOAD_MORE_THRESHOLD = 3
+
 /**
  * Full-screen vertical reel thread (iOS `ReelsPlayerView` parity): one video per page,
  * the visible page plays while the others stay paused. [seed] anchors the thread on a
@@ -75,6 +80,9 @@ fun ReelsScreen(
     // Muet par defaut (autoplay poli) ; le toggle vaut pour toute la session Reels.
     var muted by rememberSaveable { mutableStateOf(true) }
     val shareContext = LocalContext.current
+    // Commentaires en feuille superposee (issue #4815) : le lecteur ne quitte jamais
+    // l'ecran, la video du reel visible continue de jouer sous la feuille.
+    var commentsReelId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(seed) { viewModel.load(seed) }
 
@@ -115,7 +123,12 @@ fun ReelsScreen(
                 LaunchedEffect(pagerState, reelIds) {
                     snapshotFlow { pagerState.currentPage }
                         .distinctUntilChanged()
-                        .collect { page -> viewModel.setCurrentReel(reelIds.getOrNull(page)) }
+                        .collect { page ->
+                            viewModel.setCurrentReel(reelIds.getOrNull(page))
+                            // Infinite scroll: fetch the next cursor page a few reels before
+                            // the pager runs out, so the fetch lands before the user does.
+                            if (page >= reelIds.size - LOAD_MORE_THRESHOLD) viewModel.loadMore()
+                        }
                 }
                 VerticalPager(
                     state = pagerState,
@@ -132,8 +145,9 @@ fun ReelsScreen(
                         ReelOverlay(
                             reel = reel,
                             onLike = { viewModel.toggleLike(reel.id) },
-                            onComments = { onOpenPost(reel.id) },
+                            onComments = { commentsReelId = reel.id },
                             onRepost = { viewModel.repost(reel.id) },
+                            onBookmark = { viewModel.toggleBookmark(reel.id) },
                             onShare = {
                                 viewModel.recordShare(reel.id)
                                 val send = Intent(Intent.ACTION_SEND).apply {
@@ -177,6 +191,21 @@ fun ReelsScreen(
             )
         }
     }
+
+    val openCommentsReelId = commentsReelId
+    if (openCommentsReelId != null) {
+        ReelCommentsSheet(
+            reelId = openCommentsReelId,
+            onDismiss = { commentsReelId = null },
+            onOpenPost = {
+                commentsReelId = null
+                onOpenPost(openCommentsReelId)
+            },
+            // The reel row's own server-known total, so the sheet's title never regresses
+            // to "how many are loaded on screen" (a page-capped undercount).
+            initialCommentCount = state.reels.firstOrNull { it.id == openCommentsReelId }?.commentCount,
+        )
+    }
 }
 
 @Composable
@@ -185,6 +214,7 @@ private fun ReelOverlay(
     onLike: () -> Unit,
     onComments: () -> Unit,
     onRepost: () -> Unit,
+    onBookmark: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -241,6 +271,15 @@ private fun ReelOverlay(
                 count = reel.repostCount,
                 contentDescription = stringResource(R.string.reels_repost),
                 onClick = onRepost,
+            )
+            ReelAction(
+                icon = if (reel.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                tint = if (reel.isBookmarked) MeeshyPalette.Warning else MeeshyPalette.White,
+                count = reel.bookmarkCount,
+                contentDescription = stringResource(
+                    if (reel.isBookmarked) R.string.reels_unbookmark else R.string.reels_bookmark,
+                ),
+                onClick = onBookmark,
             )
             ReelAction(
                 icon = Icons.Filled.Share,

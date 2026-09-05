@@ -68,6 +68,7 @@ import { detachConversationsFromCategory } from '../../../services/conversationP
 import { withMutationOutcome } from '../../../utils/withMutationLog';
 import { MutationInFlight } from '../../../services/MutationLogService';
 import { depreciee, type AdresseDepreciee } from '../../../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 interface CategoryRow {
   id: string;
@@ -122,17 +123,17 @@ const DEPUIS_ME_CATEGORIES = '2026-08-30';
 
 export const ANNONCE_ME_CATEGORIES_COLLECTION: AdresseDepreciee = {
   depuis: DEPUIS_ME_CATEGORIES,
-  successeur: '/api/v1/me/categories',
+  successeur: apiPath('/me/categories'),
 };
 
 export const ANNONCE_ME_CATEGORIES_REORDER: AdresseDepreciee = {
   depuis: DEPUIS_ME_CATEGORIES,
-  successeur: '/api/v1/me/categories/reorder',
+  successeur: apiPath('/me/categories/reorder'),
 };
 
 export const ANNONCE_ME_CATEGORY_ITEM: AdresseDepreciee = {
   depuis: DEPUIS_ME_CATEGORIES,
-  successeur: (request) => `/api/v1/me/categories/${(request.params as CategoryIdParams).categoryId}`,
+  successeur: (request) => apiPath(`/me/categories/${(request.params as CategoryIdParams).categoryId}`),
 };
 
 // ========== SCHEMAS FOR OPENAPI DOCUMENTATION ==========
@@ -237,10 +238,63 @@ const successMessageResponseSchema = {
  * exactement ce que ce critère interdit. Mesuré au vrai plugin (`global:
  * false`), pas seulement lu dans sa documentation.
  */
-const categoryRateLimitConfig = (label: string, max: number) => ({
+type CategoryRateLimitLabel = 'read' | 'create' | 'update' | 'delete' | 'reorder';
+
+/**
+ * Ce que chaque label fait quand le MAGASIN DE COMPTEURS tombe (#4687).
+ *
+ * ## Pourquoi ce tableau existe au lieu d'une valeur unique
+ *
+ * Ces cinq seaux héritaient tous du même `skipOnError: true`, sans que
+ * personne l'ait choisi : `registerGlobalRateLimiter`
+ * (`middleware/rate-limiter.ts`) enregistre le plugin avec cette valeur, et
+ * `mergeParams` (`Object.assign`, @fastify/rate-limit `index.js:190`) l'étale
+ * dans toute config de route qui se tait — alors que le DÉFAUT DU PLUGIN vaut
+ * `false` (`index.js:138`), si bien que vérifier dans la dépendance fait lire
+ * l'omission comme prudente. Elle l'est ici à l'envers.
+ *
+ * Et le choix se pèse entre deux EXTRÊMES, pas entre strict et laxiste : une
+ * route qui déclare `config.rateLimit` perd le limiteur global — `onRoute`
+ * (`index.js:174`) monte le sien À LA PLACE, jamais en plus. Ouvert, le label
+ * n'a plus aucun plafond pendant la panne ; fermé, il répond 500 à CHAQUE
+ * requête, pas seulement à celles qui dépassent (`index.js:301`).
+ *
+ * ## Le critère, et le seul label qui bascule
+ *
+ * On FERME quand le côté ouvert fabrique quelque chose que le produit ne peut
+ * pas reprendre ; on OUVRE quand il ne laisse à un compte que le droit de
+ * brasser son propre état — auquel cas fermer ne prévient rien et coûte
+ * l'écran.
+ *
+ * Quatre des cinq labels ne font que LIRE (`read`, 300/min) ou muter des
+ * lignes DÉJÀ existantes de l'appelant (`update`, `delete`, `reorder`) :
+ * pendant la panne, une rafale n'y laisse rien derrière elle, et les refuser
+ * fabriquerait sur un écran de réglages la panne que le produit s'interdit
+ * (« cache-first, jamais de spinner sur un cache non vide »).
+ *
+ * `create` est le seul dont le dommage SURVIT à la panne, et c'est mesuré :
+ * `handleCreateCategory` fait `userConversationCategory.create` sans AUCUN
+ * plafond du nombre de catégories par compte — rien, nulle part, ne borne le
+ * total — et diffuse en prime `CATEGORY_CREATED` à tous les appareils de
+ * l'appelant. Le seuil de 30/min est donc la seule chose qui retient un client
+ * emballé ; les lignes qu'il crée restent après le retour de Redis. Ce qu'on
+ * cède en le fermant est borné et sans perte : la création répond 500 pendant
+ * la panne, l'utilisateur réessaie, aucune donnée n'est perdue puisque la
+ * ligne n'a jamais existé.
+ */
+const LAISSE_PASSER_SI_LE_COMPTEUR_TOMBE: Readonly<Record<CategoryRateLimitLabel, boolean>> = {
+  read: true,
+  update: true,
+  delete: true,
+  reorder: true,
+  create: false,
+};
+
+const categoryRateLimitConfig = (label: CategoryRateLimitLabel, max: number) => ({
   max,
   timeWindow: '1 minute',
   hook: 'preHandler' as const,
+  skipOnError: LAISSE_PASSER_SI_LE_COMPTEUR_TOMBE[label],
   keyGenerator: (request: FastifyRequest) => {
     const userId = request.auth?.userId;
     return userId ? `categories:${label}:${userId}` : `categories:${label}:ip:${request.ip}`;

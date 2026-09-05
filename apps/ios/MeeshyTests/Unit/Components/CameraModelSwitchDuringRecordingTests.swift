@@ -201,13 +201,34 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
         )
     }
 
-    func test_mergeSegments_exportsToMovViaHighestQualityPreset() throws {
+    /// **Le preset se DÉCIDE, il ne se cite plus** (#5052).
+    ///
+    /// Ce témoin épinglait le littéral `AVAssetExportPresetHighestQuality`, sur
+    /// une intention juste : « ceci est une prise vue par l'utilisateur, pas un
+    /// rendu de vignette ». `CameraSegmentMergePolicy` sert désormais cette
+    /// intention MIEUX que le littéral — `Passthrough` ne ré-encode pas du tout
+    /// quand les segments sont homogènes, et le littéral y payait un transcodage
+    /// complet pour rien. La garde était donc périmée par un correctif, pas
+    /// contredite par lui.
+    ///
+    /// Elle se RE-VISE sur ce qui reste vrai : l'export délègue à la politique.
+    /// Ce que la politique décide est éprouvé ailleurs, par des témoins de
+    /// COMPORTEMENT sur une fonction pure — `CameraSegmentMergePolicyTests`, six
+    /// cas dont celui qui refuse d'affirmer une homogénéité non mesurée. Une
+    /// garde de source n'a pas à redire ce qu'un test de comportement établit.
+    func test_mergeSegments_exportsToMovViaThePolicyDecidedPreset() throws {
         let fn = try mergeSegmentsBody()
         XCTAssertTrue(
-            fn.contains("AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)"),
-            "The stitched composition must export via AVAssetExportSession at " +
-            "the highest-quality preset — this is a user-facing recording, not " +
-            "a thumbnail/preview render."
+            fn.contains("CameraSegmentMergePolicy.preset(formats:"),
+            "Le preset d'export se DÉCIDE depuis les formats des segments — " +
+            "un littéral rendrait la vue 4b impossible à tenir (« concatène des " +
+            "pistes déjà encodées, quasi instantané quelle que soit la durée »)."
+        )
+        XCTAssertTrue(
+            fn.contains("AVAssetExportSession(asset: composition, presetName: preset)"),
+            "…et la valeur décidée est celle que l'export REÇOIT : une politique " +
+            "calculée puis ignorée serait pire qu'un littéral, parce qu'elle " +
+            "aurait l'air d'être appliquée."
         )
         XCTAssertTrue(
             fn.contains("exportSession.outputFileType = .mov"),

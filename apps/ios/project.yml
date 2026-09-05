@@ -84,7 +84,7 @@ settings:
   # la série locale : une valeur restée à 1271 ici ne bloquerait pas les lanes
   # fastlane — elles prennent max(dépôt, dernier TestFlight) + 1 — mais rendrait
   # le prochain numéro imprévisible, ce que le bloc ci-dessus proscrit.
-  CURRENT_PROJECT_VERSION: "1805"
+  CURRENT_PROJECT_VERSION: "1812"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
@@ -360,6 +360,13 @@ targets:
       - path: MeeshyShareExtension/ShareLimits.swift
       - path: MeeshyShareExtension/ShareMediaStaging.swift
       - path: MeeshyShareExtension/SharePendingShare.swift
+      # #5056 — la fiche de COMPOSITION (vue `2a`). Listée ici pour la même
+      # raison que sa jumelle d'envoi juste au-dessus : c'est le seul endroit
+      # où les DEUX miroirs du contrat coexistent, donc le seul où leur dérive
+      # peut être attrapée mécaniquement (`ShareComposeContractTests`). Sans
+      # cette ligne, la suite ne compile pas — et une suite qui ne compile pas
+      # est plus honnête qu'une suite verte par omission.
+      - path: MeeshyShareExtension/ShareComposeHandoff.swift
       # Lot B-2 : client TUS de l'extension. LISTÉ ICI EXPRÈS — « le dépôt a
       # déjà vécu des suites vertes par omission » (spec, § Tests et gates).
       - path: MeeshyShareExtension/ShareTusClient.swift

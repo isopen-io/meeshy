@@ -343,7 +343,14 @@ export function sweepMissingSuccessSchemas(routesDir: string): ReadonlyArray<Mis
  * partie du correctif qui l'a réparé. La CIBLE est un objet vide.
  */
 const FROZEN_OPEN_RESPONSE_SCHEMAS: Readonly<Record<string, number>> = {
-  'admin/content.ts|200': 2,
+  // #4284 a découpé admin/content.ts (1026 lignes) : les deux portes des LIENS
+  // DE PARTAGE sont parties dans admin/content-share-links.ts, et l'un des deux
+  // sites ouverts avec elles. Le TOTAL du fichier d'origine est inchangé (2),
+  // seule sa répartition l'est — comme pour conversations/messages-send.ts
+  // ci-dessous, même issue, même opération. Aucun site ouvert n'a été ajouté ni
+  // réparé ; ce cliquet mesure ici un déménagement, pas une régression.
+  'admin/content.ts|200': 1,
+  'admin/content-share-links.ts|200': 1,
   'admin/posts.ts|200': 2,
   // #4284 a découpé conversations/messages.ts en fichiers frères ; ces deux
   // sites vivent désormais dans messages-send.ts (compte inchangé : 2).

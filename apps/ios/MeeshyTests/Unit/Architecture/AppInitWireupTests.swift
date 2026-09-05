@@ -210,9 +210,31 @@ final class AppInitWireupTests: XCTestCase {
     /// « injections == présentations » cesserait de mesurer quoi que ce soit.
     /// L'invariant côté porte est tenu par
     /// `test_theStoryCreationDoor_mountsTheComposerHost_andLetsItPoseTheProviders`.
+    /// **#5053 — la liste a MAIGRI, et c'est le résultat visé.**
+    ///
+    /// `StoryTrayView` en sort : son cover d'édition monte `StoryEditComposer`,
+    /// donc le meuble, qui pose les cinq fournisseurs au plus près de l'atelier.
+    /// Les reposer chez la porte empilerait deux couches sur la même clé
+    /// d'environnement — la dernière gagne, sans erreur ni signal.
+    ///
+    /// `StoryViewerView` en est sorti à son tour au **#5055** : « éditer et
+    /// republier en post » montait `UnifiedPostComposer`, le dernier composer
+    /// historique présenté nu du dépôt. Il monte désormais
+    /// `StoryRepublishComposer` — la même porte que « Republier », ouverte sur
+    /// `.post`.
+    ///
+    /// **Il ne reste donc qu'UNE entrée**, et c'est le résultat visé : le meuble
+    /// pose les cinq fournisseurs au plus près de l'atelier, une fois, pour
+    /// toutes ses portes. Que cette garde tienne encore sur un seul site est ce
+    /// qui la rend utile — elle tombera si quelqu'un remonte un atelier nu
+    /// ailleurs. `ComposerAtelierHasOneMountSiteTests` garde le compte, elle,
+    /// par un balayage récursif qui ne connaît aucune liste.
+    ///
+    /// > Une garde qui compte les sites d'un motif VOIT sa propre réussite comme
+    /// > une panne : « ne présente plus de composer ? » est ici la bonne nouvelle.
+    /// > Le retrait doit donc être fait à la main, en disant pourquoi — sinon la
+    /// > session suivante rétablit le site pour faire repasser le test au vert.
     private static let storyComposerPresentationSites = [
-        "Meeshy/Features/Main/Views/StoryTrayView.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView.swift",
         // #4102 — `composerSurface`, qui PRÉSENTE l'atelier et pose les
         // fournisseurs, a suivi le découpage du meuble vers `+Surfaces`.
         // L'adresse d'une garde suit le montage, jamais le nom du type.

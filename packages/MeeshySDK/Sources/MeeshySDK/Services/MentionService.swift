@@ -65,7 +65,7 @@ public final class MentionService: MentionServiceProviding, @unchecked Sendable 
             queryItems.append(URLQueryItem(name: "query", value: query))
         }
         let response: APIResponse<[MentionSuggestion]> = try await api.request(
-            endpoint: "/mentions/suggestions",
+            MentionsEndpoint.suggestions,
             queryItems: queryItems
         )
         return response.data

@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import type { PrivacyPreferences } from '../../services/PrivacyPreferencesService';
+import { findFirstHonouringWhere } from '../helpers/find-first-honouring-where';
 
 const VIEWER = 'viewer-id';
 const TARGET = 'target-id';
@@ -239,5 +240,49 @@ describe('PresenceVisibilityService.acceptedFriendIds', () => {
   it("ne se rend jamais lui-même comme ami (ligne d'auto-amitié résiduelle)", async () => {
     const { service } = svcWithFriendships([{ senderId: VIEWER, receiverId: VIEWER }]);
     await expect(service.acceptedFriendIds(VIEWER)).resolves.toEqual(new Set());
+  });
+});
+
+describe('PresenceVisibilityService.resolveForTarget — la loi d\'amitié atteint le verdict SERVI (#4866)', () => {
+  /**
+   * `makeMocks` ci-dessus double `friendRequest.findFirst` INCONDITIONNELLEMENT
+   * (`mockResolvedValue`) : il ne peut pas distinguer une demande ACCEPTÉE d'une
+   * demande PENDING/REJECTED entre les deux mêmes comptes. Ici le double HONORE
+   * le `where` (`findFirstHonouringWhere`, #4585), et la fixture porte les DEUX
+   * formes de bruit que la loi doit écarter — sans quoi le double n'a rien à
+   * honorer (leçon de #4585, reprise par #4866 critère 2).
+   */
+  function servicePresentToFriendshipRows(rows: ReadonlyArray<Record<string, unknown>>) {
+    const prisma = {
+      user: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+      friendRequest: { findFirst: jest.fn<any>(findFirstHonouringWhere(rows)) },
+    } as any;
+    const privacy = { getPreferences: jest.fn<any>().mockResolvedValue(makePrefs()) } as any;
+    return new PresenceVisibilityService(prisma, privacy);
+  }
+
+  it('une demande REFUSÉE entre le viewer et la cible ne révèle PAS la présence', async () => {
+    const service = servicePresentToFriendshipRows([
+      { id: 'fr-1', senderId: VIEWER, receiverId: TARGET, status: 'rejected' },
+    ]);
+    const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+
+  it('une demande EN ATTENTE entre le viewer et la cible ne révèle PAS la présence', async () => {
+    const service = servicePresentToFriendshipRows([
+      { id: 'fr-1', senderId: TARGET, receiverId: VIEWER, status: 'pending' },
+    ]);
+    const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+
+  it('une demande ACCEPTÉE, même en présence d\'une pending/rejected du même couple, révèle la présence', async () => {
+    const service = servicePresentToFriendshipRows([
+      { id: 'fr-old', senderId: VIEWER, receiverId: TARGET, status: 'rejected' },
+      { id: 'fr-new', senderId: TARGET, receiverId: VIEWER, status: 'accepted' },
+    ]);
+    const v = await service.resolveForTarget({ userId: VIEWER, role: 'USER' }, target);
+    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
   });
 });

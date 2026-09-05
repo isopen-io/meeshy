@@ -53,6 +53,25 @@ public data class LanguageShare(
     val fraction: Double,
 )
 
+/** The attachment kinds a client-side fallback can tally (parity iOS `AttachmentType`). */
+public enum class ClientAttachmentKind { IMAGE, AUDIO, VIDEO, FILE, LOCATION }
+
+/**
+ * One in-memory message, reduced to what the client-side stats fallback needs.
+ *
+ * [day] is the message's local calendar day — the caller resolves the
+ * instant→day in the device zone, keeping [ConversationStatsProjection.clientComputed]
+ * a pure, timezone-free grouping (the same "pass the clock in" doctrine
+ * [ConversationStatsProjection.activitySeries] already follows for `today`).
+ */
+public data class ClientStatMessage(
+    val senderId: String,
+    val senderName: String? = null,
+    val content: String = "",
+    val attachmentKinds: List<ClientAttachmentKind> = emptyList(),
+    val day: LocalDate,
+)
+
 public object ConversationStatsProjection {
 
     /**
@@ -151,6 +170,105 @@ public object ConversationStatsProjection {
             .map { LanguageShare(it.language, it.count, it.count.toDouble() / total) }
             .sortedWith(compareByDescending<LanguageShare> { it.count }.thenBy { it.language })
     }
+
+    /**
+     * Compute a [ConversationMessageStatsResponse] from the messages already loaded
+     * in memory — the client-side fallback the stats sheet shows before, or instead
+     * of, the server aggregation (offline, or a failed/lagging fetch). A faithful
+     * port of iOS's `clientComputed*` computed properties in `ConversationDashboardView`,
+     * lifted here so the same [ConversationStatsProjection] path renders either source.
+     *
+     * Semantics kept identical to iOS:
+     *  - a word is a maximal run of non-whitespace (empty and blank content ⇒ 0 words);
+     *  - a message with NO attachments and non-empty content counts as one TEXT item
+     *    (a caption alongside an attachment does not — the attachments win);
+     *  - participants accumulate by [ClientStatMessage.senderId] (SOTA over iOS, which
+     *    groups by display name and so merges distinct users who share one).
+     *
+     * The daily series is emitted oldest-first as `yyyy-MM-dd` strings so
+     * [activitySeries] windows it unchanged. `hourlyDistribution` and
+     * `languageDistribution` stay empty — neither is derivable from the reduced
+     * message shape without the wall clock / a detector, matching iOS's own fallback.
+     */
+    public fun clientComputed(
+        conversationId: String,
+        messages: List<ClientStatMessage>,
+    ): ConversationMessageStatsResponse {
+        var text = 0
+        var image = 0
+        var audio = 0
+        var video = 0
+        var file = 0
+        var location = 0
+        var totalWords = 0
+        var totalCharacters = 0
+
+        val byUser = LinkedHashMap<String, ParticipantAccumulator>()
+        val byDay = HashMap<LocalDate, Int>()
+
+        for (message in messages) {
+            val words = wordCount(message.content)
+            totalWords += words
+            totalCharacters += message.content.length
+
+            if (message.attachmentKinds.isEmpty()) {
+                if (message.content.isNotEmpty()) text += 1
+            } else {
+                for (kind in message.attachmentKinds) {
+                    when (kind) {
+                        ClientAttachmentKind.IMAGE -> image += 1
+                        ClientAttachmentKind.AUDIO -> audio += 1
+                        ClientAttachmentKind.VIDEO -> video += 1
+                        ClientAttachmentKind.FILE -> file += 1
+                        ClientAttachmentKind.LOCATION -> location += 1
+                    }
+                }
+            }
+
+            val accumulator = byUser.getOrPut(message.senderId) { ParticipantAccumulator(message.senderName) }
+            accumulator.messageCount += 1
+            accumulator.wordCount += words
+            if (accumulator.name == null) accumulator.name = message.senderName
+
+            byDay[message.day] = (byDay[message.day] ?: 0) + 1
+        }
+
+        return ConversationMessageStatsResponse(
+            conversationId = conversationId,
+            totalMessages = messages.size,
+            totalWords = totalWords,
+            totalCharacters = totalCharacters,
+            contentTypes = ContentTypeCounts(
+                text = text,
+                image = image,
+                audio = audio,
+                video = video,
+                file = file,
+                location = location,
+            ),
+            participantStats = byUser.map { (id, accumulator) ->
+                ParticipantStatEntry(
+                    userId = id,
+                    name = accumulator.name,
+                    messageCount = accumulator.messageCount,
+                    wordCount = accumulator.wordCount,
+                )
+            },
+            dailyActivity = byDay.entries
+                .sortedBy { it.key }
+                .map { DailyActivityEntry(date = it.key.toString(), count = it.value) },
+        )
+    }
+
+    private class ParticipantAccumulator(var name: String?) {
+        var messageCount = 0
+        var wordCount = 0
+    }
+
+    private fun wordCount(content: String): Int =
+        content.split(WHITESPACE).count { it.isNotEmpty() }
+
+    private val WHITESPACE = Regex("\\s+")
 
     private const val HOURS_PER_DAY = 24
 }
