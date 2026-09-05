@@ -32,6 +32,19 @@ describe('transformTranslationsToArray', () => {
     expect(transformTranslationsToArray('msg-1', undefined)).toEqual([]);
   });
 
+  it('serves a legacy region-tagged STORED key against a canonical request (#5234)', () => {
+    // Un document legacy porte une clé régionale ('pt-BR'), lue par
+    // MessageTranslationService via `?? translations[normalizedTarget]`. Le filtre
+    // opt-in doit la servir face à une demande canonique 'pt' — sinon la
+    // traduction existe mais est PRUNÉE (le lecteur retombe sur l'original).
+    const legacy: Record<string, MessageTranslationJSON> = {
+      'pt-BR': { text: 'Bom dia', translationModel: 'basic', createdAt: new Date('2026-01-01') },
+      es: { text: 'Buenos días', translationModel: 'basic', createdAt: new Date('2026-01-01') },
+    };
+    const result = transformTranslationsToArray('msg-1', legacy, { languages: ['pt'] });
+    expect(result.map((t) => t.targetLanguage)).toEqual(['pt-BR']);
+  });
+
   it('preserves the synthetic id and content shape for a filtered entry', () => {
     const [translation] = transformTranslationsToArray('msg-1', makeTranslations(), { languages: ['es'] });
     expect(translation).toMatchObject({
