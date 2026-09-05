@@ -43,7 +43,13 @@ import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 
 interface ShareLink {
   id: string;
-  linkId: string;
+  // #5299 — `GET /admin/share-links` ne sert aucune colonne de
+  // `SHARE_LINK_JOIN_KEY_COLUMNS` (#4692, comment du `select` ci-dessous
+  // dans `content-share-links.ts`) : `linkId` (le secret de jointure) n'est
+  // JAMAIS présent sur cette liste, seulement via le geste souverain
+  // `POST /admin/share-links/:id/reveal`. Le déclarer non-nullable mentait
+  // sur le contrat réel.
+  linkId?: string;
   identifier?: string;
   name?: string;
   description?: string;
@@ -355,7 +361,11 @@ export default function AdminShareLinksPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2 mb-2 flex-wrap">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate max-w-md">
-                              {shareLink.name || shareLink.identifier || shareLink.linkId}
+                              {/* #5299 — `identifier` et `linkId` (secret de jointure,
+                                  #4692) ne sont jamais servis par cette route : sans
+                                  repli terminal sur `id`, un lien sans `name` n'affiche
+                                  rien du tout. */}
+                              {shareLink.name || shareLink.identifier || shareLink.linkId || shareLink.id}
                             </h3>
                             {shareLink.isActive ? (
                               <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 flex-shrink-0">
@@ -374,10 +384,16 @@ export default function AdminShareLinksPage() {
                           )}
 
                           <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
-                            <div className="flex items-center space-x-1">
-                              <Link className="h-4 w-4" />
-                              <span className="font-mono text-xs">{shareLink.linkId}</span>
-                            </div>
+                            {/* #5299 — `linkId` (secret de jointure, #4692) n'est jamais
+                                servi par `GET /admin/share-links` : cette ligne ne
+                                rend rien tant qu'il n'est pas explicitement révélé
+                                (`POST /admin/share-links/:id/reveal`). */}
+                            {shareLink.linkId && (
+                              <div className="flex items-center space-x-1">
+                                <Link className="h-4 w-4" />
+                                <span className="font-mono text-xs">{shareLink.linkId}</span>
+                              </div>
+                            )}
                             <div className="flex items-center space-x-1">
                               <User className="h-4 w-4" />
                               <span>{t('shareLinks.createdBy', { name: shareLink.creator.displayName || shareLink.creator.username })}</span>
@@ -397,15 +413,22 @@ export default function AdminShareLinksPage() {
 
                         {/* Boutons d'action - responsive */}
                         <div className="flex items-center space-x-2">
-                          {/* Primary action - always visible */}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => copyToClipboard(shareLink.linkId)}
-                          >
-                            <Copy className="h-4 w-4" />
-                            <span className="sr-only sm:not-sr-only sm:ml-1">{t('shareLinks.copy')}</span>
-                          </Button>
+                          {/* #5299 — `linkId` (secret de jointure, #4692) n'est jamais
+                              servi par cette liste : « Copier » et « Ouvrir » n'ont
+                              rien à copier / ouvrir tant qu'il n'est pas révélé.
+                              Masquées plutôt que de copier/ouvrir « undefined » —
+                              suivi : wiring de ces deux actions sur le geste
+                              souverain `POST /admin/share-links/:id/reveal`. */}
+                          {shareLink.linkId && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyToClipboard(shareLink.linkId!)}
+                            >
+                              <Copy className="h-4 w-4" />
+                              <span className="sr-only sm:not-sr-only sm:ml-1">{t('shareLinks.copy')}</span>
+                            </Button>
+                          )}
 
                           {/* Mobile dropdown for secondary actions */}
                           <DropdownMenu>
@@ -415,10 +438,12 @@ export default function AdminShareLinksPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}>
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                {t('shareLinks.open')}
-                              </DropdownMenuItem>
+                              {shareLink.linkId && (
+                                <DropdownMenuItem onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}>
+                                  <ExternalLink className="mr-2 h-4 w-4" />
+                                  {t('shareLinks.open')}
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => router.push(`/admin/share-links/${shareLink.id}`)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 {t('shareLinks.edit')}
@@ -435,14 +460,16 @@ export default function AdminShareLinksPage() {
 
                           {/* Desktop - all actions visible */}
                           <div className="hidden md:flex space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}
-                            >
-                              <ExternalLink className="h-4 w-4 mr-1" />
-                              {t('shareLinks.open')}
-                            </Button>
+                            {shareLink.linkId && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}
+                              >
+                                <ExternalLink className="h-4 w-4 mr-1" />
+                                {t('shareLinks.open')}
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"

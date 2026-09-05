@@ -1228,7 +1228,7 @@ class Component extends DCLogic {
           ? [
               { icon: 'ph-image', title: 'Photo', sub: 'Compressée avant envoi', badge: '', go: () => this.go('media') },
               { icon: 'ph-camera', title: 'Caméra', sub: '', badge: '', go: () => this.go('media') },
-              { icon: 'ph-file', title: 'Fichier', sub: 'Jusqu’à 10 Mo', badge: '', go: () => this.go('media') },
+              { icon: 'ph-file', title: 'Fichier', sub: '', badge: '', go: () => this.go('media') },
               { icon: 'ph-microphone', title: 'Vocal', sub: 'Transcrit et traduit', badge: '', go: () => this.go('media') },
             ]
           : sheet === 'link'
@@ -1378,7 +1378,7 @@ class Component extends DCLogic {
       rights: [
         { icon: 'ph-check-circle', color: '#34D399', tone: 'var(--color-text)', title: 'Historique depuis le 12 août', sub: 'Les messages antérieurs restent masqués.' },
         { icon: 'ph-check-circle', color: '#34D399', tone: 'var(--color-text)', title: 'Écrire et répondre', sub: 'Traduit vers les langues des participants.' },
-        { icon: 'ph-check-circle', color: '#34D399', tone: 'var(--color-text)', title: 'Envoyer photos et fichiers', sub: "Jusqu'à 10 Mo par envoi." },
+        { icon: 'ph-check-circle', color: '#34D399', tone: 'var(--color-text)', title: 'Envoyer photos et fichiers', sub: 'Traduit et transcrit comme le reste du fil.' },
         { icon: 'ph-x-circle', color: '#75798c', tone: 'var(--color-neutral-500)', title: "Pas d'appel, pas d'invitation", sub: 'Réservé aux membres du compte.' },
       ],
       formats: FORMATS.map((f) => ({ ...f, bg: f.id === s.format ? P : 'transparent', fg: f.id === s.format ? BG : 'var(--color-neutral-400)', pick: () => this.setState({ format: f.id }) })),

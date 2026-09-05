@@ -185,6 +185,15 @@ export const prendsLeComposeur = ({
 
   const fichiers = (): readonly File[] => [...(piece?.files ?? [])].filter((f) => f.size > 0);
 
+  /**
+   * Aucune limite de poids n'est ANNONCÉE avant sélection (#5070) : la
+   * passerelle n'en applique aucune sur `POST /attachments/upload` — seul un
+   * plafond d'INFRASTRUCTURE existe (4 Go, `@fastify/multipart`), pas une
+   * décision produit — et un chiffre ne s'invente pas (même principe que
+   * `lib/contenu/droits.ts` pour la bannière d'invité). Le poids du fichier
+   * choisi est annoncé ICI, juste après sélection ; un refus serveur (s'il
+   * survient un jour) est affiché au lecteur par `televerse`, jamais avalé.
+   */
   const annonceLaPiece = (): void => {
     if (annonceDePiece === null) return;
     const choisis = fichiers();

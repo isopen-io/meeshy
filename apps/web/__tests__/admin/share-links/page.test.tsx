@@ -204,3 +204,44 @@ describe('Console d’administration — fermer un lien de partage (#3734)', () 
     expect(apiService.delete).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * #5299 — résidus mesurés par #4692 sur cette même liste.
+ *
+ * `identifier` et `linkId` (le secret de jointure) ne sont JAMAIS servis par
+ * `GET /admin/share-links` (§ commentaire du `select`, `content-share-links.ts`) :
+ * un lien sans `name` n'affichait plus rien du tout (point 3), et les actions
+ * « Copier »/« Ouvrir », construites sur `shareLink.linkId`, copiaient/ouvraient
+ * la chaîne littérale `"undefined"` sur CHAQUE ligne (point 4 — le type client
+ * déclarait `linkId: string` alors que la passerelle ne le sert jamais ici).
+ */
+describe('Console d’administration — résidus de libellé et de type (#5299)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('replie le libellé sur l’id de la ligne quand name/identifier/linkId sont tous absents', async () => {
+    (adminService.getShareLinks as jest.Mock).mockResolvedValue({
+      success: true,
+      data: {
+        success: true,
+        data: [{ ...shareLinkRow(), name: undefined }],
+        pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
+      },
+    });
+
+    render(<AdminShareLinksPage />);
+
+    await screen.findByText(LINK_ROW_ID);
+  });
+
+  it('ne rend ni « Copier » ni « Ouvrir » — `linkId` n’est jamais servi par cette liste', async () => {
+    (adminService.getShareLinks as jest.Mock).mockResolvedValue(listResponse());
+
+    render(<AdminShareLinksPage />);
+
+    await screen.findByText('Public onboarding link');
+    expect(screen.queryByText('shareLinks.copy')).not.toBeInTheDocument();
+    expect(screen.queryAllByText('shareLinks.open')).toHaveLength(0);
+  });
+});
