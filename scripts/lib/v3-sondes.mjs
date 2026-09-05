@@ -320,5 +320,35 @@ export const sondesDuGarde = ({ constantes, replaceIn }) => {
         ),
       `n'est pas servi sur le port ${V3_PORT}`,
     ],
+    [
+      "l'origine publique du service v3 de staging devient l'adresse interne",
+      // La ligne du legacy porte la MÊME variable, plus haut : la sonde vise la
+      // v3 par sa voisine de bloc, MEESHY_GATEWAY_URL, que le legacy n'a pas.
+      (world) =>
+        replaceIn(
+          world,
+          'staging',
+          /(- MEESHY_GATEWAY_URL=http:\/\/gateway-staging:3000\n +- NEXT_PUBLIC_API_URL=)[^\n]*/,
+          '$1http://gateway-staging:3000',
+        ),
+      'adresse INTERNE',
+    ],
+    [
+      "l'origine publique du service v3 de production servie en http",
+      (world) =>
+        replaceIn(
+          world,
+          'prod',
+          /(- MEESHY_GATEWAY_URL=http:\/\/gateway:3000\n +- NEXT_PUBLIC_API_URL=)https:/,
+          '$1http:',
+        ),
+      'contenu mixte',
+    ],
+    [
+      'le Dockerfile de la v3 fige NEXT_PUBLIC_API_URL au build',
+      (world) =>
+        replaceIn(world, 'dockerfile', 'ARG VERSION=0.0.0', 'ARG VERSION=0.0.0\nARG NEXT_PUBLIC_API_URL=https://gate.meeshy.me'),
+      'inlinerait',
+    ],
   ];
 };
