@@ -119,11 +119,20 @@ lui-même ». Les trois modes ne diffèrent que par quatre témoins :
 | mode | `isMuted` | `locksMute` | `loops` | `showsChrome` | monté par |
 |---|---|---|---|---|---|
 | `.reader` | non | non | non | **oui** | `StoryViewerView+Canvas` (2 sites) |
-| `.card` | **oui** | **oui** | **oui** | non | `FeedPostCard` |
+| `.card` | **oui** | **oui** | **oui** | non | `FeedSceneAutoplay` — `PostSceneCard` |
 | `.preview` | non | non | non | non | **aucun site — retiré le 2026-08-24** |
 
 `startsPaused` ne dépend PAS du mode : **les trois naissent en pause**, y compris
 le plein écran, dont la lecture démarre par la commande du viewer.
+
+> **La colonne « monté par » a changé le 2026-09-05 sans qu'aucune règle bouge.**
+> Elle disait `FeedPostCard` ; l'extraction de `FeedSceneAutoplay.swift`
+> (`0110db94f4`, #5227) y a déplacé le montage, `FeedPostCard` n'en gardant que
+> l'hôte (`PostSceneSurface`). C'est le mode de péremption propre à ce document :
+> **un numéro de ligne meurt à la première extraction, un nom de symbole
+> survit.** Les ancrages en `fichier:ligne` ont donc été retirés des deux
+> tableaux de ce paragraphe au profit de commandes rejouables — même parade que
+> pour les sept sites de `StoryReaderRepresentable` ci-dessous.
 
 `isMuted` et `locksMute` se lisent ENSEMBLE : le premier dit ce que le mode
 PROPOSE quand l'hôte ne demande rien, le second si l'hôte a seulement le droit de
@@ -164,10 +173,15 @@ dans le dépôt : **aucun hôte ne pilote l'index.**
 
 | site | forme |
 |---|---|
-| `StoryViewerView+Canvas:1035` et `:1091` | `sceneIndex: .constant(0)` |
-| `FeedPostCard:365` | `sceneIndex: .constant(0)` |
-| **`StoryModels:1171`** — `StoryEffects.init(from decoder:)` | littéral `0`, **en dur** |
-| `StoryDraftStore:810` | littéral `0`, en dur |
+| `StoryViewerView+Canvas` (2 sites) | `sceneIndex: .constant(0)` |
+| `FeedSceneAutoplay` — `PostSceneCard` | `sceneIndex: .constant(0)` |
+| **`StoryModels`** — `StoryEffects.init(from decoder:)` | littéral `0`, **en dur** |
+| `StoryDraftStore` | littéral `0`, en dur |
+
+```bash
+git grep -n "sceneIndex: .constant(0)" -- 'apps/ios/Meeshy/**/*.swift'
+git grep -n "sceneIndex: 0" -- 'packages/MeeshySDK/Sources/**/*.swift'
+```
 
 Les deux derniers ne passent par aucun `Binding` : un balayage qui cherche
 `.constant(0)` les rate, et l'un d'eux est sur le chemin d'ÉCRITURE (le store de
@@ -214,6 +228,97 @@ dans le MÊME commit que l'œil.
 > AVEC sa raison, sa condition de retour et son témoin.** C'est la forme juste
 > d'une absence : elle se lit, elle se défend, et elle rougirait si quelqu'un la
 > rebranchait à moitié. Ne pas la lire comme un oubli à réparer.
+
+## 3 bis. Qui JOUE, quand le fil en montre plusieurs (2026-09-05)
+
+Le § 3 dit ce qu'un chrome PROPOSE ; il ne dit pas **qui joue quand plusieurs
+scènes sont à l'écran en même temps**. C'est une loi distincte, et elle manquait
+à ce document — au point que le fil a porté **trois politiques pour le même
+objet**, un canvas 9:16, jusqu'au 2026-09-05.
+
+> « Repartage ou non, les scènes sont comme les vidéos : lorsqu'on est face à
+> elles dans le viewport, il faut maintenir une cohérence générale. Normalement
+> les Posts, Reels et Story ne manipulent que des scènes. »
+> — directive porteur, 2026-09-05
+
+| surface | ce qu'elle faisait AVANT |
+|---|---|
+| réel natif / repost de réel | autoplay muet, élu par le viewport, coupé pendant un appel |
+| scène COMPOSÉE d'un post | **figée** (`isPlaying: .constant(false)`), sous une étiquette « scène · muette, en pause » |
+| story REPARTAGÉE | **jouait en permanence** (`isPaused` laissé à son défaut), sans élection ni call-awareness |
+
+Le même canvas bougeait ou non selon la façon dont il était **arrivé** dans le
+fil, et seul le figé portait un mot d'excuse. La loi, livrée par `0110db94f4`
+(#5227), tient en quatre points :
+
+1. **Une seule surface décode dans tout le fil** — celle qui est la plus proche
+   du centre du viewport, réels et scènes CONFONDUS. Il n'y a pas une élection
+   des vidéos et une élection des scènes : c'est le même coordinateur.
+2. **Un appel les tait toutes.**
+3. **L'identité d'élection est celle du POST CONTENANT**, jamais de la story ou
+   du réel cité — sans quoi un même contenu affiché deux fois dans le fil
+   binderait deux surfaces au moteur partagé.
+4. **L'élection se reçoit en VALEUR** : la feuille est `Equatable` et ne
+   l'observe pas ; seul un container observe. Une élection ne doit pas
+   ré-évaluer le `ForEach` entier du fil (Zero Unnecessary Re-render).
+
+Le mécanisme n'est pas neuf : c'est celui des réels
+(`ReelFeedAutoplayCoordinator` + `reportReelFrame(id:kind:)`), auquel les deux
+surfaces de scène se raccordent. **En écrire un second aurait fabriqué la
+quatrième politique.**
+
+> **Un gel n'est pas une économie s'il ne gèle qu'une surface sur trois.** Le
+> figé venait d'une décision documentée et JUSTE (revue Fable n°25, « zéro
+> AVPlayer/décodage actif ici ») — mais qui ne tenait que sur la surface qu'elle
+> gelait, pendant que la story repartagée d'à côté décodait autant de fois
+> qu'il y avait de cellules visibles. L'élection unique tient l'objectif de
+> cette revue MIEUX que le gel qu'elle avait posé : au plus **un** décodage
+> actif dans tout le fil. Une optimisation locale se mesure sur la SOMME des
+> surfaces, jamais sur celle qu'elle corrige.
+
+**Ce qu'aucun fichier ne pouvait dire.** Chacune des trois politiques était
+défendable prise seule ; c'est leur somme qui était fausse, et **une somme n'a
+aucun site où rougir**. D'où des témoins qui interrogent les surfaces ENSEMBLE —
+`FeedSceneCoherenceGuardTests` — plutôt qu'une de plus par surface.
+
+### Le corpus de la garde est une liste TENUE À LA MAIN
+
+`FeedSceneCoherenceGuardTests.sceneSurfaces` énumère deux chemins. Sa doctrine
+est pourtant universelle — « toute surface qui monte une scène 9:16 dans le fil
+rapporte sa frame » —, et **une troisième surface née dans un fichier NEUF n'est
+lue par personne** : quantifiée en prose, la règle est vérifiée existentiellement
+sur deux fichiers. C'est le piège que ce document énonce déjà au § 3 (« la parade
+n'est pas d'énumérer mieux — c'est de publier la COMMANDE »), reproduit dans le
+témoin qui garde la cohérence.
+
+La commande qui liste les candidats — les surfaces du fil qui montent une scène
+sans concourir à l'élection :
+
+```bash
+git grep -l "MeeshyScenePlayer(\|StoryReaderRepresentable(" \
+    -- 'apps/ios/Meeshy/Features/Main/Views/*.swift' | xargs grep -L "reportReelFrame"
+```
+
+Mesurée le 2026-09-05, elle rend quatre fichiers, et **aucun n'est un défaut** :
+`FeedPostCard` est un faux positif (le nom n'y apparaît qu'en COMMENTAIRE — le
+corpus de la garde, lui, dépouille les commentaires) ; `PostDetailView+Canvas`,
+`PostDetailView+RepostEmbed` et `StoryViewerView+Canvas` ne sont pas des LISTES,
+et une surface seule à l'écran n'a personne à qui disputer l'élection. La
+frontière de la loi est donc « **est-ce une liste ?** », et c'est elle que la
+commande ne sait pas trancher seule. Suivi : #5230.
+
+### Le mécanisme a débordé son nom
+
+`ReelFeedAutoplayCoordinator`, `reportReelFrame`, `mostCenteredReel`,
+`activeReelId`, `ReelMediaKind` gouvernent désormais **toute surface qui décode
+dans le fil** — les trois Meeshes, pas les seuls réels. Or « réel » est un TYPE
+de publication (§ 1 du modèle du composer), pas un mécanisme : le vocabulaire dit
+maintenant moins que ce que le code fait. `ReelMediaKind.scene` est le symptôme
+lisible — un « genre de média de RÉEL » dont un cas s'appelle `scene`.
+
+Réutiliser le mécanisme était juste ; le renommer est une dette à part, à solder
+quand les deux sessions qui travaillent ces fichiers auront convergé. Suivi :
+#5231.
 
 ## 4. Ce que le lecteur reçoit de la PROJECTION
 
