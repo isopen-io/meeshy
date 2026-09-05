@@ -4,28 +4,52 @@ import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Constate a l'usage (#4811) : `HttpLoggingInterceptor.Level.BODY` journalise le
  * corps de `/me/account/deletion` en build debug, mot de passe compris — un
- * niveau global n'a pas de granularite par route. Ces temoins figent le
- * contrat que le garde doit tenir : abaisser le niveau du logger PARTAGE a
- * BASIC (sans corps ni en-tetes) sur les routes qui portent un mot de passe,
- * et le laisser tel quel ailleurs.
+ * niveau global n'a pas de granularite par route.
+ *
+ * **Ces temoins mesurent CE QUI EST JOURNALISE, jamais un champ `level`.** La
+ * premiere forme du garde posait `logger.level` juste avant que le logger ne
+ * s'execute, et se mesurait en relisant ce champ APRES l'appel. Ce temoin-la
+ * etait vert sur une garde qui avait une COURSE : `level` est un champ
+ * d'INSTANCE, partage par tous les appels, et OkHttp en depeche jusqu'a 64 en
+ * parallele — le fil voisin pouvait reposer BODY entre l'ecriture du garde et
+ * la lecture du logger. Un temoin mono-fil ne peut pas voir ca : il lit quand
+ * plus rien ne bouge.
+ *
+ * On mesure donc la SORTIE (les lignes ecrites), et on la mesure aussi SOUS
+ * CONCURRENCE.
  */
 class SensitiveBodyLoggingGuardTest {
 
+    /** Le corps qu'aucune ligne de journal ne doit contenir. */
+    private val motDePasse = "hunter2-ne-doit-jamais-paraitre"
+
     private fun chain(path: String): Interceptor.Chain {
-        val request = Request.Builder().url("https://gate.meeshy.me/api/v1$path").build()
+        val request = Request.Builder()
+            .url("https://gate.meeshy.me/api/v1$path")
+            .post("""{"password":"$motDePasse"}""".toRequestBody("application/json".toMediaType()))
+            .build()
         val response = Response.Builder()
-            .request(request).protocol(Protocol.HTTP_1_1).code(200)
-            .message("OK").body("".toResponseBody(null)).build()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body("{}".toResponseBody(null))
+            .build()
         return object : Interceptor.Chain {
             override fun request(): Request = request
             override fun proceed(request: Request): Response = response
@@ -40,85 +64,84 @@ class SensitiveBodyLoggingGuardTest {
         }
     }
 
-    private fun freshLogger() = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
-
-    @Test
-    fun `lowers the shared logger to BASIC on account deletion`() {
-        val logger = freshLogger()
-        SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-            .intercept(chain("/me/account/deletion"))
-
-        assertEquals(HttpLoggingInterceptor.Level.BASIC, logger.level)
+    /** Un garde dont les deux loggers ecrivent dans [lignes]. */
+    private fun gardeQuiEcritDans(lignes: MutableCollection<String>): SensitiveBodyLoggingGuard {
+        val recueil = HttpLoggingInterceptor.Logger { lignes.add(it) }
+        return SensitiveBodyLoggingGuard(
+            full = HttpLoggingInterceptor(recueil).apply {
+                level = HttpLoggingInterceptor.Level.BODY
+            },
+            sensitive = HttpLoggingInterceptor(recueil).apply {
+                level = HttpLoggingInterceptor.Level.BASIC
+            },
+        )
     }
 
     @Test
-    fun `lowers the shared logger to BASIC on login`() {
-        val logger = freshLogger()
-        SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-            .intercept(chain("/auth/login"))
+    fun `aucune route a mot de passe ne journalise son corps`() {
+        for (route in SensitiveBodyLoggingGuard.SENSITIVE_PATHS) {
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
 
-        assertEquals(HttpLoggingInterceptor.Level.BASIC, logger.level)
+            assertTrue(
+                "$route a journalise des lignes — le garde ne s'est pas execute",
+                lignes.isNotEmpty(),
+            )
+            assertTrue(
+                "$route a journalise le mot de passe : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
     }
 
     @Test
-    fun `lowers the shared logger to BASIC on register`() {
-        val logger = freshLogger()
-        SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-            .intercept(chain("/auth/register"))
+    fun `une route ordinaire garde son corps au journal`() {
+        val lignes = mutableListOf<String>()
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations"))
 
-        assertEquals(HttpLoggingInterceptor.Level.BASIC, logger.level)
+        assertTrue(
+            "le niveau complet n'a pas ete applique hors des routes sensibles",
+            lignes.any { it.contains(motDePasse) },
+        )
     }
 
+    /**
+     * LA COURSE, mesuree. Cinquante appels sensibles et cinquante ordinaires,
+     * melanges sur huit fils. Avec un `level` partage et mute par requete, il
+     * suffit qu'un seul appel ordinaire repose BODY entre l'ecriture d'un appel
+     * sensible et sa lecture pour qu'un mot de passe parte — et avec cent
+     * appels entrelaces, cela arrive.
+     *
+     * Avec deux instances a niveau FIXE, il n'y a rien a entrelacer : le choix
+     * se fait sur la pile du fil appelant.
+     */
     @Test
-    fun `lowers the shared logger to BASIC on 2fa disable`() {
-        val logger = freshLogger()
-        SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-            .intercept(chain("/auth/2fa/disable"))
+    fun `aucun mot de passe ne fuit sous concurrence`() {
+        val lignes = ConcurrentLinkedQueue<String>()
+        val garde = gardeQuiEcritDans(lignes)
+        val pool = Executors.newFixedThreadPool(8)
+        val depart = CountDownLatch(1)
+        val fini = CountDownLatch(100)
 
-        assertEquals(HttpLoggingInterceptor.Level.BASIC, logger.level)
-    }
+        repeat(100) { i ->
+            val route = if (i % 2 == 0) "/auth/login" else "/conversations"
+            pool.execute {
+                depart.await()
+                runCatching { garde.intercept(chain(route)) }
+                fini.countDown()
+            }
+        }
+        depart.countDown()
+        assertTrue("les appels n'ont pas termine", fini.await(30, TimeUnit.SECONDS))
+        pool.shutdown()
 
-    @Test
-    fun `lowers the shared logger to BASIC on password change`() {
-        val logger = freshLogger()
-        SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-            .intercept(chain("/users/me/password"))
-
-        assertEquals(HttpLoggingInterceptor.Level.BASIC, logger.level)
-    }
-
-    // Une route sans mot de passe garde le niveau complet : le garde ne doit
-    // pas assecher le logging debug au-dela de ce que #4811 exige.
-    @Test
-    fun `leaves the full level untouched on an unrelated route`() {
-        val logger = freshLogger()
-        SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-            .intercept(chain("/conversations"))
-
-        assertEquals(HttpLoggingInterceptor.Level.BODY, logger.level)
-    }
-
-    // Deux requetes consecutives ne doivent pas se contaminer : une route
-    // sensible suivie d'une route ordinaire doit restaurer le niveau complet,
-    // pas rester bloquee a BASIC.
-    @Test
-    fun `restores the full level after a sensitive request is followed by an ordinary one`() {
-        val logger = freshLogger()
-        val guard = SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-
-        guard.intercept(chain("/me/account/deletion"))
-        assertNotEquals(HttpLoggingInterceptor.Level.BODY, logger.level)
-
-        guard.intercept(chain("/conversations"))
-        assertEquals(HttpLoggingInterceptor.Level.BODY, logger.level)
-    }
-
-    @Test
-    fun `the response passes through unchanged`() {
-        val logger = freshLogger()
-        val response = SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY)
-            .intercept(chain("/me/account/deletion"))
-
-        assertEquals(200, response.code)
+        val fuites = lignes.filter { it.contains(motDePasse) }
+        // Seules les routes ORDINAIRES ont le droit de journaliser leur corps ;
+        // il y en a cinquante. Toute ligne au-dela vient d'une route sensible.
+        assertEquals(
+            "des appels sensibles ont journalise leur corps : ${fuites.size} lignes pour 50 appels ordinaires",
+            50,
+            fuites.size,
+        )
     }
 }

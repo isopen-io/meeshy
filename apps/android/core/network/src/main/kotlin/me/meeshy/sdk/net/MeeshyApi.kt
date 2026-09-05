@@ -108,15 +108,16 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
                 .authenticator(RefreshAuthenticator(tokenStore, refresher))
                 .apply {
                     if (config.enableLogging) {
-                        // Le garde DOIT preceder le logger : c'est lui qui pose le
-                        // niveau que le logger lit en s'executant juste apres
-                        // (#4811 — sans lui, un mot de passe partait en clair dans
-                        // logcat sur /me/account/deletion et ses pairs).
-                        val logger = HttpLoggingInterceptor().apply {
-                            level = HttpLoggingInterceptor.Level.BODY
-                        }
-                        addInterceptor(SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY))
-                        addInterceptor(logger)
+                        // Le garde REMPLACE le logger — il n'en precede pas un
+                        // second (#4811). Il en tient deux, a niveaux FIXES, et
+                        // delegue par route : sans mot de passe au corps, le
+                        // niveau demande ; avec, BASIC. Aucun `level` n'est
+                        // ecrit apres construction, donc aucun appel parallele
+                        // ne peut poser le niveau d'un autre — voir la course
+                        // que documente `SensitiveBodyLoggingGuard`.
+                        addInterceptor(
+                            SensitiveBodyLoggingGuard.atLevel(HttpLoggingInterceptor.Level.BODY),
+                        )
                     }
                 }
                 .build()
