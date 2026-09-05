@@ -103,6 +103,9 @@
    "id": "echue",
    "@session": "membre"
   },
+  "links": {
+   "@session": "membre"
+  },
   "login": {
    "lien": "lien-vivant"
   },
