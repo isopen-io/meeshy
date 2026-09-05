@@ -54,7 +54,7 @@ extension View {
                 // l'auteur avait posés. La carte du fil montrait la scène et le
                 // plein écran montrait autre chose : le seul des deux formats
                 // qu'on ouvre POUR mieux voir était celui qui montrait le moins.
-                if let document = post.storyEffects?.canvasV3 {
+                if let document = SocialFullscreenRoute.scene(of: post) {
                     SocialSceneFullscreenView(
                         post: post,
                         document: document,
@@ -119,5 +119,32 @@ struct SocialMediaGalleryContent: View {
             ),
             senderInfoMap: senderInfoMap
         )
+    }
+}
+
+/// **Ce qu'un post OUVRE en plein écran** — une décision, donc une règle pure
+/// et non une condition enfouie dans un `@ViewBuilder`.
+///
+/// La question n'a qu'une forme : *ce post porte-t-il une scène ?* Un canvas se
+/// rejoue par le player ; tout le reste se feuillette par la galerie. Séparée
+/// du rendu, elle s'éprouve — et c'est ce qui empêche un futur lot de rerouter
+/// silencieusement une scène vers ses ingrédients.
+/// `nonisolated` : la règle ne touche rien de l'interface. Sans l'annotation
+/// elle hérite de l'isolation `@MainActor` du module et devient inappelable
+/// depuis un témoin synchrone — une décision qu'aucun test ne peut interroger
+/// n'est pas une décision gardée.
+nonisolated enum SocialFullscreenRoute {
+
+    /// Le canvas à rejouer, ou `nil` quand le post n'en porte pas — auquel cas
+    /// l'hôte feuillette ses médias.
+    ///
+    /// **Un canvas VIDE n'est pas une scène.** Le composer stampe une enveloppe
+    /// dès qu'il touche une publication ; sans slide, elle ne décrit rien et le
+    /// player n'aurait rien à peindre. La galerie, elle, a toujours les médias.
+    static func scene(of post: FeedPost) -> CanvasV3? {
+        guard let document = post.storyEffects?.canvasV3,
+              !document.scenes.isEmpty
+        else { return nil }
+        return document
     }
 }

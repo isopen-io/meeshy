@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { RACCOURCIS_D_ENTETE } from './atomes-feuille';
+
 /**
  * LA FEUILLE DE LA RECHERCHE — ce que `cible/search.png` dessine : ses QUATRE
  * groupes (Conversations, Personnes, Médias, Liens) depuis #5174/#5171. Les
@@ -60,12 +62,25 @@ import { compacte } from '@/app/enveloppe/feuille';
  *    règles réutilisent `--color-text-muted` et `--text-sm`, déjà posés par
  *    `.groupe>.entete .combien` et `.groupe>.encore`.
  *
+ * 7. **`RACCOURCIS_D_ENTETE` (`atomes-feuille.ts`) EST DÛ, ET N'ÉTAIT PAS
+ *    SERVI.** `enTete()` rend `raccourcisEntete('/search')` depuis la
+ *    correction Q7 (« cible/search.png les dessine, comme /communities ») —
+ *    mais cette feuille ne chargeait pas la règle qui leur donne une forme :
+ *    `.raccourci` sans `width`/`height` déclarés rend un `<a>` inline par
+ *    défaut du navigateur, mesuré à largeur ZÉRO
+ *    (`getComputedStyle` : `display:inline`, `width:auto` → boîte de 0 px).
+ *    Les deux liens existaient dans le DOM — annoncés à un lecteur d'écran —
+ *    sans jamais être vus : un contrôle qui ment par ABSENCE visuelle, pas
+ *    par absence d'effet (règle 7 lue à l'envers). Même défaut, même cause,
+ *    que `/communities` (`communautes-feuille.ts`).
+ *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
  */
 export const FEUILLE_DE_LA_RECHERCHE = compacte(`
 .recherche-ecran{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
 .recherche-ecran>.fil-tete{flex:none}
+${RACCOURCIS_D_ENTETE}
 
 .chercher{display:flex;flex-direction:column;gap:var(--space-2);margin:0;padding:0 var(--space-4) var(--space-4)}
 .chercher label{font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-text)}

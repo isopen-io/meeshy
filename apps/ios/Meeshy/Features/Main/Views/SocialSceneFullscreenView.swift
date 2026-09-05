@@ -167,10 +167,12 @@ struct SocialSceneFullscreenView: View {
 
     private var attribution: some View {
         HStack(spacing: 10) {
-            MeeshyAvatar(name: post.author,
-                         imageURL: post.authorAvatarURL,
-                         size: 32,
-                         colorHex: post.authorColor)
+            MeeshyAvatar(
+                name: post.author,
+                context: .messageBubble,
+                accentColor: post.authorColor,
+                avatarURL: post.authorAvatarURL
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text(post.author)
                     .font(.system(size: 14, weight: .semibold))
