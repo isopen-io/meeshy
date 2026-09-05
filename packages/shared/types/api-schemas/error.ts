@@ -99,20 +99,23 @@ export const errorResponseSchema = {
 /**
  * Validation error response schema
  *
- * `required: ['success']` — l'unique champ que TOUT producteur de ce schéma
- * pose sans exception (#4863) : `sendError`/`sendBadRequest` l'écrivent
- * toujours, et `schemaValidationErrorResponse` (`services/gateway/src/utils/
- * schema-validation-error.ts`) aussi, depuis #4688. Avant #4688 ce dernier ne
- * le posait pas, et rien ne rougissait — ni ce schéma (`success` n'était pas
- * `required`), ni les trois cliquets `response-schema-sweep` /
- * `response-payload-mismatch` / `response-schema-closure-guard`, qui ne
- * voient qu'un champ SUPPRIMÉ, jamais un champ DÉCLARÉ requis et absent.
+ * PAS de `required: ['success']` ici — mesuré (#4863) : ce schéma sert aussi
+ * de réponse `400` de route (`400: validationErrorResponseSchema`) pour des
+ * routes qui n'ont AUCUN gestionnaire d'erreur global au-dessus d'elles (tout
+ * harnais de test qui monte un Fastify nu autour d'un seul fichier de route,
+ * patron courant du dépôt). Sur ce chemin, un refus Ajv de `body` est rendu
+ * par le comportement PAR DÉFAUT de Fastify — jamais par
+ * `schemaValidationErrorResponse` — et ce corps ne pose pas `success`.
+ * `fast-json-stringify` REFUSE de sérialiser un objet à qui il manque un
+ * champ `required` : la réponse 400 devenait un 500. Mesuré en CI sur
+ * `register.test.ts` / `tracking.test.ts` (#4863, PR #5205) — `success` n'est
+ * donc PAS un invariant de ce schéma, seulement du producteur
+ * `schemaValidationErrorResponse`, dont
  * `services/gateway/.../__tests__/unit/routes/schema-validation-error-required-fields.test.ts`
- * en est le témoin de bout en bout, prouvé par la mutation exacte de #4688.
+ * reste le témoin dédié.
  */
 export const validationErrorResponseSchema = {
   type: 'object',
-  required: ['success'],
   properties: {
     success: { type: 'boolean', example: false },
     error: { type: 'string', description: 'Validation error message' },
