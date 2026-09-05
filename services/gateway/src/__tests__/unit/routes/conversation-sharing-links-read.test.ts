@@ -99,13 +99,6 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
   }),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  conversationSchema: { type: 'object' },
-  conversationParticipantSchema: { type: 'object' },
-  conversationResponseSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-}));
-
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { registerSharingRoutes } from '../../../routes/conversations/sharing';
