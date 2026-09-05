@@ -16,20 +16,25 @@
  * **SORT**, jamais ce qui est lu. `balayerEmissions` (dans `helpers/`) porte la
  * mesure ; ce fichier porte le VERDICT.
  *
- * ## Les quatre portes, mesurées le 2026-08-31
+ * ## Les quatre portes, mesurées le 2026-08-31 — trois gouvernées depuis #5298
  *
  * | porte | forme | gouvernée ? |
  * |---|---|---|
  * | `server.ts` (`register(cors, …)`) | déléguée à `@fastify/cors` | oui — `fastifyCorsOrigin` |
  * | `socketio/MeeshySocketIOManager.ts` (`new SocketIOServer(…)`) | déléguée à `socket.io` | oui — `socketIoCorsOrigin` |
+ * | `routes/uploads/tus-handler.ts` (`new Server({…})`) | déléguée à `@tus/server` | oui — `originIsAllowed` (#5298) |
  * | `routes/attachments/download.ts` | littérale, `'*'` | **non — déclarée** |
- * | `routes/uploads/tus-handler.ts` (`new Server({…})`) | déléguée à `@tus/server`, `'*'` par défaut | **non — déclarée** |
  *
- * **#4538 en annonçait trois ; la mesure en rend quatre.** La quatrième ne
- * nomme aucun en-tête, ne lit aucune variable d'origine et ne pose même pas
- * d'option : elle décide en OMETTANT `allowedOrigins`, ce dont seul un balayage
- * écrit sur les émetteurs pouvait s'apercevoir. Détail et raison mesurée dans
- * `PORTES_HORS_REGLE`.
+ * **#4538 en annonçait trois ; la mesure en rendait quatre.** La quatrième ne
+ * nommait aucun en-tête, ne lisait aucune variable d'origine et ne posait même
+ * pas d'option : elle décidait en OMETTANT `allowedOrigins`, ce dont seul un
+ * balayage écrit sur les émetteurs pouvait s'apercevoir. **#5298 l'a mesurée
+ * à son tour** (appelants réels de `POST /uploads`) et l'a fait REJOINDRE la
+ * règle : iOS et Android parlent au protocole TUS en client HTTP natif — ils
+ * ne posent jamais d'en-tête `Origin` — et `getCorsOrigin` de @tus/server
+ * court-circuite tout appel sans `Origin` avant de consulter `allowedOrigins`.
+ * Seul le web, seul émetteur d'un `Origin` parmi les trois clients, est
+ * concerné par la restriction. Détail dans `config/cors-origins.ts`.
  *
  * ## Les trois règles, et le sens dans lequel chacune mord
  *

@@ -22,6 +22,7 @@ import {
   readFilePrefix,
 } from '../../services/attachments/AnonymousUploadIdentity';
 import { classifyAnonymousAttachment, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import { originIsAllowed } from '../../config/cors-origins';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
@@ -243,6 +244,20 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
     datastore: uploadDataStore,
     maxSize: getMaxFileSize(),
     respectForwardedHeaders: true,
+    // #5298 — AVANT : aucune `allowedOrigins`, donc le `getCorsOrigin` de
+    // @tus/server rendait '*' inconditionnellement. Mesuré avant de brancher
+    // cette option (recherche des appelants réels de `POST /uploads`) : iOS
+    // (`ShareTusClient.swift`, `MeeshyComposerHost+PreUpload.swift`) et Android
+    // (`TusUploadRepository`, `MediaUploadQueue`) parlent au protocole TUS en
+    // client HTTP NATIF — ils ne posent jamais d'en-tête `Origin`, que seul un
+    // navigateur émet. La fonction ci-dessous applique donc la MÊME règle que
+    // les deux autres portes (`fastifyCorsOrigin`, `socketIoCorsOrigin`) sans
+    // rien leur retirer : `getCorsOrigin` de @tus/server court-circuite tout
+    // appel SANS `Origin` (`origin && allowedOrigins(origin) ? … : null`), donc
+    // un client natif ne consulte jamais `originIsAllowed` et n'est jamais
+    // concerné par cette restriction — seul un NAVIGATEUR hors allowlist perd
+    // l'en-tête (et donc la lecture de la réponse).
+    allowedOrigins: (origin: string) => originIsAllowed(origin),
     async onIncomingRequest(req, uploadId) {
       // task-1-fix-round-3, I1 — AVANT : ce serveur était construit SANS
       // `onIncomingRequest`. `onUploadCreate` n'est invoqué QUE par le

@@ -245,19 +245,15 @@ export const PORTES_HORS_REGLE: readonly PorteHorsRegle[] = Object.freeze([
       "est jugé par `resolveAttachmentReadVerdict` (participation à la conversation + cycle de vie du " +
       "message porteur), jamais par l'origine.",
   },
-  {
-    fichier: 'routes/uploads/tus-handler.ts',
-    forme: 'deleguee',
-    composant: '@tus/server',
-    entete: 'Access-Control-Allow-Origin',
-    valeur: '*',
-    pourquoi:
-      "TROUVÉE en instruisant #4538, qui n'en connaissait que trois. `new Server({…})` ne reçoit AUCUN " +
-      "`allowedOrigins` ; le `getCorsOrigin` de @tus/server 2.4.4 rend alors `'*'` sur chaque réponse. " +
-      "La porte HTTP ne la couvre pas : `tusServer.handle(req.raw, reply.raw)` écrit sur la réponse BRUTE, " +
-      "donc les en-têtes que @fastify/cors met en attente sur `reply` ne sont jamais écrits — c'est la " +
-      "SEULE décision d'origine des routes d'upload. Inerte de la même façon : `allowedCredentials` n'est " +
-      "pas posé. Fermer l'option demande de vérifier le téléversement depuis meeshy.me ET hors navigateur " +
-      "(l'issue de suivi porte cette mesure) ; elle est déclarée ici en attendant, pas oubliée.",
-  },
 ]);
+
+// La quatrième porte, `routes/uploads/tus-handler.ts` (`new Server({…})` de
+// @tus/server), a REJOINT la règle (#5298) : son option `allowedOrigins`
+// invoque désormais `originIsAllowed` — même mesure que les deux autres
+// portes gouvernées. Elle n'apparaît donc plus ici (règle 1 ter du cliquet :
+// une déclaration qui survivrait à une porte devenue gouvernée mentirait).
+// Mesure qui a permis de fermer l'option sans rien casser : iOS et Android
+// parlent au protocole TUS en client HTTP natif — jamais d'en-tête `Origin` —
+// et `getCorsOrigin` de @tus/server court-circuite tout appel sans `Origin`
+// AVANT de consulter `allowedOrigins`. Seul le web, qui en pose un, est
+// concerné par la restriction.
