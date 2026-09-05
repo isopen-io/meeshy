@@ -8,6 +8,39 @@ JOURNAL, pas une source d'état.
 
 ---
 
+## Itération 289 — 2026-09-05
+
+- **Branche** : `claude/brave-archimedes-8391g9`
+- **Base** : `dev` @ `49c41d21`
+- **PR** : (à ouvrir) — **Issue** : #5234 (`Closes`)
+- **Domaine** : services/gateway (Prisme Linguistique, filtre bande-passante SERVEUR) + packages/shared
+- **Livré** :
+  - `makeLanguageFilter(requested)` extrait en SSOT
+    (`packages/shared/utils/language-normalize.ts`) : prédicat d'appartenance
+    canonicalisant les DEUX côtés via `normalizeLanguageForDedup` (ou `null` =
+    servir toutes les langues). Couvert par 6 témoins.
+  - Les trois filtres de bande passante routés par la SSOT — traductions texte
+    REST (`transformTranslationsToArray`), pistes audio du Prisme REST
+    (`cleanAttachmentsForApi`), filtre socket texte+audio
+    (`filterMessagePayloadForLanguages`). Ils comparaient la clé STOCKÉE au
+    `.toLowerCase()` verbatim : une clé legacy régionale (`'pt-BR'`) était prunée
+    face à une demande canonique `'pt'` (le lecteur retombait sur l'original).
+  - Moitié symétrique de #5108 (qui n'avait canonicalisé que le code DEMANDÉ).
+- **Gates** : vitest shared 2890/2890 · jest gateway 68/68 (4 suites de filtre) +
+  197/197 (5 suites consommatrices) · `tsc --noEmit` gateway ET shared EXIT=0.
+- **Dimensions mûres** : 6 (Cohérence), 8 (UX/Prisme — la traduction héritée est
+  de nouveau servie), 11 (Maintenabilité — une source par règle de langue), 13
+  (Complétude).
+- **Reste / pistes suivantes** :
+  - `getTranslationFromJSON` porte une résolution single-key verbatim-puis-casse
+    (cohérente avec le reader `MessageTranslationService`) — candidat à
+    unification si un troisième single-key resolver apparaît.
+  - Pas d'équivalent `makeLanguageFilter` côté iOS/Android — ouvrir une issue si
+    une jumelle divergente y apparaît.
+  - Campagne « une source de vérité par règle de langue » : continuer à balayer
+    les résolveurs qui comparent/dédupliquent des codes verbatim hors de
+    `normalizeLanguageForDedup` / `isSameLanguage` / `makeLanguageFilter`.
+
 ## Itération 288 — 2026-09-05
 
 - **Branche** : `claude/brave-archimedes-0czo3h`
