@@ -276,6 +276,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             }
           }
         },
+        401: {
+          description: 'Authentication required - the link belongs to a creator and no session was presented',
+          ...errorResponseSchema
+        },
         403: {
           description: 'Access denied - only creator can view details',
           ...errorResponseSchema
@@ -301,9 +305,15 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       if (trackingLink.createdBy) {
+        // #5212 — une session ABSENTE et un utilisateur authentifié mais
+        // non-créateur ne sont pas le même refus : la route est montée en
+        // `authOptional`, donc atteignable sans aucun justificatif.
+        if (!request.authContext?.isAuthenticated) {
+          return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+        }
         if (!isRegisteredUser(request.authContext) ||
             request.authContext.registeredUser!.id !== trackingLink.createdBy) {
-          return sendForbidden(reply, 'Accès non autorisé');
+          return sendForbidden(reply, 'Accès non autorisé', { code: 'TRACKING_LINK_ACCESS_DENIED' });
         }
       }
 
