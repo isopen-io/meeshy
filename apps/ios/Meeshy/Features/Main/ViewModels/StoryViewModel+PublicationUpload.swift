@@ -207,6 +207,38 @@ extension StoryViewModel {
                     let mediaProgress = Double(mediaIdx) / Double(max(1, mediaCount))
                     onProgress(baseProgress + (0.30 + mediaProgress * 0.50) * slideShare)
                 }
+
+                // **L'ADOPTION du fond** (#5280, 2026-09-05).
+                //
+                // Le fond de la slide vient d'être téléversé plus haut : son
+                // `id` et son `fileUrl` partent dans `allMediaIds`, donc dans
+                // les médias du POST. Rien ne les écrivait dans l'objet du
+                // CANVAS, qui gardait l'identité de la PRÉ-MONTÉE — celle
+                // faite au moment où la photo a été posée sur la scène.
+                //
+                // Mesuré sur staging, post `6a9c52e3…` : deux lignes
+                // `PostMedia` et deux fichiers pour UNE photo, le canvas
+                // désignant celle qui n'appartient pas au post
+                // (`postMediaId` `…52c2…8d9` contre `media[0].id`
+                // `…52e3…8da`). Le lecteur cherche un id absent de
+                // `post.media` : la scène se peint VIDE, sur toute la carte.
+                //
+                // > **Le cache, lui, adoptait déjà** — `adoptImage(localFile:
+                // > for: result.fileUrl)`, douze lignes plus haut. C'est ce
+                // > qui rend l'oubli difficile à voir : la moitié qui sert la
+                // > VITESSE a été écrite, la moitié qui sert la CORRECTION ne
+                // > l'a pas été, et les deux vivent dans la même fonction.
+                //
+                // La boucle ci-dessus ne pouvait pas s'en charger : elle est
+                // gardée par `postMediaId.isEmpty` — juste, puisqu'elle
+                // téléverse ce qui n'a pas encore d'identité — et un fond
+                // pré-monté en a une. C'est exactement ce qui la lui fait
+                // sauter.
+                if let fond = uploadResult,
+                   let index = mediaObjects.firstIndex(where: { $0.isBackground }) {
+                    mediaObjects[index].postMediaId = fond.id
+                    mediaObjects[index].mediaURL = fond.fileUrl
+                }
                 updatedEffects.mediaObjects = mediaObjects
             }
 

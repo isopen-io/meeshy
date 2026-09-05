@@ -27,8 +27,21 @@ extension StickerPickerView {
     /// dans un périmètre qu'on a choisi.
     @ViewBuilder
     var tabbedContent: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+        ScrollView(.vertical, showsIndicators: false) {
+            // **`spacing: MeeshySpacing.xxl`, et plus aucun `pinnedViews`**
+            // (directive porteur 2026-09-05, « des sections sans cadre »).
+            //
+            // Un en-tête ÉPINGLÉ doit être opaque — sinon le contenu défile
+            // sous lui et le traverse — donc il portait un `.ultraThinMaterial`,
+            // donc un cadre. L'épinglage ÉTAIT la cause du cadre, pas une
+            // décoration qu'on lui aurait ajoutée. Le retirer laisse le titre
+            // défiler avec sa grille, ce qui est aussi plus juste : un titre
+            // qui reste pendant qu'on parcourt une AUTRE famille désigne la
+            // mauvaise.
+            //
+            // Ce qui sépare deux sections est désormais l'ESPACE et la graisse
+            // du titre — la même grammaire que la fiche de création audio.
+            LazyVStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
                 switch selectedTab {
                 case .search:    searchTabContent
                 case .favorites: usageSections(usage.favorites, vide: .favorites)
@@ -37,7 +50,9 @@ extension StickerPickerView {
                 case .smileys:   smileySections
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.xxxl)
         }
         // **Changer d'onglet REPART du début** — mesuré au simulateur avant
         // les onglets, sur l'interrupteur de nature : sans cela, basculer
@@ -49,7 +64,6 @@ extension StickerPickerView {
         // paresseuse, sa reconstruction ne coûte que les sections visibles, et
         // un lecteur aurait demandé une ancre par section pour un seul usage.
         .id(selectedTab)
-        .frame(maxHeight: 420)
     }
 
     // MARK: - Recherche
@@ -84,8 +98,6 @@ extension StickerPickerView {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .background(Color.primary.opacity(0.06), in: Capsule())
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
 
         let familles = StickerSheetTab.sections(of: .search, offered: offeredTabs)
             .filter { StickerPickerView.section($0, matches: searchQuery) }
@@ -134,6 +146,24 @@ extension StickerPickerView {
         } else {
             let gabarits = entrees.compactMap { StickerPickerView.template(for: $0) }
             let smileys = entrees.filter { $0.kind == .emoji }.map(\.value)
+            // **Les images de « Mes stickers » se résolvent contre la
+            // bibliothèque CHARGÉE**, jamais contre l'entrée seule : celle-ci
+            // ne porte qu'un identifiant, et le dessin vit sur le disque. Une
+            // entrée dont l'image a été effacée disparaît de la liste sans
+            // être purgée — la même tolérance qu'un gabarit retiré du
+            // catalogue.
+            let miennes = entrees
+                .filter { $0.kind == .library }
+                .compactMap { entree in libraryItems.first { $0.id == entree.value } }
+            if !miennes.isEmpty {
+                Section {
+                    usageLibraryGrid(miennes)
+                } header: {
+                    sectionHeader(symbole: "photo.on.rectangle.angled",
+                                  titre: String(localized: "story.sticker.library.title",
+                                                defaultValue: "Mes stickers", bundle: .module))
+                }
+            }
             if !gabarits.isEmpty {
                 Section {
                     usageTemplateGrid(gabarits)
@@ -218,8 +248,27 @@ extension StickerPickerView {
                     motion: gabarit.animation))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func usageLibraryGrid(_ items: [StoryStickerLibraryItem]) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
+                  spacing: 8) {
+            ForEach(items) { item in
+                Button {
+                    usage.noteUse(.library(item))
+                    onLibraryStickerSelected(item)
+                    HapticFeedback.medium()
+                } label: {
+                    LibraryStickerThumbnail(item: item)
+                }
+                .buttonStyle(.plain)
+                .stickerFavoriteMenu(.library(item), usage: usage)
+                .accessibilityLabel(String(localized: "story.sticker.library.a11y",
+                                           defaultValue: "Autocollant de votre bibliothèque",
+                                           bundle: .module))
+            }
+        }
     }
 
     @ViewBuilder
@@ -240,8 +289,6 @@ extension StickerPickerView {
                                            defaultValue: "Autocollant \(emoji)", bundle: .module))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 
     // MARK: - Les sections d'un onglet de palette
@@ -260,9 +307,19 @@ extension StickerPickerView {
             Section {
                 stickerSectionContent(onglet)
             } header: {
-                sectionHeader(icone: nil,
-                              symbole: onglet.symbolName,
-                              titre: StickerPickerView.tabTitle(onglet))
+                // **Seule la section LIEU porte un accessoire** — les lieux
+                // alentour, qui disent DE QUEL lieu parlent les dix vignettes
+                // du dessous. Les autres familles n'ont rien à qualifier : leur
+                // contenu ne dépend d'aucune donnée choisie.
+                if onglet == .place {
+                    sectionHeader(symbole: onglet.symbolName,
+                                  titre: StickerPickerView.tabTitle(onglet)) {
+                        placeChips
+                    }
+                } else {
+                    sectionHeader(symbole: onglet.symbolName,
+                                  titre: StickerPickerView.tabTitle(onglet))
+                }
             }
         }
     }
@@ -326,27 +383,46 @@ extension StickerPickerView {
     /// en-têtes ne rend rien et la liste redevient un mur — c'est la moitié
     /// d'accessibilité qu'un ruban d'onglets donnait gratuitement (chaque onglet
     /// était un bouton nommé) et qu'une liste doit rendre à la main.
+    /// - Parameter accessoire: ce que l'en-tête porte SOUS son titre — les
+    ///   lieux les plus proches, pour la section LIEU (directive porteur
+    ///   2026-09-05 : « avec en en-tête de section les lieux les plus proches
+    ///   ou les plus connus de sa position »).
+    ///
+    ///   Il vit dans l'EN-TÊTE et non au-dessus de la grille parce que c'est
+    ///   ce qu'il QUALIFIE : les dix vignettes montrent toutes le même lieu,
+    ///   celui que ces puces choisissent. Posé entre le titre et la grille sans
+    ///   appartenir à l'un ni à l'autre, il se serait lu comme une onzième
+    ///   option.
     @ViewBuilder
-    private func sectionHeader(icone: String? = nil,
-                               symbole: String? = nil,
-                               titre: String) -> some View {
+    private func sectionHeader<Accessoire: View>(
+        icone: String? = nil,
+        symbole: String? = nil,
+        titre: String,
+        @ViewBuilder accessoire: () -> Accessoire = { EmptyView() }
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
         HStack(spacing: 6) {
             if let icone {
-                Text(icone).font(.system(size: 14))
+                Text(icone).font(.system(size: 13))
             } else if let symbole {
                 Image(systemName: symbole)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
             }
-            Text(titre)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+            // **Capitales et interlettrage**, comme les titres de section de la
+            // fiche audio : sans fond ni filet, c'est la FORME du texte qui
+            // doit dire « ceci est un titre ». Un `.secondary` en corps 12
+            // ordinaire se serait lu comme une légende de la grille du dessus.
+            Text(titre.uppercased())
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .tracking(0.6)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
         .accessibilityAddTraits(.isHeader)
+            accessoire()
+        }
+        .padding(.bottom, MeeshySpacing.xs)
     }
 }
 

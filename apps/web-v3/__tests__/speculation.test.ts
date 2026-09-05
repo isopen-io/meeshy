@@ -27,6 +27,19 @@ describe('les règles de spéculation', () => {
     expect(regles.prefetch?.[0]?.eagerness).toBe('moderate');
   });
 
+  /**
+   * `/calls` est un hub de l'espace membre SANS effet de bord — il a donc
+   * exactement le profil des sept ci-dessus, et c'est précisément pour cela
+   * qu'il faut dire pourquoi il n'y est pas : sa seule route est limitée à dix
+   * appels par minute et par lecteur (`RATE_LIMITS.CALL_OPERATIONS`,
+   * `services/gateway/src/middleware/rate-limit.ts:56`). Un préchargement au
+   * survol y épuiserait le quota du lecteur. Sans ce témoin, la prochaine main
+   * « répare l'incohérence ».
+   */
+  it('laisse /calls DEHORS — son endpoint est limité à dix appels par minute', () => {
+    expect(HUBS_PRECHARGEABLES).not.toContain('/calls');
+  });
+
   it('ne précharge JAMAIS une adresse à effet de bord — la ceinture sous la garde de provenance', () => {
     for (const adresse of HUBS_PRECHARGEABLES) {
       expect(adresse.startsWith('/chat/')).toBe(false);

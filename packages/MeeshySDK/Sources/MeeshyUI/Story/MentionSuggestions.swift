@@ -49,6 +49,13 @@ final class MentionSuggestionsModel: ObservableObject {
     /// Le filtre local s'applique TOUT DE SUITE ; la recherche réseau est
     /// débattue de 300 ms puis fusionnée. Annuler la précédente est ce qui
     /// empêche une réponse lente d'écraser une frappe plus récente.
+    ///
+    /// **Le seuil de l'appel distant est `MentionLookupRule`** (directive
+    /// porteur 2026-09-05), pas `!trimmed.isEmpty`. Ce modèle partait dès la
+    /// PREMIÈRE lettre ; son jumeau applicatif
+    /// (`MentionComposerController`) partait dès le `@` NU. Deux familles de
+    /// résolveurs, deux seuils, neuf sites de montage — donc trois régimes
+    /// pour un même geste selon l'écran où le doigt se trouvait.
     func update(query: String) {
         searchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -57,7 +64,7 @@ final class MentionSuggestionsModel: ObservableObject {
                 || ($0.displayName ?? "").localizedCaseInsensitiveContains(trimmed)
         }
         candidates = local
-        guard !trimmed.isEmpty else { return }
+        guard MentionLookupRule.queriesRemote(trimmed) else { return }
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
             guard let self, !Task.isCancelled else { return }

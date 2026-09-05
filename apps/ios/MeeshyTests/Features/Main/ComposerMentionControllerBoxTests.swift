@@ -51,4 +51,70 @@ final class ComposerMentionControllerBoxTests: XCTestCase {
         wait(for: [expectation], timeout: 1)
         cancellable.cancel()
     }
+
+    // MARK: - Cache-first (directive porteur 2026-09-05)
+
+    private func candidat(_ pseudo: String) -> MentionCandidate {
+        MentionCandidate(id: pseudo, username: pseudo, displayName: pseudo, avatarURL: nil)
+    }
+
+    /// **Le cache est servi AVANT que le réseau soit interrogé**, et le témoin
+    /// le prouve à l'endroit où ça se décide : au moment où la source réseau
+    /// est appelée, `candidates` porte déjà ce que le cache a rendu.
+    ///
+    /// Assertion posée DANS la fermeture plutôt qu'après l'`await` : après,
+    /// les deux ordres possibles rendent le même état final, donc le témoin ne
+    /// mesurerait plus l'ORDRE — seulement le résultat.
+    func test_leCache_estServiAvantQueLeRéseauSoitInterrogé() async {
+        let box = ComposerMentionControllerBox()
+        var vuAuMomentDuRéseau: [String] = []
+
+        await box.loadCandidates(
+            cached: { [self] in [candidat("ami")] },
+            fresh: {
+                vuAuMomentDuRéseau = box.candidates.map(\.username)
+                return []
+            })
+
+        XCTAssertEqual(vuAuMomentDuRéseau, ["ami"],
+                       "la bande doit pouvoir répondre à un `@` AVANT l'aller-retour — "
+                       + "c'est la fenêtre exacte où l'auteur tape")
+    }
+
+    /// **Un rafraîchissement qui ÉCHOUE n'efface pas le cache.**
+    ///
+    /// C'est le défaut qu'ajouter le cache aurait introduit tout seul : deux
+    /// écritures sur une même propriété, dont la seconde peut être vide, sont
+    /// un REMPLACEMENT. Le 2026-09-05, la route des amis rendait 404 en
+    /// production et `acceptedFriends()` rendait `[]` par son `catch` — sans
+    /// cette garde, le cache aurait été servi puis effacé sous les yeux de
+    /// l'auteur.
+    func test_unRafraîchissementVide_nEffacePasCeQueLeCacheAServi() async {
+        let box = ComposerMentionControllerBox()
+
+        await box.loadCandidates(cached: { [self] in [candidat("ami")] },
+                                 fresh: { [] })
+
+        XCTAssertEqual(box.candidates.map(\.username), ["ami"])
+    }
+
+    /// Le cas nominal : le réseau a raison quand il répond.
+    func test_unRafraîchissementServi_remplaceLeCache() async {
+        let box = ComposerMentionControllerBox()
+
+        await box.loadCandidates(cached: { [self] in [candidat("vieux")] },
+                                 fresh: { [self] in [candidat("frais")] })
+
+        XCTAssertEqual(box.candidates.map(\.username), ["frais"])
+    }
+
+    /// Cache vide (premier démarrage) : le réseau reste la seule source, et il
+    /// sert.
+    func test_cacheVide_leRéseauSertQuandMême() async {
+        let box = ComposerMentionControllerBox()
+
+        await box.loadCandidates(cached: { [] }, fresh: { [self] in [candidat("ami")] })
+
+        XCTAssertEqual(box.candidates.map(\.username), ["ami"])
+    }
 }

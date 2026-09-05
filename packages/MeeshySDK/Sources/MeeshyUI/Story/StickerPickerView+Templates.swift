@@ -52,8 +52,8 @@ extension StickerPickerView {
                         motion: gabarit.animation))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            // Plus de marge horizontale ici : la feuille est plate depuis le
+            // 2026-09-05, et son défilement pose déjà les 20 points.
         }
     }
 
@@ -81,7 +81,6 @@ extension StickerPickerView {
                 .frame(minHeight: 40)
                 .background(Capsule().fill(Color.primary.opacity(0.06)))
                 .overlay(Capsule().stroke(Color.primary.opacity(0.10), lineWidth: 1))
-                .padding(.horizontal, 12)
                 .accessibilityLabel(String(localized: "sticker.text.field.a11y",
                                            defaultValue: "Texte de la décoration", bundle: .module))
             templateGrid(family: .text, enabled: !typedStickerTextTrimmed.isEmpty)
@@ -111,12 +110,14 @@ extension StickerPickerView {
             // Sans mots, rien à poser : la grille est désactivée, ceci est la
             // ceinture.
             if family == .text, (slots[StickerSlotFiller.textSlot] ?? "").isEmpty { return }
+            usage.noteUse(.template(gabarit))
             onTemplateSelected(gabarit, slots)
             return
         }
-        // Sans lieu choisi il n'y a rien à poser — la grille du lieu n'est
-        // d'ailleurs rendue que lorsque `places` n'est pas vide.
+        // Sans lieu choisi il n'y a rien à poser — la grille du lieu est
+        // d'ailleurs DÉSACTIVÉE tant que `currentPlace` est nil.
         guard let lieu = currentPlace else { return }
+        usage.noteUse(.template(gabarit))
         onLocationTemplateSelected(lieu, gabarit)
     }
 
@@ -140,12 +141,55 @@ extension StickerPickerView {
         case .text:
             return [StickerSlotFiller.textSlot: typedStickerTextTrimmed]
         case .location:
-            guard let lieu = currentPlace else { return [:] }
+            // **Un SPÉCIMEN quand aucun lieu n'est encore connu** (2026-09-05).
+            // `[:]` rendait dix cadres vides — le dessinateur mesure sur son
+            // texte, donc dix rectangles étroits et identiques, ce qui ne
+            // montre AUCUN style. Le spécimen est un nom générique et traduit,
+            // jamais un lieu inventé : « Paris » ferait croire à une position
+            // trouvée, et la vignette mentirait sur ce que la pose donnera.
+            //
+            // La grille reste DÉSACTIVÉE tant que ce spécimen est ce qu'elle
+            // montre (`enabled: currentPlace != nil`) : on regarde, on ne pose
+            // pas — la même règle que la grille de TEXTE avant la frappe.
+            guard let lieu = currentPlace else {
+                return [StickerSlotFiller.placeNameSlot:
+                            String(localized: "sticker.place.specimen.name",
+                                   defaultValue: "Votre lieu", bundle: .module),
+                        StickerSlotFiller.placeDetailSlot:
+                            String(localized: "sticker.place.specimen.detail",
+                                   defaultValue: "autour de vous", bundle: .module)]
+            }
             return StickerSlotFiller.placeSlots(for: lieu)
         }
     }
 
     // MARK: - Lieu
+
+    /// **Le lieu choisi devient le centre, ET la tête de liste** (2026-09-05).
+    ///
+    /// Deux effets, et le second est celui qu'on oublierait : le poser en tête
+    /// le rend SÉLECTIONNÉ, donc les dix vignettes le montrent immédiatement —
+    /// sans quoi l'auteur choisirait un lieu et verrait la grille continuer à
+    /// nommer l'ancien pendant que la recherche tourne.
+    ///
+    /// La recherche qui suit REMPLACE la liste, le lieu choisi remis en tête :
+    /// il n'est pas forcément dans ce que MapKit rend autour de lui — un
+    /// « chez moi » nommé à la main n'est un point d'intérêt pour personne.
+    @MainActor
+    func adopterLieuChoisi(_ lieu: SharedPlace) {
+        places = [lieu] + places.filter { $0.latitude != lieu.latitude || $0.longitude != lieu.longitude }
+        selectedPlaceIndex = 0
+        HapticFeedback.light()
+        guard let nearbyPlaces else { return }
+        Task {
+            let autour = await nearbyPlaces.nearby(around: lieu)
+            // La liste se recompose autour du lieu CHOISI, lui d'abord.
+            places = [lieu] + autour.filter {
+                $0.latitude != lieu.latitude || $0.longitude != lieu.longitude
+            }
+            selectedPlaceIndex = 0
+        }
+    }
 
     var currentPlace: SharedPlace? {
         guard places.indices.contains(selectedPlaceIndex) else { return places.first }
@@ -155,31 +199,121 @@ extension StickerPickerView {
     /// **Le chemin nominal tient en UN geste** : le lieu le plus proche est
     /// présélectionné, taper une décoration la pose. Choisir un autre lieu
     /// coûte le second geste — et seulement quand on le veut (dimension 7).
+    /// **Les DIX styles se montrent AVANT qu'un lieu soit connu** (directive
+    /// porteur 2026-09-05 : « il manque les Localisation, plusieurs styles pour
+    /// montrer la localisation ! »).
+    ///
+    /// ## Le défaut, et pourquoi il ressemblait à une absence de styles
+    ///
+    /// La grille vivait dans la branche `else` de `places.isEmpty`. Le
+    /// catalogue déclare pourtant **dix** pastilles de lieu — pastille, carte
+    /// postale, étiquette, timbre, boussole, enseigne, carte pliée, panneau,
+    /// étiquette de bagage, globe — et les dix ont leur dessinateur. Toutes
+    /// étaient invisibles tant que le GPS n'avait rien rendu : autorisation pas
+    /// encore accordée, simulateur sans position, intérieur d'un bâtiment,
+    /// aucun POI alentour. Le cas le plus FRÉQUENT, donc, montrait zéro style.
+    ///
+    /// > Le gate était motivé — « ne pas peindre une grille qu'on ne peut pas
+    /// > remplir » — et il retirait la capacité ENTIÈRE au lieu de retirer son
+    /// > contenu. Un catalogue complet, dessiné, traduit, et inatteignable :
+    /// > vu de l'écran, c'est indiscernable d'un catalogue qui n'existe pas.
+    ///
+    /// ## Le précédent qui donne la forme juste
+    ///
+    /// `textTab` fait exactement ce qu'il fallait faire : il montre ses styles
+    /// AVANT que l'auteur ait tapé un mot, avec un spécimen dans chaque cadre,
+    /// et n'active la pose qu'une fois la donnée présente
+    /// (`enabled: !typedStickerTextTrimmed.isEmpty`). L'auteur voit ce qu'il
+    /// peut obtenir, puis fournit ce qu'il faut pour l'obtenir — jamais
+    /// l'inverse.
+    ///
+    /// Le LIEU adopte la même grammaire : la grille est toujours peinte, avec
+    /// un spécimen quand aucun lieu n'est encore connu, et elle s'active dès
+    /// qu'un lieu l'est. La différence tient au geste qui apporte la donnée —
+    /// on TAPE un texte, on ATTEND un lieu — et c'est pourquoi l'attente est
+    /// dite au-dessus de la grille plutôt qu'à sa place.
     @ViewBuilder
     var placeTab: some View {
         VStack(alignment: .leading, spacing: 10) {
             if places.isEmpty {
                 // L'onglet EXISTE (l'app sait chercher) mais n'a rien trouvé :
                 // ce n'est pas la même chose qu'une capacité absente, et l'écran
-                // doit le dire plutôt que de laisser une grille vide.
-                Text(String(localized: "sticker.place.empty",
-                            defaultValue: "Aucun lieu trouvé autour de vous",
-                            bundle: .module))
+                // doit le dire — SANS retirer les styles, que l'auteur peut
+                // parcourir pendant que la position arrive.
+                // Deux ATTENTES distinctes, et l'auteur doit savoir laquelle :
+                // « le fournisseur n'est pas là » (position coupée pour Meeshy)
+                // ne se répare pas au même endroit que « on cherche, rien
+                // trouvé ». Une seule phrase pour les deux enverrait la moitié
+                // des auteurs dans les mauvais réglages.
+                Text(nearbyPlaces == nil
+                     ? String(localized: "sticker.place.noPermission",
+                              defaultValue: "Active la position pour épingler un lieu",
+                              bundle: .module)
+                     : String(localized: "sticker.place.empty",
+                              defaultValue: "Aucun lieu trouvé autour de vous",
+                              bundle: .module))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 28)
-            } else {
-                placeChips
-                templateGrid(family: .location)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
             }
+            // **Les puces ont déménagé dans l'EN-TÊTE de la section** (directive
+            // porteur 2026-09-05). Elles ne sont pas une option de plus : elles
+            // disent DE QUEL lieu parlent les dix vignettes du dessous, ce qui
+            // est le rôle d'un en-tête. Voir `sectionHeader(accessoire:)`.
+            templateGrid(family: .location, enabled: currentPlace != nil)
         }
         .padding(.top, 6)
     }
 
-    private var placeChips: some View {
+    /// **La PREMIÈRE puce choisit la position exacte** (directive porteur
+    /// 2026-09-05 : « dans les stickers de lieux en première position, il faut
+    /// permettre de choisir sa position exacte et ça charge les autres éléments
+    /// autour »).
+    ///
+    /// ## Pourquoi en tête, et pourquoi elle RECHARGE
+    ///
+    /// Les puces suivantes sont un RÉSULTAT — ce que le GPS a trouvé autour de
+    /// l'appareil. Celle-ci est la CAUSE : elle décide d'où l'on cherche. La
+    /// mettre en tête range la question avant ses réponses, et c'est aussi la
+    /// place que le doigt atteint en premier.
+    ///
+    /// Recharger n'est pas un extra : choisir « Tour Eiffel » sans recharger
+    /// laisserait à côté les cafés du quartier où l'auteur se trouve — une
+    /// liste dont la tête et la queue parlent de deux endroits. Le centre
+    /// choisi gouverne donc TOUTE la liste.
+    ///
+    /// **Et il court-circuite la permission.** `nearby(around:)` n'appelle
+    /// `currentCoordinate()` que sans centre : un lieu choisi rend la section
+    /// utile à l'intérieur d'un bâtiment, en avion, ou quand on compose une
+    /// story sur un lieu où l'on n'est pas — trois cas où le GPS ne répond
+    /// rien et où la section était muette.
+    @ViewBuilder
+    var placeChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                if storyLocationPicker != nil {
+                    Button {
+                        showsPlacePicker = true
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "sticker.place.pickExact",
+                                     defaultValue: "Ma position…", bundle: .module),
+                              systemImage: "location.magnifyingglass")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .labelStyle(.titleAndIcon)
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 32)
+                            .foregroundStyle(MeeshyColors.brandGradient)
+                            .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.10)))
+                            .overlay(Capsule().stroke(MeeshyColors.indigo400.opacity(0.35), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(String(localized: "sticker.place.pickExact.hint",
+                                              defaultValue: "Choisit le lieu autour duquel chercher",
+                                              bundle: .module))
+                }
                 ForEach(Array(places.enumerated()), id: \.offset) { index, lieu in
                     let choisi = index == selectedPlaceIndex
                     Button {
@@ -204,7 +338,6 @@ extension StickerPickerView {
                     .accessibilityAddTraits(choisi ? [.isSelected] : [])
                 }
             }
-            .padding(.horizontal, 12)
         }
     }
 

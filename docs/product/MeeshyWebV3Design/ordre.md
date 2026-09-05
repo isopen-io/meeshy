@@ -4,7 +4,7 @@
 > `depend_de` de `matrice.json`, produit par `ordre-des-ecrans.js`, qui est aussi le gate CI.
 > L'ETAT de chaque ecran vit dans son issue GitHub, jamais ici.
 
-47 ecrans (39 dessines par la planche, 8 exiges par la mission sans etre dessines), 10 lots, graphe acyclique.
+48 ecrans (40 dessines par la planche, 8 exiges par la mission sans etre dessines), 10 lots, graphe acyclique.
 
 | # | Vue | Priorite | Lot | Route | Audience | Depend de |
 |---:|---|---|---|---|---|---|
@@ -39,19 +39,20 @@
 | 29 | `detail-privacy` | P1-role-secondaire | L6 | `/settings/privacy` | connecte | `settings` |
 | 30 | `detail-profile` | P1-role-secondaire | L6 | `/settings/profile` | connecte | `settings` |
 | 31 | `detail-security` | P1-role-secondaire | L6 | `/settings/security` | connecte | `settings` |
-| 32 | `notifPrefs` | P1-role-secondaire | L6 | `/notifications/preferences` | connecte | `notifs` |
-| 33 | `reels` | P1-role-secondaire | L5 | `/feed/reels` | connecte | `feed` |
-| 34 | `sheet:attach` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | les-deux | `thread` |
-| 35 | `sheet:link` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | connecte | `links` |
-| 36 | `storyCreate` | P1-role-secondaire | L5 | `/stories/new` | connecte | `composer` |
-| 37 | `contacts` | P1-role-secondaire | L5 | `/contacts` | connecte | `chats` |
-| 38 | `detail-notification` | P1-role-secondaire | L6 | `/settings/notification` | connecte | `notifPrefs` |
-| 39 | `password` | P1-role-secondaire | L6 | `/settings/security/password` | connecte | `detail-security` |
-| 40 | `profilMembre` | P1-role-secondaire | L5 | `/chats/:cle?profil=:membre` | les-deux | `thread`, `rich`, `chats` |
-| 41 | `profileEdit` | P1-role-secondaire | L6 | `/settings/profile/edit` | connecte | `detail-profile` |
-| 42 | `search` | P1-role-secondaire | L5 | `/search` | connecte | `chats`, `feed` |
-| 43 | `sheet:conv` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | connecte | `chats` |
-| 44 | `calls` | P2-confort | L7 | `/calls` | connecte | `home` |
-| 45 | `communities` | P2-confort | L7 | `/communities` | connecte | `home` |
-| 46 | `callAudio` | P2-confort | L7 | `/calls/:id` | connecte | `calls` |
-| 47 | `callVideo` | P2-confort | L7 | `/calls/:id?video` | connecte | `callAudio` |
+| 32 | `lienDepuisLeFil` | P1-role-secondaire | L5 | `/chats/:cle?lien` | connecte | `thread`, `links` |
+| 33 | `notifPrefs` | P1-role-secondaire | L6 | `/notifications/preferences` | connecte | `notifs` |
+| 34 | `reels` | P1-role-secondaire | L5 | `/feed/reels` | connecte | `feed` |
+| 35 | `sheet:attach` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | les-deux | `thread` |
+| 36 | `sheet:link` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | connecte | `links` |
+| 37 | `storyCreate` | P1-role-secondaire | L5 | `/stories/new` | connecte | `composer` |
+| 38 | `contacts` | P1-role-secondaire | L5 | `/contacts` | connecte | `chats` |
+| 39 | `detail-notification` | P1-role-secondaire | L6 | `/settings/notification` | connecte | `notifPrefs` |
+| 40 | `password` | P1-role-secondaire | L6 | `/settings/security/password` | connecte | `detail-security` |
+| 41 | `profilMembre` | P1-role-secondaire | L5 | `/chats/:cle?profil=:membre` | les-deux | `thread`, `rich`, `chats` |
+| 42 | `profileEdit` | P1-role-secondaire | L6 | `/settings/profile/edit` | connecte | `detail-profile` |
+| 43 | `search` | P1-role-secondaire | L5 | `/search` | connecte | `chats`, `feed` |
+| 44 | `sheet:conv` *(hors planche)* | P1-role-secondaire | L5 | `(surimpression)` | connecte | `chats` |
+| 45 | `calls` | P2-confort | L7 | `/calls` | connecte | `home` |
+| 46 | `communities` | P2-confort | L7 | `/communities` | connecte | `home` |
+| 47 | `callAudio` | P2-confort | L7 | `/calls/:id` | connecte | `calls` |
+| 48 | `callVideo` | P2-confort | L7 | `/calls/:id?video` | connecte | `callAudio` |

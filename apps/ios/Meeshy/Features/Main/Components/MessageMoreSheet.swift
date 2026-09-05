@@ -24,6 +24,11 @@ struct MessageMoreSheet: View {
     var onDeleteMedia: (() -> Void)? = nil
     var onPin: (() -> Void)? = nil
     var onToggleStar: (() -> Void)? = nil
+    /// **Épingler la DÉCORATION d'un message-sticker à la palette**
+    /// (2026-09-05). `nil` ⇒ l'hôte ne sait pas le faire ; la RÈGLE ne sert
+    /// alors pas l'entrée, puisque `stickerFavorite` reste `nil` dans son
+    /// contexte — la loi 4 est tenue en amont, pas ici.
+    var onToggleStickerFavorite: (() -> Void)? = nil
     /// Suppression du message entier — route vers le dialogue riche
     /// (« pour tous » / « pour moi ») de `ConversationView`.
     var onDeleteMessage: (() -> Void)? = nil
@@ -266,6 +271,7 @@ struct MessageMoreSheet: View {
             case .thread: onThread?()
             case .pin, .unpin: onPin?()
             case .star, .unstar: onToggleStar?()
+            case .pinSticker, .unpinSticker: onToggleStickerFavorite?()
             case .delete: onDeleteMessage?()
             case .edit: onEdit?()
             case .copy: onCopy?()
@@ -341,7 +347,10 @@ struct MessageMoreSheet: View {
 
     private func isExploration(_ item: MoreItem) -> Bool {
         switch item {
-        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share: return false
+        // `pinSticker`/`unpinSticker` FONT et ferment, comme leurs voisins :
+        // épingler une décoration n'ouvre rien à explorer.
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -354,6 +363,10 @@ struct MessageMoreSheet: View {
         case .media: return theme.textSecondary
         case .pin, .unpin: return MeeshyColors.indigo400
         case .star, .unstar: return MeeshyColors.warning
+        // La DÉCORATION porte la couleur de marque, pas celle du favori de
+        // message : deux verbes voisins qui partageraient une couleur se
+        // liraient comme un seul contrôle en deux moitiés.
+        case .pinSticker, .unpinSticker: return MeeshyColors.indigo500
         case .delete: return MeeshyColors.error
         case .edit: return MeeshyColors.indigo500
         case .copy: return MeeshyColors.indigo400
@@ -436,7 +449,8 @@ struct MessageMoreSheet: View {
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
             MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
-        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share:
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
+             .pinSticker, .unpinSticker, .delete, .edit, .copy, .share:
             EmptyView()
         }
     }
@@ -451,6 +465,8 @@ struct MessageMoreSheet: View {
         case .unpin: return "pin.slash"
         case .star: return "star"
         case .unstar: return "star.slash"
+        case .pinSticker: return "rectangle.portrait.on.rectangle.portrait.angled"
+        case .unpinSticker: return "rectangle.portrait.slash"
         case .delete: return "trash"
         case .edit: return "pencil"
         case .copy: return "doc.on.doc"
@@ -475,6 +491,13 @@ struct MessageMoreSheet: View {
         case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
         case .star: return String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)
         case .unstar: return String(localized: "action.unfavorite", defaultValue: "Retirer le favori", bundle: .main)
+        // Le libellé NOMME l'objet — « la décoration », pas « le favori ».
+        // Voisin de `star`, il en désigne un autre : le message reste dans sa
+        // conversation, la décoration part dans la palette.
+        case .pinSticker: return String(localized: "action.pinSticker",
+                                        defaultValue: "Épingler la décoration", bundle: .main)
+        case .unpinSticker: return String(localized: "action.unpinSticker",
+                                          defaultValue: "Retirer la décoration", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
         case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)

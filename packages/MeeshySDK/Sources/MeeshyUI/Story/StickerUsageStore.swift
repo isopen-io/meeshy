@@ -18,13 +18,27 @@ import MeeshySDK
 /// source du dessin.
 ///
 /// > Un favori n'est pas une copie de ce qu'on aime : c'est un renvoi vers lui.
-public struct StickerUsageEntry: Codable, Hashable, Identifiable, Sendable {
+/// `nonisolated` : le module compile sous isolation `MainActor` par défaut, et
+/// ce type est une VALEUR — un identifiant composé, sans état ni horloge. Le
+/// laisser isolé le rendait inconstructible depuis une règle pure de l'app
+/// (`MessageStickerFavorite`, qui traduit un `MessageSticker` en entrée de
+/// palette hors de tout acteur).
+public nonisolated struct StickerUsageEntry: Codable, Hashable, Identifiable, Sendable {
 
     public enum Kind: String, Codable, Sendable {
         /// Un glyphe du système — `value` EST l'emoji.
         case emoji
         /// Un gabarit du catalogue — `value` est son `StickerTemplate.id`.
         case template
+        /// **Une image de « Mes stickers »** — `value` est son
+        /// `StoryStickerLibraryItem.id` (2026-09-05).
+        ///
+        /// Elle est une TROISIÈME nature et non un `template` déguisé : son
+        /// dessin n'est pas au catalogue, il est sur le disque de l'auteur.
+        /// Une entrée dont la cible a été effacée de la bibliothèque est donc
+        /// ignorée à l'affichage, exactement comme un gabarit retiré d'une
+        /// version à l'autre — la même règle, deux magasins.
+        case library
     }
 
     public let kind: Kind
@@ -46,6 +60,10 @@ public struct StickerUsageEntry: Codable, Hashable, Identifiable, Sendable {
 
     public static func template(_ gabarit: StickerTemplate) -> StickerUsageEntry {
         StickerUsageEntry(kind: .template, value: gabarit.id)
+    }
+
+    public static func library(_ item: StoryStickerLibraryItem) -> StickerUsageEntry {
+        StickerUsageEntry(kind: .library, value: item.id)
     }
 }
 
@@ -74,10 +92,22 @@ public struct StickerUsageEntry: Codable, Hashable, Identifiable, Sendable {
 @MainActor
 public final class StickerUsageStore: ObservableObject {
 
-    /// **Le nombre de récents retenus.** Vingt-cinq, soit cinq rangées pleines
-    /// à cinq colonnes : le contenu remplit son onglet sans laisser de rangée
-    /// trouée, et l'onglet se lit d'un regard.
-    public static let recentsLimit = 25
+    /// **Le nombre de récents retenus — CINQUANTE** (directive porteur
+    /// 2026-09-05 : « il faut mettre dans la liste des stickers récents les 50
+    /// derniers stickers utilisés »).
+    ///
+    /// C'était vingt-cinq, choisis pour remplir exactement cinq rangées de
+    /// cinq. L'argument était de mise en page ; la directive tranche sur
+    /// l'USAGE, et elle a raison sur le fond : une liste de récents sert à
+    /// RETROUVER, et vingt-cinq poses couvrent quelques minutes de composition
+    /// sur une palette de deux cents décorations. Cinquante reste un multiple
+    /// de cinq — deux écrans de défilement, pas une archive.
+    ///
+    /// > La borne existe toujours, et pour la même raison : au-delà, retrouver
+    /// > quelque chose dans les récents coûte autant que dans le catalogue.
+    /// > Ce qui change est OÙ se trouve ce seuil, et c'est l'usage qui le dit,
+    /// > pas la grille.
+    public static let recentsLimit = 50
 
     // **iOS 26.1 — `deinit` synthétisée ISOLÉE** (SE-0466, isolation MainActor
     // par défaut) → double-free `pointer being freed was not allocated` au

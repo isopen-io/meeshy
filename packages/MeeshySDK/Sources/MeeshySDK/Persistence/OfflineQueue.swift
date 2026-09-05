@@ -557,7 +557,16 @@ public protocol OfflineQueueing: Sendable {
         storyEffects: StoryEffects?,
         /// Les légendes par fichier, alignées par INDEX sur `sourceMediaURLs`
         /// (#4756). Sans défaut, même raison.
-        mediaCaptions: [String?]?
+        mediaCaptions: [String?]?,
+        /// Les alternatives textuelles, même alignement et même discipline —
+        /// un défaut les ferait disparaître d'un site d'appel sans casser la
+        /// moindre compilation, et un média resterait muet pour un lecteur
+        /// d'écran sans que personne ne l'apprenne.
+        mediaAlts: [String?]?,
+        /// L'identifiant d'objet de canvas de chaque fichier, même alignement.
+        /// Sans défaut, même discipline : il ne sert à rien de le porter à
+        /// moitié.
+        mediaObjectIds: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -2070,7 +2079,13 @@ public actor OfflineQueue {
         /// Les légendes par fichier, alignées par INDEX sur `sourceMediaURLs`
         /// (#4756) — l'index est la seule identité qui survive à la
         /// relocalisation des fichiers.
-        mediaCaptions: [String?]?
+        mediaCaptions: [String?]?,
+        /// Les alternatives textuelles, sur le même index et pour la même
+        /// raison : c'est la seule identité qui survive à la relocalisation.
+        mediaAlts: [String?]?,
+        /// L'identifiant d'objet de canvas de chaque fichier — le chaînon de
+        /// l'adoption (#5280).
+        mediaObjectIds: [String?]?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -2093,7 +2108,9 @@ public actor OfflineQueue {
             mobileTranscription: mobileTranscription,
             localMediaMimeTypes: sourceMediaMimeTypes,
             storyEffects: storyEffects,
-            mediaCaptions: mediaCaptions
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

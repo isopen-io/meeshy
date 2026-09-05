@@ -44,8 +44,10 @@ extension StickerPickerView {
                                                bundle: .module))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            // **Plus de marge horizontale ICI** (2026-09-05) : la feuille est
+            // plate, et c'est son défilement qui pose les 20 points. Une marge
+            // de grille s'y ajoutait pour en faire 32, et la rangée d'emoji y
+            // perdait une colonne entière.
         }
     }
 
@@ -123,12 +125,21 @@ extension StickerPickerView {
                               spacing: 8) {
                         ForEach(libraryItems) { item in
                             Button {
+                                // **« Mes stickers » alimente les RÉCENTS et
+                                // les FAVORIS comme les deux autres grilles**
+                                // (2026-09-05). L'oublier ici aurait fait un
+                                // troisième chemin de pose sans mémoire, et
+                                // l'auteur aurait conclu que les récents ne
+                                // marchent « que parfois » — le pire mode de
+                                // panne d'une mémoire.
+                                usage.noteUse(.library(item))
                                 onLibraryStickerSelected(item)
                                 HapticFeedback.medium()
                             } label: {
                                 LibraryStickerThumbnail(item: item)
                             }
                             .buttonStyle(.plain)  // cf. note des onglets
+                            .stickerFavoriteMenu(.library(item), usage: usage)
                             .accessibilityLabel(String(
                                 localized: "story.sticker.library.a11y",
                                 defaultValue: "Autocollant de votre bibliothèque",
@@ -140,8 +151,7 @@ extension StickerPickerView {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 }
 
@@ -160,7 +170,10 @@ extension StickerPickerView {
 /// Le budget de décodage est celui de la CASE (52 pt), jamais celui de la
 /// scène : trente images de 512 px pour une vignette coûteraient trente bitmaps
 /// dont on n'utiliserait qu'un dixième des pixels.
-private struct LibraryStickerThumbnail: View {
+/// `internal` depuis le 2026-09-05 : les onglets FAVORIS et RÉCENTS rendent les
+/// mêmes vignettes depuis un autre fichier d'extension. La recopier y aurait
+/// donné deux dessins de la même chose, à faire converger à chaque retouche.
+struct LibraryStickerThumbnail: View {
     let item: StoryStickerLibraryItem
 
     private static let side: CGFloat = 52

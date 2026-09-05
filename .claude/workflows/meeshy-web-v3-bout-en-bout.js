@@ -1147,8 +1147,66 @@ ${travaux.map(ligneDeTravail).join('\n')}`,
   phase('Specifier')
   // -------------------------------------------------------------------------
   const resultats = []
+  // -------------------------------------------------------------------------
+  // UN ARBRE PARTAGE, DEUX NIVEAUX (tour 2, 2026-09-05). Les AGENTS ne commitent pas : « ne commit
+  // pas » n'etait ecrit que dans le prompt du developpeur, et un correcteur a pousse 85 fichiers de
+  // trois travaux sous le titre d'une seule issue, un correcteur de gates et le documentaliste ont
+  // suivi — aucun n'avait desobei, la regle ne leur avait jamais ete dite (lecon 532). La BRANCHE,
+  // elle, doit avancer et rester alignee (directive du porteur, 2026-09-05 : « il faut commiter
+  // regulierement et se synchroniser avec les activites distantes ») : c'est une phase MECANIQUE, a
+  // des moments fixes — avant CHAQUE travail et avant les gates —, qui commite l'arbre en point
+  // d'etape, fusionne dev, pousse, et remet au travail suivant ce que les sessions voisines ont bouge.
+  // -------------------------------------------------------------------------
+  const SANS_COMMIT = `
+GIT — ne commit PAS, ne pousse PAS, ne cree ni stash, ni branche, ni worktree : l'arbre est PARTAGE
+avec les autres agents du tour, et ce sont les phases Synchroniser (points d'etape) et Livrer (commits,
+push, PR) qui commitent pour tous. Un commit ou un push de ta part est un DEFAUT du tour.`
+
+  const resynchroniser = async (moment) => {
+    phase('Synchroniser')
+    const synchro = await agent(`${SOCLE}
+${PASSERELLE}
+TA MISSION — RESYNCHRONISER l'arbre ${moment}. Un tour dure des heures : \`${DEPUIS}\` et la branche
+distante avancent pendant ce temps, d'autres sessions y livrent sur les MEMES ecrans, et ce qui se
+specifie, se code, se juge ou se livre ici doit l'etre sur l'arbre FUSIONNE (directive du porteur,
+2026-09-05 : « il faut commiter regulierement et se synchroniser avec les activites distantes »).
+
+1. \`git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE}. \`git status --short\` : si l'arbre
+   porte du travail non commite, c'est un POINT D'ETAPE — commite-le D'ABORD, tel quel (\`git add -A\`
+   apres avoir retire les artefacts generes : rendu/, rapport-conformite.json, .next/, .cache/,
+   captures hors ${D}/cible/), message \`wip(web-v3): point d'etape — <ce que l'arbre porte> (Refs #n)\`,
+   termine par les lignes :
+${ATTRIBUTION}
+   JAMAIS \`git stash\` : dans un arbre partage, un pop rejoue le stash d'un AUTRE lot (lecon 527).
+2. \`git fetch origin ${DEPUIS} ${NOM_SHELL}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
+   \`git log --oneline HEAD..origin/${NOM_SHELL}\` et \`git log --oneline HEAD..origin/${DEPUIS}\` : s'il n'y a
+   RIEN a reprendre d'aucun cote, pousse le point d'etape s'il y en a un (etape 5) et arrete-toi la
+   (reintegre=true, commits_repris=0).
+3. \`git merge origin/${NOM_SHELL}\` (si la branche distante a avance), puis \`git merge origin/${DEPUIS}\` —
+   **JAMAIS** \`git rebase\` ni \`git pull --rebase\` (lecon 324). Un conflit se resout en gardant les DEUX
+   apports (design, matrice ; lecons : celles de dev gardent leurs numeros, les notres se renumerotent
+   a la suite ; budgets-mesures.json : les valeurs se REMESURENT avec la commande que la ligne nomme,
+   jamais choisies) ou en reconciliant le CODE par sa logique ; \`git checkout --ours\` / \`--theirs\` a
+   l'aveugle est interdit. Verifie qu'aucun marqueur ne reste (\`git grep -n '^<<<<<<<'\` vide). Commite
+   chaque fusion (message : ce qui a ete concilie et pourquoi, termine par les lignes d'attribution).
+4. \`cd ${V3} && bun run type-check && bun run lint && bun run test 2>&1 | tail -5\` : ce qui est rouge se
+   corrige ICI si la cause est la fusion (dependance ajoutee par dev → \`bun install --ignore-scripts\`
+   puis \`git checkout -- bun.lock\` ; fixture qui ne connait pas un module ajoute par dev ; ratchet a
+   remesurer…) ; sinon il est rapporte dans gates_apres_merge.
+5. \`git push -u origin ${REF_PUSH}\` (4 essais sur echec RESEAU) : le point d'etape et la fusion partent
+   tout de suite — les sessions voisines les voient.
+6. Rends fichiers_touches_par_dev (ce que dev a bouge dans les fichiers du tour — ce que le prochain
+   travail doit LIRE avant d'ecrire), conflit_non_resolu VIDE si tout est resolu (sinon ce qui demande
+   un arbitrage, l'arbre laisse SANS marqueur), et un etat FACTUEL : commandes et sorties.`,
+      { label: `resynchroniser:tour-${tour}:${moment.replace(/[^a-z0-9:-]+/gi, '-')}`, phase: 'Synchroniser', schema: SYNCHRO, model: MODELE.developper, effort: 'high' })
+    if (synchro && synchro.conflit_non_resolu) log(`ATTENTION — resynchronisation incomplete ${moment} : ${synchro.conflit_non_resolu}`)
+    else if (synchro) log(`Resynchronise ${moment} : ${synchro.commits_repris || 0} commits repris`)
+    return synchro
+  }
+
   for (const t of travaux) {
     const num = numero.get(t.cle)
+    const synchroAvant = await resynchroniser(`avant ${t.cle}`)
     const cible = t.genre !== 'infra'
       ? `\nLa capture CIBLE de cet ecran est ${D}/cible/${t.cle}.png — REGARDE-LA (outil Read) avant d'ecrire. Elle fait foi sur la disposition, la hierarchie, les etats et les gestes ; la CHARTE fait foi sur le style.`
       : ''
@@ -1167,6 +1225,7 @@ OPPOSER ligne a ligne.
 TRAVAIL : ${t.titre_issue}
 ${ligneDeTravail(t)}${cible}
 ${num ? `ISSUE : #${num}.` : ''}
+${synchroAvant && synchroAvant.fichiers_touches_par_dev ? `\nCE QUE LES SESSIONS VOISINES ONT BOUGE dans \`${DEPUIS}\` depuis le debut du tour — lis-le AVANT de specifier, pour ne pas refaire ce qui est fait :\n${court(synchroAvant.fichiers_touches_par_dev, 3000)}` : ''}
 
 CE QUE LA SPECIFICATION CONTIENT, dans cet ordre :
 1. L'ETAT DES LIEUX, mesure : les fichiers qui portent DEJA cet ecran (vue / feuille / contenu /
@@ -1245,7 +1304,7 @@ METHODE, dans cet ordre :
    \`hidden\` est un defaut (gate lifecycle). Toute action a un effet IMMEDIAT et optimiste (directive 4).
 6. Fais tourner localement : \`cd ${V3} && bun run type-check && bun run lint && bun run test\`, puis
    \`bun run build\` (qui lance check-bundle-budget) ; corrige AVANT de rendre.
-7. Ne commit PAS : la phase Livrer s'en charge apres la revue.
+7.${SANS_COMMIT}
 
 Rends un rapport texte : chaque ETAPE de la specification (faite / non faite, et pourquoi), les
 fichiers touches, les commandes lancees et leurs sorties, les CAPTURES produites, ce que tu n'as PAS
@@ -1321,6 +1380,8 @@ C. CORRIGER ET METTRE EN CONFORMITE — toi-meme, maintenant :
   endpoint absent) : rends-le dans \`restants\` avec gravite, constat, preuve et correctif propose —
   c'est ce que le developpeur reprendra.
 
+${SANS_COMMIT}
+
 Rends : verdict (l'etat APRES tes corrections), defauts_trouves (tous, corriges ou non, avec preuve),
 corriges (nombre), restants (bloquant / majeur seulement), rapport (ce que tu as corrige, fichier par
 fichier), gates_rejoues (sorties tronquees), dimensions_mures, dimensions_restantes.`,
@@ -1346,7 +1407,7 @@ voit-il ses droits, puis un 401 devient-il un bouton ? le mode clair est-il auss
 sombre ? les cibles font-elles 44 px ? Est-ce un CHAT, ou encore un formulaire (directive 4) ?
 Rends CHAQUE defaut avec sa preuve (capture, assertion, sortie) ; classe bloquant tout ce qui rend
 l'ecran non fonctionnel ou inerte, majeur ce qui degrade l'usage, mineur le reste. Pose tes captures
-dans ${dossierDeTravail}/recette/${t.cle}/ et cite-les. Tu ne corriges RIEN toi-meme.
+dans ${dossierDeTravail}/recette/${t.cle}/ et cite-les. Tu ne corriges RIEN toi-meme.${SANS_COMMIT}
 
 RAPPORT DU DEVELOPPEUR :
 ${fait || '(aucun rapport rendu)'}
@@ -1380,6 +1441,8 @@ refute-le. Chaque correction garde son test. Rejoue type-check, lint, test, buil
 LES DEFAUTS :
 ${aCorriger.map((d, i) => `${i + 1}. [${d.gravite}] ${d.constat}\n   preuve: ${d.preuve}\n   correctif propose: ${d.correctif}`).join('\n\n')}
 
+${SANS_COMMIT}
+
 Rends : corriges (nombre), refutes (nombre), rapport (ce qui a ete corrige, ce qui a ete refute et
 pourquoi, les commandes rejouees et leurs sorties).`,
         { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: MODELE.developper, effort: 'high' })
@@ -1393,6 +1456,8 @@ CONTRE-REVUE. Des defauts ont ete corriges ou refutes sur « ${t.titre_issue} »
 correction est reelle (git diff) et n'a rien casse (rejoue type-check, lint, test sur le perimetre),
 et que chaque refutation est FONDEE — une refutation infondee redevient un defaut. Ne rends que ce
 qui reste BLOQUANT ou MAJEUR ; un defaut resolu ne se recopie pas.
+
+${SANS_COMMIT}
 
 DEFAUTS RENDUS AU DEVELOPPEUR :
 ${court(aCorriger, 6000)}
@@ -1417,45 +1482,11 @@ ${court(correction, 6000)}`,
   }
 
   // -------------------------------------------------------------------------
-  // Resynchroniser AVANT les gates (lecon du tour 1, 2026-09-04) : un tour dure des heures, et
-  // `dev` comme la branche distante avancent pendant ce temps. Les gates et la livraison doivent se
-  // jouer sur l'arbre FUSIONNE — sinon la fusion tombe sur la phase Livrer, HORS gates, par un
-  // agent qui n'a plus le temps de relire (treize puis trois fichiers en conflit au tour 1).
-  // Reconcilier du code par sa logique est du developpement ; les gates qui suivent jugent le resultat.
-  phase('Synchroniser')
+  // Resynchroniser AVANT les gates (lecon du tour 1, 2026-09-04) : les gates et la livraison se jouent
+  // sur l'arbre FUSIONNE — sinon la fusion tombe sur la phase Livrer, HORS gates. Meme phase mecanique
+  // que celle qui precede chaque travail (point d'etape, fusion, push).
   // -------------------------------------------------------------------------
-  const resynchro = await agent(`${SOCLE}
-${PASSERELLE}
-TA MISSION — RESYNCHRONISER l'arbre AVANT les gates. Le tour a dure des heures : \`${DEPUIS}\` et la
-branche distante ont pu avancer, et les gates comme la livraison doivent se jouer sur l'arbre FUSIONNE.
-L'arbre porte le travail NON COMMITE du tour, et il doit le RESTER (la phase Livrer compose ses commits
-par travail depuis \`git status\`) : la fusion passe donc par le remisage.
-
-1. \`git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE} ; \`git status --short\` : note la liste.
-2. \`git fetch origin ${DEPUIS} ${NOM_SHELL}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
-   \`git log --oneline HEAD..origin/${NOM_SHELL}\` et \`git log --oneline HEAD..origin/${DEPUIS}\` : s'il n'y a
-   RIEN a reprendre d'aucun cote, rends reintegre=true, commits_repris=0, et arrete-toi la.
-3. \`git stash push -u -m resync-avant-gates\`, puis \`git merge origin/${NOM_SHELL}\` (si la branche distante
-   a avance), puis \`git merge origin/${DEPUIS}\` — **JAMAIS** \`git rebase\` ni \`git pull --rebase\` (lecon
-   324). Un conflit de fusion se resout en gardant les DEUX apports (design, lecons, matrice ;
-   budgets-mesures.json : les valeurs se REMESURENT avec la commande que la ligne nomme, jamais
-   additionnees) ou en reconciliant le CODE par sa logique. Commite chaque fusion (message : ce qui a ete
-   concilie et pourquoi, termine par les lignes :
-${ATTRIBUTION}
-   ).
-4. \`git stash pop\` : les conflits du pop (le travail du tour contre ce que dev a change dans les memes
-   fichiers) se resolvent de la meme facon, en gardant le travail du tour DANS la nouvelle structure ;
-   \`git checkout --ours\` / \`--theirs\` a l'aveugle est interdit. Verifie qu'aucun marqueur ne reste
-   (\`git grep -n '^<<<<<<<' -- . ':!*.md'\` vide, puis la meme sur les .md) et que \`git stash list\` est vide.
-5. \`cd ${V3} && bun run type-check && bun run test 2>&1 | tail -5\` : ce qui est rouge se corrige ICI si la
-   cause est la fusion (fixture qui ne connait pas un module ajoute par dev, ratchet a remesurer…) ;
-   sinon il est rapporte dans gates_apres_merge et la phase Gates le traite.
-6. Rends fichiers_touches_par_dev (ce que dev a bouge dans les fichiers du tour), conflit_non_resolu VIDE si
-   tout est resolu (sinon ce qui demande un arbitrage — et l'arbre doit etre laisse SANS marqueur), et un
-   etat FACTUEL : les commandes et leurs sorties.`,
-    { label: `resynchroniser:tour-${tour}`, phase: 'Synchroniser', schema: SYNCHRO, model: MODELE.developper, effort: 'high' })
-  if (resynchro && resynchro.conflit_non_resolu) log(`ATTENTION — resynchronisation incomplete avant les gates : ${resynchro.conflit_non_resolu}`)
-  else if (resynchro) log(`Resynchronise avant les gates : ${resynchro.commits_repris || 0} commits repris`)
+  const resynchro = await resynchroniser('avant les gates')
 
   // -------------------------------------------------------------------------
   phase('Gates')
@@ -1497,6 +1528,8 @@ REGLES :
 - Rends la SORTIE reelle de chaque commande, tronquee, jamais un resume ; et les MESURES chiffrees
   (budget par groupe en trois lignes, requetes avant premier pixel, scores de conformite).
 
+${SANS_COMMIT}
+
 ETAT AVANT CE TOUR (cadrage) :
 ${(cadrage.etat || '').slice(0, 3000)}
 
@@ -1519,6 +1552,8 @@ GATES ROUGES :
 ${court(rouges, 8000)}
 
 CE QUI BLOQUE, selon la passe : ${gates.ce_qui_bloque || '(non dit)'}
+
+${SANS_COMMIT}
 
 Rends ce que tu as corrige, avec les commandes rejouees et leurs sorties.`,
       { label: `corriger-gates:tour-${tour}:${passe}`, phase: 'Implementer', model: MODELE.developper, effort: 'high' })
@@ -1547,6 +1582,8 @@ comme documents de DESIGN — jamais comme tableau de bord (aucune case cochee, 
    format des lecons existantes (constat, cause, regle). Rien si aucune correction de fond.
 5. Rejoue \`cd ${V3} && bun run test -- index-des-vues vues-comparables\` et le gate d'ordre.
 
+${SANS_COMMIT}
+
 RESULTATS DU TOUR :
 ${resultats.map((r) => `- ${r.cle} : ${r.titre}\n  mures: ${(r.dimensions_mures || []).join(', ')}\n  restantes: ${(r.dimensions_restantes || []).join(', ')}`).join('\n')}
 
@@ -1566,10 +1603,19 @@ TA MISSION — LIVRER le tour ${tour} sur ${NOM_DE_BRANCHE}.
 ETAT DES GATES :
 ${court(gates, 8000)}
 
-SI UN GATE EST ROUGE (resultat "rouge") : ne pousse RIEN, ne commit RIEN. Rends pousse=false et un
-rapport qui dit ce qui est rouge et ce qu'il faut. C'est tout.
+SI UN GATE EST ROUGE (resultat "rouge"), DISTINGUE — lecon du tour 2 (2026-09-05), ou une livraison
+entiere est restee sans PR parce qu'un gate TRANSVERSAL, rouge sur toute la matrice et sur \`${BASE}\`
+lui-meme, a ete lu comme un rouge du tour :
+(a) le rouge est CAUSE par le tour (il touche ce que le tour a livre, et l'etat du cadrage le donnait
+    vert) : ne pousse RIEN de plus, rends pousse=false et un rapport qui dit ce qui est rouge et ce
+    qu'il faut. C'est tout.
+(b) le rouge est PREEXISTANT ou TRANSVERSAL (deja rouge au cadrage ; ou rouge sur des ecrans que le
+    tour n'a pas touches ; ou cause par un chantier de \`${BASE}\` — la conformite visuelle de toute la
+    matrice apres un changement de socle, par exemple) : il n'arrete PAS la livraison. Livre (etapes
+    1 a 4) et DIS-LE, dans le corps de la PR et dans le rapport : le gate, sa cause, l'issue qui le
+    porte (ouvre-la si elle n'existe pas).
 
-SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
+SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES, et dans le cas (b) :
 1. \`git status --short\`, \`git diff --stat\` : regarde ce que tu t'appretes a commiter. Retire tout
    artefact genere (rendu/, rapport-conformite.json, .next/, node_modules/, .cache/, captures de
    travail hors ${D}/cible/). Les captures cibles regenerees (${D}/cible/*.png), vues.json, vues.md,
@@ -1581,6 +1627,8 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
    (JAMAIS \`Closes #0\`), et en fin de message, EXACTEMENT ces lignes :
 ${ATTRIBUTION}
    N'ecris aucun nom de modele ailleurs dans le message, ni nulle part dans un fichier du depot.
+   Un travail deja porte par des POINTS D'ETAPE (phase Synchroniser) n'a plus de commit a lui : son
+   \`Closes #n\` va dans le corps de la PR (section Issues) — jamais un commit vide.
 3. \`git push -u origin ${REF_PUSH}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
    Sur rejet non-reseau (non fast-forward) : \`git fetch origin ${NOM_SHELL} && git merge origin/${NOM_SHELL}\`
    — JAMAIS \`git pull --rebase\` ni \`git rebase\` (lecon 324 du depot : le rebase aplatit un commit

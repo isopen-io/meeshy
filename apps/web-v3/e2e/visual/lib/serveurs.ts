@@ -20,6 +20,8 @@ import {
   type FilSocialDeBouchon,
 } from './bouchon-compte';
 import { carnetDeBouchon, routesDuCarnet, type CarnetDeBouchon } from './bouchon-carnet';
+import { routesDesAppels } from './bouchon-appels';
+import { routesDesCommunautes, type CommunauteDeBouchon } from './bouchon-communautes';
 import { routesDeLaRecherche } from './bouchon-recherche';
 import {
   placeDeLInvite,
@@ -109,6 +111,8 @@ export {
   PRENOM_DU_LECTEUR,
   PSEUDO_DEJA_PRIS,
   PSEUDO_SUGGERE,
+  QUATRIEME_CONVERSATION,
+  TROISIEME_CONVERSATION,
   type MessageServi,
 } from './bouchon-monde';
 export { lienParDefaut, type LienDeBouchon } from './bouchon-lien';
@@ -253,6 +257,16 @@ export type PasserelleDeBouchon = {
   /** Un message qui ARRIVE pendant que le lecteur n'est pas là — servi par la liste ET par `/sync`, jamais par le socket. */
   readonly ajouteUnMessage: (message: MessageServi) => void;
   readonly messages: () => readonly MessageServi[];
+  /** Modifier un message directement — un spec prépare ainsi un message VIEUX de plus de 24 h (issue #5163). */
+  readonly modifieUnMessage: (id: string, content: string) => MessageServi | null;
+  readonly retireUnMessage: (id: string) => MessageServi | null;
+  /**
+   * REMETTRE LE FIL DANS SON ÉTAT DE DÉPART — la sœur d'`oublie()` pour les
+   * MESSAGES (issue #5163). Éditer et retirer sont des écritures DURABLES : sans
+   * elle, une épreuve qui retire `m4` le retire pour toutes les suivantes, et
+   * l'ordre des `test()` deviendrait une dépendance cachée.
+   */
+  readonly remets: () => void;
 };
 
 export const passerelleDeBouchon = async (options?: {
@@ -267,6 +281,10 @@ export const passerelleDeBouchon = async (options?: {
    * garni ne fait jamais visiter.
    */
   readonly lecteurSansRien?: boolean;
+  /** `/calls` sans aucun appel — l'état VIDE de l'historique, distinct du lecteur sans rien. */
+  readonly appelsVides?: boolean;
+  /** `/communities` sans aucune communauté — l'état VIDE du carnet, distinct du lecteur sans rien. */
+  readonly communautesVides?: boolean;
 }): Promise<PasserelleDeBouchon> => {
   const journal: AppelRecu[] = [];
   const conversationId = CONVERSATION_DU_LECTEUR.id;
@@ -287,6 +305,31 @@ export const passerelleDeBouchon = async (options?: {
   const messages: MessageServi[] = messagesInitiaux(conversationId);
   const ajouteUnMessage = (message: MessageServi): void => {
     messages.push(message);
+  };
+  const remets = (): void => {
+    messages.splice(0, messages.length, ...messagesInitiaux(conversationId));
+  };
+  /**
+   * `modifieUnMessage` / `retireUnMessage` (issue #5163) — le MÊME mutateur
+   * pour `PUT`/`DELETE /messages/:id` (bouchon-fil.ts) ET pour `message:edit`/
+   * `message:delete` (bouchon-socket.ts) : deux transports, un seul site
+   * d'écriture, comme la passerelle réelle (`messageEditAdmission.ts`).
+   */
+  const modifieUnMessage = (id: string, content: string): MessageServi | null => {
+    const rang = messages.findIndex((m) => m.id === id && m.deletedAt === undefined);
+    if (rang === -1) return null;
+    const courant = messages[rang] as MessageServi;
+    const edite: MessageServi = { ...courant, content, isEdited: true, editedAt: new Date().toISOString(), translations: [] };
+    messages[rang] = edite;
+    return edite;
+  };
+  const retireUnMessage = (id: string): MessageServi | null => {
+    const rang = messages.findIndex((m) => m.id === id && m.deletedAt === undefined);
+    if (rang === -1) return null;
+    const courant = messages[rang] as MessageServi;
+    const retire: MessageServi = { ...courant, deletedAt: new Date().toISOString(), translations: [] };
+    messages[rang] = retire;
+    return retire;
   };
   let compteur = 100;
   const identifiants = { suivant: () => `m${(compteur += 1)}` };
@@ -320,6 +363,8 @@ export const passerelleDeBouchon = async (options?: {
     invite,
     messages: () => messages,
     ajouteUnMessage,
+    modifieUnMessage,
+    retireUnMessage,
     presences,
     membres: CONVERSATION_DU_LECTEUR.membres,
     socket: () => bouchon,
@@ -375,6 +420,11 @@ export const passerelleDeBouchon = async (options?: {
     lien,
     carnet,
   );
+  const desAppels = routesDesAppels(creanceDe, { vide: () => options?.appelsVides ?? false });
+  const communautesCreees: CommunauteDeBouchon[] = [];
+  const desCommunautes = routesDesCommunautes(creanceDe, communautesCreees, {
+    vide: () => options?.communautesVides ?? false,
+  });
 
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';
@@ -454,6 +504,13 @@ export const passerelleDeBouchon = async (options?: {
     // absorbe `/api/v1/links/:key/members` (la jonction), `duCarnet` le
     // reste de `/api/v1/links` (`GET`, `POST`, `PATCH /:linkId`).
     if (await duCarnet({ requete, url, corps: octets, json })) return;
+    // L'HISTORIQUE DES APPELS (#5108) — `/api/v1/calls/history`, un chemin
+    // qu'aucune autre famille ne réclame : sa place dans l'ordre n'a pas
+    // d'incidence, elle vit à côté de `duCarnet` par voisinage de sujet.
+    if (desAppels({ requete, url, json })) return;
+    // LES COMMUNAUTÉS (#5109) — `/api/v1/communities`, un préfixe qu'aucune
+    // autre famille ne réclame : même voisinage de sujet que `desAppels`.
+    if (desCommunautes({ requete, url, corps: octets, json })) return;
     // La RECHERCHE, avant `/api/v1/conversations` et `/api/v1/directory/`
     // nues : Fastify distingue ces routes par leur chemin complet, et un
     // bouchon qui teste des préfixes ordonne du plus PRÉCIS au plus général.
@@ -473,6 +530,9 @@ export const passerelleDeBouchon = async (options?: {
     // deux conversations que `GET /conversations` sert au membre, et le fil
     // riche. Sans elles, la LISTE n'entendrait aucune frappe.
     conversationsDuMembre: [conversationId, AUTRE_CONVERSATION.id, CONVERSATION_RICHE.id],
+    messages: () => messages,
+    modifieUnMessage,
+    retireUnMessage,
   });
 
   const port = await portLibre();
@@ -527,6 +587,9 @@ export const passerelleDeBouchon = async (options?: {
     presences,
     ajouteUnMessage,
     messages: () => messages,
+    modifieUnMessage,
+    retireUnMessage,
+    remets,
   };
 };
 

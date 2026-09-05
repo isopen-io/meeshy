@@ -987,6 +987,11 @@ struct ConversationView: View {
                     isStarred: viewModel.isStarred(messageId: msg.id),
                     isEdited: msg.isEdited,
                     hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
+                    // **La décoration du message, et son état d'épinglage**
+                    // (2026-09-05). `nil` ⇒ ce n'est pas un sticker, et
+                    // l'entrée n'existe pas — la loi 4 tenue par la RÈGLE, pas
+                    // par un grisé.
+                    stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
                     isForwardable: msg.isForwardable
                 )
@@ -1029,6 +1034,10 @@ struct ConversationView: View {
                     onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                     onToggleStar: {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
+                    },
+                    onToggleStickerFavorite: {
+                        MessageStickerFavorite.toggle(for: msg.sticker)
+                        HapticFeedback.light()
                     },
                     onDeleteMessage: { requestDeleteMessage(msg.id) },
                     onEdit: { beginEdit(msg) },

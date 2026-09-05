@@ -77,7 +77,7 @@ final class PublishChainCensusTests: XCTestCase {
             audioUrl: nil, audioDuration: nil, visibilityUserIds: nil,
             location: nil, mentions: nil, discoverabilityPrecision: nil,
             repostOfId: nil, mobileTranscription: nil, storyEffects: nil,
-            mediaCaption: nil
+            mediaCaption: nil, mediaAlt: nil
         )
     }
 
@@ -101,8 +101,14 @@ final class PublishChainCensusTests: XCTestCase {
     ///
     /// | champ | producteur atteignable depuis le meuble | pourquoi il n'atteint pas la file |
     /// |---|---|---|
-    /// | `mediaAlt` | **oui** — `MediaEditTool.altText` (`ComposerObjectEditorRail`), monté par `MeeshyComposerHost+Portals` | **PERTE, depuis le 2026-09-05** — voir ci-dessous |
     /// | `allowSoundExtraction` | non — `SoundExtractionToggle`, monté par `ComposerToolPanelHost` → `ComposerBottomBand`, **l'ATELIER seul** | aucune porte ne l'écrit sur cette voie |
+    ///
+    /// **`mediaAlt` a QUITTÉ cette liste le 2026-09-05, dans la journée où il y
+    /// était entré.** Il y est resté le temps d'un correctif : la voie durable
+    /// le porte désormais de bout en bout — `ComposerDocumentDraft.mediaAlts` →
+    /// `PublishIntent.document` (réaligné sur l'index de `localMedia`, comme les
+    /// légendes) → `enqueuePostMedia` → `CreatePostPayload.mediaAlts` →
+    /// `serverKeyedTexts` → `CreatePostBody.mediaAlt`.
     ///
     /// > **Une justification de garde se périme comme un compte.** L'ancienne
     /// > disait « rien ne peut écrire ces deux champs » ; c'est resté vrai pour
@@ -111,47 +117,46 @@ final class PublishChainCensusTests: XCTestCase {
     /// > sauvé la table n'est pas un témoin : c'est d'avoir relu le commit
     /// > voisin qui ouvrait la porte.
     ///
-    /// **Ce pas est FAIT — `mediaAlt` est une PERTE, mesurée le 2026-09-05.**
-    /// La ligne précédente disait « à UN pas », et le pas ne demandait aucun
-    /// commit : il suffisait qu'un post du meuble PORTE une description. Il le
-    /// peut depuis `a372e2484e`, et tout post du meuble part par la file —
-    /// `ComposerPublishChannel.channel(.post) == .document`, donc
-    /// `publishDocument()` → `ComposerDocumentDraft` (16 champs, aucun
-    /// d'alternative) → `PublishIntent.document` → `enqueuePostMedia` →
-    /// `CreatePostBody`. La description saisie tombe au premier maillon.
+    /// ## Ce que cette entrée a coûté et appris, en une journée
+    ///
+    /// Le matin, `mediaAlt` était rangé ici sous « rien ne l'écrit ». Un commit
+    /// voisin (`a372e2484e`) a ouvert la porte de saisie, et la ligne est
+    /// devenue fausse **sans que ce fichier bouge** : le verdict — « absent de
+    /// la voie durable » — restait identique, seule sa RAISON avait changé.
     ///
     /// > **Une garde peut décrire correctement une perte à venir et ne pas la
-    /// > voir arriver** : sa condition de bascule (« le jour où un post portera
-    /// > une description ») n'est vérifiée par aucun témoin — c'est de la prose.
-    /// > Le seul témoin possible est celui qui compte les champs, et il est
-    /// > NEUTRALISÉ par l'exemption même qui porte la prose.
+    /// > voir arriver.** Sa condition de bascule (« le jour où un post portera
+    /// > une description ») n'était vérifiée par aucun témoin — c'était de la
+    /// > prose. Le seul témoin possible est celui qui COMPTE les champs, et il
+    /// > était neutralisé par l'exemption même qui portait cette prose.
     ///
-    /// Le champ reste inscrit ici, mais sa raison a changé de nature : ce n'est
-    /// plus « rien ne l'écrit », c'est « **rien ne le transporte, et quelque
-    /// chose l'écrit** ». Le correctif est nommé et chiffré : porter `mediaAlts`
-    /// sur les quatre maillons, à l'identique de `mediaCaptions` — dont
-    /// `PublishIntent.document` réaligne déjà la carte URL sur l'index de
-    /// `localMedia`. Ce qui manque en amont est l'index OBJET → URL SOURCE :
-    /// `applyContentMedia` nomme la copie `tmp/<objectId>.<ext>` et ne rend rien,
-    /// donc le meuble ne peut pas relier son objet au fichier qu'il enfile.
+    /// Ce qui bloquait le correctif n'était aucun des quatre maillons : c'était
+    /// un PONT manquant en amont. `applyContentMedia` frappe l'`objectId`,
+    /// copie la source vers `tmp/<objectId>.<ext>` — et jetait la
+    /// correspondance. Le meuble tient les alternatives par identifiant
+    /// d'OBJET (la seule clé qui survive au remplacement d'un fichier sur la
+    /// même scène) ; la voie durable réaligne par URL SOURCE. Les deux clés
+    /// sont justes à leur étage, et un seul site connaissait les deux.
+    ///
+    /// > Reconstruire ce pont par l'ORDRE aurait tenu jusqu'au premier des
+    /// > trois `continue` de cette boucle — que #4879 a rendus bruyants parce
+    /// > qu'ils arrivent. L'alternative d'une photo serait passée sous la
+    /// > suivante, en silence, sur le chemin dont on venait de rendre les
+    /// > échecs visibles.
     ///
     /// Sur l'autre voie — celle de la SCÈNE, que prend une story — le champ
-    /// voyage depuis le 2026-09-05 : `publishStoryScene()` y posait
+    /// voyage depuis le même jour : `publishStoryScene()` y posait
     /// `ComposerMediaAccessibility.empty`, la greffe n'étant câblée que sur la
     /// remise à l'atelier (`ComposerMediaAltDoorTests
     /// .test_chaqueRemiseDeLaCharge_passeParLaGreffe`).
     ///
-    /// **Ce n'est pas une exemption pour autant.** Une exemption dirait « ce
-    /// champ n'a pas à traverser » ; celui-ci l'aura à traverser dès que la
-    /// voie durable saura porter une alternative — et `mediaAlt` porte alors le
-    /// TEXTE ALTERNATIF d'accessibilité de chaque média, la dimension 5. La
-    /// liste est ÉPINGLÉE : aucun champ NEUF ne peut la rejoindre en silence, et
-    /// en retirer un exige de passer ici. C'est l'interruption qui fait le
-    /// travail, pas le nombre.
+    /// **Il ne reste donc qu'`allowSoundExtraction`**, et pour l'autre raison :
+    /// aucune porte ne l'écrit sur cette voie. La liste est ÉPINGLÉE — aucun
+    /// champ NEUF ne peut la rejoindre en silence, et en RETIRER un exige de
+    /// passer ici. C'est l'interruption qui fait le travail, pas le nombre.
     ///
     /// Suivi : #5196 · le recensement face au CONTRAT : #5239.
     private static let absentsDeLaVoieDurable: Set<String> = [
-        "mediaAlt",
         "allowSoundExtraction",
     ]
 
@@ -226,7 +231,12 @@ final class PublishChainCensusTests: XCTestCase {
         XCTAssertEqual(champs(voieEnLigne()).count, 18,
                        "`CreatePostRequest` (voie EN LIGNE) a changé de taille — ce champ neuf "
                        + "traverse-t-il la voie DURABLE ?")
-        XCTAssertEqual(champs(voieDurable()).count, 16,
+        // 17 depuis le 2026-09-05 : `mediaAlt`. Il ne NAÎT pas ici — il vient
+        // des quatre maillons amont, chacun ajouté dans le même lot
+        // (`ComposerDocumentDraft.mediaAlts` → `PublishIntent.document` →
+        // `enqueuePostMedia` → `CreatePostPayload.mediaAlts`), et c'est
+        // exactement la question que ce compte pose.
+        XCTAssertEqual(champs(voieDurable()).count, 17,
                        "`CreatePostBody` (voie DURABLE) a changé de taille — ce champ neuf "
                        + "vient-il des quatre maillons amont, ou naît-il ici ?")
     }

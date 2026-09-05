@@ -42,7 +42,14 @@ import { getIoState } from './helpers/message-new-parity-mocks';
 // Import under test (after all mocks are set up)
 // ---------------------------------------------------------------------------
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
-import { makeTranslationService, makePrisma, makeContractMessage, CONVERSATION_ID } from './helpers/message-new-parity-fixtures';
+import {
+  makeTranslationService,
+  makePrisma,
+  makeContractMessage,
+  seedParticipantsAlways,
+  seedParticipantsBySelect,
+  CONVERSATION_ID,
+} from './helpers/message-new-parity-fixtures';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
   declaredConversationUpdatedFields,
@@ -290,42 +297,9 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     return call?.[1] as Record<string, unknown> | undefined;
   }
 
-  /**
-   * Le `conversation:updated` n'est émis qu'AUX PARTICIPANTS : les deux
-   * producteurs abandonnent sur une liste vide (`sharedParticipants.length > 0`
-   * côté socket, `senderId` + `findMany` côté REST). Le double partagé de ce
-   * fichier en rend une VIDE — c'est ce qu'il faut aux témoins `message:new`,
-   * qui ne veulent aucun enrichissement. On la peuple donc ICI, pour les seuls
-   * témoins du jumeau, plutôt que de changer le double sous les autres.
-   *
-   * Forme : `PREVIEW_PRISM_PARTICIPANT_SELECT` + `joinedAt`, ce que les deux
-   * producteurs sélectionnent réellement.
-   */
+  /** Fabrique unique : `helpers/message-new-parity-fixtures.ts`. */
   function seedParticipants(): void {
-    (prisma.participant.findMany as any).mockResolvedValue([
-      {
-        id: 'sender-participantId',
-        userId: 'sender-userId',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        user: {
-          systemLanguage: 'fr',
-          regionalLanguage: null,
-          customDestinationLanguage: null,
-          deviceLocale: null,
-        },
-      },
-      {
-        id: 'peer-participantId',
-        userId: 'peer-userId',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        user: {
-          systemLanguage: 'en',
-          regionalLanguage: null,
-          customDestinationLanguage: null,
-          deviceLocale: null,
-        },
-      },
-    ]);
+    seedParticipantsAlways(prisma);
   }
 
   async function updatedFromSocketPath(message: unknown): Promise<Record<string, unknown>> {
@@ -423,41 +397,9 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
   let ioState: ReturnType<typeof getIoState>;
   let queue: { enqueue: jest.Mock };
 
-  /**
-   * Deux participants ACTIFS : l'expéditeur (exclu de la file — il a déjà son
-   * message) et un pair hors ligne (la carte `connectedUsers` du manager reste
-   * vide dans ce harnais, donc tout le monde est absent).
-   *
-   * La forme rendue est celle du SUPERSET que les deux producteurs demandent
-   * pour la ligne de liste ; `select` est inspecté pour que le témoin de panne
-   * puisse ne faire tomber QUE cette requête-là.
-   */
+  /** Fabrique unique : `helpers/message-new-parity-fixtures.ts`. */
   function seedParticipants(): void {
-    (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
-      const wantsSuperset = Boolean(args?.select?.joinedAt);
-      return [
-        {
-          id: 'sender-participantId',
-          userId: 'sender-userId',
-          ...(wantsSuperset
-            ? {
-                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-                user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
-              }
-            : {}),
-        },
-        {
-          id: 'peer-participantId',
-          userId: 'peer-userId',
-          ...(wantsSuperset
-            ? {
-                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-                user: { systemLanguage: 'en', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
-              }
-            : {}),
-        },
-      ];
-    });
+    seedParticipantsBySelect(prisma);
   }
 
   /** L'entrée réellement déposée pour ce destinataire, si elle existe. */

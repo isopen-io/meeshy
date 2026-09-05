@@ -88,3 +88,64 @@ export function makeContractMessage(overrides: Record<string, unknown> = {}) {
     ...overrides,
   } as any;
 }
+
+/**
+ * Les DEUX lignes de participant que les deux producteurs sélectionnent
+ * réellement pour la ligne de liste : `PREVIEW_PRISM_PARTICIPANT_SELECT` +
+ * `joinedAt`. L'expéditeur et un pair.
+ */
+const participantSupersetRows = () => [
+  {
+    id: 'sender-participantId',
+    userId: 'sender-userId',
+    joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+    user: {
+      systemLanguage: 'fr',
+      regionalLanguage: null,
+      customDestinationLanguage: null,
+      deviceLocale: null,
+    },
+  },
+  {
+    id: 'peer-participantId',
+    userId: 'peer-userId',
+    joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+    user: {
+      systemLanguage: 'en',
+      regionalLanguage: null,
+      customDestinationLanguage: null,
+      deviceLocale: null,
+    },
+  },
+];
+
+/**
+ * Le `conversation:updated` n'est émis qu'AUX PARTICIPANTS : les deux
+ * producteurs abandonnent sur une liste vide (`sharedParticipants.length > 0`
+ * côté socket, `senderId` + `findMany` côté REST). `makePrisma()` en rend une
+ * VIDE — c'est ce qu'il faut aux témoins `message:new`, qui ne veulent aucun
+ * enrichissement. On la peuple donc pour les seuls témoins du jumeau, plutôt
+ * que de changer le double sous les autres.
+ */
+export function seedParticipantsAlways(prisma: any): void {
+  (prisma.participant.findMany as any).mockResolvedValue(participantSupersetRows());
+}
+
+/**
+ * Deux participants ACTIFS : l'expéditeur (exclu de la file — il a déjà son
+ * message) et un pair hors ligne (la carte `connectedUsers` du manager reste
+ * vide dans ce harnais, donc tout le monde est absent).
+ *
+ * Ici le superset n'est rendu QUE si la requête le demande : `select` est
+ * inspecté pour que le témoin de panne puisse ne faire tomber QUE cette
+ * requête-là. C'est ce qui distingue cette fabrique de sa voisine, et la
+ * raison pour laquelle les deux coexistent au lieu de fusionner.
+ */
+export function seedParticipantsBySelect(prisma: any): void {
+  (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
+    const wantsSuperset = Boolean(args?.select?.joinedAt);
+    return participantSupersetRows().map(({ id, userId, joinedAt, user }) =>
+      wantsSuperset ? { id, userId, joinedAt, user } : { id, userId }
+    );
+  });
+}

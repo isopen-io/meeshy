@@ -105,23 +105,31 @@ test.describe('le tableau de bord garni', () => {
   });
 
   /**
-   * Charte règle 6 — un rond flottant est un `<a href>` vers une route SERVIE.
+   * Charte règle 6 — un raccourci d'en-tête est un `<a href>` vers une route
+   * SERVIE.
    *
-   * **SA PRÉMISSE A BOUGÉ, PAS LA RÈGLE** (#5093). Ce témoin gardait « aucun
-   * rond » pour la raison qu'il portait écrite : « la v3 ne sert aujourd'hui ni
-   * compte ni réglages ». Elle sert désormais les six écrans de `/settings`,
-   * `/feed`, `/contacts`, `/notifications`, `/search` et `/links` — donc la
-   * règle 6 veut que les ronds soient RENDUS. Ce qu'elle interdit — une cible
-   * inerte, un `href="#"`, un `onclick` — est gardé ligne pour ligne.
+   * **SA PRÉMISSE A BOUGÉ DEUX FOIS, PAS LA RÈGLE.** #5093 l'écrivait pour
+   * « aucun rond » : la v3 ne servait alors ni compte ni réglages. Elle sert
+   * désormais les six écrans de `/settings`, `/feed`, `/contacts`,
+   * `/notifications`, `/search` et `/links` — donc la règle 6 veut que les
+   * deux cibles soient RENDUES. La revue de #5164 a ensuite déplacé CES deux
+   * cibles hors du flottant : le rail `position:fixed` recouvrait la carte de
+   * conversation mise en avant dès que la liste sert plus de deux lignes, à
+   * n'importe quel défilement (charte règle 8 b/c) — `.raccourci`, DANS le
+   * flux de l'en-tête, ne peut plus recouvrir quoi que ce soit. Ce que la
+   * règle 6 interdit — une cible inerte, un `href="#"`, un `onclick` — est
+   * gardé ligne pour ligne.
    */
-  test('rend les deux ronds vers des routes servies, et aucune cible inerte', async ({ browser }) => {
+  test('rend les deux raccourcis vers des routes servies, et aucune cible inerte', async ({ browser }) => {
     const contexte = await browser.newContext();
     await contexte.addCookies(cookiesDuLecteur(v3.base));
     const page = await contexte.newPage();
     await page.goto(`${v3.base}/`, { waitUntil: 'domcontentloaded' });
 
-    await expect(page.locator('a.flottante.gauche')).toHaveAttribute('href', '/feed');
-    await expect(page.locator('a.flottante.droite')).toHaveAttribute('href', '/?espace');
+    const raccourcis = page.locator('.raccourcis-entete .raccourci');
+    await expect(raccourcis).toHaveCount(2);
+    await expect(raccourcis.first()).toHaveAttribute('href', '/feed');
+    await expect(raccourcis.last()).toHaveAttribute('href', '/?espace');
     expect(await page.locator('[href="#"], [onclick]').count()).toBe(0);
     await contexte.close();
   });

@@ -80,10 +80,15 @@ public final class MentionComposerController: ObservableObject {
     private let localCandidates: () -> [MentionCandidate]
     private var debounceTask: Task<Void, Never>?
 
-    // 0 = la liste par défaut s'affiche dès la frappe de « @ » (requête vide) :
-    // pour un post, le backend renvoie auteur + personnes ayant commenté + contacts ;
-    // pour une conversation, les participants. Débounce + cache Redis évitent le spam.
-    private static let minQueryLengthForAPI = 0
+    // **Le seuil ne vit plus ici** (directive porteur 2026-09-05).
+    //
+    // Il valait `0` : l'appel contextuel partait dès le `@` NU, au motif que
+    // « le backend renvoie auteur + commentateurs + contacts ». C'est vrai, et
+    // ce n'est pas ce que la directive demande — sur `@` seul, ce sont les amis
+    // et contacts LOCAUX qui répondent, sans réseau. La loi est
+    // `MentionLookupRule` (SDK), partagée avec `MentionSuggestionsModel` :
+    // deux familles de résolveurs portaient chacune son propre seuil, donc
+    // trois régimes pour un même geste selon l'écran.
     private static let debounceMs: UInt64 = 300_000_000
     /// Même plafond que `MentionSuggestionsModel` (SDK), qui interroge le même
     /// annuaire : deux plafonds différents pour une même liste se seraient
@@ -139,7 +144,7 @@ public final class MentionComposerController: ObservableObject {
             scheduleDirectoryLookup(query: query, locals: filtered)
             return
         }
-        guard query.count >= Self.minQueryLengthForAPI else {
+        guard MentionLookupRule.queriesRemote(query) else {
             isResolving = false
             return
         }
@@ -175,15 +180,16 @@ public final class MentionComposerController: ObservableObject {
     /// personne qu'on connaît se propose avant une homonyme qu'on ne connaît
     /// pas.
     ///
-    /// Une requête VIDE (`@` seul) ne part pas : elle rendrait l'annuaire
-    /// entier, ce qui n'aide personne et coûte un aller-retour à chaque `@`
-    /// tapé. Dans ce cas les amis sont la réponse complète, et le témoin
-    /// s'éteint tout de suite pour que la bande puisse dire « personne »
-    /// quand il n'y en a aucun — l'état exact qu'un 404 sur la route des amis
-    /// laissait passer pour un silence.
+    /// **Sous deux caractères, rien ne part** (`MentionLookupRule`). Le `@` nu
+    /// rendrait l'annuaire entier ; une seule lettre rend des dizaines de
+    /// comptes sans rapport, et les pousse DEVANT les amis de l'auteur dans une
+    /// bande qui n'en montre que trois. Dans ces deux cas les contacts locaux
+    /// sont la réponse complète, et le témoin s'éteint tout de suite pour que
+    /// la bande puisse dire « personne » quand il n'y en a aucun — l'état exact
+    /// qu'un 404 sur la route des amis laissait passer pour un silence.
     private func scheduleDirectoryLookup(query: String, locals: [MentionCandidate]) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        guard MentionLookupRule.queriesRemote(trimmed) else {
             isResolving = false
             return
         }
