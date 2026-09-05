@@ -28940,7 +28940,7 @@ transmet rien à ses `extension`. La règle pure était inatteignable depuis
 `SocialMediaCaption` (leçon 473). Une règle sur des VALEURS doit porter
 `nonisolated` sur CHAQUE déclaration, l'énuméré comme ses extensions.
 
-## Leçon 534 — Suivre le NOM plutôt que le CHEMIN : deux fois le même jour, sur le même lot
+## Leçon 535 — Suivre le NOM plutôt que le CHEMIN : deux fois le même jour, sur le même lot
 
 **Deux correctifs posés au bon endroit *selon le nom*, au mauvais endroit
 *selon l'exécution*** — 2026-09-05, tous deux sur la publication d'un post à
