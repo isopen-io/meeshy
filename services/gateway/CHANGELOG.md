@@ -1,5 +1,11 @@
 # @meeshy/gateway
 
+## 1.36.1
+
+### Patch Changes
+
+- 0061043: les sous-titres d'appel canonicalisent leur langue source avant le pivot NLLB et le regroupement — jumelle de `_normalizeSourceLanguage` du chat (#4598)
+
 ## 1.36.0
 
 ### Minor Changes
