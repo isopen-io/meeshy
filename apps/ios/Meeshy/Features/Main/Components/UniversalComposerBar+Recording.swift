@@ -58,10 +58,39 @@ extension UniversalComposerBar {
                     .padding(.vertical, 12)
                     .lineLimit(1...5)
                     .font(.callout)
+                    // **La touche RETOUR ENVOIE, et elle porte l'accent**
+                    // (directive porteur 2026-09-05).
+                    //
+                    // `.submitLabel(.send)` remplace « retour » par « envoi » et
+                    // fait peindre au système sa touche PROÉMINENTE — celle qui
+                    // prend la couleur de teinte plutôt que le gris des autres.
+                    // `.tint` la fixe à l'accent de la conversation, le MÊME que
+                    // le bouton d'envoi rond douze points plus loin : deux
+                    // chemins vers le même geste ne doivent pas avoir deux
+                    // couleurs.
+                    .submitLabel(.send)
+                    .tint(Color(hex: accentColor))
+                    // `.onSubmit` est posé POUR les versions qui l'honorent sur
+                    // un champ à axe vertical ; il ne suffit pas, et la règle
+                    // ci-dessous dit pourquoi. Les deux chemins mènent au même
+                    // `handleSend`, qui est idempotent sur un texte vide.
+                    .onSubmit { handleSend() }
                     .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
                     .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
                     .accessibilityIdentifier(MeeshyA11yID.composerTextField)
-                    .adaptiveOnChange(of: text) { _, newValue in
+                    .adaptiveOnChange(of: text) { oldValue, newValue in
+                        // **Le saut de ligne qu'un doigt vient d'insérer** — sur
+                        // un `TextField(axis: .vertical)`, la touche Retour
+                        // INSÈRE au lieu de soumettre, et ce comportement varie
+                        // avec la version d'iOS sur la plage servie (16 → 26).
+                        // La règle regarde ce que le champ observe toujours :
+                        // son propre texte. Elle refuse un collage
+                        // multi-lignes, dont l'envoi serait irréversible.
+                        if ComposerReturnKey.submits(previous: oldValue, current: newValue) {
+                            text = ComposerReturnKey.stripped(newValue)
+                            handleSend()
+                            return
+                        }
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {
                             text = String(newValue.prefix(maxLen))
                         }

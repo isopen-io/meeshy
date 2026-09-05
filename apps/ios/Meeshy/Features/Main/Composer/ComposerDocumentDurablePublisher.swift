@@ -75,7 +75,9 @@ enum ComposerDocumentDurablePublisher {
             // prenne un post du meuble, en ligne comme hors ligne. Un blob
             // qui s'arrêterait au brouillon serait perdu au premier flush.
             storyEffects: draft.storyEffects,
-            mediaCaptions: draft.mediaCaptions
+            mediaCaptions: draft.mediaCaptions,
+            mediaAlts: draft.mediaAlts,
+            mediaObjectIds: draft.mediaObjectIds
         )
 
         do {
@@ -98,7 +100,9 @@ enum ComposerDocumentDurablePublisher {
                 // encore sa scène. C'est le mode de panne que la règle « aucune
                 // valeur par défaut » existe pour rendre impossible.
                 storyEffects: intent.storyEffects,
-                mediaCaptions: intent.mediaCaptions
+                mediaCaptions: intent.mediaCaptions,
+                mediaAlts: intent.mediaAlts,
+                mediaObjectIds: intent.mediaObjectIds
             )
         } catch {
             return refuse()

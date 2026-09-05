@@ -84,6 +84,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         /// les quatre champs au-dessus : un mock qui reçoit sans enregistrer
         /// ne teste pas ce qu'il reçoit.
         let mediaCaptions: [String?]?
+        let mediaAlts: [String?]?
+        let mediaObjectIds: [String?]?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -106,7 +108,9 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         discoverabilityPrecision: DiscoverabilityPrecision?,
         mobileTranscription: MobileTranscriptionPayload?,
         storyEffects: StoryEffects?,
-        mediaCaptions: [String?]?
+        mediaCaptions: [String?]?,
+        mediaAlts: [String?]?,
+        mediaObjectIds: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
@@ -122,7 +126,9 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: mobileTranscription,
             storyEffects: storyEffects,
-            mediaCaptions: mediaCaptions
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(

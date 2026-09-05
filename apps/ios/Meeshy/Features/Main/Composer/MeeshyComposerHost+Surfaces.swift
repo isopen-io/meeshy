@@ -96,15 +96,15 @@ extension MeeshyComposerHost {
             // plutôt qu'une entrée qui aurait l'air de marcher jusqu'au tap.
             onEditSceneObject: { openObjectEditor($0) }
         )
-        .storyLocationPickerProvided()
-        .storyCameraCaptureProvided()
-        .storyRecentCameraRollProvided()
-        .storyPasteProvided()
-        .storyStickerLibraryProvided()
-        // L'onglet « Lieu » de la palette (#4579). Absent — jamais grisé —
-        // quand l'autorisation de localisation est refusée : c'est l'injecteur
-        // qui le décide, pas la feuille.
-        .stickerNearbyPlacesProvided()
+        // **Les six magasins ont MONTÉ D'UN CRAN le 2026-09-05** — ils sont
+        // désormais posés dans `surfaceWithIntakePortals`, AU-DESSUS du
+        // `.sheet` qui présente les portails. La raison est dans
+        // `MeeshyComposerHost+Portals`, à leur nouveau site.
+        //
+        // En une phrase : l'environnement descend, et une feuille présentée
+        // PLUS HAUT que l'injecteur ne le voit pas. La palette de stickers
+        // avait perdu ses sections « Lieu » et « Mes stickers » sans qu'aucune
+        // ligne ne soit fausse.
         // **Les deux accessoires de la rangée haute de l'atelier** (#4124). Le
         // SDK expose deux emplacements ; ce qu'on y met reste app-side — le chip
         // lit l'éventail et la mémoire de format, l'icône ouvre un éditeur dont

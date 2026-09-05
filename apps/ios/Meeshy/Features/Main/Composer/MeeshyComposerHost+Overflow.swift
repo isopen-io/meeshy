@@ -172,6 +172,7 @@ extension MeeshyComposerHost {
             // rôle s'oublie avec le média, sinon un fichier re-choisi serait
             // sauté en silence ».
             documentMediaCaptions = [:]
+            documentMediaObjectIdBySource = [:]
             // L'index des durées sources n'est plus ici : il vivait pour la
             // bande de rognage du bas de scène, retirée le 2026-09-05, et sa
             // mesure appartient désormais à l'éditeur plein écran — qui la

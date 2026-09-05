@@ -87,9 +87,7 @@ describe('l’espace membre n’ouvre que sur des routes que la v3 SERT', () => 
 
   it('rougirait sur une destination hors zone', () => {
     expect(ROUTES_SERVIES).not.toContain('/communities');
-    expect(ROUTES_SERVIES).not.toContain('/calls');
     expect(DESTINATIONS).not.toContain('/communities');
-    expect(DESTINATIONS).not.toContain('/calls');
   });
 });
 

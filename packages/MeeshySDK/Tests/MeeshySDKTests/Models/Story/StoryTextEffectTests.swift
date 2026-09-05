@@ -53,13 +53,20 @@ struct StoryTextEffectTests {
         #expect(!json.contains("textEffect"))
     }
 
-    // MARK: - Les vingt effets (#5244, portés à vingt le 2026-09-05)
+    // MARK: - Les vingt-cinq effets (#5244, portés à 20 puis 25 le 2026-09-05)
 
     /// **Le compte, et il INTERROMPT.** Un effet ajouté sans passer par les
     /// trois miroirs rend ce témoin rouge — c'est le seul endroit du dépôt qui
     /// puisse le dire, la table n'étant pas sur le fil.
-    @Test func theEffects_areTwenty() {
-        #expect(StoryTextEffect.allCases.count == 20)
+    @Test func theEffects_areTwentyFive() {
+        #expect(StoryTextEffect.allCases.count == 25)
+    }
+
+    /// **Vingt-cinq, c'est CINQ RANGÉES DE CINQ.** La grille est fixée à cinq
+    /// colonnes (directive porteur 2026-09-05) ; un compte qui n'est pas un
+    /// multiple laisserait une dernière rangée trouée, ce qui se voit.
+    @Test func theEffects_fillWholeRowsOfFive() {
+        #expect(StoryTextEffect.allCases.count % 5 == 0)
     }
 
     /// **Tout effet SAUF `none` porte une ombre.** Un cas ajouté à l'énuméré
@@ -100,8 +107,36 @@ struct StoryTextEffectTests {
     /// est du modèle mort, et c'est `light` — ajoutée pour `emboss` et
     /// `letterpress` — qui aurait pu le rester si l'un des deux avait glissé.
     @Test func everyInk_isUsedByAtLeastOneEffect() {
-        let encres = Set(StoryTextEffect.allCases.compactMap { $0.shadow?.ink })
-        #expect(encres == Set(StoryTextEffectInk.allCases))
+        let encres = StoryTextEffect.allCases.compactMap { $0.shadow?.ink }
+        for semantique in StoryTextEffectInk.semantic {
+            #expect(encres.contains(semantique), "l'encre \(semantique) n'est employée par aucun effet")
+        }
+    }
+
+    /// **Toute TEINTE est six chiffres hexadécimaux.** Une chaîne malformée ne
+    /// lève chez aucun des trois moteurs : UIKit retombe sur la couleur du
+    /// texte, SwiftUI et le web sur du noir. L'effet paraîtrait donc simplement
+    /// « éteint » — le mode de panne le plus difficile à remarquer, puisqu'il
+    /// ressemble à un choix.
+    @Test func everyTint_isSixHexDigits() {
+        for effet in StoryTextEffect.allCases {
+            guard case .tint(let hex)? = effet.shadow?.ink else { continue }
+            #expect(hex.count == 6, "\(effet) : « \(hex) » n'a pas six chiffres")
+            #expect(UInt32(hex, radix: 16) != nil, "\(effet) : « \(hex) » n'est pas hexadécimal")
+        }
+    }
+
+    /// **Au moins un effet emploie une teinte.** Sans ce témoin, la moitié
+    /// colorée de l'axe pourrait disparaître de la table sans que le compte
+    /// (25) ni la garde ci-dessus ne bougent — il suffirait de la remplacer
+    /// par cinq effets sémantiques.
+    @Test func theColouredNeons_areTinted() {
+        for effet in [StoryTextEffect.neonPink, .neonCyan, .neonViolet, .gold, .fire] {
+            guard case .tint = effet.shadow?.ink else {
+                Issue.record("\(effet) devrait porter une teinte propre")
+                continue
+            }
+        }
     }
 
     // MARK: - La table

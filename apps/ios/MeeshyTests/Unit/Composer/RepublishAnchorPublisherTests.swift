@@ -45,7 +45,7 @@ final class RepublishAnchorPublisherTests: XCTestCase {
             mobileTranscription: nil,
             references: [],
             storyEffects: nil,
-            mediaCaptions: [:]
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
     }
 

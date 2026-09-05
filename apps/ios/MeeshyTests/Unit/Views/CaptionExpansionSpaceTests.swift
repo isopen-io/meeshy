@@ -10,15 +10,37 @@ import SwiftUI
 /// qu'à les aligner par distraction.
 final class CaptionExpansionSpaceTests: XCTestCase {
 
-    // MARK: Le plein écran média — l'auteur cède la place
+    // MARK: Le plein écran média — l'auteur ne cède plus, il MONTE (2026-09-05)
 
-    func test_legendeRepliee_lAuteurEstVisible() {
-        XCTAssertTrue(CaptionExpansionSpace.showsAuthorDetails(captionExpanded: false))
-    }
+    /// **Ces deux témoins affirmaient le contraire, et ils avaient raison sur
+    /// la directive du 2026-09-02.**
+    ///
+    /// > « En plein écran le "voir plus" de la légende doit juste afficher le
+    /// > texte déplié avec effet ombre, en repoussant le détail de l'auteur
+    /// > vers le haut. » — porteur, 2026-09-05
+    ///
+    /// Le changement n'est pas la correction d'un défaut : c'est un
+    /// renversement assumé. Ce qui le rend sûr est qu'il retire une MÉCANIQUE
+    /// (un gate + un fondu) plutôt qu'il n'en ajoute une : la pile ancrée en
+    /// bas pousse déjà ses voisins vers le haut quand la légende grandit, et
+    /// l'ombre de `MediaCaptionOverlay` porte la lisibilité que le retrait des
+    /// voisins servait.
+    ///
+    /// `showsAuthorDetails` est SUPPRIMÉE plutôt que forcée à `true` — une
+    /// fonction qui ignore son paramètre promet une dépendance qui n'existe
+    /// plus. Ce qui la remplace ne peut pas être un unitaire : c'est une garde
+    /// de SOURCE, parce que ce qu'on garde est une ABSENCE.
+    func test_lePleinEcran_neConditionnePlusLAuteurSurLeDepliage() throws {
+        let source = AppSourceGuard.stripComments(
+            try MyStoriesSourceCorpus.text(
+                of: "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift"))
+        let code = source.components(separatedBy: .whitespacesAndNewlines).joined()
 
-    func test_legendeDepliee_lAuteurSEfface() {
-        XCTAssertFalse(CaptionExpansionSpace.showsAuthorDetails(captionExpanded: true),
-            "Le bas de l'écran est fini : une légende dépliée et une carte d'auteur s'y disputent la place.")
+        XCTAssertFalse(code.contains("showsAuthorDetails"),
+            "La carte d'auteur ne se conditionne plus sur le dépliage : la légende la POUSSE.")
+        XCTAssertTrue(code.contains("dimsBackgroundWhenExpanded:false"),
+            "« JUSTE le texte déplié avec effet ombre » — le voile du composant masquerait "
+            + "le média que l'utilisateur est venu regarder.")
     }
 
     // MARK: La story — la scène recule, rien ne se cache
@@ -92,14 +114,21 @@ final class CaptionExpansionSpaceTests: XCTestCase {
             "Le correctif rend ce que le débordement a pris — il n'en invente jamais.")
     }
 
-    /// Le témoin qui dit la DIFFÉRENCE, et pas seulement les deux valeurs :
-    /// dépliée, la story ne cache rien ET floute ; le plein écran cache ET ne
-    /// floute pas. Aligner les deux surfaces ferait tomber celui-ci.
+    /// **Les deux surfaces répondent toujours DIFFÉREMMENT, et la différence a
+    /// changé de nature.**
+    ///
+    /// Avant : le plein écran CACHAIT ses voisins, la story EFFAÇAIT sa scène.
+    /// Depuis le 2026-09-05 : le plein écran ne prend la place de personne — il
+    /// pousse —, la story efface toujours sa scène. Une seule des deux paie
+    /// donc quelque chose au dépliage, et c'est celle qui n'a rien sous sa
+    /// légende.
+    ///
+    /// Ce témoin reste ce qu'il était : le garde-fou contre un futur
+    /// « uniformisons », qui devra le contredire explicitement.
     func test_lesDeuxSurfaces_repondentDIFFEREMMENT() {
-        let depliee = true
-        XCTAssertFalse(CaptionExpansionSpace.showsAuthorDetails(captionExpanded: depliee),
-            "Plein écran : on cache.")
-        XCTAssertLessThan(CaptionExpansionSpace.storySceneOpacity(captionExpanded: depliee), 1,
-            "Story : la scène s'efface — et on ne cache rien.")
+        XCTAssertLessThan(CaptionExpansionSpace.storySceneOpacity(captionExpanded: true), 1,
+            "Story : la scène s'efface, parce qu'elle n'a rien d'autre à donner.")
+        XCTAssertEqual(CaptionExpansionSpace.storySceneOpacity(captionExpanded: false), 1,
+            "…et seulement pendant la lecture.")
     }
 }

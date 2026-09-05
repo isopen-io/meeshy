@@ -21,7 +21,7 @@ public nonisolated enum StoryTextEffectRendering {
 
     /// Couleur de l'ombre : l'encre de la table, à l'opacité de la table.
     ///
-    /// Le `switch` est EXHAUSTIF sur `StoryTextEffectInk` : une quatrième
+    /// Le `switch` est EXHAUSTIF sur `StoryTextEffectInk` : une cinquième
     /// encre ne compilera pas tant qu'elle n'aura pas dit quelle couleur elle
     /// vaut ici — plutôt que d'hériter du noir par un `default`, ce qui
     /// rendrait l'effet neuf visuellement identique à une ombre.
@@ -32,6 +32,11 @@ public nonisolated enum StoryTextEffectRendering {
         case .text:  base = textColor
         case .dark:  base = .black
         case .light: base = .white
+        // **La TEINTE d'un effet coloré** (2026-09-05). Le repli est la
+        // couleur du TEXTE, jamais le noir : un hexadécimal illisible doit
+        // dégrader vers la lueur la plus proche de l'intention — un halo — et
+        // non vers une ombre, qui est un AUTRE effet.
+        case .tint(let hex): base = UIColor(effectHex: hex) ?? textColor
         }
         return base.withAlphaComponent(CGFloat(shadow.opacity))
     }
@@ -83,5 +88,37 @@ public nonisolated enum StoryTextEffectRendering {
         layer.shadowOpacity = 0
         layer.shadowOffset = .zero
         layer.shadowRadius = 0
+    }
+}
+
+// MARK: - L'hexadécimal d'une teinte
+
+private extension UIColor {
+    // `nonisolated` : le module compile sous isolation `MainActor` par défaut,
+    // et cette projection est appelée depuis `shadowColor`, qui est PURE.
+    // Sans ce mot, l'init hérite de l'isolation du module et devient
+    // inappelable depuis un contexte nonisolated — la même frontière que le
+    // doc-comment du type documente déjà pour ses trois appelants.
+    /// **Le seul lecteur d'hexadécimal de ce fichier**, et il est PRIVÉ.
+    ///
+    /// `MeeshyUI` en porte deux autres — `Color(hex:)` (SwiftUI) et l'init du
+    /// compositeur de slides — et aucun n'est atteignable ici : le premier
+    /// rend une `Color`, le second est `private` à son fichier. En écrire un
+    /// troisième est le prix de cette frontière ; le RENDRE PUBLIC serait
+    /// pire, car il y aurait alors deux `UIColor(hex:)` publics dans le même
+    /// module, et le site d'appel choisirait au hasard.
+    ///
+    /// Tolérant au `#` de tête, strict sur le reste : une chaîne qui n'est pas
+    /// six chiffres hexadécimaux rend `nil`, et l'appelant décide de son
+    /// repli. Rendre du noir ici ferait passer une faute de frappe pour une
+    /// décision de design.
+    nonisolated convenience init?(effectHex: String) {
+        var valeur = effectHex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if valeur.hasPrefix("#") { valeur.removeFirst() }
+        guard valeur.count == 6, let nombre = UInt32(valeur, radix: 16) else { return nil }
+        self.init(red: CGFloat((nombre >> 16) & 0xFF) / 255,
+                  green: CGFloat((nombre >> 8) & 0xFF) / 255,
+                  blue: CGFloat(nombre & 0xFF) / 255,
+                  alpha: 1)
     }
 }

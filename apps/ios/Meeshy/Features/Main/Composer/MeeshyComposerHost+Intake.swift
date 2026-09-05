@@ -131,7 +131,9 @@ extension MeeshyComposerHost {
                 // Il rejoint la scène COURANTE et n'y fonde rien : pas de
                 // `addSlide`, pas d'entrée dans l'index des fondations, donc
                 // pas de tuile. C'est tout le lot.
-                viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+                documentMediaObjectIdBySource.merge(
+                    viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+                ) { _, neuf in neuf }
 
             case .background:
                 let target: String
@@ -149,7 +151,9 @@ extension MeeshyComposerHost {
                     viewModel.addSlide()
                     target = viewModel.currentSlide.id
                 }
-                viewModel.applyContentMedia([media], intoSlideId: target)
+                documentMediaObjectIdBySource.merge(
+                    viewModel.applyContentMedia([media], intoSlideId: target)
+                ) { _, neuf in neuf }
                 slideIdByMediaURL[media.sourceURL] = target
             }
         }
@@ -217,7 +221,9 @@ extension MeeshyComposerHost {
         viewModel.declaredContentLanguage = documentLanguage
         // B1 — le texte ET le média déjà composés SUIVENT dans la scène.
         viewModel.applyContentText(documentText)
-        viewModel.applyContentMedia(documentContentMedia)
+        documentMediaObjectIdBySource.merge(
+            viewModel.applyContentMedia(documentContentMedia)
+        ) { _, neuf in neuf }
     }
 
     /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
