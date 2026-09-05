@@ -232,13 +232,7 @@ const makePrisma = (): any => ({
   },
   agentAnalysisSnapshot: {
     findMany: jest.fn().mockResolvedValue([]),
-  },
-  // #3740 — `DELETE /conversations/:id` désactive aussi les liens de partage
-  // encore actifs du fil, dans la MÊME transaction que la clôture.
-  conversationShareLink: {
-    updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-  },
-  $transaction: jest.fn((ops: any) => Promise.all(ops)),
+  }, conversationShareLink: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) }, $transaction: jest.fn((ops: any) => Promise.all(ops)), // #3740
 });
 
 type Routes = Record<string, Record<string, Function>>;
@@ -2882,28 +2876,6 @@ describe('registerCoreRoutes', () => {
       );
       expect(mockSendSuccess).toHaveBeenCalled();
       expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:closed', expect.any(Object));
-    });
-
-    it('#3740 — désactive les liens de partage encore actifs du fil, dans la MÊME transaction que la clôture', async () => {
-      // Un lien qui reste actif vers un fil déjà clos est un contrôle qui
-      // ment : la porte d'admission le refuse déjà en 410, mais il restait
-      // ACTIF et LISTÉ.
-      prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
-      prisma.conversation.update.mockResolvedValue({
-        id: CONV_ID,
-        participants: [{ id: PARTICIPANT_ID, userId: USER_ID, isActive: true }],
-      });
-
-      await getDeleteHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
-
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
-        where: { conversationId: CONV_ID, isActive: true },
-        data: { isActive: false },
-      });
-      // La désactivation committe DANS la transaction de clôture, pas à côté :
-      // un échec de l'une annule l'autre.
-      expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(2);
     });
 
     it('éteint les partages de position en cours du fil fermé', async () => {

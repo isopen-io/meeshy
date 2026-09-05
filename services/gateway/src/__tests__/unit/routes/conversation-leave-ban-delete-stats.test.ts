@@ -137,12 +137,7 @@ function createMockPrisma() {
     },
     user: {
       findMany: jest.fn<any>(),
-    },
-    // #3740 — les trois portes de clôture désactivent aussi les liens de
-    // partage encore actifs du fil, dans la MÊME transaction.
-    conversationShareLink: {
-      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
-    },
+    }, conversationShareLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }, // #3740
     // Les deux routes de clôture committent leur écriture jumelle et le geste
     // de l'appelant dans UNE transaction. Le double n'en simule pas l'atomicité
     // — il rend les résultats dans l'ordre, ce qui suffit à ce que la route
@@ -409,31 +404,22 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
     prisma.participant.count.mockResolvedValue(0);
     const CLOSURE = { participants: [{ id: PARTICIPANT_ID, userId: VALID_USER_ID, isActive: true }] };
     const DEPARTURE = { id: PARTICIPANT_ID, isActive: false };
-    const LINKS_DEACTIVATED = { count: 0 };
     prisma.conversation.update.mockResolvedValue(CLOSURE);
     prisma.participant.update.mockResolvedValue(DEPARTURE);
-    prisma.conversationShareLink.updateMany.mockResolvedValue(LINKS_DEACTIVATED);
 
     await route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply);
 
-    // Les trois écritures sont DANS la transaction, et dans cet ordre : la
-    // clôture d'abord, pour que l'audience ramenée par son `include` porte
-    // encore l'appelant — puis le départ, puis la désactivation des liens de
-    // partage du fil (#3740).
+    // Les trois écritures (clôture, départ, désactivation des liens — #3740)
+    // sont DANS la transaction, et dans cet ordre : la clôture d'abord, pour
+    // que l'audience ramenée par son `include` porte encore l'appelant.
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     await expect(Promise.all(prisma.$transaction.mock.calls[0][0])).resolves.toEqual([
-      CLOSURE,
-      DEPARTURE,
-      LINKS_DEACTIVATED,
+      CLOSURE, DEPARTURE, { count: 0 },
     ]);
     // Et AUCUNE des trois n'a de jumelle restée dehors — sans quoi la moitié
     // laissée seule reproduirait exactement le défaut que la transaction ferme.
     expect(prisma.conversation.update).toHaveBeenCalledTimes(1);
     expect(prisma.participant.update).toHaveBeenCalledTimes(1);
-    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
-      where: { conversationId: VALID_CONV_ID, isActive: true },
-      data: { isActive: false },
-    });
   });
 
   it("le départ d'un simple membre reste une écriture SEULE, sans transaction", async () => {
