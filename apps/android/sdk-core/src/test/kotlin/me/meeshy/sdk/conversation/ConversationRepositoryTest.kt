@@ -124,6 +124,21 @@ private class PagedConversationApi(
     }
 }
 
+/**
+ * A single page with NO `pagination` block at all — a legal but degraded
+ * envelope shape (`{ success, data }`, no `pagination` key). Backs the
+ * hardening regression on #5186's own fix: `pagination?.hasMore ?: false`
+ * used to read "envelope omitted pagination" the same as "server confirms no
+ * more pages", which is the wrong failure direction for a DELETE — it must
+ * read as UNKNOWN completeness (never prune), not proven completeness.
+ */
+private class PaginationlessConversationApi(
+    private val served: List<ApiConversation>,
+) : StubConversationApi() {
+    override suspend fun list(offset: Int?, limit: Int?): ApiResponse<List<ApiConversation>> =
+        ApiResponse(success = true, data = served, pagination = null)
+}
+
 private class RecordingSettingsApi(
     private val response: ApiResponse<UpdateConversationResponse>,
 ) : StubConversationApi() {
@@ -831,15 +846,30 @@ class ConversationRepositoryTest {
             .isNotNull()
     }
 
+    /**
+     * Both fake responses declare `pagination.hasMore = false` explicitly —
+     * a completed single-page sweep, per #5186's hardening: an envelope with
+     * NO `pagination` block is UNKNOWN completeness and never prunes (see
+     * `revalidate prunes nothing when the envelope omits pagination`), so
+     * this test must prove its sweep exhaustive to exercise deletion at all.
+     */
     @Test
     fun `refresh removes conversations absent from the latest sync`() = runTest {
         val api = FakeConversationApi(
-            ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2"))),
+            ApiResponse(
+                success = true,
+                data = listOf(ApiConversation(id = "c1"), ApiConversation(id = "c2")),
+                pagination = me.meeshy.sdk.model.Pagination(hasMore = false),
+            ),
         )
         val repo = repository(api)
         repo.refresh()
 
-        api.response = ApiResponse(success = true, data = listOf(ApiConversation(id = "c2")))
+        api.response = ApiResponse(
+            success = true,
+            data = listOf(ApiConversation(id = "c2")),
+            pagination = me.meeshy.sdk.model.Pagination(hasMore = false),
+        )
         repo.refresh()
 
         assertThat(db.conversationDao().observeAll().first().map { it.id }).containsExactly("c2")
@@ -1219,6 +1249,87 @@ class ConversationRepositoryTest {
 
         val cachedIds = repo.cachedConversations().first().map { it.id }.toSet()
         assertThat(cachedIds).containsExactlyElementsIn((0 until total).map { "c$it" })
+    }
+
+    /**
+     * Hardening on #5186's own fix: a completed sweep can legitimately be
+     * LARGER than SQLite's per-statement bound-variable ceiling
+     * (`SQLITE_MAX_VARIABLE_NUMBER` = 999 on Android API 26-29, the floor
+     * `minSdk = 26` must hold under) — this is exactly the scale the fix
+     * exists to sweep. A naive `DELETE ... WHERE id NOT IN (:keptIds)` binds
+     * one variable per kept id and would throw "too many SQL variables" on
+     * device for the very account sizes #5186 protects.
+     *
+     * 1 200 conversations are seeded directly into Room; the server sweep
+     * (spanning several pages, `hasMore = false` on the last one) serves only
+     * the first 1 100 of them — the other 100 genuinely no longer exist. Room
+     * itself does not enforce `SQLITE_MAX_VARIABLE_NUMBER` under Robolectric,
+     * so this cannot reproduce the on-device crash directly; what it proves
+     * is the delete-set's CORRECTNESS at a scale past the 999 threshold — the
+     * chunked `deleteByIds` calls in [ConversationCacheSource] are what keep
+     * that correct behaviour from crashing where SQLite actually enforces the
+     * limit.
+     */
+    @Test
+    fun `revalidate purges only the conversations truly gone from a 1200-row local cache`() = runTest {
+        val localTotal = 1200
+        val keptTotal = 1100
+        db.conversationDao().upsertAll(
+            (0 until localTotal).map { i ->
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "c$i",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "c$i", title = "Conv $i"),
+                    ),
+                    updatedAt = i.toLong(),
+                    cachedAt = i.toLong(),
+                )
+            },
+        )
+        val repo = repository(PagedConversationApi(totalConversations = keptTotal))
+
+        repo.refresh()
+
+        val cachedIds = repo.cachedConversations().first().map { it.id }.toSet()
+        assertThat(cachedIds).containsExactlyElementsIn((0 until keptTotal).map { "c$it" })
+    }
+
+    /**
+     * #5186 hardening — an envelope with NO `pagination` block is UNKNOWN
+     * completeness, not proven completeness. Reading `pagination?.hasMore ?:
+     * false` as "no more pages, sweep is done" pointed the failure direction
+     * the wrong way for a DELETE: a server that simply forgot to send the
+     * block would wipe every conversation the cache had never seen mentioned
+     * on that one page. 5 previously-synced rows are seeded directly; the
+     * fake server answers with a single, different conversation and NO
+     * `pagination` key at all. None of the 5 should be pruned — what the page
+     * DID mention is still upserted alongside them.
+     */
+    @Test
+    fun `revalidate prunes nothing when the envelope omits pagination`() = runTest {
+        val existing = (0 until 5).map { i ->
+            me.meeshy.core.database.entity.ConversationEntity(
+                id = "c$i",
+                payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                    ApiConversation(id = "c$i", title = "Conv $i"),
+                ),
+                updatedAt = i.toLong(),
+                cachedAt = i.toLong(),
+            )
+        }
+        db.conversationDao().upsertAll(existing)
+        val repo = repository(
+            PaginationlessConversationApi(
+                served = listOf(ApiConversation(id = "new1", title = "New")),
+            ),
+        )
+
+        repo.refresh()
+
+        val cachedIds = repo.cachedConversations().first().map { it.id }.toSet()
+        assertThat(cachedIds).containsExactlyElementsIn(
+            (0 until 5).map { "c$it" } + "new1",
+        )
     }
 
     /**
