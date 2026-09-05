@@ -21,6 +21,7 @@ import {
 } from './voice-analysis-normalize';
 import { logger } from '../utils/logger';
 import { diffTranslationTargets } from '../utils/translation-targets';
+import { getVoiceProfile as getVoiceProfileCore, saveVoiceProfile as saveVoiceProfileCore } from './audio-voice-profile-core';
 import type {
   VoiceTranslateRequest,
   VoiceTranslateAsyncRequest,
@@ -655,9 +656,7 @@ export class AudioTranslateService extends EventEmitter {
    * Get voice profile for a user
    */
   async getVoiceProfile(userId: string): Promise<any | null> {
-    return this.prisma.userVoiceModel.findUnique({
-      where: { userId }
-    });
+    return getVoiceProfileCore(this.prisma, userId);
   }
 
   /**
@@ -677,35 +676,7 @@ export class AudioTranslateService extends EventEmitter {
       referenceAudioUrl?: string;
     }
   ): Promise<any> {
-    return this.prisma.userVoiceModel.upsert({
-      where: { userId },
-      create: {
-        userId,
-        profileId: `vfp_${userId}`,
-        embedding: profileData.embedding ? Uint8Array.from(profileData.embedding) as Uint8Array<ArrayBuffer> : undefined,
-        qualityScore: profileData.qualityScore || 0,
-        audioCount: profileData.audioCount || 1,
-        totalDurationMs: profileData.totalDurationMs || 0,
-        fingerprint: profileData.fingerprint || null,
-        voiceCharacteristics: profileData.voiceCharacteristics || null,
-        chatterboxConditionals: profileData.chatterboxConditionals ? Uint8Array.from(profileData.chatterboxConditionals) as Uint8Array<ArrayBuffer> : null,
-        referenceAudioId: profileData.referenceAudioId || null,
-        referenceAudioUrl: profileData.referenceAudioUrl || null,
-        version: 1
-      },
-      update: {
-        embedding: profileData.embedding ? Uint8Array.from(profileData.embedding) as Uint8Array<ArrayBuffer> : undefined,
-        qualityScore: profileData.qualityScore,
-        audioCount: profileData.audioCount,
-        totalDurationMs: profileData.totalDurationMs,
-        fingerprint: profileData.fingerprint,
-        voiceCharacteristics: profileData.voiceCharacteristics,
-        chatterboxConditionals: profileData.chatterboxConditionals ? Uint8Array.from(profileData.chatterboxConditionals) as Uint8Array<ArrayBuffer> : undefined,
-        referenceAudioId: profileData.referenceAudioId,
-        referenceAudioUrl: profileData.referenceAudioUrl,
-        updatedAt: new Date()
-      }
-    });
+    return saveVoiceProfileCore(this.prisma, userId, profileData);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
