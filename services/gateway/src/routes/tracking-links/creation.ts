@@ -276,8 +276,12 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             }
           }
         },
+        401: {
+          description: 'No session at all — a visitor with no identity to check ownership against (#5212)',
+          ...errorResponseSchema
+        },
         403: {
-          description: 'Access denied - only creator can view details',
+          description: 'Authenticated, but not the creator of this link',
           ...errorResponseSchema
         },
         404: {
@@ -301,9 +305,27 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       if (trackingLink.createdBy) {
+        /**
+         * DEUX REFUS, PAS UN (#5212, suite de #4792). `!isRegisteredUser(...)`
+         * était vrai à la fois pour un visiteur SANS SESSION et pour un
+         * utilisateur enregistré qui n'est pas le créateur — les deux
+         * rendaient le même 403 « Accès non autorisé ». Ici la question est
+         * une question de PROPRIÉTÉ (créateur du lien), pas d'appartenance à
+         * une conversation : `verdictAccesConversation` ne s'applique pas,
+         * mais la distinction de statut est la même — absence de session ⇒
+         * 401, identité connue et non-créatrice ⇒ 403.
+         */
+        if (!request.authContext?.isAuthenticated) {
+          return sendUnauthorized(reply, 'Authentification requise pour consulter ce lien', {
+            code: 'UNAUTHORIZED'
+          });
+        }
+
         if (!isRegisteredUser(request.authContext) ||
             request.authContext.registeredUser!.id !== trackingLink.createdBy) {
-          return sendForbidden(reply, 'Accès non autorisé');
+          return sendForbidden(reply, 'Accès non autorisé', {
+            code: 'TRACKING_LINK_ACCESS_DENIED'
+          });
         }
       }
 

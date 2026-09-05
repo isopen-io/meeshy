@@ -110,7 +110,8 @@ const sert = async ({
   readonly motif?: string | null;
   readonly statut?: number;
 }): Promise<Response> => {
-  const liste = await communautesDuLecteur({ jeton, offset: offsetDeLURL(requete), limite: LIMITE, recuperer });
+  const offset = offsetDeLURL(requete);
+  const liste = await communautesDuLecteur({ jeton, offset, limite: LIMITE, recuperer });
   if (liste.genre === 'session-expiree') return versLaConnexion();
   if (liste.genre === 'panne') return rendu(documentDePanne(), 503);
 
@@ -125,6 +126,7 @@ const sert = async ({
   return rendu(
     documentDesCommunautes({
       communautes: liste.communautes,
+      offset,
       suite: liste.suite,
       ouverte: ouverte ?? null,
       nouvelle: nouvelle ?? nouvelleDemandee(requete),
