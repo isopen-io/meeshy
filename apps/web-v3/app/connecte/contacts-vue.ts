@@ -12,6 +12,7 @@ import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DES_CONTACTS } from './contacts-feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
+import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
 import { documentPleinEcran } from './fil-vue';
 import { carteVide, quand } from './vue';
 
@@ -50,6 +51,8 @@ export type EtatDesContacts = {
   readonly maintenant: number;
   /** Ce que le POST vient de faire, dit au retour de la redirection. */
   readonly avis: 'acceptee' | 'refusee' | 'echouee' | null;
+  /** Ce que le document porte pour son module de participation (§ 12.4, #4921) — sans socket, comme `/feed`. */
+  readonly tempsReel: { readonly module: string; readonly passerelle: string } | null;
 };
 
 const CLASSE_DE_PRESENCE: Readonly<Record<string, string>> = {
@@ -109,7 +112,10 @@ const gestes = (demande: Demande): string =>
   `<input type="hidden" name="demande" value="${echappe(demande.id)}">` +
   `<button type="submit" name="geste" value="refuser" class="action discrete" aria-label="${echappe(`${CONTACTS.refuser} — ${demande.personne.nom}`)}">${svgDuSprite('ph-x-circle')}</button>` +
   '</form>' +
-  '</span>';
+  '</span>' +
+  // LA FENTE DU GESTE FAIT — servie CACHÉE, remplie et révélée par le module
+  // du direct (`lib/realtime/contacts.ts`) : il ne fabrique aucun nœud.
+  '<span class="etat-du-geste" hidden></span>';
 
 const ligneDeDemande = (demande: Demande, maintenant: number): string => {
   const recue = demande.sens === 'recue';
@@ -117,7 +123,7 @@ const ligneDeDemande = (demande: Demande, maintenant: number): string => {
   const libelle = recue ? CONTACTS.demandeRecue : CONTACTS.demandeEnvoyee;
 
   return (
-    `<li class="contact" data-sorte="${recue ? 'recue' : 'envoyee'}">` +
+    `<li class="contact" data-sorte="${recue ? 'recue' : 'envoyee'}"${recue ? ` data-demande="${echappe(demande.id)}"` : ''}>` +
     vignette(recue ? GLYPHE_RECUE : GLYPHE_ENVOYEE, pastille(demande.personne, maintenant)) +
     '<span class="dit">' +
     `<span class="primaire">${echappe(demande.personne.nom)}</span>` +
@@ -174,10 +180,19 @@ const corps = (etat: EtatDesContacts): string => {
     etat.demandesEnvoyees.map((d) => ligneDeDemande(d, etat.maintenant)).join('') +
     etat.contacts.map((c) => ligneDeContact(c, etat.maintenant)).join('');
 
+  const participation =
+    etat.tempsReel === null
+      ? ''
+      : ` data-participation="contacts" data-module="${echappe(etat.tempsReel.module)}" data-passerelle="${echappe(etat.tempsReel.passerelle)}"`;
+
   return (
-    '<main id="main-content" class="contacts-ecran">' +
+    `<main id="main-content" class="contacts-ecran"${participation}>` +
     enTete(etat.demandesRecues.length) +
     avis(etat.avis) +
+    // LA VOIX DE L'ÉCRAN — servie même muette, comme sur `/chats` : une région
+    // créée après coup n'est annoncée par aucun lecteur d'écran. Le module y
+    // dit le geste optimiste, son annulation possible et son éventuel refus.
+    '<p class="defaite" id="journal-des-gestes" role="status" aria-live="polite"></p>' +
     (lignes === ''
       ? carteVide({
           glyphe: GLYPHE_CONTACT,
@@ -198,4 +213,5 @@ export const documentDesContacts = (etat: EtatDesContacts): string =>
         : CONTACTS.enAttente(etat.demandesRecues.length),
     corps: corps(etat),
     feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_CONTACTS,
+    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });

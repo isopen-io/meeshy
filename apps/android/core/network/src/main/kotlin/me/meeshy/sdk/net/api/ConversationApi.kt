@@ -12,9 +12,13 @@ import me.meeshy.sdk.model.JoinAuthenticatedResponse
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.net.ConditionalResult
+import me.meeshy.sdk.net.conditionalApiCall
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -50,11 +54,43 @@ data class ParticipantRoleUpdate(val role: String)
 data class AddParticipantRequest(val userId: String)
 
 interface ConversationApi {
+    /**
+     * `GET /conversations` — full page (default: server-side `lastMessageAt
+     * DESC`) when [updatedSince] is omitted, or a DELTA page
+     * (`updatedAt` strictly greater than [updatedSince], sorted `updatedAt
+     * ASC, id ASC`) when it is set — gateway contract:
+     * `services/gateway/src/routes/conversations/core-list.ts:251-264`.
+     * [updatedSince] is an ISO-8601 instant; an unparseable value is
+     * silently ignored server-side and the call falls back to a full page.
+     * #5187 — [ConversationCacheSource] is the sole caller that passes it.
+     */
     @GET("conversations")
     suspend fun list(
         @Query("offset") offset: Int? = null,
         @Query("limit") limit: Int? = null,
+        @Query("updatedSince") updatedSince: String? = null,
     ): ApiResponse<List<ApiConversation>>
+
+    /**
+     * Same request as [list], carrying an optional `If-None-Match` and returning
+     * the raw [Response] instead of the unwrapped envelope — needed to reach the
+     * response's own `ETag` header and to distinguish a genuine 304 (no body,
+     * RFC 7232) from a decoded 200. Gateway contract: `sendWithETag`,
+     * `services/gateway/src/routes/conversations/core-list.ts:892-906` — the
+     * ETag hashes the FULL response body (`data` + `pagination` +
+     * `cursorPagination` + any delta `meta`), so it is valid ONLY for the exact
+     * same query that produced it. #5188 — never call this directly; go
+     * through [listConditionalResult], which keeps [Response] confined to this
+     * module (`:core:network`; see its doc-comment, mirroring [TusApi]'s
+     * `createSession`/`patchChunk`).
+     */
+    @GET("conversations")
+    suspend fun listConditional(
+        @Query("offset") offset: Int? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("updatedSince") updatedSince: String? = null,
+        @Header("If-None-Match") ifNoneMatch: String? = null,
+    ): Response<ApiResponse<List<ApiConversation>>>
 
     @GET("conversations/{id}")
     suspend fun getById(@Path("id") id: String): ApiResponse<ApiConversation>
@@ -251,3 +287,20 @@ data class ParticipantRightsUpdateResult(
     val historyVisibleFrom: String? = null,
     val rights: me.meeshy.sdk.model.ParticipantEntryCapabilities? = null,
 )
+
+/**
+ * [ConversationApi.listConditional] folded into a [ConditionalResult] — a thin
+ * wrapper whose only purpose is keeping every `retrofit2.Response` type
+ * confined to `:core:network` (retrofit is an `implementation`, not `api`,
+ * dependency of this module — `:sdk-core`'s [me.meeshy.sdk.conversation.
+ * ConversationCacheSource] cannot reference [Response] itself, only this
+ * module's own [ConditionalResult]/`ApiError` types). Mirrors [TusApi]'s
+ * `createSession`/`patchChunk`. #5188.
+ */
+suspend fun ConversationApi.listConditionalResult(
+    offset: Int?,
+    limit: Int?,
+    updatedSince: String?,
+    ifNoneMatch: String?,
+): ConditionalResult<List<ApiConversation>> =
+    conditionalApiCall { listConditional(offset, limit, updatedSince, ifNoneMatch) }

@@ -3,7 +3,7 @@ import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { documentDuSite } from '@/app/enveloppe/vue';
 import { echappe } from '@/app/socle';
 
-import { apercuServi, homologueDe, type Conversation } from '@/lib/api/compte';
+import { apercuServi, homologueDe, type Conversation, type Lecteur } from '@/lib/api/compte';
 import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 import {
   ACTIONS,
@@ -17,8 +17,12 @@ import {
 } from '@/lib/contenu/liste';
 import type { Contact } from '@/lib/api/contacts';
 
-import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, blocDuNavigateur, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
+import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
+import { REGION_DE_LA_BANNIERE } from './banniere-vue';
+import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
+import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
 import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from './liste-feuille';
 import { FEUILLE_DU_PROFIL } from './profil-feuille';
 import { adresseDuProfil, surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
@@ -245,6 +249,15 @@ export type EtatDesChats = {
    * demandé que dans cet état.
    */
   readonly nouvelle?: EtatDeLaNouvelleConv;
+  /**
+   * LA FEUILLE « ESPACE MEMBRE » (`?espace`, `sheet:member`) — le troisième
+   * état de cette adresse. Elle remplace la barre d'onglets que la planche n'a
+   * pas (conception § 11, question 6) et ne coûte AUCUNE requête : tout ce
+   * qu'elle rend, la porte le tient déjà.
+   */
+  readonly espace?: boolean;
+  /** Le lecteur, pour NOMMER l'espace membre sous son titre. Rien d'autre ne le lit ici. */
+  readonly lecteur?: Lecteur | null;
 };
 
 /** Ce que la feuille de création connaît — son carnet, sa saisie, son refus. */
@@ -332,7 +345,11 @@ const corps = (etat: EtatDesChats): string =>
           ligne({ conversation, langues: etat.langues, maintenant: etat.maintenant, adresse: ADRESSE_DE_LA_LISTE, moi: etat.moi }),
         )
         .join('')}</ul>`) +
-  '</section>';
+  '</section>' +
+  // LES DEUX RONDS, aux mêmes coins qu'au tableau de bord (planche `:868`).
+  // Dans le FLUX : leur conteneur réserve la bande, sinon ils couvriraient la
+  // dernière ligne de la liste au repos (charte règle 7 b/c).
+  actionsFlottantes(ADRESSE_DE_LA_LISTE);
 
 
 /**
@@ -430,11 +447,15 @@ const surimpression = (etat: EtatDesChats): string => {
 
 export const documentDesChats = (etat: EtatDesChats): string => {
   const dessus = surimpression(etat);
-  // DEUX SURIMPRESSIONS, JAMAIS EN MÊME TEMPS : `?profil=` et `?nouvelle` sont
-  // deux états de la même adresse. La feuille de création l'emporte quand les
-  // deux sont demandés — c'est celle que le lecteur vient d'ouvrir.
+  // TROIS SURIMPRESSIONS, JAMAIS DEUX EN MÊME TEMPS : `?profil=`, `?nouvelle`
+  // et `?espace` sont trois états de la même adresse, et le document n'en
+  // empile aucun. L'ORDRE est celui de ce qu'on vient d'ouvrir : la création
+  // l'emporte sur le profil, l'espace membre sur les deux — c'est la dernière
+  // porte touchée, et un `<dialog open>` sous un autre serait un piège à focus
+  // sans sortie.
   const creation = etat.nouvelle === undefined ? '' : nouvelleConversation(etat.nouvelle);
-  const surimpose = creation === '' ? dessus : creation;
+  const espace = etat.espace === true ? feuilleDeLEspace({ lecteur: etat.lecteur ?? null, hote: ADRESSE_DE_LA_LISTE }) : '';
+  const surimpose = espace !== '' ? espace : creation === '' ? dessus : creation;
 
   return documentDuSite({
     titre: `${CHATS.titre} — Meeshy`,
@@ -442,12 +463,17 @@ export const documentDesChats = (etat: EtatDesChats): string => {
     feuille:
       FEUILLE_CONNECTEE +
       FEUILLE_DE_LA_LISTE +
-      (dessus === '' || creation !== '' ? '' : FEUILLE_DU_PROFIL) +
-      (creation === '' ? '' : FEUILLE_DE_LA_NOUVELLE_CONV),
+      FEUILLE_DES_FLOTTANTES +
+      (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
+      (surimpose === dessus && dessus !== '' ? FEUILLE_DU_PROFIL : '') +
+      (surimpose === creation && creation !== '' ? FEUILLE_DE_LA_NOUVELLE_CONV : '') +
+      (espace === '' ? '' : FEUILLE_DE_L_ESPACE),
     corps: corps(etat),
     retour: true,
     surimpression: surimpose,
+    // Voir `documentDuFil` : la région suit le module, jamais l'écran.
+    banniere: etat.tempsReel === null ? '' : REGION_DE_LA_BANNIERE,
     attributsDuMain: attributsDeParticipation(etat),
-    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
+    script: (etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION) + blocDuNavigateur(),
   });
 };

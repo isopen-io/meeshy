@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// #4080 (vue `2b`) — **le viseur vit dans la scène, et les trois pastilles ne
@@ -135,5 +136,126 @@ final class ComposerSceneCameraTests: XCTestCase {
         XCTAssertNotEqual(
             ComposerSceneCamera.hintKey(mode: .handsFree, stage: .armed),
             ComposerSceneCamera.hintKey(mode: .handsFree, stage: .recording))
+    }
+}
+
+/// #4080 — **ce que le viseur OCCUPE, une fois qu'il vit dans la carte.**
+final class ComposerSceneCameraOverlayTests: XCTestCase {
+
+    /// **Le volet de description cède, et il est le seul.** Il est ancré au bas
+    /// du DESSIN — donc exactement là où le déclencheur se pose. Mesuré au
+    /// simulateur avant ce lot : déclencheur y 569–665, volet y 610–648,
+    /// quarante points de chevauchement.
+    func test_leVoletDeDescription_cèdeAuViseur() {
+        XCTAssertFalse(ComposerSceneCameraOverlay.isServed(.description, stage: .armed))
+        XCTAssertFalse(ComposerSceneCameraOverlay.isServed(.description, stage: .recording))
+        XCTAssertTrue(ComposerSceneCameraOverlay.isServed(.description, stage: .off))
+    }
+
+    /// **La trace du son NE cède PAS** — elle est ancrée AU-DESSUS du dessin
+    /// (#5017), et le viseur ne monte pas jusque-là. La faire céder retirerait
+    /// une information que rien ne recouvre.
+    func test_laTraceDuSon_neCèdePas() {
+        for étape in ComposerSceneCameraStage.allCases {
+            XCTAssertTrue(ComposerSceneCameraOverlay.isServed(.soundTrace, stage: étape))
+        }
+    }
+
+    /// **Les rails NE cèdent PAS**, et c'est vital : le viseur est borné au
+    /// dessin, donc il ne les atteint pas — et les cacher priverait l'auteur de
+    /// sa SORTIE autant que de ses portes.
+    func test_lesRails_neCèdentPas() {
+        for étape in ComposerSceneCameraStage.allCases {
+            XCTAssertTrue(ComposerSceneCameraOverlay.isServed(.rails, stage: étape))
+        }
+    }
+
+    /// **Trois meubles, trois réponses.** Une règle où tout céderait ne
+    /// déciderait rien — elle rendrait `stage != .off` en ignorant son premier
+    /// paramètre. Ce témoin garde qu'elle décide vraiment.
+    func test_laRègle_neCèdePasEnBloc() {
+        let cèdent = ComposerSceneCameraOverlay.Furniture.allCases
+            .filter { ComposerSceneCameraOverlay.yieldsToViewfinder($0) }
+        XCTAssertEqual(cèdent, [.description])
+    }
+}
+
+/// #4080 — **ce que la carte MONTRE, et pourquoi « noir » n'est pas un état.**
+final class ComposerSceneCameraSurfaceTests: XCTestCase {
+
+    func test_viseurÉteint_laSceneResteUneScene() {
+        // **`.camera` n'est PAS un cas de l'énuméré** : c'est une propriété
+        // calculée qui LIT le statut système vivant. L'employer dans un témoin
+        // le rendrait dépendant des réglages de la machine — vert ou rouge
+        // selon ce que le simulateur a accordé ce jour-là. Les cas nommés sont
+        // les seuls qui décrivent une intention.
+        for permission in [MediaPermissionState.granted, .denied, .notDetermined] {
+            XCTAssertEqual(
+                ComposerSceneCameraSurface.shown(stage: .off, permission: permission), .scene)
+        }
+    }
+
+    func test_permissionAccordée_montreLAperçu() {
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .granted), .viewfinder)
+    }
+
+    /// **Le cas qui manquait.** Une permission refusée laissait la carte NOIRE
+    /// — indiscernable d'une scène vide ou d'une caméra en panne. L'auteur
+    /// cherchait un défaut là où il n'y avait qu'une case à cocher.
+    func test_permissionRefusée_ditPOURQUOI_plutôtQueDeResterNoire() {
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .denied),
+            .permissionRefused)
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .recording, permission: .denied),
+            .permissionRefused)
+        // `.restricted` — bloqué par une politique (contrôle parental, MDM).
+        // Jamais promptable, et « ouvrir les Réglages » y est le seul recours,
+        // exactement comme `.denied` : les deux doivent rendre le même écran,
+        // sinon un appareil d'entreprise resterait devant une carte noire.
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .restricted),
+            .permissionRefused)
+    }
+
+    /// **`notDetermined` ne montre PAS le panneau** : le système est en train
+    /// de poser sa question, et un écran de refus affiché pendant qu'on demande
+    /// dirait le contraire de ce qui se passe.
+    func test_permissionEnCoursDeDemande_neCrieVictoireNiDéfaite() {
+        XCTAssertEqual(
+            ComposerSceneCameraSurface.shown(stage: .armed, permission: .notDetermined),
+            .viewfinder)
+    }
+}
+
+/// #4080 — **le viseur a deux tailles, et elles ne servent pas les mêmes
+/// contrôles** (directive porteur 2026-09-04).
+final class ComposerSceneCameraSizeTests: XCTestCase {
+
+    func test_leBouton_faitBasculerDansLesDeuxSens() {
+        XCTAssertEqual(ComposerSceneCameraSize.card.toggled, .fullScreen)
+        XCTAssertEqual(ComposerSceneCameraSize.fullScreen.toggled, .card)
+    }
+
+    /// **Le glyphe annonce OÙ l'on va, jamais où l'on est.** Un symbole qui
+    /// décrirait l'état laisserait deviner ce qu'un appui ferait — et ils sont
+    /// visuellement proches, donc l'erreur ne se verrait pas.
+    func test_lesDeuxGlyphes_diffèrent() {
+        XCTAssertNotEqual(ComposerSceneCameraSize.card.toggleSymbol,
+                          ComposerSceneCameraSize.fullScreen.toggleSymbol)
+    }
+
+    /// **La croix n'existe qu'en plein écran**, et c'est la décision qui fait
+    /// de ceci une règle plutôt qu'un booléen.
+    ///
+    /// En carte, le plateau reste visible : le viseur a déjà ses sorties — la
+    /// porte qui l'a armé, et le geste qui l'a ouvert. Une croix y ferait
+    /// double emploi et occuperait la place du seul contrôle que la carte ne
+    /// peut pas offrir autrement. En plein écran, il n'y a plus rien autour :
+    /// sans elle, l'écran serait un piège.
+    func test_seulLePleinÉcran_montreLaCroix() {
+        XCTAssertFalse(ComposerSceneCameraSize.card.showsClose)
+        XCTAssertTrue(ComposerSceneCameraSize.fullScreen.showsClose)
     }
 }

@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -47,7 +48,7 @@ struct MeeshyComposerHost: View {
     /// lui-même dans l'appel — il ne fait aucun appel : il le POSE sur l'atelier
     /// (`publishTargetType`), qui le transmet au hand-off. C'est ce qui fait de
     /// l'éventail un choix réel plutôt qu'un décor.
-    let onPublishAllInBackground: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool
+    let onPublishAllInBackground: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool
 
     /// **Le canal de publication du DOCUMENT** — le jumeau, pour les surfaces
     /// sans atelier, de ce que `onPublishAllInBackground` est pour la scène.
@@ -303,6 +304,104 @@ struct MeeshyComposerHost: View {
     /// `documentCameraSheet`, l'unique lecteur.
     @State var pendingCameraMode: CameraCaptureMode = .photo
 
+    /// **Le viseur POSÉ DANS LA SCÈNE** (#4080, vue `2b`).
+    ///
+    /// > « ça déclenche la caméra et ouvre la sheet caméra au lieu de
+    /// > déclencher la caméra et **utiliser le fond de la scène comme
+    /// > caméra** » — porteur, 2026-09-04
+    ///
+    /// `@StateObject` et non `.shared`, pour la même raison que l'export : une
+    /// session de capture appartient à CETTE composition. Un singleton
+    /// laisserait la caméra ouverte après la fermeture du composer — voyant
+    /// allumé, batterie consommée, et aucun écran pour dire pourquoi.
+    ///
+    /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
+    /// demande, donc le porter ici ne coûte rien tant que l'auteur n'a pas armé.
+    @StateObject var sceneCamera = CameraModel()
+
+    /// Le flash du viseur en scène. Le CYCLE et le vocabulaire vivent dans
+    /// `ComposerCameraFlash`, partagés avec la feuille : deux cycles écrits
+    /// séparément divergeraient au premier réglage.
+    @State var sceneCameraFlash: AVCaptureDevice.FlashMode = .off
+
+    /// **Les segments de la prise en cours** (#4099, vue `4b`). Chacun est un
+    /// FICHIER déjà écrit — jamais des octets en mémoire, ce qui est toute la
+    /// promesse de la planche : valider concatène des pistes déjà encodées.
+    @State var sceneSegments: [ComposerCaptureSegment] = []
+
+    /// La durée du segment en cours, saisie AU RELÂCHEMENT.
+    ///
+    /// `CameraModel.recordingDuration` est remise à zéro au démarrage suivant,
+    /// et le fichier n'arrive qu'après — la lire au moment où l'URL se présente
+    /// rendrait zéro pour tous les segments sauf le dernier. C'est le genre
+    /// d'écart qui ne casse rien et fait mentir toute la bande.
+    @State var pendingSegmentDuration: TimeInterval = 0
+
+    /// L'étape du viseur — la loi est dans `ComposerSceneCamera`, l'état ici.
+    @State var sceneCameraStage: ComposerSceneCameraStage = .off
+
+    /// La pastille choisie. `nil` tant que rien n'est armé : un mode qui
+    /// survivrait à la fermeture rendrait le prochain armement dépendant du
+    /// précédent, ce que rien à l'écran n'annoncerait — même raison que
+    /// `pendingCameraMode`, qui est reposé à chaque ouverture.
+    @State var sceneCameraMode: ComposerSceneCameraMode?
+
+    /// La taille du viseur. REPOSÉE à chaque armement : un plein écran qui
+    /// survivrait ferait naître le viseur suivant dans un état que rien à
+    /// l'écran n'annonce — même raison que `pendingCameraMode`.
+    @State var sceneCameraSize: ComposerSceneCameraSize = .card
+
+    /// **La course du glissement qui coupe la caméra**, en points, pendant que
+    /// le doigt est posé (directive porteur 2026-09-04 : « lorsqu'on swipe vers
+    /// le bas sur la scène avec la caméra activée, ça arrête la caméra »).
+    ///
+    /// Elle est ici et non dans l'extension parce qu'un `@State` est une
+    /// propriété STOCKÉE : Swift ne permet pas d'en déclarer dans une
+    /// extension. Elle n'est pas `private` pour la raison inverse — un
+    /// `@State private` est inaccessible depuis un fichier d'extension du même
+    /// type, et c'est `MeeshyComposerHost+Viewfinder.swift` qui la lit.
+    ///
+    /// Remise à zéro à la levée : ce qu'elle porte est le GESTE en cours, pas
+    /// un état du viseur. La décision, elle, est prise par
+    /// `ComposerSceneCameraFrame.dismisses(translationY:)`.
+    @State var sceneCameraDismissDrag: CGFloat = 0
+
+    /// **L'instant où le doigt s'est posé sur la SCÈNE**, `nil` quand aucun
+    /// appui long n'est en cours (directive porteur 2026-09-04 : « il faut que
+    /// le simple longpress déclenche la photo et non pas juste l'objectif »).
+    ///
+    /// C'est lui qui fait la différence entre une photo et une vidéo, et il ne
+    /// peut pas se déduire du stage : `armed` dit qu'on cadre, pas depuis
+    /// combien de temps. La barre tient le sien (`pressedAt`) pour son propre
+    /// obturateur ; celui-ci appartient au geste de la scène, qui commence
+    /// AVANT que la barre n'existe.
+    ///
+    /// Sa présence sert de second rôle, et c'est ce qui rend la levée sûre : le
+    /// canvas émet sa fin même quand l'hôte a refusé l'armement (le refus vit
+    /// chez nous, ses trois gardes chez lui). Sans témoin de début, cette fin
+    /// prendrait une photo que personne n'a armée.
+    @State var sceneHoldStartedAt: Date?
+
+    /// La minuterie qui fait passer de la visée à la VIDÉO. Elle est nécessaire
+    /// parce qu'un `UILongPressGestureRecognizer` n'émet `.changed` que sur un
+    /// MOUVEMENT : un doigt immobile ne réveille personne, et la vidéo ne
+    /// partirait jamais sans qu'on bouge.
+    @State var sceneHoldTask: Task<Void, Never>?
+
+    /// **Le fond dont le menu est ouvert**, `nil` quand aucun ne l'est (#5041).
+    ///
+    /// Un identifiant plutôt qu'un booléen : le menu agit sur UN objet, et un
+    /// booléen aurait obligé à garder l'identifiant ailleurs — donc deux états
+    /// à tenir d'accord, dont la divergence se serait vue le jour où l'auteur
+    /// ouvre le menu d'un fond, le remplace, puis valide.
+    @State var backgroundMenuObjectId: String?
+
+    /// **Le registre des pré-montées** (#5086, vue `4c`). `@StateObject` parce
+    /// que le meuble le POSSÈDE : sa durée de vie est celle de la composition,
+    /// et un `@ObservedObject` le reconstruirait à chaque rendu — donc
+    /// relancerait les envois.
+    @StateObject var preUploads = ComposerPreUploadRegistry()
+
     /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
     ///
     /// `@StateObject` et non `.shared` : un bake appartient à CETTE
@@ -554,12 +653,36 @@ struct MeeshyComposerHost: View {
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
 
-    /// **Le repli du volet de description** (#4742).
+    /// **La couche d'écriture du CORPS DU POST** (#4890, directive porteur
+    /// 2026-09-04).
+    ///
+    /// Jumelle de `editsSceneDescription`, et distincte d'elle parce que les
+    /// DEUX textes existent en même temps sur un post : la description est la
+    /// légende du média courant (`PostMedia.caption`), le contenu est le corps
+    /// de la publication. Un seul drapeau aurait fait de la porte CONTENU une
+    /// seconde entrée vers le champ de la légende — un contrôle qui existe,
+    /// répond au doigt, et écrit ailleurs qu'annoncé.
+    ///
+    /// Les deux ne s'ouvrent jamais ensemble (voir le `body`) : au même
+    /// ancrage bas, elles se recouvriraient.
+    @State var editsPostContent = false
+
+    /// **Le repli du volet de description** (#4742, défaut RETOURNÉ au #5138).
     ///
     /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
     /// d'histoire ne doit pas rouvrir un volet que l'auteur vient de ranger.
-    /// Déplié par défaut — la description existe pour être relue.
-    @State var sceneDescriptionCollapsed = false
+    ///
+    /// **Replié par défaut** (directive porteur 2026-09-04 : « par défaut
+    /// l'espace de contenu du caption doit être replié »). Il naissait déplié,
+    /// et la raison écrite ici — « la description existe pour être relue » —
+    /// valait tant que le volet était le SEUL endroit où le texte se voyait
+    /// (#4742). Depuis #4993 il se peint PAR-DESSUS la scène : déplié d'entrée,
+    /// il couvre la bande basse du canvas à l'instant précis où l'auteur
+    /// compose — c'est-à-dire avant qu'il y ait la moindre légende à relire.
+    ///
+    /// Replié n'est pas caché : le chevron reste disponible en permanence
+    /// (#4993), et ouvrir la saisie déplie (`sceneDescriptionPanel.onEdit`).
+    @State var sceneDescriptionCollapsed = true
 
     /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
@@ -633,7 +756,7 @@ struct MeeshyComposerHost: View {
         /// les séparer aurait permis d'en passer une sans l'autre, c'est-à-dire
         /// de republier sans plafond, silencieusement.
         hydration: ComposerHydration? = nil,
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], [String: Data], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPublishDocument: @escaping @MainActor (ComposerDocumentDraft) async -> Bool,
         moodSeed: ComposerMoodSeed?,
         mediaSeed: StoryComposerSeed?,
@@ -764,30 +887,12 @@ struct MeeshyComposerHost: View {
         )
     }
 
-    /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, #4851 —
-    /// porteur 2026-09-03 ; planche `2b`).
-    ///
-    /// C'est ce geste qui tient désormais la promesse de la porte, à la place
-    /// du viseur présenté au montage. Trois choses vivent ailleurs, exprès :
-    ///
-    /// - **si** le geste est offert — `ComposerSceneCaptureGesture.offersCapture`,
-    ///   qui lit la clause « scène vide ou à fond vide » de la directive ;
-    /// - **quel** viseur — la même règle, où le FORMAT prime la porte ;
-    /// - **comment** il s'ouvre — `presentCamera(mode:)`, le site unique.
-    ///
-    /// L'hôte ne fait que les composer. Un `if` écrit ici aurait remis la
-    /// décision dans un corps de vue, où une garde de source ne la lit pas.
-    func handleSceneCaptureLongPress() {
-        guard ComposerSceneCaptureGesture.offersCapture(
-            backgroundIsEmpty: !viewModel.currentSlide.effects.hasVisualBackgroundMedia,
-            format: selectedFormat
-        ) else { return }
-        HapticFeedback.medium()
-        presentCamera(mode: ComposerSceneCaptureGesture.mode(
-            format: selectedFormat, opening: profile.opensWith))
-    }
 
-    var body: some View {
+    /// La pile du meuble — plateau, surface, socle. Extraite du `body` le
+    /// 2026-09-04 pour que le viseur puisse l'ENVELOPPER : ce qui doit couvrir
+    /// le socle ne peut pas être un modificateur posé après lui.
+    @ViewBuilder
+    var composerStack: some View {
         VStack(spacing: 0) {
             // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
             // règle de placement. Il vivait dans `composerSurface`, ce qui le
@@ -830,7 +935,23 @@ struct MeeshyComposerHost: View {
                 socle
             }
         }
+    }
+
+    var body: some View {
+        // **Le viseur ENVELOPPE le meuble entier, socle compris** (directive
+        // porteur 2026-09-04). Une enveloppe, et non un `.overlay` posé plus
+        // bas : le socle — audience · aperçu · publier — est le FRÈRE de la
+        // surface dans `composerStack`, et un overlay ne couvre jamais son
+        // frère. C'est ce qui laissait la rangée visible en plein écran, quelle
+        // que soit la couche employée — la géométrie de la composition, pas un
+        // ordre de z.
+        // **Le menu du fond est monté sur la PILE, pas sur la racine** (#5041) :
+        // SwiftUI n'honore qu'UNE présentation par vue, et la racine porte déjà
+        // la feuille de partage (#4996). Une seconde y serait silencieusement
+        // avalée — le mode de panne qui ne rougit nulle part.
+        withSceneCameraViewfinder(backgroundMenuPresented(composerStack))
         .background(tint.color.ignoresSafeArea())
+
         // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du
         // meuble et non en `.sheet` : une feuille système laisse voir la scène
         // NETTE derrière son bord arrondi et impose sa propre poignée, alors que
@@ -843,10 +964,9 @@ struct MeeshyComposerHost: View {
         // `storyComposerCanvasBottomReservation`, posée sur `composerSurface` —
         // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
         // seconde.
-        .overlay(alignment: .bottom) {
-            if editsSceneDescription { sceneDescriptionEditor }
-        }
+        .overlay(alignment: .bottom) { textEditingZones }
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsSceneDescription)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsPostContent)
         // **La feuille de partage est portée par la RACINE, pas par
         // `surfaceWithIntakePortals`** (#4996). Ce dernier porte déjà un
         // `.sheet(item:)` et un `.fullScreenCover(item:)`, et SwiftUI n'honore

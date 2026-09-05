@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// **Le texte d'une slide n'a pas le même RÔLE selon le profil** (#4890).
@@ -134,5 +135,98 @@ final class ComposerSlideTextRoleTests: XCTestCase {
         ComposerSlideTextRole.applyCaption("la grue", to: nil, in: &captions)
         XCTAssertEqual(captions.count, 1)
         XCTAssertEqual(captions[URL(fileURLWithPath: "/tmp/a.jpg")], "le quai")
+    }
+
+    // MARK: - #4890 seconde moitié — la légende SORT du composer
+
+    /// Une slide de post, un fond, une légende : la carte sortante est clée sur
+    /// l'id de l'OBJET de canvas — la seule clé que
+    /// `StoryMediaTextMapping.serverKeyed` sache traduire en `PostMedia.id`.
+    func test_laLegende_ressortCleeSurLIdDeLObjetDeFond() {
+        let url = URL(fileURLWithPath: "/tmp/quai.jpg")
+        let fond = StoryMediaObject(id: "obj-fond", postMediaId: "", mediaType: "image",
+                                    aspectRatio: nil, isBackground: true)
+        var effets = StoryEffects()
+        effets.mediaObjects = [fond]
+        let slide = StorySlide(id: "slide-1", effects: effets)
+
+        let sortie = ComposerSlideTextRole.canvasKeyed(
+            [url: "Le quai au petit matin"],
+            slideIdByMediaURL: [url: "slide-1"],
+            slides: [slide]
+        )
+
+        XCTAssertEqual(sortie, ["obj-fond": "Le quai au petit matin"],
+                       "La clé sortante est l'id d'OBJET, jamais l'URL locale ni l'id de slide.")
+    }
+
+    /// **Le FOND porte la légende, pas un objet de premier plan.** Le témoin
+    /// pose le fond en SECONDE position : un repli sur `first` seul rendrait le
+    /// mauvais objet, et la carte serait juste par accident d'ordonnancement.
+    func test_leFond_porteLaLegende_memeQuandIlNestPasLePremierObjet() {
+        let url = URL(fileURLWithPath: "/tmp/quai.jpg")
+        let devant = StoryMediaObject(id: "obj-devant", postMediaId: "", mediaType: "image",
+                                      aspectRatio: nil, isBackground: false)
+        let fond = StoryMediaObject(id: "obj-fond", postMediaId: "", mediaType: "image",
+                                    aspectRatio: nil, isBackground: true)
+        var effets = StoryEffects()
+        effets.mediaObjects = [devant, fond]
+        let slide = StorySlide(id: "slide-1", effects: effets)
+
+        let sortie = ComposerSlideTextRole.canvasKeyed(
+            [url: "la grue"],
+            slideIdByMediaURL: [url: "slide-1"],
+            slides: [slide]
+        )
+
+        XCTAssertEqual(sortie["obj-fond"], "la grue")
+        XCTAssertNil(sortie["obj-devant"], "un objet de premier plan n'est pas ce que l'URL a fondé")
+    }
+
+    /// **Deux médias, deux légendes DISTINCTES** — le critère de fin de #4890,
+    /// réduit à sa loi pure. Une carte qui écraserait sur une clé unique
+    /// passerait tous les témoins à un seul média.
+    func test_deuxMedias_gardentDeuxLegendesDistinctes() {
+        let a = URL(fileURLWithPath: "/tmp/a.jpg")
+        let b = URL(fileURLWithPath: "/tmp/b.jpg")
+        func slide(_ id: String, _ objet: String) -> StorySlide {
+            var effets = StoryEffects()
+            effets.mediaObjects = [StoryMediaObject(id: objet, postMediaId: "",
+                                                    mediaType: "image", aspectRatio: nil,
+                                                    isBackground: true)]
+            return StorySlide(id: id, effects: effets)
+        }
+
+        let sortie = ComposerSlideTextRole.canvasKeyed(
+            [a: "le quai", b: "la grue"],
+            slideIdByMediaURL: [a: "s1", b: "s2"],
+            slides: [slide("s1", "o1"), slide("s2", "o2")]
+        )
+
+        XCTAssertEqual(sortie, ["o1": "le quai", "o2": "la grue"])
+    }
+
+    /// **Rien n'est FABRIQUÉ.** Une URL sans slide, une slide sans objet, un
+    /// texte blanc : l'entrée est omise. Une clé inventée poserait la légende
+    /// sur un média que l'auteur n'a pas désigné — la faute exacte que
+    /// `applyCaption` refuse déjà quand `media == nil`.
+    func test_uneUrlSansSlide_ouUneSlideSansObjet_neProduitAucuneCle() {
+        let orpheline = URL(fileURLWithPath: "/tmp/orpheline.jpg")
+        let vide = URL(fileURLWithPath: "/tmp/vide.jpg")
+        let blanche = URL(fileURLWithPath: "/tmp/blanche.jpg")
+        var avecObjet = StoryEffects()
+        avecObjet.mediaObjects = [StoryMediaObject(id: "o", postMediaId: "",
+                                                   mediaType: "image", aspectRatio: nil,
+                                                   isBackground: true)]
+
+        let sortie = ComposerSlideTextRole.canvasKeyed(
+            [orpheline: "sans slide", vide: "sans objet", blanche: "   "],
+            slideIdByMediaURL: [vide: "s-vide", blanche: "s-blanche"],
+            slides: [StorySlide(id: "s-vide", effects: StoryEffects()),
+                     StorySlide(id: "s-blanche", effects: avecObjet)]
+        )
+
+        XCTAssertTrue(sortie.isEmpty,
+                      "Aucune des trois entrées n'a de destinataire — aucune ne doit produire de clé.")
     }
 }

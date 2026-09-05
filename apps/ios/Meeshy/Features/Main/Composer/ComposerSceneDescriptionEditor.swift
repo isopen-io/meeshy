@@ -40,6 +40,17 @@ struct ComposerSceneDescriptionEditor: View {
     let onDone: () -> Void
     let onHeightChange: (CGFloat) -> Void
 
+    /// **La langue du texte, servie AU-DESSUS de la coche** (#5137). Simple
+    /// relais : la zone ne construit pas la capsule — elle ne sait ni quelle
+    /// langue est déclarée, ni quel portail ouvre le sélecteur. Le calque la
+    /// peint, l'hôte la fabrique, et personne au milieu ne décide.
+    var languageAccessory: AnyView?
+
+    /// Relais du libellé de la coche (#4890) — voir
+    /// `ComposerDescriptionLayer.validationLabel`. Le défaut garde ce que
+    /// l'appelant historique avait.
+    var validationLabel: String = ComposerDescriptionCopy.done
+
     var body: some View {
         // **Le glissement est CONTRÔLÉ, pas déclenché** (directive porteur
         // 2026-08-30, precision) :
@@ -92,7 +103,12 @@ struct ComposerSceneDescriptionEditor: View {
             // 2026-08-30) : elle range la zone, comme le glissement vers le bas.
             // Deux gestes, un seul acte — et plus de « Terminé » en doublon sur
             // la barre du clavier.
-            onValidate: onDone
+            onValidate: onDone,
+            // APRÈS `onValidate:` — l'ordre suit la DÉCLARATION du calque, que
+            // Swift n'autorise pas à réordonner (`fillsAvailableHeight` garde sa
+            // valeur par défaut entre les deux).
+            languageAccessory: languageAccessory,
+            validationLabel: validationLabel
         )
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

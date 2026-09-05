@@ -518,19 +518,40 @@ describe('#4340 critère 1 — la vue rend ce que la route dédiée rendait', ()
     expect(vue.corps.data[0].metadata).toBeUndefined();
   });
 
-  it('les deux vues servent DAVANTAGE que leur route dédiée — la forme est celle de la collection', async () => {
+  it('la vue sert DAVANTAGE que la route dédiée, mais les deux servent les drapeaux de protection (#4885)', async () => {
     const vue = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`);
     const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`);
     const champsVue = Object.keys(vue.corps.data[0]);
     const champsDediee = Object.keys(dediee.corps.data[0]);
-    // Les drapeaux de PROTECTION du message — que la recherche dédiée ne
-    // sélectionne pas, donc ne sert pas : un message à vue unique trouvé par
-    // recherche arrive sans le dire.
-    expect(champsDediee).not.toContain('isViewOnce');
+    // #4885 — la recherche DÉDIÉE sert désormais les drapeaux de PROTECTION du
+    // message elle aussi (source unique avec la vue : `MESSAGE_PROTECTION_SELECT`
+    // / `mapMessageProtectionFields`, `messages-list-query.ts`). Avant ce
+    // correctif, un message à vue unique trouvé par la route dédiée arrivait
+    // sans le dire, et restait donc FORWARDABLE.
+    expect(champsDediee).toContain('isViewOnce');
+    expect(champsDediee).toContain('isBlurred');
+    expect(champsDediee).toContain('expiresAt');
     expect(champsVue).toContain('isViewOnce');
     expect(champsVue).toContain('isBlurred');
     expect(champsVue).toContain('expiresAt');
+    // La vue reste plus riche : attachments, isEncrypted, pinnedAt, etc. —
+    // que la route dédiée de recherche ne sélectionne toujours pas.
     expect(champsVue.length).toBeGreaterThan(champsDediee.length);
+  });
+
+  it('sert la VALEUR réelle des drapeaux, pas seulement leur présence — un message à vue unique reste `isViewOnce: true` (#4885)', async () => {
+    // Le témoin ci-dessus ne prouve que la présence de la clé — un `undefined`
+    // aurait aussi bien traversé `toContain`. Le témoin décisif porte sur la
+    // CONSÉQUENCE : le garde de transfert (`BubbleMessageNormalView.tsx`,
+    // `!message.isViewOnce`) doit lire `true`, pas une clé vidée.
+    const protege = JEU.map((r) =>
+      r.id === M_OK ? { ...r, isViewOnce: true, isBlurred: true, effectFlags: 5 } : r
+    );
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: protege });
+    const servi = dediee.corps.data.find((m: any) => m.id === M_OK);
+    expect(servi.isViewOnce).toBe(true);
+    expect(servi.isBlurred).toBe(true);
+    expect(servi.effectFlags).toBe(5);
   });
 });
 

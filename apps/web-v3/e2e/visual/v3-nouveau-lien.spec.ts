@@ -90,7 +90,7 @@ test('créer un lien le CRÉE, et il apparaît dans le carnet', async ({ browser
   await page.locator('input[name="nom"]').fill('Voisins');
   await page.locator('input[value="jour"]').check();
   await page.locator('input[name="capacite"]').fill('12');
-  await page.locator('button[type="submit"]').click();
+  await page.locator('dialog.nouveau-lien button[type="submit"]').click();
 
   await expect(page).toHaveURL(`${v3.base}/links?cree`);
   await expect(page.locator('[role="status"]')).toBeVisible();
@@ -98,6 +98,51 @@ test('créer un lien le CRÉE, et il apparaît dans le carnet', async ({ browser
   // non seulement que la passerelle a répondu 201.
   await expect(page.locator('.liens')).toContainText('mshy_cree_1');
   await expect(page.locator('dialog.nouveau-lien')).toHaveCount(0);
+
+  await ctx.close();
+});
+
+/**
+ * #4933, critère (5) — LES TROIS ASSERTIONS SUR LE CORPS REÇU, contre le
+ * BOUCHON : `__tests__/nouveau-lien.test.ts` les tient déjà en jsdom contre un
+ * `recuperer` simulé ; ici, un VRAI navigateur remplit un VRAI formulaire et le
+ * corps est lu dans `passerelle.journal`, la trace que le bouchon garde de
+ * chaque appel REÇU (`serveurs.ts` › `AppelRecu`).
+ */
+test('la feuille de création mute la charge envoyée — échéance, capacité, booléens explicites', async ({ browser }) => {
+  // Le journal est PARTAGÉ par tout le fichier (une seule passerelle,
+  // `beforeAll`) : l'oublier isole la lecture qui suit de la création du
+  // témoin précédent.
+  passerelle.oublie();
+  const ctx = await contexte(browser);
+  const page = await ctx.newPage();
+  const avant = Date.now();
+
+  await page.goto(`${v3.base}/links?nouveau`);
+  await page.locator('input[name="conversation"]').fill('Le potager du quartier');
+  await page.locator('input[value="jour"]').check();
+  await page.locator('input[name="capacite"]').fill('7');
+  // Écrire des messages est cochée PAR DÉFAUT (`PERMISSIONS_DU_LIEN`) — la
+  // décocher prouve qu'une case décochée part en `false` EXPLICITE, jamais
+  // omise. Joindre des fichiers est décochée par défaut : la cocher prouve
+  // l'inverse sur le même geste.
+  await page.locator('input[name="allowAnonymousMessages"]').uncheck();
+  await page.locator('input[name="allowAnonymousFiles"]').check();
+  await page.locator('dialog.nouveau-lien button[type="submit"]').click();
+  await expect(page).toHaveURL(`${v3.base}/links?cree`);
+
+  const creation = passerelle.journal.find(
+    (appel) => appel.methode === 'POST' && appel.chemin === '/api/v1/links',
+  );
+  const corps = JSON.parse(creation?.corps ?? '{}') as Record<string, unknown>;
+
+  // Dans « 24h − 5s, 24h + 5s » — l'horloge du SERVEUR, pas celle du test.
+  const echeance = Date.parse(String(corps.expiresAt));
+  expect(echeance).toBeGreaterThanOrEqual(avant + 24 * 3_600_000 - 5_000);
+  expect(echeance).toBeLessThanOrEqual(avant + 24 * 3_600_000 + 5_000);
+  expect(corps.maxUses).toBe(7);
+  expect(corps.allowAnonymousMessages).toBe(false);
+  expect(corps.allowAnonymousFiles).toBe(true);
 
   await ctx.close();
 });
@@ -110,7 +155,7 @@ test('la feuille marche ENTIÈRE sans JavaScript', async ({ browser }) => {
   await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
 
   await page.locator('input[name="conversation"]').fill('Sans une ligne de script');
-  await page.locator('button[type="submit"]').click();
+  await page.locator('dialog.nouveau-lien button[type="submit"]').click();
 
   await expect(page).toHaveURL(`${v3.base}/links?cree`);
   await expect(page.locator('.liens')).toContainText('mshy_cree_1');
@@ -198,9 +243,9 @@ test('un refus de la passerelle garde la saisie et dit le motif', async ({ brows
   // d'appeler la passerelle, et c'est le cas que le lecteur rencontre le plus.
   await page.locator('input[name="nom"]').fill('Voisins');
   await page.locator('input[name="conversation"]').fill(' ');
-  await page.locator('button[type="submit"]').click();
+  await page.locator('dialog.nouveau-lien button[type="submit"]').click();
 
-  await expect(page.locator('[role="alert"]')).toBeVisible();
+  await expect(page.locator('dialog.nouveau-lien [role="alert"]')).toBeVisible();
   await expect(page.locator('input[name="nom"]')).toHaveValue('Voisins');
 
   await ctx.close();

@@ -31,7 +31,7 @@ final class ComposerDocumentQuoteRefusalTests: XCTestCase {
         ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "je cite", visibility: .public,
             visibilityUserIds: [], repostOfId: "post-source", localMedia: [], location: nil,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:]
         )
     }
 

@@ -30,8 +30,11 @@ export type { PreferenceCategory } from './preferences-broadcast';
 export {
   resolveForwardSourceGateForReader,
   resolveForwardSourceForBroadcast,
+  resolveForwardSourceBroadcastPayload,
+  withoutForwardSourceOrItsPath,
 } from './forward-source-visibility';
 export type {
   ForwardSourceGate,
   ForwardSourceBroadcastVerdict,
+  ForwardSourceBroadcastPayload,
 } from './forward-source-visibility';

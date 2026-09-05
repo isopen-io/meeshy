@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 import MeeshySDK
 
@@ -56,6 +57,10 @@ public struct StickerPickerView: View {
     @Environment(\.stickerPaletteClock) private var clock
 
     @State var libraryItems: [StoryStickerLibraryItem] = []
+    /// La photo choisie pour un DÉTOURAGE (#3955) — remise à `nil` dès que
+    /// la tâche l'a consommée, sinon rouvrir l'onglet re-détourerait la
+    /// même image.
+    @State var liftSelection: PhotosPickerItem?
     @State var places: [SharedPlace] = []
     @State var selectedPlaceIndex: Int = 0
     /// L'instant lu à l'OUVERTURE. Une seule lecture, figée ensuite : relire

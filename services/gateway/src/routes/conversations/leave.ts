@@ -11,6 +11,7 @@ import { emitConversationMemberCountEvent } from '../../socketio/emitConversatio
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
+import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -166,6 +167,10 @@ export function registerLeaveRoutes(
               include: { participants: { select: { id: true, userId: true, isActive: true } } },
             }),
             prisma.participant.update(leaveSelf),
+            // #3740 — même geste que `core-lifecycle.ts` et `delete-for-me.ts` :
+            // un lien qui reste actif vers un fil déjà clos est un contrôle qui
+            // ment.
+            deactivateShareLinksOnClose(prisma, id),
           ])
           closedAudience = (closed.participants ?? []).filter(p => p.isActive)
         }

@@ -1,6 +1,24 @@
 import Foundation
 
-public final class NotificationService: @unchecked Sendable {
+/// LE SEAM DU SERVICE DE NOTIFICATIONS (#4901) — créé pour l'injection dans
+/// `NotificationListViewModel` (le témoin de boucle du curseur se joue au
+/// niveau VM, contre un mock qui CAPTURE les arguments). Antérieur à la règle
+/// « protocole avant implémentation », rattrapé ici. Les défauts d'arguments
+/// vivent sur le TYPE CONCRET (un protocole Swift n'en porte pas) : un
+/// appelant par protocole passe tout, et c'est ce qui rend ses appels
+/// vérifiables.
+public protocol NotificationServiceProviding: Sendable {
+    func list(
+        offset: Int?,
+        cursor: String?,
+        limit: Int,
+        unreadOnly: Bool
+    ) async throws -> NotificationListResponse
+    func unreadCount() async throws -> Int
+    func markAsRead(notificationId: String) async throws
+}
+
+public final class NotificationService: NotificationServiceProviding, @unchecked Sendable {
     public static let shared = NotificationService()
     private let api: APIClientProviding
 
@@ -8,11 +26,27 @@ public final class NotificationService: @unchecked Sendable {
         self.api = api
     }
 
-    public func list(offset: Int = 0, limit: Int = 20, unreadOnly: Bool = false) async throws -> NotificationListResponse {
-        var queryItems = [
-            URLQueryItem(name: "offset", value: "\(offset)"),
-            URLQueryItem(name: "limit", value: "\(limit)"),
-        ]
+    /// LA LISTE, PAR CURSEUR D'ABORD (#4901). `offset` était NON OPTIONNEL :
+    /// la signature obligeait l'appelant à envoyer un rang — la forme qui
+    /// repaye un `count()` à chaque première page et SAUTE des lignes dès
+    /// qu'une notification arrive entre deux pages. Sans rang ni curseur, la
+    /// passerelle sert la première page KEYSET (`nextCursor` dans
+    /// `NotificationPagination`, déjà déclaré) ; `cursor` reprend la suite.
+    /// `offset` reste formulable — le repli de compatibilité, jamais le défaut
+    /// — et le curseur GAGNE quand les deux sont donnés : un appelant qui
+    /// tient un curseur tient déjà mieux qu'un rang.
+    public func list(
+        offset: Int? = nil,
+        cursor: String? = nil,
+        limit: Int = 20,
+        unreadOnly: Bool = false
+    ) async throws -> NotificationListResponse {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        } else if let offset {
+            queryItems.append(URLQueryItem(name: "offset", value: "\(offset)"))
+        }
         if unreadOnly {
             queryItems.append(URLQueryItem(name: "unreadOnly", value: "true"))
         }

@@ -168,6 +168,16 @@ extension MeeshyComposerHost {
         for (url, _) in mediaRoleByURL where !present.contains(url) {
             mediaRoleByURL.removeValue(forKey: url)
         }
+
+        // **La pré-montée part d'ICI, à la fin de la dérivation** (#5086, vue
+        // `4c`). C'est le seul moment où l'état du document est ARRÊTÉ : les
+        // objets sont posés, leurs fichiers copiés, leurs URL locales écrites.
+        //
+        // Un appel posé sur chaque porte d'entrée aurait exigé de les
+        // énumérer — cinq, dont une née d'un GESTE et absente de tout
+        // inventaire (#4879, #5069). Ici, une sixième porte hérite de la
+        // pré-montée sans que personne n'ait à y penser.
+        startPendingPreUploads()
     }
 
 
@@ -374,7 +384,22 @@ extension MeeshyComposerHost {
             // depuis le 2026-08-30 : le champ permanent qui l'affichait dès
             // qu'un texte existait a été retiré sur directive porteur.
             HapticFeedback.light()
+            // **Ouvrir l'une FERME l'autre** (#4890). Les deux zones s'ancrent
+            // en bas : ouvertes ensemble, elles se recouvriraient, et l'auteur
+            // taperait dans celle qu'il ne regarde pas. Le `body` le rend déjà
+            // impossible à l'affichage ; le fermer ICI garde l'ÉTAT d'accord
+            // avec ce qui est peint, sans quoi refermer la description
+            // rouvrirait le contenu par surprise.
+            editsPostContent = false
             editsSceneDescription = true
+        case .content:
+            // **Le CORPS du post** (#4890) — jamais la légende, que
+            // `.description` ouvre juste au-dessus. Deux portes voisines, deux
+            // textes réellement distincts : c'est la table de
+            // `ComposerSlideTextRole`, rendue atteignable.
+            HapticFeedback.light()
+            editsSceneDescription = false
+            editsPostContent = true
         case .drawing:
             // **Une porte à BASCULE, la seule du rail.** Les six autres font
             // entrer quelque chose et se referment ; celle-ci ouvre un MODE qui
@@ -874,7 +899,9 @@ extension MeeshyComposerHost {
         for item in items {
             switch item {
             case .image(let image):
-                Task { await ingestCameraCapture(.photo(image)) }
+                // Une image venue du presse-papier n'a pas d'octets d'origine
+                // à nous remettre : le repli redresse et ré-encode.
+                Task { await ingestCameraCapture(.photo(image, data: nil)) }
             case .video(let url):
                 Task { await ingestCameraCapture(.video(url)) }
             case .audio(let url):
@@ -901,12 +928,27 @@ extension MeeshyComposerHost {
 
     func ingestCameraCapture(_ result: CameraResult) async {
         switch result {
-        case .photo(let image):
-            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+        case .photo(let image, let originaux):
+            // **Les octets D'ORIGINE quand on les a** (directive porteur
+            // 2026-09-04 : « la prise de la photo doit avoir les exif et
+            // metadata »).
+            //
+            // `AVCapturePhoto.fileDataRepresentation()` rend un fichier
+            // COMPLET — EXIF, TIFF, appareil, date, temps de pose, focale,
+            // orientation. Les ré-encoder depuis l'`UIImage` jetait tout cela :
+            // `jpegData` n'écrit ni EXIF ni orientation, et c'est ce qui
+            // faisait aussi arriver la photo COUCHÉE. Une seule correction
+            // ferme les deux défauts, et elle est la bonne pour une raison de
+            // fond : on ne reconstruit pas ce qu'on a reçu.
+            let (octets, suffixe) = ComposerCapturePayload.bytes(
+                original: originaux, fallback: image)
+            guard let octets else { return }
             let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
-            guard (try? data.write(to: url)) != nil else { return }
-            ingestIntoDocument([ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg")])
+                .appendingPathComponent("composer_camera_\(UUID().uuidString).\(suffixe)")
+            guard (try? octets.write(to: url)) != nil else { return }
+            ingestIntoDocument([ComposerDocumentMediaFactory.media(
+                url: url,
+                declaredMimeType: ComposerCapturePayload.mime(for: suffixe))])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
             ingestIntoDocument([ComposerDocumentMediaFactory.media(
@@ -1016,10 +1058,13 @@ extension MeeshyComposerHost {
         }, onLibraryStickerSelected: { item in
             // Le bitmap suffit à la pose : il vit sous l'id de l'ÉLÉMENT dans
             // `loadedImages` jusqu'à ce que la publication le téléverse et
-            // remplisse `postMediaId`.
+            // remplisse `postMediaId`. Les octets animés le suivent (#3956) —
+            // un GIF posé sans eux perdrait son mouvement entre la grille et
+            // la scène, sans qu'aucun site rougisse.
             viewModel.addSticker(image: item.thumbnail,
                                  provider: StoryStickerLibraryItem.provider,
-                                 scale: StorySticker.posedScale)
+                                 scale: StorySticker.posedScale,
+                                 animatedData: item.animatedData)
             presentedPortal = nil
             HapticFeedback.light()
         }, onTemplateSelected: { gabarit, emplacements in

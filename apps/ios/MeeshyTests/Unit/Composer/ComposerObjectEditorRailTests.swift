@@ -171,4 +171,78 @@ final class ComposerObjectEditorRailTests: XCTestCase {
     func test_aLOuverture_leStyleEstSelectionne() {
         XCTAssertEqual(ComposerObjectEditorRail.initiallySelected, .tool(.style))
     }
+
+    // MARK: - La bascule (#5098)
+
+    /// **Retaper l'outil OUVERT le range.**
+    ///
+    /// > Directive porteur 2026-09-04 : « Lorsqu'on active un outil le retoucher
+    /// > le desactive et ses options se cachent. »
+    ///
+    /// Le #4936 avait REFUSÉ cette bascule, et sa raison était juste à sa date :
+    /// replier exigeait alors de vider `selectedTool`, donc de rendre le bas
+    /// vide — le défaut même que l'écran existe pour fermer. Le #5027 a séparé
+    /// les deux faits : l'outil reste SÉLECTIONNÉ pendant que son panneau se
+    /// range. La bascule ne casse donc plus rien.
+    func test_retaperLOutilOuvert_rangeSesOptions() {
+        XCTAssertTrue(
+            ComposerObjectEditorRail.collapsed(afterTapping: .tool(.style),
+                                               selected: .tool(.style),
+                                               wasCollapsed: false),
+            "le même outil, panneau ouvert ⇒ il se range")
+    }
+
+    /// L'autre sens du MÊME geste : un panneau rangé se rouvre au doigt qui l'a
+    /// rangé. Sans quoi la bascule serait un aller sans retour, et l'outil
+    /// deviendrait inatteignable une fois replié.
+    func test_retaperLOutilRange_leRouvre() {
+        XCTAssertFalse(
+            ComposerObjectEditorRail.collapsed(afterTapping: .tool(.style),
+                                               selected: .tool(.style),
+                                               wasCollapsed: true),
+            "le même outil, panneau rangé ⇒ il se rouvre")
+    }
+
+    /// **Taper un AUTRE outil ouvre toujours** — c'est ce qui distingue une
+    /// bascule d'un interrupteur global. Choisir un outil dit qu'on veut le
+    /// régler ; le laisser rangé rendrait le rail muet.
+    func test_taperUnAutreOutil_ouvreTOUJOURS() {
+        for wasCollapsed in [true, false] {
+            XCTAssertFalse(
+                ComposerObjectEditorRail.collapsed(afterTapping: .tool(.color),
+                                                   selected: .tool(.style),
+                                                   wasCollapsed: wasCollapsed),
+                "un outil AUTRE que l'ouvert déplie, quel que soit l'état d'avant")
+        }
+    }
+
+    /// Le cas qui vient du #5027 : le glissement bas a rangé le panneau sans
+    /// changer l'outil. Taper une entrée — même celle qui reste sélectionnée —
+    /// doit rendre le panneau, jamais l'enfoncer davantage.
+    func test_apresLeGesteQuiRange_leRailRouvre() {
+        XCTAssertFalse(
+            ComposerObjectEditorRail.collapsed(afterTapping: .plan,
+                                               selected: .plan,
+                                               wasCollapsed: true))
+        XCTAssertFalse(
+            ComposerObjectEditorRail.collapsed(afterTapping: .timing,
+                                               selected: .plan,
+                                               wasCollapsed: true))
+    }
+
+    /// La bascule vaut pour TOUTES les entrées, pas seulement les outils de
+    /// texte : la fenêtre et le plan sont des sections comme les autres, et un
+    /// geste qui marche sur huit entrées sur dix serait pire qu'absent.
+    func test_laBascule_vautPourChaqueEntree() {
+        for famille in MeeshySceneObject.Kind.allCases {
+            for entree in ComposerObjectEditorRail.entries(for: famille) {
+                XCTAssertTrue(
+                    ComposerObjectEditorRail.collapsed(afterTapping: entree,
+                                                       selected: entree,
+                                                       wasCollapsed: false),
+                    "\(entree) doit se ranger quand on la retape")
+            }
+        }
+    }
+
 }

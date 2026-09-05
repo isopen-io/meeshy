@@ -51,7 +51,8 @@ final class CacheCoordinatorTests: XCTestCase {
             messageService: BareMessageService(),
             messageSocket: msgSocket,
             socialSocket: socialSocket,
-            api: MockAPIClient()
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
         )
         await engine.startSocketRelay()
         return (coordinator, engine, msgSocket, socialSocket)

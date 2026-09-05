@@ -5,6 +5,7 @@ import { urlDePiece } from './fil';
 import { genreDeMime, type GenreDePiece } from './formes';
 import { chaine, instant, nombre, objet } from './lecture';
 import { baseDeLaPasserelle, DELAI_DE_REPONSE_MS } from './passerelle';
+import { adresseDeLaStory } from '@/lib/contenu/partage';
 
 /**
  * CE QU'UNE PUBLICATION EST, LUE PAR LA V3 — la story d'abord (issue #4895),
@@ -96,6 +97,20 @@ export type Voisinage = {
   /** Les stories de CET auteur, de la plus ancienne à la plus récente — les barres du haut. */
   readonly segments: readonly Segment[];
   readonly rang: number;
+  /**
+   * OÙ MÈNENT LES DEUX TAPS — des **ADRESSES**, jamais des identifiants, et le
+   * changement est un CORRECTIF (#5032). `tap()` (`app/(public)/partage-vue.ts`)
+   * composait `adresseDeLaStory(cible)` EN DUR : un voisinage de réels aurait
+   * envoyé vers `/stories/<id>`. Le défaut était DORMANT — `GENRE_REEL` et
+   * `GENRE_HUMEUR` posent `avecSegments: false`, donc la porte ne demandait
+   * aucun voisinage et aucun tap ne se rendait — et il se serait réveillé à la
+   * première file de réels.
+   *
+   * Une adresse plutôt qu'un identifiant fait aussi entrer un voisinage que
+   * l'identifiant ne peut pas dire : le réel SUIVANT du fil connecté vit à
+   * `/feed/reels?cursor=…`, pas à `/reels/<id>` — c'est un pas de curseur, pas
+   * un nom. Le lecteur reste UN ; ce qui change est ce qu'on lui donne.
+   */
   readonly precedente: string | null;
   readonly suivante: string | null;
 };
@@ -356,11 +371,18 @@ export const voisinage = ({ story, visibles }: { readonly story: Story; readonly
     return { segments: [{ id: story.id, courant: true }], rang: 0, precedente: null, suivante: null };
   }
 
+  // L'ADRESSE, pas l'identifiant (voir `Voisinage`) : la conversion se fait ICI,
+  // au seul site qui sait que ces voisines sont des STORIES.
+  const adresse = (index: number): string | null => {
+    const voisine = memeAuteur[index];
+    return voisine === undefined ? null : adresseDeLaStory(voisine.id);
+  };
+
   return {
     segments: memeAuteur.map((voisine, index) => ({ id: voisine.id, courant: index === rang })),
     rang,
-    precedente: memeAuteur[rang - 1]?.id ?? null,
-    suivante: memeAuteur[rang + 1]?.id ?? null,
+    precedente: adresse(rang - 1),
+    suivante: adresse(rang + 1),
   };
 };
 
@@ -727,13 +749,20 @@ export const filDeLaPublication = async ({
  * caractères et exige qu'au moins un porteur de contenu soit présent
  * (`hasAnyContentCarrier`).
  *
- * `visibility` EST UN PARAMÈTRE, PAS UNE CONSTANTE — depuis #5033
- * (`/stories/new`), qui en fait un contrôle RÉEL (trois valeurs, mutant la
- * charge envoyée : c'est le critère de fin de cet écran). Composer
- * (`/composer`, post/réel/humeur, #4966) ne le fournit toujours pas : le
- * défaut `'PUBLIC'` préserve son comportement à l'octet près — sa ligne
- * « Audience » reste INFORMATIVE (comme « Traduction »), la ligne ne DEVIENT
- * un contrôle que pour l'écran qui la câble.
+ * `visibility` EST UN PARAMÈTRE, PAS UNE CONSTANTE — et les DEUX écrans qui
+ * publient le fournissent.
+ *
+ * Ce paragraphe annonçait l'inverse pour `/composer` (« sa ligne Audience reste
+ * INFORMATIVE »), et l'écriture de l'écran l'a démenti : sur un écran de
+ * CRÉATION, une ligne qui affiche « Public » sans qu'on puisse en changer est
+ * exactement le contrôle qui ment que la charte règle 7 interdit. Les trois
+ * valeurs sont acceptées sans champ de plus ; il n'y avait aucune raison de ne
+ * pas les servir. Le défaut `'PUBLIC'` reste, pour l'appelant qui ne choisit
+ * pas — jamais comme une politique d'écran.
+ *
+ * La ligne « Traduction », elle, reste informative, et c'est DIFFÉRENT : il n'y
+ * a rien à y choisir. La v3 REVENDIQUE la langue d'écriture
+ * (`originalLanguage`) et le Prisme de chaque LECTEUR décide du reste.
  *
  * `originalLanguage` — `CreatePostSchema.originalLanguage`
  * (`routes/posts/types.ts:249-251`) — EST LA REVENDICATION DU CLIENT (§ Prisme,
@@ -758,6 +787,7 @@ export const publie = async ({
   type,
   texte,
   visibility = 'PUBLIC',
+  emoji = null,
   langue = null,
   cmid = null,
   base,
@@ -768,6 +798,14 @@ export const publie = async ({
   readonly texte: string;
   /** `CreatePostSchema.visibility` — `'PUBLIC'` pour composer, la valeur RÉELLEMENT choisie pour une story (#5033). */
   readonly visibility?: 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+  /**
+   * `moodEmoji` — `CreatePostSchema.moodEmoji`, `z.string().max(10)`
+   * (`routes/posts/types.ts:246`). Il n'a de sens que pour un `STATUS` : c'est
+   * l'humeur ELLE-MÊME, et le texte n'en est que le commentaire. `null` — le
+   * cas de tous les autres types — ne pose AUCUNE clé dans le corps : une
+   * chaîne vide serait un emoji vide, pas une absence d'emoji.
+   */
+  readonly emoji?: string | null;
   /** `originalLanguage` — la revendication du client. `null` : rien à revendiquer, la passerelle devine. */
   readonly langue?: string | null;
   /**
@@ -793,6 +831,7 @@ export const publie = async ({
       type,
       content: texte,
       visibility,
+      ...(emoji === null ? {} : { moodEmoji: emoji }),
       ...(langue === null ? {} : { originalLanguage: langue }),
     }),
   });
@@ -810,4 +849,49 @@ export const publie = async ({
     message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_PUBLICATION,
     statut: reponse.status,
   };
+};
+
+/**
+ * `POST /posts/:postId/comments` (`routes/posts/comments.ts:164`, requiredAuth,
+ * `CreateCommentSchema` : `content` ≤ 2000) — le geste d'écriture de `/post/:id`
+ * (#5091). Quatre issues, jamais fondues : `faite`, `session-expiree` (le cas
+ * NOMINAL d'un retour après quelques jours), `refus` (la passerelle a dit non —
+ * contenu invalide, publication fermée), `panne`.
+ */
+export type IssueDuCommentaire = 'faite' | 'session-expiree' | 'refus' | 'panne';
+
+export const ecrisUnCommentaire = async ({
+  id,
+  contenu,
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly id: string;
+  readonly contenu: string;
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<IssueDuCommentaire> => {
+  const reponse = await (recuperer ?? ((u: string, o?: RequestInit) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/posts/${encodeURIComponent(id)}/comments`,
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ content: contenu }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_DE_REPONSE_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return 'panne';
+  if (reponse.status === 401) return 'session-expiree';
+
+  const enveloppe = (await reponse.json().catch(() => null)) as { readonly success?: unknown } | null;
+  if (enveloppe?.success === true) return 'faite';
+  return reponse.status >= 500 ? 'panne' : 'refus';
 };

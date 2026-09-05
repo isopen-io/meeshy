@@ -114,6 +114,17 @@ export type MiseAJour = {
  * ABSENCE laisse l'aperçu précédent en place — un événement qui ne parle pas
  * d'aperçu ne doit pas en effacer un.
  */
+/**
+ * LES CHAMPS QUE LE RATTRAPAGE DEMANDE À `/sync` (#5088) — déclarés À CÔTÉ du
+ * réducteur qui les lit, comme la passerelle déclare son vocabulaire à côté de
+ * son `select` (`routes/sync/conversations.ts`). Le rattrapage ne corrige que
+ * le RANG (`bouge`, alimenté par `miseAJourDe`) : il lit l'identifiant et
+ * l'instant, rien d'autre — et il ne DEMANDE donc rien d'autre. Un champ
+ * ajouté ici sans lecteur dans `miseAJourDe` fait rougir le témoin de borne
+ * (`liste-rattrapage.test.ts`), et l'inverse aussi.
+ */
+export const CHAMPS_DU_RATTRAPAGE = ['conversations.id', 'conversations.lastMessageAt'] as const;
+
 export const miseAJourDe = (charge: unknown): MiseAJour | null => {
   const brut = objet(charge);
   const id = chaine(brut?.conversationId);

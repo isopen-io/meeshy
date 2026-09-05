@@ -1,11 +1,12 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
 import type { LienDePartage } from '@/lib/api/compte';
-import { GLYPHE_LIEN, LIENS, NOUVEAU_LIEN, type Echeance } from '@/lib/contenu/liens';
+import { FERMETURE, GLYPHE_LIEN, LIENS, NOUVEAU_LIEN, type Echeance } from '@/lib/contenu/liens';
 
 import { adresseDuLien } from './contenu';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
+import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
 import { documentPleinEcran } from './fil-vue';
 import { FEUILLE_DES_LIENS, FEUILLE_DU_NOUVEAU_LIEN } from './liens-feuille';
 import { carteVide } from './vue';
@@ -43,6 +44,13 @@ import { carteVide } from './vue';
  * peint sur l'accueil dirait qu'on peut encore le partager. Ici, c'est
  * l'inverse : cet écran est l'endroit où le lecteur apprend qu'un lien ne sert
  * plus. Le cacher se lirait comme une perte, pas comme une fermeture.
+ *
+ * ON LE FERME DEPUIS ICI, DEPUIS #4933. Chaque ligne ACTIVE porte un menu
+ * (`<details class="actions">`, l'atome `MENU_DE_LIGNE` partagé avec `/chats`)
+ * dont l'unique geste POSTe `{ geste: 'fermer', lien: <linkId> }` — sans
+ * `action`, donc vers `/links` lui-même, comme la feuille de création. Une
+ * ligne FERMÉE n'a AUCUN menu : il n'y a plus rien à y faire (règle 11, « un
+ * contrôle existe s'il a un effet »).
  */
 
 export type EtatDesLiens = {
@@ -51,12 +59,21 @@ export type EtatDesLiens = {
   readonly actifs: number;
   /** L'état d'adresse `?nouveau` : la feuille de création est-elle ouverte ? */
   readonly nouveau?: boolean;
-  /** Ce que la soumission vient de faire, dit au retour de la redirection. */
-  readonly avis?: 'cree' | null;
-  /** Le refus de la passerelle, rendu TEL QUEL — jamais recomposé. */
+  /** Ce que la soumission vient de faire, dit au retour de la redirection (PRG). */
+  readonly avis?: 'cree' | 'ferme' | null;
+  /** Le refus de la passerelle À LA CRÉATION, rendu TEL QUEL — jamais recomposé. */
   readonly motif?: string | null;
+  /**
+   * LE REFUS DE LA PASSERELLE À LA FERMETURE (#4933) — distinct de `motif`
+   * (celui de la feuille de création) : ils ne sont jamais servis ensemble, et
+   * les confondre ferait porter le motif d'un geste sur l'écran de l'autre.
+   * `null` : aucun refus à dire. Rendu dans `#carnet`, `role="alert"`.
+   */
+  readonly refusFermeture?: string | null;
   /** Ce que le lecteur venait de taper, reposé après un refus. */
   readonly saisie?: SaisieDuLien;
+  /** Ce que le document porte pour son module (§ 12.4, #5090) — même origine, aucune passerelle. */
+  readonly tempsReel: { readonly module: string } | null;
 };
 
 /**
@@ -131,6 +148,18 @@ const meta = (lien: LienDePartage): readonly string[] => {
   ];
 };
 
+/**
+ * LA PASTILLE « FERMÉ » EST UNE FENTE SERVIE, MUETTE SUR UNE LIGNE ACTIVE
+ * (#4933, patron `reserve: true` de `liste-vue.ts`) — jamais un nœud que le
+ * module compose.
+ *
+ * Elle l'était : `marqueFerme` créait le `<span class="etat">` et l'appendait
+ * DANS `.dit`, quand le serveur le pose en FRÈRE de `.dit`. `.lien .dit` est
+ * un `flex-direction:column` (`liens-feuille.ts:55`) : la même pastille y
+ * tombait sur une TROISIÈME ligne, pleine largeur, au lieu du bout de rangée
+ * où le rechargement la remet. Un état optimiste doit être l'état confirmé —
+ * sinon la ligne SAUTE quand la passerelle répond, et l'optimisme se voit.
+ */
 const dedans = (lien: LienDePartage): string =>
   `<span class="tuile" aria-hidden="true">${svgDuSprite(GLYPHE_LIEN)}</span>` +
   '<span class="dit">' +
@@ -139,14 +168,47 @@ const dedans = (lien: LienDePartage): string =>
     .map((morceau) => `<span>${echappe(morceau)}</span>`)
     .join('')}</span>` +
   '</span>' +
-  (lien.actif ? '' : `<span class="etat">${echappe(LIENS.ferme)}</span>`);
+  `<span class="etat"${lien.actif ? ' hidden' : ''}>${echappe(LIENS.ferme)}</span>`;
 
+/**
+ * LE MENU DE FERMETURE (#4933) — un `<details class="actions">`, l'atome
+ * `MENU_DE_LIGNE` partagé avec `/chats`, jamais posé sur une ligne FERMÉE :
+ * il n'y a plus rien à y faire (règle 11).
+ *
+ * LE `<form>` N'A PAS D'`action` : sans elle, le défaut du navigateur est
+ * l'adresse COURANTE — `/links` —, la même route que la création. La porte
+ * distingue les deux par le champ `geste`, présent ici et absent là-bas.
+ */
+const menu = (lien: LienDePartage): string =>
+  '<details class="actions">' +
+  `<summary>${svgDuSprite('ph-caret-down')}<span class="hors-ecran">${echappe(FERMETURE.menu(lien.nom))}</span></summary>` +
+  '<form method="post">' +
+  '<input type="hidden" name="geste" value="fermer">' +
+  `<input type="hidden" name="lien" value="${echappe(lien.identifiant)}">` +
+  `<p class="aide">${echappe(FERMETURE.aide)}</p>` +
+  `<button type="submit" class="grave">${echappe(FERMETURE.geste)}</button>` +
+  '</form>' +
+  '</details>';
+
+/**
+ * UN `<form>` NE VIT JAMAIS DANS UN `<a>` (HTML invalide, et le clic sur
+ * « Fermer ce lien » ouvrirait la conversation au passage) : le menu est donc
+ * le FRÈRE du `.lien`, tous deux enfants du `<li class="ligne-lien">` qui
+ * porte l'identifiant — la même géométrie que `liste-vue.ts` › `ligne()`.
+ */
 const ligne = (lien: LienDePartage): string => {
   const classe = `lien${lien.actif ? '' : ' ferme'}`;
+  const interieur =
+    lien.conversation === null
+      ? `<span class="${classe}">${dedans(lien)}</span>`
+      : `<a class="${classe}" href="/chats/${echappe(encodeURIComponent(lien.conversation))}">${dedans(lien)}</a>`;
 
-  return lien.conversation === null
-    ? `<li class="${classe}">${dedans(lien)}</li>`
-    : `<li><a class="${classe}" href="/chats/${echappe(encodeURIComponent(lien.conversation))}">${dedans(lien)}</a></li>`;
+  return (
+    `<li class="ligne-lien${lien.actif ? '' : ' ferme'}" data-lien="${echappe(lien.identifiant)}">` +
+    interieur +
+    (lien.actif ? menu(lien) : '') +
+    '</li>'
+  );
 };
 
 
@@ -196,6 +258,10 @@ const nouveauLien = ({ saisie, motif }: { readonly saisie: SaisieDuLien; readonl
       ? ''
       : `<p class="alerte" role="alert">${echappe(motif === '' ? NOUVEAU_LIEN.refuse : `${NOUVEAU_LIEN.refuse} ${motif}`)}</p>`) +
     '<form method="post">' +
+    // LA VOIX DE LA FEUILLE — servie muette : le module y dit une passerelle
+    // injoignable SANS toucher aux champs (une région créée après coup n'est
+    // annoncée par aucun lecteur d'écran).
+    '<p class="avis-feuille" role="status" hidden></p>' +
     '<p class="champ">' +
     `<label for="l-conversation">${echappe(NOUVEAU_LIEN.conversation)}</label>` +
     `<input id="l-conversation" name="${CHAMPS_DU_NOUVEAU_LIEN.conversation}" type="text" required value="${echappe(saisie.conversation)}" autocomplete="off">` +
@@ -237,10 +303,38 @@ const enTete = (actifs: number): string =>
   `<a class="action discrete" href="/links?nouveau">${svgDuSprite('ph-plus')}${echappe(NOUVEAU_LIEN.ouvrir)}</a>` +
   '</header>';
 
-const corps = ({ liens, actifs, avis }: EtatDesLiens): string =>
-  '<main id="main-content" class="liens-ecran">' +
+/**
+ * LA RÉGION QUE LE MODULE ÉCHANGE (#5090) — l'avis ET le carnet, ensemble :
+ * le document redemandé après une création OU une fermeture porte les deux,
+ * et les échanger d'un bloc fait dire à la région de statut ce que la liste
+ * vient de gagner ou de perdre.
+ *
+ * DEUX AVIS DE SUCCÈS (`role="status"`), UN AVIS DE REFUS (`role="alert"`) —
+ * jamais les deux premiers ensemble (`avis` est une clé unique), et le refus
+ * de fermeture ne redirige PAS : la ligne visée reste sous les yeux du
+ * lecteur, sans qu'un PRG ne la fasse défiler hors champ.
+ *
+ * L'ALERTE EST TOUJOURS SERVIE, MUETTE QUAND IL N'Y A RIEN À DIRE — la voix du
+ * module, comme `.avis-feuille` l'est pour la feuille de création. Une région
+ * `role="alert"` doit exister dans le document AVANT qu'on n'y écrive : celle
+ * qu'un script insère avec son texte n'est annoncée par aucun lecteur d'écran
+ * de façon fiable, et le module aurait dû la COMPOSER — un second site de
+ * balisage pour un message que le serveur écrit déjà.
+ */
+const corps = ({ liens, actifs, avis, refusFermeture }: EtatDesLiens, participation: string): string =>
+  `<main id="main-content" class="liens-ecran"${participation}>` +
   enTete(actifs) +
+  '<div id="carnet">' +
   (avis === 'cree' ? `<p class="avis" role="status">${svgDuSprite('ph-check-circle')}${echappe(NOUVEAU_LIEN.cree)}</p>` : '') +
+  (avis === 'ferme' ? `<p class="avis" role="status">${svgDuSprite('ph-check-circle')}${echappe(FERMETURE.fait)}</p>` : '') +
+  `<p class="avis alerte" role="alert"${refusFermeture === null || refusFermeture === undefined ? ' hidden' : ''}>` +
+  svgDuSprite('ph-warning-circle') +
+  `<span class="motif">${
+    refusFermeture === null || refusFermeture === undefined
+      ? ''
+      : echappe(refusFermeture === '' ? FERMETURE.refuse : `${FERMETURE.refuse} ${refusFermeture}`)
+  }</span>` +
+  '</p>' +
   (liens.length === 0
     ? carteVide({
         glyphe: GLYPHE_LIEN,
@@ -249,6 +343,7 @@ const corps = ({ liens, actifs, avis }: EtatDesLiens): string =>
         action: { libelle: NOUVEAU_LIEN.ouvrir, href: '/links?nouveau' },
       })
     : `<ul class="liens" aria-label="${echappe(LIENS.liste)}">${liens.map(ligne).join('')}</ul>`) +
+  '</div>' +
   '</main>';
 
 /**
@@ -270,16 +365,24 @@ export const documentDesLiens = (etat: EtatDesLiens): string => {
       ? nouveauLien({ saisie: etat.saisie ?? SAISIE_NEUVE, motif: etat.motif ?? null })
       : '';
 
+  const participation =
+    etat.tempsReel === null
+      ? ''
+      : ` data-participation="liens" data-module="${echappe(etat.tempsReel.module)}"`;
+
   return documentPleinEcran({
     titre: etat.nouveau === true ? NOUVEAU_LIEN.titre : LIENS.titre,
     description: etat.actifs === 0 ? LIENS.titre : LIENS.actifs(etat.actifs),
     corps:
       surimpression +
-      (surimpression === '' ? corps(etat) : corps(etat).replace('<main ', '<main inert ')),
+      (surimpression === ''
+        ? corps(etat, participation)
+        : corps(etat, participation).replace('<main ', '<main inert ')),
     feuille:
       FEUILLE_CONNECTEE +
       FEUILLE_DU_FIL +
       FEUILLE_DES_LIENS +
       (surimpression === '' ? '' : FEUILLE_DU_NOUVEAU_LIEN),
+    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
   });
 };

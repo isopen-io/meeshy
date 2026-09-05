@@ -487,6 +487,11 @@ struct OutboxDispatcher: OutboxDispatching {
         // mid-upload resumes from the saved offset.
         var resolvedMediaIds = payload.attachmentIds
         var uploadedLocalPaths: [String] = []
+        // **Hissés hors du bloc**, comme `uploadedLocalPaths` juste au-dessus :
+        // la jointure « position d'origine → id serveur » se lit APRÈS l'upload,
+        // pour le corps de la requête (#4756).
+        var uploadedIds: [String] = []
+        var uploadedSourceIndexes: [Int] = []
         if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
             guard let baseURL = URL(string: serverOrigin),
@@ -498,7 +503,6 @@ struct OutboxDispatcher: OutboxDispatching {
                 )
             }
             let uploader = TusUploadManager(baseURL: baseURL)
-            var uploadedIds: [String] = []
             for (index, stored) in pendingMediaPaths.enumerated() {
                 let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
                 guard FileManager.default.fileExists(atPath: absolutePath) else {
@@ -536,6 +540,19 @@ struct OutboxDispatcher: OutboxDispatching {
                     )
                     uploadedIds.append(tusResult.id)
                     uploadedLocalPaths.append(absolutePath)
+                    // **L'INDEX D'ORIGINE voyage avec l'id** (#4756). C'est la
+                    // seule jointure possible entre ce que l'auteur a composé
+                    // et ce que le serveur vient de créer : la légende, l'alt
+                    // et les objets média du canvas sont tous clés par la
+                    // POSITION du fichier, jamais par un id qui n'existait pas
+                    // encore à la composition.
+                    //
+                    // Un upload qui ÉCHOUE est sauté (best-effort, `catch`
+                    // ci-dessous) : l'alignement avec `payload.localMediaPaths`
+                    // est alors rompu, et c'est précisément pourquoi l'index
+                    // s'enregistre ici plutôt que de se déduire de la longueur
+                    // des tableaux.
+                    uploadedSourceIndexes.append(index)
                 } catch {
                     logger.error("Post media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
                 }
@@ -549,6 +566,17 @@ struct OutboxDispatcher: OutboxDispatching {
             }
             resolvedMediaIds = uploadedIds + payload.attachmentIds
         }
+
+        // **La carte « position d'origine → id serveur »** (#4756) — construite
+        // une fois, lue par les deux consommateurs ci-dessous. Vide quand rien
+        // n'a été téléversé (post texte, ou pièces déjà en ligne), et les deux
+        // lectures rendent alors ce qu'elles avaient.
+        let idParIndexSource = Dictionary(
+            uniqueKeysWithValues: zip(uploadedSourceIndexes, uploadedIds)
+        )
+        let legendesServeur = serverKeyedCaptions(
+            payload.mediaCaptions, idsBySourceIndex: idParIndexSource
+        )
 
         let body = CreatePostBody(
             content: payload.content,
@@ -564,7 +592,24 @@ struct OutboxDispatcher: OutboxDispatching {
             mentions: payload.mentions,
             discoverabilityPrecision: payload.discoverabilityPrecision,
             repostOfId: payload.repostOfId,
-            mobileTranscription: payload.mobileTranscription
+            mobileTranscription: payload.mobileTranscription,
+            // **ASSAINI avant de partir** (#4756). Le blob composé porte des
+            // `mediaURL` LOCALES tant que l'upload n'a pas eu lieu ; le
+            // sanitizer les annule et le journalise, plutôt que de publier une
+            // scène qui référence un `file://` illisible par quiconque.
+            //
+            // Ce que ce lot ne fait PAS : relier les objets média du canvas aux
+            // `PostMedia` que la boucle ci-dessus vient de créer
+            // (`postMediaId`). Un canvas dont le FOND est un fichier local part
+            // donc sans son image — suivi ouvert et nommé, jamais masqué par ce
+            // correctif.
+            storyEffects: payload.storyEffects?.sanitizedForServerPublish(),
+            // **La légende atteint enfin son destinataire** (#4756). Elle était
+            // saisie, affichée, relue — et mourait ici, faute d'une clé que le
+            // gateway sache reconnaître : `PostService.applyMediaText` filtre en
+            // SILENCE les ids qu'il ignore, si bien qu'une carte mal clée se
+            // perd sans erreur.
+            mediaCaption: legendesServeur.isEmpty ? nil : legendesServeur
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             PostsEndpoint.root,
@@ -951,6 +996,36 @@ final class OutboxRetryScheduler {
 /// `nonisolated` : l'app compile sous `defaultIsolation(MainActor)`, et une
 /// conformance `Encodable` isolée ne peut pas servir depuis le dispatch, qui
 /// hérite de l'isolation de son appelant.
+/// **La traduction des LÉGENDES, de la position d'origine vers l'id serveur**
+/// (#4756).
+///
+/// Les deux identités ne coexistent qu'à cet étage : la légende est composée
+/// quand le fichier n'a qu'une position, et servie quand il n'a plus qu'un id.
+/// Écrire cette carte plus tôt aurait produit une charge dont aucune clé
+/// n'existe chez le destinataire — et `PostService.applyMediaText` filtre en
+/// SILENCE ce qu'il ne reconnaît pas.
+///
+/// Une position dont l'upload a ÉCHOUÉ n'a pas d'entrée : sa légende est
+/// OMISE plutôt que posée sur le voisin. C'est la même règle que
+/// `StoryMediaTextMapping.serverKeyed` applique sur l'autre voie — un texte
+/// sans destinataire ne s'invente pas un porteur.
+///
+/// Une légende vide ou blanche est omise aussi : une clé présente à valeur vide
+/// poserait une légende BLANCHE sur le média, le contraire de « pas de
+/// légende » (`ComposerSlideTextRole.applyCaption`, même distinction).
+nonisolated func serverKeyedCaptions(
+    _ byIndex: [String?]?,
+    idsBySourceIndex: [Int: String]
+) -> [String: String] {
+    guard let byIndex else { return [:] }
+    return byIndex.enumerated().reduce(into: [String: String]()) { keyed, entree in
+        let (index, texte) = entree
+        guard let texte, !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let id = idsBySourceIndex[index] else { return }
+        keyed[id] = texte
+    }
+}
+
 nonisolated struct CreatePostBody: Encodable {
     let content: String?
     let mediaIds: [String]?
@@ -995,6 +1070,26 @@ nonisolated struct CreatePostBody: Encodable {
     /// Sa graphie (`duration_ms`, `speaker_id`) est portée par les
     /// `CodingKeys` du type lui-même — ne pas la réécrire ici.
     let mobileTranscription: MobileTranscriptionPayload?
+    /// **LE CANVAS** — même clé top-level `storyEffects` que le chemin direct
+    /// (`CreatePostRequest`, `PostService.createCanvasPost`), et même schéma
+    /// gateway (`CreatePostSchema`).
+    ///
+    /// Sans elle ICI, la scène survivait jusqu'au décodage de
+    /// `CreatePostPayload` puis était jetée en silence à l'ultime saut réseau :
+    /// exactement le défaut que `location`, `discoverabilityPrecision` et
+    /// `repostOfId` ont payé avant elle, sur le chemin que prend **tout** post
+    /// du meuble.
+    ///
+    /// > Trois champs ont déjà été perdus à ce même mètre du fil, et chacun
+    /// > porte son commentaire disant pourquoi. Ce type est un INVENTAIRE
+    /// > recopié à la main : rien n'y signale un champ absent — ni le
+    /// > compilateur, ni le schéma, ni le serveur, qui publie sans lui.
+    let storyEffects: StoryEffects?
+    /// **Les LÉGENDES par média** — même clé top-level `mediaCaption` que le
+    /// chemin direct (`CreatePostRequest`, `PostService.createCanvasPost`).
+    /// Clée par `PostMedia.id`, la seule que le gateway reconnaisse : il filtre
+    /// le reste sans rien dire.
+    let mediaCaption: [String: String]?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -1024,11 +1119,22 @@ nonisolated struct CreatePostBody: Encodable {
         if let mobileTranscription {
             try container.encode(mobileTranscription, forKey: .mobileTranscription)
         }
+        // Encodé seulement quand il existe : un post TEXTE n'a pas de scène, et
+        // un blob vide affirmerait une scène composée puis effacée.
+        if let storyEffects {
+            try container.encode(storyEffects, forKey: .storyEffects)
+        }
+        // Vide vaut absent : une carte vide n'efface rien à la CRÉATION, et le
+        // schéma n'attend pas de verdict ici.
+        if let mediaCaption, !mediaCaption.isEmpty {
+            try container.encode(mediaCaption, forKey: .mediaCaption)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case content, mediaIds, visibility, originalLanguage, type
         case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
-        case discoverabilityPrecision, repostOfId, mobileTranscription
+        case discoverabilityPrecision, repostOfId, mobileTranscription, storyEffects
+        case mediaCaption
     }
 }

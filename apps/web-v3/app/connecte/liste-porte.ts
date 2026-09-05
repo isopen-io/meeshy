@@ -14,6 +14,7 @@ import {
 import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
 
+import { espaceDemande } from './espace-vue';
 import { tempsReelDuDocument } from './fil-porte';
 import {
   ADRESSE_DE_LA_LISTE,
@@ -107,7 +108,14 @@ export const LISTE_DES_CHATS = serviteurDe({
       // `serviteurDe` (`app/connecte/porte.ts`) l'a déjà vérifié pour rendre
       // cette page du tout.
       profil: await chargeLeProfilSiDemande({ requete, jeton: jetonDuLecteur(requete), recuperer }),
-      nouvelle: creationDemandee(requete)
+      lecteur: charge.lecteur,
+      espace: espaceDemande(requete),
+      // LE CARNET N'EST PAS DEMANDÉ QUAND L'ESPACE MEMBRE EST OUVERT. Les deux
+      // états ne se rendent jamais ensemble (`documentDesChats` tranche en
+      // faveur du dernier ouvert) : sans cette garde, une adresse portant les
+      // deux paierait un aller-retour pour une feuille que le document ne rend
+      // pas.
+      nouvelle: creationDemandee(requete) && !espaceDemande(requete)
         ? NOUVELLE_CONV_NEUVE(
             await carnetPourLaFeuille({
               jeton: jetonDuLecteur(requete) ?? '',

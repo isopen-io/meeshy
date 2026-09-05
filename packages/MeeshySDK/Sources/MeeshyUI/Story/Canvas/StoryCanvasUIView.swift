@@ -750,6 +750,41 @@ public final class StoryCanvasUIView: UIView {
     /// > construction — un booléen de configuration ne l'aurait pas fait.
     public var onBackgroundLongPressed: (() -> Void)?
 
+    /// **L'appui long sur un média DE FOND demande son menu** (#5041).
+    ///
+    /// Distinct de `onBackgroundLongPressed`, qui appartient au viseur : la
+    /// scène qui porte un fond n'est pas vide, et le geste y ouvre supprimer /
+    /// ramener en avant / éditer — les mêmes verbes que le menu contextuel d'un
+    /// objet de premier plan, pour que le geste ait un seul sens.
+    ///
+    /// **Sa présence est un FAIT que la règle lit** : tant que l'hôte ne le
+    /// branche pas, `StoryCanvasBackgroundLongPress` retombe sur le viseur
+    /// plutôt que de rendre le geste muet. Un composant partagé reste inerte
+    /// chez qui ne le branche pas — le doc-comment ci-dessus le dit déjà de son
+    /// jumeau, et la même construction le garantit ici.
+    public var onBackgroundMediaLongPressed: ((String) -> Void)?
+
+    /// **La LEVÉE d'un appui long armé sur une scène vide** (#5041).
+    ///
+    /// L'appui long n'émettait que son `.began` : de quoi ouvrir un viseur,
+    /// jamais de quoi tenir une prise. Ces deux rappels donnent au geste sa
+    /// durée — la translation pendant qu'on tient, puis le relâchement.
+    ///
+    /// **Ils ne sont émis que si le `.began` a passé les trois gardes.** Sans
+    /// cette condition, relâcher un appui long REFUSÉ (en lecture, sur un objet,
+    /// pendant une saisie) déclencherait la fin d'une prise que rien n'avait
+    /// armée.
+    public var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+
+    /// Le relâchement — ou l'annulation, qui doit rendre le même verdict : un
+    /// geste interrompu par le système laisserait sinon la prise ouverte.
+    public var onBackgroundLongPressEnded: (() -> Void)?
+
+    /// Le point où l'appui long ARMÉ a commencé, `nil` quand rien n'est armé.
+    /// C'est lui qui porte la condition ci-dessus : sa présence EST la preuve
+    /// que `.began` est passé, et sa remise à `nil` désarme.
+    var backgroundLongPressOrigin: CGPoint?
+
     /// Miroir du zoom viewport SwiftUI (`canvasScale != 1`). Quand `true`,
     /// un double-tap sur le fond demande un reset du viewport — prioritaire
     /// sur le cycle videoFitMode, qui reste le double-tap à l'échelle 1 (C4).

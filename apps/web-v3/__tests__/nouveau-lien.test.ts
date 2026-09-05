@@ -66,7 +66,7 @@ const corpsSoumis = (vus: readonly { corps: string | null; methode: string }[]):
   JSON.parse(vus.find(({ methode }) => methode === 'POST')?.corps ?? '{}') as Record<string, unknown>;
 
 describe('la feuille de création, rendue', () => {
-  const html = documentDesLiens({ liens: [], actifs: 0, nouveau: true, saisie: SAISIE_NEUVE });
+  const html = documentDesLiens({ liens: [], actifs: 0, nouveau: true, saisie: SAISIE_NEUVE , tempsReel: null });
 
   it('est un dialogue servi OUVERT, que le module élèvera en modale', () => {
     expect(html).toContain('<dialog class="nouveau-lien" open');
@@ -107,7 +107,7 @@ describe('la feuille de création, rendue', () => {
   });
 
   it('ne sert NI la feuille NI son style quand l’état n’est pas ouvert', () => {
-    const nu = documentDesLiens({ liens: [], actifs: 0 });
+    const nu = documentDesLiens({ liens: [], actifs: 0 , tempsReel: null });
     expect(nu).not.toContain('<dialog');
     expect(nu).not.toContain('nouveau-lien{');
   });

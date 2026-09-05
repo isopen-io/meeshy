@@ -395,6 +395,10 @@ fun StoryViewerScreen(
                     mediaUrl = slide.backgroundVideoUrl,
                     isActive = true,
                     muted = false,
+                    // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
+                    // quand la source joue en entier.
+                    sourceStartMs = slide.backgroundVideoWindow?.startMs,
+                    sourceEndMs = slide.backgroundVideoWindow?.endMs,
                     // Aspect-fill base, then the author's pan/zoom framing on top — the
                     // offset fractions scale to the measured canvas so it is resolution-
                     // independent (mirrors the image branch and iOS's "zoom inside the
@@ -402,8 +406,10 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = bg.scale
-                            scaleY = bg.scale
+                            // Deux axes depuis #5085 : un recadrage non carré
+                            // agrandit différemment en largeur et en hauteur.
+                            scaleX = bg.scaleX
+                            scaleY = bg.scaleY
                             rotationZ = bg.rotationDegrees
                             translationX = bg.offsetXFraction * size.width
                             translationY = bg.offsetYFraction * size.height
@@ -429,8 +435,10 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = bg.scale
-                            scaleY = bg.scale
+                            // Deux axes depuis #5085 : un recadrage non carré
+                            // agrandit différemment en largeur et en hauteur.
+                            scaleX = bg.scaleX
+                            scaleY = bg.scaleY
                             rotationZ = bg.rotationDegrees
                             translationX = bg.offsetXFraction * size.width
                             translationY = bg.offsetYFraction * size.height
@@ -485,10 +493,28 @@ fun StoryViewerScreen(
         }
 
         slide?.backgroundAudioUrl?.let { url ->
-            key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = slide.backgroundLoop) }
+            key(url) {
+                AudioTrackSurface(
+                    mediaUrl = url,
+                    isActive = true,
+                    loop = slide.backgroundLoop,
+                    sourceStartMs = slide.backgroundAudioWindow?.startMs,
+                    sourceEndMs = slide.backgroundAudioWindow?.endMs,
+                )
+            }
         }
         slide?.foregroundAudioUrl?.let { url ->
-            key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = false) }
+            key(url) {
+                AudioTrackSurface(
+                    mediaUrl = url,
+                    isActive = true,
+                    loop = false,
+                    // Un vocal rogné compte autant qu'une vidéo rognée : iOS
+                    // écrit les deux bornes sur les deux familles (#5129).
+                    sourceStartMs = slide.foregroundAudioWindow?.startMs,
+                    sourceEndMs = slide.foregroundAudioWindow?.endMs,
+                )
+            }
         }
 
         if (slide != null && slide.text.isNotBlank()) {
@@ -973,7 +999,14 @@ private fun StoryForegroundLayer(
             .aspectRatio(aspectRatio)
             .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
         if (media.isVideo) {
-            ReelVideoSurface(mediaUrl = media.url, isActive = true, muted = false, modifier = layerModifier)
+            ReelVideoSurface(
+                mediaUrl = media.url,
+                isActive = true,
+                muted = false,
+                modifier = layerModifier,
+                sourceStartMs = media.sourceWindow?.startMs,
+                sourceEndMs = media.sourceWindow?.endMs,
+            )
         } else {
             AsyncImage(
                 model = media.url,

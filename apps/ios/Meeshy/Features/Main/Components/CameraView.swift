@@ -6,7 +6,21 @@ import MeeshySDK
 import MeeshyUI
 
 enum CameraResult {
-    case photo(UIImage)
+    /// **La photo, ET ses octets d'origine** (directive porteur 2026-09-04 :
+    /// « la prise de la photo doit avoir les exif et metadata »).
+    ///
+    /// `AVCapturePhoto.fileDataRepresentation()` rend un fichier COMPLET :
+    /// EXIF, TIFF, marque et modèle de l'appareil, date de prise, temps de
+    /// pose, focale, orientation — et la position si l'app y a droit. Une
+    /// `UIImage` n'en garde RIEN : elle porte des pixels et une orientation, et
+    /// tout le reste est perdu à la construction.
+    ///
+    /// Les octets voyagent donc À CÔTÉ de l'image, `nil` quand la source n'en
+    /// a pas. La sauvegarde en photothèque suivait déjà cette doctrine — « les
+    /// octets ORIGINAUX, pas une `UIImage` ré-encodée » — mais elle vivait dans
+    /// le délégué et ne sortait pas de lui : les quatre consommateurs de ce
+    /// type ré-encodaient tous, chacun de son côté.
+    case photo(UIImage, data: Data?)
     case video(URL)
 }
 
@@ -101,7 +115,7 @@ struct CameraView: View {
         .onDisappear { camera.stop() }
         .onReceive(camera.$capturedPhotoId) { id in
             guard id != nil, let image = camera.capturedPhoto else { return }
-            onCapture(.photo(image))
+            onCapture(.photo(image, data: camera.capturedPhotoData))
             dismiss()
         }
         .onReceive(camera.$capturedVideoId) { id in
@@ -117,39 +131,10 @@ struct CameraView: View {
     /// Remplace le preview quand l'accès caméra est refusé ou restreint.
     /// Avant, `configure()` sortait en silence et l'utilisateur restait devant
     /// un écran noir sans explication ni recours.
-    private var permissionDeniedPanel: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 44, weight: .light))
-                .foregroundColor(.white.opacity(0.7))
+    /// **Le panneau est EXTRAIT** (#4080) : le viseur en scène en a besoin, et
+    /// deux écrans de refus écrits séparément auraient divergé au premier mot.
+    private var permissionDeniedPanel: some View { CameraPermissionPanel() }
 
-            Text(String(localized: "camera.permission.denied.title",
-                        defaultValue: "Accès à la caméra refusé", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundColor(.white)
-
-            Text(String(localized: "camera.permission.denied.body",
-                        defaultValue: "Autorisez Meeshy à utiliser la caméra pour prendre des photos et des vidéos.",
-                        bundle: .main))
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(.white.opacity(0.7))
-                .multilineTextAlignment(.center)
-
-            Button {
-                MediaPermissionCoordinator.openSettings()
-            } label: {
-                Text(String(localized: "camera.permission.openSettings",
-                            defaultValue: "Ouvrir les Réglages", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 24)
-                    .frame(height: 44)
-                    .background(Capsule().fill(.white))
-            }
-        }
-        .padding(.horizontal, 40)
-        .accessibilityElement(children: .contain)
-    }
 
     // MARK: - Top Bar
 
@@ -181,28 +166,16 @@ struct CameraView: View {
         .padding(.top, 8)
     }
 
-    private var flashIcon: String {
-        switch flashMode {
-        case .on: return "bolt.fill"
-        case .auto: return "bolt.badge.automatic.fill"
-        default: return "bolt.slash.fill"
-        }
-    }
+    // **Le vocabulaire du flash a été EXTRAIT** (#4080) : la barre du viseur en
+    // scène sert les mêmes trois positions, et deux cycles écrits séparément
+    // auraient divergé au premier réglage. `ComposerCameraFlash` en est le site
+    // unique — glyphe, libellé et ordre du cycle.
+    private var flashIcon: String { ComposerCameraFlash.symbol(for: flashMode) }
 
-    private var flashAccessibilityLabel: String {
-        switch flashMode {
-        case .on: return String(localized: "camera.flash.on", defaultValue: "Flash activé", bundle: .main)
-        case .auto: return String(localized: "camera.flash.auto", defaultValue: "Flash automatique", bundle: .main)
-        default: return String(localized: "camera.flash.off", defaultValue: "Flash désactivé", bundle: .main)
-        }
-    }
+    private var flashAccessibilityLabel: String { ComposerCameraFlash.label(for: flashMode) }
 
     private func cycleFlash() {
-        switch flashMode {
-        case .off: flashMode = .on
-        case .on: flashMode = .auto
-        default: flashMode = .off
-        }
+        flashMode = ComposerCameraFlash.next(after: flashMode)
         HapticFeedback.light()
     }
 
@@ -357,6 +330,9 @@ final class CameraModel: NSObject, ObservableObject {
     nonisolated deinit {}
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
+    /// Les octets tels que l'appareil les a produits — EXIF compris. `nil`
+    /// tant qu'aucune photo n'a été prise.
+    var capturedPhotoData: Data?
     var capturedVideoURL: URL?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
@@ -791,6 +767,9 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image
+            // Les octets D'ORIGINE, publiés à côté de l'image : c'est eux qui
+            // portent l'EXIF, et une `UIImage` ne le rend pas.
+            self.capturedPhotoData = data
             self.capturedPhotoId = UUID().uuidString
         }
         // Persist the ORIGINAL encoded bytes (HEIC/JPEG as captured), not a
@@ -817,18 +796,41 @@ extension CameraModel: AVCaptureFileOutputRecordingDelegate {
 struct CameraPreviewLayer: UIViewRepresentable {
     let session: AVCaptureSession
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer)
-        context.coordinator.previewLayer = previewLayer
+    /// **La couche d'aperçu EST la couche de la vue** (#4080).
+    ///
+    /// Elle était un SOUS-CALQUE dont la frame se posait dans un
+    /// `Task { @MainActor }` depuis `updateUIView`. Deux défauts que la feuille
+    /// ne montrait pas et que la scène a révélés sur appareil :
+    ///
+    /// - la frame arrivait une passe de layout APRÈS la vue, donc l'aperçu
+    ///   naissait à `.zero` — un rectangle NOIR de la taille de la carte, qui
+    ///   ressemble exactement à une caméra qui ne rend rien ;
+    /// - un sous-calque ne suit pas son parent : toute reprise de disposition
+    ///   (rotation, clavier, changement de ratio) le laissait à l'ancienne
+    ///   taille jusqu'au prochain `updateUIView`.
+    ///
+    /// `layerClass` supprime les deux : le système redimensionne la couche avec
+    /// la vue, à chaque passe, sans qu'aucun code ne s'en charge.
+    final class PreviewHost: UIView {
+        nonisolated deinit {}
+        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    }
+
+    func makeUIView(context: Context) -> PreviewHost {
+        let view = PreviewHost()
+        view.backgroundColor = .black
+        view.previewLayer.session = session
+        view.previewLayer.videoGravity = .resizeAspectFill
+        context.coordinator.previewLayer = view.previewLayer
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        Task { @MainActor in
-            context.coordinator.previewLayer?.frame = uiView.bounds
+    func updateUIView(_ uiView: PreviewHost, context: Context) {
+        // La SESSION peut changer (le meuble en remet une au ré-armement) ;
+        // la frame, elle, n'a plus à être posée — `layerClass` s'en charge.
+        if uiView.previewLayer.session !== session {
+            uiView.previewLayer.session = session
         }
     }
 
@@ -862,7 +864,12 @@ extension View {
         environment(\.storyCameraCapture, StoryCameraCaptureProvider { onCapture in
             AnyView(CameraView { result in
                 switch result {
-                case .photo(let image): onCapture(.photo(image))
+                // Le pont vers le SDK PERD l'EXIF, et c'est son CONTRAT qui
+                // l'impose : `StoryCameraCaptureProvider.photo` ne porte qu'une
+                // `UIImage`. Les octets d'origine s'arrêtent donc ici — ce
+                // chemin sert l'amorce « Caméra » de la page blanche du SDK, pas
+                // le viseur en scène (#4080), qui lit `capturedPhotoData`.
+                case .photo(let image, _): onCapture(.photo(image))
                 case .video(let url):   onCapture(.video(url))
                 }
             })

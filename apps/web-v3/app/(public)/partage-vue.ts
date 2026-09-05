@@ -11,7 +11,7 @@ import { mediaHtml } from '@/app/media-html';
 import { echappe } from '@/app/socle';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import type { Story, Voisinage } from '@/lib/api/publication';
-import { GENRE_STORY, type GenreServi } from '@/lib/contenu/partage';
+import { adresseDuPartage, type GenreServi } from '@/lib/contenu/partage';
 import { LONGUEUR_MAX_DE_LA_REPONSE } from '@/lib/contenu/story';
 import { nomDeLangue } from '@/lib/contenu/langues';
 
@@ -57,6 +57,33 @@ export type EtatDeLaStory = {
   readonly genre: GenreServi;
   readonly story: Story;
   readonly voisinage: Voisinage;
+  /**
+   * L'ADRESSE DE CE DOCUMENT — celle sur laquelle les liens de LECTURE se
+   * recomposent. Absente, c'est l'adresse de partage (`/reels/:id`), donc
+   * `/stories/:id`, `/reels/:id` et `/moods/:id` ne changent pas d'un octet.
+   *
+   * ELLE EXISTE PARCE QUE LE LECTEUR A DEUX HÔTES DEPUIS #5032, et le témoin
+   * en navigateur l'a montré avant que quiconque y pense : sur `/feed/reels`,
+   * la puce des langues et le « voir l'original » composaient `?lang=` sur
+   * l'adresse de PARTAGE — changer de langue éjectait le lecteur du fil vers
+   * `/reels/<id>`. Le lien n'était pas mort ; il quittait l'écran. C'est la
+   * famille du `tap` corrigé dans le même lot : un composant partagé qui
+   * SUPPOSE l'adresse à laquelle il est servi.
+   *
+   * LES GESTES, EUX, GARDENT L'ADRESSE DE PARTAGE — voir `repondre`.
+   */
+  readonly adresseDeLEcran?: string;
+  /**
+   * OÙ MÈNE LA CROIX — l'écran d'où l'on vient. Absente, c'est l'accueil (`/`),
+   * ce que les trois adresses de partage servent depuis toujours : un lien reçu
+   * s'ouvre hors de tout parcours, et le fermer ramène au début.
+   *
+   * `/feed/reels` en a un, lui : le fil. La planche le dit
+   * (`MeeshyWebV3.dc.html:871` — « reels → feed, Retour, chevron »), et une
+   * croix qui renverrait à l'accueil ferait sortir de la pile au lieu d'y
+   * remonter d'un cran.
+   */
+  readonly retourDeLEcran?: string;
   readonly maintenant: number;
   /** Le retour d'un envoi (Post/Redirect/Get) : la réponse est partie. */
   readonly confirmation: boolean;
@@ -69,12 +96,26 @@ export const CHAMP_DE_L_AIME = 'aime';
 
 const FEUILLE = FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY;
 
-export const adresseDuPartage = (genre: GenreServi, id: string, langue?: string): string =>
-  `${genre.base}/${encodeURIComponent(id)}${langue === undefined ? '' : `?lang=${encodeURIComponent(langue)}`}`;
+/**
+ * LES DEUX CONSTRUCTEURS D'ADRESSE vivent dans `lib/contenu/partage.ts`, avec
+ * le `base` dont ils sont composés, depuis que `voisinage()` en a besoin
+ * (#5032) : `lib/` ne peut pas importer `app/`. Ce module les ré-exporte pour
+ * ses lecteurs historiques.
+ */
+export { adresseDuPartage, adresseDeLaStory } from '@/lib/contenu/partage';
 
-/** L'adresse d'une STORY — la projection que la porte de `/stories/:id` lit. */
-export const adresseDeLaStory = (id: string, langue?: string): string =>
-  adresseDuPartage(GENRE_STORY, id, langue);
+/**
+ * `?lang=` POSÉ SUR UNE ADRESSE QUI PORTE DÉJÀ UNE QUESTION. `/feed/reels`
+ * arrive avec `?cursor=…` : concaténer un second `?` produirait une adresse que
+ * le serveur lit à moitié — le curseur serait perdu et le lecteur renvoyé au
+ * premier réel du fil en changeant simplement de langue.
+ */
+const avecLangue = (adresse: string, langue: string): string =>
+  `${adresse}${adresse.includes('?') ? '&' : '?'}lang=${encodeURIComponent(langue)}`;
+
+/** L'adresse des liens de LECTURE de ce document — l'écran courant, ou le partage. */
+const ecranDe = (etat: EtatDeLaStory): string =>
+  etat.adresseDeLEcran ?? adresseDuPartage(etat.genre, etat.story.id);
 
 /** La langue effectivement LUE — celle que le Prisme a élue, ou celle d'origine. */
 const langueLue = (story: Story): string | null => story.langueServie ?? story.langueOriginale;
@@ -115,10 +156,12 @@ const enTete = (etat: EtatDeLaStory): string => {
     choixDeLangue({
       languesOffertes: story.languesOffertes,
       langueLue: langueLue(story),
-      adresse: (langue) => adresseDuPartage(genre, story.id, langue),
+      // L'ÉCRAN COURANT, pas l'adresse de partage : changer de langue ne doit
+      // pas changer d'écran (voir `adresseDeLEcran`).
+      adresse: (langue) => avecLangue(ecranDe(etat), langue),
       libelle: copie.langues,
     }) +
-    `<a class="fermer" href="/" aria-label="${echappe(copie.fermer)}">${svgDuSprite('ph-x')}</a>` +
+    `<a class="fermer" href="${echappe(etat.retourDeLEcran ?? '/')}" aria-label="${echappe(copie.fermer)}">${svgDuSprite('ph-x')}</a>` +
     '</header>'
   );
 };
@@ -144,10 +187,15 @@ const scene = (etat: EtatDeLaStory): string => {
         (story.texte === '' ? '' : `<figcaption${langue}>${echappe(story.texte)}</figcaption>`) +
         '</figure>';
 
+  // `cible` EST une adresse (`Voisinage`, #5032), plus un identifiant : ce site
+  // composait `adresseDeLaStory(cible)` EN DUR, donc un voisinage de réels
+  // aurait envoyé vers `/stories/<id>`. Défaut DORMANT — aucun genre sans
+  // segments ne demandait de voisinage — et réveillé par la première file de
+  // réels. Le tap ne compose plus rien : il pose ce qu'on lui donne.
   const tap = (classe: string, cible: string | null, libelle: string): string =>
     cible === null
       ? ''
-      : `<a class="tap ${classe}" href="${echappe(adresseDeLaStory(cible))}"><span class="hors-ecran">${echappe(libelle)}</span></a>`;
+      : `<a class="tap ${classe}" href="${echappe(cible)}"><span class="hors-ecran">${echappe(libelle)}</span></a>`;
 
   return (
     `<section class="scene" aria-label="${echappe(copie.scene)}">` +
@@ -163,7 +211,8 @@ const scene = (etat: EtatDeLaStory): string => {
  * une story déjà écrite dans la langue du lecteur, elle n'apprendrait rien. Le
  * « voir l'original » est un LIEN, donc un EFFET (charte règle 7).
  */
-const prisme = (genre: GenreServi, story: Story): string => {
+const prisme = (etat: EtatDeLaStory): string => {
+  const { genre, story } = etat;
   const { copie } = genre;
   // Une TRADUCTION, pas simplement une langue connue : `langueServie` porte
   // celle de l'original quand c'est lui qui est servi.
@@ -178,7 +227,7 @@ const prisme = (genre: GenreServi, story: Story): string => {
     '<p class="story-prisme">' +
     svgDuSprite('ph-translate') +
     `<span>${echappe(copie.traduitDe(nomDeLangue(story.langueOriginale)))}</span>` +
-    `<a href="${echappe(adresseDuPartage(genre, story.id, story.langueOriginale))}">${echappe(copie.original)}</a>` +
+    `<a href="${echappe(avecLangue(ecranDe(etat), story.langueOriginale))}">${echappe(copie.original)}</a>` +
     '</p>'
   );
 };
@@ -190,6 +239,15 @@ const prisme = (genre: GenreServi, story: Story): string => {
  * bouton porte l'état que la passerelle a servi (`isLikedByMe`), donc il SAIT
  * lequel des deux gestes il fait. La cible dessine les deux ; les rendre
  * inertes aurait été le défaut que la charte règle 7 nomme.
+ */
+/**
+ * LES GESTES POSTENT VERS L'ADRESSE DE PARTAGE, jamais vers l'écran courant, et
+ * c'est délibéré : `/reels/:id` porte le gestionnaire de POST — garde
+ * d'origine, aime, réponse, Post/Redirect/Get. Aimer depuis `/feed/reels`
+ * dépose donc bien l'aime, puis atterrit sur l'adresse de partage du MÊME réel.
+ * Le geste a son effet (charte règle 7) ; ce qu'il perd est la place dans le
+ * fil. La tenir demanderait un second gestionnaire de POST — un lot à part,
+ * suivi par son issue, plutôt qu'une jumelle écrite au passage.
  */
 const repondre = (etat: EtatDeLaStory): string => {
   const { copie } = etat.genre;
@@ -213,7 +271,7 @@ const corps = (etat: EtatDeLaStory): string => {
   (etat.genre.avecSegments ? segments(etat) : '') +
   enTete(etat) +
   scene(etat) +
-  prisme(etat.genre, etat.story) +
+  prisme(etat) +
   (etat.confirmation ? `<p class="story-etat" role="status">${echappe(copie.repondu)}</p>` : '') +
   (etat.erreur === null ? '' : `<p class="alerte" role="alert"><b>${echappe(copie.refuse)}</b> ${echappe(etat.erreur)}</p>`) +
   repondre(etat) +
@@ -223,6 +281,7 @@ const corps = (etat: EtatDeLaStory): string => {
 
 export const documentDuPartage = (etat: EtatDeLaStory): string =>
   documentPleinEcran({
+    hubs: false, // lecture partagée : zéro script applicatif, rien à précharger (#5104)
     titre: `${etat.genre.copie.de(etat.story.auteur)} — Meeshy`,
     description: etat.story.texte === '' ? etat.genre.copie.titre : etat.story.texte,
     corps: corps(etat),
@@ -240,7 +299,12 @@ export const documentDeLaStory = (etat: EtatDeLaStory): string => documentDuPart
  */
 export const documentDeLInvitation = ({ genre, id }: { readonly genre: GenreServi; readonly id: string }): string => {
   const { copie } = genre;
-  const ici = encodeURIComponent(adresseDeLaStory(id));
+  // LE MÊME DÉFAUT, ET CELUI-CI ÉTAIT VIVANT (#5032). `adresseDeLaStory(id)`
+  // renvoyait un visiteur non connecté de `/reels/:id` ou `/moods/:id` vers
+  // `/stories/<id>` après sa connexion — le `returnUrl` d'une invitation
+  // ramenait donc à un écran qui n'existe pas pour ce contenu. Le genre est en
+  // portée depuis #4929 ; il n'était simplement pas consulté ici.
+  const ici = encodeURIComponent(adresseDuPartage(genre, id));
   return documentDeMessage({
     titre: copie.invitation.titre,
     paragraphes: [copie.invitation.corps, copie.invitation.note],
@@ -254,15 +318,30 @@ export const documentDeLInvitation = ({ genre, id }: { readonly genre: GenreServ
 
 /**
  * L'INDISPONIBLE — la MÊME réponse pour une story absente, supprimée, échue ou
- * hors audience (§ 5.1) : distinguer serait un oracle d'énumération. La vue
- * `storyFail` de la planche (`cible/storyFail.png`, sa méta et ses deux
- * actions) est l'issue SUIVANTE ; ce document en est le plancher honnête, pas
- * son remplaçant.
+ * hors audience (§ 5.1, issue #4967) : distinguer serait un oracle
+ * d'énumération, et c'est pourquoi la MÉTA de la cible (`cible/storyFail.png`,
+ * `[Auteur, Publiée, Expirée]`) n'est PAS rendue — elle ne peut exister que si
+ * la CAUSE est connue, ce que ce document refuse justement de dire (T5/T6 de
+ * la spécification `storyFail`). Ce qu'il reprend de la cible est sa FORME :
+ * l'état vide de la charte (glyphe, titre, phrase — règle 16) et DEUX sorties
+ * servies, jamais l'accueil : « Retour au fil » (le lecteur est déjà connecté)
+ * et une seconde porte propre au genre.
  */
-export const documentIndisponible = (genre: GenreServi): string =>
-  documentDeMessage({
-    titre: genre.copie.indisponible.titre,
-    paragraphes: [genre.copie.indisponible.corps],
-    actions: [{ libelle: genre.copie.indisponible.action, href: '/' }],
+export const documentIndisponible = (genre: GenreServi): string => {
+  const { indisponible } = genre.copie;
+  return documentDeMessage({
+    titre: indisponible.titre,
+    paragraphes: [indisponible.corps],
+    glyphe: indisponible.glyphe,
+    actions: [
+      { libelle: indisponible.retour.libelle, href: indisponible.retour.href },
+      { libelle: indisponible.secondaire.libelle, href: indisponible.secondaire.href, ton: 'contour' },
+    ],
     feuille: FEUILLE_CONNECTEE,
+    // AUCUNE CARTE SOCIALE, ET SUR CE DOCUMENT SEUL : l'aperçu qui se déplie
+    // dans une messagerie serait un SECOND CANAL pour ce que l'écran refuse
+    // de dire. L'INVITATION, elle, la garde — c'est le seul aperçu qu'une
+    // adresse de partage produise pour un robot sans session.
+    ogEtTwitter: false,
   });
+};

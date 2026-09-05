@@ -16,6 +16,7 @@ import { nomDeLangue } from '@/lib/contenu/langues';
 import { FEUILLE_DES_COMMENTAIRES } from './commentaires-feuille';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
+import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
 import { documentPleinEcran } from './fil-vue';
 import { documentDeMessage } from '@/app/enveloppe/vue';
 import { carteVide, quand } from './vue';
@@ -57,6 +58,13 @@ export type EtatDesCommentaires = {
   readonly commentaires: readonly Commentaire[];
   readonly encore: boolean;
   readonly maintenant: number;
+  /** Ce que le POST vient de faire, dit au retour de la redirection (#5091). */
+  readonly avis?: 'commente' | null;
+  /** La saisie TENUE par le serveur quand il refuse — perdre un texte tapé est le défaut le plus cher d'un formulaire. */
+  readonly saisieTenue?: string;
+  readonly motif?: string | null;
+  /** Ce que le document porte pour son module (§ 12.4, #5091) — même origine, aucune passerelle. */
+  readonly tempsReel?: { readonly module: string } | null;
 };
 
 /**
@@ -181,20 +189,53 @@ const enTete = (publication: Publication): string =>
   }) +
   '</header>';
 
-const corps = ({ publication, commentaires, encore, maintenant }: EtatDesCommentaires): string =>
-  '<main id="main-content" class="commentaires-ecran">' +
-  enTete(publication) +
-  puces(publication.genre) +
-  cartePublication(publication) +
-  (commentaires.length === 0
-    ? carteVide({
-        glyphe: 'ph-chat-circle',
-        titre: COMMENTAIRES.vide,
-        phrase: COMMENTAIRES.videPrecision,
-      })
-    : `<ul class="commentaires">${commentaires.map((k) => ligne(k, maintenant)).join('')}</ul>`) +
-  (encore ? `<p class="encore">${echappe(COMMENTAIRES.encore)}</p>` : '') +
-  '</main>';
+/**
+ * LE GESTE D'ÉCRITURE (#5091) — un `<form method="post">` vers la MÊME adresse,
+ * le chemin qui marche partout. Cet écran n'est servi qu'à un lecteur CONNECTÉ
+ * (l'invitation couvre l'anonyme en amont) : le formulaire n'est donc jamais un
+ * contrôle qui rendrait 401. La saisie refusée revient TENUE par le serveur,
+ * le motif en `role="alert"` ; le succès se dit en `role="status"` au retour
+ * de la redirection.
+ */
+const ecrire = ({ saisieTenue, motif, avis }: EtatDesCommentaires): string =>
+  (avis === 'commente'
+    ? `<p class="avis" role="status">${svgDuSprite('ph-check-circle')}${echappe(COMMENTAIRES.publie)}</p>`
+    : '') +
+  '<form class="ecrire" method="post">' +
+  '<p class="voix-du-geste" role="status" hidden></p>' +
+  (motif === null || motif === undefined ? '' : `<p class="motif" role="alert">${echappe(motif)}</p>`) +
+  `<label class="hors-ecran" for="contenu-du-commentaire">${echappe(COMMENTAIRES.ecrire)}</label>` +
+  `<textarea id="contenu-du-commentaire" name="contenu" rows="2" maxlength="2000" required placeholder="${echappe(
+    COMMENTAIRES.ecrire,
+  )}">${echappe(saisieTenue ?? '')}</textarea>` +
+  `<button type="submit" class="action primaire">${echappe(COMMENTAIRES.publier)}</button>` +
+  '</form>';
+
+const corps = (etat: EtatDesCommentaires): string => {
+  const { publication, commentaires, encore, maintenant, tempsReel } = etat;
+  const participation =
+    tempsReel === null || tempsReel === undefined
+      ? ''
+      : ` data-participation="commentaires" data-module="${echappe(tempsReel.module)}"`;
+  return (
+    `<main id="main-content" class="commentaires-ecran"${participation}>` +
+    enTete(publication) +
+    puces(publication.genre) +
+    cartePublication(publication) +
+    '<div id="fil-des-commentaires">' +
+    (commentaires.length === 0
+      ? carteVide({
+          glyphe: 'ph-chat-circle',
+          titre: COMMENTAIRES.vide,
+          phrase: COMMENTAIRES.videPrecision,
+        })
+      : `<ul class="commentaires">${commentaires.map((k) => ligne(k, maintenant)).join('')}</ul>`) +
+    (encore ? `<p class="encore">${echappe(COMMENTAIRES.encore)}</p>` : '') +
+    ecrire(etat) +
+    '</div>' +
+    '</main>'
+  );
+};
 
 export const documentDesCommentaires = (etat: EtatDesCommentaires): string =>
   documentPleinEcran({
@@ -202,6 +243,7 @@ export const documentDesCommentaires = (etat: EtatDesCommentaires): string =>
     description: etat.publication.titre ?? COMMENTAIRES.titre,
     corps: corps(etat),
     feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_COMMENTAIRES,
+    script: etat.tempsReel === null || etat.tempsReel === undefined ? '' : CHARGEUR_DE_PARTICIPATION,
   });
 
 /**
@@ -243,4 +285,11 @@ export const documentIndisponible = (): string =>
     titre: COMMENTAIRES.introuvable,
     paragraphes: [COMMENTAIRES.introuvablePrecision],
     feuille: FEUILLE_CONNECTEE,
+    // AUCUNE CARTE SOCIALE sur un refus — la MÊME raison que sur
+    // l'indisponible d'une story (`app/(public)/partage-vue.ts`, #4967) : un
+    // aperçu qui se déplie dans une messagerie serait un SECOND CANAL pour ce
+    // que l'écran refuse de dire, sur un document qui doit rester
+    // indistinguable d'un contenu inexistant. L'INVITATION juste au-dessus la
+    // garde : c'est le seul aperçu qu'une adresse partagée produise.
+    ogEtTwitter: false,
   });

@@ -353,7 +353,9 @@ extension FeedView {
                     // fabrique de charge ne pose aucun défaut, précisément pour
                     // qu'un champ neuf ne disparaisse pas d'un site d'appel en
                     // silence.
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil,  // le composer inline n'a pas de scène, #4756
+                    mediaCaptions: nil
                 )
             }
             return
@@ -1260,7 +1262,11 @@ struct FeedComposerSheet: View {
         .fullScreenCover(isPresented: $showCamera) {
             CameraView { result in
                 switch result {
-                case .photo(let image):
+                // Sixième et septième consommateurs de `CameraResult.photo`,
+                // élargi le 2026-09-04 pour porter l'EXIF (#4080). Le fil du
+                // feed ré-encode déjà l'image : les octets d'origine ne lui
+                // servent pas, et il les jette explicitement.
+                case .photo(let image, _):
                     handleCameraCapture(image)
                 case .video(let url):
                     handleCameraVideo(url)
@@ -1768,7 +1774,9 @@ struct FeedComposerSheet: View {
                     location: pendingPlace,
                     mentions: declared,
                     discoverabilityPrecision: nearbyPrecision,
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil,
+                    mediaCaptions: nil
                 )
             }
             return

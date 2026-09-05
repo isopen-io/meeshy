@@ -9,10 +9,12 @@ import {
   type GesteDeLigne,
 } from '@/lib/contenu/liste';
 
+import { brancheLaBanniere } from './banniere';
 import { prendsLeBalayage } from './balayage';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
 import { prendsLePleinEcran } from './plein-ecran';
 import * as L from './liste-etat';
+import { CHAMPS_DU_RATTRAPAGE } from './liste-etat';
 import { etatDuDocument, montreLeTrou, peins, peintre, type Peintre } from './liste-peinture';
 import { doitRattraper, POLITIQUE_DE_RECONNEXION } from './reconnect-policy';
 import { demandeLeDelta } from './sync/delta-client';
@@ -49,21 +51,19 @@ import { demandeLeDelta } from './sync/delta-client';
  * chaque bascule d'onglet serait exactement la lenteur que la directive appelle
  * un BUG.
  *
- * LE 304 EST DEMANDÉ, ET IL NE PEUT PAS TOMBER AUJOURD'HUI — mesuré, pas
- * supposé. La route calcule bien un ETag stable et rend 304 sur
- * `If-None-Match` (`routes/sync/index.ts:422-449`), mais un client de
- * NAVIGATEUR sur une AUTRE ORIGINE ne peut ni le lire ni le faire jouer :
+ * LE 304 TOMBE (#5015). La route calcule un ETag stable et rend 304 sur
+ * `If-None-Match` (`routes/sync/index.ts:422-449`) ; `server.ts` expose
+ * désormais `ETag` par CORS (`CORS_EXPOSED_HEADERS`, `config/cors-methods.ts`)
+ * — `ETag` n'étant pas dans la safelist CORS, un client de NAVIGATEUR sur une
+ * AUTRE ORIGINE (`https://meeshy.me` → `https://gate.meeshy.me`) ne pouvait
+ * pas le lire avant ce correctif, donc jamais composer `If-None-Match`.
  *
- *   • `server.ts:404-410` enregistre `@fastify/cors` SANS `exposedHeaders`, et
- *     `ETag` n'est pas un en-tête de réponse safelisté — `reponse.headers.get('etag')`
- *     rend `null` depuis `https://meeshy.me` vers `https://gate.meeshy.me` ;
- *   • `routes/sync/index.ts:446` pose `Cache-Control: no-store`, donc le cache
- *     HTTP du navigateur ne peut pas non plus revalider tout seul.
- *
- * Le `If-None-Match` reste posé ici — il est JUSTE, et il jouera le jour où la
- * passerelle exposera l'en-tête (issue gateway compagnon). Ce que ce module
- * tient SANS lui est la moitié qui porte la lenteur : la liste entière n'est
- * jamais redemandée, et le delta d'une fenêtre inchangée est vide.
+ * `routes/sync/index.ts:446` pose toujours `Cache-Control: no-store`
+ * (décision #5015 — charge PRIVÉE) : le cache HTTP du navigateur ne revalide
+ * pas tout seul, mais ça ne gêne pas le `If-None-Match` EXPLICITE posé ici.
+ * Ce que ce module tenait déjà SANS le 304 reste vrai en plus : la liste
+ * entière n'est jamais redemandée, et le delta d'une fenêtre inchangée est
+ * vide.
  */
 
 type Ecouteur = (...arguments_: unknown[]) => void;
@@ -363,6 +363,9 @@ const rattrape = async (ctx: Contexte): Promise<void> => {
     base: ctx.config.passerelle,
     depuis,
     collections: ['conversations'],
+    // SES champs, et rien d'autre (#5088) : le rattrapage corrige le RANG, et
+    // la passerelle rétrécit sa requête autant que sa réponse (#4173).
+    fields: CHAMPS_DU_RATTRAPAGE,
     // LE CURSEUR PART AVEC LA DEMANDE : c'est la condition pour que la
     // passerelle puisse répondre `hasGap` (`routes/sync/index.ts:360`).
     seq: ctx.seq,
@@ -459,6 +462,11 @@ const connecte = async (ctx: Contexte): Promise<void> => {
   });
   ctx.socket = socket;
   branche(ctx, socket);
+  // LA BANNIÈRE (#4454) — branchée ICI, sur le socket qui vient d'être ouvert,
+  // et jamais ailleurs : cet écran en tient DÉJÀ un, donc le toast ne coûte
+  // aucune connexion. La région est cherchée une fois ; absente (un document
+  // servi sans temps réel), la porte ne fait rien.
+  brancheLaBanniere({ socket, region: document.querySelector<HTMLElement>('.banniere') });
   if (!ctx.cache && ctx.enLigne) socket.connect();
 };
 
@@ -546,3 +554,12 @@ const demarre = async (): Promise<void> => {
 };
 
 void demarre();
+
+/**
+ * REMONTAGE PAR LE NAVIGATEUR DE ZONE (#5106) : un ES module réimporté ne se
+ * ré-exécute pas — après une navigation douce, c'est cet export que le
+ * navigateur appelle pour monter l'écran neuf. L'auto-démarrage ci-dessus
+ * reste : sans navigateur (amélioration progressive), l'import du chargeur
+ * suffit, comme avant.
+ */
+export const monte = demarre;

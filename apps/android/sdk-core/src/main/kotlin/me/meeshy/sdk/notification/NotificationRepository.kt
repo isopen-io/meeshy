@@ -35,6 +35,15 @@ class NotificationRepository @Inject constructor(
     private val _notificationsSyncedAt = MutableStateFlow<Long?>(null)
     private val _unreadCount = MutableStateFlow(0)
     private val _hasMore = MutableStateFlow(false)
+    
+    /**
+     * L'ANCRE que le serveur a servie avec la dernière page (#4901) — empruntée
+     * verbatim par [loadMore], jamais composée ici. `null` = gateway antérieur
+     * (aucun curseur servi) : le repli par RANG reste formulable, avec son
+     * défaut connu et VISIBLE (une insertion en tête fait resservir une ligne —
+     * le doublon est le signal, il ne se masque plus).
+     */
+    private var nextCursor: String? = null
 
     /** The server's unread count, kept fresh alongside every [notificationsStream] revalidate. */
     val unreadCountStream: StateFlow<Int> = _unreadCount.asStateFlow()
@@ -170,8 +179,11 @@ class NotificationRepository @Inject constructor(
         offset: Int = 0,
         limit: Int = 20,
         unreadOnly: Boolean = false,
+        cursor: String? = null,
     ): NetworkResult<List<ApiNotification>> =
-        apiCall { notificationApi.list(offset, limit, if (unreadOnly) true else null) }
+        apiCall {
+            notificationApi.list(if (cursor === null) offset else null, limit, if (unreadOnly) true else null, cursor)
+        }
 
     /**
      * Fetches the page after the currently cached notifications, appending fresh rows
@@ -184,12 +196,21 @@ class NotificationRepository @Inject constructor(
     suspend fun loadMore(): NetworkResult<Unit> {
         val current = _notificationsCache.value ?: return NetworkResult.Success(Unit)
         if (!_hasMore.value) return NetworkResult.Success(Unit)
-        return when (val result = pagedApiCall { notificationApi.list(current.size, PAGE_SIZE, null) }) {
+        // Le CURSEUR gagne (#4901) : l'ancre servie est relayée verbatim, et la
+        // tranche est insensible aux insertions en tête. Le RANG ne reste que
+        // face à un gateway antérieur — et SANS dédoublonnage : l'union par
+        // curseur est propre par construction, et au rang le doublon est le
+        // SIGNAL (le `filterNot` d'avant supprimait la ligne perdue avec lui).
+        val ancre = nextCursor
+        return when (
+            val result = pagedApiCall {
+                notificationApi.list(if (ancre === null) current.size else null, PAGE_SIZE, null, ancre)
+            }
+        ) {
             is NetworkResult.Success -> {
-                val known = current.mapTo(HashSet()) { it.id }
-                val fresh = result.data.data.filterNot { it.id in known }
-                _notificationsCache.value = current + fresh
+                _notificationsCache.value = current + result.data.data
                 _hasMore.value = result.data.pagination?.hasMore ?: false
+                nextCursor = result.data.pagination?.nextCursor
                 NetworkResult.Success(Unit)
             }
             is NetworkResult.Failure -> result
@@ -299,6 +320,7 @@ class NotificationRepository @Inject constructor(
                 _notificationsCache.value = result.data.data
                 _notificationsSyncedAt.value = clock.nowMillis()
                 _hasMore.value = result.data.pagination?.hasMore ?: false
+                nextCursor = result.data.pagination?.nextCursor
             }
             is NetworkResult.Failure -> {
                 onError(Exception(result.error.message))
@@ -322,6 +344,7 @@ class NotificationRepository @Inject constructor(
         _notificationsSyncedAt.value = null
         _unreadCount.value = 0
         _hasMore.value = false
+        nextCursor = null
     }
 
     private companion object {

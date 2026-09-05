@@ -76,8 +76,19 @@ export const ZONE_DACTIFS = `${PREFIXE_DE_ZONE}/_next`;
 // déclaration serait la jumelle qui laisse la règle réclamer un chemin mort.
 export const ZONE_DU_TEMPS_REEL = `${PREFIXE_DE_ZONE}/rt`;
 
+// LE TRAVAILLEUR DE ZONE (#4473) : `.rt/sw.js`, servi par `app/sw/route.ts` et
+// joignable sous `/__v3/sw` — une adresse STABLE (jamais de hash : l'URL d'un
+// Service Worker est son identité ; en changer enregistre un worker NEUF au
+// lieu de mettre à jour l'existant). La « nécessité de portée » qui aurait
+// exigé la racine (§ 7) est levée par l'en-tête `Service-Worker-Allowed: /`
+// que la route pose : le script peut vivre DANS la zone, donc sous un chemin
+// que `V3_ZONE_PREFIXES` couvre déjà (`/__v3`, segment-aware) — aucune fenêtre
+// de propagation legacy à payer, contrairement à un actif servi à la racine.
+export const ZONE_DU_TRAVAILLEUR = `${PREFIXE_DE_ZONE}/sw`;
+
 export const REECRITURES_DE_ZONE = Object.freeze([
   Object.freeze({ source: `${ZONE_DU_TEMPS_REEL}/:nom`, destination: '/rt/:nom' }),
+  Object.freeze({ source: ZONE_DU_TRAVAILLEUR, destination: '/sw' }),
 ]);
 
 // La forme ROUTE d'un motif de réécriture (`/rt/:nom` → `/rt/[nom]`) : celle sous laquelle

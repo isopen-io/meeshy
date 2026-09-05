@@ -53,23 +53,17 @@ extension ConversationView {
                 .fill(Color(hex: reply.isMe ? accentColor : reply.authorColor))
                 .frame(width: 3, height: 36)
 
-            // La miniature à GAUCHE, comme dans la bulle et sur la rangée
-            // plate : une citation ne change pas de géographie selon la peau
-            // qui la rend (#4946). Elle ne se dessine JAMAIS pour un média
-            // protégé — la garde vit dans `composerReplyAttachmentPreview`.
-            if let attType = reply.attachmentType {
-                composerReplyAttachmentPreview(type: attType, reply: reply)
-            }
-
             VStack(alignment: .leading, spacing: 2) {
-                Text(QuotedReplyPresentation.title(author: composerReplyTitle(reply)))
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
-                    .lineLimit(QuotedReplyPresentation.titleLineLimit)
+                if let emoji = reply.moodEmoji {
+                    // Réponse à un mood : le titre garde sa ligne — l'aperçu
+                    // d'un mood n'est pas `previewText` seul, il porte l'emoji
+                    // et la date, que le flot ne saurait pas composer.
+                    Text(QuotedReplyPresentation.title(author: composerReplyTitle(reply)))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
+                        .lineLimit(QuotedReplyPresentation.titleLineLimit)
 
-                HStack(spacing: 4) {
-                    if let emoji = reply.moodEmoji {
-                        // Réponse à un mood : emoji + contenu entier + date.
+                    HStack(spacing: 4) {
                         Text(emoji)
                             .font(MeeshyFont.relative(12))
                         if let date = reply.storyPublishedAt {
@@ -83,17 +77,36 @@ extension ConversationView {
                                 .foregroundColor(theme.textSecondary)
                                 .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
                         }
-                    } else {
+                    }
+                } else {
+                    // **Le texte part du deux-points de l'auteur** (#5103),
+                    // troisième et dernière peau. Deux `Text` concaténés
+                    // coulent dans le même paragraphe ; le budget de coupure
+                    // est celui de la peau `composer` (2 lignes), lu à la
+                    // taille de texte du lecteur.
+                    HStack(alignment: .top, spacing: 4) {
                         if let attType = reply.attachmentType {
                             Image(systemName: composerReplyAttachmentIcon(attType))
                                 .font(MeeshyFont.relative(10, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
-                        Text(reply.previewText)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textSecondary)
-                            .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
+
+                        ComposerQuotedFlow(
+                            title: QuotedReplyPresentation.title(author: composerReplyTitle(reply)),
+                            titleColor: Color(hex: reply.isMe ? accentColor : reply.authorColor),
+                            preview: reply.previewText,
+                            previewColor: theme.textSecondary)
                     }
+                }
+
+                // La miniature **sous l'auteur** (#5103). Elle vivait à gauche
+                // du bloc au titre de l'invariance de géographie entre les
+                // trois peaux (#4946) ; la directive déplace cette géographie,
+                // et les trois la suivent ensemble. Elle ne se dessine JAMAIS
+                // pour un média protégé — la garde vit dans
+                // `composerReplyAttachmentPreview`.
+                if let attType = reply.attachmentType {
+                    composerReplyAttachmentPreview(type: attType, reply: reply)
                 }
 
                 if let details = quotedDetails {
@@ -431,5 +444,43 @@ extension ConversationView {
                 .foregroundColor(color.opacity(0.7))
                 .accessibilityHidden(true)
         }
+    }
+}
+
+/// **Le nom, son deux-points, puis le texte — UN seul paragraphe** (#5103),
+/// pour le bandeau de réponse du composeur.
+///
+/// **Une VUE plutôt qu'une fonction d'extension, et c'est le budget qui le
+/// décide.** La coupure par mot a besoin de la taille de texte du lecteur, et
+/// `@Environment` ne s'attache qu'à une `View` — une extension de
+/// `ConversationView` ne peut pas ajouter de propriété stockée. La poser sur
+/// l'hôte aurait demandé de toucher `ConversationView.swift`, un fichier que
+/// d'autres sessions tiennent : la vue locale rend la même chose sans franchir
+/// aucune frontière.
+///
+/// Jumelle de `BubbleQuotedReply.quotedFlow` et `FocalQuotedReplyView.quotedFlow`.
+/// **Elle n'emploie PAS `MessageTextRenderer`**, contrairement aux deux autres :
+/// le bandeau rendait déjà son aperçu en `Text` nu, et lui donner les mentions
+/// teintées serait un changement de rendu, pas de disposition — un autre lot.
+private struct ComposerQuotedFlow: View {
+    let title: String
+    let titleColor: Color
+    let preview: String
+    let previewColor: Color
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        (Text(title)
+            .font(MeeshyFont.relative(12, weight: .semibold))
+            .foregroundColor(titleColor)
+         + Text(" ")
+         + Text(QuotedReplyPresentation.wordTruncated(
+                preview,
+                maxCharacters: QuotedReplyPresentation.previewCharacterBudget(
+                    for: .composer, dynamicTypeSize: dynamicTypeSize)))
+            .font(MeeshyFont.relative(12))
+            .foregroundColor(previewColor))
+        .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
     }
 }

@@ -39,9 +39,22 @@ export const MEDIAS = {
     `${genre === null ? 'Photos, vidéos et fichiers' : PAR_GENRE[genre]}, ${ORDRE}`,
   /** La cible dessine les vocaux SOUS la grille, en lecteurs pleine largeur : ils portent du texte. */
   vocaux: `Messages vocaux, ${ORDRE}`,
+  /**
+   * « Aucun média partagé » n'est vrai QUE si la galerie a vu toute la
+   * conversation (`plusAncien === null`) : sinon, elle n'a vu qu'une TRANCHE
+   * de 50 messages, et affirmer l'absence là où une page plus ancienne existe
+   * ment sur le cas nominal de toute conversation active.
+   */
   vide: 'Aucun média partagé',
   videPrecision: 'Les photos, vidéos, vocaux et fichiers échangés ici se retrouveront sur cet écran.',
+  /** La vérité quand une page plus ancienne existe : la PROFONDEUR, pas l'absence. */
+  videTranche: 'Aucun média dans cette tranche',
+  videTranchePrecision: 'Les messages les plus récents n’en portent aucun — il y en a peut-être plus loin dans la conversation.',
   videFiltre: (libelle: string): string => `Aucun média dans « ${libelle} »`,
   videFiltrePrecision: 'Essayez un autre type, ou revenez à « Tous ».',
+  /** Le même mensonge, sous filtre : la raison est la profondeur, pas le type. */
+  videFiltreTranchePrecision: 'Les messages les plus récents n’en portent aucun de ce type — il y en a peut-être plus loin.',
   plusAnciens: 'Médias plus anciens',
+  /** Le plein écran de la galerie (§ 9 Q3) — le geste du legacy (« Voir dans le message »), repris ici. */
+  voirDansLaConversation: 'Voir dans la conversation',
 } as const;

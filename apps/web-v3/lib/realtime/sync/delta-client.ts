@@ -64,6 +64,7 @@ export const urlDeSync = ({
   scope,
   seq,
   collections = ['messages'],
+  fields,
 }: {
   readonly base: string;
   /** Le dernier `checkpoint` reçu, ou l'instant du dernier message peint au premier tour. */
@@ -78,10 +79,18 @@ export const urlDeSync = ({
   readonly seq?: number;
   /** `messages` pour le fil, `conversations` pour la liste — le vocabulaire de `SYNC_FIELD_VOCABULARY`. */
   readonly collections?: readonly string[];
+  /**
+   * Les champs demandés, forme `collection.champ` (#4173, #5088) — la REQUÊTE
+   * Prisma rétrécit côté passerelle, pas seulement la réponse. Absent ⇒ le
+   * défaut du serveur, la ligne entière : nommer ses champs est le geste de
+   * l'appelant qui SAIT ce qu'il lit.
+   */
+  readonly fields?: readonly string[];
 }): string =>
   `${base}/api/v1/sync?since=${encodeURIComponent(depuis)}&collections=${encodeURIComponent(collections.join(','))}` +
   (scope === undefined ? '' : `&scope=${encodeURIComponent(scope)}`) +
-  (seq === undefined ? '' : `&seq=${seq}`);
+  (seq === undefined ? '' : `&seq=${seq}`) +
+  (fields === undefined || fields.length === 0 ? '' : `&fields=${encodeURIComponent(fields.join(','))}`);
 
 /**
  * CE QU'UN APPEL DE `/sync` REND, en TROIS formes — parce que trois choses
@@ -113,12 +122,11 @@ export type IssueDeSync =
  * `/chats` était une branche MORTE. Une règle de protocole tenue par un seul
  * des deux appelants n'est pas tenue.
  *
- * Le `if-none-match` n'est posé que si l'appelant DÉTIENT un validateur. Il n'en
- * détient un aujourd'hui que hors navigateur : la passerelle n'expose pas
- * `ETag` par CORS (`server.ts:404-410`, sans `exposedHeaders`), donc
- * `reponse.headers.get('etag')` rend `null` depuis une autre origine. Le
- * mécanisme est JUSTE et il jouera le jour où l'en-tête sera exposé (issue
- * gateway compagnon) ; il est mesuré ici, pas supposé.
+ * Le `if-none-match` n'est posé que si l'appelant DÉTIENT un validateur —
+ * lu depuis `ETag`, désormais exposé par CORS (`CORS_EXPOSED_HEADERS`,
+ * `config/cors-methods.ts`, #5015) : avant ce correctif, `ETag` n'étant pas
+ * dans la safelist CORS, `reponse.headers.get('etag')` rendait `null` depuis
+ * une autre origine et ce module n'avait jamais de validateur à renvoyer.
  */
 export const demandeLeDelta = async ({
   base,
@@ -126,6 +134,7 @@ export const demandeLeDelta = async ({
   scope,
   seq,
   collections,
+  fields,
   validateur,
   entetes,
   recuperer = fetch,
@@ -136,6 +145,8 @@ export const demandeLeDelta = async ({
   /** Le dernier curseur GLOBAL connu — omis tant que le lecteur n'en a jamais vu. */
   readonly seq?: number | null;
   readonly collections?: readonly string[];
+  /** Voir `urlDeSync` — les champs que l'appelant lit, et donc les seuls qu'il demande. */
+  readonly fields?: readonly string[];
   /** Le dernier `ETag` LU — `null` quand il n'a pas pu l'être. */
   readonly validateur?: string | null;
   /** La créance, telle que la surface la porte (`Bearer`, ou la session de l'invité). */
@@ -148,6 +159,7 @@ export const demandeLeDelta = async ({
     ...(scope === undefined ? {} : { scope }),
     ...(seq === undefined || seq === null ? {} : { seq }),
     ...(collections === undefined ? {} : { collections }),
+    ...(fields === undefined ? {} : { fields }),
   });
   const reponse = await recuperer(url, {
     headers: {

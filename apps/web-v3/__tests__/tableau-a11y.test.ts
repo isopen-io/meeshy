@@ -52,6 +52,7 @@ const ETAT = {
   total: 4,
   liens: { genre: 'liste' as const, liens: [{ identifiant: 'lagos-q1', nom: 'Ops', utilisations: 12, conversation: 'c1', actif: true, capacite: null, expireA: null }] },
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
+  espace: false,
 };
 
 const graves = async (): Promise<readonly string[]> => {
@@ -88,6 +89,18 @@ describe('le tableau de bord face à axe', () => {
         liens: { genre: 'liste', liens: [] },
       }),
     );
+
+    expect(await graves()).toEqual([]);
+  });
+
+  /**
+   * LA FEUILLE OUVERTE EST UN TROISIÈME ÉCRAN. Un balayage au repos ne la
+   * visite jamais — et c'est précisément l'état où le document porte un
+   * `<dialog aria-modal>`, une liste de liens et un corps rendu `inert` : trois
+   * choses qu'`axe` juge, et qu'aucun des deux autres cas n'expose.
+   */
+  it('ne porte aucune violation grave, l’espace membre ouvert', async () => {
+    peint(documentDuTableau({ ...ETAT, espace: true }));
 
     expect(await graves()).toEqual([]);
   });

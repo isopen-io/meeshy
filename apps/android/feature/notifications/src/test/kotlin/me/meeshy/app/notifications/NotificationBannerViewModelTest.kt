@@ -50,7 +50,7 @@ class NotificationBannerViewModelTest {
     }
 
     private val conversationRepository = mockk<ConversationRepository>(relaxed = true).also {
-        every { it.cachedConversations() } returns flowOf(emptyList<ApiConversation>())
+        every { it.conversationStream(any()) } returns flowOf(null)
     }
 
     private class FakeClock(
@@ -310,16 +310,14 @@ class NotificationBannerViewModelTest {
     fun theGroupBannerLeadsTheLocalNameWithItsFavoriteEmoji() = runTest(dispatcher.scheduler) {
         // The local rename + favorite emoji live only on the device (iOS composedSubtitle):
         // the banner headline must read "<actor> dans <emoji> <renamed name>", not the bare title.
-        every { conversationRepository.cachedConversations() } returns flowOf(
-            listOf(
-                ApiConversation(
-                    id = "c1",
-                    type = "group",
-                    title = "Équipe Tech",
-                    preferences = ApiConversationPreferences(
-                        customName = "Mon équipe à moi",
-                        reaction = "😴",
-                    ),
+        every { conversationRepository.conversationStream("c1") } returns flowOf(
+            ApiConversation(
+                id = "c1",
+                type = "group",
+                title = "Équipe Tech",
+                preferences = ApiConversationPreferences(
+                    customName = "Mon équipe à moi",
+                    reaction = "😴",
                 ),
             ),
         )

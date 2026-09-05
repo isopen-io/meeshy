@@ -73,9 +73,20 @@ final class ComposerSceneCaptureGestureTests: XCTestCase {
             .deletingLastPathComponent()   // Unit
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
-        let url = root.appendingPathComponent(
-            "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        // **DEUX fichiers, et c'est le point** (2026-09-04). Le viseur a été
+        // extrait dans `MeeshyComposerHost+Viewfinder.swift` le jour où l'hôte
+        // a passé 1200 lignes. Cette garde est NÉGATIVE — elle interdit trois
+        // motifs — et une garde négative qui perd son terrain **passe au vert**
+        // : c'est son métier de ne rien trouver, donc rien ne la distingue
+        // d'une garde qui garde. Un armement-au-montage réintroduit dans le
+        // fichier extrait n'aurait fait rougir personne.
+        //
+        // Le `try` est en TÊTE, une seule fois : `try a() + try b()` ne
+        // compile pas.
+        let dossier = root.appendingPathComponent("Meeshy/Features/Main/Composer")
+        return try ["MeeshyComposerHost.swift", "MeeshyComposerHost+Viewfinder.swift"]
+            .map { try String(contentsOf: dossier.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     // MARK: - Le mode suit le FORMAT, pas la porte
@@ -157,13 +168,35 @@ final class ComposerSceneCaptureGestureTests: XCTestCase {
             "la porte du clavier lève encore le clavier")
 
         // Et la capture, elle, n'est jamais offerte par une OUVERTURE : sa
-        // condition ne mentionne pas `ComposerOpening` du tout. C'est ce qui
-        // rend la garantie vraie par construction plutôt que par coïncidence.
-        for opening in ComposerOpening.allCases {
-            XCTAssertEqual(
-                ComposerSceneCaptureGesture.offersCapture(backgroundIsEmpty: true, format: .story),
-                ComposerSceneCaptureGesture.offersCapture(backgroundIsEmpty: true, format: .story),
-                "\(opening) : l'offre de capture ne doit dépendre d'aucune ouverture")
-        }
+        // condition ne mentionne pas `ComposerOpening` du tout.
+        //
+        // **Cette indépendance est vraie par CONSTRUCTION, donc elle ne
+        // s'éprouve pas par une valeur.** Une boucle sur `allCases` vivait ici
+        // et comparait `offersCapture(…)` à `offersCapture(…)` — la MÊME
+        // expression, sans `opening` dans aucun des deux membres. Elle ne
+        // pouvait pas échouer, quel que soit le code, et donnait une
+        // couverture qui n'existait pas.
+        //
+        // Ce qui tombera le jour où quelqu'un ajoute le paramètre est une
+        // garde de SIGNATURE : la règle ne peut dépendre d'une ouverture que
+        // si elle en reçoit une.
+        let regle = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneCaptureGesture.swift"),
+            encoding: .utf8)
+        let compacte = regle.components(separatedBy: .whitespacesAndNewlines).joined()
+        // La PARENTHÈSE FERMANTE fait tout le travail : sans elle, la
+        // signature attendue serait un PRÉFIXE de
+        // `…format:ComposerFormat,opening:ComposerOpening)`, et l'ajout du
+        // paramètre passerait au vert — le défaut exact que ce témoin remplace.
+        //
+        // Et la borne ne peut pas être « le fichier ne mentionne jamais
+        // ComposerOpening » : `mode(format:opening:)` vit dans le même fichier
+        // et en reçoit une à bon droit. C'est la RÈGLE de l'offre qui doit s'en
+        // passer, pas le fichier qui la porte.
+        XCTAssertTrue(compacte.contains("funcoffersCapture(backgroundIsEmpty:Bool,format:ComposerFormat)->Bool"),
+                      "l'offre de capture ne doit dépendre d'aucune ouverture — ni d'aucun autre fait")
     }
 }

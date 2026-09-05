@@ -1,5 +1,6 @@
 import { transformTranslationsToArray } from '../../../utils/translation-transformer';
 import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
+import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
 
 /**
  * Extracts sender info from unified Participant model
@@ -85,6 +86,15 @@ export function formatMessageWithUnifiedSender(message: any) {
  *
  * `deletedAt` n'est pas recopié : `getConversationMessagesWithDetails` filtre
  * `deletedAt: null`, la valeur est donc constante par construction.
+ *
+ * #4885 — `getConversationMessagesWithDetails` charge la ligne `Message`
+ * ENTIÈRE (`include` sans `select` racine), donc `isViewOnce`/`isBlurred`/
+ * `effectFlags`/`expiresAt` sont déjà dans `message` : ce formateur ne les
+ * recopiait pas, et `messageSchema` (`routes/links/types.ts`) ne les
+ * déclarait pas. Un message à vue unique / flouté / éphémère lu via un lien
+ * de partage arrivait donc SANS AUCUN de ses drapeaux — la population la
+ * plus exposée (visiteurs sans compte) était aussi la seule à n'avoir aucun
+ * moyen de savoir qu'un message est protégé.
  */
 export function formatLinkMessageWithDetails(message: any) {
   return {
@@ -97,6 +107,7 @@ export function formatLinkMessageWithDetails(message: any) {
     replyToId: message.replyToId,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
+    ...mapMessageProtectionFields(message),
     // Messages système : leur sens vit dans `metadata` (rendu localisé côté
     // client), jamais dans le texte. Clés ABSENTES sur un message ordinaire.
     ...(message.messageSource ? { messageSource: message.messageSource } : {}),

@@ -15,13 +15,15 @@ import type { Droits } from '@/lib/api/invite';
  * pousse par `participant:rights-updated` (`participants-writes.ts:403-425`),
  * que `lib/realtime/droits-peinture.ts` lit et repeint. L'accordéon de la
  * modale (`app/(public)/chat/[lien]/choix-vue.ts`, l'état CHOIX — la vue
- * `join`) NOMME les mêmes droits AVANT la jonction, sans en donner le verdict :
- * l'aperçu (`GET /anonymous/link/:identifier`, `routes/anonymous.ts:663-692`)
- * sert les exigences du lien, ses langues et son effectif, jamais
- * `allowViewHistory` ni `allowAnonymous*` — un verdict affirmé là serait
- * inventé (§ 5.1). Le seul verdict qu'elle rend est celui que rien n'accorde à
- * un invité : aucun champ de `GuestRights` (`services/participantRights.ts`)
- * ne porte un appel ni une invitation.
+ * `join`) rend les MÊMES verdicts AVANT la jonction, depuis l'aperçu
+ * (`GET /anonymous/link/:identifier`, `routes/anonymous.ts:663-692`), qui sert
+ * depuis #4522 les quatre droits que le lien ouvre (`allowViewHistory`,
+ * `allowAnonymous*`) à côté de ses exigences, ses langues et son effectif —
+ * projetés par `apercuServi` (`lib/api/invite.ts`, #4830) dans le même champ
+ * `Droits` que la jonction et le battement. Le seul droit dont le verdict ne
+ * varie jamais est « appeler » : aucun champ de `GuestRights`
+ * (`services/participantRights.ts`) ne porte un appel ni une invitation, quel
+ * que soit le lien.
  *
  * Quatre droits, dans l'ordre de la planche (`cible/rights.png`) : ce que le
  * lecteur LIT (l'historique — le plancher est `joinedAt` quand le lien ne
@@ -51,10 +53,6 @@ export type DroitRendu = {
 
 export type DroitAnnonce = {
   readonly cle: CleDeDroit;
-  /** Le nom du droit, à l'infinitif — pour l'énumérer AVANT la jonction sans en préjuger. */
-  readonly nom: string;
-  /** Vrai quand c'est le LIEN qui en décide ; faux quand aucun champ servi ne peut l'accorder à un invité. */
-  readonly variable: boolean;
   readonly rendu: (droits: Droits) => DroitRendu;
 };
 
@@ -83,19 +81,12 @@ const fichiers = (droits: Droits): Libelle => {
 const appels = (): Libelle => ({ accorde: false, titre: 'Pas d’appel, pas d’invitation', sous: 'Réservé aux membres du compte.' });
 
 export const DROITS_DE_L_INVITE: readonly DroitAnnonce[] = [
-  { cle: 'historique', nom: 'lire l’historique', variable: true, rendu: (droits) => ({ cle: 'historique', ...historique(droits) }) },
-  { cle: 'ecrire', nom: 'écrire', variable: true, rendu: (droits) => ({ cle: 'ecrire', ...ecrire(droits) }) },
-  { cle: 'fichiers', nom: 'joindre photos et fichiers', variable: true, rendu: (droits) => ({ cle: 'fichiers', ...fichiers(droits) }) },
-  { cle: 'appels', nom: 'appeler', variable: false, rendu: () => ({ cle: 'appels', ...appels() }) },
+  { cle: 'historique', rendu: (droits) => ({ cle: 'historique', ...historique(droits) }) },
+  { cle: 'ecrire', rendu: (droits) => ({ cle: 'ecrire', ...ecrire(droits) }) },
+  { cle: 'fichiers', rendu: (droits) => ({ cle: 'fichiers', ...fichiers(droits) }) },
+  { cle: 'appels', rendu: () => ({ cle: 'appels', ...appels() }) },
 ];
 
 /** Les quatre droits, rendus pour CE lien — ce que le bandeau affiche, et ce que le module repeint. */
 export const droitsRendus = (droits: Droits): readonly DroitRendu[] => DROITS_DE_L_INVITE.map((droit) => droit.rendu(droits));
 
-/** Les droits que le lien décide, par leur nom — ce que la modale énumère avant la jonction. */
-export const nomsDesDroitsVariables = (): readonly string[] =>
-  DROITS_DE_L_INVITE.filter((droit) => droit.variable).map((droit) => droit.nom);
-
-/** Les droits que rien n'accorde à un invité — le seul verdict que la modale a le droit de rendre. */
-export const droitsHorsDuLien = (): readonly DroitRendu[] =>
-  DROITS_DE_L_INVITE.filter((droit) => !droit.variable).map((droit) => droit.rendu(SANS_DROITS));

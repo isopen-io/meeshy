@@ -95,9 +95,13 @@ test('« Accepter » a un effet, et « En attente » n’est pas un bouton', asy
 
   await page.locator('li[data-sorte="recue"] button[value="accepter"]').click();
 
-  // Post/Redirect/Get : l'adresse porte le compte rendu, et l'écran le DIT.
-  await expect(page).toHaveURL(`${v3.base}/contacts?acceptee`);
-  await expect(page.locator('.avis[role="status"]')).toHaveText(/Demande acceptée/);
+  // L'EFFET a changé de forme, pas de loi (#4921) : avec le module du direct,
+  // accepter PEINT l'état servi et le DIT dans la région de statut — aucune
+  // navigation. Le Post/Redirect/Get reste le chemin sans JavaScript, tenu par
+  // `v3-contacts.spec.ts` (« sans JavaScript, accepter reste un PRG »).
+  await expect(page.locator('li[data-sorte="recue"] .etat-du-geste').first()).toHaveText('Demande acceptée');
+  await expect(page.locator('#journal-des-gestes')).toContainText('Demande acceptée');
+  await expect(page).toHaveURL(`${v3.base}/contacts`);
 
   const patch = passerelle.journal.filter((appel) => appel.methode === 'PATCH');
   expect(patch).toHaveLength(1);

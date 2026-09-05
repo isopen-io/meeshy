@@ -9,28 +9,63 @@
  * pour que ses importateurs n'aient rien à apprendre.
  */
 
+const sansBarreFinale = (url: string): string => url.replace(/\/+$/, '');
+
 /**
  * La base que le SERVEUR joint — l'adresse interne du réseau Docker en
  * production (`MEESHY_GATEWAY_URL`), sinon celle du navigateur.
  */
 export const baseDeLaPasserelle = (): string =>
-  (process.env.MEESHY_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(
-    /\/+$/,
-    '',
+  sansBarreFinale(
+    process.env.MEESHY_GATEWAY_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000',
   );
+
+/**
+ * Une origine que le navigateur du lecteur joint depuis SA machine — la seule
+ * forme d'adresse interne qui soit aussi la sienne : le poste de développement,
+ * où la passerelle et le navigateur partagent la boucle locale.
+ */
+const BOUCLE_LOCALE = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?$/i;
 
 /**
  * La base que le NAVIGATEUR peut joindre — pour le module de participation
  * (§ 12.4), qui parle à la passerelle depuis le téléphone du lecteur, pas depuis
- * le conteneur. `MEESHY_GATEWAY_URL` est l'adresse INTERNE du réseau Docker
+ * le conteneur, et pour toute URL de média que le document lui remet.
+ * `MEESHY_GATEWAY_URL` est l'adresse INTERNE du réseau Docker
  * (`http://gateway:3000`, `docker-compose.prod.yml`) : un navigateur ne la
  * résout pas.
+ *
+ * ELLE REFUSE DE SERVIR UNE ADRESSE INTERNE (staging, 2026-09-05). Le repli
+ * `NEXT_PUBLIC_API_URL ?? MEESHY_GATEWAY_URL` remettait au navigateur
+ * `http://gateway-staging:3000` dès que la variable publique manquait à
+ * l'environnement du conteneur : la page, servie en HTTPS, voyait son socket
+ * (`ws://`) et sa relecture des messages (`http://`) BLOQUÉS en contenu mixte,
+ * et le fil restait un formulaire — sans qu'aucun témoin ne rougisse, puisque
+ * le document se composait sans erreur. Un repli n'en est un que s'il peut
+ * MARCHER : la seule adresse interne qu'un navigateur atteint est la boucle
+ * locale du poste de développement. Hors d'elle, la configuration manque, et
+ * lever ici est ce qui la rend visible — `/healthz` relaie le même verdict, si
+ * bien qu'un conteneur mal configuré ne devient jamais sain.
+ *
+ * `NEXT_PUBLIC_API_URL` est lue à l'EXÉCUTION, et c'est une propriété à garder :
+ * Next inline toute variable `NEXT_PUBLIC_*` PRÉSENTE au moment du `next build`,
+ * jusque dans le code serveur. Elle ne l'est pas parce que le Dockerfile de la
+ * v3 ne la déclare ni en `ARG` ni en `ENV` — `scripts/check-v3-pipeline.mjs`
+ * le garde ; le jour où elle entrerait dans le build, la valeur du compose
+ * serait ignorée et ce repli redeviendrait la seule adresse servie.
  */
-export const baseDeLaPasserellePublique = (): string =>
-  (process.env.NEXT_PUBLIC_API_URL ?? process.env.MEESHY_GATEWAY_URL ?? 'http://localhost:3000').replace(
-    /\/+$/,
-    '',
+export const baseDeLaPasserellePublique = (): string => {
+  const publique = process.env.NEXT_PUBLIC_API_URL;
+  if (publique !== undefined && publique !== '') return sansBarreFinale(publique);
+  const interne = sansBarreFinale(process.env.MEESHY_GATEWAY_URL ?? 'http://localhost:3000');
+  if (BOUCLE_LOCALE.test(interne)) return interne;
+  throw new Error(
+    `La passerelle PUBLIQUE n'est pas configurée : NEXT_PUBLIC_API_URL est absente et MEESHY_GATEWAY_URL ` +
+      `vaut « ${interne} », une adresse interne au réseau des conteneurs qu'un navigateur ne résout pas. ` +
+      `Le document refuse de la servir : déclarez NEXT_PUBLIC_API_URL (l'origine https de la passerelle ` +
+      `derrière Traefik) sur le service de la v3.`,
   );
+};
 
 /**
  * LE DÉLAI D'ABANDON d'un appel à la passerelle, écrit une fois pour les trois

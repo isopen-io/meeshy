@@ -40,6 +40,11 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 }));
 
 import { appliquerDroitsDeParticipant } from '../../../../routes/conversations/participant-rights-core';
+import {
+  cacheParticipant,
+  getCachedParticipant,
+  resetParticipantLookupCache,
+} from '../../../../utils/participant-lookup-cache';
 
 const CONV_ID = '507f1f77bcf86cd799439033';
 const ACTEUR_ID = '507f1f77bcf86cd799439011';
@@ -119,6 +124,7 @@ const auth = (userId: string, role = 'USER') => ({
 beforeEach(() => {
   mockResolveConversationId.mockReset().mockResolvedValue(CONV_ID);
   mockCanAccessConversation.mockReset().mockResolvedValue(true);
+  resetParticipantLookupCache();
 });
 
 describe('appliquerDroitsDeParticipant — appelé DIRECTEMENT, sans Fastify (#4713)', () => {
@@ -190,6 +196,35 @@ describe('appliquerDroitsDeParticipant — appelé DIRECTEMENT, sans Fastify (#4
       data: { historyVisibleFrom: HIER },
     });
     expect(socket.invalidations).toEqual([[CIBLE_PART_ID, CONV_ID]]);
+  });
+
+  // #4855 — `MessagingService.handleMessage` tient son PROPRE cache de lookup
+  // (`utils/participant-lookup-cache.ts`), distinct de celui du middleware
+  // d'auth ci-dessus (`manager.invalidateParticipantCache`). Avant ce lot,
+  // rien n'invalidait cette seconde entrée : un droit retiré ici ne prenait
+  // effet sur l'ENVOI qu'au bout de son TTL (30 s).
+  it('invalide aussi le cache de lookup de MessagingService — sinon un droit retiré ne prend effet qu’au bout du TTL', async () => {
+    const { prisma } = fabriquerPrisma();
+    const socket = fabriquerSocket();
+    cacheParticipant(CIBLE_PART_ID, CONV_ID, {
+      id: CIBLE_PART_ID,
+      conversationId: CONV_ID,
+      isActive: true,
+      permissions: { canSendMessages: true } as any,
+      anonymousSession: null,
+    });
+    expect(getCachedParticipant(CIBLE_PART_ID, CONV_ID)).toBeDefined();
+
+    await appliquerDroitsDeParticipant({
+      prisma: prisma as any,
+      conversationIdentifier: CONV_ID,
+      participantId: CIBLE_PART_ID,
+      authContext: auth(ACTEUR_ID),
+      body: { historyVisibleFrom: HIER.toISOString() },
+      socketIO: socket.passerelle as any,
+    });
+
+    expect(getCachedParticipant(CIBLE_PART_ID, CONV_ID)).toBeUndefined();
   });
 
   it('sert DEUX charges : la room du fil ignore l’octroi, la room personnelle le porte', async () => {

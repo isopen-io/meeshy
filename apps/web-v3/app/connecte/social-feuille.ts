@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { CHAMP_D_APPEL } from './atomes-feuille';
+
 /**
  * LES RADIOS DE LANGUE SONT `.hors-ecran` (clip-path) — leur `label` associé
  * porte donc SEUL l'état coché et le focus visibles. Un radio et son label ne
@@ -60,13 +62,14 @@ const parRang = (etat: 'checked' | 'focus-visible'): string =>
  * qui n'est pas un espacement de DESIGN. Témoin : `__tests__/charte.test.ts`.
  */
 export const FEUILLE_DU_FIL_SOCIAL = compacte(`
+${CHAMP_D_APPEL}
 ${parRang('checked')}{background:var(--color-primary);border-color:var(--color-primary);color:var(--color-on-primary);font-weight:var(--font-weight-semibold)}
 ${parRang('focus-visible')}{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:var(--stroke-strong)}
 .fil-social{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
 .fil-social>.fil-tete{flex:none}
 
 .fil-social{position:relative}
-.saut{position:absolute;left:var(--space-4);top:calc(var(--space-9) * -1);z-index:20;display:inline-flex;align-items:center;min-height:var(--target-min);padding:0 var(--space-4);border:var(--stroke-strong) solid var(--color-primary);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-primary);font-weight:var(--font-weight-semibold);text-decoration:none}
+.saut{position:absolute;left:var(--space-4);top:calc(var(--space-9) * -1);z-index:20;display:inline-flex;align-items:center;min-height:var(--target-min);padding:0 var(--space-4);border:var(--stroke-strong) solid var(--color-primary);border-radius:var(--radius-pill);background:var(--color-surface);color:var(--color-primary);font-weight:var(--font-weight-semibold);text-decoration:none}
 .saut:focus-visible{top:var(--space-2)}
 
 .rail{display:flex;gap:var(--space-4);margin:0;padding:var(--space-2) var(--space-4) var(--space-5);overflow-x:auto;list-style:none;scroll-padding-inline:var(--space-4)}

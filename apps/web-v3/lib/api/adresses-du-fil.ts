@@ -44,6 +44,26 @@
  *      lui : on revient là où l'on regardait, jamais au bas du fil.
  */
 
+/**
+ * ET L'OUVERTURE DU PROFIL D'UN AUTEUR (§ 12.10.3) EST DE LA MÊME FAMILLE — un
+ * ÉTAT de l'adresse hôte, composé par le serveur (`app/connecte/fil-lignes.ts`,
+ * `liste-vue.ts`) ET par le module de participation (`fil-peinture.ts`).
+ *
+ * ELLE VIT ICI, ET NON DANS `app/connecte/profil-vue.ts`, POUR UNE RAISON
+ * MESURÉE : le module de participation qui l'importait DE LÀ-BAS tirait tout le
+ * module de vue dans son graphe — `getLanguageInfo` de `@meeshy/shared` avec —,
+ * et `participate.js` passait de **26 719 à 41 107 o gzip (+14 388, +54 %)**
+ * sur l'actif que le lecteur en 3G rurale télécharge. Une composition de chaîne
+ * de trente caractères ne se paie pas quatorze kilo-octets : les deux rendus
+ * partagent la RÈGLE, jamais le module qui la rend. `profil-vue.ts` la
+ * RÉ-EXPORTE, donc aucun appelant ne change et le site reste unique.
+ */
+export const PARAM_DU_PROFIL = 'profil';
+
+/** L'ouverture : l'adresse de l'hôte, plus `?profil=`. */
+export const adresseDuProfil = (adresseHote: string, handle: string): string =>
+  `${adresseHote}?${PARAM_DU_PROFIL}=${encodeURIComponent(handle)}`;
+
 /** Le paramètre qui porte l'état « plein écran » — lu par les deux portes du fil. */
 export const PARAM_DU_PLEIN = 'media';
 
@@ -58,9 +78,18 @@ export const ancreDuMessage = (id: string): string => `#${encodeURIComponent(ide
 /** L'adresse de la porte, cadrée sur un message — la cible du Post/Redirect/Get. */
 export const adresseDuMessage = (adresse: string, id: string): string => `${adresse}${ancreDuMessage(id)}`;
 
-/** L'adresse de la porte, servie AUTOUR d'un message — la tranche qui le contient, à coup sûr. */
+/**
+ * L'adresse de la porte, servie AUTOUR d'un message — la tranche qui le
+ * contient, à coup sûr. `adresse` est en général NUE (`adresseDeLaPorte`,
+ * sans `?`), mais la galerie des médias (`app/connecte/medias-vue.ts`) y
+ * passe sa propre adresse déjà FILTRÉE (`?genre=…`, `lib/api/medias.ts`) : le
+ * séparateur s'adapte, sous peine du bogue mesuré une fois — un second `?`
+ * dans la chaîne, que `URL().searchParams` ne coupe QUE sur `&`, si bien que
+ * `autour=` finissait comme une queue collée à la valeur de `genre=` et
+ * n'était jamais lu.
+ */
 export const adresseAutourDuMessage = (adresse: string, messageId: string): string =>
-  `${adresse}?${PARAM_DE_L_ANCRE}=${encodeURIComponent(messageId)}`;
+  `${adresse}${adresse.includes('?') ? '&' : '?'}${PARAM_DE_L_ANCRE}=${encodeURIComponent(messageId)}`;
 
 /** L'ouverture : la tranche qui porte la pièce, et la pièce. */
 export const adresseDuPlein = (adresse: string, messageId: string, pieceId: string): string =>

@@ -22,12 +22,18 @@
  *   rétrécit une LECTURE sans jamais fermer la PORTE. Un invité dont le lien
  *   est mort ne peut plus lire le fil, et peut toujours en chercher un mot ou
  *   en lire les épingles.
- * - **La forme diverge.** Un résultat de recherche ne porte NI `isViewOnce`,
- *   NI `isBlurred`, NI `expiresAt`, NI `attachments`, NI `deletedAt` — son
- *   `select` ne les demande pas. Les drapeaux qui disent à un client qu'un
- *   message est PROTÉGÉ n'atteignent donc pas la surface de recherche. Et son
- *   `reactionCount` vaut toujours `0` : c'est le `default` du schéma partagé,
- *   jamais un comptage, la route ne sélectionnant pas `_count`.
+ * - **La forme diverge, en partie corrigée depuis (#4885).** Au 2026-09-02,
+ *   un résultat de recherche ne portait NI `isViewOnce`, NI `isBlurred`, NI
+ *   `expiresAt`, NI `attachments`, NI `deletedAt` — son `select` ne les
+ *   demandait pas, et les drapeaux qui disent à un client qu'un message est
+ *   PROTÉGÉ n'atteignaient donc pas la surface de recherche (un message à vue
+ *   unique trouvé par recherche restait FORWARDABLE). #4885 a fait rejoindre
+ *   `MESSAGE_PROTECTION_SELECT` / `mapMessageProtectionFields`
+ *   (`messages-list-query.ts`) aux DEUX surfaces — la route dédiée sert
+ *   désormais les six champs de protection, à l'identique de la vue. Elle ne
+ *   sert toujours pas `attachments` ni `deletedAt`, et son `reactionCount`
+ *   vaut toujours `0` : c'est le `default` du schéma partagé, jamais un
+ *   comptage, la route ne sélectionnant pas `_count`.
  *
  * Un paramètre `view` qui se contenterait de router vers ces trois formes
  * n'aurait rien unifié. Les quatre vues passent donc par le MÊME `select`, le

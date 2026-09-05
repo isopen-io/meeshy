@@ -1,3 +1,4 @@
+import MeeshySDK
 import Foundation
 
 /// **Le viseur vit DANS la scène — il n'est pas une feuille** (#4080, vue `2b`).
@@ -105,4 +106,113 @@ nonisolated enum ComposerSceneCamera {
         case (.handsFree, _):        return "composer.camera.hint.handsFreeStart"
         }
     }
+}
+
+/// **Ce que le viseur OCCUPE, et ce qu'il laisse** (#4080).
+///
+/// Le chrome du viseur vit désormais DANS la carte (directive porteur
+/// 2026-09-04). Il y rencontre donc les meubles que la carte peint déjà —
+/// et mesuré au simulateur, le déclencheur (y 569–665) tombait exactement sur
+/// le volet de description (y 610–648).
+///
+/// ## Trois meubles, trois réponses — c'est ce qui fait de ceci une règle
+///
+/// Une fonction qui rendrait « tout cède » en ignorant son paramètre ne
+/// déciderait rien. Celle-ci décide l'APPARTENANCE : ce que le viseur occupe
+/// n'est pas « le bas de l'écran », c'est **la carte**.
+nonisolated enum ComposerSceneCameraOverlay {
+
+    enum Furniture: String, CaseIterable, Sendable {
+        /// Le volet de description, ancré au bas du DESSIN (#4993) — donc
+        /// exactement là où le déclencheur se pose.
+        case description
+        /// La trace du son de fond, ancrée AU-DESSUS du dessin (#5017). Le
+        /// viseur ne monte pas jusque-là.
+        case soundTrace
+        /// Les deux rails, dans les COULOIRS du plateau (#4561). Le viseur est
+        /// borné au dessin ; il ne les atteint pas, et les cacher priverait
+        /// l'auteur de sa sortie autant que de ses portes.
+        case rails
+    }
+
+    static func yieldsToViewfinder(_ furniture: Furniture) -> Bool {
+        switch furniture {
+        case .description: return true
+        case .soundTrace:  return false
+        case .rails:       return false
+        }
+    }
+
+    /// La question que les sites de montage posent — ils n'écrivent pas
+    /// `cameraStage != .off`, ils demandent si LEUR meuble est servi.
+    static func isServed(_ furniture: Furniture,
+                         stage: ComposerSceneCameraStage) -> Bool {
+        !(stage != .off && yieldsToViewfinder(furniture))
+    }
+}
+
+/// **Ce que la carte MONTRE quand le viseur est armé** (#4080).
+///
+/// Trois états, et le troisième est celui qui manquait : une permission REFUSÉE
+/// laissait la carte noire, c'est-à-dire indiscernable d'une scène vide ou
+/// d'une caméra en panne. L'auteur cherchait un défaut là où il n'y avait
+/// qu'une case à cocher.
+///
+/// `notDetermined` ne montre PAS le panneau : le système est en train de poser
+/// sa question, et un écran de refus affiché pendant qu'on demande dirait le
+/// contraire de ce qui se passe.
+nonisolated enum ComposerSceneCameraSurface {
+
+    enum Shown: String, Equatable, Sendable {
+        /// La scène est une scène.
+        case scene
+        /// L'aperçu de l'objectif.
+        case viewfinder
+        /// L'écran qui dit POURQUOI il n'y a pas d'image.
+        case permissionRefused
+    }
+
+    static func shown(stage: ComposerSceneCameraStage,
+                      permission: MediaPermissionState) -> Shown {
+        guard stage != .off else { return .scene }
+        if permission.needsSettingsRedirect { return .permissionRefused }
+        return .viewfinder
+    }
+}
+
+/// **Le viseur a DEUX tailles** (directive porteur 2026-09-04 : « à la place de
+/// (x) pour fermer, il faut mettre [ ] plutôt pour passer en full screen
+/// entièrement »).
+///
+/// ## Pourquoi le plein écran REMPLACE la fermeture, et ne s'ajoute pas
+///
+/// Le viseur en carte a déjà une sortie : la porte du rail qui l'a armé, et le
+/// geste qui l'a ouvert. Une croix y faisait double emploi — et occupait la
+/// place du seul contrôle que la carte ne peut pas offrir autrement.
+///
+/// Le plein écran, lui, N'A PAS d'autre sortie : c'est pourquoi il garde la
+/// croix. Les deux tailles ne servent donc pas les mêmes contrôles, et c'est ce
+/// qui fait de ceci une règle plutôt qu'un booléen.
+nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Sendable {
+    /// Le viseur occupe la carte 9:16, plateau visible autour.
+    case card
+    /// Il occupe l'écran entier — plus de plateau, plus de rails.
+    case fullScreen
+
+    /// Ce qu'un appui sur le bouton de taille produit.
+    var toggled: ComposerSceneCameraSize { self == .card ? .fullScreen : .card }
+
+    /// Le glyphe de ce bouton — il annonce OÙ l'on va, jamais où l'on est.
+    /// Un chevron qui décrirait l'état laisserait deviner ce qu'un appui ferait.
+    var toggleSymbol: String {
+        self == .card
+            ? "arrow.up.left.and.arrow.down.right"
+            : "arrow.down.right.and.arrow.up.left"
+    }
+
+    /// **La croix n'existe qu'en plein écran.** En carte, le plateau reste
+    /// visible et le viseur a déjà ses sorties ; une croix y ferait double
+    /// emploi avec la porte qui l'a armé. En plein écran, il n'y a plus rien
+    /// autour — sans elle, l'écran serait un piège.
+    var showsClose: Bool { self == .fullScreen }
 }

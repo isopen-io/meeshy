@@ -86,6 +86,42 @@ struct ComposerDescriptionLayer: View {
     /// vide et sauterait d'une demi-ligne à chaque retour.
     var fillsAvailableHeight: Bool = false
 
+    /// **Le sélecteur de langue du texte, posé AU-DESSUS de la coche** (#5137,
+    /// directive porteur 2026-09-04).
+    ///
+    /// > « il faut au dessus du check de validation de la description, du
+    /// > contenu, indiquer le sélecteur pour choisir la langue du contenu ! Du
+    /// > coup enlever cela de la ligne canonique ! »
+    ///
+    /// La capsule vivait en queue de la **rangée canonique**
+    /// (`toolRowTrailingAccessory`, #3904). Elle y était arrivée pour une raison
+    /// de DISPOSITION — elle chevauchait la bande de mentions en `.overlay` —
+    /// jamais parce que sa place sémantique y était. Or cette rangée porte ce
+    /// qu'on ATTACHE à un texte ; la langue, elle, le QUALIFIE. Rangée parmi
+    /// sept outils d'attache, elle se lisait comme un huitième.
+    ///
+    /// Elle est donc servie par l'HÔTE et non construite ici : ce calque ne sait
+    /// rien de `documentLanguage`, du portail qui ouvre le sélecteur, ni de la
+    /// mémoire qui le retient. `nil` ⇒ **rien n'est peint** — jamais une
+    /// capsule grisée : un site qui ne sait pas déclarer de langue n'en promet
+    /// aucune (loi 4).
+    var languageAccessory: AnyView?
+
+    /// **Ce que la coche VALIDE, dit à voix haute** (#4890).
+    ///
+    /// Le calque sert désormais DEUX textes — la légende d'un média et le corps
+    /// d'un post — et sa coche s'annonçait « Terminer la description » dans les
+    /// deux. Un lecteur d'écran entendait donc valider un texte pendant qu'il en
+    /// validait un autre : le glyphe `checkmark` ne porte aucune information,
+    /// c'est la phrase qui doit la porter.
+    ///
+    /// > Un libellé JUSTE pour l'usage d'origine devient FAUX au second usage,
+    /// > sans que rien ne rougisse — il reste non vide, traduit, et prononçable.
+    ///
+    /// Le défaut par défaut reste celui de la description : le site historique
+    /// n'a rien à déclarer pour garder ce qu'il avait.
+    var validationLabel: String = ComposerDescriptionCopy.done
+
     @State private var isEditing = false
     @FocusState private var isFocused: Bool
 
@@ -222,6 +258,30 @@ struct ComposerDescriptionLayer: View {
         }
     }
 
+    /// **La coche ne ferme pas : elle LÂCHE LE FOCUS.** C'est la perte de focus
+    /// qui range la zone (`adaptiveOnChange(of: isFocused)`), et lui laisser ce
+    /// seul rôle donne au bouton et au glissement le même chemin — donc le même
+    /// ordre : le clavier part, puis la zone. Fermer ici en plus ferait partir
+    /// les deux ensemble par un geste et dans l'ordre par l'autre.
+    ///
+    /// Sortie de `field` au #5137 : elle y était l'unique enfant de queue du
+    /// `HStack`, elle est désormais le bas d'une COLONNE que la langue coiffe.
+    private var validationCheck: some View {
+        Button {
+            isFocused = false
+        } label: {
+            Image(systemName: "checkmark")
+                .font(MeeshyFont.relative(14).weight(.semibold))
+                // Adaptatif : le calque vit sur le plateau SOMBRE de la surface
+                // de scène ET sur la couche floutée de l'atelier, qui prend la
+                // teinte du fond composé. Une couleur figée « claire »
+                // disparaît sur la seconde.
+                .glassControlForeground()
+                .frame(width: 32, height: 32)
+        }
+        .accessibilityLabel(Text(validationLabel))
+    }
+
     private var field: some View {
         HStack(alignment: .bottom, spacing: 10) {
             TextField(placeholder, text: $text, axis: .vertical)
@@ -234,25 +294,16 @@ struct ComposerDescriptionLayer: View {
                 .focused($isFocused)
                 .accessibilityLabel(Text(placeholder))
 
-            Button {
-                // **La coche ne ferme pas : elle LÂCHE LE FOCUS.** C'est la
-                // perte de focus qui range la zone (voir plus bas), et lui
-                // laisser ce seul rôle donne au bouton et au glissement le même
-                // chemin — donc le même ordre : le clavier part, puis la zone.
-                // Fermer ici en plus ferait partir les deux ensemble par un
-                // geste et dans l'ordre par l'autre.
-                isFocused = false
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(MeeshyFont.relative(14).weight(.semibold))
-                    // Adaptatif : le calque vit sur le plateau SOMBRE de la
-                    // surface de scène ET sur la couche floutée de l'atelier,
-                    // qui prend la teinte du fond composé. Une couleur figée
-                    // « claire » disparaît sur la seconde.
-                    .glassControlForeground()
-                    .frame(width: 32, height: 32)
+            // **La colonne de queue : la langue AU-DESSUS, la coche EN
+            // DESSOUS** (#5137). L'ordre porte le sens du geste — on déclare
+            // dans quelle langue on écrit, PUIS on valide ce qu'on a écrit. Le
+            // même empilement lu de bas en haut donnerait « je valide, ah au
+            // fait c'était en quelle langue » : la langue arriverait après la
+            // décision qu'elle qualifie.
+            VStack(alignment: .trailing, spacing: 6) {
+                if let languageAccessory { languageAccessory }
+                validationCheck
             }
-            .accessibilityLabel(Text(ComposerDescriptionCopy.done))
         }
         .onAppear {
             // Une prise de focus posée dans le tour de boucle de l'insertion est

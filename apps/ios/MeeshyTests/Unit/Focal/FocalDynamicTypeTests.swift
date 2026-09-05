@@ -179,9 +179,21 @@ final class FocalDynamicTypeTests: XCTestCase {
             occurrences(of: ".lineLimit(QuotedReplyPresentation.titleLineLimit)"), 2,
             "Le titre et la ligne de détails tiennent chacun sur UNE ligne — deux éléments, ni plus ni moins."
         )
-        XCTAssertEqual(
+        // **Un COMPTE n'était pas la promesse** (#5103). Cette assertion exigeait
+        // UNE occurrence ; la citation a désormais deux branches d'aperçu — le
+        // flot « auteur : texte » et l'aperçu dédié des mood/story — et les deux
+        // lisent la règle. Le compte tombait donc sur un ajout CONFORME.
+        //
+        // Ce que la garde promet est « aucun budget épelé sur place ». C'est ce
+        // qu'elle vérifie maintenant, et c'est strictement plus fort : un
+        // littéral quelconque la fait rougir, pas seulement `1`.
+        XCTAssertNil(
+            code.range(of: "\\.lineLimit\\([0-9]", options: .regularExpression),
+            "FocalQuotedReplyView.swift épelle un budget de lignes sur place : il vient de `QuotedReplyPresentation`."
+        )
+        XCTAssertGreaterThanOrEqual(
             occurrences(of: ".lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))"), 1,
-            "L'aperçu prend le budget de la peau plate, et lui seul."
+            "L'aperçu prend le budget de la peau plate — au moins une branche doit le lire."
         )
         XCTAssertEqual(QuotedReplyPresentation.titleLineLimit, 1)
         XCTAssertEqual(QuotedReplyPresentation.previewLineLimit(for: .focal), 2)

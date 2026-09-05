@@ -63,7 +63,7 @@ a{color:var(--color-primary)}
 
 .marque{display:flex;align-items:center;gap:var(--space-3)}
 .marque a{display:inline-flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);color:inherit;text-decoration:none;font-size:var(--text-lg);font-weight:var(--font-weight-semibold);letter-spacing:-.01em}
-.marque .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-6);height:var(--space-6);border-radius:var(--radius-md);background:var(--color-primary);color:var(--color-on-primary)}
+.marque .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-6);height:var(--space-6);border-radius:var(--radius-lg);background:var(--color-primary);color:var(--color-on-primary)}
 .marque .tuile svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .marque .retour{display:inline-flex;align-items:center;margin-left:auto;min-height:var(--target-min);font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-text-muted);text-decoration:none}
 

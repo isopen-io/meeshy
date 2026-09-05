@@ -127,7 +127,9 @@ final class FeedViewModelDiscoverabilityTests: XCTestCase {
             type: "REEL",
             location: makePlace(),
             discoverabilityPrecision: .city,
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
@@ -146,7 +148,9 @@ final class FeedViewModelDiscoverabilityTests: XCTestCase {
             content: "Concert",
             type: "REEL",
             location: makePlace(),
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         XCTAssertNil(queue.enqueuePostMediaCalls.first?.discoverabilityPrecision)

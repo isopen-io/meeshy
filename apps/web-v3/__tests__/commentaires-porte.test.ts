@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { COMMENTAIRES_SERVIS } from '@/app/connecte/commentaires-porte';
+import { COMMENTAIRE_POSTE, COMMENTAIRES_SERVIS } from '@/app/connecte/commentaires-porte';
 
 /**
  * CE QUE CES TÉMOINS ÉPROUVENT — la PORTE de `/post/:id` et l'écran qu'elle
@@ -327,3 +327,98 @@ describe('la porte de /post/:id', () => {
     expect(html).toContain('La revue de mars est prête.');
   });
 });
+
+describe('le POST de /post/:id — écrire, en Post/Redirect/Get (#5091)', () => {
+  const posteur = (contenu: string, avecJeton = true): Request =>
+    new Request('https://meeshy.test/post/p1', {
+      method: 'POST',
+      headers: {
+        ...(avecJeton ? { cookie: COOKIE } : {}),
+        origin: 'https://meeshy.test',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ contenu }),
+    });
+
+  it('poste le contenu à la passerelle et redirige — ?commente porte le compte rendu', async () => {
+    const { recuperer, vus } = passerelle({
+      '/posts/p1/comments': () => json({ success: true, data: { id: 'k-neuf' } }),
+    });
+
+    const reponse = await COMMENTAIRE_POSTE({ requete: posteur('Très bel endroit'), id: 'p1', recuperer });
+
+    expect(reponse.status).toBe(303);
+    expect(reponse.headers.get('location')).toBe('/post/p1?commente');
+    const envoi = vus.find((appel) => appel.includes('/posts/p1/comments'));
+    expect(envoi).toBeDefined();
+  });
+
+  it('refuse un contenu VIDE sans appeler la passerelle — un geste sans dire', async () => {
+    const { recuperer, vus } = NOMINALE();
+
+    const reponse = await COMMENTAIRE_POSTE({ requete: posteur('   '), id: 'p1', recuperer });
+    const html = await reponse.text();
+
+    expect(vus.filter((appel) => appel.includes('/comments') && !appel.includes('?'))).toEqual([]);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('Écrivez quelque chose');
+  });
+
+  it('un refus de la passerelle re-sert l’écran, saisie TENUE et motif dit', async () => {
+    // Le harnais ne voit pas la MÉTHODE : le GET de la re-serve se distingue
+    // par sa chaîne de requête (`?limit`), servi AVANT la clé du POST.
+    const { recuperer } = passerelle({
+      '/auth/me': () =>
+        json({ success: true, data: { id: MOI, displayName: 'Moi', systemLanguage: 'fr', regionalLanguage: 'es' } }),
+      '/comments?': () => json({ success: true, data: [commentaireServi()], pagination: { limit: 30, hasMore: false } }),
+      '/posts/p1/comments': () => json({ success: false, error: { message: 'fermé' } }, 403),
+      '/api/v1/posts/': () => json({ success: true, data: publicationServie() }),
+    });
+
+    const reponse = await COMMENTAIRE_POSTE({ requete: posteur('Un texte précieux'), id: 'p1', recuperer });
+    const html = await reponse.text();
+
+    expect(reponse.status).toBe(200);
+    expect(html).toContain('Un texte précieux');
+    expect(html).toContain('role="alert"');
+  });
+
+  it('un POST sans jeton reçoit l’invitation — rien ne part vers la passerelle', async () => {
+    const { recuperer, vus } = NOMINALE();
+
+    const reponse = await COMMENTAIRE_POSTE({ requete: posteur('Coucou', false), id: 'p1', recuperer });
+
+    expect(vus).toEqual([]);
+    expect(await reponse.text()).toContain('returnUrl');
+  });
+
+  it('un POST d’origine ÉTRANGÈRE est refusé avant tout', async () => {
+    const { recuperer, vus } = NOMINALE();
+    const etranger = new Request('https://meeshy.test/post/p1', {
+      method: 'POST',
+      headers: { cookie: COOKIE, origin: 'https://voleur.test', 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ contenu: 'x' }),
+    });
+
+    const reponse = await COMMENTAIRE_POSTE({ requete: etranger, id: 'p1', recuperer });
+
+    expect(vus).toEqual([]);
+    expect(reponse.status).not.toBe(303);
+  });
+
+  it('au retour de la redirection, le GET dit « publié » et sert le formulaire', async () => {
+    const { recuperer } = NOMINALE();
+
+    const reponse = await COMMENTAIRES_SERVIS({
+      requete: requete('https://meeshy.test/post/p1?commente'),
+      id: 'p1',
+      recuperer,
+    });
+    const html = await reponse.text();
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Commentaire publié');
+    expect(html).toContain('name="contenu"');
+  });
+});
+

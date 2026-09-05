@@ -747,12 +747,36 @@ const noSourceFileOfTheV3IsGitIgnored = (world) =>
  * si un script invoqué par ci.yml la nomme, ou si elle appartient au projet
  * qu'il lance — `pages` par sa liste, `chaines` par le complément de cette même
  * liste (`testIgnore`), qui est ce qui fait entrer d'office toute suite neuve.
+ *
+ * **CE CONTRÔLE A ÉTÉ AVEUGLE UNE CINQUIÈME FOIS, ET C'EST SA PROPRE LECTURE
+ * QUI L'AVEUGLAIT** (2026-09-04, #5093). `SUITES_DE_PAGE` a cessé d'être un
+ * littéral le jour où `SUITES_QUI_IMPORTENT_LA_LOI` s'est mise à RELEVER les
+ * suites sur le DISQUE — une amélioration, et la bonne. Mais le `matchAll` ci-
+ * dessous ne voit d'un `[...SPREAD, 'a.spec.ts', 'b.spec.ts']` que les deux
+ * littéraux : il croyait donc que `pages` ne contenait QUE ces deux-là, et que
+ * `chaines`, son complément, ramassait tout le reste. Il ramassait, en vrai,
+ * neuf suites de MOINS — `v3-nouvelle-conversation`, `v3-nouveau-lien` et les
+ * sept `*-a11y` que ci.yml ne nommait pas —, et la garde les déclarait
+ * atteintes.
+ *
+ * **UN CONTRÔLE NE DOIT PAS DEVINER CE QU'IL NE PEUT PAS LIRE.** Il ne
+ * reconstruit pas la règle de `playwright.config.ts` — ce serait la jumelle qui
+ * diverge au premier changement de critère. Il DÉTECTE que la liste est
+ * calculée, et cesse alors de répartir les suites entre les deux projets :
+ * quand la frontière lui est illisible, la seule couverture qu'il sait prouver
+ * est celle des DEUX projets lancés EN ENTIER. C'est aussi la seule qui ne
+ * dépende pas de ce que cette garde arrive à lire — donc la seule qui survive
+ * au prochain raffinement du critère.
  */
 const everyV3SuiteIsLaunched = (world) => {
   const listeDePages = /const SUITES_DE_PAGE\s*=\s*\[([^\]]*)\]/.exec(world.playwright);
   if (listeDePages === null) {
     return ["playwright.config.ts ne déclare plus SUITES_DE_PAGE : la couverture par projet n'est plus calculable"];
   }
+  // La liste est-elle ENTIÈREMENT lisible ici ? Un `...` dit que non : une
+  // partie du projet `pages` est relevée ailleurs, et le COMPLÉMENT que
+  // `chaines` exécute ne se calcule plus depuis ce fichier.
+  const listeCalculee = listeDePages[1].includes('...');
   const suitesDePage = new Set(
     [...listeDePages[1].matchAll(/([A-Za-z0-9._-]+\.spec\.ts)/g)].map((m) => m[1]),
   );
@@ -772,22 +796,47 @@ const everyV3SuiteIsLaunched = (world) => {
   );
 
   const atteintes = new Set();
-  for (const [, corps] of lances) {
+  const corpsLances = lances.map(([, corps]) => corps);
+  for (const corps of corpsLances) {
     for (const suite of world.suites) {
       if (corps.includes(suite)) atteintes.add(suite);
     }
-    if (/--project=pages/.test(corps)) {
-      for (const suite of world.suites) if (suitesDePage.has(suite)) atteintes.add(suite);
-    }
-    if (/--project=chaines/.test(corps)) {
-      for (const suite of world.suites) if (!suitesDePage.has(suite)) atteintes.add(suite);
-    }
+  }
+
+  const lancePages = corpsLances.some((corps) => /--project=pages/.test(corps));
+  const lanceChaines = corpsLances.some((corps) => /--project=chaines/.test(corps));
+
+  if (listeCalculee) {
+    // Frontière illisible : les deux projets ensemble couvrent la totalité, et
+    // rien de moins ne se prouve depuis ce fichier.
+    if (lancePages && lanceChaines) for (const suite of world.suites) atteintes.add(suite);
+  } else {
+    if (lancePages) for (const suite of world.suites) if (suitesDePage.has(suite)) atteintes.add(suite);
+    if (lanceChaines) for (const suite of world.suites) if (!suitesDePage.has(suite)) atteintes.add(suite);
   }
 
   return world.suites
     .filter((suite) => !atteintes.has(suite))
     .map((suite) => `la suite e2e ${suite} n'est lancée par aucune étape de ci.yml`);
 };
+
+// L'IMAGE DE LA V3 NE FIGE AUCUNE VARIABLE PUBLIQUE AU BUILD.
+//
+// Next inline toute variable `NEXT_PUBLIC_*` PRÉSENTE au moment du `next build`
+// — jusque dans le code serveur (mesuré : absente au build, `process.env.NEXT_PUBLIC_API_URL`
+// reste une lecture d'exécution dans `.next/server`, et c'est ce qui permet au
+// compose de la poser). La v3 tient ses deux origines de l'ENVIRONNEMENT du
+// conteneur, staging et prod partageant la même image : un `ARG` ou un `ENV`
+// `NEXT_PUBLIC_*` dans le Dockerfile figerait la valeur d'UN déploiement dans
+// l'image de tous, et la valeur du compose serait ignorée sans qu'aucun témoin
+// ne rougisse. Le legacy vit avec ce piège (placeholders `__RUNTIME_*__`
+// réécrits au démarrage) ; la v3 s'en garde à la source.
+const theV3ImageFreezesNoPublicVariable = (world) =>
+  [...world.dockerfile.matchAll(/^\s*(?:ARG|ENV)\s+(NEXT_PUBLIC_[A-Z0-9_]*)/gm)].map(
+    ([, name]) =>
+      `${V3_DIRECTORY}/Dockerfile déclare ${name} au build : Next l'inlinerait dans l'image et la ` +
+      `valeur du compose serait ignorée`,
+  );
 
 const CHECKS = [
   ['le type-check de la v3 est BLOQUANT', theV3TypeCheckIsBlocking],
@@ -809,6 +858,7 @@ const CHECKS = [
   ['chaque option du dispatch sélectionne un service', everyDispatchOptionSelectsAService],
   ["l'image de la v3 se construit depuis un Dockerfile existant", theV3ImageIsBuiltFromAnExistingDockerfile],
   ["l'image de la v3 ne se construit pas pour le legacy seul", theV3ImageIsNeverBuiltForTheLegacyAlone],
+  ["l'image de la v3 ne fige aucune variable NEXT_PUBLIC_ au build", theV3ImageFreezesNoPublicVariable],
   // Les invariants de ROUTAGE, une fois par déploiement qui sert la zone.
   // Déroulés plutôt que recopiés : c'est la recopie qui avait laissé staging
   // hors surface (#4630), et un troisième déploiement repartirait du même
@@ -818,6 +868,7 @@ const CHECKS = [
     [`${dep.fichier} : le routeur legacy garde son plancher attrape-tout`, routage.theLegacyRouterKeepsItsFloor(dep)],
     [`${dep.fichier} : le conteneur de la v3 est disjoint du legacy`, routage.theV3ContainerIsDisjointFromTheLegacy(dep)],
     [`${dep.fichier} : le service de la v3 déclare ce que son code lit`, routage.theV3ServiceDeclaresWhatItsCodeReads(dep)],
+    [`${dep.fichier} : l'origine publique de la passerelle est joignable par un navigateur`, routage.lOriginePubliqueEstJoignableParUnNavigateur(dep)],
     [`${dep.fichier} : aucun actif servi à la racine n'échappe à la zone`, routage.noRootServedAssetEscapesTheZone(dep)],
     [`${dep.fichier} : la règle ne réclame que des chemins servis`, routage.theRouterClaimsNothingTheZoneDoesNotServe(dep)],
     [`${dep.fichier} : le worker legacy s'efface devant ce que la règle réclame`, routage.leWorkerLegacySEfface(dep)],

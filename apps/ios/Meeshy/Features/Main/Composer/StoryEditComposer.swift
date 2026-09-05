@@ -94,7 +94,7 @@ struct StoryEditComposer: View {
             // fabriquer une seconde source à cette valeur.
             initialVisibility: session.story.visibility ?? PostVisibility.friends.rawValue,
             hydration: .editingStory(session.composer),
-            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, _ in
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, _ in
                 let edit = StoryViewModel.StoryEditContext(
                     postId: session.composer.editingPostId ?? session.story.id,
                     originalMediaIds: session.composer.editingOriginalMediaIds,
@@ -108,6 +108,7 @@ struct StoryEditComposer: View {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    loadedStickerAnimations: loadedStickerAnimations,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,
