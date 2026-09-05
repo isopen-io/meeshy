@@ -131,6 +131,17 @@ const V3_ZONE_PREFIXES = [
   '/feed',
   '/composer',
   '/deconnexion',
+  // `/calls` entre le 2026-09-05 — l'historique des appels (#5108, consultation
+  // seule, aucune pile WebRTC embarquee) : meme marche que les huit ci-dessus,
+  // declaree ICI avant que le routeur ne la reclame (§ 4.4 bis).
+  '/calls',
+  // `/communities` entre le 2026-09-05 — les communautes du lecteur (matrice
+  // ordre 45, L7 : liste, ouverture sur ses conversations, creation). Il etait
+  // servi par `apps/web-v3/app` sans etre ici : exactement le trou que les huit
+  // prefixes du 2026-09-03 ont solde, et que l'invariant garde depuis. Meme
+  // marche que `/calls` juste au-dessus — declarer ICI, DEPLOYER, puis reclamer
+  // au routeur (§ 4.4 bis).
+  '/communities',
 ];
 
 function belongsToV3Zone(pathname) {

@@ -410,6 +410,8 @@ const cadre = (etat: EtatDuChoix): EtatDuFil => ({
   maintenant: etat.maintenant,
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  // Le cadre du CHOIX n'arme aucun contexte : rien ne se répond, rien ne se modifie avant le choix.
+  contexte: null,
   // Le cadre du CHOIX ne sert AUCUN message : il n'y a pas de pièce à ouvrir.
   plein: null,
   profil: null,

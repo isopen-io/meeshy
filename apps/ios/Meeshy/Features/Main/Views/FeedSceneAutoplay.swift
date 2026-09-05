@@ -67,6 +67,11 @@ struct PostSceneCard: View {
     let preferredContentLanguages: [String]
     var onTapPost: ((FeedPost) -> Void)?
 
+    /// **Ce que le doigt fait sur l'IMAGE** — le plein écran, quand l'hôte sait
+    /// le présenter. `nil` ⇒ repli sur `onTapPost`, pour les hôtes qui n'ont pas
+    /// de galerie à ouvrir.
+    var onTapScene: (() -> Void)?
+
     /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un iPad
     /// en colonne large n'étire pas la scène en mur vertical géant). La hauteur
     /// n'est PAS dupliquée en constante : `.aspectRatio` la dérive de la largeur
@@ -76,13 +81,58 @@ struct PostSceneCard: View {
     /// padding horizontal de 16 pt).
     static let maxWidth: CGFloat = 420
 
+    /// **LE PORTEUR de la scène — sans lui, le player sert une COQUILLE.**
+    ///
+    /// Mesuré sur staging le 2026-09-05 : un post composé avec une scène rendait
+    /// une carte de 601 pt entièrement VIDE. Le canvas était pourtant servi
+    /// (`storyEffects` sous `X-Canvas-Caps: 3`, un objet `media` de plan
+    /// `content`), et son fichier téléchargeable (200 sur la route des
+    /// attachements). Rien ne manquait à la donnée.
+    ///
+    /// Ce qui manquait était l'INDEX. `MeeshyScenePlayer` le dit dans son
+    /// propre doc-comment, et la phrase était déjà écrite avant ce lot :
+    ///
+    /// > « Le document dit ce qu'il faut PEINDRE ; il ne dit pas où vivent les
+    /// > pixels. L'adresse des médias vit dans le `StoryItem` qui porte la
+    /// > scène. […] Le résolveur de `makeUIView` y puise en plus son repli
+    /// > distant par `postMediaId`. **Sans porteur, le player sert une
+    /// > coquille** : c'est licite (une scène purement textuelle se peint sans
+    /// > lui) mais un viewer story doit toujours le donner. »
+    ///
+    /// Le viewer story le donne. La carte du FIL, née plus tard, ne le donnait
+    /// pas — et le paramètre ayant une valeur par défaut (`carrier: nil`), rien
+    /// n'a rougi : ni compilation, ni témoin, ni journal.
+    ///
+    /// > **Un défaut de paramètre transforme un oubli en silence.** La phrase
+    /// > qui décrit le mécanisme était là, exacte, au-dessus du type ; c'est le
+    /// > `= nil` de la signature qui a permis de l'ignorer. Une scène de TEXTE
+    /// > se peignait sans porteur, donc l'absence ne se voyait que sur les
+    /// > scènes de MÉDIA — c'est-à-dire sur le cas nominal d'un post-photo.
+    ///
+    /// Le porteur est construit ICI, à partir du post, plutôt que reçu : les
+    /// deux seules choses dont le résolveur a besoin — l'index des médias et le
+    /// canvas — sont exactement ce que le post porte déjà. Le fabriquer chez
+    /// l'appelant aurait donné autant de fabriques que de surfaces.
+    private var carrier: StoryItem {
+        StoryItem(id: post.id,
+                  content: post.content,
+                  media: post.media,
+                  storyEffects: post.storyEffects,
+                  // `timestamp` chez `FeedPost`, `createdAt` chez `StoryItem` :
+                  // deux noms pour la même horloge. Le porteur ne s'en sert
+                  // que pour son identité de lecture, mais lui donner une date
+                  // FABRIQUÉE ferait dater la scène du rendu.
+                  createdAt: post.timestamp)
+    }
+
     var body: some View {
         MeeshyScenePlayer(
             document: document,
             mode: .card,
             sceneIndex: .constant(0),
             isPlaying: .constant(isActive),
-            accentColorHex: accentColor
+            accentColorHex: accentColor,
+            carrier: carrier
         )
         .preferredContentLanguages(preferredContentLanguages)
         .aspectRatio(9.0 / 16.0, contentMode: .fit)
@@ -91,7 +141,16 @@ struct PostSceneCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .reportReelFrame(id: post.id, kind: .scene)
         .contentShape(Rectangle())
-        .onTapGesture { onTapPost?(post) }
+        // **Le doigt sur l'IMAGE ouvre l'image** (directive porteur
+        // 2026-09-05) : « dans la restitution des cards, le touché de l'image
+        // doit afficher en plein écran et non ouvrir les détails du post ».
+        //
+        // Le repli sur `onTapPost` reste, et il n'est pas un vestige : les
+        // hôtes qui montent cette carte SANS pouvoir présenter un plein écran
+        // (l'aperçu d'un repost, une liste de profil) doivent garder un geste
+        // qui mène quelque part. Un tap sans effet serait pire que le mauvais
+        // effet — c'est la loi 4.
+        .onTapGesture { (onTapScene ?? { onTapPost?(post) })() }
     }
 }
 
@@ -118,6 +177,11 @@ struct PostSceneCardContainer: View {
     let accentColor: String
     var onTapPost: ((FeedPost) -> Void)?
 
+    /// **Ce que le doigt fait sur l'IMAGE** — le plein écran, quand l'hôte sait
+    /// le présenter. `nil` ⇒ repli sur `onTapPost`, pour les hôtes qui n'ont pas
+    /// de galerie à ouvrir.
+    var onTapScene: (() -> Void)?
+
     var body: some View {
         PostSceneCard(
             post: post,
@@ -125,7 +189,8 @@ struct PostSceneCardContainer: View {
             isActive: coordinator.activeReelId == post.id,
             accentColor: accentColor,
             preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-            onTapPost: onTapPost
+            onTapPost: onTapPost,
+            onTapScene: onTapScene
         )
         .equatable()
     }
@@ -145,6 +210,11 @@ struct PostSceneSurface: View {
     let accentColor: String
     var onTapPost: ((FeedPost) -> Void)?
 
+    /// **Ce que le doigt fait sur l'IMAGE** — le plein écran, quand l'hôte sait
+    /// le présenter. `nil` ⇒ repli sur `onTapPost`, pour les hôtes qui n'ont pas
+    /// de galerie à ouvrir.
+    var onTapScene: (() -> Void)?
+
     var body: some View {
         if let coordinator {
             PostSceneCardContainer(
@@ -152,7 +222,8 @@ struct PostSceneSurface: View {
                 post: post,
                 document: document,
                 accentColor: accentColor,
-                onTapPost: onTapPost
+                onTapPost: onTapPost,
+                onTapScene: onTapScene
             )
         } else {
             // Sans coordinateur, la scène ne fabrique pas une élection que
@@ -163,7 +234,8 @@ struct PostSceneSurface: View {
                 isActive: false,
                 accentColor: accentColor,
                 preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                onTapPost: onTapPost
+                onTapPost: onTapPost,
+                onTapScene: onTapScene
             )
             .equatable()
         }

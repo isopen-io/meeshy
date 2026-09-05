@@ -37,6 +37,14 @@ import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 
 import { stripComments } from '../../routes/__tests__/response-schema-sweep';
+import {
+  datamodelReel,
+  construireIndexDesRelations,
+  estUneRelation,
+  modeleCible,
+  modeleDuDelegue,
+  type IndexDesRelations,
+} from './prisma-relation-fields';
 
 const ROUTES_DIR = join(__dirname, '../../routes');
 
@@ -122,6 +130,141 @@ export function scanBareIncludes(source: string, file: string): ReadonlyArray<Ba
   }
 
   return sites;
+}
+
+/**
+ * #4888 — la SECONDE forme d'une relation embarquée ENTIÈRE : `select: {
+ * <relation>: true }` charge exactement la même relation complète, mais
+ * `select` peut aussi désigner un SCALAIRE (`select: { translations: true }`
+ * sur `Message`, un `Json`) — `include`, lui, ne peut désigner qu'une
+ * relation, Prisma refuse un scalaire là. Distinguer les deux exige de
+ * connaître le MODÈLE interrogé, jamais le seul nom du champ.
+ *
+ * Portée assumée : la résolution part d'un appel `prisma.<délégué>.<méthode>(`
+ * littéral — ni `tx.<délégué>.` (transactions interactives), ni un client
+ * réassigné sous un autre nom. `services/gateway/src/routes/` n'emploie aucune
+ * transaction interactive (mesuré : zéro `async (tx`), donc cette portée
+ * couvre le répertoire balayé en entier ; l'élargir à `tx.` se ferait le jour
+ * où un premier appelant l'exigerait, avec son propre témoin RED.
+ */
+function matchParen(source: string, openIndex: number): number {
+  let depth = 0;
+  for (let i = openIndex; i < source.length; i++) {
+    if (source[i] === '(') depth++;
+    else if (source[i] === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return source.length - 1;
+}
+
+/**
+ * Les occurrences `select:` / `include:` directement au premier niveau d'un
+ * corps d'arguments de requête (`body` = l'intérieur de l'objet options d'un
+ * appel Prisma, OU l'intérieur de la config d'une relation imbriquée), dans
+ * le contexte du modèle `model` — c'est ce contexte qui descend à chaque
+ * relation traversée.
+ */
+function scanForSelectInclude(
+  code: string,
+  body: string,
+  bodyStartAbs: number,
+  model: string,
+  file: string,
+  sites: BareIncludeSite[],
+  index: IndexDesRelations
+): void {
+  const re = /\b(select|include)\s*:\s*\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    if (braceDepthAt(body, 0, m.index) !== 0) continue;
+    const kind = m[1] as 'select' | 'include';
+    const openIdx = m.index + m[0].length - 1;
+    const closeIdx = matchBrace(body, openIdx);
+    const fieldsBody = body.slice(openIdx + 1, closeIdx);
+    walkFieldsObject(code, fieldsBody, bodyStartAbs + openIdx + 1, model, kind, file, sites, index);
+  }
+}
+
+/**
+ * Les propriétés DIRECTES d'un corps `select: {…}` / `include: {…}`. Une
+ * valeur `true` sur un champ RELATION, sous `select`, est le motif recherché
+ * (`include` ne peut pas porter cette ambiguïté). Une valeur objet désigne
+ * TOUJOURS une relation (ou `_count`, sans modèle cible) — on y redescend
+ * `scanForSelectInclude` avec le modèle CIBLE de la relation, jamais avec
+ * `model` inchangé.
+ */
+function walkFieldsObject(
+  code: string,
+  body: string,
+  bodyStartAbs: number,
+  model: string,
+  kind: 'select' | 'include',
+  file: string,
+  sites: BareIncludeSite[],
+  index: IndexDesRelations
+): void {
+  const re = /([A-Za-z_$][\w$]*)\s*:\s*(true\b|\{)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    if (braceDepthAt(body, 0, m.index) !== 0) continue;
+    const key = m[1];
+
+    if (m[2] === 'true') {
+      if (kind === 'select' && estUneRelation(index, model, key)) {
+        sites.push({ file, line: lineOf(code, bodyStartAbs + m.index), relation: key });
+      }
+      continue;
+    }
+
+    if (key === '_count') continue;
+    const target = modeleCible(index, model, key);
+    if (!target) continue;
+
+    const openIdx = m.index + m[0].length - 1;
+    const closeIdx = matchBrace(body, openIdx);
+    const nestedBody = body.slice(openIdx + 1, closeIdx);
+    scanForSelectInclude(code, nestedBody, bodyStartAbs + openIdx + 1, target, file, sites, index);
+  }
+}
+
+/**
+ * Balaie `source` pour `select: { <relation>: true }`, résolu PAR MODÈLE
+ * depuis chaque appel `prisma.<délégué>.<méthode>({ … })` qu'il contient.
+ */
+export function scanBareSelects(source: string, file: string, index: IndexDesRelations): ReadonlyArray<BareIncludeSite> {
+  const code = stripComments(source);
+  const sites: BareIncludeSite[] = [];
+  const callRe = /\bprisma\.([A-Za-z_$][\w$]*)\.[A-Za-z_$][\w$]*\s*\(/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = callRe.exec(code)) !== null) {
+    const model = modeleDuDelegue(index, m[1]);
+    if (!model) continue;
+
+    const openParen = m.index + m[0].length - 1;
+    const closeParen = matchParen(code, openParen);
+
+    let i = openParen + 1;
+    while (i < closeParen && /\s/.test(code[i])) i++;
+    if (code[i] !== '{') continue;
+
+    const openBrace = i;
+    const closeBrace = matchBrace(code, openBrace);
+    if (closeBrace > closeParen) continue;
+
+    const argsBody = code.slice(openBrace + 1, closeBrace);
+    scanForSelectInclude(code, argsBody, openBrace + 1, model, file, sites, index);
+  }
+
+  return sites;
+}
+
+export function sweepBareSelects(routesDir: string, index: IndexDesRelations): ReadonlyArray<BareIncludeSite> {
+  return walk(routesDir).flatMap((full) =>
+    scanBareSelects(readFileSync(full, 'utf8'), relative(routesDir, full), index)
+  );
 }
 
 function walk(dir: string, acc: string[] = []): string[] {
@@ -311,5 +454,137 @@ describe('Le balayage LIT bien le répertoire — sans quoi il passerait au vert
     ]) {
       expect(readFileSync(join(ROUTES_DIR, rel), 'utf8').length).toBeGreaterThan(500);
     }
+  });
+});
+
+// =============================================================================
+// #4888 — la SECONDE forme, `select: { <relation>: true }`, résolue PAR
+// MODÈLE. C'est elle qui a laissé partir l'enveloppe E2EE de #4392
+// (`messages-pin.ts`, avant son correctif) : `select: { attachments: true }`
+// charge la relation ENTIÈRE — 51 clés, chiffrement compris — exactement
+// comme `include: { attachments: true }`, mais sous une forme que le
+// balayage ci-dessus, qui ne cherche QUE `include:`, ne voit pas.
+// =============================================================================
+
+const INDEX_DES_RELATIONS: IndexDesRelations = construireIndexDesRelations(datamodelReel());
+
+describe('Le datamodel réel est lisible depuis ce balayage', () => {
+  it('expose au moins un modèle, sans quoi tout le reste serait vert à vide', () => {
+    // Le client Prisma est stubbé par jest.config.json pour le spécificateur
+    // `@meeshy/shared/prisma/client` ; `datamodelReel()` le contourne par un
+    // chemin RELATIF vers le client généré. Si ce chemin se rompt (client
+    // déplacé, régénéré ailleurs), ce témoin tombe plutôt que de laisser
+    // silencieusement `estUneRelation` répondre `false` à tout — la même
+    // leçon que « une garde négative meurt en silence quand son terrain
+    // disparaît » appliquée au DATAMODEL plutôt qu'au répertoire de routes.
+    expect(datamodelReel().length).toBeGreaterThan(50);
+  });
+});
+
+describe("Aucun select: { relation: true } sous services/gateway/src/routes/ (#4888)", () => {
+  it("n'introduit aucun site — l'inventaire est VIDE, contrairement à celui d'`include:`", () => {
+    // #4392 a corrigé le seul site connu (`messages-pin.ts`) avant même que
+    // ce balayage n'existe : l'extension se pose donc sur un terrain déjà
+    // propre, la seule situation où un cliquet ne fige pas une dette au
+    // passage (§ tête de fichier de l'issue).
+    expect(sweepBareSelects(ROUTES_DIR, INDEX_DES_RELATIONS)).toEqual([]);
+  });
+});
+
+describe('Le balayage de `select:` sait discriminer PAR MODÈLE', () => {
+  it('ne signale RIEN pour un scalaire JSON `select: { translations: true }` sur Message', () => {
+    // Le cas que l'issue nomme explicitement : `translations` est un `Json`
+    // sur `Message` (et sur `Post`) — un balayage par simple NOM le
+    // confondrait avec une relation portant le même nom ailleurs.
+    const source = `
+      const rows = await prisma.message.findMany({
+        where: { conversationId },
+        select: { id: true, translations: true }
+      });`;
+
+    expect(scanBareSelects(source, 'x.ts', INDEX_DES_RELATIONS)).toEqual([]);
+  });
+
+  it('signale `select: { attachments: true } sur Message — le défaut réel de #4392, avant son correctif', () => {
+    const source = `
+      const rows = await prisma.message.findMany({
+        where: { conversationId },
+        select: { id: true, translations: true, attachments: true }
+      });`;
+
+    expect(scanBareSelects(source, 'x.ts', INDEX_DES_RELATIONS)).toMatchObject([
+      { file: 'x.ts', relation: 'attachments' },
+    ]);
+  });
+
+  it('ne signale rien quand la relation porte sa propre projection nommée (la forme corrigée de #4392)', () => {
+    const source = `
+      const rows = await prisma.message.findMany({
+        select: { id: true, attachments: { select: attachmentForwardPreviewSelect } }
+      });`;
+
+    expect(scanBareSelects(source, 'x.ts', INDEX_DES_RELATIONS)).toEqual([]);
+  });
+
+  it('_count: { select: { … } } n\'a pas de modèle cible — jamais confondu avec une relation nue', () => {
+    const source = `
+      const rows = await prisma.message.findMany({
+        select: { id: true, _count: { select: { reactions: true } } }
+      });`;
+
+    expect(scanBareSelects(source, 'x.ts', INDEX_DES_RELATIONS)).toEqual([]);
+  });
+
+  it('redescend le MODÈLE CIBLE dans une relation imbriquée : un scalaire du modèle parent n\'est pas celui de l\'enfant', () => {
+    // `Message.attachments` cible `MessageAttachment`, qui porte SA PROPRE
+    // relation `reactions` (vers `AttachmentReaction`) — un select nu dessus,
+    // sous la config de la relation, doit être vu, à la ligne où IL vit.
+    const source = `
+      const rows = await prisma.message.findMany({
+        select: {
+          attachments: {
+            select: { id: true, reactions: true }
+          }
+        }
+      });`;
+
+    const sites = scanBareSelects(source, 'x.ts', INDEX_DES_RELATIONS);
+    expect(sites).toHaveLength(1);
+    expect(sites[0].relation).toBe('reactions');
+  });
+
+  it('un délégué Prisma inconnu (faute de frappe, ou pas un modèle) ne fait pas lever le balayage', () => {
+    const source = `
+      const rows = await prisma.ceModeleNexistePas.findMany({
+        select: { attachments: true }
+      });`;
+
+    expect(scanBareSelects(source, 'x.ts', INDEX_DES_RELATIONS)).toEqual([]);
+  });
+
+  it("ne rapporte pas un select: {relation: true} cité en commentaire", () => {
+    const source = `
+      // ancien code : select: { attachments: true }
+      const rows = await prisma.message.findMany({
+        select: { attachments: { select: attachmentForwardPreviewSelect } }
+      });`;
+
+    expect(scanBareSelects(source, 'x.ts', INDEX_DES_RELATIONS)).toEqual([]);
+  });
+});
+
+describe('Mutation (#4888 critère 4) — le défaut réintroduit sur le vrai fichier tombe, nommé', () => {
+  it('`select: { attachments: true }` réintroduit sur messages-pin.ts fait tomber le balayage', () => {
+    const original = readFileSync(join(ROUTES_DIR, 'conversations/messages-pin.ts'), 'utf8');
+    const muté = original.replace(
+      'attachments: { select: attachmentForwardPreviewSelect }',
+      'attachments: true'
+    );
+    // La mutation doit avoir PRIS — sans quoi ce témoin passerait pour la
+    // mauvaise raison (le texte ciblé aurait changé sans que ce test suive).
+    expect(muté).not.toBe(original);
+
+    const sites = scanBareSelects(muté, 'conversations/messages-pin.ts', INDEX_DES_RELATIONS);
+    expect(sites).toMatchObject([{ file: 'conversations/messages-pin.ts', relation: 'attachments' }]);
   });
 });

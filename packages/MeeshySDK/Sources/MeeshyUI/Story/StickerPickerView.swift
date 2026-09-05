@@ -43,10 +43,27 @@ public struct StickerPickerView: View {
     /// la plateforme LIT, jamais un sticker jumeau.
     public var onLocationTemplateSelected: (SharedPlace, StickerTemplate) -> Void
 
-    /// **La NATURE choisie** (#5012) — elle remplace l'onglet courant : la
-    /// famille n'est plus un état, c'est une section de la liste.
-    @State var selectedNature: StickerPaletteNature = .sticker
+    /// **L'ONGLET choisi** (directive porteur 2026-09-05) — il remplace
+    /// `selectedNature`, l'interrupteur à deux positions de #5012.
+    ///
+    /// La nature répondait à « qu'est-ce que c'est ? » ; l'onglet répond à
+    /// « qu'est-ce que je cherche ? », question qui vient AVANT. Le
+    /// raisonnement complet vit dans `StickerSheetTab`, avec ce que le
+    /// remplacement corrige : dix-huit sections toutes également lointaines,
+    /// où la deuxième visite coûtait autant que la première.
+    @State var selectedTab: StickerSheetTab = .search
+    /// Les mots tapés dans l'onglet RECHERCHE — ils filtrent le catalogue à la
+    /// frappe (loi 7), et ne survivent pas à la fermeture : une recherche est
+    /// une intention du moment, pas une préférence.
+    @State var searchQuery: String = ""
     @Environment(\.colorScheme) var colorScheme
+    /// **Fermer la feuille.** `@Environment(\.dismiss)` plutôt qu'un rappel au
+    /// contrat : les trois hôtes la présentent en `.sheet`, et un rappel de
+    /// plus aurait obligé chacun à redire ce que le système sait déjà faire.
+    @Environment(\.dismiss) var dismiss
+    /// Les favoris et les récents. Le magasin est un STORE DE PRÉFÉRENCES,
+    /// donc SDK — il retient, il rend, il borne, il ne décide de rien.
+    @ObservedObject var usage: StickerUsageStore = .shared
 
     /// V3-5 — « Mes stickers ». `nil` tant que l'app n'a pas injecté
     /// `.storyStickerLibraryProvided()`.
@@ -61,6 +78,12 @@ public struct StickerPickerView: View {
     /// la tâche l'a consommée, sinon rouvrir l'onglet re-détourerait la
     /// même image.
     @State var liftSelection: PhotosPickerItem?
+    /// Le sélecteur de lieu, injecté par l'app (`storyLocationPickerProvided`).
+    /// `nil` ⇒ la puce « Ma position… » n'est pas peinte : elle ouvrirait le
+    /// vide, et un chip qui ouvre le vide est pire que pas de chip.
+    @Environment(\.storyLocationPicker) var storyLocationPicker
+    /// La feuille du sélecteur est-elle ouverte ? (2026-09-05)
+    @State var showsPlacePicker = false
     @State var places: [SharedPlace] = []
     @State var selectedPlaceIndex: Int = 0
     /// L'instant lu à l'OUVERTURE. Une seule lecture, figée ensuite : relire
@@ -87,21 +110,71 @@ public struct StickerPickerView: View {
                                   hasNearbyPlaces: nearbyPlaces != nil)
     }
 
+    /// **La feuille est PLATE, et elle a l'anatomie de la fiche de création
+    /// audio** (directive porteur 2026-09-05).
+    ///
+    /// > « Il faut refonder la fiche des stickers pour ressembler à la fiche de
+    /// > création d'audio, tout aplatir sur la feuille, des sections sans
+    /// > cadre ! En somme une vue moderne. »
+    ///
+    /// ## Ce que la refonte retire, et pourquoi ça se voyait
+    ///
+    /// Le contenu vivait dans une CARTE — `.padding(16)` + `.ultraThinMaterial`
+    /// + un rayon de 16 — posée à l'intérieur d'une feuille qui a déjà son
+    /// propre fond et son propre arrondi. Deux boîtes concentriques, dont
+    /// l'intérieure rognait seize points de chaque côté d'un écran qui n'en a
+    /// que 402, et dont les coins arrondis répétaient ceux de la feuille à
+    /// quelques points près. Le contenu paraissait FLOTTER dans une fenêtre
+    /// plutôt que d'occuper l'écran.
+    ///
+    /// > Une carte à l'intérieur d'une feuille n'ajoute aucune information : la
+    /// > feuille dit déjà « ceci est un calque au-dessus ». Elle ne fait que
+    /// > répéter la frontière, et facturer la répétition en largeur.
+    ///
+    /// Les en-têtes de section perdent leur `.ultraThinMaterial` et leur
+    /// épinglage : un titre encadré au-dessus d'une grille encadrée dans une
+    /// carte encadrée fait trois cadres pour une seule chose à lire. Ce qui
+    /// sépare deux sections est désormais l'ESPACE — `MeeshySpacing.xxl` — et
+    /// la graisse du titre.
+    ///
+    /// ## Ce qu'elle reprend de la fiche audio
+    ///
+    /// Le dégradé pleine feuille (`background`), le défilement unique, la
+    /// respiration de 24 points entre blocs, la marge de 20. C'est
+    /// littéralement l'anatomie d'`AudioPostComposerView` : deux feuilles du
+    /// même composer qui ne se ressemblaient pas obligeaient l'auteur à
+    /// réapprendre où regarder à chaque ouverture (dimension 6).
+    ///
+    /// **Le plafond de 420 pt est parti avec la carte.** Il bornait la liste à
+    /// l'intérieur de son cadre ; sans cadre, c'est la feuille qui borne, et
+    /// elle le fait à la taille de l'écran plutôt qu'à un nombre écrit à la
+    /// main.
     public var body: some View {
-        VStack(spacing: 0) {
-            panelHeader
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-            StickerNatureSwitch(selection: $selectedNature)
-                .padding(.bottom, 8)
-            Divider().opacity(0.15)
-            naturedContent
+        ZStack {
+            background
+            VStack(spacing: 0) {
+                panelHeader
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.md)
+                StickerSheetTabBar(selection: $selectedTab)
+                    .padding(.bottom, MeeshySpacing.sm)
+                tabbedContent
+            }
         }
-        .padding(16)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
+        // **Le sélecteur de position exacte** (2026-09-05). Il est monté ICI,
+        // sur la feuille entière, et non dans la puce : une feuille présentée
+        // depuis une branche conditionnelle disparaît avec elle, et la puce vit
+        // dans un `ScrollView` horizontal que le moindre changement d'état
+        // reconstruit.
+        .sheet(isPresented: $showsPlacePicker) {
+            if let storyLocationPicker {
+                storyLocationPicker.makeView { lieu in
+                    showsPlacePicker = false
+                    adopterLieuChoisi(lieu)
+                }
+            }
+        }
         .task {
             // Une seule lecture de l'horloge, à l'ouverture (cf. doc de type).
             if openedAt == .distantPast { openedAt = clock() }
@@ -109,6 +182,26 @@ public struct StickerPickerView: View {
                 libraryItems = await stickerLibrary.recents()
             }
         }
+    }
+
+    // MARK: - Le fond
+
+    /// **Le même dégradé que la fiche de création audio**, aux mêmes jetons de
+    /// marque. Deux feuilles du même composer qui n'auraient pas le même fond
+    /// se liraient comme deux applications.
+    ///
+    /// `.ignoresSafeArea()` : le dégradé descend sous l'indicateur d'accueil et
+    /// remonte sous la poignée de la feuille, sans quoi une bande du fond
+    /// SYSTÈME apparaîtrait aux deux bouts — précisément le liseré que la
+    /// directive appelle « cadre ».
+    private var background: some View {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [MeeshyColors.indigo950, Color.black.opacity(0.92), MeeshyColors.indigo950.opacity(0.85)]
+                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(0.55)],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
     }
 
     // MARK: - En-tête
@@ -123,16 +216,63 @@ public struct StickerPickerView: View {
     /// iOS 16.0 = le plancher du projet.
     static let sheetSymbolName = "rectangle.portrait.on.rectangle.portrait.angled"
 
+    /// **L'en-tête : le `✕` en verre, puis le logo et le titre — tous à
+    /// GAUCHE** (directive porteur 2026-09-05).
+    ///
+    /// > « Rendre un header propre avec (X) en liquidglass et le titre et logo
+    /// > Stickers à gauche »
+    ///
+    /// ## Le `✕` n'existait pas, et son absence n'était pas une décision
+    ///
+    /// La feuille se fermait par le GLISSEMENT, seul geste offert. Il marche —
+    /// et il est invisible : rien sur l'écran ne dit qu'il existe, et un auteur
+    /// qui ne le connaît pas n'a aucune sortie. Une feuille dont la seule
+    /// fermeture est un geste appris ailleurs est fermée pour qui ne l'a pas
+    /// appris.
+    ///
+    /// ## Pourquoi le titre reste à GAUCHE du `✕`, et non centré
+    ///
+    /// Un titre centré cède la moitié de sa largeur aux deux marges qui
+    /// l'équilibrent, pour une feuille qui n'a qu'UNE action d'en-tête. Groupés
+    /// à gauche, le glyphe, le mot et la croix se lisent dans l'ordre du regard
+    /// et laissent la droite libre — c'est ce que la directive demande, et
+    /// c'est aussi ce qui laisse la place à une action future sans rien
+    /// déplacer.
+    ///
+    /// **`adaptiveGlass` et non `glassEffect`** : l'enrobage du SDK rend le vrai
+    /// Liquid Glass sur iOS 26 et un matériau translucide en dessous. Le
+    /// plancher du projet est iOS 16, et un appel direct ne compilerait pas
+    /// sans une garde de version que ce site n'a pas à porter.
     private var panelHeader: some View {
-        HStack {
+        HStack(spacing: 10) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                    // 32 pt de DESSIN dans une cible de 44 — le plancher
+                    // tactile (dimension 5) porte sur ce que le doigt vise,
+                    // jamais sur ce que l'œil voit.
+                    .frame(width: 32, height: 32)
+                    .adaptiveGlass(in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "sticker.sheet.close",
+                                       defaultValue: "Fermer", bundle: .module))
+
             Image(systemName: Self.sheetSymbolName)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
-            Spacer()
+            Spacer(minLength: 0)
         }
+        // Le titre et le glyphe DISENT la même chose que le bouton qui a ouvert
+        // la feuille ; les fusionner évite à VoiceOver de lire deux éléments
+        // pour un seul en-tête, et le trait dit au rotor que c'en est un.
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Les onglets

@@ -133,4 +133,71 @@ final class ComposerMediaAltDoorTests: XCTestCase {
         XCTAssertTrue(greffe.contains("altsDuComposer=documentMediaAlts.filter{"),
                       "…et la greffe filtre en second rideau ce qui n'est que du blanc.")
     }
+
+    // MARK: - 3. La greffe est posée sur TOUS les sites de remise (2026-09-05)
+
+    /// **Le meuble remet la charge d'accessibilité par DEUX bouches, et une
+    /// seule avait la greffe.**
+    ///
+    /// `MeeshyComposerHost+Surfaces` enveloppe la fermeture qu'il descend à
+    /// l'ATELIER ; `MeeshyComposerHost+Socle.publishStoryScene()` appelle la
+    /// MÊME fermeture lui-même, et y posait `ComposerMediaAccessibility.empty`.
+    /// Une story publiée depuis le socle — le chemin nominal, l'atelier n'étant
+    /// plus monté — partait donc sans une seule légende ni un seul texte
+    /// alternatif, alors que les deux champs s'affichaient et se relisaient.
+    ///
+    /// > **Ouvrir une porte de saisie ne se termine pas à « où est-ce lu ? »**,
+    /// > mais à « **quels sites remettent cette charge, et les ai-je TOUS
+    /// > visités ?** ». La question précédente rendait UN site — celui qui
+    /// > contenait déjà la greffe —, ce qui ressemblait à une réponse complète.
+    ///
+    /// Le témoin compte plutôt qu'il ne nomme : une TROISIÈME bouche, ajoutée
+    /// demain sans greffe, le fera tomber sans qu'on ait à l'inscrire ici.
+    func test_chaqueRemiseDeLaCharge_passeParLaGreffe() throws {
+        let unite = MyStoriesSourceCorpus.strippingComments(try AppSourceGuard.composerHostSource())
+        let remises = occurrences(of: "onPublishAllInBackground(", in: unite)
+        let greffes = occurrences(of: "accessibilityCarryingComposerCaptions(", in: unite)
+            - occurrences(of: "func accessibilityCarryingComposerCaptions(", in: unite)
+
+        XCTAssertGreaterThan(remises, 1,
+                             "Le meuble remet la charge par plusieurs bouches — si ce compte "
+                             + "tombe à 1, relire quelle bouche a disparu avant de croire le vert.")
+        XCTAssertEqual(greffes, remises,
+                       """
+                       \(remises) site(s) appellent `onPublishAllInBackground(` et \(greffes) \
+                       passent par `accessibilityCarryingComposerCaptions(`.
+
+                       Un site qui remet la charge SANS la greffe publie sans les légendes ni les \
+                       textes alternatifs saisis dans le meuble — silencieusement : ni le \
+                       compilateur, ni le schéma, ni le serveur ne s'en plaignent, et l'auteur a \
+                       vu ses deux champs à l'écran.
+                       """)
+    }
+
+    /// **Aucune charge ne part NUE.** Le pendant négatif du compte ci-dessus :
+    /// il tombe sur la forme exacte du défaut, pas seulement sur son nombre.
+    ///
+    /// `.empty` reste légitime comme BASE donnée à la greffe — le meuble n'a
+    /// pas de magasin d'atelier à relayer sur ce chemin. Ce que ce témoin
+    /// interdit est de la remettre TELLE QUELLE en argument de publication.
+    func test_aucuneChargeDAccessibilite_neEstRemiseNue() throws {
+        let unite = compact(
+            MyStoriesSourceCorpus.strippingComments(try AppSourceGuard.composerHostSource()))
+        XCTAssertFalse(unite.contains("ComposerMediaAccessibility.empty,"),
+                       "Une charge remise nue est une charge VIDE : ce qui a été saisi "
+                       + "dans le meuble ne part pas. La base `.empty` se donne à la "
+                       + "greffe (`accessibilityCarryingComposerCaptions(.empty, slides:)`), "
+                       + "jamais au publieur.")
+    }
+
+    private func occurrences(of aiguille: String, in botte: String) -> Int {
+        guard !aiguille.isEmpty else { return 0 }
+        var compte = 0
+        var index = botte.startIndex
+        while let trouve = botte.range(of: aiguille, range: index..<botte.endIndex) {
+            compte += 1
+            index = trouve.upperBound
+        }
+        return compte
+    }
 }

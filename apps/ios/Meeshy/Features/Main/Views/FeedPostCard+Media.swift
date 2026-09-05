@@ -32,8 +32,23 @@ extension FeedPostCard {
             // `fittedMediaHeight`. Le `.frame(height: 220)` qui vivait ici
             // écrasait ce calcul et letterboxait les clips verticaux.
             // L'audio et les documents restent compacts et s'auto-dimensionnent.
-            singleMediaView(media)
-                .contentShape(RoundedRectangle(cornerRadius: 12))
+            //
+            // **La légende s'affiche ICI AUSSI depuis le 2026-09-05.** Elle ne
+            // s'affichait que sur le carrousel (≥ 2 médias) et en plein écran ;
+            // un média SEUL n'en montrait aucune — et c'est le cas d'un post à
+            // canvas, qui n'en a qu'un. L'auteur composait sa légende, la
+            // voyait dans le composer, la retrouvait sur le serveur, et ne la
+            // revoyait plus jamais dans son fil.
+            //
+            // > **Une capacité servie sur deux surfaces de trois ne rougit
+            // > nulle part.** La troisième n'a pas de témoin qui l'attende, et
+            // > celui qui la découvre conclut qu'elle n'a jamais été
+            // > enregistrée — c'est exactement le rapport qu'on a reçu.
+            ZStack(alignment: .bottomLeading) {
+                singleMediaView(media)
+                singleMediaCaption(media)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         } else if mediaList.count > 1 {
             FeedPostCardCarousel(
                 media: mediaList,
@@ -96,6 +111,26 @@ extension FeedPostCard {
     // calcul de ratio des cellules image/vidéo et letterboxait les clips
     // verticaux. L'audio et les documents s'auto-dimensionnent, le prédicat
     // n'avait donc plus d'appelant.
+
+    /// **La légende d'un média SEUL** — même résolveur, même chrome que le
+    /// carrousel (`FeedPostCardCarousel.slide`).
+    ///
+    /// Le dégradé n'existe que SOUS elle : sans légende, rien ne s'assombrit.
+    /// Un voile permanent ferait payer à tous les posts le coût de ceux qui
+    /// parlent.
+    ///
+    /// `SocialMediaCaption.map` reste le juge : pour UN visuel, il retombe sur
+    /// le texte du porteur à défaut de légende propre — et c'est ce repli qui
+    /// est ici indésirable, le texte du post étant DÉJÀ rendu au-dessus du
+    /// média. On ne lit donc que la légende PROPRE.
+    /// **La légende d'un média SEUL** — la MÊME couche que le carrousel et la
+    /// carte de scène (`FeedCaptionOverlay`), donc la même troncature : vingt
+    /// mots et une ellipse. Elle portait son propre chrome jusqu'au
+    /// 2026-09-05, avec un `lineLimit(3)` qui rendait une longueur différente
+    /// selon la largeur et le corps de texte.
+    func singleMediaCaption(_ media: FeedMedia) -> some View {
+        FeedCaptionOverlay(caption: media.caption)
+    }
 
     @ViewBuilder
     func singleMediaView(_ media: FeedMedia) -> some View {

@@ -3,6 +3,7 @@ import { AuthService } from '../../services/AuthService';
 import { PhoneTransferService } from '../../services/PhoneTransferService';
 import { SmsService } from '../../services/SmsService';
 import type { CacheStore } from '../../services/CacheStore';
+import type { AfterResponse } from '../../utils/after-response';
 
 /**
  * Context shared across all auth route modules
@@ -16,6 +17,21 @@ export interface AuthRouteContext {
   cacheStore: CacheStore;
   redis: any;
   prisma: any;
+  /**
+   * Où partent les travaux qui ne conditionnent PAS la réponse (#5216) —
+   * l'e-mail de vérification, l'annonce d'arrivée dans le salon global, la
+   * reprise de la géolocalisation. Absent ⇒ `deferAfterResponse`, c'est-à-dire
+   * `setImmediate` avec sa garde de rejet.
+   *
+   * **C'est la surface HTTP qui décide de différer**, parce qu'elle est la
+   * seule à avoir une réponse à rendre : le service appelé sans requête (seed,
+   * création par un administrateur) exécute les mêmes travaux EN LIGNE.
+   *
+   * Injectable pour que les témoins soient déterministes : un différé leur
+   * ferait mesurer le vide, la tâche n'étant pas encore partie quand
+   * l'assertion tombe.
+   */
+  afterResponse?: AfterResponse;
 }
 
 /**

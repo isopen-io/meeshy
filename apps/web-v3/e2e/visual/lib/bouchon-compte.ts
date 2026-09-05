@@ -5,8 +5,7 @@ import type { NotificationPreference } from '@meeshy/shared/types/preferences';
 import { serviParLAnnuaire } from './bouchon-annuaire';
 import type { Identite } from './bouchon-socket';
 import {
-  AUTRE_CONVERSATION,
-  CONVERSATION_DU_LECTEUR,
+  LIGNES_DE_CONVERSATIONS_SERVIES,
   MEMBRE,
   PAIR_ANGLOPHONE,
   PAIR_HISPANOPHONE,
@@ -1081,59 +1080,27 @@ export const routesDuCompte =
        * Prisme au niveau CONVERSATION (`lastMessageOriginalLanguage`,
        * `lastMessageTranslations` — une carte `{ langue: aperçu }` restreinte au
        * prisme du lecteur) et `userPreferences`, un TABLEAU d'au plus une
-       * entrée (`take: 1` sur `userId`).
+       * entrée (`take: 1` sur `userId`). Les QUATRE lignes (#5164, correction de
+       * revue) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
+       * gestionnaire boucle dessus au lieu de porter le littéral.
+       *
+       * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN
+       * PRODUCTION : `whereClause` exclut les participations dont
+       * `deletedForMe` est posé (`routes/conversations/core-list.ts:176-190`).
+       * `isArchived`, LUI, N'EST PAS FILTRÉ PAR LA PASSERELLE — sa seule
+       * occurrence dans la route est le `select` qui le SERT
+       * (`core-selects.ts:65`, déclaré au contrat wire
+       * `conversationMinimalSchema.userPreferences`). Le bouchon le filtrait,
+       * et ce filtre rendait VERTS onze témoins de `/chats` contre un serveur
+       * qui n'existe pas : c'est exactement le « vert obtenu contre un bouchon
+       * qui ne ressemble pas au serveur ». Écarter l'archivée est le travail
+       * du CLIENT (`lib/api/compte.ts` › `sansArchivees`), et c'est lui que la
+       * suite doit prouver.
        */
       const prefs = (id: string) => [{ isPinned: false, isMuted: false, isArchived: false, ...(etat.preferences.get(id) ?? {}) }];
-      const lignes = [
-        {
-          id: CONVERSATION_DU_LECTEUR.id,
-          identifier: 'lagos',
-          title: CONVERSATION_DU_LECTEUR.titre,
-          type: 'group',
-          memberCount: CONVERSATION_DU_LECTEUR.membres,
-          unreadCount: CONVERSATION_DU_LECTEUR.nonLus,
-          lastMessageAt: new Date(Date.now() - 30 * 60_000).toISOString(),
-          lastMessage: { id: 'm-apercu', content: 'On se cale à 15 h pour la revue ?' },
-          lastMessageOriginalLanguage: 'fr',
-          lastMessageTranslations: null,
-          userPreferences: prefs(CONVERSATION_DU_LECTEUR.id),
-        },
-        {
-          id: AUTRE_CONVERSATION.id,
-          identifier: 'marta',
-          title: AUTRE_CONVERSATION.titre,
-          type: 'direct',
-          memberCount: AUTRE_CONVERSATION.membres,
-          unreadCount: AUTRE_CONVERSATION.nonLus,
-          lastMessageAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
-          lastMessage: { id: 'm-apercu-2', content: AUTRE_CONVERSATION.apercu },
-          lastMessageOriginalLanguage: AUTRE_CONVERSATION.langueOriginale,
-          lastMessageTranslations: AUTRE_CONVERSATION.traductions,
-          userPreferences: prefs(AUTRE_CONVERSATION.id),
-          // L'AUTRE personne du tête-à-tête (§ 12.10.3) : son avatar, dans
-          // `/chats`, ouvre son profil — `homologueDe` l'élit en excluant
-          // `MEMBRE.id` de cette liste.
-          participants: [
-            { userId: PAIR_HISPANOPHONE.id, displayName: PAIR_HISPANOPHONE.nom },
-            { userId: MEMBRE.id, displayName: MEMBRE.nom },
-          ],
-        },
-        /**
-         * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN
-         * PRODUCTION : `whereClause` exclut les participations dont
-         * `deletedForMe` est posé (`routes/conversations/core-list.ts:176-190`).
-         *
-         * `isArchived`, LUI, N'EST PAS FILTRÉ PAR LA PASSERELLE — sa seule
-         * occurrence dans la route est le `select` qui le SERT
-         * (`core-selects.ts:65`, déclaré au contrat wire
-         * `conversationMinimalSchema.userPreferences`). Le bouchon le filtrait,
-         * et ce filtre rendait VERTS onze témoins de `/chats` contre un serveur
-         * qui n'existe pas : c'est exactement le « vert obtenu contre un bouchon
-         * qui ne ressemble pas au serveur ». Écarter l'archivée est le travail
-         * du CLIENT (`lib/api/compte.ts` › `sansArchivees`), et c'est lui que la
-         * suite doit prouver.
-         */
-      ].filter((ligne) => !etat.masquees.has(ligne.id));
+      const lignes = LIGNES_DE_CONVERSATIONS_SERVIES.map((ligne) => ({ ...ligne, userPreferences: prefs(ligne.id) })).filter(
+        (ligne) => !etat.masquees.has(ligne.id),
+      );
 
       json({ success: true, data: lignes, pagination: { total: 7 } });
       return true;

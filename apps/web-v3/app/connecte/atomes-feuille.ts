@@ -44,6 +44,47 @@ export const PASTILLE_DE_LANGUE =
 export const TRACE_DE_FRAPPE = '.frappe{margin:0;font-size:var(--text-sm);font-style:italic;color:var(--color-primary)}';
 
 /**
+ * LES DEUX RACCOURCIS D'EN-TÊTE (`raccourcisEntete`, `espace-vue.ts`) — ce qui
+ * REMPLACE, sur les DEUX écrans qui en dotent la barre d'onglets (`/chats` et
+ * le TABLEAU DE BORD), le rail `position:fixed` d'origine (charte règle 8
+ * b/c). `.entete-chats` met le bloc de titre et les deux raccourcis sur la
+ * même ligne ; `.raccourci` est TERTIAIRE (`--target-min`, règle 7), un
+ * cercle à filet — la même géométrie qu'un rond flottant, jamais
+ * `position:fixed`, donc jamais susceptible de recouvrir quoi que ce soit en
+ * dessous, quelle que soit la longueur du contenu ou la position de
+ * défilement.
+ *
+ * DEUX LECTEURS depuis la revue de #5164 : `/chats` l'a adopté en premier
+ * (le rail y couvrait le pied de l'enveloppe) ; le TABLEAU DE BORD a suivi à
+ * la revue suivante (le même rail, resté `position:fixed` chez lui, couvrait
+ * sa carte de conversation mise en avant dès que la liste sert plus de deux
+ * lignes). Un atome PARTAGÉ, jamais deux déclarations de la même géométrie.
+ */
+export const RACCOURCIS_D_ENTETE =
+  '.entete-chats{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3)}' +
+  '.raccourcis-entete{display:flex;flex:none;gap:var(--space-2);margin-top:var(--space-1)}' +
+  '.raccourci{display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);border:var(--stroke-strong) solid var(--color-border-interactive);color:var(--color-primary)}' +
+  '.raccourci svg{width:var(--glyph);height:var(--glyph)}';
+
+/**
+ * LA PUCE DU PRISME, EN GÉOMÉTRIE — pilule, contour interactif, texte à
+ * l'accent (charte règle 12). DEUX LECTEURS depuis #5164 : le fil
+ * (`fil-feuille.ts`, qui garde son `.puces` — le `<nav>` qui la centre) et la
+ * liste (`liste-feuille.ts`, qui l'aligne à GAUCHE : deux dispositions pour le
+ * même atome, jamais deux déclarations de la pilule elle-même). C'ÉTAIT une
+ * jumelle en germe : le fil la portait seul, et `/chats` en aurait recopié une
+ * SECONDE au premier écran qui la sert à son tour — exactement le motif que
+ * `feuilleQuiMonte` et `MENU_DE_LIGNE`, un cran plus haut dans ce fichier,
+ * existent pour empêcher.
+ *
+ * Le balisage vit à côté, dans `app/connecte/prisme-vue.ts` (`puceDuPrisme`) :
+ * un seul site pour le MOT et pour la FORME, chacun dans son registre.
+ */
+export const PUCE_DU_PRISME =
+  '.puce{display:inline-flex;align-items:center;gap:var(--space-2);margin:0;min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-strong) solid var(--color-border-interactive);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--color-primary)}' +
+  '.puce svg{width:var(--glyph-inline);height:var(--glyph-inline)}';
+
+/**
  * L'APERÇU DU DERNIER MESSAGE — la pastille de langue puis le texte, sur une
  * ligne qui se coupe plutôt qu'elle ne pousse (`min-width:0` + ellipse : sans
  * lui, un aperçu long élargit la ligne au lieu de se tronquer).
@@ -54,8 +95,15 @@ export const TRACE_DE_FRAPPE = '.frappe{margin:0;font-size:var(--text-sm);font-s
  * c'est la seconde raison de paramétrer plutôt que de dégrouper : un `.apercu`
  * nu lui imposerait un `display:flex` et une couleur qu'il n'a pas demandés.
  */
+/**
+ * `color:var(--color-text)` — l'encre PLEINE, jamais `--color-text-muted`
+ * (règle 18, #5164). Un aperçu de conversation n'est pas une précision
+ * secondaire comme une heure ou un compte de participants : c'est le CONTENU
+ * même que le lecteur vient consulter, sur la carte mise en avant comme sur
+ * une ligne plate (`cible/chats.png`).
+ */
 export const apercuDeLigne = (racine: string): string =>
-  `${racine} .apercu{display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-1);min-width:0;font-size:var(--text-base);color:var(--color-text-muted)}` +
+  `${racine} .apercu{display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-1);min-width:0;font-size:var(--text-base);color:var(--color-text)}` +
   `${racine} .apercu .langue{flex:none}` +
   `${racine} .apercu .texte{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}`;
 
@@ -89,6 +137,26 @@ export const feuilleQuiMonte = (classe: string): string =>
   `dialog.${classe}::backdrop{background:var(--color-overlay)}` +
   `dialog.${classe} .poignee{display:block;position:relative;width:100%;height:var(--target-min);margin:0 0 var(--space-2)}` +
   `dialog.${classe} .poignee::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:var(--glyph-large);height:var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-strong)}`;
+
+/**
+ * LE ROND D'UNE EN-TÊTE DE FIL — la cible de 44 px, teintée à l'accent, qui
+ * porte un glyphe et rien d'autre : « Retour », « Médias » (#4525), et
+ * « Partager » depuis #5034.
+ *
+ * ATOME PARAMÉTRÉ, la même raison qu'`avisDEcran` juste en dessous : les deux
+ * premiers corps étaient RECOPIÉS à l'identique dans `FEUILLE_DU_FIL`, et le
+ * troisième arrivait — deux copies se surveillent, trois divergent.
+ *
+ * PARAMÉTRÉ PLUTÔT QUE GROUPÉ, et c'est une MESURE, pas un goût : un sélecteur
+ * groupé (`.fil-tete .retour,.fil-tete .medias,.fil-tete .partager`) vit dans
+ * `FEUILLE_DU_FIL`, que la GALERIE inline pour son propre en-tête — elle
+ * paierait 6 o gzip (9 203 vers 9 209, MESURÉ, pour un plafond dur de 9 216)
+ * une classe qu'elle ne rend jamais, contre la charte règle 7. Chaque écran
+ * n'appelle donc que les ronds qu'il sert.
+ */
+export const rondDEnTete = (classe: string): string =>
+  `.fil-tete .${classe}{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}` +
+  `.fil-tete .${classe} svg{width:var(--glyph);height:var(--glyph)}`;
 
 /**
  * L'AVIS D'UN ÉCRAN — la ligne discrète qui dit ce qui vient d'avoir lieu

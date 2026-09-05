@@ -617,7 +617,44 @@ struct MeeshyComposerHost: View {
     /// éditeur d'alternative textuelle. Le transport existait de bout en bout ;
     /// c'est la SOURCE qui manquait, et l'UI aussi existait, restée dans la peau
     /// de l'atelier plein écran (`MediaAccessibilityPanel` → `ComposerBottomBand`).
+    ///
+    /// **Où cette carte ARRIVE, et où elle n'arrive pas encore** (2026-09-05) :
+    ///
+    /// | canal | format | la carte voyage ? |
+    /// |---|---|---|
+    /// | scène (`publishStoryScene` → `publishStoryInBackground`) | story | **oui**, depuis que la greffe y est posée |
+    /// | document (`publishDocument` → file durable) | **post**, mood | **non** — `ComposerDocumentDraft` n'a pas de champ d'alternative |
+    ///
+    /// Le second est le canal du POST, donc du cas nominal de cet éditeur. Ce
+    /// n'est pas une exemption mais une PERTE nommée et chiffrée : porter
+    /// `mediaAlts` sur les quatre maillons, comme `mediaCaptions` — dont
+    /// `PublishIntent.document` réaligne déjà la carte URL sur l'index de
+    /// `localMedia`. Ce qui manque en amont est l'index OBJET → URL SOURCE, que
+    /// ni `applyContentMedia` (qui nomme sa copie `tmp/<objectId>.<ext>` et ne
+    /// rend rien) ni `slideIdByMediaURL` (qui n'indexe que les FONDS) ne
+    /// fournissent. Détail : `PublishChainCensusTests.absentsDeLaVoieDurable`.
     @State var documentMediaAlts: [String: String] = [:]
+
+    /// **`URL source → identifiant d'objet`, le chaînon qui manquait à l'alt**
+    /// (2026-09-05).
+    ///
+    /// `documentMediaAlts` est keyé par identifiant d'OBJET — c'est ce que
+    /// l'éditeur de scène édite, et c'est ce que le chemin STORY sait traduire
+    /// en `postMediaId` après l'upload (`StoryMediaTextMapping.serverKeyed`).
+    /// Le chemin DURABLE, lui, travaille par POSITION dans `localMedia`,
+    /// c'est-à-dire par URL SOURCE : `PublishIntent.document` aligne déjà les
+    /// légendes ainsi.
+    ///
+    /// Les deux clés sont justes à leur étage ; ce qui manquait était le pont.
+    /// Il ne peut venir que d'`applyContentMedia`, seul site à connaître les
+    /// deux bouts — il frappe l'`objectId` ET copie la source. Il le REND
+    /// désormais, et cette carte l'accumule.
+    ///
+    /// > **Une carte n'est pas un cache** : celle-ci est la mémoire du
+    /// > BROUILLON. Le modèle de scène ne peut pas la tenir — un objet
+    /// > remplacé, un fond rechangé, et il ne saurait plus de quel fichier il
+    /// > est né.
+    @State var documentMediaObjectIdBySource: [URL: String] = [:]
 
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
@@ -655,16 +692,17 @@ struct MeeshyComposerHost: View {
     /// séparés est ce qui empêche une bande vide d'occuper les ≈ 170 pt que
     /// l'encastrement vient de libérer.
     @State var requestedSceneBand: ComposerSceneBand?
+    // **`trimSourceDurations` est parti avec la bande de rognage**
+    // (2026-09-05). Il indexait, par objet, la durée MESURÉE du fichier source
+    // — la seule valeur qui laisse un rognage se défaire. Son unique écrivain
+    // était `mesurerLaSource`, qui vivait dans `MeeshyComposerHost+EditBands`
+    // et n'existe plus : la première vue n'édite plus rien.
+    //
+    // La mesure n'est pas perdue, elle a changé de propriétaire :
+    // `ComposerObjectEditorView.mediaSourceDuration` la refait pour l'objet
+    // ouvert, et c'est le bon niveau — la durée d'une source ne sert qu'à
+    // l'écran qui la borne.
 
-    /// **La durée du fichier source, MESURÉE, par objet (#4082).**
-    ///
-    /// Le modèle ne la porte pas de façon fiable : une vidéo a
-    /// `intrinsicDuration`, un son n'a que `duration` — et celle-ci DEVIENT la
-    /// durée de la fenêtre au premier rognage. Rouvrir la bande sur cette
-    /// valeur montrerait une source rétrécie à chaque passage, et la queue
-    /// coupée deviendrait irrécupérable : un rognage qui ne se défait pas n'est
-    /// pas un rognage. Seul le fichier dit la vérité, et il faut la lui demander.
-    @State var trimSourceDurations: [String: Double] = [:]
 
     /// **La couche d'écriture de la description, par-dessus l'atelier** (#4124).
     /// `false` ⇒ rien n'est monté : la scène occupe tout ce que le chrome lui

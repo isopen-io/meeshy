@@ -113,9 +113,15 @@ final class LocalizationConsistencyTests: XCTestCase {
         // fichier, et pas une ligne avant : la remplaçante était déjà là, si
         // bien qu'aucun écran n'est sorti du cliquet entre les deux lots.
         "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
-        // 225i — the registration step flow: the first screens a new account ever
-        // sees, and the largest single-file gap in the catalog when it was pinned.
-        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",
+        // 225i — the registration flow: the first screen a new account ever sees,
+        // and the largest single-file gap in the catalog when it was pinned.
+        //
+        // #5218 — le wizard en huit étapes est remplacé par UN écran. Le cliquet
+        // suit le CODE, pas le chemin (#4084) : sans ces deux lignes, les clés
+        // de l'inscription sortiraient de la garde au moment même où elles sont
+        // réécrites — et rien ne rougirait.
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupView.swift",
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupViewModel.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
         "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
         // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles
@@ -159,7 +165,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/Views/OnboardingView.swift",  // 16
+        // #5218 — `OnboardingView` (le carrousel de cinq pages, 16 clés) est
+        // remplacé par `WelcomeView`. Épinglé dès la bascule, pour la même
+        // raison qu'au #4084 : un écran qui remplace un écran épinglé n'a
+        // aucune raison de sortir du cliquet.
+        "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
         "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
@@ -186,7 +196,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
-        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
         // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
@@ -413,7 +422,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         // sinon les deux cliquets ci-dessous cesseraient de les voir — la
         // dérive silencieuse que #4425 décrit pour `StoryViewModel`.
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",  // 2
-        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingFlowView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",  // 6
@@ -472,13 +480,26 @@ final class LocalizationConsistencyTests: XCTestCase {
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
     /// simply a missing translation. Keep this list as short as the truth allows.
-    private static let untranslatableKeys: Set<String> = [
-        // 225i — the in-app terms of use. Product/legal copy: it is not a UI label
-        // an iteration may translate on its own authority, and a machine rendering
-        // of terms a user is asked to ACCEPT is worse than an honest source-language
-        // one. Needs a reviewed translation, tracked outside the UI/UX track.
-        "onboarding.step.recap.terms.body",
-    ]
+    // MARK: - `untranslatableKeys` — SUPPRIMÉE au #5218
+    //
+    // Elle ne portait qu'une clé : `onboarding.step.recap.terms.body`, le pavé de
+    // conditions d'utilisation du récapitulatif du wizard d'inscription — exempté
+    // parce qu'une traduction machine de conditions qu'on demande d'ACCEPTER est
+    // pire qu'un texte honnêtement en langue source. Le wizard est supprimé, la
+    // clé avec lui : l'exemption n'avait plus rien à exempter.
+    //
+    // **Elle n'a pas été vidée, elle a été RETIRÉE**, avec sa plomberie
+    // (`honouringExemptions`) et son témoin
+    // (`test_lExemptionDesClesIntraduisiblesAUnEffetSurLeCliquet`). Ce témoin le
+    // demandait lui-même, en toutes lettres : « l'exemption vide rendrait ce
+    // témoin trivialement vrai — le supprimer serait alors plus honnête que le
+    // garder ». Un ensemble vide traversé par trois règles est une porte que
+    // personne ne garde plus : le prochain qui a besoin d'une exemption la
+    // rouvrirait sans que rien n'exige qu'elle ait un EFFET (leçon 380).
+    //
+    // `SignupView` ne rouvre pas le besoin : elle n'affiche AUCUN pavé légal,
+    // seulement une phrase courte et deux liens vers `TermsOfServiceView` /
+    // `PrivacyPolicyView`, qui servent leur texte depuis leurs propres sources.
 
     /// La source d'un écran épinglé, résolue pour l'UNITÉ quand `path` désigne
     /// `StoryViewModel.swift` (#4425).
@@ -512,8 +533,7 @@ final class LocalizationConsistencyTests: XCTestCase {
             let catalog = env.catalog(resolvedFor: url)
             let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key), !call.isModuleBundle,
-                      !Self.untranslatableKeys.contains(call.key) else { continue }
+                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
                 let missing = catalog.requiredLocales.subtracting(catalog.translations[call.key] ?? [])
                 guard !missing.isEmpty else { continue }
                 violations.append("\(call.key)  (\(url.lastPathComponent) → missing \(missing.sorted().joined(separator: ", ")))")
@@ -545,7 +565,6 @@ final class LocalizationConsistencyTests: XCTestCase {
             let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
-                      !Self.untranslatableKeys.contains(call.key),
                       let inline = call.defaultValue,
                       // Xcode rewrites `"… \(x)"` to `"… %@"` on extraction, so an
                       // interpolated default legitimately differs from its catalog
@@ -734,7 +753,7 @@ final class LocalizationConsistencyTests: XCTestCase {
     func test_untranslatedKeyBacklogDoesNotGrow() throws {
         let env = try makeEnvironment()
 
-        let untranslated = untranslatedKeys(env, honouringExemptions: true)
+        let untranslated = untranslatedKeys(env)
 
         // History: 1669 at 220i, −63 for the onboarding step flow (225i), then −54 for
         // share-link creation and −7 once pluralized keys stopped being miscounted
@@ -787,9 +806,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         // > Déclarée pour deux lectures sur trois, elle laisse la troisième compter ce
         // > que le dépôt a explicitement décidé de ne pas traduire.
         //
-        // `test_lExemptionDesClesIntraduisiblesAUnEffetSurLeCliquet` est le témoin qui
-        // interdit à cette liste de devenir une échappatoire : elle doit CHANGER le
-        // compte, et chacune de ses clés doit être vue par le scanner.
+        // #5218 — l'exemption ET son témoin sont partis avec la clé qu'ils
+        // gardaient (le pavé de CGU du wizard d'inscription supprimé) ; voir la
+        // note « `untranslatableKeys` — SUPPRIMÉE » plus haut dans ce fichier.
+        // Le plafond, lui, ne bouge pas : il valait déjà 0, et la clé exemptée
+        // n'était comptée par AUCUNE des lectures qui l'alimentent aujourd'hui.
         let backlogCeiling = 0
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
@@ -801,52 +822,24 @@ final class LocalizationConsistencyTests: XCTestCase {
 
     /// Les clés identifiantes non traduites dans au moins une locale expédiée.
     ///
-    /// `honouringExemptions` sépare la MESURE de la RÈGLE : le cliquet lit la
-    /// version exemptée (ce que le dépôt s'engage à traduire), le témoin
-    /// ci-dessous lit les deux pour prouver que l'exemption change quelque chose.
-    /// Sans ce second appel, une liste d'exemptions qui grossit ne rougirait
-    /// nulle part — c'est la loi « un contrôle existe s'il a un effet ».
-    private func untranslatedKeys(_ env: Environment, honouringExemptions: Bool) -> Set<String> {
+    /// Elle prenait un `honouringExemptions` qui séparait la MESURE de la RÈGLE,
+    /// pour qu'un témoin puisse prouver que `untranslatableKeys` changeait le
+    /// compte. L'ensemble d'exemptions a été retiré au #5218 (voir la note plus
+    /// haut) : le paramètre n'avait plus qu'une valeur, et un paramètre à une
+    /// seule valeur ment sur ce qu'il gouverne.
+    private func untranslatedKeys(_ env: Environment) -> Set<String> {
         var untranslated: Set<String> = []
         for file in env.sourceFiles {
             let catalog = env.catalog(resolvedFor: file)
             let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle else { continue }
-                if honouringExemptions, Self.untranslatableKeys.contains(call.key) { continue }
                 if !catalog.requiredLocales.isSubset(of: catalog.translations[call.key] ?? []) {
                     untranslated.insert(call.key)
                 }
             }
         }
         return untranslated
-    }
-
-    /// **L'exemption doit se PAYER : toute clé qu'elle retire du cliquet y serait
-    /// sinon comptée** (232i, #4328).
-    ///
-    /// `untranslatableKeys` est la seule porte de sortie du plafond zéro. Une porte
-    /// qu'on peut élargir sans rien casser cesse d'être une porte : ce témoin exige
-    /// que chaque clé exemptée soit (a) VUE par le scanner — sinon l'entrée est du
-    /// bois mort qui documente un défaut disparu — et (b) réellement en défaut sans
-    /// l'exemption. Une entrée ajoutée « au cas où » tombe sur (b).
-    func test_lExemptionDesClesIntraduisiblesAUnEffetSurLeCliquet() throws {
-        let env = try makeEnvironment()
-
-        let sansExemption = untranslatedKeys(env, honouringExemptions: false)
-        let avecExemption = untranslatedKeys(env, honouringExemptions: true)
-
-        XCTAssertEqual(
-            sansExemption.subtracting(avecExemption), Self.untranslatableKeys,
-            "chaque clé de `untranslatableKeys` doit être exactement une clé que le "
-            + "cliquet compterait sans elle — une entrée qui ne change pas le compte "
-            + "n'exempte rien et masque le prochain défaut réel"
-        )
-        XCTAssertFalse(
-            Self.untranslatableKeys.isEmpty,
-            "l'exemption vide rendrait ce témoin trivialement vrai — le supprimer serait "
-            + "alors plus honnête que le garder"
-        )
     }
 
     // MARK: - Langue déclarée du document (T2.2)

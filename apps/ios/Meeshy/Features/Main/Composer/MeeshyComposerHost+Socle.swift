@@ -398,11 +398,34 @@ extension MeeshyComposerHost {
     ///
     /// Les treize arguments sont ceux que `StoryComposerView+Publication`
     /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
-    /// il relaie. `ComposerMediaAccessibility.empty` est le seul écart, et il
-    /// est honnête — la surface de scène du meuble n'offre pas encore d'éditeur
-    /// d'alternative textuelle, donc il n'y a rien à transmettre. Fabriquer un
-    /// dictionnaire vide plutôt que de lire un magasin absent dit la vérité ;
-    /// lire un magasin par défaut aurait fait croire à un relais.
+    /// il relaie.
+    ///
+    /// ## L'accessibilité VOYAGE désormais par ici (#4756, corrigé 2026-09-05)
+    ///
+    /// Ce site posait `ComposerMediaAccessibility.empty`, et son commentaire le
+    /// justifiait ainsi : « la surface de scène du meuble n'offre pas encore
+    /// d'éditeur d'alternative textuelle, donc il n'y a rien à transmettre ».
+    ///
+    /// **C'était vrai à l'écriture et faux depuis deux lots.** #4890 a donné au
+    /// meuble un éditeur de LÉGENDE (`documentMediaCaptions`), `a372e2484e` un
+    /// éditeur de TEXTE ALTERNATIF (`documentMediaAlts`) — et ni l'un ni l'autre
+    /// n'est passé ici : la greffe n'était câblée que sur la remise à l'ATELIER
+    /// (`MeeshyComposerHost+Surfaces`), l'autre bouche du même entonnoir. Une
+    /// story publiée depuis le socle partait donc sans une seule des deux
+    /// cartes, silencieusement, pendant que les deux champs s'affichaient,
+    /// se validaient et se relisaient à l'écran.
+    ///
+    /// > **Un commentaire qui justifie une valeur PAR une absence se périme
+    /// > quand l'absence se comble — et il se périme en SILENCE**, puisque
+    /// > combler l'absence se fait ailleurs, dans le fichier qui ouvre la porte.
+    /// > La question à poser en ouvrant une porte de saisie n'est pas « où
+    /// > est-ce lu ? » mais « **quels sites remettent cette charge, et les
+    /// > ai-je TOUS visités ?** ». Ils étaient deux ; un seul avait la greffe.
+    ///
+    /// `accessibilityCarryingComposerCaptions` reste le site UNIQUE de la
+    /// greffe : ce qui change ici est la BASE qu'on lui donne — `.empty`, parce
+    /// que le meuble n'a pas de magasin d'atelier à relayer sur ce chemin, et
+    /// c'est toujours honnête.
     func publishStoryScene() {
         guard canPublishDocument else { return }
         isPublishingDocument = true
@@ -418,7 +441,7 @@ extension MeeshyComposerHost {
             composerVisibilityUserIds,
             viewModel.draftId,
             composerReferences,
-            ComposerMediaAccessibility.empty,
+            accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides),
             selectedFormat.postType
         )
         isPublishingDocument = false
@@ -486,17 +509,85 @@ extension MeeshyComposerHost {
     /// `.opacity` marque le refus du gate : un remplissage plein aurait l'air
     /// armé même quand rien ne peut partir.
     func publishCapsule<Contenu: View>(_ contenu: Contenu) -> some View {
-        contenu
-            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
-            .opacity(canPublishDocument ? 1 : 0.45)
-            .disabled(!canPublishDocument)
-            // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
-            // flèche perdrait son nom à l'instant même où elle devient compacte
-            // — le défaut que `StatusComposerView` a dû corriger, dans l'autre
-            // sens.
-            .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
-            .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
-            .accessibilityHint(publishBlockedHint)
+        // **L'indice de blocage se VOIT, il ne s'entend plus seulement**
+        // (2026-09-05). Voir `publishBlockedNotice`.
+        //
+        // Un EMPILEMENT, et non un `.overlay` : mesuré au simulateur, un overlay
+        // — même avec `.alignmentGuide(.top)` calé sur le bas du texte — reste
+        // CENTRÉ sur la capsule et rend l'indice illisible PAR-DESSUS le mot
+        // « Publier ». `alignmentGuide` gouverne l'alignement dans une PILE ;
+        // `.overlay` ne le consulte pas. La pile, elle, n'a rien à supposer :
+        // elle place l'un au-dessus de l'autre quelle que soit la hauteur du
+        // texte — deux lignes en français, trois en allemand.
+        VStack(alignment: .trailing, spacing: 6) {
+            publishBlockedNotice
+            contenu
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+                .opacity(canPublishDocument ? 1 : 0.45)
+                .disabled(!canPublishDocument)
+                // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
+                // flèche perdrait son nom à l'instant même où elle devient
+                // compacte — le défaut que `StatusComposerView` a dû corriger,
+                // dans l'autre sens.
+                .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
+                .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
+                .accessibilityHint(publishBlockedHint)
+        }
+    }
+
+    /// **Pourquoi la flèche est grise — DIT à l'œil** (directive porteur
+    /// 2026-09-05 : « corrige le refus muet »).
+    ///
+    /// ## Le défaut mesuré
+    ///
+    /// Au simulateur : photo posée, texte tapé, flèche pressée — **rien**. Ni
+    /// post, ni mot, ni mouvement. J'ai d'abord cru à une publication refusée
+    /// en silence ; la mesure dit autre chose, et c'est pire :
+    ///
+    /// `publishBlockedHint` EXISTE. Elle est calculée, elle est traduite en
+    /// sept langues, elle sait distinguer les surfaces — et elle n'était servie
+    /// qu'à **`.accessibilityHint`**. Un utilisateur de VoiceOver s'entendait
+    /// donc expliquer pourquoi la flèche ne part pas ; **un utilisateur voyant
+    /// voyait une flèche grise et rien d'autre.**
+    ///
+    /// > **Une explication réservée à VoiceOver n'est pas une explication, c'est
+    /// > une asymétrie.** Le travail avait été fait — la règle, la phrase, les
+    /// > traductions — et il manquait le pixel. C'est la forme exacte du « qui
+    /// > AFFICHE ce que tu résous ? » que ce dépôt a déjà payée trois fois cette
+    /// > semaine, appliquée cette fois à un texte qu'on croyait rendu parce
+    /// > qu'il était PASSÉ à un modificateur.
+    ///
+    /// ## Pourquoi un overlay, et pas un toast au tap
+    ///
+    /// La capsule est `.disabled` : aucun tap ne l'atteint, donc aucun geste ne
+    /// peut déclencher un message. L'explication doit être là AVANT qu'on
+    /// essaie — c'est d'ailleurs mieux : elle évite l'essai plutôt que de le
+    /// commenter.
+    ///
+    /// Vide quand il n'y a rien à dire (`publishBlockedHint` rend `""` dès que
+    /// la flèche est armée, ou quand l'indice serait FAUX — audience nominative
+    /// incomplète). Un `EmptyView` alors, jamais une bulle vide : la règle de
+    /// l'indice décide déjà, cette vue ne la re-décide pas.
+    @ViewBuilder
+    var publishBlockedNotice: some View {
+        if !publishBlockedHint.isEmpty {
+            Text(publishBlockedHint)
+                .font(MeeshyFont.relative(11, weight: .medium))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
+                // TROIS lignes, pas deux : à 190 pt la phrase française se
+                // coupait sur « une photo ou u… », mesuré au simulateur. Le
+                // nombre de lignes se règle sur la langue la PLUS longue —
+                // l'allemand — jamais sur celle qu'on a sous les yeux.
+                .lineLimit(3)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 240, alignment: .trailing)
+                .allowsHitTesting(false)
+                // VoiceOver l'entend déjà par `accessibilityHint` sur la
+                // capsule ; le lire une seconde fois ici ferait entendre la
+                // même phrase deux fois pour un seul fait.
+                .accessibilityHidden(true)
+        }
     }
 
     var publishButton: some View {
@@ -604,10 +695,14 @@ extension MeeshyComposerHost {
     /// s'écrira dans le lot qui possède le catalogue.
     var publishBlockedHint: String {
         guard !canPublishDocument, !isPublishingDocument else { return "" }
+        // L'audience passe AVANT la surface, et l'ordre porte la règle : les
+        // deux causes peuvent être vraies ensemble (composer vide ET personne
+        // choisie), et c'est l'audience qu'il faut dire — elle seule n'est
+        // signalée par rien d'autre à l'écran. Un composer vide, lui, se voit.
         guard ComposerDocumentPublishGate.audienceIsComplete(
             composerVisibility,
             userIds: composerVisibilityUserIds
-        ) else { return "" }
+        ) else { return ComposerSocleCopy.publishBlockedAudienceHint }
         return ComposerSocleCopy.publishBlockedHint(surface: mountedSurface) ?? ""
     }
 
@@ -616,6 +711,25 @@ extension MeeshyComposerHost {
     /// `nil` sous la scène — le socle n'y est pas peint, et fabriquer un
     /// brouillon pour une surface qui publie par l'atelier aurait été le second
     /// chemin d'envoi que la doctrine, C2 et le lot 7 interdisent tous les trois.
+    /// **`identifiant d'objet → alternative` devient `URL source →
+    /// alternative`** (2026-09-05).
+    ///
+    /// Le pont est `documentMediaObjectIdBySource`, alimenté par le retour
+    /// d'`applyContentMedia` — le seul site qui ait jamais connu les deux
+    /// bouts. Une source dont l'objet n'a pas d'alternative n'entre pas dans
+    /// la carte : un `nil` et une chaîne vide se disent pareil à l'arrivée, et
+    /// une chaîne vide poserait une alternative BLANCHE — un lecteur d'écran
+    /// annoncerait alors « image » suivi de rien, ce qui est pire que rien.
+    var altsParURLSource: ComposerMediaCaptions {
+        documentMediaObjectIdBySource.reduce(into: ComposerMediaCaptions()) { carte, entree in
+            let (source, objectId) = entree
+            guard let texte = documentMediaAlts[objectId],
+                  !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+            carte[source] = texte
+        }
+    }
+
     var documentDraft: ComposerDocumentDraft? {
         switch mountedSurface {
         case .scene:
@@ -721,7 +835,24 @@ extension MeeshyComposerHost {
                 // **Les légendes du composer, enfin remises** (#4756). Cette
                 // carte avait un écrivain et aucun lecteur sur cette voie : ce
                 // qui manquait n'était pas la saisie, c'était ce passage-ci.
-                mediaCaptions: documentMediaCaptions
+                mediaCaptions: documentMediaCaptions,
+                // **La traduction de clé se fait ICI, et nulle part ailleurs.**
+                //
+                // L'éditeur d'objet écrit par identifiant d'OBJET — c'est ce
+                // qu'il édite, et c'est la seule clé qui survive au
+                // remplacement d'un fichier sur la même scène. Le chemin
+                // durable, lui, réaligne par URL SOURCE, comme les légendes.
+                //
+                // Ce site est le seul qui tienne les DEUX : la carte des alts
+                // et le pont `URL source → identifiant d'objet` qu'a rendu
+                // `applyContentMedia`. Traduire plus tôt aurait accroché
+                // l'alternative à un fichier plutôt qu'à l'objet ; plus tard,
+                // le pont n'existe plus.
+                mediaAlts: altsParURLSource,
+                // Le pont que `applyContentMedia` a rendu, remis TEL QUEL : la
+                // traduction en positions se fait un étage plus bas, là où
+                // l'ORDRE des fichiers existe.
+                mediaObjectIds: documentMediaObjectIdBySource
             )
         }
     }
@@ -756,7 +887,33 @@ extension MeeshyComposerHost {
     /// levée nommée** : que `setStatus` rende un résultat, comme `createPost` le
     /// fait déjà par `publishSuccess` / `publishError`.
     func publishDocument() {
-        guard canPublishDocument, let draft = documentDraft else { return }
+        // **Un refus qui SE DIT** (#5285, 2026-09-05).
+        //
+        // Ce `guard` rendait la main SANS un mot. Mesuré par la session
+        // voisine : photo posée, texte tapé par la porte CONTENU, flèche
+        // pressée — **aucun post créé, et le composer reste ouvert**. L'auteur
+        // ne voit rien qui distingue « ça part » de « ça n'est pas parti » ;
+        // il presse encore, et compose peut-être une seconde fois ce qu'il
+        // vient d'écrire.
+        //
+        // > **Un refus muet est PIRE qu'une donnée perdue.** Une publication
+        // > incomplète laisse quelque chose à réparer ; une publication qui
+        // > n'a pas eu lieu et ne le dit pas laisse l'auteur croire qu'elle a
+        // > eu lieu. C'est la règle que ce lot applique déjà DEUX fois à
+        // > l'étage du dessous — `ComposerDocumentDurablePublisher.refuse()`
+        // > et `DocumentComposerDoor.refuse()` peignent tous deux un toast —
+        // > et qui manquait à l'étage qui les APPELLE.
+        //
+        // Les deux branches sont distinctes et le restent : `canPublishDocument`
+        // faux est un état NORMAL (rien à publier — pas de texte, pas de
+        // média), que la flèche grisée dit déjà. Un brouillon NUL, lui, est une
+        // anomalie : la flèche était armée et rien n'est parti.
+        guard canPublishDocument else { return }
+        guard let draft = documentDraft else {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
+            return
+        }
         // Le palier RETENU pour la PROCHAINE publication est écrit ICI, au
         // moment où il SERT — même geste que
         // `FeedView+Attachments.publishPostWithAttachments`

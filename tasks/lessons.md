@@ -28611,3 +28611,473 @@ qu'une.
    jouait. Le mécanisme était complet, câblé, testé ; il manquait un argument
    dans un appel. Après avoir branché une valeur, compter les HÔTES qui la
    servent, pas les sites qui la produisent.
+
+## Leçon 526 — Une recommandation qui ajoute de la friction à l'utilisateur est une décision-produit, jamais un défaut adopté « avec le reste »
+
+**Cycle #3684 (2026-09-05).** Le brouillon « Inscription en un écran » rangeait six décisions dans une
+même liste, dont « passer le mot de passe à 12 caractères avec zxcvbn ». Le porteur a adopté les cinq
+autres et REFUSÉ celle-là : le minimum reste à 6. Il a aussi demandé que le téléphone RESTE sur
+l'écran — drapeau et indicatif pré-sélectionnés — sans être annoncé comme facultatif : vide, on n'en
+fait rien ; rempli, on le prend.
+
+**Ce que la liste cachait.** Cinq recommandations retiraient de la friction (écran unique, CGU par le
+bouton, nom affiché, accueil à deux boutons, limite comptée sur les créations) ; une seule en AJOUTAIT,
+au nom d'une issue de sécurité d'un autre milestone. Les présenter d'un bloc, c'était laisser croire
+qu'elles allaient dans le même sens — et faire porter à « adopter les recommandations » un choix que le
+porteur n'avait pas fait.
+
+**La règle.**
+1. Quand un lot vise à RACCOURCIR un parcours, toute proposition qui l'ALLONGE (longueur de mot de
+   passe, case à cocher, vérification préalable) se présente À PART, avec son coût en secondes et
+   l'issue qui la motive — jamais dans la liste des allègements.
+2. Un champ qui sert la RÉCUPÉRATION ou le CONTACT (téléphone, e-mail de secours) ne se retire pas
+   au nom de la vitesse : il se pré-remplit au maximum (pays depuis la locale), ne se signale pas comme
+   facultatif, et ne coûte rien à qui le laisse vide. La vitesse se gagne sur les ATTENTES et les
+   ÉCRANS, pas sur les données que le produit a besoin de retrouver un jour.
+3. Une recommandation refusée est une DÉCISION du porteur : elle s'écrit dans le rapport de clôture
+   (« maintenu à 6 par directive »), et l'issue de sécurité qui la portait (#3629) garde son cours
+   sans que ce lot la préjuge.
+
+## Leçon 527 — `git stash` dans un arbre PARTAGÉ applique le stash d'un AUTRE lot
+
+Constat du 2026-09-05, incident causé et réparé dans la même session : un
+correctif d'écran a lancé `git stash push -- <chemins de l'écran>` puis
+`git stash pop`, dans un arbre où plusieurs lots (agents parallèles) écrivent
+en même temps. Le `push` par chemins n'a RIEN pris — un commit de point
+d'étape venait déjà d'absorber ces fichiers, donc rien n'était modifié à cet
+instant précis — et `git stash` reste une pile UNIQUE, partagée par tout
+l'arbre : le `pop` qui a suivi a donc réappliqué `stash@{0}`, le WIP d'un
+AUTRE lot (« recherche »), sur les fichiers de CET écran — neuf fichiers en
+conflit (`<<<<<<< Updated upstream` / `>>>>>>> Stashed changes`) sur des
+chemins que le lot courant ne possédait même pas.
+
+**`git stash` n'a pas de PORTÉE.** `push -- <chemins>` filtre ce qu'il MET
+DANS le stash, jamais ce qu'un `pop` ultérieur en RETIRE — le stash est
+toujours dépilé en entier, sur l'état COURANT de l'arbre, quel que soit le
+lot qui l'a créé. Dans un arbre à un seul agent, la pile n'a qu'un
+propriétaire et l'ambiguïté ne se voit jamais. Dans un arbre PARTAGÉ, la pile
+est un canal commun : n'importe quel agent qui pop lit le sommet, pas SON
+propre dépôt.
+
+1. **Ne jamais employer `git stash` (ni aucune commande qui touche un état
+   GLOBAL du dépôt — l'index, la pile de stash, `git bisect`, un hook global)
+   dans un arbre que plusieurs agents éditent en parallèle.** Un worktree
+   dédié (`git worktree add`) ou une copie de fichiers dans le scratchpad
+   isolent l'opération ; un simple `git diff`/`git status` avant d'agir
+   n'aurait pas suffi ici — le push avait réussi (silencieusement, sur rien)
+   et rien ne distinguait un stash vide d'un stash correctement ciblé.
+2. **Un `push -- <chemins>` qui ne modifie rien mérite un contrôle** : si
+   `git status` montre les mêmes chemins avant et après le `push`, c'est que
+   rien n'a été empilé — poursuivre par un `pop` dépile alors le sommet de
+   quelqu'un d'autre, pas un vide inoffensif.
+3. **La réparation se vérifie à TROIS niveaux, pas un** : `git diff HEAD --
+   <chemins touchés>` doit rendre vide (rien ne reste de l'application
+   erronée), `grep -rln '^<<<<<<< '` sur l'arbre doit rendre vide (aucun
+   marqueur oublié), et `git stash list` doit encore montrer le stash
+   d'origine INTACT (le "ours" repris pendant la résolution de conflit ne
+   doit pas avoir aussi supprimé l'entrée de la pile — un `stash pop` réussi
+   la retire automatiquement ; un conflit la LAISSE, ce qui est le filet de
+   sécurité qui a permis de tout récupérer ici).
+
+## Leçon 528 — Une cause MESURÉE peut être vraie et secondaire ; seule la réparation les départage
+
+**Symptôme (porteur, 2026-09-05)** : « j'ai tapé `@meeshy` et aucune rangée de
+mentions potentiel n'est apparu nulle part ». Capture jointe : dans le post
+PUBLIÉ, `@meeshy` est un lien qui ouvre le profil. Le rendu marche, la
+composition non.
+
+Deux faits mesurés le même quart d'heure, tous deux solides :
+
+1. `GET /api/v1/directory/friend-requests` rend **404 en production** (vérifié
+   au `curl` ; toute la famille `/directory/*` manque à la passerelle
+   déployée, alors que le dépôt a les routes et les enregistre).
+   `ComposerMentionFriendsSource` avale l'échec en `catch { return [] }`.
+2. Un brouillon n'avait **aucune recherche d'utilisateurs** :
+   `Context.composerDraft.remoteContext == nil` → sortie anticipée. Seuls les
+   amis ACCEPTÉS pouvaient être proposés.
+
+J'ai classé (1) en premier — un 404 en production est spectaculaire, daté,
+citable. C'était le mauvais ordre.
+
+Le porteur a fait basculer le simulateur sur **staging**, où `/directory/*`
+répond. Retapé `@` : **toujours aucune rangée**. Mesuré à l'API, jeton en
+main : `friend-requests?status=accepted` → **0 ami** ;
+`users/search?q=meeshy` → **1 : @meeshy**. La personne visée n'était l'amie de
+personne, donc injoignable sur les DEUX serveurs, 404 ou pas.
+
+> **Deux causes mesurées ne se hiérarchisent ni par leur gravité, ni par leur
+> netteté, ni par l'ordre où on les a trouvées.** Le seul test qui les sépare
+> est : *réparer l'une, et regarder si le symptôme survit.* Ici il a survécu —
+> (1) était réelle et secondaire, (2) était la racine.
+
+Corollaire de méthode : **quand un banc d'essai neuf devient disponible
+(ici : un second serveur), il ne sert pas qu'à « reproduire » — c'est une
+EXPÉRIENCE qui isole une variable.** Basculer sur staging n'était pas une
+commodité de test, c'était la manipulation qui a rendu le verdict.
+
+Et une forme à retenir sur le défaut lui-même : **l'impossibilité d'un appel
+CONTEXTUEL avait été lue comme l'impossibilité de TOUTE recherche.** Le
+doc-comment de `.composerDraft` le disait presque bien — « aucun id serveur
+n'existe, donc aucun appel réseau n'est possible » — la première moitié étant
+vraie (l'endpoint `/mentions/suggestions` exige un post ou une conversation)
+et la seconde fausse : `users/search` n'a jamais eu besoin de contexte, et la
+surface MOOD du MÊME composer l'employait déjà. Une jumelle divergente, dont
+la pauvre était montée sur la surface la plus utilisée.
+
+## Leçon 529 — Un chrome hérité d'un écran voisin arrive avec les hypothèses de CET écran-là
+
+**Retour porteur (2026-09-05)** : « la ligne des propositions doit avoir un
+fond transparent ».
+
+`ComposerMentionStrip` portait `.adaptiveGlass(in: Rectangle())`, justifié en
+commentaire par « même chrome neutre que `MentionSuggestionPanel` : une bande
+d'assistance à la saisie, pas du contenu de conversation ». La justification
+est correcte SUR SON SUJET — les deux vues jouent bien le même rôle — et
+fausse sur ce qu'elle sert à décider : `MentionSuggestionPanel` vit sur un
+écran CLAIR, le plateau du composer est sombre par doctrine (`PlateauTint`
+n'offre que trois teintes sombres). Le verre y peignait une barre pâle en
+travers de la scène, juste au-dessus du clavier.
+
+> **« Même chrome que X » n'est une raison que si X a le même FOND.** Une
+> analogie de RÔLE ne transporte pas les hypothèses de RENDU, et c'est
+> précisément ce qu'un commentaire d'analogie donne l'air d'avoir vérifié.
+
+**Ce que le retrait a réparé en plus, et que personne ne cherchait.** Les
+trois témoins de `ComposerMentionStripContrastTests` mesurent « la capsule à
+6 % de `textPrimary` par-dessus la teinte du plateau » — un empilement à DEUX
+couches, explicitement énoncé. Avec le verre, l'écran en avait TROIS, et la
+couche du milieu n'était mesurée nulle part : les ratios étaient justes par
+accident, sur un empilement qui n'était pas celui rendu.
+
+> **Un témoin de contraste décrit un EMPILEMENT.** Insérer une couche entre
+> deux de celles qu'il nomme ne le fait pas rougir : il continue de mesurer,
+> scrupuleusement, un écran qui n'existe plus. La question à poser à un témoin
+> de contraste n'est donc pas « ses couleurs sont-elles les bonnes ? » mais
+> **« l'empilement qu'il décrit est-il celui que la vue peint ? »** — et elle
+> se répond en lisant les modificateurs de fond de la vue, pas le témoin.
+
+Garde : `test_laBande_neSePeintAucunFond` interdit le verre ET tout fond
+opaque de remplacement.
+
+## Leçon 536 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
+
+Constat du 2026-09-05 (gate `test:chaines` › `v3-fil.spec.ts`, tour v3, écran
+`thread`) : `.reagir-slot` était à `height:0` tant que le module de temps réel
+n'y avait pas posé le bouton « Réagir », et une revue précédente (#5061) avait
+corrigé le recouvrement qui en résultait (`overflow:visible` centrait le
+bouton de 44 px SUR la ligne nulle, recouvrant le dernier mot du texte
+précédent) par `:has(>.reagir)` — réserver la hauteur SEULEMENT quand le
+bouton est déjà là. Mesure suivante : CLS 0,089 sur `/chats/:cle`, au-dessus
+du budget 0,05. Le correctif du recouvrement avait rouvert un décalage : le
+module insère le bouton APRÈS le premier pixel (chargement différé, § 12.4),
+donc la bascule `height:0 → var(--target-min)` déplaçait tout ce qui suit
+CHAQUE bulle au moment où le module chargeait.
+
+**La règle.**
+1. Un slot qui réserve une hauteur CONDITIONNELLEMENT à la présence d'un
+   contenu inséré APRÈS le premier pixel garantit un CLS, pas une exception :
+   la condition qui évite le recouvrement AU REPOS est exactement celle qui
+   produit le décalage AU CHARGEMENT. Les deux symptômes (recouvrement,
+   CLS) sont la même cause vue à deux instants — les traiter comme deux
+   correctifs indépendants (l'un par `:has()`, l'autre à trouver plus tard)
+   les fait alterner sans jamais converger.
+2. Le correctif qui les résout ENSEMBLE réserve la hauteur INCONDITIONNELLEMENT,
+   dès le SSR : la place existe avant que le contenu n'arrive, donc son
+   insertion ne déplace rien (CLS supprimé À LA SOURCE) et le slot a déjà sa
+   taille réelle quand le contenu y arrive (plus de centrage qui déborde).
+3. Le prix (un carré vide, non cliquable, tant que le module n'a pas chargé)
+   se documente et s'assume — ce n'est pas un défaut, c'est le coût mesuré
+   d'une amélioration progressive dont l'espace est réservé par avance.
+4. Devant un correctif de recouvrement sur un slot dont le contenu arrive en
+   différé, demander : « la condition qui évite le recouvrement au repos
+   est-elle aussi la condition qui produit un décalage au chargement ? » —
+   si oui, les deux ne se corrigent qu'ENSEMBLE, par une réservation
+   inconditionnelle, jamais par deux correctifs qui se contredisent.
+
+## Leçon 537 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
+
+Constat du 2026-09-05 (`compare-rendu.js` / `v3-rapport.mjs`, tour v3) : après
+la livraison du chantier de navigation en une page (§ 12.11, #5104/#4472/
+#4473/#5106 — un fondu inter-documents, une préconnexion au survol, un
+navigateur de zone), le gate de conformité visuelle rapportait **48 vues sur
+48 hors cible** (`ecart_structurel_max=0,5507`), y compris des écrans que
+personne n'avait touchés dans ce tour. Diagnostic : les trois écrans livrés
+(`thread`, `chats`, `rich`) portent désormais une barre de navigation globale
+(logo + « Retour à l'accueil », deux boutons flottants remontés en HAUT du
+document) que les captures cible ne montraient PAS — le chantier de
+navigation avait changé la disposition SERVIE de chaque écran connecté, mais
+`capture-cibles.js` n'avait été rejoué que pour trois vues (`thread`, `rich`,
+`rights`), jamais pour les 45 autres, dont `chats`.
+
+**La règle.**
+1. Un chantier qui change la disposition COMMUNE à tous les écrans (un socle,
+   un chrome, une barre persistante) est, du point de vue du gate de
+   conformité, une modification de CHAQUE écran — même ceux qu'aucun commit
+   du chantier n'a nommés. La régénération des captures cible n'est pas un
+   pas facultatif de la PR qui livre le chantier : c'est une partie de sa
+   livraison, au même titre que le code.
+2. Régénérer TROIS captures sur quarante-huit après un changement de socle
+   laisse un gate qui rougit partout SANS distinguer un vrai écart d'un
+   référentiel périmé — le signal se perd exactement pour tout le monde, pas
+   seulement pour les écrans oubliés.
+3. Le témoin qui aurait dû l'attraper n'existe pas encore : un gate qui
+   compare le SOCLE (chrome commun) de deux captures cible entre elles
+   rougirait dès qu'une seule diverge des autres, avant même de comparer
+   le contenu propre à chaque écran.
+4. Devant un chantier transversal, poser la question au moment de le clore,
+   pas au moment où le gate suivant rougit : « ce changement touche-t-il le
+   SOCLE de plusieurs écrans, et si oui, qui régénère leurs captures ? » —
+   la réponse « je n'ai régénéré que celles de mon écran » est un aveu que
+   la question n'a pas été posée à la bonne échelle.
+
+## Leçon 538 — Une interdiction écrite dans UN prompt ne gouverne que cet agent ; dans un arbre partagé, chaque rôle qui écrit la porte
+
+Constat du 2026-09-05 (tour 2 du workflow web v3) : « Ne commit PAS : la phase
+Livrer s'en charge » n'était écrit que dans le prompt du DÉVELOPPEUR. Un agent
+de correction a commité et poussé 85 fichiers — trois travaux — sous le titre
+d'une seule issue ; un correcteur de gates a récidivé ; l'agent de documentation
+a commité à son tour. Aucun n'avait désobéi : la règle ne leur avait jamais été
+dite. Pendant ce temps, le porteur demandait l'inverse pour la BRANCHE — « il
+faut commiter régulièrement et se synchroniser avec les activités distantes » :
+dev avait reçu 1 335 puis 24 commits d'autres sessions sur les mêmes écrans, et
+le tour ne le relisait qu'au départ et avant les gates.
+
+**La règle.**
+1. Une consigne qui gouverne une RESSOURCE PARTAGÉE (l'arbre, la branche, un
+   port) se déclare UNE fois et s'injecte dans le prompt de CHAQUE rôle qui
+   touche cette ressource — jamais dans un seul. Le témoin : lister les rôles
+   qui écrivent, puis vérifier que chacun porte la consigne.
+2. « Ne commit pas » (l'agent) et « commiter régulièrement » (la branche) ne se
+   contredisent pas : ce sont deux niveaux. Les agents laissent l'arbre ; une
+   phase mécanique, à des moments FIXES (avant chaque travail, avant les
+   gates), commite l'arbre en point d'étape, fusionne `origin/dev`, pousse — et
+   remet au travail suivant ce que les sessions voisines ont bougé.
+3. `git stash` n'est pas l'outil de cette phase dans un arbre partagé (leçon
+   527) : le point d'étape est un COMMIT, que la PR porte tel quel ; le
+   `Closes #n` va alors dans le corps de la PR, jamais dans un commit vide.
+4. Un gate rouge sur TOUTE la matrice — y compris des écrans que le tour n'a pas
+   touchés — n'est pas un rouge du tour : il ne retient pas la livraison, il se
+   DIT dans la PR avec l'issue qui le porte. Le tour 2 est resté sans PR une
+   heure pour l'avoir lu autrement.
+## Leçon 530 — Deux familles de résolveurs, neuf sites, trois régimes pour un même geste
+
+**Directive porteur (2026-09-05)** : « déclencher la remontée après `@` avec
+les amis/contacts (normalement existant en local et en cache) ; ensuite
+lorsqu'on tape la première lettre ça filtre parmi ses amis et contacts
+LOCALEMENT ; c'est au bout de la DEUXIÈME lettre qu'on recherche via API. **Ce
+système doit être général pour tous les emplacements où on doit mentionner un
+utilisateur.** »
+
+Recensé avant d'agir — et c'est le recensement qui a rendu le lot juste :
+
+| famille | sites | seuil AVANT |
+|---|---|---|
+| `MentionComposerController` | conversation, commentaires de post, feuille de commentaires du feed, brouillon du composer (×3 surfaces) | `minQueryLengthForAPI = 0` → appel dès le `@` NU |
+| `MentionSuggestionsModel` (SDK) | mood, éditeur de texte de story, sélecteur de mention, composer unifié | `guard !trimmed.isEmpty` → appel dès la 1ʳᵉ lettre |
+
+Neuf sites, deux seuils — donc **trois régimes** pour un même geste selon
+l'écran où le doigt se trouvait (et mon correctif du matin en ajoutait un
+quatrième, en branchant l'annuaire dès le premier caractère).
+
+> **Une constante recopiée dans deux familles n'est pas une règle partagée :
+> c'est deux règles qui se ressemblent AUJOURD'HUI.** Le jour où l'une bouge,
+> rien ne rougit — les deux compilent, les deux ont l'air délibérées, et
+> l'écart ne se voit qu'en passant d'un écran à l'autre avec le même geste.
+
+Loi unique : `MentionLookupRule` (`packages/MeeshySDK/.../Story/ComposerMentionQuery.swift`,
+posée à côté de `ComposerMentionQuery` qui découpe déjà le handle — même
+question, deux moitiés). Les deux familles l'appellent.
+
+**La raison du seuil n'est pas l'économie d'octets.** `@a` rend des dizaines de
+comptes sans rapport et les pousse DEVANT les amis de l'auteur, dans une bande
+qui n'en montre que trois ou quatre. Le premier caractère utile est le second.
+
+**Corollaire cache-first, et le piège qu'il porte.** La source locale
+(`ComposerMentionFriendsSource`) était réseau seule : le `@` nu attendait un
+aller-retour, et son échec (404 en prod) était avalé en liste vide. La rendre
+cache-first se fait en deux écritures sur la même propriété — cache, puis
+réseau — et **la seconde peut être vide**. Sans garde, servir le cache puis
+échouer EFFACE ce qu'on venait de servir : deux écritures dont la seconde peut
+être vide sont un REMPLACEMENT, pas une mise à jour.
+
+## Leçon 531 — Un instrument qui rend « 0 » partout ne mesure rien, et le prouve au palier où il devrait rendre « 1 »
+
+Pour vérifier les trois régimes ci-dessus au simulateur, j'ai grepé le journal
+sur `users/search` après chaque frappe :
+
+- `@` → **0** ✓ (attendu)
+- `@m` → **0** ✓ (attendu)
+- `@me` → **0** ✗ — alors que l'écran montrait deux résultats venus du serveur
+
+Le logger réseau de l'app ne trace que les requêtes LENTES (`Slow request:`).
+Mon grep ne pouvait donc rendre autre chose que zéro, quel que soit le
+comportement — les deux premiers « ✓ » ne prouvaient strictement rien.
+
+> **Un instrument doit être vu RENDRE LE SIGNAL au moins une fois avant qu'on
+> lise ses zéros.** Un test négatif qui n'a jamais été vu positif n'est pas un
+> test négatif : c'est un instrument dont on ignore s'il est branché. C'est la
+> forme « code de sortie lu sans son journal », déplacée du gate au terrain.
+
+Ce qui l'a remplacé est un témoin de COMPORTEMENT, lisible sans instrument :
+`@m` ne montre rien pendant que `@me` montre deux personnes. Si la recherche
+partait à une lettre, `@m` en montrerait aussi — le serveur retenant « m »
+dans bien plus de noms que « me ». **Quand l'instrument est douteux, mesurer
+la CONSÉQUENCE plutôt que la cause.**
+
+## Leçon 532 — Douter d'un instrument est juste ; conclure qu'il ment ne l'est pas
+
+**Enchaînement mesuré le 2026-09-05**, sur « le canvas d'un post part-il ? ».
+
+1. Sonde : `'storyEffects' in post` sur la réponse de l'API → **absent**.
+   Conclusion annoncée : « le canvas n'est jamais parti ».
+2. Doute légitime, une heure plus tard : *ai-je vérifié que ce champ est SERVI
+   par cette API ?* Non. La leçon 531 venait précisément de coûter un
+   instrument aveugle.
+3. **Rétractation** : « mon sondage ne pouvait rien mesurer, je retire ».
+4. Expérience DISCRIMINANTE : interroger le MÊME endpoint pour des STORIES,
+   qui ont toujours un canvas → **10 items sur 13 portent la clé**.
+
+Donc le champ est bien servi, la sonde était valide, et le canvas n'était
+réellement pas parti. **La rétractation était une SUR-CORRECTION** : j'avais
+raison au point 1, pour une raison que je n'avais pas encore établie.
+
+> **Douter d'un instrument est une bonne réaction ; en déduire qu'il ment est
+> une seconde affirmation non mesurée.** « Cet instrument est peut-être
+> aveugle » et « cet instrument est aveugle » sont deux propositions
+> différentes, et la seconde demande sa propre preuve — exactement comme celle
+> qu'elle prétend annuler.
+
+Ce qui tranche n'est jamais l'introspection, c'est une **expérience
+discriminante** : trouver un cas où les deux hypothèses prédisent des
+observations DIFFÉRENTES. Ici, une story a un canvas par construction — si
+l'API sert le champ, elle le montre ; sinon, elle ne le montre pour personne.
+Une seule requête, et le doute est clos dans un sens ou dans l'autre.
+
+**Le coût de la sur-correction n'est pas nul** : entre 3 et 4, j'ai annoncé au
+porteur que je ne savais plus si le canvas voyageait, alors que je le savais —
+et j'ai ouvert une piste (« le serveur ne projette pas le champ ») qui a coûté
+six lectures de code côté gateway avant d'être écartée par une seule requête.
+
+**Corollaire pour la formulation** : entre 1 et 4, la phrase juste n'était ni
+« le canvas n'est pas parti » ni « je retire », mais *« le champ est absent de
+la réponse ; je n'ai pas encore vérifié que cette API le sert — voici
+l'expérience qui le dira »*. Une affirmation datée de son niveau de preuve
+n'a pas à être retirée : elle se complète.
+
+## Leçon 533 — Un facteur d'échelle DÉDUIT au lieu d'être MESURÉ décale chaque geste
+
+**Coût mesuré le 2026-09-05** : une demi-douzaine de taps au mauvais endroit,
+trois ouvertures du mauvais écran, et un diagnostic (« le rail n'est pas
+accessible ») ouvert puis refermé pour rien.
+
+La capture d'un simulateur iPhone 16 Pro fait 1206 × 2622 px pour un écran de
+402 × 874 pt. Redimensionnée pour la lecture, elle fait **322 × 700 px**. Le
+facteur juste est donc **874 / 700 = 1,2486**. J'avais supposé un rendu de 672
+px de haut — jamais mesuré — d'où un facteur de 1,3006 : **4 % d'erreur**, soit
+plus de 30 points en bas d'écran, largement de quoi taper la rangée voisine
+d'un rail dont les entrées font 56 points.
+
+> **Le facteur d'échelle d'une capture se MESURE (`sips -g pixelHeight`), il ne
+> se suppose pas.** Et il se VÉRIFIE sur une ancre dont l'arbre d'accessibilité
+> donne la position exacte : si « Publier » est à y=806 pt et paraît à y=645
+> px, le facteur est 1,2496 — un contrôle qui coûte une ligne et qui aurait
+> économisé toute la série.
+
+**Corollaire, plus général que l'échelle** : une coordonnée MÉMORISÉE d'un tour
+précédent est fausse dès que la mise en page bouge. Le bouton « Flux » était à
+y=152 puis à y=254 — sa position dépend d'une bannière de signaux présente ou
+non. **Aucune coordonnée ne se réutilise d'un écran à l'autre** : elle se relit
+dans l'arbre, et à défaut elle se recalcule depuis une capture dont l'échelle
+vient d'être mesurée.
+
+**Et une non-correction, qui compte autant** : j'ai cru trouver un défaut
+d'accessibilité (« les boutons du rail ne sont pas exposés ») parce qu'`idb ui
+describe-all` ne rendait que le conteneur. Vérification faite, le rail porte
+`.accessibilityElement(children: .contain)` et chaque bouton son
+`.accessibilityLabel` — VoiceOver descend, c'est l'outil qui n'énumère pas.
+**L'absence dans un outil d'inspection n'est pas une absence dans le produit**
+(leçon 532, autre visage). Rien n'a été « corrigé ».
+
+## Leçon 534 — La moitié qui sert la VITESSE écrite, la moitié qui sert la CORRECTION oubliée
+
+**Trois défauts trouvés le 2026-09-05, tous de la même forme**, et la
+répétition est ce qui la rend nommable.
+
+| lot | la moitié ÉCRITE | la moitié OUBLIÉE |
+|---|---|---|
+| upload du fond de slide | `CacheCoordinator.images.adoptImage(localFile:for:)` — le cache adopte l'URL serveur | rien n'écrit l'id serveur dans l'objet du CANVAS |
+| `ComposerPreUploadRegistry` | téléverse dès la pose, écrit `postMediaId` dans le canvas — la composition est fluide | `stopForPublication()` l'arrête et **aucun chemin ne lit ses résultats** : la publication re-téléverse tout |
+| `PostSceneCard` (trouvé par la session voisine) | le document dit ce qu'il faut peindre | aucun `carrier` remis au player — « sans porteur, le player sert une coquille », écrit dans son propre doc-comment |
+
+> **Une PRÉSENCE rassure plus qu'une absence n'alerte.** Devant
+> `adoptImage(...)` douze lignes plus haut, l'œil enregistre « l'adoption est
+> faite » et passe. Il n'y a pas d'absence à remarquer : il y a une moitié
+> présente, correcte, et qui répond à une AUTRE question.
+
+**Ce qui distingue les deux moitiés, et permet de les chercher** : l'une sert
+la PERFORMANCE (cache, pré-montée, rendu immédiat), l'autre sert la
+CORRECTION (l'identité qui part sur le fil). La première se remarque tout de
+suite quand elle manque — l'écran rame. La seconde ne se remarque JAMAIS chez
+l'auteur : son propre appareil a le fichier en cache, la scène se peint chez
+lui, et c'est le viewer suivant qui voit du blanc.
+
+> **La question qui les attrape** : *ce que je viens d'obtenir du serveur, qui
+> d'autre doit l'apprendre ?* Posée devant chaque `let result = try await
+> upload…`, elle rend les trois défauts ci-dessus en une lecture. Posée devant
+> le code qui l'entoure, elle n'en rend aucun — parce que le voisinage est
+> juste.
+
+**Corollaire de datation.** Le porteur a dit « il y a trois jours ça
+fonctionnait », et la donnée lui a donné raison au jour près : les posts du
+02-09 n'avaient PAS de canvas (médias simples, grille de tuiles), ceux du
+05-09 en ont un et il est orphelin. **Un « ça marchait avant » se vérifie sur
+les DONNÉES produites, pas sur le code** — l'API rendait la réponse en une
+requête, là où la lecture du diff aurait demandé une heure.
+
+**Et un défaut d'isolation qui n'est pas un détail** : `nonisolated enum` ne
+transmet rien à ses `extension`. La règle pure était inatteignable depuis
+`OutboxDispatcher`, qui dispatche hors du fil principal — même piège que
+`SocialMediaCaption` (leçon 473). Une règle sur des VALEURS doit porter
+`nonisolated` sur CHAQUE déclaration, l'énuméré comme ses extensions.
+
+## Leçon 535 — Suivre le NOM plutôt que le CHEMIN : deux fois le même jour, sur le même lot
+
+**Deux correctifs posés au bon endroit *selon le nom*, au mauvais endroit
+*selon l'exécution*** — 2026-09-05, tous deux sur la publication d'un post à
+canvas.
+
+| correctif | où je l'ai posé | pourquoi c'était faux | où il fallait |
+|---|---|---|---|
+| l'ADOPTION du média dans le canvas | `StoryViewModel+PublicationUpload.runStoryUpload` | ce fichier sert les STORIES ; un POST descend la voie durable | `OutboxDispatcher`, seul étage qui tienne la carte `position → id serveur` |
+| le REDRESSEMENT d'orientation | `StoryMediaLayer` (« la couche des médias ») | le média d'un post-photo est un FOND (`isBackground`) | `StoryBackgroundLayer`, qui a sa propre couche |
+
+Les deux fois, le raisonnement était : *« ce défaut concerne un média de
+canvas ⇒ il vit dans le fichier dont le nom parle de médias de canvas »*. Les
+deux fois, le nom décrivait une FAMILLE et l'exécution suivait une autre
+route.
+
+> **Un nom de fichier décrit la famille que son auteur visait ; il ne décrit
+> pas le chemin que la donnée emprunte.** `StoryViewModel+PublicationUpload`
+> ne dit pas « stories seulement », `StoryMediaLayer` ne dit pas « sauf les
+> fonds » — et ni l'un ni l'autre ne ment : ils nomment ce qu'ils font, pas ce
+> qu'ils NE font pas.
+
+**Ce qui l'attrape, et ce qui ne l'attrape pas.** Relire le fichier ne
+l'attrape pas : il est cohérent. Chercher d'autres fichiers au nom voisin ne
+l'attrape pas non plus — j'avais couvert média, lieu et sticker, et le fond
+manquait quand même. Ce qui l'attrape est de **suivre l'exécution depuis le
+geste** : quel routeur décide, quelle branche est prise, quelle couche peint.
+Trois mesures, pas trois lectures.
+
+**Le témoin qui l'a révélé les deux fois est le même** : republier et LIRE le
+résultat. La première fois, le serveur a rendu `ORPHELIN` après un correctif
+que je croyais posé ; la seconde, la carte est restée à l'envers après un
+redressement que je croyais complet. Dans les deux cas, la compilation était
+verte et les témoins unitaires aussi — ils éprouvaient la RÈGLE, jamais son
+site d'appel.
+
+> **Une règle juste, testée, et appelée nulle part sur le chemin réel, est
+> indiscernable d'une règle absente.** C'est la forme de la journée
+> (leçon 533) vue depuis l'autre bout : là, une moitié présente rassurait sur
+> la moitié absente ; ici, un correctif présent rassure sur le chemin qu'il ne
+> couvre pas.

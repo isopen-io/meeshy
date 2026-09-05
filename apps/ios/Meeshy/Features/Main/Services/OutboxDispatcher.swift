@@ -491,6 +491,12 @@ struct OutboxDispatcher: OutboxDispatching {
         // la jointure « position d'origine → id serveur » se lit APRÈS l'upload,
         // pour le corps de la requête (#4756).
         var uploadedIds: [String] = []
+        // **L'URL SERVIE voyage avec l'id** (#5280). Le canvas ne référence
+        // pas seulement une ligne `PostMedia` : il porte aussi l'URL qu'il
+        // affiche. Adopter l'id sans l'URL laisserait le lecteur devant un
+        // `file://` que l'assainisseur annule — une scène sans image, pour un
+        // canvas pourtant cohérent.
+        var uploadedUrls: [String] = []
         var uploadedSourceIndexes: [Int] = []
         if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -539,6 +545,7 @@ struct OutboxDispatcher: OutboxDispatching {
                         uploadContext: "post"
                     )
                     uploadedIds.append(tusResult.id)
+                    uploadedUrls.append(tusResult.fileUrl)
                     uploadedLocalPaths.append(absolutePath)
                     // **L'INDEX D'ORIGINE voyage avec l'id** (#4756). C'est la
                     // seule jointure possible entre ce que l'auteur a composé
@@ -574,8 +581,19 @@ struct OutboxDispatcher: OutboxDispatching {
         let idParIndexSource = Dictionary(
             uniqueKeysWithValues: zip(uploadedSourceIndexes, uploadedIds)
         )
-        let legendesServeur = serverKeyedCaptions(
+        let urlParIndexSource = Dictionary(
+            uniqueKeysWithValues: zip(uploadedSourceIndexes, uploadedUrls)
+        )
+        let legendesServeur = serverKeyedTexts(
             payload.mediaCaptions, idsBySourceIndex: idParIndexSource
+        )
+        // **Le même réalignement, sur l'autre texte** (2026-09-05). Deux
+        // appels à UNE fonction, jamais deux fonctions : la carte des ids
+        // (`idParIndexSource`) est la même, et c'est elle qui porte le seul
+        // fait délicat — un upload sauté rompt l'alignement, donc l'index
+        // s'enregistre au lieu de se déduire d'une longueur.
+        let altsServeur = serverKeyedTexts(
+            payload.mediaAlts, idsBySourceIndex: idParIndexSource
         )
 
         let body = CreatePostBody(
@@ -603,13 +621,41 @@ struct OutboxDispatcher: OutboxDispatching {
             // (`postMediaId`). Un canvas dont le FOND est un fichier local part
             // donc sans son image — suivi ouvert et nommé, jamais masqué par ce
             // correctif.
-            storyEffects: payload.storyEffects?.sanitizedForServerPublish(),
+            // **Le canvas ADOPTE les médias que le post vient de créer**
+            // (#5280, 2026-09-05). Avant cette ligne, il désignait la ligne
+            // `PostMedia` de la PRÉ-MONTÉE — celle faite au moment où la photo
+            // a été posée sur la scène — et le lecteur cherchait un id absent
+            // de `post.media` : la scène se peignait VIDE, sur toute la carte.
+            //
+            // L'adoption se fait ICI parce que c'est le seul étage qui tienne
+            // les deux bouts : la carte `position → id serveur` (construite
+            // ci-dessus, et déjà lue par les légendes et les alternatives) et
+            // le canvas lui-même. Plus haut, les ids serveur n'existent pas ;
+            // plus bas, il n'y a plus de canvas.
+            //
+            // L'ASSAINISSEMENT vient APRÈS, et l'ordre compte : il annule les
+            // `file://` restés locaux, et une adoption réussie n'en laisse
+            // aucun. Assainir d'abord effacerait l'URL que l'adoption doit
+            // remplacer, et le sanitizer journaliserait un défaut que le lot
+            // vient de corriger.
+            storyEffects: CanvasMediaAdoption
+                .adopting(payload.storyEffects,
+                          objectIdsBySourceIndex: payload.mediaObjectIds,
+                          idsBySourceIndex: idParIndexSource,
+                          urlsBySourceIndex: urlParIndexSource)?
+                .sanitizedForServerPublish(),
             // **La légende atteint enfin son destinataire** (#4756). Elle était
             // saisie, affichée, relue — et mourait ici, faute d'une clé que le
             // gateway sache reconnaître : `PostService.applyMediaText` filtre en
             // SILENCE les ids qu'il ignore, si bien qu'une carte mal clée se
             // perd sans erreur.
-            mediaCaption: legendesServeur.isEmpty ? nil : legendesServeur
+            mediaCaption: legendesServeur.isEmpty ? nil : legendesServeur,
+            // **L'alternative textuelle atteint enfin son destinataire.**
+            // `CreatePostSchema.mediaAlt` l'attendait depuis toujours côté
+            // gateway ; côté client, la carte s'arrêtait au meuble. Un média
+            // partait donc muet pour un lecteur d'écran, alors que l'auteur
+            // avait rempli le champ « Décrire » et l'avait relu.
+            mediaAlt: altsServeur.isEmpty ? nil : altsServeur
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             PostsEndpoint.root,
@@ -1013,7 +1059,18 @@ final class OutboxRetryScheduler {
 /// Une légende vide ou blanche est omise aussi : une clé présente à valeur vide
 /// poserait une légende BLANCHE sur le média, le contraire de « pas de
 /// légende » (`ComposerSlideTextRole.applyCaption`, même distinction).
-nonisolated func serverKeyedCaptions(
+/// **La traduction « position d'origine → id serveur », pour TOUT texte par
+/// média.**
+///
+/// Elle s'appelait `serverKeyedCaptions` et ne servait qu'aux légendes. Le nom
+/// disait le premier appelant, jamais la règle — et le second appelant (le
+/// texte alternatif, 2026-09-05) aurait eu le choix entre appeler une fonction
+/// qui prétend faire autre chose, ou en écrire une jumelle. Les deux réponses
+/// sont mauvaises ; renommer coûte une ligne.
+///
+/// > Un nom qui décrit l'APPELANT plutôt que la règle fabrique une jumelle au
+/// > deuxième usage.
+nonisolated func serverKeyedTexts(
     _ byIndex: [String?]?,
     idsBySourceIndex: [Int: String]
 ) -> [String: String] {
@@ -1091,6 +1148,10 @@ nonisolated struct CreatePostBody: Encodable {
     /// le reste sans rien dire.
     let mediaCaption: [String: String]?
 
+    /// Le texte ALTERNATIF par média, keyé `PostMedia.id` — champ distinct de
+    /// la légende dans `CreatePostSchema`, et jamais son repli.
+    let mediaAlt: [String: String]?
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         if let content, !content.isEmpty { try container.encode(content, forKey: .content) }
@@ -1129,6 +1190,9 @@ nonisolated struct CreatePostBody: Encodable {
         if let mediaCaption, !mediaCaption.isEmpty {
             try container.encode(mediaCaption, forKey: .mediaCaption)
         }
+        if let mediaAlt, !mediaAlt.isEmpty {
+            try container.encode(mediaAlt, forKey: .mediaAlt)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1136,5 +1200,6 @@ nonisolated struct CreatePostBody: Encodable {
         case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
         case discoverabilityPrecision, repostOfId, mobileTranscription, storyEffects
         case mediaCaption
+        case mediaAlt
     }
 }

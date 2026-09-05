@@ -174,11 +174,37 @@ enum FullscreenImageSource {
 /// lieu de recopier l'un des deux au jugé.
 enum CaptionExpansionSpace {
 
-    /// Les détails d'auteur restent-ils visibles ? Non dès que la légende est
-    /// dépliée — c'est la place qu'elle occupe.
-    nonisolated static func showsAuthorDetails(captionExpanded: Bool) -> Bool {
-        !captionExpanded
-    }
+    /// **Le plein écran média ne CÈDE plus rien** (directive porteur
+    /// 2026-09-05).
+    ///
+    /// > « En plein écran le "voir plus" de la légende doit juste afficher le
+    /// > texte déplié avec effet ombre, en repoussant le détail de l'auteur
+    /// > vers le haut. »
+    ///
+    /// Cette valeur répondait `!captionExpanded` : la carte d'auteur
+    /// DISPARAISSAIT en fondu pour libérer le bas de l'écran, sur la directive
+    /// du 2026-09-02 (« les détails d'auteur se cachent pour afficher le
+    /// contenu »). La directive d'aujourd'hui la renverse, et il faut le dire
+    /// franchement plutôt que l'effacer : ce n'est pas une correction de
+    /// défaut, c'est un CHANGEMENT D'AVIS du porteur, et le code doit porter
+    /// les deux dates pour que la prochaine main sache laquelle est vivante.
+    ///
+    /// Ce qui change dans la MÉCANIQUE : il n'y a plus de place à trouver. La
+    /// légende dépliée grandit dans une pile ancrée en bas, donc elle POUSSE
+    /// ses voisins vers le haut — l'auteur monte au lieu de s'effacer. Et la
+    /// lisibilité, que le retrait des voisins servait, est portée par l'ombre
+    /// que `MediaCaptionOverlay` applique déjà (`legibleOverCanvas` : une passe
+    /// courte et dense, une longue et douce).
+    ///
+    /// > **Une constante qui ignore son paramètre est un mensonge de
+    /// > signature.** D'où le retrait de la fonction plutôt qu'un `true`
+    /// > inconditionnel : `showsAuthorDetails(captionExpanded:)` promettait que
+    /// > la réponse DÉPEND du dépliage. Elle n'en dépend plus, et le seul
+    /// > moyen honnête de le dire est qu'aucun appelant ne la demande.
+    ///
+    /// Le témoin qui remplace ses deux unitaires est une garde de SOURCE : la
+    /// galerie ne doit conditionner sa carte d'auteur sur `captionExpanded` par
+    /// aucun chemin.
 
     /// Opacité de la scène d'une story pendant que sa légende est dépliée.
     ///

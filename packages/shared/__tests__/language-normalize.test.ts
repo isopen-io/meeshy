@@ -6,7 +6,7 @@
  * - Swift app  : ConversationLanguagePreferences.normalize (apps/ios)
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeLanguageCode, normalizeLanguageForDedup, isSameLanguage } from '../utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup, isSameLanguage, makeLanguageFilter } from '../utils/language-normalize';
 
 describe('normalizeLanguageCode', () => {
   it('returns ISO 639-1 for plain code', () => {
@@ -249,5 +249,44 @@ describe('isSameLanguage', () => {
 
   it('matches a code against itself', () => {
     expect(isSameLanguage('fr', 'fr')).toBe(true);
+  });
+});
+
+describe('makeLanguageFilter', () => {
+  it('returns null when the requested list is absent or empty (serve every language)', () => {
+    expect(makeLanguageFilter(undefined)).toBeNull();
+    expect(makeLanguageFilter(null)).toBeNull();
+    expect(makeLanguageFilter([])).toBeNull();
+    expect(makeLanguageFilter([''])).toBeNull();
+  });
+
+  it('matches a stored region-tagged key against a canonical request (untreated half of #5108)', () => {
+    const match = makeLanguageFilter(['pt'])!;
+    expect(match('pt-BR')).toBe(true);
+    expect(match('pt_BR')).toBe(true);
+    expect(match('pt')).toBe(true);
+    expect(match('es')).toBe(false);
+  });
+
+  it('matches a canonical stored key against a region-tagged request (both sides canonicalized)', () => {
+    const match = makeLanguageFilter(['pt-BR', 'zh-Hant-HK'])!;
+    expect(match('pt')).toBe(true);
+    expect(match('zh')).toBe(true);
+    expect(match('en')).toBe(false);
+  });
+
+  it('matches case-insensitively and across legacy aliases', () => {
+    const heMatch = makeLanguageFilter(['he'])!;
+    expect(heMatch('iw')).toBe(true);
+    expect(makeLanguageFilter(['EN'])!('en-US')).toBe(true);
+  });
+
+  it('matches an ISO 639-3 code against its 639-1 canonical form', () => {
+    expect(makeLanguageFilter(['es'])!('spa')).toBe(true);
+    expect(makeLanguageFilter(['fra'])!('fr')).toBe(true);
+  });
+
+  it('returns false for an empty candidate code', () => {
+    expect(makeLanguageFilter(['en'])!('')).toBe(false);
   });
 });

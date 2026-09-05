@@ -361,7 +361,9 @@ struct DocumentComposerDoor: View {
             // rang : un écart entre les deux serait un champ perdu en silence
             // chez l'une des deux — ce que leur doc-comment croisé annonce.
             storyEffects: draft.storyEffects,
-            mediaCaptions: draft.mediaCaptions
+            mediaCaptions: draft.mediaCaptions,
+            mediaAlts: draft.mediaAlts,
+            mediaObjectIds: draft.mediaObjectIds
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

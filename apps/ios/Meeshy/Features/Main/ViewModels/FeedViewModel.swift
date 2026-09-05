@@ -890,7 +890,15 @@ class FeedViewModel: ObservableObject {
         /// Le canvas (#4756), sans défaut — même raison qu'au-dessus.
         storyEffects: StoryEffects?,
         /// Les légendes par fichier (#4756), alignées par index sur `localMediaURLs`.
-        mediaCaptions: [String?]?
+        mediaCaptions: [String?]?,
+        /// Les alternatives textuelles et l'identifiant d'objet de canvas de
+        /// chaque fichier (2026-09-05). **Sans défaut**, et c'est le point :
+        /// cette entrée est partagée par la feuille du fil — qui n'a ni
+        /// éditeur d'objet ni scène, et passe donc `nil` en le DISANT — et par
+        /// des chemins qui en portent. Un défaut ferait disparaître ces champs
+        /// d'un site d'appel sans casser la moindre compilation.
+        mediaAlts: [String?]?,
+        mediaObjectIds: [String?]?
     ) async {
         publishError = nil
         publishSuccess = false
@@ -937,7 +945,9 @@ class FeedViewModel: ObservableObject {
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: mobileTranscription,
             storyEffects: storyEffects,
-            mediaCaptions: mediaCaptions
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds
         )
     }
 
@@ -976,7 +986,20 @@ class FeedViewModel: ObservableObject {
             discoverabilityPrecision: intent.discoverabilityPrecision,
             mobileTranscription: intent.mobileTranscription,
             storyEffects: intent.storyEffects,
-            mediaCaptions: intent.mediaCaptions
+            mediaCaptions: intent.mediaCaptions,
+            // **Un relais qui RECOPIE champ par champ est un inventaire à
+            // tenir à jour** (2026-09-05). Ce site s'arrêtait aux légendes :
+            // `mediaAlts` et `mediaObjectIds`, ajoutés en amont le même jour,
+            // y mouraient en silence — l'intention les portait, le relais ne
+            // les nommait pas, et rien ne rougissait.
+            //
+            // > C'est la forme que le `CLAUDE.md` documente sur
+            // > `createMentionNotificationsBatch` : « il en recopiait neuf,
+            // > retenant en silence chaque champ ajouté en amont ». Un relais
+            // > exhaustif ne se vérifie pas en le lisant — il se vérifie en
+            // > comptant, et c'est ce que fait `PublishIntentRelayTests`.
+            mediaAlts: intent.mediaAlts,
+            mediaObjectIds: intent.mediaObjectIds
         )
     }
 
@@ -999,7 +1022,12 @@ class FeedViewModel: ObservableObject {
         discoverabilityPrecision: DiscoverabilityPrecision?,
         mobileTranscription: MobileTranscriptionPayload?,
         storyEffects: StoryEffects?,
-        mediaCaptions: [String?]?
+        mediaCaptions: [String?]?,
+        /// Les alternatives textuelles et l'identifiant d'objet de canvas.
+        /// Sans défaut : ce cœur est le point de passage des DEUX entrées, et
+        /// c'est ici qu'un champ oublié se perdrait pour les deux à la fois.
+        mediaAlts: [String?]?,
+        mediaObjectIds: [String?]?
     ) async {
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
@@ -1054,7 +1082,26 @@ class FeedViewModel: ObservableObject {
                 // Les légendes voyagent par l'INDEX du fichier (#4756) : l'id
                 // serveur n'existera qu'à l'upload, et le dispatcher fait
                 // seul la traduction.
-                mediaCaptions: mediaCaptions
+                mediaCaptions: mediaCaptions,
+                // **TRANSMIS, plus posés à `nil`** (2026-09-05).
+                //
+                // Ils l'étaient, sous un commentaire qui disait « ce site n'en
+                // a aucune » — vrai de l'entrée `createOfflineMediaPost` (la
+                // feuille du fil n'a ni éditeur d'objet ni scène), FAUX de
+                // `publish(_:)`, qui relaie une intention composée au MEUBLE
+                // et qui en porte.
+                //
+                // > **Un `nil` justifié par le cas d'UN appelant devient un
+                // > mensonge dès qu'un second appelant partage la fonction.**
+                // > Le commentaire décrivait honnêtement une moitié de la
+                // > vérité, et c'est exactement ce qui l'a rendu invisible :
+                // > il se relit comme une décision, pas comme un oubli.
+                //
+                // Mesuré : `adoption IMPOSSIBLE: effets=true objectIds=-1
+                // mediaObjects=1` — le canvas et ses objets étaient là, le
+                // pont était nul, et l'adoption ne pouvait pas avoir lieu.
+                mediaAlts: mediaAlts,
+                mediaObjectIds: mediaObjectIds
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in

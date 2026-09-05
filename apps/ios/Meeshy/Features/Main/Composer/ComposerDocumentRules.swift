@@ -797,6 +797,21 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// Vide pour un mood, qui n'a pas de média.
     let mediaCaptions: ComposerMediaCaptions
 
+    /// **Les textes ALTERNATIFS par média, clés par URL locale** (2026-09-05).
+    ///
+    /// Ils étaient saisis (section « Décrire » de l'éditeur d'objet), stockés
+    /// (`documentMediaAlts`, au meuble) et relus — et n'allaient nulle part sur
+    /// la voie DOCUMENT, la seule que prenne un post. Le chemin STORY, lui, les
+    /// portait depuis #4756 : deux voies pour une même saisie, dont une seule
+    /// arrivait.
+    ///
+    /// Vide pour un mood, qui n'a pas de média.
+    let mediaAlts: ComposerMediaCaptions
+
+    /// **`URL source → identifiant d'objet de canvas`** (#5280) — le chaînon
+    /// de l'adoption. Vide pour un post sans scène.
+    let mediaObjectIds: ComposerMediaCaptions
+
     /// **T2.4 — l'interrupteur POST ↔ RÉEL.** `ReelComposition.defaultType`
     /// élit `"REEL"` dès qu'une vidéo, un audio ≥ 3 s ou ≥ 2 images qualifient
     /// (`qualifiesAsReel`) ; ce champ, quand `true`, retient un POST simple
@@ -873,6 +888,10 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             storyEffects: nil,
             // Un mood n'a pas de média, donc aucune légende par média.
             mediaCaptions: [:],
+            // Un mood n'a pas de média, donc pas d'alternative non plus.
+            mediaAlts: [:],
+            // Un mood n'a pas de scène : aucun objet de canvas à adopter.
+            mediaObjectIds: [:],
             forcePlainPost: false,
             // Un mood n'a pas d'outil micro (rangée du document seule, T2.6) :
             // aucun geste ne peut jamais alimenter ce champ pour ce format.
@@ -955,7 +974,14 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         /// Le canvas de la slide courante, ou `nil` sans scène (#4756).
         storyEffects: StoryEffects?,
         /// Les légendes par média saisies dans le composer (#4756).
-        mediaCaptions: ComposerMediaCaptions
+        mediaCaptions: ComposerMediaCaptions,
+        /// Les alternatives textuelles saisies dans l'éditeur d'objet, déjà
+        /// TRADUITES en clés d'URL par le meuble — c'est lui, et lui seul, qui
+        /// tient le pont `identifiant d'objet → URL source`.
+        mediaAlts: ComposerMediaCaptions,
+        /// Le pont `URL source → identifiant d'objet`, tenu par le meuble
+        /// depuis le retour d'`applyContentMedia`.
+        mediaObjectIds: ComposerMediaCaptions
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -977,6 +1003,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             originalLanguage: originalLanguage,
             storyEffects: storyEffects,
             mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds,
             forcePlainPost: forcePlainPost,
             mobileTranscription: mobileTranscription
         )
@@ -1028,6 +1056,19 @@ nonisolated enum ComposerDocumentCopy {
     static var mentionStrip: String {
         String(localized: "composer.document.a11y.mentions",
                defaultValue: "Suggestions de mention", bundle: .main)
+    }
+
+    /// **Le mot qu'une bande VIDE affiche** (2026-09-05).
+    ///
+    /// La bande disparaissait quand rien ne correspondait, et l'auteur ne
+    /// pouvait pas distinguer « cette personne n'existe pas » de « la
+    /// fonctionnalité est cassée ». Le SDK dit déjà ce mot sur la même
+    /// question (`mention.suggestions.empty`, catalogue `.module`) ; la clé est
+    /// distincte parce que les deux bundles ne se lisent pas l'un l'autre, la
+    /// phrase est la même parce que c'est la même réponse.
+    static var mentionEmpty: String {
+        String(localized: "composer.mention.empty",
+               defaultValue: "Aucune personne trouvée", bundle: .main)
     }
 
     /// Le libellé du picker de couleur de fond (F2, #3883… F2, #3885) — clé

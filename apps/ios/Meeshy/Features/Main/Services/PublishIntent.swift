@@ -142,6 +142,38 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// (`ComposerSlideTextRole.applyCaption`).
     let mediaCaptions: [String?]
 
+    /// **Le texte ALTERNATIF par média, dans le même ordre que les fichiers**
+    /// (2026-09-05).
+    ///
+    /// Jumeau de `mediaCaptions` dans sa FORME, et distinct dans son SENS : la
+    /// légende s'adresse à qui VOIT le média, l'alternative à qui ne le voit
+    /// pas. Ce sont deux textes, deux champs du schéma (`CreatePostSchema.
+    /// mediaCaption` / `.mediaAlt`), et jamais un repli l'un sur l'autre —
+    /// servir une légende comme alternative dirait à un lecteur d'écran
+    /// « voici ce que l'image montre » à partir d'un texte écrit pour
+    /// accompagner ce qu'on voit déjà.
+    ///
+    /// Même convention que ci-dessus : `nil` à une position ⇒ ce fichier n'a
+    /// pas d'alternative.
+    let mediaAlts: [String?]
+
+    /// **L'identifiant d'OBJET de canvas que chaque fichier représente**
+    /// (#5280, 2026-09-05).
+    ///
+    /// Ni un texte ni une donnée d'affichage : le chaînon qui permet au
+    /// dispatcher d'ADOPTER, dans le canvas, l'identité serveur qu'il vient de
+    /// créer. Sans lui, le canvas publié désigne la ligne `PostMedia` de la
+    /// PRÉ-MONTÉE — celle faite à la pose sur la scène — et le lecteur cherche
+    /// un id absent de `post.media` : la scène se peint VIDE.
+    ///
+    /// Même forme et même alignement que les deux textes ci-dessus, pour la
+    /// même raison : c'est la POSITION dans `localMedia` qui survit à la
+    /// relocalisation des fichiers, jamais l'URL.
+    ///
+    /// `nil` à une position ⇒ ce fichier ne correspond à aucun objet de canvas
+    /// (un post sans scène, une pièce jointe simple).
+    let mediaObjectIds: [String?]
+
     private init(
         clientMutationId: String,
         type: String,
@@ -156,7 +188,9 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         discoverabilityPrecision: DiscoverabilityPrecision?,
         mobileTranscription: MobileTranscriptionPayload?,
         storyEffects: StoryEffects?,
-        mediaCaptions: [String?]
+        mediaCaptions: [String?],
+        mediaAlts: [String?],
+        mediaObjectIds: [String?]
     ) {
         self.clientMutationId = clientMutationId
         self.type = type
@@ -172,6 +206,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         self.mobileTranscription = mobileTranscription
         self.storyEffects = storyEffects
         self.mediaCaptions = mediaCaptions
+        self.mediaAlts = mediaAlts
+        self.mediaObjectIds = mediaObjectIds
     }
 
     /// Le geste « **j'ai composé un document** » — un post ou un réel né du
@@ -212,7 +248,17 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         /// **Les légendes du composer, clées par URL LOCALE** (#4756). Elles
         /// sont RÉALIGNÉES sur l'index de `localMedia` ci-dessous — c'est le
         /// seul endroit qui voie les deux, la carte et l'ordre des fichiers.
-        mediaCaptions: ComposerMediaCaptions
+        mediaCaptions: ComposerMediaCaptions,
+        /// **Les alternatives textuelles, clées par URL LOCALE elles aussi.**
+        /// Le meuble les tient par identifiant d'OBJET (c'est ce que l'éditeur
+        /// de scène édite) et les traduit en URL avant de les remettre :
+        /// `documentMediaObjectIdBySource` est le pont, et il ne peut vivre
+        /// que là où les deux clés coexistent.
+        mediaAlts: ComposerMediaCaptions,
+        /// `URL source → identifiant d'objet de canvas`, tel que
+        /// `applyContentMedia` l'a rendu et que le meuble l'accumule
+        /// (`documentMediaObjectIdBySource`). Vide pour un post sans scène.
+        mediaObjectIds: ComposerMediaCaptions
     ) -> PublishIntent {
         PublishIntent(
             clientMutationId: ClientMutationId.generate(),
@@ -260,7 +306,15 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             // site est le seul qui tienne à la fois les légendes (par URL) et
             // l'ORDRE des fichiers ; plus bas, l'URL n'existe plus — la file
             // relocalise les fichiers et n'en garde que des chemins relatifs.
-            mediaCaptions: localMedia.map { mediaCaptions[$0.url] }
+            mediaCaptions: localMedia.map { mediaCaptions[$0.url] },
+            // Le MÊME réalignement, sur la même liste et dans le même ordre :
+            // deux boucles écrites séparément se décaleraient au premier
+            // fichier sauté.
+            mediaAlts: localMedia.map { mediaAlts[$0.url] },
+            // Le TROISIÈME réalignement, sur la même liste et dans le même
+            // ordre — un quatrième tableau écrit séparément se décalerait au
+            // premier fichier sauté.
+            mediaObjectIds: localMedia.map { mediaObjectIds[$0.url] }
         )
     }
 
@@ -321,7 +375,12 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             storyEffects: nil,
             // Un vocal n'a pas non plus de légende par média : il EST le média,
             // et ce qui le décrit est sa transcription.
-            mediaCaptions: [nil]
+            mediaCaptions: [nil],
+            // Ni alternative : un vocal ne se REGARDE pas. Ce qui le rend
+            // accessible est sa transcription, déjà portée ci-dessus.
+            mediaAlts: [nil],
+            // Un vocal n'a pas de canvas : aucun objet à adopter.
+            mediaObjectIds: [nil]
         )
     }
 }

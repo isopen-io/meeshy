@@ -53,11 +53,10 @@ import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
+import { fetchParticipantSuperset } from '../participant-superset';
 import {
-  PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
   toIsoOrNull,
-  type PreviewPrismParticipant,
 } from '../utils/lastMessagePreviewPrism';
 import { validateMessageLength } from '../../config/message-limits';
 import {
@@ -1353,35 +1352,12 @@ export class MessageHandler {
         ...locationParts,
       };
 
-      // Single participant query shared between the `message:new` fan-out,
-      // CONVERSATION_UPDATED and CONVERSATION_UNREAD_UPDATED to avoid
-      // duplicate DB round-trips. Lue AVANT la diffusion : la réciprocité
-      // des sources de transfert a besoin des lecteurs du salon pour
-      // décider qui a droit à la provenance — une liste, un lecteur.
-      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
-      // satisfies both callers — `user` (préférences de langue) est le Prisme
-      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
-      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
-      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
-      // qui charge le même superset pour la même raison.
-      //
-      // `undefined` — jamais `[]` — quand la requête tombe. Les deux formes se
-      // lisent pareil au site d'appel et ne disent pas la même chose : `[]`
-      // AFFIRME que la conversation n'a aucun participant, `undefined` avoue
-      // qu'on ne sait pas. `enqueueForOfflineParticipants` distingue les deux
-      // (`params.participants ?? sa propre requête`), et c'est la seule des
-      // trois consommatrices dont l'abandon soit DESTRUCTIF : un `[]` lui
-      // faisait enfiler pour PERSONNE, donc perdre le message pour tous les
-      // absents, pendant que ce journal n'annonçait que deux pertes cosmétiques.
-      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
-      try {
-        sharedParticipants = await this.prisma.participant.findMany({
-          where: { conversationId: normalizedId, isActive: true },
-          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-        });
-      } catch (err) {
-        handlerLogger.warn('participant fetch failed — CONVERSATION_UPDATED + unread sautés, la file hors ligne refait sa propre requête', { error: err });
-      }
+      // Site UNIQUE, partagé avec le chemin REST/ZMQ : `participant-superset.ts`
+      // (le `select`, la sémantique `undefined` ≠ `[]`, et pourquoi). Lue AVANT
+      // la diffusion : la réciprocité des sources de transfert a besoin des
+      // lecteurs du salon pour décider qui a droit à la provenance — une
+      // liste, un lecteur.
+      const sharedParticipants = await fetchParticipantSuperset(this.prisma, normalizedId, 'socket');
 
       const room = ROOMS.conversation(normalizedId);
 

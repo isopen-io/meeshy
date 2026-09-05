@@ -158,6 +158,21 @@ extension ConversationViewModel {
         if isViewOnceEnabled { isViewOnceEnabled = false }
         if pendingEffects.hasAnyEffect { pendingEffects = .none }
         mentionController.clearDraft()
+
+        // #5218 — LE moment où la permission de notification a un sens pour un
+        // compte fraîchement créé : il vient de parler à quelqu'un, donc il a
+        // quelque chose à recevoir. `MeeshyApp` a posé le marqueur au lieu de
+        // demander à l'ouverture (`PushPermissionDeferral`) ; ici on l'honore
+        // une fois, et le marqueur disparaît.
+        //
+        // Ce site est le point de passage des DEUX transports acquittés par le
+        // serveur (socket-first et REST) : le placer dans `sendMessage`, qui a
+        // quatre `return true` dont un pour la simple mise en file HORS LIGNE,
+        // demanderait la permission pour un message qui n'est pas encore parti.
+        //
+        // Détaché : la demande ouvre une alerte système qui peut rester à
+        // l'écran indéfiniment, et rien de l'envoi ne doit l'attendre.
+        Task { await PushPermissionPrompt.honourDeferredRequest() }
     }
 
     /// Preview shown in the conversation list for an OPTIMISTIC message: the

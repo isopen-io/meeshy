@@ -24,7 +24,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageForDedup, makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
 import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
@@ -53,10 +53,10 @@ function cleanAttachmentsForApi(
   }
 
   // Bandwidth opt-in : restreindre les traductions audio (Prisme) aux langues
-  // demandées, miroir exact du filtre appliqué aux traductions texte.
-  const langSet = languageFilter && languageFilter.length > 0
-    ? new Set(languageFilter.map((l) => l.toLowerCase()))
-    : null;
+  // demandées, miroir exact du filtre appliqué aux traductions texte. SSOT
+  // `makeLanguageFilter` — canonicalise les DEUX côtés (une clé audio stockée
+  // `'pt-BR'` matche une demande `'pt'`, #5234).
+  const matchesLanguage = makeLanguageFilter(languageFilter);
 
   if (attachments.length > 0) {
     logger.debug(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
@@ -121,7 +121,7 @@ function cleanAttachmentsForApi(
 
       const cleanedTranslations: any = {};
       for (const [lang, translation] of Object.entries(cleaned.translations)) {
-        if (langSet && !langSet.has(lang.toLowerCase())) continue;
+        if (matchesLanguage && !matchesLanguage(lang)) continue;
         const trans = translation as any;
         cleanedTranslations[lang] = {
           ...trans,

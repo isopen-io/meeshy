@@ -65,4 +65,64 @@ final class ComposerObjectEditorOptionsHeightTests: XCTestCase {
         XCTAssertTrue(code.contains("ComposerObjectEditorOptions.height("),
                       "…et faire la hauteur de son contenu, un ScrollView étant glouton")
     }
+
+    /// **UNE boîte, UNE mesure** (2026-09-05).
+    ///
+    /// ## Ce que le témoin ci-dessus ne pouvait pas voir
+    ///
+    /// Il cherche `ComposerObjectEditorOptions.height(` quelque part dans le
+    /// fichier. C'était vrai avec DEUX branches — texte et média — dont **une
+    /// seule publiait la préférence** : la branche média lisait
+    /// `optionsContentHeight` sans que rien ne l'alimente, `height(content:0…)`
+    /// rendait son plancher, et le panneau d'un média faisait **1 point**.
+    ///
+    /// Mesuré au simulateur `Meeshy-iOS26`, écran de 874 points : section
+    /// « Décrire » ouverte sur un média, son titre à y=839 et son champ de
+    /// saisie à **y=884** — décrit par l'arbre d'accessibilité, hors d'atteinte
+    /// de tout doigt. Filtre, rognage et actions vivaient là depuis #5083 ;
+    /// « Décrire » n'a rien cassé, il a été le premier de la famille à porter
+    /// un champ de SAISIE, donc le premier dont le défaut se constate au doigt.
+    ///
+    /// > **Une garde `contains` sur un site PARTAGÉ ne distingue pas « une
+    /// > branche le fait » de « toutes le font ».** Elle reste verte tant qu'un
+    /// > seul appelant la satisfait — et c'est exactement la moitié du travail
+    /// > qu'un correctif à deux branches oublie.
+    ///
+    /// Le témoin compte donc les SITES : une seule boîte, qui mesure ce qu'on
+    /// lui donne. Une troisième famille d'objet ne peut plus naître aveugle,
+    /// puisqu'elle ne peut pas monter sa propre boîte sans faire tomber ceci.
+    func test_uneSeuleBoîte_etElleMesureCeQuOnLuiDonne() throws {
+        let code = AppSourceGuard.stripComments(try String(contentsOf: vue, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertEqual(occurrences(of: "ComposerObjectEditorOptions.height(", in: code), 1,
+                       """
+                       Le panneau d'options doit être monté par UN seul site. Deux sites \
+                       partagent sa TAILLE, jamais sa MESURE — celle-ci se recopie, donc elle \
+                       s'oublie, et la branche qui l'oublie rend un panneau d'un point dont le \
+                       contenu se peint SOUS le bord de l'écran.
+                       """)
+        XCTAssertEqual(
+            occurrences(of: "preference(key:ComposerObjectEditorOptionsHeightKey.self",
+                        in: code), 1,
+            "…et ce site unique PUBLIE la hauteur de ce qu'il contient, sinon il lit "
+            + "une préférence que personne n'écrit et sert son plancher.")
+    }
+
+    private var vue: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+    }
+
+    private func occurrences(of aiguille: String, in botte: String) -> Int {
+        var compte = 0
+        var index = botte.startIndex
+        while let trouve = botte.range(of: aiguille, range: index..<botte.endIndex) {
+            compte += 1
+            index = trouve.upperBound
+        }
+        return compte
+    }
 }

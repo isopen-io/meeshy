@@ -366,7 +366,31 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
       if (manualIds && manualIds.length > 0) {
         const users = await fastify.prisma.user.findMany({
           where: { id: { in: manualIds } },
-          select: { id: true, displayName: true, username: true, agentGlobalProfile: true },
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            // #4888 — la relation partait NUE (`agentGlobalProfile: true`),
+            // chargeant `id`/`userId`/`responsePatterns`/`locked`/`createdAt`/
+            // `updatedAt` qu'aucune ligne ci-dessous ne lit. Projection sur
+            // les seuls champs que la construction d'`AgentUserRole` consomme.
+            agentGlobalProfile: {
+              select: {
+                personaSummary: true,
+                tone: true,
+                vocabularyLevel: true,
+                typicalLength: true,
+                emojiUsage: true,
+                topicsOfExpertise: true,
+                topicsAvoided: true,
+                catchphrases: true,
+                commonEmojis: true,
+                reactionPatterns: true,
+                messagesAnalyzed: true,
+                confidence: true,
+              },
+            },
+          },
         });
 
         for (const u of users) {
