@@ -11,7 +11,6 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
-import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -891,35 +890,9 @@ describe('POST /communities/:id/invite — inviter not a member (line 1995)', ()
   });
 });
 
-describe('POST /communities/:id/invite — inviter not a member, proven by mutation on the nested where (#4867)', () => {
-  // Le double du bloc précédent sème `members: []` — il ne prouve rien sur le
-  // `where: { userId }` imbriqué : un tableau déjà vide reste vide qu'on
-  // filtre ou pas. Celui-ci HONORE le `where` réel et sème un intrus — un
-  // AUTRE membre de la communauté, qui n'est pas l'appelant. Si le `where`
-  // imbriqué disparaissait, `members[0]` deviendrait cet intrus et
-  // `inviterMember` serait truthy : la route passerait la porte au lieu de la
-  // refuser.
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.community.findFirst = jest.fn<any>(findFirstHonouringWhere([
-      {
-        id: COMM_ID, isPrivate: false, createdBy: OTHER_USER_ID,
-        members: [{ userId: OTHER_USER_ID, role: 'admin' }],
-      },
-    ]));
-    ({ app } = await buildAuthApp(prisma));
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 for the caller whose OWN row is absent, despite an unrelated member row existing', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/communities/${COMM_ID}/invite`,
-      payload: { userId: INVITEE_ID },
-    });
-    expect(res.statusCode).toBe(403);
-  });
-});
+// La preuve par mutation sur le `where: { userId }` imbriqué de cette branche
+// (« inviter not a member ») vit dans `communities-invite-nested-where.test.ts`
+// (#4867, extrait pour rester sous le budget de taille — #4531).
 
 // ─── POST /communities/:id/invite — private, non-admin (lines 1999-2001) ─────
 
@@ -944,34 +917,9 @@ describe('POST /communities/:id/invite — private community, non-admin inviter 
   });
 });
 
-describe('POST /communities/:id/invite — private community, non-admin inviter, proven by mutation (#4867)', () => {
-  // Fixture semée avec un intrus ADMIN d'un AUTRE compte, en tête du tableau
-  // brut. Si le `where: { userId }` imbriqué disparaissait, `members[0]`
-  // deviendrait cet admin et la route laisserait passer l'invitation.
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const prisma = makePrisma();
-    prisma.community.findFirst = jest.fn<any>(findFirstHonouringWhere([
-      {
-        id: COMM_ID, isPrivate: true, createdBy: OTHER_USER_ID,
-        members: [
-          { userId: OTHER_USER_ID, role: 'admin' },
-          { userId: USER_ID, role: 'member' },
-        ],
-      },
-    ]));
-    ({ app } = await buildAuthApp(prisma));
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 for the caller whose OWN row is member, despite an unrelated admin row existing', async () => {
-    const res = await app.inject({
-      method: 'POST', url: `/communities/${COMM_ID}/invite`,
-      payload: { userId: INVITEE_ID },
-    });
-    expect(res.statusCode).toBe(403);
-  });
-});
+// La preuve par mutation sur le `where: { userId }` imbriqué de cette branche
+// (« private community, non-admin inviter ») vit aussi dans
+// `communities-invite-nested-where.test.ts` (#4867).
 
 // ─── POST /communities/:id/invite — invitee not found (line 2011) ────────────
 
