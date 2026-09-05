@@ -353,7 +353,8 @@ extension FeedView {
                     // fabrique de charge ne pose aucun défaut, précisément pour
                     // qu'un champ neuf ne disparaisse pas d'un site d'appel en
                     // silence.
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil   // le composer inline n'a pas de scène, #4756
                 )
             }
             return
@@ -1772,7 +1773,8 @@ struct FeedComposerSheet: View {
                     location: pendingPlace,
                     mentions: declared,
                     discoverabilityPrecision: nearbyPrecision,
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil
                 )
             }
             return

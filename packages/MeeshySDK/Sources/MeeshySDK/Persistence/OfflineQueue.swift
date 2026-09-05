@@ -551,7 +551,10 @@ public protocol OfflineQueueing: Sendable {
         /// compilation, ce qui est exactement le mécanisme par lequel
         /// `CreatePostPayload` avait perdu trois champs sur la branche hors
         /// ligne de `setStatus`.
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        /// Le canvas composé sur la scène (#4756) — sans défaut, comme
+        /// `mobileTranscription` : chaque appelant DÉCLARE s'il en a un.
+        storyEffects: StoryEffects?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -2054,7 +2057,13 @@ public actor OfflineQueue {
         /// SANS défaut, délibérément — voir la REQUIREMENT du protocole. Tout
         /// appelant DÉCLARE s'il a une transcription embarquée ou non ; un
         /// média visuel passe `nil` en toutes lettres.
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        /// **Le canvas** (#4756). SANS défaut, pour la même raison que
+        /// `mobileTranscription` juste au-dessus : un appelant qui n'a pas de
+        /// scène écrit `nil` en toutes lettres. Un défaut ferait disparaître le
+        /// canvas d'un site d'appel sans casser la moindre compilation — le
+        /// mode de panne exact que ce champ vient de payer une fois.
+        storyEffects: StoryEffects?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -2075,7 +2084,8 @@ public actor OfflineQueue {
             mentions: mentions,
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: mobileTranscription,
-            localMediaMimeTypes: sourceMediaMimeTypes
+            localMediaMimeTypes: sourceMediaMimeTypes,
+            storyEffects: storyEffects
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

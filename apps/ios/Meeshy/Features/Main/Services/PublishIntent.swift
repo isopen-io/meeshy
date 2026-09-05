@@ -87,6 +87,37 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// serveur re-transcrit et jette ce travail en silence.
     let mobileTranscription: MobileTranscriptionPayload?
 
+    /// **LE CANVAS — ce que l'auteur a COMPOSÉ sur la scène** (#4756).
+    ///
+    /// ## Le défaut, mesuré à l'écran le 2026-09-04
+    ///
+    /// Un post composé avec un fond et un objet texte a été publié depuis
+    /// `Meeshy-iOS26` : la carte du fil affichait **le texte seul**. Ni fond, ni
+    /// objet, ni dessin, ni sticker — la scène entière perdue, sans une erreur,
+    /// sans un log, sans un état d'échec.
+    ///
+    /// La cause tenait en une ligne : `PublishIntent` portait douze champs et
+    /// aucun n'était `storyEffects`. Le blob existe pourtant de bout en bout —
+    /// `CreatePostRequest.storyEffects` le déclare, `CreatePostSchema` l'accepte,
+    /// et `createCanvasPost` s'en sert déjà. Seule la voie DOCUMENT, celle que
+    /// prend tout post du meuble, ne le transportait pas.
+    ///
+    /// > **Un champ absent d'une charge ne rougit nulle part.** Le compilateur
+    /// > ne le réclame pas, le schéma le tolère, le serveur publie. Le seul
+    /// > témoin possible est ce que l'auteur VOIT — et il faut aller le
+    /// > regarder.
+    ///
+    /// ## Pourquoi ici, et pas seulement dans le brouillon du meuble
+    ///
+    /// Parce que ce type est la matière composée UNE fois. La voie durable
+    /// (`CreatePostPayload` → `OutboxDispatcher`) est la seule que prenne un
+    /// post du meuble, en ligne comme hors ligne : un canvas qui s'arrêterait au
+    /// brouillon serait perdu au premier flush, silencieusement.
+    ///
+    /// `nil` ⇒ aucune scène. C'est le cas nominal d'un post TEXTE, et un blob
+    /// vide encodé à sa place ferait croire à une scène composée puis effacée.
+    let storyEffects: StoryEffects?
+
     private init(
         clientMutationId: String,
         type: String,
@@ -99,7 +130,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         mentions: [PostMentionInput]?,
         location: SharedPlace?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        storyEffects: StoryEffects?
     ) {
         self.clientMutationId = clientMutationId
         self.type = type
@@ -113,6 +145,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         self.location = location
         self.discoverabilityPrecision = discoverabilityPrecision
         self.mobileTranscription = mobileTranscription
+        self.storyEffects = storyEffects
     }
 
     /// Le geste « **j'ai composé un document** » — un post ou un réel né du
@@ -144,7 +177,12 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         mentions: [PostMentionInput]?,
         location: SharedPlace?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
-        transcription: MobileTranscriptionPayload?
+        transcription: MobileTranscriptionPayload?,
+        /// **Le canvas composé sur la scène** (#4756). `nil` pour un post
+        /// TEXTE — la règle 1 de ce fichier interdit un défaut : un site qui
+        /// n'a pas de scène l'écrit en toutes lettres, sinon le champ
+        /// disparaîtrait demain d'un appelant sans casser la compilation.
+        storyEffects: StoryEffects?
     ) -> PublishIntent {
         PublishIntent(
             clientMutationId: ClientMutationId.generate(),
@@ -186,7 +224,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: transcription
+            mobileTranscription: transcription,
+            storyEffects: storyEffects
         )
     }
 
@@ -238,7 +277,13 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: transcription
+            mobileTranscription: transcription,
+            // **Un vocal n'a pas de scène**, et ce `nil` est écrit ici plutôt
+            // que porté par un défaut : la règle 1 de ce fichier veut que
+            // chaque geste DÉCLARE tout ce qu'il publie. Le jour où un
+            // enregistrement gagnera un canvas, c'est cette ligne qui refusera
+            // de rester fausse en silence.
+            storyEffects: nil
         )
     }
 }

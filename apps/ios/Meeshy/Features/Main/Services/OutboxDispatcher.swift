@@ -564,7 +564,18 @@ struct OutboxDispatcher: OutboxDispatching {
             mentions: payload.mentions,
             discoverabilityPrecision: payload.discoverabilityPrecision,
             repostOfId: payload.repostOfId,
-            mobileTranscription: payload.mobileTranscription
+            mobileTranscription: payload.mobileTranscription,
+            // **ASSAINI avant de partir** (#4756). Le blob composé porte des
+            // `mediaURL` LOCALES tant que l'upload n'a pas eu lieu ; le
+            // sanitizer les annule et le journalise, plutôt que de publier une
+            // scène qui référence un `file://` illisible par quiconque.
+            //
+            // Ce que ce lot ne fait PAS : relier les objets média du canvas aux
+            // `PostMedia` que la boucle ci-dessus vient de créer
+            // (`postMediaId`). Un canvas dont le FOND est un fichier local part
+            // donc sans son image — suivi ouvert et nommé, jamais masqué par ce
+            // correctif.
+            storyEffects: payload.storyEffects?.sanitizedForServerPublish()
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             PostsEndpoint.root,
@@ -995,6 +1006,21 @@ nonisolated struct CreatePostBody: Encodable {
     /// Sa graphie (`duration_ms`, `speaker_id`) est portée par les
     /// `CodingKeys` du type lui-même — ne pas la réécrire ici.
     let mobileTranscription: MobileTranscriptionPayload?
+    /// **LE CANVAS** — même clé top-level `storyEffects` que le chemin direct
+    /// (`CreatePostRequest`, `PostService.createCanvasPost`), et même schéma
+    /// gateway (`CreatePostSchema`).
+    ///
+    /// Sans elle ICI, la scène survivait jusqu'au décodage de
+    /// `CreatePostPayload` puis était jetée en silence à l'ultime saut réseau :
+    /// exactement le défaut que `location`, `discoverabilityPrecision` et
+    /// `repostOfId` ont payé avant elle, sur le chemin que prend **tout** post
+    /// du meuble.
+    ///
+    /// > Trois champs ont déjà été perdus à ce même mètre du fil, et chacun
+    /// > porte son commentaire disant pourquoi. Ce type est un INVENTAIRE
+    /// > recopié à la main : rien n'y signale un champ absent — ni le
+    /// > compilateur, ni le schéma, ni le serveur, qui publie sans lui.
+    let storyEffects: StoryEffects?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -1024,11 +1050,16 @@ nonisolated struct CreatePostBody: Encodable {
         if let mobileTranscription {
             try container.encode(mobileTranscription, forKey: .mobileTranscription)
         }
+        // Encodé seulement quand il existe : un post TEXTE n'a pas de scène, et
+        // un blob vide affirmerait une scène composée puis effacée.
+        if let storyEffects {
+            try container.encode(storyEffects, forKey: .storyEffects)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case content, mediaIds, visibility, originalLanguage, type
         case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
-        case discoverabilityPrecision, repostOfId, mobileTranscription
+        case discoverabilityPrecision, repostOfId, mobileTranscription, storyEffects
     }
 }

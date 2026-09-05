@@ -355,7 +355,12 @@ struct DocumentComposerDoor: View {
             mentions: draft.mentions,
             location: draft.location,
             discoverabilityPrecision: draft.discoverabilityPrecision,
-            transcription: draft.mobileTranscription
+            transcription: draft.mobileTranscription,
+            // **Le canvas** (#4756). La porte jumelle
+            // (`ComposerDocumentDurablePublisher`) passe la même valeur au même
+            // rang : un écart entre les deux serait un champ perdu en silence
+            // chez l'une des deux — ce que leur doc-comment croisé annonce.
+            storyEffects: draft.storyEffects
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

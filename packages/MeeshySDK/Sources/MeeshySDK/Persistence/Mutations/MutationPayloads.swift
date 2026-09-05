@@ -442,6 +442,20 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// laisse derrière.
     public let localMediaMimeTypes: [String]?
 
+    /// **LE CANVAS composé sur la scène** (#4756).
+    ///
+    /// Porté ici pour la même raison que `location` et `mentions`, et c'est ici
+    /// que cela compte le plus : un post du meuble n'emprunte JAMAIS
+    /// `PostService.create`, il part par cette file — en ligne comme hors ligne
+    /// (`FeedViewModel.publish`). Sans ce champ, l'auteur compose un fond, des
+    /// objets, un dessin, voit sa publication apparaître, et **la carte du fil
+    /// n'affiche que le texte**. Mesuré au simulateur le 2026-09-04.
+    ///
+    /// Optionnel : un enregistrement persisté avant ce lot décode toujours sans
+    /// cette clé, et `nil` y dit la vérité — ces posts-là n'avaient pas de
+    /// scène à transporter.
+    public let storyEffects: StoryEffects?
+
     /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
     /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
     ///
@@ -470,7 +484,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         discoverabilityPrecision: DiscoverabilityPrecision? = nil,
         repostOfId: String? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
-        localMediaMimeTypes: [String]? = nil
+        localMediaMimeTypes: [String]? = nil,
+        storyEffects: StoryEffects? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -489,6 +504,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.repostOfId = repostOfId
         self.mobileTranscription = mobileTranscription
         self.localMediaMimeTypes = localMediaMimeTypes
+        self.storyEffects = storyEffects
     }
 }
 

@@ -705,7 +705,19 @@ extension MeeshyComposerHost {
                 // passage, la feuille aurait laissé choisir des gens et un mode
                 // puis le brouillon serait parti avec `mentions: nil` : un geste
                 // complet pour une conséquence nulle.
-                references: composerReferences
+                references: composerReferences,
+                // **LE CANVAS de la slide courante** (#4756). Il est ici et
+                // nulle part ailleurs : c'est le seul site qui compose le
+                // brouillon d'un post, et le seul qui voie à la fois le format
+                // choisi et l'atelier.
+                //
+                // `sceneIsPresent` — le MÊME prédicat que celui qui monte la
+                // vue, jamais `documentHasScene` en direct : les deux
+                // répondaient à la même question et divergeaient sur une story
+                // vide (cf. `sceneIsPresent`). Sans scène à l'écran, aucun blob
+                // ne part — un canvas vide encodé ferait croire à une scène
+                // composée puis effacée.
+                storyEffects: sceneIsPresent ? viewModel.currentSlide.effects : nil
             )
         }
     }

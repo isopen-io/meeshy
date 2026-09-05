@@ -43,7 +43,8 @@ final class RepublishAnchorPublisherTests: XCTestCase {
             discoverabilityPrecision: nil,
             originalLanguage: "fr",
             mobileTranscription: nil,
-            references: []
+            references: [],
+            storyEffects: nil
         )
     }
 

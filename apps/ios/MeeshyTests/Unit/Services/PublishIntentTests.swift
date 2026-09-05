@@ -56,7 +56,8 @@ final class PublishIntentTests: XCTestCase {
         localMedia: [ComposerDocumentMedia] = [],
         forcePlainPost: Bool = false,
         originalLanguage: String? = nil,
-        transcription: MobileTranscriptionPayload? = nil
+        transcription: MobileTranscriptionPayload? = nil,
+        storyEffects: StoryEffects? = nil
     ) -> PublishIntent {
         PublishIntent.document(
             localMedia: localMedia,
@@ -69,7 +70,8 @@ final class PublishIntentTests: XCTestCase {
             mentions: nil,
             location: nil,
             discoverabilityPrecision: nil,
-            transcription: transcription
+            transcription: transcription,
+            storyEffects: storyEffects
         )
     }
 
@@ -212,7 +214,8 @@ final class PublishIntentTests: XCTestCase {
     func test_uneLangueDeMedia_distincteDeLaLangueDuTexte() {
         let intent = intentionDocument(
             originalLanguage: "fr",
-            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo")
+            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo"),
+            storyEffects: nil
         )
         XCTAssertEqual(
             intent.originalLanguage, "fr",

@@ -299,7 +299,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "bonjour", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil
         )
         XCTAssertEqual(brouillon.location, lieu, "Le brouillon doit porter le lieu tel que la fabrique l'a reçu.")
 
@@ -314,7 +314,8 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             mentions: brouillon.mentions,
             location: brouillon.location,
             discoverabilityPrecision: brouillon.discoverabilityPrecision,
-            transcription: brouillon.mobileTranscription
+            transcription: brouillon.mobileTranscription,
+            storyEffects: brouillon.storyEffects
         )
         XCTAssertEqual(intent.location, lieu, "Le lieu choisi doit atteindre l'intention publiée, jamais s'y perdre.")
     }
@@ -392,7 +393,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil
         )
         XCTAssertNotEqual(
             ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
@@ -421,7 +422,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [vocal], location: nil,
-            discoverabilityPrecision: nil, originalLanguage: "fr", mobileTranscription: transcrit, references: []
+            discoverabilityPrecision: nil, originalLanguage: "fr", mobileTranscription: transcrit, references: [], storyEffects: nil
         )
         XCTAssertEqual(
             brouillon.mobileTranscription, transcrit,
@@ -439,7 +440,8 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             mentions: brouillon.mentions,
             location: brouillon.location,
             discoverabilityPrecision: brouillon.discoverabilityPrecision,
-            transcription: brouillon.mobileTranscription
+            transcription: brouillon.mobileTranscription,
+            storyEffects: brouillon.storyEffects
         )
         XCTAssertNotNil(
             intent.mobileTranscription,
@@ -479,7 +481,8 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             mentions: nil,
             location: nil,
             discoverabilityPrecision: nil,
-            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo")
+            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo"),
+            storyEffects: nil
         )
         XCTAssertEqual(
             intent.originalLanguage, "wo",
@@ -505,7 +508,8 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             mentions: nil,
             location: nil,
             discoverabilityPrecision: nil,
-            transcription: nil
+            transcription: nil,
+            storyEffects: nil
         )
         XCTAssertEqual(
             intent.originalLanguage, "en",
