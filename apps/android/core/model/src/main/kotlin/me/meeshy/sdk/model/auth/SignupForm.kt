@@ -134,12 +134,15 @@ public data class SignupForm(
      * pas une faute, c'est un champ qu'on n'a pas rempli. Le bouton inactif le
      * dit déjà, et écrire « obligatoire » sous quatre champs vierges à
      * l'ouverture accueille l'utilisateur par quatre reproches.
+     *
+     * « Vide » au sens de la SAISIE, pas du contenu : des espaces sont quelque
+     * chose que l'utilisateur a tapé, et le refus qu'ils valent doit se voir.
      */
     public fun visibleValidation(): SignupValidation {
         val all = validate()
         return SignupValidation(
-            displayName = all.displayName?.takeIf { displayName.isNotBlank() },
-            email = all.email?.takeIf { email.isNotBlank() },
+            displayName = all.displayName?.takeIf { displayName.isNotEmpty() },
+            email = all.email?.takeIf { email.isNotEmpty() },
             password = all.password?.takeIf { password.isNotEmpty() },
         )
     }
@@ -153,6 +156,14 @@ public data class SignupForm(
      * partent ensemble ou pas du tout, jamais un numéro sans son pays. La langue
      * régionale est omise quand elle est vide OU égale à la principale : servir
      * deux fois le même rang au Prisme ne lui apprend rien.
+     *
+     * Les chiffres partent TELS QUE TAPÉS, avec leur pays — jamais préfixés de
+     * l'indicatif. Un « 06 12 34 56 78 » français composé en `+33` +
+     * `0612345678` porte un préfixe national que l'E.164 ne connaît pas, et le
+     * retirer soi-même se trompe dès l'Italie, dont les fixes GARDENT leur zéro.
+     * La passerelle normalise avec `phoneCountryCode` (libphonenumber,
+     * `normalizePhoneWithCountry`) : c'est son site unique, et c'est exactement
+     * ce que le web v3 lui remet — le champ tel quel et l'ISO du sélecteur.
      */
     public fun toRegisterRequest(): RegisterRequest {
         val digits = normalizedPhoneDigits
@@ -164,7 +175,7 @@ public data class SignupForm(
             password = password,
             systemLanguage = system,
             regionalLanguage = regional,
-            phoneNumber = if (digits.isEmpty()) null else dialCode + digits,
+            phoneNumber = if (digits.isEmpty()) null else digits,
             phoneCountryCode = if (digits.isEmpty()) null else dialCountryIso,
         )
     }

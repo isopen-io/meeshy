@@ -69,8 +69,9 @@ public struct RegisterRequest: Encodable, Sendable {
     public let displayName: String?
     public let email: String
     public let password: String
-    /// Numéro complet (indicatif + chiffres). `nil` ⇒ absent de la charge —
-    /// le téléphone n'est jamais obligatoire.
+    /// Les chiffres tels que tapés (forme nationale admise, `0612345678`) ;
+    /// la passerelle les normalise en E.164 avec `phoneCountryCode`. `nil` ⇒
+    /// absent de la charge — le téléphone n'est jamais obligatoire.
     public let phoneNumber: String?
     /// ISO 3166-1 alpha-2 du pays choisi. Voyage avec `phoneNumber` ou pas du tout.
     public let phoneCountryCode: String?

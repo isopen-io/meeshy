@@ -107,7 +107,7 @@ final class SignupViewModelTests: XCTestCase {
 
         XCTAssertEqual(registrar.lastRegisterRequest?.displayName, "Awa N’Diaye")
         XCTAssertEqual(registrar.lastRegisterRequest?.email, "awa@example.com")
-        XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "+33612345678")
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "612345678")
         XCTAssertEqual(registrar.lastRegisterRequest?.phoneCountryCode, "FR")
         XCTAssertNil(registrar.lastRegisterRequest?.username,
                      "la passerelle dérive le pseudo — le client ne l'envoie plus (#5218)")

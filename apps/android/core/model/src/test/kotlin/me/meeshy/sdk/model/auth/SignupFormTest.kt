@@ -127,7 +127,7 @@ class SignupFormTest {
     fun phoneEntry_internationalNumberSurvivesTheRoundTripToThePayload() {
         val request = valid().withPhoneEntry("+12025550143").toRegisterRequest()
 
-        assertThat(request.phoneNumber).isEqualTo("+12025550143")
+        assertThat(request.phoneNumber).isEqualTo("2025550143")
         assertThat(request.phoneCountryCode).isEqualTo("US")
     }
 
@@ -203,19 +203,25 @@ class SignupFormTest {
         assertThat(request.phoneCountryCode).isNull()
     }
 
+    /**
+     * Les chiffres partent tels que tapés, préfixe national compris, avec l'ISO
+     * du pays : c'est la passerelle qui les normalise (libphonenumber), comme
+     * pour le web v3. Composer `+33` + `0612345678` ici fabriquerait un E.164
+     * faux, et retirer le zéro soi-même se tromperait dès l'Italie.
+     */
     @Test
-    fun payload_filledPhone_travelsAsDialCodePlusDigitsWithItsIso() {
+    fun payload_filledPhone_travelsAsTheTypedDigitsWithItsIso() {
         val request = valid().copy(dialCountryIso = "FR", phoneDigits = "06 12 34 56 78").toRegisterRequest()
 
-        assertThat(request.phoneNumber).isEqualTo("+33612345678")
+        assertThat(request.phoneNumber).isEqualTo("0612345678")
         assertThat(request.phoneCountryCode).isEqualTo("FR")
     }
 
     @Test
-    fun payload_phoneOfAnotherCountry_usesThatCountrysDialCode() {
+    fun payload_phoneOfAnotherCountry_carriesThatCountrysIso() {
         val request = valid().copy(dialCountryIso = "US", phoneDigits = "2025550143").toRegisterRequest()
 
-        assertThat(request.phoneNumber).isEqualTo("+12025550143")
+        assertThat(request.phoneNumber).isEqualTo("2025550143")
         assertThat(request.phoneCountryCode).isEqualTo("US")
     }
 

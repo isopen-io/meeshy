@@ -181,17 +181,23 @@ final class SignupFormTests: XCTestCase {
         XCTAssertNil(payload["phoneCountryCode"])
     }
 
-    func test_registerRequest_filledPhone_carriesDialCodePlusDigitsAndISO2() throws {
+    /// Les chiffres partent tels que tapés, avec l'ISO du pays : c'est la
+    /// passerelle qui les normalise (libphonenumber), comme pour le web v3.
+    /// Composer `+33` + les chiffres ici fabriquerait un E.164 faux dès qu'un
+    /// préfixe national est tapé, et retirer ce zéro soi-même se tromperait dès
+    /// l'Italie.
+    func test_registerRequest_filledPhone_carriesTheTypedDigitsAndISO2() throws {
         let payload = try encodedPayload(makeForm(phoneDigits: "612345678", countryISO: "FR"))
-        XCTAssertEqual(payload["phoneNumber"] as? String, "+33612345678")
+        XCTAssertEqual(payload["phoneNumber"] as? String, "612345678")
         XCTAssertEqual(payload["phoneCountryCode"] as? String, "FR")
     }
 
     /// Un numéro collé depuis un carnet d'adresses arrive avec des espaces et
-    /// des points ; seuls les chiffres partent.
+    /// des points ; seuls les chiffres partent — préfixe national compris, la
+    /// passerelle sait quoi en faire.
     func test_registerRequest_strippsEverythingButDigitsFromThePhone() throws {
         let payload = try encodedPayload(makeForm(phoneDigits: "06 12.34-56 78", countryISO: "FR"))
-        XCTAssertEqual(payload["phoneNumber"] as? String, "+33612345678")
+        XCTAssertEqual(payload["phoneNumber"] as? String, "0612345678")
     }
 
     /// Un champ téléphone qui ne contient AUCUN chiffre (des espaces collés)

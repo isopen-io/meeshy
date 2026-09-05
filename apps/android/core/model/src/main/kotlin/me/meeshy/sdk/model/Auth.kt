@@ -35,7 +35,10 @@ data class RegisterRequest(
     val lastName: String? = null,
     val systemLanguage: String? = null,
     val regionalLanguage: String? = null,
-    /** E.164 (dial code + national digits, e.g. `"+33612345678"`), or `null` when skipped/empty. */
+    /**
+     * The digits as typed (national form allowed, e.g. `"0612345678"`); the gateway
+     * normalises them to E.164 with [phoneCountryCode]. `null` when skipped/empty.
+     */
     val phoneNumber: String? = null,
     /** The selected dial-code country's ISO 3166-1 alpha-2, or `null` alongside [phoneNumber]. */
     val phoneCountryCode: String? = null,

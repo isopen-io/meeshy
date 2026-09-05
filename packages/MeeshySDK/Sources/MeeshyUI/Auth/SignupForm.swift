@@ -115,12 +115,6 @@ public struct SignupForm: Equatable {
 
     public var hasPhone: Bool { !normalizedPhoneDigits.isEmpty }
 
-    /// Le numéro complet tel qu'il part : indicatif + chiffres. `nil` quand
-    /// aucun chiffre n'a été saisi — un champ vide ne voyage PAS.
-    public var composedPhoneNumber: String? {
-        hasPhone ? country.dialCode + normalizedPhoneDigits : nil
-    }
-
     // MARK: - Composition de la charge
 
     /// La charge exacte de `POST /auth/register`.
@@ -129,8 +123,17 @@ public struct SignupForm: Equatable {
     /// passerelle les dérive de `displayName`. Le couple téléphone est TOUT ou
     /// RIEN — un `phoneCountryCode` sans numéro décrirait un pays qui ne
     /// qualifie rien.
+    ///
+    /// Les chiffres partent TELS QUE TAPÉS, avec leur pays — jamais préfixés
+    /// de l'indicatif. Un « 06 12 34 56 78 » français composé en `+33` +
+    /// `0612345678` porte un préfixe national que l'E.164 ne connaît pas, et
+    /// retirer ce zéro soi-même se trompe dès l'Italie, dont les fixes le
+    /// GARDENT. La passerelle normalise avec `phoneCountryCode`
+    /// (libphonenumber, `normalizePhoneWithCountry`) : c'est son site unique,
+    /// et c'est exactement ce que le web v3 lui remet — le champ tel quel et
+    /// l'ISO du sélecteur.
     public func registerRequest() -> RegisterRequest {
-        let phone = composedPhoneNumber
+        let phone = hasPhone ? normalizedPhoneDigits : nil
         return RegisterRequest(
             displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
             email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),

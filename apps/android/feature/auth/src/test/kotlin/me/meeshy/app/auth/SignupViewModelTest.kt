@@ -277,7 +277,7 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun register_filledPhone_sendsTheDialCodePrefixedNumberAndItsCountry() = runTest(dispatcher) {
+    fun register_filledPhone_sendsTheTypedDigitsAndTheirCountry() = runTest(dispatcher) {
         val scenario = scenario(ApiResponse(success = true, data = session()))
         scenario.viewModel.fillValid()
         scenario.viewModel.onDialCountryChange("FR")
@@ -286,7 +286,7 @@ class SignupViewModelTest {
         advanceUntilIdle()
 
         val sent = scenario.api.captured.single()
-        assertThat(sent.phoneNumber).isEqualTo("+330612345678")
+        assertThat(sent.phoneNumber).isEqualTo("0612345678")
         assertThat(sent.phoneCountryCode).isEqualTo("FR")
     }
 
