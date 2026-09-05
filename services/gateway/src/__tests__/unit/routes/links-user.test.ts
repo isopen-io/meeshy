@@ -514,7 +514,14 @@ describe('GET /links — pagination', () => {
     prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ createdAt: new Date('2025-06-01') });
     const res = await app.inject({ method: 'GET', url: `/links?cursor=${mockLink.id}` });
     const body = res.json();
-    expect(body.cursorPagination).toEqual(expect.objectContaining({ nextCursor: mockLink.id }));
+    // Ce témoin garde la SÉLECTION DE FORME (`cursorPagination` seul, `pagination`
+    // absent). Le mock ne rend qu'UN lien (< limit) : c'est une page finale, donc
+    // `hasMore` est faux et `nextCursor` est `null` — un curseur rendu sur une
+    // dernière page forcerait un aller-retour vide (cf. `buildCursorPaginationMeta`,
+    // aligné sur `sliceByIdCursor` et le `cursorPage` canonique).
+    expect(body.cursorPagination).toEqual(
+      expect.objectContaining({ limit: 50, hasMore: false, nextCursor: null })
+    );
     expect(body.pagination).toBeUndefined();
   });
 
