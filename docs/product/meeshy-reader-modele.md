@@ -402,8 +402,11 @@ périmée s'est passé sur une AUTRE plateforme.
 
 Détail et critères : #5043 (les transitions), #5047 (le `thumbHash`, dont
 l'absence laisse une story web s'ouvrir sur du vide — `CanvasV3Scene` n'a aucun
-état de chargement, et c'est le chemin de TOUTES ses stories depuis que la
-passerelle refuse le non-v3).
+état de chargement, et c'est le chemin de TOUTES ses stories parce que les deux
+écrivains émettent du v3 natif ; **correction de cause du 2026-09-05** : la
+passerelle ne refuse PAS le non-v3, son refus est derrière
+`CANVAS_V3_WRITE_STRICT`, armé dans aucun fichier de configuration du dépôt —
+détail à l'encadré du § 1 bis-2 de `meeshy-composer-modele.md`).
 
 ## 5. Ce que ce document ne couvre pas
 
