@@ -179,6 +179,58 @@ test.describe('les treize bascules, en direct', () => {
     await contexte.close();
   });
 
+  /**
+   * DÉFAUT RELEVÉ EN REVUE (#4899) : un 401 en cours de session était rendu
+   * comme un échec réseau — « réessayez » sur une session qui n'est plus
+   * valide, où le lecteur doit se RECONNECTER, jamais réessayer. La forme
+   * (`success: false`, `error`, `message`, `code`) est celle de `sendError`
+   * (`services/gateway/src/utils/response.ts:83-90`), que
+   * `sendUnauthorized` compose avec `code: 'UNAUTHORIZED'`
+   * (`services/gateway/src/routes/me/preferences/unified-routes.ts:194`).
+   */
+  test('un 401 en cours de session révèle le bandeau de reconnexion — jamais « réessayez »', async ({ browser }) => {
+    const contexte = await contexteDuLecteur(browser);
+    const page = await contexte.newPage();
+    await page.goto(`${v3.base}/notifications/preferences`);
+    await attendsLeModule(page);
+
+    const cle = 'reactionEnabled';
+    const avant = stocke(cle);
+    const bouton = formulaireDe(page, cle).locator('button[role="switch"]');
+
+    await page.route(
+      (url) => url.pathname === '/api/v1/me/preferences',
+      (route) =>
+        route.request().method() === 'PATCH'
+          ? route.fulfill({
+              status: 401,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                success: false,
+                error: 'UNAUTHORIZED',
+                message: 'Authentication required',
+                code: 'UNAUTHORIZED',
+              }),
+            })
+          : route.continue(),
+    );
+
+    await bouton.click();
+    await expect(bouton).toHaveAttribute('aria-checked', String(avant));
+    await expect(page.locator('#bandeau-session-expiree')).toBeVisible();
+    // Ni le bandeau d'échec générique, ni l'avis de réussite — jamais les
+    // deux annonces à la fois (la même loi que `.avis`/`.echec` entre eux).
+    await expect(page.locator('.echec[role="alert"]')).toBeHidden();
+    await expect(page.locator('.avis[role="status"]')).toBeHidden();
+    await expect(page.locator('#bandeau-session-expiree a.action')).toHaveAttribute(
+      'href',
+      '/login?returnUrl=%2Fnotifications%2Fpreferences',
+    );
+
+    await page.unroute((url) => url.pathname === '/api/v1/me/preferences');
+    await contexte.close();
+  });
+
   test('la bascule est optimiste — l’état change AVANT que le bouchon ne réponde', async ({ browser }) => {
     const contexte = await contexteDuLecteur(browser);
     const page = await contexte.newPage();

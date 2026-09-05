@@ -2,6 +2,7 @@ import { basculeUnePreference } from '@/lib/api/preferences';
 import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { estUneCleDePrefs, PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
+import { montreLeBandeau } from './bandeau';
 import { annule, bascule, reconcilie, type EtatDePrefs } from './prefs-etat';
 
 /**
@@ -30,6 +31,12 @@ import { annule, bascule, reconcilie, type EtatDePrefs } from './prefs-etat';
  * la valeur d'avant ET signale l'échec — la région `.echec` est révélée, la
  * région `.avis` de succès est masquée : jamais les deux à la fois, jamais un
  * état affiché qui divergerait du serveur au rechargement suivant.
+ *
+ * UN 401 EST UN ROLLBACK QUI DIT AUTRE CHOSE. `basculeUnePreference`
+ * (`lib/api/preferences.ts`) rend une `IssueDuGeste` à TROIS genres, pas deux
+ * — confondre `session-expiree` avec `refus`/`panne` sous « réessayez »
+ * ferait boucler un lecteur qui doit simplement se reconnecter
+ * (`montreLaSessionExpiree`, ci-dessous, plutôt que `montreLEchec`).
  */
 
 type Contexte = {
@@ -100,6 +107,24 @@ const montreLEchec = (ctx: Contexte): void => {
 };
 
 /**
+ * UN 401 N'EST PAS UN ÉCHEC RÉSEAU (défaut relevé en revue, #4899) : le
+ * rollback est le même, l'ANNONCE ne l'est pas. `montreLEchec` invite à
+ * « réessayer » — sur une session qui n'est plus valide, le lecteur
+ * réessaierait indéfiniment sans jamais apprendre qu'il doit se reconnecter.
+ * Le bandeau et son geste de révélation sont ceux du fil, PARTAGÉS
+ * (`app/connecte/bandeau-vue.ts`, `lib/realtime/bandeau.ts`) — un second
+ * mécanisme écrit ici aurait divergé du jour où l'un des deux aurait changé
+ * de forme.
+ */
+const montreLaSessionExpiree = (ctx: Contexte): void => {
+  const avis = ctx.main.querySelector<HTMLElement>('.avis');
+  const echec = ctx.main.querySelector<HTMLElement>('.echec');
+  if (avis !== null) avis.hidden = true;
+  if (echec !== null) echec.hidden = true;
+  montreLeBandeau(ctx.main, 'bandeau-session-expiree', true);
+};
+
+/**
  * LA VALEUR D'UNE CLÉ, LUE DANS UN ÉTAT PARTIEL — jamais un index nu :
  * `EtatDePrefs.reglages` est `Partial` (`prefs-etat.ts`, doc-comment de tête),
  * et ce module n'écrit une clé qu'en même temps qu'il la LIT ici, donc elle
@@ -137,6 +162,10 @@ const surBascule = (ctx: Contexte, formulaire: HTMLFormElement, libelle: string)
       }
       const { etat: etatAnnule } = annule(etatOptimiste, cle, avant);
       peinsLaRangee(formulaire, bouton, valeurDe(etatAnnule, cle));
+      if (issue.genre === 'session-expiree') {
+        montreLaSessionExpiree(ctx);
+        return;
+      }
       montreLEchec(ctx);
     })
     .catch(() => {
