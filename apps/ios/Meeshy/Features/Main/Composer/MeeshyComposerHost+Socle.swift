@@ -662,14 +662,30 @@ extension MeeshyComposerHost {
             // La règle est appelée, jamais réécrite ici : c'est elle qui sait
             // que la slide SEMÉE au montage ne compte pas comme de la matière.
             //
-            // **Ce terme reste nommé sur la STORY** (#4869), et c'est délibéré :
-            // il arme la flèche de ce que la SCÈNE porte, et seule la story
-            // publie par ce canal. L'élargir au réel armerait une flèche dont
-            // le canal refuse ensuite — un contrôle qui promet, exactement ce
-            // que ce lot retire ailleurs. Il s'élargira le jour où le réel aura
-            // son canal, dans le même lot.
+            // **Ce terme couvre la STORY et le POST** (élargi le 2026-09-05).
+            //
+            // Il était nommé sur la seule story (#4869) pour une raison juste :
+            // ne pas armer une flèche dont le canal refuserait ensuite. Cette
+            // raison tenait à une CONDITION — « seule la story publie par ce
+            // canal » — et la condition a changé. Mesuré contre la passerelle
+            // de staging le 2026-09-05 : `POST /posts` accepte un corps dont
+            // `content` est vide, sans aucun média, porté par son seul
+            // `storyEffects.canvasV3`, et rend le canvas intact.
+            //
+            // > **Une restriction survit à la condition qui la justifiait.** Le
+            // > commentaire disait « il s'élargira le jour où… » ; ce jour était
+            // > arrivé sans que rien ne le signale, parce qu'aucun témoin ne
+            // > relie une garde de CLIENT à ce que le SERVEUR accepte. Le
+            // > symptôme, lui, était muet du bon côté : un canvas de texte, de
+            // > dessin ou à fond de couleur — exactement les formes que le
+            // > porteur demande d'éprouver — laissait la flèche éteinte sur un
+            // > écran plein de travail.
+            //
+            // Le RÉEL reste dehors, et pour la raison d'origine, inchangée :
+            // son canal est `.unsupported` (`ComposerPublishChannel`). L'y
+            // faire entrer armerait une flèche qui promet ce que rien ne livre.
             hasMedia: !documentLocalMedia.isEmpty
-                || (selectedFormat == .story
+                || (ComposerPublishChannel.channel(for: selectedFormat) != .unsupported
                     && ComposerStoryCanvas.hasMatter(
                         slides: viewModel.slides,
                         // L'image de fond ne vit pas dans `effects` : sans elle
