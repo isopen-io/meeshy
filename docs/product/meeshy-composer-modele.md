@@ -390,7 +390,7 @@ l'ÉMETTENT ainsi, et non parce que la passerelle refuserait autre chose.
 |---|---|---|
 | le fil | clé `storyEffects`, contenu **canvas v3 par production** | `StoryEffectsSchema` (`routes/posts/types.ts:178`) est ce qui s'applique — `.passthrough()`, 7 clés déclarées, ≤ 256 Ko. `CanvasV3Schema.safeParse` (`core.ts:110`) n'est atteint que si `CANVAS_V3_WRITE_STRICT === '1'`, armé nulle part dans le dépôt |
 | le contrat | `ObjectV3Schema` | `packages/shared/types/canvas-v3.ts` |
-| iOS, en mémoire | `StoryEffects` (forme v1) | `StoryModels.swift:962` |
+| iOS, en mémoire | `StoryEffects` (forme v1) | `StoryModels.swift:1032` |
 | iOS, à l'encodage | **toujours v3** | `StoryEffects.encode` → `CanvasV3(migrating: self)` (`StoryModels.swift:1360`, corrigé — la ligne citée était `:1290`) |
 | iOS, le vocabulaire d'objet | `MeeshySceneObject`, **somme à cinq cas** — `text` · `media` · `sticker` · `place` · `audio` | `Models/MeeshySceneObject.swift:56` |
 | **validation à la LECTURE** | **aucune, sur les quatre lecteurs** | `CanvasV3Schema` n'a qu'un appel de production dans tout le dépôt, et c'est celui de l'ÉCRITURE ci-dessus. Web ne l'importe que dans ses tests ; `story-transforms.ts:42` ne teste que `v >= 3` |
