@@ -83,6 +83,8 @@ const TEMPS_REEL_DES_MEDIAS = {
     liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
     commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
     plein: { nom: 'plein.abc.js', url: '/__v3/rt/plein.abc.js', corps: '' },
+    navigateur: { nom: 'navigateur.abc.js', url: '/__v3/rt/navigateur.abc.js', corps: '' },
+    composer: { nom: 'composer.abc.js', url: '/__v3/rt/composer.abc.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
