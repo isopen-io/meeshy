@@ -242,10 +242,17 @@ export function registerAttachmentSearchRoutes(
         });
       }
 
-      // 1. Appartenance — mêmes bornes que `conversations/search.ts`.
+      // 1. Appartenance — mêmes bornes que `conversations/search.ts`. `take`
+      // littéral requis par `unbounded-findmany-guard.test.ts` (#4165 critère
+      // 4) : un nouveau site ne rejoint pas la dette gelée
+      // (`conversations/search.ts`, `sync/membership.ts`). 5000 est un plafond
+      // de PROTECTION, jamais un pagination produit — aucun lecteur réel
+      // n'appartient à autant de conversations actives ; le jour où c'est
+      // mesuré faux, la borne se relève, elle ne se retire pas.
       const memberships = await prisma.participant.findMany({
         where: { userId, isActive: true },
         select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
+        take: 5000,
       });
       if (memberships.length === 0) {
         return sendSuccess(reply, { attachments: [] }, {
