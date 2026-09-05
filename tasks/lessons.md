@@ -28341,7 +28341,7 @@ Sites : `apps/web-v3/__tests__/banniere-servie.test.ts` (l'actif manquant),
 `apps/web-v3/budgets-mesures.json` (la mesure des modules, réécrite par
 `--mesure` après le même `git add`). Fusion `1becc7e4d7`.
 
-## Leçon 518 — Un module qui AFFIRME garder une pièce protégée sans lire ses propres drapeaux ment par omission
+## Leçon 522 — Un module qui AFFIRME garder une pièce protégée sans lire ses propres drapeaux ment par omission
 
 **Le fait (revue de `media`, #4525, 2026-09-04).** La galerie des médias d'une conversation
 (`apps/web-v3/lib/api/medias.ts`) se déclare elle-même « une PROJECTION PURE du fil », et son test
@@ -28371,7 +28371,7 @@ jamais un contournement côté client.
 
 Site : `apps/web-v3/lib/api/medias.ts`. Détail : rapport de revue `media` (#4525), tour 2026-09-04.
 
-## Leçon 519 — Un gate de conformité qui dépend d'un état non déclaré rend un écran invisible aux instruments, en silence
+## Leçon 523 — Un gate de conformité qui dépend d'un état non déclaré rend un écran invisible aux instruments, en silence
 
 **Le fait (revue de `vitrine`/`home`, #5115, 2026-09-04).** Le portage de la charte du tour 3
 (contour, encre, dégradé) sur `app/vitrine/feuille.ts` et `app/connecte/feuille.ts` a été validé par
