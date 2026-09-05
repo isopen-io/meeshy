@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -21,6 +21,7 @@ const COMPOSEUR = 'lib/realtime/composeur.ts';
 const LIGNES = 'app/connecte/fil-lignes.ts';
 const PARTICIPATION = 'lib/realtime/participate.ts';
 const VUE = 'app/connecte/vue.ts';
+const VUE_DU_FIL = 'app/connecte/fil-vue.ts';
 
 describe('les libellés du fil', () => {
   it('viennent de lib/contenu/fil.ts — le module de participation n’en porte aucune copie', () => {
@@ -79,6 +80,86 @@ describe('la forme d’une pièce jointe', () => {
         .replace(/\/\/[^\n]*/g, '');
       expect(code).not.toMatch(/(?:genre|mimeType)\s*[!=]==\s*'(?:audio|video|image|fichier)'/);
     });
+  });
+});
+
+/**
+ * CE QUE LE TAP OUVRE SUR UNE PIÈCE, ET LA FICHE D'UN VOCAL — un seul site,
+ * `app/connecte/plein-vue.ts` (issue #4525, + point 2 de #5024). `fil-lignes.ts`
+ * les EXTRAYAIT en `const` privées ; la galerie (`medias-vue.ts`) en est le
+ * second lecteur, et les recopier aurait fait deux façons de dire ce qu'un tap
+ * ouvre (§ 3.1 (B), leçon 465).
+ */
+describe('ce que le tap ouvre sur une pièce, et la fiche d’un vocal', () => {
+  const PLEIN = 'app/connecte/plein-vue.ts';
+  const MEDIAS = 'app/connecte/medias-vue.ts';
+
+  it('vient d’un seul site — plein-vue.ts —, jamais recopié dans la ligne ou la galerie', () => {
+    [LIGNES, MEDIAS].forEach((chemin) => {
+      expect(source(chemin)).toContain("from './plein-vue'");
+      expect(source(chemin)).not.toMatch(/const gesteDePiece\b/);
+      expect(source(chemin)).not.toMatch(/const aFiche\b/);
+      expect(source(chemin)).not.toMatch(/const ficheDePiece\b/);
+    });
+  });
+
+  it('plein-vue.ts reste AGNOSTIQUE de l’hôte — il n’IMPORTE aucune adresse du fil ou de la galerie', () => {
+    expect(source(PLEIN)).not.toMatch(/from '[^']*adresses-du-fil'/);
+    expect(source(PLEIN)).not.toMatch(/from '[^']*\/lib\/api\/medias'/);
+  });
+
+  it('fil-vue.ts et medias-vue.ts importent tous deux pleinEcran de plein-vue.ts', () => {
+    [VUE_DU_FIL, MEDIAS].forEach((chemin) => {
+      expect(source(chemin)).toMatch(/import\s*\{[^}]*\bpleinEcran\b[^}]*\}\s*from\s*'\.\/plein-vue'/);
+    });
+  });
+
+  /**
+   * LE MODULE COMPTE AUTANT QUE LE SERVEUR. La surimpression PEINTE serait une
+   * jumelle du même objet exactement comme une seconde vue le serait — et c'est
+   * `lib/realtime/` qui peint (`fil-peinture.ts`), pas `app/connecte/`. Balayer
+   * la seule vue serveur laissait la moitié du dépôt hors du témoin.
+   */
+  it('aucun fichier hors plein-vue.ts ne rend le plein écran — un seul site de balisage', () => {
+    ([
+      [join(RACINE, 'app', 'connecte'), 'plein-vue.ts'],
+      [join(RACINE, 'lib', 'realtime'), null],
+    ] as const).forEach(([dossier, exception]) => {
+      readdirSync(dossier)
+        .filter((nom) => nom.endsWith('.ts') && nom !== exception)
+        .forEach((nom) => {
+          expect(readFileSync(join(dossier, nom), 'utf8')).not.toContain('<dialog class="plein"');
+        });
+    });
+  });
+});
+
+/**
+ * CE QUE LE MODULE DE PARTICIPATION A LE DROIT D'IMPORTER — MESURÉ, pas deviné.
+ *
+ * `lib/realtime/*` est COMPILÉ EN ACTIF (`scripts/build-participate.mjs`), donc
+ * tout ce qu'un de ces modules importe DESCEND CHEZ LE LECTEUR. Un import vers
+ * `app/connecte/*` — un module de VUE SERVEUR — y tire son graphe entier : la
+ * revue de #5030 en a fait la mesure, `participate.js` passant de 26 719 à
+ * 41 107 o gzip (+14 388, +54 %) pour une composition de chaîne de trente
+ * caractères, parce que `profil-vue.ts` amène `getLanguageInfo` de
+ * `@meeshy/shared` avec lui.
+ *
+ * La règle n'est pas « ne pas partager » — c'est l'inverse de ce que ce fichier
+ * garde. C'est : ce que les DEUX rendus partagent vit sous `lib/`
+ * (`lib/api/adresses-du-fil.ts` pour les adresses, `lib/contenu/` pour les
+ * textes), jamais sous `app/`. Le témoin est sur l'IMPORT et non sur le poids :
+ * un ratchet d'octets dirait QU'un module a grossi, jamais POURQUOI, et il
+ * n'existe pas pour ces neuf actifs.
+ */
+describe('ce que les modules de participation importent', () => {
+  const MODULES = join(RACINE, 'lib', 'realtime');
+
+  it('n’importe RIEN de app/ — un module de vue serveur tirerait son graphe dans l’actif', () => {
+    const fautifs = readdirSync(MODULES)
+      .filter((nom) => nom.endsWith('.ts'))
+      .filter((nom) => /from '@\/app\//.test(readFileSync(join(MODULES, nom), 'utf8')));
+    expect(fautifs).toEqual([]);
   });
 });
 

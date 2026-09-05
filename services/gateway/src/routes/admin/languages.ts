@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
@@ -205,9 +206,13 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         }
       });
 
+      // #5146 — systemLanguage est persisté VERBATIM (région/casse variables selon
+      // le client) ; replier chaque bucket sur son code canonique et ADDITIONNER
+      // les comptes qui convergent, plutôt que d'écraser le dernier bucket lu.
       const usersLanguageMap = usersByLanguage.reduce((acc, item) => {
         if (item.systemLanguage) {
-          acc[item.systemLanguage] = item._count.id;
+          const canonical = normalizeLanguageForDedup(item.systemLanguage);
+          acc[canonical] = (acc[canonical] ?? 0) + item._count.id;
         }
         return acc;
       }, {} as Record<string, number>);

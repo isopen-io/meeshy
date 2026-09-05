@@ -405,6 +405,12 @@ export const routesDuLien =
         });
         return true;
       }
+      // `mshy_lagos` (`LIEN_DU_FIL`) lit `lien.actif` — l'état MUTABLE que
+      // `PATCH /api/v1/links/:linkId` (`bouchon-carnet.ts`, #4933) écrit :
+      // révoquer ce lien depuis `/links` doit fermer `/resolve` DANS LA
+      // FOULÉE, comme la passerelle réelle le ferait pour tout jeton. Les
+      // autres jetons (fixtures de `v3-lien-expire.spec.ts`) restent gouvernés
+      // par `jetons.actif`, indépendant de ce lien précis.
       json({
         success: true,
         data: {
@@ -412,7 +418,9 @@ export const routesDuLien =
           targetType: 'CONVERSATION',
           targetId: 'conv-interne',
           originalUrl: null,
-          isActive: etat.jetons.refusParJeton[jeton] === undefined && etat.jetons.actif,
+          isActive:
+            etat.jetons.refusParJeton[jeton] === undefined &&
+            (jeton === LIEN_DU_FIL ? lien.actif : etat.jetons.actif),
           expiresAt: null,
         },
       });
@@ -469,6 +477,13 @@ export const routesDuLien =
           requireEmail: lien.requireEmail,
           requireBirthday: lien.requireBirthday,
           allowedLanguages: lien.allowedLanguages,
+          // Les quatre droits que ce lien ouvre (`routes/anonymous.ts:691-694`,
+          // #4522) — la MÊME ligne que la jonction et le battement lisent
+          // (`invite.place.lien`, `bouchon-fil.ts`), jamais une copie séparée.
+          allowAnonymousMessages: invite.place.lien.allowAnonymousMessages,
+          allowAnonymousFiles: invite.place.lien.allowAnonymousFiles,
+          allowAnonymousImages: invite.place.lien.allowAnonymousImages,
+          allowViewHistory: invite.place.lien.allowViewHistory,
           creator: { id: 'u1', username: CREATEUR_DU_LIEN, email: `${CREATEUR_DU_LIEN}@example.com` },
           conversation: { id: etat.conversationId, title: NOM_DU_LIEN, description: DESCRIPTION_DU_LIEN, type: 'group' },
           stats: { totalParticipants: CONVERSATION_DU_LECTEUR.membres, memberCount: 8, anonymousCount: 4, languageCount: 3, spokenLanguages: ['fr', 'en', 'es'] },

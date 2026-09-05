@@ -29,7 +29,7 @@ export class BroadcastSenderJob {
         return;
       }
 
-      const filter = this.buildRecipientFilter(broadcast.targeting as any);
+      const filter = await this.buildRecipientFilter(broadcast.targeting as any);
 
       // Count total recipients
       const totalRecipients = await this.prisma.user.count({ where: filter });
@@ -172,7 +172,7 @@ export class BroadcastSenderJob {
   }
 
   /** Ciblage commun (`buildBroadcastRecipientFilter`) + contrainte du canal : une adresse vérifiée. */
-  private buildRecipientFilter(targeting: BroadcastTargeting): any {
-    return { ...buildBroadcastRecipientFilter(targeting), emailVerifiedAt: { not: null } };
+  private async buildRecipientFilter(targeting: BroadcastTargeting): Promise<any> {
+    return { ...(await buildBroadcastRecipientFilter(this.prisma, targeting)), emailVerifiedAt: { not: null } };
   }
 }

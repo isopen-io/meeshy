@@ -68,6 +68,24 @@ extension ConversationSyncEngine {
         isSyncing = true
         defer { isSyncing = false }
 
+        // LA VOIE `/sync` D'ABORD (#4172, seconde moitié du critère 1) : le
+        // démarrage à froid en pages d'ancre au lieu de ≈ 100 requêtes par
+        // rang. Le repli est la condition NOMMÉE du critère 2 — la collection
+        // non servie par ce déploiement (`UNSUPPORTED_COLLECTION`, mesuré en
+        // production le 2026-09-04) ramène le chemin historique ENTIER,
+        // jamais un `try?` qui fondrait un refus dans une panne.
+        switch await fullSyncViaSyncPages() {
+        case .fait:
+            return true
+        case .echouee:
+            // Panne en cours de pagination : même contrat que le chemin
+            // historique sur une première page tombée — on rend la main, le
+            // prochain signal retentera. Le cache garde ce qu'il a.
+            return false
+        case let .indisponible(raison):
+            Self.logger.notice("[SyncEngine] plein /sync → repli \(raison.rawValue) : pages /conversations")
+        }
+
         let pageSize = 100
         let userId = await currentUserId()
         let service = self.conversationService
@@ -387,6 +405,117 @@ extension ConversationSyncEngine {
         return outcome.succeeded
     }
 
+    private enum IssueDuPleinParSync {
+        case fait
+        case indisponible(RaisonDuRepliDeSync)
+        case echouee
+    }
+
+    /// L'ÉPOQUE : un `since` antérieur à tout — le plein est un delta depuis
+    /// le commencement, et c'est ce qui lui permet d'emprunter le MÊME canal,
+    /// la même fusion par champs servis et le même watermark que le nominal.
+    private static let sinceDeLEpoque = "1970-01-01T00:00:00.000Z"
+
+    /// LE PLEIN PAR `/sync` — pages d'ANCRE (`nextCursor` relayé verbatim),
+    /// `truncated`/`hasMore` honorés, et le REMPLACEMENT que le plein promet :
+    /// la liste finale est ce que le serveur a servi (fusionné ligne à ligne
+    /// avec le cache pour ce que la ligne maigre ne porte pas) — les fantômes
+    /// locaux absents du serveur PARTENT, comme sur le chemin historique.
+    ///
+    /// Verdict à trois issues, et l'ordre compte : `indisponible` n'est rendu
+    /// que sur la PREMIÈRE page (le déploiement ne sert pas la collection —
+    /// le chemin historique reprend tout) ; une panne au MILIEU rend
+    /// `echouee` (retenter coûterait moins que rejouer ≈ 100 requêtes, et le
+    /// cache garde la portion déjà peinte).
+    private func fullSyncViaSyncPages() async -> IssueDuPleinParSync {
+        guard let creance = creanceDeSync() else { return .indisponible(.creanceAbsente) }
+
+        let userId = await currentUserId()
+        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
+        let parId = Dictionary(uniqueKeysWithValues: baseline.map { ($0.id, $0) })
+
+        var servies: [MeeshyConversation] = []
+        var idsServis = Set<String>()
+        var ancre: String? = nil
+        var pages = 0
+        let maxPages = 100
+        var dernierCheckpoint: String? = nil
+
+        while pages < maxPages {
+            pages += 1
+            let demande = SyncDeltaRequest(
+                since: Self.sinceDeLEpoque,
+                collections: ["conversations"],
+                seq: await SyncSeqTracker.shared.lastSeq.flatMap { Int(exactly: $0) },
+                cursor: ancre
+            )
+            let issue: SyncDeltaOutcome<APIConversation> = await clientDeSync()
+                .demandeLeDelta(demande, creance: creance, rangeant: APIConversation.self)
+
+            switch issue {
+            case .refuse:
+                return pages == 1 ? .indisponible(.syncRefuse) : .echouee
+            case .muet:
+                return pages == 1 ? .indisponible(.survolMuet) : .echouee
+            case .inchange:
+                // Un 304 sur un plein sans validateur ne devrait pas tomber ;
+                // s'il tombe, la fenêtre est réputée vide — fin de pagination.
+                return await finaliseLePlein(servies, baseline: baseline, checkpoint: dernierCheckpoint) ? .fait : .echouee
+            case let .delta(delta, _):
+                let collection = delta.collections["conversations"]
+                let recues = (collection?.added ?? []) + (collection?.modified ?? [])
+                let mappees = await Self.mapConversationsOffMain(recues, userId: userId)
+                for ligne in mappees where !idsServis.contains(ligne.id) {
+                    idsServis.insert(ligne.id)
+                    servies.append(Self.fusionneLigneDeSync(existante: parId[ligne.id], recue: ligne))
+                }
+                dernierCheckpoint = delta.checkpoint ?? dernierCheckpoint
+
+                // PREMIÈRE PAGE PEINTE TOUT DE SUITE — le motif
+                // first-page-first du chemin historique : ~300 ms avant les
+                // lignes visibles, le reste en arrière-plan.
+                if pages == 1 && !servies.isEmpty {
+                    await saveSorted(servies, to: "list", baseline: baseline)
+                    await SearchIndex.shared.indexConversations(servies)
+                    _conversationsDidChange.send()
+                }
+
+                let suite = collection?.nextCursor
+                let continuer = (delta.hasMore || (collection?.truncated ?? false)) && suite != nil
+                if !continuer {
+                    return await finaliseLePlein(servies, baseline: baseline, checkpoint: dernierCheckpoint) ? .fait : .echouee
+                }
+                ancre = suite
+            }
+        }
+        // Plafond de sécurité atteint : la liste est peut-être incomplète —
+        // on la garde peinte mais on signale l'échec, comme la queue
+        // séquentielle du chemin historique.
+        _ = await finaliseLePlein(servies, baseline: baseline, checkpoint: nil)
+        return .echouee
+    }
+
+    /// La CLÔTURE du plein : persistance, index, watermark serveur (jamais
+    /// l'horloge de l'appareil — R15b), et la fenêtre de réconciliation.
+    @discardableResult
+    private func finaliseLePlein(
+        _ servies: [MeeshyConversation],
+        baseline: [MeeshyConversation],
+        checkpoint: String?
+    ) async -> Bool {
+        await saveSorted(servies, to: "list", baseline: baseline)
+        await SearchIndex.shared.indexConversations(servies.filter(\.isActive))
+        _conversationsDidChange.send()
+        if let checkpoint,
+           let date = Self.formatterDuCheckpoint.date(from: checkpoint) ?? ISO8601DateFormatter().date(from: checkpoint) {
+            lastSyncTimestamp = max(lastSyncTimestamp, date)
+        } else if let plusRecente = servies.map(\.updatedAt).max() {
+            lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: [plusRecente], fallback: lastSyncTimestamp)
+        }
+        lastFullReconcileAt = Date()
+        return true
+    }
+
     /// PORTÉE DE `reconcileUnread` CÔTÉ WEB — voir le jumeau nommé sur
     /// `syncSinceLastCheckpoint` ci-dessus pour la règle de fusion elle-même.
     ///
@@ -536,6 +665,7 @@ extension ConversationSyncEngine {
     enum RaisonDuRepliDeSync: String, Sendable {
         case creanceAbsente = "creance-absente"
         case survolMuet = "survol-muet"
+        case syncRefuse = "sync-refuse"
     }
 
     private enum CheminDuDelta {
@@ -588,6 +718,11 @@ extension ConversationSyncEngine {
         switch issue {
         case .muet:
             return .repli(.survolMuet)
+        case .refuse:
+            // Le serveur a DIT NON (collection non servie par ce déploiement,
+            // requête refusée) : même repli nommé — le chemin historique sait
+            // rejouer le delta, et le refus est journalisé par l'appelant.
+            return .repli(.syncRefuse)
         case .inchange:
             // La fenêtre n'a pas bougé : rien à peindre, rien à avancer.
             return .traite(.complete)

@@ -33,6 +33,10 @@ public struct SyncDeltaRequest: Sendable, Equatable {
     public let fields: [String]
     /// Le dernier `ETag` lu — posé en `if-none-match` pour que le 304 puisse tomber.
     public let validateur: String?
+    /// L'ANCRE de pagination servie par la page précédente (`nextCursor` de la
+    /// collection, #4172 seconde moitié du critère 1) — relayée VERBATIM pour
+    /// que le PLEIN par `/sync` enchaîne ses pages sans rejouer la fenêtre.
+    public let cursor: String?
 
     public init(
         since: String,
@@ -40,7 +44,8 @@ public struct SyncDeltaRequest: Sendable, Equatable {
         scope: String? = nil,
         seq: Int? = nil,
         fields: [String] = [],
-        validateur: String? = nil
+        validateur: String? = nil,
+        cursor: String? = nil
     ) {
         self.since = since
         self.collections = collections
@@ -48,6 +53,7 @@ public struct SyncDeltaRequest: Sendable, Equatable {
         self.seq = seq
         self.fields = fields
         self.validateur = validateur
+        self.cursor = cursor
     }
 }
 
@@ -57,13 +63,22 @@ public struct SyncDeltaCollection<Row: Decodable & Sendable>: Decodable, Sendabl
     public let modified: [Row]
     public let deleted: [String]
 
-    private enum CodingKeys: String, CodingKey { case added, modified, deleted }
+    /// L'ancre de la PAGE SUIVANTE, servie quand la fenêtre a coupé — c'est
+    /// elle que la demande suivante relaie (`SyncDeltaRequest.cursor`).
+    public let nextCursor: String?
+    /// La fenêtre a COUPÉ cette collection (budget d'octets serveur) : la page
+    /// est complète en soi mais la collection ne l'est pas.
+    public let truncated: Bool
+
+    private enum CodingKeys: String, CodingKey { case added, modified, deleted, nextCursor, truncated }
 
     public init(from decoder: Decoder) throws {
         let conteneur = try decoder.container(keyedBy: CodingKeys.self)
         added = try conteneur.decodeIfPresent([Row].self, forKey: .added) ?? []
         modified = try conteneur.decodeIfPresent([Row].self, forKey: .modified) ?? []
         deleted = try conteneur.decodeIfPresent([String].self, forKey: .deleted) ?? []
+        nextCursor = try conteneur.decodeIfPresent(String.self, forKey: .nextCursor)
+        truncated = try conteneur.decodeIfPresent(Bool.self, forKey: .truncated) ?? false
     }
 }
 
@@ -97,6 +112,12 @@ public struct SyncDelta<Row: Decodable & Sendable>: Decodable, Sendable {
 public enum SyncDeltaOutcome<Row: Decodable & Sendable>: Sendable {
     case inchange
     case muet
+    /// Le serveur a RÉPONDU et a DIT NON (4xx) — `code` porte son verdict
+    /// (`UNSUPPORTED_COLLECTION` quand la collection n'est pas servie par ce
+    /// déploiement). Distinct de `muet` parce que le critère 2 de #4172
+    /// l'exige : le repli du PLEIN se déclenche sur cette condition NOMMÉE,
+    /// jamais sur une panne fondue dans un silence.
+    case refuse(statut: Int, code: String?)
     case delta(SyncDelta<Row>, validateur: String?)
 }
 
@@ -160,6 +181,10 @@ public final class SyncDeltaClient: SyncDeltaClientProviding, Sendable {
 
         guard let (octets, reponse) = try? await transport.executer(requete) else { return .muet }
         if reponse.statusCode == 304 { return .inchange }
+        if (400...499).contains(reponse.statusCode) {
+            let code = (try? JSONDecoder().decode(EnveloppeDeRefus.self, from: octets))?.error?.code
+            return .refuse(statut: reponse.statusCode, code: code)
+        }
         guard (200...299).contains(reponse.statusCode) else { return .muet }
 
         // LE DÉCODEUR EST CELUI DE LA MAISON (`APIClient.makeAPIPayloadDecoder`,
@@ -184,6 +209,7 @@ public final class SyncDeltaClient: SyncDeltaClientProviding, Sendable {
         ]
         if let scope = demande.scope { elements.append(URLQueryItem(name: "scope", value: scope)) }
         if let seq = demande.seq { elements.append(URLQueryItem(name: "seq", value: String(seq))) }
+        if let cursor = demande.cursor { elements.append(URLQueryItem(name: "cursor", value: cursor)) }
         if !demande.fields.isEmpty {
             elements.append(URLQueryItem(name: "fields", value: demande.fields.joined(separator: ",")))
         }
@@ -195,6 +221,11 @@ public final class SyncDeltaClient: SyncDeltaClientProviding, Sendable {
 private struct EnveloppeDeSync<Row: Decodable & Sendable>: Decodable {
     let success: Bool?
     let data: SyncDelta<Row>?
+}
+
+private struct EnveloppeDeRefus: Decodable {
+    struct Erreur: Decodable { let code: String? }
+    let error: Erreur?
 }
 
 /// LE TRANSPORT DE PRODUCTION — une session SANS cache : `/sync` répond

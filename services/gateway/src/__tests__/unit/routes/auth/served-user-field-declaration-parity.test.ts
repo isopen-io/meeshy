@@ -15,7 +15,7 @@
  * | sens | cas réel |
  * |---|---|
  * | déclaré, non produit | `banner` (#4641) — servi `null` en dur à toute connexion |
- * | produit, non déclaré | `pendingEmail` / `pendingPhone` (#4653) — supprimés de toute réponse d'authentification |
+ * | produit, non déclaré | `pendingEmail` / `pendingPhone` (#4653) — TRANCHÉ : producteur retiré, plus un écart |
  *
  * ## Pourquoi ce motif, et pas un témoin de corps
  *
@@ -100,11 +100,12 @@
  * | #4641 (`…-field-producers`) | le champ déclaré VAUT-il la colonne ? | un repli constant (`banner: null` partout) | un champ que le schéma ne déclare PAS — il n'atteint jamais le corps |
  * | #4654 (ce fichier) | les deux déclarations disent-elles la MÊME chose ? | une clé produite hors contrat, une clé promise sans producteur | ce qu'un champ déclaré ET produit VAUT |
  *
- * **Ne pas en supprimer une comme doublon de l'autre.** #4653 est la preuve
- * vivante de l'angle mort de la première : `pendingEmail` est produit, jamais
- * déclaré, donc absent du corps qu'elle inspecte — elle est verte, et le
- * restera. Symétriquement, un `banner` déclaré, produit, et constant à `null`
- * laisserait ce fichier vert : les deux jeux de clés coïncident parfaitement.
+ * **Ne pas en supprimer une comme doublon de l'autre.** #4653 était la preuve
+ * vivante de l'angle mort de la première : `pendingEmail`, tant qu'il restait
+ * produit sans être déclaré, était absent du corps qu'elle inspecte — elle
+ * restait verte quel que soit le sort de l'écart. Symétriquement, un `banner`
+ * déclaré, produit, et constant à `null` laisserait ce fichier vert : les deux
+ * jeux de clés coïncident parfaitement.
  *
  * Deux autres suites nomment `formatUserResponse` (`unit/routes/auth/types.test.ts`,
  * `unit/routes/auth-types.test.ts`) : elles exercent la CORRESPONDANCE de
@@ -215,24 +216,6 @@ type EcartAssume = {
  * périmée d'un cliquet d'inventaire.
  */
 const ECARTS_ASSUMES: Readonly<Record<string, EcartAssume>> = {
-  pendingEmail: {
-    sens: 'produit-non-declare',
-    issue: 4653,
-    raison:
-      "Décision produit NON TRANCHÉE : déclarer le champ (une reprise de session apprendrait " +
-      "qu'un changement de contact est en attente sans second appel) ou retirer le producteur " +
-      "(aucun client ne le lit sur une réponse de connexion — mesuré sur les trois plateformes). " +
-      'Exiger la déclaration ici trancherait la décision à la place du porteur.'
-  },
-  pendingPhone: {
-    sens: 'produit-non-declare',
-    issue: 4653,
-    raison:
-      "Même décision que `pendingEmail`, plus un écart de NOM à trancher avec elle : le " +
-      'producteur lit la colonne `pendingPhoneNumber` et sert `pendingPhone`, quand le chemin ' +
-      'de RÉGLAGES sert `pendingPhoneNumber` aux clients. Déclarer sans choisir un nom laisserait ' +
-      'un client aveugle sur une route et voyant sur l’autre.'
-  },
   phoneCountryCode: {
     sens: 'declare-non-produit',
     issue: 4641,

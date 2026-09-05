@@ -969,11 +969,18 @@ class Component extends DCLogic {
     const src = s.commentSrc;
 
     const BLANKS = {
+      // LA MÉTA A ÉTÉ RETIRÉE, ET C'EST LE FOND DE L'ÉCRAN (issue #4967).
+      // Auteur / Publiée / Expirée ne peuvent exister que si la story existe
+      // ET que sa cause est connue : les dessiner ferait de cet écran l'oracle
+      // d'énumération que le refus 404 existe pour fermer. « 24 h » était faux
+      // de surcroît (20 h, EPHEMERAL_POST_TTL_HOURS.STORY, #5033) : le corps
+      // reprend désormais mot pour mot STORY.indisponible.corps
+      // (apps/web-v3/lib/contenu/story.ts), source unique de cette phrase.
       storyFail: {
         icon: 'ph-sparkle', iconBg: 'rgba(148,151,171,.12)', iconFg: '#9397ab',
         title: 'Story indisponible',
-        body: "Cette story a expiré il y a 3 h. Les stories restent visibles 24 h après leur publication.",
-        meta: [['Auteur', 'Ibrahim'], ['Publiée', 'hier · 09:12'], ['Expirée', "aujourd'hui · 09:12"]],
+        body: "Cette story n’existe plus, ou elle ne vous est pas ouverte. Les stories restent visibles 20 h après leur publication.",
+        meta: [],
         primary: 'Retour au fil', primaryGo: 'feed', secondary: 'Créer une story', secondaryGo: 'storyCreate',
       },
       linkRedirect: {
@@ -994,7 +1001,10 @@ class Component extends DCLogic {
     const bl = BLANKS[screen];
     const blank = bl
       ? { icon: bl.icon, iconBg: bl.iconBg, iconFg: bl.iconFg, title: bl.title, body: bl.body,
-          hasMeta: true, meta: bl.meta.map(([k, v]) => ({ k, v })),
+          // `hasMeta` SE DÉDUIT de la méta, il ne se décrète pas : posé en dur
+          // à `true`, un écran dont la méta est vide (storyFail, #4967) aurait
+          // rendu un bloc vide au lieu de n'en rendre aucun.
+          hasMeta: bl.meta.length > 0, meta: bl.meta.map(([k, v]) => ({ k, v })),
           primary: bl.primary, primaryGo: () => this.go(bl.primaryGo),
           secondary: bl.secondary, secondaryGo: () => this.go(bl.secondaryGo) }
       : { hasMeta: false, meta: [], primaryGo: () => {}, secondaryGo: () => {} };

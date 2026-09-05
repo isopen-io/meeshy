@@ -653,6 +653,20 @@ struct MeeshyComposerHost: View {
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
 
+    /// **La couche d'écriture du CORPS DU POST** (#4890, directive porteur
+    /// 2026-09-04).
+    ///
+    /// Jumelle de `editsSceneDescription`, et distincte d'elle parce que les
+    /// DEUX textes existent en même temps sur un post : la description est la
+    /// légende du média courant (`PostMedia.caption`), le contenu est le corps
+    /// de la publication. Un seul drapeau aurait fait de la porte CONTENU une
+    /// seconde entrée vers le champ de la légende — un contrôle qui existe,
+    /// répond au doigt, et écrit ailleurs qu'annoncé.
+    ///
+    /// Les deux ne s'ouvrent jamais ensemble (voir le `body`) : au même
+    /// ancrage bas, elles se recouvriraient.
+    @State var editsPostContent = false
+
     /// **Le repli du volet de description** (#4742, défaut RETOURNÉ au #5138).
     ///
     /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
@@ -950,10 +964,9 @@ struct MeeshyComposerHost: View {
         // `storyComposerCanvasBottomReservation`, posée sur `composerSurface` —
         // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
         // seconde.
-        .overlay(alignment: .bottom) {
-            if editsSceneDescription { sceneDescriptionEditor }
-        }
+        .overlay(alignment: .bottom) { textEditingZones }
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsSceneDescription)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsPostContent)
         // **La feuille de partage est portée par la RACINE, pas par
         // `surfaceWithIntakePortals`** (#4996). Ce dernier porte déjà un
         // `.sheet(item:)` et un `.fullScreenCover(item:)`, et SwiftUI n'honore

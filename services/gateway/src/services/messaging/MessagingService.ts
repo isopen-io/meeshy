@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
+import type { ParticipantPermissions, AnonymousRightsOverride } from '@meeshy/shared/prisma/client';
 import type {
   MessageRequest,
   MessageResponse
@@ -25,6 +26,7 @@ import {
   isConversationWriteRefused,
   describeConversationWriteRefusal
 } from './conversationWriteAdmission';
+import { resolveParticipantRights, attachmentSendRightForMimeType } from '../participantRights';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -105,15 +107,25 @@ export class MessagingService {
           const cached = getCachedParticipant(participantId, conversationId);
           if (cached) return cached;
 
+          // `permissions` + `anonymousSession.rights` : nécessaires à
+          // `resolveParticipantRights` (#4855) pour trancher `canSendMessages`
+          // sans lecture Prisma supplémentaire — même projection que
+          // `HISTORY_FLOOR_PARTICIPANT_SELECT` (`services/historyFloor.ts`).
           let p = await this.prisma.participant.findUnique({
             where: { id: participantId },
-            select: { id: true, conversationId: true, isActive: true }
+            select: {
+              id: true, conversationId: true, isActive: true,
+              permissions: true, anonymousSession: { select: { rights: true } }
+            }
           });
           if (!p || p.conversationId !== conversationId) {
             logger.error('DEPRECATED: userId passed as participantId — caller must pass Participant.id', { participantId, conversationId });
             p = await this.prisma.participant.findFirst({
               where: { userId: participantId, conversationId, isActive: true },
-              select: { id: true, conversationId: true, isActive: true }
+              select: {
+                id: true, conversationId: true, isActive: true,
+                permissions: true, anonymousSession: { select: { rights: true } }
+              }
             });
           }
           if (!p) {
@@ -224,6 +236,62 @@ export class MessagingService {
         return this.createErrorResponse(
           describeConversationWriteRefusal(conversationAdmission)
         );
+      }
+
+      // 3.7. Droit D'ÉCRITURE DU PARTICIPANT (#4855) — distinct de l'état du
+      //      conteneur ci-dessus : `canSendMessages` est un droit PERSONNEL
+      //      (instantané figé au join, retirable par un hôte via
+      //      `PATCH …/participants/:id/rights`), jamais une règle de la
+      //      conversation elle-même. Seul `routes/links/messages.ts`
+      //      l'appliquait jusqu'ici — ni cette route REST canonique ni
+      //      `message:send` (les deux convergent ici) ne le lisaient : un hôte
+      //      qui retirait le droit d'écrire à un invité voyait
+      //      `participant:rights-updated` fermer le composeur du client
+      //      obéissant, pendant qu'un client qui postait quand même (ou sans
+      //      cet écouteur) passait.
+      //
+      //      Même loi que `historyFloorFor` / `participantConversationPayload`
+      //      — `resolveParticipantRights` (`services/participantRights.ts`),
+      //      jamais `participant.permissions` brut : l'instantané ne voit pas
+      //      la surcharge que l'hôte a posée depuis. `=== false` explicite :
+      //      un droit ABSENT (participant auto-créé, ligne héritée sans
+      //      `permissions` sélectionné) est permissif, comme partout ailleurs
+      //      dans ce module — seul un refus EXPLICITE bloque.
+      const senderRights = participant.permissions
+        ? resolveParticipantRights({ permissions: participant.permissions, anonymousSession: participant.anonymousSession })
+        : null;
+      if (senderRights?.canSendMessages === false) {
+        logger.info('participant write right denied', { ...corr, conversationId });
+        return this.createErrorResponse(
+          'Vous n\'êtes pas autorisé à envoyer des messages',
+          'WRITE_NOT_PERMITTED'
+        );
+      }
+
+      // 3.8. Droits DE PIÈCE JOINTE (#5151) — distincts de `canSendMessages`
+      //      ci-dessus : ce qu'on a le droit de JOINDRE, pas d'ÉCRIRE. Un hôte
+      //      peut laisser un invité écrire (`canSendMessages: true`) sans le
+      //      laisser illustrer (`canSendImages: false`) — `upload.ts` ne garde
+      //      que le TÉLÉVERSEMENT du fichier, jamais son admission au moment
+      //      où il est RATTACHÉ à un message envoyé par ce transport. Le droit
+      //      dépend du TYPE de chaque pièce (`attachmentSendRightForMimeType`,
+      //      même table que `senderRights` ci-dessus) — d'où la lecture
+      //      supplémentaire, minimale (id + mimeType uniquement).
+      if (senderRights && request.attachmentIds && request.attachmentIds.length > 0) {
+        const attachments = await this.prisma.messageAttachment.findMany({
+          where: { id: { in: [...request.attachmentIds] } },
+          select: { mimeType: true }
+        });
+        const deniedRight = attachments
+          .map(a => attachmentSendRightForMimeType(a.mimeType))
+          .find(right => senderRights![right] === false);
+        if (deniedRight) {
+          logger.info('participant attachment right denied', { ...corr, conversationId, right: deniedRight });
+          return this.createErrorResponse(
+            'Vous n\'êtes pas autorisé à envoyer ce type de pièce jointe',
+            'ATTACHMENT_RIGHT_NOT_PERMITTED'
+          );
+        }
       }
 
       // 4. Détection de langue — trust the client's `originalLanguage` when
@@ -559,10 +627,11 @@ export class MessagingService {
   /**
    * Génère une réponse d'erreur
    */
-  private createErrorResponse(error: string): MessageResponse {
+  private createErrorResponse(error: string, code?: string): MessageResponse {
     return {
       success: false,
       error,
+      ...(code ? { code } : {}),
       data: null as any
     };
   }
@@ -589,7 +658,13 @@ export class MessagingService {
   private async ensureParticipantFromMember(
     userId: string,
     conversationId: string
-  ): Promise<{ id: string; conversationId: string; isActive: boolean } | null> {
+  ): Promise<{
+    id: string;
+    conversationId: string;
+    isActive: boolean;
+    permissions: ParticipantPermissions;
+    anonymousSession: { rights: AnonymousRightsOverride | null } | null;
+  } | null> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -647,7 +722,10 @@ export class MessagingService {
           // disparues de la liste).
           deletedForMe: null
         },
-        select: { id: true, conversationId: true, isActive: true }
+        select: {
+          id: true, conversationId: true, isActive: true,
+          permissions: true, anonymousSession: { select: { rights: true } }
+        }
       });
 
       logger.info('Auto-created Participant', { conversationId });
