@@ -289,6 +289,11 @@ export class AttachmentService {
         translations: true,
         metadata: true,
         createdAt: true,
+        // #4923 — requis par la garde d'appartenance de la route (le
+        // déposant d'une pièce PAS ENCORE rattachée à un message est le seul
+        // à pouvoir la lire) ; déjà déclaré par `messageAttachmentSchema`
+        // mais jamais chargé ici, donc jamais servi malgré le contrat.
+        uploadedBy: true,
       },
     });
 
