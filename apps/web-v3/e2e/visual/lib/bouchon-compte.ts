@@ -3,7 +3,6 @@ import type { IncomingMessage } from 'node:http';
 import { serviParLAnnuaire } from './bouchon-annuaire';
 import type { Identite } from './bouchon-socket';
 import {
-  CONVERSATION_DU_LECTEUR,
   LIGNES_DE_CONVERSATIONS_SERVIES,
   MEMBRE,
   PAIR_ANGLOPHONE,

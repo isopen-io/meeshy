@@ -2,8 +2,8 @@
  * @jest-environment node
  */
 
-import { documentDesPrefs } from '@/app/connecte/prefs-vue';
-import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS } from '@/lib/contenu/prefs-de-notif';
+import { documentDesPrefs, type EtatDesPrefs } from '@/app/connecte/prefs-vue';
+import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
 /**
  * `app/connecte/prefs-vue.ts` — LA VUE DE `/notifications/preferences`
@@ -23,16 +23,16 @@ import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS } from '@/lib/contenu/prefs-de-not
 
 const REGLAGES_SERVIS = Object.fromEntries(
   BASCULES_DE_PREFS.map((b) => [b.cle, b.cle !== 'reactionEnabled']),
-) as Record<string, boolean>;
+) as Record<CleDePreference, boolean>;
 
-const ETAT_NOMINAL = {
+const ETAT_NOMINAL: EtatDesPrefs = {
   reglages: REGLAGES_SERVIS,
   dndStartTime: '22:00',
   dndEndTime: '08:00',
   regleAppliquee: null,
   echec: false,
   tempsReel: null,
-} as const;
+};
 
 describe('la vue des réglages de notification', () => {
   it('sert les six sections, dans l’ordre de la planche', () => {

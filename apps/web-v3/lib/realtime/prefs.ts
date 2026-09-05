@@ -105,8 +105,8 @@ const surBascule = (ctx: Contexte, formulaire: HTMLFormElement, libelle: string)
       montreLEchec(ctx);
     })
     .catch(() => {
-      const { etat } = annule(etatOptimiste, cle, avant);
-      peinsLaRangee(bouton, etat.reglages[cle]);
+      annule(etatOptimiste, cle, avant);
+      peinsLaRangee(bouton, avant);
       montreLEchec(ctx);
     });
 };
