@@ -91,11 +91,13 @@ def _ends_with_sentence_boundary(text: str) -> bool:
     if not text:
         return False
 
-    text = text.rstrip()  # Enlever les espaces de fin
-
-    # Vérifier les retours à la ligne
+    # Vérifier les retours à la ligne AVANT rstrip() : un `rstrip()` nu mange le
+    # `\n` de fin, exactement le cas — un segment qui se termine SUR un saut de
+    # ligne — que cette règle existe pour couper.
     if '\n' in text:
         return True
+
+    text = text.rstrip()  # Enlever les espaces de fin
 
     # Vérifier les ponctuations fortes
     if text and text[-1] in SENTENCE_ENDING_PUNCTUATION:

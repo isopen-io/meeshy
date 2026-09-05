@@ -362,6 +362,17 @@ class TestEndsSentenceBoundary:
         from src.utils.smart_segment_merger import _ends_with_sentence_boundary
         assert _ends_with_sentence_boundary("Hello.   ") is True
 
+    def test_trailing_newline_is_a_boundary(self):
+        """Regression: a segment ending EXACTLY at a line break is the case the
+        rule exists to break on, yet a bare rstrip() ran before the '\\n' check
+        and ate the trailing newline, so the guard missed its own contract."""
+        from src.utils.smart_segment_merger import _ends_with_sentence_boundary
+        assert _ends_with_sentence_boundary("Hello\n") is True
+
+    def test_newline_with_trailing_spaces_is_a_boundary(self):
+        from src.utils.smart_segment_merger import _ends_with_sentence_boundary
+        assert _ends_with_sentence_boundary("Hello\n   ") is True
+
     def test_emoji_only(self):
         from src.utils.smart_segment_merger import _ends_with_sentence_boundary
         assert _ends_with_sentence_boundary("😊") is True
@@ -472,6 +483,18 @@ class TestMergeShortSegments:
         ]
         result = merge_short_segments(segs)
         assert len(result) == 2
+
+    def test_trailing_newline_prevents_merge(self):
+        """The non-fusion rule (module header) forbids merging across a line
+        break. A previous segment ending with '\\n' must keep the pair split."""
+        from src.utils.smart_segment_merger import merge_short_segments
+        segs = [
+            _seg("a\n", 0, 100, speaker_id="s0"),
+            _seg("b", 110, 200, speaker_id="s0"),   # pause 10ms, 4 chars, same speaker
+        ]
+        result = merge_short_segments(segs)
+        assert len(result) == 2
+        assert result[0].text == "a\n"
 
     def test_different_speakers_prevents_merge(self):
         from src.utils.smart_segment_merger import merge_short_segments
