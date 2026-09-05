@@ -368,6 +368,15 @@ Quatre suites au 2026-09-05 : `FeedPostCardScenePlayerGuardTests`,
 > renommage ne touche pas) et une manquante (`ReelFeedLayoutTests`). Sur une
 > dette dont le sujet EST « une énumération ne survit pas à ce qu'elle décrit »,
 > c'est la démonstration la moins coûteuse qu'on pouvait en obtenir.
+>
+> Et la faute s'est présentée **trois fois dans le même échange** : la borne
+> `Views/*.swift` de la commande publiée plus haut, la table d'exclusions du
+> correctif bâtie depuis un `git grep` NU, et ces deux listes de gardes écrites
+> de mémoire. D'où la forme générale, qui vaut bien au-delà de ce paragraphe :
+> **le geste qui remplace une énumération en contient toujours une plus petite —
+> le territoire, l'extension, la table d'exclusions —, et c'est celle-là qu'on ne
+> relit pas.** Après avoir publié une commande, poser une question de plus :
+> *quelle énumération reste-t-il dedans ?*, l'élargir d'un cran, et re-mesurer.
 
 ## 4. Ce que le lecteur reçoit de la PROJECTION
 
