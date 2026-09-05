@@ -23,9 +23,9 @@ import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
 const mockCompare = jest.fn() as jest.Mock<any>;
-jest.mock('bcryptjs', () => ({
-  __esModule: true,
-  default: { compare: (...a: any[]) => mockCompare(...a) },
+jest.mock('../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...a: any[]) => mockCompare(...a),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({

@@ -365,6 +365,16 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
    */
   const ENV_REPLI_SUR = new Map([
     ['NODE_ENV', "posée par le Dockerfile (ENV NODE_ENV=production) et par Next lui-même"],
+    // Ni l'une ni l'autre n'est INCONDITIONNELLEMENT nécessaire — leur absence
+    // est SÛRE tant que le déploiement ne route rien au-delà des actifs de
+    // zone (`/__v3/_next`, `/__v3/rt/`, `/__v3/sw`), ce que la règle GÉNÉRALE
+    // ci-dessous ne sait pas exprimer (elle exige la déclaration, point). La
+    // question conditionnelle est posée par l'invariant DÉDIÉ,
+    // `unDeploiementQuiRouteAuDelaDesActifsDeclareLaNavigationDeZone`, plus
+    // bas dans ce fichier — c'est lui qui rougit le jour où un déploiement
+    // franchit le préfixe de zone sans les poser.
+    ['V3_NAVIGABLE', "gouvernée par l'invariant dédié « actifs seulement » ci-dessous, pas par cette règle générale"],
+    ['V3_SW_PORTEES', "même exemption que V3_NAVIGABLE, même invariant dédié, même raison"],
   ]);
 
   const environmentOf = (compose, service) => {
@@ -402,6 +412,46 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
           `service ${dep.v3} de ${dep.fichier} : dans le conteneur c'est le repli codé ` +
           `en dur de la source qui s'applique, c'est-à-dire celui du poste de développement`,
       );
+  };
+
+  // «ACTIFS SEULEMENT» N'A RIEN À DÉCLARER ; TOUT LE RESTE DOIT DÉCLARER LA
+  // NAVIGATION DE ZONE.
+  //
+  // `V3_NAVIGABLE` (`blocDuNavigateur`, #5106) et `V3_SW_PORTEES`
+  // (`SCRIPT_DU_TRAVAILLEUR`, #4472/#4473) sont servies par TOUT document
+  // PLEIN ÉCRAN (`documentPleinEcran`, `/l/` compris) ET par les écrans
+  // connectés que compose `documentDuSite` — pas seulement par un sous-
+  // ensemble nommé « écrans connectés » au sens étroit. Un déploiement dont
+  // la règle Traefik ne réclame RIEN au-delà du préfixe de zone
+  // (`/__v3/_next`, `/__v3/rt/`, `/__v3/sw`) est en ACTIFS SEULEMENT : aucun
+  // humain n'atteint encore ce code, et l'absence des deux variables est
+  // SÛRE — c'est le régime de `docker-compose.prod.yml` aujourd'hui (§ 4.9,
+  // aucun `PathPrefix`/`Path` humain n'y est encore posé). Dès qu'UNE seule
+  // route franchit le préfixe de zone (le cas de `docker-compose.staging.yml`,
+  // qui sert déjà `/l/`, `/chats`, `/chat/`…), le code qui lit ces deux
+  // variables devient joignable, et leur absence redevient un défaut.
+  //
+  // C'est un invariant DISTINCT de `theV3ServiceDeclaresWhatItsCodeReads` (la
+  // règle générale, inconditionnelle) : les deux variables en sont exemptées
+  // (`ENV_REPLI_SUR`) précisément parce que leur nécessité DÉPEND du routage
+  // — une condition que la règle générale ne sait pas exprimer.
+  const NAVIGATION_DE_ZONE = ['V3_NAVIGABLE', 'V3_SW_PORTEES'];
+
+  const theV3ServiceDeclaresZoneNavigationWhenItRoutesBeyondAssets = (dep) => (world) => {
+    const rule = v3RuleOf(world, dep);
+    if (rule === null) return [];
+    const cheminsHumains = cheminsReclames(rule).filter(
+      ({ valeur }) => !valeur.startsWith(V3_PATH_PREFIX),
+    );
+    if (cheminsHumains.length === 0) return [];
+    const declared = environmentOf(dep.source(world), dep.v3);
+    if (declared === null) return [];
+    return NAVIGATION_DE_ZONE.filter((name) => !declared.includes(name)).map(
+      (name) =>
+        `le service ${dep.v3} de ${dep.fichier} route ${cheminsHumains[0].valeur} au-delà des actifs de ` +
+        `zone mais ne déclare pas ${name} : le code qui la lit (blocDuNavigateur / SCRIPT_DU_TRAVAILLEUR) ` +
+        `est déjà joignable, et sa chaîne de replis retombe sur le poste de développement`,
+    );
   };
 
   const environmentEntriesOf = (compose, service) => {
@@ -476,6 +526,7 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
     leDeploiementRouteLaV3,
     theLegacyRouterKeepsItsFloor,
     theV3ServiceDeclaresWhatItsCodeReads,
+    theV3ServiceDeclaresZoneNavigationWhenItRoutesBeyondAssets,
     lOriginePubliqueEstJoignableParUnNavigateur,
     theV3ContainerIsDisjointFromTheLegacy,
   };

@@ -1,25 +1,36 @@
 /**
  * LA COPIE DES RÉGLAGES — ce que les six écrans DISENT.
  *
- * SIX, ET NON DIX. La matrice en dessine dix ; quatre n'ont aucune route pour
- * les servir, et le relevé est daté (2026-09-03, sur les routes assemblées) :
- * `detail-privacy`, `detail-media`, `detail-message` et `detail-notification`
- * n'ont, dans la passerelle, ni lecture ni écriture. Les dessiner ferait des
- * rangées qui n'ouvrent rien, c'est-à-dire exactement ce que la charte règle 7
+ * SIX, ET NON DIX. La matrice en dessine dix ; trois n'ont toujours aucune
+ * route pour les servir, et le relevé est daté (2026-09-04, sur les routes
+ * assemblées) : `detail-privacy`, `detail-media` et `detail-message` n'ont,
+ * dans la passerelle, ni lecture ni écriture. Les dessiner ferait des rangées
+ * qui n'ouvrent rien, c'est-à-dire exactement ce que la charte règle 7
  * interdit (« un contrôle existe s'il a un EFFET »). Le carrefour ne liste donc
  * que les destinations qui MÈNENT quelque part, et ce qui manque est dit dans
  * la PR plutôt que grisé à l'écran.
  *
+ * `detail-notification` N'EST PLUS DANS CETTE LISTE (#4899) : `GET`/`PATCH
+ * /me/preferences?categories=notification` EXISTE
+ * (`services/gateway/src/routes/me/preferences/unified-routes.ts:150,229`),
+ * et l'écran qui la sert vit à SA PROPRE adresse — `/notifications/
+ * preferences` (`app/connecte/prefs-vue.ts`), pas `/settings/notification` —
+ * parce que la planche la range sous la boîte de notifications, pas sous ce
+ * carrefour (nav planche ligne 875 : `notifPrefs → notifs`). Le carrefour n'en
+ * garde donc qu'un LIEN, comme un raccourci vers une destination qui vit
+ * ailleurs — la rangée que la table ci-dessous nomme.
+ *
  * CE QUE LA PASSERELLE SERT, ET QUI DÉCIDE DE CE LOT :
  *
- *   | écran                         | route                                                    |
- *   |-------------------------------|----------------------------------------------------------|
- *   | `/settings`                   | aucune — un carrefour de liens                           |
- *   | `/settings/profile`           | `GET /auth/me`                                           |
- *   | `/settings/profile/edit`      | `PATCH /users/me` (`profile-updates.ts:41`)              |
- *   | `/settings/application`       | aucune — le thème est un cookie de cet appareil          |
- *   | `/settings/security`          | `GET`/`DELETE /users/me/devices` (`push-tokens.ts:355`)  |
- *   | `/settings/security/password` | `PATCH /users/me/password` (`profile-credentials.ts:32`) |
+ *   | écran                          | route                                                    |
+ *   |--------------------------------|----------------------------------------------------------|
+ *   | `/settings`                    | aucune — un carrefour de liens                           |
+ *   | `/settings/profile`            | `GET /auth/me`                                           |
+ *   | `/settings/profile/edit`       | `PATCH /users/me` (`profile-updates.ts:41`)              |
+ *   | `/settings/application`        | aucune — le thème est un cookie de cet appareil          |
+ *   | `/settings/security`           | `GET`/`DELETE /users/me/devices` (`push-tokens.ts:355`)  |
+ *   | `/settings/security/password`  | `PATCH /users/me/password` (`profile-credentials.ts:32`) |
+ *   | `/notifications/preferences`   | `GET`/`PATCH /me/preferences?categories=notification`    |
  *
  * CE QUE LES CIBLES DESSINENT ET QUE LA V3 NE SERT PAS, écran par écran —
  * parce qu'un silence non motivé se relit comme un oubli :
@@ -49,6 +60,7 @@ export const REGLAGES = {
     profil: { titre: 'Profil', phrase: 'Votre identité et les langues dans lesquelles vous lisez.' },
     securite: { titre: 'Sécurité', phrase: 'Votre mot de passe et vos appareils.' },
     application: { titre: 'Application', phrase: 'Le thème de Meeshy sur cet appareil.' },
+    notifications: { titre: 'Notifications', phrase: 'Ce qui vous alerte, et comment.' },
   },
 
   profil: {

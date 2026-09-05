@@ -201,6 +201,7 @@ const ETAT = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  contexte: null,
   plein: null,
   profil: null,
   ...attributs,
@@ -221,6 +222,7 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
     plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
     navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
     composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+    prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
@@ -289,6 +291,7 @@ describe('le fil rendu', () => {
             plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
             navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
             composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+            prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
             socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
           },
         },

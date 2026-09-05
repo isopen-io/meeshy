@@ -39,7 +39,7 @@ final class ComposerClearAllInventoryTests: XCTestCase {
     /// - ce qui se VOIT (texte, médias, fond, lieu) ;
     /// - ce qui PART AVEC sans se voir (les personnes nommées, les légendes) ;
     /// - les INDEX que l'effacement invalide (`slideIdByMediaURL`,
-    ///   `mediaRoleByURL`, `trimSourceDurations`), qui servent aussi de gardes
+    ///   `mediaRoleByURL`), qui servent aussi de gardes
     ///   d'idempotence — un index survivant fait SAUTER la re-pose du même
     ///   fichier après un effacement.
     private static let composition = [
@@ -55,7 +55,6 @@ final class ComposerClearAllInventoryTests: XCTestCase {
         "editedForegroundSound",
         "slideIdByMediaURL",
         "mediaRoleByURL",
-        "trimSourceDurations",
         "selectedSceneItemKind"
     ]
 

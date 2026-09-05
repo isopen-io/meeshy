@@ -204,3 +204,37 @@ export function isSameLanguage(
 ): boolean {
   return !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 }
+
+/**
+ * Construit un prédicat d'appartenance à un ensemble de langues DEMANDÉES,
+ * conforme au Prisme : une clé de traduction STOCKÉE matche une langue demandée
+ * si les deux canonicalisent ({@link normalizeLanguageForDedup}) vers la même
+ * clé. Rend `null` quand la liste demandée est absente ou n'a aucune entrée
+ * exploitable — le caller sert alors TOUTES les langues (comportement historique
+ * du filtre bande-passante opt-in).
+ *
+ * SSOT unique du filtre « ne servir que les langues du lecteur », partagée par
+ * les trois surfaces qui restreignaient les traductions à un `.toLowerCase()`
+ * verbatim : traductions texte REST (`transformTranslationsToArray`), pistes
+ * audio du Prisme REST (`cleanAttachmentsForApi`) et filtre socket
+ * (`filterMessagePayloadForLanguages`).
+ *
+ * Les DEUX côtés sont canonicalisés — c'est la moitié symétrique de #5108, qui
+ * n'avait canonicalisé que les codes DEMANDÉS à la frontière. La clé STOCKÉE
+ * pouvait rester régionale sur un document legacy (`'pt-BR'`, `'zh-Hant-HK'` —
+ * `MessageTranslationService` les lit déjà via `?? translations[normalizedTarget]`),
+ * si bien qu'un lecteur demandant le canonique `'pt'` voyait sa traduction
+ * `'pt-BR'` PRUNÉE et retombait sur l'original : violation directe du Prisme.
+ */
+export function makeLanguageFilter(
+  requested: Iterable<string> | null | undefined
+): ((code: string) => boolean) | null {
+  if (!requested) return null;
+  const canonical = new Set<string>();
+  for (const code of requested) {
+    if (code) canonical.add(normalizeLanguageForDedup(code));
+  }
+  if (canonical.size === 0) return null;
+  return (code: string): boolean =>
+    !!code && canonical.has(normalizeLanguageForDedup(code));
+}

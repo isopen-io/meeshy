@@ -1,4 +1,5 @@
-import { decideLInterception, extraitLEchange } from './navigateur-decision';
+import { armeLaDeconnexion } from './deconnexion';
+import { decideLInterception, extraitLEchange, porteUneSurimpression } from './navigateur-decision';
 
 /**
  * LE NAVIGATEUR DE ZONE — le 9ᵉ module de participation (#5106, directive
@@ -90,6 +91,13 @@ const demarre = (): void => {
   let enVol: AbortController | null = null;
 
   const navigue = async (url: string, geste: 'pousse' | 'retour'): Promise<void> => {
+    // L'ÉCRAN QUITTÉ PORTE-T-IL UNE SURIMPRESSION ? L'échange ne remet que
+    // `<main>` : le dialogue resterait ouvert par-dessus l'écran neuf, en
+    // piège à focus. On rend la main au navigateur — avant même le `fetch`.
+    if (porteUneSurimpression(document)) {
+      window.location.assign(url);
+      return;
+    }
     enVol?.abort();
     const controleur = new AbortController();
     enVol = controleur;
@@ -186,6 +194,14 @@ const demarre = (): void => {
   (window as Window & { __zoneNavigateur?: number }).__zoneNavigateur =
     ((window as Window & { __zoneNavigateur?: number }).__zoneNavigateur ?? 0) + 1;
 };
+
+// LA SORTIE (#5095) — armée ICI parce que ce module est le SEUL que le
+// TABLEAU DE BORD expédie (`app/connecte/vue.ts:342`, `blocDuNavigateur()`),
+// et que le tableau de bord sert le formulaire de l'espace membre au même
+// titre que `/chats`. `liste.ts` l'arme aussi ; `armeLaDeconnexion` est
+// idempotente, les deux ensemble ne posent qu'un écouteur. Hors de `demarre`,
+// et avant lui : la sortie ne dépend d'aucun périmètre navigable.
+armeLaDeconnexion();
 
 demarre();
 

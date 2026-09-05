@@ -154,4 +154,37 @@ final class ComposerMentionStripContrastTests: XCTestCase {
                                  "\(teinte.rawValue) doit rester un fond sombre")
         }
     }
+
+    /// **La bande n'a PAS de fond à elle** (directive porteur 2026-09-05).
+    ///
+    /// Elle portait `.adaptiveGlass(in: Rectangle())`, hérité de
+    /// `MentionSuggestionPanel` sous la formule « même chrome neutre ». Ce
+    /// panneau vit sur un écran CLAIR ; le plateau est sombre par doctrine, et
+    /// le verre y peignait une barre pâle en travers de la scène, juste
+    /// au-dessus du clavier — au moment précis où l'auteur regarde ce qu'il
+    /// écrit.
+    ///
+    /// **Ce témoin ne garde pas seulement une préférence de porteur : il rend
+    /// VRAIE la base que les trois témoins ci-dessus énoncent.** Ils mesurent
+    /// « la capsule à 6 % de `textPrimary` par-dessus la teinte du plateau » —
+    /// une composition à DEUX couches. Avec le verre, l'écran en avait trois,
+    /// et la couche du milieu n'était mesurée nulle part : les ratios étaient
+    /// justes par accident, sur un empilement qui n'était pas celui rendu.
+    ///
+    /// > Un témoin de contraste décrit un EMPILEMENT. Ajouter une couche entre
+    /// > deux de celles qu'il nomme ne le fait pas rougir — il continue de
+    /// > mesurer un écran qui n'existe plus.
+    func test_laBande_neSePeintAucunFond() throws {
+        let source = try MyStoriesSourceCorpus.text(
+            of: "Meeshy/Features/Main/Components/ComposerMentionStrip.swift")
+        let code = AppSourceGuard.stripComments(source)
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertFalse(code.contains(".adaptiveGlass("),
+                       "La bande doit laisser voir le plateau : un fond de verre y peint une "
+                       + "barre pâle en travers de la scène.")
+        XCTAssertFalse(code.contains(".background(Color"),
+                       "…et aucun fond opaque ne doit le remplacer. Les CAPSULES des entrées "
+                       + "portent le leur — c'est celui que les trois témoins ci-dessus mesurent.")
+    }
 }

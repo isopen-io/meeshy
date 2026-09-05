@@ -235,7 +235,11 @@ test.describe('la vue rights — ce que l’invité a le droit de faire, dit dan
     expect(
       await page.evaluate(() => {
         const bandeau = document.querySelector('details.bandeau.bien');
-        const puces = document.querySelector('nav.puces');
+        // `.puces` et non `nav.puces` : la région du Prisme est un `<div>` depuis
+        // que `prisme-vue.ts` en est le site unique — « un point de repère de
+        // navigation sans un seul lien » (revue de #5164). Le sélecteur était
+        // resté sur l'ancienne balise et ne trouvait plus rien.
+        const puces = document.querySelector('.puces');
         return bandeau !== null && puces !== null && (bandeau.compareDocumentPosition(puces) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
       }),
     ).toBe(true);

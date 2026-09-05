@@ -283,8 +283,12 @@ final class AuthServiceTests: XCTestCase {
 
     // MARK: - Register
 
-    private func makeRegisterRequest(username: String = "newuser", email: String = "new@meeshy.me") -> RegisterRequest {
-        RegisterRequest(username: username, password: "securePass", firstName: "Test", lastName: "User", email: email)
+    /// #5218 — la charge d'inscription ne porte plus qu'une IDENTITÉ, le nom
+    /// affiché : la passerelle en dérive pseudo, prénom et nom. Ce qui rend le
+    /// test toujours juste est que `AuthManager.register` ne lit aucun de ces
+    /// champs — il transporte la charge et applique la session.
+    private func makeRegisterRequest(displayName: String = "New User", email: String = "new@meeshy.me") -> RegisterRequest {
+        RegisterRequest(displayName: displayName, email: email, password: "securePass")
     }
 
     func test_register_success_authenticatesNewUser() async {

@@ -1,4 +1,8 @@
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import {
+  makeLanguageFilter,
+  normalizeLanguageCode,
+  normalizeLanguageForDedup,
+} from '@meeshy/shared/utils/language-normalize';
 
 /**
  * Per-recipient language filtering for the `message:new` socket payload
@@ -17,15 +21,17 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
  * original content (`content`, `attachments[].transcription`) is always
  * preserved — only the alternate-language translations are trimmed.
  *
- * Matching is case-insensitive. An empty `languages` list returns the payload
- * unchanged (defensive: never strip everything by accident).
+ * Matching canonicalises BOTH sides via the shared `makeLanguageFilter` SSOT: a
+ * legacy region-tagged stored key (`'pt-BR'`) matches a canonical requested code
+ * (`'pt'`) instead of being pruned (#5234). An empty `languages` list returns the
+ * payload unchanged (defensive: never strip everything by accident).
  */
 export function filterMessagePayloadForLanguages<T extends object>(
   payload: T,
   languages: readonly string[]
 ): T {
-  const langSet = new Set(languages.map((l) => l.toLowerCase()).filter(Boolean));
-  if (langSet.size === 0) return payload;
+  const matchesLanguage = makeLanguageFilter(languages);
+  if (!matchesLanguage) return payload;
 
   const source = payload as { translations?: unknown; attachments?: unknown };
   const next = { ...payload } as T & { translations?: unknown; attachments?: unknown };
@@ -33,7 +39,7 @@ export function filterMessagePayloadForLanguages<T extends object>(
   if (Array.isArray(source.translations)) {
     next.translations = source.translations.filter(
       (t) => typeof (t as { targetLanguage?: unknown })?.targetLanguage === 'string'
-        && langSet.has(((t as { targetLanguage: string }).targetLanguage).toLowerCase())
+        && matchesLanguage((t as { targetLanguage: string }).targetLanguage)
     );
   }
 
@@ -45,7 +51,7 @@ export function filterMessagePayloadForLanguages<T extends object>(
       }
       const filtered: Record<string, unknown> = {};
       for (const [lang, value] of Object.entries(translations as Record<string, unknown>)) {
-        if (langSet.has(lang.toLowerCase())) filtered[lang] = value;
+        if (matchesLanguage(lang)) filtered[lang] = value;
       }
       return { ...(att as Record<string, unknown>), translations: filtered };
     });
@@ -65,12 +71,25 @@ export function filterMessagePayloadForLanguages<T extends object>(
  * le repli tombe alors sur cette valeur brute. Sans réduction, le set de langues
  * du groupe contient `'pt-br'`, qui ne matche jamais la clé de traduction `'pt'`
  * : la traduction existante est prunée et le lecteur retombe sur l'original —
- * violation directe du Prisme. On délègue à `normalizeLanguageCode` (source de
- * vérité partagée) et, si elle rejette l'entrée, on conserve le repli historique
- * (`.trim().toLowerCase()`) pour ne dropper aucun code plausible.
+ * violation directe du Prisme.
+ *
+ * On délègue à `normalizeLanguageForDedup` — la SSOT du couple
+ * « normalise-ou-replie » employée partout où des codes verbatim sont agrégés
+ * ou servent de clé (aperçu de liste, `recipient-language.ts`,
+ * `anonymous.ts`). Elle réduit ce que `normalizeLanguageCode` sait réduire et,
+ * pour un irréductible, REPLIE sur le sous-tag PRIMAIRE lowercased plutôt que
+ * sur la chaîne entière : la clé de groupe reste ainsi région-aveugle pour TOUT
+ * code, y compris hors catalogue (`'yue-HK'` → `'yue'`). Le repli historique
+ * `.trim().toLowerCase()` laissait un `'yue-HK'` et un `'yue'` former DEUX
+ * groupes — deux émissions de charge là où une suffit — la fuite exacte que le
+ * cas `'en'`/`'en-US'` interdit. Aucun code plausible n'est droppé (la SSOT ne
+ * rend jamais `undefined`) et, la carte de traduction étant à clés catalogue,
+ * le matching des langues réelles est inchangé.
+ *
+ * @see packages/shared/utils/language-normalize.ts — `normalizeLanguageForDedup`
  */
 function normalizeGroupLanguage(code: string): string {
-  return normalizeLanguageCode(code) ?? code.trim().toLowerCase();
+  return normalizeLanguageForDedup(code);
 }
 
 export interface SocketLanguageGroup {

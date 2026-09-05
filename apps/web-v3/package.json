@@ -27,6 +27,7 @@
     "@meeshy/design-tokens": "workspace:*",
     "@meeshy/icons": "workspace:*",
     "@meeshy/shared": "workspace:*",
+    "libphonenumber-js": "^1.13.12",
     "next": "15.5.23",
     "react": "19.2.8",
     "react-dom": "19.2.8",

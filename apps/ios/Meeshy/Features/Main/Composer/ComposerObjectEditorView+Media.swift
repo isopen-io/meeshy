@@ -85,10 +85,62 @@ extension ComposerObjectEditorView {
                 section(ComposerObjectEditorCopy.mediaActions, .media(.actions)) {
                     mediaActionRow(media)
                 }
+                // **⌾ DÉCRIRE** (#4756) — l'atome du SDK, tel quel. Il porte
+                // déjà son étiquette, son invite et son indice VoiceOver dans
+                // les sept langues du catalogue `.module` ; en réécrire un ici
+                // aurait fait diverger deux champs au premier réglage, ce que
+                // le composer a déjà payé sur les légendes.
+                //
+                // La section ne se peint que si le meuble a remis son binding :
+                // sans lui, le champ n'écrirait nulle part — un contrôle sans
+                // effet, que la loi 4 bannit.
+                if let alt = mediaAltText {
+                    section(ComposerObjectEditorCopy.media(.altText), .media(.altText)) {
+                        MediaAltTextField(kind: .alt, text: alt.wrappedValue) { saisi in
+                            alt.wrappedValue = saisi
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)
         }
+    }
+
+    /// **Les options d'une PUCE DE SON posée** (2026-09-05).
+    ///
+    /// Elle n'en avait aucune : `options` ne rendait que pour `.media` et pour
+    /// un texte, donc sélectionner un son dans l'éditeur ouvrait un écran dont
+    /// la zone basse restait vide. Le rognage d'un son vivait dans la bande
+    /// `timeline` du bas de scène — que la directive du jour retire.
+    ///
+    /// La bande est la MÊME que celle d'un média (`trimBand`), et c'est le
+    /// point : deux bandes de rognage écrites côte à côte auraient divergé au
+    /// premier ajustement de poignée.
+    @ViewBuilder
+    var audioOptions: some View {
+        if let source = viewModel.sourceTrim(id: objectId) {
+            VStack(alignment: .leading, spacing: 18) {
+                section(ComposerObjectEditorCopy.trim, .media(.trim)) {
+                    trimBand(source)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 28)
+        }
+    }
+
+    /// **L'ONDE d'un son, quand elle a été analysée** — reprise du meuble, qui
+    /// la servait à sa bande et ne la sert plus à personne.
+    ///
+    /// Une vidéo n'en porte pas sur le modèle : la bande montre alors ses
+    /// vignettes seules, ce qui suffit à repérer un plan. La passer à `[]` pour
+    /// tout le monde — ce que ce fichier faisait — perdait, sur un son, le seul
+    /// repère visuel qu'il ait.
+    private var trimWaveform: [Float] {
+        viewModel.currentEffects.audioPlayerObjects?
+            .first(where: { $0.id == objectId })?
+            .waveformSamples ?? []
     }
 
     private func trimBand(_ source: (url: URL, bounds: MediaTrimBounds,
@@ -105,7 +157,7 @@ extension ComposerObjectEditorView {
             bounds: MediaTrimRule.resolved(start: source.bounds.start,
                                            end: source.bounds.end,
                                            sourceDuration: duree),
-            waveform: [],
+            waveform: trimWaveform,
             accent: MeeshyColors.brandPrimary,
             onChange: { bornes in
                 viewModel.setSourceTrim(id: objectId, bounds: bornes, sourceDuration: duree)

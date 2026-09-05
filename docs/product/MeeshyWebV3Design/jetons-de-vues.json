@@ -47,6 +47,14 @@
   "bon droit. Un jeton de la chaîne de requête se déclare comme un jeton de chemin :",
   "`motifJeton` de vues-comparables.mjs lit la route ENTIÈRE (c'est déjà le cas de `login`).",
   "",
+  "UNE FANION DE CHAÎNE DE REQUÊTE SANS VALEUR (directive 2026-09-04, § 12.10.5). `lienDepuisLeFil`",
+  "vise `/chats/:cle?lien` : `?lien` est un FANION (pas de `:jeton`, `motifJeton` ne le voit pas),",
+  "donc un seul jeton — `cle`, la même conversation que `thread` — suffit à désigner l'écran. Ce",
+  "n'est PAS une collision de route avec `thread` (`/chats/:cle`) : les DEUX chemins substitués",
+  "diffèrent littéralement (`/chats/equipe-lagos` contre `/chats/equipe-lagos?lien`), à l'inverse",
+  "de `join`/`rights` qui partagent le MÊME texte de route et ont besoin d'un jeton pour se",
+  "séparer.",
+  "",
   "UN ÉTAT DE SESSION, DÉCLARÉ PAR VUE (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,",
   "`/chats/:id` — ne rend rien à un visiteur sans créance : elle redirige vers `/login`. Ce n'est",
   "pas un jeton de route qui la sépare d'une vue publique, c'est une SESSION. Une vue le déclare",
@@ -98,6 +106,10 @@
    "membre": "u3",
    "@session": "membre"
   },
+  "lienDepuisLeFil": {
+   "cle": "equipe-lagos",
+   "@session": "membre"
+  },
   "media": {
    "cle": "equipe-lagos",
    "@session": "membre"
@@ -107,6 +119,21 @@
    "@session": "membre"
   },
   "links": {
+   "@session": "membre"
+  },
+  "search": {
+   "@session": "membre"
+  },
+  "calls": {
+   "@session": "membre"
+  },
+  "communities": {
+   "@session": "membre"
+  },
+  "notifPrefs": {
+   "@session": "membre"
+  },
+  "chats": {
    "@session": "membre"
   },
   "login": {

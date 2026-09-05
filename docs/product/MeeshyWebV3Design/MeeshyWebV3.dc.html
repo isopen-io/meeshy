@@ -140,6 +140,12 @@
 <div style="align-self:center;display:flex;gap:8px">
 <div onClick="{{ openLang }}" style="height:44px;padding:0 14px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);font:600 12.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-translate" style="font-size:16px;line-height:1"></i>AUTO · {{ langueAffichee }}<i class="ph ph-caret-down" style="font-size:12px;line-height:1"></i></div>
 <div onClick="{{ goMedia }}" style="height:44px;padding:0 14px;border-radius:9999px;border:2px solid var(--color-neutral-800);color:var(--color-neutral-400);font:600 12.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-image" style="font-size:16px;line-height:1"></i>Médias</div>
+<!-- Créer un lien EXIGE un compte (POST /links, authRequired) : la puce n'apparaît
+     que sur le fil du MEMBRE (`isThread`), jamais sur l'état INVITÉ (`isRights`)
+     ni sur la surimpression de profil, dont l'hôte peut être l'un ou l'autre. -->
+<sc-if value="{{ isThread }}" hint-placeholder-val="{{ true }}">
+<div onClick="{{ openLienDepuisLeFil }}" style="height:44px;padding:0 14px;border-radius:9999px;border:2px solid var(--color-neutral-800);color:var(--color-neutral-400);font:600 12.5px var(--font-body);display:flex;align-items:center;gap:6px;cursor:pointer"><i class="ph ph-link-simple" style="font-size:16px;line-height:1"></i>Lien</div>
+</sc-if>
 </div>
 <sc-for list="{{ messages }}" as="m" hint-placeholder-count="5">
 <div style="display:flex;gap:11px">
@@ -360,6 +366,23 @@
 </div>
 </div>
 
+<!-- LIEU (#5061) — un message de position se lit comme un LIEU, jamais comme
+     des coordonnées : nom + adresse + lien « Voir sur la carte », zéro tuile.
+     Même anatomie que `lieuHtml()` (fil-lignes.ts) : glyphe ph-map-pin, nom en
+     évidence, adresse en sous-texte, fiche cliquable distincte du corps. -->
+<div style="display:flex;gap:11px">
+<div style="width:34px;height:34px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 13px var(--font-body);flex:none">AD</div>
+<div style="flex:1;min-width:0">
+<div style="font:600 14.5px var(--font-body);color:var(--color-text)">Vous</div>
+<div style="margin-top:5px;border-radius:16px;background:var(--color-surface);border:1px solid var(--color-neutral-900);padding:12px;display:flex;align-items:center;gap:12px">
+<span style="width:38px;height:38px;border-radius:9999px;background:var(--color-neutral-900);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;flex:none"><i class="ph ph-map-pin" style="font-size:18px;line-height:1"></i></span>
+<div style="flex:1;min-width:0"><div style="font:600 14.5px var(--font-body);color:var(--color-text)">Position partagée</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">12 Rue de la Paix, Paris</div></div>
+</div>
+<div style="margin-top:6px;font:600 12.5px var(--font-body);color:var(--meeshy-p)">Voir sur la carte</div>
+<div style="margin-top:5px;display:flex;align-items:center;gap:6px;font:400 12px var(--font-body);color:var(--color-neutral-600)"><span style="margin-left:auto">12:12</span><i class="ph ph-checks" style="font-size:14px;line-height:1;color:var(--meeshy-p)"></i></div>
+</div>
+</div>
+
 <div style="display:flex;gap:11px">
 <div style="width:34px;height:34px;border-radius:9999px;background:#6366F1;color:var(--color-bg);display:flex;align-items:center;justify-content:center;font:600 13px var(--font-body);flex:none">SK</div>
 <div style="flex:1;min-width:0">
@@ -539,9 +562,19 @@
 </div>
 </sc-if>
 
+<!-- LE COMPOSEUR ENREGISTRE UN VOCAL ET PARTAGE LA POSITION (#5061) — deux
+     ronds >= 44 px de plus entre le trombone et le champ, régis par le MÊME
+     droit que la pièce jointe/l'écriture (§ 2.3 de la spécification) : chez
+     l'invité, le micro suit `canSendMessages` (pas `canSendFiles`) et la
+     position suit `canSendMessages` — la planche ne distingue pas ici les
+     droits (prototype visuel), le code applique la garde réelle
+     (`droits-peinture.ts`). Ordre de la cible : trombone, micro, position,
+     champ, envoi. -->
 <sc-if value="{{ showComposerBar }}" hint-placeholder-val="{{ true }}">
 <div style="padding:10px 16px 26px;border-top:1px solid var(--color-neutral-900);display:flex;align-items:center;gap:10px;flex:none">
 <div onClick="{{ openAttach }}" style="width:50px;height:50px;border-radius:9999px;border:1px solid var(--color-neutral-900);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer"><i class="ph ph-paperclip" style="font-size:23px;line-height:1"></i></div>
+<div onClick="{{ tapMicro }}" style="width:44px;height:44px;border-radius:9999px;border:1px solid var(--color-neutral-900);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer"><i class="ph ph-microphone" style="font-size:20px;line-height:1"></i></div>
+<div onClick="{{ tapPosition }}" style="width:44px;height:44px;border-radius:9999px;border:1px solid var(--color-neutral-900);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer"><i class="ph ph-map-pin" style="font-size:20px;line-height:1"></i></div>
 <div style="flex:1;height:50px;border-radius:9999px;background:var(--color-surface);border:1px solid var(--color-neutral-900);display:flex;align-items:center;padding:0 18px;font:400 15.5px var(--font-body);color:var(--color-neutral-600)">Écrire en français…</div>
 <div style="width:50px;height:50px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;flex:none"><i class="ph ph-arrow-up" style="font-size:21px;line-height:1"></i></div>
 </div>
@@ -608,6 +641,35 @@
 <div onClick="{{ ecrireA }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 17px var(--font-body);cursor:pointer"><i class="ph ph-chat-circle-dots" style="font-size:22px;line-height:1"></i>Écrire à Marta</div>
 <div onClick="{{ demanderAmi }}" style="height:52px;border-radius:9999px;border:2px solid var(--meeshy-p);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;gap:9px;font:600 16px var(--font-body);cursor:pointer"><i class="ph ph-user-plus" style="font-size:20px;line-height:1"></i>Ajouter en ami</div>
 <div onClick="{{ closeProfil }}" style="min-height:44px;display:flex;align-items:center;justify-content:center;gap:8px;font:600 14.5px var(--font-body);color:var(--color-neutral-500);cursor:pointer"><i class="ph ph-shield" style="font-size:18px;line-height:1"></i>Bloquer ou signaler</div>
+</div>
+</sc-if>
+
+<!-- LA FEUILLE « NOUVEAU LIEN DE PARTAGE » DEPUIS LE FIL (directive du porteur 2026-09-04,
+     conception § 12.10.5 ; #5034 ; vue `lienDepuisLeFil`). C'est la MÊME feuille que
+     `sheet:link` (hors_planche, ouverte depuis `chats` et `home`) vue depuis son SECOND
+     hôte : le fil d'une conversation déjà ouverte. Rien de neuf dans le produit — la
+     conversation est PRÉREMPLIE (celle qu'on lit), jamais un champ à choisir, ce qui
+     distingue ce dessin de celui de `chats`/`home` où la conversation reste à désigner.
+     Le fil reste visible et lisible derrière (même raison que `profilMembre` : rien à
+     protéger d'un flou ici — le flou de `join` protège un choix qui n'a pas eu lieu,
+     celui-ci n'existe pas une fois dans la conversation), et la fermeture rend l'adresse
+     du fil sans le paramètre `?lien`. -->
+<sc-if value="{{ isLienDepuisLeFil }}" hint-placeholder-val="{{ true }}">
+<div onClick="{{ closeLienDepuisLeFil }}" style="position:absolute;inset:0;background:rgba(0,0,0,.6)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:80%;overflow-y:auto;background:var(--color-surface);border-top:1px solid var(--color-neutral-800);border-radius:26px 26px 0 0;padding:12px 20px 28px;display:flex;flex-direction:column;gap:14px">
+<div style="width:40px;height:4px;border-radius:9999px;background:var(--color-neutral-800);margin:0 auto"></div>
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+<div><div style="font:700 21px var(--font-body);color:var(--color-text)">Nouveau lien de partage</div><div style="margin-top:2px;font:400 13.5px var(--font-body);color:var(--color-neutral-500)">Pour « Équipe Lagos » · conversation déjà ouverte</div></div>
+<div onClick="{{ closeLienDepuisLeFil }}" style="width:40px;height:40px;border-radius:9999px;border:1px solid var(--color-neutral-800);color:var(--color-neutral-400);display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer" style-hover="border-color:var(--meeshy-p)"><i class="ph ph-x" style="font-size:18px;line-height:1"></i></div>
+</div>
+<sc-for list="{{ lienFilRows }}" as="r" hint-placeholder-count="4">
+<div onClick="{{ r.go }}" style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--color-neutral-900);cursor:pointer">
+<div style="width:40px;height:40px;border-radius:12px;background:rgba(129,140,248,.14);color:var(--meeshy-p);display:flex;align-items:center;justify-content:center;flex:none"><i class="ph {{ r.icon }}" style="font-size:19px;line-height:1"></i></div>
+<div style="flex:1;min-width:0"><div style="font:600 16px var(--font-body);color:var(--color-text)">{{ r.title }}</div><div style="margin-top:2px;font:400 12.5px var(--font-body);color:var(--color-neutral-600)">{{ r.sub }}</div></div>
+<span style="font:600 12.5px var(--font-body);color:var(--meeshy-p)">{{ r.badge }}</span>
+</div>
+</sc-for>
+<div onClick="{{ closeLienDepuisLeFil }}" style="height:56px;border-radius:9999px;background:var(--meeshy-p);color:var(--color-bg);display:flex;align-items:center;justify-content:center;gap:9px;font:600 17px var(--font-body);cursor:pointer"><i class="ph ph-link-simple" style="font-size:20px;line-height:1"></i>Créer le lien</div>
 </div>
 </sc-if>
 
@@ -840,6 +902,11 @@ const SCREENS = {
   // ferme sans une ligne de JavaScript. Ce n'est PAS `sheet:member`, qui mène le
   // lecteur vers SON PROPRE compte.
   profilMembre: { title: 'Profil du participant', subtitle: 'Surimpression sur le fil', route: '/chats/:cle?profil=:membre' },
+  // La feuille « Nouveau lien de partage » (`sheet:link`, hors_planche) vue depuis son
+  // SECOND hôte — le fil — conversation déjà préremplie (directive 2026-09-04, § 12.10.5,
+  // #5034). Même règle que `profilMembre` : la route est celle du fil, plus un paramètre
+  // d'état, pour qu'un lien `?lien` s'ouvre et se ferme sans une ligne de JavaScript.
+  lienDepuisLeFil: { title: 'Nouveau lien de partage', subtitle: 'Depuis le fil · conversation préremplie', route: '/chats/:cle?lien' },
   story: { title: 'Story', subtitle: 'Lecture plein écran', route: '/stories/:id' },
   storyCreate: { title: 'Nouvelle story', subtitle: 'Capture, texte, langue', route: '/stories/new' },
   storyFail: { title: 'Story', subtitle: 'Indisponible', route: '/stories/:id' },
@@ -856,7 +923,7 @@ const SCREENS = {
 const MAP = [
   { title: 'SITE', keys: [['vitrine', 'ph-globe-hemisphere-west']] },
   { title: 'ENTRÉE PUBLIQUE', keys: [['linkRedirect', 'ph-arrows-clockwise'], ['join', 'ph-link-simple'], ['rights', 'ph-ghost'], ['login', 'ph-sign-in'], ['signup', 'ph-user-plus'], ['linkExpired', 'ph-warning-circle']] },
-  { title: 'MEMBRE — PRINCIPAL', keys: [['home', 'ph-house'], ['chats', 'ph-chats-circle'], ['thread', 'ph-chat-circle-dots'], ['rich', 'ph-stack'], ['profilMembre', 'ph-user'], ['media', 'ph-image'], ['search', 'ph-magnifying-glass']] },
+  { title: 'MEMBRE — PRINCIPAL', keys: [['home', 'ph-house'], ['chats', 'ph-chats-circle'], ['thread', 'ph-chat-circle-dots'], ['rich', 'ph-stack'], ['profilMembre', 'ph-user'], ['lienDepuisLeFil', 'ph-link-simple'], ['media', 'ph-image'], ['search', 'ph-magnifying-glass']] },
   { title: 'APPELS', keys: [['callAudio', 'ph-phone'], ['callVideo', 'ph-video-camera'], ['calls', 'ph-clock-counter-clockwise']] },
   { title: 'SOCIAL', keys: [['feed', 'ph-squares-four'], ['reels', 'ph-film-strip'], ['composer', 'ph-note-pencil'], ['comments', 'ph-chat-teardrop-text'], ['story', 'ph-sparkle'], ['storyCreate', 'ph-plus-circle'], ['storyFail', 'ph-warning-circle']] },
   { title: 'ESPACE MEMBRE', keys: [['notifs', 'ph-bell'], ['contacts', 'ph-address-book'], ['communities', 'ph-users-three'], ['links', 'ph-link-simple'], ['settings', 'ph-gear'], ['notifPrefs', 'ph-sliders'], ['profileEdit', 'ph-user-circle'], ['password', 'ph-lock-key']] },
@@ -866,7 +933,7 @@ const EXITS = {
   vitrine: [['signup', 'Créer son compte', 'bouton du héros'], ['login', 'Se connecter', 'bouton du héros'], ['signup', 'Créer un compte gratuit', 'appel final'], ['join', 'Lien reçu', 'hors site · /chat/:lien']],
   home: [['chats', 'Chats', 'Tout voir'], ['links', 'Mes liens', 'carte'], ['communities', 'Communautés', 'créer'], ['search', 'Recherche', 'champ'], ['feed', 'Fil', 'bouton gauche'], ['settings', 'Espace membre', 'bouton droit']],
   chats: [['thread', 'Conversation', 'carte de focus'], ['join', 'Créer un lien', 'en-tête'], ['thread', 'Nouvelle conversation', 'en-tête'], ['profilMembre', 'Profil du participant', 'avatar d’une ligne'], ['feed', 'Fil', 'bouton gauche'], ['settings', 'Espace membre', 'bouton droit']],
-  thread: [['chats', 'Retour', 'chevron'], ['rich', 'Messages riches', 'défilement'], ['media', 'Médias', 'pièce jointe'], ['callAudio', 'Rappeler', 'bulle d’appel'], ['callVideo', 'Appel vidéo', 'en-tête'], ['profilMembre', 'Profil du participant', 'avatar ou nom de l’auteur · ?profil=']],
+  thread: [['chats', 'Retour', 'chevron'], ['rich', 'Messages riches', 'défilement'], ['media', 'Médias', 'pièce jointe'], ['callAudio', 'Rappeler', 'bulle d’appel'], ['callVideo', 'Appel vidéo', 'en-tête'], ['profilMembre', 'Profil du participant', 'avatar ou nom de l’auteur · ?profil='], ['lienDepuisLeFil', 'Nouveau lien de partage', 'puce « Lien » · ?lien']],
   feed: [['composer', 'Composer', 'champ'], ['reels', 'Réels', 'bouton'], ['comments', 'Commentaires', 'icône'], ['media', 'Média', 'image']],
   reels: [['comments', 'Commentaires', 'icône'], ['feed', 'Retour', 'chevron']],
   composer: [['feed', 'Publier', 'bouton'], ['media', 'Ajouter', 'vignette']],
@@ -887,6 +954,10 @@ const EXITS = {
   // le tête-à-tête, la demande d'ami se lit dans Contacts —, sans quoi elles seraient des
   // contrôles sans effet (charte, loi « un contrôle existe s'il a un effet »).
   profilMembre: [['thread', 'Fermer', 'croix, Échap ou voile · retour à /chats/:cle'], ['thread', 'Écrire à Marta', 'action primaire · tête-à-tête'], ['contacts', 'Demande d’ami envoyée', 'action secondaire · optimiste']],
+  // Fermer rend l'adresse du fil SANS `?lien` : même vue, sans son état — comme
+  // `profilMembre` ci-dessus. « Voir tous mes liens » et « Aperçu du lien créé » mènent
+  // ailleurs, sans quoi ce seraient des contrôles sans effet.
+  lienDepuisLeFil: [['thread', 'Fermer', 'croix, voile ou Créer le lien · retour à /chats/:cle sans ?lien'], ['links', 'Voir tous mes liens', 'action secondaire'], ['join', 'Aperçu du lien créé', 'rangée · copier']],
   story: [['comments', 'Répondre', 'champ'], ['feed', 'Fermer', 'croix'], ['storyFail', 'Story expirée', 'cas d’échec']],
   storyCreate: [['story', 'Publier', 'bouton'], ['feed', 'Retour', 'chevron']],
   storyFail: [['feed', 'Retour au fil', 'bouton'], ['storyCreate', 'Créer une story', 'bouton']],
@@ -943,13 +1014,17 @@ class Component extends DCLogic {
     // CONVERSATION, la surimpression se pose par-dessus. Le libellé « Profil du
     // participant » ne vit que dans le navigateur de droite, jamais dans le téléphone.
     const isProfilMembre = screen === 'profilMembre';
-    const surLeFil = isRightsState || isProfilMembre;
+    // `lienDepuisLeFil` est, lui aussi, un ÉTAT du fil (directive 2026-09-04, § 12.10.5) :
+    // le cadre garde l'en-tête de la CONVERSATION, la feuille se pose par-dessus — même
+    // construction que `profilMembre`.
+    const isLienDepuisLeFil = screen === 'lienDepuisLeFil';
+    const surLeFil = isRightsState || isProfilMembre || isLienDepuisLeFil;
     const title = list ? list.title : surLeFil ? SCREENS.thread.title : meta.title;
     const subtitle = list
       ? list.subtitle
       : isRightsState
         ? 'Entré comme Tolu · anonyme'
-        : isProfilMembre
+        : isProfilMembre || isLienDepuisLeFil
           ? SCREENS.thread.subtitle
           : meta.subtitle;
 
@@ -1032,7 +1107,7 @@ class Component extends DCLogic {
       isLogin, pending: true,
       fields: isLogin
         ? [{ label: 'Identifiant ou e-mail', value: 'amina@meeshy.me', hint: '', tone: 'var(--color-text)' }, { label: 'Mot de passe', value: '••••••••', hint: 'Afficher', tone: 'var(--color-text)' }]
-        : [{ label: 'Nom affiché', value: 'Tolu Adeyemi', hint: '', tone: 'var(--color-text)' }, { label: 'E-mail', value: 'tolu@exemple.com', hint: '', tone: 'var(--color-text)' }, { label: 'Mot de passe', value: '••••••••', hint: '8 car. min', tone: 'var(--color-text)' }, { label: 'Langue parlée', value: '🇳🇬 Yoruba', hint: 'Changer', tone: 'var(--color-text)' }],
+        : [{ label: 'Nom affiché', value: 'Tolu Adeyemi', hint: '', tone: 'var(--color-text)' }, { label: 'E-mail', value: 'tolu@exemple.com', hint: '', tone: 'var(--color-text)' }, { label: 'Téléphone', value: '🇳🇬 +234 · 0801 234 5678', hint: '', tone: 'var(--color-text)' }, { label: 'Mot de passe', value: '••••••••', hint: '6 car. min', tone: 'var(--color-text)' }, { label: 'Langue parlée', value: '🇳🇬 Yoruba', hint: 'Changer', tone: 'var(--color-text)' }],
       submit: isLogin ? 'Se connecter et rejoindre' : 'Créer le compte et rejoindre',
       submitGo: () => this.go('rights'),
       alt: isLogin ? "Pas encore de compte ? Créer un compte" : 'Déjà un compte ? Se connecter',
@@ -1177,8 +1252,9 @@ class Component extends DCLogic {
       isHome: screen === 'home',
       isChats: screen === 'chats',
       isThread,
-      isThreadLike: isThread || isRights || isProfilMembre,
+      isThreadLike: isThread || isRights || isProfilMembre || isLienDepuisLeFil,
       isProfilMembre,
+      isLienDepuisLeFil,
       isFeed: screen === 'feed',
       isReels,
       isComposer,
@@ -1289,8 +1365,8 @@ class Component extends DCLogic {
       isDoc: s.format !== 'status',
       moods: MOOD_EMOJIS.map((e) => ({ emoji: e, bg: e === s.mood ? 'rgba(129,140,248,.14)' : 'var(--color-surface)', ring: e === s.mood ? '0 0 0 2px ' + P : 'none', pick: () => this.setState({ mood: e === s.mood ? '' : e }) })),
 
-      showComposerBar: isThread || isRights || isProfilMembre || screen === 'rich',
-      showFabs: !isVitrine && !isThread && !isComposer && !isJoin && !isRights && !isProfilMembre && !isReels && !isComments && screen !== 'rich' && !isStory && !isCall && !isAuth && !bl && screen !== 'storyCreate' && screen !== 'profileEdit' && screen !== 'password',
+      showComposerBar: isThread || isRights || isProfilMembre || isLienDepuisLeFil || screen === 'rich',
+      showFabs: !isVitrine && !isThread && !isComposer && !isJoin && !isRights && !isProfilMembre && !isLienDepuisLeFil && !isReels && !isComments && screen !== 'rich' && !isStory && !isCall && !isAuth && !bl && screen !== 'storyCreate' && screen !== 'profileEdit' && screen !== 'password',
       memberIcon: s.sheet === 'member' ? 'ph-x' : 'ph-user-circle',
       tapFeeds: () => this.go('feed'),
       toggleMember: () => this.setState((st) => ({ sheet: st.sheet === 'member' ? null : 'member' })),
@@ -1343,8 +1419,23 @@ class Component extends DCLogic {
         ],
       },
       openAttach: () => this.setState({ sheet: 'attach' }),
+      // Micro et position (#5061) : prototype visuel seulement — le geste réel
+      // (MediaRecorder, navigator.geolocation) vit dans `lib/realtime/capture.ts`.
+      tapMicro: () => {},
+      tapPosition: () => {},
       openCreateLink: () => this.setState({ sheet: 'link' }),
       openCreateConv: () => this.setState({ sheet: 'conv' }),
+      // Feuille « Nouveau lien de partage » depuis le FIL (§ 12.10.5) : mêmes rangées que
+      // `sheet: 'link'` (chats/home), la conversation étant déjà celle du fil ouvert —
+      // aucun champ « pour quelle conversation » à afficher.
+      openLienDepuisLeFil: () => this.go('lienDepuisLeFil'),
+      closeLienDepuisLeFil: () => this.go('thread'),
+      lienFilRows: [
+        { icon: 'ph-link-simple', title: 'meeshy.me/chats/lagos-q1', sub: 'Identifiant modifiable', badge: 'Copier', go: () => this.go('join') },
+        { icon: 'ph-ghost', title: 'Autoriser les anonymes', sub: 'Pseudo + langue à l’entrée', badge: 'Oui', go: () => this.go('join') },
+        { icon: 'ph-clock', title: 'Expiration', sub: 'Dans 7 jours', badge: '', go: () => this.go('links') },
+        { icon: 'ph-qr-code', title: 'QR à montrer', sub: 'Utile en salle', badge: '', go: () => this.go('links') },
+      ],
       publish: () => this.go('feed'),
       map,
       exits,

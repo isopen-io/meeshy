@@ -300,11 +300,15 @@ struct ComposerAudienceSheet: View {
 
 /// Une rangée de puces qui passe à la ligne.
 ///
-/// **`FlowLayout` existe déjà dans l'app** (`OnboardingStepViews.swift`) — en
-/// écrire un second l'a fait rougir en « invalid redeclaration », et c'était la
-/// bonne rougeur : deux mises en page identiques auraient divergé au premier
+/// **`FlowLayout` existe déjà dans l'app** (`Features/Main/Components/FlowLayout.swift`)
+/// — en écrire un second l'a fait rougir en « invalid redeclaration », et c'était
+/// la bonne rougeur : deux mises en page identiques auraient divergé au premier
 /// réglage d'espacement. Ce type n'ajoute donc que le `ForEach`, qui est ce que
 /// les deux sites ne partagent pas.
+///
+/// Le fichier cité a CHANGÉ au retrait du wizard d'inscription (#5218) : il
+/// vivait dans `OnboardingStepViews.swift`, et cette ligne aurait survécu à la
+/// suppression en désignant un fichier disparu.
 struct FlowingChips<Item: Hashable, Content: View>: View {
     let items: [Item]
     @ViewBuilder let content: (Item) -> Content

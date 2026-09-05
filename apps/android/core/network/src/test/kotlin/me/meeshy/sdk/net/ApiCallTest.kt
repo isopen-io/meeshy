@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.SerializationException
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ApiViolation
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -63,6 +64,19 @@ class ApiCallTest {
     // status for different reasons (e.g. /me/account/deletion's 409 ALREADY_PENDING
     // vs. 409 NO_EMAIL), and only the body-carried code tells them apart. ---
 
+    /**
+     * Les corps de refus qualifiés, déclarés en constantes : coupés en deux
+     * chaînes brutes, la seconde commencerait par un guillemet collé au `"""`
+     * ouvrant — une forme que le lexeur n'a aucune raison de rendre lisible.
+     */
+    private val USERNAME_TAKEN_BODY: String =
+        "{\"success\":false,\"code\":\"USERNAME_TAKEN\",\"field\":\"username\"," +
+            "\"error\":\"Username taken\",\"suggestions\":[\"ada1\",\"ada2\"]}"
+
+    private val VALIDATION_ERROR_BODY: String =
+        "{\"success\":false,\"code\":\"VALIDATION_ERROR\",\"error\":\"Validation failed\"," +
+            "\"violations\":[{\"path\":\"/body/email\",\"message\":\"invalid\"}]}"
+
     private fun httpExceptionWithBody(status: Int, body: String?): HttpException {
         val responseBody = body?.toResponseBody("application/json".toMediaTypeOrNull())
         val response = if (responseBody != null) {
@@ -108,6 +122,50 @@ class ApiCallTest {
         val failure = result as NetworkResult.Failure
         assertThat(failure.error.code).isEqualTo("HTTP_401")
         assertThat(failure.error.httpStatus).isEqualTo(401)
+    }
+
+    // --- Les trois cles qui QUALIFIENT un refus (`field`, `suggestions`,
+    // `violations`) vivent a la RACINE de l'enveloppe, jamais sous `error`. Sans
+    // elles, un ecran ne peut poser un refus que dans une banniere globale, et
+    // l'utilisateur cherche seul lequel de ses champs est en cause. ---
+
+    @Test
+    fun httpException_carriesTheRefusalQualifyingKeysFromTheEnvelopeRoot() = runTest {
+        val exception = httpExceptionWithBody(
+            409,
+            USERNAME_TAKEN_BODY,
+        )
+
+        val result = apiCall<String> { throw exception }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.code).isEqualTo("USERNAME_TAKEN")
+        assertThat(failure.error.fieldName).isEqualTo("username")
+        assertThat(failure.error.suggestions).containsExactly("ada1", "ada2").inOrder()
+    }
+
+    @Test
+    fun httpException_carriesEveryValidationViolation() = runTest {
+        val exception = httpExceptionWithBody(
+            400,
+            VALIDATION_ERROR_BODY,
+        )
+
+        val result = apiCall<String> { throw exception }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.violations)
+            .containsExactly(ApiViolation(path = "/body/email", message = "invalid"))
+    }
+
+    @Test
+    fun failure_envelopeWithoutQualifyingKeys_carriesNoneRatherThanNull() = runTest {
+        val result = apiCall { ApiResponse<String>(success = false, error = "boom") }
+
+        val failure = result as NetworkResult.Failure
+        assertThat(failure.error.fieldName).isNull()
+        assertThat(failure.error.suggestions).isEmpty()
+        assertThat(failure.error.violations).isEmpty()
     }
 
     @Test

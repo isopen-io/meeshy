@@ -87,10 +87,22 @@ final class ComposerProgressiveDisclosureGuardTests: XCTestCase {
             surfaces.contains("onRedo: composerServesHistory && viewModel.canRedoGlobal"),
             "…et un geste à refaire, séparément"
         )
-        // La bande de rognage — pas d'objet rognable, pas de bande.
+        // **Les options d'outil — pas de dessin en cours, pas de panneau.**
+        //
+        // Cette assertion épinglait `canTrimSelection: trimmableSelection != nil`,
+        // la condition qui ne servait la bande de rognage que pour une
+        // sélection rognable. La bande est partie le 2026-09-05 avec toute
+        // l'édition de la première vue ; la divulgation progressive qui reste à
+        // ce niveau est celle du panneau d'options, qui ne se monte plus que
+        // pendant un DESSIN.
+        //
+        // > Une garde dont le sujet disparaît se REPOINTE sur ce qui a pris sa
+        // > place, ou se supprime. La réécrire sur un littéral encore présent
+        // > mais devenu accessoire est le pire des trois — elle continue de
+        // > compter sans plus rien tenir.
         XCTAssertTrue(
-            surfaces.contains("canTrimSelection: trimmableSelection != nil"),
-            "la bande `timeline` n'est servie que pour une sélection qui a une source à rogner"
+            surfaces.contains("ComposerFirstView.lowZoneShowsToolOptions("),
+            "le panneau d'options n'est monté que pour l'outil que la première vue sert encore"
         )
         // Le rail des contrôleurs — pas de sélection, pas de rail.
         XCTAssertTrue(

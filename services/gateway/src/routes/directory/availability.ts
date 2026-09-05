@@ -5,36 +5,24 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { getRequestContext } from '../../services/GeoIPService';
 import { clientRateKey } from '../../utils/client-rate-key';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
+import { candidatsDePseudo } from '../../utils/username-candidates';
 
 const logger = enhancedLogger.child({ module: 'DirectoryAvailability' });
 
 /** Combien de pseudos de rechange proposer quand celui demandé est pris. */
 const SUGGESTIONS_RENDUES = 3;
-/** Combien de candidats tester — en UNE requête, pas dix. */
-const CANDIDATS_TESTES = 6;
 
 export type StatutPseudo = 'available' | 'taken';
 export type StatutForme = 'valid' | 'invalid';
 
 /**
- * Des candidats DÉTERMINISTES, pas un tirage.
- *
- * L'ancienne route tirait jusqu'à dix suffixes au hasard, avec une requête
- * Prisma CHACUN. Des candidats dérivés du pseudo demandé se testent en une
- * seule requête, et rendent la même suggestion à deux appels successifs — ce
- * qui est moins déroutant pour la personne qui hésite.
+ * Les candidats de rechange vivent désormais dans `utils/username-candidates.ts`
+ * (#5216) : la GÉNÉRATION de pseudo à l'inscription les emploie aussi, et un
+ * service qui importe une règle d'un fichier de ROUTE se met à dépendre de la
+ * surface HTTP qui l'appelle. Le ré-export garde les appelants historiques —
+ * dont l'alias déprécié `GET /auth/check-availability`.
  */
-export function candidatsDePseudo(base: string): string[] {
-  const racine = base.trim();
-  return [
-    `${racine}1`,
-    `${racine}7`,
-    `${racine}_`,
-    `${racine}26`,
-    `${racine}${racine.length}`,
-    `the${racine}`,
-  ].slice(0, CANDIDATS_TESTES);
-}
+export { candidatsDePseudo };
 
 /**
  * `GET /directory/availability` — la porte PUBLIQUE de l'annuaire (S1).

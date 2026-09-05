@@ -56,6 +56,56 @@ describe('l’élévation d’une surimpression servie', () => {
   });
 
   /**
+   * LE FOCUS DU LECTEUR SURVIT À L'ÉLÉVATION. `showModal()` pose le focus sur
+   * le PREMIER élément focalisable du dialogue — la poignée « Fermer » — et ce
+   * module arrive APRÈS le premier pixel (§ 12.4) : un lecteur au clavier peut
+   * déjà tenir un contrôle du dialogue. Mesuré (`v3-deconnexion.spec.ts:51`, en
+   * CI comme en local, une fois sur trois) : Entrée partait sur la poignée, et
+   * la SORTIE devenait une FERMETURE — atterrissage sur `/chats` au lieu de `/`.
+   */
+  it('rend le focus au contrôle que le lecteur tenait quand showModal() l’a déplacé', () => {
+    document.body.innerHTML =
+      '<dialog class="espace" open data-retour="/chats"><a class="poignee" href="/chats">Fermer</a>' +
+      '<form class="sortie" method="post" action="/deconnexion"><button type="submit">Se déconnecter</button></form></dialog>';
+    const dialogue = document.querySelector<HTMLDialogElement>('dialog.espace')!;
+    const poignee = dialogue.querySelector<HTMLAnchorElement>('a.poignee')!;
+    const bouton = dialogue.querySelector<HTMLButtonElement>('button')!;
+    bouton.focus();
+    expect(document.activeElement).toBe(bouton);
+    Object.defineProperty(dialogue, 'showModal', {
+      value: () => {
+        dialogue.setAttribute('open', '');
+        // Ce que fait le navigateur : le premier focalisable du dialogue.
+        poignee.focus();
+      },
+    });
+
+    prendsLePleinEcran();
+
+    expect(document.activeElement).toBe(bouton);
+  });
+
+  it('laisse au navigateur son premier focalisable quand le lecteur ne tenait rien dans le dialogue', () => {
+    document.body.innerHTML =
+      '<button id="ailleurs">Ailleurs</button>' +
+      '<dialog class="espace" open data-retour="/chats"><a class="poignee" href="/chats">Fermer</a>' +
+      '<form class="sortie" method="post" action="/deconnexion"><button type="submit">Se déconnecter</button></form></dialog>';
+    const dialogue = document.querySelector<HTMLDialogElement>('dialog.espace')!;
+    const poignee = dialogue.querySelector<HTMLAnchorElement>('a.poignee')!;
+    document.querySelector<HTMLButtonElement>('#ailleurs')!.focus();
+    Object.defineProperty(dialogue, 'showModal', {
+      value: () => {
+        dialogue.setAttribute('open', '');
+        poignee.focus();
+      },
+    });
+
+    prendsLePleinEcran();
+
+    expect(document.activeElement).toBe(poignee);
+  });
+
+  /**
    * Le repli : `showModal()` jette (un navigateur sans dialogue modal — jsdom
    * en est un). La surimpression garde son `open`, donc son contenu et sa
    * croix ; seul Échap manque.

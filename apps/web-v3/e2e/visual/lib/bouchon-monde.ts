@@ -65,6 +65,41 @@ export const AUTRE_CONVERSATION = {
   traductions: { fr: 'Merci, je t’envoie le fichier' },
 } as const;
 
+/**
+ * LA TROISIÈME LIGNE DE `/chats` (#5164, correction de revue) — un second
+ * témoin de pastille de langue, ORIGINAL anglais traduit en français, sur un
+ * tête-à-tête (`membres: 2`, § 12.10.2 : la méta se tait donc ici aussi,
+ * comme sur `AUTRE_CONVERSATION`). C'est la ligne « Salon démo » de
+ * `cible/chats.png`.
+ */
+export const TROISIEME_CONVERSATION = {
+  id: '68f2a81417a557e8ce4ddfbd',
+  titre: 'Salon démo',
+  membres: 2,
+  nonLus: 0,
+  apercu: 'Tolu joined the conversation',
+  langueOriginale: 'en',
+  traductions: { fr: 'Tolu a rejoint la conversation' },
+} as const;
+
+/**
+ * LA QUATRIÈME LIGNE — SANS pastille de langue (original français, aucune
+ * traduction) ET SANS pastille de non-lus (`nonLus: 0`) : le témoin de la
+ * règle 30 que la revue du #5164 réclamait, faute duquel le premier écran de
+ * `/chats` à 360 × 844 ne pouvait montrer les TROIS lignes actionnables que la
+ * charte règle 12 nomme (une carte mise en avant + deux lignes ne suffisent
+ * pas). C'est la ligne « Support produit » de `cible/chats.png`.
+ */
+export const QUATRIEME_CONVERSATION = {
+  id: '68f2a81417a557e8ce4ddfbe',
+  titre: 'Support produit',
+  membres: 2,
+  nonLus: 0,
+  apercu: 'Appel audio manqué',
+  langueOriginale: 'fr',
+  traductions: null as Readonly<Record<string, string>> | null,
+} as const;
+
 export const IDENTIFIANT_DU_LIEN_PARTAGE = 'lagos-q1';
 export const DESCRIPTION_DU_LIEN = 'Le canal des opérations de terrain.';
 /** Servi par l'aperçu, JAMAIS attendu dans le HTML : c'est le témoin de la fuite du § 5.1. */
@@ -80,6 +115,86 @@ export const PSEUDO_DEJA_PRIS = 'ibrahim';
 export const PSEUDO_SUGGERE = 'ibrahim2';
 
 export type MessageServi = Record<string, unknown> & { readonly id: string; readonly createdAt: string };
+
+/** Une ligne de `GET /conversations`, telle que `routes/conversations/core-list.ts:776-830` la sert. */
+export type LigneDeConversationServie = {
+  readonly id: string;
+  readonly identifier: string;
+  readonly title: string;
+  readonly type: string;
+  readonly memberCount: number;
+  readonly unreadCount: number;
+  readonly lastMessageAt: string;
+  readonly lastMessage: { readonly id: string; readonly content: string };
+  readonly lastMessageOriginalLanguage: string;
+  readonly lastMessageTranslations: Readonly<Record<string, string>> | null;
+  readonly participants?: readonly { readonly userId: string; readonly displayName: string }[];
+};
+
+/**
+ * LES QUATRE LIGNES DE `/chats` (#5164, correction de revue — la cible en
+ * dessine QUATRE : une carte mise en avant + trois lignes plates, dont une
+ * SANS pastille de langue). Un TABLEAU EXPORTÉ, pour que `bouchon-compte.ts`
+ * (déjà à 1 078 lignes) BOUCLE dessus plutôt que de porter le littéral —
+ * c'est ce fichier-ci, pas lui, qui grossit d'une ligne de plus demain.
+ */
+export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie[] = [
+  {
+    id: CONVERSATION_DU_LECTEUR.id,
+    identifier: 'lagos',
+    title: CONVERSATION_DU_LECTEUR.titre,
+    type: 'group',
+    memberCount: CONVERSATION_DU_LECTEUR.membres,
+    unreadCount: CONVERSATION_DU_LECTEUR.nonLus,
+    lastMessageAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+    lastMessage: { id: 'm-apercu', content: 'On se cale à 15 h pour la revue ?' },
+    lastMessageOriginalLanguage: 'fr',
+    lastMessageTranslations: null,
+  },
+  {
+    id: AUTRE_CONVERSATION.id,
+    identifier: 'marta',
+    title: AUTRE_CONVERSATION.titre,
+    type: 'direct',
+    memberCount: AUTRE_CONVERSATION.membres,
+    unreadCount: AUTRE_CONVERSATION.nonLus,
+    lastMessageAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+    lastMessage: { id: 'm-apercu-2', content: AUTRE_CONVERSATION.apercu },
+    lastMessageOriginalLanguage: AUTRE_CONVERSATION.langueOriginale,
+    lastMessageTranslations: AUTRE_CONVERSATION.traductions,
+    // L'AUTRE personne du tête-à-tête (§ 12.10.3) : son avatar, dans
+    // `/chats`, ouvre son profil — `homologueDe` l'élit en excluant
+    // `MEMBRE.id` de cette liste.
+    participants: [
+      { userId: PAIR_HISPANOPHONE.id, displayName: PAIR_HISPANOPHONE.nom },
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+    ],
+  },
+  {
+    id: TROISIEME_CONVERSATION.id,
+    identifier: 'salon-demo',
+    title: TROISIEME_CONVERSATION.titre,
+    type: 'direct',
+    memberCount: TROISIEME_CONVERSATION.membres,
+    unreadCount: TROISIEME_CONVERSATION.nonLus,
+    lastMessageAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    lastMessage: { id: 'm-apercu-3', content: TROISIEME_CONVERSATION.apercu },
+    lastMessageOriginalLanguage: TROISIEME_CONVERSATION.langueOriginale,
+    lastMessageTranslations: TROISIEME_CONVERSATION.traductions,
+  },
+  {
+    id: QUATRIEME_CONVERSATION.id,
+    identifier: 'support-produit',
+    title: QUATRIEME_CONVERSATION.titre,
+    type: 'direct',
+    memberCount: QUATRIEME_CONVERSATION.membres,
+    unreadCount: QUATRIEME_CONVERSATION.nonLus,
+    lastMessageAt: new Date(Date.now() - 4 * 24 * 3_600_000).toISOString(),
+    lastMessage: { id: 'm-apercu-4', content: QUATRIEME_CONVERSATION.apercu },
+    lastMessageOriginalLanguage: QUATRIEME_CONVERSATION.langueOriginale,
+    lastMessageTranslations: QUATRIEME_CONVERSATION.traductions,
+  },
+];
 
 /** La présence de départ : Ibrahim en ligne, Marta hors ligne — ce que `thread.png` dessine (« 1 en ligne » chez le membre, leur ami). */
 export const PRESENCES_INITIALES: readonly (readonly [string, boolean])[] = [

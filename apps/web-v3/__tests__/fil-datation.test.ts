@@ -39,6 +39,7 @@ const message = (attributs: Partial<Message> = {}): Message => ({
   edite: false,
   supprime: false,
   pieces: [],
+  lieu: null,
   citations: [],
   reactions: [],
   accuse: 'envoye',
@@ -52,6 +53,8 @@ const rendu = (m: Message): HTMLElement => {
     maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
     langueDuDocument: 'fr',
     adresse: '/chats/c1',
+    composeurOuvert: true,
+    estInvite: false,
   });
   return hote;
 };
@@ -135,12 +138,37 @@ describe('la feuille tient la colonne', () => {
 
   /**
    * **La ligne méta ne réserve plus de marge pour rien.** Vidée de l'heure,
-   * elle ne contient plus, dans le cas nominal, qu'un `.reagir-slot` en
-   * `height:0` : sa `margin-top` serait un blanc pur. Les états d'envoi la
-   * reprennent, eux, puisqu'ils s'affichent à cet endroit.
+   * elle ne contient plus, dans le cas nominal, qu'un `.reagir-slot` réservé :
+   * sa `margin-top` serait un blanc pur au-dessus d'un carré déjà vide. Les
+   * états d'envoi la reprennent, eux, puisqu'ils s'affichent à cet endroit.
    */
   it('annule la marge de la méta quand rien n’y est visible, et la rend aux états d’envoi', () => {
     expect(FEUILLE_DU_FIL).toContain('.ligne .meta:not(:has(>:not(.reagir-slot):not(.attente):not(.echec):not([hidden]))){margin-top:0}');
     expect(FEUILLE_DU_FIL).toContain('.ligne.envoi-attente .meta,.ligne.envoi-hors-ligne .meta,.ligne.envoi-echec .meta{margin-top:var(--space-1)}');
+  });
+
+  /**
+   * **REVUE CLS (2026-09-05, gate 8a) — `.reagir-slot` réserve sa hauteur
+   * DÈS LE SSR, jamais à l'arrivée du module.** L'ancienne règle
+   * (`:has(>.reagir)`) corrigeait un recouvrement — REVUE DE #5061,
+   * `overflow:visible` + `align-items:center` sur une boîte `height:0`
+   * centrait `button.reagir` (44 px) SUR la ligne de `.meta`, recouvrant le
+   * dernier mot du `.texte` qui précède (mesuré :
+   * `rich-capture-{light,dark}.png`) — mais en ne réservant la hauteur
+   * qu'APRÈS l'insertion du bouton par `poseLeBoutonReagir`
+   * (`fil-peinture.ts`, chargé après le premier pixel, § 12.4), elle
+   * déplaçait tout ce qui suit chaque bulle d'un coup : CLS mesuré à 0,089
+   * sur `/chats/:cle`, au-dessus du budget 0,05 (`v3-fil.spec.ts`).
+   *
+   * Une boîte qui réserve SA hauteur de vraie taille (`--target-min`, 44 px)
+   * dès le SSR ne bouge plus à l'insertion (CLS supprimé) ET ne centre plus
+   * le bouton sur une ligne nulle (le recouvrement de #5061 ne revient pas) —
+   * les deux défauts partageaient la même cause. Le prix assumé : un carré
+   * de 44 px reste VIDE (jamais un contrôle inerte — rien n'y est cliquable)
+   * tant que le module n'a pas chargé, sur les messages où il apparaîtra.
+   */
+  it('réserve la hauteur du bouton « Réagir » DÈS LE SSR — jamais de décalage à son arrivée', () => {
+    expect(FEUILLE_DU_FIL).toContain('.ligne .reagir-slot{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min)}');
+    expect(FEUILLE_DU_FIL).not.toMatch(/\.ligne \.reagir-slot:has\(/);
   });
 });

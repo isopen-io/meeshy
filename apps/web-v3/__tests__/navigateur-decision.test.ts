@@ -1,4 +1,4 @@
-import { decideLInterception, estNavigable, extraitLEchange } from '@/lib/realtime/navigateur-decision';
+import { decideLInterception, estNavigable, extraitLEchange, porteUneSurimpression } from '@/lib/realtime/navigateur-decision';
 
 /**
  * LE NAVIGATEUR DE ZONE — la DÉCISION, séparée du geste (#5106).
@@ -105,5 +105,30 @@ describe('extraitLEchange — ce que le document cible remet au swap', () => {
       '<!doctype html><html><head><title>T</title><style>a{}</style></head>' +
       '<body><main>statique</main></body></html>';
     expect(extraitLEchange(sansModule)?.module).toBeNull();
+  });
+
+  /**
+   * LA SURIMPRESSION REFUSE L'ÉCHANGE — mesuré au navigateur avant d'être figé
+   * ici : sous `V3_NAVIGABLE`, cliquer « Mon espace » depuis `/chats` posait
+   * l'adresse `/chats?espace` et ne montrait AUCUN dialogue — le contrôle
+   * était INERTE, et avec lui la sortie de la v3 (#5095). La surimpression vit
+   * hors de `<main>` (`app/enveloppe/vue.ts:198`) : un échange qui ne porte
+   * que `<main>` ne peut ni l'ouvrir ni la refermer.
+   */
+  it('un document cible qui porte une surimpression rend null — le dialogue ne survit pas au swap', () => {
+    const avecDialogue =
+      '<!doctype html><html><head><title>T</title><style>a{}</style></head>' +
+      '<body><dialog class="espace" open><p>Mon espace</p></dialog>' +
+      '<div class="enveloppe" inert><main>la liste</main></div></body></html>';
+    expect(extraitLEchange(avecDialogue)).toBeNull();
+  });
+
+  it('porteUneSurimpression ne voit QUE le dialogue enfant direct de body', () => {
+    const parse = (html: string): Document => new DOMParser().parseFromString(html, 'text/html');
+    expect(porteUneSurimpression(parse('<body><dialog open>x</dialog><main>y</main></body>'))).toBe(true);
+    // Un `<dialog>` PORTÉ PAR L'ÉCRAN — dans `<main>` — n'est pas une
+    // surimpression : il voyage avec le `<main>` échangé.
+    expect(porteUneSurimpression(parse('<body><main><dialog open>x</dialog></main></body>'))).toBe(false);
+    expect(porteUneSurimpression(parse('<body><main>y</main></body>'))).toBe(false);
   });
 });

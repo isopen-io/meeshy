@@ -20,10 +20,13 @@ import {
   ancreDemandee,
   CACHE_PRIVE,
   curseurDemande,
+  modificationDemandee,
   pleinDemande,
   lisLeFormulaire,
   redirection,
+  reponseDemandee,
   rendu,
+  resoutLeContexte,
   soumissionDuFil,
   tempsReelDuDocument,
   traiteLaSoumission,
@@ -32,7 +35,7 @@ import { adresseDeLaPorte, documentDuFil, type Composeur } from '@/app/connecte/
 import { chargeLeProfilSiDemande, traiteLActionDeProfil } from '@/app/connecte/profil-porte';
 import { documentDePanne } from '@/app/connecte/vue';
 import { chargementSpeculatif, navigationEtrangere, origineEtrangere, refusDOrigine, sansEffet } from '@/app/provenance';
-import { jetonDuLecteur } from '@/app/session';
+import { estSecurisee, jetonDuLecteur } from '@/app/session';
 
 import {
   CHAMP_DE_LA_LANGUE,
@@ -155,10 +158,6 @@ export const dynamic = 'force-dynamic';
 type Contexte = { readonly params: Promise<{ lien: string }> };
 
 const segmentDe = async (contexte: Contexte): Promise<string> => (await contexte.params).lien;
-
-const estSecurisee = (requete: Request): boolean =>
-  new URL(requete.url).protocol === 'https:' ||
-  (requete.headers.get('x-forwarded-proto') ?? '').split(',')[0]?.trim() === 'https';
 
 /**
  * L'adresse du VISITEUR, telle que le proxy qui précède la v3 l'a écrite —
@@ -292,6 +291,8 @@ const invite = async ({
   erreur,
   brouillon,
   statut = 400,
+  idReponse = null,
+  idModification = null,
 }: {
   readonly requete: Request;
   readonly segment: string;
@@ -301,6 +302,10 @@ const invite = async ({
   readonly erreur: string | null;
   readonly brouillon: string;
   readonly statut?: number;
+  /** `?repondre=` — ou le contexte CONSERVÉ d'un refus de réponse (issue #5163). */
+  readonly idReponse?: string | null;
+  /** `?modifier=` — jamais résolu réellement chez l'invité (régime 3), conservé pour la symétrie de signature. */
+  readonly idModification?: string | null;
 }): Promise<Response> => {
   const battement = await rafraichis({ jeton });
 
@@ -324,6 +329,11 @@ const invite = async ({
   const langues = languesDuLecteur({ systemLanguage: participant?.langue ?? null });
 
   const plein = pleinDemande(requete);
+  // `?repondre=`/`?modifier=` servent la tranche AUTOUR de leur cible (§ 9 Q2
+  // de la spécification #5163, la loi de `?media=` étendue à un troisième
+  // état) — jamais avec `?avant=` ni les deux entre eux à la fois.
+  const idReponseDemandee = idReponse ?? reponseDemandee(requete);
+  const idModificationDemandee = idModification ?? (idReponseDemandee === null ? modificationDemandee(requete) : null);
   const issue = await fil({
     cle: conversation,
     creance: { genre: 'invite', jeton },
@@ -333,7 +343,7 @@ const invite = async ({
     // La tranche que le lien d'un média nomme (§ 12.10.1) : sans elle, la pièce
     // d'un message ancien n'était dans aucune tranche servie, et le tap
     // n'ouvrait rien.
-    autour: ancreDemandee(requete),
+    autour: ancreDemandee(requete) ?? idReponseDemandee ?? idModificationDemandee,
   });
 
   if (issue.genre === 'panne') return rendu(documentDePanne(), 503);
@@ -351,6 +361,17 @@ const invite = async ({
   // porte `invite`).
   const profil = await chargeLeProfilSiDemande({ requete, jeton: null });
 
+  const maintenant = Date.now();
+  const composeur = composeurDe(droits, fermeture);
+  const contexte = resoutLeContexte({
+    idReponse: idReponseDemandee,
+    idModification: idModificationDemandee,
+    fil: lu,
+    maintenant,
+    composeurOuvert: composeur.genre === 'ouvert',
+    estInvite: true,
+  });
+
   return rendu(
     documentDuFil({
       porte: {
@@ -365,9 +386,10 @@ const invite = async ({
       lecteur: { id: participant?.id ?? null, nom: participant?.pseudo ?? '', langues },
       erreur,
       brouillon,
-      maintenant: Date.now(),
-      composeur: composeurDe(droits, fermeture),
+      maintenant,
+      composeur,
       tempsReel: tempsReelDuDocument(),
+      contexte,
       plein,
       profil,
     }),
@@ -609,5 +631,18 @@ export const POST = async (requete: Request, contexte: Contexte): Promise<Respon
     adresse: adresseDeLaPorte({ genre: 'invite', lien: place.lien, segment, pseudo: null, droits: null, jonctionFraiche: false }),
   });
   if (issue.genre === 'redirection') return redirection(issue.vers);
-  return invite({ requete, segment, place, jeton, vers, erreur: issue.message, brouillon: issue.brouillon, statut: issue.statut });
+  // Le contexte armé est CONSERVÉ sur un refus (§ 9 Q2) : le formulaire poste
+  // vers l'adresse NUE, donc `requete.url` ne porte plus `?repondre=`.
+  const idReponse = soumission.genre === 'reponse' ? soumission.replyToId : null;
+  return invite({
+    requete,
+    segment,
+    place,
+    jeton,
+    vers,
+    erreur: issue.message,
+    brouillon: issue.brouillon,
+    statut: issue.statut,
+    idReponse,
+  });
 };

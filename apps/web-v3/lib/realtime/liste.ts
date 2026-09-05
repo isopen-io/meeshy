@@ -11,6 +11,7 @@ import {
 
 import { brancheLaBanniere } from './banniere';
 import { prendsLeBalayage } from './balayage';
+import { armeLaDeconnexion } from './deconnexion';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
 import { prendsLePleinEcran } from './plein-ecran';
 import * as L from './liste-etat';
@@ -517,6 +518,13 @@ const demarre = async (): Promise<void> => {
   // configuration manque ou dont le jeton a disparu. Ce que ces replis
   // protègent, c'est le temps réel — jamais le clavier.
   prendsLePleinEcran();
+
+  // LE CONTRÔLE DE SORTIE (#5095) — servi par l'espace membre, dans l'état
+  // `?espace` du document. Même raison que `prendsLePleinEcran` ci-dessus :
+  // il doit s'armer même si les quatre replis qui suivent renvoient bredouille
+  // (config absente, jeton disparu…), et RIEN de ce qu'il fait n'a besoin
+  // d'une créance de participation.
+  armeLaDeconnexion();
 
   const main = document.querySelector<HTMLElement>('main[data-participation="liste"]');
   if (main === null) return;

@@ -601,6 +601,61 @@ struct MeeshyComposerHost: View {
     /// meuble tient déjà ses médias.
     @State var documentMediaCaptions: ComposerMediaCaptions = [:]
 
+    /// **Les textes alternatifs saisis dans l'éditeur d'objet** (#4756), keyés
+    /// par `StoryMediaObject.id`.
+    ///
+    /// Clé plus simple que celle des légendes, et ce n'est pas un raccourci :
+    /// une légende se saisit sur la SCÈNE, où l'on ne connaît que l'URL locale
+    /// du média — d'où la traduction `URL → slide → porteur` de
+    /// `ComposerSlideTextRole.canvasKeyed`. Un texte alternatif se saisit dans
+    /// l'éditeur d'UN objet, qui tient son identifiant : la clé du fil
+    /// (`ComposerMediaAccessibility.mediaAlt`, keyée par `StoryMediaObject.id`)
+    /// est celle qu'on a déjà en main.
+    ///
+    /// Le nouveau composer publiait `ComposerMediaAccessibility.empty` — son
+    /// propre doc-comment l'admettait — parce que sa surface n'offrait aucun
+    /// éditeur d'alternative textuelle. Le transport existait de bout en bout ;
+    /// c'est la SOURCE qui manquait, et l'UI aussi existait, restée dans la peau
+    /// de l'atelier plein écran (`MediaAccessibilityPanel` → `ComposerBottomBand`).
+    ///
+    /// **Où cette carte ARRIVE, et où elle n'arrive pas encore** (2026-09-05) :
+    ///
+    /// | canal | format | la carte voyage ? |
+    /// |---|---|---|
+    /// | scène (`publishStoryScene` → `publishStoryInBackground`) | story | **oui**, depuis que la greffe y est posée |
+    /// | document (`publishDocument` → file durable) | **post**, mood | **non** — `ComposerDocumentDraft` n'a pas de champ d'alternative |
+    ///
+    /// Le second est le canal du POST, donc du cas nominal de cet éditeur. Ce
+    /// n'est pas une exemption mais une PERTE nommée et chiffrée : porter
+    /// `mediaAlts` sur les quatre maillons, comme `mediaCaptions` — dont
+    /// `PublishIntent.document` réaligne déjà la carte URL sur l'index de
+    /// `localMedia`. Ce qui manque en amont est l'index OBJET → URL SOURCE, que
+    /// ni `applyContentMedia` (qui nomme sa copie `tmp/<objectId>.<ext>` et ne
+    /// rend rien) ni `slideIdByMediaURL` (qui n'indexe que les FONDS) ne
+    /// fournissent. Détail : `PublishChainCensusTests.absentsDeLaVoieDurable`.
+    @State var documentMediaAlts: [String: String] = [:]
+
+    /// **`URL source → identifiant d'objet`, le chaînon qui manquait à l'alt**
+    /// (2026-09-05).
+    ///
+    /// `documentMediaAlts` est keyé par identifiant d'OBJET — c'est ce que
+    /// l'éditeur de scène édite, et c'est ce que le chemin STORY sait traduire
+    /// en `postMediaId` après l'upload (`StoryMediaTextMapping.serverKeyed`).
+    /// Le chemin DURABLE, lui, travaille par POSITION dans `localMedia`,
+    /// c'est-à-dire par URL SOURCE : `PublishIntent.document` aligne déjà les
+    /// légendes ainsi.
+    ///
+    /// Les deux clés sont justes à leur étage ; ce qui manquait était le pont.
+    /// Il ne peut venir que d'`applyContentMedia`, seul site à connaître les
+    /// deux bouts — il frappe l'`objectId` ET copie la source. Il le REND
+    /// désormais, et cette carte l'accumule.
+    ///
+    /// > **Une carte n'est pas un cache** : celle-ci est la mémoire du
+    /// > BROUILLON. Le modèle de scène ne peut pas la tenir — un objet
+    /// > remplacé, un fond rechangé, et il ne saurait plus de quel fichier il
+    /// > est né.
+    @State var documentMediaObjectIdBySource: [URL: String] = [:]
+
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
     /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois
@@ -637,16 +692,17 @@ struct MeeshyComposerHost: View {
     /// séparés est ce qui empêche une bande vide d'occuper les ≈ 170 pt que
     /// l'encastrement vient de libérer.
     @State var requestedSceneBand: ComposerSceneBand?
+    // **`trimSourceDurations` est parti avec la bande de rognage**
+    // (2026-09-05). Il indexait, par objet, la durée MESURÉE du fichier source
+    // — la seule valeur qui laisse un rognage se défaire. Son unique écrivain
+    // était `mesurerLaSource`, qui vivait dans `MeeshyComposerHost+EditBands`
+    // et n'existe plus : la première vue n'édite plus rien.
+    //
+    // La mesure n'est pas perdue, elle a changé de propriétaire :
+    // `ComposerObjectEditorView.mediaSourceDuration` la refait pour l'objet
+    // ouvert, et c'est le bon niveau — la durée d'une source ne sert qu'à
+    // l'écran qui la borne.
 
-    /// **La durée du fichier source, MESURÉE, par objet (#4082).**
-    ///
-    /// Le modèle ne la porte pas de façon fiable : une vidéo a
-    /// `intrinsicDuration`, un son n'a que `duration` — et celle-ci DEVIENT la
-    /// durée de la fenêtre au premier rognage. Rouvrir la bande sur cette
-    /// valeur montrerait une source rétrécie à chaque passage, et la queue
-    /// coupée deviendrait irrécupérable : un rognage qui ne se défait pas n'est
-    /// pas un rognage. Seul le fichier dit la vérité, et il faut la lui demander.
-    @State var trimSourceDurations: [String: Double] = [:]
 
     /// **La couche d'écriture de la description, par-dessus l'atelier** (#4124).
     /// `false` ⇒ rien n'est monté : la scène occupe tout ce que le chrome lui
@@ -1111,87 +1167,4 @@ struct MeeshyComposerHost: View {
         composerVisibility = adoptee.visibility
         composerVisibilityUserIds = adoptee.visibilityUserIds
     }
-
-    // MARK: - Les trois surfaces (V2, élargies au mood par le lot 4)
-
-    /// Le meuble a TROIS surfaces, et c'est `ComposerSurfaceRouting` qui tranche
-    /// — jamais une condition écrite ici. La règle vit à côté de la surface
-    /// document parce qu'elle est éprouvable sans monter la moindre vue ; la
-    /// recopier dans le `body` l'aurait rendue muette aux tests.
-    ///
-    /// Le socle, lui, ne dépend d'aucune des trois : il reste sous toutes
-    /// (loi 5 — le socle ne bouge jamais).
-    /// **Quatre vues, une par contexte** (#4070). La règle est PURE
-    /// (`ComposerMountedView`) et séparée du routage : celui-ci dit quelle
-    /// SURFACE le format appelle, celle-là quelle VUE cette surface monte une
-    /// fois qu'on sait s'il y a une scène.
-    ///
-    /// Le `switch` est exhaustif : une cinquième vue casse la compilation ici,
-    /// avant de pouvoir diverger en silence.
-
-    /// **La vue réellement MONTÉE** — et c'est elle, jamais le kind de surface,
-    /// qui répond à « y a-t-il une scène à l'écran ? ».
-    ///
-    /// Elle était calculée en ligne dans l'aiguillage. Un second site en a eu
-    /// besoin — l'historique (#4402) — et a interrogé `mountedSurface` à la
-    /// place : ça compilait, et ça ne pouvait jamais rendre vrai, la scène
-    /// incrustée étant un `.document` QUI A une scène. Une valeur lue à un seul
-    /// endroit ne peut pas être lue de travers ailleurs.
-    /// **Le prédicat de PRÉSENCE de la scène — un seul, pour la vue ET pour sa
-    /// branche** (#4513).
-    ///
-    /// Il existait en DEUX exemplaires, et la bascule de #4513 les a fait
-    /// diverger visiblement : `mountedComposerView` lisait `showsCanvas(...)`
-    /// (vrai pour une story, même vide — une story EST ses canvas), tandis que
-    /// `ComposerDocumentSurface(showsScene:)` recevait `documentHasScene` (faux
-    /// tant que rien n'est posé, la slide semée ne comptant pas comme matière).
-    ///
-    /// Tant que `.document + hasScene` montait `ComposerSceneSurface`, l'écart
-    /// ne se voyait pas : la scène était peinte par l'autre vue. Depuis que le
-    /// document la porte lui-même, la story ouverte n'avait plus AUCUN canvas —
-    /// la vue disait « il y a une scène », sa branche disait « non ».
-    ///
-    /// > Deux prédicats qui répondent à la même question restent d'accord tant
-    /// > qu'un seul est consulté. C'est le jour où le second est branché que
-    /// > l'écart devient un écran vide — et aucun témoin ne rougit, puisque
-    /// > chacun est juste séparément.
-    ///
-    /// Mesuré au simulateur, pas au gate : 263 témoins verts au-dessus de cette
-    /// régression.
-    var sceneIsPresent: Bool {
-        ComposerStoryCanvas.showsCanvas(format: selectedFormat,
-                                        documentHasScene: documentHasScene)
-    }
-
-    var mountedComposerView: ComposerMountedView {
-        ComposerMountedView.mounted(
-            surface: mountedSurface,
-            // **Une story a toujours son canvas** (directive porteur
-            // 2026-09-01). `documentHasScene` demande « y a-t-il de la matière
-            // à cadrer ? », la bonne question pour un post dont la scène est
-            // une incrustation optionnelle. Une story EST ses canvas : lui
-            // poser le prédicat du post la laisserait sur l'écran document tant
-            // qu'elle est vide — au moment précis où elle en a besoin.
-            //
-            // La substitution se fait ICI et pas dans `documentHasScene`, dont
-            // le MOOD est l'autre lecteur : y injecter le format ferait décider
-            // l'offre de formats par le format déjà choisi.
-            hasScene: sceneIsPresent
-        )
-    }
-
-    @ViewBuilder
-    var surface: some View {
-        switch mountedComposerView {
-        case .atelier:
-            composerSurface
-        case .scene:
-            sceneSurface
-        case .document:
-            documentSurface
-        case .mood:
-            moodSurface
-        }
-    }
-
 }

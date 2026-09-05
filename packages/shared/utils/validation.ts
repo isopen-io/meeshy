@@ -5,50 +5,27 @@
 
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
-import { personNamePatternSource, usernamePatternSource } from '../types/api-schemas.js';
 import { EMOJI_MAX_LENGTH } from '../types/reaction.js';
 import { createError } from './errors.js';
-import { isSupportedLanguage } from './languages.js';
-import { normalizeLanguageCode } from './language-normalize.js';
 import { OBJECT_ID_REGEX } from './object-id.js';
+import { AuthSchemas } from './auth-schemas.js';
+import {
+  PASSWORD_MIN_LENGTH,
+  USERNAME_PATTERN,
+  customDestinationLanguageCode,
+  passwordTooShort,
+  supportedLanguageCode,
+} from './validation-primitives.js';
 
 /**
- * Nom de personne (prénom / nom). Compilé depuis la source unique
- * `personNamePatternSource` (types/api-schemas.ts) pour que la couche Ajv
- * (body JSON schema Fastify) et la couche Zod rendent le même verdict —
- * notamment l'acceptation des apostrophes typographiques `’`/`ʼ` insérées par
- * le clavier iOS.
+ * Les bornes et motifs partagés vivent dans `./validation-primitives.js`
+ * depuis #5216 — ce fichier est hors budget (2700 lignes pour un plafond de
+ * 1000) et le dépôt y interdit tout ajout tant qu'on n'en a pas extrait. Le
+ * ré-export garde les importeurs historiques, qui nommaient déjà
+ * `PASSWORD_MIN_LENGTH` à cette adresse.
  */
-const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
+export { PASSWORD_MIN_LENGTH } from './validation-primitives.js';
 
-/**
- * Nom d'utilisateur. Compilé depuis la source unique `usernamePatternSource`
- * (types/api-schemas.ts) pour que la couche Ajv (body JSON schema Fastify) et la
- * couche Zod rendent le même verdict — notamment le refus de l'espace et des
- * lettres accentuées, que le charset ASCII exclut.
- */
-const USERNAME_PATTERN = new RegExp(usernamePatternSource);
-
-/**
- * Longueur minimale d'un mot de passe — UNE règle, pour toutes les portes.
- *
- * Elle a valu onze déclarations indépendantes, et trois valeurs différentes :
- * le wizard web ouvrait le pas suivant dès 6, la checklist affichée à
- * l'utilisateur en promettait 8, et les schémas serveur en exigeaient 8. Une
- * saisie de 6 caractères franchissait donc tout le formulaire pour se faire
- * rejeter à la DERNIÈRE étape par un message Ajv brut, trois écrans après le
- * champ fautif.
- *
- * La borne s'applique aux mots de passe qu'on DÉFINIT. Un mot de passe qu'on
- * PROUVE (`currentPassword`) n'a qu'à être non vide : c'est le hash qui
- * l'arbitre, et lui imposer une longueur enfermerait tout compte créé sous une
- * borne plus basse.
- *
- * Garde : `__tests__/password-min-length-parity.test.ts`.
- */
-export const PASSWORD_MIN_LENGTH = 6;
-
-const passwordTooShort = `Mot de passe trop court (min ${PASSWORD_MIN_LENGTH} caractères)`;
 
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
@@ -69,55 +46,6 @@ function clampOffset(val: string | undefined): number {
   const parsed = parseInt(val ?? '', 10);
   return Math.max(0, Number.isNaN(parsed) ? 0 : parsed);
 }
-
-/**
- * Code de langue in-app supporté, **validé ET normalisé** (lowercase).
- *
- * Source de vérité unique de la normalisation à l'écriture : `isSupportedLanguage`
- * accepte les codes de manière insensible à la casse (`'EN'`, `'Fr'`) mais ne les
- * transforme pas — sans le `.transform` ci-dessous, un `systemLanguage: 'EN'` serait
- * persisté verbatim et casserait la résolution du Prisme Linguistique côté lecture
- * (les traductions sont stockées sous clé minuscule). On lowercase donc au point
- * d'écriture pour garantir l'invariant « la base ne contient que des codes
- * minuscules », rendant les compensations de lecture (`resolveUserLanguage`) purement
- * défensives.
- *
- * @see packages/shared/utils/conversation-helpers.ts — résolveurs de lecture
- */
-const supportedLanguageCode = z
-  .string()
-  .min(2)
-  .max(5)
-  .refine((code) => isSupportedLanguage(code), { message: 'Unsupported language code' })
-  .transform((code) => code.toLowerCase());
-
-/**
- * Code de langue de destination personnalisée (priorité 3 du Prisme). Contrairement
- * à {@link supportedLanguageCode}, ce champ n'exige pas que le code figure dans la
- * liste des langues supportées, mais il DOIT être canonique en base : un locale
- * région/script-taggé de plateforme (`'fr-FR'`, `'en_US'`) persisté verbatim comme
- * `'fr-fr'` / `'en-us'` ne matcherait aucune `MessageTranslation.targetLanguage`
- * (clé lowercase) et forcerait la résolution du Prisme sur le message original.
- *
- * Canonicalisation au write boundary via le SSOT {@link normalizeLanguageCode}
- * (`'fr-FR'`/`'fr_FR'` → `'fr'`, `'en-US'` → `'en'`), avec repli `.toLowerCase()`
- * pour les codes que le normaliseur ne sait pas réduire (ISO 639-3 supporté comme
- * `'bas'`, ou code plausible inconnu) : comportement d'acceptation strictement
- * inchangé, seul le stockage des codes région-taggés est corrigé.
- *
- * La borne `.max(6)` reflète la longueur MAXIMALE d'un code 639-3 région-taggé
- * (`[a-z]{3}` + `-` + `[A-Z]{2}` = 6, ex. `'bas-CM'`, `'ewo-CM'`), miroir de
- * {@link CommonSchemas.language}. Un `.max(5)` tombait AVANT la `.transform` et
- * rejetait ces locales de plateforme (`Locale.current` / `Accept-Language`) en
- * HTTP 400 — la même exclusion silencieuse que l'itération 266 a fermée sur les
- * langues de contenu, manquée ici parce que `.min`/`.max` sur deux lignes
- * échappaient à son grep mono-ligne.
- */
-const customDestinationLanguageCode = z
-  .string()
-  .min(2)
-  .max(6)
-  .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
 
 /**
  * Valider un schéma Zod et retourner une erreur standardisée
@@ -461,83 +389,12 @@ export const updateUsernameSchema = z.object({
 // =============================================================================
 
 /**
- * Schémas pour l'authentification
+ * Les schémas d'authentification vivent dans `./auth-schemas.js` depuis #5216 —
+ * ce fichier est hors budget, et le dépôt y interdit tout ajout tant qu'on n'en
+ * a pas extrait. Le ré-export garde les importeurs historiques, qui nommaient
+ * déjà `AuthSchemas` à cette adresse.
  */
-export const AuthSchemas = {
-  // Login request
-  login: z.object({
-    username: z.string().min(2).max(50),
-    password: z.string().min(1),
-    rememberDevice: z.boolean().optional().default(false), // Trust this device for longer sessions (365 days)
-  }),
-
-  // Register request
-  register: z.object({
-    username: z.string()
-      .min(2, 'Username trop court (min 2)')
-      .max(16, 'Username trop long (max 16)')
-      .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
-    password: z.string()
-      .min(PASSWORD_MIN_LENGTH, passwordTooShort),
-    firstName: z.string().min(1).max(50)
-      .regex(PERSON_NAME_PATTERN, 'Le prénom doit contenir au moins une lettre'),
-    lastName: z.string().min(1).max(50)
-      .regex(PERSON_NAME_PATTERN, 'Le nom doit contenir au moins une lettre'),
-    email: z.email('Email invalide'),
-    phoneNumber: z.string().optional(),
-    phoneCountryCode: z.string().length(2).optional(),
-    systemLanguage: supportedLanguageCode.default('fr'),
-    regionalLanguage: supportedLanguageCode.default('fr'),
-    phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
-  }),
-
-  // Refresh token
-  refreshToken: z.object({
-    token: z.string().min(1),
-    sessionToken: z.string().optional(),
-  }),
-
-  // Verify email (token from link OR 6-digit code from mobile)
-  verifyEmail: z.object({
-    token: z.string().min(1).optional(),
-    code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
-    email: z.email(),
-  }).refine(
-    (data) => !!data.token || !!data.code,
-    { message: 'Either token or code must be provided' }
-  ),
-
-  // Resend verification
-  resendVerification: z.object({
-    email: z.email(),
-  }),
-
-  // Phone verification
-  sendPhoneCode: z.object({
-    phoneNumber: z.string().min(8),
-  }),
-
-  verifyPhone: z.object({
-    phoneNumber: z.string().min(8),
-    code: z.string().length(6).regex(/^[0-9]{6}$/),
-  }),
-
-  // Password reset
-  requestPasswordReset: z.object({
-    email: z.email(),
-  }),
-
-  resetPassword: z.object({
-    token: z.string().min(1),
-    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
-  }),
-
-  // Change password (authenticated)
-  changePassword: z.object({
-    currentPassword: z.string().min(1),
-    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
-  }),
-};
+export { AuthSchemas } from './auth-schemas.js';
 
 // =============================================================================
 // SESSION SCHEMAS

@@ -168,12 +168,17 @@ describe('POST /:id/preview — ciblage et rapport de langue (#5161)', () => {
     );
   });
 
+  // La fixture cible l'ANGLAIS, pas le français : la diffusion est en `fr`
+  // (`sourceLanguage`), et les cibles EXCLUENT la langue source (#5247). Le
+  // repli `en-US`/`en_US` → `en` reste ce que ce témoin mesure ; l'écrire sur
+  // `fr` faisait passer l'exclusion de la source pour une régression alors
+  // qu'elle est le correctif.
   it('derives targetLanguages (sent to translation and persisted) from the CANONICAL buckets, not the verbatim ones', async () => {
     setupPreviewMocks({
       recipientsByLanguage: [
-        { systemLanguage: 'fr', _count: 1 },
-        { systemLanguage: 'fr-FR', _count: 1 },
-        { systemLanguage: 'fr_FR', _count: 1 },
+        { systemLanguage: 'en', _count: 1 },
+        { systemLanguage: 'en-US', _count: 1 },
+        { systemLanguage: 'en_US', _count: 1 },
       ],
     });
 
@@ -181,10 +186,43 @@ describe('POST /:id/preview — ciblage et rapport de langue (#5161)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(mockTranslateContent).toHaveBeenCalledWith(
-      expect.anything(), expect.anything(), expect.anything(), ['fr']
+      expect.anything(), expect.anything(), expect.anything(), ['en']
     );
     expect(mockPrisma.adminBroadcast.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ targetLanguages: ['fr'] }) })
+      expect.objectContaining({ data: expect.objectContaining({ targetLanguages: ['en'] }) })
+    );
+  });
+
+  /**
+   * L'EXCLUSION DE LA SOURCE (#5247), et pourquoi elle n'est pas cosmétique :
+   * demander `fr → fr` à NLLB ne rend pas le texte, il en rend une PARAPHRASE,
+   * et la passerelle la range comme une traduction. Le lecteur francophone
+   * reçoit alors une réécriture machine du texte de l'admin, présentée comme
+   * l'original. C'est la règle que `MessageTranslationService` applique déjà —
+   * « la langue source est retirée pour éviter une auto-traduction NLLB ».
+   *
+   * Le repli VERBATIM se fait AVANT l'exclusion : un destinataire en `fr-FR`
+   * doit être exclu comme un destinataire en `fr`, sans quoi la variante
+   * région-taguée rouvrirait la porte que la canonicalisation vient de fermer.
+   */
+  it('exclut la langue SOURCE des cibles — y compris sous ses variantes verbatim', async () => {
+    setupPreviewMocks({
+      recipientsByLanguage: [
+        { systemLanguage: 'fr', _count: 1 },
+        { systemLanguage: 'FR', _count: 1 },
+        { systemLanguage: 'fr-FR', _count: 1 },
+        { systemLanguage: 'en', _count: 2 },
+      ],
+    });
+
+    const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockTranslateContent).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), expect.anything(), ['en']
+    );
+    expect(mockPrisma.adminBroadcast.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ targetLanguages: ['en'] }) })
     );
   });
 });

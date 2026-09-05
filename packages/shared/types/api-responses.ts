@@ -296,13 +296,6 @@ export function isSuccessResponse<T>(response: ApiResponse<T>): response is ApiR
 }
 
 /**
- * Type guard to check if a response is an error
- */
-export function isErrorResponse<T>(response: ApiResponse<T>): response is ApiResponse<T> & { success: false; error: string } {
-  return response.success === false && response.error !== undefined;
-}
-
-/**
  * Utility to create a success response
  */
 export function createSuccessResponse<T>(data: T, meta?: ResponseMeta): ApiResponse<T> {
