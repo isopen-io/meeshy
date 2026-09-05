@@ -495,9 +495,9 @@ const COMPTE = {
 };
 
 /**
- * Trente clés — les trente-deux que `formatUserResponse` compose, moins
- * `pendingEmail` et `pendingPhone` que `userSchema` ne déclare pas (supprimées
- * par fast-json-stringify).
+ * Trente clés — exactement ce que `formatUserResponse` compose depuis que
+ * `pendingEmail` et `pendingPhone` en ont été retirés (#4653) : aucun client ne
+ * les lisait sur une réponse de connexion, mesuré sur les trois plateformes.
  *
  * `phoneCountryCode` est déclaré et jamais produit : `SocketIOUser` ne le porte
  * pas, donc le projecteur ne peut pas le servir sans élargir le type partagé.
