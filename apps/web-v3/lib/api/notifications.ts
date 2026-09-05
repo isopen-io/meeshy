@@ -1,3 +1,5 @@
+import { ATTRIBUT_PAR_CONTEXTE, type CleDeContexte } from '../contenu/notifs';
+
 import { baseDeLaPasserelle } from './links';
 import { DELAI_DE_REPONSE_MS } from './passerelle';
 
@@ -67,6 +69,12 @@ export type Notification = {
   readonly nomDeLActeur: string | null;
   readonly lue: boolean;
   readonly creeeA: string | null;
+  /**
+   * Les clés de `context` que le prédicat partagé d'un `notification:read-bulk`
+   * lit (`notificationMatchesReadBulkScope`, `@meeshy/shared`) — et RIEN
+   * d'autre : le reste de `context` n'a pas de lecteur ici, donc pas de relais.
+   */
+  readonly contexte: Readonly<Partial<Record<CleDeContexte, string>>>;
 };
 
 export type Boite =
@@ -75,6 +83,15 @@ export type Boite =
       readonly notifications: readonly Notification[];
       readonly nonLues: number;
       readonly total: number;
+      /**
+       * Le curseur de la page SUIVANTE, ou `null` — même dérivation que
+       * `filSocial().curseurSuivant` (`lib/api/social.ts`) : depuis
+       * `pagination.hasMore`, pas la seule présence de `nextCursor`. La
+       * passerelle rend déjà `null` sur une page finale
+       * (`NotificationFormatter.nextCursorFrom`), mais la porte n'a pas à en
+       * dépendre pour rester correcte.
+       */
+      readonly curseurSuivant: string | null;
     }
   | { readonly genre: 'session-expiree' }
   | { readonly genre: 'panne' };
@@ -110,6 +127,14 @@ const notification = (brut: Readonly<Record<string, unknown>>): Notification | n
   const lue = etat === null ? brut.isRead === true : etat.isRead === true;
   const creeeA = etat === null ? chaine(brut.createdAt) : chaine(etat.createdAt);
 
+  const contexteServi = objet(brut.context);
+  const contexte = (Object.keys(ATTRIBUT_PAR_CONTEXTE) as readonly CleDeContexte[]).reduce<
+    Partial<Record<CleDeContexte, string>>
+  >((retenu, cle) => {
+    const valeur = chaine(contexteServi?.[cle]);
+    return valeur === null ? retenu : { ...retenu, [cle]: valeur };
+  }, {});
+
   return {
     id,
     genre: chaine(brut.type) ?? 'system',
@@ -119,7 +144,22 @@ const notification = (brut: Readonly<Record<string, unknown>>): Notification | n
     nomDeLActeur: chaine(objet(brut.actor)?.displayName),
     lue,
     creeeA,
+    contexte,
   };
+};
+
+/**
+ * LA MÊME PROJECTION POUR UNE CHARGE SOCKET (issue #4898). `notification:new`
+ * porte `{...formatted}` — la forme que la liste sert, `state` compris — et le
+ * module de participation doit en faire une ligne IDENTIQUE à celle que la vue
+ * aurait servie : un seul mappeur, sinon la ligne reçue et la ligne servie
+ * divergent au premier correctif (le doc-comment de `notification` l'annonçait
+ * déjà : « le jour où la liste et l'événement peignent la même ligne, ils
+ * doivent en lire l'état au même endroit »).
+ */
+export const notificationServie = (brut: unknown): Notification | null => {
+  const charge = objet(brut);
+  return charge === null ? null : notification(charge);
 };
 
 /**
@@ -134,15 +174,19 @@ const notification = (brut: Readonly<Record<string, unknown>>): Notification | n
 export const boiteDuLecteur = async ({
   jeton,
   limite = 30,
+  curseur,
   base,
   recuperer,
 }: {
   readonly jeton: string;
   readonly limite?: number;
+  readonly curseur?: string;
   readonly base?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Boite> => {
-  const url = `${base ?? baseDeLaPasserelle()}${CHEMIN_NOTIFICATIONS}?limit=${limite}`;
+  const url =
+    `${base ?? baseDeLaPasserelle()}${CHEMIN_NOTIFICATIONS}?limit=${limite}` +
+    (curseur === undefined ? '' : `&cursor=${encodeURIComponent(curseur)}`);
   const reponse = await demande(url, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
@@ -178,6 +222,7 @@ export const boiteDuLecteur = async ({
     notifications,
     nonLues: entier(enveloppe.unreadCount),
     total: entier(pagination?.total),
+    curseurSuivant: pagination?.hasMore === true ? (chaine(pagination.nextCursor) ?? null) : null,
   };
 };
 

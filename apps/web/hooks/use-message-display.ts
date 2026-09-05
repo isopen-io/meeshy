@@ -4,21 +4,9 @@ import { useMemo } from 'react';
 import type { BubbleTranslation } from '@meeshy/shared/types';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { mentionsToLinks } from '@meeshy/shared/types/mention';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { buildTranslationRecord } from '@/utils/translation-record';
-
-/**
- * Égalité de langue conforme au Prisme : `currentDisplayLanguage`, `originalLanguage`
- * et les clés de traduction (`language`/`targetLanguage`) sont verbatim et peuvent
- * être région-tagués (`en-US`, `fr_FR`), 3-lettres (`fra`) ou legacy (`iw`). Une
- * comparaison brute `===` traiterait `fr-FR` et `fr` comme deux langues distinctes —
- * le message serait réputé « hors langue affichée » alors qu'il y est, et une
- * traduction keyée `fr-FR` ne matcherait jamais la langue affichée `fr`.
- * SSOT : normalizeLanguageForDedup (packages/shared/utils/language-normalize.ts).
- */
-const sameLanguage = (a?: string, b?: string): boolean =>
-  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 
 interface UseMessageDisplayProps {
   message: {

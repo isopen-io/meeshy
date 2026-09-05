@@ -588,7 +588,7 @@ describe('broadcastRoutes', () => {
       mockPrisma.adminBroadcast.findUnique.mockResolvedValue(
         fakeBroadcast({ targeting, status: 'DRAFT' })
       );
-      mockPrisma.user.count.mockResolvedValue(10);
+      mockPrisma.user.count.mockResolvedValue(10); mockPrisma.user.findMany.mockResolvedValue([]); // #5161 resolveSystemLanguageVariants
       mockPrisma.user.groupBy
         .mockResolvedValueOnce([{ systemLanguage: 'en', _count: 5 }, { systemLanguage: 'fr', _count: 5 }])
         .mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]);

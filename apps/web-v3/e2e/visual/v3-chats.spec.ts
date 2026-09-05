@@ -307,15 +307,16 @@ test.describe('la liste des conversations', () => {
      * avale en silence (`.catch(() => null)`) — l'aurait laissé vert, en
      * prouvant seulement qu'une requête part.
      *
-     * Le 304 est ADMIS ici, jamais EXIGÉ, et la raison est mesurée : la
-     * passerelle n'expose pas `ETag` par CORS (`server.ts:404-410`, sans
-     * `exposedHeaders`), donc `reponse.headers.get('etag')` rend `null` depuis
-     * une autre origine et le module n'a aucun validateur à renvoyer. Le
-     * bouchon reproduit cette absence (`bouchon-fil.ts`) : exiger 304 ici
-     * exigerait un serveur qui n'existe pas. Le court-circuit du 304 est,
-     * lui, tenu sans navigateur — `__tests__/liste-rattrapage.test.ts`.
+     * LE PREMIER appel n'a aucun validateur à annoncer (rien n'a encore posé
+     * `If-None-Match`) et rend donc 200. LE SECOND est exigé 304 : `ETag` est
+     * désormais exposé par CORS (`CORS_EXPOSED_HEADERS`, `server.ts`, #5015 —
+     * avant ce correctif, `reponse.headers.get('etag')` rendait `null` depuis
+     * une autre origine et le module n'avait aucun validateur à renvoyer, d'où
+     * l'admission de 200 que ce témoin portait). Le court-circuit du 304 est,
+     * lui, tenu aussi sans navigateur — `__tests__/liste-rattrapage.test.ts`.
      */
-    expect(sync.map((appel) => appel.statut).filter((statut) => statut !== 200 && statut !== 304)).toEqual([]);
+    expect(sync[0]?.statut).toBe(200);
+    expect(sync[1]?.statut, 'le second /sync doit rendre 304 — l’ETag exposé par CORS le permet').toBe(304);
     /**
      * ET LE CURSEUR PART. Le premier tour n'en a aucun à annoncer ; les
      * suivants renvoient le `checkpointSeq` reçu — sans quoi la passerelle ne
@@ -326,6 +327,19 @@ test.describe('la liste des conversations', () => {
       new URL(appel.chemin, 'http://bouchon').searchParams.get('seq');
     expect(seq(sync[0]!)).toBeNull();
     expect(seq(sync[sync.length - 1]!)).not.toBeNull();
+    /**
+     * ET SEULS SES CHAMPS PARTENT (#5088). Le rattrapage corrige le RANG : il
+     * lit l'identifiant et l'instant, la passerelle rétrécit sa requête autant
+     * que sa réponse (`SYNC_FIELD_VOCABULARY`, #4173). Sans ce paramètre,
+     * chaque retour de focus repayait les ~12 colonnes de
+     * `syncConversationSelect` — description, avatar, banner — pour n'en lire
+     * que deux.
+     */
+    sync.forEach((appel) => {
+      expect(new URL(appel.chemin, 'http://bouchon').searchParams.get('fields')).toBe(
+        'conversations.id,conversations.lastMessageAt',
+      );
+    });
     // La collection DEMANDÉE est `conversations`, et elle seule : la liste n'a
     // que faire des messages, et les demander ferait payer au retour de focus
     // ce que le fil paie déjà de son côté.

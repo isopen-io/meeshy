@@ -34,6 +34,45 @@ import Foundation
 /// premier kilo-octet suffit donc, et c'est borné.
 nonisolated public enum AnimatedImageEligibility {
 
+    /// **Le conteneur qui porte l'animation** (#3956).
+    ///
+    /// La porte lisait déjà ces signatures pour répondre « peut-être » ; les
+    /// NOMMER ne coûte pas un octet de plus et répond à une seconde question
+    /// que le lot du GIF collé pose : **sous quel mime ces octets repartent-ils
+    /// au serveur ?** Un GIF téléversé en `image/png` arriverait mal étiqueté
+    /// chez tous les lecteurs — l'animation survivrait au disque et mourrait à
+    /// l'en-tête.
+    ///
+    /// > Le décodeur reste l'arbitre de « est-ce animé ». Ce type ne dit que
+    /// > « de quel format il s'agit » : un HEIC FIXE se nomme `.heic` ici, et
+    /// > c'est `AnimatedImageDecoder.decode` qui refusera de l'animer.
+    public enum Container: String, Sendable, CaseIterable {
+        case gif, apng, webp, heic
+
+        /// Le type MIME à porter jusqu'au serveur.
+        public var mimeType: String {
+            switch self {
+            case .gif: return "image/gif"
+            // Un APNG EST un PNG : `image/apng` existe mais n'est pas servi
+            // partout, et les octets se décodent de la même façon.
+            case .apng: return "image/png"
+            case .webp: return "image/webp"
+            case .heic: return "image/heic"
+            }
+        }
+
+        /// L'extension du fichier temporaire d'envoi — TUS et le serveur en
+        /// dérivent leur propre typage quand le mime leur manque.
+        public var filenameExtension: String {
+            switch self {
+            case .gif: return "gif"
+            case .apng: return "png"
+            case .webp: return "webp"
+            case .heic: return "heic"
+            }
+        }
+    }
+
     /// Le nombre d'octets à examiner. Assez pour toutes les signatures, et pour
     /// l'`acTL` d'un APNG, qui vit dans l'en-tête.
     public static let inspectedPrefix = 1024
@@ -41,32 +80,38 @@ nonisolated public enum AnimatedImageEligibility {
     /// `false` ⇒ ces octets ne peuvent PAS être animés, garanti.
     /// `true` ⇒ ils le peuvent ; c'est au décodeur de trancher.
     public static func mayBeAnimated(_ data: Data) -> Bool {
+        container(data) != nil
+    }
+
+    /// `nil` ⇒ ces octets ne peuvent PAS être animés, garanti — la MÊME
+    /// réponse que `mayBeAnimated`, avec le nom du format en prime.
+    public static func container(_ data: Data) -> Container? {
         let head = data.prefix(inspectedPrefix)
-        guard head.count >= 12 else { return false }
+        guard head.count >= 12 else { return nil }
         let bytes = [UInt8](head)
 
         if matches(bytes, at: 0, "GIF87a") || matches(bytes, at: 0, "GIF89a") {
-            return true
+            return .gif
         }
         if bytes.starts(with: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
             // **Seul un APNG anime**, et son chunk `acTL` précède le premier
             // `IDAT` par obligation de spec — donc il est dans l'en-tête ou il
             // n'existe pas.
-            return contains(bytes, "acTL")
+            return contains(bytes, "acTL") ? .apng : nil
         }
         if matches(bytes, at: 0, "RIFF"), matches(bytes, at: 8, "WEBP") {
             // Un WebP ANIMÉ est nécessairement étendu (`VP8X`) et porte un
             // chunk `ANIM`. Un WebP simple (`VP8 ` / `VP8L`) ne peut pas animer.
-            return contains(bytes, "ANIM")
+            return contains(bytes, "ANIM") ? .webp : nil
         }
         // HEIC : la marque de conteneur vit dans la boîte `ftyp`, à l'offset 4.
         // On n'essaie PAS d'y distinguer la séquence du fixe — la structure est
         // dans les boîtes suivantes, hors de l'en-tête, et se tromper dans le
         // sens « non » est la seule erreur inacceptable.
         if matches(bytes, at: 4, "ftyp") {
-            return true
+            return .heic
         }
-        return false
+        return nil
     }
 
     private static func matches(_ bytes: [UInt8], at offset: Int, _ ascii: String) -> Bool {

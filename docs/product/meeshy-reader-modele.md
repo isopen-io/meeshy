@@ -134,16 +134,27 @@ persistant, piloté au rail.
 
 Le tableau ci-dessus énumère les hôtes de **`MeeshyScenePlayer`**. Il en existe
 un **quatrième chemin**, qui ne passe par aucun `ScenePlayerConfig` :
-`StoryReaderRepresentable`, monté à quatre sites —
-`PostDetailView+Canvas.swift:69`, `PostDetailView+RepostEmbed.swift:178`, et
-`StoryViewerView+Canvas.swift:1045` et `:1107`.
+`StoryReaderRepresentable`, monté à **sept** fichiers (recompté le 2026-09-05) :
 
-Le viewer story monte donc **les deux** : le player à `:1034`/`:1090`, le
-représentable à `:1045`/`:1107`.
+```bash
+git grep -l "StoryReaderRepresentable(" -- '*.swift'
+```
+
+`FeedPostCard` · `PostDetailView+Canvas` · `PostDetailView+RepostEmbed` ·
+`StoryRepostEmbedCell` · `StoryViewerView+Canvas` · `MeeshyScenePlayer` ·
+`UnifiedPostComposer`.
+
+Le viewer story monte donc **les deux** : le player et le représentable.
 
 > **« Trois chromes, un moteur » décrit les hôtes du PLAYER, pas les surfaces qui
 > rendent une scène.** La loi 6 reste vraie de ce qu'elle nomme ; elle ne couvre
 > pas tout ce qui peint. Ne pas lire son énumération comme un inventaire.
+
+> **Et ce paragraphe s'était lui-même pris au piège qu'il énonce** : il disait
+> « quatre sites », trois lignes au-dessus d'un avertissement contre les
+> énumérations lues comme des inventaires. Trois manquaient. La parade n'est pas
+> d'énumérer mieux — c'est de publier la COMMANDE, ce que fait la version
+> ci-dessus : une liste se périme en silence, une commande se rejoue.
 
 ### La scène 0 est figée PARTOUT, et c'est une décision que personne n'a écrite
 
@@ -244,6 +255,34 @@ binding existe pour lui.
 > lecture serait une heuristique, donc un endroit où deux clients divergeront.
 
 ## 4 bis. Les TROIS lecteurs, mesurés (2026-09-02)
+
+> **Addendum du 2026-09-04 — la méthode de ce comptage a une faille que le
+> recadrage vient de révéler, et les chiffres ci-dessous ne sont PAS corrigés.**
+>
+> Ils restent ceux du 2026-09-02, à leur date, parce qu'ils ont été obtenus en
+> comptant les clés *effectivement lues* par chaque projection. Les recompter
+> aujourd'hui avec une méthode plus grossière — toute chaîne entre guillemets —
+> rendrait 57 pour Android et 11 pour le web : **remplacer une mesure soignée
+> par une mesure large est une régression, pas une mise à jour.**
+>
+> Ce que la mesure du jour révèle est ailleurs, et c'est méthodologique. Le
+> recadrage (#5085) est désormais lu par les deux lecteurs, mais **pas de la
+> même façon** :
+>
+> | lecteur | où vivent les noms de clés `cropX/Y/W/H` |
+> |---|---|
+> | Android | dans `CanvasV3Projection.kt` — la projection les NOMME |
+> | web | dans `packages/shared/utils/media-crop.ts` — `readMediaCrop(payload)`, la règle partagée les nomme à sa place |
+>
+> **Un audit « quelles clés chaque lecteur lit-il ? » conduit sur les fichiers du
+> LECTEUR manquerait donc entièrement le recadrage côté web** — non parce qu'il
+> ne le lit pas, mais parce qu'il le lit par délégation. Toute reprise de ce
+> comptage doit suivre les modules partagés, sinon elle sous-compte le lecteur
+> le mieux factorisé et récompense celui qui recopie.
+>
+> C'est la forme lecteur du défaut de #4833 : un inventaire qui interroge un
+> site rate ce qui a été délégué à un autre.
+
 
 Le § 5 disait, à la première écriture de ce document, que les lecteurs web et
 Android n'étaient pas mesurés et qu'il ne fallait pas lire ce silence comme une
@@ -374,8 +413,11 @@ périmée s'est passé sur une AUTRE plateforme.
 
 Détail et critères : #5043 (les transitions), #5047 (le `thumbHash`, dont
 l'absence laisse une story web s'ouvrir sur du vide — `CanvasV3Scene` n'a aucun
-état de chargement, et c'est le chemin de TOUTES ses stories depuis que la
-passerelle refuse le non-v3).
+état de chargement, et c'est le chemin de TOUTES ses stories parce que les deux
+écrivains émettent du v3 natif ; **correction de cause du 2026-09-05** : la
+passerelle ne refuse PAS le non-v3, son refus est derrière
+`CANVAS_V3_WRITE_STRICT`, armé dans aucun fichier de configuration du dépôt —
+détail à l'encadré du § 1 bis-2 de `meeshy-composer-modele.md`).
 
 ## 5. Ce que ce document ne couvre pas
 

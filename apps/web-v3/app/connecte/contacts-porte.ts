@@ -1,6 +1,8 @@
 import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import { jetonDuLecteur } from '@/app/session';
+import { actifsTempsReel } from '@/lib/actifs-rt';
 import { moi } from '@/lib/api/compte';
+import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import {
   carnetDuLecteur,
   repondreALaDemande,
@@ -60,6 +62,18 @@ const avisDeLURL = (requete: Request): Avis | null => {
   return trouve ?? null;
 };
 
+/**
+ * LE SOCLE DU MODULE DE PARTICIPATION (#4921) — `null` tant que l'actif
+ * compilé est absent : le Post/Redirect/Get reste alors le seul chemin, ce qui
+ * est toujours correct (§ 12.4). Sans socket, comme `/feed` : accepter et
+ * refuser sont des allers simples.
+ */
+const moduleDeParticipation = (): { readonly module: string; readonly passerelle: string } | null => {
+  const actifs = actifsTempsReel();
+  if (actifs.contacts.corps === '') return null;
+  return { module: actifs.contacts.url, passerelle: baseDeLaPasserellePublique() };
+};
+
 const sert = async ({
   jeton,
   avis,
@@ -90,6 +104,7 @@ const sert = async ({
       contacts: carnet.contacts,
       maintenant: Date.now(),
       avis,
+      tempsReel: moduleDeParticipation(),
     }),
   );
 };

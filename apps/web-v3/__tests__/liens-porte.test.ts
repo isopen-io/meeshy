@@ -3,6 +3,7 @@
  */
 
 import { CARNET_DE_LIENS } from '@/app/connecte/liens-porte';
+import { documentDesLiens } from '@/app/connecte/liens-vue';
 
 /**
  * CE QUE CES TÉMOINS ÉPROUVENT — la PORTE de `/links` et l'écran qu'elle rend.
@@ -78,7 +79,7 @@ describe('la porte de /links', () => {
     const html = await (await CARNET_DE_LIENS(requete('https://meeshy.test/links'), recuperer)).text();
 
     // Le TEXTE est ce que le lecteur colle ailleurs — la porte de l'invité.
-    expect(html).toContain('/chat/lagos-q1');
+    expect(html).toContain('/chat/mshy_lagos');
     // La LIGNE mène à sa propre conversation : l'y renvoyer par `/chat/:lien`
     // lui ferait refaire une jonction déjà faite.
     expect(html).toContain('href="/chats/c1"');
@@ -114,7 +115,7 @@ describe('la porte de /links', () => {
     // Le mot, pas seulement une teinte : cet écran est celui où le lecteur
     // apprend qu'un lien ne sert plus, et le cacher se lirait comme une perte.
     expect(html).toContain('Fermé');
-    expect(html).toContain('/chat/lagos-q1');
+    expect(html).toContain('/chat/mshy_lagos');
   });
 
   it('n’invente ni capacité ni échéance quand le lien n’en déclare pas', async () => {
@@ -148,7 +149,7 @@ describe('la porte de /links', () => {
 
     // La ligne reste une ligne d'INFORMATION — l'adresse s'y lit et s'y copie —
     // plutôt qu'un lien qui ne mène nulle part (charte règle 7).
-    expect(html).toContain('/chat/lagos-q1');
+    expect(html).toContain('/chat/mshy_lagos');
     expect(html).not.toContain('href="/chats/');
   });
 
@@ -183,5 +184,74 @@ describe('la porte de /links', () => {
     });
     expect(muette.status).toBe(503);
     expect(await muette.text()).not.toBe('');
+  });
+
+  /**
+   * #4933 — LE MENU DE FERMETURE : présent sur une ligne ACTIVE, absent d'une
+   * ligne FERMÉE (règle 11, « un contrôle existe s'il a un effet »).
+   */
+  it('rend, sur une ligne ACTIVE, un menu qui ferme — et rien sur une ligne fermée', async () => {
+    const { recuperer } = NOMINALE([lienServi(), lienServi({ id: 'l2', linkId: 'mshy_demo', identifier: 'demo', isActive: false })]);
+
+    const html = await (await CARNET_DE_LIENS(requete('https://meeshy.test/links'), recuperer)).text();
+
+    expect(html).toContain('<li class="ligne-lien" data-lien="mshy_lagos">');
+    expect(html).toContain('<details class="actions">');
+    expect(html).toMatch(/<form method="post">[^]*?name="geste" value="fermer"/);
+    expect(html).toContain('name="lien" value="mshy_lagos"');
+    expect(html).toContain('<button type="submit" class="grave">Fermer ce lien</button>');
+
+    // La ligne FERMÉE ne porte AUCUN menu.
+    const versLaLigneFermee = html.split('data-lien="mshy_demo"')[1] ?? '';
+    expect(versLaLigneFermee).not.toContain('<details class="actions">');
+  });
+
+  /**
+   * LES DEUX FENTES QUE LE MODULE DÉVOILE — jamais qu'il compose. Une pastille
+   * « Fermé » construite en JavaScript est un SECOND site de balisage : celle
+   * qu'écrivait `marqueFerme` atterrissait DANS `.dit` (une colonne flex) quand
+   * le serveur la pose en frère de `.dit`, et la ligne SAUTAIT au retour de la
+   * passerelle. Une région `role="alert"` insérée avec son texte, elle, n'est
+   * annoncée par aucun lecteur d'écran de façon fiable.
+   */
+  it('sert les deux fentes du module, muettes : la pastille d’état et la voix du carnet', async () => {
+    const { recuperer } = NOMINALE([lienServi(), lienServi({ id: 'l2', linkId: 'mshy_demo', identifier: 'demo', isActive: false })]);
+
+    const html = await (await CARNET_DE_LIENS(requete('https://meeshy.test/links'), recuperer)).text();
+
+    // La ligne ACTIVE porte la pastille, MUETTE, en FRÈRE de `.dit`.
+    expect(html).toContain('</span><span class="etat" hidden>Fermé</span>');
+    // La ligne FERMÉE porte la MÊME pastille, visible — un seul balisage.
+    expect(html).toContain('</span><span class="etat">Fermé</span>');
+    // La voix du carnet existe AVANT qu'on n'y écrive.
+    expect(html).toContain('<p class="avis alerte" role="alert" hidden>');
+  });
+
+  it('dit le succès au retour de ?ferme', async () => {
+    const { recuperer } = NOMINALE([lienServi()]);
+
+    const html = await (await CARNET_DE_LIENS(requete('https://meeshy.test/links?ferme'), recuperer)).text();
+
+    expect(html).toContain('Le lien est fermé.');
+    expect(html).toContain('role="status"');
+  });
+
+  it('un <form> n’est jamais DANS un <a> — HTML valide', () => {
+    const html = documentDesLiens({
+      liens: [{
+        identifiant: 'mshy_lagos',
+        nom: 'Ops Lagos',
+        utilisations: 4,
+        conversation: 'c1',
+        actif: true,
+        capacite: null,
+        expireA: null,
+      }],
+      actifs: 1,
+      tempsReel: null,
+    });
+
+    const zoneDeLaLigne = /<a class="lien"[^>]*>[\s\S]*?<\/a>/.exec(html)?.[0] ?? '';
+    expect(zoneDeLaLigne).not.toContain('<form');
   });
 });

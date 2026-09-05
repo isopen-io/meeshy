@@ -216,6 +216,13 @@ export const evenementDeReaction = ({
 export type BouchonSocket = {
   readonly io: Server;
   /**
+   * Le NOMBRE de fermetures de socket vues par le serveur — le témoin de
+   * « l'écran quitté reçoit destruction » (#5106) : un COMPTEUR, jamais un
+   * solde net, parce qu'une poignée de main transitoire ou une reconnexion
+   * ferait mentir le solde sans qu'aucune destruction n'ait manqué.
+   */
+  readonly deconnexions: () => number;
+  /**
    * CE QU'UN MESSAGE DOIT À LA LIGNE DE LISTE de chaque destinataire —
    * `conversation:updated` (le rang et l'aperçu DÉJÀ descendu au prisme du
    * lecteur : `MeeshySocketIOManager.ts:3216`, `MessageHandler.ts:1691`) puis
@@ -237,6 +244,13 @@ export type BouchonSocket = {
   readonly recus: readonly Emission[];
   /** Faire parler la room de la conversation, comme `io.to(room).emit`. */
   readonly emets: (conversationId: string, evenement: string, charge: unknown) => void;
+  /**
+   * Faire parler la room PERSONNELLE d'un lecteur — le canal des
+   * `notification:*` (`emitWithSeq` vers `ROOMS.user(userId)` pour `new`,
+   * `io.to(ROOMS.user(...))` pour `read` / `read-bulk` / `counts`,
+   * `NotificationService.ts:1650, 5375, 5054, 5033`).
+   */
+  readonly emetsAuLecteur: (userId: string, evenement: string, charge: unknown) => void;
   /** `message:new` d'un envoi par la ROUTE — l'identité client à l'expéditeur inscrit, la charge nue aux autres. */
   readonly diffuseLeMessage: (conversationId: string, message: Record<string, unknown>, expediteur: Identite) => void;
   /** `reaction:added` / `reaction:removed` d'un geste par la ROUTE. */
@@ -393,6 +407,7 @@ export const bouchonSocket = ({
     pingTimeout: PING_DU_BOUCHON.toleranceMs,
   });
   const recus: Emission[] = [];
+  let fermetures = 0;
   const identites = new Map<string, Identite>();
   let jonctionsRefusees = 0;
 
@@ -633,14 +648,19 @@ export const bouchonSocket = ({
 
     socket.on('disconnect', () => {
       identites.delete(socket.id);
+      fermetures += 1;
     });
   });
 
   return {
     io,
+    deconnexions: () => fermetures,
     recus,
     emets: (conversationId, evenement, charge) => {
       io.to(room(conversationId)).emit(evenement, charge);
+    },
+    emetsAuLecteur: (userId, evenement, charge) => {
+      io.to(roomPersonnelle(userId)).emit(evenement, charge);
     },
     diffuseLaLigne,
     diffuseLeMessage,

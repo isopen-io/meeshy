@@ -151,6 +151,13 @@ extension iPadRootView {
                 conversationListViewModel: conversationViewModel,
                 statusViewModel: statusViewModel
             )
+            // **Vue `2a` — l'entrée externe** (#5056), montée à la racine iPad
+            // pour la même raison que son jumeau iPhone : plusieurs hôtes
+            // observant la même fiche présenteraient le cover en double.
+            .shareComposeCover(
+                consumer: ShareComposeHandoffConsumer.shared,
+                storyViewModel: storyViewModel
+            )
             // Lecteur de réels immersif. `ReelsPresenter` est un singleton
             // partagé : toucher un réel (carte du feed, écran Favoris) posait
             // `launch` et SEUL `RootView` (iPhone) le rendait — sur iPad le tap

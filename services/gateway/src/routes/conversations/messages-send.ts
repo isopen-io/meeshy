@@ -348,6 +348,14 @@ export function registerSendMessageRoute(
           durationMs: Date.now() - routeStart, success: false,
           error: result.error
         });
+        // #4855 / #5151 — un droit PARTICIPANT refusé (host ayant retiré
+        // `canSendMessages`, ou `canSendFiles`/`canSendImages`/`canSendVideos`/
+        // `canSendAudios` pour le type de pièce jointe posté) est un 403,
+        // jamais une erreur de VALIDATION de la requête — même statut que le
+        // jumeau anonyme, `routes/links/messages.ts`.
+        if (result.code === 'WRITE_NOT_PERMITTED' || result.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') {
+          return sendForbidden(reply, result.error || 'Vous n\'êtes pas autorisé à envoyer des messages');
+        }
         return sendBadRequest(reply, result.error || 'Invalid message request');
       }
 

@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 import {
   AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
-  IDENTIFIANT_DU_LIEN_PARTAGE,
+  LIEN_DU_FIL,
   PRENOM_DU_LECTEUR,
   chargeMesureReseau,
   passerelleDeBouchon,
@@ -106,17 +106,22 @@ test.describe('le tableau de bord garni', () => {
 
   /**
    * Charte règle 6 — un rond flottant est un `<a href>` vers une route SERVIE.
-   * La v3 ne sert aujourd'hui ni compte (`sheet:member`) ni réglages
-   * (`settings`) : l'écran n'en rend AUCUN, ce qui est le comportement voulu —
-   * jamais une puce inerte.
+   *
+   * **SA PRÉMISSE A BOUGÉ, PAS LA RÈGLE** (#5093). Ce témoin gardait « aucun
+   * rond » pour la raison qu'il portait écrite : « la v3 ne sert aujourd'hui ni
+   * compte ni réglages ». Elle sert désormais les six écrans de `/settings`,
+   * `/feed`, `/contacts`, `/notifications`, `/search` et `/links` — donc la
+   * règle 6 veut que les ronds soient RENDUS. Ce qu'elle interdit — une cible
+   * inerte, un `href="#"`, un `onclick` — est gardé ligne pour ligne.
    */
-  test('ne rend aucun rond flottant, aucune cible inerte', async ({ browser }) => {
+  test('rend les deux ronds vers des routes servies, et aucune cible inerte', async ({ browser }) => {
     const contexte = await browser.newContext();
     await contexte.addCookies(cookiesDuLecteur(v3.base));
     const page = await contexte.newPage();
     await page.goto(`${v3.base}/`, { waitUntil: 'domcontentloaded' });
 
-    expect(await page.locator('a.flottant').count()).toBe(0);
+    await expect(page.locator('a.flottante.gauche')).toHaveAttribute('href', '/feed');
+    await expect(page.locator('a.flottante.droite')).toHaveAttribute('href', '/?espace');
     expect(await page.locator('[href="#"], [onclick]').count()).toBe(0);
     await contexte.close();
   });
@@ -127,6 +132,12 @@ test.describe('le tableau de bord garni', () => {
    * texte est l'adresse que le lecteur COPIE (`/chat/:lien`, la porte de
    * l'invité) ; la destination est la conversation du MEMBRE (`/chats/:cle`).
    * Les confondre enverrait le membre refaire une jonction déjà faite.
+   *
+   * L'ADRESSE COPIÉE PORTE LE `linkId` (#5077), jamais le slug `identifier` :
+   * la route d'aperçu anonyme prenait tout `mshy_*` pour un linkId, et une
+   * adresse composée du slug rendait « Ce lien ne mène nulle part » — mesuré
+   * sur staging. `IDENTIFIANT_DU_LIEN_PARTAGE` reste ce que la porte de
+   * l'invité REÇOIT en URL ; ce que la carte AFFICHE est la clé canonique.
    */
   test('la carte d’un lien mène à la conversation, pas à la porte de l’invité', async ({ browser }) => {
     const contexte = await browser.newContext();
@@ -135,7 +146,7 @@ test.describe('le tableau de bord garni', () => {
     await page.goto(`${v3.base}/`, { waitUntil: 'domcontentloaded' });
 
     const carte = page.locator(`a.carte[href="/chats/${CONVERSATION_DU_LECTEUR.id}"]`).last();
-    await expect(carte).toContainText(`/chat/${IDENTIFIANT_DU_LIEN_PARTAGE}`);
+    await expect(carte).toContainText(`/chat/${LIEN_DU_FIL}`);
     await contexte.close();
   });
 

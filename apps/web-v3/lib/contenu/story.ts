@@ -1,4 +1,14 @@
 import { deLaLangue } from './langues';
+import { HEURES_DE_VIE_D_UNE_STORY } from './story-neuve';
+
+/**
+ * LA DURÉE DE VIE SERVIE À UN LECTEUR VENAIT D'UN LITTÉRAL FAUX (#5033). Cette
+ * phrase disait « 24 h » ; la passerelle applique 20 h
+ * (`EPHEMERAL_POST_TTL_HOURS.STORY`). Le nombre venait de la cible
+ * (`MeeshyWebV3.dc.html`, ligne « Expire dans »), et un document de design
+ * arrêté à sa date ne peut pas décider d'une durée que le serveur applique.
+ * Elle vient désormais de la seule constante du dépôt qui la porte côté v3.
+ */
 
 /**
  * LA COPIE DE LA STORY — ce que l'écran DIT, hors de ce qu'il compose.
@@ -38,11 +48,25 @@ export const STORY = {
   repondu: 'Votre réponse a été envoyée.',
   refuse: 'Votre réponse n’est pas partie.',
   vide: 'Écrivez votre réponse avant de l’envoyer.',
+  /**
+   * L'INDISPONIBLE — MÊME réponse pour une story absente, supprimée, échue ou
+   * hors audience (§ 5.1 de la spécification `storyFail`, issue #4967) : la
+   * cible (`cible/storyFail.png`) dessine un état DESSINÉ (charte règle 16) —
+   * glyphe, titre, phrase — et DEUX sorties, jamais la méta [Auteur, Publiée,
+   * Expirée] de la planche : afficher une CAUSE distinguerait ce que la porte
+   * refuse justement de distinguer (un 403 déguisé en texte serait le même
+   * défaut qu'un 403 en statut). `retour` ramène au fil qu'on connaît déjà
+   * (`/feed`, jamais l'accueil : un lecteur CONNECTÉ ne repasse pas par la
+   * vitrine) ; `secondaire` propose de CRÉER, sur la seule route de ce genre
+   * qui existe déjà dans la zone (§ 3, T10 de la spécification).
+   */
   indisponible: {
     titre: 'Story indisponible',
     corps:
-      'Cette story n’existe plus, ou elle ne vous est pas ouverte. Les stories restent visibles 24 h après leur publication.',
-    action: 'Retour à l’accueil',
+      `Cette story n’existe plus, ou elle ne vous est pas ouverte. Les stories restent visibles ${HEURES_DE_VIE_D_UNE_STORY} h après leur publication.`,
+    glyphe: 'ph-sparkle',
+    retour: { libelle: 'Retour au fil', href: '/feed' },
+    secondaire: { libelle: 'Créer une story', href: '/stories/new' },
   },
   invitation: {
     titre: 'Cette story vous attend',

@@ -1,3 +1,4 @@
+import { PARAM_DU_PLEIN } from './adresses-du-fil';
 import type { Message, PieceJointe } from './fil';
 import { GENRES_DE_PIECE, type GenreDePiece } from './formes';
 
@@ -131,4 +132,31 @@ export const adresseDesMedias = (
   ];
   const base = `/chats/${encodeURIComponent(cle)}/medias`;
   return parametres.length === 0 ? base : `${base}?${parametres.join('&')}`;
+};
+
+/**
+ * L'ADRESSE DU PLEIN ÉCRAN DE LA GALERIE — la tranche servie (`?genre=&avant=`,
+ * `adresseDesMedias`), PLUS `?media=<pièce>`. Le NOM du paramètre vient
+ * d'`adresses-du-fil.ts` (`PARAM_DU_PLEIN`) : c'est le SEUL site qui le
+ * déclare, celui que `pleinDemande` (`app/connecte/fil-porte.ts`) relit pour
+ * les deux portes du fil ET pour cette route — un second nom aurait ouvert la
+ * même surimpression sous deux adresses différentes.
+ *
+ * `autour=` N'ENTRE PAS ICI : la pièce est cherchée dans la galerie SERVIE
+ * (`?genre=&avant=`), pas dans une tranche nommée par un message — la galerie
+ * n'a pas la notion de tranche autour d'un message, elle a celle de PAGE.
+ */
+export const adresseDuPleinDeLaGalerie = ({
+  cle,
+  genre,
+  avant,
+  piece,
+}: {
+  readonly cle: string;
+  readonly genre: GenreDePiece | null;
+  readonly avant: string | null;
+  readonly piece: string;
+}): string => {
+  const base = adresseDesMedias(cle, genre, avant);
+  return `${base}${base.includes('?') ? '&' : '?'}${PARAM_DU_PLEIN}=${encodeURIComponent(piece)}`;
 };

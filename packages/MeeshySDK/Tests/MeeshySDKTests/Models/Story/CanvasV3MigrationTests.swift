@@ -710,6 +710,50 @@ struct CanvasV3MigrationTests {
     }
 
     // ------------------------------------------------------------------
+    // **Les TROIS états du ratio survivent à l'aller-retour** (#5182, suivi de
+    // #5100). Ils ne peuvent pas s'éprouver un par un : « non mesuré » et
+    // « carré mesuré » servent la MÊME valeur (1.0), donc seul l'aller-retour
+    // les distingue — l'un doit revenir `nil`, l'autre `1.0`.
+    //
+    // C'est le témoin qui manquait : #5100 a porté la règle sur le décodeur
+    // JSON, où elle était visible, et le compilateur n'a réclamé aucune des
+    // trois autres portes du type. Un `?? 1.0` compile, un `!= 1` compile.
+    // ------------------------------------------------------------------
+
+    @Test func anUnmeasuredRatio_staysUnmeasured_throughTheBridge() throws {
+        var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "m", kind: .image, aspectRatio: nil)]
+
+        let restored = try #require(
+            StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0).mediaObjects?.first)
+
+        #expect(restored.measuredAspectRatio == nil,
+                "le pont ne doit FABRIQUER aucune mesure : un `measuredAspectRatio` non nil éteint l'hydratation read-time de `toRenderableSlide`, seule source de dimensionnement primaire d'un document v3")
+        #expect(restored.aspectRatio == 1.0, "et le repli reste servi, comme partout ailleurs")
+    }
+
+    @Test func aMeasuredSquare_survivesTheBridge_asAMeasure() throws {
+        var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "m", kind: .image, aspectRatio: 1.0)]
+
+        let restored = try #require(
+            StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0).mediaObjects?.first)
+
+        #expect(restored.measuredAspectRatio == 1.0,
+                "le cas qui était irreprésentable : un carré MESURÉ n'est pas un ratio inconnu — l'émission conditionnée à `!= 1` le taisait, et l'aller-retour le rendait inconnu")
+    }
+
+    @Test func aMeasuredNonSquare_survivesTheBridge() throws {
+        var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "m", kind: .video, aspectRatio: 0.5625)]
+
+        let restored = try #require(
+            StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0).mediaObjects?.first)
+
+        #expect(restored.measuredAspectRatio == 0.5625)
+    }
+
+    // ------------------------------------------------------------------
     // Bornes de rognage de la SOURCE (`sourceStart`/`sourceEnd`) — distinctes
     // de `startTime`/`duration` (place du clip DANS LA TIMELINE de la slide) :
     // ces deux-là disent QUELLE PORTION de la source joue. Voyagent dans le

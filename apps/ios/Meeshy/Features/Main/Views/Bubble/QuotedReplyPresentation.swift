@@ -242,4 +242,65 @@ nonisolated enum QuotedReplyPresentation {
         let word = String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main)
         return "\(value) \(word)"
     }
+
+    // MARK: - La coupure par MOT (#5103)
+
+    /// **Combien de caractères l'aperçu peut porter, avant qu'on le coupe.**
+    ///
+    /// > « Il faut mettre le début du message juste après les `:` de l'auteur
+    /// > et poursuivre sur 2 autres lignes si nécessaire **avant de couper par
+    /// > mot** » — directive porteur du 2026-09-04.
+    ///
+    /// `lineLimit` seul ne sait pas tenir cette promesse : il coupe au
+    /// caractère qui déborde, donc au milieu d'un mot. La seule façon de couper
+    /// entre deux mots est de RACCOURCIR la chaîne avant de la rendre — d'où
+    /// ce budget.
+    ///
+    /// **Il dépend de la taille de texte du lecteur, et c'est ce qui le rend
+    /// honnête.** À `accessibility3` une ligne porte environ deux fois moins de
+    /// signes qu'à `large` ; un budget fixe ferait déborder la citation hors
+    /// des lignes que `lineLimit` lui accorde, et la coupure par mot ne
+    /// servirait plus à rien puisque `lineLimit` reprendrait la main — au
+    /// milieu d'un mot.
+    ///
+    /// Les valeurs sont des ORDRES DE GRANDEUR mesurés sur la peau `bubble` en
+    /// 12 pt : ~46 signes par ligne à `large`. Elles n'ont pas à être exactes —
+    /// une approximation basse coupe un mot trop tôt, ce qui reste lisible ;
+    /// une approximation haute laisse `lineLimit` couper, ce qui est l'état
+    /// d'avant ce lot. Le sens de l'erreur est donc choisi, pas subi.
+    /// **`charactersPerLine` est un ENTIER, pas une taille de texte** — et
+    /// c'est une contrainte de conception, pas une commodité. Cette règle ne
+    /// connaît aucune vue : elle rend des chaînes et des entiers, les peaux
+    /// les rendent (garde `test_laRegle_estNonisolated_etNeConnaitAucuneVue`).
+    ///
+    /// La traduction « taille de texte du lecteur → signes par ligne » est
+    /// donc chez la vue, en UN site : `QuotedReplyPresentation+DynamicType.swift`.
+    static func previewCharacterBudget(for skin: Skin,
+                                       charactersPerLine: Int) -> Int {
+        max(1, previewLineLimit(for: skin) * max(1, charactersPerLine))
+    }
+
+    /// **Coupe à la dernière frontière de MOT qui tient dans le budget.**
+    ///
+    /// Rend le texte INCHANGÉ quand il tient — poser une ellipse sur une
+    /// citation complète ferait croire au lecteur qu'il manque quelque chose.
+    ///
+    /// **Un mot unique plus long que le budget se coupe quand même** : préserver
+    /// sa frontière n'aurait de sens que si l'alternative était acceptable, et
+    /// elle ne l'est pas — un mot de 80 signes déborderait des lignes que ce
+    /// budget protège. On coupe donc au caractère, faute de mieux, plutôt que
+    /// de rendre un texte plus long que ce qu'on a promis.
+    static func wordTruncated(_ text: String, maxCharacters: Int) -> String {
+        guard maxCharacters > 0 else { return "" }
+        guard text.count > maxCharacters else { return text }
+
+        let fenetre = text.prefix(maxCharacters)
+        if let derniereEspace = fenetre.lastIndex(of: " ") {
+            let corps = String(fenetre[fenetre.startIndex..<derniereEspace])
+            let nettoye = corps.trimmingCharacters(in: .whitespaces)
+            if !nettoye.isEmpty { return nettoye + "…" }
+        }
+        // Aucune frontière de mot dans la fenêtre : un seul mot l'occupe toute.
+        return String(text.prefix(max(1, maxCharacters - 1))) + "…"
+    }
 }

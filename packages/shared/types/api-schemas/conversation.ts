@@ -55,7 +55,12 @@ export const conversationParticipantSchema = {
     systemLanguage: { type: 'string', nullable: true, description: 'System language preference' },
     regionalLanguage: { type: 'string', nullable: true, description: 'Regional language' },
     customDestinationLanguage: { type: 'string', nullable: true, description: 'Custom destination language' },
-    autoTranslateEnabled: { type: 'boolean', nullable: true, description: 'Auto-translate enabled' },
+    // PAS de `autoTranslateEnabled` : c'était un littéral `true` en dur, retiré
+    // avec son producteur (#4643) — même défaut, même correctif que le profil
+    // public (#4161). Le magasin réel de la préférence d'un utilisateur est
+    // `UserPreferences.application`, jamais servi à un co-participant : la
+    // directive de présence du 2026-08-25 ne fait aucune exception pour une
+    // préférence personnelle sur la seule foi d'une conversation partagée.
     isActive: { type: 'boolean', description: 'Participant is active' },
     createdAt: { type: 'string', format: 'date-time', description: 'User creation timestamp' },
     updatedAt: { type: 'string', format: 'date-time', description: 'User last update timestamp' },

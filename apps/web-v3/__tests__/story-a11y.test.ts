@@ -6,7 +6,7 @@ import {
   documentIndisponible,
   type EtatDeLaStory,
 } from '@/app/(public)/partage-vue';
-import { GENRE_STORY } from '@/lib/contenu/partage';
+import { GENRE_HUMEUR, GENRE_REEL, GENRE_STORY } from '@/lib/contenu/partage';
 import { partageLu, voisinage, type Story, type Voisine } from '@/lib/api/publication';
 
 /**
@@ -16,7 +16,10 @@ import { partageLu, voisinage, type Story, type Voisine } from '@/lib/api/public
  * `v3-a11y.spec.ts` : celui-ci découvre les PAGES que `next build` a émises, et
  * `/stories/:id` est un GESTIONNAIRE de route (§ 12.6) — il n'apparaît dans
  * aucun manifeste de page. Son gate vit donc ici, comme celui du fil et celui
- * de la galerie, et se rejoue au navigateur dans `e2e/visual/v3-story.spec.ts`.
+ * de la galerie. L'INDISPONIBLE se rejoue de plus au navigateur, en quatre
+ * colonnes de thème, dans `e2e/visual/v3-story-fail.spec.ts` (#4967) ; les
+ * trois autres états n'ont pas encore leur spec de chaîne — `v3-story.spec.ts`
+ * était annoncé ici et n'a jamais existé, ce que cette phrase disait à tort.
  *
  * LES QUATRE ÉTATS SONT BALAYÉS, pas seulement le nominal : la story seule, la
  * story au milieu d'une file (les deux taps, qui sont des liens SANS texte
@@ -111,8 +114,18 @@ describe('la story — gate B', () => {
     expect(await graves()).toEqual([]);
   });
 
-  it('ne porte aucune violation grave, story indisponible', async () => {
-    ecris(documentIndisponible(GENRE_STORY));
+  /**
+   * LES TROIS GENRES (issue #4967, `storyFail`) — la MÊME porte sert
+   * `/stories/:id`, `/reels/:id`, `/moods/:id`, et le gabarit d'état vide
+   * (`.carte-vide`, un `<h1>` et un glyphe de 40 px) est neuf sur les trois.
+   * « exactement un `h1`, un `main` » : un document sans contenu reste UN
+   * document — deux repères de page rendraient le lecteur d'écran incapable
+   * de dire où il se trouve.
+   */
+  it.each([GENRE_STORY, GENRE_REEL, GENRE_HUMEUR])('ne porte aucune violation grave, indisponible — %s', async (genre) => {
+    ecris(documentIndisponible(genre));
     expect(await graves()).toEqual([]);
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+    expect(document.querySelectorAll('main')).toHaveLength(1);
   });
 });

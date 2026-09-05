@@ -142,8 +142,89 @@ struct FocalRow: View {
 
     // MARK: - Rangée standard
 
+    /// **DEUX COLONNES** (#5135, directive porteur 2026-09-04) : la bulle à
+    /// gauche, la date et l'accusé au BAS de sa droite.
+    ///
+    /// Ils vivaient sur la ligne basse, qui se montait alors TOUJOURS — c'est
+    /// elle qui portait la méta — et ne montrait RIEN au repos,
+    /// `FocalRevealedDetail` masquant l'heure et les coches par OPACITÉ. Une
+    /// hauteur pleine et son espacement, réservés sous chaque message à de
+    /// l'invisible.
+    ///
+    /// `.bottom` est la forme exacte demandée : la date se pose au niveau de la
+    /// DERNIÈRE ligne de la bulle, jamais de la première.
+    ///
+    /// **Les modificateurs terminaux vivent ICI, sur les deux colonnes**, et
+    /// pas sur la seule colonne de contenu : la carte de focus est le fond de
+    /// la rangée ENTIÈRE, et `.messageEffects` doit garder « exactement le même
+    /// périmètre que la bulle historique » — identité, citation, média, texte
+    /// **et méta**. Les laisser sur `contentColumn` aurait sorti la date de la
+    /// carte et de l'effet, sans qu'aucun test de valeur ne tombe.
     @ViewBuilder
     private var standardBody: some View {
+        HStack(alignment: .bottom, spacing: FocalMetrics.MetaColumn.spacing) {
+            contentColumn
+
+            // En focus, `focusStampChip` dit la même chose sur la bande de la
+            // carte : la colonne s'efface alors, comme la ligne basse, sans
+            // céder sa place — largeur stable, zéro relayout à l'élection.
+            FocalMetaColumn(
+                isMe: content.isMe,
+                timeString: content.meta.timeString,
+                deliveryStatus: content.meta.deliveryStatus,
+                isDark: input.isDark,
+                editedAt: content.editedAt,
+                isEditSaving: content.isEditSaving,
+                hasEditHistory: content.hasEditHistory,
+                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } }
+            )
+            .equatable()
+            .opacity(input.isFocused ? 0 : 1)
+        }
+        // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
+        // que ses chips, toujours consolidés quelle que soit la hauteur
+        // (estimée ou posée) de la cellule ; identité sur la ligne du HAUT
+        // (hors tête de groupe, qui a déjà la sienne) et bande sur la ligne
+        // BASSE — des superpositions, aucune hauteur réservée : tout apparaît
+        // AVEC la carte, au tick d'élection.
+        .background {
+            if input.isFocused {
+                focusCardBackground
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if input.isFocused {
+                focusIdentityChip
+                    .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
+                    .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if input.isFocused {
+                HStack(alignment: .center, spacing: 4) {
+                    focusStrip
+                    Spacer(minLength: 4)
+                    focusStampChip
+                }
+                .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
+                .offset(y: FocalMetrics.FocusStrip.overhang)
+            }
+        }
+        // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
+        // contenu » — même overlay que le chemin bulle
+        // (`ThemedMessageBubble.swift:317`, `.messageEffects(message.effects)`,
+        // §1.3 réutilisé tel quel via `View.messageEffects(_:)`, PAS
+        // réimplémenté). Posé sur les DEUX colonnes (identité + citation +
+        // média + texte + méta), exactement le même périmètre que la bulle
+        // historique applique à `BubbleStandardLayout(...)`.
+        .messageEffects(input.effects)
+    }
+
+    /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
+    /// d'un espace avec #5135 : seule la méta l'a quittée, et la ligne basse
+    /// est devenue conditionnelle.
+    @ViewBuilder
+    private var contentColumn: some View {
         VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
             // F-083ter (F11) : « les badges éphémère/épinglé/transféré
             // restent AU-DESSUS DE L'IDENTITÉ » — avant FocalIdentityHeader,
@@ -225,48 +306,39 @@ struct FocalRow: View {
             // C'est aussi la disposition qu'a déjà la bande du message
             // magnifié (`focusStrip` … `focusStampChip`) : les deux modes
             // disent maintenant la même chose au même endroit.
-            flagAndReactionsRow
-                // En focus, la bande SUR la ligne basse remplace visuellement
-                // cette ligne — qui garde sa place (hauteur stable).
-                .opacity(input.isFocused ? 0 : 1)
-        }
-        // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
-        // que ses chips, toujours consolidés quelle que soit la hauteur
-        // (estimée ou posée) de la cellule ; identité sur la ligne du HAUT
-        // (hors tête de groupe, qui a déjà la sienne) et bande sur la ligne
-        // BASSE — des superpositions, aucune hauteur réservée : tout apparaît
-        // AVEC la carte, au tick d'élection.
-        .background {
-            if input.isFocused {
-                focusCardBackground
+            // La ligne basse ne porte plus QUE les drapeaux et les réactions —
+            // elle redevient donc CONDITIONNELLE. C'est très exactement le
+            // blanc que la directive vient chercher : sans drapeau ni réaction
+            // (le cas nominal), plus aucune ligne n'est réservée.
+            //
+            // Sa garde d'origine (`translation != nil || showsReactions`) était
+            // juste ; c'est en lui confiant la méta qu'on l'avait rendue
+            // inconditionnelle. La méta partie en colonne, la condition revient.
+            if mountsBottomLine {
+                flagAndReactionsRow
+                    // En focus, la bande SUR la ligne basse remplace visuellement
+                    // cette ligne — qui garde sa place (hauteur stable).
+                    .opacity(input.isFocused ? 0 : 1)
             }
         }
-        .overlay(alignment: .topLeading) {
-            if input.isFocused {
-                focusIdentityChip
-                    .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
-                    .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if input.isFocused {
-                HStack(alignment: .center, spacing: 4) {
-                    focusStrip
-                    Spacer(minLength: 4)
-                    focusStampChip
-                }
-                .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
-                .offset(y: FocalMetrics.FocusStrip.overhang)
-            }
-        }
-        // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
-        // contenu » — même overlay que le chemin bulle
-        // (`ThemedMessageBubble.swift:317`, `.messageEffects(message.effects)`,
-        // §1.3 réutilisé tel quel via `View.messageEffects(_:)`, PAS
-        // réimplémenté). Posé sur la VStack de contenu entière (identité +
-        // citation + média + texte + méta), exactement le même périmètre que
-        // la bulle historique applique à `BubbleStandardLayout(...)`.
-        .messageEffects(input.effects)
+        // La bulle prend toute la laisse que la colonne lui laisse : sans cela
+        // une rangée courte se rétracterait sur son texte et sa date viendrait
+        // se coller au mot, au lieu de tenir la marge droite comme les autres.
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// **La ligne basse se monte-t-elle ?** La règle est éprouvée dans
+    /// `FocalMetaColumn.mountsBottomLine` — jamais réécrite ici. Elle portait
+    /// deux gardes que ce `if` tenait inline, donc hors d'atteinte de toute
+    /// assertion : pas de drapeau en clair sur un message voilé (2026-08-18),
+    /// un seul jeu de drapeaux par groupe (#3919).
+    private var mountsBottomLine: Bool {
+        FocalMetaColumn.mountsBottomLine(
+            hasTranslation: content.translation != nil,
+            isBlurred: content.isBlurred,
+            isLastInGroup: input.isLastInGroup,
+            hasReactions: mountsReactions
+        )
     }
 
     // MARK: - F-083ter (F11) — badges éphémère/épinglé/transféré
@@ -327,12 +399,42 @@ struct FocalRow: View {
         content.reply != nil && !content.audioHostsReply && !content.visualHostsReply
     }
 
+    /// Le geste de la carte de scène, ou `nil` — même règle que la bulle : sans
+    /// identifiant il n'y a rien à ouvrir, et un tap qui n'ouvre rien est une
+    /// cible morte (loi 4). La carte, elle, se rend quand même : c'est la
+    /// citation qui « subsiste » quand la story a expiré.
+    private var storyCitationOpenTap: (() -> Void)? {
+        guard let citation = content.detachedStoryCitation,
+              !citation.messageId.isEmpty,
+              let onStoryReplyTap = actions.onStoryReplyTap else { return nil }
+        return { onStoryReplyTap(citation.messageId) }
+    }
+
     /// Le bloc contenu protégé par le flou de message — citation + médias +
     /// audio + non-média + texte. Le VStack reprend le MÊME espacement que la
     /// pile parente : hauteur de rangée identique, wrapper monté ou pas.
     private var contentSections: some View {
         VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
-            if showsQuotedReply, let reply = content.reply {
+            // **Vue `3h` (#5059) — une story citée est une SCÈNE ici aussi.**
+            //
+            // La rangée plate rendait TOUTE citation par `FocalQuotedReplyView`,
+            // y compris celle d'une story : un carré de 38 pt sur une ligne
+            // « 📷 Story · il y a 3 h ». C'est le mot que la doctrine emploie —
+            // *aplatie* — et la bulle l'avait corrigé seule au #4098.
+            //
+            // La règle de détachement n'est pas réécrite : elle vit sur
+            // `BubbleContent`, que cette rangée reçoit déjà. Un `else if` plutôt
+            // que deux `if` — les deux rendus s'excluent par CONSTRUCTION, pas
+            // par la coïncidence de deux prédicats qui pourraient diverger.
+            if let storyCitation = content.detachedStoryCitation {
+                BubbleStoryCitationCard(
+                    reply: storyCitation,
+                    isDark: input.isDark,
+                    accentHex: input.accentHex,
+                    onOpen: storyCitationOpenTap
+                )
+                .equatable()
+            } else if showsQuotedReply, let reply = content.reply {
                 FocalQuotedReplyView(
                     reply: reply,
                     accentHex: input.accentHex,
@@ -643,13 +745,18 @@ struct FocalRow: View {
     }
 
     @ViewBuilder
-    /// La ligne BASSE de toute rangée — drapeaux et réactions à gauche, date
-    /// et coches tout à droite (directive 2026-08-24).
+    /// La ligne BASSE — drapeaux et réactions.
     ///
-    /// Elle se monte TOUJOURS, même sans drapeau ni réaction : c'est elle qui
-    /// porte désormais la méta, et un message sans traduction date quand même.
-    /// Le garde d'origine (`translation != nil || showsReactions`) ne couvrait
-    /// que son ancien contenu.
+    /// **Elle ne se monte plus QUE si elle a quelque chose à montrer** (#5135,
+    /// 2026-09-04), et c'est `mountsBottomLine` qui en décide.
+    ///
+    /// Histoire de la ligne, en deux temps, parce que le second annule la
+    /// raison du premier : la directive 2026-08-24 y avait ramené la date et
+    /// les coches, jusque-là sur une ligne à elles — d'où un « elle se monte
+    /// TOUJOURS, même sans drapeau ni réaction : c'est elle qui porte désormais
+    /// la méta ». La méta étant passée en COLONNE, cette justification est
+    /// tombée avec elle et la garde d'origine (`translation != nil ||
+    /// showsReactions`) redevient la bonne — élargie de ses deux exceptions.
     private var flagAndReactionsRow: some View {
         let showsReactions = mountsReactions
         return HStack(alignment: .center, spacing: 6) {
@@ -685,20 +792,9 @@ struct FocalRow: View {
                 .equatable()
             }
 
-            Spacer(minLength: 4)
-
-            FocalMetaRow(
-                isMe: content.isMe,
-                timeString: content.meta.timeString,
-                deliveryStatus: content.meta.deliveryStatus,
-                isDark: input.isDark,
-                indent: indent,
-                editedAt: content.editedAt,
-                isEditSaving: content.isEditSaving,
-                hasEditHistory: content.hasEditHistory,
-                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } },
-            fillsWidth: false
-        )
+            // Plus de `Spacer` ni de méta : la ligne se rétracte sur ce
+            // qu'elle porte. Ce qui la remplissait jusqu'à la marge droite —
+            // la date et les coches — vit désormais dans `FocalMetaColumn`.
         }
         .padding(.leading, indent)
     }

@@ -13,19 +13,8 @@ import { useState, useCallback } from 'react';
 import { useMessageTranslation } from '@/hooks/useMessageTranslation';
 import { getLanguageInfo } from '@meeshy/shared/types';
 import type { User } from '@meeshy/shared/types';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
-
-/**
- * Égalité de langue conforme au Prisme : `targetLanguage` (traductions reçues) et
- * les préférences du lecteur sont verbatim et peuvent être région-tagués (`fr-FR`),
- * 3-lettres (`fra`) ou legacy (`iw`). Sans canonicalisation, `fr` et `fr-FR` sont
- * dédupliqués comme deux traductions distinctes (doublons en cache) et une
- * traduction pertinente pour le lecteur n'est jamais détectée.
- * SSOT : normalizeLanguageForDedup (packages/shared/utils/language-normalize.ts).
- */
-const sameLanguage = (a?: string, b?: string): boolean =>
-  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 
 interface UseStreamTranslationOptions {
   user: User;

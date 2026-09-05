@@ -206,6 +206,18 @@ public struct OffsetPagination: Decodable, Sendable {
     public let hasMore: Bool?
     public let limit: Int?
     public let offset: Int?
+    /// LA RAMPE DE #4175/#4901 : la page 1 servie AU RANG porte l'ancre de la
+    /// suite AU CURSEUR. Sans cette clé, le curseur servi était JETÉ au
+    /// décodage et aucun client ne pouvait emprunter la rampe.
+    public let nextCursor: String?
+
+    public init(total: Int?, hasMore: Bool?, limit: Int?, offset: Int?, nextCursor: String? = nil) {
+        self.total = total
+        self.hasMore = hasMore
+        self.limit = limit
+        self.offset = offset
+        self.nextCursor = nextCursor
+    }
 }
 
 public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {

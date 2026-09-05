@@ -448,7 +448,14 @@ public extension CanvasV3 {
         if media.loop { payload["loop"] = .bool(true) }
         if media.isBackground { payload["isBackground"] = .bool(true) }
         if let duration = media.duration { payload["duration"] = .number(duration) }
-        if media.aspectRatio != 1 { payload["aspectRatio"] = .number(media.aspectRatio) }
+        // **La clé sort quand la MESURE existe, pas quand la valeur diffère de 1**
+        // (#5182, suivi de #5100). Le test `!= 1` interrogeait la PROJECTION
+        // (`measured ?? 1.0`) : il omettait donc la clé pour un non-mesuré — ce
+        // qui est juste — mais AUSSI pour un carré RÉELLEMENT mesuré, effaçant
+        // à l'aller la seule distinction que #5100 existe pour créer. Le pont
+        // d'en face lit la PRÉSENCE de la clé, comme le décodeur JSON : lui
+        // taire un carré mesuré, c'est le lui rendre inconnu.
+        if let measured = media.measuredAspectRatio { payload["aspectRatio"] = .number(measured) }
         if media.anchor != centerPivot { payload["anchor"] = pivotWire(media.anchor) }
         if let intrinsic = media.intrinsicDuration { payload["intrinsicDuration"] = .number(intrinsic) }
         if let memento = media.mutedVolumeMemento {
@@ -456,6 +463,17 @@ public extension CanvasV3 {
         }
         if let sourceStart = media.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = media.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
+        // **Le recadrage voyage en QUATRE fractions plates** (#5085), du même
+        // style que ses voisines temporelles — et OMISES quand le cadre est
+        // entier : « les décode-défauts sont omis, leur absence les restitue ».
+        // Un objet imbriqué aurait demandé au payload une forme que le contrat
+        // ne garantit pas ; quatre nombres passent partout.
+        if let crop = media.crop, !crop.isFull {
+            payload["cropX"] = .number(crop.x)
+            payload["cropY"] = .number(crop.y)
+            payload["cropW"] = .number(crop.width)
+            payload["cropH"] = .number(crop.height)
+        }
         if let ducking = media.isDuckingDisabled { payload["isDuckingDisabled"] = .bool(ducking) }
         if media.placement != "media" { payload["placement"] = .string(media.placement) }
         if let fadeIn = media.fadeIn { payload["fadeIn"] = .number(fadeIn) }
@@ -783,13 +801,31 @@ public extension StoryEffects {
     private static func mediaObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryMediaObject {
         let muted = object.payload.bool("muted") ?? false
         let volume = object.payload.double("volume").map { Float($0) } ?? 1
+        // Les quatre fractions ne se lisent qu'ENSEMBLE : trois sur quatre
+        // décriraient un rectangle que personne n'a posé. Leur absence rend le
+        // cadre entier, qui est le défaut.
+        let crop: MediaCropRect? = {
+            guard let x = object.payload.double("cropX"),
+                  let y = object.payload.double("cropY"),
+                  let w = object.payload.double("cropW"),
+                  let h = object.payload.double("cropH") else { return nil }
+            return MediaCropRule.clamped(MediaCropRect(x: x, y: y, width: w, height: h))
+        }()
         var media = StoryMediaObject(
             id: object.id,
             postMediaId: object.payload.string("postMediaId") ?? "",
             mediaURL: object.payload.string("mediaURL"),
             mediaType: object.payload.string("mediaType") ?? "image",
             placement: object.payload.string("placement") ?? "media",
-            aspectRatio: object.payload.double("aspectRatio") ?? 1.0,
+            // **Aucun `?? 1.0` ici** (#5182, suivi de #5100) : le paramètre est
+            // `Double?` SANS défaut, et l'absence de la clé DOIT traverser.
+            // Le repli fabriquait une mesure que la charge ne portait pas —
+            // `measuredAspectRatio` cessait donc d'être `nil`, et
+            // `StoryItem.toRenderableSlide` sautait l'hydratation read-time
+            // depuis `FeedMedia.width/height`, sa source de dimensionnement
+            // PRIMAIRE. Un 1080×1920 s'affichait squishé en carré chez le
+            // lecteur, sur le chemin que prend TOUT document v3.
+            aspectRatio: object.payload.double("aspectRatio"),
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
             anchor: pivotPoint(object.payload),
@@ -810,6 +846,7 @@ public extension StoryEffects {
         media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         media.sourceStart = object.payload.double("sourceStart")
         media.sourceEnd = object.payload.double("sourceEnd")
+        media.crop = crop
         return media
     }
 

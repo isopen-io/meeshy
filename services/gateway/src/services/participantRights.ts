@@ -214,3 +214,22 @@ export function resolveParticipantRights(
     canSendLinks: rights.canSendLinks ?? permissions.canSendLinks,
   };
 }
+
+/**
+ * Le droit de PIÈCE JOINTE qui gouverne un type MIME donné (#5151).
+ *
+ * `canSendFiles`/`canSendImages`/`canSendVideos`/`canSendAudios` partagent la
+ * même table de droits mais gouvernent des CONTENUS différents — contrairement
+ * à `canSendMessages`, qui est un gate binaire unique, trancher lequel
+ * s'applique exige de connaître le type de la pièce. `canSendFiles` est le
+ * repli générique : tout ce qui n'est ni image, ni vidéo, ni audio (document,
+ * type absent ou non reconnu) — jamais un laissez-passer implicite pour les
+ * trois autres, qui restent gouvernés par leur propre droit même quand
+ * `canSendFiles` est ouvert.
+ */
+export function attachmentSendRightForMimeType(mimeType?: string | null): ParticipantRightName {
+  if (mimeType?.startsWith('image/')) return 'canSendImages';
+  if (mimeType?.startsWith('video/')) return 'canSendVideos';
+  if (mimeType?.startsWith('audio/')) return 'canSendAudios';
+  return 'canSendFiles';
+}

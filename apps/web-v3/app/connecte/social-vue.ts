@@ -58,6 +58,16 @@ export type EtatDuFilSocial = {
   readonly tempsReel: { readonly module: string; readonly passerelle: string } | null;
 };
 
+/**
+ * L'EN-TÊTE PORTE LA PORTE DES RÉELS. La table de navigation de la planche
+ * (`MeeshyWebV3.dc.html:870`) pose un bouton « Réels » sur cet écran — c'est la
+ * SEULE entrée de `/feed/reels` qu'elle dessine, et sans elle l'écran serait
+ * servi sans qu'aucun lien n'y mène (leçon 507).
+ *
+ * IL PREND LA PLACE DE DROITE de l'en-tête du fil, celle que `.fil-tete` réserve
+ * déjà à une action (`.medias` sur le fil de conversation) : même géométrie,
+ * même cible de 44 px, aucun pixel neuf.
+ */
 const enTete = (): string =>
   '<header class="fil-tete">' +
   `<a class="retour" href="/" aria-label="${echappe(FIL_SOCIAL.retour)}">${svgDuSprite('ph-caret-left')}</a>` +
@@ -65,6 +75,7 @@ const enTete = (): string =>
   `<h1>${echappe(FIL_SOCIAL.titre)}</h1>` +
   `<p class="sous">${echappe(FIL_SOCIAL.sousTitre)}</p>` +
   '</div>' +
+  `<a class="medias" href="/feed/reels" aria-label="${echappe(FIL_SOCIAL.reels)}">${svgDuSprite('ph-film-strip')}</a>` +
   '</header>';
 
 /**
@@ -230,8 +241,17 @@ const cartePost = (post: PostDuFil, maintenant: number, langueDuDocument: string
   );
 };
 
+/**
+ * LE CHAMP « QUOI DE NEUF ? » — la porte du composer (`:870`), posée en tête du
+ * fil comme la cible la dessine. Un `<a>`, jamais un `<input>` : ce qu'on tape
+ * ici serait perdu au moment d'aller sur l'écran qui sait le publier.
+ */
+const versLeComposer = (): string =>
+  `<a class="chercher" href="/composer">${svgDuSprite('ph-note-pencil')}${echappe(FIL_SOCIAL.composer)}</a>`;
+
 const corps = (etat: EtatDuFilSocial, langueDuDocument: string): string =>
   sautDeRail(etat.stories) +
+  versLeComposer() +
   rail(etat.stories) +
   '<p class="hors-ecran" id="journal-des-gestes" role="status" aria-live="polite">' +
   (etat.fait === null ? '' : CONFIRMATIONS[etat.fait]) +

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { doitRattraper, SEUIL_DE_RATTRAPAGE_MS } from '@/lib/realtime/reconnect-policy';
+import { CHAMPS_DU_RATTRAPAGE, miseAJourDe } from '@/lib/realtime/liste-etat';
 import { demandeLeDelta } from '@/lib/realtime/sync/delta-client';
 
 /**
@@ -59,6 +60,69 @@ const passerelle = (reponse: () => Response) => {
   };
   return { appels, recuperer };
 };
+
+describe('les champs demandés — rien ne part qui n’ait été demandé (#5088)', () => {
+  /**
+   * LA REQUÊTE DE FOND LA PLUS FRÉQUENTE DE LA V3 recevait ~12 colonnes par
+   * conversation (`syncConversationSelect` : description, avatar, banner…)
+   * pour n'en lire que DEUX. La loi `?fields=` de #4173 est vivante côté
+   * passerelle (`SYNC_FIELD_VOCABULARY`) ; ces témoins tiennent le côté
+   * client : l'URL les porte, la constante suffit au réducteur, et la liste
+   * la passe.
+   */
+  it('porte `fields=` sur l’URL quand l’appelant nomme ses champs', async () => {
+    const { appels, recuperer } = passerelle(
+      () => new Response(JSON.stringify(corpsDeDelta()), { status: 200 }),
+    );
+
+    await demandeLeDelta({
+      base: BASE,
+      depuis: DEPUIS,
+      collections: ['conversations'],
+      fields: CHAMPS_DU_RATTRAPAGE,
+      entetes: {},
+      recuperer,
+    });
+
+    const url = new URL(appels[0]!.url);
+    expect(url.searchParams.get('fields')).toBe('conversations.id,conversations.lastMessageAt');
+  });
+
+  it('n’en porte AUCUN quand l’appelant n’en nomme pas — le défaut serveur reste le sien', async () => {
+    const { appels, recuperer } = passerelle(
+      () => new Response(JSON.stringify(corpsDeDelta()), { status: 200 }),
+    );
+
+    await demandeLeDelta({ base: BASE, depuis: DEPUIS, entetes: {}, recuperer });
+
+    expect(new URL(appels[0]!.url).searchParams.has('fields')).toBe(false);
+  });
+
+  /**
+   * LA BORNE, DANS LES DEUX SENS. Une ligne réduite aux champs DEMANDÉS doit
+   * suffire au réducteur — sinon la frugalité casse le rang — et la constante
+   * ne doit pas demander plus que ce que le réducteur lit — sinon la
+   * frugalité n'en est pas une. Les deux moitiés se mesurent sur la même
+   * ligne fabriquée.
+   */
+  it('les champs demandés suffisent au réducteur du rang — et il ne lit rien de plus', () => {
+    const ligneFrugale = Object.fromEntries(
+      CHAMPS_DU_RATTRAPAGE.map((champ) => [champ.replace('conversations.', ''), champ.endsWith('.id') ? 'c1' : '2026-09-01T12:04:00.000Z']),
+    );
+
+    expect(miseAJourDe({ conversationId: ligneFrugale.id, lastMessageAt: ligneFrugale.lastMessageAt })).toMatchObject({
+      id: 'c1',
+      quand: '2026-09-01T12:04:00.000Z',
+    });
+    expect(CHAMPS_DU_RATTRAPAGE).toHaveLength(2);
+  });
+
+  it('la liste PASSE la constante — un rattrapage qui l’oublierait repaierait la ligne entière', () => {
+    const texte = readFileSync(join(process.cwd(), 'lib', 'realtime', 'liste.ts'), 'utf8');
+
+    expect(texte).toContain('fields: CHAMPS_DU_RATTRAPAGE');
+  });
+});
 
 describe('l’appel de /sync', () => {
   /**
@@ -129,11 +193,12 @@ describe('l’appel de /sync', () => {
   });
 
   /**
-   * LE VALIDATEUR ILLISIBLE N'EST PAS UNE PANNE. Depuis un NAVIGATEUR, sur une
-   * autre origine, `reponse.headers.get('etag')` rend `null` — la passerelle
-   * n'expose pas l'en-tête par CORS (`server.ts:404-410`, sans
-   * `exposedHeaders`). Le delta doit être servi quand même : c'est la moitié
-   * qui porte la lenteur, et elle ne dépend pas du 304.
+   * LE VALIDATEUR ILLISIBLE N'EST PAS UNE PANNE. `reponse.headers.get('etag')`
+   * peut rendre `null` — un intermédiaire qui filtre l'en-tête, une passerelle
+   * qui ne l'expose pas encore (c'était la production avant #5015 : `ETag`
+   * n'est pas dans la safelist CORS et `server.ts` n'appelait pas
+   * `exposedHeaders`) — et le delta doit être servi quand même : c'est la
+   * moitié qui porte la lenteur, et elle ne dépend pas du 304.
    */
   it('sert le delta même quand l’ETag n’est pas lisible', async () => {
     const { recuperer } = passerelle(() => new Response(JSON.stringify(corpsDeDelta()), { status: 200 }));

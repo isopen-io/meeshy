@@ -21,6 +21,7 @@ import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding
 } from '../../services/personalHistoryFilter';
+import { MESSAGE_PROTECTION_SELECT, mapMessageProtectionFields } from './messages-list-query';
 import { validatePagination } from '../../utils/pagination';
 import {
   messageSchema,
@@ -29,11 +30,10 @@ import {
 import {
   refuserAccesConversation,
   verdictAccesConversation,
-  CODE_NON_MEMBRE,
   type MessagesDeRefusDAcces
 } from './utils/access-control';
 import type { ConversationParams } from './types';
-import { sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
@@ -108,6 +108,11 @@ export function registerMessageSearchRoute(
         },
         401: errorResponseSchema,
         403: errorResponseSchema,
+        // #4856 — un identifiant qui ne résout à AUCUNE conversation est un
+        // « je ne trouve pas », pas un refus d'accès : même verdict que la
+        // vérification jumelle de `threads.ts` et `messages-read-status.ts`
+        // pour ce même appel à `resolveConversationId`.
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -128,15 +133,16 @@ export function registerMessageSearchRoute(
       // NEGATIVE Prisma `take`. Search is cursor-based, so only the limit is used.
       const { limit: searchLimit } = validatePagination('0', limitStr, { maxLimit: 50 });
 
-      // #4856 — un identifiant qui ne résout à AUCUNE conversation reçoit le
-      // même refus, mot pour mot, qu'un identifiant qui en résout une dont
-      // l'appelant n'est pas membre (`REFUS_DE_RECHERCHE.nonMembre`, servi
-      // juste en dessous) : distinguer les deux dirait à quiconque essaie
-      // un identifiant au hasard s'il a touché une conversation réelle,
-      // exactement ce que le 403 de cette route existe pour taire.
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendForbidden(reply, REFUS_DE_RECHERCHE.nonMembre, { code: CODE_NON_MEMBRE });
+        // #4856 — le statut disait « refusé » pendant que le texte disait
+        // « absent » : l'un des deux mentait. `resolveConversationId` ne rend
+        // `null` que pour un identifiant qui ne résout à AUCUNE conversation
+        // (un ObjectId valide passe tel quel, existence non vérifiée ici) —
+        // ce n'est pas une décision anti-énumération, c'est un « je ne
+        // trouve pas », comme le rendent déjà `threads.ts` et
+        // `messages-read-status.ts` pour le même appel.
+        return sendNotFound(reply, 'Conversation not found');
       }
 
       const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
@@ -180,6 +186,12 @@ export function registerMessageSearchRoute(
         // aussi — sans `metadata`, un message géolocalisé trouvé par
         // recherche n'affiche jamais sa position.
         metadata: true,
+        // #4885 — les quatre drapeaux de protection (vue unique / flou /
+        // expiration / bitfield), source unique avec `messages-list-query.ts`.
+        // Sans eux un message à vue unique trouvé par recherche arrivait
+        // FORWARDABLE : le garde web/iOS qui interdit le transfert lit
+        // `isViewOnce`, absent de cette réponse.
+        ...MESSAGE_PROTECTION_SELECT,
         sender: {
           // `sender` is a `Participant`, which has no `username`/`isOnline` of
           // its own — those live on the related `User`. Selecting `username`
@@ -286,6 +298,9 @@ export function registerMessageSearchRoute(
         // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
         return hoistStickerOnto(hoistLocationOnto({
           ...msg,
+          // #4885 — les quatre drapeaux de protection, servis à l'identique
+          // de `GET .../messages` (même source, `mapMessageProtectionFields`).
+          ...mapMessageProtectionFields(msg),
           // #4177 — même résolution que `GET .../messages` : `msg.senderId`
           // (spread ci-dessus) est le `Participant.id` BRUT stocké en base,
           // jamais le `User.id` que les clients comparent à LEUR `userId`.

@@ -457,7 +457,7 @@ se pose**, et aucune liste écrite à la main ne double cette décision.
 | `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
 
 **Le même média n'est pas la même porte selon son PLAN.** Une image de PREMIER
-PLAN devient un `MeeshyObject` et vit à gauche ; un FOND se règle par la porte
+PLAN devient un `MeeshySceneObject` et vit à gauche ; un FOND se règle par la porte
 `background`, à gauche elle aussi (#4919) — voir la correction ci-dessous. Idem
 pour le son : un son de fond est un attribut de la publication (il porte son
 crédit au socle) et vit en bas, un son POSÉ est un objet visible. Ranger les deux
@@ -611,10 +611,19 @@ Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
 
 **Le premier de ces noms EST un type depuis le 2026-08-31** :
 `MeeshySceneObject` (`packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshySceneObject.swift`),
-une somme à cinq cas — `text` · `media` · `sticker` · `location` · `audio` — qui
+une somme à cinq cas — `text` · `media` · `sticker` · **`place`** · `audio` — qui
 rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
 `isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
 Les quatre autres noms restent à écrire.
+
+> **`place`, et non `location`** (#4960) — et cette ligne a dit `location`
+> jusqu'au 2026-09-04, seule de tout le dépôt. Le contrat du fil dit `place`
+> (`ACTIVE_KINDS`, `packages/shared/types/canvas-v3.ts`), son miroir Swift dit
+> `place` (`ObjectKind`), la timeline dit `place` (`TimelineClipKind`) et
+> l'inspecteur aussi (`ClipSnapshot.Kind`). Un document qui GOUVERNE le
+> vocabulaire est le pire endroit où laisser le mot abandonné : il ne casse
+> aucune compilation, et il réintroduit la divergence chez le prochain qui
+> nomme quelque chose d'après lui.
 
 **Ce que la somme a rendu visible.** Des dizaines de fonctions interrogeaient
 quatre ou cinq tableaux à la suite pour UN identifiant ; chacune décidait seule

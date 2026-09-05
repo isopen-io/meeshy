@@ -51,6 +51,14 @@ export const RECHERCHE = {
 /** Le paramètre d'adresse — un `GET` de formulaire, donc une adresse partageable. */
 export const PARAMETRE_DE_RECHERCHE = 'q';
 
+/**
+ * LE SILENCE DE SAISIE avant qu'une recherche parte (#4897) — assez court pour
+ * suivre le pouce, assez long pour qu'une frappe continue ne coûte qu'un
+ * aller-retour. Distinct de `SILENCE_DE_FRAPPE_MS` (reconnect-policy) : l'un
+ * mesure quand ON cherche, l'autre quand L'AUTRE écrit.
+ */
+export const SILENCE_DE_SAISIE_MS = 300;
+
 export const GLYPHE_CONVERSATION = 'ph-chat-circle';
 export const GLYPHE_PERSONNE = 'ph-user';
 export const GLYPHE_RECHERCHE = 'ph-magnifying-glass';

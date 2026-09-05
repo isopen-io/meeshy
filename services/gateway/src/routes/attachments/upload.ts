@@ -94,8 +94,12 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without upload permissions',
             ...errorResponseSchema
           },
+          // #4856 — le lien de partage RECHERCHÉ est celui par lequel
+          // l'appelant s'est lui-même authentifié (son propre
+          // `shareLinkId` de session) : sa disparition entretemps est un
+          // « je ne trouve pas », pas un refus d'accès à un tiers.
           404: {
-            description: 'The share link backing this anonymous session no longer exists',
+            description: 'The share link this anonymous session was authenticated with no longer exists',
             ...errorResponseSchema
           },
           500: {
@@ -162,13 +166,9 @@ export async function registerUploadRoutes(
             },
           });
 
-          // #4856 — `authContext.anonymousUser?.shareLinkId` vient de la
-          // vérification du jeton de session de CET appelant, jamais d'un
-          // identifiant qu'il choisit : son absence décrit l'état de SA
-          // PROPRE session (lien retiré/expiré après l'établissement de la
-          // session), pas celle d'une ressource qu'il chercherait à sonder.
-          // Aucun anti-oracle n'est en jeu.
           if (!shareLink) {
+            // #4856 — le lien recherché ici est celui de la SESSION anonyme
+            // de l'appelant, jamais celui d'un tiers : rien à cacher.
             return sendNotFound(reply, 'Share link not found');
           }
 
@@ -263,8 +263,10 @@ export async function registerUploadRoutes(
             description: 'Forbidden - anonymous users without file upload permission',
             ...errorResponseSchema
           },
+          // #4856 — même verdict que sur `/attachments/upload` : le lien de
+          // partage recherché est celui de la session anonyme appelante.
           404: {
-            description: 'The share link backing this anonymous session no longer exists',
+            description: 'The share link this anonymous session was authenticated with no longer exists',
             ...errorResponseSchema
           },
           500: {
@@ -319,10 +321,9 @@ export async function registerUploadRoutes(
             select: { allowAnonymousFiles: true },
           });
 
-          // #4856 — même raison que sur `POST /attachments/upload` ci-dessus :
-          // `shareLinkId` vient de la session de CET appelant, pas d'un
-          // identifiant qu'il sonde.
           if (!shareLink) {
+            // #4856 — comme sur `/attachments/upload` : c'est le lien de la
+            // session anonyme appelante, jamais celui d'un tiers.
             return sendNotFound(reply, 'Share link not found');
           }
 

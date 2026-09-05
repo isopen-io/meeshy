@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
@@ -20,16 +21,16 @@ import MeeshyUI
 ///
 /// Une scène n'est pas un document avec une image. Elle a ses portes, ses
 /// contrôleurs, sa géométrie et sa description ; les loger dans le document
-/// obligeait ce dernier à savoir ce qu'est un `MeeshyObject`.
+/// obligeait ce dernier à savoir ce qu'est un `MeeshySceneObject`.
 ///
 /// ## Ce qu'elle porte, et sur quel niveau du modèle
 ///
 /// | zone | niveau |
 /// |---|---|
 /// | barre haute (`ComposerTopBar`) | la `MeeshyPublication` |
-/// | rail *leading* — les portes | crée un `MeeshyObject` (sauf « description ») |
+/// | rail *leading* — les portes | crée un `MeeshySceneObject` (sauf « description ») |
 /// | la scène 9:16, encastrée | une `MeeshyScene` |
-/// | rail *trailing* — les contrôleurs | UN `MeeshyObject` |
+/// | rail *trailing* — les contrôleurs | UN `MeeshySceneObject` |
 /// | la description | la `MeeshySlide` |
 ///
 /// Le SOCLE n'est pas ici : il vit au meuble, sous les trois surfaces, et ne
@@ -59,6 +60,8 @@ struct ComposerSceneSurface: View {
     let aspectRatio: CGFloat
     let plateauTint: Color
     var sceneImages: [String: UIImage] = [:]
+    /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
+    var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
     var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
 
@@ -94,6 +97,36 @@ struct ComposerSceneSurface: View {
     /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, planche
     /// `2b`). L'hôte décide du mode ; la surface ne fait que transmettre.
     var onBackgroundLongPressed: (() -> Void)?
+
+    /// **L'appui long sur un média DE FOND demande son MENU** (#5041).
+    ///
+    /// Distinct du jumeau ci-dessus, qui appartient au viseur : une scène qui
+    /// porte un fond n'est pas vide. Tant que le meuble ne le branche pas, la
+    /// règle du canvas (`StoryCanvasBackgroundLongPress`) retombe sur le viseur
+    /// — le geste ne devient jamais muet en attendant son hôte.
+    var onBackgroundMediaLongPressed: ((String) -> Void)?
+
+    /// **La durée d'un appui long ARMÉ** (#5041) : la translation pendant qu'on
+    /// tient, puis le relâchement. Le `.began` seul ouvrait un objectif ; ces
+    /// deux-là permettent de TENIR une prise.
+    var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    var onBackgroundLongPressEnded: (() -> Void)?
+
+    /// **L'étape du viseur — la seule chose que la scène ait encore besoin de
+    /// savoir de la caméra** (directive porteur 2026-09-04).
+    ///
+    /// La surface PEIGNAIT le viseur ; elle n'en publie plus que la place
+    /// (`ComposerSceneCameraFrameKey`), le meuble le montant en un site unique
+    /// pour couvrir le socle. Tout le reste du contrat caméra — session,
+    /// permission, taille, mode, flash, segments et leurs onze rappels — est
+    /// parti AVEC la vue qui les lisait.
+    ///
+    /// Ce champ reste parce qu'un autre consommateur le lit ici : la zone de
+    /// description s'efface pendant qu'on cadre
+    /// (`ComposerSceneCameraOverlay.isServed(.description, stage:)`). Le
+    /// garder « au cas où » aurait été une dette ; le garder pour un lecteur
+    /// nommé est un contrat.
+    var cameraStage: ComposerSceneCameraStage = .off
 
     // MARK: - Les deux rails
 
@@ -242,6 +275,28 @@ struct ComposerSceneSurface: View {
                     overlay: geo.size,
                     ratio: aspectRatio,
                     horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+        }
+    }
+
+    /// **Borne un contenu AU DESSIN** (#4080) — ni au-dessus, ni en dessous :
+    /// DEDANS.
+    ///
+    /// `ancreAuDessin` pose au BAS du dessin ; celle-ci lui donne exactement le
+    /// rectangle du dessin, de sorte que ce qu'on y met flotte sur l'image et
+    /// jamais dans le letterbox. C'est ce que le viseur exige : ses contrôles
+    /// posés sur la frame paraîtraient hors de la scène, ce que la directive du
+    /// 2026-09-04 corrige mot pour mot.
+    @ViewBuilder
+    private func ancreDansLeDessin<Contenu: View>(_ contenu: Contenu) -> some View {
+        GeometryReader { geo in
+            let inset = ComposerRailGeometry.sceneBottomInset(
+                overlay: geo.size,
+                ratio: aspectRatio,
+                horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true))
+            contenu
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, inset)
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
         }
     }
 
@@ -563,7 +618,11 @@ struct ComposerSceneSurface: View {
                     editableKinds: editableSceneKinds,
                     onBackgroundTapped: onBackgroundTapped,
                     onBackgroundLongPressed: onBackgroundLongPressed,
+                    onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,
+                    onBackgroundLongPressChanged: onBackgroundLongPressChanged,
+                    onBackgroundLongPressEnded: onBackgroundLongPressEnded,
                     loadedImages: sceneImages,
+                    loadedStickerAnimations: sceneStickerAnimations,
                     loadedImagesVersion: sceneImagesVersion,
                     // Le canvas retire son calque de dessin persisté pendant
                     // qu'une surface live est posée dessus — sinon le trait
@@ -581,6 +640,51 @@ struct ComposerSceneSurface: View {
                     selectionBadge: selectionBadge
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // **Le viseur OCCUPE la carte** (#4080, vue `2b`) — il ne
+                // s'ouvre pas par-dessus elle.
+                //
+                // > « utiliser le fond de la scène comme caméra » — porteur,
+                // > 2026-09-04
+                //
+                // Posé AVANT le padding des couloirs, exprès : le repère est
+                // alors celui dans lequel la carte se `fit`, donc un
+                // `aspectRatio(.fit)` y reproduit EXACTEMENT le rectangle du
+                // dessin. Posé après, il couvrirait aussi les couloirs — et le
+                // viseur déborderait sur les rails, qui sont précisément ce
+                // qu'on garde visible pour que la caméra reste une ENTRÉE et
+                // non un mode.
+                //
+                // `allowsHitTesting(false)` : l'aperçu ne prend aucun doigt.
+                // Les gestes de la scène — déplacer, pincer, l'appui long qui
+                // a armé ce viseur — continuent d'atteindre le canvas dessous.
+                // **La surface ne PEINT plus le viseur — elle PUBLIE sa
+                // place** (directive porteur 2026-09-04).
+                //
+                // Le viseur avait deux montages : ici pour la carte, et un
+                // overlay de la surface entière pour le plein écran. Passer de
+                // l'un à l'autre DÉTRUISAIT l'aperçu pour en construire un
+                // second, qui doit ensuite attendre sa première image — c'est
+                // le « trop de temps » du porteur, et aucune courbe
+                // d'animation ne le rattrape.
+                //
+                // Il n'y a plus qu'un montage, et il est chez le MEUBLE : le
+                // socle (audience · aperçu · publier) est le FRÈRE de cette
+                // surface dans la `VStack` de l'hôte, donc aucun overlay posé
+                // ici ne peut le couvrir. La directive demande précisément
+                // qu'il disparaisse en plein écran.
+                //
+                // Ce qui reste ici est la seule chose que la surface sache et
+                // que le meuble ignore : OÙ la scène dessine. `Color.clear` +
+                // `aspectRatio(.fit)` reproduit exactement le rectangle du
+                // dessin — la même construction que l'aperçu occupait — et
+                // l'ancre le fait descendre sans repère partagé.
+                .overlay {
+                    Color.clear
+                        .aspectRatio(aspectRatio, contentMode: .fit)
+                        .anchorPreference(key: ComposerSceneCameraFrameKey.self,
+                                          value: .bounds) { $0 }
+                        .allowsHitTesting(false)
+                }
 
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
@@ -712,8 +816,30 @@ struct ComposerSceneSurface: View {
                 // carte de la moitié de la hauteur perdue dès que le ratio
                 // n'est pas plein (#4119).
                 .overlay(alignment: .bottom) {
-                    ancreAuDessin(descriptionOverlay, alignment: .bottom)
+                    // **Le volet CÈDE au viseur** (#4080) : il est ancré au bas
+                    // du dessin, c'est-à-dire exactement là où le déclencheur se
+                    // pose — mesuré au simulateur, ils se chevauchaient de
+                    // quarante points. La question passe par la règle, jamais
+                    // par un `cameraStage != .off` écrit ici : les trois meubles
+                    // de la carte n'ont pas la même réponse, et c'est ce qui en
+                    // fait une décision.
+                    if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage) {
+                        ancreAuDessin(descriptionOverlay, alignment: .bottom)
+                    }
                 }
+                // **Le chrome du viseur vit DANS la carte** (#4080, directive
+                // porteur 2026-09-04 : « tout doit être dans la scène »).
+                //
+                // La loi 6 protège l'APERÇU d'une composition, pour qu'il ne
+                // mente pas sur le rendu. Un VISEUR n'est pas un aperçu de
+                // composition — c'est un instrument de cadrage, et son chrome
+                // ne part avec aucune publication. La planche `2b` le dessine
+                // d'ailleurs par-dessus l'image.
+                //
+                // `ancreAuDessin` le borne au DESSIN et non à la frame : posé
+                // sur celle-ci, les contrôles flotteraient dans le letterbox,
+                // c'est-à-dire hors de la scène — exactement ce que la
+                // directive corrige.
                 .padding(.top, 8)
 
                 // **Ce que la publication EMPORTE, COLLÉ au bas de la scène**
@@ -862,6 +988,18 @@ struct ComposerSceneSurface: View {
                 // d'une lecture. Elle n'entre donc PAS dans
                 // `ComposerCanonicalZone.Element`, et ce commentaire dit
                 // pourquoi pour que personne ne l'y remette.
+                // **Le viseur PREND la rangée basse** (#4080), exactement
+                // comme les contrôleurs d'un outil ouvert la prennent depuis
+                // #4072 : la place est permanente, son contenu change.
+                //
+                // La cible `2b` dessine ces contrôles SUR un aperçu plein
+                // écran ; le plateau n'a pas cette géographie — ses rails et sa
+                // rangée d'entrées vivent dans les couloirs, et un contrôle
+                // posé sur le canvas vole les touches de la bande qu'il couvre
+                // (directive porteur 2026-08-31). Ce qui est PRESCRIT par la
+                // planche — l'ordre des modes, du déclencheur et de la phrase,
+                // et leurs états — est tenu ; c'est la géographie qui suit le
+                // plateau, comme pour les rails.
                 lowToolRow
 
             }

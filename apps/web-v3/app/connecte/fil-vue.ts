@@ -10,8 +10,10 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
  * leurs lecteurs historiques.
  */
 export { type TempsReel } from './chargeur';
-import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR, blocDuNavigateur, type TempsReel } from './chargeur';
+import { porteesDuTravailleur } from '@/lib/sw/portees';
 export { CHARGEUR_DE_PARTICIPATION };
+import { adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
 import { adresseDesMedias } from '@/lib/api/medias';
@@ -23,10 +25,12 @@ import { nomDeLangue } from '@/lib/contenu/langues';
 import { MEDIAS } from '@/lib/contenu/medias';
 
 import { FEUILLE_CONNECTEE } from './feuille';
+import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
+import { REGION_DE_LA_BANNIERE } from './banniere-vue';
 import { FEUILLE_DU_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
 import { gabaritDeLigne, lignes } from './fil-lignes';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
-import { pieceEnPlein, pleinEcran } from './plein-vue';
+import { pieceEnPlein, piecesDuFil, pleinEcran } from './plein-vue';
 import { FEUILLE_DU_PROFIL } from './profil-feuille';
 import { surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
 import { carteVide } from './vue';
@@ -594,17 +598,47 @@ export const documentPleinEcran = ({
   corps,
   script = '',
   feuille = FEUILLE,
+  banniere = '',
+  hubs = true,
 }: {
   readonly titre: string;
   readonly description: string;
   readonly corps: string;
   readonly script?: string;
   readonly feuille?: string;
+  /**
+   * LA RÉGION DE LA BANNIÈRE (#4454) — servie VIDE, AVANT le corps, donc hors
+   * du `<main>` que toute surimpression rend `inert`. Voir la même raison, plus
+   * longuement, dans `ParametresDuDocument` (`app/enveloppe/vue.ts`) : une
+   * croix inerte est un contrôle sans effet (charte règle 7).
+   *
+   * Seul le FIL la sert parmi les écrans pleins : c'est le seul dont le module
+   * tient un socket. Les neuf autres (`/notifications`, `/search`, `/contacts`,
+   * `/links`, `/post/:id`, `/feed`, `/composer`, `/stories/new`, la galerie) ne
+   * la portent pas.
+   */
+  readonly banniere?: string;
+  /**
+   * Les règles de spéculation (#5104) — servies par défaut aux écrans
+   * CONNECTÉS. La LECTURE PARTAGÉE les refuse (`hubs: false`) : son budget dit
+   * « aucun script applicatif » et un lecteur ANONYME n'a rien à précharger
+   * des hubs d'un compte qu'il n'a pas.
+   */
+  readonly hubs?: boolean;
 }): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots: 'noindex, nofollow' }) +
-  `<body>${corps}${script}</body>` +
+  // LA BANNIÈRE OUVRE LE CORPS, tout le reste le ferme, et l'ordre porte une
+  // raison par pièce. La bannière est une région `aria-live` qui doit EXISTER
+  // quand le navigateur construit son arbre d'accessibilité (#4454) — créée
+  // après coup, elle n'est annoncée par personne. Les hubs se préchargent au
+  // survol (#5104) et le travailleur de zone (#4472/#4473) s'enregistre — pour
+  // TOUT document plein écran, la lecture partagée comprise : c'est elle, `/l/`,
+  // que son cache sert en premier. Sans `V3_SW_PORTEES` dans l'environnement, le
+  // script n'existe pas. Aucun des quatre n'est dans le `<main>` qu'une
+  // surimpression rend `inert` : une croix inerte serait un contrôle sans effet.
+  `<body>${banniere}${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}${SCRIPT_DU_TRAVAILLEUR(porteesDuTravailleur(process.env['V3_SW_PORTEES']))}${blocDuNavigateur()}</body>` +
   '</html>';
 
 /**
@@ -639,8 +673,17 @@ const surimpression = (etat: EtatDuFil): Surimpression => {
       }),
     };
   }
-  const plein = pieceEnPlein(etat.fil, etat.plein);
-  return plein === null ? { genre: 'aucune' } : { genre: 'plein', html: pleinEcran({ plein, adresse: adresseDeLaPorte(etat.porte), langueDuDocument: DOCUMENT_LANGUAGE }) };
+  const plein = pieceEnPlein(piecesDuFil(etat.fil), etat.plein);
+  return plein === null
+    ? { genre: 'aucune' }
+    : {
+        genre: 'plein',
+        html: pleinEcran({
+          piece: plein.piece,
+          retour: adresseDuRetourDuPlein(adresseDeLaPorte(etat.porte), plein.messageId),
+          langueDuDocument: DOCUMENT_LANGUAGE,
+        }),
+      };
 };
 
 export const documentDuFil = (etat: EtatDuFil): string => {
@@ -662,8 +705,17 @@ export const documentDuFil = (etat: EtatDuFil): string => {
     // navigateur donne gratuitement — la première tabulation atteint la croix,
     // et le lecteur d'écran n'annonce plus un fil que rien ne montre.
     corps: html + corpsDuFil(etat, { inerte: html !== '' }),
+    // LA BANNIÈRE NE PART QU'AVEC SON MODULE (#4454) — même condition que le
+    // chargeur, et pour la même raison : sans socket, rien n'y sera jamais
+    // peint. Une région servie qu'aucun code ne remplit est du poids sans usage,
+    // et un `<output>` vide qu'un lecteur d'écran surveille pour rien.
+    banniere: etat.tempsReel === null ? '' : REGION_DE_LA_BANNIERE,
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
-    feuille: FEUILLE + (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') + (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : ''),
+    feuille:
+      FEUILLE +
+      (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
+      (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') +
+      (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : ''),
   });
 };
 

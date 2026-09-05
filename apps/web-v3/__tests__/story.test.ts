@@ -10,10 +10,11 @@ import {
   documentIndisponible,
   type EtatDeLaStory,
 } from '@/app/(public)/partage-vue';
-import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/lib/api/cookies';
 import { GENRE_HUMEUR, GENRE_REEL, GENRE_STORY, type GenreServi } from '@/lib/contenu/partage';
 import { partageLu, voisinage, type Story, type Voisine } from '@/lib/api/publication';
 import { STORY } from '@/lib/contenu/story';
+
+import { AVEC_JETON, brute, json, MAINTENANT, MONDE, ORIGINE, passerelle, requete, soumission } from './lib/partage-fixtures';
 
 /**
  * **UNE STORY PARTAGÉE SE LIT INTÉGRALEMENT, DANS LA LANGUE DU LECTEUR**
@@ -41,37 +42,13 @@ import { STORY } from '@/lib/contenu/story';
  * INVITATION, et rien du contenu ne part avant sa connexion.
  */
 
-const ORIGINE = 'https://gate.test';
-const MAINTENANT = Date.parse('2026-09-02T12:00:00.000Z');
-
-const brute = (attributs: Record<string, unknown> = {}): Record<string, unknown> => ({
-  id: 's1',
-  type: 'STORY',
-  content: 'Three charts, two surprises. The review lands tomorrow.',
-  originalLanguage: 'en',
-  createdAt: '2026-09-02T09:00:00.000Z',
-  // UNE DATE RELATIVE, ET C'EST UN CORRECTIF. Cette échéance était écrite en
-  // absolu — `2026-09-03T05:00:00Z` —, donc vraie le jour où le témoin a été
-  // écrit et FAUSSE à partir de 05:00 UTC le lendemain : `lisLePartage` lit
-  // l'horloge RÉELLE (`porte.ts:100`), et la story se mettait à échoir pour de
-  // bon. Deux témoins verts la veille rendaient 404 le jour même, sans qu'une
-  // ligne du dépôt ait changé.
-  //
-  // Ce que le témoin veut dire est « une story qui n'a PAS échu », pas « une
-  // story qui échoit à cinq heures » : il le dit désormais. Les deux épreuves
-  // qui veulent l'inverse passent leur propre date, absolue et PASSÉE — un
-  // repère qui, lui, ne peut pas se périmer.
-  expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-  authorId: 'u2',
-  author: { id: 'u2', displayName: 'Ibrahim', username: 'ibrahim' },
-  translations: {
-    fr: { text: 'Trois graphiques, deux surprises. La revue arrive demain.' },
-    es: { text: 'Tres gráficos, dos sorpresas. La revisión llega mañana.' },
-  },
-  isLikedByMe: false,
-  media: [],
-  ...attributs,
-});
+// ORIGINE, MAINTENANT et `brute()` vivent désormais dans `./lib/partage-fixtures`
+// (issue #4967 — `story-fail.test.ts` les partage, une fixture recopiée aurait
+// été la jumelle que la leçon 465 interdit). `brute()` garde ici sa note sur
+// la date RELATIVE de `expiresAt` : « une story qui n'a PAS échu », jamais
+// « une story qui échoit à telle heure » — les témoins qui veulent l'inverse
+// (l'échue, l'échéance à l'horloge injectée) passent leur propre date,
+// absolue et PASSÉE, un repère qui ne peut pas se périmer.
 
 const lue = (
   attributs: Record<string, unknown> = {},
@@ -211,7 +188,7 @@ describe('le média d’une story', () => {
       media: [{ id: 'p1', fileUrl: '/api/v1/attachments/file/2026/scene.jpg', mimeType: 'image/jpeg', width: 1080, height: 1920, alt: 'Trois graphiques' }],
     });
     expect(story.medias).toEqual([
-      { url: `${ORIGINE}/api/v1/attachments/file/2026/scene.jpg`, genre: 'image', alt: 'Trois graphiques', largeur: 1080, hauteur: 1920 },
+      { url: `${ORIGINE}/api/v1/attachments/file/2026/scene.jpg`, genre: 'image', alt: 'Trois graphiques', largeur: 1080, hauteur: 1920, affiche: null },
     ]);
   });
 });
@@ -224,6 +201,13 @@ const voisine = (id: string, minutes: number, auteurId = 'u2'): Voisine => ({
   publieeA: new Date(MAINTENANT - minutes * 60_000).toISOString(),
 });
 
+/**
+ * LE VOISINAGE REND DES ADRESSES, plus des identifiants (#5032). Ces témoins
+ * les opposent TELLES QUELLES plutôt que de les recomposer avec
+ * `adresseDeLaStory` : un témoin qui applique la même fonction que le code
+ * qu'il juge passe au vert quel que soit le préfixe qu'elle rend — c'est le
+ * défaut que le lot corrige, réinstallé dans sa propre garde.
+ */
 describe('le voisinage d’une story', () => {
   it('n’ordonne que les stories du MÊME auteur, de la plus ancienne à la plus récente', () => {
     const v = voisinage({
@@ -233,7 +217,7 @@ describe('le voisinage d’une story', () => {
     expect(v.segments.map((s) => s.id)).toEqual(['s1', 's2', 's3']);
     expect(v.rang).toBe(0);
     expect(v.precedente).toBeNull();
-    expect(v.suivante).toBe('s2');
+    expect(v.suivante).toBe('/stories/s2');
   });
 
   it('rend un seul segment quand le voisinage ne porte pas la story ouverte', () => {
@@ -249,8 +233,8 @@ describe('le voisinage d’une story', () => {
       visibles: [voisine('s0', 300), voisine('s1', 180), voisine('s2', 10)],
     });
     expect(v.rang).toBe(1);
-    expect(v.precedente).toBe('s0');
-    expect(v.suivante).toBe('s2');
+    expect(v.precedente).toBe('/stories/s0');
+    expect(v.suivante).toBe('/stories/s2');
   });
 });
 
@@ -348,22 +332,9 @@ describe('l’invitation servie au visiteur sans session', () => {
 });
 
 // --- la porte ---------------------------------------------------------------
-
-const json = (corps: unknown, statut = 200): Response => new Response(JSON.stringify(corps), { status: statut });
-
-const AVEC_JETON = `${COOKIE_DE_SESSION}=ouverte; ${COOKIE_DE_JETON}=JWT.xyz`;
-
-const requete = (chemin: string, cookie?: string): Request =>
-  new Request(`https://meeshy.me${chemin}`, cookie === undefined ? {} : { headers: { cookie } });
-
-const soumission = (chemin: string, champs: Readonly<Record<string, string>>, entetes: Readonly<Record<string, string>> = {}): Request => {
-  const corps = new URLSearchParams(champs);
-  return new Request(`https://meeshy.me${chemin}`, {
-    method: 'POST',
-    headers: { cookie: AVEC_JETON, 'content-type': 'application/x-www-form-urlencoded', ...entetes },
-    body: corps.toString(),
-  });
-};
+// `json`, `AVEC_JETON`, `requete`, `soumission`, `passerelle` et `MONDE`
+// viennent de `./lib/partage-fixtures` (issue #4967, § « la fixture n'est
+// jamais recopiée »).
 
 /**
  * **L'HORLOGE EST INJECTÉE, JAMAIS LUE.** Une story a une échéance : la porte
@@ -385,30 +356,6 @@ const lisLa = (demande: Omit<Parameters<typeof lisLePartage>[0], 'genre'>): Prom
 
 const soumetsA = (demande: Omit<Parameters<typeof soumetsAuPartage>[0], 'genre'>): Promise<Response> =>
   soumetsAuPartage({ genre: GENRE_STORY, maintenant: MAINTENANT, ...demande });
-
-type Appel = { readonly methode: string; readonly chemin: string; readonly corps: string };
-
-const passerelle = (parChemin: Readonly<Record<string, () => Response>>) => {
-  const appels: Appel[] = [];
-  const recuperer = async (url: string, options: RequestInit = {}): Promise<Response> => {
-    const adresse = new URL(url);
-    appels.push({
-      methode: options.method ?? 'GET',
-      chemin: `${adresse.pathname}${adresse.search}`,
-      corps: typeof options.body === 'string' ? options.body : '',
-    });
-    const reponse = parChemin[adresse.pathname];
-    if (reponse === undefined) throw new Error(`chemin non simulé : ${adresse.pathname}`);
-    return reponse();
-  };
-  return { appels, recuperer };
-};
-
-const MONDE = {
-  '/api/v1/auth/me': () => json({ success: true, data: { id: 'u1', displayName: 'Amina', systemLanguage: 'fr' } }),
-  '/api/v1/posts/s1': () => json({ success: true, data: brute() }),
-  '/api/v1/social/posts': () => json({ success: true, data: [brute()] }),
-};
 
 describe('la porte de la story', () => {
   it('sert l’INVITATION sans un seul appel à la passerelle quand aucun jeton n’accompagne la demande', async () => {

@@ -918,7 +918,7 @@ struct MoodComposerDoor: View {
             // du mood, jamais vers l'atelier. Écrit en toutes lettres plutôt que
             // rendu optionnel — un défaut le ferait disparaître des sites qui,
             // eux, montent vraiment une scène.
-            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _ in false },
+            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _, _ in false },
             onPublishDocument: { draft in await publish(draft) },
             // `moodSeed:` vient APRÈS `onPublishDocument:`, et ce n'est pas un
             // goût de mise en page : Swift n'autorise aucun réordonnancement

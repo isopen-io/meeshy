@@ -423,7 +423,16 @@ export type Lecteur = {
 };
 
 const lienDePartage = (brut: Readonly<Record<string, unknown>>): LienDePartage | null => {
-  const identifiant = chaine(brut.identifier);
+  /**
+   * `linkId` EST L'IDENTIFIANT PUBLIC — celui qui compose l'adresse
+   * partageable, comme `creeUnLien` le documente plus bas. `identifier` est un
+   * SLUG dérivé du nom (`mshy_beta-staging`) : la route d'aperçu anonyme prend
+   * tout `mshy_*` pour un `linkId` (#5077), donc une adresse composée du slug
+   * rendait « Ce lien ne mène nulle part » — mesuré sur staging, 2026-09-04.
+   * Le slug reste le REPLI quand la passerelle ne sert pas `linkId` : une
+   * adresse qui s'ouvre parfois vaut mieux qu'une ligne disparue.
+   */
+  const identifiant = chaine(brut.linkId) ?? chaine(brut.identifier);
   if (identifiant === null) return null;
 
   return {
@@ -737,6 +746,77 @@ export const creeUnLien = async ({
   if (identifiant === null) return { genre: 'panne' };
 
   return { genre: 'fait', identifiant };
+};
+
+/**
+ * FERMER UN LIEN DE PARTAGE — `PATCH /links/:linkId`
+ * (`services/gateway/src/routes/links/management.ts:183`, `onRequest:
+ * [authRequired]` = `requireAuth: true, allowAnonymous: false` : un porteur,
+ * jamais une session invitée).
+ *
+ * LE CORPS EST STRICT : `{ isActive: false }`, et rien d'autre. La route
+ * accepte dix-huit champs optionnels (`updateLinkSchema`) ; en poser un autre
+ * ferait cette écriture faire deux choses à la fois, dont une qu'aucun geste
+ * de l'écran ne demande. Fermer un lien RÉVOQUE les invités déjà entrés
+ * (`applyShareLinkUpdate`, `management.ts:118-146`, `revokeShareLinkGuests`
+ * AVANT l'écriture) — c'est l'effet que `FERMETURE.aide` annonce.
+ *
+ * LA POLICE EST CRÉATEUR OU MODÉRATEUR, jamais le seul créateur
+ * (`loadShareLinkForManagement`, `management.ts:56-96`) : un 403 sur ce
+ * chemin dit « ni l'un ni l'autre », pas « pas le créateur ».
+ *
+ * `/toggle` (`admin.ts:226`) N'EST PAS APPELÉE : c'est une route ADMIN
+ * (#3734), et `PATCH /links/:linkId` porte la MÊME révocation
+ * (`applyShareLinkUpdate`, site unique depuis #4351) sans exiger ce rang.
+ *
+ * LE REFUS EST RENDU TEL QUEL, la même lecture que `creeUnLien` : `error` est
+ * une CHAÎNE (`sendError`, `utils/response.ts:66-88`), jamais un objet — les
+ * deux formes sont lues pour ne pas dépendre d'un détail d'implémentation.
+ */
+export type LienFerme =
+  | { readonly genre: 'fait' }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+export const fermeUnLien = async ({
+  jeton,
+  identifiant,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly identifiant: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LienFerme> => {
+  const reponse = await (recuperer ?? ((u, o) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/links/${encodeURIComponent(identifiant)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ isActive: false }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status >= 500) return { genre: 'panne' };
+
+  if (!reponse.ok) {
+    const enveloppe = objet(await reponse.json().catch(() => null));
+    const message =
+      chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.error) ?? chaine(enveloppe?.message);
+    return { genre: 'refus', message: message ?? '', statut: reponse.status };
+  }
+
+  return { genre: 'fait' };
 };
 
 /**

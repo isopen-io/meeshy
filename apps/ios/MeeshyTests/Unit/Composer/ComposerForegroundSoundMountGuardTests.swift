@@ -103,7 +103,12 @@ final class ComposerForegroundSoundMountGuardTests: XCTestCase {
     /// fermeture d'édition, et elle rouvre bien le portail du son — sans quoi
     /// la carte serait un contrôle inerte à l'air parfaitement vivant.
     func test_leMeuble_câbleLÉdition_versLaFeuilleDeCréationAudio() throws {
-        let surfaces = try source("MeeshyComposerHost+Surfaces.swift")
+        // `documentSurface` a quitté `+Surfaces` pour `+DocumentSurface` au
+        // #5069 — le fichier d'origine dépassait le plafond de 1200 lignes. La
+        // garde SUIT le membre : elle épingle une règle de montage, pas un
+        // chemin de fichier, et un chemin périmé la ferait échouer sur
+        // « introuvable » là où la règle est intacte.
+        let surfaces = try source("MeeshyComposerHost+DocumentSurface.swift")
         guard let document = corps("var documentSurface: some View {", dans: surfaces) else {
             return XCTFail("`documentSurface` introuvable.")
         }

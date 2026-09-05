@@ -12,6 +12,23 @@ export const FIL_SOCIAL = {
   titre: 'Fil',
   sousTitre: 'Postes et réels',
   retour: 'Retour',
+  /**
+   * LA PORTE DES RÉELS (#5032) — le bouton que la table de navigation de la
+   * planche pose sur cet écran (`MeeshyWebV3.dc.html:870` : « feed → reels,
+   * Réels, bouton »). Sans lui, `/feed/reels` serait servi et n'aurait AUCUN
+   * lien entrant : l'écran orphelin que la leçon 507 nomme, dans le lot qui
+   * suit celui qui l'a écrite.
+   */
+  reels: 'Réels',
+  /**
+   * LA PORTE DU COMPOSER (#4966) — le « champ » que la table de navigation de
+   * la planche pose sur cet écran (`MeeshyWebV3.dc.html:870` : « feed →
+   * composer, Composer, champ »). Un LIEN, pas un `<input>` : la saisie vit
+   * sur `/composer`, qui la sert avec son format, son audience et sa
+   * publication — un champ ici ferait taper deux fois, exactement comme la
+   * recherche du tableau de bord.
+   */
+  composer: 'Quoi de neuf ?',
 
   rail: 'Les stories, de la plus récente à la plus ancienne',
   publications: 'Les publications, du plus récent au plus ancien',

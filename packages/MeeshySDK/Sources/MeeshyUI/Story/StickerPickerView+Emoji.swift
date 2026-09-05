@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import MeeshySDK
 
 // MARK: - L'onglet EMOJI et l'onglet « Mes stickers »
@@ -49,16 +50,52 @@ extension StickerPickerView {
     /// intégrée (`postMediaId`) : taper une vignette la POSE sur le canevas, la
     /// bibliothèque n'est plus une collection sans sortie.
     var libraryTab: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // Valeurs `@MainActor` (bundle localisé) hissées hors de la closure de
+        // label de `PhotosPicker`, qui est inférée `@Sendable` — même correctif
+        // que `ConversationSettingsView.visualSection`, et pour la même raison :
+        // `.module` y est « main actor-isolated property referenced from a
+        // nonisolated context ».
+        let liftLabel = String(localized: "story.sticker.library.lift",
+                               defaultValue: "Détourer", bundle: .module)
+        let liftA11y = String(localized: "story.sticker.library.lift.a11y",
+                              defaultValue: "Détourer le sujet d'une photo", bundle: .module)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Spacer()
                 if let stickerLibrary {
+                    // **La seconde alimentation** (#3955) : détourer le sujet
+                    // d'une photo. Elle n'est rendue QUE si l'app a injecté la
+                    // capacité — le détourage est une API iOS 17 et le plancher
+                    // du projet est 16 (loi 4 : absent, jamais grisé).
+                    if stickerLibrary.canLift {
+                        PhotosPicker(selection: $liftSelection, matching: .images) {
+                            Label(liftLabel, systemImage: "person.and.background.dotted")
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonBorderShape(.capsule)
+                        .frame(minHeight: 32)
+                        .accessibilityLabel(liftA11y)
+                    }
                     PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
                         Task { libraryItems = await stickerLibrary.paste(providers) }
                     }
                     .labelStyle(.iconOnly)
                     .buttonBorderShape(.capsule)
                     .frame(minHeight: 32)
+                }
+            }
+            .task(id: liftSelection) {
+                // `nil` ⇒ rien de choisi : la tâche se relance à chaque
+                // remise à zéro de la sélection, et sortir tôt évite un
+                // détourage fantôme après chaque geste.
+                guard let liftSelection, let stickerLibrary else { return }
+                defer { self.liftSelection = nil }
+                guard let data = try? await liftSelection.loadTransferable(type: Data.self) else { return }
+                // `nil` du détourage = aucun sujet trouvé : c'est l'APP qui le
+                // dit à l'utilisateur (elle possède le toast), la grille
+                // reste simplement inchangée.
+                if let updated = await stickerLibrary.lift(imageData: data) {
+                    libraryItems = updated
                 }
             }
             if libraryItems.isEmpty {
@@ -83,11 +120,7 @@ extension StickerPickerView {
                                 onLibraryStickerSelected(item)
                                 HapticFeedback.medium()
                             } label: {
-                                Image(uiImage: item.thumbnail)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 52, height: 52)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                LibraryStickerThumbnail(item: item)
                             }
                             .buttonStyle(.plain)  // cf. note des onglets
                             .accessibilityLabel(String(
@@ -103,6 +136,52 @@ extension StickerPickerView {
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
+    }
+}
+
+/// **La vignette d'un sticker de la bibliothèque — animée si elle l'est** (#3956).
+///
+/// `Image(uiImage:)` ne joue PAS une `UIImage` animée : il lit le `cgImage` de
+/// base et ignore le tableau d'images. Une grille écrite avec lui montrerait
+/// donc la première image d'un GIF sans qu'aucune ligne soit fausse — la panne
+/// muette que `AnimatedImageView` existe pour fermer.
+///
+/// Le décodage passe par `AnimatedImageMemo` : une grille se re-rend à chaque
+/// collage, à chaque changement d'onglet et à chaque frappe dans le champ de
+/// recherche, et re-décoder N images à chacun de ces rendus ferait sauter le
+/// défilement de la palette.
+///
+/// Le budget de décodage est celui de la CASE (52 pt), jamais celui de la
+/// scène : trente images de 512 px pour une vignette coûteraient trente bitmaps
+/// dont on n'utiliserait qu'un dixième des pixels.
+private struct LibraryStickerThumbnail: View {
+    let item: StoryStickerLibraryItem
+
+    private static let side: CGFloat = 52
+
+    private var decoded: AnimatedImageDecoder.Decoded? {
+        guard let bytes = item.animatedData else { return nil }
+        return AnimatedImageMemo.decoded(
+            key: item.id, bytes: bytes,
+            maxPixelSize: StoryStickerLibraryItem.thumbnailPixelBudget)
+    }
+
+    var body: some View {
+        Group {
+            if let decoded {
+                // `.scaleAspectFill` : la même règle de remplissage que le
+                // `scaledToFill` du chemin fixe — deux cadrages différents dans
+                // la même grille se verraient au premier GIF posé à côté d'un
+                // PNG.
+                AnimatedImageView(decoded: decoded, contentMode: .scaleAspectFill)
+            } else {
+                Image(uiImage: item.thumbnail)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
+        .frame(width: Self.side, height: Self.side)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

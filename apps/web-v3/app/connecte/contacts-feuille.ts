@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { avisDEcran } from './atomes-feuille';
+
 /**
  * LA FEUILLE DES CONTACTS — ce que `cible/contacts.png` dessine, et rien de
  * plus.
@@ -35,8 +37,7 @@ export const FEUILLE_DES_CONTACTS = compacte(`
 .contacts-ecran{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
 .contacts-ecran>.fil-tete{flex:none}
 
-.contacts-ecran>.avis{display:flex;align-items:center;gap:var(--space-2);margin:0;padding:var(--space-3) var(--space-4);font-size:var(--text-sm);color:var(--color-text-muted)}
-.contacts-ecran>.avis svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}
+${avisDEcran('.contacts-ecran')}
 
 .contacts{flex:1 1 0;min-height:0;overflow-y:auto;display:grid;gap:var(--space-2);margin:0;padding:0 var(--space-4) var(--space-9);list-style:none}
 

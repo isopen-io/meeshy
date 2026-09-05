@@ -311,8 +311,21 @@ public final class StoryMediaLayer: CALayer {
         // pas héritée d'un état masqué d'une précédente configuration.
         isHidden = false
 
+        // **Le recadrage change les PROPORTIONS de l'objet** (#5085) : un média
+        // recadré n'a plus celles de son fichier. S'en tenir à `aspectRatio`
+        // peindrait la source entière dans un cadre recadré — l'aperçu
+        // mentirait sur le rendu, ce que la loi 6 interdit.
+        //
+        // Et le recadrage lui-même passe par `contentsRect`, plus bas : un
+        // sous-rectangle NORMALISÉ appliqué par le compositeur. C'est la
+        // promesse de la planche `4c` au niveau du rendu — « aucun ne
+        // ré-encode » — et la seule écriture qui la tienne sans toucher au
+        // fichier.
+        let effectiveRatio = MediaCropRule.effectiveRatio(
+            sourceRatio: media.aspectRatio, crop: media.crop)
         // Design-space frame (1080-référentiel) → render-space via geometry.
-        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: effectiveRatio)
+        applyCrop(media.crop)
         let scaledDesignSize = CGSize(
             width: baseDesignSize.width * CGFloat(media.scale),
             height: baseDesignSize.height * CGFloat(media.scale)
@@ -386,6 +399,26 @@ public final class StoryMediaLayer: CALayer {
     /// update double-scale en posant `transform = scale × rotation` sur des
     /// bounds déjà × scale (bug "media grossit après rotation puis pan",
     /// 2026-05-27). Aligne avec le pattern déjà appliqué au text scale.
+    /// **Le recadrage, posé sur le COMPOSITEUR** (#5085).
+    ///
+    /// `contentsRect` prend un sous-rectangle normalisé des contenus : c'est
+    /// exactement la forme de `MediaCropRect`, et rien n'est ré-encodé — le
+    /// fichier reste celui qui est déjà en train de partir.
+    ///
+    /// Le remettre au cadre ENTIER quand il n'y a pas de recadrage n'est pas
+    /// une redite : un calque réutilisé garderait sinon le `contentsRect` de
+    /// l'objet qu'il peignait avant, et l'auteur verrait un média recadré
+    /// qu'il n'a jamais recadré.
+    private func applyCrop(_ crop: MediaCropRect?) {
+        guard let crop, !crop.isFull else {
+            contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+            return
+        }
+        let borné = MediaCropRule.clamped(crop)
+        contentsRect = CGRect(x: borné.x, y: borné.y,
+                              width: borné.width, height: borné.height)
+    }
+
     internal static func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
         let target: CGFloat = CanvasGeometry.designWidth * 0.65   // 702
         let ratio = max(0.1, min(10.0, CGFloat(aspectRatio)))

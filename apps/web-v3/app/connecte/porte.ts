@@ -11,6 +11,7 @@ import {
 
 import { jetonDuLecteur } from '@/app/session';
 
+import { espaceDemande } from './espace-vue';
 import { documentDePanne, documentDuTableau } from './vue';
 
 /**
@@ -168,7 +169,14 @@ export const serviteurDe =
 export const TABLEAU = serviteurDe({
   chemin: '/',
   avecLiens: true,
-  ecran: (charge, maintenant) => documentDuTableau({ ...charge, maintenant }),
+  // LE TABLEAU LIT SON ADRESSE DEPUIS QU'IL A UN ÉTAT. `?espace` ouvre la
+  // feuille de l'espace membre — un état d'ADRESSE, comme `?profil=` sur la
+  // liste : il se partage, il revient au « précédent », et il ne coûte pas un
+  // octet de JavaScript. Le doc-comment de `Ecran` disait « le tableau de bord
+  // l'ignore — il ne répond à aucun geste » : c'est resté vrai des GESTES (il
+  // n'a toujours aucun POST), plus des états.
+  ecran: (charge, maintenant, requete) =>
+    documentDuTableau({ ...charge, maintenant, espace: espaceDemande(requete) }),
 });
 
 export { CACHE_PRIVE, rendu, versLaConnexion };

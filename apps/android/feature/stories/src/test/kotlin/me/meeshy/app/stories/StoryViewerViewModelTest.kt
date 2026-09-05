@@ -755,7 +755,7 @@ class StoryViewerViewModelTest {
         val vm = viewModel(startUserId = "a", posts = listOf(post))
 
         val transform = vm.state.value.current?.backgroundTransform
-        assertThat(transform?.scale).isWithin(1e-6f).of(1.5f)
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(1.5f)
         assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.2f)
         assertThat(transform?.offsetYFraction).isEqualTo(0f)
         assertThat(transform?.isIdentity).isFalse()
@@ -805,7 +805,7 @@ class StoryViewerViewModelTest {
 
         val transform = vm.state.value.current?.backgroundTransform
         assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
-        assertThat(transform?.scale).isWithin(1e-6f).of(2.0f)
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(2.0f)
         assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.3f)
         assertThat(transform?.offsetYFraction).isEqualTo(0f)
         assertThat(transform?.isIdentity).isFalse()

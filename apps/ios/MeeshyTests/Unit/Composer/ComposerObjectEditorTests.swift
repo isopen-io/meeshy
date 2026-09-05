@@ -361,4 +361,114 @@ final class ComposerObjectEditorTests: XCTestCase {
         XCTAssertTrue(code.contains("varttiming:ComposerObjectTiming{")
                       || code.contains("vartiming:ComposerObjectTiming{"))
     }
+
+    // MARK: - La frontière entre le rail et les options (#5097)
+
+    /// **Les DEUX couloirs portent la MÊME pièce.**
+    ///
+    /// > Directive porteur 2026-09-04 : « la liste des tools à gauche […]
+    /// > toujours être au dessus des options qui apparaissent en base et non pas
+    /// > se confondre avec les option lorsqu'on a le clavier qui s'affiche. »
+    ///
+    /// Le rail était déjà à gauche (#5026) et déjà défilable : ce qui manquait
+    /// n'était ni la place ni la course, mais une FRONTIÈRE. Posé nu, il se
+    /// terminait au contact de la zone d'options sur le même fond — et clavier
+    /// levé, ce qui reste au `HStack` se réduit d'autant, donc les deux se
+    /// touchent.
+    ///
+    /// Le témoin ne mesure pas des pixels : il mesure la COHÉRENCE (dimension
+    /// 6). Le couloir droit portait déjà cette carte ; le gauche doit porter la
+    /// même — même rayon dérivé de la largeur, même teinte, même respiration.
+    /// Écrire un autre dessin ici passerait ce test s'il ne citait que le
+    /// gauche, et c'est précisément la divergence qu'on veut interdire.
+    func test_lesDeuxCouloirs_portentLaMemeCarte() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let trailing = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+
+        for (nom, source, largeur) in [
+            ("le couloir d'OUTILS", editeur, "ComposerObjectEditorRail.railWidth"),
+            ("le couloir d'HISTORIQUE", trailing, "ComposerRailGeometry.railWidth")
+        ] {
+            let nu = AppSourceGuard.stripComments(source)
+                .replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "\n", with: "")
+            XCTAssertTrue(
+                nu.contains("RoundedRectangle(cornerRadius:\(largeur)/2,style:.continuous)"),
+                "\(nom) doit porter la carte arrondie du plateau")
+            XCTAssertTrue(
+                nu.contains(".fill(plateauTint.opacity(0.55))"),
+                "\(nom) doit porter la teinte du plateau — la même que son jumeau")
+            XCTAssertTrue(
+                nu.contains(".padding(.vertical,8)"),
+                "\(nom) doit respirer comme son jumeau")
+        }
+    }
+
+    /// **Non-vacuité** — sans elle, le témoin ci-dessus passerait sur un fichier
+    /// renommé ou vidé, et dirait « les deux couloirs sont cohérents » d'une
+    /// source qu'il n'a pas lue. C'est le motif qui a fait passer trois gardes
+    /// au vert en mesurant zéro fichier.
+    func test_leTemoinDeLaCarte_litBienDeuxRails() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let trailing = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+        XCTAssertTrue(editeur.contains("private var toolRail"),
+                      "l'éditeur doit bien porter le rail d'outils que le témoin mesure")
+        XCTAssertTrue(trailing.contains("struct ComposerTrailingRail"),
+                      "le jumeau de référence doit exister")
+    }
+
+
+    // MARK: - Le filtre, atteignable des DEUX surfaces (#5041)
+
+    /// **Une capacité qui n'existe que d'une surface sur deux est une capacité
+    /// manquante.**
+    ///
+    /// `StoryFilterGridView` et `applyFilter` existaient de bout en bout, et
+    /// `EmbeddedSceneInspector` les montait déjà — mais **dans l'écran document
+    /// seulement**. L'éditeur d'objet plein écran, où l'on va justement pour
+    /// régler un média, ne les offrait nulle part.
+    ///
+    /// > Directive porteur 2026-09-04 : « longpress sur la minipreview pour
+    /// > editer l'image general avec **filtre** et taille de la scene ».
+    ///
+    /// Le témoin vérifie la chose qui compte vraiment : les deux surfaces
+    /// montent **la même vue** avec **le même modèle**. Deux écrivains d'un même
+    /// champ depuis deux surfaces est la forme la plus commune des jumelles
+    /// divergentes — ici il n'y en a qu'un, `viewModel.applyFilter`, et aucune
+    /// des deux surfaces n'écrit `currentEffects.filter` de sa main.
+    func test_leFiltre_estLaMemeGrilleDepuisLesDeuxSurfaces() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let nu = AppSourceGuard.stripComments(editeur)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+
+        // **La parenthèse FERMANTE fait tout le travail.** Écrite en préfixe —
+        // `StoryFilterGridView(viewModel:viewModel,` — cette garde passerait au
+        // vert le jour exact où un argument de plus s'ajoute, donc elle ne
+        // tomberait que sur un RENOMMAGE, jamais sur un AJOUT. Or un argument
+        // ajouté est précisément la façon dont un appel dérive de son jumeau.
+        XCTAssertTrue(
+            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:viewModel.currentSlideBackgroundImage)"),
+            "l'éditeur monte LA grille du SDK avec le MÊME aperçu que l'inspecteur du "
+            + "document — le montage entier, fermante comprise, pas son préfixe")
+        XCTAssertFalse(nu.contains("currentEffects.filter="),
+                       "aucune surface n'écrit le champ de sa main : `applyFilter` est l'unique écrivain")
+    }
+
+    /// **Non-vacuité du témoin ci-dessus** : sans elle, un fichier renommé ferait
+    /// passer les trois assertions sur une source vide — dont la négative, qui
+    /// serait alors vraie pour la pire des raisons.
+    func test_leTemoinDuFiltre_litBienLEditeur() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        XCTAssertTrue(editeur.contains("struct ComposerObjectEditorView"))
+        XCTAssertTrue(editeur.contains("var mediaOptions"),
+                      "les options média — l'unité inclut l'extension `+Media` où vit la grille")
+    }
+
 }

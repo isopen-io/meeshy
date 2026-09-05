@@ -1508,7 +1508,7 @@ describe('POST /conversations/:id/mark-unread', () => {
     expect(mockSendForbidden).toHaveBeenCalled();
   });
 
-  it('returns 404 when no participant (#4856 — access already proven, absence describes caller)', async () => {
+  it('returns 404 when no participant (#4856)', async () => {
     prisma.participant.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeRequest(), reply);
@@ -1991,11 +1991,11 @@ describe('GET /conversations/:id/messages/search', () => {
   const makeSearchReq = (q = 'hello', extra: any = {}) =>
     makeRequest({ query: { q, ...extra } });
 
-  it('403 when conversationId not found', async () => {
+  it('404 when conversationId not found (#4856)', async () => {
     mockResolveConversationId.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
   });
 
   it('403 when no access', async () => {

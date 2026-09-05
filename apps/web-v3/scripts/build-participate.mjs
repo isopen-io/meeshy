@@ -23,20 +23,33 @@ import { gzipSync } from 'node:zlib';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, '..');
-// TROIS modules, pas un — et la raison est un POIDS mesuré, pas un goût
+// ONZE modules, pas un — et la raison est un POIDS mesuré, pas un goût
 // d'architecture. `participate.js` pèse 26 173 o gzip (budgets-mesures.json) :
 // c'est le prix du fil — composeur, réserve, plein écran, réactions, peinture
 // de bulles. La LISTE n'a besoin d'aucun d'eux, et le FIL SOCIAL (#5031)
 // n'a besoin ni d'eux ni d'un socket — aimer et reposter sont des allers
 // simples (`lib/realtime/feed.ts`) — et les lui faire télécharger après leur
 // premier pixel coûterait sur la 3G rurale du § 12.6, pour du code qu'ils
-// n'exécutent jamais. Le socle que `participate` et `liste` PARTAGENT —
-// socket.io-client — reste un seul actif, à une seule adresse ; `feed` ne
-// l'importe pas du tout.
+// n'exécutent jamais. Les NOTIFICATIONS (#4898) n'ont ni composeur ni gestes
+// de ligne : leur module écoute, peint, et intercepte « Tout lire » — rien
+// d'autre. La GALERIE (`plein`, `/chats/:cle/medias`, #4525) n'a NI l'un ni
+// l'autre NI de socket : elle n'a besoin que d'Échap sur sa surimpression, un
+// seul appel à `prendsLePleinEcran()` — le lui faire payer via `participate.js`
+// aurait été le défaut même que ces huit autres modules existent pour éviter.
+// Le socle que `participate` et `liste` PARTAGENT — socket.io-client — reste
+// UN actif, à UNE adresse ; `feed` et `plein` ne l'importent pas du tout.
 const SOURCES = [
   { base: 'participate', chemin: join(RACINE, 'lib', 'realtime', 'participate.ts') },
   { base: 'liste', chemin: join(RACINE, 'lib', 'realtime', 'liste.ts') },
   { base: 'feed', chemin: join(RACINE, 'lib', 'realtime', 'feed.ts') },
+  { base: 'notifs', chemin: join(RACINE, 'lib', 'realtime', 'notifs.ts') },
+  { base: 'contacts', chemin: join(RACINE, 'lib', 'realtime', 'contacts.ts') },
+  { base: 'recherche', chemin: join(RACINE, 'lib', 'realtime', 'recherche.ts') },
+  { base: 'liens', chemin: join(RACINE, 'lib', 'realtime', 'liens.ts') },
+  { base: 'commentaires', chemin: join(RACINE, 'lib', 'realtime', 'commentaires.ts') },
+  { base: 'plein', chemin: join(RACINE, 'lib', 'realtime', 'plein.ts') },
+  { base: 'navigateur', chemin: join(RACINE, 'lib', 'realtime', 'navigateur.ts') },
+  { base: 'composer', chemin: join(RACINE, 'lib', 'realtime', 'composer.ts') },
 ];
 const DOSSIER = join(RACINE, '.rt');
 const SOCKET = join(RACINE, 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js');
@@ -55,8 +68,17 @@ const compileUn = ({ base, chemin }) => {
   return { brut: readFileSync(sortie).length, gzip: gzip(sortie) };
 };
 
+// Le TRAVAILLEUR DE ZONE (#4473) sort de la même chaîne mais PAS de la même
+// liste : il n'est pas un module de participation (aucune entrée dans
+// `ActifsTempsReel`, aucune adresse hashée — l'URL d'un Service Worker doit
+// être STABLE, sinon chaque build enregistrerait un worker NEUF au lieu de
+// mettre à jour l'existant). Sa version vit DANS son cache, par l'empreinte
+// que `app/sw/route.ts` substitue au service.
+const TRAVAILLEUR = { base: 'sw', chemin: join(RACINE, 'lib', 'sw', 'travailleur.js') };
+
 export const compile = () => {
   mkdirSync(DOSSIER, { recursive: true });
+  compileUn(TRAVAILLEUR);
   const modules = Object.fromEntries(SOURCES.map((source) => [source.base, compileUn(source)]));
   return {
     ...modules,
@@ -68,19 +90,33 @@ const ecrisLaMesure = (poids) => {
   const mesures = JSON.parse(readFileSync(MESURES, 'utf8'));
   mesures.participate = {
     quoi:
-      'Le poids des TROIS modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
+      'Le poids des ONZE modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], lib/realtime/plein.ts pour /chats/:cle/medias [#4525], lib/realtime/navigateur.ts pour la navigation de zone [§ 12.11], lib/realtime/composer.ts pour /composer [#4966], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
     participate_brut_octets: poids.participate.brut,
     participate_gzip_9_octets: poids.participate.gzip,
     liste_brut_octets: poids.liste.brut,
     liste_gzip_9_octets: poids.liste.gzip,
     feed_brut_octets: poids.feed.brut,
     feed_gzip_9_octets: poids.feed.gzip,
+    notifs_brut_octets: poids.notifs.brut,
+    notifs_gzip_9_octets: poids.notifs.gzip,
+    contacts_brut_octets: poids.contacts.brut,
+    contacts_gzip_9_octets: poids.contacts.gzip,
+    recherche_brut_octets: poids.recherche.brut,
+    recherche_gzip_9_octets: poids.recherche.gzip,
+    liens_brut_octets: poids.liens.brut,
+    liens_gzip_9_octets: poids.liens.gzip,
+    commentaires_brut_octets: poids.commentaires.brut,
+    commentaires_gzip_9_octets: poids.commentaires.gzip,
+    plein_brut_octets: poids.plein.brut,
+    plein_gzip_9_octets: poids.plein.gzip,
+    composer_brut_octets: poids.composer.brut,
+    composer_gzip_9_octets: poids.composer.gzip,
     socket_io_client_brut_octets: poids.socket?.brut ?? null,
     socket_io_client_gzip_9_octets: poids.socket?.gzip ?? null,
     commande: 'cd apps/web-v3 && node scripts/build-participate.mjs --mesure',
     date: new Date().toISOString().slice(0, 10),
   };
-  writeFileSync(MESURES, `${JSON.stringify(mesures, null, 1)}\n`);
+  writeFileSync(MESURES, `${JSON.stringify(mesures, null, 2)}\n`);
 };
 
 const main = () => {

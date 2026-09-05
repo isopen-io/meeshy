@@ -1,5 +1,7 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { avisDEcran } from './atomes-feuille';
+
 /**
  * LA FEUILLE DE LA BOÎTE — ce que `cible/notifs.png` dessine, et rien de plus.
  *
@@ -36,8 +38,7 @@ export const FEUILLE_DES_NOTIFS = compacte(`
 .notifs-ecran{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
 .notifs-ecran>.fil-tete{flex:none}
 
-.notifs-ecran>.avis{display:flex;align-items:center;gap:var(--space-2);margin:0;padding:var(--space-3) var(--space-4);font-size:var(--text-sm);color:var(--color-text-muted)}
-.notifs-ecran>.avis svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}
+${avisDEcran('.notifs-ecran')}
 
 .tout-lire{display:flex;justify-content:flex-end;margin:0;padding:0 var(--space-4) var(--space-3)}
 .tout-lire button{display:inline-flex;align-items:center;gap:var(--space-2)}

@@ -149,7 +149,11 @@ extension StoryComposerViewModel {
     /// `SlideMiniPreview` and the canvas resolve the background image — passing
     /// only `slideImages[slide.id]` left every photo-backed slide's tiles blank
     /// because modern photos live in `mediaObjects`, not `slideImages`.
-    var currentSlideBackgroundImage: UIImage? {
+    /// **`public` depuis #5041** : l'éditeur d'objet plein écran (app) monte la
+    /// même `StoryFilterGridView` que `EmbeddedSceneInspector` (SDK) et lui doit
+    /// le même aperçu. Servir `nil` depuis l'app aurait montré les tuiles en
+    /// dégradé de repli — un aperçu qui ne ressemble pas à ce qui va changer.
+    public var currentSlideBackgroundImage: UIImage? {
         if let bgId = currentSlide.effects.resolvedBackgroundMedia?.id,
            let img = loadedImages[bgId] {
             return img
@@ -542,13 +546,21 @@ extension StoryComposerViewModel {
     /// L'emoji de repli est écrit ICI, pas à la publication : un brouillon relu
     /// par une version antérieure — qui ne sait rien de l'image — doit déjà
     /// montrer un glyphe.
+    /// - Parameter animatedData: les octets d'un GIF/APNG/WebP/HEICS collé
+    ///   (#3956) — `nil` pour une image fixe, qui ne paie donc rien. Ils sont
+    ///   retenus sous le MÊME id que le bitmap : la couche du canvas essaie les
+    ///   octets d'abord et retombe sur l'image fixe quand il n'y en a pas.
     @discardableResult
     public func addSticker(image: UIImage,
                            provider: String,
-                           scale: Double? = nil) -> StorySticker {
+                           scale: Double? = nil,
+                           animatedData: Data? = nil) -> StorySticker {
         let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
                                  provider: provider, scale: scale)
         registerLoadedImage(image, for: sticker.id)
+        if let animatedData {
+            registerLoadedStickerAnimation(animatedData, for: sticker.id)
+        }
         return sticker
     }
 
@@ -597,7 +609,14 @@ extension StoryComposerViewModel {
             postMediaId: "",
             kind: kind,
             placement: "media",
-            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
+            // **`nil`, et c'est la correction du #5100.** Ce site posait `1.0`
+            // avec un TODO « compute real aspectRatio from asset » : la valeur
+            // était donc une SENTINELLE qui se lisait comme un carré. Les
+            // appelants mesurent ensuite (`setMediaAspectRatio`) ; jusque-là
+            // l'objet doit DIRE qu'il ne sait pas, sans quoi un recadrage tapé
+            // pendant cette fenêtre pose une borne calculée contre 1:1 —
+            // enregistrée, publiée, et impossible à distinguer d'un choix.
+            aspectRatio: nil,
             x: center.x,
             y: center.y,
             scale: 1.0,
@@ -671,6 +690,45 @@ extension StoryComposerViewModel {
         medias[mediaIdx].mediaURL = url
         effects.mediaObjects = medias
         slides[targetIndex].effects = effects
+    }
+
+    /// **Adopte une PRÉ-MONTÉE** — l'asset est déjà chez le serveur, l'objet
+    /// cesse d'être local (#5086, vue `4c`).
+    ///
+    /// La recherche se fait par URL LOCALE et non par identifiant d'objet, et
+    /// balaie TOUTES les slides. Deux raisons, chacune décisive :
+    ///
+    /// - la montée est lancée à la POSE, et l'auteur peut déplacer l'objet
+    ///   d'une slide à l'autre pendant qu'elle voyage ; un index de slide
+    ///   capturé au départ désignerait la mauvaise à l'arrivée ;
+    /// - le registre de pré-montée est indexé par FICHIER, parce que c'est le
+    ///   fichier qui monte. Lui faire tenir des identifiants d'objet
+    ///   l'obligerait à suivre les créations et suppressions du document.
+    ///
+    /// Les deux champs se posent ENSEMBLE, et c'est ce qui rend l'adoption
+    /// sûre : la boucle de publication saute tout objet dont `postMediaId` est
+    /// non vide, donc un objet qui porterait l'identifiant sans l'URL distante
+    /// serait publié avec un `file://` que personne ne peut lire.
+    ///
+    /// - Returns: `true` si un objet a été adopté. `false` — l'auteur a retiré
+    ///   le média pendant la montée — n'est pas une erreur : l'appelant y lit
+    ///   qu'il peut oublier cette pré-montée.
+    /// `public` parce que le REGISTRE de pré-montée vit côté app : le SDK
+    /// fournit l'atome — muter le document —, l'app décide QUAND l'appeler.
+    @discardableResult
+    public func adoptPreUploadedMedia(localURL: String, postMediaId: String, remoteURL: String) -> Bool {
+        for slideIdx in slides.indices {
+            var effects = slides[slideIdx].effects
+            guard var medias = effects.mediaObjects,
+                  let mediaIdx = medias.firstIndex(where: { $0.mediaURL == localURL })
+            else { continue }
+            medias[mediaIdx].postMediaId = postMediaId
+            medias[mediaIdx].mediaURL = remoteURL
+            effects.mediaObjects = medias
+            slides[slideIdx].effects = effects
+            return true
+        }
+        return false
     }
 
     /// Met à jour l'aspectRatio (width/height) d'un media. Appelé après le
@@ -845,6 +903,12 @@ extension StoryComposerViewModel {
         if let img = loadedImages.removeValue(forKey: id) { retiredImages[id] = img }
         if let url = loadedVideoURLs.removeValue(forKey: id) { retiredVideoURLs[id] = url }
         if let url = loadedAudioURLs.removeValue(forKey: id) { retiredAudioURLs[id] = url }
+        // Les octets animés suivent leur bitmap (#3956) : les laisser derrière
+        // ferait grossir le composer d'un GIF par sticker supprimé, et l'undo
+        // ramènerait un sticker figé.
+        if let bytes = loadedStickerAnimations.removeValue(forKey: id) {
+            retiredStickerAnimations[id] = bytes
+        }
         mediaAspectRatios.removeValue(forKey: id)
         zIndexMap.removeValue(forKey: id)
     }
@@ -1076,9 +1140,23 @@ extension StoryComposerViewModel {
         currentEffects = effects
     }
 
+    /// **Le quart de tour d'un média** (#4082, vue `2d`). La règle vit dans
+    /// `StoryMediaRotation` : elle normalise, et elle porte le SENS du glyphe.
+    ///
+    /// Contrairement au muet, ce geste vaut pour une IMAGE autant que pour une
+    /// vidéo — une photo prise de travers est le cas nominal, pas l'exception.
+    public func rotateMedia(id: String) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects,
+              let i = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[i].rotation = StoryMediaRotation.turned(medias[i].rotation)
+        effects.mediaObjects = medias
+        currentEffects = effects
+    }
+
     /// Mute un-bouton d'une piste VIDÉO (bouton canvas, rangée du panneau
     /// Médias). No-op pour une image — rien à couper.
-    func toggleMediaMute(id: String) {
+    public func toggleMediaMute(id: String) {
         var effects = currentEffects
         guard var medias = effects.mediaObjects,
               let i = medias.firstIndex(where: { $0.id == id }),

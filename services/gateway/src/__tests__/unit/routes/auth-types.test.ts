@@ -36,8 +36,6 @@ const makeUser = (overrides: Record<string, unknown> = {}) => ({
   emailVerifiedAt: new Date('2026-01-01T08:00:00Z'),
   phoneVerifiedAt: null,
   twoFactorEnabledAt: null,
-  pendingEmail: null,
-  pendingPhone: null,
   lastPasswordChange: null,
   lastLoginIp: '127.0.0.1',
   lastLoginLocation: 'Paris, FR',
@@ -90,8 +88,6 @@ describe('formatUserResponse', () => {
     expect(result.emailVerifiedAt).toEqual(new Date('2026-01-01T08:00:00Z'));
     expect(result.phoneVerifiedAt).toBeNull();
     expect(result.twoFactorEnabledAt).toBeNull();
-    expect(result.pendingEmail).toBeNull();
-    expect(result.pendingPhone).toBeNull();
     expect(result.lastPasswordChange).toBeNull();
     expect(result.lastLoginIp).toBe('127.0.0.1');
     expect(result.lastLoginLocation).toBe('Paris, FR');
@@ -128,29 +124,12 @@ describe('formatUserResponse', () => {
     expect(result.permissions).toBeUndefined();
   });
 
-  it('prefers pendingPhone over pendingPhoneNumber when both present', () => {
-    const result = formatUserResponse(makeUser({ pendingPhone: '+1', pendingPhoneNumber: '+2' }));
-    expect(result.pendingPhone).toBe('+1');
-  });
-
-  it('falls back to pendingPhoneNumber when pendingPhone is null', () => {
-    const result = formatUserResponse(makeUser({ pendingPhone: null, pendingPhoneNumber: '+33600000000' }));
-    expect(result.pendingPhone).toBe('+33600000000');
-  });
-
-  it('returns null for pendingPhone when both pendingPhone and pendingPhoneNumber are null/undefined', () => {
-    const result = formatUserResponse(makeUser({ pendingPhone: null, pendingPhoneNumber: undefined }));
-    expect(result.pendingPhone).toBeNull();
-  });
-
-  it('returns null for pendingEmail when user.pendingEmail is falsy', () => {
-    const result = formatUserResponse(makeUser({ pendingEmail: undefined }));
-    expect(result.pendingEmail).toBeNull();
-  });
-
-  it('passes through a non-null pendingEmail', () => {
-    const result = formatUserResponse(makeUser({ pendingEmail: 'new@example.com' }));
-    expect(result.pendingEmail).toBe('new@example.com');
+  it('does not compose pendingEmail/pendingPhone — no client reads them on a connection response (#4653)', () => {
+    const result = formatUserResponse(
+      makeUser({ pendingEmail: 'new@example.com', pendingPhone: '+33600000000', pendingPhoneNumber: '+33600000000' })
+    ) as unknown as Record<string, unknown>;
+    expect('pendingEmail' in result).toBe(false);
+    expect('pendingPhone' in result).toBe(false);
   });
 
   it('handles a user with no optional fields gracefully', () => {
@@ -167,8 +146,6 @@ describe('formatUserResponse', () => {
       emailVerifiedAt: null,
       phoneVerifiedAt: null,
       twoFactorEnabledAt: null,
-      pendingEmail: null,
-      pendingPhone: null,
       lastPasswordChange: null,
       lastLoginIp: null,
       lastLoginLocation: null,

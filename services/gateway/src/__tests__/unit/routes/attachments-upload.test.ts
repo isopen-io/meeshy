@@ -401,9 +401,9 @@ describe('POST /attachments/upload — anonymous, shareLink not found', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  // #4856 — l'ABSENCE de ce lien décrit l'état de la session de CET appelant
-  // (résolue côté serveur depuis son jeton), jamais un identifiant qu'il
-  // sonde : aucun anti-oracle n'est en jeu, et le vrai statut est 404.
+  // #4856 — le lien recherché est celui de la SESSION anonyme appelante,
+  // jamais celui d'un tiers : son absence est un « je ne trouve pas », pas
+  // un refus d'accès. Le texte disait déjà « not found » sous un 403.
   it('returns 404 when share link does not exist', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -819,9 +819,8 @@ describe('POST /attachments/upload-text — anonymous, share link not found (tas
   });
   afterAll(async () => { await app.close(); });
 
-  // #4856 — même raison que sur `POST /attachments/upload` : la session de
-  // l'appelant est la seule source de `shareLinkId`, donc son absence n'ouvre
-  // aucun oracle et le vrai statut est 404.
+  // #4856 — même verdict que `/attachments/upload` : c'est le lien de la
+  // session anonyme appelante, jamais celui d'un tiers.
   it('returns 404 when share link does not exist', async () => {
     mockCreateTextAttachment.mockClear();
     const res = await app.inject({

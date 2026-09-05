@@ -30,6 +30,12 @@ const nextConfig: NextConfig = {
    */
   outputFileTracingIncludes: {
     /**
+     * Le travailleur de zone (#4473) : lu par CHEMIN (`lib/sw/actif-sw.ts`),
+     * donc invisible au traceur — sans cette entrée, l'image servirait 404 sur
+     * `/__v3/sw` et le worker n'existerait qu'en local, en silence.
+     */
+    '/sw': ['./.rt/sw.js'],
+    /**
      * Le sous-sprite critique est inliné par la COQUILLE (§ 8.5) : il est donc
      * lu par toute page, pas par une route nommée. La clé est un glob pour cette
      * seule raison — l'attacher à un chemin laisserait la page suivante servir
@@ -90,6 +96,21 @@ const nextConfig: NextConfig = {
       ]),
     ),
     /**
+     * `/chats/:cle/medias` (#4525) compose l'adresse hachée de SON module —
+     * `plein.js`, le seul appel qu'elle doit au clavier (Échap sur sa
+     * surimpression) — et lit le sprite et la table de jetons comme le fil.
+     * Aucun socket.io-client : la galerie n'a pas de temps réel, seulement un
+     * dialogue à élever. Sans cette entrée, l'image servirait une galerie sans
+     * style dont le chargeur vise une adresse calculée sur un fichier absent.
+     */
+    '/chats/[cle]/medias': [
+      './node_modules/@meeshy/design-tokens/tokens.css',
+      './node_modules/@meeshy/design-tokens/dark.css',
+      './node_modules/@meeshy/design-tokens/light.css',
+      './node_modules/@meeshy/icons/sprite.svg',
+      './.rt/plein.js',
+    ],
+    /**
      * `/chats` est la TROISIÈME surface de participation (§ 12.4) : elle compose
      * l'adresse hachée de SON module (`liste.js`) et de socket.io-client en les
      * LISANT, comme les deux portes du fil. Elle lit de plus le sprite — la
@@ -105,9 +126,30 @@ const nextConfig: NextConfig = {
       './.rt/liste.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
+    /**
+     * LA ROUTE QUI SERT LES MODULES trace TOUS les fichiers de `.rt/` — c'est
+     * l'entrée qui fait exister chaque module dans l'arbre `standalone`. Un
+     * module absent ne casse RIEN de visible : `actifsTempsReel` rend un corps
+     * vide, la porte sert `tempsReel: null`, et l'écran perd son direct EN
+     * SILENCE — c'est ainsi que `/feed` a tourné sans module en production,
+     * `feed.js` n'ayant jamais été tracé. Le témoin de `actifs-rt.test.ts`
+     * (« chaque module que les actifs servent est tracé ») garde désormais la
+     * liste : tout module neuf doit s'y inscrire pour exister — c'est ce témoin,
+     * et lui seul, qui a rendu l'oubli de `composer.js` (#4966) au moment où il
+     * a été écrit, plutôt qu'en production trois semaines plus tard.
+     */
     '/rt/[nom]': [
       './.rt/participate.js',
       './.rt/liste.js',
+      './.rt/feed.js',
+      './.rt/notifs.js',
+      './.rt/contacts.js',
+      './.rt/recherche.js',
+      './.rt/liens.js',
+      './.rt/commentaires.js',
+      './.rt/plein.js',
+      './.rt/navigateur.js',
+      './.rt/composer.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },

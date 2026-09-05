@@ -54,7 +54,8 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
             messageService: messageService,
             messageSocket: MockMessageSocket(),
             socialSocket: MockSocialSocket(),
-            api: MockAPIClient()
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
         )
         return (engine, cache)
     }
@@ -139,7 +140,20 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
     /// `preferredLanguages:` — un site qui retombe sur le défaut `[]` a l'air
     /// correct et sert l'original.
     func test_everyConversionSite_passesTheReaderPrism() throws {
-        let engine = try Self.source("Sync/ConversationSyncEngine.swift")
+        // LE MOTEUR EST UNE FAMILLE DE FICHIERS depuis l'extraction #4172
+        // (`ConversationSyncEngine.swift` + `+Chargement` + `+Socket` +
+        // `+Ecritures`) : la garde CONCATÈNE la famille entière — lire l'ancien
+        // fichier seul compterait ZÉRO site et transformerait l'ancrage en
+        // rouge permanent, ou pire, un balayage partiel en vert menteur. La
+        // non-vacuité est tenue par l'ancrage à 4 : une famille qui cesserait
+        // d'être trouvée rendrait 0 ≠ 4.
+        let famille = [
+            "Sync/ConversationSyncEngine.swift",
+            "Sync/ConversationSyncEngine+Chargement.swift",
+            "Sync/ConversationSyncEngine+Socket.swift",
+            "Sync/ConversationSyncEngine+Ecritures.swift",
+        ]
+        let engine = try famille.map { try Self.source($0) }.joined(separator: "\n")
         let calls = Self.callSites(of: ".toMessage(", in: engine)
         XCTAssertEqual(calls.count, 4, "ancrage : quatre conversions vivent dans le moteur (chargement, pagination, message:new, message:edited)")
         for call in calls {

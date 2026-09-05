@@ -598,10 +598,16 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       // Resoudre l'ID de ConversationShareLink reel
       let shareLink;
 
-      // Si c'est un linkId au format mshy_..., chercher directement
+      // `mshy_*` peut être un linkId (`mshy_JLKGTETp`) OU un identifier généré
+      // depuis le nom (`mshy_beta-staging`) : la création préfixe les DEUX.
+      // Ne PAS supposer que tout `mshy_*` est un linkId — un identifier ne
+      // matcherait jamais via findUnique(linkId), et chaque adresse que /links
+      // compose depuis le slug rendait 404 (#5077, mesuré sur staging). Même
+      // piège que `findShareLinkByIdentifier` (`prisma-queries.ts`), même
+      // remède, cohérent avec le fix join `ab22f62ac`.
       if (identifier.startsWith('mshy_')) {
-        shareLink = await fastify.prisma.conversationShareLink.findUnique({
-          where: { linkId: identifier },
+        shareLink = await fastify.prisma.conversationShareLink.findFirst({
+          where: { OR: [{ linkId: identifier }, { identifier: identifier }] },
           select: anonymousLinkPreviewSelect
         });
       } else {

@@ -97,6 +97,13 @@ public struct EmbeddedSceneCanvas: View {
     /// Appui long sur une zone VIDE de la carte — inerte chez qui ne le
     /// branche pas (le composer l'utilise pour ouvrir la caméra, #4036).
     public var onBackgroundLongPressed: (() -> Void)?
+    /// L'appui long sur un média DE FOND demande son menu (#5041). Sa présence
+    /// est ce qui fait basculer `StoryCanvasBackgroundLongPress` du viseur vers
+    /// le menu : non câblé, le geste garde son comportement d'avant.
+    public var onBackgroundMediaLongPressed: ((String) -> Void)?
+    /// La translation d'un appui long ARMÉ, puis son relâchement (#5041).
+    public var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    public var onBackgroundLongPressEnded: (() -> Void)?
 
     /// **Les bitmaps du composer, keyés par id d'objet média (#4038).**
     ///
@@ -106,6 +113,10 @@ public struct EmbeddedSceneCanvas: View {
     /// qu'au premier post à photos, où la carte se peignait au tiers de sa
     /// taille, calée en haut à gauche.
     public var loadedImages: [String: UIImage]
+    /// Octets animés des stickers collés (#3956) — la scène embarquée les
+    /// joue comme le canvas plein écran ; sans ce fil, un GIF posé ici
+    /// s'y peindrait figé alors qu'il anime dans l'autre surface.
+    public var loadedStickerAnimations: [String: Data]
 
     /// Cookie monotone : les dictionnaires d'`UIImage` ne sont pas `Equatable`,
     /// donc c'est LUI qui dit au canvas qu'un bitmap a changé. Le transmettre
@@ -170,7 +181,11 @@ public struct EmbeddedSceneCanvas: View {
         editableKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text, .media],
         onBackgroundTapped: (() -> Void)? = nil,
         onBackgroundLongPressed: (() -> Void)? = nil,
+        onBackgroundMediaLongPressed: ((String) -> Void)? = nil,
+        onBackgroundLongPressChanged: ((CGPoint) -> Void)? = nil,
+        onBackgroundLongPressEnded: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
+        loadedStickerAnimations: [String: Data] = [:],
         loadedImagesVersion: UInt64 = 0,
         isDrawingOverlayActive: Bool = false,
         editingTextId: String? = nil,
@@ -190,7 +205,11 @@ public struct EmbeddedSceneCanvas: View {
         self.editableKinds = editableKinds
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundLongPressed = onBackgroundLongPressed
+        self.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        self.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        self.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         self.loadedImages = loadedImages
+        self.loadedStickerAnimations = loadedStickerAnimations
         self.loadedImagesVersion = loadedImagesVersion
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.editingTextId = editingTextId
@@ -235,8 +254,12 @@ public struct EmbeddedSceneCanvas: View {
                 selectionBadge: selectionBadge,
                 onBackgroundTapped: onBackgroundTapped,
                 onBackgroundLongPressed: onBackgroundLongPressed,
+                onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,
+                onBackgroundLongPressChanged: onBackgroundLongPressChanged,
+                onBackgroundLongPressEnded: onBackgroundLongPressEnded,
                 isDrawingOverlayActive: isDrawingOverlayActive,
                 loadedImages: loadedImages,
+                loadedStickerAnimations: loadedStickerAnimations,
                 loadedImagesVersion: loadedImagesVersion,
                 // Rayon compensé par l'échelle : la carte est rendue à sa taille
                 // de référence PUIS réduite, donc un rayon UIKit de

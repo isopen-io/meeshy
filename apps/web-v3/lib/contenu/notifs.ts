@@ -27,6 +27,10 @@ export const NOTIFS = {
   nonLues: (n: number): string => (n <= 1 ? `${n} non lue` : `${n} non lues`),
   vide: 'Aucune notification',
   videPrecision: 'Ce qui vous concerne apparaîtra ici — réponses, mentions, demandes de contact.',
+  /** Le lien de page suivante — même patron que `FIL.plusAnciens` / `MEDIAS.plusAnciens`. */
+  plusAnciennes: 'Notifications plus anciennes',
+  /** Le refus de la passerelle sur « Tout lire » — dit dans la même région de statut que la réussite. */
+  echec: 'L’action n’a pas abouti. Réessayez.',
   /** L'écran de panne partage la phrase des autres surfaces connectées : une seule voix pour un même incident. */
   panne: 'Vos notifications n’ont pas pu être chargées',
   panneePrecision: 'La connexion au service a échoué. Réessayez dans un instant.',
@@ -85,3 +89,53 @@ const GLYPHE_PAR_GENRE: Readonly<Record<string, string>> = {
 export const GLYPHE_PAR_DEFAUT = 'ph-bell';
 
 export const glypheDuGenre = (genre: string): string => GLYPHE_PAR_GENRE[genre] ?? GLYPHE_PAR_DEFAUT;
+
+/**
+ * LES TEXTES D'UNE LIGNE — UNE composition, DEUX peintres (issue #4898).
+ *
+ * La vue serveur (`notifs-vue.ts`) et le module de participation
+ * (`lib/realtime/notifs-etat.ts`) peignent la même ligne : l'un au premier
+ * rendu, l'autre quand `notification:new` arrive. Deux compositions auraient
+ * divergé au premier correctif — la forme exacte du cycle 125 bis (« deux
+ * sites qui partagent le sous-helper d'une règle ont l'air de partager la
+ * règle ») — et le lecteur aurait lu deux phrases différentes pour une même
+ * notification selon qu'elle était servie ou reçue.
+ *
+ * Le secondaire ne répète JAMAIS le primaire : quand le titre manque, le corps
+ * devient le texte primaire, et il ne redescend pas en dessous.
+ */
+export const textesDeNotif = ({
+  titre,
+  sousTitre,
+  corps,
+  nomDeLActeur,
+}: {
+  readonly titre: string | null;
+  readonly sousTitre: string | null;
+  readonly corps: string | null;
+  readonly nomDeLActeur: string | null;
+}): { readonly primaire: string; readonly secondaire: string | null } => {
+  const primaire = titre ?? corps ?? nomDeLActeur ?? NOTIFS.titre;
+  const secondaire = sousTitre ?? (corps !== null && corps !== primaire ? corps : null);
+  return { primaire, secondaire };
+};
+
+/**
+ * LE CONTEXTE D'UNE LIGNE, ÉCRIT DANS SES ATTRIBUTS — la table que la vue
+ * (écriture) et la peinture (relecture) partagent.
+ *
+ * Ces trois clés sont celles du prédicat partagé
+ * `notificationMatchesReadBulkScope` (`@meeshy/shared`) : un
+ * `notification:read-bulk` de contexte se rejoue sur le cache, jamais par un
+ * refetch, et la ligne doit donc PORTER ce que le prédicat lit. Une clé que la
+ * passerelle ajouterait n'est pas relayée tant qu'elle n'est pas ici — le
+ * repli sûr du prédicat (ne rien marquer, laisser `notification:counts`
+ * recaler) couvre l'intervalle.
+ */
+export const ATTRIBUT_PAR_CONTEXTE = {
+  conversationId: 'data-ctx-conversation',
+  postId: 'data-ctx-post',
+  friendRequestId: 'data-ctx-demande',
+} as const;
+
+export type CleDeContexte = keyof typeof ATTRIBUT_PAR_CONTEXTE;

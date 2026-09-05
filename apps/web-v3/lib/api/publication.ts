@@ -5,6 +5,7 @@ import { urlDePiece } from './fil';
 import { genreDeMime, type GenreDePiece } from './formes';
 import { chaine, instant, nombre, objet } from './lecture';
 import { baseDeLaPasserelle, DELAI_DE_REPONSE_MS } from './passerelle';
+import { adresseDeLaStory } from '@/lib/contenu/partage';
 
 /**
  * CE QU'UNE PUBLICATION EST, LUE PAR LA V3 — la story d'abord (issue #4895),
@@ -52,6 +53,14 @@ export type MediaDeStory = {
   readonly alt: string | null;
   readonly largeur: number | null;
   readonly hauteur: number | null;
+  /**
+   * `thumbnailUrl` (`postIncludes.ts:107`, `mediaSelect`) — l'affiche qu'un
+   * `<video preload="none">` peint AVANT la pression (§ media-html.ts). `null`
+   * pour un genre sans vignette (image, son) ou quand la passerelle n'en sert
+   * aucune : une affiche inventée serait pire qu'aucune (§ INTERDITS, aucune
+   * mesure/valeur ne s'invente).
+   */
+  readonly affiche: string | null;
 };
 
 export type Story = {
@@ -88,6 +97,20 @@ export type Voisinage = {
   /** Les stories de CET auteur, de la plus ancienne à la plus récente — les barres du haut. */
   readonly segments: readonly Segment[];
   readonly rang: number;
+  /**
+   * OÙ MÈNENT LES DEUX TAPS — des **ADRESSES**, jamais des identifiants, et le
+   * changement est un CORRECTIF (#5032). `tap()` (`app/(public)/partage-vue.ts`)
+   * composait `adresseDeLaStory(cible)` EN DUR : un voisinage de réels aurait
+   * envoyé vers `/stories/<id>`. Le défaut était DORMANT — `GENRE_REEL` et
+   * `GENRE_HUMEUR` posent `avecSegments: false`, donc la porte ne demandait
+   * aucun voisinage et aucun tap ne se rendait — et il se serait réveillé à la
+   * première file de réels.
+   *
+   * Une adresse plutôt qu'un identifiant fait aussi entrer un voisinage que
+   * l'identifiant ne peut pas dire : le réel SUIVANT du fil connecté vit à
+   * `/feed/reels?cursor=…`, pas à `/reels/<id>` — c'est un pas de curseur, pas
+   * un nom. Le lecteur reste UN ; ce qui change est ce qu'on lui donne.
+   */
   readonly precedente: string | null;
   readonly suivante: string | null;
 };
@@ -144,12 +167,14 @@ export const media = (brut: unknown, origine: string): MediaDeStory | null => {
   const piece = objet(brut);
   const servie = chaine(piece?.fileUrl);
   if (piece === null || servie === null) return null;
+  const affiche = chaine(piece.thumbnailUrl);
   return {
     url: urlDePiece(servie, origine),
     genre: genreDeMime(chaine(piece.mimeType)),
     alt: chaine(piece.alt) ?? chaine(piece.caption),
     largeur: nombre(piece.width),
     hauteur: nombre(piece.height),
+    affiche: affiche === null ? null : urlDePiece(affiche, origine),
   };
 };
 
@@ -346,11 +371,18 @@ export const voisinage = ({ story, visibles }: { readonly story: Story; readonly
     return { segments: [{ id: story.id, courant: true }], rang: 0, precedente: null, suivante: null };
   }
 
+  // L'ADRESSE, pas l'identifiant (voir `Voisinage`) : la conversion se fait ICI,
+  // au seul site qui sait que ces voisines sont des STORIES.
+  const adresse = (index: number): string | null => {
+    const voisine = memeAuteur[index];
+    return voisine === undefined ? null : adresseDeLaStory(voisine.id);
+  };
+
   return {
     segments: memeAuteur.map((voisine, index) => ({ id: voisine.id, courant: index === rang })),
     rang,
-    precedente: memeAuteur[rang - 1]?.id ?? null,
-    suivante: memeAuteur[rang + 1]?.id ?? null,
+    precedente: adresse(rang - 1),
+    suivante: adresse(rang + 1),
   };
 };
 
@@ -702,4 +734,164 @@ export const filDeLaPublication = async ({
       .filter((c): c is Commentaire => c !== null),
     encore: objet(enveloppe.pagination)?.hasMore === true,
   };
+};
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * PUBLIER (#4966, `/composer` ; #5033, `/stories/new`) — au même endroit et
+ * par les mêmes primitives que la lecture ci-dessus.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * `POST /api/v1/posts` (`services/gateway/src/routes/posts/core.ts:365`,
+ * `preValidation: [requiredAuth]`) est la SEULE porte de création que la v3
+ * appelle : le corps est celui de `CreatePostSchema`
+ * (`routes/posts/types.ts:233-237`), qui refuse un contenu de plus de 5000
+ * caractères et exige qu'au moins un porteur de contenu soit présent
+ * (`hasAnyContentCarrier`).
+ *
+ * `visibility` EST UN PARAMÈTRE, PAS UNE CONSTANTE — et les DEUX écrans qui
+ * publient le fournissent.
+ *
+ * Ce paragraphe annonçait l'inverse pour `/composer` (« sa ligne Audience reste
+ * INFORMATIVE »), et l'écriture de l'écran l'a démenti : sur un écran de
+ * CRÉATION, une ligne qui affiche « Public » sans qu'on puisse en changer est
+ * exactement le contrôle qui ment que la charte règle 7 interdit. Les trois
+ * valeurs sont acceptées sans champ de plus ; il n'y avait aucune raison de ne
+ * pas les servir. Le défaut `'PUBLIC'` reste, pour l'appelant qui ne choisit
+ * pas — jamais comme une politique d'écran.
+ *
+ * La ligne « Traduction », elle, reste informative, et c'est DIFFÉRENT : il n'y
+ * a rien à y choisir. La v3 REVENDIQUE la langue d'écriture
+ * (`originalLanguage`) et le Prisme de chaque LECTEUR décide du reste.
+ *
+ * `originalLanguage` — `CreatePostSchema.originalLanguage`
+ * (`routes/posts/types.ts:249-251`) — EST LA REVENDICATION DU CLIENT (§ Prisme,
+ * « canonicalize the client claim at the write boundary »). Sans elle, la
+ * passerelle retombe sur `detectLanguage(content)` : une étiquette DEVINÉE, et
+ * le pivot de toute la descente du Prisme chez les LECTEURS — l'erreur ne se
+ * voit jamais chez l'auteur (revue croisée #4966, défaut 8). `langue` est
+ * `null` quand `/auth/me` n'a servi aucune `systemLanguage` : ne RIEN
+ * revendiquer est correct, la passerelle devine alors comme elle l'a toujours
+ * fait — une chaîne vide ne l'est pas, elle poserait un `originalLanguage`
+ * vide dans le corps.
+ */
+
+export type PublicationEnvoyee =
+  | { readonly genre: 'publie'; readonly id: string }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
+
+const REFUS_PUBLICATION = 'La publication n’a pas pu être envoyée. Réessayez.';
+
+export const publie = async ({
+  jeton,
+  type,
+  texte,
+  visibility = 'PUBLIC',
+  emoji = null,
+  langue = null,
+  cmid = null,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly type: 'POST' | 'REEL' | 'STATUS' | 'STORY';
+  readonly texte: string;
+  /** `CreatePostSchema.visibility` — `'PUBLIC'` pour composer, la valeur RÉELLEMENT choisie pour une story (#5033). */
+  readonly visibility?: 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+  /**
+   * `moodEmoji` — `CreatePostSchema.moodEmoji`, `z.string().max(10)`
+   * (`routes/posts/types.ts:246`). Il n'a de sens que pour un `STATUS` : c'est
+   * l'humeur ELLE-MÊME, et le texte n'en est que le commentaire. `null` — le
+   * cas de tous les autres types — ne pose AUCUNE clé dans le corps : une
+   * chaîne vide serait un emoji vide, pas une absence d'emoji.
+   */
+  readonly emoji?: string | null;
+  /** `originalLanguage` — la revendication du client. `null` : rien à revendiquer, la passerelle devine. */
+  readonly langue?: string | null;
+  /**
+   * `X-Client-Mutation-Id` — `cmid_<uuid v4 minuscule>`
+   * (`services/gateway/src/middleware/clientMutationId.ts:29`). Un rejeu
+   * PORTANT LE MÊME `cmid` (retour en ligne, un second onglet) retombe sur
+   * `MutationLogService` et rend le résultat déjà produit plutôt que d'en
+   * fabriquer un second (`POST /posts` est enveloppé par `withMutationLog`,
+   * `replayCost: 'diverges'` — routes/posts/core.ts:389-410). `null` : aucun
+   * en-tête posé, l'appel n'est pas idempotent (chemin SANS JavaScript).
+   */
+  readonly cmid?: string | null;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<PublicationEnvoyee> => {
+  const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_DES_POSTS}`, jeton, recuperer, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(cmid === null ? {} : { 'x-client-mutation-id': cmid }),
+    },
+    body: JSON.stringify({
+      type,
+      content: texte,
+      visibility,
+      ...(emoji === null ? {} : { moodEmoji: emoji }),
+      ...(langue === null ? {} : { originalLanguage: langue }),
+    }),
+  });
+
+  if (reponse === null) return { genre: 'refus', message: REFUS_PUBLICATION, statut: null };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success === true) {
+    const id = chaine(objet(enveloppe.data)?.id);
+    if (id !== null) return { genre: 'publie', id };
+  }
+
+  return {
+    genre: 'refus',
+    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_PUBLICATION,
+    statut: reponse.status,
+  };
+};
+
+/**
+ * `POST /posts/:postId/comments` (`routes/posts/comments.ts:164`, requiredAuth,
+ * `CreateCommentSchema` : `content` ≤ 2000) — le geste d'écriture de `/post/:id`
+ * (#5091). Quatre issues, jamais fondues : `faite`, `session-expiree` (le cas
+ * NOMINAL d'un retour après quelques jours), `refus` (la passerelle a dit non —
+ * contenu invalide, publication fermée), `panne`.
+ */
+export type IssueDuCommentaire = 'faite' | 'session-expiree' | 'refus' | 'panne';
+
+export const ecrisUnCommentaire = async ({
+  id,
+  contenu,
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly id: string;
+  readonly contenu: string;
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<IssueDuCommentaire> => {
+  const reponse = await (recuperer ?? ((u: string, o?: RequestInit) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/posts/${encodeURIComponent(id)}/comments`,
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ content: contenu }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_DE_REPONSE_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return 'panne';
+  if (reponse.status === 401) return 'session-expiree';
+
+  const enveloppe = (await reponse.json().catch(() => null)) as { readonly success?: unknown } | null;
+  if (enveloppe?.success === true) return 'faite';
+  return reponse.status >= 500 ? 'panne' : 'refus';
 };

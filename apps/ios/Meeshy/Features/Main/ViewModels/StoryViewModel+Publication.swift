@@ -194,6 +194,13 @@ extension StoryViewModel {
         let loadedImages: [String: UIImage]
         let loadedVideoURLs: [String: URL]
         let loadedAudioURLs: [String: URL]
+        /// **Les octets ANIMÉS des stickers collés, keyés par id d'élément**
+        /// (#3956) — vide pour toute publication sans GIF.
+        ///
+        /// `loadedImages` n'en porte que la PREMIÈRE image ; téléverser
+        /// celle-ci publierait un sticker figé après l'avoir composé animé —
+        /// l'aperçu aurait dit vrai et la publication, non.
+        var loadedStickerAnimations: [String: Data] = [:]
         let originalLanguage: String?
         let visibility: String
         let visibilityUserIds: [String]
@@ -264,6 +271,9 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
+        /// Les octets animés des stickers collés (#3956) — `[:]` quand la
+        /// publication n'en porte aucun, ce qui est le cas nominal.
+        loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
@@ -349,6 +359,7 @@ extension StoryViewModel {
             loadedImages: loadedImages,
             loadedVideoURLs: loadedVideoURLs,
             loadedAudioURLs: loadedAudioURLs,
+            loadedStickerAnimations: loadedStickerAnimations,
             originalLanguage: originalLanguage,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
