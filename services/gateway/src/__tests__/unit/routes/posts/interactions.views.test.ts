@@ -450,22 +450,33 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
   });
 });
 
-describe('POST /posts/impressions/batch — caps at 50 entries', () => {
-  it('returns 200 and caps batch at 50 entries', async () => {
+/**
+ * CE TÉMOIN ÉPINGLAIT LE DÉFAUT (#4622). Il envoyait 60 identifiants et
+ * EXIGEAIT `recorded: 50` — c'est-à-dire la troncature SILENCIEUSE d'un lot que
+ * le schéma déclarait pourtant valide (`maxItems: 100`). Deux littéraux
+ * portaient la même borne sans lien, et ils avaient divergé ; le témoin gravait
+ * la moitié perdue comme un comportement attendu.
+ *
+ * Sous la borne UNIQUE, 60 ≤ `IMPRESSION_BATCH_CAP` : rien n'est tronqué, et
+ * les soixante sont enregistrés. Le plafond lui-même se mesure aux DEUX bornes
+ * — à 100 et à 101 — dans le bloc plus bas.
+ */
+describe('POST /posts/impressions/batch — sous le plafond, rien ne se perd', () => {
+  it('enregistre les SOIXANTE entrées d’un lot que le schéma accepte', async () => {
     const postIds = Array.from({ length: 60 }, (_, i) => `507f1f77bcf86cd7994390${i.toString().padStart(2, '0')}`);
     const prisma = {
       postImpression: {
-        createMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
+        createMany: jest.fn<any>().mockResolvedValue({ count: 60 }),
       },
       post: {
-        updateMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 60 }),
         findMany: aclAwareFindMany(),
       },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: '/posts/impressions/batch', payload: { postIds } });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.recorded).toBe(50);
+    expect(res.json().data.recorded).toBe(60);
     await app.close();
   });
 });
@@ -663,6 +674,46 @@ describe('#4150 — POST /posts/:id/view borne `duration` avant le handler', () 
     });
 
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// Le plafond du lot d'impressions (#4622) — deux témoins arrivés d'une PR qui
+// visait `interactions.test.ts`, découpé depuis (922763f995). Leur place est
+// ICI : ce fichier porte `view` / `anonymous-view` / `impression` et les deux
+// lots.
+describe('POST /posts/impressions/batch — caps at IMPRESSION_BATCH_CAP (100) entries', () => {
+  // La borne interne est la MÊME que le `maxItems` du schéma (100), plus jamais
+  // un 50 qui tronquait en silence un lot que le contrat déclarait valide. Un
+  // lot au-delà de 100 (que le schéma refuserait s'il l'atteignait) est borné à
+  // 100 ; en deçà, chaque id admis est enregistré.
+  const makePrismaDouble = () => ({
+    postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 100 }) },
+    post: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 100 }),
+      findMany: aclAwareFindMany(),
+    },
+  });
+
+  it('records all 100 entries at the cap boundary', async () => {
+    const postIds = Array.from({ length: 100 }, (_, i) => `507f1f77bcf86cd799439${i.toString().padStart(3, '0')}`);
+    const app = await buildApp({ prisma: makePrismaDouble() });
+    const res = await app.inject({ method: 'POST', url: '/posts/impressions/batch', payload: { postIds } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(100);
+    await app.close();
+  });
+
+  // Au-delà du plafond, le schéma REFUSE (400) plutôt que de tronquer en
+  // silence : l'appelant apprend que son lot est trop grand, il ne perd pas la
+  // moitié sans le savoir. C'est ce que corrige l'alignement schéma ↔ garde.
+  it('rejects a batch over the cap with 400 instead of silently truncating', async () => {
+    const postIds = Array.from({ length: 101 }, (_, i) => `507f1f77bcf86cd799439${i.toString().padStart(3, '0')}`);
+    const prisma = makePrismaDouble();
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: '/posts/impressions/batch', payload: { postIds } });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.postImpression.createMany).not.toHaveBeenCalled();
     await app.close();
   });
 });
