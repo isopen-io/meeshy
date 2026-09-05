@@ -4,7 +4,6 @@ import type { Appel } from '@/lib/api/appels';
 import { APPELS, classeDeLaTuile, duree, glypheDeLAppel } from '@/lib/contenu/appels';
 
 import { FEUILLE_DES_APPELS } from './appels-feuille';
-import { raccourcisEntete } from './espace-vue';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { documentPleinEcran } from './fil-vue';

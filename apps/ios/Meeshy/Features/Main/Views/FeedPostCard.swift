@@ -331,7 +331,31 @@ struct FeedPostCard: View {
     /// VoiceOver label pour la scène de carte — même convention que
     /// `mediaAccessibilityLabel` (attribution à l'auteur).
     private var cardSceneAccessibilityLabel: String {
-        String(format: String(localized: "a11y.feed.post.scene", defaultValue: "Scène partagée par %@", bundle: .main), post.author)
+        let attribution = String(
+            format: String(localized: "a11y.feed.post.scene",
+                           defaultValue: "Scène partagée par %@", bundle: .main),
+            post.author)
+        // **La légende ENTRE dans le libellé** (2026-09-05).
+        //
+        // La carte est un élément unique (`accessibilityElement(children:
+        // .ignore)`) : tout ce qu'on peint DEDANS — dont la surimpression de
+        // légende posée le même jour — disparaît de l'arbre. VoiceOver
+        // annonçait « Scène partagée par Demo » et taisait le texte que
+        // l'auteur avait écrit pour décrire son image.
+        //
+        // > **Un `overlay` posé sur un élément qui ignore ses enfants est
+        // > peint pour l'œil et muet pour l'oreille.** Le défaut ne se voit
+        // > pas — la couche s'affiche —, et il ne se lit pas non plus : les
+        // > deux modificateurs sont justes séparément, c'est leur ORDRE qui
+        // > décide. Trouvé en cherchant la légende dans l'arbre pour la
+        // > vérifier à l'écran ; sans ce détour, elle serait restée inaudible.
+        //
+        // La légende ENTIÈRE est servie ici, pas sa version abrégée : les
+        // vingt mots sont une contrainte de PLACE, et l'oreille n'en a pas.
+        guard let caption = cardSceneCaption?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !caption.isEmpty
+        else { return attribution }
+        return "\(attribution). \(caption)"
     }
 
     /// **Le média que le plein écran doit ouvrir sur une carte de SCÈNE.**
@@ -692,34 +716,20 @@ struct FeedPostCard: View {
                 senderName: post.author
             )
         }
-        .fullScreenCover(isPresented: $showFullscreenGallery) {
-            let attachments = post.media
-                .filter { $0.type == .image || $0.type == .video }
-                .map { $0.toMessageAttachment() }
-            let senderInfo = ConversationViewModel.MediaSenderInfo(
-                senderName: post.author,
-                senderAvatarURL: post.authorAvatarURL,
-                senderColor: post.authorColor,
-                sentAt: post.timestamp
-            )
-            let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
-            ConversationMediaGalleryView(
-                allAttachments: attachments,
-                startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                accentColor: accentColor,
-                // #4934 — le plein écran garde la bascule de langue que la
-                // carte offre : `captionServings` porte le texte ET ses
-                // alternatives, `captionMap` reste servi pour les appelants qui
-                // n'ont rien à basculer.
-                captionServings: SocialMediaCaption.serving(
-                    for: post.media, carrier: .from(post: post)
-                ),
-                captionMap: SocialMediaCaption.map(
-                    for: post.media, carrierText: post.displayContent
-                ),
-                senderInfoMap: senderMap
-            )
-        }
+        // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
+        //
+        // Cette vingtaine de lignes était l'un des trois exemplaires que
+        // `socialMediaGallery` a été écrit pour remplacer — et le dernier à
+        // n'avoir pas été raccordé. Le brancher n'est pas qu'un nettoyage :
+        // c'est ce qui apporte à la carte du fil la branche SCÈNE, qui rejoue
+        // le canvas au lieu d'ouvrir son fond.
+        .socialMediaGallery(
+            post: post,
+            isPresented: $showFullscreenGallery,
+            startMediaId: fullscreenMediaId,
+            accentColor: accentColor,
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
     }

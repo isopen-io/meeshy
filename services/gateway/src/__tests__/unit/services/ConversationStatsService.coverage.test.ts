@@ -1,36 +1,26 @@
 /**
- * ConversationStatsService — suite SŒUR de `ConversationStatsService.test.ts` (#5265).
+ * LES CHEMINS QUE LA SUITE PRINCIPALE N'ATTEINT PAS — sortie de
+ * `ConversationStatsService.test.ts` le 2026-09-05, avec la canonicalisation
+ * des langues (`ConversationStatsService.languageCanonical.test.ts`), parce que
+ * le fichier hôte était repassé au-dessus de la dette que le cliquet #4531
+ * refuse de voir monter.
  *
- * Extraite pour ramener `ConversationStatsService.test.ts` sous le budget de
- * taille des suites (`gateway-test-file-size-budget.test.ts`, #4531) — même
- * motif que #5263 : `6fb7e5b843` a ajouté 103 lignes (les quatre témoins de
- * canonicalisation de langue) à un fichier déjà hors budget. Ce fichier porte
- * le bloc `describe('ConversationStatsService — coverage gap-fill', …)`
- * **déplacé tel quel** — aucun cas perdu, aucune assertion changée — avec son
- * propre `makeBasePrisma()` et ses propres constantes locales
- * (`testConversationId`, `testUserId1`), qui masquaient déjà celles du fichier
- * d'origine : le bloc était SÉPARÉ dès l'origine, seulement colocalisé.
+ * Découpe par RESPONSABILITÉ, et celle-ci se lisait déjà dans le nom du bloc :
+ * « coverage gap-fill » est un APPENDICE — ce que la suite nominale laisse
+ * derrière (branches d'erreur, cas limites, chemins rarement pris). Il se lit
+ * à côté, jamais dedans.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-// Mock logger to avoid console noise during tests
 jest.mock('../../../utils/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  }
+  logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }
 }));
 
 import { ConversationStatsService } from '../../../services/ConversationStatsService';
-
-// ==============================================
-// GAP-FILL COVERAGE TESTS
-// ==============================================
 
 describe('ConversationStatsService — coverage gap-fill', () => {
   // Each describe block gets its own service reference to keep the singleton
@@ -236,96 +226,4 @@ describe('ConversationStatsService — coverage gap-fill', () => {
   // through the SSOT `normalizeLanguageForDedup`, `'en'`/`'EN'`/`'en-US'` would
   // split into distinct buckets and inflate the derived languageCount — the same
   // defect already closed on the `spokenLanguages` aggregate (routes/anonymous.ts).
-  describe('language-code canonicalization', () => {
-    const convObj = {
-      id: testConversationId,
-      identifier: `conv_${testConversationId.slice(-4)}`,
-      type: 'private',
-    };
-
-    beforeEach(() => {
-      const service = ConversationStatsService.getInstance();
-      service.getActiveConversationIds().forEach(id => service.invalidate(id));
-    });
-
-    it('should merge region-tagged/mixed-case message language variants into one canonical bucket (summing counts)', async () => {
-      const service = ConversationStatsService.getInstance();
-      const mockPrisma: any = makeBasePrisma();
-      mockPrisma.conversation.findFirst.mockResolvedValue(convObj);
-      mockPrisma.message.groupBy.mockResolvedValue([
-        { originalLanguage: 'en', _count: { _all: 3 } },
-        { originalLanguage: 'en-US', _count: { _all: 4 } },
-        { originalLanguage: 'EN', _count: { _all: 2 } },
-        { originalLanguage: 'fr-FR', _count: { _all: 5 } }
-      ]);
-      mockPrisma.participant.findMany.mockResolvedValue([]);
-      mockPrisma.user.findMany.mockResolvedValue([]);
-
-      const stats = await service.getOrCompute(mockPrisma as any, testConversationId, () => []);
-
-      // 3 + 4 + 2 collapse into a single 'en' bucket; region stripped for 'fr'.
-      expect(stats.messagesPerLanguage).toEqual({ en: 9, fr: 5 });
-    });
-
-    it('should merge region-tagged/mixed-case participant language variants into one canonical bucket', async () => {
-      const service = ConversationStatsService.getInstance();
-      const mockPrisma: any = makeBasePrisma();
-      mockPrisma.conversation.findFirst.mockResolvedValue(convObj);
-      mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.participant.findMany.mockResolvedValue([
-        { user: { id: '507f1f77bcf86cd799439201', systemLanguage: 'en-US' } },
-        { user: { id: '507f1f77bcf86cd799439202', systemLanguage: 'EN' } },
-        { user: { id: '507f1f77bcf86cd799439203', systemLanguage: 'pt-BR' } }
-      ]);
-      mockPrisma.user.findMany.mockResolvedValue([]);
-
-      const stats = await service.getOrCompute(mockPrisma as any, testConversationId, () => []);
-
-      expect(stats.participantsPerLanguage).toEqual({ en: 2, pt: 1 });
-      expect(stats.participantCount).toBe(3);
-    });
-
-    it('should canonicalize the incremental message-language bucket (updateOnNewMessage)', async () => {
-      const service = ConversationStatsService.getInstance();
-      const mockPrisma: any = makeBasePrisma();
-      mockPrisma.conversation.findFirst.mockResolvedValue(convObj);
-      mockPrisma.message.groupBy.mockResolvedValue([
-        { originalLanguage: 'en', _count: { _all: 1 } }
-      ]);
-      mockPrisma.participant.findMany.mockResolvedValue([]);
-      mockPrisma.user.findMany.mockResolvedValue([]);
-
-      await service.getOrCompute(mockPrisma as any, testConversationId, () => []);
-
-      // A region-tagged incoming message must land on the SAME 'en' bucket,
-      // not create a distinct 'en-us' one.
-      const stats = await service.updateOnNewMessage(
-        mockPrisma as any,
-        testConversationId,
-        'en-US',
-        () => []
-      );
-
-      expect(stats.messagesPerLanguage).toEqual({ en: 2 });
-    });
-
-    it('should canonicalize global-conversation participant languages (user.findMany branch)', async () => {
-      const service = ConversationStatsService.getInstance();
-      service.getActiveConversationIds().forEach(id => service.invalidate(id));
-      const globalConvId = '507f1f77bcf86cd799439098';
-      const mockPrisma: any = makeBasePrisma();
-      mockPrisma.conversation.findFirst.mockResolvedValue({ id: globalConvId, identifier: 'meeshy' });
-      mockPrisma.message.groupBy.mockResolvedValue([]);
-      mockPrisma.user.findMany.mockResolvedValue([
-        { id: '507f1f77bcf86cd799439211', systemLanguage: 'fr' },
-        { id: '507f1f77bcf86cd799439212', systemLanguage: 'fr-FR' },
-        { id: '507f1f77bcf86cd799439213', systemLanguage: 'FR' }
-      ]);
-      mockPrisma.participant.findMany.mockResolvedValue([]);
-
-      const stats = await service.getOrCompute(mockPrisma as any, 'meeshy', () => []);
-
-      expect(stats.participantsPerLanguage).toEqual({ fr: 3 });
-    });
-  });
 });

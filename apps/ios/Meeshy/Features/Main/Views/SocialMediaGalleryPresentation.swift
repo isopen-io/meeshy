@@ -31,17 +31,41 @@ extension View {
     ///     l'hôte n'a pas à garder son binding, ce qui évite le cas où l'on
     ///     ouvre un plein écran vide pendant un rechargement.
     ///   - startMediaId: le média par lequel on ENTRE. `nil` ⇒ le premier.
+    ///   - preferredContentLanguages: le Prisme du LECTEUR, servi au player
+    ///     quand le post porte une scène. Vide ⇒ le player retombe sur les
+    ///     textes originaux, ce qui est licite mais jamais souhaitable.
     func socialMediaGallery(
         post: FeedPost?,
         isPresented: Binding<Bool>,
         startMediaId: String?,
-        accentColor: String
+        accentColor: String,
+        preferredContentLanguages: [String] = []
     ) -> some View {
         fullScreenCover(isPresented: isPresented) {
             if let post {
-                SocialMediaGalleryContent(
-                    post: post, startMediaId: startMediaId, accentColor: accentColor
-                )
+                // **Une SCÈNE se rejoue, elle ne se feuillette pas** (directive
+                // porteur 2026-09-05). Le site unique d'ouverture est le seul
+                // endroit qui connaisse la NATURE du post ; c'est donc ici que
+                // la question se pose, une fois pour les quatre surfaces qui
+                // ouvrent un plein écran.
+                //
+                // Sans cette branche, un canvas s'ouvrait sur son fond — la
+                // photo source, en paysage, sans le texte ni les stickers que
+                // l'auteur avait posés. La carte du fil montrait la scène et le
+                // plein écran montrait autre chose : le seul des deux formats
+                // qu'on ouvre POUR mieux voir était celui qui montrait le moins.
+                if let document = post.storyEffects?.canvasV3 {
+                    SocialSceneFullscreenView(
+                        post: post,
+                        document: document,
+                        accentColor: accentColor,
+                        preferredContentLanguages: preferredContentLanguages
+                    )
+                } else {
+                    SocialMediaGalleryContent(
+                        post: post, startMediaId: startMediaId, accentColor: accentColor
+                    )
+                }
             }
         }
     }

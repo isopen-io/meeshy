@@ -1207,3 +1207,8 @@ describe('conversationStatsService (exported singleton)', () => {
     expect(conversationStatsService).toBe(instance);
   });
 });
+
+// ==============================================
+// GAP-FILL COVERAGE TESTS
+// ==============================================
+

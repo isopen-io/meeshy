@@ -30,6 +30,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { LocationHandler } from '../LocationHandler';
 import type { Socket, Server as SocketIOServer } from 'socket.io';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { findFirstHonouringWhere } from '../../../__tests__/helpers/find-first-honouring-where';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,12 @@ const USER_ID = 'user-loc-001';
 const CONV_ID = '507f1f77bcf86cd799439011';
 const NORMALIZED_CONV_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = 'participant-loc-001';
+// Un AUTRE participant, ACTIF dans la MÊME conversation — ni `USER_ID` ni
+// `PARTICIPANT_ID`. Placé en tête du double, il fait échouer tout `where` qui
+// perdrait son `userId` (branche inscrite) ou son `id` (branche anonyme) : la
+// garde plate rendrait alors CET intrus, jamais `null` (#5191).
+const INTRUDER_USER_ID = 'user-loc-intruder';
+const INTRUDER_PARTICIPANT_ID = 'participant-loc-intruder';
 
 const VALID_COORDINATES = { latitude: 48.8566, longitude: 2.3522 };
 
@@ -61,10 +68,26 @@ function makeIo() {
   };
 }
 
-function makePrisma(participantResult: unknown = { id: PARTICIPANT_ID }): any {
+// Une ligne satisfaisant les DEUX `where` (`id` pour la branche anonyme,
+// `userId` pour la branche inscrite) — comme une vraie ligne `Participant`,
+// qui porte toujours les deux colonnes à la fois.
+const REAL_PARTICIPANT_ROW = {
+  id: PARTICIPANT_ID,
+  userId: USER_ID,
+  conversationId: NORMALIZED_CONV_ID,
+  isActive: true,
+};
+const INTRUDER_ROW = {
+  id: INTRUDER_PARTICIPANT_ID,
+  userId: INTRUDER_USER_ID,
+  conversationId: NORMALIZED_CONV_ID,
+  isActive: true,
+};
+
+function makePrisma(rows: ReadonlyArray<Record<string, unknown>> = [INTRUDER_ROW, REAL_PARTICIPANT_ROW]): any {
   return {
     participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(participantResult),
+      findFirst: jest.fn<any>(findFirstHonouringWhere(rows)),
     },
     // Conversation OUVERTE par défaut — l'état terminal a sa propre suite.
     conversation: {
@@ -237,7 +260,7 @@ describe('LocationHandler', () => {
     });
 
     it('returns error when user is not a participant', async () => {
-      const prisma = makePrisma(null);
+      const prisma = makePrisma([INTRUDER_ROW]);
       const cb = jest.fn();
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
@@ -265,7 +288,7 @@ describe('LocationHandler', () => {
 
     it('catches errors and returns error via callback', async () => {
       mockNormalize.mockRejectedValue(new Error('normalize failed'));
-      const prisma = makePrisma({ id: PARTICIPANT_ID });
+      const prisma = makePrisma();
       const cb = jest.fn();
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
@@ -337,7 +360,7 @@ describe('LocationHandler', () => {
     });
 
     it('returns early when user is not a participant', async () => {
-      const prisma = makePrisma(null);
+      const prisma = makePrisma([INTRUDER_ROW]);
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
 
@@ -486,7 +509,7 @@ describe('LocationHandler', () => {
     });
 
     it('returns early when user is not a participant', async () => {
-      const prisma = makePrisma(null);
+      const prisma = makePrisma([INTRUDER_ROW]);
       const { handler } = makeHandler({ prisma });
       const socket = makeSocket();
 
@@ -533,6 +556,21 @@ describe('LocationHandler', () => {
       await handler.handleLiveLocationStop(socket, { conversationId: CONV_ID });
 
       expect((socket as any)._toRoom.emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_STOPPED, expect.anything());
+    });
+
+    // La branche anonyme n'avait AUCUN témoin de refus : les deux tests
+    // ci-dessus prouvent seulement que « quelqu'un » de trouvé suffit. Ici
+    // aucune ligne ne porte `PARTICIPANT_ID` — seul un `where` honorant `id`
+    // peut légitimement rendre `null` ; un `where` qui l'aurait perdu
+    // trouverait l'intrus, actif dans la MÊME conversation (#5191).
+    it('handleLiveLocationUpdate stays silent for an anonymous session whose participantId matches no one', async () => {
+      const prisma = makePrisma([INTRUDER_ROW]);
+      const { handler } = makeHandler({ prisma });
+      const socket = makeSocket();
+
+      await handler.handleLiveLocationUpdate(socket, { ...VALID_COORDINATES, conversationId: CONV_ID });
+
+      expect((socket as any)._toRoom.emit).not.toHaveBeenCalled();
     });
   });
 });

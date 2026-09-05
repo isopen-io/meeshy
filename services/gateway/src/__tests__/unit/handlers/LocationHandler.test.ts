@@ -12,6 +12,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { LocationHandler } from '../../../socketio/handlers/LocationHandler';
 import type { LocationHandlerDependencies } from '../../../socketio/handlers/LocationHandler';
 import type { SocketUser } from '../../../socketio/utils/socket-helpers';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 // ===== MOCKS =====
 
@@ -77,6 +78,32 @@ const SOCKET_ID = 'socket-1';
 const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const NORMALIZED_ID = '507f1f77bcf86cd799439011';
 const PARTICIPANT_ID = 'participant-1';
+// Un AUTRE membre de la MÊME conversation — placé en tête du double, il fait
+// échouer tout `where` qui aurait perdu `userId` : la garde plate (#5191)
+// rendrait alors CE participant-là, jamais `null`.
+const INTRUDER_USER_ID = 'user-intruder';
+const INTRUDER_PARTICIPANT_ID = 'participant-intruder';
+
+function seedParticipant(prisma: ReturnType<typeof createMockPrisma>): void {
+  prisma.participant.findFirst.mockImplementation(
+    findFirstHonouringWhere([
+      { id: INTRUDER_PARTICIPANT_ID, userId: INTRUDER_USER_ID, conversationId: NORMALIZED_ID, isActive: true },
+      { id: PARTICIPANT_ID, userId: USER_ID, conversationId: NORMALIZED_ID, isActive: true },
+    ])
+  );
+}
+
+// Un membre de la conversation, mais PAS `USER_ID` : un `where` qui perdrait
+// `userId` le trouverait quand même — c'est exactement la garde plate que
+// #5191 nomme. Aucune ligne pour `USER_ID` : seul un `where` honorant
+// `userId` peut légitimement rendre `null` ici.
+function seedOnlyAnotherMember(prisma: ReturnType<typeof createMockPrisma>): void {
+  prisma.participant.findFirst.mockImplementation(
+    findFirstHonouringWhere([
+      { id: INTRUDER_PARTICIPANT_ID, userId: INTRUDER_USER_ID, conversationId: NORMALIZED_ID, isActive: true },
+    ])
+  );
+}
 
 // ===== TESTS =====
 
@@ -101,7 +128,7 @@ describe('LocationHandler', () => {
     ]);
     normalizeConversationId = jest.fn<any>().mockResolvedValue(NORMALIZED_ID);
 
-    mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+    seedParticipant(mockPrisma);
 
     handler = new LocationHandler({
       io: mockIO as any,
@@ -215,7 +242,7 @@ describe('LocationHandler', () => {
     it('returns error when not a participant', async () => {
       const callback = jest.fn();
       const socket = createMockSocket(SOCKET_ID);
-      mockPrisma.participant.findFirst.mockResolvedValue(null);
+      seedOnlyAnotherMember(mockPrisma);
 
       await handler.handleLiveLocationStart(socket, validData as any, callback);
 
@@ -278,7 +305,7 @@ describe('LocationHandler', () => {
 
     it('silently ignores when not a participant', async () => {
       const socket = createMockSocket(SOCKET_ID);
-      mockPrisma.participant.findFirst.mockResolvedValue(null);
+      seedOnlyAnotherMember(mockPrisma);
 
       await handler.handleLiveLocationUpdate(socket, validData as any);
 
@@ -330,7 +357,7 @@ describe('LocationHandler', () => {
 
     it('silently ignores when not a participant', async () => {
       const socket = createMockSocket(SOCKET_ID);
-      mockPrisma.participant.findFirst.mockResolvedValue(null);
+      seedOnlyAnotherMember(mockPrisma);
 
       await handler.handleLiveLocationStop(socket, validData as any);
 

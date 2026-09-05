@@ -347,8 +347,9 @@ P2025 → NotFoundError
 - Status updates: throttled to once per 5 seconds
 
 ## Response Format
+Producteur unique : `sendSuccess()`/`sendError()` (`utils/response.ts`), forme déclarée par `errorResponseSchema` (`packages/shared/types/api-schemas/error.ts`) — voir § « Un schéma d'ERREUR se confronte à l'enveloppe » plus bas, ne pas la reproduire ici (#4884). `error` est une CHAÎNE PLATE :
 ```typescript
-{ success: boolean, error?: { code, message }, data?: T, meta?: { total, page, limit } }
+{ success: boolean, error?: string, message?: string, code?: string, data?: T, pagination?: PaginationMeta }
 ```
 
 ## Logging
@@ -480,7 +481,7 @@ Pagination is emitted at the ROOT of the response, NOT under `meta` — both
 `pagination` as a top-level key, and the iOS/web decoders read it there. This
 line used to state the opposite, which no route could satisfy while using the
 mandated helper.
-Errors under `error: { code, message }`, NOT `error: "string"`.
+Errors are `sendError(reply, statusCode, error, { message?, code?, violations?, details? })` — `error` and `code` are SIBLING top-level strings, NOT `error: { code, message }`. See § « Un schéma d'ERREUR se confronte à l'enveloppe » below and `errorResponseSchema` (`packages/shared/types/api-schemas/error.ts`), the single source for this shape (#4884).
 
 ### Language Resolution
 ALWAYS use `resolveUserLanguage()` from `@meeshy/shared` for language resolution.
@@ -1551,6 +1552,11 @@ Les deux étaient déjà utilisés à quelques lignes des blocs fautifs, dans le
 mêmes fichiers. **C'est outillé et en cliquet depuis le cycle 92** —
 `routes/__tests__/error-schema-sweep.ts`, inventaire VIDE : il n'y a pas de dette
 d'erreur légitime à porter, la forme juste étant toujours la même constante.
+Le producteur lui-même (`sendError`) est confronté au même schéma partagé par
+`utils/__tests__/response.test.ts` § « sendError sert une forme ⊆
+errorResponseSchema, et réciproquement » (#4884) — un cliquet complémentaire à
+`global-error-handler-field-closure-guard.test.ts`, qui ne tient que le
+gestionnaire global.
 
 ### La troisième forme : une clé du MAUVAIS TYPE est COERCÉE, pas supprimée
 

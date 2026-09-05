@@ -13,6 +13,7 @@ import {
   createPaginationMeta,
 } from '../response';
 import type { FastifyReply } from 'fastify';
+import { errorResponseSchema } from '@meeshy/shared/types';
 
 function makeReply(): FastifyReply & { _status: number; _body: unknown } {
   const reply = {
@@ -83,6 +84,52 @@ describe('sendError', () => {
     const reply = makeReply();
     sendError(reply, 400, 'Bad request');
     expect((reply._body as Record<string, unknown>).message).toBe('Bad request');
+  });
+});
+
+/**
+ * Le CLIQUET qui relie ce que `sendError` POSE à ce que `errorResponseSchema`
+ * DÉCLARE (#4884). `sendError` est le producteur UNIQUE de toutes les erreurs
+ * de la passerelle (1440 appels) ; `errorResponseSchema` est le schéma partagé
+ * qui le documente. Les deux ont divergé une fois sans témoin pour le voir —
+ * dix-neuf schémas de `calls.ts` déclaraient `error` comme un OBJET
+ * `{ code, message, details }` là où `sendError` pose une CHAÎNE, et
+ * `fast-json-stringify` a rendu `{"success":false,"error":{}}` sur toute la
+ * surface de signalisation d'appel. `global-error-handler-field-closure-guard.test.ts`
+ * tient déjà cette relation pour le gestionnaire global ; `sendError`, qui
+ * sert lui seul 1440 refus, ne l'était pas.
+ *
+ * `details` est un ÉTALEMENT documenté à la racine, propre à chaque appelant
+ * (`retryAfter`, `suggestedNickname`…) — il n'est délibérément PAS de ce
+ * superset (voir le doc-comment de `errorResponseSchema`) et n'entre donc pas
+ * dans cette comparaison.
+ */
+describe('sendError sert une forme ⊆ errorResponseSchema, et réciproquement (#4884)', () => {
+  const clesDeErrorResponseSchema = Object.keys(errorResponseSchema.properties).sort();
+
+  it('ne peut pas rester vide — sinon la garde compare tout à rien', () => {
+    expect(clesDeErrorResponseSchema.length).toBeGreaterThan(0);
+  });
+
+  it('les clés que sendError pose (hors `details`, étalement propre à l’appelant) sont EXACTEMENT celles du schéma partagé', () => {
+    const reply = makeReply();
+    sendError(reply, 422, 'Validation failed', {
+      message: 'Bad data',
+      code: 'INVALID',
+      violations: [{ path: 'x', message: 'y' }],
+    });
+    const clesServies = Object.keys(reply._body as Record<string, unknown>).sort();
+    expect(clesServies).toEqual(clesDeErrorResponseSchema);
+  });
+
+  it('rougit si sendError pose une clé que le schéma ignore — preuve que la garde sait tomber', () => {
+    const reply = makeReply();
+    // `details` s'étale à la racine : une route qui en pose SANS le déclarer
+    // en plus du superset reproduit exactement le défaut de #4884.
+    sendError(reply, 409, 'Conflict', { details: { suggestedNickname: 'alice2' } });
+    const clesServies = Object.keys(reply._body as Record<string, unknown>).sort();
+    expect(clesServies).not.toEqual(clesDeErrorResponseSchema);
+    expect(clesServies).toContain('suggestedNickname');
   });
 });
 
