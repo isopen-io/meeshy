@@ -48,6 +48,26 @@ describe('filterMessagePayloadForLanguages', () => {
     expect(Object.keys((out.attachments as any[])[0].translations).sort()).toEqual(['en', 'es']);
   });
 
+  it('serves a legacy region-tagged STORED translation key against a canonical request (#5234)', () => {
+    // Symétrique du chemin socket : la clé STOCKÉE peut être régionale sur un
+    // document legacy ('pt-BR'), pendant que le groupe demande le canonique 'pt'.
+    const src = {
+      id: 'msg-legacy',
+      content: 'Bonjour',
+      originalLanguage: 'fr',
+      translations: [
+        { targetLanguage: 'pt-BR', translatedContent: 'Bom dia' },
+        { targetLanguage: 'es', translatedContent: 'Hola' },
+      ],
+      attachments: [
+        { id: 'att-legacy', translations: { 'pt-BR': { url: 'pt.mp3' }, es: { url: 'es.mp3' } } },
+      ],
+    };
+    const out = filterMessagePayloadForLanguages(src, ['pt']);
+    expect((out.translations as any[]).map((t) => t.targetLanguage)).toEqual(['pt-BR']);
+    expect(Object.keys((out.attachments as any[])[0].translations)).toEqual(['pt-BR']);
+  });
+
   it('does NOT mutate the source payload (purity)', () => {
     const src = basePayload();
     filterMessagePayloadForLanguages(src, ['en']);

@@ -42,9 +42,13 @@ jest.mock('qrcode', () => ({
 
 const mockBcryptCompare = jest.fn() as jest.Mock<any>;
 
-jest.mock('bcryptjs', () => ({
-  default: { compare: (...args: unknown[]) => mockBcryptCompare(...args) },
-  compare: (...args: unknown[]) => mockBcryptCompare(...args),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216 (#5235
+// l'étend à ce service). Doubler `bcryptjs` ne suffirait plus : le module
+// charge d'abord le binaire NATIF, et le repli JavaScript n'est atteint que
+// s'il manque.
+jest.mock('../../../utils/password-hash.js', () => ({
+  ...(jest.requireActual('../../../utils/password-hash.js') as Record<string, unknown>),
+  verifyPassword: (...args: unknown[]) => mockBcryptCompare(...args),
 }));
 
 jest.mock('../../../utils/logger-enhanced.js', () => ({

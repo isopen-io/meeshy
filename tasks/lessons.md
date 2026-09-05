@@ -28759,7 +28759,7 @@ accident, sur un empilement qui n'était pas celui rendu.
 Garde : `test_laBande_neSePeintAucunFond` interdit le verre ET tout fond
 opaque de remplacement.
 
-## Leçon 530 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
+## Leçon 536 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
 
 Constat du 2026-09-05 (gate `test:chaines` › `v3-fil.spec.ts`, tour v3, écran
 `thread`) : `.reagir-slot` était à `height:0` tant que le module de temps réel
@@ -28794,7 +28794,7 @@ CHAQUE bulle au moment où le module chargeait.
    si oui, les deux ne se corrigent qu'ENSEMBLE, par une réservation
    inconditionnelle, jamais par deux correctifs qui se contredisent.
 
-## Leçon 531 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
+## Leçon 537 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
 
 Constat du 2026-09-05 (`compare-rendu.js` / `v3-rapport.mjs`, tour v3) : après
 la livraison du chantier de navigation en une page (§ 12.11, #5104/#4472/
@@ -28830,7 +28830,7 @@ navigation avait changé la disposition SERVIE de chaque écran connecté, mais
    la réponse « je n'ai régénéré que celles de mon écran » est un aveu que
    la question n'a pas été posée à la bonne échelle.
 
-## Leçon 532 — Une interdiction écrite dans UN prompt ne gouverne que cet agent ; dans un arbre partagé, chaque rôle qui écrit la porte
+## Leçon 538 — Une interdiction écrite dans UN prompt ne gouverne que cet agent ; dans un arbre partagé, chaque rôle qui écrit la porte
 
 Constat du 2026-09-05 (tour 2 du workflow web v3) : « Ne commit PAS : la phase
 Livrer s'en charge » n'était écrit que dans le prompt du DÉVELOPPEUR. Un agent

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import bcrypt from 'bcryptjs';
+import { verifyPassword } from '../../utils/password-hash';
 import { logError } from '../../utils/logger';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { normalizeEmail, normalizePhoneNumber } from '../../utils/normalize';
@@ -52,8 +52,8 @@ type ContactChannel = 'email' | 'phone';
  * `currentPassword` est REQUIS : c'est la dernière asymétrie de la famille —
  * `PATCH /users/me/username` et `/password` (`profile.ts`) l'exigent déjà,
  * `change-email`/`change-phone` (l'ancienne surface) ne le font pas. La
- * comparaison est reprise TELLE QUELLE de ces deux routes (`bcrypt.compare`),
- * jamais réinventée.
+ * comparaison passe par `verifyPassword` (`utils/password-hash`) — SITE UNIQUE
+ * du hachage de mot de passe (#5216) —, jamais un `bcrypt.compare` direct.
  */
 const contactChangeInitiateSchema = z.object({
   channel: z.enum(['email', 'phone']),
@@ -143,7 +143,7 @@ export async function initiateContactChange(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      const isPasswordValid = await bcrypt.compare(body.currentPassword, user.password);
+      const isPasswordValid = await verifyPassword(body.currentPassword, user.password);
       if (!isPasswordValid) {
         return sendBadRequest(reply, 'Current password is incorrect');
       }
