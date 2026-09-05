@@ -148,6 +148,51 @@ describe('sendUnauthorized', () => {
     expect(reply._status).toBe(401);
     expect((reply._body as Record<string, unknown>).error).toBe('Authentication required');
   });
+
+  /**
+   * #4857 — `code` était en OPTION, et son omission servait `undefined`,
+   * qui disparaît à la sérialisation JSON : la seule façon de distinguer
+   * deux 401 était le filage de chaîne sur une prose française. Le défaut
+   * est désormais un CODE NOMMÉ, jamais l'absence.
+   */
+  it('sert un `code` explicite par défaut — jamais `undefined` — quand aucun n\'est fourni', () => {
+    const reply = makeReply();
+    sendUnauthorized(reply);
+    const body = reply._body as Record<string, unknown>;
+
+    expect(body.code).toBe('UNAUTHORIZED');
+    expect(Object.keys(body)).toContain('code');
+  });
+
+  it('un `code` explicite prime sur le défaut', () => {
+    const reply = makeReply();
+    sendUnauthorized(reply, 'Session invalide ou expirée', { code: 'SESSION_INVALID' });
+    const body = reply._body as Record<string, unknown>;
+
+    expect(body.code).toBe('SESSION_INVALID');
+    expect(body.error).toBe('Session invalide ou expirée');
+  });
+
+  /**
+   * Critère 3 de #4857 : le corps SÉRIALISÉ d'au moins un refus par sens
+   * nommé traverse le vrai producteur — un témoin qui n'assert que le
+   * statut ne peut pas voir un `code` manquant.
+   */
+  it.each([
+    ['UNAUTHORIZED', undefined],
+    ['SESSION_INVALID', 'SESSION_INVALID'],
+    ['MAGIC_LINK_INVALID', 'MAGIC_LINK_INVALID'],
+    ['SESSION_REVOKED', 'SESSION_REVOKED'],
+    ['INVALID_CREDENTIALS', 'INVALID_CREDENTIALS'],
+    ['TWO_FACTOR_FAILED', 'TWO_FACTOR_FAILED'],
+    ['LINK_SESSION_REQUIRED', 'LINK_SESSION_REQUIRED'],
+  ] as const)('sérialise le sens %s dans le corps de la réponse', (attendu, code) => {
+    const reply = makeReply();
+    sendUnauthorized(reply, 'refus', code ? { code } : undefined);
+    const body = reply._body as Record<string, unknown>;
+
+    expect(body).toMatchObject({ success: false, code: attendu });
+  });
 });
 
 describe('sendForbidden', () => {
