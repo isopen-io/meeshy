@@ -82,6 +82,25 @@ export const adresseDuMessage = (adresse: string, id: string): string => `${adre
 export const adresseAutourDuMessage = (adresse: string, messageId: string): string =>
   `${adresse}?${PARAM_DE_L_ANCRE}=${encodeURIComponent(messageId)}`;
 
+/**
+ * RÉPONDRE ET MODIFIER SONT DES ÉTATS DE L'ADRESSE HÔTE (§ 12.10.1, issue
+ * #5163) — la même famille que `?media=` et `?profil=` : un lien SANS
+ * JavaScript qui arme le composeur, jamais une route à eux. La TRANCHE
+ * n'habite PAS ces paramètres — c'est la PORTE qui sert `?autour=<id>` quand
+ * l'un d'eux nomme un message (`app/connecte/fil-porte.ts`, la loi de
+ * `?media=` appliquée à un troisième état, § 9 Q2).
+ */
+export const PARAM_DE_LA_REPONSE = 'repondre';
+export const PARAM_DE_LA_MODIFICATION = 'modifier';
+
+/** L'adresse qui arme le composeur en RÉPONSE au message visé. */
+export const adresseDeReponse = (adresse: string, id: string): string =>
+  `${adresse}?${PARAM_DE_LA_REPONSE}=${encodeURIComponent(id)}`;
+
+/** L'adresse qui arme le composeur en MODIFICATION du message visé. */
+export const adresseDeModification = (adresse: string, id: string): string =>
+  `${adresse}?${PARAM_DE_LA_MODIFICATION}=${encodeURIComponent(id)}`;
+
 /** L'ouverture : la tranche qui porte la pièce, et la pièce. */
 export const adresseDuPlein = (adresse: string, messageId: string, pieceId: string): string =>
   `${adresseAutourDuMessage(adresse, messageId)}&${PARAM_DU_PLEIN}=${encodeURIComponent(pieceId)}`;

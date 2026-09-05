@@ -4,6 +4,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { regionDuPrisme } from '@/app/connecte/prisme-vue';
+
 /**
  * UNE SOURCE PAR VÉRITÉ, sur le fil. La revue croisée a trouvé trois JUMELLES
  * entre ce que le serveur sert et ce que le module peint : les libellés
@@ -15,6 +17,13 @@ import { join } from 'node:path';
 
 const RACINE = join(__dirname, '..');
 const source = (chemin: string): string => readFileSync(join(RACINE, chemin), 'utf8');
+
+/** Les sources écrites à la main du fil — vue, lignes, feuille, et tout `lib/realtime/fil-*` + `lib/api/fil*`. */
+const fichiersDuFil = (): readonly string[] => [
+  ...readdirSync(join(RACINE, 'lib', 'realtime')).filter((nom) => nom.endsWith('.ts')).map((nom) => join('lib', 'realtime', nom)),
+  ...readdirSync(join(RACINE, 'lib', 'api')).filter((nom) => nom.endsWith('.ts')).map((nom) => join('lib', 'api', nom)),
+  ...readdirSync(join(RACINE, 'app', 'connecte')).filter((nom) => nom.endsWith('.ts')).map((nom) => join('app', 'connecte', nom)),
+];
 
 const PEINTRE = 'lib/realtime/fil-peinture.ts';
 const COMPOSEUR = 'lib/realtime/composeur.ts';
@@ -80,6 +89,52 @@ describe('la forme d’une pièce jointe', () => {
         .replace(/\/\/[^\n]*/g, '');
       expect(code).not.toMatch(/(?:genre|mimeType)\s*[!=]==\s*'(?:audio|video|image|fichier)'/);
     });
+  });
+});
+
+/**
+ * L'ADRESSE D'UN LIEU — `lib/api/lieu.ts` (#5061). `geo:` et le repli vers
+ * une carte sont des ADRESSES : le fil servi (`lieuHtml`), le peintre
+ * (`remplisLeLieu`, et `lieuDuDocument` qui les RELIT) et le module de
+ * capture les composent tous les trois. Écrites à la main dans l'un des
+ * trois, elles divergeraient sans qu'aucune exécution ne le dise : la bulle
+ * REÇUE en direct porterait une autre adresse que la MÊME bulle rechargée —
+ * la jumelle exacte que le gabarit existe pour empêcher.
+ */
+describe('l’adresse d’un lieu partagé', () => {
+  const LECTEURS = [LIGNES, PEINTRE];
+
+  it('a un seul site, lib/api/lieu.ts, lu par la ligne servie et par le peintre', () => {
+    expect(source('lib/api/lieu.ts')).toMatch(/export const adresseGeo\b/);
+    expect(source('lib/api/lieu.ts')).toMatch(/export const adresseCarte\b/);
+    LECTEURS.forEach((chemin) => {
+      expect(source(chemin)).toMatch(/from '@\/lib\/api\/lieu'/);
+    });
+  });
+
+  it('n’est composée à la main nulle part ailleurs — ni `geo:`, ni une carte écrite en dur', () => {
+    fichiersDuFil()
+      .filter((chemin) => chemin !== 'lib/api/lieu.ts')
+      .forEach((chemin) => {
+        const code = source(chemin)
+          .replace(/\/\*\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/[^\n]*/g, '');
+        expect(`${chemin}: ${code}`).not.toMatch(/geo:\s*(?:\$\{|['"`]\s*\+)/);
+        expect(`${chemin}: ${code}`).not.toMatch(/openstreetmap|google\.[a-z]+\/maps|maps\.apple\.com/);
+      });
+  });
+
+  it('la ligne SERVIE et le GABARIT portent la même fente `.lieu` — le peintre la remplit, il ne la dessine pas', () => {
+    const lignes = source(LIGNES);
+    expect(lignes).toMatch(/<p class="lieu">/);
+    expect(lignes).toMatch(/<p class="lieu" hidden>/);
+    ['lieu-lien', 'glyphe-lieu', 'nom-du-lieu', 'adresse-du-lieu', 'lieu-carte'].forEach((classe) => {
+      expect((lignes.match(new RegExp(classe, 'g')) ?? []).length).toBeGreaterThanOrEqual(2);
+    });
+    const peintre = source(PEINTRE)
+      .replace(/\/\*\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    expect(peintre).not.toMatch(/<(?:p|a|span)[^>]*class="lieu/);
   });
 });
 
@@ -196,6 +251,59 @@ describe('le battement de bail', () => {
  * choses qui ont produit la divergence — une seconde implémentation, et
  * l'appel direct à l'API de repli.
  */
+/**
+ * LA PUCE DU PRISME — « AUTO · <langue> », un seul site (#5164) : le fil la
+ * portait seul avant ce lot, et `/chats` en aurait recopié une SECONDE au
+ * premier écran qui la sert à son tour.
+ */
+describe('la puce du Prisme', () => {
+  const PRISME = 'app/connecte/prisme-vue.ts';
+  const LISTE = 'app/connecte/liste-vue.ts';
+
+  it('a un seul site — prisme-vue.ts —, importé par fil-vue.ts ET liste-vue.ts', () => {
+    [VUE_DU_FIL, LISTE].forEach((chemin) => {
+      expect(source(chemin)).toMatch(/import\s*\{[^}]*\bregionDuPrisme\b[^}]*\}\s*from\s*'\.\/prisme-vue'/);
+    });
+  });
+
+  /**
+   * LA PUCE **ET SA RÉGION** — la première version de ce témoin ne cherchait
+   * que `class="puce prisme"`, la chaîne qui avait déménagé : le CONTENEUR
+   * (`<nav class="puces" aria-label="Affichage">`) restait, lui, recopié mot
+   * pour mot dans les deux vues, et la garde ne rougissait pas. Une jumelle se
+   * cache exactement là — dans ce que le correctif n'a pas nommé.
+   */
+  it('ni la puce ni sa région ne sont déclarées hors de prisme-vue.ts, dans tout app/connecte/', () => {
+    const dossier = join(RACINE, 'app', 'connecte');
+    readdirSync(dossier)
+      .filter((nom) => nom.endsWith('.ts') && nom !== 'prisme-vue.ts')
+      .forEach((nom) => {
+        const texte = readFileSync(join(dossier, nom), 'utf8');
+        expect(texte).not.toContain('class="puce prisme"');
+        expect(texte).not.toContain('class="puces"');
+      });
+  });
+
+  it('prisme-vue.ts déclare la puce et sa région, et elles seules', () => {
+    expect(source(PRISME)).toMatch(/export const puceDuPrisme\b/);
+    expect(source(PRISME)).toMatch(/export const regionDuPrisme\b/);
+  });
+
+  /**
+   * ET LA RÉGION N'EST PAS UN POINT DE REPÈRE DE NAVIGATION : elle ne contient
+   * qu'un `<p>` qui DIT la langue servie et n'ouvre rien. Annoncer « navigation
+   * — Affichage » à un lecteur d'écran devant une région sans un seul lien est
+   * une promesse que l'écran ne tient pas.
+   */
+  it('n’annonce pas une navigation qu’elle ne porte pas', () => {
+    const rendu = regionDuPrisme('fr');
+
+    expect(rendu.startsWith('<div class="puces">')).toBe(true);
+    expect(rendu).not.toContain('<nav');
+    expect(rendu).not.toContain('role="navigation"');
+  });
+});
+
 describe('le nom d’une langue', () => {
   const VUES_QUI_NOMMENT_UNE_LANGUE = [
     'app/connecte/fil-vue.ts',

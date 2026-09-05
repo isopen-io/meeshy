@@ -59,6 +59,7 @@ const etat = (attributs: Partial<EtatDuFil> = {}): EtatDuFil => ({
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: TEMPS_REEL,
+  contexte: null,
   plein: null,
   profil: null,
   ...attributs,

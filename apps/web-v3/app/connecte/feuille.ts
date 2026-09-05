@@ -1,6 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { apercuDeLigne, CHAMP_D_APPEL, PASTILLE_DE_LANGUE } from './atomes-feuille';
+import { apercuDeLigne, CHAMP_D_APPEL, PASTILLE_DE_LANGUE, RACCOURCIS_D_ENTETE } from './atomes-feuille';
 
 /**
  * La feuille de la zone CONNECTÉE — le tableau de bord, la liste des
@@ -135,13 +135,21 @@ a.carte:hover{background:var(--color-tint-primary)}
  * table de navigation `:867` — « search, Recherche, champ »). Aucun autre écran
  * de la zone ne le rend, aucun autre ne le paie.
  *
- * Les deux règles viennent des ATOMES (`atomes-feuille.ts`), qu'elle partage
+ * Les trois règles viennent des ATOMES (`atomes-feuille.ts`), qu'elle partage
  * avec `/chats` : la pastille de langue est la même sur les deux écrans qu'un
- * tap sépare, et `apercuDeLigne` en est le bloc, servi ici sous la racine de la
- * carte.
+ * tap sépare, `apercuDeLigne` en est le bloc, servi ici sous la racine de la
+ * carte, et `RACCOURCIS_D_ENTETE` (correction de revue de #5164, charte règle
+ * 8 b/c) est ce qui remplace, sur CET écran aussi, le rail `position:fixed`
+ * d'origine — la mesure l'a trouvé recouvrant la carte de conversation mise
+ * en avant dès que la liste sert plus de deux lignes, à N'IMPORTE QUEL
+ * défilement (un élément `fixed` reste ancré au coin de la fenêtre quel que
+ * soit le contenu en dessous ; réserver une bande en fin de flux, l'ancienne
+ * `FEUILLE_DES_FLOTTANTES`, ne protège que le défilement tout en bas). Voir
+ * `atomes-feuille.ts` et `espace-vue.ts` › `raccourcisEntete`.
  */
 export const FEUILLE_DU_TABLEAU = compacte(`
 ${PASTILLE_DE_LANGUE}
 ${apercuDeLigne('.carte')}
 ${CHAMP_D_APPEL}
+${RACCOURCIS_D_ENTETE}
 `);

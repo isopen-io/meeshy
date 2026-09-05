@@ -14,7 +14,8 @@ import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR
 import { porteesDuTravailleur } from '@/lib/sw/portees';
 export { CHARGEUR_DE_PARTICIPATION };
 import { adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
-import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
+import { citationDeReponse, resoutContreLaPage } from '@/lib/api/citations';
+import { LONGUEUR_MAX_DU_MESSAGE, MENTIONS_RETENUES, type Fil, type Message } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
 import { adresseDesMedias } from '@/lib/api/medias';
 import type { Droits } from '@/lib/api/invite';
@@ -27,10 +28,12 @@ import { MEDIAS } from '@/lib/contenu/medias';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
 import { REGION_DE_LA_BANNIERE } from './banniere-vue';
-import { FEUILLE_DU_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
-import { gabaritDeLigne, lignes } from './fil-lignes';
+import { FEUILLE_DU_FIL, FEUILLE_DE_LA_CAPTURE, FEUILLE_DES_GESTES, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
+import { citation as citationHtml, gabaritDeLigne, lignes } from './fil-lignes';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
+import { langAttribut } from './transcrit';
 import { pieceEnPlein, piecesDuFil, pleinEcran } from './plein-vue';
+import { regionDuPrisme } from './prisme-vue';
 import { FEUILLE_DU_PROFIL } from './profil-feuille';
 import { surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
 import { carteVide } from './vue';
@@ -110,6 +113,19 @@ export type Composeur =
   | { readonly genre: 'ferme'; readonly raison: string; readonly cause: 'lien' | 'droit' };
 
 
+/**
+ * LE CONTEXTE DU COMPOSEUR (§ 12.10.1, issue #5163) — deux ÉTATS D'ADRESSE
+ * de plus, résolus par la PORTE contre ce qui est SERVI (`fil-porte.ts` ›
+ * `resoutLeContexte`), jamais recalculés ici : une cible qui n'existe pas
+ * dans la tranche, ou que le composeur ne peut pas armer (droit retiré,
+ * fenêtre de 24 h dépassée, invité), n'atteint jamais ce type — `null` est
+ * alors le seul verdict, et le composeur reste NOMINAL.
+ */
+export type ContexteDuComposeur =
+  | { readonly genre: 'reponse'; readonly cible: Message }
+  | { readonly genre: 'modification'; readonly cible: Message }
+  | null;
+
 export type EtatDuFil = {
   readonly porte: Porte;
   readonly fil: Fil;
@@ -118,6 +134,8 @@ export type EtatDuFil = {
   readonly brouillon: string;
   readonly maintenant: number;
   readonly composeur: Composeur;
+  /** `?repondre=<id>` / `?modifier=<id>` — le contexte que le composeur arme (issue #5163). `null` : le cas nominal. */
+  readonly contexte: ContexteDuComposeur;
   /** `null` ⇒ aucun module ne se charge : une lecture pure (§ 12.4, jamais sur une surface de lecture). */
   readonly tempsReel: TempsReel | null;
   /**
@@ -138,6 +156,18 @@ export type EtatDuFil = {
 
 export const CHAMP_DU_MESSAGE = 'texte';
 export const CHAMP_DE_LA_PIECE = 'piece';
+/** Le champ caché du composeur ARMÉ en RÉPONSE — porte `replyToId` (issue #5163). */
+export const CHAMP_DE_LA_REPONSE = 'reponseA';
+/** Le champ caché du composeur ARMÉ en MODIFICATION — porte l'identifiant du message visé. */
+export const CHAMP_DE_LA_MODIFICATION = 'modifie';
+/**
+ * Le champ caché du texte SERVI d'une modification — permet à `modifieLeMessage`
+ * (`fil-porte.ts`) de reconnaître un « Enregistrer » sans rien avoir changé
+ * SANS relire la conversation (défaut #5163 §8, chemin SANS JavaScript) : sans
+ * requête de plus, sans elle la passerelle marquerait le message « modifié »
+ * pour tous et effacerait ses traductions pour un texte identique.
+ */
+export const CHAMP_DE_L_ORIGINAL = 'original';
 
 const FEUILLE = FEUILLE_CONNECTEE + FEUILLE_DU_FIL;
 
@@ -173,6 +203,17 @@ export const droitsDePiece = (porte: Porte): DroitsDePiece =>
   porte.genre === 'membre'
     ? { fichiers: true, images: true }
     : { fichiers: porte.droits?.canSendFiles ?? false, images: porte.droits?.canSendImages ?? false };
+
+/**
+ * LE LECTEUR PEUT-IL ÉCRIRE — un membre toujours, un invité selon
+ * `canSendMessages` SERVI (§ 2.3 de la spécification #5061 : le vocal ET la
+ * position suivent CE droit, jamais `canSendFiles`/`allowAnonymousFiles` —
+ * la passerelle ADMET toujours un vocal chez un invité qui peut écrire,
+ * `ContentSignature.ts:266-269`, et n'applique `canSendLocations` NULLE PART
+ * à l'envoi). Remontée ici après sa SECONDE surface (§ 3.1 (B)) :
+ * `attributsDeParticipation` la portait seule, en `const` locale.
+ */
+export const ecritDansLeFil = (porte: Porte): boolean => (porte.genre === 'invite' ? (porte.droits?.canSendMessages ?? false) : true);
 
 const retour = (porte: Porte): string =>
   porte.genre === 'membre'
@@ -268,18 +309,11 @@ const enTete = (etat: EtatDuFil): string =>
   '</header>';
 
 /**
- * La puce du Prisme — `AUTO · <langue>` (charte règle 12). Elle n'a pas de
- * chevron : la feuille des langues (`sheet:lang`) n'est pas servie, et un
- * chevron qui n'ouvre rien mentirait (règle 7). Elle DIT ce qui est servi.
+ * La puce du Prisme — `AUTO · <langue>` (charte règle 12), depuis le site
+ * UNIQUE que ce fil partage avec `/chats` (`./prisme-vue.ts` › `regionDuPrisme`,
+ * `__tests__/fil-source-unique.test.ts`).
  */
-const puces = (etat: EtatDuFil): string => {
-  const langue = etat.lecteur.langues[0] ?? DOCUMENT_LANGUAGE;
-  return (
-    '<nav class="puces" aria-label="Affichage">' +
-    `<p class="puce prisme" title="${echappe(FIL.prismeTitre)}">${svgDuSprite('ph-translate')}${echappe(FIL.prisme)} · ${echappe(nomDeLangue(langue))}</p>` +
-    '</nav>'
-  );
-};
+const puces = (etat: EtatDuFil): string => regionDuPrisme(etat.lecteur.langues[0] ?? DOCUMENT_LANGUAGE);
 
 /**
  * Une ligne du bandeau porte ses DEUX glyphes de verdict ; la feuille montre
@@ -415,7 +449,7 @@ const listeDesMessages = (etat: EtatDuFil, inerte: boolean): string => {
     (fil.messages.length === 0 && !inerte && etat.composeur.genre === 'ouvert'
       ? carteVide({ glyphe: 'ph-chat-circle', titre: FIL.vide, phrase: FIL.videPrecision })
       : '') +
-    `<ol class="lignes" id="lignes" aria-label="${echappe(FIL.messagesOrdre)}">${lignes({ messages: fil.messages, maintenant: etat.maintenant, langueDuDocument: DOCUMENT_LANGUAGE, adresse })}</ol>` +
+    `<ol class="lignes" id="lignes" aria-label="${echappe(FIL.messagesOrdre)}">${lignes({ messages: fil.messages, maintenant: etat.maintenant, langueDuDocument: DOCUMENT_LANGUAGE, adresse, composeurOuvert: etat.composeur.genre === 'ouvert', estInvite: etat.porte.genre === 'invite' })}</ol>` +
     // La liste est close : sa dernière ligne, complète, se montre (feuille du fil, CLS).
     `<style>${REVELE_LA_DERNIERE_LIGNE}</style>` +
     '</div>' +
@@ -467,30 +501,138 @@ const trombone = (droits: DroitsDePiece, revelable: boolean): string => {
 };
 
 /**
+ * LE MICRO ET LA POSITION (#5061) — deux AMÉLIORATIONS PROGRESSIVES de plus,
+ * à côté du trombone. Servis CACHÉS INCONDITIONNELLEMENT — sans JavaScript,
+ * il n'existe ni `MediaRecorder` ni `navigator.geolocation` pour les
+ * actionner, et le formulaire texte + pièce reste entier (charte règle 7).
+ * Le module (`lib/realtime/capture.ts`) les RÉVÈLE quand le NAVIGATEUR porte
+ * la capacité ET que le lecteur PEUT ÉCRIRE (`ecritDansLeFil`) — le même
+ * droit chez l'invité, et lui seul (§ 2.3 : ni `canSendFiles`, ni
+ * `allowAnonymousFiles`, que la passerelle n'applique à AUCUN des deux).
+ * `!ecrire && !revelable` retire l'élément entier — la MÊME condition que le
+ * trombone juste au-dessus : un document qui n'arme AUCUN module (lecture
+ * pure, `tempsReel === null`) ne verra jamais personne les révéler, donc il
+ * ne les paie pas. Un composeur fermé AVEC le temps réel armé les sert
+ * cachés : `participant:rights-updated` peut rendre `canSendMessages` en
+ * direct, et `capture.actualise()` (`participate.ts` › `appliqueLesDroits`)
+ * les révèle alors sans rechargement.
+ */
+const micro = (ecrire: boolean, revelable: boolean): string => {
+  if (!ecrire && !revelable) return '';
+  return `<button type="button" class="micro" id="bouton-micro" hidden aria-label="${echappe(FIL.enregistrerUnVocal)}">${svgDuSprite('ph-microphone')}</button>`;
+};
+
+const position = (ecrire: boolean, revelable: boolean): string => {
+  if (!ecrire && !revelable) return '';
+  return `<button type="button" class="position" id="bouton-position" hidden aria-label="${echappe(FIL.partagerMaPosition)}">${svgDuSprite('ph-map-pin')}</button>`;
+};
+
+/**
+ * LA BARRE D'ENREGISTREMENT — vide au chargement (`FIL.*` posés par le
+ * module dès qu'il l'affiche) : annuler, la durée (`aria-live`), envoyer.
+ * Comme le micro et la position, elle n'existe qu'aux mêmes conditions —
+ * sans eux, rien ne l'ouvrira jamais.
+ */
+const barreDEnregistrement = (ecrire: boolean, revelable: boolean): string => {
+  if (!ecrire && !revelable) return '';
+  return (
+    '<div class="enregistrement" id="enregistrement" role="status" hidden>' +
+    `<button type="button" class="annuler-vocal" aria-label="${echappe(FIL.annulerLEnregistrement)}">${svgDuSprite('ph-x')}</button>` +
+    '<span class="duree-vocale" id="duree-vocale" aria-live="polite">0:00</span>' +
+    `<button type="button" class="envoyer-vocal" aria-label="${echappe(FIL.envoyerLeVocal)}">${svgDuSprite('ph-check')}</button>` +
+    '</div>'
+  );
+};
+
+/**
+ * LE BANDEAU DU CONTEXTE (§ 12.10.1, issue #5163) — une FENTE que le module
+ * peut révéler SANS recomposer : `<ul class="citations">` porte la citation
+ * d'une RÉPONSE par le MÊME site que la lecture (`citation()`,
+ * `fil-lignes.ts` — jamais une jumelle), `.quoi-modif` la phrase d'une
+ * MODIFICATION, `a.annuler` mène à l'adresse NUE. Sur une lecture PURE
+ * (`tempsReel === null`) hors état, la fente n'est pas servie (charte règle 7 :
+ * ce qu'un écran n'affiche pas, il ne le paie pas — même règle que
+ * `bandeauxDifferes`) : aucun module ne viendra jamais la révéler.
+ */
+const contexteDuComposeur = (etat: EtatDuFil): string => {
+  const { contexte, tempsReel } = etat;
+  if (contexte === null && tempsReel === null) return '';
+  const adresseNue = adresseDeLaPorte(etat.porte);
+  const enReponse = contexte?.genre === 'reponse';
+  const enModification = contexte?.genre === 'modification';
+  const citationDeLaReponse =
+    contexte?.genre === 'reponse'
+      ? citationHtml(
+          resoutContreLaPage(
+            citationDeReponse({ cible: contexte.cible.id, source: contexte.cible.deMoi ? FIL.vous : contexte.cible.auteur }),
+            etat.fil.messages,
+            MENTIONS_RETENUES,
+          ),
+          DOCUMENT_LANGUAGE,
+        )
+      : '';
+  return (
+    `<div class="contexte" id="contexte-du-composeur" aria-live="polite" data-genre="${contexte?.genre ?? ''}"${contexte === null ? ' hidden' : ''}>` +
+    `<ul class="citations"${enReponse ? '' : ' hidden'}>${citationDeLaReponse}</ul>` +
+    `<p class="quoi-modif"${enModification ? '' : ' hidden'}>${echappe(FIL.modification)}</p>` +
+    `<a class="annuler action discrete" href="${echappe(adresseNue)}">${echappe(FIL.annuler)}</a>` +
+    '</div>'
+  );
+};
+
+/**
  * LE FORMULAIRE D'ENVOI — un `<form method="post">` vers la porte, un
  * `<textarea>`, un trombone selon les droits, un envoi de 56 px. `cache` le
  * sert derrière une fermeture par DROIT, pour que le module le révèle.
+ *
+ * ARMÉ EN MODIFICATION (§ 12.10.1, issue #5163) : le champ est PRÉREMPLI du
+ * texte ORIGINAL (jamais la traduction lue — la passerelle n'édite que le
+ * contenu d'origine) avec sa langue, aucun trombone n'est servi (une
+ * modification ne joint rien), et le bouton d'envoi porte « Enregistrer ».
  */
 const formulaire = (etat: EtatDuFil, cache: boolean): string => {
   const langue = nomDeLangue(etat.lecteur.langues[0] ?? DOCUMENT_LANGUAGE);
   const droits = droitsDePiece(etat.porte);
-  const avecPiece = droits.fichiers || droits.images;
-  const revelable = etat.tempsReel !== null && etat.porte.genre === 'invite';
+  const enModification = etat.contexte?.genre === 'modification';
+  const cibleDeLaModification = enModification ? etat.contexte?.cible ?? null : null;
+  const avecPiece = !enModification && (droits.fichiers || droits.images);
+  const revelable = !enModification && etat.tempsReel !== null && etat.porte.genre === 'invite';
   const pieceServie = avecPiece || revelable;
+  // Le micro et la position (#5061) : `ecrire` gouverne leur admission ET
+  // leur révélation possible plus tard (un membre a toujours `ecrire`, donc
+  // jamais besoin d'être révélé ; un invité fermé par le LIEN n'a ni l'un ni
+  // l'autre — `revelable` reste celui du trombone, l'invité seul).
+  const ecrire = !enModification && ecritDansLeFil(etat.porte);
+  // Une modification n'est requise que si la cible n'a AUCUNE pièce jointe —
+  // ôter la légende d'un message à pièce est une édition valide (§ 2 de la
+  // spécification, `messageEditContent.ts`).
+  const admetVide = enModification ? (cibleDeLaModification?.pieces.length ?? 0) > 0 : avecPiece;
+  const texteDuChamp = cibleDeLaModification !== null ? cibleDeLaModification.texteOriginal : etat.brouillon;
+  const langueDuChamp = cibleDeLaModification !== null ? cibleDeLaModification.langueOriginale : null;
+  const libelleEnvoi = enModification ? FIL.enregistrer : FIL.envoyer;
+  const idReponse = etat.contexte?.genre === 'reponse' ? etat.contexte.cible.id : '';
+  const idModification = cibleDeLaModification?.id ?? '';
   return (
     `<form class="composeur" id="composeur" method="post" action="${echappe(adresseDeLaPorte(etat.porte))}"${pieceServie ? ' enctype="multipart/form-data"' : ''}${cache ? ' hidden' : ''}>` +
     `<label class="hors-ecran" for="champ-texte">${echappe(FIL.ecrire)}</label>` +
-    trombone(droits, revelable) +
+    contexteDuComposeur(etat) +
+    `<input type="hidden" name="${CHAMP_DE_LA_REPONSE}" value="${echappe(idReponse)}"/>` +
+    `<input type="hidden" name="${CHAMP_DE_LA_MODIFICATION}" value="${echappe(idModification)}"/>` +
+    (enModification ? `<input type="hidden" name="${CHAMP_DE_L_ORIGINAL}" value="${echappe(cibleDeLaModification?.texteOriginal ?? '')}"/>` : '') +
+    (enModification ? '' : trombone(droits, revelable)) +
+    (enModification ? '' : micro(ecrire, revelable)) +
+    (enModification ? '' : position(ecrire, revelable)) +
     // `required` n'est posé que sans pièce jointe possible : une pièce seule
     // est un message, et c'est la route qui juge un envoi vide.
     // `maxlength` porte le plafond de la passerelle SANS JavaScript (`LONGUEUR_MAX_DU_MESSAGE`) ; le
     // compteur et le refus sont deux `<output>` que le module révèle — dès 90 %, et sur un 400.
-    `<textarea id="champ-texte" name="${CHAMP_DU_MESSAGE}" rows="1"${avecPiece ? '' : ' required'} maxlength="${LONGUEUR_MAX_DU_MESSAGE}" autocomplete="off" enterkeyhint="send" aria-describedby="aide-composeur" placeholder="${echappe(FIL.ecrireEn(langue))}">${echappe(etat.brouillon)}</textarea>` +
-    `<button class="envoyer" type="submit" aria-label="${echappe(FIL.envoyer)}">${svgDuSprite('ph-arrow-up')}</button>` +
+    `<textarea id="champ-texte" name="${CHAMP_DU_MESSAGE}" rows="1"${admetVide ? '' : ' required'} maxlength="${LONGUEUR_MAX_DU_MESSAGE}" autocomplete="off" enterkeyhint="send" aria-describedby="aide-composeur"${langAttribut(langueDuChamp, DOCUMENT_LANGUAGE)} placeholder="${echappe(FIL.ecrireEn(langue))}">${echappe(texteDuChamp)}</textarea>` +
+    `<button class="envoyer" type="submit" aria-label="${echappe(libelleEnvoi)}">${svgDuSprite('ph-arrow-up')}</button>` +
     `<span class="hors-ecran" id="aide-composeur">${echappe(FIL.aideDuClavier)}</span>` +
     `<output class="compteur" id="compteur" for="champ-texte" aria-live="polite" hidden></output>` +
     `<output class="refus" id="refus-du-composeur" for="champ-texte" role="alert" hidden></output>` +
     (pieceServie ? '<output class="piece-choisie" id="piece-choisie" for="champ-piece" hidden></output>' : '') +
+    (enModification ? '' : barreDEnregistrement(ecrire, revelable)) +
     '</form>'
   );
 };
@@ -514,7 +656,7 @@ const attributsDeParticipation = (etat: EtatDuFil): string => {
   if (etat.tempsReel === null) return '';
   const { porte, fil, lecteur, tempsReel } = etat;
   const droits = droitsDePiece(porte);
-  const ecrire = porte.genre === 'invite' ? (porte.droits?.canSendMessages ?? false) : true;
+  const ecrire = ecritDansLeFil(porte);
   // Les droits SERVIS, tels que le module les tient avant tout changement reçu — l'historique compris,
   // que seule la charge PERSONNELLE de `participant:rights-updated` porte (#4009).
   const historique = porte.genre === 'invite' ? ` data-historique="${porte.droits?.canViewHistory === true ? '1' : '0'}"` : '';
@@ -713,6 +855,10 @@ export const documentDuFil = (etat: EtatDuFil): string => {
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
     feuille:
       FEUILLE +
+      // Le menu d'une ligne et le bandeau du composeur (#5163) — servis par CE
+      // document seul : trois écrans pleins partagent `FEUILLE_DU_FIL` sans rendre ni ligne ni composeur.
+      FEUILLE_DES_GESTES +
+      FEUILLE_DE_LA_CAPTURE +
       (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
       (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') +
       (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : ''),

@@ -2,7 +2,9 @@ import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
 import { adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
 import { annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
+import { peutModifier, peutRetirer } from '@/lib/api/fil-mutations';
 import { FORME_PAR_GENRE, sEcouteSurPlace } from '@/lib/api/formes';
+import { adresseCarte, adresseGeo, type Lieu } from '@/lib/api/lieu';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
@@ -282,7 +284,14 @@ const GLYPHE_PAR_CITATION: Readonly<Record<GenreDeCitation, string>> = {
   story: 'ph-sparkle',
 };
 
-const corpsDeLaCitation = (citation: Citation, langueDuDocument: string): string =>
+/**
+ * EXPORTÉES depuis l'issue #5163 : le bandeau de citation du composeur armé
+ * en RÉPONSE (`lib/realtime/fil-gestes.ts`) rend la citation par ce MÊME
+ * site — jamais une jumelle. `citation` s'appuie sur `corpsDeLaCitation` ;
+ * les deux sortent ensemble pour rester la seule source de la forme d'une
+ * citation, servie ou peinte.
+ */
+export const corpsDeLaCitation = (citation: Citation, langueDuDocument: string): string =>
   `<span class="vignette">${glyphes(GLYPHE_PAR_CITATION)}</span>` +
   '<span class="dit">' +
   `<span class="quoi">${echappe(libelleDeCitation(citation))}</span>` +
@@ -291,7 +300,7 @@ const corpsDeLaCitation = (citation: Citation, langueDuDocument: string): string
     : `<span class="apercu"${langAttribut(citation.langue, langueDuDocument)}>${echappe(citation.apercu)}</span>`) +
   '</span>';
 
-const citation = (citation: Citation, langueDuDocument: string): string =>
+export const citation = (citation: Citation, langueDuDocument: string): string =>
   `<li class="citation" data-genre="${citation.genre}" data-cite="${echappe(citation.cible)}">` +
   `<a class="saut"${citation.surLaPage ? ` href="${echappe(ancreDuMessage(citation.cible))}"` : ''}>` +
   `<span class="hors-ecran"${citation.surLaPage ? '' : ' hidden'}>${echappe(FIL.allerAuMessage)} </span>` +
@@ -318,6 +327,34 @@ const pieces = (message: Message, langueDuDocument: string, adresse: string): st
   message.pieces.length === 0
     ? ''
     : `<ul class="pieces">${message.pieces.map((p) => piece(p, langueDuDocument, adresse, message.id)).join('')}</ul>`;
+
+/**
+ * UN LIEU PARTAGÉ SE LIT COMME UN LIEU (#5061), JAMAIS COMME DEUX NOMBRES.
+ * Un lieu n'est PAS une pièce jointe (`lib/api/lieu.ts`) : il n'a ni bloc
+ * lecteur ni affiche à choisir, une seule forme — un glyphe, un nom (ou
+ * `FIL.lieuPartage` quand la passerelle n'en a servi aucun), son adresse
+ * quand elle existe.
+ *
+ * DEUX LIENS, DEUX GESTES : `geo:` d'abord — la SEULE adresse qui n'engage
+ * aucune requête (§ 12.6, zéro tuile de carte téléchargée à la lecture) —,
+ * et un repli DANS UN ONGLET (`target="_blank" rel="noopener"`, le même
+ * patron que le fichier d'une pièce jointe) pour qui n'a aucun gestionnaire
+ * `geo:` enregistré (la quasi-totalité des ordinateurs de bureau).
+ */
+const lieuHtml = (lieu: Lieu): string => {
+  const nom = lieu.nom ?? FIL.lieuPartage;
+  return (
+    '<p class="lieu">' +
+    `<a class="lieu-lien" href="${echappe(adresseGeo(lieu))}" aria-label="${echappe(FIL.ouvrirLeLieu(nom))}">` +
+    `<span class="glyphe-lieu" aria-hidden="true">${svgDuSprite('ph-map-pin')}</span>` +
+    '<span class="texte-du-lieu">' +
+    `<span class="nom-du-lieu">${echappe(nom)}</span>` +
+    (lieu.adresse === null ? '<span class="adresse-du-lieu" hidden></span>' : `<span class="adresse-du-lieu">${echappe(lieu.adresse)}</span>`) +
+    '</span></a>' +
+    `<a class="lieu-carte fiche" href="${echappe(adresseCarte(lieu))}" target="_blank" rel="noopener">${echappe(FIL.voirSurCarte)}</a>` +
+    '</p>'
+  );
+};
 
 /**
  * UNE PASTILLE DE RÉACTION EST UN FORMULAIRE : le même geste bascule l'emoji
@@ -427,6 +464,80 @@ const classes = (message: Message, suite: boolean): string =>
     .filter((classe) => classe !== '')
     .join(' ');
 
+/**
+ * LE MENU D'UNE LIGNE (§ 12.10.1, issue #5163) — l'atome `MENU_DE_LIGNE`
+ * partagé avec `/chats` et `/links` (`app/connecte/atomes-feuille.ts`), et le
+ * MÊME glyphe de menu (`ph-caret-down`, `liste-vue.ts:88`) : aucun 73e
+ * glyphe. Trois boutons possibles, chacun une raison distincte de disparaître
+ * plutôt que d'être rendu inerte (charte règle 7) :
+ *
+ *   • « Répondre » — SI le composeur est ouvert (`composeurOuvert`) : sur une
+ *     ligne close, ou chez un invité sans `canSendMessages`, il n'y a rien à
+ *     armer ;
+ *   • « Modifier » — SEULEMENT sur SES propres messages, de moins de 24 h
+ *     (`peutModifier`, borne inclusive comme la passerelle), et JAMAIS chez
+ *     l'invité (régime 3, § 2 de la spécification : les quatre portes du
+ *     gateway refusent un anonyme) ;
+ *   • « Retirer » — SEULEMENT sur SES propres messages, jamais chez l'invité.
+ *
+ * `estInvite` gouverne modifier/retirer À LUI SEUL : un membre les voit dès
+ * que le message est le sien, quelle que soit la porte qui sert cette ligne.
+ * Sans AUCUN bouton admis, le `<details>` n'est pas rendu — un menu vide
+ * serait un contrôle sans effet.
+ *
+ * UN SEUL `<form method="get">` porte « Répondre » et « Modifier » (deux
+ * NAVIGATIONS, la même adresse nue, un paramètre différent selon le bouton
+ * cliqué — le comportement natif d'un formulaire GET) ; « Retirer » y
+ * bascule en POST par `formmethod`, exactement le patron de `/chats`
+ * (`liste-vue.ts` › `menu`).
+ */
+export const menuDeLigne = (
+  message: Message,
+  adresse: string,
+  { composeurOuvert, maintenant, estInvite }: { readonly composeurOuvert: boolean; readonly maintenant: number; readonly estInvite: boolean },
+): string => {
+  if (message.systeme || message.supprime || message.protege) return '';
+  const admetRepondre = composeurOuvert;
+  const candidat = {
+    deMoi: message.deMoi,
+    systeme: message.systeme,
+    supprime: message.supprime,
+    protege: message.protege,
+    ecritA: message.ecritA,
+  };
+  const admetModifier = !estInvite && peutModifier({ ...candidat, maintenant });
+  const admetRetirer = !estInvite && peutRetirer(candidat);
+  if (!admetRepondre && !admetModifier && !admetRetirer) return '';
+  const nomDuMenu = message.deMoi ? FIL.actionsSurMonMessage : FIL.actionsSurLeMessage(message.auteur);
+  return (
+    '<details class="actions">' +
+    `<summary>${svgDuSprite('ph-caret-down')}<span class="hors-ecran">${echappe(nomDuMenu)}</span></summary>` +
+    `<form method="get" action="${echappe(adresse)}">` +
+    (admetRepondre
+      ? `<button type="submit" name="repondre" value="${echappe(message.id)}">${svgDuSprite('ph-chat-teardrop-text')}${echappe(FIL.repondre)}</button>`
+      : '') +
+    (admetModifier
+      ? `<button type="submit" name="modifier" value="${echappe(message.id)}">${svgDuSprite('ph-note-pencil')}${echappe(FIL.modifier)}</button>`
+      : '') +
+    (admetRetirer
+      ? `<button type="submit" name="retirer" value="${echappe(message.id)}" formmethod="post" class="grave">${svgDuSprite('ph-x')}${echappe(FIL.retirer)}</button>`
+      : '') +
+    '</form>' +
+    '</details>'
+  );
+};
+
+/** Le gabarit du menu — les TROIS boutons, `value=""` : le module en retire ce que le lecteur ne peut pas faire. */
+const gabaritDuMenu = (): string =>
+  '<details class="actions">' +
+  `<summary>${svgDuSprite('ph-caret-down')}<span class="hors-ecran"></span></summary>` +
+  '<form method="get">' +
+  `<button type="submit" name="repondre" value="">${svgDuSprite('ph-chat-teardrop-text')}${echappe(FIL.repondre)}</button>` +
+  `<button type="submit" name="modifier" value="">${svgDuSprite('ph-note-pencil')}${echappe(FIL.modifier)}</button>` +
+  `<button type="submit" name="retirer" value="" formmethod="post" class="grave">${svgDuSprite('ph-x')}${echappe(FIL.retirer)}</button>` +
+  '</form>' +
+  '</details>';
+
 const attributs = (message: Message): string =>
   `id="${echappe(identifiantDuMessage(message.id))}" data-id="${echappe(message.id)}"` +
   (message.clientMessageId === null ? '' : ` data-cid="${echappe(message.clientMessageId)}"`) +
@@ -466,13 +577,19 @@ export const ligne = ({
   maintenant,
   langueDuDocument,
   adresse,
+  composeurOuvert,
+  estInvite,
 }: {
   readonly message: Message;
   readonly precedent: Message | null;
   readonly maintenant: number;
   readonly langueDuDocument: string;
-  /** L'adresse de la porte — l'`action` des formulaires de réaction. */
+  /** L'adresse de la porte — l'`action` des formulaires de réaction ET du menu d'une ligne. */
   readonly adresse: string;
+  /** Le composeur est OUVERT — gouverne « Répondre » (§ 12.10.1, issue #5163). */
+  readonly composeurOuvert: boolean;
+  /** L'invité ne modifie ni ne retire (régime 3) — le membre le peut sur ses propres lignes. */
+  readonly estInvite: boolean;
 }): string => {
   if (message.systeme) {
     return (
@@ -501,6 +618,7 @@ export const ligne = ({
     // de sa photo — et une citation au-dessus de la réponse qu'elle motive.
     citationsHtml(message, langueDuDocument) +
     pieces(message, langueDuDocument, adresse) +
+    (message.lieu === null ? '' : lieuHtml(message.lieu)) +
     texte(message, langueDuDocument) +
     original(message, langueDuDocument) +
     '<p class="meta">' +
@@ -518,6 +636,7 @@ export const ligne = ({
     reactionsHtml(message, adresse) +
     '</div>' +
     datation(message, maintenant) +
+    menuDeLigne(message, adresse, { composeurOuvert, maintenant, estInvite }) +
     '</div>' +
     '</li>'
   );
@@ -538,11 +657,17 @@ export const lignes = ({
   maintenant,
   langueDuDocument,
   adresse,
+  composeurOuvert,
+  estInvite,
 }: {
   readonly messages: readonly Message[];
   readonly maintenant: number;
   readonly langueDuDocument: string;
   readonly adresse: string;
+  /** Le composeur est OUVERT — gouverne « Répondre » sur chaque ligne (§ 12.10.1, issue #5163). */
+  readonly composeurOuvert: boolean;
+  /** L'invité ne modifie ni ne retire (régime 3). */
+  readonly estInvite: boolean;
 }): string =>
   messages
     .map((message, rang) => {
@@ -553,7 +678,7 @@ export const lignes = ({
         message.ecritA !== null && jour !== jourPrecedent
           ? separateurDeJour({ iso: message.ecritA, maintenant, langueDuDocument })
           : '';
-      return ligne({ message, precedent, maintenant, langueDuDocument, adresse }) + separateur;
+      return ligne({ message, precedent, maintenant, langueDuDocument, adresse, composeurOuvert, estInvite }) + separateur;
     })
     .reverse()
     .join('');
@@ -589,6 +714,16 @@ export const gabaritDeLigne = (adresse: string): string =>
   `<p class="qui"><a class="nom-lien"><span class="nom"></span></a><span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span></p>` +
   gabaritDeCitation() +
   `<ul class="pieces" hidden>${gabaritDePiece()}</ul>` +
+  // LE LIEU (#5061) — la même fente que `.langue`/`.modifie` juste dessous :
+  // `remplisLeLieu` (`fil-peinture.ts`) ne le RETIRE jamais (un lieu ne
+  // disparaît pas), il le pose ou le révèle.
+  '<p class="lieu" hidden>' +
+  '<a class="lieu-lien">' +
+  `<span class="glyphe-lieu" aria-hidden="true">${svgDuSprite('ph-map-pin')}</span>` +
+  '<span class="texte-du-lieu"><span class="nom-du-lieu"></span><span class="adresse-du-lieu" hidden></span></span>' +
+  '</a>' +
+  '<a class="lieu-carte fiche" target="_blank" rel="noopener"></a>' +
+  '</p>' +
   '<p class="texte"></p>' +
   `<details class="original"><summary>${svgDuSprite('ph-text-aa')}${echappe(FIL.original)}</summary><p></p></details>` +
   '<p class="meta">' +
@@ -606,6 +741,7 @@ export const gabaritDeLigne = (adresse: string): string =>
   `<ul class="reactions" aria-label="${echappe(FIL.reactions)}" hidden>${pastilleDeReaction({ emoji: '', nombre: 0, messageId: '', adresse })}</ul>` +
   '</div>' +
   `<p class="datation"><time></time>${accuseHtml('envoye')}</p>` +
+  gabaritDuMenu() +
   '</div>' +
   '</li>' +
   '</template>' +

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { INVITE, MEMBRE, type MessageServi } from './bouchon-monde';
-import { chargeDeMessage, evenementDeReaction, participantDe, PARTICIPANT_DU_MEMBRE, type BouchonSocket, type Identite, type MagasinDeReactions } from './bouchon-socket';
+import { chargeDeMessage, evenementDeReaction, lieuValide, participantDe, PARTICIPANT_DU_MEMBRE, type BouchonSocket, type Identite, type MagasinDeReactions } from './bouchon-socket';
 
 /**
  * LES ROUTES DU FIL, côté passerelle de bouchon — celles que le module de
@@ -36,9 +36,12 @@ import { chargeDeMessage, evenementDeReaction, participantDe, PARTICIPANT_DU_MEM
  *   • `POST /attachments/upload` — `routes/attachments/upload.ts:58-195` :
  *     `authOptional` puis `isAuthenticated` exigé (401), multipart en
  *     `request.parts()` (tout champ fichier), 400 sans fichier, 403 pour un
- *     anonyme dont le lien n'admet pas le TYPE (`classifyAnonymousAttachment`
- *     : image ⇒ `allowAnonymousImages`, sinon `allowAnonymousFiles`), 200
- *     `{ attachments: results }` — `AttachmentService.uploadMultiple`
+ *     anonyme dont le lien n'admet pas le TYPE (`classifyAnonymousAttachment`,
+ *     `ContentSignature.ts:255-281` : image ⇒ `allowAnonymousImages`, sinon
+ *     `allowAnonymousFiles` — **UN VOCAL EST TOUJOURS ADMIS** (`isAudio ⇒
+ *     { allowed: true }`, `:266-269` : « la voix suit le droit d'écrire dans
+ *     la conversation, pas le droit d'envoyer des fichiers » — #5061 § 2.3),
+ *     200 `{ attachments: results }` — `AttachmentService.uploadMultiple`
  *     (`AttachmentService.ts:175-215`) : `id`, `fileUrl` RELATIF
  *     (`/api/v1/attachments/file/<chemin>`), `originalName`, `mimeType`,
  *     `fileSize`, `width`, `height`, `duration` ;
@@ -254,6 +257,10 @@ export type EtatDuFilDeBouchon = {
   readonly messages: () => readonly MessageServi[];
   /** Un message qui entre dans le fil — par la route, ou « pendant l'absence » du lecteur (`ajouteUnMessage`, `serveurs.ts`). */
   readonly ajouteUnMessage: (message: MessageServi) => void;
+  /** `PUT /api/v1/messages/:id` ET `message:edit` (issue #5163) — le MÊME mutateur ; `null` = introuvable ou déjà supprimé. */
+  readonly modifieUnMessage: (id: string, content: string) => MessageServi | null;
+  /** `DELETE /api/v1/messages/:id` ET `message:delete`. */
+  readonly retireUnMessage: (id: string) => MessageServi | null;
   /** La présence des pairs, telle que `connectedUsers` la tient — gardée par la visibilité à la fiche (`core-detail.ts:231-236`). */
   readonly presences: ReadonlyMap<string, boolean>;
   readonly membres: number;
@@ -479,10 +486,14 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
         return true;
       }
       if (identite.genre === 'invite') {
-        // `classifyAnonymousAttachment` (`services/attachments/ContentSignature.ts:273-277`) sur le LIEN VIVANT
+        // `classifyAnonymousAttachment` (`services/attachments/ContentSignature.ts:255-281`) sur le LIEN VIVANT
         // (`upload.ts:301-311` relit `allowAnonymousFiles` / `allowAnonymousImages`) — jamais l'instantané du join.
+        // UN VOCAL EST TOUJOURS ADMIS (`:266-269`, décision produit — #5061 § 2.3) : ni
+        // `allowAnonymousFiles` ni `allowAnonymousImages` ne le gouvernent.
         const { lien } = etat.invite.place;
-        const refuse = fichiers.find((f) => (f.type.startsWith('image/') ? !lien.allowAnonymousImages : !lien.allowAnonymousFiles));
+        const refuse = fichiers.find(
+          (f) => !f.type.startsWith('audio/') && (f.type.startsWith('image/') ? !lien.allowAnonymousImages : !lien.allowAnonymousFiles),
+        );
         if (refuse !== undefined) {
           erreur(
             403,
@@ -590,6 +601,50 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
     }
 
     /**
+     * `PUT` / `DELETE /api/v1/messages/:messageId` (issue #5163) —
+     * `routes/messages-writes.ts:127,428`, `requiredAuth` avec
+     * `allowAnonymous: false` : un INVITÉ y est toujours 401, jamais un refus
+     * de saisie ou d'autorisation qui laisserait croire que la route existe
+     * pour lui. Les phrases sont EXACTES, relues dans la passerelle.
+     */
+    const unMessage = /^\/api\/v1\/messages\/([^/?]+)$/.exec(url.pathname);
+    if (unMessage !== null && (methode === 'PUT' || methode === 'DELETE')) {
+      const identite = etat.creanceDe(requete);
+      if (identite === null || identite.genre === 'invite') {
+        erreur(401, 'UNAUTHORIZED', 'Authentication required');
+        return true;
+      }
+      const messageId = decodeURIComponent(unMessage[1] ?? '');
+      if (methode === 'DELETE') {
+        const retire = etat.retireUnMessage(messageId);
+        if (retire === null) {
+          erreur(404, 'NOT_FOUND', 'Message non trouvé');
+          return true;
+        }
+        etat.socket().emets(etat.conversationId, 'message:deleted', { messageId, conversationId: etat.conversationId });
+        json({ success: true, data: { message: 'Message supprimé avec succès' } });
+        return true;
+      }
+      const lu = lisLeCorps();
+      const content = typeof lu.content === 'string' ? lu.content : undefined;
+      const piecesDeLaCible = etat.messages().find((m) => m.id === messageId)?.attachments;
+      // `admitEditedContent` n'accepte le vide que si le message PORTE des
+      // pièces (`messageEditContent.ts`) : un tableau VIDE n'en est pas une.
+      if (content !== undefined && content.trim() === '' && !(Array.isArray(piecesDeLaCible) && piecesDeLaCible.length > 0)) {
+        erreur(400, 'VALIDATION', 'Message content cannot be empty (unless attachments are included)');
+        return true;
+      }
+      const edite = content === undefined ? null : etat.modifieUnMessage(messageId, content);
+      if (edite === null) {
+        erreur(404, 'NOT_FOUND', 'Message not found or you are not authorized to modify it');
+        return true;
+      }
+      etat.socket().emets(etat.conversationId, 'message:edited', edite);
+      json({ success: true, data: { ...edite, message: 'Message modifié avec succès' } });
+      return true;
+    }
+
+    /**
      * Le fil — `GET /conversations/:id`, `GET` / `POST /conversations/:id/messages`
      * (doc-tête). `cidsVus` est la déduplication par `clientMessageId` de la
      * passerelle (§ 6.2 de la phase 4) : une clé revue rend le message déjà
@@ -681,7 +736,10 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
       // `attachmentIds` — des pièces PRÉ-TÉLÉVERSÉES (`messages-send.ts:76`) ; un
       // message sans texte mais avec une pièce n'est pas vide (`:92-98`).
       const attachmentIds = Array.isArray(corpsLu.attachmentIds) ? corpsLu.attachmentIds.filter((id): id is string => typeof id === 'string') : [];
-      if (content.trim() === '' && attachmentIds.length === 0) {
+      // UN LIEU PARTAGÉ SEUL n'est pas un message vide (#5061, § 2.1 —
+      // `.refine()` de `SendMessageBodySchema` admet `Boolean(data.location)`).
+      const location = lieuValide(corpsLu.location);
+      if (content.trim() === '' && attachmentIds.length === 0 && location === null) {
         erreur(400, 'VALIDATION', 'Le message ne peut pas être vide');
         return true;
       }
@@ -696,6 +754,10 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
         json({ success: true, data: { ...etat.messages().find((m) => m.id === deja), isDuplicate: true } });
         return true;
       }
+      // `replyToId` (issue #5163, `messages-send.ts:60`) — résolu contre ce
+      // qui est déjà servi, comme la passerelle le referme (`messageNewPayload.ts:164-176`).
+      const replyToId = typeof corpsLu.replyToId === 'string' ? corpsLu.replyToId : undefined;
+      const cible = replyToId === undefined ? undefined : etat.messages().find((m) => m.id === replyToId);
       const message = chargeDeMessage({
         id: etat.identifiants.suivant(),
         conversationId: etat.conversationId,
@@ -708,6 +770,8 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
             ? { id: INVITE.id, displayName: etat.invite.nom, type: 'anonymous' }
             : { id: PARTICIPANT_DU_MEMBRE, displayName: MEMBRE.nom, userId: MEMBRE.id },
         attachments: attachmentIds.map((id) => attachmentServi(etat.pieces.get(id) as PieceDeBouchon)),
+        ...(cible === undefined ? {} : { replyToId, replyTo: cible }),
+        ...(location === null ? {} : { location }),
       });
       if (cid !== null) cidsVus.set(cid, message.id);
       etat.ajouteUnMessage({ ...message, senderParticipantId: identite.genre === 'invite' ? INVITE.id : PARTICIPANT_DU_MEMBRE });

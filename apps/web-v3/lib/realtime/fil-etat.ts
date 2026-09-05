@@ -1,7 +1,7 @@
 import { buildTranslationRecord, resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 
-import { citationsDeLaPage } from '@/lib/api/citations';
-import { message, MENTIONS_RETENUES, type Accuse, type Message } from '@/lib/api/fil';
+import { citationDeReponse, citationsDeLaPage } from '@/lib/api/citations';
+import { message, MENTIONS_RETENUES, type Accuse, type Lieu, type Message } from '@/lib/api/fil';
 
 /**
  * L'ÉTAT D'UN FIL OUVERT, et les transitions que le temps réel lui fait subir
@@ -103,6 +103,8 @@ export const bulleOptimiste = ({
   langue,
   horsLigne,
   maintenant,
+  reponseA,
+  lieu,
 }: {
   readonly clientMessageId: string;
   readonly texte: string;
@@ -111,6 +113,16 @@ export const bulleOptimiste = ({
   readonly langue: string;
   readonly horsLigne: boolean;
   readonly maintenant: number;
+  /**
+   * LA CITATION D'UNE RÉPONSE EN COURS (issue #5163) — le squelette posé par
+   * `citationDeReponse` (`lib/api/citations.ts`), résolu contre la tranche
+   * PAR `citantes` juste dessous : la bulle optimiste porte sa citation AVANT
+   * l'accusé, et son aperçu est le texte que le lecteur LIT déjà, jamais une
+   * seconde descente du Prisme.
+   */
+  readonly reponseA?: { readonly cible: string; readonly source: string };
+  /** UN LIEU PARTAGÉ EN COURS D'ENVOI (#5061) — posé AVANT l'accusé, comme la citation d'une réponse ci-dessus. */
+  readonly lieu?: Lieu;
 }): Bulle => ({
   id: clientMessageId,
   clientMessageId,
@@ -129,7 +141,8 @@ export const bulleOptimiste = ({
   edite: false,
   supprime: false,
   pieces: [],
-  citations: [],
+  lieu: lieu ?? null,
+  citations: reponseA === undefined ? [] : [citationDeReponse(reponseA)],
   reactions: [],
   accuse: 'envoye',
   envoi: horsLigne ? 'hors-ligne' : 'en-attente',
@@ -271,13 +284,69 @@ export const edite = (
   };
 };
 
+/** `message:deleted` REÇU — d'autrui ou la confirmation de SON PROPRE retrait (`retireMoiMeme`) : les deux finissent `servi`. */
 export const retire = (etat: EtatDuFil, messageId: string): EtatDuFil => ({
   ...etat,
   bulles: citantes(
     etat.bulles.map((bulle) =>
-      bulle.id === messageId ? { ...bulle, supprime: true, texte: '', pieces: [], citations: [], reactions: [] } : bulle,
+      bulle.id === messageId
+        ? { ...bulle, supprime: true, texte: '', pieces: [], lieu: null, citations: [], reactions: [], envoi: 'servi' }
+        : bulle,
     ),
   ),
+});
+
+/**
+ * MODIFIER / RETIRER SA PROPRE BULLE — OPTIMISTE (issue #5163), le même
+ * patron que l'envoi : peindre AVANT que le réseau réponde. Le contenu d'une
+ * édition est l'ORIGINAL (`texteOriginal`) — jamais une traduction lue, la
+ * passerelle n'édite que le contenu d'origine — et ses traductions sont
+ * PÉRIMÉES (`translations: null` en base, § 2 de la spécification) : elles
+ * reviendront par `message:translation`.
+ */
+export const modifieMoiMeme = (etat: EtatDuFil, id: string, texte: string): EtatDuFil => ({
+  ...etat,
+  bulles: citantes(
+    etat.bulles.map((bulle) =>
+      bulle.id === id
+        ? { ...bulle, texte, texteOriginal: texte, langueServie: null, traductions: {}, edite: true, envoi: 'en-attente' }
+        : bulle,
+    ),
+  ),
+});
+
+/**
+ * Un retrait OPTIMISTE efface le contenu TOUT DE SUITE — la même chose
+ * qu'un `retire()` reçu, sauf `envoi`, qui reste `en-attente` jusqu'à
+ * l'accusé ou le `message:deleted` que la passerelle diffuse (même à
+ * l'auteur du retrait, § 2).
+ */
+export const retireMoiMeme = (etat: EtatDuFil, id: string): EtatDuFil => ({
+  ...etat,
+  bulles: citantes(
+    etat.bulles.map((bulle) =>
+      bulle.id === id
+        ? { ...bulle, supprime: true, texte: '', pieces: [], lieu: null, citations: [], reactions: [], envoi: 'en-attente' }
+        : bulle,
+    ),
+  ),
+});
+
+/** L'accusé d'une mutation (`{ success: true }` de `message:edit`/`message:delete`, ou une réponse REST 200) : `en-attente` devient `servi`. */
+export const confirmeLaMutation = (etat: EtatDuFil, id: string): EtatDuFil => ({
+  ...etat,
+  bulles: etat.bulles.map((bulle) => (bulle.id === id ? { ...bulle, envoi: 'servi' } : bulle)),
+});
+
+/**
+ * UN REFUS RÉTABLIT LA BULLE D'AVANT, À L'IDENTIQUE — texte, pièces,
+ * citations, réactions compris (snapshot → apply → rollback, Instant App
+ * Principles). `avant` est la bulle telle qu'elle était juste AVANT le geste
+ * optimiste — prise par l'appelant, jamais recalculée ici.
+ */
+export const retabli = (etat: EtatDuFil, avant: Bulle): EtatDuFil => ({
+  ...etat,
+  bulles: citantes(etat.bulles.map((bulle) => (bulle.id === avant.id ? avant : bulle))),
 });
 
 /**

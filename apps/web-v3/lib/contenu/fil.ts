@@ -152,6 +152,39 @@ export const FIL = {
   reactions: 'Réactions',
   choisirUneReaction: 'Choisir une réaction',
   fermer: 'Fermer',
+  /**
+   * LES TROIS GESTES D'UNE LIGNE (§ 12.10.1, issue #5163) — répondre,
+   * modifier, retirer. Ils vivent dans `FIL` avec le reste de la copie du
+   * fil : une SECONDE table qui ne ferait que réexporter ces clés serait un
+   * second nom pour une seule chaîne, et `lib/contenu/fil.ts` voyage dans
+   * QUATRE modules clients (participate, liste, notifs, composer) — chaque
+   * octet y est payé quatre fois.
+   */
+  actionsSurLeMessage: (auteur: string): string => `Actions sur le message de ${auteur}`,
+  /** Le MIEN se nomme à la deuxième personne — « le message de Vous » n'est pas une phrase (le patron de `voirVotreProfil`). */
+  actionsSurMonMessage: 'Actions sur mon message',
+  repondre: 'Répondre',
+  modifier: 'Modifier',
+  retirer: 'Retirer',
+  annuler: 'Annuler',
+  enregistrer: 'Enregistrer',
+  modification: 'Modification du message',
+  /**
+   * LE VOCAL ET LA POSITION (#5061) — deux AMÉLIORATIONS PROGRESSIVES du
+   * composeur, servies dans `FIL` avec le reste de sa copie (même raison que
+   * les trois gestes de ligne, § 12.10.1 : une seconde table ne ferait que
+   * réexporter ces clés).
+   */
+  enregistrerUnVocal: 'Enregistrer un message vocal',
+  envoyerLeVocal: 'Envoyer le message vocal',
+  annulerLEnregistrement: 'Annuler l’enregistrement',
+  microRefuse: 'Le microphone n’est pas accessible. Vérifiez les autorisations de votre navigateur.',
+  partagerMaPosition: 'Partager ma position',
+  positionRefusee: 'Votre position n’a pas pu être obtenue. Vérifiez les autorisations de votre navigateur.',
+  /** Le nom d'un lieu quand la passerelle n'en a servi aucun — jamais un nom inventé. */
+  lieuPartage: 'Position partagée',
+  voirSurCarte: 'Voir sur la carte',
+  ouvrirLeLieu: (nom: string): string => `Ouvrir ${nom} dans une carte`,
 } as const;
 
 /**

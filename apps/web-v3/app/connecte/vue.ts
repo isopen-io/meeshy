@@ -12,8 +12,8 @@ import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 import { ESPACE } from '@/lib/contenu/espace';
 
 import { CHATS, PANNE, TABLEAU_DE_BORD, adresseDuLien, salutation } from './contenu';
-import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
-import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
+import { feuilleDeLEspace, raccourcisEntete } from './espace-vue';
+import { FEUILLE_DE_L_ESPACE } from './espace-feuille';
 import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from './feuille';
 import { langAttribut } from './transcrit';
 
@@ -288,9 +288,12 @@ const corpsDuTableau = ({
   const langues = languesDuLecteur(lecteur ?? {});
 
   return (
+    '<div class="entete-chats">' +
     '<div class="bonjour">' +
     `<h1>${echappe(salutation(lecteur?.prenom ?? null))}</h1>` +
     `<p>${echappe(TABLEAU_DE_BORD.apercu)}</p>` +
+    '</div>' +
+    raccourcisEntete('/') +
     '</div>' +
     // « RECHERCHER PARTOUT » — le champ que la cible pose en tête du tableau de
     // bord (`MeeshyWebV3.dc.html:74`) et la SEULE porte que `/search` avait sur
@@ -323,11 +326,7 @@ const corpsDuTableau = ({
               .map((conversation) => carteDeFil({ conversation, langues, maintenant }))
               .join('')}</ul>`,
     }) +
-    sectionDesLiens(liens) +
-    // LES DEUX RONDS EN DERNIER, ET DANS LE FLUX : leur conteneur réserve sous
-    // la dernière section la bande qu'ils occupent, sans quoi ils couvriraient
-    // « Nouveau lien de partage » au repos (charte règle 7 b/c).
-    actionsFlottantes('/')
+    sectionDesLiens(liens)
   );
 };
 
@@ -344,8 +343,7 @@ export const documentDuTableau = (etat: EtatDuTableau): string => {
     // La feuille du TABLEAU en plus de celle de la zone, et pour lui seul : la
     // page de PANNE ci-dessous ne rend aucune carte de fil, donc aucun aperçu
     // — elle n'en paie pas un octet (charte règle 7).
-    feuille:
-      FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DES_FLOTTANTES + (dessus === '' ? '' : FEUILLE_DE_L_ESPACE),
+    feuille: FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + (dessus === '' ? '' : FEUILLE_DE_L_ESPACE),
     corps: corpsDuTableau(etat),
     retour: false,
     surimpression: dessus,

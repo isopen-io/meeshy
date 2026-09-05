@@ -103,6 +103,8 @@ export {
   PRENOM_DU_LECTEUR,
   PSEUDO_DEJA_PRIS,
   PSEUDO_SUGGERE,
+  QUATRIEME_CONVERSATION,
+  TROISIEME_CONVERSATION,
   type MessageServi,
 } from './bouchon-monde';
 export { lienParDefaut, type LienDeBouchon } from './bouchon-lien';
@@ -238,6 +240,16 @@ export type PasserelleDeBouchon = {
   /** Un message qui ARRIVE pendant que le lecteur n'est pas là — servi par la liste ET par `/sync`, jamais par le socket. */
   readonly ajouteUnMessage: (message: MessageServi) => void;
   readonly messages: () => readonly MessageServi[];
+  /** Modifier un message directement — un spec prépare ainsi un message VIEUX de plus de 24 h (issue #5163). */
+  readonly modifieUnMessage: (id: string, content: string) => MessageServi | null;
+  readonly retireUnMessage: (id: string) => MessageServi | null;
+  /**
+   * REMETTRE LE FIL DANS SON ÉTAT DE DÉPART — la sœur d'`oublie()` pour les
+   * MESSAGES (issue #5163). Éditer et retirer sont des écritures DURABLES : sans
+   * elle, une épreuve qui retire `m4` le retire pour toutes les suivantes, et
+   * l'ordre des `test()` deviendrait une dépendance cachée.
+   */
+  readonly remets: () => void;
 };
 
 export const passerelleDeBouchon = async (options?: {
@@ -273,6 +285,31 @@ export const passerelleDeBouchon = async (options?: {
   const ajouteUnMessage = (message: MessageServi): void => {
     messages.push(message);
   };
+  const remets = (): void => {
+    messages.splice(0, messages.length, ...messagesInitiaux(conversationId));
+  };
+  /**
+   * `modifieUnMessage` / `retireUnMessage` (issue #5163) — le MÊME mutateur
+   * pour `PUT`/`DELETE /messages/:id` (bouchon-fil.ts) ET pour `message:edit`/
+   * `message:delete` (bouchon-socket.ts) : deux transports, un seul site
+   * d'écriture, comme la passerelle réelle (`messageEditAdmission.ts`).
+   */
+  const modifieUnMessage = (id: string, content: string): MessageServi | null => {
+    const rang = messages.findIndex((m) => m.id === id && m.deletedAt === undefined);
+    if (rang === -1) return null;
+    const courant = messages[rang] as MessageServi;
+    const edite: MessageServi = { ...courant, content, isEdited: true, editedAt: new Date().toISOString(), translations: [] };
+    messages[rang] = edite;
+    return edite;
+  };
+  const retireUnMessage = (id: string): MessageServi | null => {
+    const rang = messages.findIndex((m) => m.id === id && m.deletedAt === undefined);
+    if (rang === -1) return null;
+    const courant = messages[rang] as MessageServi;
+    const retire: MessageServi = { ...courant, deletedAt: new Date().toISOString(), translations: [] };
+    messages[rang] = retire;
+    return retire;
+  };
   let compteur = 100;
   const identifiants = { suivant: () => `m${(compteur += 1)}` };
 
@@ -305,6 +342,8 @@ export const passerelleDeBouchon = async (options?: {
     invite,
     messages: () => messages,
     ajouteUnMessage,
+    modifieUnMessage,
+    retireUnMessage,
     presences,
     membres: CONVERSATION_DU_LECTEUR.membres,
     socket: () => bouchon,
@@ -451,6 +490,9 @@ export const passerelleDeBouchon = async (options?: {
     // deux conversations que `GET /conversations` sert au membre, et le fil
     // riche. Sans elles, la LISTE n'entendrait aucune frappe.
     conversationsDuMembre: [conversationId, AUTRE_CONVERSATION.id, CONVERSATION_RICHE.id],
+    messages: () => messages,
+    modifieUnMessage,
+    retireUnMessage,
   });
 
   const port = await portLibre();
@@ -504,6 +546,9 @@ export const passerelleDeBouchon = async (options?: {
     presences,
     ajouteUnMessage,
     messages: () => messages,
+    modifieUnMessage,
+    retireUnMessage,
+    remets,
   };
 };
 

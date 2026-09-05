@@ -7,10 +7,13 @@ import {
   CACHE_PRIVE,
   curseurDemande,
   lisLeFormulaire,
+  modificationDemandee,
   pleinDemande,
   nomDuLecteur,
   redirection,
+  reponseDemandee,
   rendu,
+  resoutLeContexte,
   soumissionDuFil,
   tempsReelDuDocument,
   traiteLaSoumission,
@@ -67,6 +70,8 @@ const charge = async ({
   avant,
   autour = null,
   plein = null,
+  idReponse = null,
+  idModification = null,
   erreur,
   brouillon,
   statut = 200,
@@ -79,6 +84,10 @@ const charge = async ({
   readonly autour?: string | null;
   /** `?media=` — la pièce ouverte en plein écran (§ 12.10.1), résolue par la vue contre ce qui est servi. */
   readonly plein?: string | null;
+  /** `?repondre=` — ou le contexte CONSERVÉ d'un refus de réponse (issue #5163). */
+  readonly idReponse?: string | null;
+  /** `?modifier=` — ou le contexte CONSERVÉ d'un refus de modification. */
+  readonly idModification?: string | null;
   readonly erreur: string | null;
   readonly brouillon: string;
   readonly statut?: number;
@@ -104,6 +113,11 @@ const charge = async ({
   // profil d'un participant, une requête de plus SEULEMENT quand il est demandé.
   const profil = await chargeLeProfilSiDemande({ requete, jeton });
 
+  const maintenant = Date.now();
+  // `?repondre=` / `?modifier=` (§ 12.10.1, issue #5163) — résolus contre CE
+  // qui vient d'être servi : une cible hors tranche n'arme rien.
+  const contexte = resoutLeContexte({ idReponse, idModification, fil: issue.fil, maintenant, composeurOuvert: true, estInvite: false });
+
   return rendu(
     documentDuFil({
       porte: { genre: 'membre', cle },
@@ -111,9 +125,10 @@ const charge = async ({
       lecteur: { id: lecteur?.id ?? null, nom: nomDuLecteur(lecteur), langues },
       erreur,
       brouillon,
-      maintenant: Date.now(),
+      maintenant,
       composeur: { genre: 'ouvert' },
       tempsReel: tempsReelDuDocument(),
+      contexte,
       plein,
       profil,
     }),
@@ -131,13 +146,21 @@ export const GET = async (
   const jeton = jetonDuLecteur(requete);
   if (jeton === null) return versLaConnexion(cle);
 
+  const idReponse = reponseDemandee(requete);
+  const idModification = idReponse === null ? modificationDemandee(requete) : null;
+
   return charge({
     requete,
     jeton,
     cle,
     avant: curseurDemande(requete),
-    autour: ancreDemandee(requete),
+    // `?repondre=`/`?modifier=` servent la tranche AUTOUR de leur cible — la
+    // loi de `?media=` (§ 9 Q2 de la spécification #5163) appliquée à un
+    // troisième état ; `?avant=` l'emporte toujours (jamais les deux à la fois).
+    autour: ancreDemandee(requete) ?? idReponse ?? idModification,
     plein: pleinDemande(requete),
+    idReponse,
+    idModification,
     erreur: null,
     brouillon: '',
   });
@@ -161,13 +184,30 @@ export const POST = async (
   const actionDeProfil = await traiteLActionDeProfil({ formulaire, jeton, adresseHote });
   if (actionDeProfil !== null) return actionDeProfil;
 
+  const soumission = soumissionDuFil(formulaire);
   const issue = await traiteLaSoumission({
-    soumission: soumissionDuFil(formulaire),
+    soumission,
     creance: { genre: 'membre', jeton },
     conversation: cle,
     adresse: adresseHote,
   });
   if (issue.genre === 'redirection') return redirection(issue.vers);
   if (issue.statut === 401) return versLaConnexion(cle);
-  return charge({ requete, jeton, cle, avant: null, erreur: issue.message, brouillon: issue.brouillon, statut: issue.statut });
+  // Le contexte armé est CONSERVÉ sur un refus (§ 9 Q2) : le formulaire poste
+  // vers l'adresse NUE, donc `requete.url` ne porte plus `?modifier=`/
+  // `?repondre=` — c'est la soumission elle-même qui dit ce qui était armé.
+  const idReponse = soumission.genre === 'reponse' ? soumission.replyToId : null;
+  const idModification = soumission.genre === 'modification' ? soumission.messageId : null;
+  return charge({
+    requete,
+    jeton,
+    cle,
+    avant: null,
+    autour: idReponse ?? idModification,
+    idReponse,
+    idModification,
+    erreur: issue.message,
+    brouillon: issue.brouillon,
+    statut: issue.statut,
+  });
 };

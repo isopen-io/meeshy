@@ -55,6 +55,7 @@ const fil = (droits: Droits): string =>
     maintenant: 0,
     composeur: { genre: 'ouvert' },
     tempsReel: null,
+    contexte: null,
     plein: null,
     profil: null,
   } satisfies EtatDuFil);

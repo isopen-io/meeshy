@@ -30,7 +30,7 @@ import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import { RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
-import { actionsFlottantes, feuilleDeLEspace, versLEspace } from '@/app/connecte/espace-vue';
+import { feuilleDeLEspace, raccourcisEntete, versLEspace } from '@/app/connecte/espace-vue';
 
 const RACINE = join(__dirname, '..', 'app');
 
@@ -55,7 +55,7 @@ const adresseServie = (fichier: string): string => {
 
 const ROUTES_SERVIES: readonly string[] = fichiersDeRoute(RACINE).map(adresseServie);
 
-/** Les destinations que le lot promet — les deux ronds, les rangées, le champ du tableau. */
+/** Les destinations que le lot promet — les deux raccourcis, les rangées, le champ du tableau. */
 const DESTINATIONS: readonly string[] = [
   '/feed',
   ...RANGEES_DE_L_ESPACE.map((rangee) => rangee.href),
@@ -118,6 +118,6 @@ describe('la feuille se ferme sans un octet de JavaScript', () => {
   it('ouvre depuis l’hôte, et y revient', () => {
     expect(versLEspace('/')).toBe('/?espace');
     expect(versLEspace('/chats')).toBe('/chats?espace');
-    expect(actionsFlottantes('/chats')).toContain('href="/chats?espace"');
+    expect(raccourcisEntete('/chats')).toContain('href="/chats?espace"');
   });
 });

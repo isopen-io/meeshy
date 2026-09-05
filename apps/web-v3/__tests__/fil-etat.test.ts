@@ -304,3 +304,32 @@ describe('la présence — `user:status`, `presence:snapshot`', () => {
     expect(un.bulles).toEqual([]);
   });
 });
+
+/**
+ * UN LIEU PARTAGÉ EN COURS D'ENVOI (#5061) — posé sur la bulle optimiste
+ * AVANT l'accusé, comme la citation d'une réponse : `envoieLaBulle`
+ * (`lib/realtime/capture.ts`) le porte jusqu'à `expedie`, qui le force sur
+ * la route (jamais le socket). `retire` efface un lieu comme il efface une
+ * pièce — un contenu RETIRÉ ne montre plus rien de ce qu'il portait.
+ */
+describe('un lieu partagé, optimiste puis retiré', () => {
+  const LIEU = { latitude: 48.8566, longitude: 2.3522, nom: null, adresse: null };
+
+  it('bulleOptimiste porte le lieu quand on le lui donne, null sinon', () => {
+    const avecLieu = bulleOptimiste({ clientMessageId: 'cid_l1', texte: '', auteur: 'Amina', auteurId: 'u1', langue: 'fr', horsLigne: false, maintenant: 0, lieu: LIEU });
+    expect(avecLieu.lieu).toEqual(LIEU);
+
+    const sansLieu = bulleOptimiste({ clientMessageId: 'cid_l2', texte: 'Bonjour', auteur: 'Amina', auteurId: 'u1', langue: 'fr', horsLigne: false, maintenant: 0 });
+    expect(sansLieu.lieu).toBeNull();
+  });
+
+  it('retire efface le lieu, comme il efface le texte et les pièces', () => {
+    const optimiste = bulleOptimiste({ clientMessageId: 'cid_l3', texte: '', auteur: 'Amina', auteurId: 'u1', langue: 'fr', horsLigne: false, maintenant: 0, lieu: LIEU });
+    const servie: typeof optimiste = { ...optimiste, id: 'm-lieu', envoi: 'servi' };
+    const etat = insere(ETAT_VIDE, servie);
+    expect(etat.bulles[0]?.lieu).toEqual(LIEU);
+    const apresRetrait = retire(etat, 'm-lieu');
+    expect(apresRetrait.bulles[0]?.lieu).toBeNull();
+    expect(apresRetrait.bulles[0]?.supprime).toBe(true);
+  });
+});

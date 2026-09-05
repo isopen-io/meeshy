@@ -54,6 +54,7 @@ const filDe = (tempsReel: EtatDuFil['tempsReel']): string =>
     maintenant: MAINTENANT,
     composeur: { genre: 'ouvert' },
     tempsReel,
+    contexte: null,
     plein: null,
     profil: null,
   });

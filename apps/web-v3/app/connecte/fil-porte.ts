@@ -1,12 +1,21 @@
 import { actifsTempsReel } from '@/lib/actifs-rt';
-import { adresseDuMessage, PARAM_DE_L_ANCRE, PARAM_DU_PLEIN } from '@/lib/api/adresses-du-fil';
+import { adresseDuMessage, PARAM_DE_L_ANCRE, PARAM_DE_LA_MODIFICATION, PARAM_DE_LA_REPONSE, PARAM_DU_PLEIN } from '@/lib/api/adresses-du-fil';
 import type { Lecteur } from '@/lib/api/compte';
-import { accuseLecture, aAccuser, envoie, reagis, televerse, type Creance, type Fil } from '@/lib/api/fil';
+import { envoie, televerse, type Creance, type Fil } from '@/lib/api/fil';
+import { accuseLecture, aAccuser, modifie, peutModifier, reagis, retire } from '@/lib/api/fil-mutations';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import { FIL } from '@/lib/contenu/fil';
 
 import { CHAMP_DE_LA_REACTION, CHAMP_DU_MESSAGE_CIBLE } from './fil-lignes';
-import { CHAMP_DE_LA_PIECE, CHAMP_DU_MESSAGE, type TempsReel } from './fil-vue';
+import {
+  CHAMP_DE_LA_MODIFICATION,
+  CHAMP_DE_LA_PIECE,
+  CHAMP_DE_LA_REPONSE,
+  CHAMP_DE_L_ORIGINAL,
+  CHAMP_DU_MESSAGE,
+  type ContexteDuComposeur,
+  type TempsReel,
+} from './fil-vue';
 import { pieceEnPlein, piecesDuFil } from './plein-vue';
 
 /**
@@ -74,6 +83,75 @@ export const ancreDemandee = (requete: Request): string | null => {
   return valeur === null || valeur.trim() === '' ? null : valeur;
 };
 
+/**
+ * `?repondre=<id>` / `?modifier=<id>` — LES DEUX ÉTATS D'ADRESSE DU FIL
+ * (§ 12.10.1, issue #5163). Lus ICI, comme `?media=` et `?autour=` : les deux
+ * portes en tirent la même TRANCHE (§ 9 Q2, la loi de `?media=` appliquée à
+ * un troisième état — jamais `avant` ET l'un des deux à la fois) et le même
+ * contexte de composeur (`EtatDuFil.contexte`, `fil-vue.ts`).
+ */
+export const reponseDemandee = (requete: Request): string | null => {
+  const valeur = new URL(requete.url).searchParams.get(PARAM_DE_LA_REPONSE);
+  return valeur === null || valeur.trim() === '' ? null : valeur;
+};
+
+export const modificationDemandee = (requete: Request): string | null => {
+  const valeur = new URL(requete.url).searchParams.get(PARAM_DE_LA_MODIFICATION);
+  return valeur === null || valeur.trim() === '' ? null : valeur;
+};
+
+/**
+ * LE CONTEXTE DU COMPOSEUR, RÉSOLU CONTRE CE QUI EST SERVI — le site UNIQUE
+ * des deux portes (issue #5163). `idReponse` et `idModification` ne naviguent
+ * pas seuls : leur cible doit être une ligne PRÉSENTE dans la tranche (jamais
+ * un identifiant deviné), et un composeur FERMÉ (lien clos, droit retiré)
+ * n'arme rien — « Répondre » n'existe pas sur un fil qu'on ne peut pas
+ * écrire. `?modifier=` porte de plus la garde de la fenêtre de 24 h et le
+ * régime 3 de l'invité : hors de ces conditions, l'état est IGNORÉ — le
+ * composeur reste NOMINAL, jamais un contrôle inerte (charte règle 7, § 9 Q8
+ * de la spécification).
+ *
+ * PURE, DÉLIBÉRÉMENT : les identifiants sont lus PAR L'APPELANT — depuis
+ * l'adresse au chargement normal (`reponseDemandee`/`modificationDemandee`),
+ * depuis la SOUMISSION refusée sur un rechargement d'erreur (§ 9 Q2 : « le
+ * contexte armé est conservé » — la requête POST ne porte jamais ces
+ * paramètres, elle poste vers l'adresse NUE).
+ */
+export const resoutLeContexte = ({
+  idReponse,
+  idModification,
+  fil,
+  maintenant,
+  composeurOuvert,
+  estInvite,
+}: {
+  readonly idReponse: string | null;
+  readonly idModification: string | null;
+  readonly fil: Fil;
+  readonly maintenant: number;
+  readonly composeurOuvert: boolean;
+  readonly estInvite: boolean;
+}): ContexteDuComposeur => {
+  if (!composeurOuvert) return null;
+
+  if (idReponse !== null) {
+    const cible = fil.messages.find((m) => m.id === idReponse && !m.systeme && !m.supprime && !m.protege);
+    if (cible !== undefined) return { genre: 'reponse', cible };
+  }
+
+  if (idModification !== null && !estInvite) {
+    const cible = fil.messages.find((m) => m.id === idModification);
+    if (
+      cible !== undefined &&
+      peutModifier({ deMoi: cible.deMoi, systeme: cible.systeme, supprime: cible.supprime, protege: cible.protege, ecritA: cible.ecritA, maintenant })
+    ) {
+      return { genre: 'modification', cible };
+    }
+  }
+
+  return null;
+};
+
 /** Le formulaire posté, ou `null` — un corps illisible n'est pas une exception. */
 export const lisLeFormulaire = async (requete: Request): Promise<FormData | null> =>
   requete.formData().catch(() => null);
@@ -90,24 +168,63 @@ export const champDuFormulaire = async (requete: Request, nom: string): Promise<
  * portes : le nom des champs est celui que `fil-lignes.ts` et `fil-vue.ts`
  * écrivent.
  */
+/**
+ * CE QU'UN FORMULAIRE DU FIL DEMANDE — cinq genres depuis l'issue #5163 :
+ * une réaction, un message NU, une RÉPONSE (`replyToId` porté par le champ
+ * caché `reponseA` du composeur armé), une MODIFICATION (`modifie`, le champ
+ * caché du composeur armé en mode édition) ou un RETRAIT (le bouton
+ * `name="retirer"` du menu d'une ligne, posté seul). Lus UNE fois pour les
+ * deux portes.
+ */
 export type SoumissionDuFil =
   | { readonly genre: 'reaction'; readonly messageId: string; readonly emoji: string }
-  | { readonly genre: 'message'; readonly texte: string; readonly fichiers: readonly File[] };
+  | { readonly genre: 'message'; readonly texte: string; readonly fichiers: readonly File[] }
+  | { readonly genre: 'reponse'; readonly texte: string; readonly replyToId: string; readonly fichiers: readonly File[] }
+  | { readonly genre: 'modification'; readonly messageId: string; readonly texte: string; readonly texteOriginal: string }
+  | { readonly genre: 'retrait'; readonly messageId: string };
 
 const texteDe = (formulaire: FormData, nom: string): string => {
   const brut = formulaire.get(nom);
   return typeof brut === 'string' ? brut.trim() : '';
 };
 
+/** Le nom du bouton `retirer` du menu d'une ligne — posté SEUL, jamais avec les champs du composeur (§ 12.10.1). */
+const CHAMP_DU_RETRAIT = 'retirer';
+
+/**
+ * L'ORDRE DE LECTURE (§ 4 étape 2 de la spécification #5163) : `retirer` →
+ * `modifie` → `reaction`+`message` → `reponse`/`message`. Un formulaire ne
+ * porte qu'UN de ces cinq genres à la fois — le menu d'une ligne, le
+ * composeur et la pastille de réaction sont trois formulaires distincts.
+ */
 export const soumissionDuFil = (formulaire: FormData | null): SoumissionDuFil => {
   if (formulaire === null) return { genre: 'message', texte: '', fichiers: [] };
+
+  const aRetirer = texteDe(formulaire, CHAMP_DU_RETRAIT);
+  if (aRetirer !== '') return { genre: 'retrait', messageId: aRetirer };
+
+  const aModifier = texteDe(formulaire, CHAMP_DE_LA_MODIFICATION);
+  if (aModifier !== '')
+    return {
+      genre: 'modification',
+      messageId: aModifier,
+      texte: texteDe(formulaire, CHAMP_DU_MESSAGE),
+      texteOriginal: texteDe(formulaire, CHAMP_DE_L_ORIGINAL),
+    };
+
   const emoji = texteDe(formulaire, CHAMP_DE_LA_REACTION);
   const messageId = texteDe(formulaire, CHAMP_DU_MESSAGE_CIBLE);
   if (emoji !== '' && messageId !== '') return { genre: 'reaction', messageId, emoji };
+
   const fichiers = formulaire
     .getAll(CHAMP_DE_LA_PIECE)
     .filter((valeur): valeur is File => valeur instanceof File && valeur.size > 0 && valeur.name !== '');
-  return { genre: 'message', texte: texteDe(formulaire, CHAMP_DU_MESSAGE), fichiers };
+  const texte = texteDe(formulaire, CHAMP_DU_MESSAGE);
+
+  const reponseA = texteDe(formulaire, CHAMP_DE_LA_REPONSE);
+  if (reponseA !== '') return { genre: 'reponse', texte, replyToId: reponseA, fichiers };
+
+  return { genre: 'message', texte, fichiers };
 };
 
 /** Ce qu'une soumission produit : un rechargement qui CADRE la ligne concernée, ou une erreur à peindre avec le brouillon. */
@@ -131,22 +248,70 @@ const envoieLeMessage = async ({
   adresse,
   texte,
   fichiers,
+  replyToId,
 }: {
   readonly creance: Creance;
   readonly conversation: string;
   readonly adresse: string;
   readonly texte: string;
   readonly fichiers: readonly File[];
+  readonly replyToId?: string;
 }): Promise<IssueDeSoumission> => {
   if (texte === '' && fichiers.length === 0) return { genre: 'erreur', message: FIL.messageVide, brouillon: '', statut: 400 };
 
   const pieces = fichiers.length === 0 ? null : await televerse({ creance, fichiers });
   if (pieces?.genre === 'refus') return { genre: 'erreur', message: pieces.message, brouillon: texte, statut: pieces.statut ?? 400 };
 
-  const envoi = await envoie({ cle: conversation, creance, texte, pieces: pieces?.identifiants });
+  const envoi = await envoie({ cle: conversation, creance, texte, pieces: pieces?.identifiants, replyToId });
   if (envoi.genre === 'refus') return { genre: 'erreur', message: envoi.message, brouillon: texte, statut: envoi.statut ?? 400 };
 
   return { genre: 'redirection', vers: envoi.id === null ? adresse : adresseDuMessage(adresse, envoi.id) };
+};
+
+/**
+ * MODIFIER ET RETIRER SONT FAIL-CLOSED CÔTÉ INVITÉ (régime 3, § 2 de la
+ * spécification #5163) : les quatre portes du gateway (`PUT`/`DELETE
+ * /messages/:id`, `message:edit`/`message:delete`) refusent un anonyme. La
+ * v3 ne paie pas une 401 en 3G — le refus est rendu SANS qu'aucune requête
+ * ne parte.
+ */
+const modifieLeMessage = async ({
+  creance,
+  adresse,
+  messageId,
+  texte,
+  texteOriginal,
+}: {
+  readonly creance: Creance;
+  readonly adresse: string;
+  readonly messageId: string;
+  readonly texte: string;
+  /** Le texte SERVI, porté par le champ caché `original` (`fil-vue.ts`) — défaut #5163 §8. */
+  readonly texteOriginal: string;
+}): Promise<IssueDeSoumission> => {
+  if (creance.genre === 'invite') return { genre: 'erreur', message: FIL.refuse, brouillon: texte, statut: 403 };
+  // RIEN N'A CHANGÉ : aucune requête — la passerelle marquerait sinon le
+  // message « modifié » pour tous et effacerait ses traductions pour un texte
+  // identique (même défaut que le chemin avec JavaScript, `composeur.ts`).
+  if (texte === texteOriginal) return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
+  const issue = await modifie({ creance, messageId, texte });
+  if (issue.genre === 'refus') return { genre: 'erreur', message: issue.message, brouillon: texte, statut: issue.statut ?? 400 };
+  return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
+};
+
+const retireLeMessage = async ({
+  creance,
+  adresse,
+  messageId,
+}: {
+  readonly creance: Creance;
+  readonly adresse: string;
+  readonly messageId: string;
+}): Promise<IssueDeSoumission> => {
+  if (creance.genre === 'invite') return { genre: 'erreur', message: FIL.refuse, brouillon: '', statut: 403 };
+  const issue = await retire({ creance, messageId });
+  if (issue.genre === 'refus') return { genre: 'erreur', message: issue.message, brouillon: '', statut: issue.statut ?? 400 };
+  return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
 };
 
 /**
@@ -186,10 +351,21 @@ export const traiteLaSoumission = ({
   readonly creance: Creance;
   readonly conversation: string;
   readonly adresse: string;
-}): Promise<IssueDeSoumission> =>
-  soumission.genre === 'reaction'
-    ? basculeLaReaction({ creance, adresse, messageId: soumission.messageId, emoji: soumission.emoji })
-    : envoieLeMessage({ creance, conversation, adresse, texte: soumission.texte, fichiers: soumission.fichiers });
+}): Promise<IssueDeSoumission> => {
+  if (soumission.genre === 'reaction') {
+    return basculeLaReaction({ creance, adresse, messageId: soumission.messageId, emoji: soumission.emoji });
+  }
+  if (soumission.genre === 'reponse') {
+    return envoieLeMessage({ creance, conversation, adresse, texte: soumission.texte, fichiers: soumission.fichiers, replyToId: soumission.replyToId });
+  }
+  if (soumission.genre === 'modification') {
+    return modifieLeMessage({ creance, adresse, messageId: soumission.messageId, texte: soumission.texte, texteOriginal: soumission.texteOriginal });
+  }
+  if (soumission.genre === 'retrait') {
+    return retireLeMessage({ creance, adresse, messageId: soumission.messageId });
+  }
+  return envoieLeMessage({ creance, conversation, adresse, texte: soumission.texte, fichiers: soumission.fichiers });
+};
 
 /**
  * CE QUI EST AFFICHÉ EST LU — dit à la passerelle par la porte qui a servi le

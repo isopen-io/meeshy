@@ -39,6 +39,7 @@ const message = (attributs: Partial<Message> = {}): Message => ({
   edite: false,
   supprime: false,
   pieces: [],
+  lieu: null,
   citations: [],
   reactions: [],
   accuse: 'envoye',
@@ -52,6 +53,8 @@ const rendu = (m: Message): HTMLElement => {
     maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
     langueDuDocument: 'fr',
     adresse: '/chats/c1',
+    composeurOuvert: true,
+    estInvite: false,
   });
   return hote;
 };
@@ -142,5 +145,27 @@ describe('la feuille tient la colonne', () => {
   it('annule la marge de la méta quand rien n’y est visible, et la rend aux états d’envoi', () => {
     expect(FEUILLE_DU_FIL).toContain('.ligne .meta:not(:has(>:not(.reagir-slot):not(.attente):not(.echec):not([hidden]))){margin-top:0}');
     expect(FEUILLE_DU_FIL).toContain('.ligne.envoi-attente .meta,.ligne.envoi-hors-ligne .meta,.ligne.envoi-echec .meta{margin-top:var(--space-1)}');
+  });
+
+  /**
+   * **REVUE DE #5061 — le bouton « Réagir » RECOUVRE la dernière ligne du
+   * texte.** `.reagir-slot` reste en `height:0` tant qu'il est SERVI vide
+   * (no-JS, ligne sans réaction possible) : `poseLeBoutonReagir`
+   * (`fil-peinture.ts`) y insère alors le `button.reagir` réel
+   * (`--target-min`, 44 px). `overflow:visible` + `align-items:center` sur un
+   * conteneur de hauteur nulle centre ce bouton SUR la ligne de `.meta`, donc
+   * pour moitié au-dessus d'elle — sur le dernier mot du `.texte` qui la
+   * précède (mesuré : `rich-capture-{light,dark}.png`, « les chiffres de
+   * mars. » et « pour Marta. » recouverts).
+   *
+   * Le correctif GARDE l'économie du slot vide (aucune ligne blanche tant que
+   * le module n'a rien posé) et ne réserve la hauteur du bouton QUE lorsque
+   * `.reagir-slot` porte réellement un `.reagir` — donc jamais avant que le
+   * module l'y insère, jamais sur un navigateur sans JavaScript. La marge de
+   * la ligne (test précédent) n'est pas concernée : seule la hauteur change.
+   */
+  it('réserve la hauteur du bouton « Réagir » SEULEMENT quand il est posé — jamais avant, jamais en trop', () => {
+    expect(FEUILLE_DU_FIL).toContain('.ligne .reagir-slot{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:0;overflow:visible}');
+    expect(FEUILLE_DU_FIL).toContain('.ligne .reagir-slot:has(>.reagir){height:var(--target-min)}');
   });
 });

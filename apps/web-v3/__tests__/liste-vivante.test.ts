@@ -2,7 +2,7 @@ import { axe } from 'jest-axe';
 
 import { documentDesChats } from '@/app/connecte/liste-vue';
 import type { Conversation } from '@/lib/api/compte';
-import { CHATS } from '@/lib/contenu/liste';
+import { ACTIONS, CHATS } from '@/lib/contenu/liste';
 import { gesteDuSens, prendsLeBalayage } from '@/lib/realtime/balayage';
 import { bouge, compte, frappe, metEnSourdine, miseAJourDe, retire, remets } from '@/lib/realtime/liste-etat';
 import { etatDuDocument, montreLeTrou, peins, peintre } from '@/lib/realtime/liste-peinture';
@@ -204,6 +204,33 @@ describe('la peinture reprend le document servi', () => {
     expect(meta.textContent).toBe(`4 ${CHATS.participants} · ${CHATS.sourdine}`);
   });
 
+  /**
+   * LA BASCULE NE MENT PLUS APRÈS SON PROPRE EFFET (correction de revue,
+   * #5164) : le bouton du menu et le champ caché relisent l'état COURANT,
+   * jamais celui du premier chargement — sans quoi le menu ouvert après une
+   * sourdine posée EN DIRECT continuait de proposer « Mettre en sourdine » et
+   * le formulaire sans JavaScript aurait re-posé la sourdine au lieu de la
+   * lever.
+   */
+  it('repeint le libellé du menu et le champ caché après une bascule de sourdine', () => {
+    peint([CONVERSATION()]);
+    const pe = p();
+    const ligne = document.querySelector<HTMLElement>('li[data-conversation="c1"]')!;
+    const bouton = () => ligne.querySelector('form button[value="sourdine"]');
+    const champ = () => ligne.querySelector<HTMLInputElement>('form input[name="sourdine"]');
+
+    expect(bouton()?.textContent).toBe(ACTIONS.sourdine);
+    expect(champ()?.value).toBe('0');
+
+    peins(pe, metEnSourdine(etatDuDocument(pe), 'c1', true), MAINTENANT);
+    expect(bouton()?.textContent).toBe(ACTIONS.sonner);
+    expect(champ()?.value).toBe('1');
+
+    peins(pe, metEnSourdine(etatDuDocument(pe), 'c1', false), MAINTENANT);
+    expect(bouton()?.textContent).toBe(ACTIONS.sourdine);
+    expect(champ()?.value).toBe('0');
+  });
+
   /** § 12.10.2 tenu par la PEINTURE aussi : une conversation à deux ne se met pas à parler en direct. */
   it('se tait à deux, même quand la sourdine bascule', () => {
     peint([CONVERSATION({ membres: 2 })]);
@@ -243,6 +270,94 @@ describe('la peinture reprend le document servi', () => {
 
     expect(document.querySelectorAll('.manque').length).toBe(1);
     expect(document.querySelector('.manque a')?.textContent).toContain(CHATS.trouAction);
+  });
+});
+
+/**
+ * LA CARTE MISE EN AVANT, EN DIRECT (#5164) — la MÊME règle que le document
+ * servi (`vedetteDe`), rejouée à chaque `peins` : rien n'est reconstruit,
+ * seule la CLASSE `vedette` bouge.
+ */
+describe('la conversation mise en avant, en direct', () => {
+  const vedette = (id: string): boolean =>
+    document.querySelector<HTMLElement>(`li[data-conversation="${id}"]`)?.classList.contains('vedette') ?? false;
+
+  it('une ligne qui remonte en tête AVEC des non-lus devient la carte', () => {
+    peint([
+      CONVERSATION({ id: 'a', nonLus: 3, dernierMessageA: '2026-09-01T12:00:00.000Z' }),
+      CONVERSATION({ id: 'b', nonLus: 0, dernierMessageA: '2026-09-01T10:00:00.000Z' }),
+    ]);
+    const pe = p();
+    expect(vedette('a')).toBe(true);
+
+    const avecCompte = compte(etatDuDocument(pe), { id: 'b', nonLus: 1 });
+    const maj = miseAJourDe({ conversationId: 'b', lastMessageAt: '2026-09-01T13:00:00.000Z' })!;
+    peins(pe, bouge(avecCompte, maj, pe.langues), MAINTENANT);
+
+    expect(ids()).toEqual(['b', 'a']);
+    expect(vedette('b')).toBe(true);
+    expect(vedette('a')).toBe(false);
+  });
+
+  it('une carte redescend en ligne plate quand ses non-lus tombent à zéro, et la suivante non lue la prend', () => {
+    peint([
+      CONVERSATION({ id: 'a', nonLus: 3, dernierMessageA: '2026-09-01T12:00:00.000Z' }),
+      CONVERSATION({ id: 'b', nonLus: 0, dernierMessageA: '2026-09-01T10:00:00.000Z' }),
+    ]);
+    const pe = p();
+    expect(vedette('a')).toBe(true);
+
+    peins(pe, compte(etatDuDocument(pe), { id: 'a', nonLus: 0 }), MAINTENANT);
+    expect(vedette('a')).toBe(false);
+    expect(document.querySelectorAll('.vedette').length).toBe(0);
+
+    peins(pe, compte(etatDuDocument(pe), { id: 'b', nonLus: 2 }), MAINTENANT);
+    expect(vedette('b')).toBe(true);
+  });
+
+  it('une ligne retirée (geste optimiste) cède la vedette, et la reprend une fois remise', () => {
+    peint([
+      CONVERSATION({ id: 'a', nonLus: 3, dernierMessageA: '2026-09-01T12:00:00.000Z' }),
+      CONVERSATION({ id: 'b', nonLus: 5, dernierMessageA: '2026-09-01T11:00:00.000Z' }),
+    ]);
+    const pe = p();
+    const etat = etatDuDocument(pe);
+    expect(vedette('a')).toBe(true);
+
+    peins(pe, retire(etat, 'a'), MAINTENANT);
+    expect(document.querySelector<HTMLElement>('li[data-conversation="a"]')?.hidden).toBe(true);
+    expect(vedette('b')).toBe(true);
+
+    peins(pe, remets(retire(etat, 'a'), 'a'), MAINTENANT);
+    expect(vedette('a')).toBe(true);
+  });
+
+  it('est idempotente : deux peintures identiques ne changent pas la classe', () => {
+    peint([CONVERSATION({ id: 'a', nonLus: 3 })]);
+    const pe = p();
+    const etat = etatDuDocument(pe);
+
+    peins(pe, etat, MAINTENANT);
+    const avant = document.querySelector('li[data-conversation="a"]')?.className;
+    peins(pe, etat, MAINTENANT);
+    const apres = document.querySelector('li[data-conversation="a"]')?.className;
+
+    expect(apres).toBe(avant);
+  });
+
+  it('un `<details>` ouvert sur la vedette survit à sa descente en ligne plate', () => {
+    peint([
+      CONVERSATION({ id: 'a', nonLus: 3, dernierMessageA: '2026-09-01T12:00:00.000Z' }),
+      CONVERSATION({ id: 'b', nonLus: 0, dernierMessageA: '2026-09-01T10:00:00.000Z' }),
+    ]);
+    const pe = p();
+    const menu = document.querySelector<HTMLDetailsElement>('li[data-conversation="a"] details.actions')!;
+    menu.open = true;
+
+    peins(pe, compte(etatDuDocument(pe), { id: 'a', nonLus: 0 }), MAINTENANT);
+
+    expect(vedette('a')).toBe(false);
+    expect(menu.open).toBe(true);
   });
 });
 
