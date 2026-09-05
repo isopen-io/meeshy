@@ -108,10 +108,15 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
                 .authenticator(RefreshAuthenticator(tokenStore, refresher))
                 .apply {
                     if (config.enableLogging) {
+                        // Le garde REMPLACE le logger — il n'en precede pas un
+                        // second (#4811). Il en tient deux, a niveaux FIXES, et
+                        // delegue par route : sans mot de passe au corps, le
+                        // niveau demande ; avec, BASIC. Aucun `level` n'est
+                        // ecrit apres construction, donc aucun appel parallele
+                        // ne peut poser le niveau d'un autre — voir la course
+                        // que documente `SensitiveBodyLoggingGuard`.
                         addInterceptor(
-                            HttpLoggingInterceptor().apply {
-                                level = HttpLoggingInterceptor.Level.BODY
-                            },
+                            SensitiveBodyLoggingGuard.atLevel(HttpLoggingInterceptor.Level.BODY),
                         )
                     }
                 }
