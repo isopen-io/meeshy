@@ -600,25 +600,142 @@ promouvoir en slide ; l'y poser, c'est l'inverse.
 
 ## 6. Le chrome de base
 
+> **Ce schéma était périmé sur TROIS points, corrigés le 2026-09-05.** Il ne
+> montrait ni la bande haute ni la bande basse que le § 1 décrit depuis #5001 et
+> #5002 — deux sections du même document, l'une ajoutée sans relire l'autre. Il
+> portait l'ŒIL au socle, alors que `.preview` n'a **aucun site de production**
+> (retiré le 2026-08-24, `meeshy-reader-modele.md` § 3). Et il ne montrait aucun
+> rail latéral, alors que la directive porteur du 2026-08-31 y a posé les
+> dimensions, l'historique et la création de slide.
+>
+> Un schéma est le passage d'un document qu'on lit en premier et qu'on met à jour
+> en dernier. Celui-ci a survécu à trois lots qui le contredisaient.
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  ✕      [ Post ▾ ]      ▭ ▭ ▭ ＋              ⋯          │   barre haute
 ├──────────────────────────────────────────────────────────┤
-│                                                          │
-│                    la scène courante                     │
-│                                                          │
+│  ♪ note · spectre · crédit · durée      (son de la SCÈNE)│   bande haute #5001
+│ ┌───┐ ┌──────────────────────────────────────┐ ┌───┐     │
+│ │ o │ │                                      │ │ ⤺ │     │
+│ │ b │ │         la scène courante            │ │ ⤻ │     │   couloirs
+│ │ j │ │      (carte 9:16, centrée)           │ │ ⇅ │     │   du plateau
+│ │ e │ │                                      │ │ ＋ │     │
+│ └───┘ └──────────────────────────────────────┘ └───┘     │
+│  #hashtags · @mentions référencées   (la PUBLICATION)    │   bande basse #5002
 ├──────────────────────────────────────────────────────────┤
 │  description de la slide (P) / le contenu (S·R)          │
 │  [ zone contextuelle — Amorce ou Inspecteur ]            │
-│  [ rangée d'outils ]                                     │
-│  🌐 Audience            👁            ⬆ Publier          │   socle
+│  [ ligne canonique — ce qui vise la publication/slide ]  │
+│  🌐 Audience                          ⬆ Publier          │   socle
 └──────────────────────────────────────────────────────────┘
 ```
 
 La barre haute porte, dans cet ordre : **✕** (fermer) · le **type de publication**
 (sélecteur) · le **rail des slides** (vignettes + ajouter) · **⋯** (le reste).
-Le rail des slides monte dans la barre haute : c'est là qu'on navigue entre les slides,
-pas au milieu du document.
+
+**Les deux bandes ENCADRENT la carte et ne qualifient pas la même chose** — la
+haute parle de la SCÈNE, la basse de la PUBLICATION ; c'est le § 1 qui en porte
+la règle et la décision-produit restée ouverte.
+
+**Les deux couloirs latéraux ne sont pas sur la carte, ils sont à côté d'elle**
+(directive porteur 2026-08-31) : à GAUCHE ce qui pose un objet SUR la scène, à
+DROITE ce qui agit sur les DIMENSIONS des objets — plus l'historique
+(undo/redo, #4586) et la création d'une autre slide. Aucun contrôle ne se pose
+sur le canvas : un rail flottant volerait les touches de la bande qu'il couvre,
+et l'auteur découvrirait la zone morte en essayant d'y traîner quelque chose.
+
+**Le socle porte DEUX membres, pas trois.** La loi 5 en annonce trois — audience ·
+aperçu · publier — mais l'œil n'a aucun site : `ScenePlayerMode.preview` est une
+absence DÉCLARÉE depuis le 2026-08-24. Le troisième membre est une place vacante,
+pas une pièce manquante ; le jour où l'aperçu revient, c'est ici qu'il se pose.
+
+## 6 bis-0. Les trois inventaires du chrome — et pourquoi leur COMPTE se mérite (mesure 2026-09-05)
+
+Le § 6 dessine le chrome ; ce paragraphe le NOMME. Trois inventaires gouvernent
+l'entrée dans le composer et la place de chaque contrôle, **et aucun des deux
+documents d'autorité ne les mentionnait** — ils vivaient dans des doc-comments et
+une garde. Or le NIVEAU d'une porte est une RÈGLE : c'est lui qui décide de quel
+côté elle se pose (§ « Le composer met ses portes SUR LE PLATEAU », `apps/ios/CLAUDE.md`).
+
+| inventaire | ce qu'il énumère | contenu mesuré |
+|---|---|---|
+| **`ComposerRailDoor`** (11) | les portes qui posent ou règlent quelque chose | `description` · `content` · `media` · `sound` · `sticker` · `mention` · `place` · `drawing` · `text` · `hashtag` · `background` |
+| **`ComposerRailLevel`** (4) | ce que la porte VISE — et donc où elle se pose | `publication` · `slide` · `object` · `scene` |
+| **`ComposerOrigin`** (8) | par où l'on ENTRE dans le composer | `storyTray` · `feedComposer` · `moodChip` · `repost` · `edit` · `draft` · `share` · `conversationMedia` |
+| `ComposerDocumentTool.canonicalRow` (7) | les outils d'attache du document | `photo` · `camera` · `emoji` · `document` · `place` · `microphone` · `mention` |
+
+**`rangée canonique` désigne DEUX choses**, et il faut le savoir avant de lire une
+directive : `ComposerDocumentTool.canonicalRow` (les sept outils d'attache du
+document, en colonne sous l'avatar depuis #5082) et la rangée contextuelle du bas
+de scène que sert `ComposerRailDoor`. Le même document emploie aussi
+« ligne canonique » pour la seconde. Un mot, deux inventaires, deux niveaux — c'est
+le meilleur candidat au vocabulaire à trancher.
+
+### Le compte de ces enums n'est PAS reproductible par `grep`, et il faut le dire
+
+Quatre méthodes ont été essayées sur `ComposerOrigin` le même jour, et elles ont
+rendu **5, 5, 15, puis 8** :
+
+| méthode | rendu | ce qu'elle rate |
+|---|---|---|
+| `awk` borné à 60 lignes | 5 | l'enum est plus long que la fenêtre |
+| équilibrage d'accolades + `^\s*case\s+(\w+)` | 5 | **un `case a, b, c` ne rend que `a`** |
+| idem + tous les identifiants de la ligne | 15 | les **valeurs associées** (`ofPostId`, `documentFormat`, `messageId`…) ne sont pas des cas |
+| équilibrage + découpage par virgules **hors parenthèses** | **8** | — |
+
+> **Un enum Swift à valeurs associées n'a pas d'équivalent de `Mirror`.** Le § 6
+> bis a résolu le recensement des CHAMPS en adoptant une définition qui n'était
+> pas la sienne — celle de Swift lui-même. Pour les CAS, `CaseIterable` jouerait
+> ce rôle, mais un enum à valeurs associées ne peut pas s'y conformer. Il n'y a
+> donc pas de définition empruntable : le compte se mérite, et **c'est la
+> commande qu'on publie, jamais le nombre seul**.
+
+La commande qui rend les lignes du tableau ci-dessus, et qu'on rejoue plutôt que
+de croire le nombre :
+
+```bash
+python3 - <<'EOF'
+import re, pathlib
+def cas(fichier, enum):
+    s = pathlib.Path(fichier).read_text()
+    j = s.index("{", s.index(enum)); d, k = 0, j
+    while True:
+        d += (s[k] == "{") - (s[k] == "}")
+        if d == 0: break
+        k += 1
+    out = []
+    for ligne in re.findall(r'^\s*case\s+(.+)$', s[j:k], re.M):
+        prof, seg, segs = 0, "", []
+        for c in ligne.split("//")[0]:
+            prof += (c == "(") - (c == ")")
+            if c == "," and prof == 0: segs.append(seg); seg = ""
+            else: seg += c
+        segs.append(seg)
+        out += [m.group(1) for sg in segs if (m := re.match(r'\s*([a-z][a-zA-Z]*)', sg))]
+    return list(dict.fromkeys(out))
+for f, e in [("apps/ios/Meeshy/Features/Main/Composer/ComposerRailDoor.swift", "enum ComposerRailDoor"),
+             ("apps/ios/Meeshy/Features/Main/Composer/ComposerIntent.swift", "enum ComposerOrigin")]:
+    c = cas(f, e); print(f"{e.split()[-1]} : {len(c)} — {' · '.join(c)}")
+EOF
+```
+
+La vérité reste le fichier source. Un chiffre recopié ici sans sa commande serait
+une décoration — et ce document en a déjà porté trois qui ne tombaient pas juste.
+
+### Les mots du chrome qui n'ont aucune autorité sémantique
+
+Mesuré : `plateau`, `couloir`, `meuble`, `étagère` et `timeline` sont employés
+massivement dans le code (des centaines de fichiers pour les trois premiers, 161
+fichiers SDK pour `timeline`) et **n'apparaissent dans aucun des deux
+`*-modele.md`** autrement qu'en passant. `couloir` — le mot qui a tranché la
+géographie des rails (#4561, #4633) — n'est écrit que dans `apps/ios/CLAUDE.md`.
+
+Ce n'est pas un oubli à combler d'un trait : un mot n'entre dans un document
+d'autorité que lorsqu'on peut dire ce qu'il DÉSIGNE et ce qu'il ne désigne pas.
+`étagère` en est l'exemple — il sert déjà pour deux choses (les quatre onglets
+File · Brouillons · Publiées · Archive, et la bibliothèque de sons), et l'inscrire
+sans trancher figerait la confusion au lieu de la lever.
 
 ## 6 bis. Où la structure d'une publication est VRAIMENT connue (mesure 2026-09-02)
 
