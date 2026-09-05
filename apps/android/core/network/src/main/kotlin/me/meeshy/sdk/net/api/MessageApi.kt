@@ -3,6 +3,7 @@ package me.meeshy.sdk.net.api
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.MessagesApiResponse
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.conditionalApiCall
@@ -44,6 +45,39 @@ interface MessageApi {
         @Path("cid") conversationId: String,
         @Header("If-None-Match") ifNoneMatch: String? = null,
     ): Response<ApiResponse<List<ApiMessage>>>
+
+    /**
+     * Forward-watermark gap backfill (#5206) — `after` resumes from the
+     * CLIENT's own held high-water mark (`createdAt` of its newest
+     * server-confirmed message) instead of a server-issued cursor:
+     * `createdAt > after`, strictly, ascending. `offset`/`before` are
+     * mutually exclusive with this mode server-side (gateway skips ALWAYS 0
+     * here — the `after` value itself IS the cursor; advancing means raising
+     * it, never paginating by offset). Gateway contract:
+     * `services/gateway/src/routes/conversations/messages-list.ts:112`
+     * (schema), `228-232` (mode selection), `370-372` (the `createdAt > after`
+     * filter), `505-529` (ascending order, `limit + 1` probe row for a
+     * PRECISE `hasMore`, `skip` pinned to 0).
+     *
+     * Returns [MessagesApiResponse], NOT the standard [ApiResponse] envelope:
+     * `hasMore`/`nextCursor` live under `cursorPagination` in this mode — the
+     * offset-shaped `pagination` field is never populated for an `after`
+     * request (`messages-list.ts:764`), and `nextCursor` is always `null`
+     * (the client already holds its own continuation, `after`, not a
+     * server-issued id — `messages-list.ts:722-729`).
+     *
+     * Not conditional — no `If-None-Match` sent, deliberately: this is a
+     * DIFFERENT request shape than [listConditional]'s recent window, so its
+     * validator (`ETag` hashes ONE exact query) would never match anyway; a
+     * gap backfill also expects genuinely new data far more often than the
+     * recent window does, making the conditional round-trip a poor bet.
+     */
+    @GET("conversations/{cid}/messages")
+    suspend fun listAfter(
+        @Path("cid") conversationId: String,
+        @Query("after") after: String,
+        @Query("limit") limit: Int? = null,
+    ): MessagesApiResponse
 
     @POST("conversations/{cid}/messages")
     suspend fun send(

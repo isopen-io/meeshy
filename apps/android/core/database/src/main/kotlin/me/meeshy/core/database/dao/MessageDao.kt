@@ -65,6 +65,21 @@ public interface MessageDao {
     )
     public suspend fun oldestSynced(conversationId: String): MessageEntity?
 
+    /**
+     * The high-water mark for a conversation's SERVER-CONFIRMED messages — MAX
+     * `createdAt` among rows with no pending `sendState` (#5206). An optimistic,
+     * not-yet-acked row's `createdAt` is CLIENT-assigned, never a value the
+     * forward-watermark gap backfill (`GET .../messages?after=`) may safely
+     * resume from — same exclusion [deleteMissingSince] already applies.
+     * `null` when the conversation has no synced messages yet, in which case
+     * the caller falls back to the full recent-window sync.
+     */
+    @Query(
+        "SELECT MAX(createdAt) FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL",
+    )
+    public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
+
     @Query("UPDATE messages SET sendState = :sendState WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)
 
