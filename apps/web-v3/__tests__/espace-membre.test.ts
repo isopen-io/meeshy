@@ -85,9 +85,20 @@ describe('l’espace membre n’ouvre que sur des routes que la v3 SERT', () => 
     },
   );
 
+  /**
+   * LA SENTINELLE — une route que la v3 ne sert PAS, pour prouver que
+   * `ROUTES_SERVIES` distingue vraiment. Sans elle, une liste qui rendrait
+   * TOUT passerait les témoins ci-dessus au vert sans rien vérifier.
+   *
+   * C'ÉTAIT `/communities`, et l'écran a été servi (`communautes-porte.ts`) :
+   * la sentinelle est alors devenue un rouge permanent qui n'accusait rien.
+   * Une sentinelle se choisit donc parmi les routes que le LEGACY sert et que
+   * la v3 n'a pas reprises — `/groups` en est une, et le jour où la v3 la
+   * servira, ce témoin le dira au lieu de mentir.
+   */
   it('rougirait sur une destination hors zone', () => {
-    expect(ROUTES_SERVIES).not.toContain('/communities');
-    expect(DESTINATIONS).not.toContain('/communities');
+    expect(ROUTES_SERVIES).not.toContain('/groups');
+    expect(DESTINATIONS).not.toContain('/groups');
   });
 });
 

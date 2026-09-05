@@ -7,6 +7,7 @@ import { COMMUNAUTES, metaDeLaCommunaute } from '@/lib/contenu/communautes';
 import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 import { quand } from '@/lib/temps';
 
+import { blocDuNavigateur } from './chargeur';
 import { FEUILLE_DES_COMMUNAUTES } from './communautes-feuille';
 import { feuilleDeLEspace, raccourcisEntete } from './espace-vue';
 import { FEUILLE_DE_L_ESPACE } from './espace-feuille';
@@ -231,6 +232,10 @@ export const documentDesCommunautes = (etat: EtatDesCommunautes): string => {
           : '';
 
   return documentPleinEcran({
+    // L'écran sert la feuille de l'espace membre, donc son FORMULAIRE DE
+    // SORTIE : sans ce module, le quatrième chemin de fermeture (celui qui
+    // vient du navigateur) n'est armé nulle part sur cet écran-là.
+    script: blocDuNavigateur(),
     titre: `${COMMUNAUTES.titre} — Meeshy`,
     description: COMMUNAUTES.sous,
     corps: dessus + (dessus === '' ? corps(etat) : corps(etat).replace('<main ', '<main inert ')),

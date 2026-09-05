@@ -360,7 +360,7 @@ describe('la porte de /communities', () => {
 
   it('POST sans nom ⇒ refus CÔTÉ CLIENT, jamais de POST vers la passerelle', async () => {
     const methodes: string[] = [];
-    const recuperer = async (url: string, init: RequestInit): Promise<Response> => {
+    const recuperer = async (_url: string, init: RequestInit): Promise<Response> => {
       methodes.push(String(init.method ?? 'GET'));
       return json({ success: true, data: DEUX_COMMUNAUTES, pagination: { total: 2, limit: 20, offset: 0, hasMore: false } });
     };

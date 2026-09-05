@@ -15,7 +15,6 @@ import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
 import {
   CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE,
   documentDesCommunautes,
-  SAISIE_NEUVE_COMMUNAUTE,
   type Ouverte,
   type SaisieDeCommunaute,
 } from './communautes-vue';
