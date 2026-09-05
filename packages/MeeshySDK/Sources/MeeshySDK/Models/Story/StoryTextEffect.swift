@@ -32,6 +32,24 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     /// Lueur large et pleine : l'enseigne au néon.
     case neon
 
+    // MARK: Néons COLORÉS — la lueur a sa propre couleur (2026-09-05)
+    //
+    // Cinq effets dont l'encre ne vient ni du texte ni du fond, mais d'eux.
+    // C'est ce que la concurrence appelle « néon » : un texte clair dont le
+    // halo est ROSE, CYAN ou VIOLET. Le rendre en teintant le TEXTE perdrait
+    // le cœur clair du glyphe, qui est ce qui fait lire l'enseigne.
+
+    /// Néon rose — le plus reconnaissable de la famille.
+    case neonPink
+    /// Néon cyan — le contrepoint froid du rose.
+    case neonCyan
+    /// Néon violet — la teinte de marque, en halo.
+    case neonViolet
+    /// Halo doré, plus serré : le lettrage chaud d'une affiche.
+    case gold
+    /// Braise — un halo orangé légèrement tombant, comme une lueur de feu.
+    case fire
+
     // MARK: Contours — l'encre SOMBRE, sans décalage
 
     /// Halo sombre diffus tout autour : le texte tient sur un fond clair
@@ -105,6 +123,22 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
             return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.60,
                                          ink: .text, opacity: 1)
 
+        case .neonPink:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.55,
+                                         ink: .tint("FF2D95"), opacity: 1)
+        case .neonCyan:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.55,
+                                         ink: .tint("22D3EE"), opacity: 1)
+        case .neonViolet:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.55,
+                                         ink: .tint("A855F7"), opacity: 1)
+        case .gold:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.32,
+                                         ink: .tint("FFC857"), opacity: 0.95)
+        case .fire:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0.04, blur: 0.42,
+                                         ink: .tint("FF6A00"), opacity: 0.9)
+
         case .halo:
             return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.30,
                                          ink: .dark, opacity: 0.75)
@@ -171,13 +205,41 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
 /// (`StoryTextObject.textEffect`), jamais sa table. Élargir l'encre ne touche
 /// donc ni schéma, ni version, ni migration — seulement les trois miroirs de
 /// rendu, qui doivent rester identiques.
-public enum StoryTextEffectInk: String, Equatable, Sendable, CaseIterable {
-    /// La couleur du TEXTE lui-même — les lueurs.
+public enum StoryTextEffectInk: Equatable, Sendable {
+    /// La couleur du TEXTE — les lueurs qui prolongent le glyphe.
     case text
     /// Noir — ombres, contours, reliefs sombres.
     case dark
-    /// Blanc — la lumière d'un relief gravé (`emboss`, `letterpress`).
+    /// Blanc — la lumière d'un relief gravé.
     case light
+    /// **Une couleur PROPRE à l'effet, en hexadécimal** (directive porteur
+    /// 2026-09-05 : « il faut absolument revoir les effets sur le texte pour
+    /// produire de vrais effets modernes existant chez la concurrence »).
+    ///
+    /// Les trois encres sémantiques ne savent dire qu'une chose : « la couleur
+    /// de quelqu'un d'autre ». Or ce qui rend une enseigne au néon
+    /// reconnaissable n'est pas qu'elle brille — c'est qu'elle brille EN ROSE,
+    /// quelle que soit la couleur du texte. Un néon rose obtenu en passant le
+    /// texte en rose n'est pas le même effet : il perd la lecture blanche au
+    /// centre, qui EST le néon.
+    ///
+    /// > Une encre sémantique dit d'où vient la couleur. Une teinte dit
+    /// > laquelle. Les deux coexistent parce qu'elles répondent à des
+    /// > questions différentes — et confondre les deux obligeait chaque effet
+    /// > coloré à devenir une couleur de TEXTE, c'est-à-dire à ne plus être un
+    /// > effet.
+    ///
+    /// Les trois moteurs la rendent sans rien changer à leur forme : une
+    /// couleur d'ombre est une couleur, quelle que soit son origine.
+    case tint(String)
+
+    /// Les trois encres SÉMANTIQUES — celles qui empruntent leur couleur.
+    ///
+    /// `CaseIterable` n'est plus dérivable depuis que `tint` porte une valeur,
+    /// et c'est justement ce qu'elle dit : les teintes ne s'énumèrent pas, il
+    /// y en a autant que de couleurs. Cette liste garde ce qu'`allCases`
+    /// gardait — qu'aucune encre sémantique ne devienne du modèle mort.
+    public static let semantic: [StoryTextEffectInk] = [.text, .dark, .light]
 }
 
 // MARK: - Story Text Effect Shadow

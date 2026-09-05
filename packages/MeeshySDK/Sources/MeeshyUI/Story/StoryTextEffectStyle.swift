@@ -47,6 +47,12 @@ struct StoryTextEffectModifier: ViewModifier {
         case .text:  return textColor
         case .dark:  return .black
         case .light: return .white
+        // `Color(hex:)` du design system — le même lecteur que partout ailleurs
+        // côté SwiftUI. Il ne rend jamais `nil` (il retombe sur du noir), donc
+        // le repli vers la couleur du texte que fait le miroir UIKit n'a pas
+        // d'équivalent ici : c'est une divergence CONNUE et bornée à une
+        // chaîne malformée, que la table ne contient pas.
+        case .tint(let hex): return Color(hex: hex)
         }
     }
 }

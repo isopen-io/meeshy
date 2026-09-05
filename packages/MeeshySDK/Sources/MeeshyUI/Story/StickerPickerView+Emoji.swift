@@ -25,6 +25,11 @@ extension StickerPickerView {
                       spacing: 8) {
                 ForEach(category.emojis, id: \.self) { emoji in
                     Button {
+                        // **Poser, c'est se souvenir** (2026-09-05). L'onglet
+                        // RÉCENTS n'a pas d'autre source : il ne devine pas ce
+                        // qu'on a posé, on le lui dit ici, au seul endroit qui
+                        // le sait.
+                        usage.noteUse(.emoji(emoji))
                         onStickerSelected(emoji)
                         HapticFeedback.medium()
                     } label: {
@@ -33,6 +38,7 @@ extension StickerPickerView {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)  // cf. note des onglets
+                    .stickerFavoriteMenu(.emoji(emoji), usage: usage)
                     .accessibilityLabel(String(localized: "story.sticker.a11y",
                                                defaultValue: "Autocollant \(emoji)",
                                                bundle: .module))

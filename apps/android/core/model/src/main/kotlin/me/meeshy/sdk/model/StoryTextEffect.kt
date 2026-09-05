@@ -34,6 +34,23 @@ enum class StoryTextEffect(val wire: String, val shadow: StoryTextEffectShadow?)
     /** A wide, full glow: the neon sign. */
     NEON("neon", StoryTextEffectShadow(0.0, 0.0, 0.60, StoryTextEffectInk.TEXT, 1.0)),
 
+    // --- Coloured neons: the ink belongs to the EFFECT, not to the text
+
+    /** Pink neon — the most recognisable of the family. */
+    NEON_PINK("neonPink", StoryTextEffectShadow(0.0, 0.0, 0.55, StoryTextEffectInk.Tint("FF2D95"), 1.0)),
+
+    /** Cyan neon — the cold counterpoint to the pink. */
+    NEON_CYAN("neonCyan", StoryTextEffectShadow(0.0, 0.0, 0.55, StoryTextEffectInk.Tint("22D3EE"), 1.0)),
+
+    /** Violet neon — the brand hue, as a halo. */
+    NEON_VIOLET("neonViolet", StoryTextEffectShadow(0.0, 0.0, 0.55, StoryTextEffectInk.Tint("A855F7"), 1.0)),
+
+    /** A tighter golden halo: the warm lettering of a poster. */
+    GOLD("gold", StoryTextEffectShadow(0.0, 0.0, 0.32, StoryTextEffectInk.Tint("FFC857"), 0.95)),
+
+    /** Ember — a slightly falling orange glow, like firelight. */
+    FIRE("fire", StoryTextEffectShadow(0.0, 0.04, 0.42, StoryTextEffectInk.Tint("FF6A00"), 0.9)),
+
     // --- Outlines: the DARK ink, no offset
 
     /** A diffuse dark halo all around — the text holds on a busy light ground. */
@@ -123,13 +140,28 @@ data class StoryTextEffectShadow(
  * touches no schema, no version and no migration — only the three render
  * mirrors, which must stay identical.
  */
-enum class StoryTextEffectInk {
+sealed interface StoryTextEffectInk {
     /** The TEXT's own colour — the glows. */
-    TEXT,
+    data object Text : StoryTextEffectInk
 
     /** Black — shadows, outlines, dark reliefs. */
-    DARK,
+    data object Dark : StoryTextEffectInk
 
     /** White — the highlight of a carved relief. */
-    LIGHT,
+    data object Light : StoryTextEffectInk
+
+    /**
+     * A colour that belongs to the EFFECT itself, as six hex digits (2026-09-05).
+     *
+     * The three semantic inks can only say "someone else's colour". What makes a
+     * neon sign recognisable is not that it glows but that it glows PINK,
+     * whatever colour the text is — and tinting the text instead loses the pale
+     * core of the glyph, which IS the neon.
+     */
+    data class Tint(val hex: String) : StoryTextEffectInk
+
+    companion object {
+        /** The three SEMANTIC inks — the ones that borrow their colour. Tints do not enumerate. */
+        val semantic: List<StoryTextEffectInk> = listOf(Text, Dark, Light)
+    }
 }

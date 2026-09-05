@@ -55,33 +55,43 @@ final class TextEditOptionsLayoutTests: XCTestCase {
         XCTAssertEqual(TextEditTool.allCases.count, 8)
     }
 
-    // MARK: - Le gabarit rend PLUSIEURS colonnes, même sur l'écran le plus étroit
+    // MARK: - Le gabarit rend CINQ colonnes, et elles tiennent partout
 
-    /// **La grille doit rester une GRILLE.** Une largeur minimale de colonne
-    /// trop généreuse dégraderait la mise en page en colonne unique : douze
-    /// fonds sur douze rangées, soit strictement pire que la rangée qu'on
-    /// remplace. 343 pt est la largeur servie sur l'iPhone le plus étroit
-    /// encore pris en charge (375 pt d'écran, moins les deux marges de 16).
-    func test_surLÉcranLePlusÉtroit_laGrilleRendPlusieursColonnes() {
-        XCTAssertGreaterThanOrEqual(
-            TextEditOptionsGridMetrics.columnCount(forWidth: 343), 3,
-            "une grille à moins de trois colonnes n'apporte rien sur la rangée")
+    /// **Cinq par rangée, et c'est un CONTRAT, plus une conséquence**
+    /// (directive porteur 2026-09-05 : « il faut 5 éléments par rangée »).
+    ///
+    /// Le gabarit était adaptatif : `columnCount(forWidth:)` disait combien de
+    /// colonnes entraient, et la réponse dépendait de l'appareil — quatre sur
+    /// un iPhone 16 Pro, mesuré. Les trois témoins qui vivaient ici gardaient
+    /// cette arithmétique ; ils n'ont plus d'objet, et ce qui les remplace
+    /// garde l'invariant devenu vrai.
+    func test_laGrilleRendCinqColonnes() {
+        XCTAssertEqual(TextEditOptionsGridMetrics.columns, 5)
     }
 
-    /// Douze fonds tiennent alors en quatre rangées au plus — un panneau qu'on
-    /// embrasse d'un regard, ce que la rangée horizontale ne permettait pas.
-    func test_lesDouzeFonds_tiennentEnPeuDeRangées() {
-        let colonnes = TextEditOptionsGridMetrics.columnCount(forWidth: 343)
-        let rangées = Int((Double(StoryTextBackgroundPresets.all.count) / Double(colonnes)).rounded(.up))
-        XCTAssertLessThanOrEqual(rangées, 4)
+    /// **Le compte étant FIXE, c'est la BOÎTE qui doit tenir.**
+    ///
+    /// Ce que le gabarit adaptatif protégeait — ne jamais dégénérer en colonne
+    /// unique — était garanti par SwiftUI. Avec cinq colonnes imposées, c'est
+    /// l'inverse qui menace : une boîte trop large rogne la cinquième, ou
+    /// écrase les cinq. Le témoin s'éprouve sur le PLUS ÉTROIT des appareils
+    /// servis, jamais sur celui qui exécute le test.
+    func test_cinqBoîtes_tiennentSurLÉcranLePlusÉtroit() {
+        XCTAssertTrue(TextEditOptionsGridMetrics.fitsNarrowestDevice(),
+                      "cinq boîtes de \(TextEditOptionsGridMetrics.boxSide) pt ne tiennent pas "
+                        + "dans \(TextEditOptionsGridMetrics.narrowestDeviceWidth) pt")
     }
 
-    /// Une largeur nulle ou négative — vue non encore mesurée — rend UNE
-    /// colonne, jamais zéro : un `ForEach` sur zéro colonne ne peint rien, et
-    /// un panneau vide est indiscernable d'un panneau cassé.
-    func test_uneLargeurNonMesurée_rendUneColonne() {
-        XCTAssertEqual(TextEditOptionsGridMetrics.columnCount(forWidth: 0), 1)
-        XCTAssertEqual(TextEditOptionsGridMetrics.columnCount(forWidth: -120), 1)
+    /// Et la marge n'est pas une supposition : le témoin ci-dessus passerait
+    /// aussi avec zéro point de reste, ce qui donnerait cinq boîtes collées
+    /// bord à bord. Celui-ci exige que la grille RESPIRE.
+    func test_laGrille_gardeDeLAirSurLÉcranLePlusÉtroit() {
+        let utile = TextEditOptionsGridMetrics.narrowestDeviceWidth
+            - 2 * TextEditOptionsGridMetrics.hostHorizontalPadding
+        let requis = CGFloat(TextEditOptionsGridMetrics.columns) * TextEditOptionsGridMetrics.boxSide
+            + CGFloat(TextEditOptionsGridMetrics.columns - 1) * TextEditOptionsGridMetrics.columnSpacing
+        XCTAssertGreaterThanOrEqual(utile - requis, 8,
+                                    "moins de 8 pt de reste : les boîtes se touchent")
     }
 
     /// La boîte reste au-dessus du plancher de 44 pt (dimension 5) — c'est la

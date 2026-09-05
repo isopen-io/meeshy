@@ -243,11 +243,11 @@ describe('CanvasV3Scene — l\'axe EFFET du texte (#4870)', () => {
 
   /// #5244 — dix effets de plus, et une encre CLAIRE que le booléen d'origine
   /// ne savait pas dire ; six de plus le 2026-09-05, l'axe portant vingt noms.
-  it('the twenty effects all render, and none falls back to the veil', () => {
+  it('the twenty-five effects all render, and none falls back to the veil', () => {
     for (const effect of TEXT_EFFECTS) {
       expect(shadowOf({ textEffect: effect })).not.toContain('1px 4px');
     }
-    expect(TEXT_EFFECTS).toHaveLength(19); // les vingt moins « aucun », qui est l'absence
+    expect(TEXT_EFFECTS).toHaveLength(24); // les vingt-cinq moins « aucun », qui est l'absence
   });
 
   it('a light-ink relief paints WHITE — what "text colour or black" could not say', () => {

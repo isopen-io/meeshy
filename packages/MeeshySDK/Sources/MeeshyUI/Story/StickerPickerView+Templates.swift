@@ -40,6 +40,7 @@ extension StickerPickerView {
                                                side: Self.previewSide)
                     }
                     .buttonStyle(.plain)
+                    .stickerFavoriteMenu(.template(gabarit), usage: usage)
                     .disabled(!enabled)
                     .opacity(enabled ? 1 : 0.55)
                     // **Le mouvement se DIT aussi ici** (#5000) : la scène
@@ -98,7 +99,12 @@ extension StickerPickerView {
     ///
     /// Le partage de la grille avait masqué exactement ça : une seule
     /// destination pour trois familles.
-    private func pose(_ gabarit: StickerTemplate,
+    /// `internal` depuis le 2026-09-05 : les onglets FAVORIS et RÉCENTS posent
+    /// les mêmes gabarits depuis un autre fichier d'extension. `private` y
+    /// aurait imposé une seconde pose — donc une seconde décision sur la
+    /// famille LIEU, le gel de l'heure et l'enregistrement de l'usage, avec la
+    /// certitude qu'elles divergeraient au premier ajustement.
+    func pose(_ gabarit: StickerTemplate,
                       family: StickerTemplateFamily,
                       slots: [String: String]) {
         guard family == .location else {

@@ -43,10 +43,27 @@ public struct StickerPickerView: View {
     /// la plateforme LIT, jamais un sticker jumeau.
     public var onLocationTemplateSelected: (SharedPlace, StickerTemplate) -> Void
 
-    /// **La NATURE choisie** (#5012) — elle remplace l'onglet courant : la
-    /// famille n'est plus un état, c'est une section de la liste.
-    @State var selectedNature: StickerPaletteNature = .sticker
+    /// **L'ONGLET choisi** (directive porteur 2026-09-05) — il remplace
+    /// `selectedNature`, l'interrupteur à deux positions de #5012.
+    ///
+    /// La nature répondait à « qu'est-ce que c'est ? » ; l'onglet répond à
+    /// « qu'est-ce que je cherche ? », question qui vient AVANT. Le
+    /// raisonnement complet vit dans `StickerSheetTab`, avec ce que le
+    /// remplacement corrige : dix-huit sections toutes également lointaines,
+    /// où la deuxième visite coûtait autant que la première.
+    @State var selectedTab: StickerSheetTab = .search
+    /// Les mots tapés dans l'onglet RECHERCHE — ils filtrent le catalogue à la
+    /// frappe (loi 7), et ne survivent pas à la fermeture : une recherche est
+    /// une intention du moment, pas une préférence.
+    @State var searchQuery: String = ""
     @Environment(\.colorScheme) var colorScheme
+    /// **Fermer la feuille.** `@Environment(\.dismiss)` plutôt qu'un rappel au
+    /// contrat : les trois hôtes la présentent en `.sheet`, et un rappel de
+    /// plus aurait obligé chacun à redire ce que le système sait déjà faire.
+    @Environment(\.dismiss) var dismiss
+    /// Les favoris et les récents. Le magasin est un STORE DE PRÉFÉRENCES,
+    /// donc SDK — il retient, il rend, il borne, il ne décide de rien.
+    @ObservedObject var usage: StickerUsageStore = .shared
 
     /// V3-5 — « Mes stickers ». `nil` tant que l'app n'a pas injecté
     /// `.storyStickerLibraryProvided()`.
@@ -92,11 +109,11 @@ public struct StickerPickerView: View {
             panelHeader
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
-                .padding(.bottom, 8)
-            StickerNatureSwitch(selection: $selectedNature)
+                .padding(.bottom, 10)
+            StickerSheetTabBar(selection: $selectedTab)
                 .padding(.bottom, 8)
             Divider().opacity(0.15)
-            naturedContent
+            tabbedContent
         }
         .padding(16)
         .background(.ultraThinMaterial)
@@ -123,16 +140,63 @@ public struct StickerPickerView: View {
     /// iOS 16.0 = le plancher du projet.
     static let sheetSymbolName = "rectangle.portrait.on.rectangle.portrait.angled"
 
+    /// **L'en-tête : le `✕` en verre, puis le logo et le titre — tous à
+    /// GAUCHE** (directive porteur 2026-09-05).
+    ///
+    /// > « Rendre un header propre avec (X) en liquidglass et le titre et logo
+    /// > Stickers à gauche »
+    ///
+    /// ## Le `✕` n'existait pas, et son absence n'était pas une décision
+    ///
+    /// La feuille se fermait par le GLISSEMENT, seul geste offert. Il marche —
+    /// et il est invisible : rien sur l'écran ne dit qu'il existe, et un auteur
+    /// qui ne le connaît pas n'a aucune sortie. Une feuille dont la seule
+    /// fermeture est un geste appris ailleurs est fermée pour qui ne l'a pas
+    /// appris.
+    ///
+    /// ## Pourquoi le titre reste à GAUCHE du `✕`, et non centré
+    ///
+    /// Un titre centré cède la moitié de sa largeur aux deux marges qui
+    /// l'équilibrent, pour une feuille qui n'a qu'UNE action d'en-tête. Groupés
+    /// à gauche, le glyphe, le mot et la croix se lisent dans l'ordre du regard
+    /// et laissent la droite libre — c'est ce que la directive demande, et
+    /// c'est aussi ce qui laisse la place à une action future sans rien
+    /// déplacer.
+    ///
+    /// **`adaptiveGlass` et non `glassEffect`** : l'enrobage du SDK rend le vrai
+    /// Liquid Glass sur iOS 26 et un matériau translucide en dessous. Le
+    /// plancher du projet est iOS 16, et un appel direct ne compilerait pas
+    /// sans une garde de version que ce site n'a pas à porter.
     private var panelHeader: some View {
-        HStack {
+        HStack(spacing: 10) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                    // 32 pt de DESSIN dans une cible de 44 — le plancher
+                    // tactile (dimension 5) porte sur ce que le doigt vise,
+                    // jamais sur ce que l'œil voit.
+                    .frame(width: 32, height: 32)
+                    .adaptiveGlass(in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "sticker.sheet.close",
+                                       defaultValue: "Fermer", bundle: .module))
+
             Image(systemName: Self.sheetSymbolName)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
-            Spacer()
+            Spacer(minLength: 0)
         }
+        // Le titre et le glyphe DISENT la même chose que le bouton qui a ouvert
+        // la feuille ; les fusionner évite à VoiceOver de lire deux éléments
+        // pour un seul en-tête, et le trait dit au rotor que c'en est un.
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Les onglets

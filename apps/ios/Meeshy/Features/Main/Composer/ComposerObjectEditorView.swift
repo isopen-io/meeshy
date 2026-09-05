@@ -733,8 +733,30 @@ struct ComposerObjectEditorView: View {
     @ViewBuilder
     private func textOptions(_ binding: Binding<StoryTextObject>) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            styleSection(binding)
-            ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
+            // **POLICE n'est plus un cas particulier** (directive porteur
+            // 2026-09-05 : « aligne correctement les éléments Effets et
+            // Polices », « assure-toi que tout entre bien dans les viewport »).
+            //
+            // Elle était servie par `TextStyleSpecimenBand` — le spécimen `2e`,
+            // le vrai texte sur son vrai fond — une bande HORIZONTALE à deux
+            // rangs. Mesuré au simulateur le 2026-09-05 sur `Meeshy-iOS26` :
+            // ses dix-huit vignettes s'étendaient de x=16 à **x=512 sur un
+            // écran de 402 points**. Neuf polices sur dix-huit étaient hors du
+            // champ, atteignables par un défilement latéral que rien
+            // n'annonce, à l'endroit exact où les sept autres outils
+            // s'enroulent proprement.
+            //
+            // > Le spécimen sur le VRAI texte est plus riche qu'un « Aa », et
+            // > c'est ce qui l'a fait garder. Mais une richesse qu'on ne peut
+            // > pas PARCOURIR ne se compare pas : le choix d'une police se
+            // > fait en balayant les dix-huit du regard, pas en en révélant
+            // > neuf au doigt.
+            //
+            // La grille rend le « Aa » dans l'encre CHOISIE et sous l'effet
+            // COURANT (`styleGridCell`) — donc elle montre bien ce que la
+            // police donnera, sur la seule chose que la vignette ne peut pas
+            // porter : la longueur du texte réel.
+            ForEach(TextEditTool.all, id: \.self) { tool in
                 section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
                     // **L'écran plein demande la GRILLE** (#5045).
                     // Les deux hôtes SDK gardent la rangée : au-dessus
@@ -752,22 +774,11 @@ struct ComposerObjectEditorView: View {
         .padding(.bottom, 28)
     }
 
-    /// **Le spécimen `2e`, à sa vraie place** — pendant l'édition, sur le fond
-    /// réel, avec le vrai texte de la scène.
-    @ViewBuilder
-    private func styleSection(_ binding: Binding<StoryTextObject>) -> some View {
-        section(ComposerObjectEditorCopy.tool(.style), .tool(.style)) {
-            TextStyleSpecimenBand(
-                text: binding.wrappedValue.text,
-                selection: binding.wrappedValue.parsedTextStyle,
-                onDarkSurface: true,
-                horizontalInset: 0,
-                onSelect: { style in
-                    viewModel.updateTextStyle(id: objectId, style: style)
-                }
-            )
-        }
-    }
+    // `styleSection` est retirée le 2026-09-05 : elle montait
+    // `TextStyleSpecimenBand` pour la seule POLICE, et c'est ce cas particulier
+    // qui laissait neuf polices hors du champ. Le spécimen sur le vrai texte
+    // reste disponible dans le SDK ; il n'a simplement plus d'hôte ici.
+
 
     // MARK: - D'où à où
 
