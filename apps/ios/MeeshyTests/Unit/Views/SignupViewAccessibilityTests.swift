@@ -61,12 +61,12 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// arbitrage de goût (`CLAUDE.md` § roadmap).
     func test_signup_neverDelaysTheUser() throws {
         for path in [Self.signupView, Self.signupViewModel, Self.welcomeView] {
-            let code = try code(path)
-            XCTAssertFalse(code.contains("asyncAfter"),
+            let body = try code(path)
+            XCTAssertFalse(body.contains("asyncAfter"),
                            "\(path) : aucune pause ne se pose entre l'utilisateur et son compte")
-            XCTAssertFalse(code.contains("Task.sleep"),
+            XCTAssertFalse(body.contains("Task.sleep"),
                            "\(path) : idem — une attente déguisée reste une attente")
-            XCTAssertFalse(code.contains("debounce"),
+            XCTAssertFalse(body.contains("debounce"),
                            "\(path) : le formulaire ne temporise rien, il n'interroge personne en frappant")
         }
     }
@@ -75,10 +75,10 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// depuis #4158 la passerelle ne répond plus « déjà pris » à un appelant
     /// anonyme : ils coûtaient trois attentes pour zéro information.
     func test_signup_neverProbesAvailabilityBeforeSubmitting() throws {
-        let code = try code(Self.signupViewModel) + try code(Self.signupView)
-        XCTAssertFalse(code.contains("checkAvailability"),
+        let body = try code(Self.signupViewModel) + code(Self.signupView)
+        XCTAssertFalse(body.contains("checkAvailability"),
                        "l'écran ne sonde plus la disponibilité : c'est la soumission qui tranche")
-        XCTAssertFalse(code.contains("checkPhoneOwnership"),
+        XCTAssertFalse(body.contains("checkPhoneOwnership"),
                        "idem pour le numéro — le conflit se découvre à l'envoi, en 200 typé")
     }
 
@@ -91,10 +91,10 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// chaque événement — c'est la seule voie autorisée.
     func test_signupAndWelcome_routeEveryHapticThroughTheDesignSystem() throws {
         for path in [Self.signupView, Self.welcomeView] {
-            let code = try code(path)
-            XCTAssertFalse(code.contains("UIImpactFeedbackGenerator("),
+            let body = try code(path)
+            XCTAssertFalse(body.contains("UIImpactFeedbackGenerator("),
                            "\(path) : générateur monté à la main — il ne sera jamais chaud")
-            XCTAssertFalse(code.contains("UINotificationFeedbackGenerator("),
+            XCTAssertFalse(body.contains("UINotificationFeedbackGenerator("),
                            "\(path) : même raison")
         }
     }
@@ -108,21 +108,21 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// derniers sont d'INTENSITÉS distinctes : un compte créé et un refus ne se
     /// sentent pas pareil, et c'est la seule information tactile de l'écran.
     func test_signupView_keepsItsSevenHaptics() throws {
-        let code = try code(Self.signupView)
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: code), 7)
-        XCTAssertTrue(code.contains("HapticFeedback.success()"),
+        let body = try code(Self.signupView)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 7)
+        XCTAssertTrue(body.contains("HapticFeedback.success()"),
                       "la création du compte se SENT — c'est le seul retour immédiat avant la bascule")
-        XCTAssertTrue(code.contains("HapticFeedback.error()"),
+        XCTAssertTrue(body.contains("HapticFeedback.error()"),
                       "un refus aussi, et d'une autre intensité : les confondre annulerait l'information")
     }
 
     /// Deux boutons, deux haptiques, deux intensités : `medium` pour l'action
     /// principale (créer un compte), `light` pour la secondaire (se connecter).
     func test_welcomeView_distinguishesItsTwoButtonsByIntensity() throws {
-        let code = try code(Self.welcomeView)
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: code), 2)
-        XCTAssertTrue(code.contains("HapticFeedback.medium()"))
-        XCTAssertTrue(code.contains("HapticFeedback.light()"))
+        let body = try code(Self.welcomeView)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 2)
+        XCTAssertTrue(body.contains("HapticFeedback.medium()"))
+        XCTAssertTrue(body.contains("HapticFeedback.light()"))
     }
 
     // MARK: - La pastille de langue
@@ -132,18 +132,18 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// bouton ordinaire : l'utilisateur entend l'action, jamais l'état — et
     /// c'est l'état qui porte le Prisme.
     func test_languageChip_announcesItsSelectedState() throws {
-        let code = try code(Self.signupView)
-        XCTAssertTrue(code.contains(".accessibilityAddTraits(.isSelected)"),
+        let body = try code(Self.signupView)
+        XCTAssertTrue(body.contains(".accessibilityAddTraits(.isSelected)"),
                       "la pastille de langue doit annoncer qu'elle porte une sélection")
-        XCTAssertTrue(code.contains("accessibilityHint"),
+        XCTAssertTrue(body.contains("accessibilityHint"),
                       "et dire ce que le toucher va faire — ouvrir le choix de langue")
     }
 
     /// Elle porte son propre libellé : sans `children: .ignore`, VoiceOver
     /// énumère le drapeau, la phrase et le mot « Changer » comme trois éléments.
     func test_languageChip_readsAsOneElement() throws {
-        let code = try code(Self.signupView)
-        XCTAssertTrue(code.contains(".accessibilityElement(children: .ignore)"))
+        let body = try code(Self.signupView)
+        XCTAssertTrue(body.contains(".accessibilityElement(children: .ignore)"))
     }
 
     // MARK: - Cibles tactiles
@@ -154,23 +154,23 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// La croix de fermeture passe par `meeshyTapTarget()`, qui pose 44×44
     /// autour d'un glyphe plus petit.
     func test_everyControl_declaresAHitRegionOfAtLeast44() throws {
-        let code = try code(Self.signupView)
-        XCTAssertTrue(code.contains("meeshyTapTarget()"),
+        let body = try code(Self.signupView)
+        XCTAssertTrue(body.contains("meeshyTapTarget()"),
                       "la croix de fermeture est un glyphe : sans cadre déclaré, sa cible EST son dessin")
         XCTAssertGreaterThanOrEqual(
-            occurrences(of: "minHeight: 44", in: code), 4,
+            occurrences(of: "minHeight: 44", in: body), 4,
             "les boutons de texte (Se connecter ×2, conditions, confidentialité) portent chacun 44 pt"
         )
-        XCTAssertFalse(code.contains("frame(height: 3"),
+        XCTAssertFalse(body.contains("frame(height: 3"),
                        "aucun contrôle ne se laisse mesurer sous les 44 pt de la HIG")
     }
 
     /// La rangée du sélecteur de pays est une LISTE : chaque ligne doit être
     /// touchable sur 44 pt, et annoncer celle qui est retenue.
     func test_countrySheet_rowsAreTouchableAndAnnounceTheSelection() throws {
-        let code = try code(Self.signupView)
-        XCTAssertTrue(code.contains(".frame(minHeight: 44)"))
-        XCTAssertTrue(code.contains("country.id == selection.id ? [.isSelected] : []"),
+        let body = try code(Self.signupView)
+        XCTAssertTrue(body.contains(".frame(minHeight: 44)"))
+        XCTAssertTrue(body.contains("country.id == selection.id ? [.isSelected] : []"),
                       "le pays retenu doit s'entendre, pas seulement se voir")
     }
 
@@ -191,10 +191,10 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Un message d'erreur muet ne corrige rien : VoiceOver doit le lire comme
     /// un texte à part entière, sous la saisie qu'il vise.
     func test_fieldErrors_areRenderedAsFootnotesWithTheirOwnLabel() throws {
-        let code = try code(Self.signupView)
-        XCTAssertTrue(code.contains(".font(.footnote)"),
+        let body = try code(Self.signupView)
+        XCTAssertTrue(body.contains(".font(.footnote)"),
                       "le refus se pose en `.footnote` sous son champ")
-        XCTAssertTrue(code.contains(".accessibilityLabel(message)"),
+        XCTAssertTrue(body.contains(".accessibilityLabel(message)"),
                       "et il se LIT — un message d'erreur inaudible n'existe pas")
     }
 
@@ -204,17 +204,17 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// fait croire qu'il y a une décision à prendre. Vide, il est simplement
     /// absent de la charge.
     func test_phoneField_isNeverAnnouncedAsOptional() throws {
-        let code = try code(Self.signupView)
-        XCTAssertFalse(code.lowercased().contains("facultat"),
+        let body = try code(Self.signupView)
+        XCTAssertFalse(body.lowercased().contains("facultat"),
                        "aucun « facultatif » sur le champ téléphone")
-        XCTAssertFalse(code.lowercased().contains("optionnel"),
+        XCTAssertFalse(body.lowercased().contains("optionnel"),
                        "ni sa variante — le champ vide se suffit")
 
         // L'astérisque se cherche dans ce que l'utilisateur LIT, pas dans le
         // fichier : un `*` de code (multiplication, commentaire de bloc) n'a
         // jamais marqué un champ comme requis, et une règle qui le compterait
         // rougirait pour une raison qui n'est pas la sienne.
-        let starred = Self.copyLiterals(in: code).filter { $0.contains("*") }
+        let starred = Self.copyLiterals(in: body).filter { $0.contains("*") }
         XCTAssertTrue(
             starred.isEmpty,
             "un astérisque dans la copie marquerait implicitement les AUTRES champs comme "

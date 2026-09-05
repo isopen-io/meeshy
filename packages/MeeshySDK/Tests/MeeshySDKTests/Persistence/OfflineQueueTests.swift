@@ -553,7 +553,8 @@ final class OfflineQueueTests: XCTestCase {
             // est sans défaut (#4756) précisément pour que ce choix soit
             // ÉCRIT — un défaut aurait laissé ces témoins muets sur un champ
             // qui voyage désormais avec chaque post.
-            storyEffects: nil
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         XCTAssertEqual(result.localMediaPaths.count, 2)
@@ -614,7 +615,8 @@ final class OfflineQueueTests: XCTestCase {
             // est sans défaut (#4756) précisément pour que ce choix soit
             // ÉCRIT — un défaut aurait laissé ces témoins muets sur un champ
             // qui voyage désormais avec chaque post.
-            storyEffects: nil
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         let maybePool = await queue.outboxPoolForTesting
@@ -651,7 +653,8 @@ final class OfflineQueueTests: XCTestCase {
             // est sans défaut (#4756) précisément pour que ce choix soit
             // ÉCRIT — un défaut aurait laissé ces témoins muets sur un champ
             // qui voyage désormais avec chaque post.
-            storyEffects: nil
+            storyEffects: nil,
+            mediaCaptions: nil
         )
 
         // The durable row must carry the REEL type so the dispatcher creates the
