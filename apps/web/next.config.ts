@@ -99,6 +99,15 @@ const nextConfig: NextConfig = {
         destination: '/',
         permanent: false,
       },
+      // The app-info of the LIVE 1.0.5 App Store build is frozen and still
+      // points its privacy URL at /policy (not editable post-release); only
+      // 1.0.6's editable app-info was updated to /privacy. Users on 1.0.5
+      // hitting /policy must not see a dead link (#3539).
+      {
+        source: '/policy',
+        destination: '/privacy',
+        permanent: true,
+      },
     ];
   },
 
