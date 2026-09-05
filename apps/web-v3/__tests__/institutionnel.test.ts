@@ -334,7 +334,7 @@ describe('les cinq pages institutionnelles', () => {
     // l'exemption mord : « Mot de passe oublié ? » sort de la zone, et la seule
     // façon de savoir qu'il ne meurt pas est de le NOMMER.
     const ecran = (e: typeof CONNEXION): string =>
-      documentDeLEcran({ ecran: e, erreur: null, valeurs: {}, retour: null });
+      documentDeLEcran({ ecran: e, refus: null, valeurs: {}, retour: null });
 
     const documents = [
       ['/', documentDeLaVitrine()] as const,

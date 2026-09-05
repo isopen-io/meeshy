@@ -40,10 +40,38 @@ export type DeuxiemeFacteur = {
   readonly pseudonyme: string;
 };
 
+/** Une SORTIE proposée par un refus — « Connectez-vous » sous un e-mail pris. */
+export type Lien = {
+  readonly libelle: string;
+  readonly href: string;
+};
+
+/**
+ * UN REFUS SAIT DÉSORMAIS DE QUOI IL PARLE.
+ *
+ * `champ` porte le nom du champ V3 (`courriel`, `telephone`, `motDePasse`,
+ * `nomAffiche`) — jamais celui de la passerelle : c'est ce nom-là que la vue
+ * connaît, et le traduire ici plutôt que dans la vue garde UNE table de
+ * correspondance au lieu d'une par écran. `null` quand la passerelle ne nomme
+ * rien : la vue rend alors l'alerte globale, et ne DEVINE pas un champ —
+ * désigner le mauvais est pire que n'en désigner aucun.
+ *
+ * `recours` est la SUITE que le refus propose. Un seul refus en a une
+ * aujourd'hui — un e-mail déjà pris veut dire « vous avez déjà un compte » —,
+ * et elle voyage en donnée plutôt qu'en règle de vue : la vue ne saurait pas
+ * qu'un refus sur `courriel` n'appelle « Connectez-vous » que lorsqu'il dit
+ * « déjà pris », et pas lorsqu'il dit « adresse invalide ».
+ */
+export type Refus = {
+  readonly message: string;
+  readonly champ: string | null;
+  readonly recours: Lien | null;
+};
+
 export type Issue =
   | { readonly genre: 'session'; readonly session: Session }
   | { readonly genre: 'deuxieme-facteur'; readonly etape: DeuxiemeFacteur }
-  | { readonly genre: 'refus'; readonly message: string };
+  | ({ readonly genre: 'refus' } & Refus);
 
 export type Recuperateur = (url: string, options: RequestInit) => Promise<Response>;
 
@@ -79,8 +107,13 @@ const chaine = (valeur: unknown): string | null =>
  * C'est la différence de fond avec la connexion : « ce pseudo est pris »,
  * « cet e-mail est invalide », « ce mot de passe est trop court » ne
  * renseignent personne sur un compte EXISTANT — ils décrivent la saisie qu'on
- * vient de faire. Les taire obligerait à deviner ce qui cloche, sur un
- * formulaire de cinq champs.
+ * vient de faire. Les taire obligerait à deviner ce qui cloche.
+ *
+ * DEUX FORMES D'ENVELOPPE. `sendError` de la passerelle pose le texte humain à
+ * la RACINE (`message`), et `error` y est une CHAÎNE (« Validation Error ») ;
+ * d'autres routes rendent `error` en objet portant son `message`. Lire les deux
+ * n'est pas de la superstition : c'est le prix d'un `objet()` qui rend `null`
+ * sur une chaîne, donc d'une lecture qui ne se trompe jamais de forme.
  */
 const messageDuServeur = (corps: Readonly<Record<string, unknown>> | null): string | null => {
   const erreur = objet(corps?.error);
@@ -121,21 +154,124 @@ const poste = async (
  * deux politiques y rendaient le même verdict.
  *
  * `taire` est la politique de la CONNEXION : quoi que le serveur dise, le
- * lecteur reçoit une phrase unique. `relayer` est celle de l'INSCRIPTION : « ce
- * pseudo est pris » décrit la saisie qu'on vient de faire, pas un compte
- * existant.
+ * lecteur reçoit une phrase unique, et aucun champ n'est désigné — l'écran n'a
+ * pas à dire lequel des deux est faux. `relayer` est celle de l'INSCRIPTION :
+ * « ce pseudo est pris » décrit la saisie qu'on vient de faire, pas un compte
+ * existant, et le champ qu'elle décrit se nomme.
  */
-type Politique = (corps: Readonly<Record<string, unknown>> | null) => string;
+type Politique = (corps: Readonly<Record<string, unknown>> | null) => Refus;
 
 const taire =
   (message: string): Politique =>
-  () =>
-    message;
+  () => ({ message, champ: null, recours: null });
+
+/**
+ * LE NOM DU CHAMP, D'UN VOCABULAIRE À L'AUTRE — LE SEUL SITE.
+ *
+ * La passerelle nomme ses champs (`email`, `phoneNumber`, `displayName`) ;
+ * l'écran nomme les siens (`courriel`, `telephone`, `nomAffiche`). Le refus
+ * arrive avec le premier vocabulaire et doit se poser sous le second. Écrire
+ * cette traduction dans la vue la ferait recommencer à chaque écran, et
+ * `username` — un champ que l'écran NE DEMANDE PLUS — n'aurait nulle part où
+ * atterrir : il se pose sur `nomAffiche`, dont la passerelle le DÉRIVE.
+ *
+ * `phoneCountryCode` retombe aussi sur `telephone` : le lecteur a choisi un
+ * pays dans le sélecteur COLLÉ au numéro, et rien d'autre sur l'écran ne
+ * pourrait porter ce refus.
+ */
+const CHAMP_PAR_NOM: Readonly<Record<string, string>> = {
+  displayName: 'nomAffiche',
+  username: 'nomAffiche',
+  email: 'courriel',
+  phoneNumber: 'telephone',
+  phoneCountryCode: 'telephone',
+  password: 'motDePasse',
+};
+
+/**
+ * LE CODE DE REFUS, QUAND IL DIT PLUS QUE LE CHAMP.
+ *
+ * Redondante avec `CHAMP_PAR_NOM` sur le contrat d'aujourd'hui — la passerelle
+ * envoie `field` avec chacun de ces codes. Elle n'est pas décorative pour
+ * autant : `field` est un champ de service qu'un refactor peut laisser tomber
+ * sans que rien ne casse, et le jour où il tombe, un refus SANS champ
+ * remonterait en alerte globale — une régression muette. Le code, lui, est ce
+ * que la route promet.
+ */
+const CHAMP_PAR_CODE: Readonly<Record<string, string>> = {
+  EMAIL_TAKEN: 'courriel',
+  USERNAME_TAKEN: 'nomAffiche',
+  PHONE_INVALID: 'telephone',
+};
+
+const RECOURS_DE_CONNEXION: Lien = { libelle: 'Connectez-vous', href: '/login' };
+
+/**
+ * `body/password` → `password`. Les chemins d'une violation sont ceux du
+ * validateur (`/email`, `body/phoneNumber`) : seul le dernier segment nomme un
+ * champ, et le préfixe dit de quelle partie de la requête il vient.
+ *
+ * DEUX CLÉS, PARCE QUE LA PASSERELLE REFUSE À DEUX ENDROITS. Le gestionnaire
+ * de `/auth/register` rend ses violations en `violations[].path` ; mais le
+ * corps d'une requête est d'abord jugé par le SCHÉMA, avant que le
+ * gestionnaire ne s'exécute, et ce refus-là remonte du gestionnaire d'erreurs
+ * de Fastify sous la forme `details[].field`
+ * (`services/gateway/src/utils/schema-validation-error.ts`). C'est le plus
+ * FRÉQUENT des deux — un mot de passe trop court n'atteint jamais le
+ * gestionnaire —, et le lire dans le même site est ce qui évite qu'un refus de
+ * schéma retombe en alerte globale pendant qu'un refus de service se pose
+ * proprement sous son champ.
+ */
+const champDeLaViolation = (violation: unknown): string | undefined => {
+  const declaree = objet(violation);
+  const chemin = chaine(declaree?.path) ?? chaine(declaree?.field);
+  if (chemin === null) return undefined;
+  return CHAMP_PAR_NOM[chemin.split('/').filter((segment) => segment !== '').at(-1) ?? ''];
+};
+
+const listeDeViolations = (corps: Readonly<Record<string, unknown>> | null): readonly unknown[] => [
+  ...(Array.isArray(corps?.violations) ? corps.violations : []),
+  ...(Array.isArray(corps?.details) ? corps.details : []),
+];
+
+const champEnDefaut = (corps: Readonly<Record<string, unknown>> | null): string | null => {
+  const parLeNom = CHAMP_PAR_NOM[chaine(corps?.field) ?? ''];
+  if (parLeNom !== undefined) return parLeNom;
+
+  const parLeCode = CHAMP_PAR_CODE[chaine(corps?.code) ?? ''];
+  if (parLeCode !== undefined) return parLeCode;
+
+  return listeDeViolations(corps)
+    .map(champDeLaViolation)
+    .find((champ) => champ !== undefined) ?? null;
+};
+
+/**
+ * UN NUMÉRO DÉJÀ RATTACHÉ N'EST PAS UNE ERREUR — la passerelle rend 200,
+ * `success: true`, et ne crée AUCUN compte. Le lire comme un succès ouvrirait
+ * une session qui n'existe pas ; le lire comme une panne cacherait la seule
+ * chose que le lecteur doit apprendre : le champ qui bloque, et le fait qu'il
+ * peut continuer SANS lui.
+ *
+ * La sortie est dans la phrase plutôt qu'en `recours` : « ou connectez-vous »
+ * s'y lit d'un trait, et un lien répétant le mot juste à côté ferait deux fois
+ * la même offre.
+ */
+const CONFLIT_DE_NUMERO =
+  'Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer, ou connectez-vous.';
 
 const relayer =
   (defaut: string): Politique =>
-  (corps) =>
-    messageDuServeur(corps) ?? defaut;
+  (corps) => {
+    if (objet(corps?.data)?.phoneOwnershipConflict === true) {
+      return { message: CONFLIT_DE_NUMERO, champ: 'telephone', recours: null };
+    }
+    return {
+      message: messageDuServeur(corps) ?? defaut,
+      champ: champEnDefaut(corps),
+      recours: chaine(corps?.code) === 'EMAIL_TAKEN' ? RECOURS_DE_CONNEXION : null,
+    };
+  };
 
 const issueDeLaReponse = (
   corps: Readonly<Record<string, unknown>> | null,
@@ -171,7 +307,7 @@ const issueDeLaReponse = (
     };
   }
 
-  return { genre: 'refus', message: refus(corps) };
+  return { genre: 'refus', ...refus(corps) };
 };
 
 const appelle = async (
@@ -183,7 +319,7 @@ const appelle = async (
   const url = `${parametres.base ?? baseDeLaPasserelle()}${chemin}`;
 
   const reponse = await poste(url, charge, parametres.recuperer).catch(() => null);
-  if (reponse === null) return { genre: 'refus', message: INDISPONIBLE };
+  if (reponse === null) return { genre: 'refus', message: INDISPONIBLE, champ: null, recours: null };
 
   return issueDeLaReponse(await lis(reponse), refus);
 };
@@ -202,33 +338,49 @@ export const connexion = (parametres: {
   );
 
 /**
- * L'INSCRIPTION. `systemLanguage` et `regionalLanguage` sont posés, et ne sont
- * pas demandés : le schéma de la passerelle leur donne déjà `'fr'` par défaut,
- * et la v3 ne sert aujourd'hui qu'en français (`DOCUMENT_LANGUAGE`). Les
- * envoyer explicitement ferait de ce fichier le SECOND site de ce défaut ; les
- * omettre laisse la passerelle décider, ce qu'elle sait faire.
+ * L'INSCRIPTION — CINQ RÉPONSES, ET RIEN QUE CE QUE LA PASSERELLE NE PEUT PAS
+ * SAVOIR.
  *
- * `phoneNumber` et `phoneCountryCode` sont facultatifs au schéma et ne sont pas
- * demandés non plus : un champ de plus sur le chemin nominal se paie chez
- * l'utilisateur (dimension 7), et le numéro se renseigne aux réglages.
+ * `username`, `firstName` et `lastName` NE PARTENT PLUS. La passerelle les
+ * DÉRIVE du nom affiché, et les envoyer ferait de ce fichier le second site de
+ * cette dérivation — le premier à diverger, et celui dont l'écart se verrait
+ * chez l'utilisateur sous la forme d'un pseudo qui n'est pas celui qu'on lui
+ * annonce ailleurs. Ce que la passerelle sait faire, elle le fait seule.
+ *
+ * `systemLanguage` PART, lui, et c'est neuf : l'écran DEMANDE la langue de
+ * lecture (pré-remplie depuis `Accept-Language`, rang 4 du Prisme). La laisser
+ * au défaut du schéma servirait « fr » à un lecteur qui vient de choisir
+ * « Yorùbá » dans une pastille qu'on lui a montrée. `regionalLanguage` ne part
+ * pas : l'écran n'en demande qu'UNE, et en inventer une seconde en douce
+ * serait décider pour le lecteur.
+ *
+ * LE NUMÉRO PART TEL QU'IL A ÉTÉ SAISI — « 0801 234 5678 » —, accompagné du
+ * pays choisi. Le normaliser ici en E.164 demanderait la même bibliothèque que
+ * la passerelle, donc DEUX normalisations pour un seul numéro, dont la seconde
+ * serait la seule à décider. Le vide n'envoie RIEN plutôt qu'une chaîne vide :
+ * un champ absent est une réponse (« je n'en donne pas »), un champ vide est
+ * une valeur à valider.
  */
 export const inscription = (parametres: {
-  readonly prenom: string;
-  readonly nom: string;
-  readonly identifiant: string;
+  readonly nomAffiche: string;
   readonly courriel: string;
   readonly motDePasse: string;
+  readonly telephone: string;
+  readonly pays: string;
+  readonly langue: string;
   readonly base?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Issue> =>
   appelle(
     CHEMIN_INSCRIPTION,
     {
-      firstName: parametres.prenom,
-      lastName: parametres.nom,
-      username: parametres.identifiant,
+      displayName: parametres.nomAffiche,
       email: parametres.courriel,
       password: parametres.motDePasse,
+      ...(parametres.telephone === ''
+        ? {}
+        : { phoneNumber: parametres.telephone, phoneCountryCode: parametres.pays }),
+      systemLanguage: parametres.langue,
     },
     relayer('La création du compte a échoué.'),
     parametres,

@@ -25,17 +25,18 @@ final class AuthModelsTests: XCTestCase {
 
     func testRegisterRequestEncodable() throws {
         let request = RegisterRequest(
-            username: "newuser", password: "strongpass",
-            firstName: "Jean", lastName: "Dupont",
-            email: "jean@example.com", phoneNumber: "+33612345678",
-            phoneCountryCode: "FR", systemLanguage: "fr", regionalLanguage: "oc"
+            displayName: "Jean Dupont",
+            email: "jean@example.com",
+            password: "strongpass",
+            phoneNumber: "+33612345678",
+            phoneCountryCode: "FR",
+            systemLanguage: "fr",
+            regionalLanguage: "oc"
         )
         let data = try JSONEncoder().encode(request)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        XCTAssertEqual(dict["username"] as? String, "newuser")
+        XCTAssertEqual(dict["displayName"] as? String, "Jean Dupont")
         XCTAssertEqual(dict["password"] as? String, "strongpass")
-        XCTAssertEqual(dict["firstName"] as? String, "Jean")
-        XCTAssertEqual(dict["lastName"] as? String, "Dupont")
         XCTAssertEqual(dict["email"] as? String, "jean@example.com")
         XCTAssertEqual(dict["phoneNumber"] as? String, "+33612345678")
         XCTAssertEqual(dict["phoneCountryCode"] as? String, "FR")
@@ -43,15 +44,33 @@ final class AuthModelsTests: XCTestCase {
         XCTAssertEqual(dict["regionalLanguage"] as? String, "oc")
     }
 
+    /// #5218 — trois clés que le client N'ENVOIE PLUS : la passerelle dérive
+    /// `username`, `firstName` et `lastName` de `displayName`. Elles restent
+    /// déclarées (la reprise après transfert de numéro les réémet), donc c'est
+    /// leur ABSENCE du JSON qu'il faut éprouver, pas leur type.
+    func testRegisterRequestOmitsTheDerivedIdentityFields() throws {
+        let request = RegisterRequest(
+            displayName: "Jean Dupont", email: "jean@example.com", password: "strongpass"
+        )
+        let data = try JSONEncoder().encode(request)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertNil(dict["username"])
+        XCTAssertNil(dict["firstName"])
+        XCTAssertNil(dict["lastName"])
+    }
+
     func testRegisterRequestDefaultLanguages() throws {
         let request = RegisterRequest(
-            username: "u", password: "p", firstName: "A", lastName: "B", email: "a@b.c"
+            displayName: "A B", email: "a@b.c", password: "p"
         )
         let data = try JSONEncoder().encode(request)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         XCTAssertEqual(dict["systemLanguage"] as? String, "fr")
-        XCTAssertEqual(dict["regionalLanguage"] as? String, "fr")
-        XCTAssertNil(dict["phoneNumber"] as? String)
+        // `regionalLanguage` est OPTIONNEL depuis #5218 : le contrat le déclare
+        // `regionalLanguage?`, et un défaut « fr » posé côté client aurait
+        // affirmé un rang 2 que personne n'a choisi.
+        XCTAssertNil(dict["regionalLanguage"])
+        XCTAssertNil(dict["phoneNumber"])
     }
 
     // MARK: - MeeshyUser
