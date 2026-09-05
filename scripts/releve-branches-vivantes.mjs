@@ -40,6 +40,54 @@
 // C'est la leçon 423 portée d'un fichier à un dépôt : on mesure sur l'état réel,
 // au dernier moment, jamais sur le sien au moment où ça arrangeait.
 //
+// LE PIÈGE DU SQUASH — POURQUOI IL FAUT DEUX DIFFS ET PAS UN
+//
+// La première écriture de ce script ne lisait que `base...branche` — « ce que la
+// branche a ajouté depuis leur point de divergence ». C'est la formule juste pour
+// une fusion par commit de merge : la base absorbe l'historique de la branche, le
+// point de divergence avance, le diff se vide.
+//
+// Ce dépôt fusionne ses PR en SQUASH (`… (#5094)`). Les commits d'origine
+// n'entrent jamais dans `dev` ; le point de divergence reste où il était ; et
+// `base...branche` continue d'annoncer TOUS les fichiers de la branche —
+// éternellement, pour les 1126 branches du dépôt, dont la quasi-totalité est
+// fusionnée depuis longtemps. Mesuré : `feat/web-v3-espace-membre` était rapportée
+// comme écrivant `.github/workflows/ci.yml` alors que son contenu y est identique
+// OCTET POUR OCTET depuis la veille.
+//
+// Un relevé qui crie au loup sur des branches mortes est pire qu'absent : il
+// s'ignore. La question n'est donc pas « qu'a-t-elle écrit ? » mais « qu'a-t-elle
+// écrit QUI DIFFÈRE ENCORE ? », et il faut les deux mesures :
+//
+//   base...branche  (trois points) — ce qu'elle a écrit depuis la divergence
+//   base branche    (deux points)  — ce dont le contenu diffère encore
+//
+// Seule leur INTERSECTION est en attente. Les trois points seuls comptent le
+// squash déjà fusionné ; les deux points seuls compteraient ce que la BASE a bougé
+// et que la branche n'a jamais touché.
+//
+// LA LIMITE QUI RESTE, ET POURQUOI ELLE N'EST PAS COMBLÉE ICI
+//
+// L'intersection ci-dessus retire les branches squashées dont la base n'a PAS
+// bougé. Elle ne retire pas celles que la base a DÉPASSÉE depuis : leur contenu
+// diffère à nouveau, non parce qu'elles ont quelque chose en attente, mais parce
+// que la base a avancé sans elles. Mesuré sur `feat/web-v3-espace-membre` (PR
+// #5094, squashée le 2026-09-04) : `git merge-tree` annonce NEUF conflits — le
+// signe d'un doublon squashé, pas d'un travail vivant.
+//
+// Aucune mesure git ne les sépare. La branche squashée et la branche réellement
+// divergente ont, dans le graphe, exactement la même forme ; ce qui les distingue
+// — l'état de la PR — vit sur GitHub, pas dans le dépôt. Y mettre une heuristique
+// (l'âge, un patch-id agrégé, le nom du fichier créé des deux côtés) rendrait un
+// verdict plausible et faux, ce qui est pire qu'un candidat de trop : le relevé
+// sert à DÉCIDER de céder, et céder à tort coûte un travail.
+//
+// Le relevé rend donc des CANDIDATS, et le dit. Devant une branche qui surprend,
+// deux commandes tranchent en quelques secondes :
+//
+//   git log origin/dev --oneline --grep='<nom-de-branche>\|(#<PR>)'
+//   git merge-tree --write-tree origin/dev <branche>   # que des conflits ⇒ doublon squashé
+//
 // CE QU'IL NE FAIT PAS
 //
 // Il ne RÉSERVE rien. Un relevé est un instantané, jamais un bail — mesuré : le
@@ -82,6 +130,14 @@ export const ageHeures = (branche, maintenant) =>
 export const estVivante = (branche, maintenant, fenetre) =>
   ageHeures(branche, maintenant) < fenetre;
 
+// Ce qu'une branche a VRAIMENT en attente sur la base — voir § LE PIÈGE DU SQUASH.
+// `ajoutes` seul rapporte éternellement les branches squashées ; `divergents` seul
+// rapporterait ce que la base a bougé sans que la branche y touche.
+export const enAttente = (branche) => {
+  const divergents = new Set(branche.divergents || []);
+  return (branche.ajoutes || []).filter((f) => divergents.has(f));
+};
+
 // Le relevé : quelles branches vivantes, autres que la mienne, écrivent MES chemins.
 export const releve = (monde, { chemins = [], fenetre = FENETRE_H } = {}) =>
   monde.branches
@@ -90,7 +146,7 @@ export const releve = (monde, { chemins = [], fenetre = FENETRE_H } = {}) =>
     .map((b) => ({
       branche: b.nom,
       age: ageHeures(b, monde.maintenant),
-      fichiers: b.fichiers.filter((f) => chemins.some((c) => couvre(f, c))),
+      fichiers: enAttente(b).filter((f) => chemins.some((c) => couvre(f, c))),
     }))
     .filter((e) => e.fichiers.length > 0)
     .sort((a, b) => a.age - b.age);
@@ -102,7 +158,7 @@ export const disputes = (monde, { fenetre = FENETRE_H, minimum = 2 } = {}) => {
   monde.branches
     .filter((b) => b.nom !== monde.courante)
     .filter((b) => estVivante(b, monde.maintenant, fenetre))
-    .forEach((b) => b.fichiers.forEach((f) => {
+    .forEach((b) => enAttente(b).forEach((f) => {
       if (!parFichier.has(f)) parFichier.set(f, []);
       parFichier.get(f).push(b.nom);
     }));
@@ -159,12 +215,17 @@ const lisLeMonde = async ({ base, fenetre, prefixes }) => {
   }
 
   const branches = await Promise.all(candidates.map(async ({ nom, ref, epoch }) => {
-    // `base...ref` : ce que la branche AJOUTE depuis son point de divergence —
-    // et non ce qui les sépare, qui compterait tout ce que la base a bougé depuis.
-    // Une branche déjà fusionnée rend une liste vide et disparaît d'elle-même.
-    const fichiers = (await git(['diff', '--name-only', `${base}...${ref}`]))
-      .split('\n').filter(Boolean);
-    return { nom, epoch, fichiers };
+    // Les DEUX mesures — leur intersection seule est en attente (§ LE PIÈGE DU SQUASH).
+    const [ajoutes, divergents] = await Promise.all([
+      git(['diff', '--name-only', `${base}...${ref}`]),
+      git(['diff', '--name-only', base, ref]),
+    ]);
+    return {
+      nom,
+      epoch,
+      ajoutes: ajoutes.split('\n').filter(Boolean),
+      divergents: divergents.split('\n').filter(Boolean),
+    };
   }));
 
   return { base, maintenant, courante, branches, fraisDepuisMin: await fraicheurMinutes() };
@@ -174,14 +235,24 @@ const lisLeMonde = async ({ base, fenetre, prefixes }) => {
 // LE SELF-TEST — les mutations que le relevé doit voir, et celles qu'il doit ignorer.
 // ---------------------------------------------------------------------------
 
+// `fusionnes` : des fichiers que la branche a écrits et que la base porte DÉJÀ à
+// l'identique — le cas du squash. Ils restent dans `ajoutes` (l'historique de la
+// branche n'a pas bougé) et sortent de `divergents` (le contenu, lui, est le même).
+const uneBranche = (nom, epoch, fichiers, { fusionnes = [] } = {}) => ({
+  nom,
+  epoch,
+  ajoutes: [...fichiers],
+  divergents: fichiers.filter((f) => !fusionnes.includes(f)),
+});
+
 const MONDE_TEMOIN = () => ({
   base: 'origin/dev',
   maintenant: 1_000_000,
   courante: 'claude/la-mienne',
   fraisDepuisMin: 1,
   branches: [
-    { nom: 'claude/la-mienne', epoch: 1_000_000 - 3600, fichiers: ['tasks/lessons.md'] },
-    { nom: 'claude/ailleurs', epoch: 1_000_000 - 7200, fichiers: ['services/gateway/src/x.ts'] },
+    uneBranche('claude/la-mienne', 1_000_000 - 3600, ['tasks/lessons.md']),
+    uneBranche('claude/ailleurs', 1_000_000 - 7200, ['services/gateway/src/x.ts']),
   ],
 });
 
@@ -191,8 +262,8 @@ const mute = (monde, applique) => {
   return copie;
 };
 
-const ajoute = (nom, heures, fichiers) => (monde) => {
-  monde.branches.push({ nom, epoch: monde.maintenant - heures * 3600, fichiers });
+const ajoute = (nom, heures, fichiers, options) => (monde) => {
+  monde.branches.push(uneBranche(nom, monde.maintenant - heures * 3600, fichiers, options));
 };
 
 const MUTATIONS = [
@@ -208,11 +279,17 @@ const MUTATIONS = [
   ['une branche HORS fenêtre (49 h) — un travail abandonné ne tient rien',
     ajoute('claude/perimee', 49, ['tasks/lessons.md']), 'ignore', 'claude/perimee'],
   ['MA PROPRE branche écrit le chemin — je ne me dispute pas avec moi-même',
-    (monde) => { monde.branches[0].fichiers.push('apps/web/hooks/mien.ts'); }, 'ignore', 'claude/la-mienne'],
+    (monde) => { monde.branches[0].ajoutes.push('apps/web/hooks/mien.ts'); monde.branches[0].divergents.push('apps/web/hooks/mien.ts'); }, 'ignore', 'claude/la-mienne'],
   ['un préfixe TROMPEUR : `apps/web-v3/…` ne répond pas au chemin `apps/web`',
     ajoute('claude/faux-prefixe', 1, ['apps/web-v3/lib/z.ts']), 'ignore', 'claude/faux-prefixe'],
   ['une branche déjà fusionnée n\'ajoute aucun fichier',
     ajoute('claude/fusionnee', 1, []), 'ignore', 'claude/fusionnee'],
+  ['une branche SQUASHÉE — son diff trois-points l\'annonce encore, son contenu est dans la base',
+    ajoute('claude/squashee', 1, ['tasks/lessons.md'], { fusionnes: ['tasks/lessons.md'] }),
+    'ignore', 'claude/squashee'],
+  ['un squash PARTIEL — un fichier atterri, un autre encore en attente',
+    ajoute('claude/moitie', 1, ['tasks/lessons.md', 'apps/web/hooks/reste.ts'], { fusionnes: ['apps/web/hooks/reste.ts'] }),
+    'voit', 'claude/moitie'],
 ];
 
 const selfTest = () => {
@@ -229,9 +306,11 @@ const selfTest = () => {
   const chaud = disputes(mute(MONDE_TEMOIN(), (m) => {
     ajoute('claude/a', 1, ['tasks/lessons.md'])(m);
     ajoute('claude/b', 2, ['tasks/lessons.md'])(m);
+    ajoute('claude/c', 3, ['tasks/lessons.md'], { fusionnes: ['tasks/lessons.md'] })(m);
   }));
-  if (!chaud.some((d) => d.fichier === 'tasks/lessons.md' && d.branches.length === 2)) {
-    echecs.push('AVEUGLE : deux branches sur un même fichier ne ressortent pas en zone disputée');
+  const zone = chaud.find((d) => d.fichier === 'tasks/lessons.md');
+  if (!zone || zone.branches.length !== 2) {
+    echecs.push('AVEUGLE : la zone disputée compte mal — deux branches en attente, la squashée exclue');
   }
 
   if (verdict([], { fraisDepuisMin: 999, exigeFrais: true }) !== 2) {
@@ -353,8 +432,11 @@ const main = async () => {
     fichiers.slice(0, PLAFOND_FICHIERS).forEach((f) => console.log(`      ${f}`));
     if (fichiers.length > PLAFOND_FICHIERS) console.log(`      … et ${fichiers.length - PLAFOND_FICHIERS} autre(s).`);
   });
-  console.log('\nLeçon 322 — quand deux lots se disputent un fichier, celui qui n\'a RIEN ÉCRIT cède :');
-  console.log('un lot arrêté avant sa première écriture ne coûte que de la lecture.');
+  console.log('\nCe sont des CANDIDATS : une branche squashée puis dépassée par la base a la même');
+  console.log('forme qu\'une branche vivante (§ LA LIMITE QUI RESTE). Avant de céder, trancher par');
+  console.log(`  git merge-tree --write-tree ${o.base} <branche>   # que des conflits ⇒ doublon squashé`);
+  console.log('\nPuis leçon 322 — quand deux lots se disputent un fichier, celui qui n\'a RIEN ÉCRIT');
+  console.log('cède : un lot arrêté avant sa première écriture ne coûte que de la lecture.');
 
   return verdict(contentions, { fraisDepuisMin: frais, exigeFrais: o.exigeFrais });
 };
