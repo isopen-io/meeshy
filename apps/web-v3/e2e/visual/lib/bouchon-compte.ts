@@ -1,11 +1,10 @@
 import type { IncomingMessage } from 'node:http';
 
+import { serviParLAnnuaire } from './bouchon-annuaire';
 import type { Identite } from './bouchon-socket';
 import {
   AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
-  IDENTIFIANT_DU_LIEN_PARTAGE,
-  LIEN_DU_FIL,
   MEMBRE,
   PAIR_ANGLOPHONE,
   PAIR_HISPANOPHONE,
@@ -100,12 +99,6 @@ export type EtatDuCompteDeBouchon = {
   readonly profil: Record<string, string>;
   /** Les appareils de push, que `DELETE /users/me/devices/:id` retire pour de bon. */
   readonly appareils: { id: string; deviceName: string; platform: string; lastUsedAt: string | null }[];
-  /**
-   * LES LIENS CRÉÉS PENDANT LA SESSION, relus par `GET /links`. Sans cet état
-   * partagé, `POST /links` rendrait 201 et le carnet servirait la liste
-   * d'avant : le témoin serait vert sur une création qui ne crée rien.
-   */
-  readonly liensCrees: Record<string, unknown>[];
   /** Les conversations de GROUPE créées pendant la session — relues par la liste. */
   readonly conversationsCreees: { id: string; titre: string }[];
   /**
@@ -252,32 +245,6 @@ const CARNET = [
     },
   },
 ];
-
-/**
- * LE PROFIL PUBLIC DE MARTA RUIZ (§ 12.10.3) — `publicProfileSchema`
- * (`routes/users/public-profile.ts:88-110`), servi par `GET /directory/people/
- * :handle?expand=relation` (`routes/directory/person.ts:175`). AUCUNE langue
- * (retirée depuis #4161 — la ligne de langue du panneau vient du FIL) et
- * AUCUNE présence (sans `expand=presence`, jamais demandé par ce module).
- */
-const PROFIL_DE_MARTA = {
-  id: PAIR_HISPANOPHONE.id,
-  username: 'marta',
-  firstName: 'Marta',
-  lastName: 'Ruiz',
-  displayName: PAIR_HISPANOPHONE.nom,
-  avatar: null,
-  banner: null,
-  bio: 'Traductrice · Madrid. Je relis les revues trimestrielles.',
-  role: 'USER',
-  createdAt: '2024-03-01T00:00:00.000Z',
-  voicePublic: false,
-  voiceSampleUrl: null,
-  voiceSampleDurationMs: null,
-  voiceQuality: null,
-  isAnonymous: false,
-  isMeeshyer: true,
-};
 
 /** Une carte de traductions à la forme de Prisma — des OBJETS, jamais des chaînes. */
 const traduit = (paires: Readonly<Record<string, string>>) =>
@@ -595,28 +562,6 @@ const CHAMPS_ACCEPTES: readonly string[] = [
   'autoTranslateEnabled',
 ];
 
-/** Les champs de `createLinkSchema` que le bouchon accepte — recopiés du schéma. */
-const CHAMPS_DE_LIEN: readonly string[] = [
-  'conversationId',
-  'name',
-  'description',
-  'maxUses',
-  'maxConcurrentUsers',
-  'maxUniqueSessions',
-  'expiresAt',
-  'allowAnonymousMessages',
-  'allowAnonymousFiles',
-  'allowAnonymousImages',
-  'allowViewHistory',
-  'requireAccount',
-  'requireNickname',
-  'requireEmail',
-  'requireBirthday',
-  'allowedLanguages',
-  'allowedIpRanges',
-  'newConversation',
-];
-
 export const MOT_DE_PASSE_DU_BOUCHON = 'mot-de-passe-actuel';
 
 export const APPAREILS_DU_BOUCHON = [
@@ -633,7 +578,6 @@ export const routesDuCompte =
       !(
         chemin.startsWith('/api/v1/auth/me') ||
         chemin.startsWith('/api/v1/conversations') ||
-        chemin.startsWith('/api/v1/links') ||
         chemin.startsWith('/api/v1/directory/') ||
         // LA CRÉATION EST `/api/v1/posts` NU — sans barre finale, donc invisible
         // du `startsWith('/api/v1/posts/')` ci-dessous. Le bouchon rendait 404
@@ -658,18 +602,10 @@ export const routesDuCompte =
      * droit (relation `'none'`), exactement comme un lecteur anonyme
      * (§ 12.10.3 point 4). C'est ce que le PLUS PRÉCIS avant le PLUS GÉNÉRAL
      * demande : `/directory/people/<handle>` avant `/directory/people` (la
-     * recherche, query-only), qui elle reste gardée plus bas.
+     * recherche, query-only), qui elle reste gardée plus bas. Les fiches et la
+     * RELATION vivent dans `bouchon-annuaire.ts` (#5030).
      */
-    const handleDuProfil = /^\/api\/v1\/directory\/people\/([^/]+)$/.exec(chemin)?.[1];
-    if (handleDuProfil !== undefined) {
-      const cible = decodeURIComponent(handleDuProfil);
-      if (cible !== PROFIL_DE_MARTA.id && cible !== PROFIL_DE_MARTA.username) {
-        json({ success: false, error: 'NOT_FOUND', message: 'Profil introuvable' }, 404);
-        return true;
-      }
-      json({ success: true, data: { ...PROFIL_DE_MARTA, relation: 'none', isSelf: false } });
-      return true;
-    }
+    if (serviParLAnnuaire({ chemin, requete, creanceDe: etat.creanceDe, json })) return true;
 
     const porteur = requete.headers.authorization ?? '';
     if (!porteur.startsWith('Bearer ')) {
@@ -716,41 +652,6 @@ export const routesDuCompte =
         },
         unreadCount: etat.boite.nonLues,
       });
-      return true;
-    }
-
-    /**
-     * `POST /api/v1/links` (`routes/links/creation.ts:29`) — la création d'un
-     * lien de partage. Le bouchon REFUSE tout champ que `createLinkSchema` ne
-     * déclare pas, plutôt que de l'ignorer : c'est la seule façon qu'un témoin
-     * rougisse le jour où la v3 enverrait `allowedCountries`, que la passerelle
-     * accepte et n'applique JAMAIS.
-     */
-    if (chemin === '/api/v1/links' && requete.method === 'POST') {
-      const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
-      const inconnus = Object.keys(soumis).filter((champ) => !CHAMPS_DE_LIEN.includes(champ));
-      if (inconnus.length > 0) {
-        json({ success: false, error: { message: `Unsupported field: ${inconnus.join(', ')}` } }, 400);
-        return true;
-      }
-      const titre = (soumis.newConversation as { title?: string } | undefined)?.title;
-      if (typeof titre !== 'string' || titre.trim() === '') {
-        json({ success: false, error: { message: 'Le titre de la conversation est requis' } }, 400);
-        return true;
-      }
-      const linkId = `mshy_cree_${etat.liensCrees.length + 1}`;
-      etat.liensCrees.push({
-        id: `lc${etat.liensCrees.length + 1}`,
-        linkId,
-        identifier: linkId,
-        name: typeof soumis.name === 'string' && soumis.name !== '' ? soumis.name : titre,
-        isActive: true,
-        currentUses: 0,
-        maxUses: typeof soumis.maxUses === 'number' ? soumis.maxUses : null,
-        expiresAt: typeof soumis.expiresAt === 'string' ? soumis.expiresAt : null,
-        conversation: null,
-      });
-      json({ success: true, data: { linkId, conversationId: `c${etat.liensCrees.length}` } }, 201);
       return true;
     }
 
@@ -1172,51 +1073,6 @@ export const routesDuCompte =
       return true;
     }
 
-    if (etat.lecteurSansRien) {
-      json({ success: true, data: etat.liensCrees, pagination: { total: etat.liensCrees.length } });
-      return true;
-    }
-    json({
-      success: true,
-      data: [
-        // LES LIENS CRÉÉS EN TÊTE : c'est là que le lecteur les cherche, et
-        // c'est ce qui rend la création VISIBLE au témoin.
-        ...etat.liensCrees,
-        {
-          id: 'l1',
-          linkId: LIEN_DU_FIL,
-          identifier: IDENTIFIANT_DU_LIEN_PARTAGE,
-          name: 'Ops Lagos',
-          isActive: true,
-          currentUses: 12,
-          maxUses: null,
-          expiresAt: null,
-          conversation: { id: CONVERSATION_DU_LECTEUR.id, title: CONVERSATION_DU_LECTEUR.titre, type: 'group' },
-        },
-        // Un lien FERMÉ, avec sa capacité et son échéance : c'est la ligne que
-        // le tableau de bord ÉCARTE et que l'écran `/links` doit garder. Sans
-        // elle, l'audit ne verrait jamais l'étiquette « Fermé » ni la teinte
-        // en sourdine — c'est-à-dire jamais le contraste qui les rend
-        // lisibles.
-        {
-          id: 'l2',
-          linkId: 'mshy_demo',
-          identifier: 'demo-sept',
-          name: 'Démo septembre',
-          isActive: false,
-          currentUses: 3,
-          maxUses: 10,
-          expiresAt: '2026-12-31T12:00:00.000Z',
-          conversation: null,
-        },
-      ],
-      pagination: { total: 2 },
-      // `meta.summary` — les agrégats de TOUT le carnet, servis par
-      // `?include=summary` (`routes/links/user.ts:611-613` puis `:624-630`).
-      // Le compte des actifs n'est PAS celui de la page : le bouchon en sert
-      // dix-sept pour deux lignes, ce qu'aucun décompte local ne pourrait
-      // produire.
-      meta: { summary: { totalLinks: 30, activeLinks: 17, totalUses: 400 } },
-    });
-    return true;
+    // `/api/v1/links` est servi par `bouchon-carnet.ts` (#4933) — jamais ici.
+    return false;
   };

@@ -2,7 +2,9 @@ import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
+import { adresseDuProfil, PARAM_DU_PROFIL } from '@/lib/api/adresses-du-fil';
 import type { ProfilServi, Relation } from '@/lib/api/profil';
+import { ADRESSE_DE_MON_COMPTE } from '@/lib/contenu/espace';
 import { PROFIL } from '@/lib/contenu/profil';
 
 import { avatar as avatarDuNom } from './vue';
@@ -29,7 +31,8 @@ import { avatar as avatarDuNom } from './vue';
  * pas `expand=presence`).
  */
 
-export const PARAM_DU_PROFIL = 'profil';
+export { adresseDuProfil, PARAM_DU_PROFIL };
+
 export const PARAM_DE_CONFIRMATION = 'confirmer';
 export const VALEUR_DE_CONFIRMATION = 'bloquer';
 
@@ -62,10 +65,6 @@ export const demandeDeProfil = (requete: Request): string | null => {
 /** `?confirmer=bloquer` — le sous-état de confirmation, à l'intérieur du MÊME panneau. */
 export const confirmationDemandee = (requete: Request): boolean =>
   new URL(requete.url).searchParams.get(PARAM_DE_CONFIRMATION) === VALEUR_DE_CONFIRMATION;
-
-/** L'ouverture : l'adresse de l'hôte, plus `?profil=`. */
-export const adresseDuProfil = (adresseHote: string, handle: string): string =>
-  `${adresseHote}?${PARAM_DU_PROFIL}=${encodeURIComponent(handle)}`;
 
 /** Le sous-état de confirmation d'un blocage, à la MÊME adresse. */
 export const adresseDeConfirmation = (adresseHote: string, handle: string): string =>
@@ -109,6 +108,12 @@ const ligne = (glyphe: string, titre: string, sous: string): string =>
  *   • la conversation EN COMMUN, connue localement par l'hôte qui a ouvert le
  *     panneau (le fil qu'on lit, ou la ligne de `/chats` dont l'avatar a été
  *     touché) — jamais une donnée que la route du profil ne sert pas.
+ *
+ * DEUX DE CES TROIS PARLENT DE L'AUTRE. « Écrit en Español dans ce fil » et
+ * « Participe à Équipe Lagos » se disent d'un tiers ; sur SOI, l'appelant les
+ * passe à `null` (#5030) — on ne se présente pas à soi-même la conversation
+ * qu'on est en train de lire. « Membre depuis » reste : c'est un fait de
+ * compte, vrai dans les deux sens.
  */
 const informations = ({
   langue,
@@ -161,9 +166,12 @@ const formulaireDAction = ({
       '</form>';
 
 /**
- * LES TROIS ACTIONS — RENDUES SEULEMENT à un lecteur qui tient un compte
- * (`peutAgir`), et JAMAIS à soi-même (`estSoi`) : les deux gardes du § 12.10.3
- * point 5, « un contrôle qui rendrait 401 est un contrôle sans effet ».
+ * LES TROIS ACTIONS D'AUTRUI — RENDUES SEULEMENT à un lecteur qui tient un
+ * compte (`peutAgir`) : la garde du § 12.10.3 point 5, « un contrôle qui
+ * rendrait 401 est un contrôle sans effet ». Soi-même n'entre PLUS ici du
+ * tout : la branche `estSoi` appelle `actionDeMonCompte`, qui rend l'action
+ * qui a un sens sur soi (#5030) — c'est le SITE D'APPEL qui sépare les deux
+ * mondes, plus un drapeau passé à une fonction qui les mélangeait.
  * `relation` décide du VERBE d'amitié : déjà ami ou demande en cours, le
  * bouton disparaît — le rendre ferait un contrôle qui répète ce que le badge
  * dit déjà, sans effet nouveau.
@@ -202,6 +210,30 @@ const actions = ({
     '</div>'
   );
 };
+
+/**
+ * L'ACTION DE SOI — UNE seule, « Mon compte », et seulement à un lecteur qui
+ * TIENT un compte (#5030). Les trois actions d'autrui n'ont aucun sens sur
+ * soi (s'écrire, s'ajouter en ami, se bloquer) ; la branche « c'est vous »
+ * n'était pourtant qu'un badge, donc un écran SANS issue — la charte règle 7
+ * dans son autre sens : un état qui ne mène nulle part.
+ *
+ * `peutAgir` la garde comme il garde les trois autres, et pour la MÊME
+ * raison : `ADRESSE_DE_MON_COMPTE` pointe une route de MEMBRE — servie à un
+ * invité anonyme, elle rendrait une redirection vers `/login`, donc un
+ * contrôle sans effet. Un invité qui touche son propre nom voit « C'est
+ * vous », et rien de plus : il n'a pas de compte à ouvrir.
+ *
+ * La DESTINATION est LUE (`ADRESSE_DE_MON_COMPTE`, `lib/contenu/espace.ts`),
+ * jamais écrite : l'espace membre y mène déjà par sa première rangée, et deux
+ * littéraux jumeaux dériveraient le jour où la route déménage.
+ */
+const actionDeMonCompte = (peutAgir: boolean): string =>
+  peutAgir
+    ? '<div class="actions-profil">' +
+      `<a class="action primaire" href="${echappe(ADRESSE_DE_MON_COMPTE)}">${svgDuSprite('ph-user-circle')}${echappe(PROFIL.monCompte)}</a>` +
+      '</div>'
+    : '';
 
 /**
  * L'EN-TÊTE — la poignée (pleine largeur, TROISIÈME chemin de fermeture avec
@@ -288,19 +320,25 @@ export const surimpressionDuProfil = ({
     corps = enTete(adresseHote, false) + messageSimple('ph-warning-circle', PROFIL.panneTitre, PROFIL.panne);
   } else {
     const { profil, relation, estSoi } = servi;
-    const autorise = peutAgir && !estSoi;
     const sousLeTete = enConfirmation
       ? confirmationDeBlocage({ adresseHote, handle, nom: profil.nom })
       : (estSoi ? `<p class="relation" data-relation="self">${echappe(PROFIL.cEstVous)}</p>` : badge(relation)) +
         (profil.bio === null ? '' : `<p class="bio">${echappe(profil.bio)}</p>`) +
-        informations({ langue, membreDepuis: profil.membreDepuis, conversationEnCommun, langueDuDocument }) +
-        actions({
-          adresseHote,
-          handle,
-          prenom: profil.nom.split(/\s+/)[0] ?? profil.nom,
-          relation,
-          peutAgir: autorise,
-        });
+        informations({
+          langue: estSoi ? null : langue,
+          membreDepuis: profil.membreDepuis,
+          conversationEnCommun: estSoi ? null : conversationEnCommun,
+          langueDuDocument,
+        }) +
+        (estSoi
+          ? actionDeMonCompte(peutAgir)
+          : actions({
+              adresseHote,
+              handle,
+              prenom: profil.nom.split(/\s+/)[0] ?? profil.nom,
+              relation,
+              peutAgir,
+            }));
     corps = enTete(enConfirmation ? retourDuConfirme : adresseHote, !enConfirmation, identite(profil.nom, profil.pseudonyme)) + sousLeTete;
   }
 

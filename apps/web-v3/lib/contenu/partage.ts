@@ -49,7 +49,9 @@ export const REEL: CopieDuPartage = {
   indisponible: {
     titre: 'Réel indisponible',
     corps: 'Ce réel n’existe plus, ou il ne vous est pas ouvert.',
-    action: 'Retour à l’accueil',
+    glyphe: 'ph-film-strip',
+    retour: { libelle: 'Retour au fil', href: '/feed' },
+    secondaire: { libelle: 'Voir les réels', href: '/feed/reels' },
   },
   invitation: {
     titre: 'Ce réel vous attend',
@@ -85,7 +87,9 @@ export const HUMEUR: CopieDuPartage = {
   indisponible: {
     titre: 'Humeur indisponible',
     corps: 'Cette humeur n’existe plus, ou elle ne vous est pas ouverte. Une humeur ne dure que quelques heures.',
-    action: 'Retour à l’accueil',
+    glyphe: 'ph-smiley',
+    retour: { libelle: 'Retour au fil', href: '/feed' },
+    secondaire: { libelle: 'Partager une humeur', href: '/composer?format=humeur' },
   },
   invitation: {
     titre: 'Cette humeur vous attend',
