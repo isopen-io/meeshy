@@ -53,13 +53,19 @@ function makePrisma(opts: {
   userCount?: number;
   users?: unknown[];
   userPrefs?: unknown;
+  systemLanguageVariants?: readonly { systemLanguage: string }[];
 } = {}) {
   const {
     broadcast = BASE_BROADCAST,
     userCount = 1,
     users = [USER_EN],
     userPrefs = null,
+    systemLanguageVariants = [{ systemLanguage: 'fr' }, { systemLanguage: 'en' }],
   } = opts;
+
+  const batchFindMany = jest.fn<any>()
+    .mockResolvedValueOnce(users) // first batch
+    .mockResolvedValue([]);        // subsequent batches → break
 
   return {
     adminBroadcast: {
@@ -68,9 +74,14 @@ function makePrisma(opts: {
     },
     user: {
       count: jest.fn<any>().mockResolvedValue(userCount),
-      findMany: jest.fn<any>()
-        .mockResolvedValueOnce(users) // first batch
-        .mockResolvedValue([]),        // subsequent batches → break
+      // #5161 — `buildBroadcastRecipientFilter` interroge d'abord les valeurs
+      // `systemLanguage` verbatim distinctes (`findMany({ distinct: [...] })`)
+      // avant de construire le filtre `in` ; ce n'est PAS le même appel que le
+      // `findMany` de batch d'envoi, qui suit — brancher sur la PRÉSENCE de
+      // `distinct` dans les arguments, jamais sur l'ordre d'appel.
+      findMany: jest.fn<any>().mockImplementation((args: any) =>
+        args?.distinct ? Promise.resolve(systemLanguageVariants) : batchFindMany(args)
+      ),
     },
     userPreferences: {
       findUnique: jest.fn<any>().mockResolvedValue(userPrefs),
@@ -329,7 +340,12 @@ describe('BroadcastSenderJob.execute', () => {
       ...BASE_BROADCAST,
       targeting: { languages: ['fr', 'es'] },
     };
-    const prisma = makePrisma({ broadcast, userCount: 0, users: [] });
+    const prisma = makePrisma({
+      broadcast,
+      userCount: 0,
+      users: [],
+      systemLanguageVariants: [{ systemLanguage: 'fr' }, { systemLanguage: 'es' }],
+    });
     const emailService = makeEmailService();
     const sut = new BroadcastSenderJob(prisma as any, emailService as any);
 
@@ -342,6 +358,36 @@ describe('BroadcastSenderJob.execute', () => {
         where: expect.objectContaining({ systemLanguage: { in: ['fr', 'es'] } }),
       }),
     );
+  });
+
+  it('expands a canonical language target to its verbatim systemLanguage variants (#5161)', async () => {
+    // 'fr' est choisi dans l'UI admin ; en base, trois variantes verbatim
+    // convergent vers 'fr' et une ne convergent pas ('en') — seules les trois
+    // premières doivent entrer dans le filtre `in`.
+    const broadcast = {
+      ...BASE_BROADCAST,
+      targeting: { languages: ['fr'] },
+    };
+    const prisma = makePrisma({
+      broadcast,
+      userCount: 0,
+      users: [],
+      systemLanguageVariants: [
+        { systemLanguage: 'fr' },
+        { systemLanguage: 'FR' },
+        { systemLanguage: 'fr-FR' },
+        { systemLanguage: 'en' },
+      ],
+    });
+    const emailService = makeEmailService();
+    const sut = new BroadcastSenderJob(prisma as any, emailService as any);
+
+    const promise = sut.execute('bc-1');
+    await jest.runAllTimersAsync();
+    await promise;
+
+    const where = (prisma.user.count as jest.Mock<any>).mock.calls[0][0].where;
+    expect([...where.systemLanguage.in].sort()).toEqual(['FR', 'fr', 'fr-FR']);
   });
 
   it('applies country filter when targeting.countries is set', async () => {

@@ -35,8 +35,19 @@ const USER_FR = { id: 'u-fr', systemLanguage: 'fr' };
 const USER_EN = { id: 'u-en', systemLanguage: 'en' };
 const USER_NOLANG = { id: 'u-nolang', systemLanguage: null };
 
-function makePrisma(opts: { broadcast?: unknown; userCount?: number; users?: unknown[] } = {}) {
-  const { broadcast = BASE_BROADCAST, userCount = 1, users = [USER_EN] } = opts;
+function makePrisma(opts: {
+  broadcast?: unknown;
+  userCount?: number;
+  users?: unknown[];
+  systemLanguageVariants?: readonly { systemLanguage: string }[];
+} = {}) {
+  const {
+    broadcast = BASE_BROADCAST,
+    userCount = 1,
+    users = [USER_EN],
+    systemLanguageVariants = [{ systemLanguage: 'fr' }, { systemLanguage: 'en' }],
+  } = opts;
+  const batchFindMany = jest.fn<any>().mockResolvedValueOnce(users).mockResolvedValue([]);
   return {
     adminBroadcast: {
       findUnique: jest.fn<any>().mockResolvedValue(broadcast),
@@ -44,7 +55,12 @@ function makePrisma(opts: { broadcast?: unknown; userCount?: number; users?: unk
     },
     user: {
       count: jest.fn<any>().mockResolvedValue(userCount),
-      findMany: jest.fn<any>().mockResolvedValueOnce(users).mockResolvedValue([]),
+      // #5161 — `buildBroadcastRecipientFilter` interroge d'abord les valeurs
+      // `systemLanguage` verbatim distinctes (`findMany({ distinct: [...] })`),
+      // un appel DISTINCT du batch d'envoi qui suit.
+      findMany: jest.fn<any>().mockImplementation((args: any) =>
+        args?.distinct ? Promise.resolve(systemLanguageVariants) : batchFindMany(args)
+      ),
     },
   };
 }
@@ -115,6 +131,21 @@ describe('BroadcastInAppSenderJob.execute', () => {
     const where = prisma.user.count.mock.calls[0][0].where;
     expect(where).toEqual(expect.objectContaining({ isActive: true, deletedAt: null, systemLanguage: { in: ['fr'] } }));
     expect(where).not.toHaveProperty('emailVerifiedAt');
+  });
+
+  it('expands a canonical language target to its verbatim systemLanguage variants (#5161)', async () => {
+    const prisma = makePrisma({
+      broadcast: { ...BASE_BROADCAST, targeting: { languages: ['fr'], activityStatus: 'all' } },
+      systemLanguageVariants: [
+        { systemLanguage: 'fr' }, { systemLanguage: 'FR' }, { systemLanguage: 'fr-FR' }, { systemLanguage: 'en' },
+      ],
+    });
+    const notifications = makeNotifications();
+
+    await new BroadcastInAppSenderJob(prisma as any, notifications as any).execute('bc-1');
+
+    const where = prisma.user.count.mock.calls[0][0].where;
+    expect([...where.systemLanguage.in].sort()).toEqual(['FR', 'fr', 'fr-FR']);
   });
 
   it('compte les livraisons et les échecs, puis clôt la diffusion in-app', async () => {

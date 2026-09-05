@@ -5,6 +5,8 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
+import { resolveSystemLanguageVariants } from '../../jobs/broadcast-recipients';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { EmailService } from '../../services/EmailService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
@@ -273,7 +275,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       };
 
       if (targeting.languages && Array.isArray(targeting.languages) && targeting.languages.length > 0) {
-        where.systemLanguage = { in: targeting.languages };
+        // #5161 — `systemLanguage` est persisté VERBATIM ; élargir le filtre aux
+        // variantes verbatim réellement présentes en base dont le repli
+        // canonique matche un des codes choisis dans l'UI admin (même SSOT que
+        // le rapport ci-dessous, `normalizeLanguageForDedup`).
+        where.systemLanguage = { in: await resolveSystemLanguageVariants(fastify.prisma, targeting.languages) };
       }
 
       if (targeting.countries && Array.isArray(targeting.countries) && targeting.countries.length > 0) {
@@ -312,7 +318,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       const recipientCount = await fastify.prisma.user.count({ where });
 
       // Group by systemLanguage
-      const recipientsByLanguage = await fastify.prisma.user.groupBy({
+      const recipientsByLanguageRaw = await fastify.prisma.user.groupBy({
         by: ['systemLanguage'],
         where,
         _count: true,
@@ -325,10 +331,20 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         _count: true,
       });
 
-      // Get unique target languages from recipients
-      const targetLanguages = recipientsByLanguage
-        .map((g: any) => g.systemLanguage)
-        .filter(Boolean) as string[];
+      // #5161 — `systemLanguage` est persisté VERBATIM : replier chaque bucket
+      // sur son code canonique et ADDITIONNER les comptes qui convergent,
+      // plutôt que de traduire une fois par variante (même défaut que
+      // `usersLanguageMap` avant #5155 — même SSOT `normalizeLanguageForDedup`).
+      const recipientsByLanguageMap = recipientsByLanguageRaw.reduce((acc: Record<string, number>, g: any) => {
+        if (g.systemLanguage) {
+          const canonical = normalizeLanguageForDedup(g.systemLanguage);
+          acc[canonical] = (acc[canonical] ?? 0) + g._count;
+        }
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Get unique canonical target languages from recipients
+      const targetLanguages = Object.keys(recipientsByLanguageMap);
 
       // Translate content
       const translationService = new BroadcastTranslationService();
@@ -353,9 +369,9 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, {
         recipientCount,
-        recipientsByLanguage: recipientsByLanguage.map((g: any) => ({
-          language: g.systemLanguage,
-          count: g._count,
+        recipientsByLanguage: Object.entries(recipientsByLanguageMap).map(([language, count]) => ({
+          language,
+          count,
         })),
         recipientsByCountry: recipientsByCountry.map((g: any) => ({
           country: g.registrationCountry,

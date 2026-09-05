@@ -1,5 +1,6 @@
-import type { Prisma } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
 export type BroadcastTargeting = {
   readonly languages?: readonly string[];
@@ -22,21 +23,53 @@ const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma.UserWh
 };
 
 /**
- * Le ciblage d'une diffusion admin, traduit en filtre Prisma — commun aux
- * canaux e-mail et in-app. Règle PURE : seul le ciblage entre, aucune
- * contrainte de canal (l'e-mail y ajoute l'adresse vérifiée, l'in-app n'exige
- * rien de plus qu'un compte actif).
+ * `User.systemLanguage` est persisté VERBATIM (région/casse variables selon le
+ * client — `fr`, `fr-FR`, `FR`, `fr_FR` coexistent), alors que le ciblage
+ * d'une diffusion admin se choisit parmi des codes CANONIQUES (`fr`, `en`, …,
+ * cf. `LANGUAGES` de `apps/web/app/admin/broadcasts/new/page.tsx`). Un
+ * `{ in: ['fr'] }` littéral contre cette colonne rate donc toute variante
+ * région/casse. On élargit le filtre aux valeurs verbatim réellement
+ * présentes en base dont le repli canonique matche l'un des codes demandés —
+ * même SSOT `normalizeLanguageForDedup` que #5146/#5155 (qui repliait déjà
+ * `usersByLanguage` de `/admin/languages/stats`), appliquée ici au FILTRE de
+ * ciblage plutôt qu'au RAPPORT agrégé (#5161).
  */
-export function buildBroadcastRecipientFilter(
+export async function resolveSystemLanguageVariants(
+  prisma: Pick<PrismaClient, 'user'>,
+  canonicalLanguages: readonly string[],
+): Promise<string[]> {
+  if (canonicalLanguages.length === 0) return [];
+  const wanted = new Set(canonicalLanguages.map((code) => normalizeLanguageForDedup(code)));
+  const distinctValues = await prisma.user.findMany({
+    where: { systemLanguage: { not: null } },
+    distinct: ['systemLanguage'],
+    select: { systemLanguage: true },
+  });
+  return distinctValues
+    .map((u) => u.systemLanguage)
+    .filter((value): value is string => Boolean(value) && wanted.has(normalizeLanguageForDedup(value)));
+}
+
+/**
+ * Le ciblage d'une diffusion admin, traduit en filtre Prisma — commun aux
+ * canaux e-mail et in-app. Règle PURE sur le ciblage lui-même (aucune
+ * contrainte de canal : l'e-mail y ajoute l'adresse vérifiée, l'in-app n'exige
+ * rien de plus qu'un compte actif) ; ASYNCHRONE parce que la langue exige une
+ * lecture des valeurs verbatim en base ({@link resolveSystemLanguageVariants}).
+ */
+export async function buildBroadcastRecipientFilter(
+  prisma: Pick<PrismaClient, 'user'>,
   targeting: BroadcastTargeting,
   now: Date = new Date(),
-): Prisma.UserWhereInput {
+): Promise<Prisma.UserWhereInput> {
+  const hasLanguages = Boolean(targeting.languages && targeting.languages.length > 0);
+  const languageVariants = hasLanguages
+    ? await resolveSystemLanguageVariants(prisma, targeting.languages as readonly string[])
+    : [];
   return {
     isActive: true,
     deletedAt: null,
-    ...(targeting.languages && targeting.languages.length > 0
-      ? { systemLanguage: { in: [...targeting.languages] } }
-      : {}),
+    ...(hasLanguages ? { systemLanguage: { in: languageVariants } } : {}),
     ...(targeting.countries && targeting.countries.length > 0
       ? { registrationCountry: { in: [...targeting.countries] } }
       : {}),

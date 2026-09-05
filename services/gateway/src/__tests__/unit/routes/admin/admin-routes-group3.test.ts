@@ -27,11 +27,12 @@ jest.mock('../../../../utils/logger', () => ({
   },
 }));
 
-// Mock BroadcastTranslationService
-const mockTranslateContent = jest.fn<any>();
+// Mock BroadcastTranslationService (chargé transitivement par broadcasts.ts ;
+// `POST /:id/preview`, seul consommateur de `translateContent`, est testé à
+// part dans admin-broadcasts-preview.test.ts — #5161, budget de taille)
 jest.mock('../../../../services/admin/broadcast-translation.service', () => ({
   BroadcastTranslationService: jest.fn<any>().mockImplementation(() => ({
-    translateContent: mockTranslateContent,
+    translateContent: jest.fn<any>(),
   })),
 }));
 
@@ -579,141 +580,8 @@ describe('broadcastRoutes', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // POST /:id/preview — Preview & translate
-  // -------------------------------------------------------------------------
-
-  describe('POST /:id/preview', () => {
-    function setupPreviewMocks(targeting: any = {}) {
-      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(
-        fakeBroadcast({ targeting, status: 'DRAFT' })
-      );
-      mockPrisma.user.count.mockResolvedValue(10);
-      mockPrisma.user.groupBy
-        .mockResolvedValueOnce([{ systemLanguage: 'en', _count: 5 }, { systemLanguage: 'fr', _count: 5 }])
-        .mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]);
-      mockTranslateContent.mockResolvedValue({ subjects: { fr: 'Bonjour' }, bodies: { fr: 'Corps' } });
-      mockPrisma.adminBroadcast.update.mockResolvedValue(fakeBroadcast({ status: 'READY' }));
-    }
-
-    it('returns 401 when unauthenticated', async () => {
-      await app.close();
-      const noAuthApp = buildBroadcastAppNoAuth();
-      await noAuthApp.ready();
-
-      const res = await noAuthApp.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(401);
-      await noAuthApp.close();
-    });
-
-    it('returns 403 for USER role', async () => {
-      await app.close();
-      const userApp = buildBroadcastApp('USER');
-      await userApp.ready();
-
-      const res = await userApp.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(403);
-      await userApp.close();
-    });
-
-    it('returns 404 when broadcast not found', async () => {
-      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(null);
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(404);
-    });
-
-    it('returns 200 with preview data on success (no targeting)', async () => {
-      setupPreviewMocks({});
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.success).toBe(true);
-      expect(body.data.recipientCount).toBe(10);
-      expect(body.data.translations).toBeDefined();
-    });
-
-    it('applies language targeting filter', async () => {
-      setupPreviewMocks({ languages: ['fr', 'en'] });
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-    });
-
-    it('applies country targeting filter', async () => {
-      setupPreviewMocks({ countries: ['FR', 'US'] });
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-    });
-
-    it('applies activityStatus=active filter (last 30 days)', async () => {
-      setupPreviewMocks({ activityStatus: 'active' });
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-      const whereArg = mockPrisma.user.count.mock.calls[0][0].where;
-      expect(whereArg.lastActiveAt).toBeDefined();
-      expect(whereArg.lastActiveAt.gte).toBeInstanceOf(Date);
-    });
-
-    it('applies activityStatus=inactive filter (no activity in 30 days)', async () => {
-      setupPreviewMocks({ activityStatus: 'inactive' });
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-      const whereArg = mockPrisma.user.count.mock.calls[0][0].where;
-      expect(whereArg.OR).toBeDefined();
-      expect(Array.isArray(whereArg.OR)).toBe(true);
-    });
-
-    it('applies activityStatus=new filter (registered in last 7 days)', async () => {
-      setupPreviewMocks({ activityStatus: 'new' });
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-      const whereArg = mockPrisma.user.count.mock.calls[0][0].where;
-      expect(whereArg.createdAt).toBeDefined();
-      expect(whereArg.createdAt.gte).toBeInstanceOf(Date);
-    });
-
-    it('ignores unrecognized activityStatus (treats as all)', async () => {
-      setupPreviewMocks({ activityStatus: 'all' });
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-      const whereArg = mockPrisma.user.count.mock.calls[0][0].where;
-      // no extra filter added for 'all'
-      expect(whereArg.lastActiveAt).toBeUndefined();
-      expect(whereArg.createdAt).toBeUndefined();
-    });
-
-    it('sets broadcast status to READY after preview', async () => {
-      setupPreviewMocks({});
-
-      await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(mockPrisma.adminBroadcast.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'READY' }),
-        })
-      );
-    });
-
-    it('handles null targeting gracefully (falls back to empty object)', async () => {
-      setupPreviewMocks(null);
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(200);
-    });
-
-    it('returns 500 when DB throws', async () => {
-      mockPrisma.adminBroadcast.findUnique.mockRejectedValue(new Error('DB error'));
-
-      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
-      expect(res.statusCode).toBe(500);
-    });
-  });
+  // `POST /:id/preview` est testé à part dans admin-broadcasts-preview.test.ts
+  // (#5161 — ce fichier est frozen au budget de taille des suites).
 
   // -------------------------------------------------------------------------
   // POST /:id/send-inapp — canal in-app (notification système à chaque compte ciblé)
