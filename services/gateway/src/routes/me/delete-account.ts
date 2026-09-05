@@ -5,7 +5,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateBody, validateQuery } from '../../validation/helpers.js';
 import { DeleteAccountBodySchema, OpenAccountDeletionBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
-import bcrypt from 'bcryptjs';
+import { verifyPassword } from '../../utils/password-hash.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -292,7 +292,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
         // `apps/android`) ne le lit — changer le statut ne peut donc casser aucun
         // branchement existant — et il reste le discriminant nommable pour celui
         // qui voudra distinguer ce 400 d'un 400 de validation.
-        const motDePasseValide = await bcrypt.compare(currentPassword, compte.password ?? '');
+        const motDePasseValide = await verifyPassword(currentPassword, compte.password);
         if (!motDePasseValide) {
           return sendBadRequest(reply, 'Mot de passe incorrect', { code: 'INVALID_PASSWORD' });
         }

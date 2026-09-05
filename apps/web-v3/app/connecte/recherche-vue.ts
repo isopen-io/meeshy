@@ -14,6 +14,7 @@ import {
   RECHERCHE,
 } from '@/lib/contenu/recherche';
 
+import { raccourcisEntete } from './espace-vue';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
@@ -193,6 +194,14 @@ const groupe = ({
     : `<ul>${lignes}</ul>` + (encore ? `<p class="encore">${echappe(RECHERCHE.encore)}</p>` : '')) +
   '</section>';
 
+/**
+ * LES DEUX RONDS DE L'ESPACE MEMBRE (Q7) — `cible/search.png` les dessine
+ * comme `/communities` (même correctif, cycle suivant) : la classification
+ * initiale de `raccourcisEntete` (« un seul site pour les deux écrans ») ne
+ * couvrait que /chats et le tableau de bord, et n'a jamais été revue quand
+ * la cible de CET écran est apparue avec ces deux ronds — l'omission portait
+ * donc l'ancienne classification, pas une lecture de LA cible actuelle.
+ */
 const enTete = (): string =>
   '<header class="fil-tete">' +
   `<a class="retour" href="/" aria-label="${echappe(RECHERCHE.retour)}">${svgDuSprite('ph-caret-left')}</a>` +
@@ -200,6 +209,7 @@ const enTete = (): string =>
   `<h1>${echappe(RECHERCHE.titre)}</h1>` +
   `<p class="sous">${echappe(RECHERCHE.portee)}</p>` +
   '</div>' +
+  raccourcisEntete('/search') +
   '</header>';
 
 const resultats = (etat: EtatDeLaRecherche): string => {
