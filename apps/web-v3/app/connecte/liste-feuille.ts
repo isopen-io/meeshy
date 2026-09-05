@@ -1,8 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { feuilleQuiMonte } from './atomes-feuille';
-
-import { apercuDeLigne, PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
+import { apercuDeLigne, feuilleQuiMonte, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
 
 /**
  * LA FEUILLE DE `/chats` — la liste des conversations, et elle seule.
@@ -51,6 +49,7 @@ import { apercuDeLigne, PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feu
 export const FEUILLE_DE_LA_LISTE = compacte(`
 ${PASTILLE_DE_LANGUE}
 ${TRACE_DE_FRAPPE}
+${MENU_DE_LIGNE}
 .liste{margin-top:var(--space-6)}
 .liste>ul{margin:0;padding:0;list-style:none;border-top:var(--stroke-hair) solid var(--color-border-strong)}
 .liste>ul>li{position:relative;border-bottom:var(--stroke-hair) solid var(--color-border-strong);overflow:hidden}
@@ -76,17 +75,6 @@ ${apercuDeLigne('.liste')}
 .liste .muet svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .liste li[data-nonlus="0"] .compte{display:none}
 .liste .compte .valeur{display:block}
-
-.actions{flex:none;position:relative}
-.actions>summary{display:flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-text-muted);list-style:none;cursor:pointer;transition:background-color 120ms,color 120ms}
-.actions>summary::-webkit-details-marker{display:none}
-.actions>summary:hover{background:var(--color-tint-primary);color:var(--color-primary)}
-.actions>summary svg{width:var(--glyph);height:var(--glyph)}
-.actions form{display:grid;margin:var(--space-2) 0;padding:var(--space-2);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface)}
-.actions button{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:0 var(--space-3);border:0;border-radius:var(--radius-lg);background:var(--color-surface);font:inherit;font-size:var(--text-base);color:var(--color-text);text-align:left;cursor:pointer;transition:background-color 120ms}
-.actions button:hover{background:var(--color-bg-sunken)}
-.actions button svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}
-.actions button.grave{color:var(--color-danger)}
 
 .defaite{display:flex;align-items:center;gap:var(--space-3);min-height:var(--row-height);padding:var(--space-2) 0;font-size:var(--text-base);color:var(--color-text-muted)}
 .defaite:empty{min-height:0;padding:0}

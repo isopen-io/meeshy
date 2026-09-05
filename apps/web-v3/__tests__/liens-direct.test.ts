@@ -49,4 +49,42 @@ describe('le document des liens porte ses fentes de direct', () => {
     // Et le formulaire reste un POST — le chemin sans JavaScript est entier.
     expect(document.querySelector<HTMLFormElement>('dialog.nouveau-lien form')!.method).toBe('post');
   });
+
+  /** #4933 — LE GESTE DE FERMETURE : la ligne IDENTIFIÉE, le menu que le module intercepte. */
+  it('identifie chaque ligne pour le module, et porte un menu de fermeture sur une ligne active', () => {
+    peint(
+      ETAT({
+        liens: [
+          {
+            identifiant: 'mshy_lagos',
+            nom: 'Ops Lagos',
+            utilisations: 4,
+            conversation: 'c1',
+            actif: true,
+            capacite: null,
+            expireA: null,
+          },
+        ],
+        actifs: 1,
+      }),
+    );
+
+    const ligne = document.querySelector<HTMLElement>('li[data-lien="mshy_lagos"]')!;
+    expect(ligne).not.toBeNull();
+    const forme = ligne.querySelector<HTMLFormElement>('details.actions form')!;
+    expect(forme.method).toBe('post');
+    expect((forme.elements.namedItem('geste') as HTMLInputElement).value).toBe('fermer');
+    expect((forme.elements.namedItem('lien') as HTMLInputElement).value).toBe('mshy_lagos');
+  });
+
+  it('la voix du carnet est servie, muette, prête à porter le refus de fermeture', () => {
+    peint(ETAT());
+
+    const alerte = document.querySelector<HTMLElement>('#carnet > .avis.alerte')!;
+    // La région existe AVANT qu'on n'y écrive — une `role="alert"` insérée avec
+    // son texte n'est annoncée par aucun lecteur d'écran de façon fiable.
+    expect(alerte).not.toBeNull();
+    expect(alerte.hidden).toBe(true);
+    expect(alerte.querySelector<HTMLElement>('.motif')!.textContent).toBe('');
+  });
 });

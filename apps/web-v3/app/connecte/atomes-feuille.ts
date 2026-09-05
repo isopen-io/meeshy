@@ -128,3 +128,29 @@ export const CHAMP_D_APPEL =
   '.chercher{display:flex;align-items:center;gap:var(--space-3);min-height:var(--action-height-secondary);margin-top:var(--space-6);padding:0 var(--space-4);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text-muted);text-decoration:none}' +
   '.chercher:hover{background:var(--color-tint-primary)}' +
   '.chercher svg{flex:none;width:var(--glyph);height:var(--glyph);color:var(--color-primary)}';
+
+/**
+ * LE MENU D'UNE LIGNE — un `<details class="actions">` natif : le `<summary>`
+ * (un rond de `--target-min`) et le `<form>` qu'il révèle, chacun de ses
+ * `<button>` une cible de `--target-min`.
+ *
+ * DEUX LECTEURS DEPUIS #4933 : la ligne de `/chats` (trois gestes,
+ * `liste-vue.ts`) et la ligne de `/links` (un seul, « Fermer ce lien »,
+ * `liens-vue.ts`). C'ÉTAIT UNE JUMELLE avant l'extraction — recopiée à
+ * l'identique dans `FEUILLE_DE_LA_LISTE`, et `/links` en aurait porté une
+ * SECONDE copie divergente au premier rayon changé. Même raison que
+ * `feuilleQuiMonte` : deux copies se surveillent, la troisième aurait divergé.
+ *
+ * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1).
+ */
+export const MENU_DE_LIGNE =
+  '.actions{flex:none;position:relative}' +
+  '.actions>summary{display:flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-text-muted);list-style:none;cursor:pointer;transition:background-color 120ms,color 120ms}' +
+  '.actions>summary::-webkit-details-marker{display:none}' +
+  '.actions>summary:hover{background:var(--color-tint-primary);color:var(--color-primary)}' +
+  '.actions>summary svg{width:var(--glyph);height:var(--glyph)}' +
+  '.actions form{display:grid;margin:var(--space-2) 0;padding:var(--space-2);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface)}' +
+  '.actions button{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:0 var(--space-3);border:0;border-radius:var(--radius-lg);background:var(--color-surface);font:inherit;font-size:var(--text-base);color:var(--color-text);text-align:left;cursor:pointer;transition:background-color 120ms}' +
+  '.actions button:hover{background:var(--color-bg-sunken)}' +
+  '.actions button svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}' +
+  '.actions button.grave{color:var(--color-danger)}';

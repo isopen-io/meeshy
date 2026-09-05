@@ -50,6 +50,12 @@ import { apercuDeLigne, CHAMP_D_APPEL, PASTILLE_DE_LANGUE } from './atomes-feuil
  *    `--color-text-muted`** (règle 18, qui NOMME `.carte-vide p` dans la liste
  *    des sélecteurs interdits au gris) : c'est le texte pour lequel on ouvre
  *    l'état, pas une méta qu'on peut ne pas lire.
+ * 9. **`.carte-vide h1,.carte-vide h3`** (issue #4967, `storyFail`) : le
+ *    gabarit d'écran sans contenu que `carteVide()` réserve à un `<h3>` (une
+ *    carte au milieu d'une liste) sert aussi un DOCUMENT ENTIER
+ *    (`documentDeMessage`, `app/enveloppe/vue.ts`), qui pose toujours un
+ *    `<h1>` — chaque document en veut exactement un. Le SÉLECTEUR se partage,
+ *    pas la balise : deux niveaux de titre, une seule règle visuelle.
  *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (§ 3.2 corollaire 2, charte
  * règle 1). Témoin : `__tests__/charte.test.ts`.
@@ -90,7 +96,7 @@ a.carte:hover{background:var(--color-tint-primary)}
 
 .carte-vide{margin-top:var(--space-3);padding:var(--space-5);border:var(--stroke-strong) dashed var(--color-border-interactive);border-radius:var(--radius-xl);text-align:center}
 .carte-vide svg{width:var(--glyph-large);height:var(--glyph-large);color:var(--color-text-muted)}
-.carte-vide h3{margin:var(--space-2) 0 var(--space-1);font-size:var(--text-lg);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
+.carte-vide h1,.carte-vide h3{margin:var(--space-2) 0 var(--space-1);font-size:var(--text-lg);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
 .carte-vide p{margin:0 auto;max-width:var(--measure);color:var(--color-text)}
 .carte-vide .action{margin-top:var(--space-5)}
 

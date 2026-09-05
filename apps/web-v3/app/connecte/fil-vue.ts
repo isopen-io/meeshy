@@ -13,6 +13,7 @@ export { type TempsReel } from './chargeur';
 import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR, blocDuNavigateur, type TempsReel } from './chargeur';
 import { porteesDuTravailleur } from '@/lib/sw/portees';
 export { CHARGEUR_DE_PARTICIPATION };
+import { adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
 import { LONGUEUR_MAX_DU_MESSAGE, type Fil } from '@/lib/api/fil';
 import type { CleDeLien } from '@/lib/api/guest-session';
 import { adresseDesMedias } from '@/lib/api/medias';
@@ -29,7 +30,7 @@ import { REGION_DE_LA_BANNIERE } from './banniere-vue';
 import { FEUILLE_DU_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
 import { gabaritDeLigne, lignes } from './fil-lignes';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
-import { pieceEnPlein, pleinEcran } from './plein-vue';
+import { pieceEnPlein, piecesDuFil, pleinEcran } from './plein-vue';
 import { FEUILLE_DU_PROFIL } from './profil-feuille';
 import { surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
 import { carteVide } from './vue';
@@ -672,8 +673,17 @@ const surimpression = (etat: EtatDuFil): Surimpression => {
       }),
     };
   }
-  const plein = pieceEnPlein(etat.fil, etat.plein);
-  return plein === null ? { genre: 'aucune' } : { genre: 'plein', html: pleinEcran({ plein, adresse: adresseDeLaPorte(etat.porte), langueDuDocument: DOCUMENT_LANGUAGE }) };
+  const plein = pieceEnPlein(piecesDuFil(etat.fil), etat.plein);
+  return plein === null
+    ? { genre: 'aucune' }
+    : {
+        genre: 'plein',
+        html: pleinEcran({
+          piece: plein.piece,
+          retour: adresseDuRetourDuPlein(adresseDeLaPorte(etat.porte), plein.messageId),
+          langueDuDocument: DOCUMENT_LANGUAGE,
+        }),
+      };
 };
 
 export const documentDuFil = (etat: EtatDuFil): string => {

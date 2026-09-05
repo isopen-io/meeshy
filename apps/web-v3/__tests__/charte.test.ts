@@ -262,6 +262,13 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     { nom: 'fil en plein écran', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_PLEIN },
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
     { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
+    // L'état `?media=` de la galerie (#4525, + point 2 de #5024) : la SEULE
+    // composition qui porte la feuille du plein écran sur cet écran — une
+    // galerie ordinaire n'en paie pas un octet, comme « fil en plein écran ».
+    {
+      nom: 'médias en plein écran',
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS + FEUILLE_DU_PLEIN,
+    },
     { nom: 'story', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY },
     // `/feed` (#5031) — le fil social, servi par `documentPleinEcran` comme le
     // fil, la liste et les commentaires : chrome + connecté + sa feuille.
@@ -591,7 +598,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.lecteur .lire', // le cliquable — le rond de lecture d'un vocal ou d'une vidéo
     '.pieces .transcrit-original summary', // le cliquable — l'original d'un transcrit
     '.pieces>li[data-genre=video] .media .lire', // le cliquable — le rond de lecture d'une vidéo, sur son poster
-    '.pieces .fiche', // le cliquable — la fiche d'un vocal, où sa transcription se lit entière
+    // Le cliquable — la fiche d'un vocal, où sa transcription se lit entière.
+    // Sélecteur NU : le balisage a UN site (`plein-vue.ts` › `ficheDePiece`) et
+    // DEUX hôtes — le fil (`.pieces`) et la galerie (`.lecteurs`, #4525) ; le
+    // scoper aurait demandé de recopier la déclaration dans la feuille de la
+    // galerie, c'est-à-dire une jumelle.
+    '.fiche',
     // Le plein écran (§ 12.10.1) : le cliquable — la croix qui ferme, l'original
     // d'un transcrit. La scène, le nom du fichier et son poids restent sur l'encre.
     'dialog.plein .fermer',

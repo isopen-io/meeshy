@@ -1417,6 +1417,47 @@ ${court(correction, 6000)}`,
   }
 
   // -------------------------------------------------------------------------
+  // Resynchroniser AVANT les gates (lecon du tour 1, 2026-09-04) : un tour dure des heures, et
+  // `dev` comme la branche distante avancent pendant ce temps. Les gates et la livraison doivent se
+  // jouer sur l'arbre FUSIONNE — sinon la fusion tombe sur la phase Livrer, HORS gates, par un
+  // agent qui n'a plus le temps de relire (treize puis trois fichiers en conflit au tour 1).
+  // Reconcilier du code par sa logique est du developpement ; les gates qui suivent jugent le resultat.
+  phase('Synchroniser')
+  // -------------------------------------------------------------------------
+  const resynchro = await agent(`${SOCLE}
+${PASSERELLE}
+TA MISSION — RESYNCHRONISER l'arbre AVANT les gates. Le tour a dure des heures : \`${DEPUIS}\` et la
+branche distante ont pu avancer, et les gates comme la livraison doivent se jouer sur l'arbre FUSIONNE.
+L'arbre porte le travail NON COMMITE du tour, et il doit le RESTER (la phase Livrer compose ses commits
+par travail depuis \`git status\`) : la fusion passe donc par le remisage.
+
+1. \`git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE} ; \`git status --short\` : note la liste.
+2. \`git fetch origin ${DEPUIS} ${NOM_SHELL}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
+   \`git log --oneline HEAD..origin/${NOM_SHELL}\` et \`git log --oneline HEAD..origin/${DEPUIS}\` : s'il n'y a
+   RIEN a reprendre d'aucun cote, rends reintegre=true, commits_repris=0, et arrete-toi la.
+3. \`git stash push -u -m resync-avant-gates\`, puis \`git merge origin/${NOM_SHELL}\` (si la branche distante
+   a avance), puis \`git merge origin/${DEPUIS}\` — **JAMAIS** \`git rebase\` ni \`git pull --rebase\` (lecon
+   324). Un conflit de fusion se resout en gardant les DEUX apports (design, lecons, matrice ;
+   budgets-mesures.json : les valeurs se REMESURENT avec la commande que la ligne nomme, jamais
+   additionnees) ou en reconciliant le CODE par sa logique. Commite chaque fusion (message : ce qui a ete
+   concilie et pourquoi, termine par les lignes :
+${ATTRIBUTION}
+   ).
+4. \`git stash pop\` : les conflits du pop (le travail du tour contre ce que dev a change dans les memes
+   fichiers) se resolvent de la meme facon, en gardant le travail du tour DANS la nouvelle structure ;
+   \`git checkout --ours\` / \`--theirs\` a l'aveugle est interdit. Verifie qu'aucun marqueur ne reste
+   (\`git grep -n '^<<<<<<<' -- . ':!*.md'\` vide, puis la meme sur les .md) et que \`git stash list\` est vide.
+5. \`cd ${V3} && bun run type-check && bun run test 2>&1 | tail -5\` : ce qui est rouge se corrige ICI si la
+   cause est la fusion (fixture qui ne connait pas un module ajoute par dev, ratchet a remesurer…) ;
+   sinon il est rapporte dans gates_apres_merge et la phase Gates le traite.
+6. Rends fichiers_touches_par_dev (ce que dev a bouge dans les fichiers du tour), conflit_non_resolu VIDE si
+   tout est resolu (sinon ce qui demande un arbitrage — et l'arbre doit etre laisse SANS marqueur), et un
+   etat FACTUEL : les commandes et leurs sorties.`,
+    { label: `resynchroniser:tour-${tour}`, phase: 'Synchroniser', schema: SYNCHRO, model: MODELE.developper, effort: 'high' })
+  if (resynchro && resynchro.conflit_non_resolu) log(`ATTENTION — resynchronisation incomplete avant les gates : ${resynchro.conflit_non_resolu}`)
+  else if (resynchro) log(`Resynchronise avant les gates : ${resynchro.commits_repris || 0} commits repris`)
+
+  // -------------------------------------------------------------------------
   phase('Gates')
   // -------------------------------------------------------------------------
   let gates = null
@@ -1434,7 +1475,13 @@ Dans cet ordre, en t'arretant pour corriger des qu'un gate est rouge :
 6. \`cd ${V3} && bun run build\`                               (next build + check-app-router-built + check-bundle-budget)
 7. \`cd ${V3} && bun run test:a11y\` et \`bun run test:lifecycle\` (Playwright, serveur \`bun run start\`
    lance par la config ; Chromium dans /opt/pw-browsers)
-8. les suites e2e du role premier et celles ajoutees ce tour : \`cd ${V3} && bun run e2e\`
+8. les suites e2e, PAR PROJET et jamais nues (lecon 520 : \`bun run e2e\` sans \`--project\` melange les
+   deux projets Playwright et casse la resolution ESM/CJS de mesure-reseau.mjs — neuf faux rouges au
+   tour 1) : \`cd ${V3} && bun run test:chaines\` puis \`bun run test:pages\`. Ces deux suites durent
+   15-20 min a un seul worker : LANCE-LES EN ARRIERE-PLAN DES LE DEBUT de ta passe (sortie dans un
+   fichier de ${dossierDeTravail}), joue les gates 1 a 7 pendant qu'elles tournent, puis lis leur
+   resultat en entier. Tue tout serveur \`next start\` orphelin (\`pgrep -af 'next start'\`) AVANT de
+   lancer les gates 9 et 10 sur le port 3300 (lecon 514).
 9. conformite visuelle : serveur v3 en arriere-plan (\`bun run start\`, port 3300) puis
    \`node ${D}/compare-rendu.js --base http://127.0.0.1:3300 --vues ${travaux.filter((t) => t.genre !== 'infra').map((t) => t.cle).join(',')}\`
    — rends les SCORES rendus tels quels ; rc=3 (non comparable) se dit, ne se maquille pas.

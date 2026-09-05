@@ -97,6 +97,38 @@ describe("une mesure dit toujours d'où elle vient", () => {
     expect(mesure.lcp_ms).toBe(1100);
   });
 
+  /**
+   * #4933 — UN CODE INTENTIONNEL N'EST PAS UN CODE ACCIDENTEL. `estCodeDeMesure`
+   * reste 200–399 par DÉFAUT : c'est le garde-fou contre l'identifiant mort ou
+   * deviné faux. Mais `/l/:token/expired` (#4496 → 410 depuis #4933) est un
+   * écran dont le CONTRAT EST de répondre hors de cette plage — un
+   * gestionnaire de route stable, jamais un identifiant qu'on aurait mal
+   * copié. `codesSupplementaires` le déclare EXPLICITEMENT, au site d'appel,
+   * plutôt que d'élargir la plage par défaut pour tous les écrans.
+   */
+  it('mesure un code hors 200–399 quand il est déclaré EXPLICITEMENT — et seulement lui', () => {
+    const args = {
+      url: 'https://exemple/l/x/expired',
+      commande: COMMANDE,
+      http: 410,
+      dureeMs: 10,
+      requetesEmises: 1,
+      reponses: [{ requestId: '1', type: 'Document' }],
+      chargements: [{ requestId: '1', encodedDataLength: 512 }],
+      ressources: [],
+      fcpMs: 50,
+      lcpMs: 60,
+      cls: 0,
+    };
+
+    expect(composeMesure(args).statut).toBe('à établir');
+    expect(composeMesure({ ...args, codesSupplementaires: [410] }).statut).toBe('mesuré');
+    expect(composeMesure({ ...args, codesSupplementaires: [410] }).http).toBe(410);
+    // Un code NON déclaré reste refusé, même avec la liste posée : le
+    // garde-fou tient pour tout le reste.
+    expect(composeMesure({ ...args, http: 404, codesSupplementaires: [410] }).statut).toBe('à établir');
+  });
+
   it("marque « à établir » — et non zéro — ce qu'elle n'a pas pu mesurer", () => {
     const mesure = mesureIndisponible({
       url: 'https://meeshy.me/',
