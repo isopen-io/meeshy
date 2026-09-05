@@ -331,7 +331,31 @@ struct FeedPostCard: View {
     /// VoiceOver label pour la scène de carte — même convention que
     /// `mediaAccessibilityLabel` (attribution à l'auteur).
     private var cardSceneAccessibilityLabel: String {
-        String(format: String(localized: "a11y.feed.post.scene", defaultValue: "Scène partagée par %@", bundle: .main), post.author)
+        let attribution = String(
+            format: String(localized: "a11y.feed.post.scene",
+                           defaultValue: "Scène partagée par %@", bundle: .main),
+            post.author)
+        // **La légende ENTRE dans le libellé** (2026-09-05).
+        //
+        // La carte est un élément unique (`accessibilityElement(children:
+        // .ignore)`) : tout ce qu'on peint DEDANS — dont la surimpression de
+        // légende posée le même jour — disparaît de l'arbre. VoiceOver
+        // annonçait « Scène partagée par Demo » et taisait le texte que
+        // l'auteur avait écrit pour décrire son image.
+        //
+        // > **Un `overlay` posé sur un élément qui ignore ses enfants est
+        // > peint pour l'œil et muet pour l'oreille.** Le défaut ne se voit
+        // > pas — la couche s'affiche —, et il ne se lit pas non plus : les
+        // > deux modificateurs sont justes séparément, c'est leur ORDRE qui
+        // > décide. Trouvé en cherchant la légende dans l'arbre pour la
+        // > vérifier à l'écran ; sans ce détour, elle serait restée inaudible.
+        //
+        // La légende ENTIÈRE est servie ici, pas sa version abrégée : les
+        // vingt mots sont une contrainte de PLACE, et l'oreille n'en a pas.
+        guard let caption = cardSceneCaption?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !caption.isEmpty
+        else { return attribution }
+        return "\(attribution). \(caption)"
     }
 
     /// **Le média que le plein écran doit ouvrir sur une carte de SCÈNE.**
