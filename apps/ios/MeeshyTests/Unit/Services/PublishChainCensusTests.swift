@@ -101,7 +101,7 @@ final class PublishChainCensusTests: XCTestCase {
     ///
     /// | champ | producteur atteignable depuis le meuble | pourquoi il n'atteint pas la file |
     /// |---|---|---|
-    /// | `mediaAlt` | **oui désormais** — `MediaEditTool.altText` (`ComposerObjectEditorRail`), monté par `MeeshyComposerHost+Portals` | il alimente `publishStoryInBackground` → **`PostService.createCanvasPost(mediaAlt:)`**, le publieur DIRECT ; et `ComposerDocumentDraft` (16 champs) n'a aucun champ d'alternative, donc la voie durable n'a rien à transporter |
+    /// | `mediaAlt` | **oui** — `MediaEditTool.altText` (`ComposerObjectEditorRail`), monté par `MeeshyComposerHost+Portals` | **PERTE, depuis le 2026-09-05** — voir ci-dessous |
     /// | `allowSoundExtraction` | non — `SoundExtractionToggle`, monté par `ComposerToolPanelHost` → `ComposerBottomBand`, **l'ATELIER seul** | aucune porte ne l'écrit sur cette voie |
     ///
     /// > **Une justification de garde se périme comme un compte.** L'ancienne
@@ -111,10 +111,35 @@ final class PublishChainCensusTests: XCTestCase {
     /// > sauvé la table n'est pas un témoin : c'est d'avoir relu le commit
     /// > voisin qui ouvrait la porte.
     ///
-    /// **`mediaAlt` est donc à UN pas d'être une PERTE.** Il a maintenant un
-    /// producteur et un transport — sur l'autre voie. Le jour où un post du
-    /// meuble portant des médias part par la file en portant une description,
-    /// le champ tombera, et ce sera silencieux comme les sept précédents.
+    /// **Ce pas est FAIT — `mediaAlt` est une PERTE, mesurée le 2026-09-05.**
+    /// La ligne précédente disait « à UN pas », et le pas ne demandait aucun
+    /// commit : il suffisait qu'un post du meuble PORTE une description. Il le
+    /// peut depuis `a372e2484e`, et tout post du meuble part par la file —
+    /// `ComposerPublishChannel.channel(.post) == .document`, donc
+    /// `publishDocument()` → `ComposerDocumentDraft` (16 champs, aucun
+    /// d'alternative) → `PublishIntent.document` → `enqueuePostMedia` →
+    /// `CreatePostBody`. La description saisie tombe au premier maillon.
+    ///
+    /// > **Une garde peut décrire correctement une perte à venir et ne pas la
+    /// > voir arriver** : sa condition de bascule (« le jour où un post portera
+    /// > une description ») n'est vérifiée par aucun témoin — c'est de la prose.
+    /// > Le seul témoin possible est celui qui compte les champs, et il est
+    /// > NEUTRALISÉ par l'exemption même qui porte la prose.
+    ///
+    /// Le champ reste inscrit ici, mais sa raison a changé de nature : ce n'est
+    /// plus « rien ne l'écrit », c'est « **rien ne le transporte, et quelque
+    /// chose l'écrit** ». Le correctif est nommé et chiffré : porter `mediaAlts`
+    /// sur les quatre maillons, à l'identique de `mediaCaptions` — dont
+    /// `PublishIntent.document` réaligne déjà la carte URL sur l'index de
+    /// `localMedia`. Ce qui manque en amont est l'index OBJET → URL SOURCE :
+    /// `applyContentMedia` nomme la copie `tmp/<objectId>.<ext>` et ne rend rien,
+    /// donc le meuble ne peut pas relier son objet au fichier qu'il enfile.
+    ///
+    /// Sur l'autre voie — celle de la SCÈNE, que prend une story — le champ
+    /// voyage depuis le 2026-09-05 : `publishStoryScene()` y posait
+    /// `ComposerMediaAccessibility.empty`, la greffe n'étant câblée que sur la
+    /// remise à l'atelier (`ComposerMediaAltDoorTests
+    /// .test_chaqueRemiseDeLaCharge_passeParLaGreffe`).
     ///
     /// **Ce n'est pas une exemption pour autant.** Une exemption dirait « ce
     /// champ n'a pas à traverser » ; celui-ci l'aura à traverser dès que la

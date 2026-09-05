@@ -160,6 +160,10 @@ extension MeeshyComposerHost {
         .fullScreenCover(item: $editedObject) { objet in
             ComposerObjectEditorView(
                 viewModel: viewModel,
+                // La MÊME boîte que la surface du dessous : le portail charge
+                // ses candidats une fois (`.task` plus bas), et l'écran modal
+                // — où la frappe a réellement lieu depuis #4634 — la reçoit.
+                mentionBox: sceneMentionBox,
                 objectId: objet.id,
                 aspectRatio: viewModel.currentCanvasRatio,
                 plateauTint: tint.color,
@@ -176,7 +180,17 @@ extension MeeshyComposerHost {
                 // (`accessibilityCarryingComposerCaptions`). Un magasin tenu par
                 // l'éditeur mourrait à sa fermeture — le défaut que la légende a
                 // payé avant #4890.
-                mediaAltText: mediaAltBinding(for: objet.id)
+                mediaAltText: mediaAltBinding(for: objet.id),
+                // **La section par laquelle on ENTRE** (2026-09-05). Un jeton
+                // de l'inspecteur nomme un réglage précis ; l'écran s'ouvre
+                // dessus au lieu de le faire rechercher. `nil` pour les autres
+                // portes — appui long, création, plan 2D — qui ne désignent
+                // rien.
+                //
+                // L'ordre des arguments SUIT la déclaration : cette vue n'a pas
+                // d'`init` écrit à la main, donc son init memberwise impose
+                // l'ordre des propriétés.
+                initialSection: objet.section
             )
         }
         .photosPicker(

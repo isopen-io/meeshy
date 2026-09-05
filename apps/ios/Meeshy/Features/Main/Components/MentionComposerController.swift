@@ -47,10 +47,36 @@ public final class MentionComposerController: ObservableObject {
     @Published public private(set) var activeQuery: String? = nil
     @Published public private(set) var draftMentions: [String: MentionCandidate] = [:]
 
+    /// **Une recherche est EN VOL.** Sans ce témoin, « aucune suggestion »
+    /// couvre deux états qui n'ont pas la même réponse : « personne ne
+    /// correspond » et « on n'a pas encore regardé ». Une bande qui les
+    /// confond annonce « aucune personne trouvée » 300 ms avant d'avoir
+    /// cherché, puis se dédit.
+    @Published public private(set) var isResolving = false
+
+    /// **LA règle de montage de la bande, écrite UNE fois.**
+    ///
+    /// Elle vivait recopiée sur les trois surfaces du composer sous la forme
+    /// `activeQuery != nil && !suggestions.isEmpty`, chacune avec son
+    /// doc-comment expliquant que « aucun appel réseau ne remplira la liste
+    /// plus tard ». Cette justification est devenue FAUSSE le jour où un
+    /// brouillon a pu interroger l'annuaire — et trois copies d'une règle se
+    /// périment séparément.
+    ///
+    /// Ce qu'elle dit : on montre la bande dès qu'une requête `@` est active,
+    /// SAUF pendant qu'une recherche est en vol et n'a encore rien rendu.
+    /// Une bande vide n'est donc plus un silence : c'est la réponse
+    /// « personne », que `ComposerMentionStrip` écrit en toutes lettres.
+    public var showsSuggestions: Bool {
+        activeQuery != nil && (!suggestions.isEmpty || !isResolving)
+    }
+
     // MARK: - Private
 
     private let context: Context
     private let service: MentionServiceProviding
+    private let directory: AudienceUserSearching
+    private let currentUserId: String?
     private let localCandidates: () -> [MentionCandidate]
     private var debounceTask: Task<Void, Never>?
 
@@ -59,17 +85,25 @@ public final class MentionComposerController: ObservableObject {
     // pour une conversation, les participants. Débounce + cache Redis évitent le spam.
     private static let minQueryLengthForAPI = 0
     private static let debounceMs: UInt64 = 300_000_000
+    /// Même plafond que `MentionSuggestionsModel` (SDK), qui interroge le même
+    /// annuaire : deux plafonds différents pour une même liste se seraient
+    /// contredits à l'écran selon la surface qui pose la question.
+    private static let directoryLimit = 20
 
     // MARK: - Init
 
     public init(
         context: Context,
         localCandidates: @escaping () -> [MentionCandidate] = { [] },
-        service: MentionServiceProviding = MentionService.shared
+        service: MentionServiceProviding = MentionService.shared,
+        directory: AudienceUserSearching = UserService.shared,
+        currentUserId: String? = AuthManager.shared.currentUser?.id
     ) {
         self.context = context
         self.localCandidates = localCandidates
         self.service = service
+        self.directory = directory
+        self.currentUserId = currentUserId
     }
 
     // MARK: - Public API
@@ -88,9 +122,29 @@ public final class MentionComposerController: ObservableObject {
         suggestions = filtered
 
         debounceTask?.cancel()
-        guard query.count >= Self.minQueryLengthForAPI,
-              let remoteContext = context.remoteContext else { return }
 
+        // **Un brouillon cherche dans l'ANNUAIRE, pas seulement chez ses amis**
+        // (#3904 → 2026-09-05). Le contexte manquant interdisait l'endpoint
+        // CONTEXTUEL (`/mentions/suggestions` exige un post ou une
+        // conversation) — et cette impossibilité, juste, avait été lue comme
+        // « donc aucune recherche n'est possible ». Il en existait pourtant
+        // une, employée par la surface mood du MÊME composer via
+        // `MentionSuggestionList` : la recherche d'utilisateurs.
+        //
+        // Mesuré au simulateur `Meeshy-iOS26` : taper `@meeshy` dans le
+        // document ne faisait apparaître AUCUNE rangée, tandis que le rendu du
+        // post publié en faisait un lien cliquable. L'app affichait donc des
+        // mentions qu'elle ne savait pas composer.
+        guard let remoteContext = context.remoteContext else {
+            scheduleDirectoryLookup(query: query, locals: filtered)
+            return
+        }
+        guard query.count >= Self.minQueryLengthForAPI else {
+            isResolving = false
+            return
+        }
+
+        isResolving = true
         debounceTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -103,10 +157,54 @@ public final class MentionComposerController: ObservableObject {
                 )
                 guard !Task.isCancelled else { return }
                 suggestions = mergeAPISuggestions(apiResults, localCandidates: filtered)
+                isResolving = false
             } catch is CancellationError {
-                // Expected — ignore
+                // Attendu : une frappe plus récente a déjà repris le témoin à
+                // son compte — le remettre à `false` ici l'éteindrait pour la
+                // recherche SUIVANTE, qui vient de commencer.
             } catch {
+                guard !Task.isCancelled else { return }
+                isResolving = false
                 Logger.messages.error("MentionComposerController: API suggestions failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// **La recherche d'un brouillon**, débattue comme celle du contexte et
+    /// fusionnée derrière les amis déjà filtrés — qui restent EN TÊTE : une
+    /// personne qu'on connaît se propose avant une homonyme qu'on ne connaît
+    /// pas.
+    ///
+    /// Une requête VIDE (`@` seul) ne part pas : elle rendrait l'annuaire
+    /// entier, ce qui n'aide personne et coûte un aller-retour à chaque `@`
+    /// tapé. Dans ce cas les amis sont la réponse complète, et le témoin
+    /// s'éteint tout de suite pour que la bande puisse dire « personne »
+    /// quand il n'y en a aucun — l'état exact qu'un 404 sur la route des amis
+    /// laissait passer pour un silence.
+    private func scheduleDirectoryLookup(query: String, locals: [MentionCandidate]) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            isResolving = false
+            return
+        }
+
+        isResolving = true
+        debounceTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Task.sleep(nanoseconds: Self.debounceMs)
+                guard !Task.isCancelled else { return }
+                let found = try await directory.searchUsers(
+                    query: trimmed, limit: Self.directoryLimit, offset: 0)
+                guard !Task.isCancelled else { return }
+                suggestions = mergeDirectory(found, localCandidates: locals)
+                isResolving = false
+            } catch is CancellationError {
+                // Idem ci-dessus : le témoin appartient déjà à la frappe suivante.
+            } catch {
+                guard !Task.isCancelled else { return }
+                isResolving = false
+                Logger.messages.error("MentionComposerController: directory search failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -117,6 +215,7 @@ public final class MentionComposerController: ObservableObject {
         debounceTask = nil
         activeQuery = nil
         suggestions = []
+        isResolving = false
     }
 
     /// Replaces the trailing `@query` in `text` with `@username ` and records the mention.
@@ -173,6 +272,29 @@ public final class MentionComposerController: ObservableObject {
         }
         let newFromAPI = fromAPI.filter { !localUsernames.contains($0.username) }
         return localCandidates + newFromAPI
+    }
+
+    /// **La même fusion que celle de l'API contextuelle, sur l'autre source.**
+    /// Les amis restent en tête, l'auteur ne se propose jamais lui-même, et un
+    /// pseudo déjà servi ne revient pas en double — l'annuaire contient les
+    /// amis, donc sans ce dédoublonnage chaque ami correspondant paraîtrait
+    /// deux fois.
+    private func mergeDirectory(
+        _ found: [UserSearchResult],
+        localCandidates: [MentionCandidate]
+    ) -> [MentionCandidate] {
+        let known = Set(localCandidates.map(\.username))
+        let extras = found
+            .filter { $0.id != currentUserId && !known.contains($0.username) }
+            .map {
+                MentionCandidate(
+                    id: $0.id,
+                    username: $0.username,
+                    displayName: $0.displayName ?? $0.username,
+                    avatarURL: $0.avatar
+                )
+            }
+        return localCandidates + extras
     }
 
     /// Replaces the active `@query` fragment at the end of the text with the

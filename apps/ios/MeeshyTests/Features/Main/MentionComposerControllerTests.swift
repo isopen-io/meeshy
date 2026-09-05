@@ -12,15 +12,39 @@ final class MentionComposerControllerTests: XCTestCase {
     private func makeSUT(
         context: MentionComposerController.Context = .conversation(id: "conv-1"),
         localCandidates: [MentionCandidate] = [],
-        service: MockMentionService = MockMentionService()
+        service: MockMentionService = MockMentionService(),
+        directory: MockUserDirectorySearch = MockUserDirectorySearch(),
+        currentUserId: String? = "moi"
     ) -> (sut: MentionComposerController, mock: MockMentionService) {
         let mock = service
         let sut = MentionComposerController(
             context: context,
             localCandidates: { localCandidates },
-            service: mock
+            service: mock,
+            directory: directory,
+            currentUserId: currentUserId
         )
         return (sut, mock)
+    }
+
+    /// **L'annuaire par DÉFAUT est un double, et ce n'est pas un détail de
+    /// confort.** Sans lui, chaque test de ce fichier partirait sur
+    /// `UserService.shared` — donc sur le réseau réel, avec la session de
+    /// l'appareil : les verdicts dépendraient de ce que la production répond.
+    private func makeSUTWithDirectory(
+        context: MentionComposerController.Context = .composerDraft,
+        localCandidates: [MentionCandidate] = [],
+        currentUserId: String? = "moi"
+    ) -> (sut: MentionComposerController, annuaire: MockUserDirectorySearch) {
+        let annuaire = MockUserDirectorySearch()
+        let sut = MentionComposerController(
+            context: context,
+            localCandidates: { localCandidates },
+            service: MockMentionService(),
+            directory: annuaire,
+            currentUserId: currentUserId
+        )
+        return (sut, annuaire)
     }
 
     private func makeCandidate(
@@ -245,12 +269,16 @@ final class MentionComposerControllerTests: XCTestCase {
 
     // MARK: - Context: composerDraft (#3904)
 
-    /// Un brouillon composer n'a pas encore d'id serveur : `.composerDraft`
-    /// ne doit JAMAIS programmer d'appel réseau, quelle que soit la requête —
-    /// seuls les candidats locaux (amis) répondent. Le sleep couvre large le
-    /// débounce de 300 ms : la question n'est pas un TIMING à rattraper mais
-    /// l'ABSENCE d'une tâche jamais programmée, donc la marge ne rend pas le
-    /// test flaky (zéro reste zéro, quelle que soit la durée d'attente).
+    /// Un brouillon composer n'a pas encore d'id serveur : il ne doit JAMAIS
+    /// interroger l'endpoint CONTEXTUEL (`/mentions/suggestions` exige un post
+    /// ou une conversation, et rendrait 400 sans).
+    ///
+    /// **Ce témoin ne dit rien de l'annuaire, et c'est la distinction qui
+    /// manquait** : l'impossibilité d'un appel CONTEXTUEL avait été lue comme
+    /// l'impossibilité de TOUTE recherche, ce qui rendait `@meeshy`
+    /// introuvable à la composition alors que le post publié en faisait un
+    /// lien. Le double d'annuaire de `makeSUT` ne rend rien, donc les amis
+    /// restent bien la seule source ICI.
     func test_context_composerDraft_neverCallsTheRemoteService() async {
         let alice = makeCandidate(id: "1", username: "alice", displayName: "Alice")
         let mockService = MockMentionService()
@@ -334,5 +362,140 @@ final class MentionComposerControllerTests: XCTestCase {
         let usernames = sut.suggestions.map(\.username)
         XCTAssertEqual(usernames.filter { $0 == "alice" }.count, 1)
         XCTAssertTrue(usernames.contains("alicia"))
+    }
+
+    // MARK: - L'annuaire d'un brouillon (2026-09-05)
+
+    /// **Le défaut rapporté.** Taper `@meeshy` pendant la composition ne
+    /// faisait apparaître AUCUNE rangée — mesuré au simulateur `Meeshy-iOS26`
+    /// le 2026-09-05, sur la surface document d'un post.
+    ///
+    /// Deux causes s'additionnaient, et une seule aurait suffi : la route des
+    /// amis rendait 404 en production (`GET /api/v1/directory/friend-requests`,
+    /// vérifié au `curl`), et `ComposerMentionFriendsSource` avale l'échec en
+    /// liste vide ; et même remplie, cette liste n'aurait jamais contenu une
+    /// personne qui n'est pas un ami de l'auteur.
+    ///
+    /// L'annuaire répond aux deux : il ne dépend pas de la route en panne, et
+    /// il connaît les gens qu'on ne connaît pas encore.
+    func test_brouillon_chercheDansLAnnuaire_quandAucunAmiNeCorrespond() async {
+        let (sut, annuaire) = makeSUTWithDirectory()
+        annuaire.result = .success([
+            UserSearchResult(id: "u9", username: "meeshy", displayName: "Meeshy", avatar: nil)
+        ])
+
+        sut.handleQuery(in: "Bonjour @meeshy")
+        await waitUntil({ sut.suggestions.contains { $0.username == "meeshy" } },
+                        "un brouillon doit atteindre l'annuaire : sans lui, seule "
+                        + "une personne DÉJÀ amie peut être mentionnée")
+
+        XCTAssertEqual(annuaire.lastQuery, "meeshy",
+                       "c'est le FRAGMENT découpé qui part, jamais le texte entier")
+    }
+
+    /// **Les amis restent en tête, et ne reviennent pas en double.** L'annuaire
+    /// contient aussi les amis : sans dédoublonnage, chaque ami correspondant
+    /// paraîtrait deux fois dans la bande.
+    func test_lAnnuaire_seFusionneDerriereLesAmis_sansDoublon() async {
+        let alice = makeCandidate(id: "1", username: "alice", displayName: "Alice")
+        let (sut, annuaire) = makeSUTWithDirectory(localCandidates: [alice])
+        annuaire.result = .success([
+            UserSearchResult(id: "1", username: "alice", displayName: "Alice"),
+            UserSearchResult(id: "2", username: "alicia", displayName: "Alicia")
+        ])
+
+        sut.handleQuery(in: "@ali")
+        await waitUntil({ sut.suggestions.count == 2 })
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice", "alicia"])
+    }
+
+    /// **L'auteur ne se propose jamais lui-même.** L'annuaire le rend comme
+    /// n'importe qui d'autre ; se mentionner soi-même n'a aucun destinataire.
+    func test_lAnnuaire_neProposeJamaisLAuteur() async {
+        let (sut, annuaire) = makeSUTWithDirectory(currentUserId: "moi")
+        annuaire.result = .success([
+            UserSearchResult(id: "moi", username: "andre", displayName: "André"),
+            UserSearchResult(id: "u2", username: "andrea", displayName: "Andrea")
+        ])
+
+        sut.handleQuery(in: "@and")
+        await waitUntil({ !sut.suggestions.isEmpty })
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["andrea"])
+    }
+
+    /// **Un `@` NU ne part pas au réseau.** La requête vide rendrait l'annuaire
+    /// entier — un aller-retour par `@` tapé, pour une liste qui n'aide
+    /// personne. Les amis sont la réponse complète de ce cas.
+    func test_unArobaseNu_nInterrogePasLAnnuaire() async {
+        let alice = makeCandidate(id: "1", username: "alice")
+        let (sut, annuaire) = makeSUTWithDirectory(localCandidates: [alice])
+
+        sut.handleQuery(in: "Salut @")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        XCTAssertEqual(annuaire.callCount, 0)
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice"])
+    }
+
+    // MARK: - showsSuggestions : les DEUX vides ne se valent pas
+
+    /// **« On cherche encore » ne se peint pas.** Sinon la bande annoncerait
+    /// « aucune personne trouvée » 300 ms avant d'avoir cherché, puis se
+    /// dédirait — un clignotement qui dit le contraire du vrai.
+    func test_pendantLaRecherche_laBandeNeSeMontrePas() {
+        let (sut, _) = makeSUTWithDirectory()
+
+        sut.handleQuery(in: "@meeshy")
+
+        XCTAssertTrue(sut.isResolving)
+        XCTAssertFalse(sut.showsSuggestions,
+                       "une bande vide pendant une recherche en vol dirait « personne » "
+                       + "avant d'avoir regardé")
+    }
+
+    /// **« Personne ne correspond » se peint.** C'est la moitié du défaut
+    /// rapporté : l'auteur ne pouvait pas distinguer une absence de résultat
+    /// d'une fonctionnalité en panne, parce que la bande DISPARAISSAIT dans les
+    /// deux cas.
+    func test_rechercheTerminéeSansRésultat_laBandeSeMontreQuandMême() async {
+        let (sut, annuaire) = makeSUTWithDirectory()
+        annuaire.result = .success([])
+
+        sut.handleQuery(in: "@personnequinexistepas")
+        await waitUntil({ !sut.isResolving })
+
+        XCTAssertTrue(sut.suggestions.isEmpty)
+        XCTAssertTrue(sut.showsSuggestions,
+                      "la bande doit DIRE « aucune personne trouvée » — disparaître "
+                      + "laisse croire que la mention ne fonctionne pas")
+    }
+
+    /// **Un échec réseau rend le même verdict qu'une absence de résultat.** Il
+    /// n'y a pas d'état d'erreur distinct à ce niveau — mais il ne doit surtout
+    /// pas laisser le témoin allumé, sinon la bande ne reparaît plus jamais
+    /// pour cette frappe.
+    func test_unÉchecDAnnuaire_neLaissePasLeTémoinAllumé() async {
+        let (sut, annuaire) = makeSUTWithDirectory()
+        annuaire.result = .failure(NSError(domain: "test", code: -1))
+
+        sut.handleQuery(in: "@meeshy")
+        await waitUntil({ !sut.isResolving })
+
+        XCTAssertTrue(sut.showsSuggestions)
+    }
+
+    /// **Effacer le `@` éteint tout**, témoin compris : sans cela, rouvrir le
+    /// champ hériterait d'un « en cours » qu'aucune tâche ne terminera.
+    func test_clearSuggestions_éteintLeTémoinDeRecherche() async {
+        let (sut, _) = makeSUTWithDirectory()
+        sut.handleQuery(in: "@meeshy")
+        XCTAssertTrue(sut.isResolving)
+
+        sut.clearSuggestions()
+
+        XCTAssertFalse(sut.isResolving)
+        XCTAssertFalse(sut.showsSuggestions, "sans requête active, aucune bande")
     }
 }

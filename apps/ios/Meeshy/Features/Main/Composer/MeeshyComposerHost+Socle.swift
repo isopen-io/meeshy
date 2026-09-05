@@ -398,11 +398,34 @@ extension MeeshyComposerHost {
     ///
     /// Les treize arguments sont ceux que `StoryComposerView+Publication`
     /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
-    /// il relaie. `ComposerMediaAccessibility.empty` est le seul écart, et il
-    /// est honnête — la surface de scène du meuble n'offre pas encore d'éditeur
-    /// d'alternative textuelle, donc il n'y a rien à transmettre. Fabriquer un
-    /// dictionnaire vide plutôt que de lire un magasin absent dit la vérité ;
-    /// lire un magasin par défaut aurait fait croire à un relais.
+    /// il relaie.
+    ///
+    /// ## L'accessibilité VOYAGE désormais par ici (#4756, corrigé 2026-09-05)
+    ///
+    /// Ce site posait `ComposerMediaAccessibility.empty`, et son commentaire le
+    /// justifiait ainsi : « la surface de scène du meuble n'offre pas encore
+    /// d'éditeur d'alternative textuelle, donc il n'y a rien à transmettre ».
+    ///
+    /// **C'était vrai à l'écriture et faux depuis deux lots.** #4890 a donné au
+    /// meuble un éditeur de LÉGENDE (`documentMediaCaptions`), `a372e2484e` un
+    /// éditeur de TEXTE ALTERNATIF (`documentMediaAlts`) — et ni l'un ni l'autre
+    /// n'est passé ici : la greffe n'était câblée que sur la remise à l'ATELIER
+    /// (`MeeshyComposerHost+Surfaces`), l'autre bouche du même entonnoir. Une
+    /// story publiée depuis le socle partait donc sans une seule des deux
+    /// cartes, silencieusement, pendant que les deux champs s'affichaient,
+    /// se validaient et se relisaient à l'écran.
+    ///
+    /// > **Un commentaire qui justifie une valeur PAR une absence se périme
+    /// > quand l'absence se comble — et il se périme en SILENCE**, puisque
+    /// > combler l'absence se fait ailleurs, dans le fichier qui ouvre la porte.
+    /// > La question à poser en ouvrant une porte de saisie n'est pas « où
+    /// > est-ce lu ? » mais « **quels sites remettent cette charge, et les
+    /// > ai-je TOUS visités ?** ». Ils étaient deux ; un seul avait la greffe.
+    ///
+    /// `accessibilityCarryingComposerCaptions` reste le site UNIQUE de la
+    /// greffe : ce qui change ici est la BASE qu'on lui donne — `.empty`, parce
+    /// que le meuble n'a pas de magasin d'atelier à relayer sur ce chemin, et
+    /// c'est toujours honnête.
     func publishStoryScene() {
         guard canPublishDocument else { return }
         isPublishingDocument = true
@@ -418,7 +441,7 @@ extension MeeshyComposerHost {
             composerVisibilityUserIds,
             viewModel.draftId,
             composerReferences,
-            ComposerMediaAccessibility.empty,
+            accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides),
             selectedFormat.postType
         )
         isPublishingDocument = false

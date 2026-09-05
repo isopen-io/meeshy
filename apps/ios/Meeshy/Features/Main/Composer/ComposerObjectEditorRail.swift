@@ -130,6 +130,23 @@ nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
     case timing
     /// Le plan 2D — où il se pose, se pince et se tourne.
     case plan
+
+    /// **Un nom STABLE pour l'accessibilité et les identifiants de test.**
+    ///
+    /// Une somme à cas associés n'a pas de `rawValue`, et c'est ce que la
+    /// rangée de jetons lisait tant que sa destination était une bande
+    /// (`ComposerSceneBand: String`). Composer l'identifiant ici plutôt qu'au
+    /// site d'affichage garde une SEULE écriture de ces noms — deux
+    /// interpolations divergeraient au premier outil ajouté, et un identifiant
+    /// d'accessibilité qui change casse silencieusement le test qui le vise.
+    var identifier: String {
+        switch self {
+        case .tool(let outil):  return "tool.\(outil.rawValue)"
+        case .media(let outil): return "media.\(outil.rawValue)"
+        case .timing:           return "timing"
+        case .plan:             return "plan"
+        }
+    }
 }
 
 /// **Le rail d'outils de l'éditeur d'objet** (#4936).
@@ -239,11 +256,24 @@ nonisolated enum ComposerObjectEditorRail {
         // qu'elle règle.
         case .media:
             outils = MediaEditTool.served.map { ComposerObjectEditorSection.media($0) }
-        // **Différées, pas oubliées** : ces familles n'ont pas de panneau
+        // **L'AUDIO a gagné son ROGNAGE le 2026-09-05**, et pas par confort :
+        // la bande `timeline` du bas de scène était l'unique chemin pour borner
+        // une PUCE DE SON posée (`StoryAudioPlayerObject`), et la directive qui
+        // vide la première vue de ses éditions la retire. Sans cette ligne, le
+        // lot aurait supprimé une capacité au lieu d'un doublon.
+        //
+        // > Un retrait ne se mesure pas à ce qu'il enlève, mais à ce qui
+        // > SURVIT ailleurs. Les quatre autres surfaces retirées avaient leur
+        // > jumelle ici ; celle-ci ne l'avait pas, et rien ne l'aurait dit —
+        // > `sourceTrim(id:)` sert les deux familles depuis toujours, donc
+        // > aucun type n'aurait rougi.
+        case .audio:
+            outils = [.media(.trim)]
+        // **Différées, pas oubliées** : ces deux familles n'ont pas de panneau
         // d'options propre dans le dépôt. Le `switch` est exhaustif à dessein —
         // une sixième famille ne compilera pas tant qu'elle n'aura pas dit ce
         // qu'elle règle.
-        case .sticker, .place, .audio:
+        case .sticker, .place:
             outils = []
         }
         return outils + [.timing, .plan]

@@ -585,33 +585,22 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
     /// La bande de la scène passe par la même capacité — sans quoi le littéral
     /// qu'elle portait aurait survécu à la garde négative de la suite suivante.
     ///
-    /// **Une seule bande servie**, et la garde ne se relâche pas : elle vérifie
-    /// que chacune a un CONTENU. Le dessin a eu la sienne pendant un lot, puis
-    /// l'a perdue — ses réglages sont le contrôleur FLOTTANT de l'atelier, dont
-    /// la forme ne tient pas dans une bande. `timeline` et `textStyles` restent
-    /// dehors faute d'hôte.
+    /// **Une seule bande, et le jeu ne dépend plus d'un état** (directive
+    /// porteur 2026-09-05). `timeline` et `textStyles` n'en étaient pas
+    /// absentes « faute d'hôte » : elles en sont sorties parce qu'elles
+    /// ÉDITAIENT un objet posé, et que la première vue n'édite plus. Les
+    /// nommer ici serait devenu impossible — elles ne sont plus des cas du
+    /// type.
+    ///
+    /// Le témoin qui les remplace est POSITIF et exhaustif : toute bande du
+    /// type est servie, donc aucune ne peut être déclarée sans hôte. C'est la
+    /// même loi 4, prise par l'autre bout.
     func test_lesBandesServies_ontTouteUnContenu() {
         XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette])
-        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.timeline),
-                       "Le jeu de BASE ne sert pas la timeline : elle n'a de contenu que pour un objet rognable (#4082).")
-        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.textStyles),
-                       "Les 18 styles exigent un objet `text` sélectionné, qu'aucune porte ne pose (#4401).")
-    }
-
-    /// **La bande de rognage n'est servie que quand elle a de quoi se remplir**
-    /// (#4082). Le témoin s'écrit sur les DEUX verdicts : n'éprouver que le cas
-    /// « servie » laisserait passer une bande servie en permanence, c'est-à-dire
-    /// exactement le défaut que la loi 4 refuse.
-    func test_laTimeline_nEstServieQuePourUnObjetRognable() {
-        XCTAssertTrue(
-            ComposerSceneCapabilities.bands(canTrimSelection: true).contains(.timeline),
-            "un objet à rogner sélectionné doit rendre la bande ouvrable")
-        XCTAssertFalse(
-            ComposerSceneCapabilities.bands(canTrimSelection: false).contains(.timeline),
-            "sans objet rognable, la bande occuperait 170 pt pour ne rien montrer")
-        XCTAssertTrue(
-            ComposerSceneCapabilities.bands(canTrimSelection: false).contains(.palette),
-            "la condition ne doit RETIRER aucune bande de base")
+        XCTAssertEqual(
+            Set(ComposerSceneBand.allCases), ComposerSceneCapabilities.bands,
+            "une bande DÉCLARÉE et non servie est indiscernable d'une bande oubliée : "
+                + "le lot suivant la sert à nouveau sans qu'aucun témoin ne tombe")
     }
 
     /// **Rogner est offert par l'OBJET, pas par le meuble.** Le meuble déclare

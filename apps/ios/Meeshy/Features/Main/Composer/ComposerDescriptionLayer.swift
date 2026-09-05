@@ -225,13 +225,20 @@ struct ComposerDescriptionLayer: View {
             // dessous : le calque vit au bas de l'écran, juste sur le socle —
             // une bande posée sous le champ passerait derrière lui.
             //
-            // `!suggestions.isEmpty`, pas seulement `activeQuery != nil` — même
-            // raison que la bande du document : ici il n'y a AUCUN appel réseau
-            // en attente qui remplirait la liste plus tard, donc « pas d'ami
-            // accepté », « requête sans correspondance » et « chargement en
-            // cours » sont tous des états NOMINAUX. Gater sur la seule requête
-            // peindrait une bande de verre vide dans chacun.
-            if mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty {
+            // **La règle vit sur le CONTRÔLEUR, plus ici** (2026-09-05).
+            //
+            // Ce site portait `activeQuery != nil && !suggestions.isEmpty`,
+            // justifié par « il n'y a AUCUN appel réseau en attente qui
+            // remplirait la liste plus tard ». Cette phrase était vraie tant
+            // qu'un brouillon ne cherchait que dans ses amis ; elle est
+            // devenue fausse quand il a pu interroger l'annuaire — et elle
+            // vivait en TROIS exemplaires, qui se seraient périmés
+            // séparément.
+            //
+            // `showsSuggestions` distingue désormais les deux vides qu'elle
+            // confondait : « on cherche encore » (on ne peint rien) et
+            // « personne ne correspond » (la bande le DIT).
+            if mentionBox.controller.showsSuggestions {
                 ComposerMentionStrip(
                     controller: mentionBox.controller,
                     currentText: text,
@@ -244,7 +251,7 @@ struct ComposerDescriptionLayer: View {
         }
         .animation(
             .spring(response: 0.3, dampingFraction: 0.8),
-            value: mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty
+            value: mentionBox.controller.showsSuggestions
         )
         // Les amis acceptés sont le seul jeu de candidats : mentionner qui ne
         // vous a pas accepté n'a pas de destinataire.

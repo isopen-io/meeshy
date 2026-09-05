@@ -32,10 +32,17 @@ final class ComposerSceneBandTests: XCTestCase {
     /// bande. Sans ce refus, un contexte demandé avant d'avoir son contenu
     /// peindrait une bande vide sur les ≈ 170 pt que l'encastrement libère,
     /// ce que le critère de fin de l'issue interdit nommément.
+    ///
+    /// **Le témoin s'écrit sur un jeu servi VIDE depuis le 2026-09-05.** Il
+    /// éprouvait `.timeline` et `.textStyles` contre un jeu qui ne portait que
+    /// `.palette` ; les deux cas ont quitté le TYPE avec la directive qui vide
+    /// la première vue de ses éditions, et il ne reste qu'un cas — donc plus
+    /// aucune paire (servie, demandée) qui diffère. La loi, elle, ne dépend
+    /// d'aucun cas particulier : c'est l'APPARTENANCE au jeu qui décide.
     func test_uneBandeNonServie_estAbsente() {
-        for absente in [ComposerSceneBand.timeline, .textStyles] {
-            XCTAssertNil(ComposerSceneBand.opened(absente, served: [.palette]),
-                         "`\(absente.rawValue)` n'est pas servie : elle ne doit RIEN peindre.")
+        for demandee in ComposerSceneBand.allCases {
+            XCTAssertNil(ComposerSceneBand.opened(demandee, served: []),
+                         "`\(demandee.rawValue)` n'est pas servie : elle ne doit RIEN peindre.")
         }
     }
 
@@ -51,16 +58,25 @@ final class ComposerSceneBandTests: XCTestCase {
         }
     }
 
-    /// La liste est celle de la planche, et elle est FERMÉE. Ce témoin rougit
-    /// si un quatrième contexte s'y glisse sans que le critère
-    /// — un axe horizontal, ou une comparaison latérale — ait été rediscuté.
-    /// **`drawing` en est ressorti** : ses réglages sont le contrôleur FLOTTANT
-    /// de l'atelier (`StoryDrawingToolbar`), pas une bande. La liste reste donc
-    /// celle de la planche, à trois entrées — et une quatrième ferait rougir ce
-    /// témoin, ce qu'on lui demande.
+    /// La liste est FERMÉE, et le CRITÈRE la gouverne — un axe horizontal, ou
+    /// une comparaison latérale. Ce témoin rougit dès qu'un contexte s'y glisse
+    /// sans que ce critère ait été rediscuté.
+    ///
+    /// **Elle est passée de trois à UNE le 2026-09-05.** `drawing` en était
+    /// déjà ressorti (ses réglages sont le contrôleur FLOTTANT de l'atelier,
+    /// pas une bande) ; `timeline` et `textStyles` en sortent parce qu'elles
+    /// ÉDITAIENT un objet déjà posé, et que la première vue n'édite plus
+    /// (`ComposerFirstView`). Elles vivent dans l'éditeur plein écran, aux
+    /// sections `.media(.trim)` et `.tool(.style)`.
+    ///
+    /// > **Le critère n'a pas changé, l'APPARTENANCE si.** Les deux bandes
+    /// > satisfaisaient bien « un axe horizontal / une comparaison latérale » —
+    /// > et c'est justement ce qui les rendait défendables sur cet écran. Ce
+    /// > qui les en sort est une seconde question, que le critère ne posait
+    /// > pas : **sur QUOI ce contrôle agit-il ?** Un critère de FORME ne peut
+    /// > pas répondre à une question de PORTÉE.
     func test_lesContextes_sontCeuxDeLaPlanche() {
-        XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)),
-                       ["palette", "timeline", "textStyles"])
+        XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)), ["palette"])
     }
 
     // MARK: - Le `⋯` rouvre la palette là où la rangée d'outils a disparu
@@ -155,15 +171,31 @@ final class ComposerSceneBandTests: XCTestCase {
     /// est là pour ça : « le premier lot qui libère le bas emportera l'audience
     /// avec les outils », et l'audience est la seule erreur IRRÉVERSIBLE d'une
     /// publication.
+    ///
+    /// **Repointée le 2026-09-05, et elle était ROUGE depuis le 2026-09-04.**
+    /// Elle lisait `var body: some View` ; `68c6f98bec` a extrait la pile —
+    /// plateau, surface, socle — dans `composerStack` pour que le viseur puisse
+    /// l'ENVELOPPER, et le `body` ne monte plus que cette propriété. La garde
+    /// cherchait donc le socle dans un bloc qui ne le contient plus, et son
+    /// premier `XCTAssertTrue` — le fusible censé dire « le bloc lu n'est pas
+    /// le bon » — tombait à chaque passe.
+    ///
+    /// > Le fusible a fait EXACTEMENT son travail : il a dit que la garde ne
+    /// > mesurait plus rien. Ce qui a manqué est en aval — un rouge permanent
+    /// > cesse d'être un signal, et celui-ci a survécu à un jour de lots sur ce
+    /// > fichier. C'est le mode d'extinction propre aux gardes qui suivent une
+    /// > déclaration par son NOM : l'extraction est le geste le plus courant de
+    /// > ce dépôt (budget de 1200 lignes), et le nom change à chaque fois.
     func test_leSocle_neCedeJamaisAUneBande() throws {
         let code = try source("MeeshyComposerHost.swift")
-        guard let corps = declarationBody(startingAt: "var body: some View", in: code) else {
-            return XCTFail("Le `body` du meuble est introuvable — la garde doit être re-pointée")
+        guard let corps = declarationBody(startingAt: "var composerStack: some View", in: code) else {
+            return XCTFail("`composerStack` est introuvable — la garde doit être re-pointée, "
+                             + "comme elle l'a été le 2026-09-05 quand la pile a quitté le `body`")
         }
         let compacte = compact(corps)
 
         XCTAssertTrue(compacte.contains("socle"),
-                      "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
+                      "Le bloc lu n'est pas celui de la pile — la garde ne mesurerait RIEN")
         // Complétée au 2026-08-28 (`&& !paintedSocleZones.isEmpty`, elle aussi
         // une RÈGLE lue — `ComposerChromeOwnership.socleZones` — jamais un `if`
         // sur une bande, un outil ou un contexte) : le mood a cédé sa flèche à
@@ -174,7 +206,7 @@ final class ComposerSceneBandTests: XCTestCase {
             compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { socle }")),
             "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones), sur une seule ligne lisible."
         )
-        // Et la bande n'apparaît PAS dans ce `body` : elle est passée à la
+        // Et la bande n'apparaît PAS dans cette pile : elle est passée à la
         // surface de scène, dans une propriété à part. Un identifiant de bande
         // ici voudrait dire qu'une condition de bande a été écrite au niveau
         // où vit le socle — le geste exact que l'issue interdit.
@@ -355,8 +387,6 @@ final class ComposerLowZoneTests: XCTestCase {
     func test_sansOutilOuvert_laBandeServiePrendLeBas() {
         XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: false, band: .palette),
                        .band(.palette))
-        XCTAssertEqual(ComposerLowZone.resolve(toolIsOpen: false, band: .timeline),
-                       .band(.timeline))
     }
 
     /// Un outil ouvert prend la place, quelle que soit la bande demandée — les
@@ -378,7 +408,11 @@ final class ComposerLowZoneTests: XCTestCase {
     /// ouvert ? » ; si elles divergeaient, un jeton pourrait paraître au-dessus
     /// des options de l'outil qui vient de le remplacer.
     func test_lesJetonsEtLaZoneBasse_neSeContredisentJamais() {
-        let jeton = ComposerObjectChips.Chip(id: "c", label: "L", destination: .palette)
+        // La destination d'un jeton est une SECTION de l'éditeur depuis le
+        // 2026-09-05, plus une bande : ce que le jeton ouvre a changé de place,
+        // pas la question que ce témoin pose — « les deux règles du bas
+        // répondent-elles pareil ? ».
+        let jeton = ComposerObjectChips.Chip(id: "c", label: "L", destination: .timing)
         for outilOuvert in [true, false] {
             let jetonsServis = ComposerObjectChips.isServed(toolIsOpen: outilOuvert,
                                                             chips: [jeton])
@@ -425,65 +459,23 @@ final class ComposerLowZoneTests: XCTestCase {
     }
 }
 
-/// **#4083 — le spécimen des 18 styles trouve son hôte, et le jeton STYLE
-/// cesse de pointer sur du vide.**
+/// **#4083 est CLOS par retrait** (directive porteur 2026-09-05).
 ///
-/// `ComposerSceneCapabilities.bands` ne servait que `.palette` et `.timeline`.
-/// `.textStyles` appartenait au critère de `ComposerSceneBand` sans être
-/// servie — donc `ComposerSceneBand.opened` la refusait, donc
-/// `ComposerObjectChips.porte(_:parmi:)` n'attachait aucune destination au
-/// jeton « STYLE », qui s'annonçait en `StaticText` et ne faisait rien.
+/// Cette suite éprouvait `ComposerSceneCapabilities.bands(canTrimSelection:
+/// canStyleSelection:)` : deux capacités qui faisaient entrer `.timeline` et
+/// `.textStyles` au jeu servi selon l'objet sélectionné. Les deux bandes
+/// ÉDITAIENT un objet déjà posé ; la première vue n'édite plus, elles ont
+/// quitté le type, et la fonction avec elles.
 ///
-/// > Mesuré au simulateur le 2026-08-31, avant ce lot : « taper STYLE ne fait
-/// > rien ». La chaîne était juste de bout en bout — c'est la CAPACITÉ qui
-/// > manquait à son extrémité.
-final class ComposerSceneBandStyleCapabilityTests: XCTestCase {
-
-    /// Le cœur du lot : un TEXTE sélectionné rend la bande des styles ouvrable.
-    func test_unTexteSelectionne_rendLaBandeDesStylesOuvrable() {
-        let servies = ComposerSceneCapabilities.bands(canTrimSelection: false,
-                                                      canStyleSelection: true)
-        XCTAssertTrue(servies.contains(.textStyles))
-        XCTAssertTrue(servies.contains(.palette), "La palette reste servie en toutes circonstances.")
-    }
-
-    /// …et une sélection qui n'est pas un texte ne la sert pas. Sans ce refus,
-    /// la bande s'ouvrirait sur un spécimen sans texte à peindre.
-    func test_uneSelectionSansTexte_neSertPasLaBandeDesStyles() {
-        XCTAssertFalse(ComposerSceneCapabilities.bands(canTrimSelection: true)
-                        .contains(.textStyles))
-        XCTAssertFalse(ComposerSceneCapabilities.bands(canTrimSelection: false)
-                        .contains(.textStyles))
-    }
-
-    /// **Les deux capacités sont INDÉPENDANTES.** Une vidéo se rogne sans se
-    /// styliser ; un texte se stylise sans se rogner ; et rien n'interdit qu'un
-    /// jour les deux soient vraies. Un `Set` reçu tout fait aurait laissé
-    /// l'appelant les confondre sans que le compilateur bronche.
-    func test_lesDeuxCapacites_neSeContaminentPas() {
-        let lesDeux = ComposerSceneCapabilities.bands(canTrimSelection: true,
-                                                      canStyleSelection: true)
-        XCTAssertEqual(lesDeux, [.palette, .timeline, .textStyles])
-
-        let aucune = ComposerSceneCapabilities.bands(canTrimSelection: false,
-                                                     canStyleSelection: false)
-        XCTAssertEqual(aucune, [.palette])
-    }
-
-    /// **Le jeton STYLE devient actionnable sans qu'une ligne de
-    /// `ComposerObjectChips` ait changé** — c'est le jeu SERVI qui décide.
-    /// Ce témoin relie les deux bouts : la capacité, et le jeton qu'un doigt
-    /// touche.
-    func test_leJetonStyle_devientActionnable_desQueLaBandeEstServie() {
-        var texte = StoryTextObject(id: "t1", text: "Bonjour")
-        texte.textStyle = StoryTextStyle.neon.rawValue
-
-        let inerte = ComposerObjectChips.chips(for: texte, openableBands: [.palette])
-        XCTAssertNil(inerte.first { $0.id == "style" }?.destination,
-                     "Sans bande servie, le jeton ne doit porter aucune destination.")
-
-        let vivant = ComposerObjectChips.chips(for: texte,
-                                               openableBands: [.palette, .textStyles])
-        XCTAssertEqual(vivant.first { $0.id == "style" }?.destination, .textStyles)
-    }
-}
+/// > Une suite qui n'a plus de sujet se SUPPRIME, elle ne se neutralise pas.
+/// > La garder en la réécrivant sur `bands` seul aurait laissé cinq témoins
+/// > verts qui n'éprouvent plus rien — la forme la plus douce du vert par
+/// > omission, parce qu'elle continue de COMPTER dans le total.
+///
+/// Ce que les deux capacités garantissaient est repris ailleurs, et par des
+/// questions qui ont encore un objet :
+/// - `ComposerObjectChipsTests.test_chaqueDestination_estUneSectionServieParSaFamille`
+///   — aucun jeton ne pointe sur une section que l'éditeur ne rend pas ;
+/// - `ComposerAudioChipInspectorTests.test_uneFamilleAudio_serviParLeRognageDeLEditeur`
+///   — le rognage d'une puce de son n'est pas perdu avec la bande ;
+/// - `ComposerFirstViewTests` — la ligne de partage elle-même.

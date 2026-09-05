@@ -80,21 +80,30 @@ final class ComposerAudioChipInspectorTests: XCTestCase {
         XCTAssertTrue(penche.contains { $0.id == "rotation" })
     }
 
-    /// **La fenêtre de lecture mène à la timeline**, et son jeton n'annonce une
-    /// destination que si la bande est réellement ouvrable — un jeton qui
-    /// s'illumine sur une bande que `opened` refuse est un contrôle inerte qui
-    /// a l'air vivant.
-    func test_laFenetre_meneALaTimeline_quandElleEstOuvrable() {
-        let avecBande = ComposerObjectChips.chips(
-            forSelected: "aud", in: slide(avec: son(start: 2, duree: 6)),
-            openableBands: [.timeline])
-        XCTAssertEqual(avecBande.first { $0.id == "window" }?.destination, .timeline)
+    /// **La fenêtre de lecture mène au TEMPS de l'objet**, section `.timing`
+    /// de l'éditeur plein écran.
+    ///
+    /// Elle menait à la bande `timeline` du bas de scène jusqu'au 2026-09-05 ;
+    /// cette bande éditait un objet posé, et la première vue n'édite plus
+    /// (`ComposerFirstView`). La destination n'est plus conditionnée par un
+    /// état d'écran mais par la FAMILLE : `.timing` est servie pour les cinq.
+    func test_laFenetre_meneAuTempsDeLObjet() {
+        let jetons = ComposerObjectChips.chips(
+            forSelected: "aud", in: slide(avec: son(start: 2, duree: 6)))
+        XCTAssertEqual(jetons.first { $0.id == "window" }?.destination, .timing)
+    }
 
-        let sansBande = ComposerObjectChips.chips(
-            forSelected: "aud", in: slide(avec: son(start: 2, duree: 6)),
-            openableBands: [])
-        XCTAssertNil(sansBande.first { $0.id == "window" }?.destination,
-                     "sans bande ouvrable, le jeton reste une LECTURE")
+    /// **Une puce de son se ROGNE dans l'éditeur.**
+    ///
+    /// Le témoin de la régression que le lot du 2026-09-05 a failli
+    /// introduire : la bande `timeline` était l'unique chemin vers les bornes
+    /// d'un son POSÉ, et rien n'aurait rougi en la retirant — `sourceTrim(id:)`
+    /// sert les deux familles, donc aucun type n'aurait bougé. La section est
+    /// désormais servie pour la famille `audio`.
+    func test_uneFamilleAudio_serviParLeRognageDeLEditeur() {
+        XCTAssertTrue(
+            ComposerObjectEditorRail.entries(for: .audio).contains(.media(.trim)),
+            "sans cette section, retirer la bande `timeline` supprime le rognage d'une puce de son")
     }
 
     /// **Le LIEU garde son absence, et elle est écrite.** Son nom est déjà dit
