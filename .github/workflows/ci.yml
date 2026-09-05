@@ -241,6 +241,18 @@ jobs:
       - name: Makefile workspace directories guard
         run: node scripts/check-makefile-workspaces.mjs --self-test && node scripts/check-makefile-workspaces.mjs
 
+      # Le relevé des branches vivantes (#5242) est un outil de CONSULTATION, pas
+      # un invariant : son rouge dit « une autre session écrit ce fichier en ce
+      # moment », qui est l'état NORMAL d'un dépôt à vingt sessions. Le brancher
+      # sur la CI la rendrait rouge en permanence et apprendrait à l'ignorer.
+      # Seul son `--self-test` a sa place ici — il porte sur l'instrument (les
+      # huit mutations qu'il doit voir, les trois qu'il ne doit PAS rapporter),
+      # jamais sur l'état du dépôt. Sans cette ligne, un relevé devenu aveugle
+      # rendrait « aucune contention » sans que rien ne rougisse : exactement la
+      # forme d'autorisation que son en-tête dit combattre.
+      - name: Live-branch contention survey self-test
+        run: node scripts/releve-branches-vivantes.mjs --self-test
+
       # Même raison de placement : l'invariant porte sur `ci.yml`, `docker.yml`
       # et `docker-compose.prod.yml` — trois fichiers de la RACINE. Il DÉROULE
       # les deux étapes de détection de `docker.yml` avec bash plutôt que de les
