@@ -12,14 +12,16 @@ import { lisLActif, memo } from './actifs';
  * `participate.<hash>.js` (le fil), `liste.<hash>.js` (`/chats`),
  * `feed.<hash>.js` (`/feed`, #5031), `notifs.<hash>.js` (`/notifications`,
  * #4898), `contacts.<hash>.js` (`/contacts`, #4921) et `recherche.<hash>.js`
- * (`/search`, #4897), `liens.<hash>.js` (`/links`, #5090) et
- * `commentaires.<hash>.js` (`/post/:id`, #5091) sont les HUIT modules de
- * participation
+ * (`/search`, #4897), `liens.<hash>.js` (`/links`, #5090),
+ * `commentaires.<hash>.js` (`/post/:id`, #5091) et `plein.<hash>.js`
+ * (`/chats/:cle/medias`, #4525) sont les NEUF modules de participation
  * compilés par `scripts/build-participate.mjs` (bun build, AVANT `next
- * build`) — huit fichiers parce qu'un écran ne doit télécharger que ce qu'il
+ * build`) — neuf fichiers parce qu'un écran ne doit télécharger que ce qu'il
  * exécute (la liste n'a ni composeur, ni réserve, ni plein écran ; le fil
  * social n'a ni l'un ni l'autre, et pas de socket non plus — aimer et
- * reposter sont des allers simples, § `lib/realtime/feed.ts`) ;
+ * reposter sont des allers simples, § `lib/realtime/feed.ts` ; la galerie n'a
+ * qu'UN appel, `prendsLePleinEcran()` — c'est tout ce qu'elle doit au
+ * clavier) ;
  * `socket.io.<hash>.js` est `socket.io-client@4.8.3` servi tel quel depuis son
  * paquet, et `feed.<hash>.js` ne le référence PAS : c'est le seul des quatre
  * modules qui n'en a pas besoin (`notifs` écoute la room personnelle, donc en dépend). Le hash est dans le NOM, calculé sur le CONTENU, par ce module — et
@@ -59,6 +61,7 @@ export type ActifsTempsReel = {
   readonly recherche: ActifTempsReel;
   readonly liens: ActifTempsReel;
   readonly commentaires: ActifTempsReel;
+  readonly plein: ActifTempsReel;
   readonly socket: ActifTempsReel;
 };
 
@@ -101,6 +104,7 @@ export const actifsTempsReel = memo(
     recherche: actif('recherche', lisLeModule('recherche')),
     liens: actif('liens', lisLeModule('liens')),
     commentaires: actif('commentaires', lisLeModule('commentaires')),
+    plein: actif('plein', lisLeModule('plein')),
     socket: actif(
       'socket.io',
       lisFichier(join(process.cwd(), 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js')),
@@ -112,7 +116,7 @@ export const actifsTempsReel = memo(
 export const actifParNom = (nom: string): ActifTempsReel | null => {
   const actifs = actifsTempsReel();
   return (
-    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.recherche, actifs.liens, actifs.commentaires, actifs.socket].find(
+    [actifs.participate, actifs.liste, actifs.feed, actifs.notifs, actifs.contacts, actifs.recherche, actifs.liens, actifs.commentaires, actifs.plein, actifs.socket].find(
       (candidat) => candidat.nom === nom && candidat.corps !== '',
     ) ?? null
   );

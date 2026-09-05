@@ -90,6 +90,21 @@ const nextConfig: NextConfig = {
       ]),
     ),
     /**
+     * `/chats/:cle/medias` (#4525) compose l'adresse hachée de SON module —
+     * `plein.js`, le seul appel qu'elle doit au clavier (Échap sur sa
+     * surimpression) — et lit le sprite et la table de jetons comme le fil.
+     * Aucun socket.io-client : la galerie n'a pas de temps réel, seulement un
+     * dialogue à élever. Sans cette entrée, l'image servirait une galerie sans
+     * style dont le chargeur vise une adresse calculée sur un fichier absent.
+     */
+    '/chats/[cle]/medias': [
+      './node_modules/@meeshy/design-tokens/tokens.css',
+      './node_modules/@meeshy/design-tokens/dark.css',
+      './node_modules/@meeshy/design-tokens/light.css',
+      './node_modules/@meeshy/icons/sprite.svg',
+      './.rt/plein.js',
+    ],
+    /**
      * `/chats` est la TROISIÈME surface de participation (§ 12.4) : elle compose
      * l'adresse hachée de SON module (`liste.js`) et de socket.io-client en les
      * LISANT, comme les deux portes du fil. Elle lit de plus le sprite — la
@@ -106,14 +121,14 @@ const nextConfig: NextConfig = {
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
     /**
-     * LA ROUTE QUI SERT LES MODULES trace les QUATRE fichiers de `.rt/` — c'est
+     * LA ROUTE QUI SERT LES MODULES trace les NEUF fichiers de `.rt/` — c'est
      * l'entrée qui fait exister chaque module dans l'arbre `standalone`. Un
      * module absent ne casse RIEN de visible : `actifsTempsReel` rend un corps
      * vide, la porte sert `tempsReel: null`, et l'écran perd son direct EN
      * SILENCE — c'est ainsi que `/feed` a tourné sans module en production,
      * `feed.js` n'ayant jamais été tracé. Le témoin de `actifs-rt.test.ts`
      * (« chaque module que les actifs servent est tracé ») garde désormais la
-     * liste : un cinquième module devra s'y inscrire pour exister.
+     * liste : un module de plus devra s'y inscrire pour exister.
      */
     '/rt/[nom]': [
       './.rt/participate.js',
@@ -124,6 +139,7 @@ const nextConfig: NextConfig = {
       './.rt/recherche.js',
       './.rt/liens.js',
       './.rt/commentaires.js',
+      './.rt/plein.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },

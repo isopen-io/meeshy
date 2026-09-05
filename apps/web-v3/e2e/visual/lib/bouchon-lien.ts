@@ -405,6 +405,12 @@ export const routesDuLien =
         });
         return true;
       }
+      // `mshy_lagos` (`LIEN_DU_FIL`) lit `lien.actif` — l'état MUTABLE que
+      // `PATCH /api/v1/links/:linkId` (`bouchon-carnet.ts`, #4933) écrit :
+      // révoquer ce lien depuis `/links` doit fermer `/resolve` DANS LA
+      // FOULÉE, comme la passerelle réelle le ferait pour tout jeton. Les
+      // autres jetons (fixtures de `v3-lien-expire.spec.ts`) restent gouvernés
+      // par `jetons.actif`, indépendant de ce lien précis.
       json({
         success: true,
         data: {
@@ -412,7 +418,9 @@ export const routesDuLien =
           targetType: 'CONVERSATION',
           targetId: 'conv-interne',
           originalUrl: null,
-          isActive: etat.jetons.refusParJeton[jeton] === undefined && etat.jetons.actif,
+          isActive:
+            etat.jetons.refusParJeton[jeton] === undefined &&
+            (jeton === LIEN_DU_FIL ? lien.actif : etat.jetons.actif),
           expiresAt: null,
         },
       });

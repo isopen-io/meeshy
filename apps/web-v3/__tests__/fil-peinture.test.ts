@@ -56,6 +56,7 @@ const etatServi = (): EtatDuFil => ({
       recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
       liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
       commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+      plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
       socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' },
     },
   },
@@ -163,12 +164,41 @@ describe('une bulle qui arrive', () => {
     expect(ligne.querySelector('.langue .code')?.textContent).toBe('es');
     expect(ligne.querySelector<HTMLElement>('.langue')?.hidden).toBe(false);
     expect(ligne.querySelector('.avatar')?.textContent).toBe('MR');
-    // Les fentes des deux rendus portent les mêmes classes : rien n'a été composé.
     const servie = p.liste.querySelector<HTMLElement>('li[data-id="m1"]')!;
-    ['.avatar', '.qui .nom', '.texte', 'details.original', '.meta .langue', '.meta time', 'ul.reactions'].forEach((fente) => {
+    // Les fentes des deux rendus portent les mêmes classes : rien n'a été composé.
+    // `a.avatar-lien` / `a.nom-lien` sont entrées dans cette liste avec #5030 : elles
+    // manquaient au GABARIT depuis #4958, donc une bulle PEINTE n'avait aucun chemin
+    // vers le profil quand la MÊME bulle rechargée en avait deux — et cette
+    // énumération, écrite avant elles, ne pouvait pas le dire.
+    ['a.avatar-lien', '.avatar', 'a.nom-lien', '.qui .nom', '.texte', 'details.original', '.meta .langue', '.meta time', 'ul.reactions'].forEach((fente) => {
       expect(ligne.querySelector(fente)).not.toBeNull();
       expect(servie.querySelector(fente)).not.toBeNull();
     });
+  });
+
+  /**
+   * ET LA FENTE MÈNE QUELQUE PART — la même règle que la ligne servie
+   * (`handleDeLAuteur`) : un auteur avec compte a son `href`, un auteur
+   * ANONYME (lui-même compris) n'en a pas. Un `<a>` sans `href` n'est ni
+   * focusable ni cliquable : c'est le patron de la fiche d'un vocal.
+   */
+  it('pose le href du profil sur une bulle PEINTE — et le RETIRE pour un auteur sans compte', () => {
+    const { p } = monte();
+    const etat = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
+    peins(p, insere(etat, arrivee()), Date.parse('2026-09-01T12:30:00.000Z'));
+
+    const ligne = p.liste.querySelector<HTMLElement>('li[data-id="m2"]')!;
+    const attendu = `${p.adresse}?profil=u3`;
+    expect(ligne.querySelector('a.avatar-lien')?.getAttribute('href')).toBe(attendu);
+    expect(ligne.querySelector('a.nom-lien')?.getAttribute('href')).toBe(attendu);
+    expect(ligne.querySelector('a.avatar-lien')?.getAttribute('aria-label')).toBe(FIL.voirLeProfil('Marta Ruiz'));
+
+    const anonyme = { ...arrivee({ id: 'm9' }), anonyme: true, auteur: 'Tolu', auteurId: 'p9' };
+    peins(p, insere(etat, anonyme), Date.parse('2026-09-01T12:30:00.000Z'));
+    const sans = p.liste.querySelector<HTMLElement>('li[data-id="m9"]')!;
+    expect(sans.querySelector('a.avatar-lien')?.hasAttribute('href')).toBe(false);
+    expect(sans.querySelector('a.nom-lien')?.hasAttribute('href')).toBe(false);
+    expect(sans.querySelector('a.avatar-lien')?.hasAttribute('aria-label')).toBe(false);
   });
 
   /** Le DOM va du plus récent au plus ancien : ce qui arrive se pose EN TÊTE, et l'état se relit dans l'ordre d'écriture. */

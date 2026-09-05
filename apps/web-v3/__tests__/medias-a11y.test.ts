@@ -71,13 +71,36 @@ const messages = PIECES.map((piece, rang) =>
   ),
 );
 
+const TEMPS_REEL_DES_MEDIAS = {
+  passerelle: 'https://gate.test',
+  actifs: {
+    participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
+    liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+    feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
+    notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
+    contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
+    recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
+    liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
+    commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    plein: { nom: 'plein.abc.js', url: '/__v3/rt/plein.abc.js', corps: '' },
+    socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
+  },
+};
+
 const etat = (attributs: Partial<EtatDesMedias> = {}): EtatDesMedias => ({
   cle: 'c1',
   titre: 'Équipe Lagos',
   galerie: galerie({ messages, genre: null }),
   plusAncien: 'm0',
+  avant: null,
+  plein: null,
+  tempsReel: TEMPS_REEL_DES_MEDIAS,
   ...attributs,
 });
+
+/** L'identifiant de l'image et celui du vocal, dans les fixtures ci-dessus. */
+const IMAGE_ID = 'a1';
+const VOCAL_ID = 'a3';
 
 describe('la galerie des médias — gate B', () => {
   it('ne porte aucune violation grave, grille pleine', async () => {
@@ -92,6 +115,21 @@ describe('la galerie des médias — gate B', () => {
 
   it('ne porte aucune violation grave, filtre actif et vide', async () => {
     ecris(documentDesMedias(etat({ galerie: galerie({ messages, genre: 'audio' }) })));
+    expect(await graves()).toEqual([]);
+  });
+
+  /**
+   * LE MÊME PLEIN ÉCRAN QUE LE FIL (#4525) — gate B sur ses DEUX formes : une
+   * image (`<img>`, `<dialog aria-modal>`, `<main inert>`) et la fiche d'un
+   * vocal (transcription entière, `lang=` sur l'original).
+   */
+  it('ne porte aucune violation grave, plein écran d’une image', async () => {
+    ecris(documentDesMedias(etat({ plein: IMAGE_ID })));
+    expect(await graves()).toEqual([]);
+  });
+
+  it('ne porte aucune violation grave, fiche d’un vocal', async () => {
+    ecris(documentDesMedias(etat({ plein: VOCAL_ID })));
     expect(await graves()).toEqual([]);
   });
 
@@ -124,5 +162,17 @@ describe('la galerie des médias — gate B', () => {
       expect(liste.querySelectorAll('div[role], span[role]')).toHaveLength(0);
     });
     expect(document.querySelectorAll('.galerie a[href], .galerie summary').length).toBeGreaterThanOrEqual(5);
+  });
+
+  /**
+   * SANS JAVASCRIPT, LA SURIMPRESSION RETIENT LE FOCUS. Servie devant la
+   * grille et `inert` posé dessus, la seule cible que le clavier peut atteindre
+   * est la croix qui ferme — exactement la règle que `fil-plein.test.ts` garde
+   * pour le fil (`app/connecte/fil-vue.ts`).
+   */
+  it('n’expose au clavier que la surimpression quand elle recouvre la grille', () => {
+    ecris(documentDesMedias(etat({ plein: IMAGE_ID })));
+    expect(document.querySelector('main')?.hasAttribute('inert')).toBe(true);
+    expect(document.querySelector('dialog.plein a.fermer')).not.toBeNull();
   });
 });

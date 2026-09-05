@@ -32,6 +32,13 @@ import { compacte } from '@/app/enveloppe/feuille';
  * 4. **Le poids est SOUS le glyphe, toujours** : la cible ne l'affiche que sur
  *    la tuile différée, et cet écran n'a QUE des tuiles différées — rien ne se
  *    télécharge avant le geste, donc tout s'annonce.
+ * 5. **`.fiche` n'est PAS écrite ici** (#4525) — elle vit dans `fil-feuille.ts`,
+ *    au sélecteur NU `.fiche`, parce que le balisage qui la porte a un seul
+ *    site (`plein-vue.ts` › `ficheDePiece`) et que la galerie sert déjà
+ *    `FEUILLE_DU_FIL`. La recopier sous `.lecteurs .fiche` aurait été une
+ *    JUMELLE de déclarations — deux endroits où changer la même pastille —,
+ *    et elle coûtait PLUS cher qu'elle n'économisait : le sélecteur nu allège
+ *    le document du fil ET celui de la galerie.
  *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.

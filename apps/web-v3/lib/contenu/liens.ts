@@ -103,6 +103,26 @@ export const NOUVEAU_LIEN = {
   sansTitre: 'Donnez un nom à la conversation.',
 } as const;
 
+/**
+ * LA COPIE DU GESTE DE FERMETURE (#4933) — un lien qu'on ferme, jamais qu'on
+ * détruit : la ligne RESTE (`LIENS.ferme` la dit déjà), seul son geste change
+ * de nom, du menu au bandeau de retour.
+ *
+ * `aide` DIT VRAI, et c'est mesuré : `applyShareLinkUpdate`
+ * (`services/gateway/src/routes/links/management.ts:118-146`) révoque les
+ * invités déjà entrés AVANT d'écrire `isActive:false`.
+ */
+export const FERMETURE = {
+  /** Le nom du menu d'une ligne, au lecteur d'écran — jamais lu à l'œil. */
+  menu: (nom: string): string => `Actions pour ${nom}`,
+  geste: 'Fermer ce lien',
+  aide: 'Les personnes entrées par ce lien en seront retirées. Cette action ne se défait pas.',
+  enCours: 'Fermeture…',
+  fait: 'Le lien est fermé.',
+  refuse: 'Le lien n’a pas été fermé.',
+  echec: 'Le lien n’a pas pu être fermé. Vérifiez la connexion et réessayez.',
+} as const;
+
 /** Les trois échéances offertes, et ce qu'elles valent en millisecondes. */
 export const ECHEANCES = {
   jour: 24 * 60 * 60 * 1000,

@@ -43,6 +43,7 @@ const TEMPS_REEL = {
     recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
     liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
     commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };
@@ -118,6 +119,32 @@ describe('le fil face à axe', () => {
             jonctionFraiche: true,
           },
           lecteur: { id: 'p9', nom: 'Tolu', langues: ['fr'] },
+        }),
+      ),
+    );
+    expect(await graves()).toEqual([]);
+  });
+
+  /**
+   * LA BRANCHE SOI DE LA SURIMPRESSION (#5030) — le fil INERTE derrière, un
+   * `<dialog open aria-modal>` devant, et UNE action `<a class="action
+   * primaire">` : c'est l'état que `?profil=<moi>` sert au membre, et il n'a
+   * jamais été balayé.
+   */
+  it('ne porte aucune violation grave — ?profil= sur SOI, action « Mon compte »', async () => {
+    ecris(
+      documentDuFil(
+        etat({
+          profil: {
+            handle: 'u1',
+            servi: {
+              genre: 'profil',
+              profil: { id: 'u1', nom: 'Amina Diallo', pseudonyme: 'amina', bio: 'Chef de projet · Lagos.', membreDepuis: '2024-03-01T00:00:00.000Z', anonyme: false },
+              relation: 'self',
+              estSoi: true,
+            },
+            confirmerBlocage: false,
+          },
         }),
       ),
     );

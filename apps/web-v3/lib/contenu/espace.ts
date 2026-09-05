@@ -30,6 +30,16 @@
  * lire ces deux routes, la pastille devient gratuite.
  */
 
+/**
+ * L’ADRESSE DE LA FICHE DU COMPTE DU LECTEUR — le SITE UNIQUE de cette
+ * destination côté contenu. `app/connecte/profil-vue.ts` la LIT pour l’action
+ * « Mon compte » de la branche « c’est vous » (#5030) : le fil et l’espace
+ * mènent au compte par la MÊME adresse, jamais par deux littéraux jumeaux.
+ * L’identité de la ROUTE, elle, reste chez la route (`CHEMIN_DU_PROFIL`,
+ * `app/connecte/reglages-porte.ts`) — c’est une porte, pas une copie.
+ */
+export const ADRESSE_DE_MON_COMPTE = '/settings/profile';
+
 export const ESPACE = {
   /** Le nom accessible de l'action qui ouvre la feuille, et son titre une fois ouverte. */
   titre: 'Espace membre',
@@ -54,7 +64,7 @@ export const ESPACE = {
 export const RANGEES_DE_L_ESPACE = [
   {
     glyphe: 'ph-user-circle',
-    href: '/settings/profile',
+    href: ADRESSE_DE_MON_COMPTE,
     quoi: 'Votre profil',
     sous: 'Nom, langues du Prisme, bio',
   },

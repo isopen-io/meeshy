@@ -218,6 +218,7 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
     recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
     liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
     commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
@@ -283,6 +284,7 @@ describe('le fil rendu', () => {
             recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
             liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
             commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+            plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
             socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
           },
         },
