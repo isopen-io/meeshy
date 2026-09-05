@@ -178,6 +178,30 @@ export type Fil = {
   readonly messages: readonly Message[];
   /** Le curseur `before` de la page plus ancienne, `null` quand le fil est lu en entier. */
   readonly plusAncien: string | null;
+  /**
+   * `conversation.type` (`direct` | `public` | `group` | `global`…) — SERVI
+   * SANS COÛT SUPPLÉMENTAIRE : `GET /conversations/:id` sans `?fields=` rend
+   * le PROFIL DOCUMENTÉ par défaut, qui porte `type` (`core-detail.ts:167`,
+   * `CONVERSATION_DETAIL_SERVED_FIELDS`) — cette lecture n'ajoute AUCUNE
+   * requête, elle nomme un champ déjà dans la réponse.
+   *
+   * Gouverne `peutCreerUnLien` (`fil-vue.ts`, correction de revue #5034) :
+   * la passerelle refuse la création d'un lien de partage sur un `direct`
+   * (`share-link-mint.ts:196-199`), quel que soit le rang. Optionnel — seules
+   * les fixtures qui exercent CETTE garde le posent ; la passerelle, elle, le
+   * sert toujours.
+   */
+  readonly type?: string;
+  /**
+   * `conversation.currentUserRole` — le rang du LECTEUR dans CETTE
+   * conversation (`creator`/`admin`/`moderator`/`member`), lui aussi déjà
+   * SERVI sans `?fields=` (même paragraphe que `type` ci-dessus). `null`
+   * quand la passerelle n'a résolu aucun rang (lecteur hors participation
+   * connue). Gouverne `peutCreerUnLien` : la passerelle exige au moins
+   * MODÉRATEUR hors des conversations `public` (`share-link-mint.ts:206-209`,
+   * `mayMintShareLink`).
+   */
+  readonly rang?: string | null;
 };
 
 export type Issue =
@@ -601,6 +625,8 @@ export const fil = async ({
       // l'autre sens.
       messages: [...messages(enveloppeListe.data, moi, langues, originePublique)].reverse(),
       plusAncien: pagination?.hasMore === true ? chaine(pagination.nextCursor) : null,
+      type: chaine(conversation.type) ?? undefined,
+      rang: chaine(conversation.currentUserRole),
     },
   };
 };

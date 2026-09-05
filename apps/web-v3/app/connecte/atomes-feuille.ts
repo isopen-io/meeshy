@@ -139,6 +139,26 @@ export const feuilleQuiMonte = (classe: string): string =>
   `dialog.${classe} .poignee::after{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:var(--glyph-large);height:var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-strong)}`;
 
 /**
+ * LE ROND D'UNE EN-TÊTE DE FIL — la cible de 44 px, teintée à l'accent, qui
+ * porte un glyphe et rien d'autre : « Retour », « Médias » (#4525), et
+ * « Partager » depuis #5034.
+ *
+ * ATOME PARAMÉTRÉ, la même raison qu'`avisDEcran` juste en dessous : les deux
+ * premiers corps étaient RECOPIÉS à l'identique dans `FEUILLE_DU_FIL`, et le
+ * troisième arrivait — deux copies se surveillent, trois divergent.
+ *
+ * PARAMÉTRÉ PLUTÔT QUE GROUPÉ, et c'est une MESURE, pas un goût : un sélecteur
+ * groupé (`.fil-tete .retour,.fil-tete .medias,.fil-tete .partager`) vit dans
+ * `FEUILLE_DU_FIL`, que la GALERIE inline pour son propre en-tête — elle
+ * paierait 6 o gzip (9 203 vers 9 209, MESURÉ, pour un plafond dur de 9 216)
+ * une classe qu'elle ne rend jamais, contre la charte règle 7. Chaque écran
+ * n'appelle donc que les ronds qu'il sert.
+ */
+export const rondDEnTete = (classe: string): string =>
+  `.fil-tete .${classe}{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}` +
+  `.fil-tete .${classe} svg{width:var(--glyph);height:var(--glyph)}`;
+
+/**
  * L'AVIS D'UN ÉCRAN — la ligne discrète qui dit ce qui vient d'avoir lieu
  * (« Tout lu », « Publié. », « Demande acceptée »), sous l'en-tête et au-dessus
  * du contenu.

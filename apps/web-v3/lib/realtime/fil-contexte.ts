@@ -122,6 +122,14 @@ export type Contexte = {
   gestes: { readonly detruit: () => void } | null;
   /** Le micro et la position (#5061, `lib/realtime/capture.ts`) — `actualise()` rejouée par `appliqueLesDroits`, `detruit()` par `destruction`. */
   capture: { readonly actualise: () => void; readonly detruit: () => void } | null;
+  /**
+   * La poignée de `armeLaFeuilleDeLien` (#5034, `lib/realtime/feuille-de-lien.ts`)
+   * — rendue à `destruction`, à côté des trois ci-dessus. L'écoute se pose au
+   * DOCUMENT (la feuille vit hors de `main`), qui survit à une navigation
+   * douce : sans ce retrait, chaque traversée d'écran en empilerait une, et
+   * une seule soumission posterait autant de fois qu'il y a d'écoutes.
+   */
+  feuilleDeLien: (() => void) | null;
   enLigne: boolean;
   cache: boolean;
   deconnecteDepuis: number | null;

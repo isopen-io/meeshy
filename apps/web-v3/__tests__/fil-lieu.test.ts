@@ -186,12 +186,22 @@ describe('un lieu partagé se lit comme un LIEU, jamais comme deux nombres', () 
 });
 
 describe('le micro et la position — servis cachés, gouvernés par le droit d’écrire', () => {
-  it('un membre les sert (cachés, à révéler par le module — jamais absents)', () => {
+  /**
+   * Correctif CLS (revue de #5061/#5034) — un membre connaît `ecrire`
+   * (`true`) AU SSR : sa PLACE se réserve donc dès le rendu (SANS `hidden`),
+   * avec `en-attente` pour rester INVISIBLE (`visibility:hidden`) tant que
+   * `capture.ts` n'a pas confirmé la capacité du navigateur — jamais
+   * `hidden`, qui retirerait la boîte et ferait bouger la rangée du
+   * composeur au premier tour de `capture.ts` (mesuré `cls 0.116 > 0.05`).
+   */
+  it('un membre les sert (place réservée, en-attente jusqu’à révélation par le module — jamais absents, jamais hidden)', () => {
     const html = document_({});
     expect(html).toContain('id="bouton-micro"');
     expect(html).toContain('id="bouton-position"');
-    expect(html).toMatch(/id="bouton-micro"[^>]*hidden/);
-    expect(html).toMatch(/id="bouton-position"[^>]*hidden/);
+    expect(html).toMatch(/class="micro en-attente" id="bouton-micro"/);
+    expect(html).toMatch(/class="position en-attente" id="bouton-position"/);
+    expect(html).not.toMatch(/id="bouton-micro"[^>]*hidden/);
+    expect(html).not.toMatch(/id="bouton-position"[^>]*hidden/);
   });
 
   it('un invité SANS canSendMessages et sans temps réel ne les sert PAS — rien à révéler un jour', () => {

@@ -85,10 +85,28 @@ export const prendsLaCapture = ({
    * changement de droit reçu (`participant:rights-updated`), comme le
    * trombone (`peinsLeTrombone`).
    */
+  /**
+   * DEUX ÉTATS, PAS UN (correctif CLS, revue de #5061/#5034) — `hidden`
+   * suit SEUL `ecrit` (le droit, déjà connu au SSR pour un membre : `true`
+   * INCONDITIONNELLEMENT, donc jamais réévalué ici pour lui) ; `en-attente`
+   * (`visibility:hidden`, `FEUILLE_DE_LA_CAPTURE`) suit SEULE la capacité du
+   * navigateur. Fusionner les deux dans `hidden`, comme avant ce correctif,
+   * FAISAIT RENTRER OU SORTIR LA BOÎTE de la rangée du composeur au premier
+   * appel de `actualise()` (ce module chargé par `participate.ts`, APRÈS le
+   * premier pixel) — précisément la fenêtre que `scripts/mesure-reseau.mjs`
+   * observe pour le CLS. `en-attente` ne bouge plus une boîte : la classe
+   * change la VISIBILITÉ d'une place déjà réservée au SSR (`fil-vue.ts`).
+   */
   const actualise = (): void => {
     const ecrit = ctx.droits.canSendMessages;
-    if (boutonMicro !== null) boutonMicro.hidden = !(ecrit && peutEnregistrerUnVocal());
-    if (boutonPosition !== null) boutonPosition.hidden = !(ecrit && peutGeolocaliser());
+    if (boutonMicro !== null) {
+      boutonMicro.hidden = !ecrit;
+      boutonMicro.classList.toggle('en-attente', !(ecrit && peutEnregistrerUnVocal()));
+    }
+    if (boutonPosition !== null) {
+      boutonPosition.hidden = !ecrit;
+      boutonPosition.classList.toggle('en-attente', !(ecrit && peutGeolocaliser()));
+    }
   };
 
   const arreteLaPiste = (): void => {

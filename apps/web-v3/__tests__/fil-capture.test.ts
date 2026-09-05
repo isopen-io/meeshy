@@ -92,19 +92,36 @@ afterEach(() => {
 });
 
 describe('actualise() révèle micro et position selon la capacité du navigateur ET le droit d’écrire', () => {
-  it('les cache tant qu’aucune capacité navigateur n’est posée', () => {
+  /**
+   * Correctif CLS (revue de #5061/#5034, `cls 0.116 > 0.05` sur
+   * `e2e/visual/v3-fil.spec.ts` § « avant le premier pixel ») — un membre
+   * connaît `ecrire === true` au SSR (`fil-vue.ts`) : sa PLACE est donc déjà
+   * réservée (`hidden` reste `false`), et SEULE `en-attente`
+   * (`visibility:hidden`, `FEUILLE_DE_LA_CAPTURE`) suit la capacité
+   * inconnue avant `actualise()`. `hidden === true` retirerait la BOÎTE de
+   * la rangée du composeur — exactement le réagencement mesuré.
+   */
+  it('réserve leur PLACE (hidden reste faux) mais les rend INVISIBLES (en-attente) tant qu’aucune capacité navigateur n’est posée', () => {
     const { main } = monte();
-    expect(main.querySelector<HTMLButtonElement>('#bouton-micro')?.hidden).toBe(true);
-    expect(main.querySelector<HTMLButtonElement>('#bouton-position')?.hidden).toBe(true);
+    const micro = main.querySelector<HTMLButtonElement>('#bouton-micro');
+    const position = main.querySelector<HTMLButtonElement>('#bouton-position');
+    expect(micro?.hidden).toBe(false);
+    expect(position?.hidden).toBe(false);
+    expect(micro?.classList.contains('en-attente')).toBe(true);
+    expect(position?.classList.contains('en-attente')).toBe(true);
   });
 
-  it('les révèle dès que MediaRecorder/getUserMedia et geolocation existent, avec le droit d’écrire', () => {
+  it('les révèle (retire en-attente, SANS jamais toucher hidden) dès que MediaRecorder/getUserMedia et geolocation existent, avec le droit d’écrire', () => {
     posePisteMock(true);
     poseGeolocalisationMock();
     (global as unknown as { MediaRecorder: unknown }).MediaRecorder = FauxMediaRecorder;
     const { main } = monte();
-    expect(main.querySelector<HTMLButtonElement>('#bouton-micro')?.hidden).toBe(false);
-    expect(main.querySelector<HTMLButtonElement>('#bouton-position')?.hidden).toBe(false);
+    const micro = main.querySelector<HTMLButtonElement>('#bouton-micro');
+    const position = main.querySelector<HTMLButtonElement>('#bouton-position');
+    expect(micro?.hidden).toBe(false);
+    expect(position?.hidden).toBe(false);
+    expect(micro?.classList.contains('en-attente')).toBe(false);
+    expect(position?.classList.contains('en-attente')).toBe(false);
     delete (global as unknown as { MediaRecorder?: unknown }).MediaRecorder;
   });
 });

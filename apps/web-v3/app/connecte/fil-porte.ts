@@ -1,10 +1,20 @@
 import { actifsTempsReel } from '@/lib/actifs-rt';
-import { adresseDuMessage, PARAM_DE_L_ANCRE, PARAM_DE_LA_MODIFICATION, PARAM_DE_LA_REPONSE, PARAM_DU_PLEIN } from '@/lib/api/adresses-du-fil';
-import type { Lecteur } from '@/lib/api/compte';
+import {
+  adresseDuLienCree,
+  adresseDuMessage,
+  PARAM_DE_L_ANCRE,
+  PARAM_DE_LA_MODIFICATION,
+  PARAM_DE_LA_REPONSE,
+  PARAM_DU_LIEN,
+  PARAM_DU_LIEN_CREE,
+  PARAM_DU_PLEIN,
+} from '@/lib/api/adresses-du-fil';
+import { creeUnLien, type Lecteur, type Recuperateur } from '@/lib/api/compte';
 import { envoie, televerse, type Creance, type Fil } from '@/lib/api/fil';
 import { accuseLecture, aAccuser, modifie, peutModifier, reagis, retire } from '@/lib/api/fil-mutations';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import { FIL } from '@/lib/contenu/fil';
+import { traduisLeMotifDuLien } from '@/lib/contenu/liens';
 
 import { CHAMP_DE_LA_REACTION, CHAMP_DU_MESSAGE_CIBLE } from './fil-lignes';
 import {
@@ -13,9 +23,12 @@ import {
   CHAMP_DE_LA_REPONSE,
   CHAMP_DE_L_ORIGINAL,
   CHAMP_DU_MESSAGE,
+  CHAMP_DU_NOUVEAU_LIEN,
   type ContexteDuComposeur,
   type TempsReel,
 } from './fil-vue';
+import { champsCommuns, saisieSoumise } from './nouveau-lien-porte';
+import type { SaisieDuLien } from './nouveau-lien-vue';
 import { pieceEnPlein, piecesDuFil } from './plein-vue';
 
 /**
@@ -97,6 +110,20 @@ export const reponseDemandee = (requete: Request): string | null => {
 
 export const modificationDemandee = (requete: Request): string | null => {
   const valeur = new URL(requete.url).searchParams.get(PARAM_DE_LA_MODIFICATION);
+  return valeur === null || valeur.trim() === '' ? null : valeur;
+};
+
+/**
+ * `?lien` — LA FEUILLE « NOUVEAU LIEN DE PARTAGE », OUVERTE DEPUIS LE FIL
+ * (#5034, § 12.10.5). Lue ICI, comme `?media=`, `?profil=`, `?autour=` :
+ * membre SEUL (`app/chats/[cle]/route.ts` — l'invité de `/chat/:lien` ne
+ * l'appelle jamais).
+ */
+export const feuilleDeLienDemandee = (requete: Request): boolean => new URL(requete.url).searchParams.has(PARAM_DU_LIEN);
+
+/** `?cree=<identifiant>` — le compte rendu du Post/Redirect/Get qui vient de créer un lien. */
+export const lienCreeDemande = (requete: Request): string | null => {
+  const valeur = new URL(requete.url).searchParams.get(PARAM_DU_LIEN_CREE);
   return valeur === null || valeur.trim() === '' ? null : valeur;
 };
 
@@ -395,4 +422,59 @@ export const accuseCeQuiEstServi = ({
 }): void => {
   if (pieceEnPlein(piecesDuFil(fil), plein) !== null) return;
   void accuseLecture({ cle: fil.id, creance, messageIds: aAccuser(fil.messages) });
+};
+
+/**
+ * CRÉER UN LIEN DE PARTAGE DEPUIS CE FIL (#5034, § 12.10.5) — reconnaît le
+ * formulaire de la feuille (`CHAMP_DU_NOUVEAU_LIEN`) et `null` sinon, pour
+ * que l'appelant enchaîne sur SA propre lecture du MÊME `FormData` (le
+ * composeur, une réaction) — le patron de `traiteLActionDeProfil`
+ * (`profil-porte.ts`), qui distingue de la MÊME façon un formulaire du sien.
+ *
+ * `conversation` VIENT DES PARAMS DE L'ADRESSE (`cle`), JAMAIS DU CHAMP CACHÉ
+ * DE LA FEUILLE — même si un formulaire forgé à la main portait un autre
+ * identifiant, c'est TOUJOURS la conversation que la porte sert qui reçoit le
+ * lien : la vue verrouille déjà ce champ, cette lecture est la garde qui ne
+ * fait confiance à AUCUN appelant (la même prudence que `surimpressionDuLien`
+ * côté vue).
+ *
+ * TROIS ISSUES, comme `traiteLaSoumission` : une redirection (`?cree=`, PRG),
+ * un refus À RE-SERVIR sur LE FIL (jamais une redirection qui perdrait la
+ * saisie), une session expirée.
+ */
+export type IssueDeLaCreationDuLien =
+  | { readonly genre: 'redirection'; readonly vers: string }
+  | { readonly genre: 'erreur'; readonly saisie: SaisieDuLien; readonly motif: string; readonly statut: number }
+  | { readonly genre: 'session-expiree' };
+
+export const traiteLaCreationDuLien = async ({
+  formulaire,
+  jeton,
+  conversation,
+  adresseHote,
+  recuperer,
+}: {
+  readonly formulaire: FormData | null;
+  readonly jeton: string;
+  readonly conversation: string;
+  readonly adresseHote: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<IssueDeLaCreationDuLien | null> => {
+  if (formulaire === null || !formulaire.has(CHAMP_DU_NOUVEAU_LIEN)) return null;
+
+  const saisie = saisieSoumise(formulaire);
+  const issue = await creeUnLien({
+    jeton,
+    champs: { conversationId: conversation, ...champsCommuns(saisie, Date.now()) },
+    recuperer,
+  });
+
+  if (issue.genre === 'session-expiree') return { genre: 'session-expiree' };
+  if (issue.genre === 'fait') return { genre: 'redirection', vers: adresseDuLienCree(adresseHote, issue.identifiant) };
+  return {
+    genre: 'erreur',
+    saisie,
+    motif: issue.genre === 'refus' ? traduisLeMotifDuLien(issue.message) : '',
+    statut: issue.genre === 'panne' ? 503 : 422,
+  };
 };

@@ -13,23 +13,28 @@ export { type TempsReel } from './chargeur';
 import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR, blocDuNavigateur, type TempsReel } from './chargeur';
 import { porteesDuTravailleur } from '@/lib/sw/portees';
 export { CHARGEUR_DE_PARTICIPATION };
-import { adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
+import { adresseDeLaFeuilleDeLien, adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
 import { citationDeReponse, resoutContreLaPage } from '@/lib/api/citations';
 import { LONGUEUR_MAX_DU_MESSAGE, MENTIONS_RETENUES, type Fil, type Message } from '@/lib/api/fil';
+import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import type { CleDeLien } from '@/lib/api/guest-session';
 import { adresseDesMedias } from '@/lib/api/medias';
 import type { Droits } from '@/lib/api/invite';
 import { langueDeLAuteurDansLeFil } from '@/lib/api/profil';
 import { BANDEAU_DES_DROITS, droitsRendus, type DroitRendu } from '@/lib/contenu/droits';
 import { BANDEAUX, compteDeParticipants, ETATS_DU_TEMPS_REEL, FIL, INTROUVABLE, presenceServie } from '@/lib/contenu/fil';
+import { GLYPHE_LIEN, NOUVEAU_LIEN } from '@/lib/contenu/liens';
 import { nomDeLangue } from '@/lib/contenu/langues';
 import { MEDIAS } from '@/lib/contenu/medias';
 
+import { adresseDuLien } from './contenu';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
 import { REGION_DE_LA_BANNIERE } from './banniere-vue';
-import { FEUILLE_DU_FIL, FEUILLE_DE_LA_CAPTURE, FEUILLE_DES_GESTES, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
+import { FEUILLE_DU_FIL, FEUILLE_DE_LA_CAPTURE, FEUILLE_DES_GESTES, FEUILLE_DU_LIEN_DEPUIS_LE_FIL, REVELE_LA_DERNIERE_LIGNE } from './fil-feuille';
 import { citation as citationHtml, gabaritDeLigne, lignes } from './fil-lignes';
+import { FEUILLE_DU_NOUVEAU_LIEN } from './liens-feuille';
+import { nouveauLien, type SaisieDuLien } from './nouveau-lien-vue';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
 import { langAttribut } from './transcrit';
 import { pieceEnPlein, piecesDuFil, pleinEcran } from './plein-vue';
@@ -152,6 +157,23 @@ export type EtatDuFil = {
    * aucune requête de plus sur une lecture ordinaire.
    */
   readonly profil: ProfilDeLaSurimpression | null;
+  /**
+   * LA FEUILLE « NOUVEAU LIEN DE PARTAGE », OUVERTE DEPUIS CE FIL (`?lien`,
+   * issue #5034, § 12.10.5) — un ÉTAT de cette adresse, comme `plein` et
+   * `profil` ci-dessus, réservé au MEMBRE (créer un lien est un droit de
+   * membre) : la porte ne le construit jamais pour l'invité, et la vue reste
+   * fail-closed même si on le lui passait quand même (`surimpression()`
+   * ci-dessous). Optionnel — omis, il vaut `null` : le cas nominal ne paie
+   * personne de plus, et les très nombreux témoins existants du fil n'ont pas
+   * à apprendre un champ de plus qu'ils ne rendent jamais.
+   */
+  readonly lien?: { readonly saisie: SaisieDuLien; readonly motif: string | null } | null;
+  /**
+   * `?cree=<identifiant>` — LE COMPTE RENDU DU POST QUI VIENT DE CRÉER UN
+   * LIEN (Post/Redirect/Get, § 12.10.5). Servi comme `lien` ci-dessus :
+   * optionnel, `null` par défaut, membre seul.
+   */
+  readonly lienCree?: string | null;
 };
 
 export const CHAMP_DU_MESSAGE = 'texte';
@@ -168,6 +190,14 @@ export const CHAMP_DE_LA_MODIFICATION = 'modifie';
  * pour tous et effacerait ses traductions pour un texte identique.
  */
 export const CHAMP_DE_L_ORIGINAL = 'original';
+/**
+ * Le champ caché qui marque le formulaire de la feuille « nouveau lien »
+ * (#5034) pour la porte du FIL — sans lui, un formulaire qui ne porte ni
+ * `texte` ni `reaction` ni `modifie` ni `retirer` serait lu comme un message
+ * VIDE par `soumissionDuFil` (`fil-porte.ts`), donc refusé (400) au lieu
+ * d'être reconnu comme une création de lien.
+ */
+export const CHAMP_DU_NOUVEAU_LIEN = 'nouveau-lien';
 
 const FEUILLE = FEUILLE_CONNECTEE + FEUILLE_DU_FIL;
 
@@ -231,6 +261,57 @@ const versLesMedias = (porte: Porte): string =>
     ? ''
     : `<a class="medias" href="${echappe(adresseDesMedias(porte.cle))}" aria-label="${echappe(MEDIAS.titre)}">${svgDuSprite('ph-stack')}</a>`;
 
+/**
+ * LE RANG MINIMUM POUR CRÉER UN LIEN HORS D'UNE CONVERSATION `public` —
+ * `MemberRole.MODERATOR`, le SEUIL de `mayMintShareLink`
+ * (`services/gateway/src/routes/links/utils/share-link-mint.ts:66-73`).
+ */
+const RANG_MINIMUM_POUR_UN_LIEN = MemberRole.MODERATOR;
+
+/**
+ * CE FIL ADMET-IL UN LIEN NEUF ? — miroir client de `mayMintShareLink`
+ * (correction de revue, #5034) : la passerelle refuse TOUJOURS sur un
+ * `direct` (`share-link-mint.ts:196-199`), l'accepte TOUJOURS sur un
+ * `public`, et exige au moins MODÉRATEUR ailleurs (:206-209). La même loi,
+ * `hasMinimumMemberRole`, vient de `@meeshy/shared/types/role-types` — le
+ * site UNIQUE que `conversation-authority.ts` applique côté passerelle.
+ *
+ * La passerelle reste l'arbitre : masquer la puce évite seulement d'OFFRIR un
+ * geste qu'elle refuserait — un rang rétrogradé après le chargement du fil
+ * reçoit encore le refus SERVI, traduit par `traduisLeMotifDuLien`
+ * (`lib/contenu/liens.ts`).
+ *
+ * LE BYPASS ADMIN/BIGBOSS DE PLATEFORME (`isGlobalAdmin`, la branche
+ * `global` de `mayMintShareLink`) N'EST PAS modélisé ici : `Fil` ne porte que
+ * le rang du lecteur DANS cette conversation, jamais son rang de PLATEFORME
+ * — l'ajouter engagerait une plomberie hors du périmètre de ce correctif.
+ * Conséquence bornée et ASSUMÉE : un administrateur de plateforme qui n'est
+ * pas au moins modérateur d'une conversation `global` ne voit pas la puce —
+ * jamais l'inverse, qui est le seul défaut que ce correctif devait fermer
+ * (aucun FAUX POSITIF). Type absent (fixture qui n'exerce pas cette garde) ⇒
+ * REFUSÉ, fail-closed.
+ */
+export const peutCreerUnLien = (fil: Fil): boolean => {
+  if (fil.type === undefined || fil.type === 'direct') return false;
+  if (fil.type === 'public') return true;
+  return fil.rang != null && hasMinimumMemberRole(fil.rang, RANG_MINIMUM_POUR_UN_LIEN);
+};
+
+/**
+ * CRÉER UN LIEN DE PARTAGE DEPUIS CE FIL (#5034, § 12.10.5) — à côté de
+ * « Médias » dans la rangée des puces (`cible/lienDepuisLeFil.png`), et
+ * seulement chez le MEMBRE : créer un lien est un droit de membre, l'invité
+ * de `/chat/:lien` ne rend ni ce bouton ni l'état qu'il ouvre (voir
+ * `surimpression()` plus bas — fail-closed même si l'état était posé). Et
+ * seulement quand `peutCreerUnLien` l'admet — sans quoi la puce proposait un
+ * geste que la passerelle refuse en ANGLAIS sur un direct ou un rang trop
+ * bas (défaut de revue, #5034).
+ */
+const versLeLien = (porte: Porte, fil: Fil): string =>
+  porte.genre !== 'membre' || !peutCreerUnLien(fil)
+    ? ''
+    : `<a class="partager" href="${echappe(adresseDeLaFeuilleDeLien(adresseDeLaPorte(porte)))}" aria-label="${echappe(NOUVEAU_LIEN.depuisLeFil)}">${svgDuSprite(GLYPHE_LIEN)}</a>`;
+
 const enLigne = (fil: Fil): number => fil.presence.presents.length;
 
 /**
@@ -292,11 +373,22 @@ const sousTitreHtml = (etat: EtatDuFil): string => {
   );
 };
 
-const enTete = (etat: EtatDuFil): string =>
+/**
+ * `cadre` — L'EN-TÊTE D'UN FIL QUI N'EST PAS LE SIEN. L'état CHOIX de
+ * `/chat/:lien` compose le MÊME corps à vide (`choix-vue.ts` › `cadre()`),
+ * derrière sa modale, avec une `Porte` de MEMBRE FACTICE : sans ce drapeau,
+ * les deux ronds de destination — « Médias » et « Partager » — s'y rendaient
+ * pour un visiteur SANS session, vers des adresses de membre qui ne
+ * répondraient que par `/login`. Un contrôle inerte, fût-il flouté sous un
+ * voile, reste un contrôle qui ne fait rien (loi 4) — et une garde de rôle
+ * qu'une porte factice défait n'est plus une garde.
+ */
+const enTete = (etat: EtatDuFil, cadre: boolean): string =>
   '<header class="fil-tete">' +
   retour(etat.porte) +
   `<div class="titre"><h1>${echappe(etat.fil.titre)}</h1><p class="sous">${sousTitreHtml(etat)}</p></div>` +
-  versLesMedias(etat.porte) +
+  (cadre ? '' : versLesMedias(etat.porte)) +
+  (cadre ? '' : versLeLien(etat.porte, etat.fil)) +
   // Le point d'ÉTAT du § 7 : plein quand le socket est là, creux sinon. Sans
   // JavaScript il n'y a pas de socket, et le point reste creux — ce qui est vrai.
   //
@@ -516,15 +608,36 @@ const trombone = (droits: DroitsDePiece, revelable: boolean): string => {
  * cachés : `participant:rights-updated` peut rendre `canSendMessages` en
  * direct, et `capture.actualise()` (`participate.ts` › `appliqueLesDroits`)
  * les révèle alors sans rechargement.
+ *
+ * **`ecrire` connu ⇒ la PLACE se réserve dès le SSR (correctif CLS, revue
+ * de #5061/#5034).** `ecrire` est déjà tranché au rendu (`ecritDansLeFil`
+ * lit les droits SERVIS, jamais une capacité navigateur) — SEULE la
+ * capacité (`MediaRecorder`, `navigator.geolocation`) reste inconnue avant
+ * le script. Servir `hidden` (donc `display:none`, largeur nulle) puis le
+ * retirer au premier tour de `capture.ts` faisait grandir la rangée de 88 px
+ * PENDANT la fenêtre de mesure (`scripts/mesure-reseau.mjs` › `VITALS`,
+ * 600 ms après `load`) : à 390 px de large, `FEUILLE_DE_LA_CAPTURE` fait
+ * alors DESCENDRE le champ d'une ligne (commentaire au-dessus d'elle) — un
+ * vrai réagencement, mesuré `cls 0.116 > 0.05` (issue de suivi ouverte).
+ * `ecrire === true` sert donc le bouton SANS `hidden`, avec la classe
+ * `en-attente` (`FEUILLE_DE_LA_CAPTURE` : `visibility:hidden` — la boîte
+ * existe, rien ne bouge quand `capture.ts` la retire). `ecrire === false`
+ * (invité fermé, `revelable` pour plus tard) garde `hidden` : ce chemin
+ * n'est pas le cas nominal d'une ouverture de fil et son réarmement, plus
+ * rare, reste un changement de composeur volontaire, pas cette régression.
  */
 const micro = (ecrire: boolean, revelable: boolean): string => {
   if (!ecrire && !revelable) return '';
-  return `<button type="button" class="micro" id="bouton-micro" hidden aria-label="${echappe(FIL.enregistrerUnVocal)}">${svgDuSprite('ph-microphone')}</button>`;
+  return ecrire
+    ? `<button type="button" class="micro en-attente" id="bouton-micro" aria-label="${echappe(FIL.enregistrerUnVocal)}">${svgDuSprite('ph-microphone')}</button>`
+    : `<button type="button" class="micro" id="bouton-micro" hidden aria-label="${echappe(FIL.enregistrerUnVocal)}">${svgDuSprite('ph-microphone')}</button>`;
 };
 
 const position = (ecrire: boolean, revelable: boolean): string => {
   if (!ecrire && !revelable) return '';
-  return `<button type="button" class="position" id="bouton-position" hidden aria-label="${echappe(FIL.partagerMaPosition)}">${svgDuSprite('ph-map-pin')}</button>`;
+  return ecrire
+    ? `<button type="button" class="position en-attente" id="bouton-position" aria-label="${echappe(FIL.partagerMaPosition)}">${svgDuSprite('ph-map-pin')}</button>`
+    : `<button type="button" class="position" id="bouton-position" hidden aria-label="${echappe(FIL.partagerMaPosition)}">${svgDuSprite('ph-map-pin')}</button>`;
 };
 
 /**
@@ -709,14 +822,40 @@ const attributsDeParticipation = (etat: EtatDuFil): string => {
  * L'ordre est celui de la planche (`cible/rights.png`) : l'en-tête, le bandeau
  * des droits, PUIS les puces.
  */
+/**
+ * L'AVIS « LIEN CRÉÉ » (#5034) — annoncé SUR LE FIL, jamais par un
+ * formulaire : succès d'une création, Post/Redirect/Get jusqu'au bout,
+ * `?cree=<identifiant>`. Servi MUET (`hidden`, vide) dès que le module de
+ * participation existe — c'est LUI qui l'écrira au succès d'une création
+ * SANS rechargement (`lib/realtime/participate.ts`) —, et ABSENT quand aucun
+ * module n'arrivera jamais pour y écrire (lecture pure, `tempsReel === null`) :
+ * la même règle que `bandeauxDifferes`, un cran plus haut. Membre seul —
+ * créer un lien est un droit de membre.
+ */
+const avisLienCree = (etat: EtatDuFil): string => {
+  if (etat.porte.genre !== 'membre') return '';
+  const lienCree = etat.lienCree ?? null;
+  if (lienCree === null) {
+    return etat.tempsReel === null ? '' : '<p class="avis lien-cree" id="lien-cree" role="status" hidden></p>';
+  }
+  return (
+    '<p class="avis lien-cree" id="lien-cree" role="status">' +
+    svgDuSprite('ph-check-circle') +
+    `<span>${echappe(`${NOUVEAU_LIEN.cree} ${NOUVEAU_LIEN.copiez}`)}</span>` +
+    `<span class="adresse">${echappe(adresseDuLien(lienCree))}</span>` +
+    '</p>'
+  );
+};
+
 export const corpsDuFil = (
   etat: EtatDuFil,
   { cadre = false, inerte = cadre }: { readonly cadre?: boolean; readonly inerte?: boolean } = {},
 ): string =>
   `<main id="main-content" class="fil-ecran"${inerte ? ' inert' : ''}${attributsDeParticipation(etat)}>` +
-  enTete(etat) +
+  enTete(etat, cadre) +
   bandeauDesDroits(etat.porte, etat.fil.titre) +
   puces(etat) +
+  (cadre ? '' : avisLienCree(etat)) +
   (cadre ? '' : bandeauxDifferes(etat)) +
   (etat.erreur === null ? '' : `<p class="alerte" role="alert">${echappe(etat.erreur)}</p>`) +
   zoneDeFrappe() +
@@ -784,19 +923,44 @@ export const documentPleinEcran = ({
   '</html>';
 
 /**
- * LA SURIMPRESSION — plein écran d'un média OU profil d'un participant, hors
- * du `<main>`, comme la modale de l'état CHOIX : une surimpression n'est pas
- * un morceau du contenu qu'elle recouvre. Sa FEUILLE ne part QUE dans son
- * état (`documentDuFil`) : ce que le fil n'affiche pas, il ne le paie pas
- * (charte règle 7).
+ * LA SURIMPRESSION — plein écran d'un média, profil d'un participant OU
+ * feuille « nouveau lien de partage » (#5034), hors du `<main>`, comme la
+ * modale de l'état CHOIX : une surimpression n'est pas un morceau du contenu
+ * qu'elle recouvre. Sa FEUILLE ne part QUE dans son état (`documentDuFil`) :
+ * ce que le fil n'affiche pas, il ne le paie pas (charte règle 7).
  *
- * LE PROFIL PASSE AVANT LE PLEIN ÉCRAN quand les deux adresses sont posées à
- * la fois — un cas que ni l'une ni l'autre ne produit (`?media=` et
- * `?profil=` viennent de deux gestes distincts), mais qu'une adresse composée
- * à la main peut présenter : une seule surimpression à la fois, jamais deux
- * `<dialog open>` empilés.
+ * L'ORDRE EST PROFIL > LIEN > PLEIN ÉCRAN quand plusieurs adresses sont posées
+ * à la fois — un cas qu'aucun des trois gestes ne produit seul (chacun vient
+ * d'un lien distinct), mais qu'une adresse composée à la main peut
+ * présenter : une seule surimpression à la fois, jamais deux `<dialog open>`
+ * empilés.
+ *
+ * LE LIEN EST FAIL-CLOSED CÔTÉ INVITÉ, ICI MÊME — pas seulement parce que la
+ * porte ne construit jamais `etat.lien` pour lui (`app/(public)/chat/[lien]/
+ * route.ts` ne lit jamais `?lien`) : la vue ne fait confiance à AUCUN appelant
+ * pour cette garde, la même prudence que `peutAgir` en porte pour le profil.
  */
-type Surimpression = { readonly genre: 'aucune' } | { readonly genre: 'plein'; readonly html: string } | { readonly genre: 'profil'; readonly html: string };
+type Surimpression =
+  | { readonly genre: 'aucune' }
+  | { readonly genre: 'plein'; readonly html: string }
+  | { readonly genre: 'profil'; readonly html: string }
+  | { readonly genre: 'lien'; readonly html: string };
+
+const surimpressionDuLien = (etat: EtatDuFil): string | null => {
+  if (etat.porte.genre !== 'membre') return null;
+  const lien = etat.lien ?? null;
+  if (lien === null) return null;
+  const adresseHote = adresseDeLaPorte(etat.porte);
+  return nouveauLien({
+    saisie: lien.saisie,
+    motif: lien.motif,
+    retour: adresseHote,
+    action: adresseHote,
+    sousTitre: NOUVEAU_LIEN.pour(etat.fil.titre),
+    marqueur: CHAMP_DU_NOUVEAU_LIEN,
+    conversationVerrouillee: true,
+  });
+};
 
 const surimpression = (etat: EtatDuFil): Surimpression => {
   if (etat.profil !== null) {
@@ -815,6 +979,8 @@ const surimpression = (etat: EtatDuFil): Surimpression => {
       }),
     };
   }
+  const lien = surimpressionDuLien(etat);
+  if (lien !== null) return { genre: 'lien', html: lien };
   const plein = pieceEnPlein(piecesDuFil(etat.fil), etat.plein);
   return plein === null
     ? { genre: 'aucune' }
@@ -859,9 +1025,11 @@ export const documentDuFil = (etat: EtatDuFil): string => {
       // document seul : trois écrans pleins partagent `FEUILLE_DU_FIL` sans rendre ni ligne ni composeur.
       FEUILLE_DES_GESTES +
       FEUILLE_DE_LA_CAPTURE +
+      FEUILLE_DU_LIEN_DEPUIS_LE_FIL +
       (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
       (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') +
-      (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : ''),
+      (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : '') +
+      (dessus.genre === 'lien' ? FEUILLE_DU_NOUVEAU_LIEN : ''),
   });
 };
 

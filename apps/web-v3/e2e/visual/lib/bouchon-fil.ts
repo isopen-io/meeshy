@@ -719,6 +719,13 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
           // (`presenceFor`) — le membre, ami des deux pairs ; l'invité, sans amitié, lit `false`.
           participants: [...etat.presences].map(([userId, isOnline]) => ({ userId, isOnline: identite.genre === 'membre' && isOnline })),
           unreadCount: 0,
+          // `currentUserRole` (`core-detail.ts:414`) — le rang du LECTEUR dans
+          // CETTE conversation, servi SANS `?fields=` comme `type` ci-dessus
+          // (correction de revue #5034 : `peutCreerUnLien`, côté v3, s'en sert
+          // pour taire « Partager » quand la passerelle refuserait). Le
+          // lecteur du bouchon est le CRÉATEUR de son propre fil ; un invité
+          // n'a aucun rang de MEMBRE reconnu ici.
+          currentUserRole: identite.genre === 'membre' ? 'creator' : null,
         },
       });
       return true;

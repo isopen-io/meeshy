@@ -10,7 +10,7 @@ import { FEUILLE_DE_LA_STORY } from '@/app/(public)/partage-feuille';
 import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from '@/app/connecte/feuille';
-import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
+import { FEUILLE_DU_FIL, FEUILLE_DU_LIEN_DEPUIS_LE_FIL } from '@/app/connecte/fil-feuille';
 import { FEUILLE_DU_PLEIN } from '@/app/connecte/plein-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
@@ -84,6 +84,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV', source: FEUILLE_DE_LA_NOUVELLE_CONV },
   { nom: 'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE', source: FEUILLE_DE_L_ESPACE },
   { nom: 'app/connecte/banniere-feuille.ts', source: FEUILLE_DE_LA_BANNIERE },
+  { nom: 'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL', source: FEUILLE_DU_LIEN_DEPUIS_LE_FIL },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -163,6 +164,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV',
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE',
       'app/connecte/banniere-feuille.ts',
+      'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -574,6 +576,7 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // prennent JAMAIS l'accent.
     '.fil-tete .retour', // le cliquable — chevron de retour
     '.fil-tete .medias', // le cliquable — la galerie des médias, à un tap du fil
+    '.fil-tete .partager', // le cliquable — créer un lien de partage pour CETTE conversation (#5034) ; même rond, même emploi 1 que ses deux voisins
     '.puce', // le cliquable — puce du Prisme
     '.ligne .accuse', // l'accusé de mes messages, comme le compte de non-lus
     '.langue', // la pastille de langue
