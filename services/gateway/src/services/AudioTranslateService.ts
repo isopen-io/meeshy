@@ -80,14 +80,6 @@ interface PendingRequest {
   timestamp: number;
 }
 
-// Types re-exportés depuis shared pour compatibilité
-export type {
-  TranscriptionResult,
-  TranslatedAudioResult,
-  AudioTranslationOptions,
-  ServiceResult
-} from '@meeshy/shared/types';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // SERVICE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -475,14 +467,9 @@ export class AudioTranslateService extends EventEmitter {
         voiceQuality: t.quality || undefined
       })) : [];
 
-      // Canonicaliser cibles demandées et clés stockées via la SSOT partagée
-      // (jumelle d'`AttachmentTranslateService`) : une cible région-taguée ou en
-      // casse mixte matche la clé canonique du store, et les variantes d'une même
-      // langue ne comptent que pour une cible NLLB.
-      const targetDiff = diffTranslationTargets(
-        options.targetLanguages,
-        existingTranslations.map(t => t.targetLanguage)
-      );
+      // SSOT des jumeaux (`AttachmentTranslateService`) : cibles et clés stockées
+      // comparées sous forme canonique — voir le doc de `diffTranslationTargets`.
+      const targetDiff = diffTranslationTargets(options.targetLanguages, existingTranslations.map(t => t.targetLanguage));
       const languagesToTranslate = targetDiff.missing;
 
       // Si toutes les langues sont déjà traduites, retourner le cache
