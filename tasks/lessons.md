@@ -28759,7 +28759,7 @@ accident, sur un empilement qui n'était pas celui rendu.
 Garde : `test_laBande_neSePeintAucunFond` interdit le verre ET tout fond
 opaque de remplacement.
 
-## Leçon 530 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
+## Leçon 536 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
 
 Constat du 2026-09-05 (gate `test:chaines` › `v3-fil.spec.ts`, tour v3, écran
 `thread`) : `.reagir-slot` était à `height:0` tant que le module de temps réel
@@ -28794,7 +28794,7 @@ CHAQUE bulle au moment où le module chargeait.
    si oui, les deux ne se corrigent qu'ENSEMBLE, par une réservation
    inconditionnelle, jamais par deux correctifs qui se contredisent.
 
-## Leçon 531 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
+## Leçon 537 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
 
 Constat du 2026-09-05 (`compare-rendu.js` / `v3-rapport.mjs`, tour v3) : après
 la livraison du chantier de navigation en une page (§ 12.11, #5104/#4472/
@@ -28830,7 +28830,7 @@ navigation avait changé la disposition SERVIE de chaque écran connecté, mais
    la réponse « je n'ai régénéré que celles de mon écran » est un aveu que
    la question n'a pas été posée à la bonne échelle.
 
-## Leçon 532 — Une interdiction écrite dans UN prompt ne gouverne que cet agent ; dans un arbre partagé, chaque rôle qui écrit la porte
+## Leçon 538 — Une interdiction écrite dans UN prompt ne gouverne que cet agent ; dans un arbre partagé, chaque rôle qui écrit la porte
 
 Constat du 2026-09-05 (tour 2 du workflow web v3) : « Ne commit PAS : la phase
 Livrer s'en charge » n'était écrit que dans le prompt du DÉVELOPPEUR. Un agent
@@ -29039,3 +29039,45 @@ transmet rien à ses `extension`. La règle pure était inatteignable depuis
 `OutboxDispatcher`, qui dispatche hors du fil principal — même piège que
 `SocialMediaCaption` (leçon 473). Une règle sur des VALEURS doit porter
 `nonisolated` sur CHAQUE déclaration, l'énuméré comme ses extensions.
+
+## Leçon 535 — Suivre le NOM plutôt que le CHEMIN : deux fois le même jour, sur le même lot
+
+**Deux correctifs posés au bon endroit *selon le nom*, au mauvais endroit
+*selon l'exécution*** — 2026-09-05, tous deux sur la publication d'un post à
+canvas.
+
+| correctif | où je l'ai posé | pourquoi c'était faux | où il fallait |
+|---|---|---|---|
+| l'ADOPTION du média dans le canvas | `StoryViewModel+PublicationUpload.runStoryUpload` | ce fichier sert les STORIES ; un POST descend la voie durable | `OutboxDispatcher`, seul étage qui tienne la carte `position → id serveur` |
+| le REDRESSEMENT d'orientation | `StoryMediaLayer` (« la couche des médias ») | le média d'un post-photo est un FOND (`isBackground`) | `StoryBackgroundLayer`, qui a sa propre couche |
+
+Les deux fois, le raisonnement était : *« ce défaut concerne un média de
+canvas ⇒ il vit dans le fichier dont le nom parle de médias de canvas »*. Les
+deux fois, le nom décrivait une FAMILLE et l'exécution suivait une autre
+route.
+
+> **Un nom de fichier décrit la famille que son auteur visait ; il ne décrit
+> pas le chemin que la donnée emprunte.** `StoryViewModel+PublicationUpload`
+> ne dit pas « stories seulement », `StoryMediaLayer` ne dit pas « sauf les
+> fonds » — et ni l'un ni l'autre ne ment : ils nomment ce qu'ils font, pas ce
+> qu'ils NE font pas.
+
+**Ce qui l'attrape, et ce qui ne l'attrape pas.** Relire le fichier ne
+l'attrape pas : il est cohérent. Chercher d'autres fichiers au nom voisin ne
+l'attrape pas non plus — j'avais couvert média, lieu et sticker, et le fond
+manquait quand même. Ce qui l'attrape est de **suivre l'exécution depuis le
+geste** : quel routeur décide, quelle branche est prise, quelle couche peint.
+Trois mesures, pas trois lectures.
+
+**Le témoin qui l'a révélé les deux fois est le même** : republier et LIRE le
+résultat. La première fois, le serveur a rendu `ORPHELIN` après un correctif
+que je croyais posé ; la seconde, la carte est restée à l'envers après un
+redressement que je croyais complet. Dans les deux cas, la compilation était
+verte et les témoins unitaires aussi — ils éprouvaient la RÈGLE, jamais son
+site d'appel.
+
+> **Une règle juste, testée, et appelée nulle part sur le chemin réel, est
+> indiscernable d'une règle absente.** C'est la forme de la journée
+> (leçon 533) vue depuis l'autre bout : là, une moitié présente rassurait sur
+> la moitié absente ; ici, un correctif présent rassure sur le chemin qu'il ne
+> couvre pas.

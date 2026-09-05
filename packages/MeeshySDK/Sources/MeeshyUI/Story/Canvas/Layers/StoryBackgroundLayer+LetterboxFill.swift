@@ -65,7 +65,7 @@ extension StoryBackgroundLayer {
     private func fillImage(for source: StoryLetterboxFill.Source) -> CGImage? {
         switch source {
         case .stampedBitmap:
-            return letterboxSourceImage.flatMap(Self.downsampledForFill)?.cgImage
+            return CanvasImageOrientation.displayCGImage(letterboxSourceImage.flatMap(Self.downsampledForFill))
         case .thumbHash(let hash):
             return ThumbHashDecoder.decodeIfAvailable(hash)?.cgImage
         case .none:

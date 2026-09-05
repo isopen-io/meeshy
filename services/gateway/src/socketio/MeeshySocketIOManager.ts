@@ -55,10 +55,8 @@ import {
 } from './emitToConversationParticipants';
 import { presenceStatusEmissions } from './presence-audience';
 import {
-  PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
   toIsoOrNull,
-  type PreviewPrismParticipant,
 } from './utils/lastMessagePreviewPrism';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
@@ -95,6 +93,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from './messageNewPayload';
 import { buildMessageEditedCore, resolveWireSenderId } from './messageEditedPayload';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { fetchParticipantSuperset } from './participant-superset';
 import { socketIoCorsOrigin } from '../config/cors-origins';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
@@ -3114,29 +3113,9 @@ export class MeeshySocketIOManager {
         // (`MessageHandler.broadcastNewMessage`), qui n'a jamais posé cette
         // garde — cf. `message-new-producer-parity.test.ts`.
         const senderId = message.senderId;
-        // Une seule requête : superset (id + userId + joinedAt) pour les deux signaux
-        //
-        // Dans son PROPRE `try`, et rendue `undefined` — jamais `[]` — quand
-        // elle tombe. Les deux formes se lisent pareil au site d'appel et ne
-        // disent pas la même chose : `[]` affirme « la conversation n'a aucun
-        // participant », `undefined` avoue « je ne sais pas ». La file hors
-        // ligne ci-dessous traite les deux différemment, et c'est la seule des
-        // trois consommatrices dont l'abandon soit DESTRUCTIF (cf. son bloc).
-        let allParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
-        try {
-          allParticipants = await this.prisma.participant.findMany({
-            where: {
-              conversationId: normalizedId,
-              isActive: true
-            },
-            // `user` (préférences de langue) : le Prisme de la ligne de liste,
-            // résolu par destinataire ci-dessous. `joinedAt` reste requis par
-            // `emitUnreadCountsToRecipients`, qui partage cette requête.
-            select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-          });
-        } catch (err) {
-          logger.warn('participant fetch failed — la file hors ligne fera sa propre requête', { error: err });
-        }
+        // Site UNIQUE, partagé avec le chemin socket : `participant-superset.ts`
+        // (le `select`, la sémantique `undefined` ≠ `[]`, et pourquoi).
+        const allParticipants = await fetchParticipantSuperset(this.prisma, normalizedId, 'rest-zmq');
 
         // File hors ligne — la TROISIÈME porte de sortie de ce message, et la
         // seule DURABLE. `message:new` ci-dessus ne sert que les sockets du
