@@ -29,6 +29,7 @@ import {
   sendBadRequest,
   sendInternalError
 } from '../../utils/response.js';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
 import {
@@ -127,7 +128,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       if (!authResult) {
         logger.warn('Échec de connexion — identifiants invalides', { username });
-        return sendUnauthorized(reply, 'Identifiants invalides');
+        return sendUnauthorized(reply, 'Identifiants invalides', { code: AUTH_ERROR_CODES.INVALID_CREDENTIALS });
       }
 
       const { user, sessionToken, session, requires2FA, twoFactorToken } = authResult;
@@ -276,7 +277,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const result = await authService.completeAuthWith2FA(twoFactorToken, code, requestContext);
 
       if ('success' in result && result.success === false) {
-        return sendUnauthorized(reply, result.error);
+        return sendUnauthorized(reply, result.error, { code: AUTH_ERROR_CODES.TWO_FACTOR_FAILED });
       }
 
       // Après la vérification SEULEMENT : un code faux ne doit pas consommer la

@@ -16,6 +16,7 @@ import {
   sendUnauthorized,
   sendInternalError,
 } from '../../utils/response';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
@@ -856,7 +857,7 @@ export function registerLinkAdmissionRoutes(
         const result = await refreshGuestSession({ prisma, sessionToken });
         switch (result.kind) {
           case 'invalid':
-            sendUnauthorized(reply, 'Session invalide ou expirée');
+            sendUnauthorized(reply, 'Session invalide ou expirée', { code: AUTH_ERROR_CODES.SESSION_INVALID });
             return;
           case 'link-gone':
             sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a été désactivé' });
