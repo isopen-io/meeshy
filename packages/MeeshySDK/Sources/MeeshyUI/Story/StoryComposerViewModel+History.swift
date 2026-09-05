@@ -28,6 +28,7 @@ extension StoryComposerViewModel {
         history = HistoryStore<Data>(cap: 50)
         retiredImages = [:]
         retiredVideoURLs = [:]
+        retiredStickerAnimations = [:]
         retiredAudioURLs = [:]
         retiredSlideImages = [:]
         pushHistorySnapshot()
@@ -90,6 +91,19 @@ extension StoryComposerViewModel {
             for audio in slide.effects.audioPlayerObjects ?? [] {
                 if let url = retiredAudioURLs.removeValue(forKey: audio.id) {
                     loadedAudioURLs[audio.id] = url
+                }
+            }
+            // **Les stickers IMAGE aussi** (#3956). `deleteElement` mettait déjà
+            // leur bitmap de côté, mais cette boucle ne parcourait que les
+            // médias : un undo ressuscitait le sticker SANS son image, qui
+            // retombait sur son emoji de repli — un défaut muet, puisqu'un
+            // glyphe s'affichait. Les octets animés suivent le même chemin.
+            for sticker in slide.effects.stickerObjects ?? [] {
+                if let img = retiredImages.removeValue(forKey: sticker.id) {
+                    registerLoadedImage(img, for: sticker.id)
+                }
+                if let bytes = retiredStickerAnimations.removeValue(forKey: sticker.id) {
+                    registerLoadedStickerAnimation(bytes, for: sticker.id)
                 }
             }
         }

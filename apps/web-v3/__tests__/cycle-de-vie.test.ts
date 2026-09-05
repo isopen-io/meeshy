@@ -29,12 +29,9 @@
  * deux sont posés ici en doublure, et l'absence du canal est elle-même un cas
  * de test (un navigateur sans canal doit dégrader, pas planter).
  */
-import { renderHook } from '@testing-library/react';
-
 import {
   canalDuLien,
   observeCycleDeVie,
-  useCycleDeVie,
   type Balise,
   type OptionsDuCycleDeVie,
   type TransitionDeCycle,
@@ -911,60 +908,42 @@ describe('le site unique du cycle de vie', () => {
       expect(canaux.size).toBe(0);
     });
   });
+});
 
-  describe('le hook — la seule voie ouverte à un composant', () => {
-    it('observe pendant le montage et se tait après le démontage', () => {
-      const vues: TransitionDeCycle[] = [];
-      const { unmount } = renderHook(() =>
-        useCycleDeVie({ sur: (vue) => vues.push(vue), cleDuJeton: CLE }),
-      );
-      bascule('hidden');
-      unmount();
-      bascule('visible');
+describe("le départ de zone — la navigation douce que pagehide ne voit pas (#5106)", () => {
+  beforeEach(() => {
+    canaux.clear();
+    enVol.length = 0;
+    differe = false;
+    poseLeCanal();
+    visibilite('visible');
+    enLigne(true);
+  });
 
-      expect(vues.filter((vue) => vue.type === 'masquage')).toHaveLength(1);
-      expect(vues.filter((vue) => vue.type === 'reprise')).toHaveLength(0);
-    });
+  it("l'événement de départ émet destruction — le navigateur de zone le déclenche AVANT le swap", () => {
+    const { vues } = observe();
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    expect(vues.filter((vue) => vue.type === 'destruction')).toHaveLength(1);
+  });
 
-    it('porte la télémétrie du composant à la fermeture réelle du document', () => {
-      const beacon = balises();
-      const { unmount } = renderHook(() =>
-        useCycleDeVie({ sur: () => undefined, cleDuJeton: CLE, telemetrie: () => TELEMETRIE }),
-      );
-      transition('pagehide', false);
-      unmount();
+  it('le départ NETTOIE tout seul : plus aucune transition après lui — aucun listener ne fuit', () => {
+    const { vues } = observe();
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    const apresLeDepart = vues.length;
+    bascule('hidden');
+    reseau('offline');
+    transition('pagehide', false);
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    expect(vues.length).toBe(apresLeDepart);
+  });
 
-      expect(beacon.mock.calls).toEqual([[TELEMETRIE.url, TELEMETRIE.corps]]);
-    });
-
-    it('porte le battement du composant sans lui faire toucher une minuterie', () => {
-      jest.useFakeTimers();
-      const battre = jest.fn();
-      const { unmount } = renderHook(() =>
-        useCycleDeVie({
-          sur: () => undefined,
-          cleDuJeton: CLE,
-          battement: { intervalleMs: 600_000, battre },
-        }),
-      );
-      jest.advanceTimersByTime(600_000);
-      unmount();
-      jest.advanceTimersByTime(600_000);
-      jest.useRealTimers();
-
-      expect(battre).toHaveBeenCalledTimes(1);
-    });
-
-    it('ne se rattache pas quand seule l’identité des rappels change', () => {
-      const vues: TransitionDeCycle[] = [];
-      const { rerender } = renderHook(() =>
-        useCycleDeVie({ sur: (vue) => vues.push(vue), cleDuJeton: CLE }),
-      );
-      rerender();
-      rerender();
-      bascule('hidden');
-
-      expect(vues.filter((vue) => vue.type === 'masquage')).toHaveLength(1);
-    });
+  it('le départ ne détruit que SA propre observation — le nouvel écran observe librement ensuite', () => {
+    const premiere = observe();
+    window.dispatchEvent(new Event('meeshy:zone-depart'));
+    const seconde = observe();
+    bascule('hidden');
+    expect(seconde.vues.some((vue) => vue.type === 'masquage')).toBe(true);
+    expect(premiere.vues.some((vue) => vue.type === 'masquage')).toBe(false);
+    seconde.detache();
   });
 });

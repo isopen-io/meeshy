@@ -281,7 +281,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                     </div>
                   </div>
 
-                  {(link.allowedLanguages.length > 0 || link.allowedCountries.length > 0) && (
+                  {link.allowedLanguages.length > 0 && (
                     <>
                       <Separator />
                       <div>
@@ -291,14 +291,6 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                             <span className="text-xs font-medium">{t('links.languagesLabel')}</span>
                             <p className="text-xs text-gray-600 dark:text-gray-400">
                               {link.allowedLanguages.join(', ')}
-                            </p>
-                          </div>
-                        )}
-                        {link.allowedCountries.length > 0 && (
-                          <div>
-                            <span className="text-xs font-medium">{t('links.countriesLabel')}</span>
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
-                              {link.allowedCountries.join(', ')}
                             </p>
                           </div>
                         )}

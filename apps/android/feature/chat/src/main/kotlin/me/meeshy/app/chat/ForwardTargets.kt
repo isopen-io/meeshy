@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.mayCurrentUserWrite
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 
@@ -26,7 +27,12 @@ data class ForwardTarget(
  * Rules:
  *  - The source conversation is never a target (you don't forward a message back
  *    into the conversation it came from).
- *  - A blank (or whitespace-only) query keeps every non-source conversation.
+ *  - A conversation the caller cannot write into ([ApiConversation.mayCurrentUserWrite]
+ *    — an announcement channel below admin, an inactive conversation, one the
+ *    reader soft-deleted for themselves) is never offered: it is a tappable row
+ *    that would produce a message the gateway refuses (issue found in review,
+ *    parity with `StorySendTargets`).
+ *  - A blank (or whitespace-only) query keeps every remaining non-source conversation.
  *  - A non-blank query is trimmed, then matched case-insensitively against the
  *    conversation's resolved [displayTitle] (what the user actually sees — the
  *    other participant's name for a direct conversation).
@@ -45,6 +51,7 @@ object ForwardTargets {
         val trimmed = query.trim()
         return conversations.asSequence()
             .filter { it.id != sourceConversationId }
+            .filter { it.mayCurrentUserWrite(currentUserId) }
             .map { conversation ->
                 ForwardTarget(
                     conversationId = conversation.id,

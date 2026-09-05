@@ -215,6 +215,109 @@ describe('Admin content routes — GET /messages', () => {
     expect(call.where.content.contains).toBe('hello');
   });
 
+  /**
+   * #4387 — le filtre `?search=` ne doit plus être un ORACLE sur le texte que
+   * #4384 vient de masquer.
+   *
+   * Le témoin exerce l'oracle tel qu'un modérateur l'exploiterait : un message
+   * à VUE UNIQUE dont le texte contient un terme rare, et la question « la
+   * ligne remonte-t-elle ? ». Un témoin qui vérifierait seulement que
+   * `content` sort à `null` passerait au vert sous l'ancienne implémentation —
+   * elle masquait déjà le texte. Ce qui fuyait n'était pas la charge, c'était
+   * l'APPARTENANCE de la ligne à la page.
+   */
+  describe('?search= n\'est plus un oracle sur le contenu masqué (#4387)', () => {
+    const ID_PROTEGE = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+    const ID_ORDINAIRE = 'cccccccccccccccccccccccc';
+
+    const ligne = (id: string, protection: Record<string, unknown> = {}) => ({
+      id,
+      content: 'le code du coffre est 4821',
+      messageType: 'text',
+      createdAt: new Date(),
+      isEdited: false,
+      isViewOnce: false,
+      isBlurred: false,
+      effectFlags: 0,
+      expiresAt: null,
+      deletedAt: null,
+      isEncrypted: false,
+      encryptionMode: null,
+      sender: { id: 's', userId: 's', displayName: 'S', avatar: null, type: 'user', language: 'fr', user: null },
+      conversation: { id: 'c', identifier: 'conv', title: 'T', type: 'direct' },
+      attachments: [],
+      _count: { replies: 0 },
+      ...protection,
+    });
+
+    // `jest.clearAllMocks()` du `beforeEach` vide les APPELS, pas la file des
+    // `mockResolvedValueOnce`. Sans ce `mockReset`, une file non consommée par
+    // un témoin précédent (parce qu'il a fait un appel de moins) déborde sur le
+    // suivant, qui échoue alors pour une raison qui n'est pas la sienne.
+    beforeEach(() => {
+      mockPrisma.message.findMany.mockReset();
+      mockPrisma.message.count.mockReset();
+      mockPrisma.message.findMany.mockResolvedValue([]);
+      mockPrisma.message.count.mockResolvedValue(0);
+    });
+
+    it('un message à VUE UNIQUE ne remonte pas sur un terme de son texte masqué', async () => {
+      // 1er findMany : la fenêtre de recherche. 2e : la page.
+      mockPrisma.message.findMany
+        .mockResolvedValueOnce([ligne(ID_PROTEGE, { isViewOnce: true })])
+        .mockResolvedValueOnce([]);
+      mockPrisma.message.count.mockResolvedValue(0);
+
+      app = buildApp('ADMIN');
+      await app.ready();
+      const response = await app.inject({ method: 'GET', url: '/messages?search=4821' });
+      expect(response.statusCode).toBe(200);
+
+      // La page est restreinte aux ids SERVABLES — le protégé n'y est pas.
+      const pageCall = mockPrisma.message.findMany.mock.calls[1][0];
+      expect(pageCall.where.id).toEqual({ in: [] });
+      // Et le `contains` a disparu : la pagination porte sur l'ensemble filtré,
+      // sinon `total` recompterait ce que le filtre vient d'écarter.
+      expect(pageCall.where.content).toBeUndefined();
+      expect(JSON.parse(response.body).data).toEqual([]);
+    });
+
+    it('un message ORDINAIRE remonte toujours — la garde vise la protection, pas la recherche', async () => {
+      mockPrisma.message.findMany
+        .mockResolvedValueOnce([ligne(ID_ORDINAIRE)])
+        .mockResolvedValueOnce([ligne(ID_ORDINAIRE)]);
+      mockPrisma.message.count.mockResolvedValue(1);
+
+      app = buildApp('ADMIN');
+      await app.ready();
+      const response = await app.inject({ method: 'GET', url: '/messages?search=4821' });
+
+      const pageCall = mockPrisma.message.findMany.mock.calls[1][0];
+      expect(pageCall.where.id).toEqual({ in: [ID_ORDINAIRE] });
+      // Sans ce témoin, une garde qui écarterait TOUT passerait le précédent :
+      // il n'exige qu'une absence.
+      expect(JSON.parse(response.body).data).toHaveLength(1);
+    });
+
+    it('SANS `?search=`, la ligne protégée reste LISTÉE — le masquage sans effacement tient', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([ligne(ID_PROTEGE, { isViewOnce: true })]);
+      mockPrisma.message.count.mockResolvedValue(1);
+
+      app = buildApp('ADMIN');
+      await app.ready();
+      const response = await app.inject({ method: 'GET', url: '/messages' });
+
+      const body = JSON.parse(response.body);
+      // Une seule requête de page : le chemin sans recherche est inchangé.
+      expect(mockPrisma.message.findMany.mock.calls[0][0].where.id).toBeUndefined();
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].isProtected).toBe(true);
+      expect(body.data[0].content).toBeNull();
+      // Le texte masqué ne sort par AUCUN champ de la ligne.
+      expect(response.body).not.toContain('4821');
+    });
+  });
+
   it('returns 200 and applies period=today filter (createdAt gte)', async () => {
     app = buildApp('ADMIN');
     await app.ready();
@@ -587,6 +690,84 @@ describe('Admin content routes — GET /translations', () => {
     await bigbossApp.close();
   });
 
+  /**
+   * #4386 — la console de traduction ne sert plus le texte d'un message
+   * SUPPRIMÉ ni d'un message PROTÉGÉ.
+   *
+   * Les témoins portent sur la VALEUR SERVIE, en traversant le sérialiseur
+   * (`app.inject`), jamais sur le `select` ni sur le `where` : une garde
+   * vérifiée sur la requête est vraie de la requête, pas de ce qui sort. Le
+   * témoin du `where` juste au-dessus reste utile pour la RAISON du filtre —
+   * il ne prouve rien sur la charge.
+   */
+  it('exclut du `where` les messages supprimés — `deletedAt: null`, comme la jumelle /messages', async () => {
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    const args = (mockPrisma.message.findMany as any).mock.calls[0][0];
+    expect(args.where.deletedAt).toBeNull();
+    await bigbossApp.close();
+  });
+
+  it('charge les colonnes de protection — sans elles, la garde ne PEUT pas s\'appliquer', async () => {
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    const args = (mockPrisma.message.findMany as any).mock.calls[0][0];
+    // Un champ de protection présent au modèle et absent de la requête est un
+    // piège armé : le prédicat répondrait « non protégé » sur TOUT message.
+    for (const colonne of ['isViewOnce', 'isBlurred', 'effectFlags', 'expiresAt', 'isEncrypted', 'encryptionMode']) {
+      expect(args.select[colonne]).toBe(true);
+    }
+    await bigbossApp.close();
+  });
+
+  it.each([
+    ['vue unique', { isViewOnce: true }],
+    ['flouté', { isBlurred: true }],
+    ['éphémère expiré', { expiresAt: new Date(Date.now() - 60_000) }],
+    ['chiffré', { isEncrypted: true }],
+  ])('n\'expose NI le texte original NI la traduction d\'un message %s', async (_nom, protection) => {
+    mockPrisma.message.findMany.mockResolvedValue([
+      makeFakeMessageWithTranslations(protection as any),
+    ]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    expect(response.statusCode).toBe(200);
+
+    // La CHARGE ENTIÈRE est inspectée, pas seulement les deux champs qu'on
+    // vise : le corps sert `content`, `originalContent` (le MÊME texte sous un
+    // second nom) et `translatedContent`, et le schéma déclare les lignes en
+    // `additionalProperties: true` — tout ce qui est chargé sort. Chercher
+    // dans le texte brut est la seule lecture qui ne rate pas un troisième nom.
+    expect(response.body).not.toContain('Hola');    // l'original
+    expect(response.body).not.toContain('Bonjour'); // la traduction fr
+    expect(response.body).not.toContain('Hello');   // la traduction en
+
+    const body = JSON.parse(response.body);
+    expect(body.data).toEqual([]);
+    await bigbossApp.close();
+  });
+
+  it('sert normalement un message NON protégé — la garde vise la protection, pas la route', async () => {
+    mockPrisma.message.findMany.mockResolvedValue([makeFakeMessageWithTranslations()]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    const body = JSON.parse(response.body);
+    // Sans ce témoin, une garde qui exclut TOUT passerait les quatre ci-dessus.
+    expect(body.data).toHaveLength(2);
+    expect(response.body).toContain('Bonjour');
+    await bigbossApp.close();
+  });
+
   it('includes translations.not.null in prisma where clause', async () => {
     const bigbossApp = buildApp('BIGBOSS');
     await bigbossApp.ready();
@@ -858,7 +1039,8 @@ describe('Admin content routes — GET /share-links', () => {
     await modApp.close();
   });
 
-  it('returns 200 and passes search filter to prisma (OR clause)', async () => {
+  // #4693 — plus AUCUNE clé de jointure dans le `OR` : l'appartenance à la page était un oracle.
+  it('returns 200 and passes search filter to prisma (name only)', async () => {
     app = buildApp('ADMIN');
     await app.ready();
 
@@ -867,9 +1049,8 @@ describe('Admin content routes — GET /share-links', () => {
 
     const call = mockPrisma.conversationShareLink.findMany.mock.calls[0][0];
     expect(call.where.OR).toBeDefined();
-    expect(call.where.OR[0].linkId.contains).toBe('mylink');
-    expect(call.where.OR[1].identifier.contains).toBe('mylink');
-    expect(call.where.OR[2].name.contains).toBe('mylink');
+    expect(call.where.OR).toHaveLength(1);
+    expect(call.where.OR[0].name.contains).toBe('mylink');
   });
 
   it('returns 200 and applies isActive=true filter', async () => {

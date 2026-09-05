@@ -2,8 +2,9 @@
  * Utilitaires pour construire les URLs d'attachements
  * Transforme les chemins relatifs en URLs complètes selon l'environnement
  */
-import { getBackendUrl } from '@/lib/config';
+import { getBackendUrl, getStaticUrl } from '@/lib/config';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { parseMediaRef } from '@meeshy/shared/api/media-ref';
 
 /**
  * Construit l'URL complète d'un attachement à partir d'un chemin relatif ou absolu
@@ -28,6 +29,20 @@ export function buildAttachmentUrl(relativePath: string | null | undefined): str
   // Retourner null si le chemin est vide
   if (!relativePath) {
     return null;
+  }
+
+  // Le magasin STATIQUE se déclare dans la donnée, par un schéma (#4625).
+  //
+  // Il fallait un marqueur parce qu'aucune FORME de clé ne dit son magasin :
+  // `u/i/2025/11/a.jpg` (statique) et `avatars/user/<id>.jpg` (passerelle)
+  // échouent tous deux au test `^\/\d{4}\/\d{2}\//` que cette fonction
+  // employait, et partaient donc au même hôte — celui où l'un des deux n'est
+  // pas. La règle de lecture est partagée (`parseMediaRef`) ; l'ADRESSE reste
+  // composée ici, parce que `getStaticUrl()` est une décision de déploiement du
+  // web et n'a rien à faire dans `packages/shared`.
+  const ref = parseMediaRef(relativePath);
+  if (ref?.kind === 'key' && ref.store === 'static') {
+    return `${getStaticUrl()}/${ref.key}`;
   }
 
   // Origine API dérivée au runtime (SSOT : `getBackendUrl()` dans `lib/config.ts`).

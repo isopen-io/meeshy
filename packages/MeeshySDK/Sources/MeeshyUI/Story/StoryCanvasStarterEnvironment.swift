@@ -224,12 +224,41 @@ public nonisolated struct StoryStickerLibraryItem: Identifiable, Equatable, @unc
     /// réécrit à la main au site de pose et dans les tests qui le vérifient.
     public static let provider = "library"
 
-    public let id: String
-    public let thumbnail: UIImage
+    /// **Le plafond de décodage d'une VIGNETTE de la bibliothèque, en pixels**
+    /// (#3956) — le ×3 d'un écran Retina sur la case de 52 pt de la grille.
+    ///
+    /// Il vit ici, et non de chaque côté, parce que les DEUX moitiés le lisent :
+    /// l'app décode l'image fixe d'un cycle en relisant le disque, le SDK décode
+    /// le cycle lui-même pour l'animer. Deux nombres écrits séparément
+    /// donneraient deux résolutions dans la même case, et l'écart ne se verrait
+    /// qu'entre un GIF et le PNG posé à côté de lui.
+    public static let thumbnailPixelBudget = 156
 
-    public init(id: String, thumbnail: UIImage) {
+    public let id: String
+    /// **L'image FIXE** — pour un sticker animé, sa première image, celle qu'un
+    /// GIF non joué montre. Tout chemin de rendu fixe (vignette de grille,
+    /// cover, export, thumbHash) continue de la lire sans rien savoir de
+    /// l'animation.
+    public let thumbnail: UIImage
+    /// **Les octets ANIMÉS du sticker** — `nil` = fixe (#3956).
+    ///
+    /// Les octets sont la SOURCE ; `thumbnail` en est la projection. C'est
+    /// l'inverse qui a fait perdre l'animation jusqu'ici : le collage décodait
+    /// une `UIImage` puis la ré-encodait en PNG, si bien que les images 2 à N
+    /// étaient détruites AVANT même d'entrer dans la bibliothèque.
+    ///
+    /// Pourquoi des octets et pas une `UIImage` animée : `UIImage
+    /// .animatedImage(with:duration:)` porte ses images dans `.images` et rend
+    /// `cgImage` **nil**. Une telle image traverserait `loadedImages` en
+    /// annulant en silence le thumbHash, l'encodage PNG, la cover et l'export —
+    /// quatre chemins qui lisent tous `cgImage`. Les octets se décodent au
+    /// budget du site qui les peint, et ne cassent rien en route.
+    public let animatedData: Data?
+
+    public init(id: String, thumbnail: UIImage, animatedData: Data? = nil) {
         self.id = id
         self.thumbnail = thumbnail
+        self.animatedData = animatedData
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
@@ -247,13 +276,40 @@ public nonisolated struct StoryStickerLibraryItem: Identifiable, Equatable, @unc
 public nonisolated struct StoryStickerLibraryProvider {
     public typealias Recents = @MainActor () async -> [StoryStickerLibraryItem]
     public typealias Paste = @MainActor ([NSItemProvider]) async -> [StoryStickerLibraryItem]
+    /// **Détourer le sujet d'une photo** (#3955) : l'app reçoit les octets
+    /// choisis, rend la bibliothèque à jour — ou `nil` si aucun sujet n'a été
+    /// trouvé, ce qui est le refus le plus fréquent et doit se DIRE.
+    public typealias Lift = @MainActor (Data) async -> [StoryStickerLibraryItem]?
 
     private let recentsProvider: Recents
     private let pasteProvider: Paste
+    private let liftProvider: Lift?
 
-    public init(recents: @escaping Recents, paste: @escaping Paste) {
+    /// - Parameter lift: `nil` ⇒ **l'entrée « détourer » n'est pas rendue.**
+    ///   C'est la loi 4, et ici elle a une raison mesurable : le détourage est
+    ///   une API iOS 17 alors que le plancher du projet est 16. Une entrée
+    ///   grisée promettrait à un utilisateur d'iOS 16 une capacité que son
+    ///   appareil n'a pas.
+    public init(recents: @escaping Recents,
+                paste: @escaping Paste,
+                lift: Lift? = nil) {
         self.recentsProvider = recents
         self.pasteProvider = paste
+        self.liftProvider = lift
+    }
+
+    /// `false` quand cet appareil ne sait pas détourer — la surface lit ce
+    /// prédicat plutôt que de refaire un `#available`, qui la ferait diverger
+    /// de la capacité réellement injectée.
+    public var canLift: Bool { liftProvider != nil }
+
+    /// `nil` = rien n'est entré dans la bibliothèque (capacité absente, ou
+    /// aucun sujet trouvé) : la grille reste inchangée, et c'est l'app qui l'a
+    /// dit à l'utilisateur.
+    @MainActor
+    public func lift(imageData: Data) async -> [StoryStickerLibraryItem]? {
+        guard let liftProvider else { return nil }
+        return await liftProvider(imageData)
     }
 
     @MainActor

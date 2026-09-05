@@ -6,6 +6,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.notification.NotificationCountsSocketEvent
+import me.meeshy.sdk.notification.NotificationDeletedBulkSocketEvent
+import me.meeshy.sdk.notification.NotificationDeletedSocketEvent
+import me.meeshy.sdk.notification.NotificationReadBulkSocketEvent
+import me.meeshy.sdk.notification.NotificationReadSocketEvent
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.model.TranslationEvent
@@ -76,6 +81,11 @@ class MessageSocketManager @Inject constructor(
     private val _liveLocationUpdated = buf<LiveLocationUpdatedEvent>()
     private val _liveLocationStopped = buf<LiveLocationStoppedEvent>()
     private val _notificationReceived = buf<ApiNotification>()
+    private val _notificationRead = buf<NotificationReadSocketEvent>()
+    private val _notificationReadBulk = buf<NotificationReadBulkSocketEvent>()
+    private val _notificationDeleted = buf<NotificationDeletedSocketEvent>()
+    private val _notificationDeletedBulk = buf<NotificationDeletedBulkSocketEvent>()
+    private val _notificationCounts = buf<NotificationCountsSocketEvent>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageEdited: SharedFlow<ApiMessage> = _messageEdited.asSharedFlow()
@@ -125,6 +135,21 @@ class MessageSocketManager @Inject constructor(
      */
     val notificationReceived: SharedFlow<ApiNotification> = _notificationReceived.asSharedFlow()
 
+    /**
+     * Notification sync family (issue notif-sync) — the OTHER four events a notification's
+     * lifecycle emits besides its arrival, all plain-emitted by the gateway (no `_seq`,
+     * `NotificationService.ts`'s `announceReadBulk`/`announceDeletedBulk`/`emitCountsUpdate`
+     * doc-comments: estampiller ferait avancer un curseur sans lecteur). Mirrors iOS
+     * `MessageSocketManager` / web `notification-socketio.singleton.ts`'s
+     * `onNotificationRead`/`onNotificationReadBulk`/`onNotificationDeleted`/
+     * `onNotificationDeletedBulk`/`onCounts`.
+     */
+    val notificationRead: SharedFlow<NotificationReadSocketEvent> = _notificationRead.asSharedFlow()
+    val notificationReadBulk: SharedFlow<NotificationReadBulkSocketEvent> = _notificationReadBulk.asSharedFlow()
+    val notificationDeleted: SharedFlow<NotificationDeletedSocketEvent> = _notificationDeleted.asSharedFlow()
+    val notificationDeletedBulk: SharedFlow<NotificationDeletedBulkSocketEvent> = _notificationDeletedBulk.asSharedFlow()
+    val notificationCounts: SharedFlow<NotificationCountsSocketEvent> = _notificationCounts.asSharedFlow()
+
     fun attach() {
         listen("message:new", _messageReceived)
         listen("message:edited", _messageEdited)
@@ -161,6 +186,13 @@ class MessageSocketManager @Inject constructor(
         listen("notification:new", _notificationReceived) { raw ->
             syncSeqTracker.observe((raw.opt(SEQ_KEY) as? Number)?.toLong())
         }
+        // Plain emissions (no `_seq`) — the gateway deliberately does not stamp them, so unlike
+        // "notification:new" above there is no cursor to observe here.
+        listen("notification:read", _notificationRead)
+        listen("notification:read-bulk", _notificationReadBulk)
+        listen("notification:deleted", _notificationDeleted)
+        listen("notification:deleted-bulk", _notificationDeletedBulk)
+        listen("notification:counts", _notificationCounts)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */

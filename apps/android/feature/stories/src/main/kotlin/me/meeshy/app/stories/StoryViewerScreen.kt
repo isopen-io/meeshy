@@ -44,6 +44,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -140,6 +141,8 @@ fun StoryViewerScreen(
 
     var showViewers by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var showSendTo by remember { mutableStateOf(false) }
+    var sendToStoryId by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -325,9 +328,10 @@ fun StoryViewerScreen(
         slideDurationMs,
         showViewers,
         showComments,
+        showSendTo,
         railOverlayActive,
     ) {
-        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || railOverlayActive) return@LaunchedEffect
+        if (state.slides.isEmpty() || state.isDismissed || showViewers || showComments || showSendTo || railOverlayActive) return@LaunchedEffect
         viewModel.markCurrentViewed()
         progress.snapTo(0f)
         // Gate: hold the countdown at empty until the current slide's media has
@@ -391,6 +395,10 @@ fun StoryViewerScreen(
                     mediaUrl = slide.backgroundVideoUrl,
                     isActive = true,
                     muted = false,
+                    // La fenêtre de lecture que l'auteur a posée (#5129) — `null`
+                    // quand la source joue en entier.
+                    sourceStartMs = slide.backgroundVideoWindow?.startMs,
+                    sourceEndMs = slide.backgroundVideoWindow?.endMs,
                     // Aspect-fill base, then the author's pan/zoom framing on top — the
                     // offset fractions scale to the measured canvas so it is resolution-
                     // independent (mirrors the image branch and iOS's "zoom inside the
@@ -398,8 +406,10 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = bg.scale
-                            scaleY = bg.scale
+                            // Deux axes depuis #5085 : un recadrage non carré
+                            // agrandit différemment en largeur et en hauteur.
+                            scaleX = bg.scaleX
+                            scaleY = bg.scaleY
                             rotationZ = bg.rotationDegrees
                             translationX = bg.offsetXFraction * size.width
                             translationY = bg.offsetYFraction * size.height
@@ -425,8 +435,10 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            scaleX = bg.scale
-                            scaleY = bg.scale
+                            // Deux axes depuis #5085 : un recadrage non carré
+                            // agrandit différemment en largeur et en hauteur.
+                            scaleX = bg.scaleX
+                            scaleY = bg.scaleY
                             rotationZ = bg.rotationDegrees
                             translationX = bg.offsetXFraction * size.width
                             translationY = bg.offsetYFraction * size.height
@@ -466,11 +478,43 @@ fun StoryViewerScreen(
             }
         }
 
+        // The author's freehand drawing, read-only — a stroke-only slide is publishable
+        // (StorySlideDeck.publishableSlides) but carries no other overlay, so without this
+        // the reader (and the author, re-viewing their own story) would see a bare background.
+        if (slide != null && slide.strokes.isNotEmpty()) {
+            StoryDrawingLayer(
+                strokes = slide.strokes,
+                isCapturing = false,
+                activeColorHex = "#FFFFFF",
+                activeWidthDesign = 0.0,
+                onStrokeCaptured = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
         slide?.backgroundAudioUrl?.let { url ->
-            key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = slide.backgroundLoop) }
+            key(url) {
+                AudioTrackSurface(
+                    mediaUrl = url,
+                    isActive = true,
+                    loop = slide.backgroundLoop,
+                    sourceStartMs = slide.backgroundAudioWindow?.startMs,
+                    sourceEndMs = slide.backgroundAudioWindow?.endMs,
+                )
+            }
         }
         slide?.foregroundAudioUrl?.let { url ->
-            key(url) { AudioTrackSurface(mediaUrl = url, isActive = true, loop = false) }
+            key(url) {
+                AudioTrackSurface(
+                    mediaUrl = url,
+                    isActive = true,
+                    loop = false,
+                    // Un vocal rogné compte autant qu'une vidéo rognée : iOS
+                    // écrit les deux bornes sur les deux familles (#5129).
+                    sourceStartMs = slide.foregroundAudioWindow?.startMs,
+                    sourceEndMs = slide.foregroundAudioWindow?.endMs,
+                )
+            }
         }
 
         if (slide != null && slide.text.isNotBlank()) {
@@ -585,6 +629,14 @@ fun StoryViewerScreen(
                             )
                         }
                         DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.stories_action_send_to)) },
+                                onClick = {
+                                    showOptions = false
+                                    sendToStoryId = state.currentStoryId
+                                    showSendTo = true
+                                },
+                            )
                             if (state.isOwnStory) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_delete), color = MeeshyPalette.Error) },
@@ -746,6 +798,18 @@ fun StoryViewerScreen(
             storyId = commentsStoryId,
             accentHex = accent,
             onDismiss = { showComments = false },
+        )
+    }
+
+    val frozenSendToStoryId = sendToStoryId
+    if (showSendTo && frozenSendToStoryId != null) {
+        StorySendToSheet(
+            storyId = frozenSendToStoryId,
+            accentHex = accent,
+            onDismiss = {
+                showSendTo = false
+                sendToStoryId = null
+            },
         )
     }
 }
@@ -935,7 +999,14 @@ private fun StoryForegroundLayer(
             .aspectRatio(aspectRatio)
             .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
         if (media.isVideo) {
-            ReelVideoSurface(mediaUrl = media.url, isActive = true, muted = false, modifier = layerModifier)
+            ReelVideoSurface(
+                mediaUrl = media.url,
+                isActive = true,
+                muted = false,
+                modifier = layerModifier,
+                sourceStartMs = media.sourceWindow?.startMs,
+                sourceEndMs = media.sourceWindow?.endMs,
+            )
         } else {
             AsyncImage(
                 model = media.url,
@@ -1003,6 +1074,9 @@ private fun StoryTextObjectLayer(
                 textAlign = textAlign,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = with(density) { fontSizePx.toSp() },
+                // The EFFECT axis (#4870) — the same table as the composer preview
+                // and the two other clients, at the glyphs' real pixel size.
+                style = LocalTextStyle.current.copy(shadow = animated.effect.composeShadow(fontSizePx, color)),
             )
         }
     }

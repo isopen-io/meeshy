@@ -50,7 +50,7 @@ class NotificationBannerViewModelTest {
     }
 
     private val conversationRepository = mockk<ConversationRepository>(relaxed = true).also {
-        every { it.cachedConversations() } returns flowOf(emptyList<ApiConversation>())
+        every { it.conversationStream(any()) } returns flowOf(null)
     }
 
     private class FakeClock(
@@ -310,16 +310,14 @@ class NotificationBannerViewModelTest {
     fun theGroupBannerLeadsTheLocalNameWithItsFavoriteEmoji() = runTest(dispatcher.scheduler) {
         // The local rename + favorite emoji live only on the device (iOS composedSubtitle):
         // the banner headline must read "<actor> dans <emoji> <renamed name>", not the bare title.
-        every { conversationRepository.cachedConversations() } returns flowOf(
-            listOf(
-                ApiConversation(
-                    id = "c1",
-                    type = "group",
-                    title = "Équipe Tech",
-                    preferences = ApiConversationPreferences(
-                        customName = "Mon équipe à moi",
-                        reaction = "😴",
-                    ),
+        every { conversationRepository.conversationStream("c1") } returns flowOf(
+            ApiConversation(
+                id = "c1",
+                type = "group",
+                title = "Équipe Tech",
+                preferences = ApiConversationPreferences(
+                    customName = "Mon équipe à moi",
+                    reaction = "😴",
                 ),
             ),
         )
@@ -341,6 +339,48 @@ class NotificationBannerViewModelTest {
         val inConversation = headline as BannerHeadline.InConversation
         assertThat(inConversation.actor).isEqualTo("Alice")
         assertThat(inConversation.groupName).isEqualTo("😴 Mon équipe à moi")
+    }
+
+    @Test
+    fun showPreviewOffHidesTheBannerContent() = runTest(dispatcher.scheduler) {
+        val vm = viewModel(UserNotificationPreferences(showPreview = false))
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                content = "Dinner at 8?",
+                context = NotificationContext(conversationId = "c1"),
+            ),
+        )
+        runCurrent()
+
+        val banner = vm.banner.value
+        assertThat(banner?.previewHidden).isTrue()
+        assertThat(banner?.presentation?.body).isNull()
+    }
+
+    @Test
+    fun showPreviewOnLeavesTheBannerContentVisible() = runTest(dispatcher.scheduler) {
+        val vm = viewModel(UserNotificationPreferences(showPreview = true))
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                actor = NotificationActor(id = "a1", displayName = "Alice"),
+                content = "Dinner at 8?",
+                context = NotificationContext(conversationId = "c1"),
+            ),
+        )
+        runCurrent()
+
+        val banner = vm.banner.value
+        assertThat(banner?.previewHidden).isFalse()
+        assertThat(banner?.presentation?.body).isEqualTo("Dinner at 8?")
     }
 
     @Test

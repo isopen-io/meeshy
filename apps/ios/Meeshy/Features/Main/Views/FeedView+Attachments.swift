@@ -353,7 +353,15 @@ extension FeedView {
                     // fabrique de charge ne pose aucun défaut, précisément pour
                     // qu'un champ neuf ne disparaisse pas d'un site d'appel en
                     // silence.
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil,  // le composer inline n'a pas de scène, #4756
+                    mediaCaptions: nil,
+                // **La feuille du FIL n'a ni éditeur d'objet ni scène** : pas
+                // d'alternative textuelle à porter, aucun objet de canvas à
+                // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
+                // site en silence, et rien n'aurait dit le jour où cette
+                // feuille gagnerait un champ « Décrire ».
+                mediaAlts: nil, mediaObjectIds: nil
                 )
             }
             return
@@ -1162,37 +1170,37 @@ struct FeedComposerSheet: View {
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.brandPrimary)
                     }
-                    .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
+                    .accessibilityLabel(String(localized: "feed.attach.photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.error)
                     }
-                    .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
+                    .accessibilityLabel(String(localized: "feed.attach.take-photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "F8B500"))
                     }
-                    .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
+                    .accessibilityLabel(String(localized: "feed.attach.emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
                             .foregroundColor(Color(hex: "9B59B6"))
                     }
-                    .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
+                    .accessibilityLabel(String(localized: "feed.attach.file", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.success)
                     }
-                    .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
+                    .accessibilityLabel(String(localized: "feed.attach.location", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
                             .foregroundColor(MeeshyColors.errorStrong)
                     }
-                    .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
+                    .accessibilityLabel(String(localized: "feed.attach.record-audio", defaultValue: "Enregistrer un audio"))
 
                     Spacer()
 
@@ -1214,7 +1222,7 @@ struct FeedComposerSheet: View {
                                     )
                             )
                     }
-                    .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    .accessibilityLabel(String(localized: "feed.post.language", defaultValue: "Langue du post"))
                     .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)
@@ -1236,7 +1244,7 @@ struct FeedComposerSheet: View {
                         await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                     }
                 },
-                onPublishBorrowed: { sound in
+                onPublishBorrowed: { sound, _ in
                     showAudioComposer = false
                     Task { await publishBorrowedSoundFromSheet(sound) }
                 }
@@ -1260,7 +1268,11 @@ struct FeedComposerSheet: View {
         .fullScreenCover(isPresented: $showCamera) {
             CameraView { result in
                 switch result {
-                case .photo(let image):
+                // Sixième et septième consommateurs de `CameraResult.photo`,
+                // élargi le 2026-09-04 pour porter l'EXIF (#4080). Le fil du
+                // feed ré-encode déjà l'image : les octets d'origine ne lui
+                // servent pas, et il les jette explicitement.
+                case .photo(let image, _):
                     handleCameraCapture(image)
                 case .video(let url):
                     handleCameraVideo(url)
@@ -1768,7 +1780,15 @@ struct FeedComposerSheet: View {
                     location: pendingPlace,
                     mentions: declared,
                     discoverabilityPrecision: nearbyPrecision,
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil,
+                    mediaCaptions: nil,
+                // **La feuille du FIL n'a ni éditeur d'objet ni scène** : pas
+                // d'alternative textuelle à porter, aucun objet de canvas à
+                // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
+                // site en silence, et rien n'aurait dit le jour où cette
+                // feuille gagnerait un champ « Décrire ».
+                mediaAlts: nil, mediaObjectIds: nil
                 )
             }
             return

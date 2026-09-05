@@ -67,7 +67,21 @@ function passwordLengthLiterals(source: string): readonly number[] {
  */
 const SITES: readonly string[] = [
   'packages/shared/utils/validation.ts',
-  'packages/shared/types/api-schemas.ts',
+  // #5216 — `utils/validation.ts` (2700 lignes) a été découpé pour que
+  // `AuthSchemas` puisse grandir : la CONSTANTE vit désormais dans
+  // `validation-primitives.ts` et les schémas qui l'appliquent dans
+  // `auth-schemas.ts`. Recenser la seule façade ferait tomber la contre-épreuve
+  // « gouverné, pas muet » par DISPARITION — même geste qu'aux deux découpages
+  // recensés plus bas.
+  'packages/shared/utils/validation-primitives.ts',
+  'packages/shared/utils/auth-schemas.ts',
+  // #4635 — `types/api-schemas.ts` (3995 lignes) a été découpé ; il n'est plus
+  // qu'une façade de ré-export, et la règle de longueur vit avec les schémas
+  // d'authentification qui l'appliquent (`registerRequestSchema`,
+  // `changePasswordRequestSchema`, `resetPasswordRequestSchema`). Même geste
+  // qu'au découpage de `users/profile.ts` ci-dessous : recenser la façade
+  // ferait tomber la contre-épreuve « gouverné, pas muet » par DISPARITION.
+  'packages/shared/types/api-schemas/auth.ts',
   'packages/shared/types/validation/admin-user.ts',
   'services/gateway/src/routes/password-reset.ts',
   // #4284 — `users/profile.ts` (1093 lignes) a été découpé ; il n'est plus

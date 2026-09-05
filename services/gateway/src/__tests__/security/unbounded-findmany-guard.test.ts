@@ -195,7 +195,17 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // vivent désormais dans agent-configs.ts (4) et agent-observability.ts
   // (4). Le compte total est inchangé.
   'admin/agent-configs.ts': 4,
-  'admin/agent-observability.ts': 4,
+  // 4 -> 2 : #4465 a retiré les deux `findMany` nus de `GET /stats`
+  // (`agentUserRole.findMany({distinct:['userId']})`, remplacé par un
+  // `$group`+`$count`) et de `GET /scan-logs/stats` (`agentScanLog.findMany`
+  // sur toute la fenêtre, remplacé par un `$facet` à deux grains — voir les
+  // doc-comments de `distinctControlledUsersPipeline` et
+  // `scanLogsStatsPipeline`). Les DEUX qui restent vivent dans
+  // `GET /recent-activity`, hors périmètre de #4465 (`agentConfig.findMany`
+  // et `agentUserRole.findMany` bornés transitivement par le `take` de
+  // l'`agentAnalytic.findMany` qui alimente leur `conversationIds` — une
+  // borne transitive reste une borne, ce cliquet ne sait juste pas la lire).
+  'admin/agent-observability.ts': 2,
   'admin/agent-topics.ts': 1,
   // `admin/invitations.ts` avait 1 (`GET /timeline/daily`) : #4465 l'a RETIRE.
   // La ligne ne devient pas 0, elle DISPARAIT (`compterParFichier` n'accumule
@@ -218,7 +228,15 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'auth/register.ts': 1,
   'communities/membership.ts': 1,
   'community-preferences.ts': 1,
-  'conversations/ban.ts': 2,
+  // #4713 a extrait les NOYAUX des quatre gestes de gestion d'un participant
+  // (`rights`, `role`, `ban`, `unban`) hors de leurs gestionnaires Fastify ;
+  // les deux sites de `conversations/ban.ts` vivent desormais dans
+  // `participant-ban-core.ts`, inchanges. Le compte total est le meme —
+  // seule la CLE change, ce cliquet etant indexe par FICHIER (meme mecanique
+  // que #4284 sur `core.ts`/`participants.ts`, et que #4169 sur
+  // `links/utils/share-link-mint.ts`). Ne pas lire ces lignes comme une
+  // dette neuve.
+  'conversations/participant-ban-core.ts': 2,
   // #4284 a découpé conversations/core.ts en fichiers frères ; les huit
   // sites vivent désormais dans core-detail.ts (3), core-lifecycle.ts (2)
   // et core-list.ts (3). Le compte total est inchangé.
@@ -243,7 +261,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // frères ; les cinq sites vivent désormais dans participants-presence.ts
   // (1) et participants-writes.ts (4). Le compte total reste inchangé.
   'conversations/participants-presence.ts': 1,
-  'conversations/participants-writes.ts': 4,
+  // 4 -> 3 + 1 : #4713 a emporte dans `participant-rights-core.ts` la lecture
+  // des HOTES de la conversation (l'eventail de `PATCH …/rights`) ; les trois
+  // qui restent sont celles de l'admission (`POST …/participants`), qui n'a
+  // pas bouge. Total inchange.
+  'conversations/participant-rights-core.ts': 1,
+  'conversations/participants-writes.ts': 3,
   'conversations/participant-removal.ts': 2,
   'conversations/search.ts': 1,
   'conversations/sharing.ts': 2,
@@ -267,7 +290,6 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // AILLEURS — la clause `id: { in: distinctIds }` sur un lot que le schema de
   // `/posts/impressions/batch` plafonne a 100. Une borne transitive reste une
   // borne ; ce cliquet compte les take/skip, il ne sait pas les lire.
-  'posts/impressions.ts': 1,
   'posts/postConsumptionGate.ts': 1,
   'posts/nearby.ts': 1,
   'push-tokens.ts': 1,

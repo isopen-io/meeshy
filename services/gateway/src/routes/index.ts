@@ -110,6 +110,7 @@ import { analyticsRoutes } from './admin/analytics';
 import { languagesRoutes } from './admin/languages';
 import * as AdminMessages from './admin/messages';
 import { registerContentRoutes } from './admin/content';
+import { registerAdminShareLinkRoutes } from './admin/share-links';
 import { anonymousUsersAdminRoutes } from './admin/anonymous-users';
 import { systemRankingsRoutes } from './admin/system-rankings';
 import { broadcastRoutes } from './admin/broadcasts';
@@ -152,6 +153,7 @@ import callRoutes from './calls';
 import { voiceProfileRoutes } from './voice-profile';
 import { voiceAnalysisRoutes, voiceAnalysisLegacyAliasRoutes } from './voice-analysis';
 import { appRoutes } from './app';
+import { socialEventsRoutes } from './social/events';
 import { healthProbeRoutes } from './health';
 
 const API_PREFIX = apiBasePath();
@@ -178,8 +180,9 @@ export interface RouteRegistrationEntry {
 }
 
 /**
- * 61 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
- * `conversation-receipts` ; #4348 en ajoute une, `me-consents`), réparties en
+ * 63 entrées (#4359 en a ajouté une, `me-categories` ; #4349 en ajoute une,
+ * `conversation-receipts` ; #4348 en ajoute une, `me-consents` ; #4150 en
+ * ajoute une, `social-events`), réparties en
  * QUATRE segments plutôt qu'une liste plate — et ce n'est pas une préférence
  * de mise en page.
  *
@@ -245,6 +248,12 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-languages', prefix: `${API_PREFIX}/admin/languages`, module: languagesRoutes },
   { name: 'admin-messages', prefix: `${API_PREFIX}/admin/messages`, module: AdminMessages.messagesRoutes },
   { name: 'admin-content', prefix: `${API_PREFIX}/admin`, module: registerContentRoutes },
+  // Même préfixe et même ressource que `admin-content` (qui monte `GET
+  // /admin/share-links` et `POST /admin/share-links/:id/reveal` via
+  // `admin/content-share-links.ts`) : la FERMETURE d'un lien par
+  // l'administration (#3734) est montée juste après, pour que l'adjacence des
+  // deux entrées dise ce que l'arborescence des fichiers ne dit pas encore.
+  { name: 'admin-share-links', prefix: `${API_PREFIX}/admin`, module: registerAdminShareLinkRoutes },
   { name: 'admin-anonymous-users', prefix: `${API_PREFIX}/admin`, module: anonymousUsersAdminRoutes },
   { name: 'admin-rankings', prefix: `${API_PREFIX}/admin`, module: systemRankingsRoutes },
   { name: 'admin-broadcasts', prefix: `${API_PREFIX}/admin/broadcasts`, module: broadcastRoutes },
@@ -375,6 +384,21 @@ export const ROUTE_TABLE_BEFORE_VOICE_PLUGIN: readonly RouteRegistrationEntry[] 
 
 /** Après `postRoutes`, jusqu'à la fin de `registerAllRoutes`. */
 export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
+  // ── Télémétrie sociale ────────────────────────────────────────────────
+  // `POST /social/events` (#4150) — le point d'ingestion UNIQUE de la
+  // télémétrie de lecture, vers lequel les six adresses historiques
+  // (`/posts/:id/view`, `/impression`, `/impressions/batch`,
+  // `/engagement/batch`, `/downloads`, `/anonymous-view`) délèguent en alias.
+  //
+  // Ce SEGMENT, et pas un autre : les trois premiers sont suivis d'un montage
+  // ANONYME (`conversationRoutes`, `postRoutes`, le bloc de traduction), dont
+  // `route-manifest/collect.ts` étiquette le contenu par un compteur GLOBAL
+  // incrémenté dans l'ORDRE D'EXÉCUTION. Une entrée insérée AVANT l'un d'eux
+  // décale les libellés `anonyme~N` de tout ce qui s'enregistre anonymement à
+  // l'intérieur, et fait rougir `route-manifest-ratchet` sans qu'aucune route
+  // n'ait bougé. Le quatrième segment est la QUEUE : rien d'anonyme ne le suit.
+  { name: 'social-events', prefix: API_PREFIX, module: socialEventsRoutes },
+
   // ── Amorçage applicatif, diagnostics ─────────────────────────────────
   { name: 'app-bootstrap', prefix: API_PREFIX, module: appRoutes },
   { name: 'health-probes', prefix: `${API_PREFIX}/health`, module: healthProbeRoutes },
@@ -384,7 +408,7 @@ export const ROUTE_TABLE_AFTER_POSTS: readonly RouteRegistrationEntry[] = [
  * Concaténation ORDONNÉE des quatre segments — voir le commentaire au-dessus
  * de `ROUTE_TABLE_BEFORE_USER_DELETIONS` pour pourquoi ils sont séparés dans
  * `route-registration.ts`. C'est CETTE constante que les témoins et la
- * documentation consultent : l'ordre relatif de ses 61 entrées entre elles
+ * documentation consultent : l'ordre relatif de ses 63 entrées entre elles
  * est identique à celui dans lequel `registerAllRoutes` les enregistre
  * réellement (les quatre segments, mis bout à bout, plus les huit montages
  * spéciaux qui les séparent et qui n'y figurent pas).

@@ -525,3 +525,160 @@ describe('GET /admin/invitations/timeline/daily — budget de lignes lues', () =
     expect(aAppele(journal, 'friendRequest', 'findMany')).toBe(false);
   });
 });
+
+// =============================================================================
+// Auth minimal commun aux deux sections ci-dessous — mêmes décorateurs que les
+// sections 6-8, adaptés à `registerAgentObservabilityRoutes` (qui s'enregistre
+// directement sur l'instance, sans passer par `app.register`).
+// =============================================================================
+
+function decorateAgentAdminAuth(app: FastifyInstance): void {
+  app.decorate('authenticate', async (req: FastifyRequest): Promise<void> => {
+    (req as unknown as Record<string, unknown>).authContext = {
+      isAuthenticated: true,
+      userId: USER_ID,
+      registeredUser: { id: USER_ID, role: 'ADMIN' },
+    };
+  });
+}
+
+// =============================================================================
+// 9. GET /admin/agent/stats (#4465)
+//
+// Le compte d'utilisateurs CONTRÔLÉS distincts est un repliement UNIQUE — rien
+// à combiner, donc pas de `$facet` : `$group` par `userId` puis `$count` rend
+// UN document. `agentUserRole.findMany` reste câblé pour rendre 5 000 lignes :
+// la même preuve que /trends et /timeline/daily, sur une troisième route.
+// =============================================================================
+
+describe('GET /admin/agent/stats — budget de lignes lues', () => {
+  it('compte les utilisateurs contrôlés en base : jamais une ligne par rôle', async () => {
+    const journal: Journal = { lectures: [] };
+    const prisma = instrumenter(
+      {
+        agentConfig: {
+          count: jest.fn(() => Promise.resolve(3)),
+        },
+        agentUserRole: {
+          count: jest.fn(() => Promise.resolve(10)),
+          findMany: jest.fn(() => Promise.resolve(
+            Array.from({ length: LIGNES_EN_BASE }, () => ({ userId: 'u' }))
+          )),
+          aggregateRaw: jest.fn(() => Promise.resolve([{ total: 4 }])),
+        },
+        agentAnalytic: {
+          aggregate: jest.fn(() => Promise.resolve({
+            _sum: { messagesSent: 0, totalWordsSent: 0 },
+            _avg: { avgConfidence: 0 },
+          })),
+          findMany: jest.fn(() => Promise.resolve([])),
+        },
+      },
+      journal
+    );
+
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    decorateAgentAdminAuth(app);
+    app.decorate('prisma', prisma);
+    const { registerAgentObservabilityRoutes } = await import('../../routes/admin/agent-observability');
+    registerAgentObservabilityRoutes(app);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: '/stats' });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect((JSON.parse(res.body) as { data: { totalControlledUsers: number } }).data.totalControlledUsers).toBe(4);
+    expect(lignesLues(journal)).toBeLessThanOrEqual(8);
+    expect(aAppele(journal, 'agentUserRole', 'findMany')).toBe(false);
+  });
+});
+
+// =============================================================================
+// 10. GET /admin/agent/scan-logs/stats (#4465)
+//
+// Deux GRAINS de repli sur le même `$match`, combinés par `$facet` — pas pour
+// un motif MODULO (l'axe temporel est un partitionnement jour/semaine
+// CONTIGU) mais parce que la répartition par ISSUE a besoin d'une maille
+// {seau, issue} que les comptes DISTINCTS (conversations, utilisateurs) ne
+// peuvent pas partager sans surcompter. `agentScanLog.findMany` reste câblé
+// pour rendre 5 000 lignes.
+// =============================================================================
+
+const scanLogsEnBase = () =>
+  Array.from({ length: LIGNES_EN_BASE }, () => ({
+    startedAt: new Date(), conversationId: '507f1f77bcf86cd799439099', outcome: 'success',
+    messagesSent: 1, reactionsSent: 0, userIdsUsed: [], estimatedCostUsd: 0, configChangedAt: null,
+  }));
+
+describe('GET /admin/agent/scan-logs/stats — budget de lignes lues', () => {
+  it('agrège par seau en base : jamais une ligne par scan', async () => {
+    const journal: Journal = { lectures: [] };
+    const prisma = instrumenter(
+      {
+        agentScanLog: {
+          findMany: jest.fn(() => Promise.resolve(scanLogsEnBase())),
+          aggregateRaw: jest.fn(() => Promise.resolve([{
+            buckets: [{
+              _id: '2026-08-24', scans: 3, messagesSent: 3, reactionsSent: 0,
+              costUsd: 0, configChanges: 0, conversations: 1, users: 1,
+            }],
+            outcomes: [{ _id: { bucket: '2026-08-24', outcome: 'success' }, count: 3 }],
+          }])),
+        },
+      },
+      journal
+    );
+
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    decorateAgentAdminAuth(app);
+    app.decorate('prisma', prisma);
+    const { registerAgentObservabilityRoutes } = await import('../../routes/admin/agent-observability');
+    registerAgentObservabilityRoutes(app);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: '/scan-logs/stats' });
+    await app.close();
+
+    const body = JSON.parse(res.body) as { data: { buckets: unknown[]; totalLogs: number } };
+    expect(res.statusCode).toBe(200);
+    expect(body.data.buckets).toHaveLength(1);
+    expect(body.data.totalLogs).toBe(3);
+    expect(lignesLues(journal)).toBeLessThanOrEqual(8);
+    expect(aAppele(journal, 'agentScanLog', 'findMany')).toBe(false);
+  });
+
+  /**
+   * `months` n'exposait AUCUNE borne avant #4465 — contrairement à /trends et
+   * /timeline/daily (sans paramètre de période du tout), cette route en a un.
+   * Le passage à `aggregateRaw` rend la lecture BORNÉE À UNE REQUÊTE quel que
+   * soit `months` (pas de risque de N-requêtes, à la différence du patron
+   * `count` par tranche parallèle) — mais Mongo balaie toujours `months` de
+   * lignes pour les replier : la fenêtre doit être refusée AVANT le handler.
+   */
+  it("refuse une fenêtre hors contrat AVANT d'agréger quoi que ce soit", async () => {
+    const journal: Journal = { lectures: [] };
+    const prisma = instrumenter(
+      {
+        agentScanLog: {
+          findMany: jest.fn(() => Promise.resolve(scanLogsEnBase())),
+          aggregateRaw: jest.fn(() => Promise.resolve([{ buckets: [], outcomes: [] }])),
+        },
+      },
+      journal
+    );
+
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    decorateAgentAdminAuth(app);
+    app.decorate('prisma', prisma);
+    const { registerAgentObservabilityRoutes } = await import('../../routes/admin/agent-observability');
+    registerAgentObservabilityRoutes(app);
+    await app.ready();
+
+    const horsBorne = await app.inject({ method: 'GET', url: '/scan-logs/stats?months=999999' });
+    await app.close();
+
+    expect(horsBorne.statusCode).toBe(400);
+    expect(journal.lectures).toHaveLength(0);
+  });
+});

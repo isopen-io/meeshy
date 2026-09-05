@@ -134,7 +134,7 @@ final class NewConversationViewModel: ObservableObject {
                 URLQueryItem(name: "offset", value: "0")
             ]
             let response: APIResponse<[SearchedUser]> = try await api.request(
-                endpoint: "/users/search",
+                UsersEndpoint.search,
                 method: "GET",
                 body: nil,
                 queryItems: queryItems
@@ -258,7 +258,7 @@ final class NewConversationViewModel: ObservableObject {
 
         do {
             let response: APIResponse<APIConversation> = try await api.post(
-                endpoint: "/conversations",
+                ConversationsEndpoint.root,
                 body: body
             )
             let userId = currentUserIdProvider() ?? ""
@@ -274,8 +274,7 @@ final class NewConversationViewModel: ObservableObject {
                 )
             } else {
                 errorMessage = String(
-                    localized: "Impossible de creer la conversation",
-                    defaultValue: "Impossible de cr\u{00E9}er la conversation"
+                    localized: "conversation.new.create.error", defaultValue: "Impossible de créer la conversation"
                 )
             }
         }

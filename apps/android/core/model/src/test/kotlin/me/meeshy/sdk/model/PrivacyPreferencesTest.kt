@@ -26,7 +26,13 @@ class PrivacyPreferencesTest {
         assertThat(prefs.allowGroupInvites).isTrue()
         assertThat(prefs.allowCallsFromNonContacts).isFalse()
         assertThat(prefs.saveMediaToGallery).isFalse()
-        assertThat(prefs.allowAnalytics).isTrue()
+        // #4578 — `allowAnalytics` est GARDÉE par `dataProcessingConsentAt` et
+        // n'a aucun lecteur d'usage : sa valeur stockée est la seule qui existe.
+        // Un défaut `true` faisait donc affirmer par le système, pour un compte
+        // qui n'a rien consenti, exactement ce que la garde refuse. Les quatre
+        // surfaces l'ont passée à `false` ensemble (schéma partagé, défauts
+        // passerelle, SDK iOS, ce modèle).
+        assertThat(prefs.allowAnalytics).isFalse()
         assertThat(prefs.shareUsageData).isFalse()
         assertThat(prefs.blockScreenshots).isFalse()
     }
@@ -171,7 +177,8 @@ class PrivacyPreferencesTest {
         assertThat(decoded.showOnlineStatus).isFalse()
         // Every other field keeps its default.
         assertThat(decoded.showLastSeen).isTrue()
-        assertThat(decoded.allowAnalytics).isTrue()
+        // #4578 — défaut passé à `false` sur les quatre surfaces.
+        assertThat(decoded.allowAnalytics).isFalse()
         assertThat(decoded.blockScreenshots).isFalse()
     }
 

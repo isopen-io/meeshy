@@ -63,14 +63,14 @@ public final class TwoFactorService: TwoFactorServiceProviding, @unchecked Senda
 
     public func getStatus() async throws -> TwoFactorStatus {
         let response: APIResponse<TwoFactorStatus> = try await api.request(
-            endpoint: "/auth/2fa/status"
+            AuthEndpoint.n2FaStatus
         )
         return response.data
     }
 
     public func setup() async throws -> TwoFactorSetup {
         let response: APIResponse<TwoFactorSetup> = try await api.post(
-            endpoint: "/auth/2fa/setup",
+            AuthEndpoint.n2FaSetup,
             body: [String: String]()
         )
         return response.data
@@ -78,7 +78,7 @@ public final class TwoFactorService: TwoFactorServiceProviding, @unchecked Senda
 
     public func enable(code: String) async throws -> TwoFactorBackupCodes {
         let response: APIResponse<TwoFactorBackupCodes> = try await api.post(
-            endpoint: "/auth/2fa/enable",
+            AuthEndpoint.n2FaEnable,
             body: TwoFactorCodeRequest(code: code)
         )
         return response.data
@@ -86,21 +86,21 @@ public final class TwoFactorService: TwoFactorServiceProviding, @unchecked Senda
 
     public func disable(code: String, password: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.post(
-            endpoint: "/auth/2fa/disable",
+            AuthEndpoint.n2FaDisable,
             body: ["code": code, "password": password]
         )
     }
 
     public func verify(code: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.post(
-            endpoint: "/auth/2fa/verify",
+            AuthEndpoint.n2FaVerify,
             body: TwoFactorCodeRequest(code: code)
         )
     }
 
     public func getBackupCodes(code: String) async throws -> TwoFactorBackupCodes {
         let response: APIResponse<TwoFactorBackupCodes> = try await api.post(
-            endpoint: "/auth/2fa/backup-codes",
+            AuthEndpoint.n2FaBackupCodes,
             body: TwoFactorCodeRequest(code: code)
         )
         return response.data

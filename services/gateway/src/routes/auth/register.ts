@@ -8,17 +8,116 @@ import {
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { MeeshyError } from '@meeshy/shared/utils/errors';
 import { ErrorCode } from '@meeshy/shared/types/errors';
-import { RegisterData } from '../../services/AuthService';
-import { getRequestContext } from '../../services/GeoIPService';
+import type { RegisterData } from '../../services/AuthService';
+import { getRequestContext, lookupGeoIp, isPrivateIp } from '../../services/GeoIPService';
 import { createSession, generateSessionToken } from '../../services/SessionService';
-import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
+import { isRegistrationRefusal } from '../../services/auth/registration-refusal';
+import { createRegisterRateLimiter, createAuthGlobalRateLimiter, type RateLimiter } from '../../utils/rate-limiter.js';
+import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
+import { preferredAcceptLanguage } from '../../utils/accept-language';
 import { depreciee } from '../../utils/deprecation';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
-import { candidatsDePseudo } from '../directory/availability';
+import { candidatsDePseudo } from '../../utils/username-candidates';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
+
+/**
+ * Combien de temps l'inscription attend le tiers de géolocalisation AVANT de
+ * répondre (#5216).
+ *
+ * `lookupGeoIp` accorde trois secondes par défaut — trois secondes ajoutées
+ * telles quelles au temps qu'une personne passe devant un écran de chargement,
+ * pour une donnée dont AUCUN champ de la réponse ne dépend. La borne courte
+ * garde le cas nominal (le tiers répond en quelques dizaines de millisecondes,
+ * et le cache sert les suivantes) et abandonne le cas lent — que la reprise
+ * post-réponse rattrape, sans que personne n'attende.
+ */
+const GEO_AVANT_REPONSE_MS = 400;
+
+/**
+ * Le rang 4 du Prisme, tel que la REQUÊTE le porte.
+ *
+ * Deux sources, dans cet ordre : `X-Device-Locale`, que les clients Meeshy
+ * posent explicitement, puis `Accept-Language`, que tout navigateur envoie sans
+ * qu'on le lui demande. La seconde est une liste PONDÉRÉE et non ordonnée —
+ * d'où `preferredAcceptLanguage` plutôt qu'un `split(',')[0]`, qui rendrait
+ * `en` sur `en;q=0.5, fr`.
+ *
+ * Elle n'écrase JAMAIS une préférence exprimée : `registrationLanguages` ne la
+ * consulte que lorsque l'inscription n'exprime AUCUN rang, exactement là où le
+ * code écrivait auparavant le littéral `'fr'`.
+ */
+function localeDeLaRequete(request: FastifyRequest): string | undefined {
+  const entete = request.headers['x-device-locale'];
+  const declaree = Array.isArray(entete) ? entete[0] : entete;
+  if (typeof declaree === 'string' && declaree.trim() !== '') return declaree.trim();
+
+  return preferredAcceptLanguage(request.headers['accept-language']);
+}
+
+/**
+ * REND la tentative comptée par le limiteur — sur un 400, et sur lui seul.
+ *
+ * Un 400 dit « ta saisie est mal formée » : rien n'a été touché, rien n'a été
+ * appris sur autrui. Un 409 apprend au contraire qu'un pseudo ou une adresse
+ * EXISTE — c'est un oracle, et un oracle remboursable est un oracle gratuit,
+ * donc énumérable à volonté. Un 200 et un 429 comptent évidemment.
+ *
+ * Best-effort et DÉTACHÉ : le remboursement ne doit pas retarder la réponse
+ * d'un aller-retour Redis. La garde `.catch` est obligatoire — un rejet sans
+ * écouteur termine le process sous Node 22 (leçon 230).
+ */
+function rembourserLaTentative(limiteurs: readonly RateLimiter[], request: FastifyRequest): void {
+  for (const limiteur of limiteurs) {
+    void limiteur.refund(limiteur.keyFor(request)).catch((error: unknown) => {
+      logger.warn('remboursement de tentative impossible', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+}
+
+/**
+ * REPREND la géolocalisation APRÈS la réponse, et complète la ligne du compte.
+ *
+ * Trois colonnes d'inscription en dépendent — `registrationLocation`,
+ * `registrationCountry`, `timezone` — plus `lastLoginLocation`. Aucune n'est
+ * servie dans la réponse : les faire attendre revenait à ajouter un
+ * aller-retour vers un tiers au chemin d'entrée du produit pour des données que
+ * personne ne lit avant longtemps.
+ *
+ * On ne reprend que ce qui a MANQUÉ, et seulement quand il y avait quelque
+ * chose à trouver : une adresse PRIVÉE a déjà rendu tout ce qu'elle rendra
+ * (`location: 'Local'`, sans appel réseau), et une géolocalisation déjà obtenue
+ * a été écrite à la création.
+ */
+function completerLaGeolocalisation(
+  context: AuthRouteContext,
+  afterResponse: AfterResponse,
+  userId: string,
+  requestContext: { ip: string; geoData: unknown },
+): void {
+  if (requestContext.geoData) return;
+  if (!requestContext.ip || isPrivateIp(requestContext.ip)) return;
+
+  afterResponse(async () => {
+    const geoData = await lookupGeoIp(requestContext.ip);
+    if (!geoData) return;
+
+    await context.prisma.user.update({
+      where: { id: userId },
+      data: {
+        registrationLocation: geoData.location,
+        registrationCountry: geoData.country,
+        timezone: geoData.timezone,
+        lastLoginLocation: geoData.location,
+      },
+    });
+  }, 'registration-geoip-backfill');
+}
 
 /**
  * Register registration and availability check routes
@@ -85,6 +184,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
                   properties: {
                     username: { type: 'string' },
                     email: { type: 'string' },
+                    displayName: { type: 'string' },
                     firstName: { type: 'string' },
                     lastName: { type: 'string' },
                     systemLanguage: { type: 'string' },
@@ -95,7 +195,33 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
             }
           }
         },
-        400: validationErrorResponseSchema,
+        // `field` est DÉCLARÉ ici, et c'est la moitié qui compte : `sendError`
+        // étale son `details` à la RACINE de l'enveloppe, et
+        // `fast-json-stringify` retire tout ce que le schéma ne déclare pas —
+        // en silence. Un `PHONE_INVALID` dont le client ne saurait pas quel
+        // champ surligner ne vaut pas mieux qu'un 400 muet (piège du #4487,
+        // rejoué cinq fois dans ce dépôt).
+        400: {
+          description: 'Malformed payload — the response names the field to fix',
+          ...validationErrorResponseSchema,
+          properties: {
+            ...validationErrorResponseSchema.properties,
+            field: { type: 'string', description: 'Form field to highlight (e.g. "phoneNumber")' }
+          }
+        },
+        409: {
+          description: 'The username or the email address is already taken. No account was created.',
+          ...errorResponseSchema,
+          properties: {
+            ...errorResponseSchema.properties,
+            field: { type: 'string', description: 'Form field to highlight — "username" or "email"' },
+            suggestions: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Free usernames to offer instead (USERNAME_TAKEN only)'
+            }
+          }
+        },
         429: {
           description: 'Too many registration attempts',
           ...errorResponseSchema,
@@ -110,30 +236,50 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     },
     preHandler: [registerRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const limiteurs = [registerRateLimiter, authGlobalRateLimiter];
+    // Le différé est une décision de la surface HTTP — c'est elle qui a une
+    // réponse à rendre. Le service, appelé sans requête (seed, création admin),
+    // exécute ses travaux EN LIGNE.
+    const afterResponse = context.afterResponse ?? deferAfterResponse;
+
     try {
       const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
-        phoneTransferToken?: string;
         skipPhoneConflictCheck?: boolean;
       };
 
-      const requestContext = await getRequestContext(request);
+      // Le rang 4 du Prisme entre ICI, avec la requête — c'est la seule couche
+      // qui voit les en-têtes. Le service, lui, ne le consulte que si
+      // l'inscription n'exprime aucune préférence.
+      const inscription: RegisterData = {
+        ...validatedData,
+        deviceLocale: localeDeLaRequete(request),
+      };
+
+      const requestContext = await getRequestContext(request, { geoTimeoutMs: GEO_AVANT_REPONSE_MS });
 
       // Check if phoneTransferToken is provided
       let phoneTransferValidated = false;
-      if (validatedData.phoneTransferToken) {
+      let inscriptionFinale = inscription;
+      if (inscription.phoneTransferToken) {
         logger.info('Phone transfer token provided — validating');
-        const transferData = await phoneTransferService.getTransferDataByToken(validatedData.phoneTransferToken);
+        const transferData = await phoneTransferService.getTransferDataByToken(inscription.phoneTransferToken);
 
         if (!transferData.valid) {
+          rembourserLaTentative(limiteurs, request);
           return sendBadRequest(reply, 'Token de transfert invalide ou expiré', { code: 'INVALID_TRANSFER_TOKEN' });
         }
 
         logger.info('Phone transfer token valid');
         phoneTransferValidated = true;
-        validatedData.skipPhoneConflictCheck = true;
+        inscriptionFinale = { ...inscription, skipPhoneConflictCheck: true };
       }
 
-      const result = await authService.register(validatedData as RegisterData, requestContext);
+      // Le même exécuteur post-réponse traverse jusqu'au service : l'e-mail de
+      // vérification et l'annonce d'arrivée dans le salon global n'ont, eux non
+      // plus, aucun champ de la réponse à alimenter.
+      const result = await authService.register(inscriptionFinale, requestContext, {
+        afterResponse,
+      });
 
       if (!result) {
         return sendBadRequest(reply, 'Erreur lors de la création du compte');
@@ -161,12 +307,13 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
           // SOURCE plutôt que laissé au sérialiseur : compter sur une omission
           // de schéma pour retenir un secret, c'est le piège armé du cycle 84.
           pendingRegistration: {
-            username: validatedData.username,
-            email: validatedData.email,
-            firstName: validatedData.firstName,
-            lastName: validatedData.lastName,
-            systemLanguage: validatedData.systemLanguage,
-            regionalLanguage: validatedData.regionalLanguage
+            username: inscriptionFinale.username,
+            email: inscriptionFinale.email,
+            displayName: inscriptionFinale.displayName,
+            firstName: inscriptionFinale.firstName,
+            lastName: inscriptionFinale.lastName,
+            systemLanguage: inscriptionFinale.systemLanguage,
+            regionalLanguage: inscriptionFinale.regionalLanguage
           }
         });
       }
@@ -178,10 +325,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       }
 
       // Execute phone transfer if validated
-      if (phoneTransferValidated && validatedData.phoneTransferToken) {
+      if (phoneTransferValidated && inscriptionFinale.phoneTransferToken) {
         logger.info('Executing phone transfer for new user');
         const transferResult = await phoneTransferService.executeRegistrationTransfer(
-          validatedData.phoneTransferToken,
+          inscriptionFinale.phoneTransferToken,
           user.id,
           requestContext.ip || 'unknown'
         );
@@ -219,6 +366,8 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       const token = authService.generateToken(user, session.id);
       const permissions = authService.getUserPermissions(user);
 
+      completerLaGeolocalisation(context, afterResponse, user.id, requestContext);
+
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),
         token,
@@ -235,35 +384,48 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
         logger.warn('Registration payload rejected by validation', { violations });
 
+        rembourserLaTentative(limiteurs, request);
+
         return sendError(reply, 400, fieldSummary ? `Données invalides — ${fieldSummary}` : 'Données invalides', {
           code: 'VALIDATION_ERROR',
-          violations
+          violations,
+          // Le PREMIER champ fautif, servi à part : un client qui surligne un
+          // champ n'a pas à parser une phrase française pour savoir lequel.
+          details: { field: (violations[0] as { path?: string } | undefined)?.path }
         });
       }
 
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
+      // Un REFUS de formulaire — pseudo pris, adresse prise, numéro illisible.
+      //
+      // Ces trois cas rendaient auparavant un 400 « Erreur lors de la création
+      // du compte », sans code ni champ : le service rattrapait tout et
+      // renvoyait `null`, si bien que les branches de ce `catch` qui
+      // prétendaient les distinguer par le TEXTE de l'erreur
+      // (`errorMessage.includes('déjà utilisé')`) étaient INATTEIGNABLES. Elles
+      // ont été retirées avec le `null` qui les rendait mortes ; les témoins
+      // qui les exerçaient simulaient un rejet que la production n'a jamais
+      // produit.
+      if (isRegistrationRefusal(error)) {
+        logger.info('Registration refused', { code: error.code, field: error.field });
+
+        // Un 400 rend la tentative (la saisie est à corriger, rien n'a été
+        // touché) ; un 409 la garde — il APPREND qu'un identifiant existe, et
+        // un oracle remboursable est un oracle gratuit.
+        if (error.status === 400) rembourserLaTentative(limiteurs, request);
+
+        return sendError(reply, error.status, error.message, {
+          code: error.code,
+          details: {
+            field: error.field,
+            ...(error.suggestions ? { suggestions: [...error.suggestions] } : {})
+          }
+        });
+      }
 
       logger.error('Registration error', error as Error);
 
-      // Erreurs de validation connues
-      if (errorMessage.includes('déjà utilisé') || errorMessage.includes('already exists')) {
-        return sendBadRequest(reply, errorMessage, { code: 'DUPLICATE_FIELD' });
-      }
-
-      if (errorMessage.includes('Email invalide') || errorMessage.includes('Format d\'email')) {
-        return sendBadRequest(reply, errorMessage, { code: 'INVALID_EMAIL' });
-      }
-
-      if (errorMessage.includes('mot de passe') || errorMessage.includes('password')) {
-        return sendBadRequest(reply, errorMessage, { code: 'INVALID_PASSWORD' });
-      }
-
-      if (errorMessage.includes('username') || errorMessage.includes('utilisateur')) {
-        return sendBadRequest(reply, errorMessage, { code: 'INVALID_USERNAME' });
-      }
-
       // Erreur générique avec détails en dev
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const isDev = process.env.NODE_ENV !== 'production';
       sendError(reply, 500, isDev ? errorMessage : 'Erreur lors de la création du compte', { code: 'REGISTRATION_ERROR' });
     }
@@ -292,7 +454,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   // FORME, ce que porte `phoneNumberValid` — déjà présent dans l'ancienne
   // réponse.
   fastify.get('/check-availability', {
-    onRequest: depreciee({ depuis: '2026-08-29', successeur: '/api/v1/directory/availability' }),
+    onRequest: depreciee({ depuis: '2026-08-29', successeur: apiPath('/directory/availability') }),
     schema: {
       deprecated: true,
       description:

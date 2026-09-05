@@ -38,50 +38,6 @@ fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
     }
 }
 
-/// Field-level equality over exactly the columns the `upsertFromAPIMessages`
-/// update branch mutates. CANNOT use `MessageRecord ==` here: that
-/// conformance is intentionally O(1) (`localId` + `changeVersion` only, for
-/// MessageStore's refresh skip) and the comparison runs BEFORE the
-/// changeVersion bump — it would report every mutation as "unchanged" and
-/// silently drop real content/reaction/state updates.
-fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
-    let contentAndState = a.content == b.content && a.serverId == b.serverId
-        && a.state == b.state && a.isEdited == b.isEdited
-        && a.editedAt == b.editedAt && a.deletedAt == b.deletedAt
-        // `createdAt` is the immutable server send time, but a row first
-        // written by the Notification Service Extension pre-persist carries a
-        // PLACEHOLDER value (the push-receipt time). Comparing it here lets the
-        // canonical reconcile detect — and persist — the correction.
-        && a.createdAt == b.createdAt && a.cachedTimeString == b.cachedTimeString
-    let attachmentsAndReactions = a.attachmentsJson == b.attachmentsJson
-        && a.reactionsJson == b.reactionsJson && a.reactionCount == b.reactionCount
-    let encryptionAndDelivery = a.isEncrypted == b.isEncrypted && a.encryptionMode == b.encryptionMode
-        && a.deliveredCount == b.deliveredCount && a.readCount == b.readCount
-        && a.deliveredToAllAt == b.deliveredToAllAt && a.readByAllAt == b.readByAllAt
-    let sender = a.senderId == b.senderId && a.senderName == b.senderName
-        && a.senderUsername == b.senderUsername && a.senderAvatarURL == b.senderAvatarURL
-    let replyAndForward = a.replyToId == b.replyToId && a.storyReplyToId == b.storyReplyToId
-        && a.replyToJson == b.replyToJson && a.forwardedFromId == b.forwardedFromId
-        && a.forwardedFromConversationId == b.forwardedFromConversationId
-        && a.forwardedFromJson == b.forwardedFromJson
-    // **`messageSource` et `messageType` DOIVENT figurer ici** (régression
-    // 2026-08-24). Ils décident du RENDU — un message `system` s'affiche en
-    // avis dédié, un `user` en parole avec avatar et nom. Ils manquaient à
-    // cette comparaison : une ligne née `"user"` (le chemin de réconciliation
-    // depuis le cache l'écrivait en dur) recevait ensuite la charge canonique
-    // portant `"system"`, l'upsert jugeait la ligne INCHANGÉE, et le mensonge
-    // devenait définitif — plus aucune correction du serveur ne pouvait
-    // l'atteindre. Symptôme : les avis d'arrivée rendus comme des paroles,
-    // avec le texte de repli du gateway en guise de bulle.
-    let kindAndSource = a.messageSource == b.messageSource && a.messageType == b.messageType
-    let extras = a.mentionedUsersJson == b.mentionedUsersJson
-        && a.callSummaryJson == b.callSummaryJson && a.joinNoticeJson == b.joinNoticeJson
-        && a.effectFlags == b.effectFlags
-        && a.locationJson == b.locationJson
-    return contentAndState && attachmentsAndReactions && encryptionAndDelivery
-        && sender && replyAndForward && extras && kindAndSource
-}
-
 public actor MessagePersistenceActor {
     private let dbWriter: any DatabaseWriter
 
@@ -106,7 +62,7 @@ public actor MessagePersistenceActor {
         /// mentions are all persisted. The 6-field `IncomingMessageData` path
         /// below drops every one of them (a media-only or encrypted message
         /// ingested that way renders as an empty bubble — Sprint 2 RC2.2).
-        case upsertAPIMessages([APIMessage])
+        case upsertAPIMessages([APIMessage], preferredLanguages: [String])
         case batchDeliveryUpdate(conversationId: String, event: MessageEvent)
     }
 
@@ -272,13 +228,13 @@ public actor MessagePersistenceActor {
                     if !changed.isEmpty {
                         postMessageStoreRefresh(conversationIds: changed)
                     }
-                case .upsertAPIMessages(let messages):
+                case .upsertAPIMessages(let messages, let preferredLanguages):
                     guard !messages.isEmpty else { continue }
                     // `upsertFromAPIMessages` posts its own refresh, scoped to
                     // the conversations with real row changes — do NOT re-post
                     // here or observers refresh twice.
                     do {
-                        try await self.upsertFromAPIMessages(messages)
+                        try await self.upsertFromAPIMessages(messages, preferredLanguages: preferredLanguages)
                     } catch {
                         Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
                     }
@@ -569,8 +525,8 @@ public actor MessagePersistenceActor {
     /// upsert reconciles an optimistic row by `clientMessageId`, server id or
     /// `PendingIdRecord`, so a same-user echo never duplicates a pending send.
     /// The refresh notification is posted by `upsertFromAPIMessages` itself.
-    public func bufferIncomingAPIMessages(_ messages: [APIMessage]) {
-        writeContinuation.yield(.upsertAPIMessages(messages))
+    public func bufferIncomingAPIMessages(_ messages: [APIMessage], preferredLanguages: [String]) {
+        writeContinuation.yield(.upsertAPIMessages(messages, preferredLanguages: preferredLanguages))
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
@@ -1553,7 +1509,10 @@ public actor MessagePersistenceActor {
     /// state (layout cache, optimistic fields) for rows that already exist.
     /// Called from load/refresh paths so the MessageStore observation surfaces
     /// the authoritative server data without a direct `messages = ...` write.
-    public func upsertFromAPIMessages(_ apiMessages: [APIMessage]) async throws {
+    /// `preferredLanguages` — le prisme ORDONNÉ du lecteur, par lequel la
+    /// citation gravée dans `replyToJson` descend le Prisme (même descente que
+    /// `APIMessage.toMessage(preferredLanguages:)`). Vide ⇒ l'original.
+    public func upsertFromAPIMessages(_ apiMessages: [APIMessage], preferredLanguages: [String] = []) async throws {
         // Empty payloads are a routine outcome of pagination paths (e.g.
         // `loadOlderMessages` reaching the start of the conversation) — no
         // rows to write means no refresh to post.
@@ -1697,71 +1656,10 @@ public actor MessagePersistenceActor {
                 )
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : encoder.encodeOrLog(uiReactions, field: "reactionsJson", id: api.id)
 
-                let replyToJson: Data? = {
-                    // Réponse à un post : snapshot figé `postReplyTo` (survit à
-                    // l'expiration). On construit un ReplyReference riche pour la
-                    // citation (mood : emoji+contenu+date ; story : aperçu+compteurs).
-                    if let story = api.postReplyTo {
-                        let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        // Réponse à un mood : rendu dédié (emoji + contenu + date).
-                        if let emoji = story.moodEmoji {
-                            // `authorAvatarUrl` reste nil, DELIBEREMENT : le
-                            // snapshot `postReplyTo` ne porte pas d'avatar, et
-                            // ce nom est vide — aucun profil a ouvrir.
-                            let ref = ReplyReference(
-                                messageId: story.id,
-                                authorName: "",
-                                previewText: trimmed,
-                                isMe: false,
-                                isStoryReply: true,
-                                storyPublishedAt: story.createdAt,
-                                moodEmoji: emoji
-                            )
-                            return encoder.encodeOrLog(ref, field: "replyToJson(mood)", id: api.id)
-                        }
-                        // Idem pour la story : snapshot sans avatar, nom vide.
-                        let ref = ReplyReference(
-                            messageId: story.id,
-                            authorName: "",
-                            previewText: trimmed.isEmpty ? "\u{1F4F7} Story" : trimmed,
-                            isMe: false,
-                            isStoryReply: true,
-                            storyPublishedAt: story.createdAt,
-                            storyReactionCount: story.reactionCount,
-                            storyCommentCount: story.commentCount,
-                            storyShareCount: story.shareCount,
-                            storyThumbnailUrl: story.thumbnailUrl
-                        )
-                        return encoder.encodeOrLog(ref, field: "replyToJson(story)", id: api.id)
-                    }
-                    // Réponse à un message : chemin historique inchangé.
-                    return api.replyTo.flatMap { reply in
-                        let isMe = reply.senderId == nil
-                        let authorName = reply.sender?.name ?? "?"
-                        let firstAtt = reply.attachments?.first
-                        let ref = ReplyReference(
-                            messageId: reply.id,
-                            authorName: authorName,
-                            previewText: reply.content ?? "",
-                            isMe: isMe,
-                            // Jumeau CACHE de `MessageModels.uiReplyTo` : meme
-                            // avatar, meme cascade `resolvedAvatar`. C'est ce
-                            // blob qui alimente TOUT rechargement — l'oublier
-                            // ici ferait perdre l'avatar de la citation au
-                            // premier retour de cache, donc au scroll.
-                            authorAvatarUrl: reply.sender?.resolvedAvatar,
-                            attachmentType: firstAtt?.mimeType,
-                            attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
-                            // Jumeau CACHE de la protection gravée par
-                            // `MessageModels.uiReplyTo` : c'est ce blob qui
-                            // alimente TOUT rechargement, et l'oublier ici
-                            // ferait réapparaître au premier retour de cache la
-                            // vignette d'un média à vue unique.
-                            attachmentIsProtected: firstAtt?.declaredProtection
-                        )
-                        return encoder.encodeOrLog(ref, field: "replyToJson", id: api.id)
-                    }
-                }()
+                let replyToJson: Data? = Self.replyToJson(
+                    for: api, currentUserId: currentUserId,
+                    preferredLanguages: preferredLanguages, encoder: encoder
+                )
 
                 let forwardedFromJson: Data? = api.forwardedFrom.flatMap { fwd in
                     let fwdSenderName = fwd.sender?.name ?? "?"
@@ -1805,6 +1703,13 @@ public actor MessagePersistenceActor {
                 // cache (relaunch, pull-to-refresh).
                 let locationJson: String? = api.location.flatMap { place in
                     encoder.encodeOrLog(place, field: "locationJson", id: api.id)
+                        .flatMap { String(data: $0, encoding: .utf8) }
+                }
+
+                // Sticker (#4823) — même mécanique et même raison que
+                // `locationJson` juste au-dessus.
+                let stickerJson: String? = api.sticker.flatMap { sticker in
+                    encoder.encodeOrLog(sticker, field: "stickerJson", id: api.id)
                         .flatMap { String(data: $0, encoding: .utf8) }
                 }
 
@@ -2049,6 +1954,9 @@ public actor MessagePersistenceActor {
                     // partial socket event) must not erase a position already
                     // persisted from an earlier, richer snapshot.
                     existing.locationJson = locationJson ?? existing.locationJson
+                    // Même coalescence : un écho partiel sans `sticker` ne doit
+                    // pas effacer celui qu'un instantané plus riche a persisté.
+                    existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.effectFlags = effectFlags
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
@@ -2142,7 +2050,8 @@ public actor MessagePersistenceActor {
                         callSummaryJson: callSummaryJson,
                         joinNoticeJson: joinNoticeJson,
                         recipientCount: api.recipientCount ?? 0,
-                        locationJson: locationJson
+                        locationJson: locationJson,
+                        stickerJson: stickerJson
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)

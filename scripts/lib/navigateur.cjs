@@ -32,7 +32,12 @@ const PAQUETS = [
   '@fontsource/inter@5.2.8',
   'playwright-core@1.62.1',
   'pngjs@5.0.0',
-  'pixelmatch@7.2.0',
+  // pixelmatch >= 6.0.0 est ESM-only ("type": "module") ; vendorRequire()
+  // ci-dessous fait un require() CJS synchrone — un package ESM y leve
+  // ERR_REQUIRE_ESM. 5.3.0 est la derniere version CJS, meme signature
+  // d'appel (img1, img2, output, width, height, options) que compare-rendu.js
+  // utilise deja.
+  'pixelmatch@5.3.0',
 ];
 
 function ensureVendor(journal) {

@@ -23,9 +23,9 @@ import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
 const mockCompare = jest.fn() as jest.Mock<any>;
-jest.mock('bcryptjs', () => ({
-  __esModule: true,
-  default: { compare: (...a: any[]) => mockCompare(...a) },
+jest.mock('../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...a: any[]) => mockCompare(...a),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -125,7 +125,15 @@ describe('POST /me/account/deletion — la preuve de présence', () => {
 
     const res = await ouvrir(app, { confirmationPhrase: PHRASE, currentPassword: 'faux' });
 
-    expect(res.statusCode).toBe(401);
+    // 400 depuis #4811, et non 401 : ce témoin gravait l'ancien statut. Un 401
+    // sur une session VALIDE fait entrer la route dans la famille « session
+    // expirée » de toutes les piles clientes — mesuré côté iOS, saisir un
+    // mauvais mot de passe déconnectait l'utilisateur. Le refus lui-même est
+    // inchangé, et c'est lui que ce témoin garde : un jeton volé n'ouvre rien.
+    // La famille de statuts est couverte branche par branche par
+    // `me-account-deletion-refusal-family.test.ts`.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_PASSWORD');
     expect(ecritures.some((e) => 'create' in e)).toBe(false);
     await app.close();
   });

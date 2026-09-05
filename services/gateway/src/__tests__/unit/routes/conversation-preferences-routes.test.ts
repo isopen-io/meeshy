@@ -52,7 +52,6 @@ const STORED_PREF = {
   orderInCategory: null,
   customName: null,
   reaction: null,
-  deletedForUserAt: null,
   clearHistoryBefore: null,
   version: 3,
   category: null,
@@ -400,7 +399,6 @@ describe('DELETE /user-preferences/conversations/:conversationId', () => {
       orderInCategory: null,
       customName: null,
       reaction: null,
-      deletedForUserAt: null,
       clearHistoryBefore: null,
       version: { increment: 1 },
     });

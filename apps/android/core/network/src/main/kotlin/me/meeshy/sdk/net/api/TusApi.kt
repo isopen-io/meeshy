@@ -45,6 +45,9 @@ public interface TusApi {
      */
     @PATCH
     public suspend fun uploadChunk(
+        // l'adresse de session est fabriquée par le SERVEUR et rendue
+        // dans l'en-tête `Location` du POST de création (protocole TUS). Aucun
+        // chemin déclaré ne peut la décrire : elle n'existe pas avant l'appel.
         @Url location: String,
         @Header("Upload-Offset") uploadOffset: Long,
         @Header("Tus-Resumable") tusResumable: String,
@@ -62,6 +65,9 @@ public interface TusApi {
      */
     @PATCH
     public suspend fun uploadData(
+        // Même raison que `uploadChunk` : l'adresse vient du serveur, pas du
+        // catalogue. La justification vit ICI, au site, et non seulement dans
+        // le commentaire de la garde — c'est là que la prochaine main la lira.
         @Url location: String,
         @Header("Upload-Offset") uploadOffset: Long,
         @Header("Tus-Resumable") tusResumable: String,

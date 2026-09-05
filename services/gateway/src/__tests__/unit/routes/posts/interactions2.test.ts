@@ -687,7 +687,7 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
   });
 
   it('POST /posts/:postId/impression — returns 500 on prisma error', async () => {
-    prisma.postImpression.create.mockRejectedValueOnce(new Error('DB error'));
+    prisma.postImpression.createMany.mockRejectedValueOnce(new Error('DB error')); // #4150 — REPOINTÉ : `create` n'est plus appelé, un rejet posé dessus passerait au vert
     const res = await app.inject({
       method: 'POST',
       url: `/posts/${POST_ID}/impression`,

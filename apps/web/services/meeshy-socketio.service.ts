@@ -26,6 +26,7 @@ import type { AudioTranslationReadyEventData, ConversationJoinErrorEventData, Li
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
 import type { ConnectionStatus } from './socketio/types';
+import { transformMessageTranslations } from './conversations/transformers.service';
 
 class MeeshySocketIOService {
   private static instance: MeeshySocketIOService | null = null;
@@ -674,8 +675,18 @@ class MeeshySocketIOService {
       timestamp: socketMessage.createdAt,
       createdAt: socketMessage.createdAt,
       updatedAt: socketMessage.updatedAt,
-      isEdited: false,
-      translations: [],
+      // #3644 — le gateway envoie les traductions et l'état d'édition réels
+      // sur ce chemin (contrat `SocketIOMessage`) ; les écraser en dur faisait
+      // sortir une bulle temps réel en langue d'origine, sans puce de
+      // traduction, jusqu'au prochain rechargement REST. Même règle que le
+      // transformateur REST (`transformMessageTranslations`, source unique
+      // partagée par les deux convertisseurs).
+      isEdited: Boolean(socketMessage.isEdited),
+      translations: transformMessageTranslations(
+        socketMessage.translations,
+        socketMessage.id,
+        socketMessage.originalLanguage || 'fr'
+      ),
       replyTo: replyTo,
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,

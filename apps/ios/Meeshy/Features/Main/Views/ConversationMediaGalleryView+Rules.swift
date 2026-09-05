@@ -152,3 +152,141 @@ enum FullscreenImageSource {
         return DiskCacheStore.hasAnyCachedImageVariant(for: resolved)
     }
 }
+
+// MARK: - Où trouver la place quand la légende se déplie
+
+/// **Déplier une légende demande de la place, et chaque surface la prend
+/// ailleurs** (directive porteur 2026-09-02).
+///
+/// > « Le contenu doit pouvoir s'afficher en dessous de l'auteur et quand on
+/// > affiche / déplie pour tout voir, les détails d'auteur se cachent pour
+/// > afficher le contenu. […] Pour les story pas besoin de cacher quoi que ce
+/// > soit, quand on déplie, on floute juste la story. »
+///
+/// Deux réponses à UNE question, et la différence n'est pas un goût : elle
+/// vient du VOISINAGE. Le plein écran média porte, sous la légende, une carte
+/// d'auteur et une pellicule — la place se prend donc en les retirant. La story
+/// n'a rien sous sa légende : sa scène occupe tout, elle recule au lieu de
+/// céder.
+///
+/// La règle vit ici pour être interrogeable : un troisième hôte qui monterait
+/// la couche partagée devra DIRE lequel des deux comportements il adopte, au
+/// lieu de recopier l'un des deux au jugé.
+enum CaptionExpansionSpace {
+
+    /// **Le plein écran média ne CÈDE plus rien** (directive porteur
+    /// 2026-09-05).
+    ///
+    /// > « En plein écran le "voir plus" de la légende doit juste afficher le
+    /// > texte déplié avec effet ombre, en repoussant le détail de l'auteur
+    /// > vers le haut. »
+    ///
+    /// Cette valeur répondait `!captionExpanded` : la carte d'auteur
+    /// DISPARAISSAIT en fondu pour libérer le bas de l'écran, sur la directive
+    /// du 2026-09-02 (« les détails d'auteur se cachent pour afficher le
+    /// contenu »). La directive d'aujourd'hui la renverse, et il faut le dire
+    /// franchement plutôt que l'effacer : ce n'est pas une correction de
+    /// défaut, c'est un CHANGEMENT D'AVIS du porteur, et le code doit porter
+    /// les deux dates pour que la prochaine main sache laquelle est vivante.
+    ///
+    /// Ce qui change dans la MÉCANIQUE : il n'y a plus de place à trouver. La
+    /// légende dépliée grandit dans une pile ancrée en bas, donc elle POUSSE
+    /// ses voisins vers le haut — l'auteur monte au lieu de s'effacer. Et la
+    /// lisibilité, que le retrait des voisins servait, est portée par l'ombre
+    /// que `MediaCaptionOverlay` applique déjà (`legibleOverCanvas` : une passe
+    /// courte et dense, une longue et douce).
+    ///
+    /// > **Une constante qui ignore son paramètre est un mensonge de
+    /// > signature.** D'où le retrait de la fonction plutôt qu'un `true`
+    /// > inconditionnel : `showsAuthorDetails(captionExpanded:)` promettait que
+    /// > la réponse DÉPEND du dépliage. Elle n'en dépend plus, et le seul
+    /// > moyen honnête de le dire est qu'aucun appelant ne la demande.
+    ///
+    /// Le témoin qui remplace ses deux unitaires est une garde de SOURCE : la
+    /// galerie ne doit conditionner sa carte d'auteur sur `captionExpanded` par
+    /// aucun chemin.
+
+    /// Opacité de la scène d'une story pendant que sa légende est dépliée.
+    ///
+    /// **Ce n'est PAS un flou qu'on ajoute** (correction porteur 2026-09-02) :
+    ///
+    /// > « le flou c'est pas un voile qui apparaît mais le contenu qui disparaît
+    /// > un peu pour laisser le thumbnail naturel du background si on a un média
+    /// > sur la scène, sinon on laisse la couleur de fond simplement »
+    ///
+    /// Le lecteur monte DÉJÀ, sous la scène, un fond dérivé du ThumbHash de la
+    /// slide — flou, à la bonne couleur, et gratuit puisqu'il est là pour le
+    /// démarrage à froid (« Layer 1.5 »). Effacer la scène le révèle. Sans média,
+    /// c'est la couleur de fond de la story qui remonte, sans rien de plus.
+    ///
+    /// > Un voile AJOUTE une couche que personne n'a demandée ; effacer en
+    /// > RÉVÈLE une qui était déjà juste. La seconde coûte moins cher à la
+    /// > machine et ment moins à l'œil — le fond qu'on découvre est vraiment
+    /// > celui de cette story, pas un gris générique.
+    ///
+    /// Se COMPOSE avec l'opacité de transition du canvas (`contentOpacity`) par
+    /// multiplication : les deux disent la même chose — « combien de cette scène
+    /// voit-on ? » — et se cumulent au lieu de se remplacer.
+    nonisolated static func storySceneOpacity(captionExpanded: Bool) -> Double {
+        captionExpanded ? 0.28 : 1
+    }
+
+    /// **La bande que le rail d'actions occupe à droite de la scène.**
+    ///
+    /// Repliée, la légende tient dans le bas et ne rencontre personne ; dépliée,
+    /// elle monte et traverse le rail (Envoyer, Vues, Partager, Enregistrer,
+    /// Traductions), qui court sur presque toute la hauteur. Le corpus lui laisse
+    /// donc cette bande — et la zone tactile du retour en tête aussi, sans quoi
+    /// un tap destiné au rail remonterait le texte à la place.
+    ///
+    /// > Deux vues qui doivent éviter le MÊME voisin doivent l'éviter avec le
+    /// > MÊME nombre. Deux littéraux identiques ne sont pas une règle partagée :
+    /// > ils sont deux règles qui se ressemblent, jusqu'au jour où le rail bouge.
+    ///
+    /// C'est la bande BRUTE, en points d'ÉCRAN. Les vues qui vivent dans la
+    /// colonne du canvas ne l'emploient jamais telle quelle : elles passent par
+    /// `railClearanceInset(columnWidth:viewportWidth:)`, qui la traduit dans leur
+    /// repère.
+    nonisolated static var storyActionRailInset: CGFloat { 68 }
+
+    /// **Ce que le chrome haut du lecteur ne cède JAMAIS** — barres de
+    /// progression, ligne d'auteur, fermeture.
+    ///
+    /// La zone qui ramène le corpus en tête couvre le vide au-dessus du texte :
+    /// c'est ce qui la rend atteignable sans viser. Mais elle est montée en
+    /// `zIndex(60)`, donc AU-DESSUS du chrome — sans cette réserve, elle
+    /// avalerait le bouton de fermeture de la story, et l'utilisateur qui veut
+    /// sortir remonterait un texte à la place.
+    ///
+    /// Le nombre est celui que le lecteur réserve déjà à son chrome pour borner
+    /// le rail (`topReserved`, `StoryViewerView+Canvas`) : la même bande, dite
+    /// une seule fois.
+    nonisolated static func storyTopChromeReserve(topInset: CGFloat) -> CGFloat {
+        topInset + 100
+    }
+
+    /// **Le dégagement du rail, EN COORDONNÉES DE COLONNE** — qui n'est pas la
+    /// même chose qu'en coordonnées d'écran.
+    ///
+    /// Sert aux DEUX voisins du rail : le corpus déplié (que le texte ne doit
+    /// pas chevaucher) et la zone qui le ramène en tête (qui ne doit pas
+    /// avaler ses touchers).
+    ///
+    /// La légende vit dans la colonne du CANVAS, qui déborde volontairement le
+    /// viewport pour la pagination (mesuré : 491,3 pt pour un écran de 402, donc
+    /// 44,7 pt de débordement de chaque côté). C'est ce cadrage qui a sauvé le
+    /// texte en #4762 — sans lui il sortait par la gauche.
+    ///
+    /// > Le même cadrage qui a réparé le TEXTE trahit la zone TACTILE. Un
+    /// > retrait de 68 pt exprimé dans une colonne de 491 laisse son bord droit
+    /// > à 378 pt d'écran, pas à 334 : le rail d'actions se retrouve recouvert
+    /// > aux trois quarts. Un nombre juste dans un repère est faux dans l'autre,
+    /// > et rien ne le signale — les deux valent « 68 ».
+    ///
+    /// On rend donc au retrait ce que le débordement lui a pris. À gauche, rien
+    /// à faire : déborder hors de l'écran n'y prend aucun toucher.
+    nonisolated static func railClearanceInset(columnWidth: CGFloat,
+                                               viewportWidth: CGFloat) -> CGFloat {
+        max(0, (columnWidth - viewportWidth) / 2) + storyActionRailInset
+    }
+}

@@ -119,8 +119,12 @@ final class PerpetualMotionGuardTests: XCTestCase {
             "le balayage ne trouve presque plus de `repeatForever` : c'est le SCANNER qui a "
             + "cessé de voir, pas le dépôt qui a cessé de boucler (racine : \(appRoot.path))"
         )
+        // La borne nommait `OnboardingAnimations.swift`, « le fichier le plus
+        // densément bouclé du dépôt » — parti avec le wizard d'inscription
+        // (#5218). Elle vise désormais le décor de conversation, qui a pris
+        // sa place : dix-neuf boucles décoratives, toutes gardées.
         XCTAssertTrue(
-            looping.contains { $0.name == "OnboardingAnimations.swift" },
+            looping.contains { $0.name == "ConversationAnimatedBackground.swift" },
             "le fichier le plus densément bouclé du dépôt doit être vu"
         )
     }

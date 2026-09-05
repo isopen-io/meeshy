@@ -19,16 +19,29 @@ interface AuthState {
   sessionExpiry: Date | null;
 }
 
+/**
+ * Options nommées de l'action `setTokens` (#4491, miroir de
+ * `SetCredentialsOptions`/`UpdateTokensOptions` d'`AuthManager`).
+ */
+export type SetTokensOptions = {
+  readonly authToken: string;
+  readonly refreshToken?: string;
+  readonly sessionToken?: string;
+  readonly expiresIn?: number;
+};
+
 interface AuthActions {
   setUser: (user: User | null) => void;
   setAuthChecking: (checking: boolean) => void;
-  // `refreshToken` (2e créneau) n'a plus de contrepartie en état réactif
-  // (#4405, étape 3) : son accesseur sur AuthManager a été retiré — rien ne
-  // produit jamais de valeur pour ce créneau (mesuré, aucune route
-  // d'authentification du gateway ne rend ce champ). Le paramètre reste
-  // ACCEPTÉ, à sa position : `hooks/use-auth.ts:175` (hors territoire de ce
-  // lot) l'appelle encore positionnellement.
-  setTokens: (authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number) => void;
+  // `refreshToken` n'a plus de contrepartie en état réactif (#4405, étape
+  // 3) : son accesseur sur AuthManager a été retiré — rien ne produit jamais
+  // de valeur pour ce champ (mesuré, aucune route d'authentification du
+  // gateway ne le rend). Il reste ACCEPTÉ, nommé, dans `SetTokensOptions` :
+  // objet nommé (#4491, même défaut que #4450 sur `setCredentials`) — deux
+  // `string | undefined` consécutifs et indiscernables, puis un
+  // `number | undefined` traînant, la forme qui a produit les quatre
+  // victimes de #4404. Un appel positionnel ne compile plus.
+  setTokens: (options: SetTokensOptions) => void;
   clearAuth: () => void;
   logout: () => void;
   initializeAuth: () => Promise<void>;
@@ -79,7 +92,7 @@ export const useAuthStore = create<AuthStore>()(
             set({ isAuthChecking: checking });
           },
 
-          setTokens: (authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number) => {
+          setTokens: ({ authToken, sessionToken, expiresIn }: SetTokensOptions) => {
             const sessionExpiry = expiresIn
               ? new Date(Date.now() + expiresIn * 1000)
               : null;
@@ -138,12 +151,11 @@ export const useAuthStore = create<AuthStore>()(
 
               if (!refreshed?.token) return false;
 
-              get().setTokens(
-                refreshed.token,
-                undefined,
-                refreshed.sessionToken,
-                refreshed.expiresIn
-              );
+              get().setTokens({
+                authToken: refreshed.token,
+                sessionToken: refreshed.sessionToken,
+                expiresIn: refreshed.expiresIn,
+              });
 
               return true;
             } catch (error) {

@@ -3,7 +3,10 @@
  * Covers branches and paths not reached by auth.test.ts:
  * - createUnifiedAuthMiddleware factory (all branches)
  * - Helper: authUserCacheKey, isRegisteredUser, isAnonymousUser, getUserPermissions
- * - Legacy: requireRole, requireEmailVerification
+ * - Legacy : `requireRole` / `requireEmailVerification` vivent chez elles depuis
+ *   #4760 — `auth-legacy-guards-status-codes.test.ts`, qui les monte derrière une
+ *   VRAIE route pour lire le statut ET le code sur le corps SÉRIALISÉ. Les y
+ *   laisser en double aurait fait deux vérités sur le même refus.
  * - JWT cache hit (JWT verify result cached)
  * - Auth user cache hit (user row cached; inactive cached user)
  * - JWT expired + sessionToken trusted-session paths
@@ -66,8 +69,6 @@ import {
   isRegisteredUser,
   isAnonymousUser,
   getUserPermissions,
-  requireEmailVerification,
-  requireRole as requireRoleLegacy,
   findTrustedSession,
 } from '../../../middleware/auth';
 
@@ -420,139 +421,6 @@ describe('createUnifiedAuthMiddleware', () => {
     await middleware(req, reply);
 
     expect(req.user.userId).toBe('pre-existing');
-  });
-});
-
-// ─── requireRole (legacy auth.ts export) ─────────────────────────────────────
-
-describe('requireRole (legacy from auth.ts)', () => {
-  it('returns 403 when authContext is missing', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-    const req = { authContext: null } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-  });
-
-  it('returns 403 when user is not authenticated', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-    const req = {
-      authContext: { isAuthenticated: false, registeredUser: null },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-  });
-
-  it('returns 403 when user role is not allowed', async () => {
-    const middleware = requireRoleLegacy('BIGBOSS');
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { role: 'USER' },
-      },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false })
-    );
-  });
-
-  it('allows request when user role matches', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { role: 'ADMIN' },
-      },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-  });
-
-  it('allows when role is in array of allowed roles', async () => {
-    const middleware = requireRoleLegacy(['BIGBOSS', 'ADMIN']);
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { role: 'ADMIN' },
-      },
-    } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-  });
-});
-
-// ─── requireEmailVerification ─────────────────────────────────────────────────
-
-describe('requireEmailVerification', () => {
-  it('returns 403 when authContext is missing', async () => {
-    const req = { authContext: null } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.objectContaining({ code: 'PERMISSION_DENIED' }) })
-    );
-  });
-
-  it('returns 403 when not authenticated', async () => {
-    const req = {
-      authContext: { isAuthenticated: false, registeredUser: null },
-    } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-  });
-
-  it('returns 403 EMAIL_NOT_VERIFIED when email not verified', async () => {
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { emailVerifiedAt: null },
-      },
-    } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.objectContaining({ code: 'EMAIL_NOT_VERIFIED' }) })
-    );
-  });
-
-  it('does not reply when email is verified', async () => {
-    const req = {
-      authContext: {
-        isAuthenticated: true,
-        registeredUser: { emailVerifiedAt: new Date() },
-      },
-    } as any;
-    const reply = createReply();
-
-    await requireEmailVerification(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-    expect(reply.send).not.toHaveBeenCalled();
   });
 });
 
@@ -979,34 +847,6 @@ describe('AuthMiddleware — anonymous context error path', () => {
     await expect(
       middleware.createAuthContext(undefined, 'anon_null_participant')
     ).rejects.toThrow('Invalid session token');
-  });
-});
-
-// ─── requireRole — generic non-PermissionDeniedError path ────────────────────
-
-describe('requireRole — generic error path (line 663)', () => {
-  it('returns 403 with PERMISSION_DENIED when unexpected error is thrown', async () => {
-    const middleware = requireRoleLegacy('ADMIN');
-
-    // Craft a request where accessing authContext.registeredUser throws a non-PermissionDeniedError
-    const authContext = {
-      isAuthenticated: true,
-      get registeredUser() {
-        throw new TypeError('Unexpected internal failure');
-      },
-    };
-    const req = { authContext } as any;
-    const reply = createReply();
-
-    await middleware(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(403);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        success: false,
-        error: expect.objectContaining({ code: 'PERMISSION_DENIED' }),
-      })
-    );
   });
 });
 

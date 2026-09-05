@@ -229,8 +229,8 @@ footer .mono{font-size:11.5px}
     <span>rév. 20 (2026-08-22) : <b>lot D — intégration de main dans le lot, gate REJOUÉ sur l'état FUSIONNÉ</b> (<span class="mono">git merge origin/main --no-edit</span> dans <span class="mono">feat/composer-lot-d</span>, 123 commits d'amont, <b>zéro conflit</b> ; seul fichier édité des DEUX côtés = CETTE planche, dont la fusion silencieuse a été vérifiée ligne à ligne — 31 lignes ajoutées côté main et 41 côté lot, <b>toutes présentes</b> dans le résultat, et la seule valeur périmée retenue par l'auto-fusion — l'agrégé 23/57 de la note d'exception ci-dessous, dépassé par le dénominateur 63 du lot F — corrigée ici). Le gate d'AVANT l'intégration ne prouvant rien sur l'état qui merge, les deux volets ont été relancés SUR LE MERGE : scheme <span class="mono">MeeshySDK-Package</span> COMPLET, DerivedData dédiée <span class="mono">/tmp/meeshy-dd-lot-d-sdk</span> — <span class="mono">MeeshySDKTests.xctest</span> « Executed <b>3686</b> tests, with 22 tests skipped and <b>0 failures</b> (0 unexpected) » (76,079 s) + <span class="mono">MeeshyUITests.xctest</span> « Executed <b>3346</b> tests, with 13 tests skipped and <b>0 failures</b> (0 unexpected) » (271,405 s) + Swift Testing 543/543 (60 suites) et 295/295 (44 suites) ; contrôles falsifiables : <span class="mono">grep -cE "Test Case .* failed \("</span> = <b>0</b> et <b>** TEST SUCCEEDED **</b>, code de sortie <b>0</b> (1re tentative rendue <span class="mono">70</span> — destination <span class="mono">name=iPhone 16 Pro</span> non résolue, <span class="mono">OS:latest</span> valant 26.1 quand ce simulateur est en 18.2 : <b>aucun test n'avait tourné</b>, relancé épinglé sur <span class="mono">id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5</span>). Dont, côté lot D : <span class="mono">Plan2DViewGuardTests</span> 78/78, <span class="mono">Plan2DIntegrationGuardTests</span> 37/37, <span class="mono">Plan2DRenderMeasureTests</span> 3/3, <span class="mono">TimelineLocalizationTests</span> 1/1, et les suites Swift Testing <span class="mono">Plan 2D — pistes et échelle</span>, <span class="mono">Plan2DProjectAdapter</span>, <span class="mono">Plan2DReorderResolver</span> vertes. Puis <span class="mono">./apps/ios/meeshy.sh build</span> (app <span class="mono">Meeshy</span> Debug, iPhone 16 Pro) : <b>Build succeeded en 76 s</b>, code de sortie <b>0</b>, <span class="mono">git status</span> propre après coup (ni <span class="mono">project.pbxproj</span> ni <span class="mono">project.yml</span> touchés). <b>Les deux gates verts NE LÈVENT PAS, à eux seuls, le STOP budget D4</b> : ils prouvent que l'état fusionné tient, pas que le plancher A11 a été mesuré. <b>Le porteur produit a tranché le 2026-08-21 : dérogation ACCORDÉE, STOP LEVÉ, merge autorisé</b> — artefact <span class="mono">packages/MeeshySDK/decisions.md</span> § 2026-08-22, doublé de l'amendement nommé de la ligne 117 de l'addendum du plan lot D. Gage opposable : la virtualisation du plan devient le PREMIER CHANTIER si une saccade est constatée au scrub sur appareil ancien.</span>
     <span>rév. 21 (2026-08-22) : <b>socle du lot C — le blocage d'E4 est LEVÉ et le swap est LIVRÉ</b> sur <span class="mono">feat/composer-lot-c</span> (tête <span class="mono">0dfafd355</span>, <span class="mono">origin/main</span> fusionné). Trois reprises, dans cet ordre : <b>C0a</b> ouvre le contrat B4 (porteur facultatif, muet relevable derrière <span class="mono">locksMute</span>, huit fils dans l'init) <b>sans relâcher <span class="mono">.card</span></b> — <span class="mono">FeedPostCardScenePlayerGuardTests</span> 15/15 et <span class="mono">MuteButtonExistenceGuardTests</span> 28/28 restées vertes, sans une ligne modifiée ; <b>C0b</b> enracine l'identité d'un montage dans ce qu'il PEINT — et ferme au passage un bug VIVANT du fil, où toute story legacy s'identifiait <span class="mono">"s1"</span> et où une vue canvas réemployée continuait de peindre la story précédente ; <b>C0c</b> fait le swap, puis le CORRIGE : le montage inconditionnel était faux, parce qu'iOS ne pose aucun <span class="mono">X-Canvas-Caps</span> (C4, ouverte) et que l'aller-retour v1→v3→v1 letterboxe les ancres — un texte à 0,90 peint à <b>0,6266</b> sur un fond 16:9. Le lecteur est donc monté <b>derrière une porte v3-natif</b> qui basculera d'elle-même le jour de C4. La garde de couture d'E4 s'est <b>armée d'elle-même</b> comme promis : 6 verts + 1 <span class="mono">XCTSkip</span> ⇒ <b>7 verts, aucun saut</b>, vérifié dans le xcresult. Gate sur l'état FUSIONNÉ : gate SDK <span class="mono">MeeshySDK-Package</span> COMPLET (DerivedData dédiée <span class="mono">/tmp/meeshy-dd-lot-c-sdk</span>) : <b>7 882 passés / 0 échec / 35 sautés</b> — <span class="mono">MeeshySDKTests</span> 3 690 (22 sautés), <span class="mono">MeeshyUITests</span> 3 386 (13 sautés), plus 546 tests Swift Testing en 60 suites et 295 en 44 suites · gate app <span class="mono">./apps/ios/meeshy.sh test</span> COMPLET sur simulateur DÉDIÉ, <b>exit 0</b> : phase 0 <b>7 882</b> · phase 1 <b>3 199</b> · phase 2 <b>4 264 sur 391 suites</b> · phase 3 sautée (identifiants démo hors arbre) — <b>0 échec</b>, garde d'orphelins VERTE. Suites vérifiées PASSANTES dans les xcresult, jamais seulement déclarées. <b>Mise en garde d'exécution</b> : une invocation antérieure avait rendu exit 1 sur DEUX <span class="mono">ExportEquivalenceTests</span> en dépassement du plafond de 3 min — <b>contention machine, jamais une assertion</b> (load average 36,67 à 15 min, un worktree voisin compilant dans la même fenêtre) : les deux mêmes tests passent en 20,8 s et 8,5 s isolément, et 2/2 dans les runs propres. <b>Simulateur DÉDIÉ</b> (<span class="mono">Meeshy-LotC-Gate</span>, iOS 18.2, créé pour ce gate) — la mise en garde de la ligne S2 est respectée : le simulateur partagé porte l'app d'un worktree voisin. Union pbxproj vérifiée NOMINATIVEMENT après fusion : <b>600</b> fichiers de test des deux côtés, aucune référence perdue, aucune inventée, et le pbxproj ressort du gate <b>octet pour octet identique</b>.</span>
     <span>rév. 26 (2026-08-27) : <b>Story (S) gagne le champ <span class="mono">content</span> à l'Amorce</b> — le composer unifié (<span class="mono">#3939</span>) fait NAÎTRE la scène incrustée EN HAUT de l'écran document dès qu'un fond est choisi ; le texte devient sa DESCRIPTION, sous la scène (Phase 1 <span class="mono">EmbeddedSceneCanvas</span>, <span class="mono">d06221c826</span> · Phase 2, <span class="mono">03c39ded29</span>). Trois cellules qui disaient « content pour P·R » corrigées en « content pour S·P·R » (P4 §3, P22 Amorce, P2 inventaire feed) — Mood (M) reste content SEUL, inchangé.</span>
-    <span>rév. 27 (2026-08-27) : <b>le MODÈLE est normalisé — slides, scènes, objets</b>. Quatre noms et rien d'autre : <span class="mono">MeeshyPublication</span> → <span class="mono">MeeshySlide</span> → <span class="mono">MeeshyScene</span> → <span class="mono">MeeshyObject</span>. <b>Une slide est TOUJOURS une scène</b> (une slide qui ne porte qu'un média est une scène dont le seul objet est son fond) — ce que P8 disait déjà (« chaque slide est une Scene du document »), désormais opposable. <b>Ce qu'une slide SIGNIFIE dépend du profil</b> : en S et R une slide est la publication entière et son texte EST le contenu ; en <b>P une slide est UN MÉDIA du post</b> et son texte en est la <b>LÉGENDE</b>, le <span class="mono">content</span> du post ayant son propre logement — ce qui corrige le champ posé par la Phase 2, juste en S/R et faux en P (<span class="mono">#4045</span>). <b>Poser un média</b> : pas de fond ⇒ il devient le fond, sinon un objet de premier plan ; un audio devient le son de fond (<span class="mono">#4038</span>). <b>Appui long sur un objet</b> : monter · reculer · modifier · sortir de la scène, sauf en Story (<span class="mono">#4046</span>). La <b>barre haute</b> porte désormais ✕ · type de publication · <b>rail des slides</b> · ⋯ (<span class="mono">#4047</span>) — les maquettes de P4 et P22 sont à jour. Sémantique complète : <span class="mono">docs/product/meeshy-composer-modele.md</span>, qui a raison sur les NOMS et les RÈGLES quand la planche diverge.</span>
-    <span>rév. 28 (2026-08-28) : <b>le bas RESPIRE — la rangée d'outils cesse d'être permanente, et la description devient un calque de LECTURE</b> (<span class="mono">#4064</span>, <span class="mono">#4065</span>). Deux corrections de la rév. 27, écrites parce qu'elles se découvrent à l'implémentation et pas à la planche. <b>(1) Retirer la rangée d'outils emporte ce qui n'était pas une porte</b> : la PALETTE s'y ouvrait par l'icône de fond, et le rail <i>leading</i> ne pouvait pas la reprendre — il porte ce qui fait entrer un <span class="mono">MeeshyObject</span>, et une couleur n'en est pas un. Sur la surface de scène, on pouvait donc RETIRER le fond et jamais EN CHANGER ; elle rejoint le <span class="mono">⋯</span>, qui ne l'offre que là où la rangée a disparu. Le critère d'appartenance d'une bande est écrit : <b>un axe HORIZONTAL, ou une COMPARAISON latérale</b> — tout le reste est un rail (<span class="mono">ComposerSceneBand</span>). <b>(2) « la traduction que le Prisme sert » était fausse d'un cran</b> : à la COMPOSITION le résolveur n'a rien à résoudre — aucune traduction n'existe encore. Le calque rend le texte de l'auteur avec le RENDERER du lecteur (<span class="mono">MessageTextRenderer</span>, mentions et hashtags colorés) et <b>n'annonce AUCUNE langue</b> ; y poser une pastille referait le défaut du cycle 123 en pire. Un seul calque pour les deux hôtes — la barre repliable à chevron de l'atelier a disparu avec sa clé.</span>
+    <span>rév. 27 (2026-08-27) : <b>le MODÈLE est normalisé — slides, scènes, objets</b>. Quatre noms et rien d'autre : <span class="mono">MeeshyPublication</span> → <span class="mono">MeeshySlide</span> → <span class="mono">MeeshyScene</span> → <span class="mono">MeeshySceneObject</span>. <b>Une slide est TOUJOURS une scène</b> (une slide qui ne porte qu'un média est une scène dont le seul objet est son fond) — ce que P8 disait déjà (« chaque slide est une Scene du document »), désormais opposable. <b>Ce qu'une slide SIGNIFIE dépend du profil</b> : en S et R une slide est la publication entière et son texte EST le contenu ; en <b>P une slide est UN MÉDIA du post</b> et son texte en est la <b>LÉGENDE</b>, le <span class="mono">content</span> du post ayant son propre logement — ce qui corrige le champ posé par la Phase 2, juste en S/R et faux en P (<span class="mono">#4045</span>). <b>Poser un média</b> : pas de fond ⇒ il devient le fond, sinon un objet de premier plan ; un audio devient le son de fond (<span class="mono">#4038</span>). <b>Appui long sur un objet</b> : monter · reculer · modifier · sortir de la scène, sauf en Story (<span class="mono">#4046</span>). La <b>barre haute</b> porte désormais ✕ · type de publication · <b>rail des slides</b> · ⋯ (<span class="mono">#4047</span>) — les maquettes de P4 et P22 sont à jour. Sémantique complète : <span class="mono">docs/product/meeshy-composer-modele.md</span>, qui a raison sur les NOMS et les RÈGLES quand la planche diverge.</span>
+    <span>rév. 28 (2026-08-28) : <b>le bas RESPIRE — la rangée d'outils cesse d'être permanente, et la description devient un calque de LECTURE</b> (<span class="mono">#4064</span>, <span class="mono">#4065</span>). Deux corrections de la rév. 27, écrites parce qu'elles se découvrent à l'implémentation et pas à la planche. <b>(1) Retirer la rangée d'outils emporte ce qui n'était pas une porte</b> : la PALETTE s'y ouvrait par l'icône de fond, et le rail <i>leading</i> ne pouvait pas la reprendre — il porte ce qui fait entrer un <span class="mono">MeeshySceneObject</span>, et une couleur n'en est pas un. Sur la surface de scène, on pouvait donc RETIRER le fond et jamais EN CHANGER ; elle rejoint le <span class="mono">⋯</span>, qui ne l'offre que là où la rangée a disparu. Le critère d'appartenance d'une bande est écrit : <b>un axe HORIZONTAL, ou une COMPARAISON latérale</b> — tout le reste est un rail (<span class="mono">ComposerSceneBand</span>). <b>(2) « la traduction que le Prisme sert » était fausse d'un cran</b> : à la COMPOSITION le résolveur n'a rien à résoudre — aucune traduction n'existe encore. Le calque rend le texte de l'auteur avec le RENDERER du lecteur (<span class="mono">MessageTextRenderer</span>, mentions et hashtags colorés) et <b>n'annonce AUCUNE langue</b> ; y poser une pastille referait le défaut du cycle 123 en pire. Un seul calque pour les deux hôtes — la barre repliable à chevron de l'atelier a disparu avec sa clé.</span>
   </div>
   <div class="legend">
     <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
@@ -254,7 +254,7 @@ footer .mono{font-size:11.5px}
   <span class="mono">MeeshyPublication</span> (ce qui part : audience, profil, son de fond) ·
   <span class="mono">MeeshySlide</span> (le rail, les descriptions) ·
   <span class="mono">MeeshyScene</span> (les trois plans, le 9:16, le porteur) ·
-  <span class="mono">MeeshyObject</span> (les kinds, la pose, le timing, l'inspecteur). Une tâche
+  <span class="mono">MeeshySceneObject</span> (les kinds, la pose, le timing, l'inspecteur). Une tâche
   qui ne sait pas dire sur quel niveau elle porte n'est pas encore spécifiée.</div>
 
   <p class="lede">L'état RÉEL du chantier, chiffré sur les <b>121</b> tâches d'exécution des huit lots A→H <i>et</i> des lots du chantier v2
@@ -687,10 +687,10 @@ footer .mono{font-size:11.5px}
 └── slides: [<b>MeeshySlide</b>]                     1..10
      └── MeeshySlide = <b>MeeshyScene</b> + description
           └── MeeshyScene (ratio)
-               └── objects: [<b>MeeshyObject</b>]    plans: background · content · foreground</pre>
+               └── objects: [<b>MeeshySceneObject</b>]    plans: background · content · foreground</pre>
 
   <div class="grid g4">
-    <div class="card"><h4><span class="mono">MeeshyObject</span></h4><p>L'unité posée sur une scène :
+    <div class="card"><h4><span class="mono">MeeshySceneObject</span></h4><p>L'unité posée sur une scène :
       <span class="mono">kind</span> + <span class="mono">anchor</span> + <span class="mono">plane</span> +
       <span class="mono">z</span> + <span class="mono">transform</span> + <span class="mono">timing?</span> +
       <span class="mono">locale?</span> + <span class="mono">payload</span>. Sept kinds, ceux du contrat
@@ -711,7 +711,7 @@ footer .mono{font-size:11.5px}
       déclarée</b>.</p></div>
   </div>
 
-  <h3>L'anatomie d'un <span class="mono">MeeshyObject</span> — neuf champs, sept kinds</h3>
+  <h3>L'anatomie d'un <span class="mono">MeeshySceneObject</span> — neuf champs, sept kinds</h3>
   <p>Le nom est nouveau, la structure ne l'est pas : elle est <b>déjà dans le contrat partagé</b>
   (<span class="mono">packages/shared/types/canvas-v3.ts</span>, <span class="mono">ObjectV3</span>),
   versionnée, avec un golden commun aux trois clients. Ce que le modèle apporte n'est pas un schéma
@@ -767,7 +767,7 @@ footer .mono{font-size:11.5px}
   futur « ce nom t'attend » plutôt que « ce nom n'existe pas ».</div>
 
   <div class="callout"><b>Ce que la structure NE porte pas, et où ça vit.</b> Un
-  <span class="mono">MeeshyObject</span> ne porte ni audience, ni lieu de publication, ni langue
+  <span class="mono">MeeshySceneObject</span> ne porte ni audience, ni lieu de publication, ni langue
   déclarée : ce sont des champs de la <span class="mono">MeeshyPublication</span>. Il ne porte pas
   non plus le ratio de sa scène — il se lit du porteur (coupe S8). Et le <b>son de fond</b> est
   l'exception qui mérite d'être dite : au fil, il vit sur le DOCUMENT
@@ -794,15 +794,15 @@ footer .mono{font-size:11.5px}
       <tr><td><b>le rail</b></td><td>la bande des slides du document</td><td>les <span class="mono">MeeshySlide</span></td><td class="mono">slideRail</td></tr>
       <tr><td><b>le <span class="mono">⋯</span></b></td><td>ce que le document sait faire et que rien d'autre ne fait</td><td>la publication ENTIÈRE</td><td class="mono">overflowMenu</td></tr>
       <tr><td><b>la scène incrustée</b></td><td>la scène de la slide courante, rendue dans l'écran document</td><td>une <span class="mono">MeeshyScene</span></td><td class="mono">EmbeddedSceneCanvas</td></tr>
-      <tr><td><b>l'inspecteur</b></td><td>les contrôles de l'objet sélectionné, au-dessus des outils</td><td>UN <span class="mono">MeeshyObject</span></td><td class="mono">EmbeddedSceneInspector</td></tr>
-      <tr><td><b>la rangée d'outils</b></td><td>les portes qui font ENTRER de la matière + la langue déclarée</td><td>crée des <span class="mono">MeeshyObject</span></td><td class="mono">toolRow</td></tr>
-      <tr><td><b>les amorces</b></td><td>sur une scène vide : caméra · dernière capture · « touchez pour écrire »</td><td>crée le PREMIER <span class="mono">MeeshyObject</span></td><td class="mono">blankCanvasStarter*</td></tr>
+      <tr><td><b>l'inspecteur</b></td><td>les contrôles de l'objet sélectionné, au-dessus des outils</td><td>UN <span class="mono">MeeshySceneObject</span></td><td class="mono">EmbeddedSceneInspector</td></tr>
+      <tr><td><b>la rangée d'outils</b></td><td>les portes qui font ENTRER de la matière + la langue déclarée</td><td>crée des <span class="mono">MeeshySceneObject</span></td><td class="mono">toolRow</td></tr>
+      <tr><td><b>les amorces</b></td><td>sur une scène vide : caméra · dernière capture · « touchez pour écrire »</td><td>crée le PREMIER <span class="mono">MeeshySceneObject</span></td><td class="mono">blankCanvasStarter*</td></tr>
       <tr><td><b>le socle</b></td><td>Audience · Aperçu · Publier — il ne bouge jamais (loi 5)</td><td>la publication (ce qui PART)</td><td class="mono">socle</td></tr>
     </tbody>
   </table></div>
 
   <div class="callout"><b>Règle de lecture de cette planche.</b> Chaque section nomme le niveau sur
-  lequel elle agit — un <span class="mono">MeeshyObject</span>, une <span class="mono">MeeshyScene</span>,
+  lequel elle agit — un <span class="mono">MeeshySceneObject</span>, une <span class="mono">MeeshyScene</span>,
   une <span class="mono">MeeshySlide</span>, la <span class="mono">MeeshyPublication</span>, ou une
   pièce de chrome de la table ci-dessus. Une règle qui n'en nomme aucun décrit un comportement dont on
   ne sait pas ce qu'il touche : c'est la forme sous laquelle deux lots finissent par se contredire
@@ -822,7 +822,7 @@ footer .mono{font-size:11.5px}
       « le composer de story » : on entre dans le composer, déjà réglé sur STORY parce qu'on vient
       du tray. Changer de format ne change pas d'outil.</p></div>
     <div class="card"><h4>2 · Un objet, cinq familles en moins</h4><p>Texte, média, sticker, son,
-      lieu, dessin, mention — un seul <b class="mono">MeeshyObject</b> (transform, timing,
+      lieu, dessin, mention — un seul <b class="mono">MeeshySceneObject</b> (transform, timing,
       layer, locale). Aujourd'hui chaque famille redéclare scale/rotation/zIndex/startTime/keyframes
       (<span class="mono">StoryModels.swift:272-276, 629-664, 914-928</span>).
       <b>« Cinq en moins » est un compte, pas une image</b> : la migration v1→v3 convertit SIX
@@ -837,7 +837,7 @@ footer .mono{font-size:11.5px}
     <div class="card"><h4>4 · Rien à l'écran sans raison</h4><p>Un contrôle d'OBJET apparaît si —
       et seulement si — l'objet courant l'accepte, le profil l'autorise, et l'action a un effet
       maintenant. Sinon il n'est pas grisé : il n'est pas là. <b>Niveau :</b> UN
-      <span class="mono">MeeshyObject</span> — « l'objet courant l'accepte » se lit sur son
+      <span class="mono">MeeshySceneObject</span> — « l'objet courant l'accepte » se lit sur son
       <span class="mono">kind</span>, et c'est ce qui rend la loi testable plutôt qu'esthétique.
       Portée précisée (rév. 2) : la loi
       vaut pour les contrôles d'objet, jamais pour les PORTES DE CRÉATION — l'état AMORCE (P4)
@@ -865,7 +865,7 @@ footer .mono{font-size:11.5px}
       et les objets de scène gardent chacun leur place. Le champ nouvellement montré adopte le
       contenu préservé, jamais du vide. <b>Niveaux :</b> la préservation joue sur DEUX — la
       description de la <span class="mono">MeeshySlide</span> (le texte de base) et les
-      <span class="mono">MeeshyObject</span> de sa <span class="mono">MeeshyScene</span> (chacun
+      <span class="mono">MeeshySceneObject</span> de sa <span class="mono">MeeshyScene</span> (chacun
       garde <span class="mono">anchor</span>, <span class="mono">plane</span>,
       <span class="mono">z</span>). Ce que la bascule recalcule n'est ni l'un ni l'autre : c'est le
       jeu de kinds AUTORISÉS. <b>Rév. 3 (2026-08-27)</b> — révise « le texte ne migre
@@ -887,9 +887,9 @@ footer .mono{font-size:11.5px}
       Le rail <i>leading</i> fait ENTRER de la matière ; le rail <i>trailing</i> AGIT sur ce qui est
       déjà là. <b>Un contrôle ne change jamais de rail</b> — c'est ce qui rend la latéralité
       apprenable plutôt que décorative. <b>Niveaux :</b> <i>leading</i> crée un
-      <span class="mono">MeeshyObject</span> (sauf « description », qui vise la
+      <span class="mono">MeeshySceneObject</span> (sauf « description », qui vise la
       <span class="mono">MeeshySlide</span>) ; <i>trailing</i> agit sur UN
-      <span class="mono">MeeshyObject</span>, et son <span class="mono">✕</span> sur la
+      <span class="mono">MeeshySceneObject</span>, et son <span class="mono">✕</span> sur la
       <span class="mono">MeeshyPublication</span>. Se dit en <i>leading</i>/<i>trailing</i>, jamais
       en gauche/droite : en arabe les deux s'échangent, et un rail codé « à gauche » y retourne le
       geste appris contre son utilisateur.</p></div>
@@ -910,7 +910,7 @@ footer .mono{font-size:11.5px}
       <tr><td><b>Slides</b> ≤10 · ajouter / dupliquer / supprimer</td><td class="mono">SlideStrip (addSlide, duplicateSlide(at:), context-menu Supprimer)</td><td>Rail de scènes, mêmes 3 actions</td></tr>
       <tr><td><b>Texte</b> — 18 familles de style (gras, néon, machine, manuscrit, classique, calligraphie, cartoon, futuriste, fantaisie, curve, tag · + 2026-08-20 : italique, rétro, élégant, affiche, bulle, note, pinceau)</td><td class="mono">StoryTextStyle (18 cas) + StoryFont/StoryTextFontResolver</td><td>Objet <span class="mono">text</span>, payload styles inchangé — « italique » et « rétro » réunifient le vocabulaire historique du lecteur</td></tr>
       <tr><td>Texte — couleur, fond, taille, alignement, position, offset, <b>édition en zone</b></td><td class="mono">textPosition/textColor/textBg/textAlign/textSize/textOffsetY · édition inline (zone)</td><td>Panneau contextuel Texte (P7)</td></tr>
-      <tr><td>Texte — timing + keyframes (x, y, scale, opacity, easing)</td><td class="mono">startTime/keyframes — StoryKeyframe</td><td>Timing du MeeshyObject, plan 2D (P8)</td></tr>
+      <tr><td>Texte — timing + keyframes (x, y, scale, opacity, easing)</td><td class="mono">startTime/keyframes — StoryKeyframe</td><td>Timing du MeeshySceneObject, plan 2D (P8)</td></tr>
       <tr><td><b>Dessin</b> — mode immersif, pinceaux, épaisseur avec aperçu de pointe, couleur, liste des traits</td><td class="mono">StoryDrawingToolbar + DrawingStrokeList</td><td>Objet <span class="mono">drawing</span> ; panneau reste ouvert tant que le mode est actif</td></tr>
       <tr><td><b>Stickers</b> — grille par catégories</td><td class="mono">StickerPickerView (StickerCategory)</td><td>Objet <span class="mono">sticker</span> — gagne transform + timing</td></tr>
       <tr><td><b>Médias</b> — caméra, galerie, dernière capture (sans prompt), éditeur (crop), média premier plan</td><td class="mono">galleryStarter/recentAsset, openMediaEditor, fgMediaItem</td><td>Objet <span class="mono">media</span> ; amorce préservée (P5)</td></tr>
@@ -923,7 +923,7 @@ footer .mono{font-size:11.5px}
       <tr><td><b>Références</b> — @ inline · sélecteur (appui long = mode) · INLINE/PINNED/NOTE/SILENT · badge épinglé (referenceUserId) · tri-état à l'édition</td><td class="mono">ReferenceComposerBar, ReferenceModeMenu, StoryMentionPickerSheet, adoptDeclaredReferences</td><td>Objet <span class="mono">mention</span> (PINNED) + méta (autres modes) — P7</td></tr>
       <tr><td><b>Timeline</b> — pistes, règle graduée dérivée de la largeur des libellés, lanes 52 pt, keyframes x/y/scale/opacity/volume/easing</td><td class="mono">32 vues Timeline/* · StoryKeyframe</td><td>Plan 2D unique (P8)</td></tr>
       <tr><td><b>Transitions</b> — entrée/sortie PAR SLIDE + transitions entre clips (Timeline V2) <span class="tag tEx">recensé 20/08</span></td><td class="mono">opening/closing: StoryTransitionEffect · clipTransitions: [StoryClipTransition]</td><td>Champ de la Scene + jointures du plan 2D — raté par le recensement initial, PAS un manque SOTA</td></tr>
-      <tr><td><b>Historique</b> — annuler/refaire global + pile dédiée pendant le dessin <span class="tag tEx">recensé 20/08</span></td><td class="mono">StoryComposerViewModel+History (undoGlobal/redoGlobal)</td><td>Historique du MeeshyDocument, conservé</td></tr>
+      <tr><td><b>Historique</b> — annuler/refaire global + pile dédiée pendant le dessin <span class="tag tEx">recensé 20/08</span></td><td class="mono">StoryComposerViewModel+History (undoGlobal/redoGlobal)</td><td>Historique du MeeshyPublication, conservé</td></tr>
       <tr><td><b>Cadre par slide</b> — l'import d'un fond paysage impose un canvas 16:9 <span class="tag tEx">recensé 20/08</span></td><td class="mono">canvasAspectRatio (nil = 9:16)</td><td><b>ABSORBÉ</b> par la scène 9:16 à bandes actives : le porteur garde son ratio, le cadre plus jamais. Lecture v1 : letterbox dans la scène — COUVERT (rév. 2, U20) : le convertisseur REMAPPE les ancres libres dans le rect letterboxé, golden à l'appui (§C2 rév. 4)</td></tr>
       <tr><td>Caméra — flash (off/on/auto)</td><td class="mono">CameraView (flashMode)</td><td>Conservé dans la capture (P9)</td></tr>
       <tr><td><b>Aperçu</b> — canvas né en pause, bouton lecture</td><td class="mono">règle « born paused »</td><td>Aperçu du socle = ScenePlayer en mode preview</td></tr>
@@ -1015,7 +1015,7 @@ flowchart TD
   e1 & e2 & e5 & e6 & e7 & e8 & e9 & e10 --> C
   e3 -. hors v1 .-> C
   e4 -. porte du profil M — l'éventail l'atteint aussi #4030 .-> C
-  C -->|rangée d'outils| T[Crée un MeeshyObject<br/>text · media · audio · drawing · sticker · place · mention]
+  C -->|rangée d'outils| T[Crée un MeeshySceneObject<br/>text · media · audio · drawing · sticker · place · mention]
   T --> C
   C -->|un objet sélectionné| I[Inspecteur — les contrôles de CET objet]
   I --> C
@@ -1067,7 +1067,7 @@ flowchart TD
       <li><span class="n">1</span><span><b>Plateau</b> — <i>agit sur aucun niveau du modèle : c'est
         le support.</i> Fond sombre configurable (noir · indigo profond · violet profond — jetons
         SDK, contraste AA testé sur les trois) dans les réglages d'interface. Il porte la
-        <span class="mono">MeeshyScene</span> ; <b>aucun MeeshyObject ne s'y pose</b>, et
+        <span class="mono">MeeshyScene</span> ; <b>aucun MeeshySceneObject ne s'y pose</b>, et
         <b>il n'existe que quand une scène existe</b> (rév. 2, U18) : une
         <span class="mono">MeeshyPublication</span> sans scène suit le thème de l'app. Sa teinte
         gouverne aussi l'occultation de la rangée d'outils qui défile (#4032). Chrome : matériaux du
@@ -1075,7 +1075,7 @@ flowchart TD
         MeeshyRadius/MeeshyShadow ; 26+ : Liquid Glass automatique).</span></li>
       <li><span class="n">2</span><span><b>Scène 9:16, fixe</b> — <i>c'est UNE
         <span class="mono">MeeshyScene</span>, celle de la <span class="mono">MeeshySlide</span>
-        courante.</i> Le <span class="mono">MeeshyObject</span> porteur garde son ratio et occupe le
+        courante.</i> Le <span class="mono">MeeshySceneObject</span> porteur garde son ratio et occupe le
         plan <span class="mono">content</span> ; les bandes hachurées sont les zones d'ancrage de
         premier ordre du plan <span class="mono">foreground</span> (P6). Le fond est un objet du plan
         <span class="mono">background</span> — qui porte <b>deux places</b>, un visuel <i>et</i> un
@@ -1083,20 +1083,20 @@ flowchart TD
       <li><span class="n">3</span><span><b>Zone contextuelle — DEUX états nommés</b> (rév. 2, C3 ;
         <b>rév. 27 — elle n'est plus PERMANENTE</b>, voir « les deux rails » ci-dessous),
         <i>et ils n'agissent pas sur le même niveau.</i>
-        <b>AMORCE</b> — <i>CRÉE un <span class="mono">MeeshyObject</span></i> (aucune sélection ;
+        <b>AMORCE</b> — <i>CRÉE un <span class="mono">MeeshySceneObject</span></i> (aucune sélection ;
         CIBLE : en v1 la zone reste celle du composer SDK, déscope §F/I7) : la rangée fixe des
         <b>kinds</b> que le profil autorise — <span class="mono">text</span> ·
         <span class="mono">sticker</span> · <span class="mono">audio</span> ·
         <span class="mono">place</span> (+ <span class="mono">media</span> pour S·P·R, rév. 26 —
         Story gagne l'écran document, composer unifié #3939) ; la porte de création a toujours un
         domicile.
-        <b>INSPECTEUR</b> — <i>agit sur UN <span class="mono">MeeshyObject</span>, celui qui est
+        <b>INSPECTEUR</b> — <i>agit sur UN <span class="mono">MeeshySceneObject</span>, celui qui est
         sélectionné</i> : ses contrôles, eux seuls. Jamais de vide-mystère, jamais de contrôle
         grisé — la loi 4 vaut pour les contrôles d'objet. Aucune sélection ⇒ inspecteur ABSENT, et
         le tap qui sélectionne est un va-et-vient : le même referme (#4035).</span></li>
       <li><span class="n">5</span><span><b>Rail <i>leading</i> — les PORTES</b> (rév. 27),
         <i>ce qui fait ENTRER de la matière.</i> Description · média · son · sticker · mention ·
-        lieu. Cinq de ces six créent un <span class="mono">MeeshyObject</span> ; <b>la sixième
+        lieu. Cinq de ces six créent un <span class="mono">MeeshySceneObject</span> ; <b>la sixième
         n'en crée pas</b> — « description » vise la <span class="mono">MeeshySlide</span>, et
         confondre les deux niveaux ferait poser un objet texte là où l'on voulait décrire la
         slide (P22, les trois niveaux).</span></li>
@@ -1124,15 +1124,15 @@ flowchart TD
     <caption>Ce que chaque rail porte, et sur quel niveau du modèle il agit</caption>
     <thead><tr><th>Rail</th><th>Ce qu'il porte</th><th>Niveau</th><th>Présence</th></tr></thead>
     <tbody>
-      <tr><td><b><i>leading</i></b></td><td>les PORTES — description · média · son · sticker · mention · lieu</td><td>crée un <span class="mono">MeeshyObject</span> — <b>sauf « description »</b>, qui vise la <span class="mono">MeeshySlide</span></td><td>une porte que le profil refuse n'est <b>pas là</b></td></tr>
-      <tr><td><b><i>trailing</i></b></td><td>les CONTRÔLEURS de l'objet sélectionné, + le <span class="mono">✕</span></td><td>UN <span class="mono">MeeshyObject</span> ; le <span class="mono">✕</span> vise la <span class="mono">MeeshyPublication</span></td><td>aucune sélection ⇒ <b>aucun contrôleur</b> ; le <span class="mono">✕</span>, lui, ne disparaît jamais</td></tr>
+      <tr><td><b><i>leading</i></b></td><td>les PORTES — description · média · son · sticker · mention · lieu</td><td>crée un <span class="mono">MeeshySceneObject</span> — <b>sauf « description »</b>, qui vise la <span class="mono">MeeshySlide</span></td><td>une porte que le profil refuse n'est <b>pas là</b></td></tr>
+      <tr><td><b><i>trailing</i></b></td><td>les CONTRÔLEURS de l'objet sélectionné, + le <span class="mono">✕</span></td><td>UN <span class="mono">MeeshySceneObject</span> ; le <span class="mono">✕</span> vise la <span class="mono">MeeshyPublication</span></td><td>aucune sélection ⇒ <b>aucun contrôleur</b> ; le <span class="mono">✕</span>, lui, ne disparaît jamais</td></tr>
       <tr><td><b>le bas</b></td><td>le socle, et <b>seulement lui</b> par défaut</td><td>la <span class="mono">MeeshyPublication</span></td><td>la rangée d'outils n'y revient que pour un contexte qui exige une BANDE horizontale — timeline, les 18 styles, une palette</td></tr>
     </tbody>
   </table></div>
 
   <div class="callout"><b>Pourquoi la scène RÉTRÉCIT au lieu d'être recouverte — et c'est la loi 6
   qui tranche.</b> Un FAB posé sur la scène occupe exactement la place où un
-  <span class="mono">MeeshyObject</span> peut vivre : l'aperçu mentirait sur le rendu final, or
+  <span class="mono">MeeshySceneObject</span> peut vivre : l'aperçu mentirait sur le rendu final, or
   « le lecteur EST l'aperçu ». Les rails vivent donc sur le PLATEAU et la scène s'encastre entre
   eux. Aujourd'hui la scène ne laisse que <b>14 pt</b> de chaque côté — très en dessous des 44 pt
   d'une cible tactile —, donc l'encastrement n'est pas un réglage, c'est la condition d'existence
@@ -1173,7 +1173,7 @@ flowchart TD
   l'icône de fond DANS la rangée ; sans rangée, elle n'avait plus aucun chemin — on pouvait
   <i>retirer</i> le fond (entrée du <span class="mono">⋯</span>) et jamais <i>en changer</i>. Le rail
   <i>leading</i> ne pouvait pas la reprendre : il porte les portes qui font entrer un
-  <span class="mono">MeeshyObject</span>, et une COULEUR n'en est pas un. <b>Elle rejoint donc le
+  <span class="mono">MeeshySceneObject</span>, et une COULEUR n'en est pas un. <b>Elle rejoint donc le
   <span class="mono">⋯</span></b>, où poser et retirer le même attribut se lisent au même endroit —
   et le <span class="mono">⋯</span> ne l'offre QUE là où la rangée a disparu, sans quoi le même
   contrôle existerait deux fois sur le même écran.</p></div>
@@ -1207,7 +1207,7 @@ flowchart TD
   (du texte, ce que le dépôt fait déjà), ou bien le kind est rendu vivant d'abord.</div>
 
   <div class="callout"><b>Règle d'apparition.</b> Un contrôle existe à l'écran si le
-  <span class="mono">MeeshyObject</span> courant l'accepte <b>et</b> le profil de la
+  <span class="mono">MeeshySceneObject</span> courant l'accepte <b>et</b> le profil de la
   <span class="mono">MeeshyPublication</span> l'autorise <b>et</b> l'action a un effet maintenant.
   Le piège documenté du dépôt — de l'UI verte sur du code injoignable
   (<span class="mono">UnifiedPostComposer</span>, revue 2026-08-19) — devient impossible : une
@@ -1231,7 +1231,7 @@ flowchart TD
   <div class="scrollx"><table>
     <thead><tr><th>Porte (origin)</th><th>Format</th><th>État d'ouverture</th><th>Capacités masquées</th><th>Audience</th></tr></thead>
     <tbody>
-      <tr><td><b>Tray stories « + »</b></td><td><span class="chip chS">S</span></td><td><b>Amorces</b> (elles créent le PREMIER <span class="mono">MeeshyObject</span>) : galerie, <b>dernière capture</b> — livrée le 2026-08-28, elle ne s'était jamais affichée (#4036) —, « Touchez pour écrire » ; balayage bas depuis la <span class="mono">MeeshyScene</span> = texte (depuis la barre haute = fermer — auto-brouillon, P10). <b>« Caméra prête » reste une CIBLE</b> : <span class="mono">.cameraReady</span> est déclaré par cette porte et armé par personne — mesuré le 2026-08-28, ses deux seuls lecteurs sont des règles pures (routage, clavier). Le viseur inline est #4037, non vérifiable au simulateur (aucun périphérique de capture)</td><td>description longue (le texte vit sur la scène)</td><td>dernière utilisée (profil S)</td></tr>
+      <tr><td><b>Tray stories « + »</b></td><td><span class="chip chS">S</span></td><td><b>Amorces</b> (elles créent le PREMIER <span class="mono">MeeshySceneObject</span>) : galerie, <b>dernière capture</b> — livrée le 2026-08-28, elle ne s'était jamais affichée (#4036) —, « Touchez pour écrire » ; balayage bas depuis la <span class="mono">MeeshyScene</span> = texte (depuis la barre haute = fermer — auto-brouillon, P10). <b>« Caméra prête » reste une CIBLE</b> : <span class="mono">.cameraReady</span> est déclaré par cette porte et armé par personne — mesuré le 2026-08-28, ses deux seuls lecteurs sont des règles pures (routage, clavier). Le viseur inline est #4037, non vérifiable au simulateur (aucun périphérique de capture)</td><td>description longue (le texte vit sur la scène)</td><td>dernière utilisée (profil S)</td></tr>
       <tr><td><b>Feed « Partagez quelque chose »</b> <span class="tag tNew">dette LEVÉE · 2026-08-28</span></td><td><span class="chip chP">P</span></td><td>Clavier levé sur la <b>description</b> de la <span class="mono">MeeshySlide</span> ; la <b>rangée d'outils</b> peint ses sept portes (photo · caméra · emoji · couleur de fond · fichier · lieu · micro) plus le drapeau de langue déclarée. <b>Les quatre dettes du lot 2 sont levées</b>, chacune par son lot : la rangée se peint (T2.3→T2.6) ; la saisie a son ISSUE (<span class="mono">ComposerDocumentSendPlan</span> + le publieur de la porte, qui AIGUILLE désormais sur le profil — #4030) ; l'<b>éventail</b> descend sous le document, dans la <b>barre haute</b> (#4047) ; le <b>socle</b> est peint (<span class="mono">socleZones(for:&nbsp;.document)</span>), et il gagne l'ŒIL dès que la publication a une <span class="mono">MeeshyScene</span> (#4053). La garde qui interdisait de monter cette porte est <b>RETOURNÉE</b> : elle exige désormais un appelant unique, le fil. Vidéo qualifiante ⇒ le badge du chip de profil pré-bascule RÉEL (U3)</td><td>slides multiples (→ carrousel), timeline repliée</td><td>dernière utilisée (profil P)</td></tr>
       <tr><td><b>Onglet Réels « + »</b> <span class="tag tAb">hors v1</span></td><td><span class="chip chR">R</span></td><td>Profil DÉFINI, porte HORS v1 (aucun point d'entrée réels n'existe au dépôt — §F) : caméra vidéo prête ; qualification réel au badge du chip format</td><td>slides (une scène) ; audio premier plan (la vidéo porte le son)</td><td>Public à la première ouverture, puis mémorisée (loi 10)</td></tr>
       <tr><td><b>Chip humeur</b> <span class="tag tEx">routé : StatusComposerView (S3)</span></td><td><span class="chip chM">M</span></td><td>Grille d'emojis + « Comment tu vas ? » — <b>aucune <span class="mono">MeeshySlide</span></b>, donc ni scène ni objet. v1 ET cible : l'écran existant, inchangé — cette ligne documente le PROFIL, pas un écran neuf (M9). <b>Ce n'est plus la seule porte du profil M</b> (#4030) : l'éventail du fil l'offre quand la composition est du texte seul, et la loi 9 tient enfin sur les quatre profils</td><td>tout le visuel : média, dessin, sticker, lieu-pastille, timeline</td><td>6 niveaux (existant)</td></tr>
@@ -1306,7 +1306,7 @@ flowchart TD
     </div><figcaption><b>Publication sans <span class="mono">MeeshyScene</span> — LIVRÉE</b>
     (<span class="mono">ComposerDocumentSurface</span>, #3939 ; la sheet historique n'est plus sur ce
     chemin). Un post texte n'invente pas de canvas : la scène naît au premier
-    <span class="mono">MeeshyObject</span> visuel et meurt avec le dernier (O3) — et le plateau naît
+    <span class="mono">MeeshySceneObject</span> visuel et meurt avec le dernier (O3) — et le plateau naît
     AVEC elle (U18) : avant, le composer est aux couleurs du thème. Poser une <b>couleur de fond</b>
     la fait naître aussi, incrustée en haut de l'écran document et non en atelier plein écran
     (#4033).</figcaption></figure>
@@ -1342,7 +1342,7 @@ flowchart TD
   permanent : elle ne revient en bas que pour un contexte qui exige une BANDE — la timeline, les
   18 styles, une palette. L'inventaire ci-dessous est donc inchangé, lu depuis le rail.</div>
   <p class="lede">Les outils sont les <b>portes</b> : ce sont elles qui font
-  ENTRER de la matière, et chacune <b>crée un <span class="mono">MeeshyObject</span></b> d'un kind
+  ENTRER de la matière, et chacune <b>crée un <span class="mono">MeeshySceneObject</span></b> d'un kind
   donné. Chaque carte : le déclencheur, l'<b>inspecteur</b> qu'il ouvre, et <b>exactement</b> ce que
   l'outil fait sous chaque profil de la <span class="mono">MeeshyPublication</span>. Un profil sans
   chip = l'outil n'y est pas monté, et la raison est écrite. La rangée <b>défile</b> depuis #4032 —
@@ -1352,7 +1352,7 @@ flowchart TD
   <div class="grid g2">
     <div class="card"><h4>Texte <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Style</span><span class="ob">Famille (18)</span><span class="ob">Couleur</span><span class="ob">Fond</span><span class="ob">Taille</span><span class="ob">Align</span><span class="ob">Langue</span></div>
-      <p>Tap <span class="mono">Aa</span> → un <span class="mono">MeeshyObject</span> de kind
+      <p>Tap <span class="mono">Aa</span> → un <span class="mono">MeeshySceneObject</span> de kind
       <span class="mono">text</span> naît au plan <span class="mono">foreground</span>, au centre,
       clavier levé, <b>édition en zone</b> (règle existante). <b>Trois gestes, trois sens</b> :
       tap = sélection (l'<b>inspecteur</b> paraît, prérempli) · double-tap = ré-édition · appui long
@@ -1367,7 +1367,7 @@ flowchart TD
         <span class="f"><span class="chip chP">P</span><p>Sur scène uniquement. En profil P la
           description d'une slide est la <b>légende de SON média</b> ; le
           <span class="mono">content</span> du post lui est PROPRE — indexé, traduit, rendu natif —
-          et n'est jamais un <span class="mono">MeeshyObject</span> (#4045).</p></span>
+          et n'est jamais un <span class="mono">MeeshySceneObject</span> (#4045).</p></span>
         <span class="f"><span class="chip chR">R</span><p>Ancrage bandes par défaut (le porteur
           vidéo reste lisible) ; timing synchronisé à la vidéo.</p></span>
         <span class="f"><span class="tag tAb">M —</span><p>Aucune
@@ -1380,7 +1380,7 @@ flowchart TD
       <p>Caméra, galerie, <b>dernière capture</b> (jamais de prompt à l'ouverture — la demande
       d'accès part sur le tap, règle existante ; l'amorce elle-même ne s'était <b>jamais affichée</b>
       avant #4036, un mode PhotoKit qui ne téléchargeait pas). Chaque porte crée un
-      <span class="mono">MeeshyObject</span> de kind <span class="mono">media</span>, dont le PLAN
+      <span class="mono">MeeshySceneObject</span> de kind <span class="mono">media</span>, dont le PLAN
       est choisi par la règle de pose, jamais par une question. Le <b>mime déclaré</b> voyage avec
       lui : le fichier est copié sous <span class="mono">{objectId}.{ext}</span>, et ce nom est ce
       que l'aval relit pour l'étiqueter (#4038). Filtres : vintage, N&amp;B, chaud, froid, dramatic,
@@ -1416,7 +1416,7 @@ flowchart TD
 
     <div class="card"><h4>Son <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Bibliothèque</span><span class="ob">Fichier</span><span class="ob">Micro</span><span class="ob">Volume</span><span class="ob">Bornes</span><span class="ob">Extraction ✓</span></div>
-      <p>Trois sources (existant). Chacune crée un <span class="mono">MeeshyObject</span> de kind
+      <p>Trois sources (existant). Chacune crée un <span class="mono">MeeshySceneObject</span> de kind
       <span class="mono">audio</span>. Un son emprunté garde son crédit — l'atome partagé
       « titre · @pseudo · M:SS » le rend partout, décompte compris. Le toggle
       <span class="mono">allowSoundExtraction</span> est enfin transmis (défaut documenté :
@@ -1536,7 +1536,7 @@ flowchart TD
 
     <div class="card"><h4>Fond <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Couleur</span><span class="ob">Dégradé</span><span class="ob">Média</span><span class="ob">Chip fond</span></div>
-      <p>Le fond est un <span class="mono">MeeshyObject</span> du plan
+      <p>Le fond est un <span class="mono">MeeshySceneObject</span> du plan
       <span class="mono">background</span> — déplaçable <b>uniquement via son chip</b>, et la boucle
       vidéo n'appartient qu'à lui (deux règles produit existantes, conservées à la lettre). Il ne
       s'EMPILE pas : monter et reculer ordonnent le plan <span class="mono">foreground</span>, où il
@@ -1577,7 +1577,7 @@ flowchart TD
 <!-- ================================================================ P8 -->
 <section id="p8"><div class="wrap">
   <div class="prail"><span class="pnum">P8</span><h2>Timeline — un plan, pas une liste</h2></div>
-  <p class="lede">La timeline montre <b>les <span class="mono">MeeshyObject</span> d'UNE
+  <p class="lede">La timeline montre <b>les <span class="mono">MeeshySceneObject</span> d'UNE
   <span class="mono">MeeshyScene</span></b> — jamais plusieurs slides à la fois : une slide est une
   scène, et une scène a son temps. C'est la rupture la plus nette avec l'existant (32 vues, une
   piste visible à la fois). <b>Vertical = empilement</b> — l'ordre des pistes EST l'ordre à l'écran,
@@ -1597,7 +1597,7 @@ flowchart TD
   </div>
   <div class="grid g3" style="margin-top:16px">
     <div class="card"><h4>Piste fantôme — aller ET retour</h4><p>Un
-      <span class="mono">MeeshyObject</span> sans <span class="mono">timing</span> (le cas
+      <span class="mono">MeeshySceneObject</span> sans <span class="mono">timing</span> (le cas
       majoritaire) n'affiche pas une barre pleine : un cadre pointillé dit « suit la
       <span class="mono">MeeshySlide</span> ». Le
       distinguer d'une durée fixée évite de figer par accident (O4/B) — c'est
@@ -1611,7 +1611,7 @@ flowchart TD
       Étirer un bord = durée — poignées ≥ 44 pt, débordantes sur barre étroite. Losanges =
       keyframes existants — x, y, scale, opacity, volume, easing
       (<span class="mono">StoryKeyframe</span>, inchangé). Tap la barre = l'<b>inspecteur</b> de ce
-      <span class="mono">MeeshyObject</span> — le même que le tap sur la scène ouvre (#4035), donc
+      <span class="mono">MeeshySceneObject</span> — le même que le tap sur la scène ouvre (#4035), donc
       la même zone, jamais une seconde. <b>Couleur de barre = le PLAN</b>
       (<span class="mono">foreground</span> / <span class="mono">content</span> /
       <span class="mono">background</span>, jetons du système) — jamais le profil ni le
@@ -1643,7 +1643,7 @@ flowchart TD
       <div class="sc" style="align-items:center;justify-content:center;border-color:#F87171">
         <span class="ob" style="border-color:#F87171;color:#F87171">⏺ 00:07 — maintenir = vidéo</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>3 · Maintien.</b> Relâcher crée un <span class="mono">MeeshyObject</span>,
+    </div><figcaption><b>3 · Maintien.</b> Relâcher crée un <span class="mono">MeeshySceneObject</span>,
     et c'est la <b>règle de pose</b> qui choisit son plan — <span class="mono">background</span> si
     la <span class="mono">MeeshyScene</span> n'a pas de fond, <span class="mono">foreground</span>
     sinon. Aucune question posée. L'enregistrement est TOUJOURS rouge sémantique
@@ -1655,7 +1655,7 @@ flowchart TD
   en Post, seulement UNE FOIS une <span class="mono">MeeshyScene</span> née (rév. 2, M3 : sans scène
   il n'y a pas de surface où maintenir ; l'acquisition passe par la rangée d'outils).
   <b>Le départage avec le menu d'objet est la présence d'un objet sous le doigt</b> : maintenir sur
-  une scène VIDE ouvre le viseur, maintenir sur un <span class="mono">MeeshyObject</span> ouvre SES
+  une scène VIDE ouvre le viseur, maintenir sur un <span class="mono">MeeshySceneObject</span> ouvre SES
   actions (#4046) — les deux gestes ne se disputent jamais la même cible. Les <b>amorces</b> —
   caméra, galerie, dernière capture — ne bougent pas : l'appui long s'ajoute, il ne remplace
   rien.</p>
@@ -1664,11 +1664,11 @@ flowchart TD
     <thead><tr><th>Contexte</th><th>Appui long 0,45 s / slop 24 px</th><th>Annulation</th></tr></thead>
     <tbody>
       <tr><td><b><span class="mono">MeeshyScene</span> du composer</b>, sans objet sous le doigt</td><td>ouvre le viseur (v1) → capture</td><td>glisser hors viseur, ou ✕</td></tr>
-      <tr><td><b>Un <span class="mono">MeeshyObject</span></b> du composer <span class="tag tNew">rév. 2026-08-28 · #4046</span></td><td>SES actions, et elles seules : Monter · Reculer · Modifier · Supprimer — chacune servie <b>seulement si elle a un effet</b>, jamais grisée. Un objet seul de son plan n'offre aucun empilement ; un objet du plan <span class="mono">background</span> non plus. Le tap sélectionne, le double-tap édite : les trois gestes ne se recouvrent pas</td><td>tap ailleurs</td></tr>
+      <tr><td><b>Un <span class="mono">MeeshySceneObject</span></b> du composer <span class="tag tNew">rév. 2026-08-28 · #4046</span></td><td>SES actions, et elles seules : Monter · Reculer · Modifier · Supprimer — chacune servie <b>seulement si elle a un effet</b>, jamais grisée. Un objet seul de son plan n'offre aucun empilement ; un objet du plan <span class="mono">background</span> non plus. Le tap sélectionne, le double-tap édite : les trois gestes ne se recouvrent pas</td><td>tap ailleurs</td></tr>
       <tr><td><b>Aperçu / reader</b> (ScenePlayer)</td><td>pause (invariant existant du viewer)</td><td>relâcher</td></tr>
       <tr><td><b>« Mes stickers »</b> (grille)</td><td>retirer de la bibliothèque (S6)</td><td>confirmation inline</td></tr>
       <tr><td><b>Chip Références</b></td><td>menu des 4 modes (existant)</td><td>tap ailleurs</td></tr>
-      <tr><td><b>Balayage bas</b> (frontière, M15)</td><td colspan="2">depuis la <span class="mono">MeeshyScene</span> = un <span class="mono">MeeshyObject</span> de kind <span class="mono">text</span> de plus ; depuis la <b>barre haute</b> = fermer (auto-brouillon, P10 — l'accident est gratuit)</td></tr>
+      <tr><td><b>Balayage bas</b> (frontière, M15)</td><td colspan="2">depuis la <span class="mono">MeeshyScene</span> = un <span class="mono">MeeshySceneObject</span> de kind <span class="mono">text</span> de plus ; depuis la <b>barre haute</b> = fermer (auto-brouillon, P10 — l'accident est gratuit)</td></tr>
     </tbody>
   </table></div>
 </div></section>
@@ -1728,7 +1728,7 @@ flowchart TD
   <ul class="klist" style="max-width:76ch">
     <li>La <b>langue déclarée</b> appartient à la <span class="mono">MeeshyPublication</span> et vit
       dans la <b>rangée d'outils</b>, à sa droite (rév. 2, M13 — le socle garde trois membres). Elle
-      devient la <span class="mono">locale</span> de tout <span class="mono">MeeshyObject</span>
+      devient la <span class="mono">locale</span> de tout <span class="mono">MeeshySceneObject</span>
       posé, surchargeable par objet (C6/B). Le web l'enverra enfin
       (<span class="mono">originalLanguage</span> jamais transmis aujourd'hui pour un post
       ordinaire — défaut documenté).</li>
@@ -1740,7 +1740,7 @@ flowchart TD
       Jeter » (rév. 2, M10 : zéro question au moment le plus fragile, zéro perte possible ; le
       mood auto-sauvegarde déjà). L'Étagère (P11) reprend exactement où on s'est arrêté.</li>
     <li>Le <b>lieu de la publication</b> — à ne pas confondre avec un
-      <span class="mono">MeeshyObject</span> de kind <span class="mono">place</span>, la pastille
+      <span class="mono">MeeshySceneObject</span> de kind <span class="mono">place</span>, la pastille
       qu'on POSE sur une scène : l'un dit d'où l'on publie, l'autre décore une image.
       <span class="tag tNew">rév. 2026-08-28 · #4034</span> Il ne se rappelle plus par un chip de la
       rangée : le <b>composant Position</b> porte tout — son entête NOMME le lieu (nom, à défaut
@@ -1801,7 +1801,7 @@ flowchart TD
   <span class="mono">MeeshyScene</span> partout : ses trois plans
   (<span class="mono">background</span> · <span class="mono">content</span> ·
   <span class="mono">foreground</span>), le <span class="mono">timing</span> de chaque
-  <span class="mono">MeeshyObject</span>, les références, la traduction par objet, le lieu épinglé
+  <span class="mono">MeeshySceneObject</span>, les références, la traduction par objet, le lieu épinglé
   (<span class="mono">hashtag</span> et <span class="mono">annotation</span> : kinds RÉSERVÉS,
   hors v1 — O1/S5, rév. 2 M2). Ce qui change entre les trois viewers, c'est le <b>chrome</b> — et
   rien d'autre. C'est ce qui rend la loi 6 vraie <i>par construction</i> : l'aperçu du socle n'est
@@ -1875,8 +1875,8 @@ flowchart TD
     <tbody>
       <tr class="grp"><td colspan="5">Composition</td></tr>
       <tr><td><span class="mono">content</span> de la publication</td><td class="ok">✓ = la description de sa <span class="mono">MeeshySlide</span></td><td class="ok">✓ PROPRE au post · 5 000 · mentions @ · hashtags — distinct de la description de chaque slide, qui est la légende de son média <span class="nv">◆ #4045</span></td><td class="ok">✓ = la description de sa slide</td><td class="ok">✓ « Comment tu vas ? » + moodEmoji</td></tr>
-      <tr><td><span class="mono">MeeshyObject</span> de kind <span class="mono">text</span></td><td class="ok">✓ 18 styles · zone · timing · keyframes</td><td class="ok">✓ si la slide a une <span class="mono">MeeshyScene</span></td><td class="ok">✓ ancré aux bandes par défaut · timé</td><td class="ab">— aucune slide</td></tr>
-      <tr><td><span class="mono">MeeshyObject</span> de kind <span class="mono">media</span></td><td class="ok">✓ la slide AGRÈGE : fond puis premiers plans</td><td class="ok">✓ chaque média ouvre SA slide (carrousel) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée au plan <span class="mono">content</span></td><td class="ab">— jamais eu</td></tr>
+      <tr><td><span class="mono">MeeshySceneObject</span> de kind <span class="mono">text</span></td><td class="ok">✓ 18 styles · zone · timing · keyframes</td><td class="ok">✓ si la slide a une <span class="mono">MeeshyScene</span></td><td class="ok">✓ ancré aux bandes par défaut · timé</td><td class="ab">— aucune slide</td></tr>
+      <tr><td><span class="mono">MeeshySceneObject</span> de kind <span class="mono">media</span></td><td class="ok">✓ la slide AGRÈGE : fond puis premiers plans</td><td class="ok">✓ chaque média ouvre SA slide (carrousel) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée au plan <span class="mono">content</span></td><td class="ab">— jamais eu</td></tr>
       <tr><td>Capture appui long</td><td class="nv">◆</td><td class="nv">◆ dès qu'une scène existe (M3)</td><td class="nv">◆</td><td class="ab">—</td></tr>
       <tr><td>Coller une image (O12 : la surface décide)</td><td class="nv">◆ scène = média ≤2048 · panneau = sticker ≤512</td><td class="nv">◆ média (carte carrousel si sans scène) · panneau = sticker</td><td class="nv">◆ média bandes/overlay · panneau = sticker</td><td class="ab">—</td></tr>
       <tr><td>Filtres (8)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
@@ -1888,7 +1888,7 @@ flowchart TD
       <tr><td><span class="mono">audio</span> au plan <span class="mono">background</span> (la bande-son)</td><td class="ok">✓ biblio/fichier/micro · bornes · TTS</td><td class="ok">✓ audio post + emprunté <span class="nv">◆ un vocal posé y va, et n'ouvre AUCUNE slide (#4052) : boucle timeline, fil muet</span></td><td class="ok">✓ piste vidéo + emprunt</td><td class="ab">— aucune scène</td></tr>
       <tr><td><span class="mono">audio</span> au plan <span class="mono">foreground</span> (les chips)</td><td class="ok">✓ le chip n'existe QUE pour ce plan — un son de fond n'est jamais un chip</td><td class="ok">✓ lecteur du post audio (contenu, pas chip)</td><td class="ok">✓ premier plan uniquement</td><td class="ab">—</td></tr>
       <tr><td>Extraction de son (toggle)</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td></tr>
-      <tr><td><b>lieu de la publication</b> / <span class="mono">MeeshyObject</span> de kind <span class="mono">place</span> — <i>deux choses, même mot</i></td><td class="ok">✓ / ✓ <span class="nv">◆ scalable</span></td><td class="ok">✓ (composant Position, #4034) / si la slide a une scène</td><td class="ok">✓ / timée</td><td class="ab">— / — (aucune slide)</td></tr>
+      <tr><td><b>lieu de la publication</b> / <span class="mono">MeeshySceneObject</span> de kind <span class="mono">place</span> — <i>deux choses, même mot</i></td><td class="ok">✓ / ✓ <span class="nv">◆ scalable</span></td><td class="ok">✓ (composant Position, #4034) / si la slide a une scène</td><td class="ok">✓ / timée</td><td class="ab">— / — (aucune slide)</td></tr>
       <tr><td>Références 4 modes</td><td class="ok">✓ tous</td><td class="ok">✓ tous (PINNED ⇒ scène)</td><td class="ok">✓ tous</td><td class="ok">✓ sauf PINNED (pas de scène)</td></tr>
       <tr><td>Hashtags</td><td class="ok">✓ extraction serveur</td><td class="ok">✓ idem</td><td class="ok">✓ idem</td><td class="ok">✓ idem</td></tr>
       <tr><td><span class="mono">MeeshySlide</span> (le <b>rail</b>, barre haute)</td><td class="ok">✓ ≤10 (+ / dupl. / suppr.)</td><td class="ok">✓ 1 slide = 1 média = 1 carte du carrousel</td><td class="ab">— UNE slide : le réel EST la scène, montage interne</td><td class="ab">— aucune</td></tr>
@@ -1896,7 +1896,7 @@ flowchart TD
       <tr><td>Keyframes (x·y·scale·opacity·vol·easing)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
       <tr><td>Transitions (slide : entrée/sortie · clips : jointures)</td><td class="ok">✓ existant</td><td class="ok">✓ si scène</td><td class="ok">✓ via timeline</td><td class="ab">—</td></tr>
       <tr><td>plan <span class="mono">background</span> — visuel (couleur · dégradé · média)</td><td class="ok">✓ chip mouvable · loop = fond</td><td class="ok">✓ une couleur posée FAIT NAÎTRE la scène, incrustée (#4033)</td><td class="ab">— la vidéo EST le porteur</td><td class="ab">— teinte du thème</td></tr>
-      <tr><td><span class="mono">locale</span> d'un <span class="mono">MeeshyObject</span> — héritée de la langue déclarée, surchargeable</td><td class="ok">✓ kind <span class="mono">text</span> (audience-driven) — généralisation aux autres kinds : post-v1 (§F)</td><td class="nv">◆ <span class="mono">text</span></td><td class="nv">◆ <span class="mono">text</span></td><td class="ab">— aucun objet</td></tr>
+      <tr><td><span class="mono">locale</span> d'un <span class="mono">MeeshySceneObject</span> — héritée de la langue déclarée, surchargeable</td><td class="ok">✓ kind <span class="mono">text</span> (audience-driven) — généralisation aux autres kinds : post-v1 (§F)</td><td class="nv">◆ <span class="mono">text</span></td><td class="nv">◆ <span class="mono">text</span></td><td class="ab">— aucun objet</td></tr>
       <tr class="grp"><td colspan="5">Publication</td></tr>
       <tr><td>Audience</td><td class="ok">✓ 6 niveaux + EXCEPT/ONLY</td><td class="ok">3 exposés <span class="nv">◆ → 6 partout</span></td><td class="nv">◆ 6 (hérite du socle)</td><td class="ok">✓ 6 niveaux</td></tr>
       <tr><td>Langue de publication</td><td class="ok">✓</td><td class="ok">✓ iOS <span class="nv">◆ web l'envoie enfin</span></td><td class="ok">✓</td><td class="ok">✓</td></tr>
@@ -1935,7 +1935,7 @@ flowchart TD
 <section id="p14"><div class="wrap">
   <div class="prail"><span class="pnum">P14</span><h2>Nouveautés &amp; arbitrages — après la préservation, jamais avant</h2></div>
   <div class="grid g3">
-    <div class="card"><h4><span class="tag tNew">nouveau</span> <span class="mono">MeeshyObject</span> unifié</h4><p>Une
+    <div class="card"><h4><span class="tag tNew">nouveau</span> <span class="mono">MeeshySceneObject</span> unifié</h4><p>Une
       seule définition de <span class="mono">transform</span> / <span class="mono">timing</span> /
       <span class="mono">plane</span> / <span class="mono">locale</span>, là où chaque famille les
       redéclare aujourd'hui. Les <b>sept kinds</b> la partagent : sticker animable, lieu scalable,
@@ -1943,16 +1943,16 @@ flowchart TD
       en mémoire iOS est un chantier À PART (#4048), jamais un effet de bord d'un lot de feature.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Bandes actives &amp; ancrage</h4><p>Le
       porteur 16:9 jamais rogné ; l'<span class="mono">anchor</span> d'un
-      <span class="mono">MeeshyObject</span> — <span class="mono">.band(.top/.bottom)</span> — survit
+      <span class="mono">MeeshySceneObject</span> — <span class="mono">.band(.top/.bottom)</span> — survit
       au changement de porteur, là où une coordonnée saute. On stocke le rang, jamais le
       résultat.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Timeline plan 2D</h4><p>Les
-      <span class="mono">MeeshyObject</span> d'UNE <span class="mono">MeeshyScene</span> : vertical =
+      <span class="mono">MeeshySceneObject</span> d'UNE <span class="mono">MeeshyScene</span> : vertical =
       empilement borné par les trois plans, horizontal = <span class="mono">timing</span>, pistes
       fantômes pour ceux qui n'en ont pas. Remplace 32 vues mono-piste.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Appui long = capture</h4><p>Sur une
       <span class="mono">MeeshyScene</span> SANS objet sous le doigt : photo au relâcher, vidéo au
-      maintien — même seuil que le hold du reader. Sur un <span class="mono">MeeshyObject</span>,
+      maintien — même seuil que le hold du reader. Sur un <span class="mono">MeeshySceneObject</span>,
       c'est SON menu (#4046) : les deux gestes ne se disputent jamais la même cible.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Plateau configurable</h4><p>Noir ·
       indigo profond · violet profond — un jeton d'interface, pas un thème par écran.</p></div>
@@ -2024,7 +2024,7 @@ flowchart TD
   <p class="lede">La revue couvre TOUT le système — composer, ScenePlayer, timeline, collage,
   stickers, audio — pas un aspect isolé. Chaque risque est ancré à un piège DOCUMENTÉ de ce dépôt,
   chaque garde est nommée. <b>Un budget se lie à un NIVEAU du modèle</b>, et c'est ce qui le rend
-  vérifiable : un <span class="mono">MeeshyObject</span> a un coût (pixels décodés, calque), une
+  vérifiable : un <span class="mono">MeeshySceneObject</span> a un coût (pixels décodés, calque), une
   <span class="mono">MeeshyScene</span> a un cap (60 objets, 1 vidéo de fond), une
   <span class="mono">MeeshyPublication</span> en a un aussi — <b>10 scènes</b>, donc 10
   <span class="mono">MeeshySlide</span>, borne du contrat que rien dans l'interface ne dit encore.
@@ -2038,10 +2038,10 @@ flowchart TD
     <thead><tr><th>Surface</th><th>Budget</th><th>Garde</th></tr></thead>
     <tbody>
       <tr><td><b>Fil avec CanvasPlayer</b></td><td>1 lecteur ACTIF maximum ; « autoplay muet » vaut pour les cartes vidéo/réel EXISTANTES — la carte de POST à scène naît en pause (lot E) ; les autres cartes servent leur vignette (thumbHash existant) ; pause hors écran, pool de réutilisation</td><td>le piège « réels qui chauffent » est documenté ici — le fil ne devient jamais N décodeurs</td></tr>
-      <tr><td><b>Une <span class="mono">MeeshyScene</span></b> (composer &amp; lecture)</td><td>1 vidéo de fond 1080p + ≤ 20 <span class="mono">MeeshyObject</span> ACTIFS ; chaque objet est un CALayer, jamais une vue SwiftUI par objet</td><td>le canvas RESTE UIKit/CALayer (StoryTextLayer et son mécanisme d'encre par métriques sont conservés tels quels)</td></tr>
-      <tr><td><b>Un <span class="mono">MeeshyObject</span> de kind <span class="mono">media</span></b> (collé / importé)</td><td>downsample ImageIO ≤ 2 048 px AVANT toute UIImage (une 48 Mpx décodée ≈ 190 Mo BGRA — interdit) ; HDR/gain map normalisé SDR à l'import</td><td>l'export (AVAssetWriter) reste déterministe — même pipeline que le compositor existant</td></tr>
-      <tr><td><b>Les <span class="mono">MeeshyObject</span> de kind <span class="mono">sticker</span></b> (« Mes stickers », local)</td><td>store disque dédié, LRU 64 Mo, PNG ≤ 512 px par sticker</td><td>DiskCacheStore existant (SHA256 + éviction budget) — une policy de plus, zéro code neuf de stockage</td></tr>
-      <tr><td><b>Timeline plan 2D</b> — une <span class="mono">MeeshyScene</span></td><td>≤ 60 <span class="mono">MeeshyObject</span> par scène (cap du contrat v3) dessinés en UN passe (Canvas/CALayer), jamais une vue par keyframe ; deux échelles de zoom ; la virtualisation ne vient que si le banc D4 la réclame — jamais par principe (rév. 2)</td><td>lanes 52 pt et graduation dérivée des libellés : harnais et invariants existants réutilisés</td></tr>
+      <tr><td><b>Une <span class="mono">MeeshyScene</span></b> (composer &amp; lecture)</td><td>1 vidéo de fond 1080p + ≤ 20 <span class="mono">MeeshySceneObject</span> ACTIFS ; chaque objet est un CALayer, jamais une vue SwiftUI par objet</td><td>le canvas RESTE UIKit/CALayer (StoryTextLayer et son mécanisme d'encre par métriques sont conservés tels quels)</td></tr>
+      <tr><td><b>Un <span class="mono">MeeshySceneObject</span> de kind <span class="mono">media</span></b> (collé / importé)</td><td>downsample ImageIO ≤ 2 048 px AVANT toute UIImage (une 48 Mpx décodée ≈ 190 Mo BGRA — interdit) ; HDR/gain map normalisé SDR à l'import</td><td>l'export (AVAssetWriter) reste déterministe — même pipeline que le compositor existant</td></tr>
+      <tr><td><b>Les <span class="mono">MeeshySceneObject</span> de kind <span class="mono">sticker</span></b> (« Mes stickers », local)</td><td>store disque dédié, LRU 64 Mo, PNG ≤ 512 px par sticker</td><td>DiskCacheStore existant (SHA256 + éviction budget) — une policy de plus, zéro code neuf de stockage</td></tr>
+      <tr><td><b>Timeline plan 2D</b> — une <span class="mono">MeeshyScene</span></td><td>≤ 60 <span class="mono">MeeshySceneObject</span> par scène (cap du contrat v3) dessinés en UN passe (Canvas/CALayer), jamais une vue par keyframe ; deux échelles de zoom ; la virtualisation ne vient que si le banc D4 la réclame — jamais par principe (rév. 2)</td><td>lanes 52 pt et graduation dérivée des libellés : harnais et invariants existants réutilisés</td></tr>
       <tr><td><b>Audio de fond (S·P·R)</b> — porté par la <span class="mono">MeeshyPublication</span></td><td>boucle liée à la timeline du contenu (AVPlayerLooper), pas à la page du carrousel ; un seul canal audio</td><td>PlaybackCoordinator existant — la règle « qui claim le canal » ne change pas</td></tr>
       <tr><td><b>Polices (18 familles)</b></td><td>0 octet embarqué, matérialisation CoreText au premier usage, cache process</td><td>disponibilité sous test — vérifiée fichiers + exécution sur 18.2 ET 26.1</td></tr>
     </tbody>
@@ -2111,14 +2111,14 @@ flowchart TD
   <div class="scrollx"><table>
     <thead><tr><th>Feature SOTA</th><th>État Meeshy</th><th>Prémisse proposée (minimale)</th><th>Serveur ?</th></tr></thead>
     <tbody>
-      <tr><td><b>Stickers interactifs</b> — sondage · question · quiz · curseur emoji · compte à rebours · « à vous »</td><td class="ab">absents (recensés hors périmètre par Story Atelier)</td><td>un kind <span class="mono">interactive</span> de MeeshyObject, posable/timable comme le reste ; rendu inerte élégant hors ligne et sur vieux clients</td><td><b>oui</b> — votes/réponses = table légère (O10), jamais dans le blob</td></tr>
-      <tr><td><b>Détourage sujet → sticker</b> (« lift », façon stickers iMessage)</td><td class="ab">absent</td><td>VisionKit subject-lift sur photo importée/collée → sticker image dans « Mes stickers ». <b>API iOS 16 ✓ — pile notre plancher</b></td><td>non — client pur</td></tr>
-      <tr><td><b>GIF / stickers animés</b></td><td class="ab">absent (collage = image fixe)</td><td>le collage accepte GIF/APNG → sticker animé local ; pas d'intégration Giphy en v1</td><td>non</td></tr>
+      <tr><td><b>Stickers interactifs</b> — sondage · question · quiz · curseur emoji · compte à rebours · « à vous »</td><td class="ab">absents (recensés hors périmètre par Story Atelier)</td><td>un kind <span class="mono">interactive</span> de MeeshySceneObject, posable/timable comme le reste ; rendu inerte élégant hors ligne et sur vieux clients</td><td><b>oui</b> — votes/réponses = table légère (O10), jamais dans le blob</td></tr>
+      <tr><td><b>Détourage sujet → sticker</b> (« lift », façon stickers iMessage)</td><td class="ab">absent</td><td>subject-lift sur photo importée/collée → sticker image dans « Mes stickers ». <b>API iOS <s>16</s> 17</b> <span class="tag tNew">rév. 2026-09-03 · #3955</span> — <b>ce n'était PAS notre plancher</b> : <span class="mono">VNGenerateForegroundInstanceMaskRequest</span> comme <span class="mono">ImageAnalysisInteraction.image(for:)</span> sont iOS 17, le projet plancher à 16. La capacité est donc INJECTÉE sous condition et l'entrée n'est pas rendue en dessous (loi 4 : absente, jamais grisée). Et <b>Vision plutôt que VisionKit</b> : ce dernier détoure depuis une INTERACTION posée sur une vue montée, donc rien d'interrogeable hors écran</td><td>non — client pur</td></tr>
+      <tr><td><b>GIF / stickers animés</b></td><td class="ok">FAIT <span class="tag tNew">rév. 2026-09-03 · #3956</span> — et « collage = image fixe » n'était pas un manque de RENDU : le collage décodait une <span class="mono">UIImage</span> puis la ré-encodait en <span class="mono">pngData()</span>, donc l'animation était <b>détruite avant le disque</b>. Aucun site en aval ne pouvait la rattraper</td><td>le collage garde les octets d'ORIGINE quand ils animent (arbitre : <span class="mono">AnimatedImageDecoder.animates</span>, jamais la porte — elle répond « peut-être » à toute photo HEIC) ; ils voyagent jusqu'à la couche et jusqu'au téléversement, sous le mime de leur CONTENEUR. Pas de Giphy en v1</td><td>non</td></tr>
       <tr><td><b>Vitesse</b> — ralenti / accéléré</td><td class="ab">absent (aucun champ <span class="mono">rate</span> — vérifié)</td><td><span class="mono">timing.rate</span> sur le média porteur (0,5× · 2×) ; export via <span class="mono">setRate</span></td><td>non — un champ du blob v3</td></tr>
       <tr><td><b>Presets d'animation de texte</b> (pop, glissé, machine à écrire…)</td><td class="ab">les keyframes existent, aucun preset nommé</td><td>bibliothèque de presets = keyframes PRÉGÉNÉRÉS — des données, zéro vue neuve</td><td>non</td></tr>
       <tr><td><b>Layouts / collage</b> (2·3·4 cases)</td><td class="ab">médias premier plan libres seulement</td><td>presets d'ANCRES qui posent N objets média — des données encore</td><td>non</td></tr>
       <tr><td><b>Publication programmée</b></td><td class="ab">absente</td><td><b>hors v1 INTÉGRAL</b> (O11 gelé — la prémisse best-effort ne se promet pas non plus, rév. 2 M4) ; la version fiable exige <span class="mono">scheduledAt</span> serveur</td><td>léger, pour la version fiable</td></tr>
-      <tr><td><b>Alt text</b> (accessibilité)</td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.alt</span>) et le contrat de route l'accepte (<span class="mono">mediaAlt</span>) — <b>aucun client ne l'écrit encore</b></td><td>un champ dans l'<b>inspecteur</b> du <span class="mono">MeeshyObject</span> média. La prémisse la moins chère de toute la table</td><td>non — le champ est déjà là</td></tr>
+      <tr><td><b>Alt text</b> (accessibilité)</td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.alt</span>) et le contrat de route l'accepte (<span class="mono">mediaAlt</span>) — <b>aucun client ne l'écrit encore</b></td><td>un champ dans l'<b>inspecteur</b> du <span class="mono">MeeshySceneObject</span> média. La prémisse la moins chère de toute la table</td><td>non — le champ est déjà là</td></tr>
       <tr><td><b>Légende par média</b> (la description d'une <span class="mono">MeeshySlide</span> en profil P) <span class="tag tNew">rév. 2026-08-28 · #4055</span></td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.caption</span>), était SERVI et écrit par PERSONNE — le contrat de route l'accepte désormais (<span class="mono">mediaCaption</span>)</td><td>la description de la slide, déjà saisissable, doit VOYAGER : la chaîne iOS reste à écrire, et #4045 en dépend</td><td>fait — jumeau exact de <span class="mono">mediaAlt</span>, corps partagé</td></tr>
       <tr><td><b>Désactiver / limiter les commentaires</b></td><td class="ab">absent (recensé hors périmètre)</td><td>drapeau sur les payloads de création EXISTANTS (rév. 2, C11 — <i>amendé rév. 24 : <span class="mono">PublishIntent</span> n'est plus déscopé, il est sur main pour le format audio ; les payloads de création restent néanmoins les porteurs de ce drapeau</i>) + garde sur les routes de commentaires</td><td>léger</td></tr>
       <tr><td><b>Duo / côte-à-côte</b> (duet)</td><td class="ab">repost & citation seuls</td><td><b>pas en v1</b> — scène scindée à 2 porteurs = coût lecteur réel ; l'attribution existe déjà (repost + SILENT auto)</td><td>oui</td></tr>
@@ -2135,7 +2135,7 @@ flowchart TD
   kind de plus, <span class="mono">rate</span> un champ de timing, presets et layouts des DONNÉES.
   C'est le <b>test de validité du modèle</b> : une feature SOTA qui exigerait une famille d'objets à
   part — hors des sept kinds, hors des trois plans — signalerait un
-  <span class="mono">MeeshyObject</span> raté. <b>Le test a servi depuis</b> : le son de fond
+  <span class="mono">MeeshySceneObject</span> raté. <b>Le test a servi depuis</b> : le son de fond
   n'a demandé aucun kind neuf, seulement la seconde place du plan
   <span class="mono">background</span> que le modèle déclarait déjà (#4052).</div>
 </div></section>
@@ -2154,10 +2154,10 @@ flowchart TD
       <tr><td class="mono">S2</td><td><b>PublishIntent différé</b> — <b>AMENDÉ rév. 24 : LEVÉ EN PARTIE.</b> Le composer unifié appelait les trois chemins d'envoi existants ; <span class="mono">PublishIntent</span> existe désormais sur main (lot v2 7.3) et sert le format AUDIO, avec deux appelants de production. Le déscopage tient encore pour les trois autres formats</td><td>l'arbitrage d'origine disait « le verbe unique est de l'hygiène, pas un gain » ; le lot 7 a mesuré une PERTE DE CONTENU (un vocal composé hors ligne était détruit), ce qui n'est pas de l'hygiène. La prémisse a changé — l'arbitrage est amendé, pas effacé</td></tr>
       <tr><td class="mono">S3</td><td><b>Mood hors v1.</b> StatusComposerView conservé tel quel</td><td>son UX est déjà saine (6 audiences, brouillon, offline) — elle ne change pas d'un pixel</td></tr>
       <tr><td class="mono">S4</td><td><b>Timeline v1 sans édition de keyframes DANS le plan</b> — pistes, plans, durées, fantômes ; les keyframes restent à l'inspecteur</td><td>la demande est « empiler + durées » : servie. Et c'était LE point chaud perf à mesurer</td></tr>
-      <tr><td class="mono">S5</td><td><b>Trois valeurs d'<span class="mono">anchor</span>, pas quatre.</b> <span class="mono">.pinned(toObject:)</span> — l'ancrage d'un <span class="mono">MeeshyObject</span> à un AUTRE — et le kind <span class="mono">annotation</span> partent en « plus tard » : les sept kinds actifs n'en comptent ni l'un ni l'autre</td><td>l'ancrage relatif est de la complexité de solveur sans demande</td></tr>
+      <tr><td class="mono">S5</td><td><b>Trois valeurs d'<span class="mono">anchor</span>, pas quatre.</b> <span class="mono">.pinned(toObject:)</span> — l'ancrage d'un <span class="mono">MeeshySceneObject</span> à un AUTRE — et le kind <span class="mono">annotation</span> partent en « plus tard » : les sept kinds actifs n'en comptent ni l'un ni l'autre</td><td>l'ancrage relatif est de la complexité de solveur sans demande</td></tr>
       <tr><td class="mono">S6</td><td><b>« Mes stickers » v1 = les récents</b> (grille LRU, appui long = retirer)</td><td>coller, retrouver, reposer — le geste entier est servi ; la gestion (dossiers) n'apporte rien en v1</td></tr>
       <tr><td class="mono">S7</td><td><b>L'Étagère = MyStoriesView étendue</b> (elle a déjà Published/Drafts — vérifié à l'écran) : + file d'envoi, + archive</td><td>même surface, coût divisé</td></tr>
-      <tr><td class="mono">S8</td><td><b>Le ratio d'une <span class="mono">MeeshyScene</span> n'est pas un champ</b> — il se lit du <span class="mono">MeeshyObject</span> porteur, au plan <span class="mono">content</span></td><td>aucun : c'était une redondance du modèle, et une seconde source de vérité sur la même question</td></tr>
+      <tr><td class="mono">S8</td><td><b>Le ratio d'une <span class="mono">MeeshyScene</span> n'est pas un champ</b> — il se lit du <span class="mono">MeeshySceneObject</span> porteur, au plan <span class="mono">content</span></td><td>aucun : c'était une redondance du modèle, et une seconde source de vérité sur la même question</td></tr>
     </tbody>
   </table></div>
   <div class="callout"><b>L'élément bloquant, arbitré — O2 (le modèle).</b> C'était le seul
@@ -2193,7 +2193,7 @@ flowchart TD
   <p class="lede">Deux portes de plus vers une <span class="mono">MeeshyPublication</span> : la
   feuille de partage iOS (depuis n'importe quelle app) et les médias reçus en conversation. Comme
   toutes les portes, elles ne fixent que l'état INITIAL — profil, et un
-  <span class="mono">MeeshyObject</span> déjà posé (loi 9). Deux règles au-dessus de tout :
+  <span class="mono">MeeshySceneObject</span> déjà posé (loi 9). Deux règles au-dessus de tout :
   <b>l'extension DÉCRIT, l'app compose</b> (O14) — l'extension n'a ni scène ni socle, donc rien pour
   choisir une audience — et <b>créer un post depuis un média reçu tient en 2 gestes</b> (O13). Rien
   ne se réinvente : chaque pièce réutilise une mécanique vérifiée du dépôt.</p>
@@ -2280,7 +2280,7 @@ flowchart TD
   carte → détail → plein écran → PiP. Le contenu ne rembobine jamais parce que l'écran a changé.
   Ce n'est pas un vœu : <b>le moteur existe et le handoff est prouvé en prod</b> — cette planche
   nomme le contrat que le ScenePlayer formalise (O16). <b>Le niveau du modèle sur lequel cette
-  continuité porte est le <span class="mono">MeeshyObject</span></b>, jamais la
+  continuité porte est le <span class="mono">MeeshySceneObject</span></b>, jamais la
   <span class="mono">MeeshySlide</span> qui le contient : c'est UN objet de kind
   <span class="mono">media</span> ou <span class="mono">audio</span> qui a une position de lecture,
   et il la garde quand le chrome change AUTOUR de lui.</p>
@@ -2321,11 +2321,11 @@ flowchart TD
       dans le moteur unique ; position froide persistée par média
       (<span class="mono">VideoPlaybackPositionStore</span>, zone morte de reprise).
       <b>Cette clé est déjà celle du modèle</b> : le <span class="mono">payload</span> d'un
-      <span class="mono">MeeshyObject</span> de kind <span class="mono">media</span>,
+      <span class="mono">MeeshySceneObject</span> de kind <span class="mono">media</span>,
       <span class="mono">audio</span> ou <span class="mono">sticker</span> porte
       <span class="mono">postMediaId</span> — les deux contrats désignent donc la MÊME identité,
       sans convention à inventer. Le corollaire est ce qui rend la règle vérifiable : deux
-      <span class="mono">MeeshyObject</span> distincts qui pointent le même
+      <span class="mono">MeeshySceneObject</span> distincts qui pointent le même
       <span class="mono">postMediaId</span> — le même clip posé sur deux slides — partagent une
       position, parce que la position appartient au MÉDIA et non à sa pose.</li>
     <li><b>Prouvé en prod, pas promis</b> : feed → Réels (même URL ⇒ la vidéo continue, seul le
@@ -2339,7 +2339,7 @@ flowchart TD
       média est gaté sur « pas d'appel actif ». Deux contrôleurs, un seul vivant — le flux
       événementiel existant.</li>
     <li><b>Ce que la continuité ne couvre PAS : le temps de la SCÈNE.</b> Un
-      <span class="mono">MeeshyObject</span> garde sa position de lecture ; une
+      <span class="mono">MeeshySceneObject</span> garde sa position de lecture ; une
       <span class="mono">MeeshyScene</span>, elle, a son propre temps
       (<span class="mono">timelineDuration</span>) et les <span class="mono">timing</span> de ses
       objets sont RELATIFS à lui. Changer de chrome préserve donc le premier et rejoue le second —
@@ -2367,7 +2367,7 @@ flowchart TD
   v1 range le contenu d'une scène en <b>familles SÉPARÉES</b> — un tableau de textes, un de
   stickers, un de médias, un de dessins, un de lieux, un de mentions — chacune avec ses propres
   champs de pose. v3 n'en a plus qu'un : <span class="mono">objects</span>, une liste de
-  <span class="mono">MeeshyObject</span> qui portent tous les mêmes neuf champs. La migration
+  <span class="mono">MeeshySceneObject</span> qui portent tous les mêmes neuf champs. La migration
   one-shot du lot B est donc, littéralement, <b>six boucles qui deviennent une liste</b> — c'est le
   compte exact des conversions par famille dans <span class="mono">CanvasV3Migration</span>. Tout
   ce que la planche appelle « unification » se paie ici, une fois, et jamais plus chez
@@ -2422,7 +2422,7 @@ flowchart TD
     canvas vide : le gateway génère une <b>sentinelle v1</b> (fond sobre + un objet texte) — dans
     la LANGUE DU LECTEUR (<span class="mono">resolveUserLanguage</span> : le Prisme s'applique
     même à l'invite). Générée à la lecture, jamais stockée, active dès le merge du lot A.
-    <b>Elle est exprimable parce qu'un <span class="mono">MeeshyObject</span> de kind
+    <b>Elle est exprimable parce qu'un <span class="mono">MeeshySceneObject</span> de kind
     <span class="mono">text</span> est la SEULE forme que les deux versions savent dire</b> : c'est
     le plus petit dénominateur du modèle, et c'est ce qui permet de parler à un binaire qui ne
     connaît pas le modèle.</figcaption></figure>
@@ -2464,7 +2464,7 @@ flowchart TD
 
   <div class="callout"><b>Un style est une valeur du <span class="mono">payload</span>, pas un
   champ du modèle</b> — et c'est exactement pourquoi la liste a pu passer de 11 à 18 sans
-  migration. Les neuf champs d'un <span class="mono">MeeshyObject</span> ne connaissent aucune
+  migration. Les neuf champs d'un <span class="mono">MeeshySceneObject</span> ne connaissent aucune
   police : ils décrivent OÙ l'objet est (<span class="mono">anchor</span>,
   <span class="mono">plane</span>, <span class="mono">z</span>), comment il est POSÉ
   (<span class="mono">transform</span>) et QUAND il joue (<span class="mono">timing</span>). Ce qui
@@ -2472,9 +2472,23 @@ flowchart TD
   <span class="mono">payload</span>, permissif par contrat. <b>Le dix-neuvième style ne coûtera donc
   ni champ, ni version, ni migration</b> — c'est la promesse de la dimension 12 (« la complexité se
   paie dans le code ») rendue mesurable sur un cas précis.</div>
+
+  <div class="callout"><b>Un style est une POLICE, et rien d'autre ; ce qui brille est un second
+  axe</b> (#4850, #4870 — 2026-09-02). La mesure a tranché : les dix-huit cas résolvent tous vers
+  une famille, une graisse ou un design, et aucun n'applique d'effet — « néon » est du système
+  semibold arrondi. Sept des dix-huit sont des polices <em>déguisées</em> en effets, et c'est ce
+  mélange de vocabulaire que l'auteur voyait dans la grille. La section s'appelle donc
+  <b>POLICE</b>, et l'<b>EFFET</b> — <span class="mono">lueur · ombre · relief</span> — est une
+  section à part, juste après, portée par la clé <span class="mono">textEffect</span> du
+  <span class="mono">payload</span> (absente ⇒ aucun). Une seule table, en fraction de la taille
+  de police, recopiée sur les trois clients (<span class="mono">StoryTextEffect</span> Swift ·
+  <span class="mono">story-text-effect.ts</span> · <span class="mono">StoryTextEffect.kt</span>).
+  <b>La lueur ne vit que sur cet axe</b> : web et Android faisaient briller « néon » pendant
+  qu'iOS — où la story est composée — ne le faisait pas ; un effet caché derrière un nom de
+  police, différent selon le client, était exactement ce que l'axe vient fermer.</div>
   <div class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
     <div class="card"><h4>gras</h4><p style="font-size:22px;font-weight:800;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">système .black</p></div>
-    <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff;text-shadow:0 0 6px var(--acc),0 0 14px var(--acc)">Salut le monde</p><p style="font-size:10px" class="mono">système .rounded semibold + glow</p></div>
+    <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff">Salut le monde</p><p style="font-size:10px" class="mono">système .rounded semibold — la lueur est un EFFET (#4870)</p></div>
     <div class="card"><h4>machine</h4><p style="font-size:19px;font-family:Courier,'Courier New',monospace;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Courier</p></div>
     <div class="card"><h4>manuscrit</h4><p style="font-size:22px;font-family:'Snell Roundhand','Segoe Script',cursive;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">SnellRoundhand</p></div>
     <div class="card"><h4>classique</h4><p style="font-size:21px;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Georgia</p></div>
@@ -2503,7 +2517,7 @@ flowchart TD
       dans <span class="mono">anchor</span> et <span class="mono">transform</span>, communs aux sept
       kinds. Un style ne peut donc pas déplacer un objet, et un déplacement ne peut pas le
       restyler.</li>
-    <li><b>Traduire un texte ne le restyle pas.</b> Un <span class="mono">MeeshyObject</span> de
+    <li><b>Traduire un texte ne le restyle pas.</b> Un <span class="mono">MeeshySceneObject</span> de
       kind <span class="mono">text</span> porte ses traductions DANS le même
       <span class="mono">payload</span> que son style, et son <span class="mono">locale</span> au
       premier niveau : le Prisme change la chaîne servie, jamais la famille, la couleur ni la pose.
@@ -2531,7 +2545,7 @@ flowchart TD
   faut savoir lequel.</b> Une icône dit un verbe ; le verbe ne s'applique pas toujours au même
   objet.
   <ul style="margin:8px 0 0;padding-left:18px">
-    <li><b>Créent un <span class="mono">MeeshyObject</span></b> — les sept kinds, tous présents :
+    <li><b>Créent un <span class="mono">MeeshySceneObject</span></b> — les sept kinds, tous présents :
       Texte (<span class="mono">text</span>) · Média (<span class="mono">media</span>) · Stickers
       (<span class="mono">sticker</span>) · Son (<span class="mono">audio</span>) · Lieu
       (<span class="mono">place</span>) · Dessin (<span class="mono">drawing</span>) ·
@@ -2561,7 +2575,7 @@ flowchart TD
       <tr><td>Socle</td><td>Aperçu · Publier</td><td class="mono">eye · arrow.up.circle.fill</td><td>Publier = pill dégradé de marque ; états in-flight (progress dans le pill) et échec (<span class="mono">exclamationmark.circle</span>)</td></tr>
       <tr class="grp"><td colspan="4">AMORCE (cible) &amp; outils</td></tr>
       <tr><td>Amorce</td><td>Content (S·P·R, rév. 26) · Texte · Sticker · Son · Lieu</td><td class="mono">text.alignleft · textformat (Aa) · face.smiling · music.note · mappin.and.ellipse</td><td>la rangée des kinds que le profil autorise (P4)</td></tr>
-      <tr><td>Texte</td><td>Style · Couleur · Fond · Taille · Align · Langue</td><td class="mono">textformat.alt · paintpalette · character.textbox · textformat.size · text.aligncenter (⇄ leading/trailing : ALIGNEMENT s'inverse en RTL) · globe</td><td>la rangée des 18 familles rend « Aa » dans sa police (P21)</td></tr>
+      <tr><td>Texte</td><td>Police · Effet (#4870) · Couleur · Fond · Taille · Align · Langue</td><td class="mono">textformat.alt · sparkles · paintpalette · character.textbox · textformat.size · text.aligncenter (⇄ leading/trailing : ALIGNEMENT s'inverse en RTL) · globe</td><td>la rangée des 18 familles rend « Aa » dans sa police (P21)</td></tr>
       <tr><td>Média</td><td>Caméra · Galerie · Coller · Éditer · Premier plan</td><td class="mono">camera · photo.on.rectangle · doc.on.clipboard (PasteButton système — icône imposée) · crop.rotate · square.2.layers.3d.top.filled</td><td><span class="tag tEx">existant</span> pour caméra/galerie</td></tr>
       <tr><td>Filtres</td><td>8 filtres + intensité</td><td class="mono">camera.filters + slider.horizontal.3</td><td>vignettes d'aperçu, le nom sous chaque vignette</td></tr>
       <tr><td>Son</td><td>Bibliothèque · Fichier · Micro · Volume · Bornes · Extraction</td><td class="mono">music.note.list · doc.badge.plus · mic · speaker.wave.2 · timeline.selection · square.and.arrow.up.on.square</td><td>bornes = le trim de P23 ; extraction = le toggle enfin transmis (C7b)</td></tr>
@@ -2598,7 +2612,7 @@ flowchart TD
   transcribe, modes Simple/Pro), <span class="mono">ImageEditorModel</span> (crop, ratios,
   filtres, ajustements — Simple/Pro), <span class="mono">MeeshyVideoEditorView</span> (dock
   d'outils, historique, export). Le composer les OUVRE depuis l'inspecteur média — il ne les
-  réécrit pas. <b>Un éditeur édite UN <span class="mono">MeeshyObject</span></b> — jamais la
+  réécrit pas. <b>Un éditeur édite UN <span class="mono">MeeshySceneObject</span></b> — jamais la
   <span class="mono">MeeshyScene</span>, jamais la slide : c'est ce qui rend l'inspecteur la seule
   porte légitime vers eux, et ce qui explique qu'ils n'aient aucun état à eux.</p>
   <div class="phrow">
@@ -2675,7 +2689,7 @@ flowchart TD
   2) La haptique dit les BUTÉES (début/fin, snap au playhead) — jamais le mouvement continu.
   3) NON-DESTRUCTIF partout : l'original n'est jamais réécrit, le document porte les bornes —
   rouvrir l'éditeur retrouve tout. <b>Et « le document » désigne DEUX champs, à deux niveaux, qu'il
-  ne faut pas confondre</b> : le trim d'un <span class="mono">MeeshyObject</span> — kind
+  ne faut pas confondre</b> : le trim d'un <span class="mono">MeeshySceneObject</span> — kind
   <span class="mono">media</span> ou <span class="mono">audio</span> POSÉ sur la scène — écrit son
   <span class="mono">timing</span> (<span class="mono">start</span>/<span class="mono">end</span>,
   relatifs à la slide) ; le trim du SON DE FOND, qui vit sur la
@@ -2695,7 +2709,7 @@ flowchart TD
   navigation ». <b>Les six exercent les QUATRE niveaux à la fois</b>, et c'est ce qui en fait des
   cas et non des captures : une carte est une <span class="mono">MeeshySlide</span>, ce qu'elle
   montre est une <span class="mono">MeeshyScene</span>, ce qu'on y a posé sont des
-  <span class="mono">MeeshyObject</span>, et ce qui traverse les cartes — la piste, l'audience —
+  <span class="mono">MeeshySceneObject</span>, et ce qui traverse les cartes — la piste, l'audience —
   appartient à la <span class="mono">MeeshyPublication</span>.</p>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
@@ -2711,7 +2725,7 @@ flowchart TD
     <b>AUCUN glyphe audio nulle part</b> — pas de piste ⇒ rien (B3.5) : ni ♫ barré, ni bouton 🔇.
     L'ordre des cartes est <span class="mono">PostMedia.order</span> (écrit à l'index — le fix
     P7). <b>Chaque carte est une <span class="mono">MeeshySlide</span></b> — sa
-    <span class="mono">MeeshyScene</span> porte un unique <span class="mono">MeeshyObject</span> de
+    <span class="mono">MeeshyScene</span> porte un unique <span class="mono">MeeshySceneObject</span> de
     kind <span class="mono">media</span>, né au plan <span class="mono">background</span> (règle de
     pose : aucun fond visuel préalable).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>

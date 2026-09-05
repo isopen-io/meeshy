@@ -308,7 +308,7 @@ struct AddParticipantSheet: View {
 
         do {
             let response: UserSearchResponse = try await APIClient.shared.request(
-                endpoint: "/users/search",
+                UsersEndpoint.search,
                 queryItems: [
                     URLQueryItem(name: "q", value: trimmed),
                     URLQueryItem(name: "limit", value: "20"),
@@ -333,7 +333,7 @@ struct AddParticipantSheet: View {
 
         do {
             let _: APIResponse<[String: String]> = try await APIClient.shared.post(
-                endpoint: "/conversations/\(conversationId)/participants",
+                ConversationsEndpoint.byIdParticipants(id: conversationId),
                 body: AddBody(userId: userId)
             )
             HapticFeedback.success()

@@ -1,1 +1,22 @@
-infrastructure/docker/compose/docker-compose.yml
+# Ce fichier N'EST PAS une composition. [#4544]
+#
+# La racine portait ici un LIEN dont la cible n'a jamais existé — mesuré, aucun
+# commit du dépôt n'a jamais écrit infrastructure/docker/compose/docker-compose.yml.
+# Un `docker compose up` à la racine échouait donc sur un lien mort, et qui
+# cherchait « où est le compose ? » trouvait d'abord un faux.
+#
+# Trois issues étaient possibles — repointer, supprimer, ou refuser en disant où
+# regarder. Repointer aurait tranché en silence une question qui n'a pas de bonne
+# réponse muette (un `docker compose up` nu devrait-il monter dev, local, staging
+# ou prod ?). Supprimer aurait rendu « no configuration file provided », qui
+# n'apprend rien. Ce fichier refuse EN NOMMANT la suite.
+#
+# La forme ${VAR:?message} est celle que la garde des compositions impose déjà
+# aux variables d'hôte (scripts/check-compose-required-vars.mjs) — la seule qui
+# fasse échouer `docker compose` en affichant une phrase. Le message ne porte ni
+# « : » ni « # » sans quoi le YAML lirait la ligne comme une MAP et l'erreur ne
+# dirait plus rien (règle leMessageNeCassePasLeYaml de la même garde).
+
+services:
+  ou-sont-les-compositions:
+    image: ${MEESHY_COMPOSITION_A_LA_RACINE:?Aucune composition ne vit a la racine du depot. Les quatre vivent sous infrastructure/docker/compose/ - docker-compose.dev.yml, docker-compose.local.yml, docker-compose.staging.yml, docker-compose.prod.yml. Lancer par exemple docker compose -f infrastructure/docker/compose/docker-compose.dev.yml up, ou passer par scripts/dev.sh}

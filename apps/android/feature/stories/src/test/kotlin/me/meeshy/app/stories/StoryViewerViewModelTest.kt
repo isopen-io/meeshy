@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryReactedData
@@ -38,6 +39,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.StoryRepository
@@ -108,6 +110,7 @@ class StoryViewerViewModelTest {
         startUserId: String,
         posts: List<ApiPost>,
         user: MeeshyUser? = null,
+        allowAnalytics: Boolean = true,
     ): StoryViewerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { session.currentUserId } returns null
@@ -115,8 +118,12 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         coEvery { storyRepository.react(any(), any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to startUserId))
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
         return StoryViewerViewModel(
-            storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, handle,
+            storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock,
+            privacyStore, handle,
         )
     }
 
@@ -206,6 +213,24 @@ class StoryViewerViewModelTest {
     fun `a slide with no background string leaves the projected background null`() = runTest {
         val vm = viewModel(startUserId = "a", posts = twoAuthors())
         assertThat(vm.state.value.current?.background).isNull()
+    }
+
+    @Test
+    fun `a drawn stroke on the story projects onto the slide so a drawing-only story is not shown blank`() = runTest {
+        val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(drawingStrokes = listOf(stroke))),
+            ),
+        )
+        assertThat(vm.state.value.current?.strokes).containsExactly(stroke)
+    }
+
+    @Test
+    fun `a slide with no drawing carries no strokes`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.strokes).isEmpty()
     }
 
     @Test
@@ -400,6 +425,21 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.isDismissed).isFalse()
     }
 
+    // --- Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`) ---
+
+    @Test
+    fun `with analytics consent withheld a qualifying slide dwell records no watch-time`() = runTest {
+        dwellClock.now = 0
+        val vm = viewModel(startUserId = "a", posts = twoAuthors(), allowAnalytics = false)
+        dwellClock.now = 1000
+
+        vm.advance() // a1 → b1: a 1000ms dwell WOULD qualify, but consent was withheld
+
+        // No dwell session opened, so the enrichment (the only postRepository.viewPost the story
+        // surface makes) never fires; 1000 is the exact duration this scenario could have recorded.
+        coVerify(exactly = 0) { postRepository.viewPost("a1", 1000) }
+    }
+
     @Test
     fun `reacting optimistically bumps the count, records mine, and calls the repository`() = runTest {
         val vm = viewModel(
@@ -585,7 +625,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns
             NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "boom"))
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, handle)
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
 
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.isDismissed).isFalse()
@@ -609,7 +649,7 @@ class StoryViewerViewModelTest {
         coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(twoAuthors())
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
         val handle = SavedStateHandle(mapOf(StoryViewerViewModel.USER_ID_ARG to "a"))
-        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, handle)
+        val vm = StoryViewerViewModel(storyRepository, postRepository, session, socialSocket, config, reportRepository, dwellClock, InMemoryPrivacyPreferencesStore(), handle)
 
         assertThat(vm.state.value.isOwnStory).isTrue() // group a, author == current user
 
@@ -715,7 +755,7 @@ class StoryViewerViewModelTest {
         val vm = viewModel(startUserId = "a", posts = listOf(post))
 
         val transform = vm.state.value.current?.backgroundTransform
-        assertThat(transform?.scale).isWithin(1e-6f).of(1.5f)
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(1.5f)
         assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.2f)
         assertThat(transform?.offsetYFraction).isEqualTo(0f)
         assertThat(transform?.isIdentity).isFalse()
@@ -765,7 +805,7 @@ class StoryViewerViewModelTest {
 
         val transform = vm.state.value.current?.backgroundTransform
         assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
-        assertThat(transform?.scale).isWithin(1e-6f).of(2.0f)
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(2.0f)
         assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.3f)
         assertThat(transform?.offsetYFraction).isEqualTo(0f)
         assertThat(transform?.isIdentity).isFalse()

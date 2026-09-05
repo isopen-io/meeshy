@@ -442,6 +442,53 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// laisse derrière.
     public let localMediaMimeTypes: [String]?
 
+    /// **LE CANVAS composé sur la scène** (#4756).
+    ///
+    /// Porté ici pour la même raison que `location` et `mentions`, et c'est ici
+    /// que cela compte le plus : un post du meuble n'emprunte JAMAIS
+    /// `PostService.create`, il part par cette file — en ligne comme hors ligne
+    /// (`FeedViewModel.publish`). Sans ce champ, l'auteur compose un fond, des
+    /// objets, un dessin, voit sa publication apparaître, et **la carte du fil
+    /// n'affiche que le texte**. Mesuré au simulateur le 2026-09-04.
+    ///
+    /// Optionnel : un enregistrement persisté avant ce lot décode toujours sans
+    /// cette clé, et `nil` y dit la vérité — ces posts-là n'avaient pas de
+    /// scène à transporter.
+    public let storyEffects: StoryEffects?
+
+    /// **La LÉGENDE de chaque fichier, alignée par INDEX sur
+    /// `localMediaPaths`** (#4756).
+    ///
+    /// Clée par index et non par id serveur, parce que l'id n'existe pas encore
+    /// quand cette ligne est écrite : c'est l'upload qui l'attribue, au flush.
+    /// Le dispatcher fait la traduction, seul étage à connaître les deux.
+    ///
+    /// `nil` à une position ⇒ ce fichier n'a pas de légende. Optionnel :
+    /// un enregistrement persisté avant ce lot décode sans cette clé.
+    public let mediaCaptions: [String?]?
+
+    /// **Le texte ALTERNATIF par fichier, même alignement par INDEX**
+    /// (2026-09-05).
+    ///
+    /// Jumeau de `mediaCaptions` par la forme, distinct par le destinataire :
+    /// la légende s'adresse à qui VOIT le média, l'alternative à qui ne le voit
+    /// pas. Le gateway les reçoit dans deux champs séparés
+    /// (`CreatePostSchema.mediaCaption` / `.mediaAlt`), et aucun des deux ne
+    /// sert de repli à l'autre.
+    ///
+    /// Optionnel pour la même raison : une ligne persistée avant ce lot décode
+    /// sans cette clé.
+    public let mediaAlts: [String?]?
+
+    /// **L'identifiant d'OBJET de canvas de chaque fichier** (#5280).
+    ///
+    /// Il ne part PAS au serveur : il sert au dispatcher, une fois les ids
+    /// serveur créés, à réécrire le canvas pour qu'il désigne les médias que
+    /// le post possède réellement. Persisté avec le reste parce que le
+    /// dispatch peut avoir lieu des heures après l'enfilage — et que ce lien
+    /// n'existe nulle part ailleurs à ce moment-là.
+    public let mediaObjectIds: [String?]?
+
     /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
     /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
     ///
@@ -470,7 +517,11 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         discoverabilityPrecision: DiscoverabilityPrecision? = nil,
         repostOfId: String? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
-        localMediaMimeTypes: [String]? = nil
+        localMediaMimeTypes: [String]? = nil,
+        storyEffects: StoryEffects? = nil,
+        mediaCaptions: [String?]? = nil,
+        mediaAlts: [String?]? = nil,
+        mediaObjectIds: [String?]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -489,6 +540,10 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.repostOfId = repostOfId
         self.mobileTranscription = mobileTranscription
         self.localMediaMimeTypes = localMediaMimeTypes
+        self.storyEffects = storyEffects
+        self.mediaCaptions = mediaCaptions
+        self.mediaAlts = mediaAlts
+        self.mediaObjectIds = mediaObjectIds
     }
 }
 

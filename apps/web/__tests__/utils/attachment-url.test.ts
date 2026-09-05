@@ -14,7 +14,15 @@
 // de son propre contrat dans lib/config.ts.
 jest.mock('../../lib/config', () => {
   const actual = jest.requireActual('../../lib/config');
-  return { ...actual, getBackendUrl: jest.fn(actual.getBackendUrl) };
+  // `getStaticUrl` rejoint le mock au titre de #4625 : c'est la SECONDE base
+  // de deploiement que cette fonction compose, et un temoin qui la laisserait
+  // reelle mesurerait `window.location` de jsdom au lieu de prouver la
+  // delegation.
+  return {
+    ...actual,
+    getBackendUrl: jest.fn(actual.getBackendUrl),
+    getStaticUrl: jest.fn(actual.getStaticUrl),
+  };
 });
 
 import {
@@ -24,9 +32,10 @@ import {
   isRelativeUrl,
   extractRelativePath,
 } from '../../utils/attachment-url';
-import { getBackendUrl } from '../../lib/config';
+import { getBackendUrl, getStaticUrl } from '../../lib/config';
 
 const mockedGetBackendUrl = getBackendUrl as jest.Mock;
+const mockedGetStaticUrl = getStaticUrl as jest.Mock;
 
 describe('attachment-url', () => {
   const originalEnv = process.env;
@@ -336,4 +345,45 @@ describe('La clé de stockage reçoit une route VERSIONNÉE (#4324)', () => {
     expect(buildAttachmentUrl('/2024/11/userId/photo.jpg'))
       .toBe('https://gate.meeshy.me/api/v1/attachments/file/2024/11/userId/photo.jpg');
   });
+
+  // #4625 — le magasin STATIQUE, declare par la donnee.
+  //
+  // 272 avatars de staging portaient leur adresse absolue et ne s'affichaient
+  // QUE pour cette raison : reduits a leur cle, ils partaient sur la passerelle,
+  // ou ils ne sont pas. Le schema `static:` est ce qui les rend migrables.
+  describe('magasin statique (#4625)', () => {
+    beforeEach(() => {
+      mockedGetStaticUrl.mockReturnValue('https://static.meeshy.me');
+    });
+
+    it('compose une cle `static:` contre la base STATIQUE, jamais la passerelle', () => {
+      expect(buildAttachmentUrl('static:u/i/2025/11/avatar_1763143871947_o0.jpg'))
+        .toBe('https://static.meeshy.me/u/i/2025/11/avatar_1763143871947_o0.jpg');
+      expect(mockedGetStaticUrl).toHaveBeenCalled();
+    });
+
+    it('delegue la base a getStaticUrl — elle n’est pas ecrite ici', () => {
+      mockedGetStaticUrl.mockReturnValueOnce('https://cdn.exemple.test');
+      expect(buildAttachmentUrl('static:u/i/a.jpg')).toBe('https://cdn.exemple.test/u/i/a.jpg');
+    });
+
+    it('separe deux cles qu’AUCUNE forme ne distinguait', () => {
+      // C'est le temoin decisif : les deux echouent au test `^/\d{4}/\d{2}/`
+      // que cette fonction employait, et partaient donc au meme hote.
+      expect(buildAttachmentUrl('static:u/i/2025/11/a.jpg'))
+        .toBe('https://static.meeshy.me/u/i/2025/11/a.jpg');
+      expect(buildAttachmentUrl('avatars/user/68f2a814.jpg'))
+        .toBe('https://gate.meeshy.me/api/v1/attachments/file/avatars/user/68f2a814.jpg');
+    });
+
+    it('laisse intactes les formes heritees — elles fonctionnent encore', () => {
+      const absolue = 'https://static.meeshy.me/u/i/2025/11/a.jpg';
+      mockedGetStaticUrl.mockClear();
+      expect(buildAttachmentUrl(absolue)).toBe(absolue);
+      // Une adresse qui marche ne se RECOMPOSE pas : elle traverse. Le compteur
+      // est remis a zero juste au-dessus — le mock est partage par le fichier.
+      expect(mockedGetStaticUrl).not.toHaveBeenCalled();
+    });
+  });
+
 });

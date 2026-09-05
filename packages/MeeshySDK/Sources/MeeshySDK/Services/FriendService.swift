@@ -119,7 +119,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
     public func sendFriendRequest(receiverId: String, message: String? = nil) async throws -> FriendRequest {
         let body = SendFriendRequest(receiverId: receiverId, message: message)
         let response: APIResponse<FriendRequest> = try await api.post(
-            endpoint: "/directory/friend-requests",
+            DirectoryEndpoint.friendRequests,
             body: body
         )
         return response.data
@@ -166,7 +166,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
         }
 
         return try await api.request(
-            endpoint: "/directory/friend-requests",
+            DirectoryEndpoint.friendRequests,
             method: "GET",
             body: nil,
             queryItems: items
@@ -177,7 +177,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
 
     public func receivedRequests(offset: Int = 0, limit: Int = 20) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
         try await api.offsetPaginatedRequest(
-            endpoint: "/friend-requests/received",
+            FriendRequestsEndpoint.received,
             offset: offset,
             limit: limit
         )
@@ -187,7 +187,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
 
     public func sentRequests(offset: Int = 0, limit: Int = 20) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
         try await api.offsetPaginatedRequest(
-            endpoint: "/friend-requests/sent",
+            FriendRequestsEndpoint.sent,
             offset: offset,
             limit: limit
         )
@@ -212,7 +212,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
             queryItems.append(URLQueryItem(name: "status", value: status))
         }
         return try await api.request(
-            endpoint: "/users/friend-requests",
+            UsersEndpoint.friendRequests,
             method: "GET",
             body: nil,
             queryItems: queryItems
@@ -233,7 +233,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
     public func respond(requestId: String, accepted: Bool) async throws -> FriendRequest {
         let body = FriendRequestAction(action: accepted ? "accept" : "reject")
         let response: APIResponse<FriendRequest> = try await api.request(
-            endpoint: "/directory/friend-requests/\(requestId)",
+            DirectoryEndpoint.friendRequestsById(id: requestId),
             method: "PATCH",
             body: try JSONEncoder().encode(body)
         )
@@ -254,7 +254,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
     public func deleteRequest(requestId: String) async throws {
         let body = FriendRequestAction(action: "dismiss")
         let _: APIResponse<FriendRequestActionResult> = try await api.request(
-            endpoint: "/directory/friend-requests/\(requestId)",
+            DirectoryEndpoint.friendRequestsById(id: requestId),
             method: "PATCH",
             body: try JSONEncoder().encode(body)
         )
@@ -265,7 +265,7 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
     public func sendEmailInvitation(email: String) async throws {
         let body = EmailInvitationRequest(email: email)
         let _: APIResponse<EmailInvitationResponse> = try await api.post(
-            endpoint: "/invitations/email",
+            InvitationsEndpoint.email,
             body: body
         )
     }

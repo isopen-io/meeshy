@@ -31,6 +31,10 @@ import {
 } from '../../utils/response.js';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
+import {
+  rememberPendingDeviceTrust,
+  consumePendingDeviceTrust
+} from './pending-device-trust';
 
 const logger = enhancedLogger.child({ module: 'AuthLoginRoute' });
 
@@ -38,7 +42,7 @@ const logger = enhancedLogger.child({ module: 'AuthLoginRoute' });
  * Register login and logout routes
  */
 export function registerLoginRoutes(context: AuthRouteContext) {
-  const { fastify, authService, redis } = context;
+  const { fastify, authService, redis, cacheStore } = context;
 
   const loginRateLimiter = createLoginRateLimiter(redis);
   const authGlobalRateLimiter = createAuthGlobalRateLimiter(redis);
@@ -82,7 +86,15 @@ export function registerLoginRoutes(context: AuthRouteContext) {
                 // Branche « second facteur attendu »
                 requires2FA: { type: 'boolean', description: 'True when the account carries a second factor — no access token is granted yet', example: true },
                 twoFactorToken: { type: 'string', description: 'Short-lived token identifying the pending login; present it to POST /login/2fa with the user code' },
-                rememberDevice: { type: 'boolean', description: 'Echo of the requested device-trust preference, to be replayed on POST /login/2fa' },
+                // `rememberDevice` ne figure PLUS ici (#4471). Il y était servi
+                // comme un ÉCHO « to be replayed on POST /login/2fa » — un
+                // aller-retour qu'aucun client n'a jamais fait, et qui donnait
+                // au corps de la seconde étape le pouvoir de s'accorder
+                // 365 jours de confiance sans lien avec ce que la personne
+                // avait coché ici. La préférence est désormais RETENUE PAR LE
+                // SERVEUR entre les deux étapes (`pending-device-trust.ts`),
+                // comme le lien magique le fait déjà : il n'y a plus rien à
+                // rejouer, donc plus rien à écho.
                 message: { type: 'string', description: 'Human-readable prompt for the second factor' }
               }
             }
@@ -123,10 +135,13 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       // If 2FA is required, return partial response
       if (requires2FA) {
         logger.info('2FA requis', { username: user.username });
+        // Aucune session n'existe encore : la préférence ne peut pas être
+        // APPLIQUÉE ici, seulement RETENUE, pour que `POST /login/2fa` la
+        // trouve sans que personne ait à la transporter.
+        await rememberPendingDeviceTrust({ store: cacheStore, twoFactorToken, rememberDevice });
         return sendSuccess(reply, {
           requires2FA: true,
           twoFactorToken,
-          rememberDevice,
           user: {
             id: user.id,
             username: user.username,
@@ -216,8 +231,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         required: ['twoFactorToken', 'code'],
         properties: {
           twoFactorToken: { type: 'string', description: 'Temporary token from initial login' },
-          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX)' },
-          rememberDevice: { type: 'boolean', description: 'Remember device for long session (365 days)', default: false }
+          code: { type: 'string', minLength: 6, maxLength: 9, description: 'TOTP code (6 digits) or backup code (XXXX-XXXX)' }
+          // `rememberDevice` n'est PLUS accepté ici (#4471) : la préférence est
+          // celle exprimée à `POST /login`, retenue côté serveur. Un corps qui
+          // le porterait encore est simplement ignoré — jamais honoré.
         }
       },
       response: {
@@ -249,7 +266,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
     preHandler: [twoFactorRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request, reply) => {
     try {
-      const { twoFactorToken, code, rememberDevice } = request.body;
+      const { twoFactorToken, code } = request.body;
 
       if (!twoFactorToken || !code) {
         return sendBadRequest(reply, 'Token 2FA et code requis');
@@ -261,6 +278,11 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if ('success' in result && result.success === false) {
         return sendUnauthorized(reply, result.error);
       }
+
+      // Après la vérification SEULEMENT : un code faux ne doit pas consommer la
+      // préférence, sans quoi la personne la perdrait à la première faute de
+      // frappe. Ce que le corps de la requête prétend n'entre pas ici.
+      const rememberDevice = await consumePendingDeviceTrust({ store: cacheStore, twoFactorToken });
 
       const authResult = result as AuthResult;
       const { user, sessionToken, session } = authResult;

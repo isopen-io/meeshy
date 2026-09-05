@@ -38,12 +38,16 @@ export function DocumentSettings() {
     isUpdating: isSaving,
     error,
     updatePreferences,
-  } = usePreferences('accessibility');
+  } = usePreferences('document');
 
   const preferences = preferencesData as unknown;
 
   const updateField = <K extends string>(field: K, value: unknown) => {
-    updatePreferences({ [field]: value } as unknown);
+    // `updatePreferences` rejette sur échec serveur — le hook gère déjà le
+    // rollback optimiste et la restitution de `error` ; sans ce `.catch`, un
+    // refus (ex. réseau, 400) part en rejet de promesse NON GÉRÉ à chaque
+    // interrupteur touché.
+    updatePreferences({ [field]: value } as unknown).catch(() => undefined);
   };
 
   // Memoize loading state

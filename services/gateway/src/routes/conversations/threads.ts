@@ -15,7 +15,9 @@ import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -43,6 +45,11 @@ const threadMessageSelect = {
   // message cité (replyTo) — sans `metadata`, un message géolocalisé perd
   // sa position dans ce thread alors qu'il la restitue ailleurs.
   metadata: true,
+  // #4885 — les quatre drapeaux de protection : `formatThreadMessage` étale
+  // `...message`, donc les sélectionner suffit à les servir. Sans eux, un
+  // message à vue unique ouvert par son fil de réponses était FORWARDABLE
+  // au même titre que celui trouvé par `GET .../messages/search`.
+  ...MESSAGE_PROTECTION_SELECT,
   sender: {
     select: {
       id: true,
@@ -119,16 +126,20 @@ const threadMessageSelect = {
 };
 
 /**
- * Hisse `metadata.location` sur un message de fil ET sur son `replyTo`
- * imbriqué (le message cité). Les deux affichent une vraie bulle complète —
- * un hoist qui ne porterait que sur la racine laisserait la citation sans
- * position, comme si le message cité n'en avait jamais eu.
+ * Hisse `metadata.location` ET `metadata.sticker` sur un message de fil ET
+ * sur son `replyTo` imbriqué (le message cité). Les deux affichent une vraie
+ * bulle complète — un hoist qui ne porterait que sur la racine laisserait la
+ * citation sans position ni décoration, comme si le message cité n'en avait
+ * jamais eu.
  */
 function hoistThreadMessageLocation<T extends Record<string, unknown>>(message: T): T {
-  const hoisted = hoistLocationOnto(message);
+  const hoisted: T = hoistStickerOnto(hoistLocationOnto(message));
   const replyTo = (hoisted as { replyTo?: unknown }).replyTo;
   if (replyTo && typeof replyTo === 'object' && !Array.isArray(replyTo)) {
-    return { ...hoisted, replyTo: hoistLocationOnto(replyTo as Record<string, unknown>) } as T;
+    return {
+      ...hoisted,
+      replyTo: hoistStickerOnto(hoistLocationOnto(replyTo as Record<string, unknown>)),
+    } as T;
   }
   return hoisted;
 }

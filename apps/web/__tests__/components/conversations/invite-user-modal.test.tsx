@@ -176,9 +176,18 @@ describe('InviteUserModal', () => {
       data: mockSearchResults,
     });
 
-    (apiService.post as jest.Mock).mockResolvedValue({
-      data: { success: true },
-    });
+    // #4557 — la modale envoie UN appel et lit un verdict par personne. Un
+    // double qui rendrait `{ success: true }` sans `results` ferait passer le
+    // lot pour vide : aucun invite, aucun toast, et le test rougirait sur un
+    // défaut du DOUBLE qu'on lirait comme un défaut du composant.
+    (apiService.post as jest.Mock).mockImplementation(async (_url: string, body: any) => ({
+      data: {
+        success: true,
+        data: {
+          results: (body?.userIds ?? []).map((userId: string) => ({ userId, outcome: 'new' })),
+        },
+      },
+    }));
   });
 
   afterEach(() => {
@@ -534,11 +543,47 @@ describe('InviteUserModal', () => {
       fireEvent.click(inviteButton);
 
       await waitFor(() => {
+        // UN appel, la porte des participants, et la liste en une fois.
+        expect(apiService.post).toHaveBeenCalledTimes(1);
         expect(apiService.post).toHaveBeenCalledWith(
-          '/api/v1/conversations/conv-1/invite',
-          { userId: 'user-2' }
+          '/api/v1/conversations/conv-1/participants',
+          { userIds: ['user-2'] }
         );
       });
+    });
+
+    // #4557 — LE cas de l'issue : un refus partiel ne ressemble plus à une
+    // panne. Avant, `Promise.all` rejetait au premier échec et l'écran
+    // affichait « erreur » sans dire QUI n'était pas passé.
+    it('un refus PARTIEL annonce les deux — les entrés et les refusés', async () => {
+      const { toast } = require('sonner');
+      const onUserInvited = jest.fn();
+      (apiService.post as jest.Mock).mockResolvedValue({
+        data: {
+          success: true,
+          data: { results: [{ userId: 'user-2', outcome: 'already-member' }] },
+        },
+      });
+
+      render(<InviteUserModal {...defaultProps} onUserInvited={onUserInvited} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+      await new Promise(resolve => setTimeout(resolve, 350));
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
+      fireEvent.click(screen.getByText('Inviter 1 utilisateur(s)'));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalled();
+      });
+      // Personne n'est entré : rien ne remonte au parent, et aucun succès n'est
+      // annoncé. C'est la moitié qui manquait — la boucle précédente notifiait
+      // TOUS les sélectionnés, y compris ceux dont l'appel avait échoué.
+      expect(onUserInvited).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
     });
 
     it('should call onUserInvited for each invited user', async () => {

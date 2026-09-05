@@ -76,6 +76,9 @@ function makePrisma(): any {
     agentUserRole: {
       count: jest.fn<any>(),
       findMany: jest.fn<any>().mockResolvedValue([]),
+      // #4465 — `GET /stats` compte les utilisateurs contrôlés distincts en
+      // base (`$group` + `$count`) plutôt que de charger une ligne par rôle.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ total: 0 }]),
       upsert: jest.fn<any>(),
       update: jest.fn<any>(),
       deleteMany: jest.fn<any>(),
@@ -97,6 +100,9 @@ function makePrisma(): any {
     },
     agentScanLog: {
       findMany: jest.fn<any>().mockResolvedValue([]),
+      // #4465 — `GET /scan-logs/stats` agrège par seau en base (`$facet`)
+      // plutôt que de charger une ligne par scan.
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ buckets: [], outcomes: [] }]),
       count: jest.fn<any>().mockResolvedValue(0),
       findUnique: jest.fn<any>(),
     },
@@ -722,7 +728,8 @@ describe('Agent Admin Routes — coverage gap tests', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('GET /scan-logs/stats', () => {
     it('returns 500 when DB throws', async () => {
-      prisma.agentScanLog.findMany.mockRejectedValue(new Error('DB error'));
+      // #4465 — l'agrégation par seau lit `aggregateRaw`, plus `findMany`.
+      prisma.agentScanLog.aggregateRaw.mockRejectedValue(new Error('DB error'));
 
       app = buildApp(prisma);
       await app.ready();
@@ -1178,16 +1185,18 @@ describe('Agent Admin Routes — coverage gap tests', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('GET /scan-logs/stats — conversationId filter', () => {
     it('filters by conversationId when query param provided', async () => {
-      prisma.agentScanLog.findMany.mockResolvedValue([]);
-
       app = buildApp(prisma);
       await app.ready();
 
       const res = await app.inject({ method: 'GET', url: `/scan-logs/stats?conversationId=${CONV_ID}` });
       expect(res.statusCode).toBe(200);
-      expect(prisma.agentScanLog.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ conversationId: CONV_ID }) })
-      );
+
+      // #4465 — le filtre voyage désormais dans le `$match` du pipeline
+      // `aggregateRaw`, en Extended JSON (`{ $oid }` — convention du dépôt
+      // pour un champ `@db.ObjectId`, voir `services/notifications/
+      // NotificationService.ts`), plus dans un `where` Prisma typé.
+      const [{ pipeline }] = prisma.agentScanLog.aggregateRaw.mock.calls[0];
+      expect(pipeline[0].$match.conversationId).toEqual({ $oid: CONV_ID });
     });
   });
 });

@@ -106,26 +106,30 @@ describe('Le balayage balaie bien ce qu\'il prétend balayer', () => {
 });
 
 /**
- * Les DEUX seules configs du dépôt qui comptent l'appelant sans poser le hook
- * pour une raison MESURÉE, et non par oubli.
+ * Les configs qui comptent l'appelant sans poser le hook pour une raison
+ * MESURÉE, et non par oubli. **Il n'y en a plus aucune** depuis #4687.
  *
- * Toutes deux sont des enregistrements de PLUGIN (`fastify.register(rateLimit,
- * …)`), pas des `config.rateLimit` de route : `hook` y vaut pour TOUTES les
- * routes de l'instance, donc le déplacer déplacerait aussi le comptage des
- * requêtes qui n'atteignent jamais le `preHandler` — un flot non authentifié,
- * précisément ce qu'un limiteur global doit compter. C'est le raisonnement
- * qu'écrit déjà `registerGlobalRateLimiter`, le seul des trois qui soit monté.
+ * Les deux qui vivaient ici — `registerRateLimiting` (`middleware/rate-limit.ts`,
+ * clé `user:`) et `registerMessageRateLimiter` (`middleware/rate-limiter.ts`,
+ * clé `msg:`) — étaient des enregistrements de PLUGIN, pas des
+ * `config.rateLimit` de route : `hook` y vaut pour TOUTES les routes de
+ * l'instance, donc le déplacer déplacerait aussi le comptage des requêtes qui
+ * n'atteignent jamais le `preHandler` — un flot non authentifié, précisément
+ * ce qu'un limiteur global doit compter.
  *
- * Et les deux ci-dessous ne sont montées NULLE PART (mesuré : aucun appelant
- * de production). Leur générateur ANNONCE pourtant une clé par compte, ce qui
- * en fait un patron à copier — la raison exacte pour laquelle les trois sites
- * fautifs de ce lot se ressemblaient. Ils restent donc NOMMÉS ici plutôt
- * qu'ignorés.
+ * Cette ligne d'exception les tenait pour tolérables parce qu'aucun appelant
+ * de production ne les montait. Elle disait en même temps ce qui les rendait
+ * COÛTEUSES : leur générateur ANNONÇAIT une clé par compte et rendait
+ * l'adresse, ce qui en faisait un patron à copier — la raison exacte pour
+ * laquelle les sites fautifs de #4347, #4359 et #4429 se ressemblaient tous.
+ * #4687 a tranché ce que « monté nulle part » laissait ouvert : les deux sont
+ * SUPPRIMÉS, et le tableau se vide au lieu de s'expliquer.
+ *
+ * Il reste, plutôt que d'être supprimé : c'est un état à DÉFENDRE, et le
+ * second `it.each` ci-dessous rougit si une entrée y revenait sans être
+ * RÉELLEMENT fautive.
  */
-const ADRESSE_AU_NIVEAU_DU_PLUGIN: ReadonlyArray<readonly [string, string]> = [
-  ['middleware/rate-limit.ts#user:', 'registerRateLimiting — plugin global, monté nulle part'],
-  ['middleware/rate-limiter.ts#msg:', 'registerMessageRateLimiter — plugin global, monté nulle part'],
-];
+const ADRESSE_AU_NIVEAU_DU_PLUGIN: ReadonlyArray<readonly [string, string]> = [];
 
 /**
  * Dette HORS TERRITOIRE — SOLDÉE par #4429.
@@ -161,10 +165,18 @@ describe('Toute config qui compte l\'appelant pose le hook qui le rend possible'
    * Le pendant du cliquet : une exception qui a été corrigée doit SORTIR de
    * la liste. Sans ce témoin, une ligne périmée se transformerait en
    * autorisation permanente.
+   *
+   * Un `it` unique, et non un `it.each` : les deux listes sont VIDES depuis
+   * #4687, et `it.each([])` ÉCHOUE au chargement (« called with an empty Array
+   * of table data »). Un cliquet dont la seule forme d'écriture interdit
+   * l'état qu'il vise à atteindre pousse à regeler une ligne pour rester vert
+   * — c'est exactement l'inverse de ce qu'il demande.
    */
-  it.each(EXCEPTIONS)('%s est encore fautive — sinon retirer sa ligne (%s)', (cle) => {
-    const config = BALAYAGE.configs.find((c) => c.cle === cle);
-    expect(config).toBeDefined();
-    expect(config?.posePreHandler).toBe(false);
+  it('aucune exception listée qui ne soit encore fautive', () => {
+    const perimees = EXCEPTIONS.filter(
+      ([cle]) => BALAYAGE.configs.find((c) => c.cle === cle)?.posePreHandler !== false
+    ).map(([cle]) => cle);
+
+    expect(perimees).toEqual([]);
   });
 });

@@ -23,6 +23,8 @@ import {
   selectForFields,
   type ColumnPlan,
 } from '../../utils/sparse-fieldset';
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #4170 — GET /links absorbe GET /links/my-links, GET /links/stats et
@@ -41,6 +43,7 @@ import {
 interface ListLinksQuery {
   conversationId?: string;
   mine?: string;
+  q?: string;
   cursor?: string;
   offset?: string;
   limit?: string;
@@ -104,6 +107,10 @@ const CLES_SOCLE = [
   'expiresAt',
   'createdAt',
   'conversationTitle',
+  // #3740 — pourquoi CE lien-là est inactif, plutôt que de le laisser
+  // disparaître de la liste sans explication (« un lien qui disparaît sans
+  // explication est un second mystère »).
+  'inactiveReason',
 ] as const;
 
 /** Les seize clés de POLICE — celles que `mapPolicyFields` compose sur `?expand=policy`. */
@@ -160,7 +167,10 @@ const COLONNES_LIEN = {
   allowedCountries: true,
   allowedLanguages: true,
   allowedIpRanges: true,
-  conversation: { select: { id: true, title: true, type: true, description: true } },
+  // `closedAt`/`isActive` du conteneur : jamais servis tels quels, ils
+  // n'alimentent que `inactiveReason` ci-dessous (§ #3740). Le chargement est
+  // gratuit — c'est la MÊME jointure que `conversationTitle` exige déjà.
+  conversation: { select: { id: true, title: true, type: true, description: true, closedAt: true, isActive: true } },
   creator: {
     select: { id: true, username: true, firstName: true, lastName: true, displayName: true, avatar: true },
   },
@@ -182,7 +192,10 @@ const COLONNES_LIEN = {
 const linkPlan: ColumnPlan<typeof COLONNES_LIEN> = {
   full: COLONNES_LIEN,
   pinned: ['id', 'createdAt'],
-  columns: { conversationTitle: ['conversation'] },
+  columns: {
+    conversationTitle: ['conversation'],
+    inactiveReason: ['conversation', 'isActive', 'expiresAt'],
+  },
 };
 
 /**
@@ -226,7 +239,14 @@ type LinkRow = {
   currentUses?: number;
   maxUses?: number | null;
   expiresAt?: Date | null;
-  conversation?: { id?: string; title?: string | null; type?: string; description?: string | null } | null;
+  conversation?: {
+    id?: string;
+    title?: string | null;
+    type?: string;
+    description?: string | null;
+    closedAt?: Date | null;
+    isActive?: boolean;
+  } | null;
   creator?: {
     id: string;
     username: string;
@@ -238,13 +258,33 @@ type LinkRow = {
 } & Partial<Record<(typeof CLES_POLICE)[number], unknown>>;
 
 /**
+ * Pourquoi CE lien est inactif — #3740. Trois causes, dans l'ordre de leur
+ * FORCE : la clôture du conteneur rend le lien inutilisable quoi que son
+ * propriétaire en pense (`isConversationClosed`, la même loi que
+ * `admitLinkEntry` applique déjà à l'admission) ; l'expiration est la
+ * prochaine cause opposable ; tout le reste (une désactivation manuelle,
+ * `POST /links/:linkId/revoke`) n'a pas de trace propre — `REVOKED` en est le
+ * repli honnête plutôt qu'un mensonge par omission.
+ *
+ * `null` pour un lien actif : il n'y a rien à expliquer.
+ */
+function deriveInactiveReason(l: LinkRow): 'CONVERSATION_CLOSED' | 'LINK_EXPIRED' | 'REVOKED' | null {
+  if (l.isActive) return null;
+  if (isConversationClosed(l.conversation ?? null)) return 'CONVERSATION_CLOSED';
+  if (l.expiresAt != null && l.expiresAt.getTime() < Date.now()) return 'LINK_EXPIRED';
+  return 'REVOKED';
+}
+
+/**
  * Le mapping DE BASE — identique, champ pour champ, à ce que `GET /links`
  * rendait avant ce lot. iOS (`MyShareLink`, `ShareLinkModels.swift:216`) et
  * Android (`MyShareLink`, `ShareLink.kt:172`) le décodent tous deux
  * aujourd'hui via `?offset=&limit=` : y toucher casse deux clients qu'aucun
  * autre agent de ce lot ne peut mettre à jour. `expand`/`fields` n'ajoutent
  * ou ne retirent donc jamais rien à CE socle, ils l'augmentent ou le filtrent
- * par-dessus.
+ * par-dessus. `inactiveReason` est la seule addition (#3740) — un champ EN
+ * PLUS, jamais une clé existante réécrite, donc sans risque pour ces deux
+ * décodeurs stricts.
  */
 function mapBaseLinkItem(l: LinkRow): LinkItem {
   return {
@@ -258,6 +298,7 @@ function mapBaseLinkItem(l: LinkRow): LinkItem {
     expiresAt: l.expiresAt?.toISOString() ?? null,
     createdAt: l.createdAt.toISOString(),
     conversationTitle: l.conversation?.title ?? null,
+    inactiveReason: deriveInactiveReason(l),
   };
 }
 
@@ -313,7 +354,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: ListLinksQuery }>('/links', {
     onRequest: [authRequired],
     schema: {
-      description: 'List share links. Without conversationId: the authenticated user\'s own links, globally. With conversationId: the links of that conversation — a moderator sees all of them, a regular member only their own (unless ?mine=true forces the narrower view for everyone). Supports offset pagination (legacy, still used by iOS/Android) and cursor pagination (?cursor=<linkId>, the forward-looking form — offset stays accepted for backward compatibility, it is not removed). ?expand=conversation,creator,policy adds the corresponding fields (policy = permissions/restrictions, already-loaded scalar columns, no extra query); ?include=summary adds real (never fabricated) aggregates in meta.summary, sparing a second call to the now-deprecated /links/stats. ?fields=a,b,c returns a sparse item.',
+      description: 'List share links. Without conversationId: the authenticated user\'s own links, globally. With conversationId: the links of that conversation — a moderator sees all of them, a regular member only their own (unless ?mine=true forces the narrower view for everyone). ?q=text filters on name OR identifier (case-insensitive substring), composed with the scope above — it never widens what the route already serves. Supports offset pagination (legacy, still used by iOS/Android) and cursor pagination (?cursor=<linkId>, the forward-looking form — offset stays accepted for backward compatibility, it is not removed). ?expand=conversation,creator,policy adds the corresponding fields (policy = permissions/restrictions, already-loaded scalar columns, no extra query); ?include=summary adds real (never fabricated) aggregates in meta.summary, sparing a second call to the now-deprecated /links/stats. ?fields=a,b,c returns a sparse item.',
       tags: ['links'],
       summary: 'List share links (own, or scoped to a conversation)',
       querystring: {
@@ -321,6 +362,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         properties: {
           conversationId: { type: 'string', description: 'Scope the listing to one conversation the caller is a member of' },
           mine: { type: 'string', enum: ['true', 'false'], description: 'With conversationId: force "my links only" even for a moderator' },
+          q: { type: 'string', description: 'Case-insensitive substring filter on name OR identifier — composes with the scope above, never widens it' },
           cursor: { type: 'string', description: 'Opaque keyset cursor — the `id` of the last item of the previous page' },
           offset: { type: 'number', minimum: 0, default: 0, description: 'Legacy offset pagination (kept for iOS/Android backward compatibility)' },
           limit: { type: 'number', minimum: 1, maximum: 100, default: 50, description: 'Maximum number of links to return' },
@@ -350,6 +392,17 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
                   expiresAt: { type: 'string', format: 'date-time', nullable: true },
                   createdAt: { type: 'string', format: 'date-time' },
                   conversationTitle: { type: 'string', nullable: true },
+                  // #3740 — pourquoi CE lien est inactif : `null` pour un lien
+                  // actif, sinon la cause la plus FORTE (clôture du conteneur
+                  // avant expiration avant retrait manuel). Un lien qui
+                  // disparaît de la liste sans explication est un second
+                  // mystère — il n'en disparaît donc jamais : `isActive` reste
+                  // servi tel quel, `inactiveReason` l'accompagne.
+                  inactiveReason: {
+                    type: 'string',
+                    nullable: true,
+                    enum: ['CONVERSATION_CLOSED', 'LINK_EXPIRED', 'REVOKED', null]
+                  },
                   conversation: {
                     type: 'object',
                     nullable: true,
@@ -411,7 +464,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
             },
             cursorPagination: {
               type: 'object',
-              description: 'La forme CIBLE de pagination — offset reste accepté (ci-dessus) tant que iOS/Android ne l\'ont pas adopté (packages/MeeshySDK et apps/android hors territoire de ce lot).',
+              description: 'La forme CIBLE de pagination. UNE SEULE des deux formes est servie par réponse (#4351) : `?cursor=` rend `cursorPagination` seul, `?offset=` (ou rien) rend `pagination` seul. `?offset=` reste accepté — Android le déclare (LinkApi.listMyLinks) — mais les deux objets ne cohabitent plus dans un même corps.',
               properties: {
                 limit: { type: 'number' },
                 hasMore: { type: 'boolean' },
@@ -498,6 +551,26 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         where = forceMineOnly ? { conversationId, createdBy: userId } : { conversationId };
       }
 
+      // #4962 — `q` se compose APRÈS le scope ci-dessus, une seule fois,
+      // plutôt que d'être ajouté dans chacune des deux branches : la même
+      // clause s'applique donc identiquement que l'appelant filtre par
+      // conversation ou non, sans jumelle à tenir synchronisée. `name` et
+      // `identifier` sont les deux colonnes qu'un lecteur reconnaît, déjà
+      // chargées — aucune jointure supplémentaire. Un `q` ne retire jamais
+      // le filtre d'appartenance déjà posé sur `where` : il s'AJOUTE en `AND`
+      // implicite (clé `OR` à côté des clés déjà présentes), il ne le remplace
+      // jamais.
+      const q = typeof query.q === 'string' && query.q.trim().length > 0 ? query.q.trim() : null;
+      if (q !== null) {
+        where = {
+          ...where,
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { identifier: { contains: q, mode: 'insensitive' } },
+          ],
+        };
+      }
+
       // Trois `new Set` écrits en ligne vivaient ici, avec trois bornes
       // légèrement différentes des trois autres analyseurs du dépôt. La
       // grammaire est désormais UNE (`utils/sparse-fieldset.ts`, #4356) ; ce
@@ -537,6 +610,12 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
       // projection ne demande plus.
       const select = selectForFields(linkPlan, clesServies(expand, requestedFields));
 
+      // #4351 / #4175 — le `count()` ne part QUE si la réponse va servir un
+      // `total`. Il partait sur CHAQUE appel, curseur compris, pour alimenter
+      // un champ que la pagination par curseur ne porte pas : un comptage de
+      // toute la collection payé à chaque page pour être jeté. Un curseur
+      // n'a pas besoin de savoir combien il reste — c'est même ce qui le rend
+      // stable sous insertion.
       const [links, total, summary] = await Promise.all([
         fastify.prisma.conversationShareLink.findMany({
           where: findManyWhere,
@@ -545,7 +624,9 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
           take: limit,
           select,
         }),
-        fastify.prisma.conversationShareLink.count({ where }),
+        usingCursor
+          ? Promise.resolve(null)
+          : fastify.prisma.conversationShareLink.count({ where }),
         includeSet.has('summary') ? computeShareLinksSummary(fastify, where) : Promise.resolve(null),
       ]);
 
@@ -572,12 +653,32 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         return restrictFields(enriched, requestedFields);
       });
 
-      const pagination = createPaginationMeta(total, offset, limit, links.length);
-      const cursorPagination = buildCursorPaginationMeta(
-        limit,
-        links.length,
-        links.length > 0 ? (links[links.length - 1] as { id: string }).id : null
-      );
+      // #4351 critère 3 — UNE seule forme de pagination PAR RÉPONSE.
+      //
+      // La réponse portait les deux objets, toujours, côte à côte : un
+      // appelant ne pouvait pas savoir lequel faisait foi, et deux clients
+      // pouvaient paginer la même adresse par deux mécanismes différents sans
+      // que rien ne le signale. Ce que la fusion devait supprimer, ce n'est
+      // pas le SUPPORT de l'offset — `?offset=` reste accepté, Android le
+      // déclare (`LinkApi.listMyLinks`) — c'est la COHABITATION dans un même
+      // corps.
+      //
+      // La forme servie suit donc celle qui a été DEMANDÉE : `?cursor=` rend
+      // `cursorPagination` seul, `?offset=` (ou rien) rend `pagination` seul.
+      // Retirer `pagination` inconditionnellement aurait tronqué en silence la
+      // liste du web, qui lit `data.pagination?.hasMore` pour son bouton
+      // « charger plus » (`apps/web/app/links/page.tsx`) — mesuré avant, et
+      // c'est pourquoi le web migre vers le curseur dans le même lot.
+      const pagination = usingCursor
+        ? undefined
+        : createPaginationMeta(total ?? 0, offset, limit, links.length);
+      const cursorPagination = usingCursor
+        ? buildCursorPaginationMeta(
+            limit,
+            links.length,
+            links.length > 0 ? (links[links.length - 1] as { id: string }).id : null
+          )
+        : undefined;
 
       const meta: Record<string, unknown> = {};
       if (viewerIsModerator !== undefined) meta.viewerIsModerator = viewerIsModerator;
@@ -595,8 +696,8 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: mapped,
-        pagination,
-        cursorPagination,
+        ...(pagination ? { pagination } : {}),
+        ...(cursorPagination ? { cursorPagination } : {}),
         ...(Object.keys(meta).length > 0 && { meta }),
       });
     } catch (error) {
@@ -617,7 +718,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
    * aucun des deux ne migre ici. Le retrait suit le compteur de #4275.
    */
   fastify.get('/links/stats', {
-    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links?include=summary' })],
+    onRequest: [authRequired, depreciee({ depuis: '2026-08-29', successeur: apiPath('/links?include=summary') })],
     schema: {
       description: 'Get aggregated statistics for all share links created by the authenticated user. Returns total link counts, active link counts, and total usage.',
       tags: ['links'],

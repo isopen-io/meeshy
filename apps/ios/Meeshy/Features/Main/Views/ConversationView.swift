@@ -179,139 +179,6 @@ struct PendingAudioEdit: Identifiable, Equatable {
     let url: URL
 }
 
-struct ConversationComposerState {
-    /// Plafond de sélection média du composer de conversation.
-    ///
-    /// Relevé de 10 à 199 (2026-08-14). Le planner ne découpe PAS par lot :
-    /// `MultiAttachmentSendPlanner` produit UNE bulle par type (audio /
-    /// visuel), donc 199 photos restent un seul message — la montée de plafond
-    /// ne multiplie pas les bulles, elle lève juste la contrainte de saisie.
-    /// L'envoi lui-même est borné par la concurrence d'upload, pas par ce
-    /// nombre (cf. `TusUploadManager.maxConcurrent`).
-    ///
-    /// Cette dernière phrase n'est vraie que depuis le 2026-08-16 : la boucle
-    /// d'upload attendait chaque fichier avant de lancer le suivant, donc le
-    /// pool de l'acteur ne dépassait jamais un actif et 199 photos partaient
-    /// l'une après l'autre. `sendMessageWithAttachments` confie désormais le
-    /// groupe entier au manager, qui borne réellement.
-    static let maxMediaSelection = 199
-
-    var showOptions = false
-    var actionAlert: String? = nil
-    var forwardMessage: Message? = nil
-    /// **Transfert groupé (#4005).** Vide pour les DEUX sites d'ouverture
-    /// historiques (longpress simple, swipe) — `forwardMessage` seul porte
-    /// alors tout. Non vide UNIQUEMENT depuis le mode sélection multiple :
-    /// `endSelectionMode()`-adjacent, posée puis effacée avec
-    /// `forwardMessage` par le MÊME `onDismiss` de la feuille.
-    var forwardAdditionalMessages: [Message] = []
-    /// La cible de « Composer » — le média reçu que la porte va semer.
-    /// Non-nil = la porte est présentée.
-    var composeMediaTarget: ComposableMessageTarget? = nil
-    /// La même cible, RETENUE le temps qu'une feuille se referme.
-    ///
-    /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
-    /// et présenter un plein écran pendant qu'une feuille se démonte est la
-    /// course que ce dépôt a déjà payée (« Attempt to present … which is
-    /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
-    /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
-    /// délai n'est qu'un pari.
-    var pendingComposeTarget: ComposableMessageTarget? = nil
-    var showConversationInfo = false
-
-    // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
-    // fois par session de conversation ; quelle que soit la décision, l'envoi
-    // repart — le refus envoie l'audio sans transcription/traduction.
-    var showVoiceAutoTranslateConsent = false
-    var voiceConsentPromptedThisSession = false
-    
-    // Attachment state
-    var pendingAttachments: [MessageAttachment] = []
-    var pendingMediaFiles: [String: URL] = [:]
-    var pendingThumbnails: [String: UIImage] = [:]
-    var isLoadingMedia = false
-
-    /// In-flight attachment preparations (decompression → compression →
-    /// thumbnailing → ThumbHash). Each entry renders an `AttachmentLoadingTile`
-    /// in the composer tray until it transitions to `.ready`, at which point
-    /// the result is moved into `pendingAttachments`/`pendingMediaFiles`/
-    /// `pendingThumbnails` and the handle is dropped from this array.
-    var preparingAttachments: [PreparingAttachment] = []
-    
-    // Pickers
-    var showPhotoPicker = false
-    var showCamera = false
-    var showFilePicker = false
-    var selectedPhotoItems: [PhotosPickerItem] = []
-    /// True while `selectedPhotoItems` is being primed with the recent-media
-    /// strip's multi-selection before presenting the PhotosPicker. Priming
-    /// fires the selection onChange once — this flag swallows that echo so
-    /// items are only ingested when the user actually confirms in the picker.
-    var photoPickerPriming = false
-    
-    // Location & Upload
-    var isLoadingLocation = false
-    var isUploading = false
-    var uploadProgress: UploadQueueProgress? = nil
-    var showLocationPicker = false
-    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
-    /// nom et l'adresse — `MessageAttachment.location` ne les portait pas et
-    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
-    var pendingPlace: SharedPlace? = nil
-    
-    // Language (source language for outgoing messages).
-    // Resolved via DefaultComposerLanguage: keyboard layout > "fr" fallback.
-    // TextAnalyzer overrides this once the user types enough characters.
-    var selectedLanguage: String = DefaultComposerLanguage.resolve()
-
-    // Reply & Edit
-    var pendingReplyReference: ReplyReference? = nil
-    var editingMessageId: String? = nil
-    var editingOriginalContent: String? = nil
-    /// **Le brouillon en cours au moment d'entrer en édition (#4003).** Sans
-    /// lui, `beginEdit` écrase silencieusement ce que l'auteur était en train
-    /// de composer, et `cancelEdit`/`submitEdit` ne pouvaient rien restituer.
-    /// Posé UNE fois par `beginEdit` (jamais réécrit tant qu'une édition est
-    /// en cours), consommé et effacé par `cancelEdit`.
-    var draftBeforeEdit: String? = nil
-
-    // Reply attachment preview
-    var previewMedia: PreviewMedia? = nil
-
-    // Misc Pickers
-    var showContactPicker = false
-    var showTextEmojiPicker = false
-    var emojiToInject = ""
-}
-
-extension ConversationComposerState {
-    /// Replaces the audio attachment `attachmentId` in place with the freshly
-    /// edited recording. Editing a media attachment must never spawn a second
-    /// tray chip — this mirrors the image editor's replace-by-id contract
-    /// (`pendingAttachments[idx] = …`). Returns the now-stale audio file URL so
-    /// the caller can delete it from disk.
-    @discardableResult
-    mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
-        let staleURL = pendingMediaFiles[attachmentId]
-        let duration = max(durationMs, 500)
-        pendingMediaFiles[attachmentId] = editedURL
-        if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
-            pendingAttachments[index] = MessageAttachment(
-                id: attachmentId,
-                mimeType: "audio/mp4",
-                duration: duration,
-                channels: 2,
-                thumbnailColor: pendingAttachments[index].thumbnailColor
-            )
-        } else {
-            pendingAttachments.append(
-                MessageAttachment(id: attachmentId, mimeType: "audio/mp4", duration: duration, channels: 2)
-            )
-        }
-        return staleURL == editedURL ? nil : staleURL
-    }
-}
-
 struct ConversationHeaderState {
     var showStoryViewerFromHeader = false
     var storyUserIdForHeader: String?
@@ -475,7 +342,11 @@ struct ConversationView: View {
     /// ancré. FIGÉE tant qu'un message est en cours de rédaction : voir
     /// `resolvedScrollButtonAnchor(current:composerHeight:isComposing:)`.
     @State var composerScrollButtonAnchor: CGFloat = 130
-    @State private var keyboardHeight: CGFloat = 0
+    /// La dernière animation ANNONCÉE par le clavier — hauteur d'arrivée,
+    /// durée et courbe (`ConversationView+Keyboard`). Sa hauteur gèle la mesure
+    /// du composeur ; sa courbe est celle sur laquelle le fil rejoint sa
+    /// réserve basse, au lieu de s'y téléporter (#4949).
+    @State var keyboardTransition: KeyboardTransition?
     @State private var initialScrollCompleted: Bool = false
 
 
@@ -1116,6 +987,11 @@ struct ConversationView: View {
                     isStarred: viewModel.isStarred(messageId: msg.id),
                     isEdited: msg.isEdited,
                     hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
+                    // **La décoration du message, et son état d'épinglage**
+                    // (2026-09-05). `nil` ⇒ ce n'est pas un sticker, et
+                    // l'entrée n'existe pas — la loi 4 tenue par la RÈGLE, pas
+                    // par un grisé.
+                    stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
                     isForwardable: msg.isForwardable
                 )
@@ -1158,6 +1034,10 @@ struct ConversationView: View {
                     onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                     onToggleStar: {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
+                    },
+                    onToggleStickerFavorite: {
+                        MessageStickerFavorite.toggle(for: msg.sticker)
+                        HapticFeedback.light()
                     },
                     onDeleteMessage: { requestDeleteMessage(msg.id) },
                     onEdit: { beginEdit(msg) },
@@ -1448,13 +1328,7 @@ struct ConversationView: View {
                 FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
                 dismiss()
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-                keyboardHeight = frame.height
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                keyboardHeight = 0
-            }
+            .observingKeyboardTransition($keyboardTransition)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                 // Le debounce de 400 ms a remplacé la persistance par frappe :
                 // sans ce flush, backgrounder l'app (ou la tuer depuis
@@ -1712,6 +1586,7 @@ struct ConversationView: View {
                 // qu'il traverse s'ajoute à la réserve du composeur pour que
                 // le repos du fil ne bouge pas d'un point.
                 bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                bottomInsetTransition: listInsetTransition,
                 // 0 en preview : la vue y est hébergée dans une `.sheet` à
                 // détentes, dont le bord haut est déjà sous la status bar —
                 // réserver la bande îlot y décalerait le flux dans le vide.
@@ -1787,26 +1662,53 @@ struct ConversationView: View {
                         scrollState.isScrollingActiveList = isActive
                     }
                 },
-                onMessagesSeen: { seenIds in
+                onMessagesSeen: { seenIds, visibleIds in
                     // Seule source de vérité de la lecture : ces identifiants
                     // ont été RÉELLEMENT affichés assez longtemps.
                     // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
-                    viewModel.markAsRead(messageIds: seenIds)
+                    viewModel.markAsRead(messageIds: seenIds, visibleIds: visibleIds)
                 },
                 onStoryReplyTap: { storyId in
                     // Open the story viewer at the slide that originated the
                     // quoted reply. Resolves the story id to a (group, slide)
                     // pair via StoryViewModel — preserves the legacy behaviour
                     // from ConversationView+MessageRow (now dead code).
-                    if let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) {
-                        let group = storyViewModel.storyGroups[groupIdx]
-                        let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
-                        overlayState.storyViewerUserId = group.id
-                        overlayState.storyViewerGroupIndex = groupIdx
-                        overlayState.storyViewerSlideIndex = slideIdx
-                        overlayState.storyViewerStartAtFirstUnviewed = false
-                        overlayState.showStoryViewer = true
+                    guard let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) else {
+                        // Vue `3h` (#4098) — la citation SUBSISTE à l'expiration
+                        // de la story, mais son lien, lui, ne survit pas. Cette
+                        // branche n'existait pas : story expirée, purgée ou
+                        // jamais chargée, le tap ne faisait RIEN. Pas d'erreur,
+                        // pas d'explication — l'utilisateur touchait la carte
+                        // trois fois avant de conclure que l'app était figée.
+                        //
+                        // Loi 4 du dépôt : un contrôle existe s'il a un effet.
+                        // Le chemin voisin — un MESSAGE cité introuvable — fait
+                        // déjà exactement ceci douze lignes plus haut
+                        // (`conversation.messageNotFound`) ; la story n'avait
+                        // simplement jamais reçu son pendant.
+                        //
+                        // C'est ici, et NULLE PART ailleurs, que l'échec se
+                        // constate : le client ne PEUT pas préjuger de
+                        // l'expiration. Le droit d'ouvrir une story passé son
+                        // heure est DÉCLARÉ par le serveur
+                        // (`StoryItem.referenceAccess`, « never recomputed from
+                        // `expiresAt` here ») — une personne nommée dans la
+                        // story y accède encore. Une carte qui s'annoncerait
+                        // « expirée » d'après sa seule date mentirait sur une
+                        // story que ce tap aurait ouverte.
+                        FeedbackToastManager.shared.show(
+                            String(localized: "conversation.storyUnavailable", bundle: .main),
+                            type: .info
+                        )
+                        return
                     }
+                    let group = storyViewModel.storyGroups[groupIdx]
+                    let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
+                    overlayState.storyViewerUserId = group.id
+                    overlayState.storyViewerGroupIndex = groupIdx
+                    overlayState.storyViewerSlideIndex = slideIdx
+                    overlayState.storyViewerStartAtFirstUnviewed = false
+                    overlayState.showStoryViewer = true
                 },
                 onViewSenderStory: { userId in
                     // Anneau story d'un avatar de bulle (conversations de

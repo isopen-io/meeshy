@@ -45,14 +45,52 @@ jest.mock('../services/MentionService', () => ({
 
 const POST_ID = '507f1f77bcf86cd799439011';
 
-const impressionCreate = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({});
-const postUpdate = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({});
-// Espion inutilisé côté implémentation : `findUnique` ne doit PLUS être
-// appelé sur ce chemin chaud. La résolution repostOfId/originalRepostOfId
-// (chantier reposts cohérents, tâche 1) est repliée dans le `select` de
-// `update` — garder ce spy prouve l'absence de lecture séparée plutôt que
-// de simplement l'omettre (Important #2, revue chantier reposts).
+const impressionCreateMany = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ count: 1 });
+const postUpdateMany = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ count: 1 });
+// Espion inutilisé côté implémentation : `findUnique` ne doit PLUS être appelé
+// sur ce chemin chaud — garder ce spy prouve l'ABSENCE d'une lecture par post
+// plutôt que de simplement l'omettre.
 const postFindUnique = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+
+/**
+ * #4150 — cette route est désormais un ALIAS de `POST /social/events`, et sa
+ * forme de requête a convergé vers celle du LOT.
+ *
+ * Ce que ce fichier mesurait — une impression par appel, jamais dédupliquée,
+ * `detail` comptant en plus une ouverture — est INCHANGÉ. Ce qui change est la
+ * FORME des requêtes, et le changement n'est pas cosmétique :
+ *
+ *  - `create` → `createMany` : le point d'ingestion écrit N occurrences d'un
+ *    coup, et N vaut 1 ici. Une ligne, les mêmes champs.
+ *  - `update` (+ `select`) → `findMany` puis `updateMany` : l'ancienne route
+ *    repliait la résolution des racines de repost dans le `select` de son
+ *    `update`, ce qui coûtait ZÉRO lecture — une optimisation qui n'existe QUE
+ *    pour un id unique. `updateMany` ne rend aucune ligne, donc le lot résout
+ *    ses racines par une lecture BORNÉE PAR LOT.
+ *
+ * L'invariant de coût est donc réénoncé, pas abandonné : **la résolution des
+ * racines est UNE requête pour tout le lot, jamais une par post.** C'est cette
+ * propriété-là qui protège le chemin chaud à l'échelle ; « zéro requête pour un
+ * post » était un artefact de cardinalité 1, et le prix d'une lecture bornée
+ * est ce que coûte la fin de la réimplémentation parallèle (critère 6).
+ */
+const postFindMany = jest.fn<(...args: any[]) => Promise<unknown>>()
+  .mockImplementation(({ where, select }: any) => {
+    // Passe de résolution des racines de repost — aucun repost dans ce fichier.
+    if (where?.repostOfId !== undefined) return Promise.resolve([]);
+    // Passe d'AUDIENCE : le double rend un post PUBLIC par id demandé, donc
+    // tout ce que ce fichier mesure reste ce qu'il mesurait ; le refus hors
+    // audience a son témoin dans
+    // `unit/routes/posts/interactions-consumption-audience.test.ts`.
+    void select;
+    return Promise.resolve(((where?.id?.in ?? []) as string[]).map((id) => ({
+      id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+    })));
+  });
+
+/** Les appels de `post.findMany` qui résolvent les RACINES de repost. */
+const passesRacines = () =>
+  postFindMany.mock.calls.filter(([args]: any[]) => args?.where?.repostOfId !== undefined);
 
 const buildAuthMiddleware = (userId?: string) =>
   (req: any, _reply: unknown, done: () => void) => {
@@ -65,23 +103,13 @@ const buildAuthMiddleware = (userId?: string) =>
 async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
-    postImpression: { create: impressionCreate },
-    // #4146 — la route consulte l'audience du post AVANT de compter une
-    // impression : `loadPostAcl` lit `post.findFirst`. Le double rend un post
-    // PUBLIC, donc tout ce que ce fichier mesure (comptage par source, absence
-    // de dedup, absence de lecture dediee) reste ce qu'il mesurait ; le refus
-    // hors audience a son temoin dans
-    // `unit/routes/posts/interactions-consumption-audience.test.ts`.
+    postImpression: { createMany: impressionCreateMany },
+    // #4146 puis #4150 — la route consulte l'audience du post AVANT de compter
+    // une impression, désormais par la passe de LOT (`post.findMany`).
     post: {
-      update: postUpdate,
+      updateMany: postUpdateMany,
       findUnique: postFindUnique,
-      findFirst: (args: { where: { id: string } }) => Promise.resolve({
-        id: args.where.id,
-        authorId: 'author-1',
-        visibility: 'PUBLIC',
-        visibilityUserIds: [] as string[],
-        expiresAt: null,
-      }),
+      findMany: postFindMany,
     },
   } as unknown as PrismaClient;
   const requiredAuth = buildAuthMiddleware(authenticated ? 'u1' : undefined);
@@ -109,9 +137,10 @@ describe('POST /posts/:postId/impression', () => {
   });
 
   beforeEach(() => {
-    impressionCreate.mockClear();
-    postUpdate.mockClear();
+    impressionCreateMany.mockClear();
+    postUpdateMany.mockClear();
     postFindUnique.mockClear();
+    postFindMany.mockClear();
   });
 
   it('source "detail" = +1 impression AND +1 total view (postOpenCount), immediately', async () => {
@@ -122,18 +151,21 @@ describe('POST /posts/:postId/impression', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
-    expect(impressionCreate).toHaveBeenCalledWith({
-      data: { postId: POST_ID, userId: 'u1', source: 'detail' },
+    expect(impressionCreateMany).toHaveBeenCalledWith({
+      data: [{ postId: POST_ID, userId: 'u1', source: 'detail' }],
     });
-    expect(postUpdate).toHaveBeenCalledWith({
-      where: { id: POST_ID },
-      data: { impressionCount: { increment: 1 }, postOpenCount: { increment: 1 } },
-      select: { repostOfId: true, originalRepostOfId: true },
+    expect(postUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: [POST_ID] } },
+      data: { impressionCount: { increment: 1 } },
     });
-    // Réduction de requêtes : la résolution repostOfId/originalRepostOfId
-    // est repliée dans le `select` de `update` ci-dessus — plus de lecture
-    // dédiée avant l'écriture (Important #2, revue chantier reposts).
+    expect(postUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: [POST_ID] } },
+      data: { postOpenCount: { increment: 1 } },
+    });
+    // L'invariant de coût réénoncé : aucune lecture PAR POST, et une seule
+    // résolution de racines pour tout le lot.
     expect(postFindUnique).not.toHaveBeenCalled();
+    expect(passesRacines()).toHaveLength(1);
   });
 
   it('source "feed" increments ONLY impressionCount (no total view on a feed appearance)', async () => {
@@ -143,12 +175,14 @@ describe('POST /posts/:postId/impression', () => {
       payload: { source: 'feed' },
     });
     expect(res.statusCode).toBe(200);
-    expect(postUpdate).toHaveBeenCalledWith({
-      where: { id: POST_ID },
+    expect(postUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: [POST_ID] } },
       data: { impressionCount: { increment: 1 } },
-      select: { repostOfId: true, originalRepostOfId: true },
     });
+    // Une apparition de fil ne compte AUCUNE ouverture — un seul `updateMany`.
+    expect(postUpdateMany).toHaveBeenCalledTimes(1);
     expect(postFindUnique).not.toHaveBeenCalled();
+    expect(passesRacines()).toHaveLength(1);
   });
 
   it('counts EVERY open with no dedup (N opens → N impressions)', async () => {
@@ -160,9 +194,11 @@ describe('POST /posts/:postId/impression', () => {
       });
       expect(res.statusCode).toBe(200);
     }
-    expect(impressionCreate).toHaveBeenCalledTimes(3);
-    expect(postUpdate).toHaveBeenCalledTimes(3);
+    expect(impressionCreateMany).toHaveBeenCalledTimes(3);
+    expect(postUpdateMany).toHaveBeenCalledTimes(6); // 3 appels × (impression + ouverture)
     expect(postFindUnique).not.toHaveBeenCalled();
+    // Trois appels ⇒ trois lots ⇒ trois résolutions : une PAR LOT, jamais par post.
+    expect(passesRacines()).toHaveLength(3);
   });
 
   it('rejects an unknown source with 400', async () => {

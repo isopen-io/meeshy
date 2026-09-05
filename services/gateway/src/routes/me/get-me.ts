@@ -88,7 +88,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { userSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { servedUserPermissions } from '../../services/admin/served-permissions';
-import { resolveAutoTranslateEnabled } from '../../utils/auto-translate-preference';
+import {
+  loadAutoTranslateEnabled,
+  resolveAutoTranslateEnabled,
+} from '../../utils/auto-translate-preference';
 import { sendSuccess, sendUnauthorized, sendNotFound } from '../../utils/response.js';
 import { formatUserResponse, type UserResponseData } from '../auth/types';
 import { parseFieldList, parseTokenList, restrictFields } from '../../utils/sparse-fieldset';
@@ -267,6 +270,37 @@ function resolveMeBase(authContext: UnifiedAuthContext): Record<string, unknown>
 }
 
 /**
+ * `autoTranslateEnabled` — la seule clé servie que le cache d'auth ne porte PAS.
+ *
+ * `buildRegisteredMeUser` compose depuis `authContext.registeredUser`, dont le
+ * `select` (et la ligne Redis qui le mémorise) ne joint pas `UserPreferences` :
+ * `formatUserResponse` y lisait donc `undefined`, que fast-json-stringify
+ * SUPPRIME — la clé était simplement absente de la réponse, sans erreur ni
+ * trace. Un utilisateur qui venait de couper la traduction automatique la
+ * retrouvait active au prochain démarrage (#3736).
+ *
+ * Le document est donc relu ICI, par la SSOT
+ * (`utils/auto-translate-preference.ts`), et **seulement quand la clé est
+ * effectivement SERVIE** : `?fields=id,username` ne paie pas une requête pour
+ * un champ qu'il vient d'exclure. La forme ANONYME n'entre jamais ici — un
+ * participant n'a pas de ligne `UserPreferences`, et `buildAnonymousMeUser`
+ * pose déjà le défaut partagé.
+ */
+async function withAutoTranslatePreference(
+  request: FastifyRequest,
+  authContext: UnifiedAuthContext,
+  served: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  if (authContext.type !== 'user' || !authContext.userId) return served;
+  if (!('autoTranslateEnabled' in served)) return served;
+
+  return {
+    ...served,
+    autoTranslateEnabled: await loadAutoTranslateEnabled(request.server.prisma, authContext.userId),
+  };
+}
+
+/**
  * Le SEUL calcul de « qui suis-je ». Enregistré par `me/index.ts` (adresse
  * CIBLE) et par `auth/magic-link.ts` (ALIAS déprécié) — voir le doc-comment
  * de tête. Ne rien recalculer ici indépendamment ailleurs dans le dépôt : un
@@ -291,7 +325,7 @@ export async function handleGetMe(request: FastifyRequest, reply: FastifyReply):
     return;
   }
 
-  const filtered = pickFields(base, fields);
+  const filtered = await withAutoTranslatePreference(request, authContext, pickFields(base, fields));
 
   if (!expand.includes('security')) {
     sendSuccess(reply, { user: filtered });

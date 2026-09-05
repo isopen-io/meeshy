@@ -22,13 +22,15 @@
  * étape 2 de #4405, hors territoire de ce lot) et
  * `hooks/use-fcm-notifications.ts` (jeton FCM, domaine disjoint) doivent
  * SURVIVRE. `AuthManager.setCredentials` / `updateTokens` et le store
- * (`setTokens`) continuent eux aussi d'ACCEPTER un `refreshToken?: string`
- * positionnel : deux appelants hors du territoire de ce lot
- * (`magic-link.service.ts`, `two-factor.service.ts`) le passent encore en
- * 3e argument, et `auth.service.test.ts` (« threads a refreshToken through
+ * (`setTokens`) continuent eux aussi d'ACCEPTER un champ `refreshToken?:
+ * string` — nommé, plus jamais positionnel depuis #4450 (`setCredentials`)
+ * et #4491 (`updateTokens`, `setTokens`) : trois appelants réels le
+ * transportent encore sous ce nom (`auth.service.ts`, `magic-link.service.ts`,
+ * `two-factor.service.ts`, tous vers `setCredentials`), et
+ * `auth.service.test.ts` (« threads a refreshToken through
  * to its own slot when the server does send one ») verrouille EXPLICITEMENT
- * que ce créneau doit continuer d'exister si le serveur envoie un jour ce
- * champ — l'acheminement de l'argument n'est pas le vestige, seule sa
+ * que ce champ doit continuer d'exister si le serveur envoie un jour cette
+ * valeur — le transport du champ n'est pas le vestige, seule sa
  * PERSISTANCE l'était. Un `\brefreshToken\b` bare attraperait donc trois
  * usages légitimes en plus du vestige réel : ce garde interdit à la place
  * deux identifiants NON AMBIGUS, chacun garanti sans second sens dans ce

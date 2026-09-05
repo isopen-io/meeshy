@@ -72,7 +72,14 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import {
+  CONSENT_PURPOSES,
+  CONSENT_POLICY_VERSION_DEFAULT,
+  isConsentPurpose,
+  type ConsentPurpose,
+} from '@meeshy/shared/types/consents';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { zodIssueSchema, issuesServies } from '../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { logError } from '../../utils/logger';
 import {
@@ -80,7 +87,7 @@ import {
   sendUnauthorized,
   sendNotFound,
   sendBadRequest,
-  sendConflict,
+  sendError,
   sendInternalError,
 } from '../../utils/response.js';
 
@@ -90,14 +97,7 @@ import {
  * chaîne : les ancêtres d'un `purpose` sont tout ce qui le précède dans ce
  * tableau.
  */
-export const CONSENT_PURPOSES = [
-  'data-processing',
-  'voice-data',
-  'voice-profile',
-  'voice-cloning',
-] as const;
-
-export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
+export { CONSENT_PURPOSES, type ConsentPurpose } from '@meeshy/shared/types/consents';
 
 type ConsentColumn =
   | 'dataProcessingConsentAt'
@@ -126,11 +126,8 @@ const CONSENT_SELECT: Readonly<Record<ConsentColumn, true>> = {
  * variable d'environnement permet de la faire évoluer sans redéploiement de
  * code ; la valeur par défaut date ce lot.
  */
-export const CONSENT_POLICY_VERSION = process.env.CONSENT_POLICY_VERSION || '2026-08-30';
-
-function isConsentPurpose(value: string): value is ConsentPurpose {
-  return (CONSENT_PURPOSES as readonly string[]).includes(value);
-}
+export const CONSENT_POLICY_VERSION =
+  process.env.CONSENT_POLICY_VERSION || CONSENT_POLICY_VERSION_DEFAULT;
 
 /** Les ancêtres d'un `purpose`, racine d'abord — jamais lui-même. */
 function ancestorsOf(purpose: ConsentPurpose): readonly ConsentPurpose[] {
@@ -180,6 +177,53 @@ function buildConsentEntry(purpose: ConsentPurpose, grantedAt: Date | null): Con
  * `read` (120/min, un écran de réglages relit souvent) et `write` (20 PAR
  * HEURE — un consentement ne se bascule pas en boucle, et c'est un geste
  * juridiquement significatif).
+ *
+ * ## `skipOnError: true` — le sens de l'échec, PESÉ puis écrit (#4687)
+ *
+ * Ces deux seaux héritaient du côté ouvert sans que personne l'ait décidé :
+ * `registerGlobalRateLimiter` (`middleware/rate-limiter.ts`) enregistre le
+ * plugin avec `skipOnError: true`, et `mergeParams` (`Object.assign`,
+ * @fastify/rate-limit `index.js:190`) l'étale dans toute config muette — alors
+ * que le DÉFAUT DU PLUGIN vaut `false` (`index.js:138`), ce qui fait lire
+ * l'omission comme prudente à qui va vérifier dans la dépendance. La valeur ne
+ * change pas ; ce qui change est qu'elle est désormais CHOISIE.
+ *
+ * Le choix se pèse entre deux extrêmes, pas entre « strict » et « laxiste ».
+ * Une route qui déclare `config.rateLimit` perd le limiteur global — `onRoute`
+ * (`index.js:174`) monte le sien À LA PLACE, jamais en plus. Fermé, une panne
+ * du magasin de compteurs répond 500 à CHAQUE requête de `/me/consents`, pas
+ * seulement à celles qui dépassent (`index.js:301`) ; ouvert, ces deux routes
+ * n'ont plus aucun plafond pendant la panne.
+ *
+ * Trois mesures ont décidé, et la première contredit l'intuition :
+ *
+ * 1. **Il n'y a PAS de journal de consentement à protéger.** Un consentement
+ *    vit dans UNE colonne `User.*ConsentAt` (`PURPOSE_COLUMN`), écrasée à
+ *    chaque `PUT` ; `schema.prisma` ne porte aucune table d'historique, et le
+ *    doc-comment de module dit que la versionner reste hors périmètre. Une
+ *    rafale ne peut donc pas polluer la preuve d'un choix : elle réécrit un
+ *    horodatage que seule la DERNIÈRE valeur porte.
+ * 2. **Rien ne part vers un tiers, et rien n'est créé.** Le `PUT` fait deux
+ *    requêtes Prisma sur la ligne de L'APPELANT, sans e-mail, sans push, sans
+ *    diffusion, sans ligne nouvelle. L'abus que le côté fermé préviendrait est
+ *    auto-adressé et ne survit pas à la panne.
+ * 3. **Ce `PUT` est le coupe-circuit de l'utilisateur.** `granted: false` met
+ *    la colonne à `null`, et `ConsentValidationService` lit exactement ces
+ *    colonnes pour autoriser (ou refuser) le traitement audio et le clonage
+ *    vocal. Répondre 500 à un RETRAIT pendant une panne Redis laisse tourner
+ *    le traitement sous un consentement que la personne est en train
+ *    d'enlever, sans trace de sa tentative.
+ *
+ * C'est la forme que le dépôt nomme déjà `'ouvert'` : on n'enferme pas
+ * quelqu'un dans un appel qu'il ne peut plus quitter (`ROUTE_RATE_LIMITS`,
+ * `middleware/rate-limit.ts`), on ne laisse pas un intrus connecté
+ * (`routes/auth/revoke-all-sessions.ts`). Le `read` suit le `write` : lui
+ * répondre 500 couperait l'écran qui AFFICHE les consentements au moment
+ * précis où l'on cherche à en retirer un.
+ *
+ * **Ce choix se repèse le jour où un HISTORIQUE de consentement est ajouté au
+ * schéma** — une table qui accumule une ligne par bascule ferait de la mesure
+ * 1 son contraire, et le côté fermé redeviendrait le bon.
  */
 function consentRateLimitConfig(usage: 'read' | 'write') {
   const max = usage === 'read' ? 120 : 20;
@@ -188,6 +232,7 @@ function consentRateLimitConfig(usage: 'read' | 'write') {
     max,
     timeWindow,
     hook: 'preHandler' as const,
+    skipOnError: true,
     keyGenerator: (request: FastifyRequest) => {
       const userId = request.auth?.userId;
       return userId ? `consents:${usage}:${userId}` : `consents:${usage}:ip:${request.ip}`;
@@ -218,6 +263,54 @@ const derivedSchema = {
     canTranscribeAudio: { type: 'boolean' },
     canTranslateAudio: { type: 'boolean' },
     canUseVoiceCloning: { type: 'boolean' },
+  },
+} as const;
+
+/**
+ * ## Pourquoi un refus doit DÉCLARER ce qu'il ajoute (#4487)
+ *
+ * `sendError` étale `details` à la RACINE de l'enveloppe, et
+ * fast-json-stringify RETIRE en silence toute propriété que le schéma de
+ * réponse ne déclare pas. Un champ d'appoint non déclaré est donc calculé,
+ * passé, sérialisé — puis jeté au dernier mètre : le serveur savait quel
+ * champ manquait et n'avait aucun moyen de le dire. C'est ce silence qui a
+ * fait conclure à tort à une route cassée pendant la vérification de #4348.
+ *
+ * L'enveloppe reste à site UNIQUE (`errorResponseSchema`) : on l'ÉTEND, on ne
+ * la recopie pas — recopier l'aurait figée au jour de ce lot. Et la forme
+ * déclarée est celle que Zod émet RÉELLEMENT, jamais une projection maison :
+ * une seconde forme divergerait de la première au premier changement de
+ * version de Zod, et `path` seul ne dit pas tout (une clé refusée par
+ * `.strict()` vit dans `keys`, `path` restant vide).
+ */
+
+const badRequestResponseSchema = {
+  ...errorResponseSchema,
+  properties: {
+    ...errorResponseSchema.properties,
+    issues: {
+      type: 'array',
+      items: zodIssueSchema,
+      description: 'Une entrée par champ refusé par le schéma du corps',
+    },
+    allowedPurposes: {
+      type: 'array',
+      items: { type: 'string', enum: [...CONSENT_PURPOSES] },
+      description: "Les purpose acceptés, quand celui de l'URL est inconnu",
+    },
+  },
+} as const;
+
+const policyConflictResponseSchema = {
+  ...errorResponseSchema,
+  properties: {
+    ...errorResponseSchema.properties,
+    expectedPolicyVersion: {
+      type: 'string',
+      description:
+        'La version EN VIGUEUR, lisible par une machine : un client dont la ' +
+        'constante a dérivé se recale sans relire GET /me/consents.',
+    },
   },
 } as const;
 
@@ -340,10 +433,10 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
               data: consentEntrySchema,
             },
           },
-          400: errorResponseSchema,
+          400: badRequestResponseSchema,
           401: errorResponseSchema,
           404: errorResponseSchema,
-          409: errorResponseSchema,
+          409: policyConflictResponseSchema,
           429: errorResponseSchema,
           500: errorResponseSchema,
         },
@@ -359,6 +452,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       if (!isConsentPurpose(purpose)) {
         return sendBadRequest(reply, 'UNKNOWN_CONSENT_PURPOSE', {
           message: `purpose doit être l'un de : ${CONSENT_PURPOSES.join(', ')}`,
+          details: { allowedPurposes: [...CONSENT_PURPOSES] },
         });
       }
 
@@ -367,18 +461,43 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
         body = PutConsentBodySchema.parse(request.body);
       } catch (error) {
         if (error instanceof z.ZodError) {
+          // #4487 — `issues`, étalé à la racine par `details`, et déclaré
+          // par `badRequestResponseSchema`, monté sur le 400 de cette route.
+          //
+          // `details` est étalé à la RACINE de l'enveloppe, et
+          // `fast-json-stringify` retire toute propriété que le schéma de
+          // réponse ne déclare PAS. Le serveur savait exactement quel champ
+          // manquait, le sérialisait, et le jetait — l'appelant recevait
+          // `{"error":"VALIDATION_ERROR","message":"VALIDATION_ERROR"}`, sans
+          // rien. Ce n'est pas théorique : c'est ce qui m'a fait conclure à
+          // tort à une route cassée en vérifiant #4348 sur staging, alors
+          // qu'il manquait seulement `policyVersion` au corps.
+          //
+          // La correction a donc DEUX moitiés, et une seule ne sert à rien :
+          // le schéma déclare `issues` (avec `zodIssueSchema`), et le
+          // handler sert `issues`. Ce site a servi `violations` pendant un
+          // temps — la clé générique de l'enveloppe — pendant que le schéma
+          // déclarait déjà la forme riche : le corps servi ne portait alors
+          // ni l'un ni l'autre au complet, et les trois témoins du fichier
+          // `consents-refus-motive.test.ts` étaient rouges.
+          //
+          // La forme est celle de Zod, RÉELLE et non supposée : `path` est
+          // un TABLEAU (le témoin le compare à `['policyVersion']`), et une
+          // clé refusée par `strict` laisse `path` vide en nommant la clé
+          // dans `keys` — deux faits mesurés, pas déduits.
           return sendBadRequest(reply, 'VALIDATION_ERROR', {
-            details: { issues: error.issues },
+            details: { issues: issuesServies(error.issues) },
           });
         }
         throw error;
       }
 
       if (body.policyVersion !== CONSENT_POLICY_VERSION) {
-        return sendConflict(reply, 'CONSENT_POLICY_VERSION_MISMATCH', {
+        return sendError(reply, 409, 'CONSENT_POLICY_VERSION_MISMATCH', {
           message:
             `La politique de confidentialité a changé (version en vigueur : ` +
             `${CONSENT_POLICY_VERSION}) — relire GET /me/consents avant de renvoyer ce PUT.`,
+          details: { expectedPolicyVersion: CONSENT_POLICY_VERSION },
         });
       }
 

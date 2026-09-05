@@ -2,10 +2,12 @@ package me.meeshy.sdk.conversation
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import java.time.Instant
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
@@ -31,6 +33,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -56,6 +59,27 @@ private class FakeMessageApi(
         lastLimit = limit
         return if (before != null) olderResponse else response
     }
+
+    // #5188 — [MessageCacheSource.revalidate] now always goes through the
+    // conditional call for its recent-window fetch; this fake never simulates
+    // a 304 (no existing test here holds a validator), so it always answers
+    // 200 with the SAME body [list] would have returned.
+    override suspend fun listConditional(
+        conversationId: String,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiMessage>>> =
+        retrofit2.Response.success(list(conversationId, null, null, null))
+
+    // #5206 — [MessageCacheSource.revalidate] now checks for a local
+    // high-water mark FIRST; refusing here (rather than silently answering
+    // "nothing new") makes it fall back to [listConditional] within the SAME
+    // call — the exact full-window path every test using this fake already
+    // exercises and asserts against, so their SECOND `refresh()` call (once
+    // Room holds a high-water mark from the first) still reaches the
+    // response the test actually set up.
+    override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
     override suspend fun send(conversationId: String, body: SendMessageRequest) =
         ApiResponse<ApiMessage>(success = false)
     override suspend fun edit(messageId: String, body: EditMessageRequest) =
@@ -67,6 +91,136 @@ private class FakeMessageApi(
         ApiResponse<Unit>(success = true)
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = true)
+}
+
+/**
+ * Simulates the gateway's ETag/If-None-Match contract for the recent-message
+ * window (`sendWithETag`, `services/gateway/src/routes/conversations/
+ * messages-list.ts:825-829`): the validator is a pure function of [served]'s
+ * current content, so the SAME request against an UNCHANGED [served] always
+ * recomputes the SAME validator — which is what makes `If-None-Match` match
+ * and a 304 possible. [served] is mutable so a test can simulate the server
+ * changing between two `revalidate()` calls. #5188.
+ */
+private class EtagAwareMessageApi(
+    var served: List<ApiMessage>,
+) : MessageApi {
+    val calls: MutableList<String?> = mutableListOf()
+
+    override suspend fun list(conversationId: String, offset: Int?, limit: Int?, before: String?) =
+        ApiResponse(success = true, data = served)
+
+    override suspend fun listConditional(
+        conversationId: String,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiMessage>>> {
+        calls += ifNoneMatch
+        val envelope = ApiResponse(success = true, data = served)
+        val etag = "\"${envelope.hashCode()}\""
+        return if (ifNoneMatch != null && ifNoneMatch == etag) {
+            retrofit2.Response.error(
+                "".toResponseBody(null),
+                messagesNotModifiedRawResponse(),
+            )
+        } else {
+            retrofit2.Response.success(envelope, okhttp3.Headers.headersOf("ETag", etag))
+        }
+    }
+
+    // #5206 — refusing (see [FakeMessageApi.listAfter]'s doc-comment for why
+    // this is the safe default) makes a SECOND `refresh()` call — once Room
+    // holds a high-water mark from the first — fall back to the SAME
+    // full-window/[listConditional] path every existing test using this fake
+    // already exercises.
+    override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
+        me.meeshy.sdk.model.MessagesApiResponse(success = false)
+
+    override suspend fun send(conversationId: String, body: SendMessageRequest) =
+        ApiResponse<ApiMessage>(success = false)
+    override suspend fun edit(messageId: String, body: EditMessageRequest) =
+        ApiResponse<ApiMessage>(success = false)
+    override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
+    override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<ApiMessage>>(success = false)
+    override suspend fun pin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun unpin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = false)
+}
+
+/**
+ * A raw 304 `okhttp3.Response` — [retrofit2.Response]'s `(Int, ResponseBody)`
+ * error factory REQUIRES `code >= 400` (Retrofit's own precondition), so a 304
+ * must go through the raw-response overload instead. #5188.
+ */
+private fun messagesNotModifiedRawResponse(): okhttp3.Response =
+    okhttp3.Response.Builder()
+        .code(304)
+        .message("Not Modified")
+        .protocol(okhttp3.Protocol.HTTP_1_1)
+        .request(okhttp3.Request.Builder().url("http://localhost/").build())
+        .build()
+
+/**
+ * Simulates the gateway's forward-watermark gap backfill (#5206,
+ * `services/gateway/src/routes/conversations/messages-list.ts:112, 228-232,
+ * 370-372, 505-529`): `after` filters `createdAt > after`, ascending,
+ * `cursorPagination.hasMore` computed from a `limit + 1` probe (trimmed
+ * before being counted). [listConditionalCalls] tracks how often the
+ * FULL-WINDOW ([MessageApi.listConditional]) path fires — #5206's core claim
+ * is that a successful gap sweep never needs it, and never sends the
+ * full-window's own `ETag` (structurally impossible here: [listAfter] takes
+ * no `If-None-Match` parameter at all).
+ */
+private class GapAwareMessageApi(
+    var served: List<ApiMessage>,
+) : MessageApi {
+    data class AfterCall(val after: String, val limit: Int?)
+
+    val listAfterCalls: MutableList<AfterCall> = mutableListOf()
+    var listConditionalCalls: Int = 0
+
+    override suspend fun list(conversationId: String, offset: Int?, limit: Int?, before: String?) =
+        ApiResponse(success = true, data = served)
+
+    override suspend fun listConditional(
+        conversationId: String,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiMessage>>> {
+        listConditionalCalls += 1
+        return retrofit2.Response.success(ApiResponse(success = true, data = served))
+    }
+
+    override suspend fun listAfter(conversationId: String, after: String, limit: Int?): me.meeshy.sdk.model.MessagesApiResponse {
+        listAfterCalls += AfterCall(after, limit)
+        val afterMillis = Instant.parse(after).toEpochMilli()
+        val appliedLimit = limit ?: 20
+        val matching = served
+            .filter { Instant.parse(it.createdAt!!).toEpochMilli() > afterMillis }
+            .sortedBy { Instant.parse(it.createdAt!!).toEpochMilli() }
+        val page = matching.take(appliedLimit)
+        return me.meeshy.sdk.model.MessagesApiResponse(
+            success = true,
+            data = page,
+            cursorPagination = me.meeshy.sdk.model.CursorPagination(
+                nextCursor = null,
+                hasMore = matching.size > appliedLimit,
+                limit = appliedLimit,
+            ),
+        )
+    }
+
+    override suspend fun send(conversationId: String, body: SendMessageRequest) =
+        ApiResponse<ApiMessage>(success = false)
+    override suspend fun edit(messageId: String, body: EditMessageRequest) =
+        ApiResponse<ApiMessage>(success = false)
+    override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
+    override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<ApiMessage>>(success = false)
+    override suspend fun pin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun unpin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = false)
 }
 
 private class FakeTranslationApi(
@@ -104,6 +258,9 @@ private const val T2 = "2026-06-01T11:00:00Z"
 private const val T3 = "2026-06-01T12:00:00Z"
 private const val T4 = "2026-06-01T13:00:00Z"
 
+/** A strictly increasing timestamp for [seconds] — #5189's bounded-window tests. */
+private fun isoAt(seconds: Int): String = Instant.ofEpochSecond(seconds.toLong()).toString()
+
 private val sender = MeeshyUser(id = "me", username = "atabeth", displayName = "Atabeth")
 
 @RunWith(RobolectricTestRunner::class)
@@ -140,6 +297,14 @@ class MessageRepositoryTest {
 
     private suspend fun sentRequest(lane: String): SendMessageRequest =
         MeeshyApi.json.decodeFromString<SendMessageRequest>(outbox.deliverable(lane).last().payload)
+
+    /** Unwraps a [CacheResult]'s carried value, empty for [CacheResult.Empty] — #5189 tests. */
+    private fun CacheResult<List<LocalMessage>>.valueOrEmpty(): List<LocalMessage> = when (this) {
+        is CacheResult.Fresh -> value
+        is CacheResult.Stale -> value
+        is CacheResult.Syncing -> value.orEmpty()
+        CacheResult.Empty -> emptyList()
+    }
 
     @Test
     fun `requestTranslation stores the returned translation and reports success`() = runTest {
@@ -307,6 +472,217 @@ class MessageRepositoryTest {
         assertThat(thrown).isInstanceOf(MessageSyncException::class.java)
     }
 
+    /**
+     * #5188 — the FIRST revalidate ever for this conversation (no held
+     * `etag`) must not send `If-None-Match` at all.
+     */
+    @Test
+    fun `the first-ever refresh sends no If-None-Match`() = runTest {
+        val api = EtagAwareMessageApi(served = listOf(apiMessage("m1")))
+        val repo = repository(api)
+
+        repo.refresh("c1")
+
+        assertThat(api.calls).hasSize(1)
+        assertThat(api.calls.single()).isNull()
+    }
+
+    /**
+     * #5188 — core witness. A first refresh primes a real `ETag`. Repeating
+     * the exact same refresh against an UNCHANGED server must get a 304: the
+     * second call sends `If-None-Match`, no body is ever decoded, and NOTHING
+     * is written to the `messages` table — proven by the seeded row's
+     * `cachedAt` staying byte-identical (an upsert, even of identical
+     * content, would bump it). Freshness (`lastSyncedAt`) DOES advance — a
+     * 304 is still a successful revalidation.
+     */
+    @Test
+    fun `refresh with a held validator and an unchanged server gets a 304 and writes nothing`() = runTest {
+        val api = EtagAwareMessageApi(served = listOf(apiMessage("m1", createdAt = T1)))
+        val repo = repository(api)
+
+        repo.refresh("c1") // primes a real ETag
+        val etagAfterPriming = db.syncMetaDao().etag("messages:c1")
+        assertThat(etagAfterPriming).isNotNull()
+        val cachedAtBeforeSecondCall = db.messageDao().find("m1")?.cachedAt
+        val lastSyncedAtBeforeSecondCall = db.syncMetaDao().observe("messages:c1").first()!!
+
+        repo.refresh("c1") // repeat — server unchanged, must 304
+
+        assertThat(api.calls).hasSize(2)
+        assertThat(api.calls[1]).isEqualTo(etagAfterPriming)
+        assertThat(db.messageDao().find("m1")?.cachedAt).isEqualTo(cachedAtBeforeSecondCall)
+        assertThat(db.syncMetaDao().etag("messages:c1")).isEqualTo(etagAfterPriming)
+        assertThat(db.syncMetaDao().observe("messages:c1").first()).isGreaterThan(lastSyncedAtBeforeSecondCall)
+    }
+
+    /**
+     * #5188 — the server DID change between two refreshes: the second call
+     * gets 200 (not 304), the stored `ETag` is REPLACED, and Room reflects
+     * the new content.
+     */
+    @Test
+    fun `refresh when the server changed gets 200, a replaced validator, and updates Room`() = runTest {
+        val api = EtagAwareMessageApi(served = listOf(apiMessage("m1", createdAt = T1)))
+        val repo = repository(api)
+        repo.refresh("c1") // primes an ETag
+        val etagBefore = db.syncMetaDao().etag("messages:c1")
+        assertThat(etagBefore).isNotNull()
+
+        api.served = listOf(apiMessage("m1", createdAt = T1), apiMessage("m2", createdAt = T2))
+        repo.refresh("c1")
+
+        val etagAfter = db.syncMetaDao().etag("messages:c1")
+        assertThat(etagAfter).isNotEqualTo(etagBefore)
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1", "m2")
+    }
+
+    /**
+     * Seeds a held row directly into Room, bypassing `revalidate()` — the
+     * "already-held window" this whole family of tests must never re-fetch.
+     */
+    private fun heldMessageEntity(id: String, createdAt: String) =
+        me.meeshy.core.database.entity.MessageEntity(
+            id = id,
+            conversationId = "c1",
+            seq = null,
+            payload = MeeshyApi.json.encodeToString(apiMessage(id, createdAt = createdAt)),
+            createdAt = Instant.parse(createdAt).toEpochMilli(),
+            cachedAt = Instant.parse(createdAt).toEpochMilli(),
+        )
+
+    /**
+     * #5206 — core witness. The client already holds m1/m2; the server also
+     * has m3 (the gap). ONE bounded `after=<m2's createdAt>` request must
+     * fill it, and the already-held window must never be re-requested: the
+     * fake's `listAfter` only ever returns what is STRICTLY newer than
+     * `after`, so a single call returning exactly the gap (never m1/m2)
+     * proves the held window was never asked for again.
+     */
+    @Test
+    fun `a gap of new messages is filled by one bounded after request without re-downloading the held window`() =
+        runTest {
+            val api = GapAwareMessageApi(
+                served = listOf(
+                    apiMessage("m1", createdAt = T1),
+                    apiMessage("m2", createdAt = T2),
+                    apiMessage("m3", createdAt = T3),
+                ),
+            )
+            db.messageDao().upsertAll(listOf(heldMessageEntity("m1", T1), heldMessageEntity("m2", T2)))
+            val repo = repository(api)
+
+            repo.refresh("c1")
+
+            assertThat(api.listAfterCalls).hasSize(1)
+            assertThat(api.listAfterCalls.single().after).isEqualTo(T2)
+            assertThat(api.listConditionalCalls).isEqualTo(0)
+            assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1", "m2", "m3")
+        }
+
+    /**
+     * #5206 — a gap sweep never deletes a local message. Both m1 (old) and
+     * m5 (the current high-water mark) are held directly; the gap sweep
+     * (`after=m5's createdAt`) only ever returns m6. Neither original
+     * survivor was even IN the fetched page — proving the sweep's own write
+     * path never ran a delete of any kind, windowed or not.
+     */
+    @Test
+    fun `a gap sweep never deletes a local message`() = runTest {
+        val api = GapAwareMessageApi(
+            served = listOf(apiMessage("m1", createdAt = T1), apiMessage("m5", createdAt = "2026-06-01T14:00:00Z"), apiMessage("m6", createdAt = "2026-06-01T15:00:00Z")),
+        )
+        db.messageDao().upsertAll(
+            listOf(heldMessageEntity("m1", T1), heldMessageEntity("m5", "2026-06-01T14:00:00Z")),
+        )
+        val repo = repository(api)
+
+        repo.refresh("c1")
+
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1", "m5", "m6")
+    }
+
+    /**
+     * #5206 — the dominant "caught up, nothing missed" case. The gap sweep
+     * confirms zero new messages: this must write NOTHING to Room at all —
+     * proven by the held row's `cachedAt` staying byte-identical (an
+     * upsert, even of identical content, would bump it) and `lastSyncedAt`
+     * staying untouched too.
+     */
+    @Test
+    fun `an empty after response makes zero Room writes`() = runTest {
+        val api = GapAwareMessageApi(served = listOf(apiMessage("m1", createdAt = T1)))
+        db.messageDao().upsertAll(listOf(heldMessageEntity("m1", T1)))
+        val repo = repository(api)
+        val cachedAtBefore = db.messageDao().find("m1")?.cachedAt
+        val lastSyncedAtBefore = db.syncMetaDao().observe("messages:c1").first()
+
+        repo.refresh("c1")
+
+        assertThat(api.listAfterCalls).hasSize(1)
+        assertThat(db.messageDao().find("m1")?.cachedAt).isEqualTo(cachedAtBefore)
+        assertThat(db.syncMetaDao().observe("messages:c1").first()).isEqualTo(lastSyncedAtBefore)
+    }
+
+    /**
+     * #5206 — the full-window `ETag` from #5188 must never be sent on an
+     * `after` request: a DIFFERENT request shape entirely, whose validator
+     * (if any existed for it) would never match anyway. Proven here by the
+     * strongest available signal — the full-window/[listConditional] path is
+     * never even CALLED when the gap sweep succeeds, so the stored `etag`
+     * never gets a chance to be sent at all.
+     */
+    @Test
+    fun `the full-window ETag validator is not sent on an after request`() = runTest {
+        val api = GapAwareMessageApi(served = listOf(apiMessage("m1", createdAt = T1), apiMessage("m2", createdAt = T2)))
+        db.messageDao().upsertAll(listOf(heldMessageEntity("m1", T1)))
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                "messages:c1",
+                System.currentTimeMillis(),
+                null,
+                "\"stale-full-window-etag\"",
+                null,
+            ),
+        )
+        val repo = repository(api)
+
+        repo.refresh("c1")
+
+        assertThat(api.listConditionalCalls).isEqualTo(0)
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1", "m2")
+    }
+
+    /**
+     * #5206 direction-of-failure — a malformed/refused gap sweep (here:
+     * `cursorPagination` absent, so `hasMore` cannot be proven either way)
+     * falls back to the full window WITHIN THE SAME CALL rather than
+     * throwing: the user still gets a successful revalidation this tick.
+     */
+    @Test
+    fun `a malformed after response falls back to the full window in the same call`() = runTest {
+        val api = object : MessageApi by GapAwareMessageApi(served = emptyList()) {
+            override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
+                me.meeshy.sdk.model.MessagesApiResponse(success = true, data = emptyList(), cursorPagination = null)
+            override suspend fun listConditional(conversationId: String, ifNoneMatch: String?) =
+                retrofit2.Response.success(
+                    ApiResponse(success = true, data = listOf(apiMessage("m2", createdAt = T2))),
+                )
+        }
+        db.messageDao().upsertAll(listOf(heldMessageEntity("m1", T1)))
+        val repo = repository(api)
+
+        repo.refresh("c1")
+
+        // The fallback reached the full window and persisted its content —
+        // m1 legitimately survives too: the full-window response here only
+        // returned m2, so the windowed prune's fetched-window floor sits AT
+        // m2's createdAt, and m1 (older, outside that narrow window) is
+        // untouched by design (`MessageDao.deleteMissingSince`'s own
+        // contract) — the point of this test is that m2 arrived at all.
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1", "m2")
+    }
+
     @Test
     fun `sendOptimistic shows a SENDING bubble instantly and queues the outbox`() = runTest {
         val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
@@ -332,6 +708,35 @@ class MessageRepositoryTest {
         assertThat(request.isViewOnce).isNull()
         assertThat(request.ephemeralDuration).isNull()
         assertThat(request.expiresAt).isNull()
+    }
+
+    /**
+     * **Le corps envoye porte un `clientMessageId` au format que le gateway
+     * EXIGE** (#4624).
+     *
+     * Le temoin voisin epingle `request.clientMessageId == cmid` : la coherence
+     * du client AVEC LUI-MEME, vraie quel que soit le prefixe. Il est reste
+     * vert pendant que TOUT envoi Android etait rejete en 400. Ce qui manquait
+     * est le FORMAT, et il appartient au serveur — les trois portes le
+     * declarent a l'identique :
+     * `routes/conversations/messages-send.ts:56` (REST),
+     * `validation/socket-event-schemas.ts:24` (socket),
+     * `routes/links/types.ts:99` (lien anonyme).
+     *
+     * Le litteral est RECOPIE plutot que derive d'`OutboxIds` : une constante
+     * partagee avec la source ferait passer ce temoin par construction, et
+     * c'est justement la construction qui etait fausse.
+     */
+    @Test
+    fun `sendOptimistic puts a gateway-shaped clientMessageId on the wire`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val serverContract =
+            "^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        assertThat(sentRequest("message:c1").clientMessageId).matches(serverContract)
+        assertThat(cmid).matches(serverContract)
     }
 
     @Test
@@ -586,6 +991,61 @@ class MessageRepositoryTest {
         assertThat(request.forwardedFromConversationId).isEqualTo("c1")
     }
 
+    @Test
+    fun `sendOptimistic story replies carry the storyReplyToId on the bubble and the queued request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            conversationId = "c1",
+            content = "check this out",
+            originalLanguage = "fr",
+            sender = sender,
+            storyReplyToId = "story-1",
+        )
+
+        val bubble = cachedMessage(cmid)
+        assertThat(bubble.storyReplyToId).isEqualTo("story-1")
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isEqualTo("story-1")
+    }
+
+    @Test
+    fun `a non-story send carries no storyReplyToId`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isNull()
+        assertThat(cachedMessage(cmid).storyReplyToId).isNull()
+    }
+
+    @Test
+    fun `retrySend preserves the storyReplyToId when re-enqueuing from the cached payload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic(
+            conversationId = "c1",
+            content = "check this out",
+            originalLanguage = "fr",
+            sender = sender,
+            storyReplyToId = "story-1",
+        )
+        outbox.markSucceeded(cmid)
+        repo.markSendFailed(cmid)
+
+        repo.retrySend(cmid)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.storyReplyToId).isEqualTo("story-1")
+    }
+
     private suspend fun cachedMessage(id: String): ApiMessage =
         MeeshyApi.json.decodeFromString(db.messageDao().find(id)!!.payload)
 
@@ -824,6 +1284,52 @@ class MessageRepositoryTest {
         val thrown = runCatching { repo.loadOlder("c1") }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(MessageSyncException::class.java)
+    }
+
+    @Test
+    fun `messagesStream observes only a bounded recent window, not the whole synced history`() = runTest {
+        // 30 rows land inside a single recent-window fetch; #5189's bounded
+        // observe (MessageRepository.INITIAL_HISTORY_WINDOW) trims the
+        // OLDEST rows off, keeping the newest 30 — never the full 35 Room holds.
+        val api = FakeMessageApi(
+            response = ApiResponse(
+                success = true,
+                data = (1..35).map { i -> apiMessage("m$i", createdAt = isoAt(i)) },
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+
+        val observed = repo.messagesStream("c1").first().valueOrEmpty().map { it.message.id }
+
+        assertThat(observed).hasSize(30)
+        assertThat(observed).containsNoneOf("m1", "m2", "m3", "m4", "m5")
+        assertThat(observed).contains("m35")
+    }
+
+    @Test
+    fun `loadOlder extends the bounded window so newly-fetched older rows become visible`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(
+                success = true,
+                // The 30-row recent window, already at the bound.
+                data = (6..35).map { i -> apiMessage("m$i", createdAt = isoAt(i)) },
+            ),
+            olderResponse = ApiResponse(
+                success = true,
+                data = (1..5).map { i -> apiMessage("m$i", createdAt = isoAt(i)) },
+                pagination = Pagination(hasMore = false),
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+        val before = repo.messagesStream("c1").first().valueOrEmpty().map { it.message.id }
+        assertThat(before).doesNotContain("m5")
+
+        repo.loadOlder("c1")
+
+        val after = repo.messagesStream("c1").first().valueOrEmpty().map { it.message.id }
+        assertThat(after).containsAtLeast("m1", "m2", "m3", "m4", "m5")
     }
 
     @Test

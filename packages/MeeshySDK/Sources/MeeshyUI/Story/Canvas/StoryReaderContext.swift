@@ -27,19 +27,35 @@ public struct StoryReaderContext: Sendable {
     /// privés, seuls capables de suivre une timeline en cours d'édition.
     public let playerProvider: (any StoryCarrierPlayerProviding)?
 
+    /// **Le muet de cette surface est-il VERROUILLÉ ?** (#4084)
+    ///
+    /// `mute` dit l'ÉTAT, celui-ci dit s'il a le droit de changer. Les deux se
+    /// lisent ensemble, comme `ScenePlayerConfig.isMuted` et `locksMute` dont
+    /// il est la projection : une carte de fil est muette PAR CONSTRUCTION.
+    ///
+    /// Sans lui, le verrou n'existait qu'au niveau du PROP, et n'atteignait le
+    /// canvas qu'à la passe de rendu suivante. Entre les deux, la notification
+    /// diffusée `.storyComposerUnmuteCanvas` — postée `object: nil`, donc reçue
+    /// par TOUS les canvas montés — relevait le muet des cartes de fil restées
+    /// vivantes derrière un `fullScreenCover`. Le verrou était juste, testé, et
+    /// contournable.
+    public let locksMute: Bool
+
     public init(preferredLanguages: [String] = [],
                 mute: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 postMediaURLResolver: (@Sendable (String) -> URL?)? = nil,
                 imageCache: ImageCacheReader? = nil,
                 localAudioURLResolver: (@Sendable (String) -> URL?)? = nil,
-                playerProvider: (any StoryCarrierPlayerProviding)? = nil) {
+                playerProvider: (any StoryCarrierPlayerProviding)? = nil,
+                locksMute: Bool = false) {
         self.preferredLanguages = preferredLanguages
         self.mute = mute
         self.onCompletion = onCompletion
         self.postMediaURLResolver = postMediaURLResolver
         self.imageCache = imageCache
         self.localAudioURLResolver = localAudioURLResolver
+        self.locksMute = locksMute
         self.playerProvider = playerProvider
     }
 

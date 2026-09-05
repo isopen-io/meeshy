@@ -13,7 +13,7 @@ struct MediaCaptionOverlayTests {
 
     @Test("une légende plus courte que la limite n'est pas tronquée")
     func shortCaptionIsNotTruncated() {
-        let rendu = MediaCaptionOverlay.collapse("Trois petits mots", words: 10)
+        let rendu = MediaCaptionRule.collapse("Trois petits mots", words: 10)
         #expect(rendu.head == "Trois petits mots")
         #expect(rendu.isTruncated == false)
     }
@@ -21,7 +21,7 @@ struct MediaCaptionOverlayTests {
     @Test("exactement la limite ne déclenche PAS le dépliage")
     func exactlyAtLimitIsNotTruncated() {
         let dix = "un deux trois quatre cinq six sept huit neuf dix"
-        let rendu = MediaCaptionOverlay.collapse(dix, words: 10)
+        let rendu = MediaCaptionRule.collapse(dix, words: 10)
         #expect(rendu.head == dix)
         #expect(rendu.isTruncated == false)
     }
@@ -29,7 +29,7 @@ struct MediaCaptionOverlayTests {
     @Test("au-delà de la limite, on garde les 10 premiers mots et on signale la suite")
     func longCaptionKeepsFirstTenWords() {
         let onze = "un deux trois quatre cinq six sept huit neuf dix onze"
-        let rendu = MediaCaptionOverlay.collapse(onze, words: 10)
+        let rendu = MediaCaptionRule.collapse(onze, words: 10)
         #expect(rendu.head == "un deux trois quatre cinq six sept huit neuf dix")
         #expect(rendu.isTruncated == true)
     }
@@ -40,7 +40,7 @@ struct MediaCaptionOverlayTests {
     @Test("les blancs multiples et les sauts de ligne ne comptent pas pour des mots")
     func whitespaceRunsDoNotCountAsWords() {
         let aere = "un   deux\n\ntrois    quatre"
-        let rendu = MediaCaptionOverlay.collapse(aere, words: 10)
+        let rendu = MediaCaptionRule.collapse(aere, words: 10)
         #expect(rendu.isTruncated == false)
         #expect(rendu.head == aere)
     }
@@ -53,7 +53,7 @@ struct MediaCaptionOverlayTests {
     @Test("un texte sans blancs est rendu entier plutôt que coupé au hasard")
     func spacelessTextIsRenderedWhole() {
         let japonais = "今日はとてもいい天気ですから公園に行きましょう"
-        let rendu = MediaCaptionOverlay.collapse(japonais, words: 10)
+        let rendu = MediaCaptionRule.collapse(japonais, words: 10)
         #expect(rendu.head == japonais)
         #expect(rendu.isTruncated == false)
     }
@@ -63,7 +63,7 @@ struct MediaCaptionOverlayTests {
     @Test("la tête tronquée ne finit pas par un blanc")
     func truncatedHeadHasNoTrailingWhitespace() {
         let long = "un deux trois quatre cinq six sept huit neuf dix    onze douze"
-        let rendu = MediaCaptionOverlay.collapse(long, words: 10)
+        let rendu = MediaCaptionRule.collapse(long, words: 10)
         #expect(rendu.head.hasSuffix("dix"))
     }
 
@@ -72,7 +72,7 @@ struct MediaCaptionOverlayTests {
     /// prétendre qu'il y a une suite.
     @Test("une légende vide n'est jamais tronquée")
     func emptyCaptionIsNeverTruncated() {
-        let rendu = MediaCaptionOverlay.collapse("   \n  ", words: 10)
+        let rendu = MediaCaptionRule.collapse("   \n  ", words: 10)
         #expect(rendu.isTruncated == false)
     }
 }
@@ -93,28 +93,28 @@ struct MediaCaptionOverlaySeuilTests {
 
     @Test("vingt mots sortent ENTIERS — au-dessus de la tête, sous le seuil")
     func vingtMotsEntiers() {
-        let rendu = MediaCaptionOverlay.collapse(mots(20), threshold: 30, head: 15)
+        let rendu = MediaCaptionRule.collapse(mots(20), threshold: 30, head: 15)
         #expect(rendu.isTruncated == false)
         #expect(rendu.head == mots(20))
     }
 
     @Test("exactement trente mots sortent entiers — le seuil est STRICT")
     func trenteMotsEntiers() {
-        let rendu = MediaCaptionOverlay.collapse(mots(30), threshold: 30, head: 15)
+        let rendu = MediaCaptionRule.collapse(mots(30), threshold: 30, head: 15)
         #expect(rendu.isTruncated == false)
     }
 
     @Test("trente-et-un mots se replient sur les QUINZE premiers, pas sur trente")
     func trenteEtUnRepliesSurQuinze() {
-        let rendu = MediaCaptionOverlay.collapse(mots(31), threshold: 30, head: 15)
+        let rendu = MediaCaptionRule.collapse(mots(31), threshold: 30, head: 15)
         #expect(rendu.isTruncated == true)
         #expect(rendu.head == mots(15))
     }
 
     @Test("les valeurs par défaut du composant portent la règle du porteur")
     func defautsDuPorteur() {
-        #expect(MediaCaptionOverlay.defaultWordThreshold == 30)
-        #expect(MediaCaptionOverlay.defaultWordHead == 15)
-        #expect(MediaCaptionOverlay.defaultWordHead < MediaCaptionOverlay.defaultWordThreshold)
+        #expect(MediaCaptionRule.wordThreshold == 30)
+        #expect(MediaCaptionRule.wordHead == 15)
+        #expect(MediaCaptionRule.wordHead < MediaCaptionRule.wordThreshold)
     }
 }

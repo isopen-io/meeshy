@@ -55,6 +55,7 @@ import java.time.ZoneId
 import java.util.Locale
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.NotificationBannerFraming
 import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.notificationTypeAccentHex
 import me.meeshy.ui.component.MeeshyAvatar
@@ -67,10 +68,25 @@ import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
+/**
+ * @param onOpenConversation Navigate to a conversation ([NotificationDestination.Conversation]).
+ * @param onOpenPost Navigate to a post/story/status detail ([NotificationDestination.Post]).
+ * @param onOpenReel Navigate to a réel, anchored at its id ([NotificationDestination.Reel]).
+ * @param onOpenStory Navigate to a user's story tray ([NotificationDestination.Story]).
+ * @param onOpenProfile Navigate to a user's profile ([NotificationDestination.Profile]).
+ *
+ * Every parameter defaults to a no-op so existing callers keep compiling; wiring them is what
+ * makes a row tap actually open its target (issue #4793).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsScreen(
     viewModel: NotificationsViewModel = hiltViewModel(),
+    onOpenConversation: (String) -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
+    onOpenReel: (String) -> Unit = {},
+    onOpenStory: (String) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -140,7 +156,16 @@ fun NotificationsScreen(
                                 }
                                 NotificationItem(
                                     notification = notification,
-                                    onTap = { viewModel.markAsRead(notification.id) },
+                                    onTap = {
+                                        viewModel.markAsRead(notification.id)
+                                        NotificationDestinationResolver.resolve(notification).dispatch(
+                                            onOpenConversation = onOpenConversation,
+                                            onOpenPost = onOpenPost,
+                                            onOpenReel = onOpenReel,
+                                            onOpenStory = onOpenStory,
+                                            onOpenProfile = onOpenProfile,
+                                        )
+                                    },
                                     onMarkRead = { viewModel.markAsRead(notification.id) },
                                     onDelete = { viewModel.deleteNotification(notification.id) },
                                 )
@@ -231,6 +256,16 @@ private fun NotificationItem(
 ) {
     val isUnread = !notification.state.isRead
     val accent = hexColor(notificationTypeAccentHex(notification.type))
+    // The formatted action phrase: the server's own title/subtitle when present, else the
+    // per-type fallback composed by NotificationBannerFraming — the SAME single source the
+    // in-app toast renders (see NotificationPresentationText.kt), so a message and its banner
+    // never disagree on what happened. `groupName: null` — this list has no local
+    // conversation-rename lookup, so it falls back to the server's conversation title.
+    val presentation = NotificationBannerFraming.present(
+        notification = notification,
+        groupName = null,
+        isDirect = notification.context?.conversationType.equals("direct", ignoreCase = true),
+    )
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -266,11 +301,11 @@ private fun NotificationItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = notification.actor?.displayName ?: notification.actor?.username
-                                ?: stringResource(R.string.notifications_system_sender),
+                            text = headlineText(presentation.headline),
                             style = MaterialTheme.typography.labelMedium,
                             color = MeeshyTheme.tokens.textPrimary,
                             fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 2,
                         )
                         if (isUnread) {
                             Spacer(Modifier.width(MeeshySpacing.sm))
@@ -282,11 +317,12 @@ private fun NotificationItem(
                             )
                         }
                     }
-                    notification.content?.let {
+                    presentationBodyText(presentation)?.let {
                         Text(
                             text = it,
                             style = MaterialTheme.typography.bodySmall,
                             color = MeeshyTheme.tokens.textSecondary,
+                            maxLines = 2,
                         )
                     }
                     notificationRowRelativeTime(notification)?.let { relativeTime ->

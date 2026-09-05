@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -51,6 +52,12 @@ fun MagicLinkValidateScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Cet ecran n'a pas de Scaffold : depuis que le Scaffold racine ne
+                // reserve plus les barres systeme (MeeshyApp.kt, contentWindowInsets
+                // a zero), il pose lui-meme son inset. Le fond reste PLEIN ECRAN,
+                // seul le CONTENU est retreci — c'est exactement la geometrie
+                // d'avant, le degrade en plus.
+                .systemBarsPadding()
                 .padding(horizontal = MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,

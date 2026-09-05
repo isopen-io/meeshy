@@ -46,6 +46,22 @@ class OutboxLaneMapTest {
     }
 
     @Test
+    fun `like and unlike share the social lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.LIKE_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UNLIKE_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+    }
+
+    @Test
+    fun `bookmark and unbookmark share the social lane`() {
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.BOOKMARK_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+        assertThat(OutboxLaneMap.assignmentFor(OutboxKind.UNBOOKMARK_POST))
+            .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.SOCIAL))
+    }
+
+    @Test
     fun `read receipt and mark-unread share the read-receipt lane`() {
         assertThat(OutboxLaneMap.assignmentFor(OutboxKind.READ_RECEIPT))
             .isEqualTo(OutboxLaneAssignment.Shared(OutboxLanes.READ_RECEIPT))

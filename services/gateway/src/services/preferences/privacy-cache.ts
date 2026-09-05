@@ -45,8 +45,22 @@
  *
  * Les échecs. `loadStoredPrivacyPreferences` ne rattrape rien et ce module non
  * plus : un incident transitoire de base ne doit pas figer un repli pour cinq
- * minutes. Chaque appelant garde son propre repli — tous « ouvert », tout le
- * monde reste visible — et la lecture suivante retente.
+ * minutes. Chaque appelant garde son propre repli, et la lecture suivante
+ * retente.
+ *
+ * **Le repli appartient à l'appelant, et il n'est pas le même partout** — cette
+ * phrase disait « tous « ouvert », tout le monde reste visible », ce qui décrit
+ * cinq appelants sur six et ne prescrit rien. Le discriminant, mesuré (#4530) :
+ *
+ * | ce que la préférence décide | repli | appelants |
+ * |---|---|---|
+ * | si un CHAMP part dans une charge qui part de toute façon | **ouvert** — se fermer priverait tout le monde d'un contenu sur la foi d'un incident | `PrivacyPreferencesService` (×2), `MessageReadStatusService._loadReadReceiptOptOuts`, `forward-source-visibility` (×2) |
+ * | à QUI la charge est adressée | **restrictif** — la room de l'acteur : il reste synchronisé, l'audience ne s'élargit pas | `routes/messages-writes.ts` (`attachment-status:updated`) |
+ *
+ * Et un appelant SANS repli à lui n'hérite pas d'un défaut raisonnable : il
+ * hérite du `catch` qui l'entoure. Celui de la diffusion ne se replie sur rien
+ * — il journalise et passe —, si bien qu'une lecture en échec faisait
+ * DISPARAÎTRE l'événement pendant que la route rendait 200.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';

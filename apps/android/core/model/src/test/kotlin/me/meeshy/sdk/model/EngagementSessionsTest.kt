@@ -157,4 +157,44 @@ class EngagementSessionsTest {
         assertThat(EngagementSessions.MIN_DWELL_MS).isEqualTo(1000L)
         assertThat(EngagementSessions.MIN_WATCH_MS).isEqualTo(2000L)
     }
+
+    // --- analytics-consent gate (iOS `EngagementTracker.begin` `guard consentProvider()`) --
+
+    @Test
+    fun `a begin without analytics consent opens no session and reports nothing`() {
+        val (next, view) = start
+            .begin(EngagementSurface.REELS, "r1", nowMs = 0, consentGranted = false)
+            .end(EngagementSurface.REELS, nowMs = 5000)
+
+        assertThat(view).isNull()
+        // No session was ever opened: the machine is unchanged from empty, so a
+        // non-consenting reader who dwells a full minute still enriches nothing.
+        assertThat(next).isEqualTo(start)
+    }
+
+    @Test
+    fun `a begin without consent does not pause the running session underneath`() {
+        // DETAIL runs (consented) from t0; a non-consented REELS "opens" at t600.
+        // The consent guard returns BEFORE the topmost-owns-the-clock pause, so
+        // DETAIL is never paused and keeps accruing across the whole span — the
+        // consented overlay case yields 1000 ms, this one yields the full 1200.
+        val sessions = start
+            .begin(EngagementSurface.DETAIL, "p1", nowMs = 0)
+            .begin(EngagementSurface.REELS, "r1", nowMs = 600, consentGranted = false)
+
+        val (afterReels, reelsView) = sessions.end(EngagementSurface.REELS, nowMs = 800)
+        assertThat(reelsView).isNull() // the non-consented REELS never had a session
+
+        val (_, detailView) = afterReels.end(EngagementSurface.DETAIL, nowMs = 1200)
+        assertThat(detailView).isEqualTo(QualifiedView("p1", dwellMs = 1200))
+    }
+
+    @Test
+    fun `an explicitly consented begin qualifies exactly like the default`() {
+        val (_, view) = start
+            .begin(EngagementSurface.REELS, "r1", nowMs = 0, consentGranted = true)
+            .end(EngagementSurface.REELS, nowMs = 1000)
+
+        assertThat(view).isEqualTo(QualifiedView("r1", dwellMs = 1000))
+    }
 }

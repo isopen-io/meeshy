@@ -382,9 +382,6 @@ struct ParticipantProfileSheet: View {
                 row(icon: "checkmark.seal", label: linkRequiresLabel, value: requirements.joined(separator: " · "))
             }
 
-            if !link.allowedCountries.isEmpty {
-                row(icon: "globe.europe.africa", label: linkCountriesLabel, value: link.allowedCountries.joined(separator: ", "))
-            }
 
             if !link.allowedLanguages.isEmpty {
                 row(icon: "character.bubble", label: linkLanguagesLabel, value: link.allowedLanguages.joined(separator: ", ").uppercased())
@@ -575,7 +572,6 @@ struct ParticipantProfileSheet: View {
     private var linkUsesLabel: String { String(localized: "participantProfile.linkUses", defaultValue: "Entrées", bundle: .main) }
     private var linkExpiresLabel: String { String(localized: "participantProfile.linkExpires", defaultValue: "Expire le", bundle: .main) }
     private var linkRequiresLabel: String { String(localized: "participantProfile.linkRequires", defaultValue: "Exige", bundle: .main) }
-    private var linkCountriesLabel: String { String(localized: "participantProfile.linkCountries", defaultValue: "Pays admis", bundle: .main) }
     private var linkLanguagesLabel: String { String(localized: "participantProfile.linkLanguages", defaultValue: "Langues admises", bundle: .main) }
     private var requireNicknameLabel: String { String(localized: "participantProfile.requireNickname", defaultValue: "pseudo", bundle: .main) }
     private var requireEmailLabel: String { String(localized: "participantProfile.requireEmail", defaultValue: "email", bundle: .main) }

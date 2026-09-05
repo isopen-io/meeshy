@@ -210,7 +210,7 @@ struct ThemedFeedOverlay: View {
     private func postLikeViaREST(postId: String, like: Bool) async -> Bool {
         do {
             let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                endpoint: "/posts/\(postId)/like",
+                PostsEndpoint.byPostIdLike(postId: postId),
                 method: like ? "POST" : "DELETE"
             )
             return true
@@ -290,7 +290,7 @@ struct ThemedFeedOverlay: View {
             let ok: Bool = await {
                 do {
                     let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
-                        endpoint: "/posts/\(postId)/bookmark",
+                        PostsEndpoint.byPostIdBookmark(postId: postId),
                         method: wasBookmarked ? "DELETE" : "POST"
                     )
                     return true
@@ -357,11 +357,11 @@ struct ThemedFeedOverlay: View {
                 try await RepostPublisher.shared.publish(
                     .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
                 )
-                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "post.repost.label", defaultValue: "Repartage"))
             } catch {
                 postRepostedIds.remove(postId)
                 postRepostDelta[postId, default: 0] -= 1
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+                FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost"))
             }
         }
     }
@@ -627,7 +627,13 @@ struct ThemedFeedOverlay: View {
                 storyViewerCoordinator.present(
                     StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
                 )
-            }
+            },
+            // Ce fil AGRÈGE déjà les frames et élit une surface (`onPreferenceChange`
+            // plus bas) — il ne le REMETTAIT à aucune carte standard. Un repost de
+            // réel y restait donc sur son poster figé, et depuis le 2026-09-05 une
+            // scène y resterait en pause, pendant que le fil voisin (`FeedView`) les
+            // joue. Une élection tenue mais jamais servie ne se voit nulle part.
+            reelAutoplay: reelAutoplay
         )
     }
 

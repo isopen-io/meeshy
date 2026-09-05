@@ -154,9 +154,19 @@ public struct ComposerControlsLayer: View {
 
     @Environment(\.storyComposerToolRowLeadingAccessory) private var toolRowLeadingAccessory
 
+    /// **Le volet que le meuble pose sous la scène** (#4742) — la description
+    /// de la slide, repliable. `nil` quand aucun hôte n'en sert.
+    @Environment(\.storyComposerBelowCanvasAccessory) private var belowCanvasAccessory
+
     public var body: some View {
         VStack(spacing: 0) {
             Spacer()
+
+            // **Ce que le meuble pose sous la scène** (#4742) — la description
+            // de la slide. Elle vient AVANT la rangée d'outils : de haut en
+            // bas, le bas de l'écran descend les niveaux du modèle — la scène,
+            // puis la SLIDE (ce volet), puis ce qui fait entrer de la matière.
+            if let belowCanvasAccessory { belowCanvasAccessory.makeView() }
 
             // Barre d'outils horizontale — visible only when the band is hidden
             // (directive 2026-07-10 : outils en bas, centrés, à portée de pouce).

@@ -43,19 +43,27 @@ extension ConversationView {
     }
 
     func composerReplyBanner(_ reply: ReplyReference) -> some View {
-        HStack(spacing: 8) {
+        // Les faits du média cité — « 1024×768 · 0:42 · 1,2 Mo » —, résolus UNE
+        // fois : la ligne qui les montre et l'énoncé VoiceOver les partagent.
+        // `nil` pour un média protégé (règle partagée, site unique).
+        let quotedDetails = QuotedReplyPresentation.detailsLabel(for: reply)
+
+        return HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color(hex: reply.isMe ? accentColor : reply.authorColor))
                 .frame(width: 3, height: 36)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(composerReplyTitle(reply))
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
+                if let emoji = reply.moodEmoji {
+                    // Réponse à un mood : le titre garde sa ligne — l'aperçu
+                    // d'un mood n'est pas `previewText` seul, il porte l'emoji
+                    // et la date, que le flot ne saurait pas composer.
+                    Text(QuotedReplyPresentation.title(author: composerReplyTitle(reply)))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
+                        .lineLimit(QuotedReplyPresentation.titleLineLimit)
 
-                HStack(spacing: 4) {
-                    if let emoji = reply.moodEmoji {
-                        // Réponse à un mood : emoji + contenu entier + date.
+                    HStack(spacing: 4) {
                         Text(emoji)
                             .font(MeeshyFont.relative(12))
                         if let date = reply.storyPublishedAt {
@@ -67,28 +75,49 @@ extension ConversationView {
                             Text(reply.previewText)
                                 .font(MeeshyFont.relative(12))
                                 .foregroundColor(theme.textSecondary)
-                                .lineLimit(1)
+                                .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
                         }
-                    } else {
+                    }
+                } else {
+                    // **Le texte part du deux-points de l'auteur** (#5103),
+                    // troisième et dernière peau. Deux `Text` concaténés
+                    // coulent dans le même paragraphe ; le budget de coupure
+                    // est celui de la peau `composer` (2 lignes), lu à la
+                    // taille de texte du lecteur.
+                    HStack(alignment: .top, spacing: 4) {
                         if let attType = reply.attachmentType {
                             Image(systemName: composerReplyAttachmentIcon(attType))
                                 .font(MeeshyFont.relative(10, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
-                        Text(reply.previewText)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textSecondary)
-                            .lineLimit(1)
+
+                        ComposerQuotedFlow(
+                            title: QuotedReplyPresentation.title(author: composerReplyTitle(reply)),
+                            titleColor: Color(hex: reply.isMe ? accentColor : reply.authorColor),
+                            preview: reply.previewText,
+                            previewColor: theme.textSecondary)
                     }
+                }
+
+                // La miniature **sous l'auteur** (#5103). Elle vivait à gauche
+                // du bloc au titre de l'invariance de géographie entre les
+                // trois peaux (#4946) ; la directive déplace cette géographie,
+                // et les trois la suivent ensemble. Elle ne se dessine JAMAIS
+                // pour un média protégé — la garde vit dans
+                // `composerReplyAttachmentPreview`.
+                if let attType = reply.attachmentType {
+                    composerReplyAttachmentPreview(type: attType, reply: reply)
+                }
+
+                if let details = quotedDetails {
+                    Text(details)
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 }
             }
 
             Spacer()
-
-            // Rich attachment preview in composer reply banner
-            if let attType = reply.attachmentType {
-                composerReplyAttachmentPreview(type: attType, reply: reply)
-            }
 
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -116,7 +145,18 @@ extension ConversationView {
                 )
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "conversation.view.composer.reply_to", defaultValue: "Reponse a \(reply.isMe ? "vous" : reply.authorName): \(reply.previewText)", bundle: .main))
+        .accessibilityLabel(String(
+            localized: "conversation.view.composer.reply_to",
+            // « vous » etait un litteral Swift NU dans l'interpolation : la cle
+            // partait bien au catalogue, et son argument restait francais dans
+            // les six autres langues. `bubble.reply.you` porte deja ce mot,
+            // traduit, pour la bulle de reponse — meme mot, meme cle.
+            // Le SECOND argument porte l'aperçu ET les détails du média cité
+            // (« Photo, 800×600 · 0:05 ») : la citation ANNONCE ce qu'elle
+            // montre. La forme du catalogue reste à DEUX `%@` — en ajouter un
+            // troisième ferait diverger la clé de ses sept traductions.
+            defaultValue: "Réponse à \(reply.isMe ? String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) : reply.authorName) : \(QuotedReplyPresentation.spokenPreview(preview: reply.previewText, details: quotedDetails))",
+            bundle: .main))
     }
 
     // MARK: - Edit Banner
@@ -234,119 +274,158 @@ extension ConversationView {
     }
 
     // MARK: - Rich Attachment Preview for Reply Banner
+
+    /// L'aperçu du média cité, à gauche du bandeau de réponse.
+    ///
+    /// **Un média PROTÉGÉ n'a NI vignette, NI ThumbHash, NI ouverture plein
+    /// écran** (#4946). Les deux autres peaux le refusaient déjà
+    /// (`quotedMediaIsProtected`) ; ce bandeau, lui, affichait la vignette EN
+    /// CLAIR d'une photo à vue unique et l'ouvrait en plein écran au tap — sur
+    /// la surface même où l'auteur compose sa réponse, donc à chaque fois qu'il
+    /// répond. La protection se lit AVANT toute vignette : c'est la première
+    /// question, jamais un repli.
+    ///
+    /// **Le GENRE est résolu, jamais comparé à une chaîne brute.**
+    /// `attachmentType` porte le MIME (« image/jpeg ») sur le chemin de rendu
+    /// réel (`MessagePersistenceActor` y grave `mimeType`) et le rawValue court
+    /// (« image ») sur la bulle optimiste : le `switch` littéral d'origine
+    /// n'était vrai que sur la seconde, et le bandeau perdait sa vignette dès
+    /// que le serveur accusait. Même défaut, même correctif que le badge play
+    /// de la rangée plate.
     @ViewBuilder
     func composerReplyAttachmentPreview(type: String, reply: ReplyReference) -> some View {
         let accent = Color(hex: reply.isMe ? accentColor : reply.authorColor)
+        // Le flou instantané de la miniature — `nil` pour un média protégé.
+        let quotedThumbHash = QuotedReplyPresentation.thumbHash(for: reply)
 
-        switch type {
-        case "image":
-            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
-                CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40)) {
-                    accent.opacity(0.3)
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .onTapGesture {
-                    if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                        composerState.previewMedia = PreviewMedia(url: url, type: "image")
-                    }
-                }
-            }
-
-        case "video":
-            if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
-                ZStack {
-                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40)) {
+        if reply.quotedMediaIsProtected {
+            // Ni vignette, ni ThumbHash, ni zone tactile : le glyphe générique
+            // de la ligne d'aperçu et le placeholder du texte cité disent déjà
+            // ce qu'il y a à dire.
+            EmptyView()
+        } else if type == "location" {
+            composerReplyLocationTile
+        } else if let kind = BubbleQuotedReply.resolveAttachmentKind(type) {
+            switch kind {
+            case .image:
+                if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40), thumbHash: quotedThumbHash) {
                         accent.opacity(0.3)
                     }
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onTapGesture {
+                        if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
+                            composerState.previewMedia = PreviewMedia(url: url, type: "image")
+                        }
+                    }
+                }
 
-                    Image(systemName: "play.circle.fill")
-                        // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
-                        .font(.system(size: 18))
-                        .foregroundStyle(.white, .black.opacity(0.4))
+            case .video:
+                if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                    ZStack {
+                        CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40), thumbHash: quotedThumbHash) {
+                            accent.opacity(0.3)
+                        }
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        Image(systemName: "play.circle.fill")
+                            // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
+                            .font(.system(size: 18))
+                            .foregroundStyle(.white, .black.opacity(0.4))
+                            .accessibilityHidden(true)
+                    }
+                    .onTapGesture {
+                        if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
+                            composerState.previewMedia = PreviewMedia(url: url, type: "video")
+                        }
+                    }
+                } else {
+                    replyAttachmentFallbackBadge(icon: "video.fill", color: accent)
+                }
+
+            case .audio:
+                HStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                        // Doctrine 86i : glyphe décoratif du badge audio (waveform) → figé + masqué.
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(accent.opacity(0.6))
                         .accessibilityHidden(true)
-                }
-                .onTapGesture {
-                    if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                        composerState.previewMedia = PreviewMedia(url: url, type: "video")
+
+                    HStack(spacing: 1.5) {
+                        ForEach(0..<8, id: \.self) { i in
+                            let h: CGFloat = [0.4, 0.7, 0.5, 1.0, 0.6, 0.9, 0.3, 0.5][i]
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(accent.opacity(0.35))
+                                .frame(width: 2, height: 4 + 16 * h)
+                        }
                     }
+                    .frame(height: 22)
                 }
-            } else {
-                replyAttachmentFallbackBadge(icon: "video.fill", color: accent)
-            }
-
-        case "audio":
-            HStack(spacing: 4) {
-                Image(systemName: "play.fill")
-                    // Doctrine 86i : glyphe décoratif du badge audio (waveform) → figé + masqué.
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(accent.opacity(0.6))
-                    .accessibilityHidden(true)
-
-                HStack(spacing: 1.5) {
-                    ForEach(0..<8, id: \.self) { i in
-                        let h: CGFloat = [0.4, 0.7, 0.5, 1.0, 0.6, 0.9, 0.3, 0.5][i]
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(accent.opacity(0.35))
-                            .frame(width: 2, height: 4 + 16 * h)
-                    }
-                }
-                .frame(height: 22)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(accent.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(accent.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-            .onTapGesture {
-                if let thumbUrl = reply.attachmentThumbnailUrl, let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                    composerState.previewMedia = PreviewMedia(url: url, type: "audio")
-                }
-            }
-
-        case "location":
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.success.opacity(0.15), MeeshyColors.success.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(accent.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(accent.opacity(0.15), lineWidth: 0.5)
                         )
-                    )
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(MeeshyColors.success.opacity(0.2), lineWidth: 0.5)
-                    )
-
-                VStack(spacing: 1) {
-                    Image(systemName: "mappin.circle.fill")
-                        // Doctrine 86i : glyphe décoratif borné par la vignette fixe 40×40 → figé + masqué.
-                        .font(.system(size: 18))
-                        .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(0.2))
-                        .accessibilityHidden(true)
-                    Circle()
-                        .fill(MeeshyColors.success.opacity(0.3))
-                        .frame(width: 6, height: 3)
-                        .scaleEffect(x: 1.8, y: 1)
+                )
+                .onTapGesture {
+                    if let thumbUrl = reply.attachmentThumbnailUrl, let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
+                        composerState.previewMedia = PreviewMedia(url: url, type: "audio")
+                    }
                 }
+
+            case .pdf, .spreadsheet, .document, .presentation,
+                 .archive, .code, .text, .other:
+                // Documents, archives, code, texte, inconnu : le glyphe de
+                // FAMILLE de la source de vérité partagée, jamais un `doc.fill`
+                // gravé ici — un tableur cité montre son icône de tableur. Les
+                // onze cas sont énumérés SANS `default` : une famille neuve
+                // oblige à décider de son badge, elle ne se range pas en
+                // silence sous le repli du voisin.
+                replyAttachmentFallbackBadge(icon: kind.sfSymbolName, color: MeeshyColors.info)
             }
-
-        case "file":
-            replyAttachmentFallbackBadge(icon: "doc.fill", color: MeeshyColors.info)
-
-        default:
+        } else {
             EmptyView()
+        }
+    }
+
+    /// La tuile de LIEU cité. Hors du `switch` par genre : « location » n'est
+    /// pas une famille d'`AttachmentKind` (elle décrit un lieu, pas un
+    /// fichier), et seule la bulle optimiste pose ce rawValue.
+    private var composerReplyLocationTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    LinearGradient(
+                        colors: [MeeshyColors.success.opacity(0.15), MeeshyColors.success.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 40, height: 40)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(MeeshyColors.success.opacity(0.2), lineWidth: 0.5)
+                )
+
+            VStack(spacing: 1) {
+                Image(systemName: "mappin.circle.fill")
+                    // Doctrine 86i : glyphe décoratif borné par la vignette fixe 40×40 → figé + masqué.
+                    .font(.system(size: 18))
+                    .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(0.2))
+                    .accessibilityHidden(true)
+                Circle()
+                    .fill(MeeshyColors.success.opacity(0.3))
+                    .frame(width: 6, height: 3)
+                    .scaleEffect(x: 1.8, y: 1)
+            }
         }
     }
 
@@ -365,5 +444,43 @@ extension ConversationView {
                 .foregroundColor(color.opacity(0.7))
                 .accessibilityHidden(true)
         }
+    }
+}
+
+/// **Le nom, son deux-points, puis le texte — UN seul paragraphe** (#5103),
+/// pour le bandeau de réponse du composeur.
+///
+/// **Une VUE plutôt qu'une fonction d'extension, et c'est le budget qui le
+/// décide.** La coupure par mot a besoin de la taille de texte du lecteur, et
+/// `@Environment` ne s'attache qu'à une `View` — une extension de
+/// `ConversationView` ne peut pas ajouter de propriété stockée. La poser sur
+/// l'hôte aurait demandé de toucher `ConversationView.swift`, un fichier que
+/// d'autres sessions tiennent : la vue locale rend la même chose sans franchir
+/// aucune frontière.
+///
+/// Jumelle de `BubbleQuotedReply.quotedFlow` et `FocalQuotedReplyView.quotedFlow`.
+/// **Elle n'emploie PAS `MessageTextRenderer`**, contrairement aux deux autres :
+/// le bandeau rendait déjà son aperçu en `Text` nu, et lui donner les mentions
+/// teintées serait un changement de rendu, pas de disposition — un autre lot.
+private struct ComposerQuotedFlow: View {
+    let title: String
+    let titleColor: Color
+    let preview: String
+    let previewColor: Color
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        (Text(title)
+            .font(MeeshyFont.relative(12, weight: .semibold))
+            .foregroundColor(titleColor)
+         + Text(" ")
+         + Text(QuotedReplyPresentation.wordTruncated(
+                preview,
+                maxCharacters: QuotedReplyPresentation.previewCharacterBudget(
+                    for: .composer, dynamicTypeSize: dynamicTypeSize)))
+            .font(MeeshyFont.relative(12))
+            .foregroundColor(previewColor))
+        .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
     }
 }

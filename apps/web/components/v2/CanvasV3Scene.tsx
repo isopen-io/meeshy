@@ -2,7 +2,13 @@
 
 import { Component, useEffect, useRef, type ReactNode } from 'react';
 import type { CanvasV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
+import {
+  effectiveMediaRatio,
+  mediaCropStyle,
+  readMediaCrop,
+  type MediaCropRect,
+} from '@meeshy/shared/utils/media-crop';
 import {
   resolveKeyframeState,
   resolveClipTransitionOpacity,
@@ -13,6 +19,7 @@ import {
 } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
 import { cn } from '@/lib/utils';
+import { FLAT_TEXT_SHADOW, parseTextEffect, textEffectShadow } from '@/lib/story-text-effect';
 
 const SCENE_ASPECT_RATIO = '9 / 16';
 const STORY_DESIGN_WIDTH = 1080;
@@ -40,22 +47,25 @@ const POSED_MEDIA_WIDTH = '65%';
 
 const SYSTEM_SANS = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 const ROUNDED_STACK = `"Arial Rounded MT Bold", "Avenir Next Rounded", ui-rounded, ${SYSTEM_SANS}`;
-const NEON_GLOW = '0 0 10px currentColor, 0 0 20px currentColor';
-const FLAT_SHADOW = '0 1px 4px rgba(0,0,0,0.5)';
 
 type TextStyleCss = {
   fontFamily: string;
   fontWeight: number;
   fontStyle?: 'italic';
-  textShadow?: string;
 };
 
 /// Table des 18 familles — mêmes noms et mêmes intentions que le résolveur iOS
 /// (`StoryTextFontResolver` / `storyFont(for:size:)`), polices web équivalentes
 /// avec repli système : la face iOS d'origine est citée par famille.
+///
+/// **Aucune famille ne brille par elle-même** (#4870) : « neon » est du
+/// système semibold arrondi, comme sur iOS où la story est composée. La lueur
+/// que cette table lui prêtait vit sur l'axe EFFET (`payload.textEffect`,
+/// `lib/story-text-effect.ts`) — un effet caché derrière un nom de police,
+/// différent selon le client, était exactement ce que l'axe vient fermer.
 const TEXT_STYLES: Record<string, TextStyleCss> = {
   bold: { fontFamily: SYSTEM_SANS, fontWeight: 800 },
-  neon: { fontFamily: ROUNDED_STACK, fontWeight: 600, textShadow: NEON_GLOW },
+  neon: { fontFamily: ROUNDED_STACK, fontWeight: 600 },
   typewriter: { fontFamily: 'Courier, "Courier New", monospace', fontWeight: 400 },
   handwriting: { fontFamily: '"Snell Roundhand", "Brush Script MT", cursive', fontWeight: 400 },
   classic: { fontFamily: 'Georgia, serif', fontWeight: 500 },
@@ -319,23 +329,10 @@ function bandClass(anchor: ObjectV3['anchor']): string | undefined {
   return anchor.edge === 'top' ? 'band-top' : 'band-bottom';
 }
 
-/// Égalité de langue conforme au Prisme : les codes comparés ici sont verbatim
-/// (clés de `translations`, `o.locale`, préférences du lecteur) et peuvent être
-/// région-tagués (`en-US`, `fr_FR`), sous-tagués script (`zh-Hant`), 3-lettres
-/// (`fra`, `swe`) ou legacy (`iw`). Un `split('-')[0]` ne réduit ni le séparateur
-/// `_`, ni les codes 639-2/3, ni les alias dépréciés : `fr_FR` et `fr`, `fra` et
-/// `fr`, `iw` et `he` y compteraient pour des langues distinctes, et un objet
-/// déjà écrit dans la langue primaire du lecteur (ou une traduction keyée sous
-/// une forme divergente) serait manqué.
-/// SSOT de la canonicalisation : normalizeLanguageForDedup (language-normalize.ts).
-function sameLanguage(a: string, b: string): boolean {
-  return normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
-}
-
 export function translationFor(translations: Record<string, unknown>, language: string): string | undefined {
   const exact = str(translations[language]);
   if (exact) return exact;
-  const match = Object.entries(translations).find(([lang]) => sameLanguage(lang, language));
+  const match = Object.entries(translations).find(([lang]) => isSameLanguage(lang, language));
   return match ? str(match[1]) : undefined;
 }
 
@@ -351,7 +348,7 @@ export function resolveText(o: ObjectV3, preferredLanguages: readonly string[]):
   for (const language of preferredLanguages) {
     const translated = translationFor(table, language);
     if (translated) return translated;
-    if (o.locale && sameLanguage(language, o.locale)) return original;
+    if (o.locale && isSameLanguage(language, o.locale)) return original;
   }
   return original;
 }
@@ -393,6 +390,15 @@ type ResolvedMedia = {
   aspectRatio?: number;
   isBackground: boolean;
   alt?: string;
+  /**
+   * **Les bornes de recadrage, en fractions de la source** (#5085).
+   *
+   * Elles voyagent depuis iOS sous `cropX/cropY/cropW/cropH` et n'étaient
+   * lues par PERSONNE : `payload` est `z.record(z.unknown())` — permissif par
+   * contrat — donc la clé passait la validation, arrivait ici, et une image
+   * recadrée se rendait ENTIÈRE sans qu'un seul test ne rougisse.
+   */
+  crop: MediaCropRect | null;
 };
 
 function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResolution>): ResolvedMedia {
@@ -406,6 +412,10 @@ function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResoluti
     aspectRatio: numeric(o.payload.aspectRatio) ?? entry?.aspectRatio,
     isBackground: o.payload.isBackground === true,
     alt: entry?.alt,
+    // La LECTURE vit dans `@meeshy/shared` et non ici : trois clients
+    // projettent la même forme de fil, et une boucle réécrite par surface est
+    // ce qui a produit trois familles divergentes de Prisme en trois cycles.
+    crop: readMediaCrop(o.payload),
   };
 }
 
@@ -427,7 +437,7 @@ function TextObject({ o, anim, preferredLanguages }: ObjectRenderProps & { prefe
       style={{
         ...objectStyle(o, anim),
         ...style,
-        textShadow: style.textShadow ?? FLAT_SHADOW,
+        textShadow: textEffectShadow(parseTextEffect(o.payload.textEffect)) ?? FLAT_TEXT_SHADOW,
         fontSize: canvasV3TextFontSize(o.payload),
         color: hex(o.payload.textColor) ?? '#ffffff',
         textAlign: (str(o.payload.textAlign) as React.CSSProperties['textAlign']) ?? 'center',
@@ -485,6 +495,45 @@ function MediaObject({
       zIndex: PLANE_Z[o.plane] + o.z,
       opacity: anim?.opacity ?? o.transform.opacity,
     };
+    /**
+     * **Un fond RECADRÉ ne peut pas rester en `inset-0`** : il faut agrandir
+     * le média à l'inverse de la bande et le décaler, sous un conteneur qui
+     * coupe. C'est ce que `CALayer.contentsRect` fait en interne côté iOS —
+     * d'où l'identité du rendu, et le fait qu'aucun pixel n'est retouché ni
+     * ici ni là. Le web n'a pas d'équivalent direct.
+     */
+    if (media.crop) {
+      return (
+        <div
+          data-testid={`canvas-v3-object-${o.id}`}
+          data-kind="media"
+          className="absolute inset-0 overflow-hidden"
+          style={fullBleed}
+        >
+          {media.kind === 'video' ? (
+            <video
+              data-testid={`canvas-v3-media-${o.id}`}
+              src={media.url}
+              className="absolute max-w-none object-cover"
+              style={mediaCropStyle(media.crop)}
+              muted={muted}
+              loop
+              autoPlay
+              playsInline
+              {...videoGateHandlers}
+            />
+          ) : (
+            <img
+              data-testid={`canvas-v3-media-${o.id}`}
+              src={media.url}
+              alt={media.alt ?? ''}
+              className="absolute max-w-none object-cover"
+              style={mediaCropStyle(media.crop)}
+            />
+          )}
+        </div>
+      );
+    }
     return media.kind === 'video' ? (
       <video
         data-testid={`canvas-v3-object-${o.id}`}
@@ -520,14 +569,22 @@ function MediaObject({
         width: POSED_MEDIA_WIDTH,
         maxWidth: '100%',
         maxHeight: '100%',
-        aspectRatio: media.aspectRatio !== undefined ? `${media.aspectRatio}` : undefined,
+        // **Un média recadré n'a plus les proportions de son FICHIER.** Poser
+        // `aspectRatio` brut laisserait la carte à la forme de la source et
+        // letterboxerait la bande dedans — le recadrage se verrait alors comme
+        // une marge, pas comme un cadrage.
+        aspectRatio:
+          media.aspectRatio !== undefined
+            ? `${effectiveMediaRatio(media.aspectRatio, media.crop)}`
+            : undefined,
       }}
     >
       {media.url && media.kind === 'video' && (
         <video
           data-testid={`canvas-v3-media-${o.id}`}
           src={media.url}
-          className="h-full w-full object-contain"
+          className={media.crop ? 'absolute max-w-none object-cover' : 'h-full w-full object-contain'}
+          style={media.crop ? mediaCropStyle(media.crop) : undefined}
           muted
           loop
           autoPlay
@@ -536,7 +593,13 @@ function MediaObject({
         />
       )}
       {media.url && media.kind === 'image' && (
-        <img data-testid={`canvas-v3-media-${o.id}`} src={media.url} alt="" className="h-full w-full object-contain" />
+        <img
+          data-testid={`canvas-v3-media-${o.id}`}
+          src={media.url}
+          alt=""
+          className={media.crop ? 'absolute max-w-none object-cover' : 'h-full w-full object-contain'}
+          style={media.crop ? mediaCropStyle(media.crop) : undefined}
+        />
       )}
     </div>
   );

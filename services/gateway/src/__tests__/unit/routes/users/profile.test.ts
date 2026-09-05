@@ -68,13 +68,13 @@ jest.mock('../../../../utils/normalize', () => ({
 const mockBcryptCompare = jest.fn<any>();
 const mockBcryptHash = jest.fn<any>().mockResolvedValue('hashed_new_password');
 
-jest.mock('bcryptjs', () => ({
-  default: {
-    compare: (...args: any[]) => mockBcryptCompare(...args),
-    hash: (...args: any[]) => mockBcryptHash(...args),
-  },
-  compare: (...args: any[]) => mockBcryptCompare(...args),
-  hash: (...args: any[]) => mockBcryptHash(...args),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216. Doubler
+// `bcryptjs` ne suffirait plus : le module charge d'abord le binaire NATIF, et
+// le repli JavaScript n'est atteint que s'il manque.
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...args: any[]) => mockBcryptCompare(...args),
+  hashPassword: (...args: any[]) => mockBcryptHash(...args),
 }));
 
 // `updateUserProfileSchema` est le SCHÉMA RÉEL (#4184), pas un passe-plat.
@@ -102,20 +102,15 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   },
 }));
 
-// `updateUserRequestSchema` (AJV) est le SCHÉMA RÉEL pour la même raison : sous
+// `updateUserRequestSchema` (AJV) doit etre le SCHEMA REEL : sous
 // `additionalProperties: true`, Fastify ne rejette jamais rien au niveau AJV,
-// et le lot #4184 dépend justement de ce que ce schéma ne DÉCLARE plus
+// et le lot #4184 depend justement de ce que ce schema ne DECLARE plus
 // `email`/`phoneNumber`/`avatar`/`timezone` pour que la couche Zod voie encore
-// la clé interdite et la refuse (voir le doc-comment du schéma réel pour le
-// détail de l'interaction avec `removeAdditional`). Les trois autres clés
-// restent des stubs : ce lot ne touche ni `userSchema`, ni `userMinimalSchema`,
-// ni `errorResponseSchema`.
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  userSchema: {},
-  userMinimalSchema: {},
-  updateUserRequestSchema: (jest.requireActual('@meeshy/shared/types/api-schemas') as any).updateUserRequestSchema,
-  errorResponseSchema: { type: 'object' },
-}));
+// la cle interdite et la refuse. Les trois autres cles etaient restees des
+// bouchons : #4649 les rend reelles a leur tour — un `errorResponseSchema` de
+// substitution remplace le contrat que les huit assertions de corps d'erreur
+// de ce fichier pretendent mesurer. Plus aucune cle n'est reecrite, donc plus
+// de double du tout.
 
 jest.mock('../../../../routes/auth/types', () => ({
   formatUserResponse: jest.fn((u: any) => ({ ...u, formatted: true })),

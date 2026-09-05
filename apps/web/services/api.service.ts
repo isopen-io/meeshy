@@ -36,12 +36,25 @@ interface NavigatorWithConnection extends Navigator {
 class ApiServiceError extends Error {
   status: number;
   code?: string;
+  /**
+   * Le corps SERVI, tel quel.
+   *
+   * #4487 — les champs d'appoint d'un refus vivent à la racine de l'enveloppe
+   * (`expectedPolicyVersion` sur un 409 de consentement, `suggestedNickname` sur
+   * un 409 d'admission, `issues` / `allowedPurposes` sur un 400). Ils étaient
+   * lus, puis JETÉS ici : seuls `message`, `status` et `code` survivaient, si
+   * bien qu'aucun appelant web ne pouvait s'en servir. Une passerelle qui prend
+   * la peine de dire QUELLE version elle attendait n'a corrigé personne tant
+   * que le client jette la réponse.
+   */
+  body?: Record<string, unknown>;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, body?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiServiceError';
     this.status = status;
     this.code = code;
+    this.body = body;
   }
 }
 
@@ -236,7 +249,7 @@ class ApiService {
             }, 100);
           }
         }
-        throw new ApiServiceError(data.message || data.error || `Erreur serveur (${response.status})`, response.status, data.code);
+        throw new ApiServiceError(data.message || data.error || `Erreur serveur (${response.status})`, response.status, data.code, data);
       }
 
       return {

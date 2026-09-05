@@ -109,4 +109,17 @@ data class StoryDrawingBoard(
         if (strokes.none { it.id == id }) return this
         return copy(strokes = strokes.map { if (it.id == id) transform(it) else it })
     }
+
+    /**
+     * Resyncs this board to [strokes] — called after every deck-wide mutation on the
+     * composer's selected slide. When [strokes] already equals this board's [strokes]
+     * the mutation was driven **through this board** (commit / undo / redo / clear /
+     * delete / a per-stroke edit), so it is returned untouched — its [redoStack] and
+     * [selectedStrokeId] survive. Otherwise the slide's strokes changed **out from
+     * under the board** (a slide switch, or a slide added/removed/duplicated) — a
+     * fresh board seeded with [strokes] and an empty redo stack, since a redo history
+     * that no longer describes what is on screen would restore the wrong thing.
+     */
+    fun resyncedTo(strokes: List<StoryDrawingStroke>): StoryDrawingBoard =
+        if (this.strokes == strokes) this else StoryDrawingBoard(strokes = strokes)
 }

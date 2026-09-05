@@ -28,6 +28,69 @@ enum TextEditLabels {
         }
     }
 
+    /// Le nom d'un effet (#4870). « Aucun » reprend la clé du cadre : c'est
+    /// le même mot, et une deuxième clé pour le même mot divergerait à la
+    /// première retouche de traduction.
+    static func title(for effect: StoryTextEffect) -> String {
+        switch effect {
+        case .none:        return String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module)
+        case .glow:        return String(localized: "story.textEdit.effect.glow", defaultValue: "Lueur", bundle: .module)
+        case .glowSoft:    return String(localized: "story.textEdit.effect.glowSoft", defaultValue: "Halo doux", bundle: .module)
+        case .aura:        return String(localized: "story.textEdit.effect.aura", defaultValue: "Aura", bundle: .module)
+        case .neon:        return String(localized: "story.textEdit.effect.neon", defaultValue: "Néon", bundle: .module)
+        case .neonPink:    return String(localized: "story.textEdit.effect.neonPink", defaultValue: "Néon rose", bundle: .module)
+        case .neonCyan:    return String(localized: "story.textEdit.effect.neonCyan", defaultValue: "Néon cyan", bundle: .module)
+        case .neonViolet:  return String(localized: "story.textEdit.effect.neonViolet", defaultValue: "Néon violet", bundle: .module)
+        case .gold:        return String(localized: "story.textEdit.effect.gold", defaultValue: "Doré", bundle: .module)
+        case .fire:        return String(localized: "story.textEdit.effect.fire", defaultValue: "Braise", bundle: .module)
+        case .halo:        return String(localized: "story.textEdit.effect.halo", defaultValue: "Auréole", bundle: .module)
+        case .outline:     return String(localized: "story.textEdit.effect.outline", defaultValue: "Contour", bundle: .module)
+        case .outlineLight: return String(localized: "story.textEdit.effect.outlineLight", defaultValue: "Contour clair", bundle: .module)
+        case .shadow:      return String(localized: "story.textEdit.effect.shadow", defaultValue: "Ombre", bundle: .module)
+        case .shadowSoft:  return String(localized: "story.textEdit.effect.shadowSoft", defaultValue: "Ombre douce", bundle: .module)
+        case .drop:        return String(localized: "story.textEdit.effect.drop", defaultValue: "Ombre portée", bundle: .module)
+        case .lift:        return String(localized: "story.textEdit.effect.lift", defaultValue: "Élévation", bundle: .module)
+        case .sideShadow:  return String(localized: "story.textEdit.effect.sideShadow", defaultValue: "Ombre latérale", bundle: .module)
+        case .float:       return String(localized: "story.textEdit.effect.float", defaultValue: "Flottant", bundle: .module)
+        case .longShadow:  return String(localized: "story.textEdit.effect.longShadow", defaultValue: "Ombre longue", bundle: .module)
+        case .relief:      return String(localized: "story.textEdit.effect.relief", defaultValue: "Relief", bundle: .module)
+        case .emboss:      return String(localized: "story.textEdit.effect.emboss", defaultValue: "Gaufré", bundle: .module)
+        case .letterpress: return String(localized: "story.textEdit.effect.letterpress", defaultValue: "Imprimé", bundle: .module)
+        case .echo:        return String(localized: "story.textEdit.effect.echo", defaultValue: "Écho", bundle: .module)
+        case .ghost:       return String(localized: "story.textEdit.effect.ghost", defaultValue: "Fantôme", bundle: .module)
+        }
+    }
+
+    /// **Le nom d'une POLICE** (#5244).
+    ///
+    /// Il n'en existait aucun : la rangée historique rendait un « Aa » nu, sans
+    /// libellé ni `accessibilityLabel` — dix-huit boutons que VoiceOver
+    /// annonçait tous « Aa », donc indiscernables sans la vue. La grille pose
+    /// le nom SOUS la boîte comme pour les fonds et les effets, et la même
+    /// chaîne sert les deux publics.
+    static func title(for style: StoryTextStyle) -> String {
+        switch style {
+        case .bold:          return String(localized: "story.textEdit.style.bold", defaultValue: "Gras", bundle: .module)
+        case .neon:          return String(localized: "story.textEdit.style.neon", defaultValue: "Néon", bundle: .module)
+        case .typewriter:    return String(localized: "story.textEdit.style.typewriter", defaultValue: "Machine", bundle: .module)
+        case .handwriting:   return String(localized: "story.textEdit.style.handwriting", defaultValue: "Manuscrit", bundle: .module)
+        case .classic:       return String(localized: "story.textEdit.style.classic", defaultValue: "Classique", bundle: .module)
+        case .calligraphy:   return String(localized: "story.textEdit.style.calligraphy", defaultValue: "Calligraphie", bundle: .module)
+        case .cartoon:       return String(localized: "story.textEdit.style.cartoon", defaultValue: "Cartoon", bundle: .module)
+        case .futuristic:    return String(localized: "story.textEdit.style.futuristic", defaultValue: "Futuriste", bundle: .module)
+        case .fantasy:       return String(localized: "story.textEdit.style.fantasy", defaultValue: "Fantaisie", bundle: .module)
+        case .curve:         return String(localized: "story.textEdit.style.curve", defaultValue: "Courbe", bundle: .module)
+        case .tag:           return String(localized: "story.textEdit.style.tag", defaultValue: "Tag", bundle: .module)
+        case .italic:        return String(localized: "story.textEdit.style.italic", defaultValue: "Italique", bundle: .module)
+        case .retro:         return String(localized: "story.textEdit.style.retro", defaultValue: "Rétro", bundle: .module)
+        case .elegant:       return String(localized: "story.textEdit.style.elegant", defaultValue: "Élégant", bundle: .module)
+        case .poster:        return String(localized: "story.textEdit.style.poster", defaultValue: "Affiche", bundle: .module)
+        case .bubble:        return String(localized: "story.textEdit.style.bubble", defaultValue: "Bulle", bundle: .module)
+        case .note:          return String(localized: "story.textEdit.style.note", defaultValue: "Note", bundle: .module)
+        case .brush:         return String(localized: "story.textEdit.style.brush", defaultValue: "Pinceau", bundle: .module)
+        }
+    }
+
     static func title(for shape: StoryTextFrameShape) -> String {
         switch shape {
         case .none:      return String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module)
@@ -41,9 +104,29 @@ enum TextEditLabels {
     }
 }
 
-struct TextEditToolOptions: View {
+/// **Public depuis le 2026-08-31** (#4634). C'est un ATOME au sens de la règle
+/// de pureté du SDK : il reçoit un outil et un `Binding`, ne connaît aucun
+/// singleton Meeshy, et n'encode aucune règle produit du type « quand
+/// afficher ». L'écran qui les EMPILE tous — l'éditeur d'objet plein écran —
+/// est de l'orchestration, et reste côté app.
+public struct TextEditToolOptions: View {
     let tool: TextEditTool
     @Binding var textObject: StoryTextObject
+
+    /// **Demandée par l'hôte, jamais devinée** (#5045). Le défaut `.row` est
+    /// ce qui rend le lot sûr : les deux hôtes SDK — la barre au-dessus du
+    /// clavier et la zone basse de la scène — n'ont pas la hauteur d'une
+    /// grille, et ne changent pas d'un pixel tant qu'ils ne la demandent pas.
+    /// Voir `TextEditOptionsLayout`.
+    let layout: TextEditOptionsLayout
+
+    public init(tool: TextEditTool,
+                textObject: Binding<StoryTextObject>,
+                layout: TextEditOptionsLayout = .row) {
+        self.tool = tool
+        self._textObject = textObject
+        self.layout = layout
+    }
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -55,7 +138,7 @@ struct TextEditToolOptions: View {
     static let chipMinWidth: CGFloat = 46
     static let chipFontSize: CGFloat = 11
 
-    var body: some View {
+    public var body: some View {
         // Rangée nue : pas de conteneur de panneau propre (fond arrondi,
         // contour). C'est `StoryTextEditToolbar` qui pose l'îlot de verre
         // autour de cette rangée — évite le panneau-dans-panneau et la
@@ -63,6 +146,7 @@ struct TextEditToolOptions: View {
         Group {
             switch tool {
             case .style:      styleOptions
+            case .effect:     effectOptions
             case .color:      colorOptions
             case .align:      alignOptions
             case .background: backgroundOptions
@@ -143,7 +227,20 @@ struct TextEditToolOptions: View {
         }
     }
 
+    /// **Grille chez l'hôte qui la demande, rangée partout ailleurs** (#5244).
+    /// Même dispatch que `effectOptions` : la grille est une DEMANDE de
+    /// l'hôte, jamais un changement subi par les deux autres — l'îlot
+    /// au-dessus du clavier et la zone basse de scène n'ont pas la hauteur.
+    @ViewBuilder
     private var styleFamilyRow: some View {
+        if layout.wraps(.style) {
+            styleGrid
+        } else {
+            styleFamilyScrollRow
+        }
+    }
+
+    private var styleFamilyScrollRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(StoryTextStyle.allCases, id: \.self) { style in
@@ -163,9 +260,72 @@ struct TextEditToolOptions: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    // Sans ceci, VoiceOver annonce « Aa » dix-huit fois — la
+                    // rangée n'a jamais eu de libellé, et c'est le même
+                    // manque que la grille corrige de son côté.
+                    .accessibilityLabel(TextEditLabels.title(for: style))
+                    .accessibilityAddTraits(isSel ? [.isButton, .isSelected] : .isButton)
                 }
             }
         }
+    }
+
+    // MARK: - Effet (#4870)
+
+    /// **Chaque vignette rend « Aa » AVEC son effet, dans la police courante**
+    /// (loi 6 — une vignette montre la donnée en visuel). Le nom en dessous
+    /// est ce que VoiceOver lit ; l'œil, lui, compare quatre lueurs et ombres
+    /// sur le même glyphe, comme la grille des polices compare dix-huit faces
+    /// sur le même « Aa ».
+    @ViewBuilder
+    private var effectOptions: some View {
+        if layout.wraps(.effect) {
+            effectGrid
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(StoryTextEffect.allCases, id: \.self) { effect in
+                        effectChip(effect)
+                    }
+                }
+                .padding(4)   // marge pour la lueur, qui déborde de la vignette
+            }
+        }
+    }
+
+    /// 48 pt de haut, comme les vignettes du spécimen des polices — et non les
+    /// 38 pt des pastilles historiques, sous le plancher des 44 pt (dimension 5).
+    private func effectChip(_ effect: StoryTextEffect) -> some View {
+        let isSel = textObject.parsedTextEffect == effect
+        let ink: Color = isSel ? .white : .primary
+        return Button {
+            // « Aucun » s'écrit `nil` : un texte sans effet garde le JSON
+            // qu'il avait — même règle que `StoryTextAttributeCycle`.
+            textObject.textEffect = effect == StoryTextEffect.none ? nil : effect.rawValue
+            HapticFeedback.light()
+        } label: {
+            VStack(spacing: 3) {
+                Text(verbatim: "Aa")
+                    .font(storyFont(for: textObject.parsedTextStyle, size: 17))
+                    .foregroundStyle(ink)
+                    .storyTextEffect(effect, fontSize: 17, textColor: ink)
+                Text(TextEditLabels.title(for: effect))
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.85))
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 56)
+            .frame(height: 48)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                : AnyShapeStyle(Color.gray.opacity(0.18)))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(TextEditLabels.title(for: effect))
+        .accessibilityAddTraits(isSel ? [.isButton, .isSelected] : .isButton)
     }
 
     // MARK: - Color
@@ -333,11 +493,16 @@ struct TextEditToolOptions: View {
 
     // MARK: - Background
 
+    @ViewBuilder
     private var backgroundOptions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(Array(StoryTextBackgroundPresets.all.enumerated()), id: \.offset) { _, style in
-                    backgroundChip(style)
+        if layout.wraps(.background) {
+            backgroundGrid
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(StoryTextBackgroundPresets.all.enumerated()), id: \.offset) { _, style in
+                        backgroundChip(style)
+                    }
                 }
             }
         }

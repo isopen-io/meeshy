@@ -335,21 +335,6 @@ describe('PostService', () => {
       );
     });
 
-    it('clears alt (null) when the client sends an empty string', async () => {
-      prisma.post.create.mockResolvedValue(makePost());
-      prisma.postMedia.findFirst.mockResolvedValue(null);
-
-      await service.createPost(
-        { ...basePostData, mediaIds: ['media-1'], mediaAlt: { 'media-1': '   ' } },
-        'user-1',
-      );
-
-      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-        where: { id: 'media-1', postId: 'post-1' },
-        data: { alt: null },
-      });
-    });
-
     // ── #4055 — la LÉGENDE par média, jumelle exacte de `alt` ──────────────
     //
     // `PostMedia.caption` existait, était SERVIE (`postIncludes.ts`) et n'était
@@ -381,19 +366,25 @@ describe('PostService', () => {
       expect(foreign).toEqual([]);
     });
 
-    it('clears the caption (null) when the client sends blank', async () => {
+    // ── L'ASSAINISSEMENT, de bout en bout (#4714) ─────────────────────────
+    //
+    // La règle et ses cas vivent chez la fonction extraite
+    // (`services/posts/__tests__/mediaText.test.ts`). Ce témoin garde la moitié
+    // qu'elle ne peut pas prouver seule : que `createPost` passe BIEN par elle.
+    it('sanitizes the caption before it reaches the database', async () => {
       prisma.post.create.mockResolvedValue(makePost());
       prisma.postMedia.findFirst.mockResolvedValue(null);
 
       await service.createPost(
-        { ...basePostData, mediaIds: ['media-1'], mediaCaption: { 'media-1': '   ' } },
+        { ...basePostData, mediaIds: ['media-1'], mediaCaption: { 'media-1': 'Coucher de soleil <script>alert(1)</script>' } },
         'user-1',
       );
 
-      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-        where: { id: 'media-1', postId: 'post-1' },
-        data: { caption: null },
-      });
+      const written = prisma.postMedia.updateMany.mock.calls
+        .map((call: any[]) => call[0])
+        .find((args: any) => args.data?.caption !== undefined);
+      expect(written?.data.caption).not.toContain('<script>');
+      expect(written?.data.caption).toContain('Coucher de soleil');
     });
 
     it('never touches postMedia for caption when mediaCaption is omitted', async () => {

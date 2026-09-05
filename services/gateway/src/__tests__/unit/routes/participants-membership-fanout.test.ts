@@ -20,12 +20,14 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
   canAccessConversation: jest.fn<any>(),
 }));
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
+  ...jest.requireActual<Record<string, unknown>>('@meeshy/shared/utils/conversation-helpers'),
   isValidMongoId: jest.fn<any>((id: string) => /^[0-9a-fA-F]{24}$/.test(id)),
 }));
 
@@ -46,6 +48,8 @@ const TARGET_ID = '507f1f77bcf86cd799439033';
 const WITNESS_ID = '507f1f77bcf86cd799439066';
 /** Participant entré par lien de partage : aucune ligne `User` derrière lui. */
 const ANON_PARTICIPANT_ID = '507f1f77bcf86cd799439077';
+/** Un AUTRE membre RÉEL de la conversation — jamais l'appelant. */
+const INTRUDER_USER_ID = '507f1f77bcf86cd799439099';
 
 type EmittedEvent = { rooms: string[]; excepts: string[]; event: string; payload: any };
 
@@ -175,6 +179,34 @@ function targetParticipant(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * #5191 — les deux gardes plates (`participants-writes.ts:578`,
+ * `participant-removal.ts:82`) résolvent l'appelant par
+ * `where: { conversationId, userId, isActive: true }`, doublé jusqu'ici par un
+ * `mockResolvedValueOnce().mockResolvedValue()` POSITIONNEL : la même paire de
+ * lignes sortait quel que soit le `where` demandé, et retirer `userId` du
+ * filtre de production ne faisait tomber aucun témoin de ce fichier.
+ *
+ * L'INTRUS — un autre membre RÉEL de la conversation, simple `member`, rang
+ * insuffisant pour ajouter/retirer qui que ce soit — est semé EN PREMIER via
+ * `findFirstHonouringWhere` : si `userId` disparaît du `where`, cette ligne
+ * est résolue à la place de l'appelant, et la garde de rang qui suit refuse
+ * une action que l'appelant réel devrait pourtant obtenir.
+ */
+function seedParticipants(
+  prisma: ReturnType<typeof createMockPrisma>,
+  actorRole: string,
+  targetOverrides: Record<string, unknown> = {}
+): void {
+  prisma.participant.findFirst.mockImplementation(
+    findFirstHonouringWhere([
+      { id: 'p-intruder', conversationId: CONV_ID, userId: INTRUDER_USER_ID, isActive: true, role: 'member', user: { id: INTRUDER_USER_ID, role: 'USER' } },
+      actorParticipant(actorRole),
+      targetParticipant(targetOverrides)
+    ])
+  );
+}
+
 describe('POST /conversations/:id/participants — l\'ajout devient comptable', () => {
   let prisma: any;
   let fastify: ReturnType<typeof createMockFastify>;
@@ -199,7 +231,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
+    seedParticipants(prisma, 'admin');
   });
 
   async function addTarget() {
@@ -284,7 +316,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
+    seedParticipants(prisma, 'admin');
 
     await addTarget();
 
@@ -319,7 +351,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
+    seedParticipants(prisma, 'admin');
 
     await addTarget();
 
@@ -387,12 +419,10 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst
-      .mockResolvedValueOnce(actorParticipant('creator'))
-      // La cible porte le `select` de production : `isActive` (le handler refuse
-      // de retirer quelqu'un déjà sorti), `userId` (room personnelle + payload)
-      // et `shareLinkId`.
-      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
+    // La cible porte le `select` de production : `isActive` (le handler refuse
+    // de retirer quelqu'un déjà sorti), `userId` (room personnelle + payload)
+    // et `shareLinkId`.
+    seedParticipants(prisma, 'creator', { id: 'p-removed', displayName: 'Removed User' });
   });
 
   it('chaîne la room du fil et les rooms personnelles des membres restants', async () => {
@@ -444,9 +474,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst
-      .mockResolvedValueOnce(actorParticipant('creator'))
-      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
+    seedParticipants(prisma, 'creator', { id: 'p-removed', displayName: 'Removed User' });
 
     const route = fastify.routes.find((r) => r.method === 'DELETE')!;
     await route.handler(
@@ -483,9 +511,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst
-      .mockResolvedValueOnce(actorParticipant('creator'))
-      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
+    seedParticipants(prisma, 'creator', { id: 'p-removed', displayName: 'Removed User' });
 
     const route = fastify.routes.find((r) => r.method === 'DELETE')!;
     await route.handler(

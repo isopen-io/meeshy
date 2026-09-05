@@ -282,3 +282,42 @@ describe('useConversationMessagesRQ — B1 dedup', () => {
     });
   });
 });
+
+describe('useConversationMessagesRQ — un échec de lecture ne vide pas le cache', () => {
+  const currentUser = { id: 'user-1', username: 'test', displayName: 'Test' } as any;
+
+  it('garde les messages déjà chargés et remonte l\'erreur quand refresh() échoue', async () => {
+    const mockedGetMessages = conversationsService.getMessages as jest.Mock;
+    mockedGetMessages.mockResolvedValueOnce({
+      messages: [makeMessage({ id: 'msg-1' })],
+      hasMore: false,
+      total: 1,
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: queryClient }, children);
+    const { result } = renderHook(
+      () => useConversationMessagesRQ('conv-1', currentUser),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.messages).toHaveLength(1);
+
+    const networkError = Object.assign(new Error('Erreur de connexion au serveur'), {
+      name: 'ApiServiceError',
+    });
+    mockedGetMessages.mockRejectedValueOnce(networkError);
+
+    await act(async () => {
+      await result.current.refresh().catch(() => {});
+    });
+
+    await waitFor(() => expect(result.current.error).toBe(networkError.message));
+    // Le refetch a échoué mais la dernière page connue reste servie — ni
+    // vidée, ni remplacée par une réponse vide silencieuse.
+    expect(result.current.messages).toHaveLength(1);
+  });
+});

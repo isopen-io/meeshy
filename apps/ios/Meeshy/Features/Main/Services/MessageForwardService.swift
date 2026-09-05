@@ -116,7 +116,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 clientMessageId: clientMessageId
             )
             let _: APIResponse<SendMessageResponseData> = try await api.post(
-                endpoint: "/conversations/\(targetConversationId)/messages",
+                ConversationsEndpoint.byIdMessages(id: targetConversationId),
                 body: body
             )
             clientMessageIds.removeValue(forKey: dedupKey)

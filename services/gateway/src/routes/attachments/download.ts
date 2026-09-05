@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
 import { thumbnailContentType } from '../../services/attachments/thumbnail';
-import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { resolve as pathResolve, sep as pathSep } from 'path';
@@ -25,6 +25,20 @@ const log = enhancedLogger.child({ module: 'AttachmentDownload' });
  * la ressource avec ERR_BLOCKED_BY_RESPONSE.NotSameOrigin (avatars cassés au
  * rechargement de page). Hook onSend SYNCHRONE obligatoirement : un second
  * hook async provoque des double-send (voir commentaire sur la route file/*).
+ *
+ * La seconde ligne est une porte CORS à elle seule, et elle n'obéit pas à la
+ * règle unique des origines (#4538). Ce n'est pas un oubli : `'*'` sert
+ * l'embarquement des médias depuis meeshy.me, et il est inerte pour une requête
+ * créditée — `'*'` et `Access-Control-Allow-Credentials: true` s'excluent par
+ * spécification, donc aucun cookie ni jeton ne voyage ici. Ce qui garde les
+ * octets est `resolveAttachmentReadVerdict`, pas l'origine.
+ *
+ * L'arbitrage est DÉCLARÉ en donnée — `PORTES_HORS_REGLE` dans
+ * `config/cors-origins.ts` — et non ici : un commentaire n'aurait rien
+ * confronté au code le jour où quelqu'un resserre les origines. La valeur `'*'`
+ * ci-dessous est comparée à la valeur déclarée par
+ * `__tests__/cors-origin-emitter-sweep.test.ts` ; la faire passer sous la règle
+ * SANS retirer sa déclaration fait rougir ce cliquet, et l'inverse aussi.
  */
 function crossOriginMediaHeaders(
   _request: FastifyRequest,
@@ -42,84 +56,6 @@ export async function registerDownloadRoutes(
   prisma: PrismaClient
 ) {
   const attachmentService = new AttachmentService(prisma);
-
-  /**
-   * Trois issues, et non deux — parce que « tu n'as pas le droit » et « ce
-   * contenu n'existe plus » ne se répondent pas avec le même code.
-   *
-   *  - `allow`     — sert les octets ;
-   *  - `forbidden` — 403, l'appelant est étranger à la conversation ;
-   *  - `gone`      — 404, le message porteur a été rappelé, a expiré, ou sa
-   *                  brûlure de vue unique est consommée.
-   */
-  type AttachmentReadVerdict = 'allow' | 'forbidden' | 'gone';
-
-  /**
-   * L'appelant a-t-il le droit de lire cette pièce jointe, et le message qui la
-   * porte rend-il encore ses octets ?
-   *
-   * Ces routes servaient le fichier à quiconque connaissait l'identifiant, sans
-   * aucune identité — et un ObjectId MongoDB n'est pas un secret : son entropie
-   * est faible et partiellement dérivable d'un horodatage.
-   *
-   * Le rattachement passe par le message : `messageId` → conversation →
-   * participation. Une pièce jointe pas encore rattachée à un message (envoi en
-   * cours) n'est lisible que par la personne qui l'a déposée.
-   *
-   * L'APPARTENANCE SE JUGE AVANT LE CYCLE DE VIE, délibérément : un étranger
-   * doit recevoir le même 403 qu'un message soit vivant ou détruit, sans quoi la
-   * paire 403/404 lui apprendrait ce qu'il est advenu d'un contenu auquel il n'a
-   * jamais eu accès.
-   */
-  async function resolveAttachmentReadVerdict(
-    request: FastifyRequest,
-    attachment: { messageId?: string | null; uploadedBy?: string | null }
-  ): Promise<AttachmentReadVerdict> {
-    const authContext = (request as unknown as { authContext?: {
-      isAuthenticated?: boolean; isAnonymous?: boolean; userId?: string; participantId?: string;
-    } }).authContext;
-
-    if (!authContext?.isAuthenticated) return 'forbidden';
-
-    if (!attachment.messageId) {
-      // Pas encore rattachée : seul le déposant y accède. Aucun porteur dont
-      // hériter une échéance — l'envoi est en cours.
-      const caller = authContext.participantId ?? authContext.userId;
-      return Boolean(caller) && caller === attachment.uploadedBy ? 'allow' : 'forbidden';
-    }
-
-    const message = await prisma.message.findUnique({
-      where: { id: attachment.messageId },
-      // `deletedAt`/`expiresAt` voyagent avec `conversationId` : la garde de
-      // cycle de vie ne coûte aucun aller-retour de plus.
-      select: { conversationId: true, deletedAt: true, expiresAt: true }
-    });
-    if (!message) return 'forbidden';
-
-    // Le discriminant est le type d'identité : un participant anonyme muni
-    // d'un jeton de session est authentifié lui aussi.
-    const where = authContext.isAnonymous && authContext.participantId
-      ? { id: authContext.participantId, conversationId: message.conversationId, isActive: true }
-      : { userId: authContext.userId, conversationId: message.conversationId, isActive: true };
-
-    const participant = await prisma.participant.findFirst({ where, select: { id: true } });
-    if (participant === null) return 'forbidden';
-
-    // Le dernier maillon de la chaîne de destruction des cycles 92 à 94 : les
-    // octets suivent la vie du message porteur. Cf. `carrierMessageLifecycle`.
-    return carrierMessageStillServesBytes(message, new Date()) ? 'allow' : 'gone';
-  }
-
-  /**
-   * Un refus de cycle de vie rend le MÊME 404 que la route rendra une minute
-   * plus tard, quand le balayage aura `unlink` le fichier — aucun client ne voit
-   * son comportement changer selon qu'il arrive avant ou après.
-   */
-  function denyAttachmentRead(reply: FastifyReply, verdict: 'forbidden' | 'gone', notFoundMessage: string) {
-    return verdict === 'gone'
-      ? sendNotFound(reply, notFoundMessage)
-      : sendForbidden(reply, 'Access denied to this attachment');
-  }
 
   /**
    * GET /attachments/:attachmentId
@@ -174,7 +110,7 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'Attachment not found');
         }
 
-        const verdict = await resolveAttachmentReadVerdict(request, attachment);
+        const verdict = await resolveAttachmentReadVerdict(request, attachment, prisma);
         if (verdict !== 'allow') {
           return denyAttachmentRead(reply, verdict, 'Attachment not found');
         }
@@ -273,7 +209,7 @@ export async function registerDownloadRoutes(
         if (!thumbnailAttachment) {
           return sendNotFound(reply, 'Thumbnail not found');
         }
-        const thumbnailVerdict = await resolveAttachmentReadVerdict(request, thumbnailAttachment);
+        const thumbnailVerdict = await resolveAttachmentReadVerdict(request, thumbnailAttachment, prisma);
         if (thumbnailVerdict !== 'allow') {
           return denyAttachmentRead(reply, thumbnailVerdict, 'Thumbnail not found');
         }

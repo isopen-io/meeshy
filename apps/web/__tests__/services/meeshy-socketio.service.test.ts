@@ -310,6 +310,46 @@ describe('MeeshySocketIOService', () => {
       expect(converted.effectFlags).toBeUndefined();
       expect(converted.isViewOnce).toBe(false);
     });
+
+    // #3644 — le convertisseur socket écrasait `translations: []` /
+    // `isEdited: false` en dur, quel que soit ce que le payload transportait.
+    // Le gateway envoie pourtant les traductions réelles sur ce chemin
+    // (contrat `SocketIOMessage.translations`) : un message arrivé en temps
+    // réel sortait donc en langue d'origine, sans puce de traduction, alors
+    // que le MÊME message rechargé via REST sortait traduit.
+    it('préserve les traductions et l\'état d\'édition portés par le payload', () => {
+      const converted = meeshySocketIOService.convertSocketMessageToMessage({
+        ...basePayload,
+        isEdited: true,
+        translations: [
+          {
+            id: 'tr-1',
+            sourceLanguage: 'fr',
+            targetLanguage: 'en',
+            translatedContent: 'Hello',
+            translationModel: 'basic',
+            cacheKey: 'k1',
+            cached: true,
+          },
+        ],
+      });
+
+      expect(converted.isEdited).toBe(true);
+      expect(converted.translations).toHaveLength(1);
+      expect(converted.translations?.[0]).toMatchObject({
+        messageId: 'msg-live-1',
+        sourceLanguage: 'fr',
+        targetLanguage: 'en',
+        translatedContent: 'Hello',
+      });
+    });
+
+    it('rend translations: [] et isEdited: false quand le payload ne les porte pas', () => {
+      const converted = meeshySocketIOService.convertSocketMessageToMessage({ ...basePayload });
+
+      expect(converted.isEdited).toBe(false);
+      expect(converted.translations).toEqual([]);
+    });
   });
 
   describe('Cleanup', () => {

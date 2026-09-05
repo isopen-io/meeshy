@@ -447,6 +447,18 @@ struct MessageListView: UIViewControllerRepresentable {
     /// message is never hidden behind the composer/keyboard.
     /// Pass the composer height here.
     var bottomInset: CGFloat = 0
+    /// La façon dont `bottomInset` REJOINT sa nouvelle valeur (#4949).
+    ///
+    /// `nil` = pose sèche, à l'ancienne. Non-nil quand le parent sait quelle
+    /// animation est en train de jouer — typiquement la courbe et la durée
+    /// que le clavier vient d'annoncer (`KeyboardTransition`) : le fil et la
+    /// barre de composition arrivent alors ENSEMBLE, au lieu que l'un glisse
+    /// pendant que l'autre se téléporte.
+    ///
+    /// Déclaré ICI, avec les autres valeurs de configuration (cf.
+    /// `isHeaderExpanded`) : l'init memberwise impose l'ordre de déclaration
+    /// aux call sites.
+    var bottomInsetTransition: ListInsetTransition? = nil
     /// Hauteur de la bande status bar / Dynamic Island que la liste recouvre :
     /// le parent l'étend sous la safe area haute pour que les bulles défilent
     /// jusqu'au bord de l'écran, et lui passe ici l'inset réel de la fenêtre
@@ -501,7 +513,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
     /// compter comme lus. Voir
     /// `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
-    var onMessagesSeen: (([String]) -> Void)?
+    var onMessagesSeen: (([String], [String]) -> Void)?
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?
@@ -654,6 +666,9 @@ struct MessageListView: UIViewControllerRepresentable {
         }
         vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
+        // Le MONTAGE reste sec : animer un inset depuis 0 sur un contrôleur
+        // qui vient de naître ferait glisser le fil à chaque ouverture de
+        // conversation. Seul `updateUIViewController` suit une courbe.
         vc.applyBottomInset(bottomInset)
         vc.applyTopInset(topInset)
         return vc
@@ -661,6 +676,24 @@ struct MessageListView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: MessageListViewController, context: Context) {
         vc.update(isDark: colorScheme == .dark, accentColor: accentColor)
+        // WS-6 (F-085) : posé AVANT `applyBottomInset`/`applyTopInset` plus bas
+        // — mêmes raisons que `makeUIViewController`. Le `didSet` côté
+        // contrôleur ne rejoue le pass QUE si la valeur change réellement
+        // (garde `oldValue != newValue`) : une réaffectation identique à
+        // chaque tick SwiftUI est un no-op.
+        //
+        // #3947 — ET LE MODE D'ABORD, avant tout ORDRE POSITIONNEL. Ce
+        // `didSet` est l'instant du RÉVEIL : c'est lui qui réapplique
+        // `.allItems` quand un pane opaque cesse de couvrir la liste, que
+        // l'entonnoir `applyToDataSource` a tenue en veille pendant. Les
+        // trois déclencheurs ci-dessous — défilement bas, vidange du suivi de
+        // lecture, saut vers un message — commandent une POSITION : les
+        // servir avant le réveil viserait un data source qui n'a pas encore
+        // repris ce qui est arrivé sous le pane. Le saut de la Rivière et du
+        // Résumé (« répondre à cette personne », « ouvrir cet épisode »)
+        // emprunte exactement ce chemin, et dans le MÊME passage :
+        // `select(.script)` puis `scrollState.scrollToMessageId`.
+        vc.readingMode = readingMode
         // If the trigger changed since last update, scroll to latest.
         if scrollToBottomTrigger != context.coordinator.lastScrollToBottomTrigger {
             context.coordinator.lastScrollToBottomTrigger = scrollToBottomTrigger
@@ -692,12 +725,6 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = onScrollingActiveChanged
         vc.isHeaderExpanded = isHeaderExpanded
-        // WS-6 (F-085) : posées AVANT `applyBottomInset`/`applyTopInset`
-        // ci-dessous — mêmes raisons que `makeUIViewController`. `didSet`
-        // du côté du contrôleur ne rejoue le pass QUE si la valeur change
-        // réellement (garde `oldValue != newValue`) : une réaffectation
-        // identique à chaque tick SwiftUI est un no-op.
-        vc.readingMode = readingMode
         // #3947 — **la liste ne se dessine pas sous ce qui la recouvre.**
         //
         // La Rivière (`RiverConversationHost`) et le Résumé
@@ -712,8 +739,10 @@ struct MessageListView: UIViewControllerRepresentable {
         // `isHidden` retire le RENDU sans toucher aux DONNÉES : le contrôleur
         // reste vivant, ses abonnements aussi, son `contentOffset` intact —
         // donc le retour au fil est instantané et à la bonne place, sans
-        // rechargement. Suspendre les abonnements ferait payer au RETOUR ce
-        // qu'on économise pendant, et le retour est la promesse du milestone.
+        // rechargement. Les abonnements ne sont toujours pas SUSPENDUS (les
+        // reprendre exigerait de savoir lesquels se rejouent) : depuis #3947
+        // c'est leur PUITS qui est fermé — `applyToDataSource` n'applique
+        // rien sous un pane, et le réveil réapplique `.allItems`.
         //
         // La condition n'est pas réécrite : `rendersThread` est déjà la loi
         // qui distingue ces deux modes (elle gouverne le suivi de lecture
@@ -751,7 +780,10 @@ struct MessageListView: UIViewControllerRepresentable {
         }
         vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
-        vc.applyBottomInset(bottomInset)
+        // #4949 — la réserve basse rejoint sa valeur SUR la courbe de ce qui
+        // l'a causée (le clavier qui monte ou descend), jamais en un pas sec.
+        // `transition == nil` retombe mot pour mot sur la pose sèche.
+        vc.applyBottomInset(bottomInset, transition: bottomInsetTransition)
         vc.applyTopInset(topInset)
     }
 

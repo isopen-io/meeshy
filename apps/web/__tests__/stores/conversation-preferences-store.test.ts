@@ -170,7 +170,7 @@ describe('applyRemotePreferences', () => {
       orderInCategory: number | null;
       customName: string | null;
       reaction: string | null;
-      deletedForUserAt: string | null;
+      readingMode: string;
       clearHistoryBefore: string | null;
     }> = {}
   ) => ({
@@ -188,7 +188,7 @@ describe('applyRemotePreferences', () => {
       orderInCategory: null,
       customName: null,
       reaction: null,
-      deletedForUserAt: null,
+      readingMode: 'auto',
       clearHistoryBefore: null,
       ...preferences,
     },
@@ -372,7 +372,7 @@ describe('optimistic writes — version arbitration', () => {
           orderInCategory: null,
           customName: null,
           reaction: null,
-          deletedForUserAt: null,
+          readingMode: 'auto',
           clearHistoryBefore: null,
           ...patch,
         },

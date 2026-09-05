@@ -221,7 +221,7 @@ struct BlockedUsersView: View {
                             .fill(Color(hex: accentColor).opacity(0.12))
                     )
             }
-            .accessibilityLabel(String(localized: "blocked.users.unblock.a11y", defaultValue: "Debloquer \(user.name)", bundle: .main))
+            .accessibilityLabel(String(localized: "blocked.users.unblock.a11y", defaultValue: "Débloquer \(user.name)", bundle: .main))
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)

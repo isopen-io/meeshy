@@ -50,21 +50,36 @@ public struct MeeshyToolOptionsPanel: View {
         }
     }
 
-    /// Le même binding que `StoryTextEditToolbar` construit — il vit ICI
-    /// désormais, et les deux hôtes le partagent. Deux constructions du même
-    /// binding auraient divergé au premier champ ajouté à `StoryTextObject`.
+    /// Le binding vit sur le VIEWMODEL depuis le 2026-08-31 (#4634) : un
+    /// troisième hôte en avait besoin — l'éditeur d'objet plein écran — et le
+    /// recopier une troisième fois aurait divergé au premier champ ajouté à
+    /// `StoryTextObject`, exactement ce que sa remontée ici avait déjà évité une
+    /// fois.
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
-        guard viewModel.currentEffects.textObjects.contains(where: { $0.id == id }) else { return nil }
+        viewModel.textObjectBinding(for: id)
+    }
+}
+
+public extension StoryComposerViewModel {
+
+    /// **LE binding vers un objet texte de la slide courante** — site unique.
+    ///
+    /// `nil` quand l'id ne désigne aucun texte : un binding fabriqué sur du vide
+    /// écrirait dans un objet que personne ne rend, et l'écran paraîtrait
+    /// répondre sans que rien ne change.
+    func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
+        guard currentEffects.textObjects.contains(where: { $0.id == id }) else { return nil }
         return Binding(
-            get: {
-                viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+            get: { [weak self] in
+                self?.currentEffects.textObjects.first(where: { $0.id == id })
                     ?? StoryTextObject(text: "")
             },
-            set: { newValue in
-                var effects = viewModel.currentEffects
+            set: { [weak self] newValue in
+                guard let self else { return }
+                var effects = self.currentEffects
                 if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
                     effects.textObjects[i] = newValue
-                    viewModel.currentEffects = effects
+                    self.currentEffects = effects
                 }
             }
         )

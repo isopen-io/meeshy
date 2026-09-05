@@ -1,0 +1,183 @@
+/**
+ * LA COPIE DE L'ÉCRAN DES LIENS — ce que l'écran DIT, hors de ce que la
+ * passerelle sert.
+ *
+ * LE MOT QUI COMPTE EST « ONT REJOINT », ET IL A ÉTÉ MESURÉ. La cible dessine
+ * « 12 vues · 4 ont rejoint » ; la charge ne porte qu'UN nombre,
+ * `currentUses`, dont l'unique producteur est `claimLinkUse`
+ * (`services/gateway/src/routes/conversations/link-admission.ts:192`) : il
+ * s'incrémente sur le chemin d'ADMISSION, borné par `maxUses`, quand quelqu'un
+ * ENTRE. Aucun compteur de vues n'existe sur un lien de partage — `clickCount`
+ * vit sur `AffiliateToken`, un autre modèle.
+ *
+ * Écrire « vues » au-dessus de ce nombre serait plus faux que de ne rien
+ * écrire : un chiffre plausible sous le mauvais nom ne se signale jamais, et
+ * personne ne va vérifier ce qu'un compteur compte.
+ */
+
+export const LIENS = {
+  titre: 'Mes liens',
+  retour: 'Retour à l’accueil',
+  /** L'en-tête de la liste, lu avant les lignes par les lecteurs d'écran. */
+  liste: 'Vos liens de partage',
+
+  /**
+   * Le compte du sous-titre. Il vient de `meta.summary.activeLinks` — TOUT le
+   * carnet —, jamais d'un décompte de la page, qui serait plafonné par
+   * `limit` et se contredirait à la page suivante.
+   */
+  actifs: (n: number): string => (n <= 1 ? `${n} lien actif` : `${n} liens actifs`),
+
+  /** « 4 ont rejoint » — ce que le nombre compte VRAIMENT (voir l'en-tête). */
+  ontRejoint: (n: number): string => (n <= 1 ? `${n} a rejoint` : `${n} ont rejoint`),
+
+  /** Un lien fermé le DIT : le cacher se lirait comme une perte, pas une fermeture. */
+  ferme: 'Fermé',
+  /** Sa capacité, quand il en déclare une — « 4 / 50 ». */
+  capacite: (utilises: number, maximum: number): string => `${utilises} / ${maximum}`,
+  /**
+   * L'échéance, dite en ABSOLU. Le reste de la v3 date en relatif (« il y a
+   * 2 j »), qui répond à « quand est-ce arrivé ? » ; celle-ci répond à
+   * « jusqu'à quand puis-je le partager ? », et « dans 3 j » se relit mal quand
+   * on décide d'envoyer un lien. La date est posée dans le fuseau du serveur —
+   * `Intl` côté client n'existe pas ici, l'écran n'ayant aucun JavaScript.
+   */
+  expire: (jour: string): string => `Expire le ${jour}`,
+
+  vide: 'Aucun lien de partage',
+  videPrecision:
+    'Un lien de partage ouvre une conversation à qui le reçoit, sans compte. Ceux que vous créerez apparaîtront ici.',
+
+  panne: 'Vos liens n’ont pas pu être chargés',
+  pannePrecision: 'La connexion au service a échoué. Réessayez dans un instant.',
+} as const;
+
+export const GLYPHE_LIEN = 'ph-link-simple';
+
+/**
+ * LA COPIE DE LA FEUILLE « NOUVEAU LIEN » (`sheet:link`, #5071).
+ *
+ * CHAQUE LIBELLÉ RECOUVRE UN CHAMP DE `createLinkSchema`, et rien d'autre : ce
+ * que la feuille NOMME, la passerelle l'applique. Le critère de fin interdit
+ * nommément le champ décoratif, et le seul candidat du schéma — les pays
+ * autorisés, déclarés `CHAMP_PAYS_INERTE` — n'a donc pas de libellé ici.
+ *
+ * L'EXPIRATION EST UN CHOIX, PAS UNE DATE À SAISIR. « 24 heures / 7 jours /
+ * jamais » se décide d'un geste ; un champ de date demande de connaître le
+ * format, de calculer, et se trompe d'un fuseau. La date envoyée est calculée
+ * au moment de la soumission, par le serveur — la seule horloge que les deux
+ * bouts partagent.
+ */
+export const NOUVEAU_LIEN = {
+  /** Le bouton pendant l'envoi du module — l'attente se DIT, elle ne se devine pas. */
+  enCours: 'Création…',
+  /** La passerelle injoignable, dit DANS la feuille — les champs tapés ne bougent pas. */
+  echec: 'Le lien n’a pas pu être créé. Vérifiez la connexion et réessayez.',
+  ouvrir: 'Nouveau lien',
+  titre: 'Nouveau lien de partage',
+  fermer: 'Fermer',
+
+  conversation: 'Nom de la conversation',
+  conversationAide: 'Le lien ouvre une conversation neuve, publique, que vous nommez ici.',
+  nom: 'Nom du lien',
+  nomAide: 'Pour vous y retrouver dans la liste. Les invités ne le voient pas.',
+
+  expiration: 'Le lien expire',
+  jour: 'Dans 24 heures',
+  semaine: 'Dans 7 jours',
+  jamais: 'Jamais',
+
+  capacite: 'Nombre de personnes maximum',
+  capaciteAide: 'Laissez vide pour ne pas limiter.',
+
+  anonymes: 'Ce que les invités peuvent faire',
+  ecrire: 'Écrire des messages',
+  fichiers: 'Joindre des fichiers',
+  images: 'Envoyer des images',
+  historique: 'Lire les messages d’avant leur arrivée',
+  pseudonyme: 'Demander un pseudonyme à l’entrée',
+
+  creer: 'Créer le lien',
+  cree: 'Votre lien est créé.',
+  refuse: 'Le lien n’a pas été créé.',
+  sansTitre: 'Donnez un nom à la conversation.',
+
+  /**
+   * LE SECOND HÔTE (#5034) — le fil du membre (`?lien`) : la conversation y
+   * est déjà ouverte, ce que le sous-titre de la feuille annonce, et l'en-tête
+   * du fil porte un bouton qui y mène.
+   */
+  depuisLeFil: 'Créer un lien de partage depuis cette conversation',
+  /**
+   * SANS BOUTON « COPIER » — un contrôle qui n'existerait qu'avec JavaScript,
+   * refusé sur les DEUX hôtes (`liens-vue.ts`) —, l'adresse se prend à la
+   * main : elle se sélectionne d'un geste (`user-select:all`), et cette
+   * phrase le DIT, faute de quoi rien ne le laisse deviner.
+   */
+  copiez: 'Sélectionnez l’adresse pour la partager.',
+  pour: (nomDeLaConversation: string): string => `Pour « ${nomDeLaConversation} » · conversation déjà ouverte`,
+} as const;
+
+/**
+ * LA COPIE DU GESTE DE FERMETURE (#4933) — un lien qu'on ferme, jamais qu'on
+ * détruit : la ligne RESTE (`LIENS.ferme` la dit déjà), seul son geste change
+ * de nom, du menu au bandeau de retour.
+ *
+ * `aide` DIT VRAI, et c'est mesuré : `applyShareLinkUpdate`
+ * (`services/gateway/src/routes/links/management.ts:118-146`) révoque les
+ * invités déjà entrés AVANT d'écrire `isActive:false`.
+ */
+export const FERMETURE = {
+  /** Le nom du menu d'une ligne, au lecteur d'écran — jamais lu à l'œil. */
+  menu: (nom: string): string => `Actions pour ${nom}`,
+  geste: 'Fermer ce lien',
+  aide: 'Les personnes entrées par ce lien en seront retirées. Cette action ne se défait pas.',
+  enCours: 'Fermeture…',
+  fait: 'Le lien est fermé.',
+  refuse: 'Le lien n’a pas été fermé.',
+  echec: 'Le lien n’a pas pu être fermé. Vérifiez la connexion et réessayez.',
+} as const;
+
+/**
+ * LES DEUX MOTIFS DE REFUS À LA CRÉATION QUE LA PASSERELLE RÉPOND EN
+ * ANGLAIS — `mayMintShareLink` et sa garde `direct`
+ * (`services/gateway/src/routes/links/utils/share-link-mint.ts:196-209`),
+ * les deux SEULS messages de cette route qui ne sont pas déjà en français
+ * (`Conversation non trouvée`, `Vous n'êtes pas membre de cette
+ * conversation`, `Cette conversation est terminée` le sont déjà — vérifié
+ * par lecture du fichier, ligne à ligne).
+ *
+ * `peutCreerUnLien` (`fil-vue.ts`) tait la puce dans ces deux cas ; cette
+ * table reste la ligne de défense SUIVANTE — un rang rétrogradé entre le
+ * chargement du fil et la soumission du formulaire atteint quand même la
+ * passerelle, et le refus qu'elle sert ne doit pas apparaître en anglais
+ * dans une interface française (défaut de revue, #5034).
+ *
+ * TOUT AUTRE MOTIF PASSE TEL QUEL — la même règle que le reste de la v3
+ * (`compte.ts` › `creeUnLien`, `lib/api/reglages.ts`) : le recomposer
+ * fabriquerait une seconde vérité qui divergerait au premier changement de
+ * politique côté passerelle. Cette table ne couvre que ce qui est
+ * PROUVÉ anglais aujourd'hui, rien de plus.
+ */
+const MOTIFS_DE_REFUS_TRADUITS: ReadonlyMap<string, string> = new Map([
+  [
+    'Cannot create share links for direct conversations',
+    'Impossible de créer un lien de partage pour une conversation privée à deux.',
+  ],
+  [
+    'You do not have the necessary rights to perform this operation',
+    'Vous n’avez pas les droits nécessaires pour créer un lien sur cette conversation.',
+  ],
+]);
+
+/** Traduit le motif d'un refus de création — ou le rend TEL QUEL s'il n'est pas dans la table ci-dessus. */
+export const traduisLeMotifDuLien = (motif: string): string => MOTIFS_DE_REFUS_TRADUITS.get(motif) ?? motif;
+
+/** Les trois échéances offertes, et ce qu'elles valent en millisecondes. */
+export const ECHEANCES = {
+  jour: 24 * 60 * 60 * 1000,
+  semaine: 7 * 24 * 60 * 60 * 1000,
+  jamais: null,
+} as const;
+
+export type Echeance = keyof typeof ECHEANCES;

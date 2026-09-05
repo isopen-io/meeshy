@@ -26,11 +26,21 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     /// l'écriture — elle ne se paie qu'à la traduction (directive user
     /// 2026-07-25).
     case language
+    /// L'EFFET posé par-dessus la police — lueur, ombre, relief (#4870).
+    /// Ajouté EN QUEUE de l'énuméré (l'ordre des `case` porte aussi la
+    /// sérialisation), mais DEUXIÈME sur la rangée : c'est la question que
+    /// l'auteur se posait devant la grille des dix-huit avant que POLICE ne
+    /// soit nommée pour ce qu'elle est (#4850), et elle se pose juste après.
+    case effect
 
     /// L'ordre d'affichage de la rangée. Distinct de `allCases` pour que
     /// réordonner l'interface ne demande pas de réordonner l'énuméré, dont
     /// l'ordre des `case` porte aussi la sérialisation.
-    static let all: [TextEditTool] = [.style, .color, .align, .background, .frame, .border, .language]
+    /// **Public depuis le 2026-08-31** (#4634) : l'éditeur d'objet plein écran
+    /// EMPILE les sept outils, et il vit côté app. Recopier la liste là-bas
+    /// aurait fait diverger l'ordre appris par les doigts au premier outil
+    /// ajouté ici — l'ordre EST la donnée, pas un détail d'affichage.
+    public static let all: [TextEditTool] = [.style, .effect, .color, .align, .background, .frame, .border, .language]
 
     public var sfSymbol: String {
         switch self {
@@ -41,6 +51,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
         case .frame:      return "rectangle.roundedtop"
         case .border:     return "square"
         case .language:   return "globe"
+        case .effect:     return "sparkles"
         }
     }
 
@@ -57,6 +68,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
         case .frame:      return String(localized: "story.textEdit.tool.frame", defaultValue: "Cadrage du texte", bundle: .module)
         case .border:     return String(localized: "story.textEdit.tool.border", defaultValue: "Contour du texte", bundle: .module)
         case .language:   return String(localized: "story.textEdit.tool.language", defaultValue: "Langue du texte", bundle: .module)
+        case .effect:     return String(localized: "story.textEdit.tool.effect", defaultValue: "Effet du texte", bundle: .module)
         }
     }
 }

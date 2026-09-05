@@ -30,6 +30,17 @@ interface InviteUserModalProps {
   onUserInvited: (user: User) => void;
 }
 
+/**
+ * Ce que le serveur dit d'UN identifiant du lot (#4557). Miroir de
+ * `ParticipantAdmissionVerdict` (`services/gateway/.../participants-writes.ts`) :
+ * les deux décrivent la même charge, et un `outcome` ajouté d'un côté doit
+ * l'être de l'autre.
+ */
+type ParticipantVerdict = {
+  userId: string;
+  outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found';
+};
+
 export function InviteUserModal({ 
   isOpen, 
   onClose, 
@@ -95,38 +106,55 @@ export function InviteUserModal({
     setSelectedUsers(selectedUsers.filter(u => u.id !== userId));
   };
 
-  // Inviter les utilisateurs sélectionnés
+  // Inviter les utilisateurs sélectionnés — UN appel, un verdict par personne (#4557)
+  //
+  // La forme précédente était un `Promise.all` d'un POST par personne. Elle
+  // repayait N fois la résolution de conversation, le contrôle de rang, l'avis
+  // d'arrivée et l'éventail de diffusion — mais surtout, **`Promise.all`
+  // rejette au premier échec** : un lot dont une seule personne était déjà
+  // membre tombait dans le `catch`, et l'écran affichait « erreur » sans dire
+  // QUI n'était pas passé. Le refus partiel était indistinguable d'une panne.
   const inviteSelectedUsers = async () => {
     if (selectedUsers.length === 0) return;
 
     setIsInviting(true);
     try {
-      // Inviter chaque utilisateur
-      const invitePromises = selectedUsers.map(user => 
-        apiService.post(API_ENDPOINTS.conversations.byIdInvite(conversationId), { userId: user.id })
+      const response = await apiService.post(
+        API_ENDPOINTS.conversations.byIdParticipants(conversationId),
+        { userIds: selectedUsers.map(user => user.id) }
       );
 
-      const results = await Promise.all(invitePromises);
+      const payload = response.data as { success?: boolean; data?: { results?: ParticipantVerdict[] } } | undefined;
+      if (!payload?.success) {
+        toast.error(t('inviteModal.inviteError'));
+        return;
+      }
 
-      // Vérifier les résultats
-      const successfulInvites = results.filter(r => (r.data as unknown)?.success);
-      const failedInvites = results.filter(r => !(r.data as unknown)?.success);
+      // Le serveur dit ce qui est arrivé à CHAQUE identifiant. Un lot vide de
+      // verdicts ne peut pas exister — mais s'il arrivait, ne rien annoncer
+      // vaut mieux qu'annoncer un succès qu'on n'a pas mesuré.
+      const verdicts = payload.data?.results ?? [];
+      const entres = new Set(
+        verdicts.filter(v => v.outcome === 'new' || v.outcome === 'rejoin').map(v => v.userId)
+      );
+      const refuses = verdicts.length - entres.size;
 
-      if (successfulInvites.length > 0) {
-        toast.success(t('inviteModal.inviteSuccess', { count: successfulInvites.length }));
-        
-        // Notifier le parent des utilisateurs invités
-        selectedUsers.forEach(user => onUserInvited(user));
-        
-        // Fermer la modale
+      if (entres.size > 0) {
+        toast.success(t('inviteModal.inviteSuccess', { count: entres.size }));
+
+        // Seuls ceux qui sont RÉELLEMENT entrés remontent au parent : la
+        // boucle précédente les notifiait tous, y compris ceux dont l'appel
+        // avait échoué.
+        selectedUsers.filter(user => entres.has(user.id)).forEach(user => onUserInvited(user));
+
         onClose();
         setSelectedUsers([]);
         setSearchQuery('');
         setSearchResults([]);
       }
 
-      if (failedInvites.length > 0) {
-        toast.error(t('inviteModal.partialError', { count: failedInvites.length }));
+      if (refuses > 0) {
+        toast.error(t('inviteModal.partialError', { count: refuses }));
       }
 
     } catch (error) {

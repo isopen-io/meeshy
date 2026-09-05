@@ -34,6 +34,23 @@ public interface MessageDao {
     )
     public suspend fun recentForConversation(conversationId: String, limit: Int): List<MessageEntity>
 
+    /**
+     * Observes a conversation's most recent [limit] rows, newest first — the
+     * bounded counterpart to [observeForConversation] (#5189). The nominal
+     * chat screen only needs a growing window of recent history: an
+     * unbounded observe re-decodes the WHOLE conversation from SQLite on
+     * every write (a reaction, a translation arriving, a read receipt),
+     * however far back that history goes. Callers restore ascending order
+     * themselves ([kotlin.collections.List.asReversed], the same convention
+     * [recentForConversation]'s callers already use). [observeForConversation]
+     * remains for legitimate full-history consumers.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "ORDER BY createdAt DESC LIMIT :limit",
+    )
+    public fun observeRecentForConversation(conversationId: String, limit: Int): Flow<List<MessageEntity>>
+
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
 
@@ -64,6 +81,21 @@ public interface MessageDao {
             "AND sendState IS NULL ORDER BY createdAt ASC LIMIT 1",
     )
     public suspend fun oldestSynced(conversationId: String): MessageEntity?
+
+    /**
+     * The high-water mark for a conversation's SERVER-CONFIRMED messages — MAX
+     * `createdAt` among rows with no pending `sendState` (#5206). An optimistic,
+     * not-yet-acked row's `createdAt` is CLIENT-assigned, never a value the
+     * forward-watermark gap backfill (`GET .../messages?after=`) may safely
+     * resume from — same exclusion [deleteMissingSince] already applies.
+     * `null` when the conversation has no synced messages yet, in which case
+     * the caller falls back to the full recent-window sync.
+     */
+    @Query(
+        "SELECT MAX(createdAt) FROM messages WHERE conversationId = :conversationId " +
+            "AND sendState IS NULL",
+    )
+    public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
 
     @Query("UPDATE messages SET sendState = :sendState WHERE id = :id")
     public suspend fun updateSendState(id: String, sendState: String?)

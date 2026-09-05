@@ -28,11 +28,55 @@ import { lireEntrees } from '../../scripts/lib/routes-emises.mjs';
 // sans sa ligne ici fait ÉCHOUER le balayage, en se nommant — jamais sauter.
 const ECHANTILLONS: Readonly<Record<string, string>> = {};
 
+/**
+ * LES ÉCRANS QUE LE MANIFESTE NE PEUT PAS NOMMER — et sans lesquels ce gate ne balaie RIEN.
+ *
+ * `routesPubliques` lit `app-build-manifest.json`, qui ne porte que les PAGES d'App Router. Or
+ * tous les écrans servis de la v3 sont des GESTIONNAIRES DE ROUTE (`bun run build` : « 13
+ * gestionnaire(s) de route, 0 page ») — c'est la décision qui tient le gate d'UNE requête avant
+ * le premier pixel (§ 12.6). Le balayage sortait donc vert par VACUITÉ sur des écrans bel et bien
+ * publics, et son propre témoin le disait à voix haute (« aucune route (public) n'est encore
+ * servie »).
+ *
+ * Ce que ce balayage ajoute au `jest-axe` de `__tests__/vitrine-a11y.test.ts` — qui juge le MÊME
+ * document — n'est pas une seconde vérification de la structure : c'est le CONTRASTE.
+ * `color-contrast` a besoin d'une mise en page et de couleurs CALCULÉES ; jsdom n'en a aucune et
+ * axe y saute la règle sans le dire. Les quatre colonnes de thème la rendent mesurable dans les
+ * DEUX schémas.
+ *
+ * La liste grandit d'un écran par commit, et chaque entrée porte le statut attendu : une
+ * redirection ou une page d'erreur ferait auditer autre chose que l'écran visé.
+ */
+const GESTIONNAIRES_PUBLICS: readonly { readonly chemin: string; readonly statut: number }[] = [
+  { chemin: '/', statut: 200 },
+];
+
 const entrees = exigeUnManifesteLu(lireEntrees(readFileSync(MANIFESTE_V3, 'utf8')));
 const routes = routesPubliques({
   entrees,
   groupes: lisGroupes(readFileSync(BUDGETS_V3, 'utf8')),
   echantillons: ECHANTILLONS,
+});
+
+// L'INSTRUMENT PROUVE QU'IL VOIT — et il ne peut le prouver que là où le build a eu lieu.
+//
+// Ces deux témoins vivaient dans `__tests__/a11y-gate.test.ts`, exécuté par le job
+// `Test web-v3`, qui ne lance jamais `next build` : ils rendaient `ENOENT` à chaque run.
+// Ici, le job `a11y-v3` construit l'application avant de lancer ce fichier — c'est le
+// sens de son étape « Build apps/web-v3 (le manifeste que le balayage lit) ».
+//
+// Ce que le reste du fichier ne dit pas déjà : l'assertion `pagesEmises` du bloc § 8.5
+// ci-dessous est CONDITIONNÉE à `routes.length === 0`, donc muette dès qu'une route
+// `(public)` existe. Les deux témoins qui suivent sont inconditionnels — ils tiennent la
+// distinction PAGE / GESTIONNAIRE DE ROUTE quel que soit l'état du lot L1.
+test.describe("le manifeste RÉEL de la v3 — l'instrument prouve qu'il voit", () => {
+  test('porte au moins le gestionnaire /healthz, livré en L-0.5', () => {
+    expect(entrees.map((entree) => entree.route)).toContain('/healthz/route');
+  });
+
+  test('se compose exactement des PAGES émises, jamais des gestionnaires de route', () => {
+    expect(pagesEmises(entrees).map((entree) => entree.route)).not.toContain('/healthz/route');
+  });
 });
 
 test.describe('§ 8.5 — accessibilité des routes (public)', () => {
@@ -54,7 +98,7 @@ test.describe('§ 8.5 — accessibilité des routes (public)', () => {
       // porte, sinon un échec de contraste ne dit pas LAQUELLE des deux palettes est rouge.
       test.use({ colorScheme: theme.colorScheme });
 
-      routes.forEach((route) => {
+      [...routes, ...GESTIONNAIRES_PUBLICS].forEach((route) => {
         test(`0 violation axe serious/critical sur ${route.chemin} (${theme.id})`, async ({
           page,
         }) => {

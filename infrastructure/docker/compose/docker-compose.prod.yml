@@ -81,7 +81,7 @@ services:
     container_name: meeshy-nosqlclient
     restart: unless-stopped
     environment:
-      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD:-MeeshyPassword123}@database:27017/${MONGODB_DATABASE:-meeshy}?authSource=admin"
+      MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD:?MONGODB_PASSWORD absente sur l hote. Vide, nosqlclient se connectait a la base avec le mot de passe public MeeshyPassword123}@database:27017/${MONGODB_DATABASE:-meeshy}?authSource=admin"
       ROOT_URL: "https://mongo.${DOMAIN:-localhost}"
       PORT: 3000
     depends_on:
@@ -228,10 +228,10 @@ services:
       - ZMQ_TRANSLATOR_SUB_PORT=5558
       - NODE_ENV=production
       - DOMAIN=${DOMAIN:-meeshy.me}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - FRONTEND_URL=${FRONTEND_URL}
-      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS absente sur l hote. Poser la liste d origines separees par des virgules. Vide, la passerelle refuse TOUTE origine de navigateur}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:?ALLOWED_ORIGINS absente sur l hote. C est le repli de CORS_ORIGINS. Vide, il ne rattrape rien}
+      - FRONTEND_URL=${FRONTEND_URL:?FRONTEND_URL absente sur l hote. Sans elle les liens de reinitialisation et de confirmation partent brises}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
       - UPLOAD_PATH=/app/uploads
       # Volume DÉDIÉ à la bibliothèque de sons. Surtout PAS sous UPLOAD_PATH :
@@ -251,9 +251,9 @@ services:
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation des utilisateurs
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
-      - MEESHY_PASSWORD=${MEESHY_PASSWORD}
-      - ATABETH_PASSWORD=${ATABETH_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}
+      - MEESHY_PASSWORD=${MEESHY_PASSWORD:?MEESHY_PASSWORD absente sur l hote. Vide, le compte BIGBOSS naitrait avec le mot de passe public bigboss123}
+      - ATABETH_PASSWORD=${ATABETH_PASSWORD:?ATABETH_PASSWORD absente sur l hote. Vide, le compte naitrait avec le mot de passe public admin123}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
       - MEESHY_EMAIL=${MEESHY_EMAIL}
       - ATABETH_EMAIL=${ATABETH_EMAIL}
@@ -445,12 +445,37 @@ services:
   #
   # `scripts/check-v3-pipeline.mjs` garde les deux sens : un actif servi hors
   # de cette règle, et un chemin de cette règle que la zone ne sert pas.
+  #
+  # CE QUE LA ZONE LIT DE SON ENVIRONNEMENT, ET POURQUOI C'EST ICI
+  #
+  # `/l/:token` est le premier code v3 qui lit l'environnement à l'EXÉCUTION.
+  # Ses deux replis codés en dur sont des replis de DÉVELOPPEMENT, et dans ce
+  # conteneur ils sont faux tous les deux :
+  #   • `MEESHY_GATEWAY_URL` absent ⇒ `http://localhost:3000` désigne le
+  #     conteneur LUI-MÊME, jamais la passerelle : toute résolution de lien
+  #     échoue et la route rend 503 pour tout le monde ;
+  #   • `NEXT_PUBLIC_FRONTEND_URL` absent ⇒ `og:url` retombe sur l'en-tête
+  #     `Host`, c'est-à-dire l'hôte INTERNE derrière Traefik : la carte d'aperçu
+  #     est mise en cache deux fois, sous deux origines.
+  # L'appel de la passerelle est SERVEUR à serveur : il passe par le réseau
+  # interne (`gateway:3000`) et n'a pas à ressortir par Traefik. L'URL publique,
+  # elle, est celle que les plateformes mettent en cache — donc le domaine.
+  # `scripts/check-v3-pipeline.mjs` garde ce contrat : toute variable lue par
+  # `apps/web-v3/app` ou `apps/web-v3/lib` est déclarée ici.
   frontend-v3:
     image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
     container_name: meeshy-frontend-v3
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      # DEUX adresses de la passerelle, jamais interchangeables :
+      # MEESHY_GATEWAY_URL est l'adresse INTERNE du réseau compose (appels
+      # serveur à serveur) ; NEXT_PUBLIC_API_URL est l'adresse PUBLIQUE, celle
+      # que le NAVIGATEUR atteint — le module de participation (conception
+      # § 12.4) y ouvre le socket et y relit /sync.
+      - MEESHY_GATEWAY_URL=http://gateway:3000
+      - NEXT_PUBLIC_API_URL=https://gate.${DOMAIN:-localhost}
+      - NEXT_PUBLIC_FRONTEND_URL=https://${DOMAIN:-localhost}
     depends_on:
       gateway:
         condition: service_healthy
@@ -464,7 +489,7 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3/_next`))"
+      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/__v3/rt/`) || PathPrefix(`/__v3/sw`))"
       - "traefik.http.routers.frontend-v3.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3.middlewares=compress@file"

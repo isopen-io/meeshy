@@ -59,6 +59,9 @@ final class EditParityInventoryTests: XCTestCase {
 
     private static let feuille = "Meeshy/Features/Main/Components/EditPostSheet.swift"
     private static let surfaceDocument = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    /// La PORTE du document, sortie de la surface au découpage `70b04d2aeb`.
+    /// C'est elle qui poste le brouillon — donc elle qui porte `originalLanguage`.
+    private static let porteDuDocument = "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift"
     private static let gardeQuiLitLaFeuille = "MeeshyTests/Unit/Views/SheetToolbarSemanticsTests.swift"
 
     private func lire(_ relativePath: String) throws -> String {
@@ -94,17 +97,30 @@ final class EditParityInventoryTests: XCTestCase {
     }
 
     private func inventaire() throws -> [Capacite] {
+        // **La mesure lit l'UNITÉ, pas le seul fichier de surface (#4072).**
+        //
+        // Elle rendait NON TENUE une capacité pourtant LIVRÉE (T2.2, `973db35ab8`) :
+        // le découpage de `ComposerDocumentSurface` (`70b04d2aeb`, « six cliquets
+        // suivent le découpage ») a sorti la porte du document dans son propre
+        // fichier, et ce cliquet-ci était le SEPTIÈME — celui que le lot n'a pas
+        // vu. Le code était juste, la mesure lisait le fichier qu'il venait de
+        // quitter.
+        //
+        // C'est le mode d'échec le plus cher d'une extraction : la garde ne dit
+        // pas « j'ai perdu mon sujet », elle dit « la capacité a disparu » — et
+        // envoie chercher une régression qui n'existe pas.
         let sourceDuDocument = try code(Self.surfaceDocument)
+            + code(Self.porteDuDocument)
 
         // 1 — CHAMP CONTENU + VALIDITE.
         // Le meuble a les deux : `ComposerDocumentDraft` porte un texte, le plan
         // d'envoi refuse un brouillon blanc, et le socle peint la fleche sous le
         // document. C'est une capacite REPRISE, la premiere des sept.
         let brouillonBlanc = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         let brouillonPlein = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         let refuseLeBlanc = ComposerDocumentSendPlan.plan(for: brouillonBlanc, isOffline: false)
             == .refuse(.emptyDraft)
@@ -180,7 +196,7 @@ final class EditParityInventoryTests: XCTestCase {
         // document, et le brouillon porte la liste nominative que ONLY et EXCEPT
         // exigent. Seconde des deux capacites tenues.
         let brouillonNomme = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         let audienceEtListe = ComposerChromeOwnership.socleZones(for: .document).contains(.audience)
             && brouillonNomme.visibilityUserIds == ["u1"]
@@ -260,11 +276,16 @@ final class EditParityInventoryTests: XCTestCase {
     /// compte serait reste vert le jour ou un format en remplacerait un autre,
     /// et c'est exactement la substitution qui a produit le defaut d'origine.
     func test_lEdition_routeParFORMAT_etCesseDeFairePasserUnPostPourUneStory() {
-        XCTAssertEqual(
+        // **#5053** — `storyEditComposerCover` existe toujours, aux mêmes quatre
+        // montages ; ce qu'il MONTE a changé. Il présente `StoryEditComposer`,
+        // donc `MeeshyComposerHost`, hydraté par
+        // `ComposerHydration.editingStory`. La table n'a plus d'historique à
+        // nommer pour ce format.
+        XCTAssertNil(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .story)).routesToLegacy,
-            .storyEdit,
-            "Editer une STORY monte `storyEditComposerCover` — quatre montages de production. C'est le "
-            + "seul format dont `.storyEdit` dise la verite."
+            "Editer une STORY monte le MEUBLE depuis #5053. `.storyEdit` reste DÉCLARÉ dans "
+            + "`LegacyComposer` — l'inventaire de ce fichier compte par ce vocabulaire, et retirer le "
+            + "mot ferait rougir un inventaire pour une raison sans rapport avec ce qu'il mesure."
         )
         XCTAssertEqual(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .post)).routesToLegacy,
@@ -304,10 +325,17 @@ final class EditParityInventoryTests: XCTestCase {
             let route = ComposerIntent(origin: .edit(postId: "d", documentFormat: format)).routesToLegacy
             let estUneStory = format == .story
 
+            // **#5053 — l'édition d'une STORY ne route plus vers l'historique.**
+            // `storyEditComposerCover` monte `StoryEditComposer`, donc le
+            // MEUBLE, hydraté par `ComposerHydration.editingStory`. Le fait que
+            // ce test tenait — « un post n'a pas de `StoryEditSession` » — reste
+            // VRAI et reste gardé : c'est l'autre moitié de l'assertion, qui
+            // exige `.editPostSheet` pour tout format non-story.
             XCTAssertEqual(
-                route == LegacyComposer.storyEdit, estUneStory,
-                "L'edition en \(format) route vers `.storyEdit` : `storyEditComposerCover` monte "
-                + "`StoryComposerView` sur une `StoryEditSession`, qu'un post n'a pas."
+                route == nil, estUneStory,
+                "L'edition en \(format) doit être servie par le MEUBLE (route `nil`) si et seulement "
+                + "si c'est une story : les autres formats montent `EditPostSheet`, la seule surface "
+                + "du depot qui bascule POST vers REEL."
             )
             XCTAssertEqual(
                 route == LegacyComposer.editPostSheet, !estUneStory,
@@ -317,7 +345,7 @@ final class EditParityInventoryTests: XCTestCase {
         }
     }
 
-    /// Les huit AUTRES portes ne touchent ni l'une ni l'autre feuille
+    /// Les sept AUTRES portes ne touchent ni l'une ni l'autre feuille
     /// d'edition. Un cas neuf dans `LegacyComposer` est une valeur que n'importe
     /// quelle ligne de la table peut se mettre a rendre ; l'interdire ici est ce
     /// qui empeche une porte de creation d'atterrir sur une surface d'edition.
@@ -325,7 +353,6 @@ final class EditParityInventoryTests: XCTestCase {
         let portesQuiNEditentRien: [ComposerOrigin] = [
             .storyTray,
             .feedComposer,
-            .reelTab,
             .moodChip,
             .repost(ofPostId: "post-source", sourceFormat: .story),
             .draft(id: "brouillon-42"),

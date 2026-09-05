@@ -362,6 +362,17 @@ class TestEndsSentenceBoundary:
         from src.utils.smart_segment_merger import _ends_with_sentence_boundary
         assert _ends_with_sentence_boundary("Hello.   ") is True
 
+    def test_trailing_newline_is_a_boundary(self):
+        """Regression: a segment ending EXACTLY at a line break is the case the
+        rule exists to break on, yet a bare rstrip() ran before the '\\n' check
+        and ate the trailing newline, so the guard missed its own contract."""
+        from src.utils.smart_segment_merger import _ends_with_sentence_boundary
+        assert _ends_with_sentence_boundary("Hello\n") is True
+
+    def test_newline_with_trailing_spaces_is_a_boundary(self):
+        from src.utils.smart_segment_merger import _ends_with_sentence_boundary
+        assert _ends_with_sentence_boundary("Hello\n   ") is True
+
     def test_emoji_only(self):
         from src.utils.smart_segment_merger import _ends_with_sentence_boundary
         assert _ends_with_sentence_boundary("😊") is True
@@ -473,6 +484,18 @@ class TestMergeShortSegments:
         result = merge_short_segments(segs)
         assert len(result) == 2
 
+    def test_trailing_newline_prevents_merge(self):
+        """The non-fusion rule (module header) forbids merging across a line
+        break. A previous segment ending with '\\n' must keep the pair split."""
+        from src.utils.smart_segment_merger import merge_short_segments
+        segs = [
+            _seg("a\n", 0, 100, speaker_id="s0"),
+            _seg("b", 110, 200, speaker_id="s0"),   # pause 10ms, 4 chars, same speaker
+        ]
+        result = merge_short_segments(segs)
+        assert len(result) == 2
+        assert result[0].text == "a\n"
+
     def test_different_speakers_prevents_merge(self):
         from src.utils.smart_segment_merger import merge_short_segments
         segs = [
@@ -561,21 +584,40 @@ class TestMergeGroup:
         result = _merge_group([s1, s2])
         assert result.speaker_id is None
 
-    def test_voice_similarity_score_all_truthy(self):
+    def test_voice_similarity_score_duration_weighted_mean(self):
         from src.utils.smart_segment_merger import _merge_group
+        # Equal durations (300ms each) -> weighted mean == arithmetic mean
         s1 = _seg("a", 0, 300, vscore=0.9)
         s2 = _seg("b", 400, 700, vscore=0.8)
         result = _merge_group([s1, s2])
-        # is_current_user = all(s.voice_similarity_score for s in group) = True
-        assert result.voice_similarity_score is True
+        # A float score must be preserved, never coerced to a boolean
+        assert isinstance(result.voice_similarity_score, float)
+        assert result.voice_similarity_score is not True
+        assert abs(result.voice_similarity_score - 0.85) < 0.01
 
-    def test_voice_similarity_score_one_none(self):
+    def test_voice_similarity_score_weights_by_duration(self):
         from src.utils.smart_segment_merger import _merge_group
+        # 100ms @1.0 and 300ms @0.0 -> weighted 0.25 (plain mean would be 0.5)
+        s1 = _seg("a", 0, 100, vscore=1.0)
+        s2 = _seg("b", 100, 400, vscore=0.0)
+        result = _merge_group([s1, s2])
+        assert abs(result.voice_similarity_score - 0.25) < 0.01
+
+    def test_voice_similarity_score_ignores_none(self):
+        from src.utils.smart_segment_merger import _merge_group
+        # One segment lacks a score -> it is ignored, the other's float survives
         s1 = _seg("a", 0, 300, vscore=0.9)
         s2 = _seg("b", 400, 700, vscore=None)
         result = _merge_group([s1, s2])
-        # all(0.9, None) = False
-        assert not result.voice_similarity_score
+        assert isinstance(result.voice_similarity_score, float)
+        assert abs(result.voice_similarity_score - 0.9) < 0.01
+
+    def test_voice_similarity_score_all_none_stays_none(self):
+        from src.utils.smart_segment_merger import _merge_group
+        s1 = _seg("a", 0, 300, vscore=None)
+        s2 = _seg("b", 400, 700, vscore=None)
+        result = _merge_group([s1, s2])
+        assert result.voice_similarity_score is None
 
 
 class TestGetMergeStatistics:

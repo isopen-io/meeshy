@@ -301,7 +301,7 @@ struct MessageViewsDetailView: View {
     static func sendAttemptCountLabel(_ count: Int) -> String {
         String(
             localized: "message-detail.send-history.attempt-count",
-            defaultValue: "\(count) \(count == 1 ? "attempt" : "attempts")",
+            defaultValue: "\(count) tentatives",
             bundle: .main
         )
     }
@@ -369,7 +369,7 @@ struct MessageViewsDetailView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(String(localized: "message-detail.send-history.attempt-number", defaultValue: "Attempt \(attempt.attemptNumber)", bundle: .main))
+                    Text(String(localized: "message-detail.send-history.attempt-number", defaultValue: "Tentative \(attempt.attemptNumber)", bundle: .main))
                         .font(.caption.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Text(sendAttemptTransportLabel(attempt.transport))
@@ -941,7 +941,7 @@ struct MessageViewsDetailView: View {
         defer { isLoadingReadStatus = false }
         do {
             let response: APIResponse<ReadStatusData> = try await APIClient.shared.request(
-                endpoint: "/messages/\(message.id)/read-status"
+                MessagesEndpoint.byMessageIdReadStatus(messageId: message.id)
             )
             if response.success {
                 readStatusData = response.data

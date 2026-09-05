@@ -116,6 +116,45 @@ class StoryComposerAutosaveTest {
         assertThat(action).isEqualTo(StoryDraftPersist.Clear)
     }
 
+    // ---- resolve: a stroke-only deck must never purge a stored draft ----
+
+    @Test
+    fun `a deck whose only content is a drawn stroke resolves to None, not Clear, over a stored draft`() {
+        // The snapshot cannot represent strokes yet (see the class doc), so it comes back
+        // not-worth-restoring even though the deck plainly has content. Resolving that to
+        // Clear would erase yesterday's stored draft to make room for a snapshot with
+        // nothing to save — losing content the drawing didn't even replace.
+        val previous = textDeck("was here").toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+        val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
+        val deck = blankDeck().setSelectedStrokes(listOf(stroke))
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = previous,
+        )
+
+        assertThat(action).isEqualTo(StoryDraftPersist.None)
+    }
+
+    @Test
+    fun `a deck whose only content is a drawn stroke resolves to None when there was no stored draft either`() {
+        val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
+        val deck = blankDeck().setSelectedStrokes(listOf(stroke))
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        )
+
+        assertThat(action).isEqualTo(StoryDraftPersist.None)
+    }
+
     // ---- resolve: rich-content fidelity gate ----
 
     @Test
@@ -202,6 +241,13 @@ class StoryComposerAutosaveTest {
     fun `a single slide carrying even a blank sticker is not pristine`() {
         val withSticker = blankDeck().addStickerToSelected(StoryStickerElement(id = "k1", emoji = ""))
         assertThat(StoryComposerAutosave.deckIsPristine(withSticker)).isFalse()
+    }
+
+    @Test
+    fun `a single slide carrying a drawn stroke is not pristine`() {
+        val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
+        val withDrawing = blankDeck().setSelectedStrokes(listOf(stroke))
+        assertThat(StoryComposerAutosave.deckIsPristine(withDrawing)).isFalse()
     }
 
     // ---- restore ----

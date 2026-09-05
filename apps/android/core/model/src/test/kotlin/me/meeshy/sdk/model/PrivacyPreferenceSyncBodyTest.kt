@@ -90,8 +90,11 @@ class PrivacyPreferenceSyncBodyTest {
         assertThat(body.showOnlineStatus).isTrue()
         assertThat(body.showLastSeen).isTrue()
         assertThat(body.allowContactRequests).isTrue()
-        assertThat(body.allowAnalytics).isTrue()
         // Defaults that intentionally diverge to false survive the projection
+        // #4578 — `allowAnalytics` a REJOINT ce groupe : gardée par un
+        // consentement et sans lecteur d'usage, elle ne peut pas valoir `true`
+        // par défaut sans que l'état initial du système contredise sa garde.
+        assertThat(body.allowAnalytics).isFalse()
         assertThat(body.allowCallsFromNonContacts).isFalse()
         assertThat(body.saveMediaToGallery).isFalse()
         assertThat(body.shareUsageData).isFalse()

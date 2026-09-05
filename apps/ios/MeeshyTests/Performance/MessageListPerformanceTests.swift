@@ -58,6 +58,83 @@ final class MessageListPerformanceTests: XCTestCase {
         }
     }
 
+    /// **Le prix de la DÉCISION, désormais payé à chaque événement (#4944).**
+    ///
+    /// L'empreinte est ce qui remplace la préparation complète sur le chemin
+    /// chaud : elle parcourt la fenêtre sans rien allouer. Ce banc la mesure
+    /// SEULE — c'est le plancher irréductible du nouveau chemin, à comparer
+    /// avec `test_snapshotDataPrep_loadedWindow_cpu` juste au-dessus, qui
+    /// mesure ce qu'on ne paie plus.
+    func test_snapshotPrepFingerprint_loadedWindow_cpu() async throws {
+        let pool = try makeDatabase(messageCount: 1000)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let store = MessageStore(conversationId: "c1", persistence: persistence)
+        await store.loadInitial()
+
+        let opts = XCTMeasureOptions()
+        opts.iterationCount = 10
+        measure(metrics: [XCTClockMetric(), XCTCPUMetric()], options: opts) {
+            _ = MessageListSnapshotPrep.Fingerprint(records: store.messages)
+        }
+    }
+
+    /// **AVANT/APRÈS de la mémoïsation de la préparation de snapshot (#4944).**
+    ///
+    /// Un fil vivant émet plusieurs événements de CONTENU par seconde (accusés
+    /// de lecture, réactions, traductions du Prisme, transcriptions, retry
+    /// d'outbox) : aucun ne change la composition de la fenêtre, et chacun
+    /// rebâtissait pourtant `reversed` + les items + `groupByDay` + la carte
+    /// `serverId`. COLD = ce comportement. WARM = la décision par empreinte,
+    /// qui reconstruit à la PREMIÈRE pose puis réutilise.
+    func test_snapshotPrep_contentEvents_warmVsCold() async throws {
+        let pool = try makeRealisticDatabase(messageCount: 5000)
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let store = MessageStore(conversationId: "c1", persistence: persistence)
+        await store.loadInitial()
+        var rounds = 0
+        while store.messages.count < 1000, rounds < 30 {
+            guard let oldest = store.messages.first?.createdAt else { break }
+            if !(await store.loadOlder(before: oldest)) { break }
+            rounds += 1
+        }
+        let records = store.messages
+        let poses = 20
+        let calendar = Calendar.current
+
+        // COLD : préparation reconstruite à chaque pose (comportement d'AVANT).
+        let coldStart = Date()
+        for _ in 0..<poses {
+            _ = MessageListSnapshotPrep(
+                reversedRecords: Array(records.reversed()),
+                fingerprint: MessageListSnapshotPrep.Fingerprint(records: records),
+                calendar: calendar
+            )
+        }
+        let coldMs = Date().timeIntervalSince(coldStart) * 1000
+
+        // WARM : l'empreinte décide, la préparation est réutilisée.
+        var memo: MessageListSnapshotPrep?
+        let warmStart = Date()
+        for _ in 0..<poses {
+            let fingerprint = MessageListSnapshotPrep.Fingerprint(records: records)
+            if let current = memo, current.fingerprint == fingerprint { continue }
+            memo = MessageListSnapshotPrep(
+                reversedRecords: Array(records.reversed()),
+                fingerprint: fingerprint,
+                calendar: calendar
+            )
+        }
+        let warmMs = Date().timeIntervalSince(warmStart) * 1000
+
+        print(String(
+            format: "[PERF] prépa snapshot ×%d sur %d msgs : AVANT(rebuild)=%.1fms  APRÈS(empreinte)=%.1fms  → ×%.1f plus rapide",
+            poses, records.count, coldMs, warmMs, coldMs / max(warmMs, 0.0001)
+        ))
+        XCTAssertNotNil(memo, "la première pose construit bien une préparation")
+        XCTAssertLessThan(warmMs, coldMs,
+                          "la décision par empreinte doit battre la reconstruction répétée")
+    }
+
     /// Measures repeated iteration over a 1000-message slice — simulates the
     /// per-frame work of a fast scroll through a pre-loaded MessageStore.
     func test_messageWindowIteration_1000Messages_underBudget() async throws {

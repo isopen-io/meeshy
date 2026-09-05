@@ -153,14 +153,6 @@ export interface BroadcastEmailData {
 }
 
 
-export interface FriendAcceptedEmailData {
-  to: string;
-  recipientName: string;
-  accepterName: string;
-  accepterAvatar?: string | null;
-  conversationUrl: string;
-  language?: string;
-}
 
 export interface InvitationEmailData {
   to: string;
@@ -187,12 +179,6 @@ export interface AccountDeletionReminderEmailData {
   language?: string;
 }
 
-export interface UsernameReminderEmailData {
-  to: string;
-  name: string;
-  username: string;
-  language?: string;
-}
 
 // ============================================================================
 // I18N TRANSLATIONS
@@ -259,13 +245,6 @@ interface EmailTranslations {
     expiry: string;
     ignoreNote: string;
   };
-  friendAccepted: {
-    subject: string;
-    title: string;
-    intro: string;
-    buttonText: string;
-    footer: string;
-  };
 }
 
 const translations: Record<SupportedLanguage, EmailTranslations> = {
@@ -327,13 +306,6 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirmer le changement',
       expiry: 'Ce lien expire dans {hours} heures.',
       ignoreNote: 'Si vous n\'avez pas demandé ce changement, ignorez cet email. Votre adresse email actuelle restera inchangée.'
-    },
-    friendAccepted: {
-      subject: 'Demande de contact acceptee - Meeshy',
-      title: 'Demande de contact acceptee',
-      intro: '{accepter} a accepte votre demande de contact sur Meeshy.',
-      buttonText: 'Envoyer un message',
-      footer: 'Vous pouvez maintenant discuter ensemble sur Meeshy.'
     }
   },
   en: {
@@ -394,13 +366,6 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirm change',
       expiry: 'This link expires in {hours} hours.',
       ignoreNote: 'If you did not request this change, please ignore this email. Your current email address will remain unchanged.'
-    },
-    friendAccepted: {
-      subject: 'Friend request accepted - Meeshy',
-      title: 'Friend Request Accepted',
-      intro: '{accepter} accepted your friend request on Meeshy.',
-      buttonText: 'Send a message',
-      footer: 'You can now chat together on Meeshy.'
     }
   },
   es: {
@@ -461,13 +426,6 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirmar cambio',
       expiry: 'Este enlace expira en {hours} horas.',
       ignoreNote: 'Si no solicitaste este cambio, ignora este correo. Tu dirección de correo actual permanecerá sin cambios.'
-    },
-    friendAccepted: {
-      subject: 'Solicitud de amistad aceptada - Meeshy',
-      title: 'Solicitud de amistad aceptada',
-      intro: '{accepter} acepto tu solicitud de amistad en Meeshy.',
-      buttonText: 'Enviar un mensaje',
-      footer: 'Ahora pueden chatear juntos en Meeshy.'
     }
   },
   pt: {
@@ -528,13 +486,6 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Confirmar alteração',
       expiry: 'Este link expira em {hours} horas.',
       ignoreNote: 'Se você não solicitou esta alteração, ignore este email. Seu endereço de email atual permanecerá inalterado.'
-    },
-    friendAccepted: {
-      subject: 'Pedido de amizade aceite - Meeshy',
-      title: 'Pedido de amizade aceite',
-      intro: '{accepter} aceitou seu pedido de amizade no Meeshy.',
-      buttonText: 'Enviar uma mensagem',
-      footer: 'Voces agora podem conversar juntos no Meeshy.'
     }
   },
   it: {
@@ -595,13 +546,6 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Conferma cambio',
       expiry: 'Questo link scade tra {hours} ore.',
       ignoreNote: 'Se non hai richiesto questo cambio, ignora questa email. Il tuo indirizzo email attuale rimarrà invariato.'
-    },
-    friendAccepted: {
-      subject: 'Richiesta di amicizia accettata - Meeshy',
-      title: 'Richiesta di amicizia accettata',
-      intro: '{accepter} ha accettato la tua richiesta di amicizia su Meeshy.',
-      buttonText: 'Invia un messaggio',
-      footer: 'Ora potete chattare insieme su Meeshy.'
     }
   },
   de: {
@@ -662,13 +606,6 @@ const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Änderung bestätigen',
       expiry: 'Dieser Link läuft in {hours} Stunden ab.',
       ignoreNote: 'Wenn du diese Änderung nicht angefordert hast, ignoriere diese E-Mail. Deine aktuelle E-Mail-Adresse bleibt unverändert.'
-    },
-    friendAccepted: {
-      subject: 'Freundschaftsanfrage akzeptiert - Meeshy',
-      title: 'Freundschaftsanfrage akzeptiert',
-      intro: '{accepter} hat deine Freundschaftsanfrage auf Meeshy akzeptiert.',
-      buttonText: 'Nachricht senden',
-      footer: 'Ihr konnt jetzt zusammen auf Meeshy chatten.'
     }
   }
 };
@@ -1138,18 +1075,6 @@ export class EmailService {
   }
 
 
-  async sendFriendAcceptedEmail(data: FriendAcceptedEmailData): Promise<EmailResult> {
-    const t = this.getTranslations(data.language);
-    const intro = replaceLiteral(t.friendAccepted.intro, '{accepter}', data.accepterName);
-    const avatarHtml = data.accepterAvatar
-      ? `<img src="${data.accepterAvatar}" alt="${this.escapeHtml(data.accepterName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
-      : '';
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header" style="background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%)"><h1>🎉 ${t.friendAccepted.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${this.escapeHtml(data.recipientName)}</strong>,</p><div style="text-align:center;margin:20px 0">${avatarHtml}<p style="font-size:16px">${this.escapeHtml(intro)}</p></div><div style="text-align:center"><a href="${data.conversationUrl}" class="button">${t.friendAccepted.buttonText}</a></div><div class="success"><p style="margin:0">${t.friendAccepted.footer}</p></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.friendAccepted.title}\n\n${t.common.greeting} ${data.recipientName},\n\n${intro}\n\n${t.friendAccepted.buttonText}: ${data.conversationUrl}\n\n${t.friendAccepted.footer}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
-
-    return this.sendEmail({ to: data.to, subject: t.friendAccepted.subject, html, text, trackingType: 'friend_accepted', trackingLang: data.language });
-  }
 
   async sendInvitationEmail(data: InvitationEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
@@ -1498,117 +1423,7 @@ export class EmailService {
     return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'deletion_reminder', trackingLang: lang });
   }
 
-  async sendUsernameReminderEmail(data: UsernameReminderEmailData): Promise<EmailResult> {
-    const lang = data.language || 'en';
-    const content = this.getUsernameReminderTranslations(lang);
-    const handle = `@${this.escapeHtml(data.username)}`;
 
-    const html = `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
-  <title>${content.subject}</title>
-  <style>${this.getBaseStyles()}</style>
-</head>
-<body>
-  <div class="container">
-    <div class="header" style="background:linear-gradient(135deg,#6366f1 0%,#4338ca 100%);border-radius:12px 12px 0 0">
-      <a href="${this.frontendUrl}" style="text-decoration:none">
-        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:50px;width:auto;margin-bottom:15px" onerror="this.style.display='none'">
-      </a>
-      <h1 style="margin:0;font-size:28px;font-weight:700;color:white">${content.title}</h1>
-      <p style="margin:10px 0 0;opacity:0.9;font-size:14px">${content.subtitle}</p>
-    </div>
-
-    <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
-      <p>${content.greeting} <strong class="link-text">${this.escapeHtml(data.name)}</strong>,</p>
-      <p>${content.intro} <strong class="link-text">${handle}</strong>.</p>
-      <p style="font-size:14px">${content.loginNote}</p>
-      <p style="font-size:14px;margin-top:25px">${content.footer}</p>
-    </div>
-
-    <div class="footer">
-      <a href="${this.frontendUrl}" style="text-decoration:none">
-        <img src="${this.brandLogoUrl}" alt="Meeshy" style="height:30px;width:auto;opacity:0.6" onerror="this.style.display='none'">
-      </a>
-      ${this.getFooterContentHtml(lang)}
-    </div>
-  </div>
-</body>
-</html>`;
-
-    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro} @${data.username}.\n\n${content.loginNote}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
-
-    return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'username_reminder', trackingLang: lang });
-  }
-
-  /**
-   * Copie strictement « rappel ». Chaque libellé énonce un fait vrai au présent ;
-   * aucune formulation n'évoque une modification — c'est une règle produit, pas
-   * une préférence de style, verrouillée par test dans EmailService.test.ts.
-   */
-  private getUsernameReminderTranslations(language: string): Record<string, string> {
-    const translations: Record<string, Record<string, string>> = {
-      fr: {
-        subject: 'Votre identifiant Meeshy',
-        title: 'Votre identifiant',
-        subtitle: 'Petit rappel',
-        greeting: 'Bonjour',
-        intro: 'Petit rappel : votre nom d\'utilisateur Meeshy est',
-        loginNote: 'C\'est avec lui — ou avec votre adresse e-mail — que vous vous connectez.',
-        footer: 'L\'équipe Meeshy',
-      },
-      en: {
-        subject: 'Your Meeshy username',
-        title: 'Your username',
-        subtitle: 'A quick reminder',
-        greeting: 'Hello',
-        intro: 'A quick reminder: your Meeshy username is',
-        loginNote: 'You sign in with it — or with your email address.',
-        footer: 'The Meeshy Team',
-      },
-      es: {
-        subject: 'Tu identificador de Meeshy',
-        title: 'Tu identificador',
-        subtitle: 'Un recordatorio',
-        greeting: 'Hola',
-        intro: 'Un recordatorio: tu nombre de usuario en Meeshy es',
-        loginNote: 'Con él — o con tu correo electrónico — inicias sesión.',
-        footer: 'El equipo de Meeshy',
-      },
-      pt: {
-        subject: 'O seu identificador Meeshy',
-        title: 'O seu identificador',
-        subtitle: 'Um lembrete',
-        greeting: 'Olá',
-        intro: 'Um lembrete: o seu nome de utilizador Meeshy é',
-        loginNote: 'É com ele — ou com o seu e-mail — que inicia sessão.',
-        footer: 'A equipa Meeshy',
-      },
-      it: {
-        subject: 'Il tuo identificativo Meeshy',
-        title: 'Il tuo identificativo',
-        subtitle: 'Un promemoria',
-        greeting: 'Ciao',
-        intro: 'Un promemoria: il tuo nome utente Meeshy è',
-        loginNote: 'Accedi con questo — oppure con il tuo indirizzo e-mail.',
-        footer: 'Il team Meeshy',
-      },
-      de: {
-        subject: 'Ihr Meeshy-Benutzername',
-        title: 'Ihr Benutzername',
-        subtitle: 'Eine kurze Erinnerung',
-        greeting: 'Hallo',
-        intro: 'Eine kurze Erinnerung: Ihr Meeshy-Benutzername lautet',
-        loginNote: 'Damit — oder mit Ihrer E-Mail-Adresse — melden Sie sich an.',
-        footer: 'Ihr Meeshy-Team',
-      },
-    };
-    return translations[language] || translations.en;
-  }
 
   private getAccountDeletionConfirmTranslations(language: string): Record<string, string> {
     const translations: Record<string, Record<string, string>> = {

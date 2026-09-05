@@ -112,7 +112,25 @@ final class RiverTypingIndicatorTests: XCTestCase {
         var searchStart = code.startIndex
         while let call = code.range(of: anchor, options: [], range: searchStart ..< code.endIndex) {
             searchStart = call.upperBound
-            guard let open = code[call.upperBound...].firstIndex(of: "(") else { continue }
+            // Le `(` doit suivre IMMÉDIATEMENT le nom appelé — sinon ce n'est
+            // pas un appel.
+            //
+            // `firstIndex(of: "(")` prenait la première parenthèse du RESTE DU
+            // FICHIER. Sur `@State private var fingerprint:
+            // RiverConversationMapping.Fingerprint` — une ANNOTATION DE TYPE,
+            // pas un appel — il attrapait donc la parenthèse d'un appel situé
+            // quatre-vingt-dix lignes plus bas, et le balayage équilibré
+            // avalait tout le `body` : `typingParticipants:` s'y trouvait,
+            // passé à `RiverStreamHost`, à qui il est parfaitement destiné.
+            // La garde accusait un site innocent, et le message qu'elle
+            // imprimait citait une « liste d'arguments » vide.
+            var cursor = call.upperBound
+            while cursor < code.endIndex,
+                  code[cursor].isLetter || code[cursor].isNumber || code[cursor] == "_" {
+                cursor = code.index(after: cursor)
+            }
+            guard cursor < code.endIndex, code[cursor] == "(" else { continue }
+            let open = cursor
             var depth = 0
             var index = open
             while index < code.endIndex {

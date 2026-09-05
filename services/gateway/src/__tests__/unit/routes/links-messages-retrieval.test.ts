@@ -26,6 +26,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
       success: { type: 'boolean' },
       error: { type: 'string' },
       message: { type: 'string' },
+      code: { type: 'string' },
     },
   },
 }));
@@ -153,9 +154,10 @@ describe('GET /links/:identifier/messages — unauthenticated, not anonymous', (
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when unauthenticated and not anonymous', async () => {
+  it('returns 401 with LINK_SESSION_REQUIRED when unauthenticated and not anonymous (#4808)', async () => {
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('LINK_SESSION_REQUIRED');
   });
 });
 
@@ -225,9 +227,10 @@ describe('GET /links/:identifier/messages — anonymous participant wrong shareL
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 for wrong shareLinkId', async () => {
+  it('returns 403 without LINK_SESSION_REQUIRED for wrong shareLinkId — distinguishable from the 401 above (#4808)', async () => {
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
     expect(res.statusCode).toBe(403);
+    expect(res.json().code).not.toBe('LINK_SESSION_REQUIRED');
   });
 });
 

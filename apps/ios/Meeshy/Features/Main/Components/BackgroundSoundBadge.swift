@@ -38,6 +38,28 @@ struct BackgroundSoundBadge: View, Equatable {
     /// fixe, pas de calcul de contraste par pixel.
     static let overMediaAccentHex = "FFFFFF"
 
+    /// **La teinte que CHAQUE branche sert : l'accent que l'hôte déclare.**
+    ///
+    /// Existe pour être interrogeable, parce que le défaut ne se voyait dans
+    /// aucune couleur écrite ici. `FeedPostCard.backgroundSoundAccentHex` porte
+    /// la garde AA (`isDark ? accent : indigo600`) et la PASSE ; la branche
+    /// `.original` la consultait, la branche `.credit` la laissait tomber en
+    /// déléguant à `AudioChipMarquee`, dont le blanc en dur est juste sur un
+    /// média et faux sur une carte thémée. Mesuré en mode clair : **1,03:1**.
+    ///
+    /// > Une garde calculée, passée, et consultée par UNE branche sur deux ne
+    /// > garde qu'une branche — et la branche qui la rate ne rougit nulle part,
+    /// > puisqu'elle rend une couleur parfaitement valide.
+    ///
+    /// `nil` ⇒ aucune ligne à peindre (`.none` ne rend rien).
+    nonisolated static func servedTintHex(for announcement: BackgroundAudioAnnouncement,
+                                          accentHex: String) -> String? {
+        switch announcement {
+        case .none: return nil
+        case .original, .credit: return accentHex
+        }
+    }
+
     static func == (lhs: BackgroundSoundBadge, rhs: BackgroundSoundBadge) -> Bool {
         lhs.announcement == rhs.announcement && lhs.accentHex == rhs.accentHex
     }
@@ -59,7 +81,8 @@ struct BackgroundSoundBadge: View, Equatable {
             AudioChipMarquee(
                 text: Self.creditText(title: title, username: username, duration: duration),
                 height: 14,
-                fontSize: 11
+                fontSize: 11,
+                tint: Color(hex: Self.servedTintHex(for: announcement, accentHex: accentHex) ?? accentHex)
             )
             .frame(width: 124)
             .opacity(0.85)
@@ -183,10 +206,48 @@ extension BackgroundSoundBadge {
     /// `renderedItem` est la MÊME valeur `StoryItem(feedPost: post)` que
     /// l'appelant a déjà construite pour son propre rendu (correctif revue
     /// mineur #8) — jamais une seconde conversion ici.
+    /// **Vue `2h` (#4086) — une règle, trois consommateurs.**
+    ///
+    /// Cette porte s'écrivait en deux branches qui REDISAIENT, chacune à sa
+    /// façon, ce que deux sites de rendu décidaient déjà. La branche
+    /// republication ne demandait que le TYPE : elle répondait donc `true`
+    /// pour une story republiée dont la source est expirée ou sans asset —
+    /// et elle avait raison, puisque `repostEmbed` rendait dans ce cas un
+    /// canvas NOIR là où une story native affiche « Story indisponible ».
+    /// La porte était cohérente avec le rendu fautif, jamais avec la règle.
+    ///
+    /// `canvasHasContent` est désormais la règle, et les trois sites la
+    /// consultent : le placeholder natif en est la négation, le placeholder
+    /// du repost aussi (il n'existait pas), et cette porte l'exige en plus du
+    /// fait qu'il s'agisse bien d'un post À CANVAS.
+    ///
+    /// Ce second facteur reste indispensable : `renderedItem.storyEffects`
+    /// est non-nil pour un post NON-story portant son PROPRE fond audio (son
+    /// emprunté, forme dominante E1, `BorrowedSoundPost.effects(for:)`) alors
+    /// qu'aucun canvas ne rend nulle part — le bouton serait monté, le tap ne
+    /// piloterait rien.
+    ///
+    /// `renderedItem` est la MÊME valeur `StoryItem(feedPost: post)` que
+    /// l'appelant a déjà construite pour son propre rendu (correctif revue
+    /// mineur #8) — jamais une seconde conversion ici.
     static func detailCanvasIsRendered(post: FeedPost, renderedItem: StoryItem) -> Bool {
-        if post.isStory {
-            return renderedItem.storyEffects != nil || !renderedItem.media.isEmpty
-        }
-        return (post.repost?.type ?? "").uppercased() == "STORY"
+        isCanvasPost(post) && canvasHasContent(renderedItem)
+    }
+
+    /// Ce post rend-il un canvas, par sa NATURE ? Une story native, ou la
+    /// republication d'une story.
+    static func isCanvasPost(_ post: FeedPost) -> Bool {
+        post.isStory || (post.repost?.type ?? "").uppercased() == "STORY"
+    }
+
+    /// **Y a-t-il quelque chose à rendre ?** La règle UNIQUE dont
+    /// « Story indisponible » est exactement la négation.
+    ///
+    /// Elle se lit sur `StoryItem(feedPost:)`, qui retombe déjà sur la SOURCE
+    /// d'une republication (`hasOwnContent`, `FeedModels.swift`) : c'est ce
+    /// qui rend un prédicat unique JUSTE pour les deux chemins, et pas
+    /// seulement commode.
+    static func canvasHasContent(_ item: StoryItem) -> Bool {
+        item.storyEffects != nil || !item.media.isEmpty
     }
 }

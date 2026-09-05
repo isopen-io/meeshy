@@ -487,7 +487,7 @@ struct MessageLanguageDetailView: View {
 
         do {
             let response: APIResponse<TranslationsPayload> = try await APIClient.shared.request(
-                endpoint: "/messages/\(message.id)/translations"
+                MessagesEndpoint.byMessageIdTranslations(messageId: message.id)
             )
             if response.success {
                 for t in response.data.translations {
