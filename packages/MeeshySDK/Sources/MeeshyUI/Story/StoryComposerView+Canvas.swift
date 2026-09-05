@@ -1262,10 +1262,11 @@ extension StoryComposerView {
                     // posé ci-dessus. L'éditeur d'image plein écran s'ouvre
                     // au double-tap.
                     break
-                case .sticker, .location:
-                    // Pastille de lieu : sélection seule (le canvas l'a remontée
-                    // au premier plan). Elle se déplace/redimensionne au doigt et
-                    // se retire par le menu contextuel — rien à éditer au tap.
+                case .sticker, .place, .audio:
+                    // Pastille de lieu ou de son : sélection seule (le canvas
+                    // l'a remontée au premier plan). Elle se déplace,
+                    // se redimensionne au doigt et se retire par le menu
+                    // contextuel — rien à éditer au tap SIMPLE.
                     break
                 }
             },
@@ -1280,7 +1281,11 @@ extension StoryComposerView {
                 case .media:
                     // Open dedicated full-screen media editor (image crop / video editor)
                     openMediaEditor(elementId: id)
-                case .sticker, .location:
+                case .sticker, .place, .audio:
+                    // L'atelier n'ouvre pas d'éditeur audio : sa timeline porte
+                    // déjà le rognage et le volume d'une piste. Le composer
+                    // unifié, lui, le câble (#4671) — `editableKinds` est ce qui
+                    // les distingue, pas ce `switch`.
                     break
                 }
             },
@@ -1327,6 +1332,9 @@ extension StoryComposerView {
             inlineEditCeilingGlobalY: measuredTextTopBarBottomY,
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
+            },
+            onEditClockThrottleChanged: { throttled in
+                isEditClockThrottled = throttled
             },
             onCanvasZoomScaleChanged: { scale, state in
                 // Pinch 3-doigts piloté par UIKit (cf. `ThreeFingerPinchGestureRecognizer`).
@@ -1392,6 +1400,10 @@ extension StoryComposerView {
             // La version sert de cookie au Coordinator pour ne déclencher
             // un rebuild qu'aux mutations utiles.
             loadedImages: viewModel.loadedImages,
+            // #3956 — un GIF collé anime DANS le composer : sans ce fil,
+            // l'aperçu montrerait une image fixe de ce que la publication
+            // envoie animé.
+            loadedStickerAnimations: viewModel.loadedStickerAnimations,
             loadedImagesVersion: viewModel.loadedImagesVersion,
             loadedAudioURLs: viewModel.loadedAudioURLs,
             canvasCornerRadius: cornerRadius,
@@ -1460,6 +1472,7 @@ extension StoryComposerView {
                         mode: .composer,
                         isSelected: viewModel.selectedElementId == binding.wrappedValue.id,
                         isUserMuted: binding.wrappedValue.volume <= 0,
+                        isEditClockThrottled: isEditClockThrottled,
                         onDragEnd: { HapticFeedback.light() },
                         onTap: {
                             HapticFeedback.light()

@@ -286,6 +286,7 @@ Toute évolution de la logique de normalisation doit toucher les **trois** sites
 
 ### Regles
 - Ne JAMAIS afficher de popup ou banniere pour indiquer une traduction — c'est un indicateur subtil dans le meta row
+- **La descente du lecteur est UNE fonction : `ReaderPrism.resolve(for:)` (`packages/MeeshySDK/Sources/MeeshySDK/Auth/ReaderPrism.swift`).** `ConversationLanguagePreferences.resolved` (la bulle, le chemin REST) et `MessagePersistenceActor.readerPrism()` (chemin socket, drain NSE) la projettent toutes deux. Ne jamais réécrire la boucle, ni lire `MeeshyUser.preferredContentLanguages` (repli « fr », locale appareil du serveur seulement) pour ce qui se GRAVE dans `replyToJson` ou s'affiche dans le fil : deux prismes gravaient deux citations pour un même message (2026-09-03, #4945). Garde : `ConversationSyncEnginePrismTests` + parité `ConversationLanguagePreferencesTests`.
 - Le contenu traduit doit s'afficher EXACTEMENT comme du contenu natif (meme style, meme layout)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
 - La vue Langue du MessageMoreSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
@@ -452,21 +453,44 @@ se pose**, et aucune liste écrite à la main ne double cette décision.
 
 | ce que la porte vise | où elle se pose | pourquoi |
 |---|---|---|
-| `.object` · `.scene` — ce qui APPARAÎT visuellement sur le canvas (texte, dessin, sticker, média de premier plan, son posé) | **rangée de gauche**, sur le plateau | le geste part de la colonne et atterrit sur la scène : la main suit le sens de l'action |
-| `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, image/vidéo de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
+| `.object` · `.scene` — ce qui APPARAÎT visuellement sur le canvas (texte, dessin, sticker, média de premier plan, son posé, **et le FOND lui-même**) | **rangée de gauche**, sur le plateau | le geste part de la colonne et atterrit sur la scène : la main suit le sens de l'action |
+| `.publication` · `.slide` — ce qui appartient à l'ENVOI ou à la slide (description du contenu, son de fond, mention, localisation de la publication) | **ligne canonique**, en bas | rien de tout cela n'a de place sur la scène ; le bas est déjà la zone de ce qui décide de l'envoi (loi 5) |
 
-**Le même média n'est pas la même porte selon son PLAN.** Une image de FOND
-appartient à la slide et vit en bas ; une image de PREMIER PLAN devient un
-`MeeshyObject` et vit à gauche. Idem pour le son : un son de fond est un attribut
-de la publication (il porte son crédit au socle), un son POSÉ est un objet
-visible. Ranger les deux sous une seule porte « média » ou « son » est ce qui
-rend la sémantique illisible pour l'auteur.
+**Le même média n'est pas la même porte selon son PLAN.** Une image de PREMIER
+PLAN devient un `MeeshySceneObject` et vit à gauche ; un FOND se règle par la porte
+`background`, à gauche elle aussi (#4919) — voir la correction ci-dessous. Idem
+pour le son : un son de fond est un attribut de la publication (il porte son
+crédit au socle) et vit en bas, un son POSÉ est un objet visible. Ranger les deux
+sous une seule porte « média » ou « son » est ce qui rend la sémantique illisible
+pour l'auteur.
+
+> **Correction du 2026-09-03 (#4919) : le FOND VISUEL a changé de côté.** Ce
+> tableau le rangeait sur la ligne canonique, avec la description, la mention et
+> le lieu. La directive porteur du 2026-09-02 — « il faut un outil de fond dans
+> la liste de gauche dès qu'on a une scène » — le déplace, et elle a raison pour
+> une meilleure raison que sa date : **la justification écrite ici pour le
+> ranger en bas était « rien de tout cela n'a de place sur la scène ».** C'est
+> vrai d'une mention, d'un lieu, d'un son de fond. C'est faux d'un fond visuel —
+> il n'est rien d'autre QUE la scène, et c'est le seul de la liste qui occupe
+> 100 % des pixels du canvas. La ligne était mal classée ; la directive la
+> corrige au lieu de la contredire.
+>
+> Le **son** de fond, lui, n'a pas bougé : il ne se voit sur aucun pixel, donc il
+> reste hors de la rangée de gauche. Sa TRACE vit dans le couloir bas depuis
+> #4918, et il s'ajoute toujours par la porte `sound` → placement `.background`.
+> Une porte de niveau « ce qui se voit » ne peut pas contenir l'invisible.
 
 ### Le témoin
 
 Une garde compare la répartition rendue à `ComposerRailDoor.level` — jamais à une
-liste recopiée. Une neuvième porte ne peut alors pas naître sans dire de quel
+liste recopiée. Une dixième porte ne peut alors pas naître sans dire de quel
 niveau elle est, et son niveau la range tout seul.
+
+**Et le témoin d'un renversement s'écrit sur un format AUTRE que la story**
+(`ComposerBackgroundDoorTests`) : en Story, `.object` et `.scene` vont tous deux
+à gauche, donc un mauvais classement y rend le même verdict que le bon. C'est sur
+un POST que l'ancienne ligne se lisait ; c'est là qu'un retour en arrière se
+voit.
 
 ### 2 bis. Les TROIS zones du plateau, et sur quoi chacune agit (directive porteur 2026-08-31, révision)
 
@@ -481,6 +505,12 @@ visuellement » mais de **sur quoi le contrôle agit** — et les deux coïncide
 pour les portes, tout en tranchant ce que la première laissait flou : la place
 des contrôleurs, de l'historique et de la création de slide.
 
+> **« Trois » compte les zones qui AGISSENT, et le reste vrai.** Le § 2 quater
+> en ajoute une quatrième qui n'agit sur rien — elle CONSTATE ce que la scène
+> emporte d'invisible (le son de fond en tête, les hashtags et les mentions
+> référencées au pied). Deux natures, deux comptes : une zone de constat
+> n'édite rien, elle ouvre la feuille qui édite.
+
 | zone | agit sur | contenu |
 |---|---|---|
 | **bas du plateau** (aucun outil actif) | le CANVAS en général | ce qui vaut pour la scène entière ou la publication — fond, description, mention, lieu |
@@ -488,19 +518,55 @@ des contrôleurs, de l'historique et de la création de slide.
 | **droite** | les DIMENSIONS des objets | empilement, duplication, suppression, rognage — **plus l'historique (undo/redo)** et **la création d'une autre slide** |
 | **bas, un outil ouvert** | l'OUTIL en cours | ses contrôleurs, qui prennent la place de la zone « canvas » |
 
-**Ce que la révision déplace, et qui reste à faire :**
+> **Le SOCLE n'est dans aucune de ces zones, et ce n'est pas un oubli.** Audience ·
+> Aperçu · Publier vivent au MEUBLE, sous les trois surfaces, et ne bougent jamais
+> (loi 5 de la planche — trois membres, jamais plus). `ComposerSceneSurface.swift:35`
+> l'écrit à l'endroit où on le chercherait : « Le SOCLE n'est pas ici ». Le « bas du
+> plateau » de la première ligne est la **rangée d'outils**, une autre rangée : y
+> ranger une entrée du socle, ou l'inverse, mélange ce qui décide de la PUBLICATION
+> avec ce qui agit sur la SCÈNE.
 
-- **undo / redo quittent le socle pour le rail DROIT.** Ils agissent sur ce qui
-  a été fait aux objets, pas sur l'envoi ; au socle, ils voisinaient avec
-  l'audience et le bouton publier, qui décident de la publication.
-- **la création d'une slide est CONDITIONNELLE** : « dès lors qu'on a déjà un
-  slide de créé ». Le `[+]` est aujourd'hui monté sans condition.
+**Ce que la révision déplace — FAIT et RESTE, mesuré le 2026-09-01 :**
 
-**Le son n'a plus de porte** (même directive) : il n'y a qu'une façon d'ajouter
-un son sur le canvas — une chip redimensionnable et déplaçable, par la palette
-du § 3 — et le son de FOND reste au socle. La porte du rail ouvrait la MÊME
-feuille que la pastille du socle (`presentedPortal = .sound`, ligne pour ligne) :
-c'était un bouton en double, jamais une capacité en double.
+- ✅ **FAIT — undo / redo ont quitté le socle pour le rail DROIT** (#4586,
+  première moitié). Ils sont montés sur le rail *trailing*
+  (`MeeshyComposerHost+Surfaces.swift:464-466` → `ComposerTrailingRail.swift:60,99`)
+  et le socle n'en porte plus qu'un commentaire. La raison qui l'a décidé tient
+  toujours : ils agissent sur ce qui a été fait aux OBJETS, pas sur l'envoi ; au
+  socle ils voisinaient avec l'audience et le bouton publier, qui décident de la
+  publication.
+- ⬜ **RESTE — la création d'une slide doit être CONDITIONNELLE** : « dès lors
+  qu'on a déjà un slide de créé ». Le `[+]` est monté **sans condition**
+  (`MeeshyComposerHost+Surfaces.swift:458`), et `ComposerTrailingRail.swift:70`
+  revendique explicitement l'inverse (« créer une slide s'offre en
+  permanence ») — les deux doivent tomber dans le même commit, sans quoi le
+  correctif laissera derrière lui un doc-comment qui le contredit.
+
+**⚠️ Le son A DE NOUVEAU une porte, depuis le 2026-09-01** (#4722). Le
+paragraphe qui suit décrit l'état d'AVANT ce jour ; il est conservé parce que le
+raisonnement qui l'a produit reste juste et que la panne qu'il a causée est
+instructive.
+
+*Ce qui avait été écrit* : « le son n'a plus de porte — il n'y a qu'une façon
+d'ajouter un son sur le canvas, une chip par la palette du § 3, et le son de
+FOND reste au socle ». La porte du rail ouvrait alors la MÊME feuille que la
+pastille du socle (`presentedPortal = .sound`, ligne pour ligne) : un bouton en
+double, jamais une capacité en double.
+
+*Ce qui est vrai aujourd'hui*, mesuré : `ComposerRailDoor.sound` existe
+(`ComposerRailDoor.swift:89`) et `ComposerHostRules.swift:436` écrit « **La
+porte SON est REVENUE le 2026-09-01** ». Les deux destinations de remplacement
+sur lesquelles le retrait s'appuyait **n'existaient ni l'une ni l'autre** : la
+palette porte cinq onglets — `emoji`, `love`, `time`, `place`, `library` — et
+pas de son (#4579 **ouvert**), et la pastille du socle est partie le lendemain,
+remplacée par une pastille d'avatar qui n'affiche qu'un CRÉDIT — donc qui ne se
+peint que s'il y a déjà un son.
+
+> **Deux retraits justifiés, chacun renvoyant vers un chemin que l'autre ne
+> fournit pas.** Ni l'un ni l'autre commit n'était faux ; c'est leur SOMME qui a
+> fermé la porte — et une somme n'a pas de site où rougir. Le témoin qui
+> l'attrape n'interroge donc aucun retrait : il demande que la scène serve AU
+> MOINS UN chemin vers le son.
 
 > **Vérifier LAQUELLE des deux avant de retirer est ce qui sépare une
 > déduplication d'une régression.** Deux boutons qui ouvrent la même feuille se
@@ -545,16 +611,46 @@ Source : `docs/product/planche-meeshy-composer.html` (78 occurrences de
 
 **Le premier de ces noms EST un type depuis le 2026-08-31** :
 `MeeshySceneObject` (`packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshySceneObject.swift`),
-une somme à cinq cas — `text` · `media` · `sticker` · `location` · `audio` — qui
+une somme à cinq cas — `text` · `media` · `sticker` · **`place`** · `audio` — qui
 rend `kind`, `id`, `x`, `y`, `scale`, `rotation`, `zIndex`, `duration`,
 `isBackground` sans que l'appelant ait à savoir dans quel tableau l'objet vit.
 Les quatre autres noms restent à écrire.
 
-**Ce que la somme a rendu visible.** Trente-quatre fonctions interrogeaient
+> **`place`, et non `location`** (#4960) — et cette ligne a dit `location`
+> jusqu'au 2026-09-04, seule de tout le dépôt. Le contrat du fil dit `place`
+> (`ACTIVE_KINDS`, `packages/shared/types/canvas-v3.ts`), son miroir Swift dit
+> `place` (`ObjectKind`), la timeline dit `place` (`TimelineClipKind`) et
+> l'inspecteur aussi (`ClipSnapshot.Kind`). Un document qui GOUVERNE le
+> vocabulaire est le pire endroit où laisser le mot abandonné : il ne casse
+> aucune compilation, et il réintroduit la divergence chez le prochain qui
+> nomme quelque chose d'après lui.
+
+**Ce que la somme a rendu visible.** Des dizaines de fonctions interrogeaient
 quatre ou cinq tableaux à la suite pour UN identifiant ; chacune décidait seule
 de l'ordre des familles, et les divergences n'étaient visibles nulle part. Douze
-sont repointées sur la somme, trois sont exclues par une raison écrite (l'ordre
-d'égalité y est significatif), dix-neuf restent.
+sont repointées sur la somme ; **une seule** exclusion est écrite dans le code
+(`StoryComposerViewModel+ZOrder.swift:59` — à `zIndex` égal, l'ordre décide avec
+qui `bringForward` permute).
+
+**Le reste se COMPTE, il ne se cite pas.** Les nombres qui vivaient ici
+(« trente-quatre », « trois exclues ») avaient été DÉRIVÉS d'une addition dont
+les trois termes n'avaient pas la même unité — des fonctions, des fonctions, et
+des *raisons*. Aucune garde ne les épinglait : ils ont donc pu dériver sans
+jamais contredire personne. Ce qui les remplace est le critère :
+
+```bash
+# les cascades restantes : un id cherché dans ≥ 2 familles, forme `first(where:)`
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\b.*first\(where:" -- '*.swift'
+# la forme que le critère ci-dessus NE VOIT PAS, et où vivaient deux bugs :
+git grep -nE "(textObjects|mediaObjects|stickerObjects|locationObjects|audioPlayerObjects)\??\.removeAll" -- '*.swift'
+```
+
+> **Un inventaire qui rate une syntaxe rate le bug qu'il servait à trouver.** La
+> seconde commande est celle qui manquait : les trois chemins de SUPPRESSION
+> (#4758) et le couple `bringForward`/`sendBackward` (#4759) écrivent la cascade
+> en `removeAll { }` et en fermetures de mutation, jamais en `first(where:)`.
+> Ils étaient donc hors de tout compte — et c'est précisément là que la pastille
+> de lieu est devenue ineffaçable et que le son a cessé d'être classable.
 
 > **Un type qui n'existe pas ne peut pas diverger — il oblige seulement chaque
 > site à réinventer la règle.** C'est ainsi que la pastille de lieu s'est
@@ -585,6 +681,51 @@ justifie son déplacement du socle vers le rail des objets (#4586).
 > qu'elle était avant que le même commit ne la corrige. **Une citation est datée
 > par le fichier qu'elle cite** — la changer sans relire ce qui la cite fabrique
 > une référence qui n'a jamais existé.
+
+### 2 quater. Le plateau a une QUATRIÈME zone — au-dessus de la scène (directive porteur 2026-09-03)
+
+> « Il faut ajouter au dessus de la scene une note suivi du detail de l'audio de
+> fond d'une scene doit être mise et au touché ouvrir la feuille permettant de
+> l'editer. […] les hashtag et mention referencé (pas les mention inline et
+> mention caché) doivent apparaitre en bas de la scene au touché ça ouvre les
+> feuille de mention ou des hashtag ! »
+
+Le § 2 bis décrit trois zones — bas, gauche, droite — et les ordonne par ce sur
+quoi elles AGISSENT. La directive en ouvre une quatrième, et elle n'agit sur
+rien : elle **CONSTATE**.
+
+| zone | ce qu'elle fait | contenu |
+|---|---|---|
+| **au-dessus de la scène** | elle CONSTATE ce que la scène emporte d'invisible | la trace du son de fond (#5001) |
+| **au pied de la scène** | idem, au niveau PUBLICATION | hashtags et mentions `.note` (#5002) |
+
+**Ce que cet ajout amende, et il faut le dire pour que le prochain lot ne le
+défasse pas.** L'escalier du bas descend les niveaux du modèle — objet, scène,
+slide, publication — et il reste juste pour ce qui se RÈGLE. Il l'était moins
+pour ce qui se CONSTATE : un son de fond n'est pas un réglage qu'on descend
+chercher. Il commence avec la scène, dure autant qu'elle, et n'apparaît sur
+aucun de ses pixels — donc rien dans la scène ne le rappelle. Sous la carte, il
+partageait la place avec la bande d'outil et les jetons d'objet et se lisait en
+dernier ; au-dessus, il se lit AVEC la scène, comme un titre se lit avec ce
+qu'il titre.
+
+**La loi 6 tient toujours, et c'est elle qui décide de la géographie.** Les deux
+zones vivent dans les COULOIRS du plateau, jamais sur la carte : ni un son de
+fond, ni un hashtag, ni une personne nommée ne produit un pixel au rendu. Les
+poser sur le canvas ferait mentir l'aperçu — et volerait au passage les touches
+de la bande couverte.
+
+**Ce qui distingue une zone de CONSTAT d'une zone de CONTRÔLE** : elle n'édite
+rien elle-même. Elle lit, et le doigt y ouvre la feuille qui édite — la même que
+la porte du rail ouvre, jamais une seconde. Un pied qui présenterait sa propre
+feuille en ferait deux à tenir d'accord, et la première divergence serait
+invisible.
+
+**Le témoin** : les deux zones sont MONTÉES (une vue sans consommateur n'a aucun
+site où rougir) et ALIMENTÉES par le meuble (un pied monté sur ses valeurs par
+défaut se peint exactement comme une publication qui n'emporte rien). Les deux
+questions sont distinctes, et les deux gardes aussi —
+`ComposerSceneReferencesTests` et `ComposerBackgroundSoundRemovalTests`.
 
 ### 3. Une porte n'a pas de JUMELLE — on ouvre une palette, on n'ajoute pas une icône
 

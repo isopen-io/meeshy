@@ -24,26 +24,17 @@ public final class StoryLocationLayer: CALayer {
     nonisolated deinit {}
     public private(set) nonisolated(unsafe) var locationObject: StoryLocationObject?
 
-    /// Design-px font size before `location.scale` — a location badge has no
-    /// author-adjustable `fontSize` field (unlike `StoryTextObject`), so the
-    /// base size is a fixed system-badge constant.
-    private static let baseDesignFontSize: CGFloat = 42
-    private static let horizontalPad: CGFloat = 22
-    private static let verticalPad: CGFloat = 14
-    private static let iconGap: CGFloat = 10
-
     /// Palette de marque MeeshyColors — jamais de couleur système en dur
-    /// (`packages/MeeshySDK/CLAUDE.md`, Visual Identity). Réutilise le
-    /// parseur hex déjà employé par `StoryTextLayer` pour brancher les
-    /// tokens `MeeshyColors` (déclarés en `Color`, pas en `UIColor`) sur ce
-    /// rendu `UIGraphicsImageRenderer`.
-    static let pinTintColor: UIColor =
-        StoryTextLayer.parseHexColorNonisolated(MeeshyColors.errorHex) ?? .systemRed
-    static let labelTextColor: UIColor =
-        StoryTextLayer.parseHexColorNonisolated(MeeshyColors.indigo900Hex) ?? .black
-    static let pillBackgroundColor: UIColor =
-        (StoryTextLayer.parseHexColorNonisolated(MeeshyColors.indigo50Hex) ?? .white)
-            .withAlphaComponent(0.94)
+    /// (`packages/MeeshySDK/CLAUDE.md`, Visual Identity).
+    ///
+    /// **Les valeurs vivent désormais avec le DESSIN** (`StickerTemplatePalette`,
+    /// #4717) : ces trois-là les redisent sous les noms que les témoins de
+    /// `StoryLocationBadgeRenderTests` nomment depuis toujours. Un alias d'une
+    /// ligne n'est pas une jumelle — c'est une définition unique vue de deux
+    /// endroits.
+    static let pinTintColor: UIColor = StickerTemplatePalette.pin
+    static let labelTextColor: UIColor = StickerTemplatePalette.label
+    static let pillBackgroundColor: UIColor = StickerTemplatePalette.surface
 
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
@@ -60,21 +51,11 @@ public final class StoryLocationLayer: CALayer {
                           renderScale: CGFloat = UIScreen.main.scale) {
         self.locationObject = location
 
-        let label = Self.resolvedLabel(for: location.place)
-        let designFontSize = Self.baseDesignFontSize * CGFloat(location.scale)
-        let renderedFontSize = geometry.render(designFontSize)
-        let renderedHPad = geometry.render(Self.horizontalPad * CGFloat(location.scale))
-        let renderedVPad = geometry.render(Self.verticalPad * CGFloat(location.scale))
-        let renderedGap = geometry.render(Self.iconGap * CGFloat(location.scale))
         let scale = contentsScale
-
-        let (image, renderedSize) = Self.badgeImage(label: label,
-                                                     fontSize: renderedFontSize,
-                                                     hPad: renderedHPad,
-                                                     vPad: renderedVPad,
-                                                     gap: renderedGap,
-                                                     screenScale: scale)
-        contents = image?.cgImage
+        let (image, renderedSize) = Self.templateImage(for: location,
+                                                       geometry: geometry,
+                                                       screenScale: scale)
+        contents = CanvasImageOrientation.displayCGImage(image)
         contentsScale = scale
         bounds = CGRect(origin: .zero, size: renderedSize)
 
@@ -110,19 +91,12 @@ public final class StoryLocationLayer: CALayer {
     /// ignorée) — pensé pour le hit-test du reader : la couche de tap de
     /// l'app doit tomber EXACTEMENT là où `configure` dessine, d'où le
     /// partage strict des mêmes constantes, de la même mesure
-    /// (`measuredBadgeSize`) et des mêmes projections `CanvasGeometry`.
+    /// (`templateSize`) et des mêmes projections `CanvasGeometry`.
     @MainActor
     public static func badgeFrame(for location: StoryLocationObject,
                                   canvasSize: CGSize) -> CGRect {
         let geometry = CanvasGeometry(renderSize: canvasSize)
-        let label = resolvedLabel(for: location.place)
-        let size = measuredBadgeSize(
-            label: label,
-            fontSize: geometry.render(baseDesignFontSize * CGFloat(location.scale)),
-            hPad: geometry.render(horizontalPad * CGFloat(location.scale)),
-            vPad: geometry.render(verticalPad * CGFloat(location.scale)),
-            gap: geometry.render(iconGap * CGFloat(location.scale))
-        )
+        let size = templateSize(for: location, geometry: geometry)
         let designCenterX = geometry.designLength(forNormalized: CGFloat(location.x))
         let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(location.y))
         let center = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
@@ -132,68 +106,70 @@ public final class StoryLocationLayer: CALayer {
                       height: size.height)
     }
 
-    /// Rasterizes the pill badge (`pillBackgroundColor` pill, `pinTintColor`
-    /// pin glyph, `labelTextColor` label — all three MeeshyColors, never a
-    /// hardcoded system color) at render-space size. Returns `nil` image
-    /// only if `UIGraphicsImageRenderer`
-    /// itself fails to produce a backing store (never observed in practice) —
-    /// callers must still assign the `renderedSize` so `bounds`/hit-testing
-    /// stay correct even in that degenerate case.
-    /// Mesure du badge SANS rasterisation — partagée entre `badgeImage`
-    /// (rendu) et `badgeFrame` (hit-test reader) pour qu'aucun des deux ne
-    /// puisse dériver de l'autre.
-    @MainActor
-    static func measuredBadgeSize(label: String,
-                                  fontSize: CGFloat,
-                                  hPad: CGFloat,
-                                  vPad: CGFloat,
-                                  gap: CGFloat) -> CGSize {
-        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: labelTextColor]
-        let textSize = (label as NSString).size(withAttributes: textAttrs)
-        let iconSize = fontSize
-        return CGSize(
-            width: ceil(hPad * 2 + iconSize + gap + textSize.width),
-            height: ceil(vPad * 2 + max(iconSize, textSize.height))
-        )
+    // MARK: - La délégation au moteur de gabarits (#4717)
+
+    /// **Le gabarit qui décore CE lieu.**
+    ///
+    /// Fail-closed sur deux cas distincts : un `styleId` inconnu (publié par une
+    /// version plus récente) ET un `styleId` qui nomme un gabarit d'une AUTRE
+    /// famille — « time.digital » sur une pastille de lieu ne doit pas dessiner
+    /// une horloge à la place d'un lieu. Les deux retombent sur la pastille.
+    static func resolvedTemplateID(_ styleId: String?) -> String {
+        guard let styleId,
+              let gabarit = StickerTemplateCatalog.template(id: styleId),
+              gabarit.family == .location
+        else { return StickerTemplateCatalog.defaultLocationTemplateID }
+        return gabarit.id
     }
 
+    /// Les emplacements du gabarit, remplis depuis le lieu.
+    ///
+    /// `StickerSlotFiller.placeSlots` dépouille le `SharedPlace` ; le repli
+    /// « Ici » est appliqué ICI parce qu'il est LOCALISÉ, et que `MeeshySDK`
+    /// n'a aucune ressource de localisation — seul `MeeshyUI` en déclare.
     @MainActor
-    private static func badgeImage(label: String,
-                                   fontSize: CGFloat,
-                                   hPad: CGFloat,
-                                   vPad: CGFloat,
-                                   gap: CGFloat,
-                                   screenScale: CGFloat) -> (UIImage?, CGSize) {
-        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: labelTextColor]
-        let textSize = (label as NSString).size(withAttributes: textAttrs)
-        let iconSize = fontSize
-        let size = measuredBadgeSize(label: label, fontSize: fontSize,
-                                     hPad: hPad, vPad: vPad, gap: gap)
-        guard size.width > 0, size.height > 0 else { return (nil, size) }
-
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = screenScale
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let image = renderer.image { _ in
-            let pill = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size),
-                                    cornerRadius: size.height / 2)
-            pillBackgroundColor.setFill()
-            pill.fill()
-
-            let iconRect = CGRect(x: hPad, y: (size.height - iconSize) / 2,
-                                  width: iconSize, height: iconSize)
-            let symbolConfig = UIImage.SymbolConfiguration(pointSize: iconSize * 0.82, weight: .semibold)
-            UIImage(systemName: "mappin.circle.fill", withConfiguration: symbolConfig)?
-                .withTintColor(pinTintColor, renderingMode: .alwaysOriginal)
-                .draw(in: iconRect)
-
-            let textRect = CGRect(x: hPad + iconSize + gap, y: (size.height - textSize.height) / 2,
-                                  width: textSize.width, height: textSize.height)
-            (label as NSString).draw(in: textRect, withAttributes: textAttrs)
+    static func templateSlots(for place: SharedPlace) -> [String: String] {
+        var emplacements = StickerSlotFiller.placeSlots(for: place)
+        if (emplacements[StickerSlotFiller.placeNameSlot] ?? "").isEmpty {
+            emplacements[StickerSlotFiller.placeNameSlot] = resolvedLabel(for: place)
         }
-        return (image, size)
+        return emplacements
+    }
+
+    /// La taille du gabarit — **une seule mesure pour le rendu ET le
+    /// hit-test**, exactement comme `measuredBadgeSize` la partageait avant.
+    @MainActor
+    static func templateSize(for location: StoryLocationObject,
+                             geometry: CanvasGeometry) -> CGSize {
+        let mesures = StickerTemplateMetrics.location(geometry: geometry,
+                                                      scale: CGFloat(location.scale))
+        let emplacements = templateSlots(for: location.place)
+        let id = resolvedTemplateID(location.styleId)
+        return StickerTemplateRenderer.measuredSize(templateID: id,
+                                                    slots: emplacements,
+                                                    metrics: mesures)
+            ?? StickerTemplateRenderer.measuredSize(
+                templateID: StickerTemplateCatalog.defaultLocationTemplateID,
+                slots: emplacements, metrics: mesures) ?? .zero
+    }
+
+    /// Le second repli — celui du moteur — est distinct du premier : un gabarit
+    /// peut être CATALOGUÉ sans être encore DESSINÉ (les deux arrivent par des
+    /// lots différents, #4716 puis #4718). Sans lui, une pastille déclarée
+    /// « carte postale » ne rendrait rien du tout entre les deux.
+    @MainActor
+    static func templateImage(for location: StoryLocationObject,
+                              geometry: CanvasGeometry,
+                              screenScale: CGFloat) -> (UIImage?, CGSize) {
+        let mesures = StickerTemplateMetrics.location(geometry: geometry,
+                                                      scale: CGFloat(location.scale))
+        let emplacements = templateSlots(for: location.place)
+        let id = resolvedTemplateID(location.styleId)
+        return StickerTemplateRenderer.image(templateID: id, slots: emplacements,
+                                             metrics: mesures, screenScale: screenScale)
+            ?? StickerTemplateRenderer.image(
+                templateID: StickerTemplateCatalog.defaultLocationTemplateID,
+                slots: emplacements, metrics: mesures,
+                screenScale: screenScale) ?? (nil, .zero)
     }
 }

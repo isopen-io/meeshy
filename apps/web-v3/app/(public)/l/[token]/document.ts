@@ -1,8 +1,10 @@
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { THEME_PAR_DEFAUT, themeScriptSource } from '@/app/theme-script';
 
-import { glypheDuSprite, tableDeJetons } from './actifs-inlines';
-import { FEUILLE_DE_L_ECRAN, SOCLE_DU_DOCUMENT } from './feuille';
+import { svgDuSprite, tableDeJetons } from '@/app/actifs-inlines';
+import { echappe, SOCLE_DU_DOCUMENT } from '@/app/socle';
+
+import { FEUILLE_DE_L_ECRAN } from './feuille';
 
 /**
  * Le document que les DEUX écrans de `/l/:token` rendent — l'ouverture du lien
@@ -45,7 +47,7 @@ import { FEUILLE_DE_L_ECRAN, SOCLE_DU_DOCUMENT } from './feuille';
  *   • **Aucune sous-ressource** — ni feuille, ni sprite, ni image : le § 8.3
  *     gate `/l/:token` à UNE requête avant le premier pixel, et son écran clos
  *     à deux. Jetons et glyphes sont inlinés depuis leurs paquets par
- *     `actifs-inlines.ts`.
+ *     `app/actifs-inlines.ts`.
  *   • **Rien du réseau n'entre en balisage** — titre, description, jeton et
  *     valeurs d'en-tête passent tous par `echappe`.
  *
@@ -116,31 +118,11 @@ export type ParametresDuDocument = {
 const RETOUR = 'Revenir à l’accueil';
 const SUITE = 'Suite';
 
-const ENTITES: Readonly<Record<string, string>> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-const echappe = (valeur: string): string => valeur.replace(/[&<>"']/g, (c) => ENTITES[c] ?? c);
 
 const meta = (cle: 'name' | 'property', nom: string, contenu: string): string =>
   `<meta ${cle}="${nom}" content="${echappe(contenu)}"/>`;
 
-/**
- * Un glyphe est DÉCORATIF ici, dans les deux cas : le chevron porte son nom sur
- * le lien qui le contient, la pastille redit ce que le titre dit déjà.
- * `aria-hidden` est donc la bonne annonce — un `role="img"` sans texte ferait
- * lire « image » à un lecteur d'écran, ce qui est pire que le silence.
- */
-const glyphe = (nom: string): string =>
-  // `fill="currentColor"` est porté par le `<symbol>` du sprite, pas par ses
-  // tracés : l'extraire sans le reposer ici rendait un glyphe NOIR sur fond
-  // sombre — invisible. C'est le seul niveau qu'un clone de `<use>` emporte,
-  // et c'est aussi celui qui manque quand on n'inline que l'intérieur.
-  `<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">${glypheDuSprite(nom)}</svg>`;
+const glyphe = svgDuSprite;
 
 const lien = (classe: string, action: ActionDuDocument): string =>
   `<a class="${classe}" href="${echappe(action.href)}">${echappe(action.libelle)}</a>`;

@@ -131,6 +131,10 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("share.consumePendingSends") {
             WidgetDataManager.shared.publishAPIBaseURL()
             await SharePendingSendConsumer.shared.consumeAll()
+            // #5056 — même réveil, même raison : la fiche de composition
+            // déposée par l'extension arrive par le disque, pas par
+            // l'ouverture, qui n'est qu'un raccourci faillible.
+            await ShareComposeHandoffConsumer.shared.consumeNext()
         }
         await withBudget("sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the

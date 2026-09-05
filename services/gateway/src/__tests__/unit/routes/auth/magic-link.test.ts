@@ -47,11 +47,12 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   validateSchema: jest.fn((_schema: any, data: any) => data),
 }));
 
+// Schemas de REPONSE reels (#4649) : `errorResponseSchema: { properties: {} }`
+// serialisait tout corps d'erreur en `{}` — invisible pour les vingt-trois
+// assertions `success === false` de ce fichier. Les schemas de REQUETE restent
+// bouchonnes : les rendre reels deplace le refus dans AJV, autre temoin.
 jest.mock('@meeshy/shared/types', () => ({
-  userSchema: { type: 'object', additionalProperties: true },
-  sessionSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: {} },
-  sessionsListResponseSchema: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object' } } },
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   refreshTokenRequestSchema: { type: 'object', properties: { token: { type: 'string' }, sessionToken: { type: 'string' } } },
   verifyEmailRequestSchema: { type: 'object', properties: { token: { type: 'string' }, code: { type: 'string' }, email: { type: 'string' } } },
   resendVerificationRequestSchema: { type: 'object', properties: { email: { type: 'string' } } },

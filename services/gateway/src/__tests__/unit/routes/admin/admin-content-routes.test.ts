@@ -1039,7 +1039,8 @@ describe('Admin content routes — GET /share-links', () => {
     await modApp.close();
   });
 
-  it('returns 200 and passes search filter to prisma (OR clause)', async () => {
+  // #4693 — plus AUCUNE clé de jointure dans le `OR` : l'appartenance à la page était un oracle.
+  it('returns 200 and passes search filter to prisma (name only)', async () => {
     app = buildApp('ADMIN');
     await app.ready();
 
@@ -1048,9 +1049,8 @@ describe('Admin content routes — GET /share-links', () => {
 
     const call = mockPrisma.conversationShareLink.findMany.mock.calls[0][0];
     expect(call.where.OR).toBeDefined();
-    expect(call.where.OR[0].linkId.contains).toBe('mylink');
-    expect(call.where.OR[1].identifier.contains).toBe('mylink');
-    expect(call.where.OR[2].name.contains).toBe('mylink');
+    expect(call.where.OR).toHaveLength(1);
+    expect(call.where.OR[0].name.contains).toBe('mylink');
   });
 
   it('returns 200 and applies isActive=true filter', async () => {

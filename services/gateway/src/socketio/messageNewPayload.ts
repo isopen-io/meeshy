@@ -1,5 +1,7 @@
 import type { Message } from '@meeshy/shared/types/index';
 import { resolveWireSenderId } from './messageEditedPayload';
+import { stickerFromMetadata } from '../services/stickers/messageSticker';
+import { servedQuotedMessage } from '../services/messaging/servedQuotedMessage';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -161,10 +163,25 @@ export function buildMessageNewPayload(
     sender: buildSenderPayload(message),
     attachments: inputs.attachments,
     replyToId: message.replyToId || undefined,
-    replyTo: inputs.replyTo,
+    // La PROTECTION et les TRADUCTIONS du message cité sont DÉRIVÉES DE LA
+    // LIGNE (cf. en-tête), donc elles appartiennent à cette unité : la forme du
+    // `replyTo` reste propre au transport, ce qu'il a le DROIT de transporter
+    // ne l'est pas. Le producteur REST/ZMQ reconstruisait sa citation champ par
+    // champ sans un seul champ de protection : répondre à un message à vue
+    // unique republiait son texte EN CLAIR dans la bulle temps réel, alors que
+    // le même fil rechargé par REST affichait « 👁️ 💬 ».
+    replyTo: message.replyTo
+      ? { ...(inputs.replyTo as Record<string, unknown>), ...servedQuotedMessage(message.replyTo) }
+      : inputs.replyTo,
     storyReplyToId: message.storyReplyToId || undefined,
     forwardedFromId: message.forwardedFromId || undefined,
     forwardedFromConversationId: message.forwardedFromConversationId || undefined,
+    // Sticker (#4823) — hissé depuis `metadata.sticker` ICI, et chez aucun des
+    // deux producteurs : c'est une famille DÉRIVÉE DE LA LIGNE MESSAGE (cf.
+    // en-tête), et `location` a montré ce que coûte un hoist recopié par
+    // transport. iOS rend la décoration animée depuis ce champ ; sans lui le
+    // destinataire ne voit que le PNG de repli jusqu'au rechargement REST.
+    sticker: stickerFromMetadata(message.metadata) ?? undefined,
     isEncrypted: message.isEncrypted,
     encryptionMode: message.encryptionMode,
     encryptedContent: message.encryptedContent,

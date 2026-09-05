@@ -11,6 +11,8 @@ import {
   UPLOAD_LIMITS,
 } from '@meeshy/shared/types/attachment';
 import jwt from 'jsonwebtoken';
+import { z } from 'zod';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
@@ -104,6 +106,57 @@ function clientMeasuredMetadata(rawDuration: string | undefined): { duration: nu
   const duration = Number(rawDuration);
   if (!Number.isFinite(duration) || duration <= 0) return undefined;
   return { duration };
+}
+
+/**
+ * Transcription faite SUR L'APPAREIL, transportée par la clé `transcription`
+ * d'`Upload-Metadata` (#4948, D-AUDIO-01).
+ *
+ * `MessageProcessor.processAudioAttachments` lisait déjà
+ * `MessageAttachment.metadata.transcription` pour le remettre au translator
+ * en passthrough (`mobileTranscription`) — mais aucun chemin d'upload iOS ne
+ * l'écrivait : un vocal restait muet tant que Whisper n'avait pas répondu, et
+ * pour toujours si le translator échouait. La forme validée est celle que le
+ * translator lit (`startMs`/`endMs`), pas celle de `POST /posts`
+ * (`MobileTranscriptionSchema`, `start`/`end`) : les deux consommateurs
+ * diffèrent, et c'est le lecteur final qui dicte la forme.
+ *
+ * Bornée avant tout parsing (un en-tête n'est pas un corps : 16 Kio ici, borne
+ * DÉFENSIVE — le client, lui, plafonne bien plus bas, à 4 Kio de JSON, parce
+ * que c'est la LIGNE d'en-tête base64 qui a un budget, pas le JSON ; voir
+ * `TusUploadTranscriptionMetadata.maxEncodedBytes`), validée
+ * strictement (langue ISO, confiance dans [0,1], horodatages entiers) et
+ * DÉPOUILLÉE de toute clé inconnue — `metadata` est un document Mongo, rien
+ * d'arbitraire n'y entre. `source` est posée par le serveur, jamais par le
+ * client. Toute charge invalide est IGNORÉE : l'audio arrive et le serveur
+ * transcrit comme avant — un vocal ne doit jamais échouer à cause d'une
+ * transcription facultative.
+ */
+const CLIENT_TRANSCRIPTION_MAX_BYTES = 16 * 1024;
+const CLIENT_TRANSCRIPTION_LANGUAGE = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i;
+const ClientTranscriptionSchema = z.object({
+  text: z.string().trim().min(1).max(CLIENT_TRANSCRIPTION_MAX_BYTES),
+  language: z.string().regex(CLIENT_TRANSCRIPTION_LANGUAGE),
+  confidence: z.number().min(0).max(1).optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  segments: z.array(z.object({
+    text: z.string().max(4096),
+    startMs: z.number().int().nonnegative(),
+    endMs: z.number().int().nonnegative(),
+  })).max(1000).optional(),
+});
+
+function clientDeclaredTranscription(raw: string | undefined): Prisma.InputJsonValue | undefined {
+  if (!raw || Buffer.byteLength(raw, 'utf8') > CLIENT_TRANSCRIPTION_MAX_BYTES) return undefined;
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  const verdict = ClientTranscriptionSchema.safeParse(candidate);
+  if (!verdict.success) return undefined;
+  return { ...verdict.data, source: 'mobile' };
 }
 
 export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoutesOptions = {}): Promise<void> {
@@ -473,6 +526,13 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           }
         }
 
+        // Lue ici, sur la branche MESSAGE et pour un AUDIO seulement :
+        // `MessageProcessor` ne la lit que là, ailleurs elle ne serait qu'un
+        // blob mort dans la ligne.
+        const clientTranscription = attachmentType === 'audio'
+          ? clientDeclaredTranscription(upload.metadata?.transcription)
+          : undefined;
+
         const attachment = await prisma.messageAttachment.create({
           data: {
             fileName: storedName,
@@ -510,6 +570,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             // ouvre ne garde rien.
             // @see packages/shared/utils/forward-to-publication.ts
             capturedInApp: upload.metadata?.capturedinapp === 'true',
+            ...(clientTranscription ? { metadata: { transcription: clientTranscription } } : {}),
           },
         });
         recordId = attachment.id;

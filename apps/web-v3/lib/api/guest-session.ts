@@ -52,6 +52,8 @@
  * vraie par construction la loi « un onglet caché ne fait rien partir ».
  */
 
+import { valeurDuCookie } from './cookies';
+
 const RACINE = 'meeshy.guest.';
 
 /** Ce qui est persisté d'une place invitée — et rien de plus. */
@@ -233,4 +235,192 @@ export const effaceSession = (lien: CleDeLien): void => {
   if (!lienValide(lien)) return;
 
   surLeStockage(undefined, (stockage) => stockage.removeItem(cleDuLien(lien)));
+};
+
+/**
+ * LE COOKIE — la seconde projection de la MÊME valeur (conception § 12.3).
+ *
+ * Pour que le SERVEUR décide l'état de `/chat/:lien` (CHOIX ou INVITÉ) sans
+ * JavaScript, le jeton voyage dans un cookie que la route pose à la jonction et
+ * relit à chaque chargement. Il est écrit et lu ICI, par le détenteur unique,
+ * jamais par un second store : `lireSession` et ce cookie sont deux projections
+ * d'une valeur, sur deux supports — le cookie pour le serveur, le stockage pour
+ * `lib/realtime/lifecycle.ts` et l'élection du battement.
+ *
+ * LE NOM PORTE LE LIEN, LE CHEMIN NE LE PORTE PAS — et c'est une décision, pas
+ * un raccourci. La directive écrit `Path=/chat/<segment>` ; or le segment n'est
+ * pas le lien : la passerelle accepte TROIS formes pour la même place (point
+ * 2 bis ci-dessus), et un cookie porté au segment cesserait d'être envoyé dès
+ * que le lecteur arrive par l'autre forme — il verrait la modale, referait un
+ * `join`, et paierait le § 6.1 point 3 en entier. Le nom, lui, est indexé par
+ * la `CleDeLien` que le SERVEUR rend ; le chemin `/chat` ne couvre que la porte
+ * de l'invité (`/chat/…`, jamais `/chats`, la porte du membre — la
+ * correspondance de chemin d'un cookie exige un `/` après le préfixe).
+ *
+ * SANS `Max-Age` : le jeton n'a AUCUN TTL (point 1). Sans `HttpOnly`, pour la
+ * même raison que `meeshy_auth` (`app/authentification/remise.ts`) : une
+ * déconnexion doit pouvoir le retirer, et le module de participation doit
+ * pouvoir le lire pour s'authentifier au socket.
+ */
+const RACINE_DU_COOKIE = 'meeshy_guest_';
+
+export const CHEMIN_DU_COOKIE = '/chat';
+
+export const nomDuCookie = (lien: CleDeLien): string => `${RACINE_DU_COOKIE}${lien}`;
+
+const attributsDuCookie = (secure: boolean): string =>
+  `Path=${CHEMIN_DU_COOKIE}; SameSite=Lax${secure ? '; Secure' : ''}`;
+
+/** La valeur `Set-Cookie` qui POSE la place — écrite par la route de jonction, et par elle seule. */
+export const cookieDeSession = ({
+  lien,
+  jeton,
+  secure,
+}: {
+  readonly lien: CleDeLien;
+  readonly jeton: string;
+  readonly secure: boolean;
+}): string => `${nomDuCookie(lien)}=${encodeURIComponent(jeton)}; ${attributsDuCookie(secure)}`;
+
+/** L'acte NOMMÉ de l'état F, projeté sur le cookie : le seul chemin par lequel il se retire. */
+export const cookieDEffacement = ({
+  lien,
+  secure,
+}: {
+  readonly lien: CleDeLien;
+  readonly secure: boolean;
+}): string => `${nomDuCookie(lien)}=; Max-Age=0; ${attributsDuCookie(secure)}`;
+
+/**
+ * Le jeton, lu dans un en-tête `Cookie` — celui d'une requête côté serveur, ou
+ * `document.cookie` côté navigateur, qui ont la même forme.
+ */
+export const jetonDuCookie = (enteteCookie: string | null, lien: CleDeLien): string | null =>
+  lienValide(lien) ? valeurDuCookie(enteteCookie, nomDuCookie(lien)) : null;
+
+const decodee = (valeur: string): string => {
+  try {
+    return decodeURIComponent(valeur);
+  } catch {
+    return valeur;
+  }
+};
+
+/**
+ * TOUS les jetons invités que le navigateur présente — la valeur de chaque
+ * cookie `meeshy_guest_<lien>` de l'en-tête, quelle que soit la place.
+ *
+ * Le NOM porte le lien (ci-dessus), mais il n'est pas relu ici, et c'est
+ * voulu : la place que ces jetons détiennent se RECONNAÎT auprès du serveur
+ * (`reconnais`, `lib/api/invite.ts`), qui rend la clé canonique — un nom de
+ * cookie n'est jamais promu en `CleDeLien` par le client, pas plus qu'un
+ * segment d'adresse.
+ *
+ * Pourquoi cette lecture existe : quand l'aperçu du lien REFUSE (410 — clos,
+ * échu, plein), sa charge ne porte aucun `linkId`, donc le nom du cookie de
+ * CE lien n'est pas calculable. Or c'est précisément là que ce que le lecteur
+ * DÉTIENT doit trancher avant l'aperçu (§ 6.3.B : « le jeton est bon tant
+ * qu'il est bon ») : la route présente chacun de ces jetons à la porte qui
+ * sait dire s'il appartient au lien. Un cookie sans valeur ne compte pas ;
+ * deux cookies de même valeur ne comptent qu'une fois.
+ */
+export const jetonsDesCookies = (enteteCookie: string | null): readonly string[] => [
+  ...new Set(
+    (enteteCookie ?? '')
+      .split(';')
+      .map((morceau) => morceau.trim())
+      .filter((morceau) => morceau.startsWith(RACINE_DU_COOKIE) && morceau.includes('='))
+      .map((morceau) => morceau.slice(morceau.indexOf('=') + 1))
+      .filter((valeur) => valeur !== '')
+      .map(decodee),
+  ),
+];
+
+/**
+ * TOUS LES NOMS de cookies invités présentés — la JUMELLE de `jetonsDesCookies`
+ * ci-dessus, qui en rend les VALEURS. La déconnexion (#5095) a besoin des NOMS :
+ * elle expire chaque place que le lecteur détient, quel que soit le lien, et un
+ * `Set-Cookie` d'effacement se rédige avec un NOM, jamais avec une valeur.
+ *
+ * Même filtre, même préfixe exact — `startsWith(RACINE_DU_COOKIE)`, jamais un
+ * autre : un cookie `meeshy_guestbook` ne commence pas par `meeshy_guest_`, il
+ * n'entre donc pas dans le balayage.
+ */
+export const nomsDesCookiesInvites = (enteteCookie: string | null): readonly string[] => [
+  ...new Set(
+    (enteteCookie ?? '')
+      .split(';')
+      .map((morceau) => morceau.trim())
+      .filter(
+        (morceau) =>
+          morceau.startsWith(RACINE_DU_COOKIE) &&
+          morceau.includes('=') &&
+          morceau.slice(morceau.indexOf('=') + 1) !== '',
+      )
+      .map((morceau) => morceau.slice(0, morceau.indexOf('='))),
+  ),
+];
+
+/**
+ * LES `Set-Cookie` QUI FERMENT TOUTES LES PLACES — un par nom présenté, avec
+ * les MÊMES attributs que la pose (`attributsDuCookie`) : un `Set-Cookie`
+ * d'effacement ne matche que si nom, `Path` et `Domain` concordent.
+ */
+export const cookiesDEffacementDesPlaces = (
+  enteteCookie: string | null,
+  secure: boolean,
+): readonly string[] =>
+  nomsDesCookiesInvites(enteteCookie).map((nom) => `${nom}=; Max-Age=0; ${attributsDuCookie(secure)}`);
+
+/**
+ * L'EFFACEMENT, CÔTÉ NAVIGATEUR, DE TOUTES LES PLACES — la projection de
+ * `effaceLaPlace` sur TOUT lien à la fois, pour la déconnexion (#5095) : sortir
+ * de la v3 ferme chaque place invitée que ce navigateur détenait, pas
+ * seulement celle du lien courant. Best-effort, comme `surLeStockage` : une
+ * entrée illisible ou un stockage refusé n'interrompt jamais la sortie.
+ */
+export const effaceToutesLesPlaces = (): void => {
+  surLeStockage(undefined, (stockage) => {
+    const cles: string[] = [];
+    for (let i = 0; i < stockage.length; i += 1) {
+      const cle = stockage.key(i);
+      if (cle !== null && cle.startsWith(RACINE)) cles.push(cle);
+    }
+    cles.forEach((cle) => stockage.removeItem(cle));
+  });
+
+  if (typeof document === 'undefined') return;
+  try {
+    for (const nom of nomsDesCookiesInvites(document.cookie)) {
+      document.cookie = `${nom}=; Max-Age=0; ${attributsDuCookie(document.location.protocol === 'https:')}`;
+    }
+  } catch {
+    // Un accès refusé à `document.cookie` (navigation privée, quota) ne doit
+    // pas interrompre la sortie — les autres étapes de la déconnexion suivent.
+  }
+};
+
+/**
+ * L'effacement, côté NAVIGATEUR — la projection de `effaceSession` sur le
+ * cookie, quand l'état F est constaté par le module de participation (401 de
+ * contrôle sur le battement). Même acte, même nom, même seul déclencheur.
+ */
+export const effaceLeCookie = (lien: CleDeLien): void => {
+  if (typeof document === 'undefined' || !lienValide(lien)) return;
+  document.cookie = cookieDEffacement({ lien, secure: document.location.protocol === 'https:' });
+};
+
+/**
+ * LA PLACE, EFFACÉE SUR SES DEUX SUPPORTS — l'acte de l'état F tel que le
+ * module de participation le pose : le cookie, que le serveur relit, ET le
+ * stockage, que les AUTRES ONGLETS écoutent (`storage`, transition
+ * `jeton-externe` de `lib/realtime/lifecycle.ts`). Un onglet dont le battement
+ * constate la place fermée ferme ainsi ses voisins sans qu'aucun n'ait à
+ * battre. Le stockage n'émet cet événement que si l'entrée EXISTAIT : c'est
+ * pourquoi le module POSE la projection à son démarrage (`poseSession`) — un
+ * effacement sans projection préalable ne dirait rien à personne.
+ */
+export const effaceLaPlace = (lien: CleDeLien): void => {
+  effaceSession(lien);
+  effaceLeCookie(lien);
 };

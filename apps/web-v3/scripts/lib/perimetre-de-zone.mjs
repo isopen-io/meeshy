@@ -14,15 +14,22 @@
 // fautif à l'étape même où `<Link>` devient universel. Le garde de la chaîne consomme désormais
 // `cheminsReclames` / `capture` d'ici [revue #4414].
 //
-// IL RESTE UNE TROISIÈME LECTURE, et la taire serait refaire la faute qu'on vient de corriger :
-// `apps/web/__tests__/public/sw.v3-zone.test.ts` → `traefikV3Prefixes()` lit la MÊME ligne, avec
-// la MÊME faiblesse (`/PathPrefix\(`([^`]+)`\)/g` seul, donc `Path(…)` jeté sans un mot). Elle
-// n'est pas fusionnée ici parce qu'elle vit dans `apps/web`, l'application VIVE, à qui la
-// conception de la v3 interdit de toucher hors de ce que le § 4 nomme — et faire dépendre l'arbre
-// de tests de l'app qui sert le trafic d'un module de `apps/web-v3` est une décision de
-// placement, pas un correctif de revue. Ce qu'elle coûte tant qu'elle vit : le gate
-// d'anti-divergence entre le routeur et `V3_ZONE_PREFIXES` sous-compterait les chemins le jour
-// où un `Path(…)` entrerait dans la règle. Ce jour-là, c'est ce module qu'elle doit appeler.
+// IL RESTE UNE TROISIÈME LECTURE — et ce qu'elle annonçait est ARRIVÉ.
+// `apps/web/__tests__/public/sw.v3-zone.test.ts` lit la MÊME ligne. Le paragraphe qui vivait ici
+// disait : « le gate d'anti-divergence sous-compterait les chemins le jour où un `Path(…)`
+// entrerait dans la règle ». Ce jour a été le 2026-09-01 : la vitrine a basculé sur staging par
+// un `Path(`/`)`, et le seul chemin humain de la zone est resté invisible à ce lecteur — donc
+// hors de `V3_ZONE_PREFIXES`, donc intercepté par le worker legacy chez tout visiteur revenant.
+// Le risque énoncé n'avait pas de témoin : l'énoncer n'était pas le garder.
+//
+// Ce qui a changé depuis : ce lecteur reconnaît désormais les DEUX matchers et lit les DEUX
+// déploiements, et surtout il a cessé d'être le gate d'anti-divergence. Ce rôle est passé à
+// `scripts/check-v3-pipeline.mjs` — invariant « le worker legacy s'efface devant ce que la règle
+// réclame », posé une fois PAR DÉPLOIEMENT et qui EXÉCUTE `belongsToV3Zone` au lieu de la
+// recopier. Le témoin de `apps/web` garde ce qu'il est seul à pouvoir garder : le COMPORTEMENT du
+// listener. La fusion complète de la lecture reste une décision de PLACEMENT — faire dépendre
+// l'arbre de tests de l'app qui sert le trafic d'un module de `apps/web-v3` — et non un correctif
+// de revue ; elle n'est simplement plus ce qui protège l'invariant.
 //
 // POURQUOI ICI, ET PAS À LA RACINE. La donnée lue est bien un fichier d'infrastructure de la
 // racine, et `scripts/lib/` y serait l'adresse naturelle — mais l'invariant (i) de
@@ -59,6 +66,44 @@ export const ROUTEUR_V3 = 'frontend-v3';
 export const PREFIXE_DE_ZONE = '/__v3';
 export const ZONE_DACTIFS = `${PREFIXE_DE_ZONE}/_next`;
 
+// LA ZONE DU TEMPS RÉEL (conception § 12.4) : `participate.<hash>.js` et `socket.io.<hash>.js`,
+// servis par `app/rt/[nom]/route.ts` — et JOIGNABLES sous `/__v3/rt/` par une RÉÉCRITURE, parce
+// que Next ignore tout segment de `app/` qui commence par `_` (`next/dist/build/entries.js`,
+// `ignorePartFilter: (part) => part.startsWith('_')`) : `app/__v3/…` n'est pas une route, c'est
+// un dossier privé. La réécriture est déclarée ICI, une fois, et lue par `next.config.ts` (qui la
+// pose) comme par `scripts/check-v3-pipeline.mjs` (qui vérifie qu'elle atterrit sur une route
+// servie, et que la règle du routeur ne réclame `/__v3/rt/` qu'à ce titre). Une seconde
+// déclaration serait la jumelle qui laisse la règle réclamer un chemin mort.
+export const ZONE_DU_TEMPS_REEL = `${PREFIXE_DE_ZONE}/rt`;
+
+// LE TRAVAILLEUR DE ZONE (#4473) : `.rt/sw.js`, servi par `app/sw/route.ts` et
+// joignable sous `/__v3/sw` — une adresse STABLE (jamais de hash : l'URL d'un
+// Service Worker est son identité ; en changer enregistre un worker NEUF au
+// lieu de mettre à jour l'existant). La « nécessité de portée » qui aurait
+// exigé la racine (§ 7) est levée par l'en-tête `Service-Worker-Allowed: /`
+// que la route pose : le script peut vivre DANS la zone, donc sous un chemin
+// que `V3_ZONE_PREFIXES` couvre déjà (`/__v3`, segment-aware) — aucune fenêtre
+// de propagation legacy à payer, contrairement à un actif servi à la racine.
+export const ZONE_DU_TRAVAILLEUR = `${PREFIXE_DE_ZONE}/sw`;
+
+export const REECRITURES_DE_ZONE = Object.freeze([
+  Object.freeze({ source: `${ZONE_DU_TEMPS_REEL}/:nom`, destination: '/rt/:nom' }),
+  Object.freeze({ source: ZONE_DU_TRAVAILLEUR, destination: '/sw' }),
+]);
+
+// La forme ROUTE d'un motif de réécriture (`/rt/:nom` → `/rt/[nom]`) : celle sous laquelle
+// `scripts/check-v3-pipeline.mjs` inventorie ce que `app/` sert.
+export const routeDeReecriture = (motif) => motif.replace(/:([A-Za-z0-9_]+)/g, '[$1]');
+
+// Les chemins que la zone sert PAR réécriture, parmi les routes servies données — sous leur
+// forme route, pour entrer dans le même inventaire que `app/`.
+export const cheminsServisParReecriture = (routesServies) =>
+  Object.freeze(
+    REECRITURES_DE_ZONE.filter(({ destination }) =>
+      routesServies.includes(routeDeReecriture(destination)),
+    ).map(({ source }) => routeDeReecriture(source)),
+  );
+
 const CLE_DE_LA_REGLE = (routeur) => `traefik.http.routers.${routeur}.rule=`;
 
 // `Path` ET `PathPrefix` : les deux matchers que Traefik distingue sur un chemin, et la
@@ -93,14 +138,27 @@ export const cheminsReclames = (regle) =>
     ),
   );
 
-// Le prédicat de Traefik, et non une approximation : `Path` est une ÉGALITÉ, `PathPrefix` est
-// l'égalité OU un sous-chemin. Le `endsWith('/')` n'est pas une coquetterie — sans lui, un
-// `PathPrefix(`/`)` (étape 7) compare contre `` `//` `` et ne capture plus rien, ce qui rend le
-// périmètre le plus LARGE possible équivalent au plus étroit.
+// Le prédicat de Traefik, et non une approximation. `Path` est une ÉGALITÉ ; `PathPrefix` est un
+// PRÉFIXE DE CHAÎNE, pas un préfixe de SEGMENTS — et cette nuance a coûté deux routes vivantes.
+//
+// Ce prédicat a longtemps comparé contre `` `${valeur}/` ``, c'est-à-dire un préfixe segmenté :
+// il tenait `/login` pour HORS de `PathPrefix(`/l`)`. Traefik, lui, y répond OUI. Mesuré sur
+// staging le 2026-09-01, la règle réclamant `PathPrefix(`/l`)` : `/login`, `/links` et `/lien`
+// étaient tous les trois servis par la ZONE — donc par le 404 du routeur Pages de la v3 — alors
+// que le legacy les sert et que rien ne les avait basculés. `/login` est l'appel à l'action de la
+// vitrine ; il était mort depuis la bascule de l'étape 2.
+//
+// Un modèle PLUS PRUDENT que la réalité ne protège pas : il DÉCLARE une frontière que
+// l'aiguilleur ne trace pas, et tout ce qui s'appuie dessus hérite du même angle mort. Le modèle
+// suit donc Traefik, et c'est le RÈGLEMENT qui doit être écrit sans ambiguïté — un `PathPrefix`
+// destiné à un sous-chemin s'écrit avec sa barre finale (`/l/`), ce que garde l'invariant « aucun
+// PathPrefix ne vole une route voisine » de `scripts/check-v3-pipeline.mjs`.
+//
+// Bénéfice de bord : le cas dégénéré disparaît de lui-même. `PathPrefix(`/`)` (étape 7) capture
+// bien toute l'origine, là où la comparaison contre `` `//` `` ne capturait plus rien — le
+// périmètre le plus LARGE devenait équivalent au plus étroit.
 export const capture = ({ matcher, valeur }, chemin) =>
-  matcher === 'Path'
-    ? chemin === valeur
-    : chemin === valeur || chemin.startsWith(valeur.endsWith('/') ? valeur : `${valeur}/`);
+  matcher === 'Path' ? chemin === valeur : chemin.startsWith(valeur);
 
 // LE PÉRIMÈTRE DE NAVIGATION — ce que la v3 sert à un HUMAIN, ce qui n'est pas ce que la règle
 // réclame.
@@ -132,7 +190,11 @@ export const perimetreDeNavigation = (compose) => {
     );
   }
 
-  return Object.freeze(reclames.filter(({ valeur }) => !valeur.startsWith(ZONE_DACTIFS)));
+  // Tout ce que la règle réclame SOUS le préfixe de zone est un ACTIF — les bundles
+  // (`/__v3/_next`) comme les modules du temps réel (`/__v3/rt/`) — jamais une page où un
+  // `<Link>` mènerait. Le filtre porte donc sur le préfixe de ZONE, pas sur la seule sous-zone
+  // des bundles : une sous-zone de plus ne doit pas faire apparaître une « navigation » fantôme.
+  return Object.freeze(reclames.filter(({ valeur }) => !valeur.startsWith(PREFIXE_DE_ZONE)));
 };
 
 export const litLePerimetre = (racineDuDepot) =>

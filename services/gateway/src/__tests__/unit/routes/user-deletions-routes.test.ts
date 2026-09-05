@@ -15,6 +15,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -45,16 +46,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
       error: jest.fn(),
       debug: jest.fn(),
     })),
-  },
-}));
-
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-    },
   },
 }));
 
@@ -593,6 +584,57 @@ describe('DELETE /api/messages/:messageId/delete-for-me', () => {
     });
     expect(res.statusCode).toBe(500);
     await appErr.close();
+  });
+});
+
+describe("DELETE /api/messages/:messageId/delete-for-me — le where imbriqué participants.isActive est HONORÉ, pas seulement déclaré (#4867)", () => {
+  // Le double `messageFindUnique` ci-dessus rend un `conversation.participants`
+  // déjà pré-filtré À LA MAIN — il ne prouve rien sur le `where: { userId,
+  // isActive: true }` imbriqué que la production applique réellement. Ici le
+  // double HONORE ce `where` (`findFirstHonouringWhere`, #4867), sur un
+  // `findUnique` — la sémantique du where vaut identiquement à un `findFirst`.
+  async function buildAppWithHonouringMessage(rawDocument: Record<string, unknown>) {
+    const prisma = makePrisma();
+    (prisma.message as any).findUnique = jest.fn<any>(findFirstHonouringWhere([rawDocument]));
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as unknown);
+    await app.register(userDeletionsRoutes);
+    await app.ready();
+    return app;
+  }
+
+  it('rend 403 pour un participant SORTI (isActive:false) même si sa propre ligne existe encore — preuve par mutation sur le `where` imbriqué', async () => {
+    const doc = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      content: 'hello',
+      conversation: { participants: [{ ...ACTIVE_PARTICIPANT, isActive: false }] },
+    };
+    const app = await buildAppWithHonouringMessage(doc);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/messages/${MSG_ID}/delete-for-me`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('rend 200 pour un participant ACTIF, sous le même double honorant', async () => {
+    const doc = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      content: 'hello',
+      conversation: { participants: [{ ...ACTIVE_PARTICIPANT, isActive: true }] },
+    };
+    const app = await buildAppWithHonouringMessage(doc);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/messages/${MSG_ID}/delete-for-me`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
   });
 });
 

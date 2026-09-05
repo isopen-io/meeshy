@@ -1,12 +1,12 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: jest.fn<any>(),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>, jest.fn<any>()));
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
-  isValidMongoId: jest.fn<any>((id: string) => /^[0-9a-fA-F]{24}$/.test(id)),
-}));
+  ...jest.requireActual<Record<string, unknown>>('@meeshy/shared/utils/conversation-helpers'),
+  isValidMongoId: jest.fn<any>((id: string) => /^[0-9a-fA-F]{24}$/.test(id)) }));
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
@@ -305,16 +305,16 @@ describe('registerParticipantsRoutes', () => {
   // Deux GET : la LISTE des participants, et la FICHE de l'un d'eux — cette
   // dernière ajoutée pour les visiteurs sans compte, qui n'ont pas de page
   // `/u/{pseudo}` où présenter ce qu'ils ont fourni en entrant.
-  // Neuf depuis #4167 : `registerLinkAdmissionRoutes` s'enregistre depuis ce
-  // même point d'entrée (`POST /links/:key/members`, `PATCH|DELETE
-  // /guest-sessions/me` — la loi d'admission UNIQUE d'un lien de partage),
-  // exactement comme `participant-removal.ts`/`participant-role.ts` avant
-  // elle : `route-registration.ts` n'a rien à savoir de la découpe.
-  it('should register all nine routes', () => {
+  // Neuf depuis #4167 (`registerLinkAdmissionRoutes` : la loi d'admission UNIQUE
+  // d'un lien de partage) ; DIX depuis #4176, `PATCH …/participants/:participantKey`
+  // étant enregistrée par `participants-writes.ts`. Elle ne REMPLACE rien encore :
+  // les quatre alias vivent deux versions clientes, d'où un PATCH de PLUS. Le
+  // témoin qui NOMME son chemin vit dans `conversations/participant-patch.test.ts`.
+  it('should register all ten routes', () => {
     expect(mockFastify.get).toHaveBeenCalledTimes(2);
     expect(mockFastify.post).toHaveBeenCalledTimes(2);
     expect(mockFastify.delete).toHaveBeenCalledTimes(2);
-    expect(mockFastify.patch).toHaveBeenCalledTimes(3);
+    expect(mockFastify.patch).toHaveBeenCalledTimes(4);
   });
 
   it('should use optionalAuth for GET and requiredAuth for POST, DELETE, PATCH', () => {
@@ -414,7 +414,6 @@ describe('registerParticipantsRoutes', () => {
               systemLanguage: 'en',
               regionalLanguage: 'fr',
               customDestinationLanguage: 'es',
-              autoTranslateEnabled: true,
               canSendMessages: true,
               canSendFiles: true,
               canSendImages: true,
@@ -427,6 +426,7 @@ describe('registerParticipantsRoutes', () => {
       // participants (aucun client ne l'affiche ; les modos ont les endpoints admin).
       const participantData = reply.send.mock.calls[0][0].data[0];
       expect(participantData.email).toBeUndefined();
+      expect(participantData.autoTranslateEnabled).toBeUndefined(); // #4643, cf. #4161
     });
 
     it('should use default limit of 20 when not provided', async () => {

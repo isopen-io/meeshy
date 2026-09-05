@@ -32,6 +32,7 @@ import {
 // `link-admission-single-source-guard.test.ts` interdit d'y revenir.
 import { performLinkJoin, resolveClientIp } from './link-admission';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -204,7 +205,13 @@ export function registerSharingRoutes(
       });
 
       if (!user) {
-        return sendForbidden(reply, 'User not found');
+        // #4856 — cette lecture porte sur la ligne `User` de l'APPELANT
+        // lui-même (son propre JWT, devenu orphelin si le compte a été
+        // supprimé entretemps) : aucun tiers n'est énuméré, donc aucune
+        // raison anti-énumération ne justifie de déguiser l'absence en
+        // refus. Aligné sur `sendNotFound(reply, 'User not found')` que ce
+        // même fichier sert déjà pour l'utilisateur CIBLE d'une invitation.
+        return sendNotFound(reply, 'User not found');
       }
 
       // #4169 — tout le reste (résolution de l'identifiant de conversation,
@@ -498,9 +505,15 @@ export function registerSharingRoutes(
       // donc du COMPTE de l'appelant. `email` est `@unique` et non nul sur
       // `User` — un lien `requireEmail` est satisfait sans jamais solliciter
       // l'appelant.
+      // #4662 — les QUATRE rangs, jamais `systemLanguage` seul. C'est cette
+      // langue que `performLinkJoin` compare à `allowedLanguages` : chargée au
+      // rang 1 nu, elle REFUSAIT l'entrée à un lecteur dont la langue admise
+      // vit au rang 2, 3 ou 4, en lui opposant le repli du site. Et c'est le
+      // `select` qui décidait, pas l'appel — une projection étroite rend la
+      // descente impossible EN AVAL sans qu'aucun témoin de rang ne rougisse.
       const requester = await prisma.user.findUnique({
         where: { id: userToken.userId },
-        select: { email: true, systemLanguage: true }
+        select: { email: true, ...RECIPIENT_LANG_SELECT }
       });
 
       const result = await performLinkJoin({
@@ -512,7 +525,7 @@ export function registerSharingRoutes(
           firstName: '',
           lastName: '',
           email: requester?.email,
-          language: normalizeLanguageForDedup(requester?.systemLanguage || 'fr'),
+          language: normalizeLanguageForDedup(recipientLanguage(requester, 'fr')),
         },
         broadcast: (message, conversationId) =>
           fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
@@ -734,13 +747,34 @@ export function registerSharingRoutes(
         return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
       }
 
-      // Vérifier que l'inviteur a les permissions pour inviter
+      // #4557 — **MODERATOR, le même plancher que `POST …/participants`.**
+      //
+      // Cette porte exigeait ADMIN pour un geste dont l'autre se contente d'un
+      // modérateur, alors que les deux produisent la MÊME ligne : ni l'une ni
+      // l'autre ne crée d'invitation EN ATTENTE — elles écrivent un
+      // `Participant` immédiatement ACTIF, `role: 'member'`, avec la table
+      // `NEW_MEMBER_PERMISSIONS` du site unique (#4174), par le même
+      // `resolveConversationEntry`. « Inviter » nomme ici un ajout direct.
+      //
+      // Le rang plus haut ne retenait donc rien : un modérateur à qui cette
+      // porte refusait quelqu'un l'ajoutait par l'autre, dans la seconde, avec
+      // les mêmes droits et un éventail de diffusion PLUS complet. C'était une
+      // incohérence (dimension 6), pas une protection.
+      //
+      // L'alignement se fait vers le BAS, seul sens non régressif : monter
+      // `participants` à ADMIN retirerait aux modérateurs une capacité VIVANTE
+      // — les trois clients passent par cette porte-là — pour fermer une porte
+      // que plus aucun client n'appelle. Le plancher LUI-MÊME (un modérateur
+      // peut-il ajouter ?) est inchangé ; le déplacer serait une décision
+      // produit. Gardé par `conversation-new-member-rights-parity.test.ts`,
+      // qui COMPARE les deux portes — un témoin posé sur une seule ne pourrait
+      // pas rougir d'une redivergence.
       const canInvite = actorHasMinimumRole(
         {
           conversationRole: inviterMember.role,
           platformRole: authContext.registeredUser.role,
         },
-        MemberRole.ADMIN,
+        MemberRole.MODERATOR,
       );
 
       if (!canInvite) {

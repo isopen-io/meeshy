@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
@@ -87,6 +88,7 @@ public fun MessageBubble(
     onImageClick: ((Int) -> Unit)? = null,
     onLocationClick: ((BubbleLocation) -> Unit)? = null,
     onAudioClick: ((BubbleAudio) -> Unit)? = null,
+    onFileClick: ((BubbleFile) -> Unit)? = null,
     onReplyPreviewClick: (() -> Unit)? = null,
     onFlagTap: ((String) -> Unit)? = null,
     mentionDisplayNames: Map<String, String>? = null,
@@ -114,6 +116,7 @@ public fun MessageBubble(
         expiresAtIso = content.expiresAtIso,
         isViewOnce = content.isViewOnce,
         viewOnceCount = content.viewOnceCount,
+        isSystem = content.isSystem,
     )
     AnimatedVisibility(
         visible = !renderKind.isEphemeralExpired,
@@ -121,7 +124,11 @@ public fun MessageBubble(
         enter = EnterTransition.None,
         exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
     ) {
-    if (renderKind.isBurned) {
+    if (renderKind.isSystem) {
+        // A conversation notice (join/leave/legacy summary) renders as a centered,
+        // avatar-less notice — never a signed bubble (iOS `BubbleSystemNoticeView`).
+        BubbleSystemNoticeView(text = content.text)
+    } else if (renderKind.isBurned) {
         // A consumed view-once message shows the persistent "Seen and deleted"
         // tombstone (iOS `BubbleBurnedView`) in place of its content, aligned to
         // the sender side like the deleted tombstone.
@@ -255,6 +262,8 @@ public fun MessageBubble(
                     BubbleFileRow(
                         file = file,
                         onColor = onColor,
+                        onClick = onFileClick?.takeIf { !file.url.isNullOrBlank() }
+                            ?.let { { it(file) } },
                         modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                     )
                 }
@@ -451,6 +460,38 @@ private fun BubbleBurnedView(isOutgoing: Boolean, modifier: Modifier = Modifier)
 }
 
 /**
+ * Centered conversation notice rendered in place of a chat bubble — Android render of the
+ * iOS `BubbleSystemNoticeView`. A muted label sits in a subtle capsule, CENTERED (no avatar,
+ * no sender name, aligned to neither side): a system message is a milestone of the thread,
+ * not a turn at talk. No leading glyph — the producer is unknown by construction. The label
+ * carries the gateway's localized notice text via [BubbleContent.text] (already resolved
+ * under the Prisme). A blank notice renders nothing rather than an empty pill.
+ */
+@Composable
+private fun BubbleSystemNoticeView(text: String, modifier: Modifier = Modifier) {
+    if (text.isBlank()) return
+    val capsule = RoundedCornerShape(MeeshyRadius.pill)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .clip(capsule)
+                .background(MeeshyTheme.tokens.backgroundTertiary)
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+                .semantics(mergeDescendants = true) { contentDescription = text },
+        )
+    }
+}
+
+/**
  * Conceals its [content] behind the "tap to reveal" fog + blur when [spec] is non-null;
  * otherwise renders the bubble body unchanged (zero cost for a normal message). The
  * boundary clips the conceal to the bubble's rounded shape so the fog never bleeds past
@@ -643,12 +684,21 @@ private fun imageAspectRatio(image: BubbleImage): Float {
 private fun BubbleFileRow(
     file: BubbleFile,
     onColor: Color,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val openLabel = stringResource(R.string.bubble_file_open)
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(MeeshyRadius.sm))
             .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics {
+                    role = Role.Button
+                    contentDescription = openLabel
+                }
+            }
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),

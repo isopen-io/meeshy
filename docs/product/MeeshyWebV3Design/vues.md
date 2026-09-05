@@ -3,17 +3,23 @@
 > **Ce fichier est une SOURCE, pas un tableau de bord.** L'etat d'implementation de chaque vue vit
 > dans son issue GitHub, jamais ici. Regenere par `capture-cibles.js` — ne pas editer a la main.
 
-La planche `MeeshyWebV3.dc.html` porte **37 ecrans**, chacun avec sa route web.
+La planche `MeeshyWebV3.dc.html` porte **40 ecrans**, chacun avec sa route web.
+
+## SITE
+
+| Vue | Route | Titre | Capture |
+|---|---|---|---|
+| Vitrine | `/` |  | ![vitrine](cible/vitrine.png) |
 
 ## ENTRÉE PUBLIQUE
 
 | Vue | Route | Titre | Capture |
 |---|---|---|---|
 | Ouverture du lien | `/l/:token` | Ouverture du lien | ![linkRedirect](cible/linkRedirect.png) |
-| Rejoindre | `/chats/:lien` |  | ![join](cible/join.png) |
-| Droits du lien | `/chats/:lien` |  | ![rights](cible/rights.png) |
-| Se connecter | `/login?next=/l/:token` | Se connecter | ![login](cible/login.png) |
-| Créer un compte | `/signup?next=/l/:token` | Créer un compte | ![signup](cible/signup.png) |
+| Rejoindre | `/chat/:lien` | Équipe Lagos | ![join](cible/join.png) |
+| Droits du lien | `/chat/:lien` | Équipe Lagos | ![rights](cible/rights.png) |
+| Se connecter | `/login?returnUrl=/chat/:lien` | Se connecter | ![login](cible/login.png) |
+| Créer un compte | `/signup?returnUrl=/chat/:lien` | Créer un compte | ![signup](cible/signup.png) |
 | Lien expiré | `/l/:token` | Lien expiré | ![linkExpired](cible/linkExpired.png) |
 
 ## MEMBRE — PRINCIPAL
@@ -22,9 +28,11 @@ La planche `MeeshyWebV3.dc.html` porte **37 ecrans**, chacun avec sa route web.
 |---|---|---|---|
 | Bonjour Amina | `/` | Bonjour Amina | ![home](cible/home.png) |
 | Chats | `/chats` | Chats | ![chats](cible/chats.png) |
-| Équipe Lagos | `/chats/:identifiant` | Équipe Lagos | ![thread](cible/thread.png) |
+| Équipe Lagos | `/chats/:cle` | Équipe Lagos | ![thread](cible/thread.png) |
 | Types de messages | `/chats/:id` | Types de messages | ![rich](cible/rich.png) |
-| Médias partagés | `/chats/:id/medias` | Médias partagés | ![media](cible/media.png) |
+| Profil du participant | `/chats/:cle?profil=:membre` | Équipe Lagos | ![profilMembre](cible/profilMembre.png) |
+| Nouveau lien de partage | `/chats/:cle?lien` | Équipe Lagos | ![lienDepuisLeFil](cible/lienDepuisLeFil.png) |
+| Médias partagés | `/chats/:cle/medias` | Médias partagés | ![media](cible/media.png) |
 | Recherche | `/search` | Recherche | ![search](cible/search.png) |
 
 ## APPELS

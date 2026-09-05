@@ -35,6 +35,19 @@ export type PlanDesordonne = {
   readonly ecart: number | null;
 };
 
+/**
+ * Un FOND sur lequel aucun des deux anneaux de focus ne tient 3:1 — la
+ * disjonction de la règle 15, qu'une paire de contraste ne sait pas exprimer.
+ */
+export type FocusInvisible = {
+  readonly fond: string;
+  readonly meilleur: number | null;
+};
+
+export type FocusInvisibleSitue = FocusInvisible & {
+  readonly schema: string;
+};
+
 export type SuiviDeLOS = {
   readonly classe: string;
   readonly propriete: string;
@@ -50,6 +63,7 @@ export type RapportDeJetons = {
   readonly orphelins: readonly JetonOrphelin[];
   readonly contrastes: readonly ContrasteInsuffisant[];
   readonly ordres: readonly PlanDesordonne[];
+  readonly focus: readonly FocusInvisibleSitue[];
   readonly suivis: readonly SuiviDeLOS[];
 };
 
@@ -77,6 +91,14 @@ export declare const contrastesInsuffisants: (
 ) => readonly ContrasteInsuffisant[];
 
 export declare const plansDesordonnes: (racineJetons: string) => readonly PlanDesordonne[];
+
+export declare const focusInvisiblesDans: (
+  table: Readonly<Record<string, string>>,
+) => readonly FocusInvisible[];
+
+export declare const focusInvisibles: (
+  racineJetons: string,
+) => readonly FocusInvisibleSitue[];
 
 export declare const audit: (args: {
   readonly racineV3: string;

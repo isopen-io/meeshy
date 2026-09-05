@@ -62,7 +62,7 @@ extension StoryComposerView {
             if doors.soundLibrary { showSoundLibrary = true }
         }) {
             NavigationStack {
-                UnifiedAudioRecorderSheet(
+                AudioRecorderSheet(
                     onImportAudioFile: {
                         recorderFollowUp = .audioFiles
                         showVoiceRecorderSheet = false
@@ -101,14 +101,33 @@ extension StoryComposerView {
             // (poser plusieurs stickers d'affilée, fermer par swipe-down).
             StickerPickerView(onStickerSelected: { emoji in
                 // C13 — chemin VM unique (currentEffects source de vérité).
-                viewModel.addSticker(emoji: emoji)
+                // `posedScale` : la MÊME échelle que le composer (#4824) — le
+                // même geste posait à 2,2 d'un site et à 1,0 de l'autre.
+                viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)
                 HapticFeedback.light()
             }, onLibraryStickerSelected: { item in
                 // S2 — le bitmap suffit à la pose : il vit en local sous l'id
                 // de l'élément jusqu'à ce que la publication le téléverse et
-                // remplisse `postMediaId`.
+                // remplisse `postMediaId`. Les octets animés voyagent AVEC lui
+                // (#3956) : le bitmap n'est que la première image d'un GIF, et
+                // poser sans eux figerait sur place ce que la bibliothèque
+                // affichait en mouvement.
                 viewModel.addSticker(image: item.thumbnail,
-                                     provider: StoryStickerLibraryItem.provider)
+                                     provider: StoryStickerLibraryItem.provider,
+                                     scale: StorySticker.posedScale,
+                                     animatedData: item.animatedData)
+                HapticFeedback.light()
+            }, onTemplateSelected: { gabarit, emplacements in
+                // L'échelle vient du GABARIT — `addSticker(template:slots:)` la
+                // lit lui-même. `StorySticker.posedScale` agrandit un glyphe NU
+                // et ferait déborder un cartouche qui mesure son contenu.
+                viewModel.addSticker(template: gabarit, slots: emplacements)
+                HapticFeedback.light()
+            }, onLocationTemplateSelected: { lieu, gabarit in
+                // Un lieu décoré reste un `StoryLocationObject` : lui seul porte
+                // les coordonnées que la plateforme LIT. Le gabarit n'en décore
+                // que l'apparence.
+                viewModel.addLocation(place: lieu, styleId: gabarit.id)
                 HapticFeedback.light()
             })
             .presentationDetents([.medium])

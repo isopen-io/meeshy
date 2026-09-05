@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-import { expect, test, type Browser } from '@playwright/test';
+import { expect, test, type Browser, type Request } from '@playwright/test';
 
 import { themeScriptSource } from '../../app/theme-script';
 import {
@@ -105,13 +105,38 @@ test.describe('linkRedirect — un lien partagé s’ouvre en un aller-retour', 
     cdp.on('Network.requestWillBeSent', (e) => emises.push(e.request.url));
 
     const finale = await page.goto(lienDe(), { waitUntil: 'commit' });
-    const origine = finale?.request().redirectedFrom();
+
+    /**
+     * La chaîne se remonte jusqu'à SA RACINE, jamais d'un seul cran.
+     *
+     * Ce test mesure le saut DU LIEN : une requête, une 302, et elle atterrit
+     * sur `/chat/:token` — la porte de l'INVITÉ, qui répond 200 en état CHOIX
+     * à un lecteur sans session (conception § 12.3). Un seul saut : c'est ce
+     * que la directive du porteur du 2026-09-01 (#4522) exige, et ce que le
+     * complément du tour a livré dans `destination.ts`.
+     *
+     * `finale.request().redirectedFrom()` remontait d'UN cran. Il rendait le
+     * lien tant que `/chats/:cle` n'existait pas — c'est-à-dire tant que la
+     * navigation s'arrêtait sur un 404. Le témoin gelait ce trou, et il est
+     * tombé le jour où le trou s'est fermé (01c49fcfee), en accusant le lien
+     * d'un saut que son destinataire venait d'ajouter. Remonter à la racine
+     * énonce l'invariant visé au lieu du nombre de sauts de toute la
+     * navigation, et il reste réfutable : un lien qui ferait DEUX sauts à lui
+     * seul poserait `/chats/:token` ailleurs qu'en `chaine[1]`.
+     *
+     * L'ATTERRISSAGE A CHANGÉ une fois — de `/chats/:token` (le fil CONNECTÉ,
+     * qui renvoyait l'anonyme vers `/login` en un SECOND saut, leçon 419) à
+     * `/chat/:lien` au SINGULIER — et seule la ligne `chaine[1]` a bougé.
+     */
+    const chaine: Request[] = [];
+    for (let requete = finale?.request() ?? null; requete !== null; requete = requete.redirectedFrom())
+      chaine.unshift(requete);
 
     expect(emises.filter((url) => url.includes(`/l/${JETON}`))).toHaveLength(1);
-    expect(origine?.url()).toBe(lienDe());
-    expect(origine?.redirectedFrom()).toBeNull();
-    expect((await origine?.response())?.status()).toBe(302);
-    expect(finale?.url()).toBe(`${v3.base}/chats/${JETON}`);
+    expect(chaine[0]?.url()).toBe(lienDe());
+    expect(chaine[0]?.redirectedFrom()).toBeNull();
+    expect((await chaine[0]?.response())?.status()).toBe(302);
+    expect(chaine[1]?.url()).toBe(`${v3.base}/chat/${JETON}`);
 
     await contexte.close();
   });
@@ -134,7 +159,13 @@ test.describe('linkRedirect — un lien partagé s’ouvre en un aller-retour', 
      */
     const redirections: number[] = [];
     cdp.on('Network.requestWillBeSent', (e) => {
-      if (e.redirectResponse?.status === 302) redirections.push(e.redirectResponse.responseTime ?? 0);
+      // La 302 DU LIEN, reconnue à l'adresse qui l'a produite : `redirectResponse`
+      // est la réponse du cran PRÉCÉDENT de la chaîne. Sans ce filtre, la 302 que
+      // la destination servirait à un lecteur sans session entrerait dans le compte, et
+      // l'ordre — le fait mesuré ici — se lisait sur une horloge qui n'est pas
+      // celle du lien.
+      if (e.redirectResponse?.status === 302 && e.redirectResponse.url.includes(`/l/${JETON_ORDRE}`))
+        redirections.push(e.redirectResponse.responseTime ?? 0);
     });
 
     await page.goto(lienDe(JETON_ORDRE), { waitUntil: 'commit' });

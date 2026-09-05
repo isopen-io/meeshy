@@ -66,7 +66,12 @@ nonisolated enum ComposerRailMode: Equatable {
             })
         }
         if textEditing {
-            return .tool(TextEditTool.allCases.map {
+            // `TextEditTool.all`, jamais `allCases` : l'ordre des `case` porte
+            // la sérialisation, celui de `all` est l'ordre APPRIS par les
+            // doigts — le même sur la rangée flottante et dans l'éditeur plein
+            // écran. Les deux coïncidaient jusqu'à l'EFFET (#4870), ajouté en
+            // queue de l'énuméré et deuxième sur la rangée.
+            return .tool(TextEditTool.all.map {
                 ComposerToolControl(id: "text.\($0.rawValue)",
                                     symbolName: $0.sfSymbol,
                                     label: $0.accessibilityLabel,

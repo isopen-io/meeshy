@@ -111,7 +111,14 @@ final class DependencyContainer {
         // list preview but is missing when the conversation opens.
         ConversationSyncEngine.shared.apiMessagePersistor = { [weak persistence] messages in
             guard !messages.isEmpty else { return }
-            await persistence?.bufferIncomingAPIMessages(messages)
+            // Le prisme du lecteur se résout ICI, à la MISE EN FILE : lu depuis
+            // la boucle d'écriture sérielle de la persistance, il y faisait
+            // attendre chaque lot que le MainActor — donc le RENDU — soit
+            // libre, et les réconciliations en file derrière lui attendaient
+            // avec.
+            await persistence?.bufferIncomingAPIMessages(
+                messages, preferredLanguages: MessagePersistenceActor.readerPrism()
+            )
         }
 
         // Même raison pour les mutations qui ne portent PAS d'`APIMessage` :

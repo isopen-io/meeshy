@@ -1,0 +1,161 @@
+// GATE — « 0 violation axe serious/critical » sur `/links`, clair ET sombre, et le compte SERVI.
+//
+// `__tests__/liens-porte.test.ts` juge le document servi dans jsdom ; ce fichier juge ce que le
+// lecteur a sous les yeux dans un vrai navigateur — et surtout le CONTRASTE, que jsdom ne calcule
+// pas : axe y saute `color-contrast` sans le dire. C'est la seule règle qui pouvait attraper une
+// ligne FERMÉE devenue illisible sur son fond en sourdine, et une ligne illisible est un lien
+// qu'on croit perdu.
+//
+// L'ÉCRAN N'A AUCUN MODULE CLIENT. Ce que ce témoin ajoute au jsdom est la mise en page et les
+// couleurs calculées, pas un état vivant.
+//
+// Il vit dans le projet `pages`, comme `v3-fil-a11y.spec.ts` : c'est l'import STATIQUE de
+// `lib/a11y.ts` qui le décide, jamais le serveur qu'il monte (`playwright.config.ts`).
+
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, type Browser, type BrowserContext } from '@playwright/test';
+
+import { COOKIE_DE_JETON } from '../../lib/api/cookies';
+import { violationsBloquantes, rapporteViolations } from './lib/a11y';
+import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
+import { passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
+
+let passerelle: PasserelleDeBouchon;
+let v3: ServeurV3;
+
+test.beforeAll(async () => {
+  passerelle = await passerelleDeBouchon();
+  v3 = await serveurDeLaV3(passerelle.base);
+});
+
+test.afterAll(async () => {
+  await v3?.ferme();
+  await passerelle?.ferme();
+});
+
+const contexteDuMembre = async (navigateur: Browser, schema: 'light' | 'dark'): Promise<BrowserContext> => {
+  const contexte = await navigateur.newContext({ colorScheme: schema });
+  await contexte.addCookies([{ name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3.base }]);
+  return contexte;
+};
+
+(['light', 'dark'] as const).forEach((schema) => {
+  test.describe(`thème ${schema}`, () => {
+    test(`0 violation axe serious/critical — les liens (${schema})`, async ({ browser }) => {
+      const contexte = await contexteDuMembre(browser, schema);
+      const page = await contexte.newPage();
+
+      await page.goto(`${v3.base}/links`);
+      await expect(page.locator('main.liens-ecran')).toBeVisible();
+      // Un lien ouvert ET un lien fermé : l'audit doit voir les deux teintes.
+      await expect(page.locator('.lien')).toHaveCount(2);
+      await expect(page.locator('.lien.ferme')).toHaveCount(1);
+
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      const bloquantes = violationsBloquantes(violations);
+      expect(bloquantes, rapporteViolations(`/links (${schema})`, bloquantes)).toEqual([]);
+
+      await contexte.close();
+    });
+  });
+});
+
+test('le compte des actifs vient du SERVEUR, jamais de la page', async ({ browser }) => {
+  const contexte = await contexteDuMembre(browser, 'light');
+  const page = await contexte.newPage();
+
+  await page.goto(`${v3.base}/links`);
+
+  // Le bouchon sert dix-sept actifs pour DEUX lignes — un chiffre qu'aucun
+  // décompte local ne pourrait produire. C'est ce qui distingue un compteur
+  // servi d'un compteur recalculé, et un `filter().length` afficherait « 1 ».
+  await expect(page.locator('.fil-tete .sous')).toHaveText('17 liens actifs');
+
+  await contexte.close();
+});
+
+test('un seul appel, et l’adresse publique n’est pas la destination de la ligne', async ({ browser }) => {
+  const contexte = await contexteDuMembre(browser, 'light');
+  const page = await contexte.newPage();
+
+  passerelle.oublie();
+  await page.goto(`${v3.base}/links`);
+  await expect(page.locator('main.liens-ecran')).toBeVisible();
+
+  const appels = passerelle.journal.map((appel) => appel.chemin);
+  expect(appels.filter((chemin) => chemin.includes('/api/v1/links'))).toHaveLength(1);
+  expect(appels.some((chemin) => chemin.includes('/auth/me'))).toBe(false);
+  expect(appels.some((chemin) => chemin.includes('/api/v1/conversations'))).toBe(false);
+
+  // Le TEXTE est la porte de l'invité — ce que le lecteur colle ailleurs ;
+  // la LIGNE mène à sa propre conversation.
+  await expect(page.locator('.lien .adresse').first()).toContainText('/chat/');
+  await expect(page.locator('a.lien').first()).toHaveAttribute('href', /^\/chats\//);
+
+  // Le lien FERMÉ du bouchon n'a pas de conversation étendue : sa ligne n'est
+  // donc pas cliquable du tout, plutôt qu'un lien mort (charte règle 7).
+  // #4933 : le `<li>` porte le geste (`ligne-lien`), le `<span>` la teinte
+  // (`lien`) — deux éléments, jamais un seul portant les deux vocabulaires.
+  await expect(page.locator('li.ligne-lien.ferme .lien.ferme')).toBeVisible();
+
+  await contexte.close();
+});
+
+/**
+ * #4933, critère (6) — LE MENU DE FERMETURE, OUVERT, PASSE AUSSI L'AUDIT.
+ * Un `<details>` fermé masque son `<form>` du DOM d'axe : sans l'ouvrir,
+ * `color-contrast` et les autres règles ne jugeraient jamais le contenu que
+ * le lecteur voit réellement une fois le menu déplié.
+ */
+(['light', 'dark'] as const).forEach((schema) => {
+  test(`0 violation axe serious/critical — le menu de fermeture OUVERT (${schema})`, async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, schema);
+    const page = await contexte.newPage();
+
+    await page.goto(`${v3.base}/links`);
+    await page.locator('li.ligne-lien:not(.ferme) details.actions summary').first().click();
+    await expect(page.locator('li.ligne-lien:not(.ferme) details.actions[open]')).toBeVisible();
+
+    const { violations } = await new AxeBuilder({ page }).analyze();
+    const bloquantes = violationsBloquantes(violations);
+    expect(bloquantes, rapporteViolations(`/links, menu ouvert (${schema})`, bloquantes)).toEqual([]);
+
+    await contexte.close();
+  });
+});
+
+test('chaque cible du geste de fermeture mesure au moins 44 px, à 360 et à 390', async ({ browser }) => {
+  for (const largeur of [360, 390]) {
+    const contexte = await browser.newContext({ viewport: { width: largeur, height: 844 } });
+    await contexte.addCookies([{ name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3.base }]);
+    const page = await contexte.newPage();
+
+    await page.goto(`${v3.base}/links`);
+    const ligne = page.locator('li.ligne-lien:not(.ferme)').first();
+    await ligne.locator('details.actions summary').click();
+
+    const cibles = [
+      ligne.locator('details.actions summary'),
+      ligne.locator('button[type="submit"]'),
+      page.locator('a.lien').first(),
+    ];
+    for (const cible of cibles) {
+      const boite = await cible.boundingBox();
+      expect(boite).not.toBeNull();
+      expect(boite!.width).toBeGreaterThanOrEqual(44);
+      expect(boite!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    await contexte.close();
+  }
+});
+
+test('?ferme rend l’avis de succès, visible', async ({ browser }) => {
+  const contexte = await contexteDuMembre(browser, 'light');
+  const page = await contexte.newPage();
+
+  await page.goto(`${v3.base}/links?ferme`);
+  await expect(page.locator('.avis[role="status"]')).toBeVisible();
+
+  await contexte.close();
+});

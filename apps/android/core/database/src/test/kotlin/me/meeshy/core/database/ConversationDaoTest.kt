@@ -13,8 +13,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
-private fun conversation(id: String, updatedAt: Long) =
-    ConversationEntity(id = id, payload = "{}", updatedAt = updatedAt, cachedAt = 0L)
+private fun conversation(id: String, updatedAt: Long, unreadCount: Int = 0) =
+    ConversationEntity(id = id, payload = "{}", updatedAt = updatedAt, cachedAt = 0L, unreadCount = unreadCount)
 
 @RunWith(RobolectricTestRunner::class)
 class ConversationDaoTest {
@@ -63,5 +63,42 @@ class ConversationDaoTest {
         dao.deleteNotIn(listOf("b"))
 
         assertThat(dao.observeAll().first().map { it.id }).containsExactly("b")
+    }
+
+    @Test
+    fun `totalUnreadCount is zero on an empty table`() = runTest {
+        assertThat(dao.totalUnreadCount().first()).isEqualTo(0)
+    }
+
+    @Test
+    fun `totalUnreadCount sums the unreadCount column across every row`() = runTest {
+        dao.upsertAll(
+            listOf(
+                conversation("a", 1, unreadCount = 3),
+                conversation("b", 2, unreadCount = 0),
+                conversation("c", 3, unreadCount = 5),
+            ),
+        )
+
+        assertThat(dao.totalUnreadCount().first()).isEqualTo(8)
+    }
+
+    @Test
+    fun `totalUnreadCount follows a later upsert without a fresh collection`() = runTest {
+        dao.upsertAll(listOf(conversation("a", 1, unreadCount = 3)))
+        assertThat(dao.totalUnreadCount().first()).isEqualTo(3)
+
+        dao.upsertAll(listOf(conversation("a", 1, unreadCount = 0)))
+
+        assertThat(dao.totalUnreadCount().first()).isEqualTo(0)
+    }
+
+    @Test
+    fun `recentByUpdatedAt returns at most limit rows, most-recently-updated first`() = runTest {
+        dao.upsertAll((0 until 10).map { i -> conversation("c$i", updatedAt = i.toLong()) })
+
+        val rows = dao.recentByUpdatedAt(limit = 3)
+
+        assertThat(rows.map { it.id }).containsExactly("c9", "c8", "c7").inOrder()
     }
 }

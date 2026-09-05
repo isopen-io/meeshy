@@ -77,7 +77,7 @@ import { overBudget, walk } from './helpers/file-size-sweep';
 
 const SRC_DIR = join(__dirname, '..');
 
-/** Le plafond demandé par le porteur, plus strict que la directive (1100). */
+/** Le plafond demandé par le porteur, plus strict que la directive (1200 depuis le 2026-09-02). */
 const MAX_LINES = 1000;
 
 /**
@@ -104,7 +104,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/MessageReadStatusService.ts': 3194,
   'services/CallService.ts': 3121,
   'services/PostService.ts': 2663,
-  'socketio/handlers/MessageHandler.ts': 2390,
+  'socketio/handlers/MessageHandler.ts': 2336,
   'services/EmailService.ts': 1843,
   'server.ts': 1406,
   'services/PostFeedService.ts': 1401,

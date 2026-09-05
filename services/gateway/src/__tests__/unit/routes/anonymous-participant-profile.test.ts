@@ -25,9 +25,10 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
 
 const mockCanAccess = jest.fn<any>();
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  canAccessConversation: (...args: unknown[]) => mockCanAccess(...args),
-}));
+jest.mock('../../../routes/conversations/utils/access-control', () =>
+  (jest.requireActual('../../helpers/acces-conversation-double') as any).doubleAccesConversation(
+    jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>,
+    (...args: unknown[]) => mockCanAccess(...args)));
 
 const mockResolveConversationId = jest.fn<any>();
 jest.mock('../../../utils/conversation-id-cache', () => ({

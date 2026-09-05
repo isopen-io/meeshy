@@ -42,6 +42,20 @@
  * indiscernable du mode nominal. Il vit donc dans `jetons-de-vues.json`, que la
  * capture n'ouvre jamais, et que `litLesVues` joint a l'index par identifiant de
  * vue (`apps/web-v3/scripts/lib/index-des-vues.mjs`).
+ *
+ * UN ETAT DE SESSION (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,
+ * `/chats/:id` — ne rend rien a un visiteur sans creance : elle redirige vers
+ * `/login`. Ce n'est pas un jeton de route qui la separe d'une vue publique,
+ * c'est une SESSION. La vue la declare par `"@session"` dans
+ * `jetons-de-vues.json`, ou le bloc `sessions` dit quels COOKIES la portent —
+ * ceux que la passerelle de bouchon reconnait —, et ce script les pose sur le
+ * contexte du navigateur avant de naviguer. Sans cela, `thread`, `rich`, `join`
+ * et `rights` etaient injouables : leur critere de fin nommait une mesure que
+ * l'outil ne savait pas produire.
+ *
+ * COMMENT LE JOUER SUR LA CHAINE. `--base` doit pointer un serveur v3 qui a une
+ * passerelle derriere lui ; `apps/web-v3/scripts/conformite-des-vues.ts` monte
+ * les deux (passerelle de bouchon + `next start`) et appelle ce script.
  */
 'use strict';
 
@@ -141,6 +155,18 @@ function ecartStructurel(a, b) {
     index.refus.forEach(r => process.stderr.write(`[compare] NON COMPARABLE — ${r.id} — ${r.raison}\n`));
     process.exit(RC_NON_COMPARABLE);
   }
+  const sessionsDeclarees = index.sessions ?? {};
+  const creanceDeVue = id => {
+    const vue = index.vues.find(v => v.id === id);
+    const nom = vue?.jetons?.['@session'] ?? null;
+    const declaree = nom === null ? null : sessionsDeclarees[nom];
+    if (declaree == null) return { nom: null, cookies: [] };
+    return {
+      nom,
+      cookies: Object.entries(declaree.cookies ?? {}).map(([name, value]) => ({ name, value, url: BASE })),
+    };
+  };
+
   const selection = selectionComparable({ vues: index.vues, demandees: ONLY });
   const refus = refusDeSelection(selection);
   if (refus) {
@@ -170,6 +196,8 @@ function ecartStructurel(a, b) {
         colorScheme: theme,
         userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       });
+      const creance = creanceDeVue(v.id);
+      if (creance.cookies.length) await ctx.addCookies(creance.cookies);
       const page = await ctx.newPage();
       let octets = 0, requetes = 0;
       const erreurs = [];
@@ -181,7 +209,7 @@ function ecartStructurel(a, b) {
       });
       page.on('pageerror', e => erreurs.push(String(e.message)));
 
-      const entree = { vue: v.id, route: v.route, chemin: v.chemin, theme };
+      const entree = { vue: v.id, route: v.route, chemin: v.chemin, theme, session: creance.nom };
       try {
         const t0 = Date.now();
         const resp = await page.goto(BASE + v.chemin, { waitUntil: 'networkidle', timeout: 45000 });

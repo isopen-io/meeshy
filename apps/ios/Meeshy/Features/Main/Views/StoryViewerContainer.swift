@@ -141,6 +141,29 @@ struct StoryViewerContainer: View {
             freshnessCheckedPostId = nil
             await ensureGroupAvailable(uid: uid)
         }
+        // **Le lecteur affiche SES PROPRES retours** (#4876).
+        //
+        // Il en lève six — « Publié », « Échec de la publication », « Republié
+        // dans ton feed », et trois refus de repost — et il est présenté en
+        // `fullScreenCover`. Or l'hôte qui les rend était monté sur la RACINE
+        // (`MeeshyApp`) : un `fullScreenCover` s'affiche au-dessus de tout, y
+        // compris de cet overlay. Les six se levaient donc DERRIÈRE l'écran.
+        //
+        // > Quatre des six sont des REFUS. Un refus muet ne se lit pas « ça a
+        // > échoué » mais « le bouton ne marche pas » — et l'utilisateur
+        // > recommence. Le geste était juste, à la bonne place, avec sa raison
+        // > écrite ; c'est la couche d'AFFICHAGE qui le rendait sans effet.
+        //
+        // Posé ici et pas sur `StoryViewerView` : ce conteneur est le point de
+        // montage UNIQUE du lecteur (`StoryViewerCoordinator` le présente en
+        // `.fullScreenCover(item:)`), donc un seul site couvre tous les points
+        // d'entrée — la trail, une conversation, une notification.
+        //
+        // Trouvé en portant au lecteur la mesure qu'une session voisine venait
+        // de faire sur le composer : si quelque chose se présente en
+        // `fullScreenCover` et peut lever un retour, la question est **qui
+        // l'AFFICHE, depuis là-dessous ?**
+        .feedbackToastOverlay()
     }
 
     // MARK: - Loading / Fallback UI

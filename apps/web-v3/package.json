@@ -1,37 +1,43 @@
 {
   "name": "@meeshy/web-v3",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3300",
     "dev:https": "node scripts/dev-https.mjs -p 3300",
-    "build": "next build && node scripts/check-app-router-built.mjs && node scripts/check-bundle-budget.mjs",
+    "build": "node scripts/build-participate.mjs && next build && node scripts/check-app-router-built.mjs && node scripts/check-bundle-budget.mjs",
     "start": "next start -p 3300 -H 0.0.0.0",
     "lint": "eslint . && node scripts/check-jetons.mjs",
     "type-check": "tsc --noEmit",
     "test": "jest --maxWorkers=50%",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --maxWorkers=50%",
-    "e2e": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test",
+    "e2e:run": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test",
+    "e2e": "npm run test:pages && npm run test:chaines",
     "clean": "rm -rf .next node_modules",
     "baseline": "node scripts/baseline.mjs",
-    "test:a11y": "playwright test e2e/visual/v3-a11y.spec.ts",
-    "test:lifecycle": "playwright test e2e/visual/v3-lifecycle.spec.ts",
-    "test:pages": "npm run e2e -- --project=pages",
-    "test:chaines": "npm run e2e -- --project=chaines"
+    "test:a11y": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test e2e/visual/v3-a11y.spec.ts",
+    "test:cibles": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test e2e/visual/v3-cibles.spec.ts",
+    "test:fil-a11y": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test e2e/visual/v3-fil-a11y.spec.ts",
+    "test:lifecycle": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test e2e/visual/v3-lifecycle.spec.ts",
+    "test:pages": "npm run e2e:run -- --project=pages",
+    "test:chaines": "npm run e2e:run -- --project=chaines"
   },
   "dependencies": {
     "@meeshy/design-tokens": "workspace:*",
     "@meeshy/icons": "workspace:*",
+    "@meeshy/shared": "workspace:*",
+    "libphonenumber-js": "^1.13.12",
     "next": "15.5.23",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "socket.io-client": "4.8.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@eslint/eslintrc": "^3.3.6",
-    "@playwright/test": "^1.62.1",
     "@next/eslint-plugin-next": "15.5.23",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
@@ -52,6 +58,7 @@
     "jest": "^30.4.2",
     "jest-axe": "^11.0.0",
     "jest-environment-jsdom": "^30.4.1",
+    "socket.io": "^4.8.3",
     "typescript": "^6.0.3"
   }
 }

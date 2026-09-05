@@ -19,11 +19,16 @@
  *   /feeds/post/<id>   /conversations/<id>   /u/<id>
  */
 
+import type { PostType } from '@meeshy/shared/types/post';
+
+/**
+ * #4809 — `PostType` (packages/shared/types/post.ts) porte les quatre valeurs
+ * de contenu (POST/REEL/STORY/STATUS) ; CONVERSATION/PROFILE/EXTERNAL n'ont
+ * pas d'équivalent amont — un lien de tracking peut aussi cibler une
+ * conversation, un profil, ou une URL externe.
+ */
 export type TrackingTargetType =
-  | 'REEL'
-  | 'POST'
-  | 'STORY'
-  | 'STATUS'
+  | PostType
   | 'CONVERSATION'
   | 'PROFILE'
   | 'EXTERNAL';
@@ -42,12 +47,18 @@ export type TrackingLinkResolution = {
   readonly expiresAt?: string | null;
 };
 
-const APP_TARGET_TYPES: ReadonlySet<TrackingTargetType> = new Set<TrackingTargetType>([
-  'REEL',
-  'POST',
-  'STORY',
-  'STATUS',
-]);
+/**
+ * Témoin de dérive (#4809) : `satisfies Record<PostType, true>` exige TOUTES
+ * les valeurs de `PostType` — un membre ajouté à la source sans entrée ici
+ * fait échouer la compilation À CETTE LIGNE. Coïncide aujourd'hui avec
+ * `PostType` en entier (post-family : POST, REEL, STORY, STATUS).
+ */
+const POST_FAMILY_TARGETS = {
+  POST: true,
+  REEL: true,
+  STORY: true,
+  STATUS: true,
+} as const satisfies Record<PostType, true>;
 
 /**
  * Normalize a raw `targetType` string (case-insensitive) to a known
@@ -72,10 +83,10 @@ export function normalizeTargetType(raw: unknown): TrackingTargetType | null {
 
 /**
  * `true` when this target should attempt a native-app open before the web
- * fallback (post-family content: REEL, POST, STORY).
+ * fallback (post-family content — every `PostType`: POST, REEL, STORY, STATUS).
  */
 export function isAppOpenTarget(targetType: TrackingTargetType): boolean {
-  return APP_TARGET_TYPES.has(targetType);
+  return targetType in POST_FAMILY_TARGETS;
 }
 
 /**

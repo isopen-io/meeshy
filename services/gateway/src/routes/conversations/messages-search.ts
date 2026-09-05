@@ -9,6 +9,7 @@
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import {
   applyHistoryFloor,
   historyReaderFromAuthContext,
@@ -20,20 +21,40 @@ import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding
 } from '../../services/personalHistoryFilter';
+import { MESSAGE_PROTECTION_SELECT, mapMessageProtectionFields } from './messages-list-query';
 import { validatePagination } from '../../utils/pagination';
 import {
   messageSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import {
+  refuserAccesConversation,
+  verdictAccesConversation,
+  type MessagesDeRefusDAcces
+} from './utils/access-control';
 import type { ConversationParams } from './types';
-import { sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+
+/**
+ * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
+ *
+ * `nonMembre` garde le mot que la route servait — `'Unauthorized'`, une prose
+ * qui disait déjà « authentification » sous le statut d'un refus de DROIT, et
+ * qui reste juste pour un non-membre AUTHENTIFIÉ. Ce qui change est le sort de
+ * la session ABSENTE ou MORTE : montée en `optionalAuth`, cette route la
+ * laissait entrer jusqu'ici puis lui répondait 403, le seul statut qu'aucun
+ * client ne lit comme « rafraîchis ta session ».
+ */
+const REFUS_DE_RECHERCHE: MessagesDeRefusDAcces = {
+  sansSession: 'Authentication required to search this conversation',
+  nonMembre: 'Unauthorized'
+};
 
 /**
  * Enregistre la route de recherche de messages dans une conversation.
@@ -87,6 +108,11 @@ export function registerMessageSearchRoute(
         },
         401: errorResponseSchema,
         403: errorResponseSchema,
+        // #4856 — un identifiant qui ne résout à AUCUNE conversation est un
+        // « je ne trouve pas », pas un refus d'accès : même verdict que la
+        // vérification jumelle de `threads.ts` et `messages-read-status.ts`
+        // pour ce même appel à `resolveConversationId`.
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -109,12 +135,19 @@ export function registerMessageSearchRoute(
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
-        return sendForbidden(reply, 'Conversation not found');
+        // #4856 — le statut disait « refusé » pendant que le texte disait
+        // « absent » : l'un des deux mentait. `resolveConversationId` ne rend
+        // `null` que pour un identifiant qui ne résout à AUCUNE conversation
+        // (un ObjectId valide passe tel quel, existence non vérifiée ici) —
+        // ce n'est pas une décision anti-énumération, c'est un « je ne
+        // trouve pas », comme le rendent déjà `threads.ts` et
+        // `messages-read-status.ts` pour le même appel.
+        return sendNotFound(reply, 'Conversation not found');
       }
 
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Unauthorized');
+      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
+      if (acces.genre !== 'ok') {
+        return refuserAccesConversation(reply, acces, REFUS_DE_RECHERCHE);
       }
 
       const queryLower = q.toLowerCase().trim();
@@ -153,6 +186,12 @@ export function registerMessageSearchRoute(
         // aussi — sans `metadata`, un message géolocalisé trouvé par
         // recherche n'affiche jamais sa position.
         metadata: true,
+        // #4885 — les quatre drapeaux de protection (vue unique / flou /
+        // expiration / bitfield), source unique avec `messages-list-query.ts`.
+        // Sans eux un message à vue unique trouvé par recherche arrivait
+        // FORWARDABLE : le garde web/iOS qui interdit le transfert lit
+        // `isViewOnce`, absent de cette réponse.
+        ...MESSAGE_PROTECTION_SELECT,
         sender: {
           // `sender` is a `Participant`, which has no `username`/`isOnline` of
           // its own — those live on the related `User`. Selecting `username`
@@ -256,8 +295,12 @@ export function registerMessageSearchRoute(
         const sender = msg.sender;
         // Lot 1 : hoistLocationOnto hisse metadata.location en `location`
         // top-level — un résultat de recherche géolocalisé le perdait sinon.
-        return hoistLocationOnto({
+        // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
+        return hoistStickerOnto(hoistLocationOnto({
           ...msg,
+          // #4885 — les quatre drapeaux de protection, servis à l'identique
+          // de `GET .../messages` (même source, `mapMessageProtectionFields`).
+          ...mapMessageProtectionFields(msg),
           // #4177 — même résolution que `GET .../messages` : `msg.senderId`
           // (spread ci-dessus) est le `Participant.id` BRUT stocké en base,
           // jamais le `User.id` que les clients comparent à LEUR `userId`.
@@ -280,7 +323,7 @@ export function registerMessageSearchRoute(
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
             : undefined
-        });
+        }));
       });
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`

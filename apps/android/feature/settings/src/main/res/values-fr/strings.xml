@@ -13,6 +13,7 @@
     <string name="settings_section_chats">Discussions</string>
     <string name="settings_starred_messages">Messages enregistrés</string>
     <string name="settings_share_links">Liens de partage</string>
+    <string name="settings_saved_posts">Publications enregistrées</string>
     <string name="settings_section_privacy">Confidentialité et sécurité</string>
     <string name="settings_section_data">Données</string>
     <string name="settings_section_about">À propos</string>
@@ -29,6 +30,10 @@
     <string name="settings_new_message_notifications">Nouveaux messages</string>
     <string name="settings_notification_sound">Son</string>
     <string name="settings_notification_vibration">Vibration</string>
+    <string name="settings_notif_show_preview">Aperçu des messages</string>
+    <string name="settings_notif_show_sender_name">Nom de l\'expéditeur</string>
+    <string name="settings_notif_group_notifications">Regrouper les notifications</string>
+    <string name="settings_notif_badge_enabled">Badge de l\'application</string>
     <string name="settings_dnd">Ne pas déranger</string>
     <string name="settings_dnd_start">De</string>
     <string name="settings_dnd_end">À</string>
@@ -57,6 +62,7 @@
     <string name="settings_notif_type_mention">Mentions</string>
     <string name="settings_notif_type_reaction">Réactions</string>
     <string name="settings_notif_type_conversation">Mises à jour de conversation</string>
+    <string name="settings_notif_type_incoming_call">Appels entrants</string>
     <string name="settings_notif_type_missed_call">Appels manqués</string>
     <string name="settings_notif_type_voicemail">Messagerie vocale</string>
     <string name="settings_notif_type_post_like">J’aime sur les publications</string>
@@ -65,6 +71,7 @@
     <string name="settings_notif_type_story_reaction">Réactions aux stories</string>
     <string name="settings_notif_type_comment_reply">Réponses aux commentaires</string>
     <string name="settings_notif_type_comment_like">J’aime sur les commentaires</string>
+    <string name="settings_notif_type_friend_content">Activité des amis</string>
     <string name="settings_notif_type_contact_request">Demandes de contact</string>
     <string name="settings_notif_type_group_invite">Invitations de groupe</string>
     <string name="settings_notif_type_member_joined">Nouveau membre</string>
@@ -202,8 +209,11 @@
     <string name="delete_account_warning_preferences">Vos préférences et paramètres</string>
     <string name="delete_account_confirm_prompt">Tapez %1$s pour confirmer</string>
     <string name="delete_account_confirm_label">Phrase de confirmation</string>
+    <string name="delete_account_password_label">Mot de passe actuel</string>
     <string name="delete_account_button">Supprimer définitivement mon compte</string>
+    <string name="delete_account_error_invalid_password">Mot de passe incorrect. Veuillez réessayer.</string>
     <string name="delete_account_error_pending">Une demande de suppression est déjà en cours. Vérifiez votre boîte de réception.</string>
+    <string name="delete_account_error_no_email">Ajoutez et vérifiez une adresse e-mail avant de pouvoir supprimer votre compte.</string>
     <string name="delete_account_error_network">Pas de connexion. Vérifiez votre réseau et réessayez.</string>
     <string name="delete_account_error_generic">Une erreur est survenue. Veuillez réessayer.</string>
     <string name="delete_account_email_title">Un email de confirmation vous a été envoyé</string>

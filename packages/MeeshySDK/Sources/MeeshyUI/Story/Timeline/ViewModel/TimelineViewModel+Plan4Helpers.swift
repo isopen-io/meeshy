@@ -136,7 +136,7 @@ extension TimelineViewModel {
         case .media, .text:
             return ClipTransform(x: objet.x, y: objet.y, scale: objet.scale,
                                  rotation: objet.rotation, zIndex: objet.zIndex)
-        case .sticker, .location, .audio:
+        case .sticker, .place, .audio:
             return nil
         }
     }
@@ -271,7 +271,7 @@ extension TimelineViewModel {
             oldVolume = project.mediaObjects.first(where: { $0.id == id })?.volume ?? 1.0
         case .audio:
             oldVolume = project.audioPlayerObjects.first(where: { $0.id == id })?.volume ?? 1.0
-        case .text, .sticker:
+        case .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -305,7 +305,7 @@ extension TimelineViewModel {
             var probe = audio
             probe.toggleMute()
             oldVolume = audio.volume; newVolume = probe.volume
-        case .image, .text, .sticker:
+        case .image, .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -323,7 +323,7 @@ extension TimelineViewModel {
             oldFadeIn = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeIn.map { Double($0) }
         case .text:
             oldFadeIn = project.textObjects.first(where: { $0.id == id })?.fadeIn
-        case .sticker:
+        case .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -341,7 +341,7 @@ extension TimelineViewModel {
             oldFadeOut = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeOut.map { Double($0) }
         case .text:
             oldFadeOut = project.textObjects.first(where: { $0.id == id })?.fadeOut
-        case .sticker:
+        case .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -357,7 +357,7 @@ extension TimelineViewModel {
             oldLoop = project.mediaObjects.first(where: { $0.id == id })?.loop
         case .audio:
             oldLoop = project.audioPlayerObjects.first(where: { $0.id == id })?.loop
-        case .text, .sticker:
+        case .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -373,7 +373,7 @@ extension TimelineViewModel {
             oldBg = project.mediaObjects.first(where: { $0.id == id })?.isBackground
         case .audio:
             oldBg = project.audioPlayerObjects.first(where: { $0.id == id })?.isBackground
-        case .text, .sticker:
+        case .text, .sticker, .place:
             return
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
@@ -410,7 +410,7 @@ extension TimelineViewModel {
             oldName = project.audioPlayerObjects.first(where: { $0.id == id })?.name
         case .text:
             oldName = project.textObjects.first(where: { $0.id == id })?.name
-        case .sticker:
+        case .sticker, .place:
             return
         }
         guard oldName != newName else { return }
@@ -467,6 +467,11 @@ extension TimelineViewModel {
             guard project.stickerObjects[idx].startTime != nil || project.stickerObjects[idx].duration != nil else { return }
             project.stickerObjects[idx].startTime = nil
             project.stickerObjects[idx].duration = nil
+        case .place:
+            guard let idx = project.locationObjects.firstIndex(where: { $0.id == id }) else { return }
+            guard project.locationObjects[idx].startTime != nil || project.locationObjects[idx].duration != nil else { return }
+            project.locationObjects[idx].startTime = nil
+            project.locationObjects[idx].duration = nil
         }
         scheduleEngineReconfigure()
         recomputeSlideDuration()
@@ -496,8 +501,9 @@ extension TimelineViewModel {
             snapshotAudio = nil
             snapshotText = project.textObjects.first(where: { $0.id == id })
             insertionIndex = project.textObjects.firstIndex(where: { $0.id == id }) ?? 0
-        case .sticker:
-            // Les stickers se suppriment depuis le canvas, pas la timeline.
+        case .sticker, .place:
+            // Sticker et pastille de lieu se posent et se retirent depuis le
+            // CANVAS, pas la timeline — qui n'y règle que leur fenêtre (#4840).
             return
         }
         let cmd = DeleteClipCommand(clipId: id, kind: kind,
@@ -617,7 +623,7 @@ extension TimelineViewModel {
         case .text:
             keyframe = project.textObjects.first(where: { $0.id == clipId })?
                 .keyframes?.first(where: { $0.id == keyframeId })
-        case .audio, .sticker:
+        case .audio, .sticker, .place:
             return nil
         }
         guard let kf = keyframe else { return nil }
@@ -653,8 +659,9 @@ extension TimelineViewModel {
             guard let idx = keyframes.firstIndex(where: { $0.id == keyframeId }) else { return }
             snapshot = keyframes[idx]
             insertionIndex = idx
-        case .sticker:
-            // Un sticker s'édite sur le canvas, pas dans la timeline.
+        case .sticker, .place:
+            // Ni le sticker ni la pastille de lieu ne portent de keyframes :
+            // leur famille temporelle est start/duration/fade, sans courbe.
             return
         }
         let cmd = DeleteKeyframeCommand(clipId: clipId, kind: kind,

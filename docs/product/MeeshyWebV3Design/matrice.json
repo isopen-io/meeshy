@@ -114,37 +114,38 @@
   {
    "ordre": 2,
    "vue_id": "join",
-   "titre_issue": "Un visiteur sans compte rejoint la conversation depuis son téléphone, même sans JavaScript",
+   "titre_issue": "Un lien reçu s'ouvre à UNE adresse : le cadre du fil flouté et la modale « anonyme ou compte ? », soumissible sans JavaScript",
    "lot": "L2",
    "priorite": "P0-role-premier",
-   "route": "/chats/:lien",
+   "route": "/chat/:lien",
    "audience": "anonyme",
    "depend_de": [
     "linkRedirect"
    ],
-   "critere_de_fin": "Playwright avec javaScriptEnabled:false : le formulaire se soumet et la place est créée (201 observé) ; la langue est pré-remplie depuis Accept-Language (et non 'fr' en dur) ; l'accordéon des droits est un <details>/<summary> natif atteignable au clavier ; les sept refus (403 REQUIRES_ACCOUNT, 403 pays/IP/langue, 410 LINK_INACTIVE / CONVERSATION_CLOSED / LINK_EXPIRED / LINK_MAX_USES, 429 MAX_CONCURRENT_USERS, 400 champ requis, 409 USERNAME_TAKEN_IN_CONVERSATION avec suggestedNickname pré-rempli) sont peints, chacun couvert par un test. 0 violation axe serious/critical.",
+   "critere_de_fin": "État CHOIX de /chat/:lien (aucune session pour ce lien) : Playwright avec javaScriptEnabled:false — le serveur rend le CADRE du fil (en-tête au nom du lien, zone de messages VIDE, composeur inactif) marqué inert et filter:blur(var(--frame-blur)), et par-dessus un <dialog open> rendu serveur portant l'aperçu du lien, l'accordéon des droits en <details>/<summary>, le formulaire anonyme (pseudo, langue pré-remplie depuis Accept-Language — pas 'fr' en dur) en POST vers la MÊME adresse, « Se connecter » (→ /login?returnUrl=/chat/:lien) et « Créer un compte » (→ /signup?returnUrl=/chat/:lien) ; assertion réseau : AUCUN appel de messages (ni GET /conversations/:id/messages, ni GET /links/:identifier avec messages) n'est émis dans cet état, même si le lien autorise l'historique ; la soumission crée la place (201 observé sur POST /api/v1/links/:key/members ou POST /api/v1/anonymous/join/:linkId) et la réponse suivante est l'état INVITÉ à la même adresse ; les refus sont ceux que la PORTE CANONIQUE émet, tels qu'elle les émet (services/gateway/src/services/conversations/linkAdmission.ts:112-118, routes/conversations/link-admission.ts:625-641 ; jamais 403 REQUIRES_ACCOUNT ni 429 MAX_CONCURRENT_USERS, qu'aucune route n'émet plus) : 403 ACCOUNT_REQUIRED / LANGUAGE_NOT_ALLOWED / REGION_NOT_ALLOWED / BANNED, 409 LINK_EXHAUSTED (maxUses, maxConcurrentUsers, maxUniqueSessions fusionnés), 410 LINK_EXPIRED / CONVERSATION_CLOSED, 400 champ requis (la phrase de la passerelle EST le code, sur SON champ), 409 USERNAME_TAKEN_IN_CONVERSATION avec suggestedNickname PRÉ-REMPLI dans value, 404 lien inconnu ; et les trois 410 de l'aperçu (LINK_INACTIVE / LINK_EXPIRED / LINK_MAX_USES, routes/anonymous.ts:603-613) avant tout choix ; chacun peint DANS la modale (refus de SAISIE ⇒ formulaire gardé ; refus DU LIEN ⇒ formulaire retiré, compte gardé), un test par refus, produit par l'ÉTAT du lien dans la passerelle de bouchon — jamais dicté ; un lien qui exige un courriel ou une date de naissance (requireEmail / requireBirthday) les demande dans la modale ; un lecteur connecté n'y voit jamais la modale (état MEMBRE : jonction puis 302 vers /chats/:cle). Cibles : action primaire 56 px, secondaire 52 px, aucune cible < 44 px. 0 violation axe serious/critical ; quatre colonnes de thème.",
    "dimensions_visees": [
     "Facilité d'accès",
     "Facilité d'usage",
     "Complétude",
     "Compatibilité",
     "Sécurité",
-    "Expérience utilisateur"
+    "Expérience utilisateur",
+    "Performance"
    ],
-   "corps_issue": "**Contexte** — Rejoindre en anonyme est le geste central du rôle premier et doit fonctionner avant toute hydratation, sur un téléphone en 3G. `apps/web/hooks/use-join-flow.ts:24,55` fige la langue à `'fr'`. La police complète du lien (`maxUses`, `maxConcurrentUsers`, `allowedCountries`, `requireAccount`) n'est appliquée que par `POST /anonymous/join/:linkId` — jamais par `POST /conversations/join/:linkId`, qui l'ignore.\n\n**Preuve attendue** — `<form action={serverAction}>` natif + Zod partagé exécuté serveur ; au tap, dans cet ordre : écriture du jeton dans `meeshy.guest.<linkKey>` (une entrée PAR LIEN, jamais une clé globale), `await import('socket.io-client')`, connexion, battement si cet onglet est le porteur élu par `BroadcastChannel('meeshy-guest')`.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1, § 6.3.A, § 6.2, § 10.1 ; `cible/join.png` ; `vues.json#join`."
+   "corps_issue": "**Contexte** — Directive du porteur (2026-09-01, conception § 12.3) : `/chat/:lien` est LA route de jonction ET de lecture de l'invité — c'est la route LEGACY (`apps/web/app/chat/[id]`, déclarée dans l'AASA iOS `/chat/*`), les liens déjà partagés doivent continuer de s'ouvrir, et `/chats/:cle` est désormais le fil du MEMBRE (collision levée). Il n'existe AUCUNE route `/join`. Rejoindre en anonyme passe par la loi d'admission unique `performLinkJoin` — porte canonique `POST /links/:key/members` (`services/gateway/src/routes/conversations/link-admission.ts:688`, `preValidation:[optionalAuth]` :738) ou sa sœur historique `POST /anonymous/join/:linkId` (`routes/anonymous.ts:87`, déléguant :206-213) — jamais un contournement. `apps/web/hooks/use-join-flow.ts:24,55` fige la langue à `'fr'`.\n\n**Preuve attendue** — Un `<form method=\"post\">` natif vers la même adresse + Zod partagé exécuté serveur ; RIEN de la conversation ne part avant le choix (le serveur ne lit ni ne sert aucun message dans cet état) ; la session invitée est détenue par `lib/api/guest-session.ts` (UNIQUE détenteur, une entrée PAR LIEN) et, pour que le serveur décide l'état, voyage dans un cookie posé par cette même route, portée au lien, jamais un second store ; `await import()` du module de participation seulement APRÈS le premier pixel de l'état INVITÉ.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — conception § 12.3 (machine à trois états), § 5.1, § 6.3.A (devenu l'état CHOIX), § 6.2, § 10.1 ; charte règles 7 (hauteurs), 13 (HTML réel), 15 (pseudo et langue côte à côte), 25 (les refus, code par code) et 27 (la modale, action primaire dans le premier écran y compris en refus) ; `cible/join.png` ; `vues.json#join` ; `jetons-de-vues.json#join` (lien vivant, sans session)."
   },
   {
    "ordre": 3,
    "vue_id": "rights",
-   "titre_issue": "Après avoir rejoint, on voit exactement ce qu'on a le droit de faire dans la conversation",
+   "titre_issue": "Juste après la jonction, les droits obtenus s'annoncent DANS le fil de l'invité, à la même adresse",
    "lot": "L2",
    "priorite": "P0-role-premier",
-   "route": "/chats/:lien",
+   "route": "/chat/:lien",
    "audience": "anonyme",
    "depend_de": [
     "join"
    ],
-   "critere_de_fin": "Test unitaire prouvant que les quatre droits rendus proviennent de la MÊME source que l'accordéon de join (un seul module, importé deux fois — aucune liste dupliquée) ; recette Playwright : l'écran est atteint depuis join, depuis login et depuis signup, avec le pseudo saisi restitué. Diff par région contre cible/rights.png ≤ 8 % de disposition, IoU ≥ 0,92, 100 % des icônes attendues rendues, dans les quatre colonnes de thème.",
+   "critere_de_fin": "État INVITÉ de /chat/:lien, juste après la jonction : la MÊME adresse rend le FIL (module app/connecte/fil-vue.ts, le même que /chats/:cle du membre — test unitaire : un seul module de vue importé par les deux routes, aucune jumelle) avec, au-dessus des messages, un <details open> .bandeau.bien (ph-check-circle) « Bienvenue <pseudo> » listant les droits (canSendMessages, canSendFiles, canSendImages, canViewHistory…) SERVIS par la réponse de jonction (`entry.rights`) puis, à chaque chargement, par le battement (`participantConversationPayload`, `link-admission.ts:554-577` — l'INSTANTANÉ du join, jamais le delta de l'hôte) — jamais d'une liste recopiée : test unitaire prouvant que l'accordéon de join et le bandeau lisent la MÊME source ; le composeur est régi par ces droits (droit retiré ⇒ .composeur.ferme avec sa raison) ; un droit que l'hôte change APRÈS le join arrive EN DIRECT par `participant:rights-updated` (`participants-writes.ts:403-425`, room personnelle rejointe par `AuthHandler.ts:381`) — le bandeau se repeint, un droit retiré ferme le composeur, un droit rendu le ROUVRE sans rechargement, et le battement (preuve de bail) ne repeint rien : témoin Playwright contre un bouchon socket qui émet la charge réelle sur `user:<participantId>`, et un bouchon HTTP dont le battement sert l'instantané figé au join ; un lien fermé pendant la lecture puis rechargé garde les messages lus, nomme l'invité par la reconnaissance (`currentUser`) et ne rend aucun verdict (état G) ; recette Playwright : l'état est atteint depuis join (anonyme) avec le pseudo saisi restitué, tandis que login et signup mènent au fil du MEMBRE (/chats/:cle) ; diff par région contre cible/rights.png ≤ 8 % de disposition, IoU ≥ 0,92, 100 % des icônes attendues, quatre colonnes de thème.",
    "dimensions_visees": [
     "Complétude",
     "Maintenabilité",
@@ -152,7 +153,7 @@
     "Expérience utilisateur",
     "Simplicité d'usage"
    ],
-   "corps_issue": "**Contexte** — Écran de CONFIRMATION. Le bloc `isRights` de `MeeshyWebV3.dc.html:239-250` rend le littéral `rights` (`:1103-1108`), qui est la MÊME liste que l'accordéon de `join` (`:223`, `:246`), plus le pseudo saisi dans `join` (`:232`).\n\n**Preuve attendue** — Une seule source de vérité pour les quatre droits (`canSendMessages`, `canSendFiles`, `canSendImages`, `allowViewHistory`), relue de la réponse de jonction : l'hôte a pu les changer.\n\n**Critère de fin** — voir champ dédié.\n\n**Dépendance, et ce qui n'en est PAS une** — `rights` ne dépend que de `join`, seul producteur de l'état qu'il confirme. Les trois entrées vers `rights` dans la planche (`join :765`, `login :773`, `signup :774`) sont des lignes de RECETTE, pas des dépendances : `login`/`signup` MÈNENT à `rights` sans en produire le contenu, et les inscrire ferait attendre une confirmation anonyme P0 derrière deux écrans d'authentification P1 — c'est exactement l'arête inverse qui fabrique un cycle.\n\n**Source** — spec § 10.1 (test d'admission d'une cellule) ; `cible/rights.png` ; `vues.json#rights`."
+   "corps_issue": "**Contexte** — Écran de CONFIRMATION devenu ÉTAT du fil (directive 2026-09-01, conception § 12.3) : la planche le dessinait en page ; il est un bandeau `<details>` replié d'un tap, au-dessus des messages de `/chat/:lien`, dans l'état INVITÉ. Les huit droits servis par la loi d'admission (`GuestRights`, `services/gateway/src/services/participantRights.ts:55-64`) sont rendus par la passerelle dans `entry.rights` du 201 de `POST /links/:key/members` (`link-admission.ts:640-662`, servi seulement à un visiteur sans compte).\n\n**Preuve attendue** — Une seule source de vérité pour les droits, relue de la réponse de jonction puis à chaque chargement : l'hôte a pu les changer. Le fil de l'invité et le fil du membre sont rendus par le MÊME module de vue — deux portes, une vue.\n\n**Critère de fin** — voir champ dédié.\n\n**Dépendance, et ce qui n'en est PAS une** — `rights` ne dépend que de `join`, seul producteur de l'état qu'il confirme. `login`/`signup` MÈNENT désormais au fil du membre (`/chats/:cle`), pas à cet état — l'inscrire ferait attendre une confirmation anonyme P0 derrière deux écrans P1.\n\n**Source** — conception § 12.3, § 10.1 ; charte règles 23 (le bandeau), 26 (les états du fil) et 29 (le bandeau des droits : premier bloc sous l'en-tête, UNE ligne par droit, sans sous-ligne, sous `--bandeau-max`) ; `cible/rights.png` ; `vues.json#rights` ; `jetons-de-vues.json#rights` (lien rejoint)."
   },
   {
    "ordre": 4,
@@ -178,15 +179,15 @@
   {
    "ordre": 5,
    "vue_id": "thread",
-   "titre_issue": "On lit et on écrit dans une conversation partagée sans compte, y compris hors ligne et au retour d'arrière-plan",
+   "titre_issue": "On lit et on écrit dans une conversation — invité à /chat/:lien, membre à /chats/:cle — en temps réel dès que le JavaScript arrive, et sans lui quand il n'arrive pas",
    "lot": "L2",
    "priorite": "P0-role-premier",
-   "route": "/chats/:identifiant",
+   "route": "/chats/:cle",
    "audience": "les-deux",
    "depend_de": [
     "join"
    ],
-   "critere_de_fin": "bunx playwright test e2e/visual/v3-lifecycle.spec.ts : les six cas C→H tombent — retour après 10 min sans modale ni re-jonction et le message manqué apparaît ; deux messages hors ligne repartent DANS L'ORDRE, hasGap peint son séparateur, jeton inchangé ; deux onglets, une seule requête de battement sur 10 min ; isActive:false forcé en base ⇒ bandeau à BOUTON, lecture conservée, AUCUN POST /anonymous/join sans clic ; lien désactivé ⇒ composeur fermé avec sa raison, file annulée et visible ; onglet fermé ⇒ ZÉRO POST /anonymous/leave. Plus l'anti-régression : visibilitychange:hidden seul ⇒ zéro requête mutante. socket.io-client absent du chunk avant le tap (assertion sur app-build-manifest.json). lang= présent sur chaque bulle traduite.",
+   "critere_de_fin": "bunx playwright test e2e/visual/v3-lifecycle.spec.ts : les six cas C→H tombent — retour après 10 min sans modale ni re-jonction et le message manqué apparaît ; deux messages hors ligne repartent DANS L'ORDRE, hasGap peint son séparateur, jeton inchangé ; deux onglets, une seule requête de battement sur 10 min ; isActive:false forcé en base ⇒ bandeau à BOUTON, lecture conservée, AUCUN POST /anonymous/join sans clic ; lien désactivé ⇒ composeur fermé avec sa raison, file annulée et visible ; onglet fermé ⇒ ZÉRO POST /anonymous/leave. Plus l'anti-régression : visibilitychange:hidden seul ⇒ zéro requête mutante. socket.io-client absent du chunk avant le tap (assertion sur app-build-manifest.json). lang= présent sur chaque bulle traduite. TEMPS RÉEL (directive 2026-09-01) : le chemin sans JavaScript (<form method=post>, rechargement) RESTE le chemin qui marche partout — Playwright javaScriptEnabled:false envoie et relit ; avec JavaScript, UN module ES écrit à la main (lib/realtime/participate.ts, servi dans la zone, chargé par await import() APRÈS le premier pixel — assertion CDP : aucune requête de script avant le premier pixel) ouvre UNE connexion socket.io vers le namespace par défaut, authentifiée comme AuthHandler l'attend (auth.token JWT du membre, ou auth.sessionToken de l'invité), rejoint la room par conversation:join, et un message:new reçu apparaît sans rechargement, typing:start peint « écrit… », auth:token-expired peint le bandeau à bouton ; 0 React hydraté (0 Ko de JS de page, check-bundle-budget). Les deux portes rendent le MÊME module de vue (test unitaire). **Ajout du tour 2026-09-05** : on répond à un message (citation, `?repondre=`), on modifie et on retire les siens (`?modifier=`, fenêtre 24 h alignée sur `MESSAGE_EDIT_WINDOW_MS`, `deMoi` requis) — fail-closed pour l'invité AVANT toute requête, résolus contre la tranche SERVIE, optimistes puis confirmés, sans JavaScript par le formulaire ET en direct avec lui, sur les DEUX portes (13 épreuves Playwright).",
    "dimensions_visees": [
     "Performance",
     "Fluidité",
@@ -194,9 +195,15 @@
     "Sécurité",
     "Optimisation mémoire",
     "Compatibilité",
-    "Expérience utilisateur"
+    "Expérience utilisateur",
+    "Maintenabilité"
    ],
-   "corps_issue": "**Contexte** — C'est l'écran où le rôle premier se joue entièrement. Sept faits mesurés le gouvernent (spec § 6.1) : le jeton invité n'a AUCUN TTL (seule condition : `Participant.isActive === true`, sur les trois portes `middleware/auth.ts:399-402`, `AuthHandler.ts:325-330`, `routes/links/messages.ts:269-276`) ; `leave` est une porte à sens unique et n'est pas idempotent ; le seul retour est un re-join qui perd la paternité des messages, suffixe le pseudo et incrémente trois compteurs.\n\n**Preuve attendue** — Le navigateur n'appelle JAMAIS `leave`. La place est un BAIL SERVEUR dont `/anonymous/refresh` est la preuve de présence. `visibilitychange:hidden` SUSPEND, ne mute rien. Reprise sur `visible` / `pageshow{persisted}` / `online`. Un 401 invité passe par une `refresh` de CONTRÔLE en UN seul site (`lib/api/guest-session.ts`) et n'autorise jamais un re-join automatique — il affiche un BOUTON. Un `TypeError: Failed to fetch` n'efface jamais un jeton.\n\n**Critère de fin** — voir champ dédié.\n\n**Bloqué par (hors web)** — `gw:bail-anonyme` : balayage compare-and-set (`updateMany({where:{id,isActive:true}})`, décrément seulement si le compte rendu vaut 1, plancher à 0), qui rend `leave` idempotent par construction et fait passer la purge des 24 h (`MaintenanceService.ts:660-666`) par la même transition, en cessant de hard-deleter une ligne qui est le `senderId` de messages. N = 10 min par défaut, à confirmer (issue `décision-produit`).\n\n**Source** — spec § 6 entier, § 7, § 8.3, § 10.1 ; `cible/thread.png` ; `vues.json#thread`."
+   "corps_issue": "**Contexte** — C'est l'écran où le rôle premier se joue entièrement. Sept faits mesurés le gouvernent (spec § 6.1) : le jeton invité n'a AUCUN TTL (seule condition : `Participant.isActive === true`, sur les trois portes `middleware/auth.ts:399-402`, `AuthHandler.ts:325-330`, `routes/links/messages.ts:269-276`) ; `leave` est une porte à sens unique et n'est pas idempotent ; le seul retour est un re-join qui perd la paternité des messages, suffixe le pseudo et incrémente trois compteurs.\n\n**Preuve attendue** — Le navigateur n'appelle JAMAIS `leave`. La place est un BAIL SERVEUR dont `/anonymous/refresh` est la preuve de présence. `visibilitychange:hidden` SUSPEND, ne mute rien. Reprise sur `visible` / `pageshow{persisted}` / `online`. Un 401 invité passe par une `refresh` de CONTRÔLE en UN seul site (`lib/api/guest-session.ts`) et n'autorise jamais un re-join automatique — il affiche un BOUTON. Un `TypeError: Failed to fetch` n'efface jamais un jeton.\n\n**Critère de fin** — voir champ dédié.\n\n**Bloqué par (hors web)** — `gw:bail-anonyme` : balayage compare-and-set (`updateMany({where:{id,isActive:true}})`, décrément seulement si le compte rendu vaut 1, plancher à 0), qui rend `leave` idempotent par construction et fait passer la purge des 24 h (`MaintenanceService.ts:660-666`) par la même transition, en cessant de hard-deleter une ligne qui est le `senderId` de messages. N = 10 min par défaut, à confirmer (issue `décision-produit`).\n\n**Deux adresses, une vue (directive 2026-09-01)** — `/chat/:lien` sert le fil à l'invité (session invitée pour ce lien, droits du lien relus à chaque chargement) ; `/chats/:cle` sert le fil au membre (jeton de compte). Les états B à H du § 6.3 s'appliquent tels quels aux deux. Temps réel : conception § 12.4.\n\n**Source** — conception § 12.3, § 12.4 ; charte règles 18 (encre pleine, y compris en attente de réseau), 26 (410 / 401 / hors-ligne / `hasGap`), 28 (le fil est PLAT, et les deux portes rendent le MÊME module), 30 (la pastille du Prisme, jamais un drapeau) et 33 (le temps réel est une amélioration progressive) ; spec § 6 entier, § 7, § 8.3, § 10.1 ; `cible/thread.png` ; `vues.json#thread`.",
+   "adresses": {
+    "membre": "/chats/:cle",
+    "invite": "/chat/:lien",
+    "note": "DEUX portes, UNE vue (app/connecte/fil-vue.ts) — directive 2026-09-01, conception § 12.3. La planche dessine le cadre une fois ; jetons-de-vues.json déclare `cle` pour le membre, et `lien` (état rejoint) pour l'invité via la vue `rights`."
+   }
   },
   {
    "ordre": 6,
@@ -209,7 +216,7 @@
    "depend_de": [
     "thread"
    ],
-   "critere_de_fin": "Test unitaire : les six variantes sont rendues par UN composant dérivant du TYPE du message (aucune branche dupliquée, aucun second résolveur) ; la transcription vocale passe par resolvePrismTranslation() et porte lang= quand la langue servie diffère de <html lang> ; diff par région contre cible/rich.png ≤ 8 %, IoU ≥ 0,92, 100 % des icônes attendues rendues, quatre colonnes de thème.",
+   "critere_de_fin": "Test unitaire : les six variantes sont rendues par UN composant dérivant du TYPE du message (aucune branche dupliquée, aucun second résolveur) ; la transcription vocale passe par resolvePrismTranslation() et porte lang= quand la langue servie diffère de <html lang> ; diff par région contre cible/rich.png ≤ 8 %, IoU ≥ 0,92, 100 % des icônes attendues rendues, quatre colonnes de thème. **Issue #5061** — le composeur du fil ENREGISTRE UN VOCAL (micro >= 44 px, MediaRecorder, POST /attachments/upload puis attachmentIds) et PARTAGE LA POSITION (bouton position >= 44 px, navigator.geolocation, POST .../messages { location }), les deux gouvernés par canSendMessages (`ContentSignature.ts:266-269`, `MessagingService.ts:263`) ; une position REÇUE se lit comme un LIEU — nom, adresse, lien geo: et repli carte en onglet — jamais comme des coordonnées brutes ; zéro tuile de carte téléchargée à la lecture ; les deux ronds sont des AMÉLIORATIONS PROGRESSIVES (masqués sans JavaScript, le composeur texte/pièce jointe reste vert). Témoin : e2e/visual/v3-fil-capture.spec.ts.",
    "dimensions_visees": [
     "Complétude",
     "Maintenabilité",
@@ -217,7 +224,38 @@
     "Facilité d'accès",
     "Expérience utilisateur"
    ],
-   "corps_issue": "**Contexte** — Six formes de bulle, une seule règle. La tentation est d'écrire six composants qui divergent au premier correctif.\n\n**Preuve attendue** — UN composant, la forme dérivée du TYPE. La transcription audio descend le prisme ORDONNÉ (`systemLanguage` → `regionalLanguage` → `customDestinationLanguage` → `deviceLocale` → `fr`), jamais le rang 1 seul, via `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`) — aucune boucle réécrite. Et la piste audio jouée est élue par la langue du TEXTE SERVI, jamais par une descente indépendante.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.3, § 5.4, § 10.1 ; CLAUDE.md § Prisme (familles de résolveurs, cycles 119/128) ; `cible/rich.png` ; `vues.json#rich`."
+   "corps_issue": "**Contexte** — Six formes de bulle, une seule règle. La tentation est d'écrire six composants qui divergent au premier correctif.\n\n**Preuve attendue** — UN composant, la forme dérivée du TYPE. La transcription audio descend le prisme ORDONNÉ (`systemLanguage` → `regionalLanguage` → `customDestinationLanguage` → `deviceLocale` → `fr`), jamais le rang 1 seul, via `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`) — aucune boucle réécrite. Et la piste audio jouée est élue par la langue du TEXTE SERVI, jamais par une descente indépendante.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.3, § 5.4, § 10.1 ; CLAUDE.md § Prisme (familles de résolveurs, cycles 119/128) ; `cible/rich.png` ; `vues.json#rich` ; issue #5061 (vocal, position, lieu)."
+  },
+  {
+   "ordre": 0,
+   "vue_id": "profilMembre",
+   "titre_issue": "Le profil d'un participant s'ouvre en surimpression sur le fil, et se ferme sans une ligne de JavaScript",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/chats/:cle?profil=:membre",
+   "audience": "les-deux",
+   "depend_de": [
+    "thread",
+    "rich",
+    "chats"
+   ],
+   "adresses": {
+    "membre": "/chats/:cle?profil=:membre",
+    "invite": "/chat/:lien?profil=:membre",
+    "liste": "/chats?profil=:membre",
+    "note": "TROIS portes, UNE surimpression : le profil est un ÉTAT porté par la chaîne de requête de l'écran hôte, jamais une adresse à lui. C'est ce qui le rend ouvrable et fermable par un simple <a href> — ouvrir pose « ?profil= », fermer rend l'adresse de l'hôte —, donc sans un octet de JavaScript (conception § 12.10.6). Le fil de l'invité et celui du membre étant rendus par le MÊME module de vue (app/connecte/fil-vue.ts, § 12.3), la surimpression est écrite UNE fois."
+   },
+   "critere_de_fin": "Playwright avec javaScriptEnabled:false : depuis /chats/:cle, cliquer l'avatar OU le nom d'un auteur navigue vers /chats/:cle?profil=<handle> et le SERVEUR y rend le fil INCHANGÉ plus un <dialog open> porté par le même document (aucune requête de script, aucun second écran) ; la croix, le voile et le lien de retour rendent /chats/:cle sans ?profil= — trois chemins, un seul effet, chacun vérifié ; Échap ferme dès que le JavaScript est là, jamais comme SEUL chemin (dimension 5). Les mêmes trois assertions sur /chat/:lien?profil= (invité, session invitée) et sur /chats?profil= (la liste) : un seul module de vue rend la surimpression aux trois adresses (test unitaire — aucune jumelle). Les DONNÉES sont celles que la passerelle sert, aucune de plus : GET /api/v1/directory/people/:handle?expand=relation (services/gateway/src/routes/directory/person.ts:175, onRequest:[getOptionalAuth] — un invité anonyme y a droit ; seaux 240/min connecté et 60/min anonyme, :160-173) rendant publicProfileSchema (routes/users/public-profile.ts:88-110 : displayName, username, firstName, lastName, avatar, banner, bio, role, createdAt, voicePublic, isAnonymous, isMeeshyer) plus relation ∈ {none,self,friend,pending_sent,pending_received} et isSelf (person.ts:72-94). AUCUNE langue n'est lue sur le profil — #4161 les a retirées de la projection — : la ligne de langue du panneau vient du FIL (langue d'origine du message lu) et le dit ; un test rougit si le panneau lit une langue du profil. AUCUNE PRÉSENCE n'est affichée tant que la charge n'en porte pas : person.ts:276-279 retire les champs de présence sans expand=presence, et gateProfilePresence (routes/users/presence-gate.ts:113-122) les retire de toute façon hors amitié acceptée / soi / ADMIN+ — le client ne FABRIQUE rien et ne garde rien que le serveur ait retiré (test : charge sans isOnline ⇒ zéro pastille dans le DOM). Chaque contrôle a un EFFET observable : « Écrire » ouvre le tête-à-tête (POST /api/v1/conversations, type:'direct', participantIds:[cible] — routes/conversations/core-lifecycle.ts:73, qui RÉUTILISE la conversation directe existante :219 — puis 303 vers son fil) ; « Ajouter en ami » poste POST /api/v1/directory/friend-requests (friend-requests.ts:289) en optimiste avec rollback à l'échec et la puce de relation change de mot ; « Bloquer » poste PUT /api/v1/directory/blocks/:userId (blocks.ts:301) derrière une confirmation ; un lecteur ANONYME ne voit ni « Ajouter en ami » ni « Bloquer » (routes authentifiées : un contrôle qui rendrait 401 est un contrôle sans effet). États dessinés : chargement (le fil reste lu, la surimpression seule est en attente), 404 profil inconnu, 429 seau plein (la phrase servie, jamais une invention), hors-ligne (cache-first : un profil déjà lu se rouvre sans réseau), et relation=self ⇒ la surimpression mène à SON compte, pas à ces actions. Cibles : primaire 56 px, secondaire 52 px, aucune cible < 44 px à 360 et 390 px dans les DEUX schémas ; 0 violation axe serious/critical ; quatre colonnes de thème ; diff par région contre cible/profilMembre.png ≤ 8 % de disposition, IoU ≥ 0,92, 100 % des icônes attendues. Poids : la surimpression n'ajoute NI motif de budget NI requête avant le premier pixel — elle vit sous /chats/* et /chat/*, dont les plafonds (4 requêtes, LCP ≤ 2,2 s, CLS ≤ 0,05) sont INCHANGÉS et opposés tels quels.",
+   "dimensions_visees": [
+    "Facilité d'accès",
+    "Sécurité",
+    "Cohérence de positionnement",
+    "Simplicité d'usage",
+    "Complétude",
+    "Expérience utilisateur",
+    "Performance"
+   ],
+   "corps_issue": "**Contexte** — Directive du porteur (2026-09-03, conception § 12.10.3) : le profil d'un participant s'ouvre en MODALE depuis son avatar ou son nom dans `thread`, `rich` et `chats`. Ce n'est PAS `sheet:member`, dont le rôle — remplacer la barre d'onglets absente et mener le lecteur vers SON PROPRE compte — est explicitement distinct (§ 10.1) : deux besoins, deux surimpressions. La planche le dessine depuis le 2026-09-03 (`cible/profilMembre.png`), et l'ancienne sortie du fil vers l'annuaire (`contacts`) est remplacée par elle : ouvrir le profil d'une personne n'est pas ouvrir la liste de ses contacts à soi.\n\n**Preuve attendue** — La surimpression est un ÉTAT de l'écran hôte, porté par `?profil=`, rendu par le serveur dans le MÊME document : elle s'ouvre et se ferme par un `<a href>`, donc sans un octet de JavaScript (§ 12.10.6), et le `<dialog>` natif porte le reste (Échap, voile, focus). Elle ne rend que ce que `GET /directory/people/:handle` SERT : pas de langue (retirée de la projection par #4161 — celle qu'affiche le panneau vient du fil et le dit), pas de présence hors amitié acceptée (`resolvePresenceVisibility`, directive 2026-08-25 ; le client ne fabrique ni ne garde ce que le serveur retire). Aucun contrôle inerte : trois actions, trois routes réelles, et celles qui exigent un compte ne s'affichent pas à un invité.\n\n**Critère de fin** — voir champ dédié.\n\n**Dépendances, et ce qui n'en est PAS une** — `thread`, `rich` et `chats` sont les TROIS hôtes que la directive nomme : ce sont eux qui PRODUISENT l'état que la surimpression rend, et rien d'autre. `contacts` n'en est pas une : l'annuaire consomme le profil, il ne le produit pas — l'inscrire rejouerait le cycle que le gate d'ordre existe pour attraper.\n\n**Source** — conception § 12.10.3 (l'écran), § 12.10.6 (la légèreté), § 12.3 (deux portes, un module de vue) ; CLAUDE.md § « User Presence » (visibilité de la présence, 2026-08-25) et § Prisme ; charte règles 5 (zéro `<div>` cliquable), 10-11 (les trois rangs d'action et le plancher de 44 px), 16 (UNE carte), 17 (quatre plans, zéro ombre) et 19 (contraste AA sur les paires servies) ; `cible/profilMembre.png` ; `vues.json#profilMembre` ; `jetons-de-vues.json#profilMembre` (`cle` + `membre`, session `membre`)."
   },
   {
    "ordre": 7,
@@ -225,12 +263,12 @@
    "titre_issue": "Les médias d'une conversation se parcourent, s'ouvrent, et leur poids est annoncé avant tout téléchargement",
    "lot": "L2",
    "priorite": "P0-role-premier",
-   "route": "/chats/:id/medias",
+   "route": "/chats/:cle/medias",
    "audience": "les-deux",
    "depend_de": [
     "thread"
    ],
-   "critere_de_fin": "Playwright : chaque tuile est cliquable et ouvre le média (loi « un contrôle existe s'il a un effet » — les tuiles sont inertes aujourd'hui) ; le poids est affiché AVANT le téléchargement et aucun octet de média n'est transféré à l'ouverture de la grille (assertion CDP encodedDataLength) ; l'audio rend sa transcription au Prisme avec lang=. 0 violation axe serious/critical ; grille atteignable au clavier ; quatre colonnes de thème sous seuil.",
+   "critere_de_fin": "Playwright javaScriptEnabled:false sur /chats/:cle/medias contre la passerelle de bouchon : (1) cliquer une tuile image navigue vers /chats/:cle/medias?…&media=<pièce> et le SERVEUR y rend la grille inchangée (inert) plus la même surimpression que le fil — témoin unitaire : pleinEcran() de plein-vue.ts est le seul site de rendu importé par fil-vue.ts ET medias-vue.ts (aucune jumelle) ; la croix, `data-retour` (ce qu'un module suit à Échap) et le retour arrière du navigateur rendent l'adresse de la galerie sans ?media=, filtre et page conservés — trois chemins, un effet, chacun vérifié ; il n'y a PAS de voile, la surimpression étant pleine page et opaque (leçon 471 : un voile qu'aucun pixel ne montre est une cible invisible par-dessus une cible visible), et « Voir dans la conversation » MÈNE au message dans le fil, effet vérifié au navigateur ; un vocal ouvre sa fiche avec la transcription entière au Prisme (lang= quand la langue servie diffère de <html lang>) ; un genre sans plein écran (PDF) garde son lien de téléchargement direct et ?media=<son id> ne rend rien ; (2) assertion CDP encodedDataLength : ZÉRO octet de média transféré à l'ouverture de la grille, et à l'ouverture de la surimpression seule l'image demandée part (vidéo/audio preload=none) ; (3) le poids est affiché avant tout téléchargement sur chaque tuile ; grille et surimpression atteignables au clavier ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil ; aucune requête avant le premier pixel ajoutée (plafonds /chats/* inchangés : 4 requêtes, LCP ≤ 2,2 s, CLS ≤ 0,05) ; #4525 et le point 2 de #5024 fermés par le commit (Closes #4525), le point 1 et le point 3 restant ouverts dans #5024 avec leur raison.",
    "dimensions_visees": [
     "Performance",
     "Facilité d'usage",
@@ -239,6 +277,11 @@
     "Complétude",
     "Optimisation mémoire"
    ],
+   "adresses": {
+    "membre": "/chats/:cle/medias",
+    "invite": null,
+    "note": "UNE porte, celle du MEMBRE (directive du porteur 2026-09-01 : « aucun /chat/:lien/… pour lire » — un lien reçu s'ouvre, se rejoint et se lit à UNE adresse). La passerelle SERVIRAIT pourtant la donnée à un invité (GET /conversations/:id/messages est en optionalAuth) : ouvrir la galerie à l'invité demande une SECONDE adresse sous /chat/:lien, donc une décision produit — pas un travail de plomberie. Tant qu'elle n'est pas prise, l'en-tête du fil de l'invité ne rend AUCUN lien (charte règle 7), et `audience: les-deux` décrit la donnée, pas les portes servies."
+   },
    "corps_issue": "**Contexte** — « Très faible consommation de données » se décide ici : une grille de 48 médias qui précharge est le contraire de la mission. Les tuiles de la planche sont inertes.\n\n**Preuve attendue** — Vignettes dimensionnées (`width`/`height` obligatoires, CLS ≤ 0,05), téléchargement à la demande avec poids annoncé, `fileUrl` servi tel quel — jamais reconstruit côté client (une signature `?exp=&sig=` viendra dans la même valeur).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (médias distants), § 8.5, § 10.1 ; `cible/media.png` ; `vues.json#media`."
   },
   {
@@ -290,18 +333,18 @@
    "lot": "L3",
    "priorite": "P0-role-premier",
    "route": "/stories/:id",
-   "audience": "anonyme",
+   "audience": "connecte",
    "depend_de": [
     "story"
    ],
-   "critere_de_fin": "Test d'oracle : une story ABSENTE, une story SUPPRIMÉE, une story EXPIRÉE et une story RESTREINTE rendent une réponse IDENTIQUE — même code, mêmes en-têtes, même corps, même absence d'OG et d'image OG. JAMAIS de 403. Assertion étendue à app/api/og/*, qui vit hors du filtre de route. Écran serveur (aucun chunk client de route dans app-build-manifest.json).",
+   "critere_de_fin": "Test d'oracle (jest sur la porte, contre quatre charges de passerelle : 404 absente, 404 supprimée, 404 expirée par la garde d'échéance, 403 restreinte) : les quatre réponses de /stories/:id sont IDENTIQUES — même code (404), mêmes en-têtes (Cache-Control, Content-Type, aucun en-tête différenciant), même corps octet à octet, aucune balise og:*/twitter:*, aucune image OG ; JAMAIS de 403 en sortie ; le même oracle sur /moods/:id et /reels/:id (même porte) ; visiteur sans session : la réponse est la même invitation pour les quatre causes ET pour une story existante, et l'assertion réseau prouve ZÉRO appel à /api/v1/posts/* dans cet état ; conformité contre cible/storyFail.png mesurée par l'INSTRUMENT du dépôt — `bun run apps/web-v3/scripts/conformite-des-vues.ts storyFail`, qui note la SIGNATURE STRUCTURELLE (seuil 0,15), l'écart pixel restant indicatif : « diff par région ≤ 8 % / IoU ≥ 0,92 » nomme l'intention, pas une mesure que `compare-rendu.js` produit ; mesuré le 2026-09-04 : 0,147 sombre / 0,1464 clair, conformes, 15 956 o et 1 requête ; glyphe attendu rendu, action de sortie ≥ 52 px vers une route servie ; écran serveur (aucun chunk client de route dans app-build-manifest.json) ; 0 violation axe serious/critical ; quatre colonnes de thème ; Closes #4967.",
    "dimensions_visees": [
     "Sécurité",
     "Complétude",
     "Expérience utilisateur",
     "Performance"
    ],
-   "corps_issue": "**Contexte** — Un 403 confirmerait l'existence du contenu : c'est un oracle d'énumération. Le patron existe déjà côté serveur : `resolveConsumptionTarget` rend `null` sans distinguer absent / supprimé / invisible (`services/gateway/src/socketio/handlers/PostReactionHandler.ts:511-516`).\n\n**Preuve attendue** — RÉUTILISER ce patron, ne pas le réécrire. Et appliquer le MÊME filtre de visibilité à l'aperçu OG qu'à la route : c'est ce qui « part À CÔTÉ » de la page, et une garde posée sur la route seule laisserait l'image OG révéler ce que la route refuse.\n\n**Critère de fin** — voir champ dédié.\n\n**Bloqué par (hors web)** — `gw:404-indistinguable`.\n\n**Source** — spec § 5.1, § 5.4 (quatrième question, cycle 124), § 10.1 ; `cible/storyFail.png` ; `vues.json#storyFail`."
+   "corps_issue": "**Contexte** — Un 403 confirmerait l'existence du contenu : c'est un oracle d'énumération. Le patron existe déjà côté serveur : `resolveConsumptionTarget` rend `null` sans distinguer absent / supprimé / invisible (`services/gateway/src/socketio/handlers/PostReactionHandler.ts:511-516`).\n\n**Preuve attendue** — RÉUTILISER ce patron, ne pas le réécrire. Et appliquer le MÊME filtre de visibilité à l'aperçu OG qu'à la route : c'est ce qui « part À CÔTÉ » de la page, et une garde posée sur la route seule laisserait l'image OG révéler ce que la route refuse.\n\n**Critère de fin** — voir champ dédié.\n\n**Rien à ouvrir côté passerelle (mesuré 2026-09-04)** — `PostService.getPostById` rend DÉJÀ 404 pour absente, supprimée ET hors audience, « indistinguishable from \"doesn't exist\" by design » (`services/gateway/src/services/PostService.ts:686-689`) : jamais 403 sur cette route. L'ÉCHÉANCE, elle, n'est PAS filtrée par la passerelle (aucun `unexpiredPostFilter` dans le dépôt, aucun `postDetailExpiry.test.ts`, aucun commit sur aucune branche) — c'est un CONTRAT, pas un bogue : la v3 la filtre elle-même (`apps/web-v3/lib/api/publication.ts:256`, `partageLu`) et rend le MÊME 404. AUCUN diff serveur dans ce lot.\n\n**Aperçu social** — la v3 n'a pas de route `app/api/og/*` (ni le legacy) : le refus n'émet AUCUNE balise `og:*`/`twitter:*` (`ogEtTwitter: false`, `app/enveloppe/vue.ts`) et ne référence ni `/api/og` ni `/api/metadata`. L'INVITATION servie au visiteur sans session GARDE la sienne — c'est le seul aperçu qu'une adresse partagée produise, et elle ne porte aucune donnée du contenu.\n\n**Audience** — `connecte` (décision du porteur 2026-09-02) : `GET /posts/:postId` est `requiredAuth`, le visiteur sans session reçoit l'INVITATION, identique que la story existe ou non.\n\n**Source** — spec § 5.1, § 5.4 (quatrième question, cycle 124), § 10.1 ; `cible/storyFail.png` ; `vues.json#storyFail`."
   },
   {
    "ordre": 11,
@@ -309,7 +352,7 @@
    "titre_issue": "On se connecte sans perdre le lien qu'on était en train d'ouvrir",
    "lot": "L4",
    "priorite": "P1-role-secondaire",
-   "route": "/login?next=/l/:token",
+   "route": "/login?returnUrl=/chat/:lien",
    "audience": "anonyme",
    "depend_de": [],
    "critere_de_fin": "Playwright : arriver depuis /l/:token, se connecter, atterrir exactement sur le contenu visé ; le bandeau « lien gardé de côté » n'apparaît QUE lorsqu'un lien est réellement en attente (aujourd'hui pending:true en dur) et disparaît sinon — deux tests symétriques ; tout lien sortant du périmètre v3 est un <a href> réel, prouvé par le lint de zone ; 0 violation axe serious/critical.",
@@ -320,20 +363,20 @@
     "Facilité d'accès",
     "Expérience utilisateur"
    ],
-   "corps_issue": "**Contexte** — Entre les étapes 2 et 4 de la bascule, `/l` est en v3 et `/chats` encore en legacy : l'utilisateur franchit une frontière de zone. Même origine ⇒ le cookie `meeshy_session` (`apps/web/middleware.ts:8`, sans `Domain=`) et `localStorage` suivent ; mais la navigation client-side de Next NE TRAVERSE PAS une zone.\n\n**Preuve attendue** — `?next=` conservé et restauré ; bandeau conditionnel ; `<a href>` réel pour toute sortie de périmètre (corollaire 4 du § 3.2, garanti par un lint).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 4.1, § 4.9, § 10.1 ; `cible/login.png` ; `vues.json#login`."
+   "corps_issue": "**Contexte** — Entre les étapes 2 et 4 de la bascule, `/l` est en v3 et `/chats` encore en legacy : l'utilisateur franchit une frontière de zone. Même origine ⇒ le cookie `meeshy_session` (`apps/web/middleware.ts:8`, sans `Domain=`) et `localStorage` suivent ; mais la navigation client-side de Next NE TRAVERSE PAS une zone.\n\n**Preuve attendue** — `?next=` conservé et restauré ; bandeau conditionnel ; `<a href>` réel pour toute sortie de périmètre (corollaire 4 du § 3.2, garanti par un lint).\n\n**Critère de fin** — voir champ dédié.\n\n**Le paramètre s'appelle `returnUrl`** (directive 2026-09-01 écrite `?next=` ; la porte v3 lit `returnUrl`, le nom du legacy — `app/authentification/porte.ts:33-38` — et un second nom serait une jumelle, conception § 12.9). Depuis `/chat/:lien`, la connexion mène à l'état MEMBRE : jonction par la loi d'admission puis 302 vers `/chats/:cle`.\n\n**Source** — spec § 4.1, § 4.9, § 10.1 ; `cible/login.png` ; `vues.json#login`."
   },
   {
    "ordre": 12,
    "vue_id": "signup",
-   "titre_issue": "On crée son compte en une passe, la disponibilité des identifiants vérifiée d'un seul appel",
+   "titre_issue": "On crée son compte en une passe : nom, e-mail, téléphone avec indicatif pré-sélectionné, mot de passe, langue pré-remplie — aucune vérification avant l’envoi",
    "lot": "L4",
    "priorite": "P1-role-secondaire",
-   "route": "/signup?next=/l/:token",
+   "route": "/signup?returnUrl=/chat/:lien",
    "audience": "anonyme",
    "depend_de": [
     "login"
    ],
-   "critere_de_fin": "Assertion CDP : pseudo, e-mail et téléphone sont vérifiés en UN SEUL appel groupé (aucune requête par champ, aucun débounce triple) ; ?next= restauré après succès ; validation Zod partagée exécutée côté serveur et rejouée côté client sans seconde définition de schéma ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "critere_de_fin": "Assertion CDP : AUCUNE requête vers la passerelle avant la soumission (ni disponibilité, ni débounce) ; le pays de l’indicatif et la langue de lecture sont pré-sélectionnés depuis Accept-Language ; un refus typé (EMAIL_TAKEN, PHONE_INVALID, conflit de numéro) est rendu SUR son champ avec aria-invalid et aria-describedby, la saisie conservée sauf le mot de passe ; ?returnUrl= restauré après succès ; 0 Ko de JavaScript de page ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
    "dimensions_visees": [
     "Performance",
     "Facilité d'usage",
@@ -341,12 +384,12 @@
     "Facilité d'accès",
     "Complétude"
    ],
-   "corps_issue": "**Contexte** — Trois vérifications de disponibilité = trois requêtes par frappe si on suit la pente naturelle, contre l'exigence « très faible consommation de données ».\n\n**Preuve attendue** — `GET /auth/check-availability` appelé UNE fois pour les trois critères, isolé dans `lib/api/identity.ts` (seul endroit à changer le jour où `/identity/availability` est monté).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (disponibilité pseudo), § 10.1 ; `cible/signup.png` ; `vues.json#signup`."
+   "corps_issue": "**Contexte** — La passerelle dérive le pseudo, le prénom et le nom du nom affiché, et déduit la langue quand elle n’est pas donnée (#5216) : l’écran n’a plus rien à vérifier avant d’envoyer, et chaque vérification retirée est une attente en moins (analyse du 2026-09-05 sur #3684).\n\n**Preuve attendue** — `POST /auth/register` est le SEUL appel du parcours ; les refus se lisent en UN site (`lib/api/authentification.ts`, table code → champ) et se posent sous leur champ.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; `cible/signup.png` ; `vues.json#signup` ; #5217."
   },
   {
    "ordre": 13,
    "vue_id": "home",
-   "titre_issue": "L'accueil connecté s'affiche depuis le cache, sans un seul spinner",
+   "titre_issue": "Le tableau de bord — `/` pour un lecteur connecté — s'affiche depuis le cache, avec ses gros boutons et ses deux actions flottantes",
    "lot": "L5",
    "priorite": "P1-role-secondaire",
    "route": "/",
@@ -362,7 +405,7 @@
     "Optimisation mémoire",
     "Cohérence de positionnement"
    ],
-   "corps_issue": "**Contexte** — Cache-First est non négociable : jamais de spinner sur un cache non vide, même périmé. Une lenteur est un BUG, pas une dette.\n\n**Preuve attendue** — `CacheResult<T>` traité cas par cas (`.fresh` / `.stale` / `.expired` / `.empty`), `.stale` servi immédiatement + rafraîchissement silencieux. `CallManager` (1350 lignes, pile WebRTC) N'EST PAS dans le layout : un composant P2 ne gouverne pas un gate P1 — il se monte à la réception d'un `call:incoming`, en `next/dynamic`.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 8.3, § 10.1 ; CLAUDE.md § Instant App Principles ; `cible/home.png` ; `vues.json#home`."
+   "corps_issue": "**Contexte** — Cache-First est non négociable : jamais de spinner sur un cache non vide, même périmé. Une lenteur est un BUG, pas une dette.\n\n**Preuve attendue** — `CacheResult<T>` traité cas par cas (`.fresh` / `.stale` / `.expired` / `.empty`), `.stale` servi immédiatement + rafraîchissement silencieux. `CallManager` (1350 lignes, pile WebRTC) N'EST PAS dans le layout : un composant P2 ne gouverne pas un gate P1 — il se monte à la réception d'un `call:incoming`, en `next/dynamic`.\n\n**Critère de fin** — voir champ dédié.\n\n**`/` sert le TABLEAU DE BORD au lecteur connecté, jamais le fil** (directive 2026-09-01, conception § 12.2) ; la vitrine est l'autre lecteur de la même adresse (`app/route.ts`). Disposition : charte règles 8 (deux ronds fixes aux DEUX coins, la bande entre eux libre), 11 (aucun chevron de retour sur `/`, qui est la racine), 15 (cartes « Reprendre », carte à tuile « Mes liens » puis « Nouveau lien de partage » en `.action.contour`, état vide dessiné pour « Communautés », deux actions flottantes 56/52 px, pas de barre d'onglets), 22 (chargement : 0 spinner sur cache non vide) et 24 (l'état vide de « Communautés »).\n\n**Source** — spec § 8.3, § 10.1 ; CLAUDE.md § Instant App Principles ; `cible/home.png` ; `vues.json#home`."
   },
   {
    "ordre": 14,
@@ -376,7 +419,7 @@
     "thread",
     "login"
    ],
-   "critere_de_fin": "Assertion CDP : au retour de focus, un 304 quasi-vide est observé sur GET /sync depuis le curseur retenu — aucun refetch complet de la liste ; hasGap peint son séparateur ; l'aperçu de dernier message descend le prisme ORDONNÉ via resolveLastMessagePreview() (témoin écrit sur un rang autre que le premier) ; scroll à 60 fps mesuré ; 0 violation axe serious/critical.",
+   "critere_de_fin": "Assertion CDP : au retour de focus, un 304 quasi-vide est observé sur GET /sync depuis le curseur retenu — aucun refetch complet de la liste ; hasGap peint son séparateur ; l'aperçu de dernier message descend le prisme ORDONNÉ via resolveLastMessagePreview() (témoin écrit sur un rang autre que le premier) ; scroll à 60 fps mesuré ; 0 violation axe serious/critical. TEMPS RÉEL (directive 2026-09-01) : liste servie par le serveur (cache-first) ; après le premier pixel, le MÊME module de participation (lib/realtime/participate.ts) réordonne la liste sur message:new, fait bouger le compte sur conversation:unread-updated, peint la frappe sur typing:start — sans rechargement, sans React hydraté ; sans JavaScript, la liste reste juste au rechargement. Disposition : charte règles 12 (au moins TROIS lignes actionnables au premier écran, à 360 × 844), 15 (deux puces 52 px « Créer un lien » / « Conversation », puce Prisme AUTO · <langue>, carte mise en avant puis lignes plates à 80 px, .langue AVANT l'aperçu), 30 (la pastille ne se rend QUE lorsque `resolvePrismTranslation()` sert une traduction — `cible/chats.png` porte désormais une ligne SANS pastille, où seul le témoin de rang peut s'écrire) et 8 (si la mesure trouve un contrôle couvert, le rail cède la place à deux raccourcis de 44 px dans l'en-tête : écart de disposition assumé avec la cible, dont la raison est un chiffre).",
    "dimensions_visees": [
     "Performance",
     "Fluidité",
@@ -544,7 +587,7 @@
    "depend_de": [
     "home"
    ],
-   "critere_de_fin": "Playwright : création EXIGE un compte côté UI (aucun chemin de création exposé sans session, malgré authOptional côté serveur) ; expiration, nombre d'usages et « anonymes autorisés » mutent la charge envoyée ; révoquer un lien le rend immédiatement 410 sur /l/:token (test de bout en bout) ; le QR encode l'URL apex servie par le serveur, jamais une URL reconstruite ; 0 violation axe serious/critical.",
+   "critere_de_fin": "Playwright contre la passerelle de bouchon (état du lien MUTABLE, jamais dicté) : (1) création ET révocation exigent un compte côté UI — GET /links, GET /links?nouveau et POST /links sans jeton rendent 302 /login?returnUrl=%2Flinks, et AUCUN appel n'atteint la passerelle (malgré authOptional côté serveur) ; (2) expiration, nombre d'usages et « anonymes autorisés » mutent la charge envoyée — trois assertions sur le corps REÇU par le bouchon ; (3) sans JavaScript, « Fermer ce lien » (un <details> par ligne ACTIVE, aucun sur une ligne fermée) POSTe vers /links, la porte appelle PATCH /api/v1/links/:linkId avec le corps STRICT {\"isActive\":false} (assertion sur le corps reçu), répond en PRG 303 vers /links?ferme, et la ligne est rendue « fermé » SANS disparaître ; (4) avec JavaScript, la ligne passe « fermé » AVANT la réponse (optimiste, retard posé sur le bouchon) et un 403/404 la RÉTABLIT avec le motif servi tel quel, le focus revenant au geste ; (5) bout en bout : après la révocation, GET /l/:token rend l'écran linkExpired en 410 (cause = desactivation) — la redirection 302 vers /l/:token/expired reste le SEUL saut, et c'est ce document qui porte le 410 (verification-impossible seule rend 503, § 7 : une erreur réseau n'est pas un refus) ; (6) 0 violation axe serious/critical, menu OUVERT compris ; toute cible ≥ 44 px à 360 et 390 px ; quatre colonnes de thème ; 0 Ko de JS de page (check-bundle-budget). QR : NON RENDU — régime 3 (§ 5.2), aucune route de la passerelle ne sert un QR ni une URL de partage pour un ConversationShareLink (routes/links/user.ts, management.ts, retrieval.ts mesurés ; TrackingLinkService.buildTrackingUrl ne frappe que les /l/ de TRACKING), et le legacy n'en a pas non plus ; à rouvrir par une issue passerelle compagnon, jamais par une URL reconstruite côté client.",
    "dimensions_visees": [
     "Sécurité",
     "Complétude",
@@ -552,7 +595,7 @@
     "Facilité d'usage",
     "Maintenabilité"
    ],
-   "corps_issue": "**Contexte** — Faille mesurée : `POST /api/v1/tracking-links` est monté en `authOptional` et cinq routes de gestion ÉCHOUENT OUVERTES quand `trackingLink.createdBy` est nul (`docs/product/api-simplification/platform.md:305` : « un changement de produit, pas seulement de sécurité »).\n\n**Preuve attendue** — La v3 ferme l'UI ; le durcissement serveur est une issue compagnon, non bloquante pour ce lot. Ne jamais reconstruire une URL de lien côté client : `TrackingLinkService.buildTrackingUrl` (`:76`) est le seul frappeur, et une signature viendra dans la même valeur.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (dernière ligne), § 11 question 9, § 10.1 ; `cible/links.png` ; `vues.json#links`."
+   "corps_issue": "**Contexte** — Faille mesurée : `POST /api/v1/tracking-links` est monté en `authOptional` et cinq routes de gestion ÉCHOUENT OUVERTES quand `trackingLink.createdBy` est nul (`docs/product/api-simplification/platform.md:305` : « un changement de produit, pas seulement de sécurité »).\n\n**Preuve attendue** — La v3 ferme l'UI ; le durcissement serveur est une issue compagnon, non bloquante pour ce lot. Ne jamais reconstruire une URL de lien côté client : `TrackingLinkService.buildTrackingUrl` (`:76`) est le seul frappeur, et une signature viendra dans la même valeur.\n\n**Critère de fin** — voir champ dédié.\n\n**Ce que le lot livre (2026-09-04)** — création (#5071), révocation par `<details>` + `<form method=\"post\">` sur chaque ligne active, optimiste avec rétablissement SERVI, et `/l/:token/expired` qui répond 410 au lieu de 200. La révocation appelle `PATCH /api/v1/links/:linkId` (`services/gateway/src/routes/links/management.ts`, `authRequired`, police créateur OU modérateur) — aucun diff serveur.\n\n**Ce que le lot NE livre PAS** — le QR (capacité non exposée, régime 3 : voir le critère de fin) et la RÉOUVERTURE d'un lien fermé (`isActive:true` existe côté schéma, mais `applyShareLinkUpdate` a déjà révoqué les invités : rouvrir ne les ramène pas — décision produit à ouvrir).\n\n**Source** — spec § 5.1 (dernière ligne), § 11 question 9, § 10.1 ; `cible/links.png` ; `vues.json#links`."
   },
   {
    "ordre": 23,
@@ -585,14 +628,14 @@
    "depend_de": [
     "notifs"
    ],
-   "critere_de_fin": "Test : les onze bascules envoient chacune sa mutation et sont relues du serveur après rechargement (onze allers-retours vérifiés — elles sont purement visuelles aujourd'hui) ; échec réseau ⇒ rollback VISIBLE, jamais un état affiché divergent du serveur ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "critere_de_fin": "Test : les treize bascules (la planche en dessine treize, DETAILS.notification lignes 750-776 — le compte de onze était un plancher daté avant la section APPELS ET SYSTÈME) envoient chacune sa mutation et sont relues du serveur après rechargement (treize allers-retours vérifiés par les témoins contre le bouchon, en boucle sur la table importée) ; échec réseau ⇒ rollback VISIBLE, jamais un état affiché divergent du serveur ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
    "dimensions_visees": [
     "Complétude",
     "Utilité",
     "Expérience utilisateur",
     "Maintenabilité"
    ],
-   "corps_issue": "**Contexte** — Onze bascules rendues sans effet : la loi « un contrôle existe s'il a un effet » est enfreinte onze fois sur un seul écran.\n\n**Preuve attendue** — Une mutation par bascule, un rollback visible, une relecture serveur qui prouve la persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; `cible/notifPrefs.png` ; `vues.json#notifPrefs`."
+   "corps_issue": "**Contexte** — Treize bascules rendues sans effet : la loi « un contrôle existe s'il a un effet » est enfreinte treize fois sur un seul écran.\n\n**Preuve attendue** — Une mutation par bascule, un rollback visible, une relecture serveur qui prouve la persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; `cible/notifPrefs.png` ; `vues.json#notifPrefs`."
   },
   {
    "ordre": 25,
@@ -708,7 +751,7 @@
    "depend_de": [
     "settings"
    ],
-   "critere_de_fin": "Test : les réglages arbitrés mutent et sont relus du serveur, et modifier « téléchargement automatique » CHANGE le comportement observé sur /chats/:id/medias (assertion CDP : aucun octet de média transféré quand le réglage est à « jamais ») ; tout ce qui n'est pas arbitré rend un état vide DESSINÉ, jamais un écran blanc ; 0 violation axe serious/critical.",
+   "critere_de_fin": "Test : les réglages arbitrés mutent et sont relus du serveur, et modifier « téléchargement automatique » CHANGE le comportement observé sur /chats/:cle/medias (assertion CDP : aucun octet de média transféré quand le réglage est à « jamais ») ; tout ce qui n'est pas arbitré rend un état vide DESSINÉ, jamais un écran blanc ; 0 violation axe serious/critical.",
    "dimensions_visees": [
     "Complétude",
     "Performance",
@@ -859,6 +902,26 @@
     "Complétude"
    ],
    "corps_issue": "**Contexte** — P2, hors énoncé de mission. Et point de fuite connu : la directive 2026-08-25 nomme explicitement la co-appartenance à une communauté comme un chemin qui ne donne AUCUN droit sur la présence d'autrui.\n\n**Preuve attendue** — Le test de garde porte sur la charge SERVIE, pas sur l'affichage : le client ne fabrique rien et ne garde pas ce que le serveur retire.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.3 (L7), § 11 question 8 ; CLAUDE.md § User Presence ; `cible/communities.png` ; `vues.json#communities`."
+  },
+  {
+   "ordre": 38,
+   "vue_id": "vitrine",
+   "titre_issue": "La vitrine — `/` avant connexion — se charge en une requête sur un téléphone rural et mène au compte en un geste",
+   "lot": "L4",
+   "priorite": "P1-role-secondaire",
+   "route": "/",
+   "audience": "anonyme",
+   "depend_de": [],
+   "critere_de_fin": "Playwright sans session, profil 3G Fast de budgets.json : UNE requête avant le premier pixel (le HTML porte sa table de jetons, sa feuille et ses glyphes inlinés depuis le sprite), 0 police web, 0 image, 0 script hors le ThemeScript inline ; le contenu est celui du legacy mot pour mot (apps/web-v3/app/vitrine/contenu.ts : héros, NEUF atouts, mission, appel final, pied) ; les appels à l'action sont des <a href> RÉELS vers /signup et /login, action primaire 56 px pleine largeur, secondaire 52 px, aucune cible < 44 px (e2e/visual/v3-cibles.spec.ts à 360 et 390 px) ; feuille de chrome ≤ 4 Ko gzip et table inlinée ≤ 1,5 Ko gzip (__tests__/charte.test.ts) ; --color-primary ne peint que le cliquable, la tuile de marque et UN mot de l'accroche (h1 em) ; indexable (index, follow) ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil ; diff par région contre cible/vitrine.png ≤ 8 %, IoU ≥ 0,92.",
+   "dimensions_visees": [
+    "Performance",
+    "Expérience utilisateur",
+    "Facilité d'accès",
+    "Compatibilité",
+    "Simplicité d'usage",
+    "Utilité"
+   ],
+   "corps_issue": "**Contexte** — Absente de la planche et de la matrice jusqu'au 2026-09-01 ; #4476 (point 2) posait la question en `décision-produit`. La directive du porteur la tranche : la vitrine est un écran de la v3, servi à `/` pour un visiteur (`app/route.ts` aiguille déjà : cookie de session ⇒ tableau de bord, sinon vitrine), audience anonyme, P1 (rôle secondaire : l'entrée dans le compte), sans dépendance. Elle est TERNE aujourd'hui : elle se STYLISE par le CSS (jetons, `color-mix`, cartes, glyphes du sprite inlinés), jamais par un octet de JavaScript ni un actif externe — elle doit se charger vite en zone rurale (3G lent, latence 500 ms+).\n\n**Preuve attendue** — Gestionnaire de route (une page d'App Router émet 6 requêtes avant le premier pixel, `budgets.json` → `plancher-next-au-dessus-du-gate-de-requetes`) ; contenu repris du legacy sans une virgule (`apps/web/locales/fr/landing.json` copié dans `app/vitrine/contenu.ts`, raison : invariant (i) de `scripts/check-v3-pipeline.mjs`) ; charte retenue « app-moderne », greffée de « clarté rurale » (conception § 12.5) : héros à gros CTA, atouts en cartes, mission, appel final, pied partagé avec les cinq pages institutionnelles (`app/enveloppe/contenu.ts`).\n\n**Critère de fin** — voir champ dédié.\n\n**Ce qui reste hors de cet écran** — la barre `navigation` du legacy (Accueil · Fonctionnalités · À propos · Contact) et `footer.social.followUs` : aucune destination servie derrière, un contrôle sans effet ment (loi « un contrôle existe s'il a un effet »).\n\n**Source** — conception § 12.1, § 12.5, § 12.6 ; issue #4476 ; charte règles 4 et 5 (les poids), 6 (zéro requête avant le premier pixel), 7 (hauteurs), 20 (l'accent, `h1 em` compris) et 35 (l'unique dégradé) ; `cible/vitrine.png` ; `vues.json#vitrine`."
   },
   {
    "vue_id": "sheet:lang",
@@ -1013,6 +1076,32 @@
    "hors_planche": true,
    "ordre": 0,
    "corps_issue": "Issue #4454. Surface TRANSVERSE — ni l'écran `notifs` (la liste) ni `notifPrefs` : le toast s'affiche par-dessus n'importe quel écran connecté. Elle n'avait aucune entrée ici, donc `ordre-des-ecrans.js` ne la voyait pas : ouverte mais hors plan.\n\n**Elle précède son infrastructure au 2026-08-31.** `apps/web-v3` ne porte alors que la route publique `/l/:token`, le moteur de thème et `lib/realtime/lifecycle.ts` — aucune coquille connectée, aucun socket applicatif, aucune surface de notification. D'où `depend_de: [\"home\"]`, comme `notifs`.\n\n**Tension de séquencement à trancher par le porteur** : rangée en L6 avec sa famille (`notifs`, `notifPrefs`), la bannière n'existe qu'après tout L5 — c'est-à-dire que `home`, `chats`, `feed` et `composer` sortiraient MUETS, sans aucun retour temps réel de ce qui arrive pendant qu'on les parcourt. La monter en L5 coûte une coquille de toast plus tôt ; l'y laisser coûte quatre écrans sans voix. Le choix n'est pas dans l'issue.\n\n**La loi est DÉJÀ écrite deux fois** — `NotificationBannerPresentation` (iOS, `packages/MeeshySDK/.../Notifications/`) et `buildNotificationBanner` (`apps/web/utils/notification-banner.ts`, 233 lignes + 290 de témoins). La v3 ne doit PAS en écrire une troisième : la dimension 11 de l'issue dit « une seule loi, trois clients ». Le lot commence donc par remonter la loi web dans `packages/shared`, pas par la recopier.\n\n**Source** — issue #4454, miroirs #4452 (iOS) et #4453 (web existant), dépendance #4451 fermée."
+  },
+  {
+   "ordre": 0,
+   "vue_id": "lienDepuisLeFil",
+   "titre_issue": "Créer un lien de partage depuis le fil, la conversation déjà préremplie — sans ouvrir /links",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/chats/:cle?lien",
+   "audience": "connecte",
+   "depend_de": [
+    "thread",
+    "links"
+   ],
+   "adresses": {
+    "membre": "/chats/:cle?lien",
+    "note": "UNE feuille, DEUX hôtes : la même capacité que `sheet:link` (ouverte depuis `chats` et `home`, sans conversation prédéterminée) mais posée SUR le fil, où la conversation est déjà celle qu'on lit — aucun champ « pour quelle conversation » à afficher. `lienDepuisLeFil` est capturable (planche, `cible/lienDepuisLeFil.png`) ; `sheet:link` reste hors_planche pour ses hôtes sans conversation prédéterminée."
+   },
+   "critere_de_fin": "Depuis /chats/:cle, la puce « Lien » ouvre `?lien` : le SERVEUR rend le fil INCHANGÉ (aucune requête de script, aucun second document) plus la feuille « Nouveau lien de partage » portant DÉJÀ le nom de la conversation lue — aucun sélecteur de conversation, à la différence de la même feuille ouverte depuis `/links` ou `/`. La soumission appelle POST /api/v1/links (services/gateway/src/routes/links/creation.ts:28, onRequest:[authRequired], body createLinkBodySchema — conversationId prérempli à celle du fil, expiresAt, allowAnonymousMessages, maxUses/maxConcurrentUsers/maxUniqueSessions, requireAccount/requireNickname/requireEmail/requireBirthday) — la MÊME porte que `links`/`sheet:link` (mintConversationShareLink, aucune seconde route) — et répond 201 avec shareLink.linkId/expiresAt/isActive (creation.ts:99-112) ; fermer (croix, voile ou après création) rend /chats/:cle sans ?lien — même mécanique que `profilMembre`, sans un octet de JavaScript. QR : NON RENDU (régime 3, § 5.2 — voir critère de fin de `links`, aucune route ne sert de QR pour un ConversationShareLink) ; un lecteur SANS compte (état INVITÉ de /chat/:lien) ne voit jamais cette puce — créer un lien exige authRequired. Cibles ≥ 44 px, action primaire 56 px ; 0 violation axe serious/critical ; quatre colonnes de thème ; diff par région contre cible/lienDepuisLeFil.png ≤ 8 % de disposition, IoU ≥ 0,92, 100 % des icônes attendues. Poids : la feuille n'ajoute aucun motif de budget ni requête avant le premier pixel — elle vit sous /chats/*, dont le plafond est INCHANGÉ.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Cohérence de positionnement",
+    "Complétude",
+    "Simplicité d'usage",
+    "Maintenabilité"
+   ],
+   "corps_issue": "**Contexte** — Directive du porteur (2026-09-04, conception § 12.10.5) : « liens et sheet:link rejoignent le focus explicite… créer un lien de partage depuis une conversation existante, pas seulement depuis /links ». `sheet:link` (hors_planche) ne dessinait que l'hôte `chats`/`home`, où la conversation reste à choisir ; ce tour ajoute son SECOND hôte, capturable, où elle est déjà fixée par le fil ouvert.\n\n**Preuve attendue** — Une SEULE porte de création (`POST /links`, `mintConversationShareLink`), appelée avec `conversationId` déjà connu — jamais une seconde route ni un champ de sélection redondant avec le fil qu'on lit déjà. La feuille est un ÉTAT du fil porté par `?lien` (comme `profilMembre` par `?profil=`) : elle s'ouvre et se ferme sans JavaScript.\n\n**Critère de fin** — voir champ dédié.\n\n**Dépendances, et ce qui n'en est PAS une** — `thread` est l'hôte qui PRODUIT l'état (la conversation ouverte) que cette feuille préremplit ; `links` PRODUIT la porte de création et sa forme de requête, réutilisée telle quelle. `sheet:link` n'est pas nommée : elle ne PRODUIT rien que cette vue consomme, les deux partagent seulement leur mécanisme de création.\n\n**Source** — conception § 12.10.5, § 12.10.3 (le patron « état porté par la chaîne de requête », appliqué ici à un second hôte) ; charte règles 5 (zéro `<div>` cliquable), 10-11 (rangs d'action, plancher 44 px) ; `cible/lienDepuisLeFil.png` ; `vues.json#lienDepuisLeFil` ; `jetons-de-vues.json#lienDepuisLeFil` (`cle`, session `membre`)."
   }
  ]
 }

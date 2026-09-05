@@ -137,6 +137,7 @@ public object BubbleContentBuilder {
                     attachmentId = attachment.id,
                     name = attachment.originalName ?: attachment.fileName,
                     sizeBytes = attachment.fileSize,
+                    url = attachment.fileUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                 )
             }
         val text = when {
@@ -225,6 +226,9 @@ public object BubbleContentBuilder {
             // takes precedence (its own path), so zero these out when deleted.
             isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
             viewOnceCount = if (isDeleted) 0 else message.viewOnceCount,
+            // A conversation notice (join/leave/legacy summary) renders as a centered
+            // notice, never a signed bubble — resolved FIRST in `BubbleRenderKind`.
+            isSystem = message.isSystemMessage,
         )
     }
 

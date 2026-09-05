@@ -2244,7 +2244,7 @@ class ConversationListViewModel: ObservableObject {
             )
             let userId = currentUserId
             let username = AuthManager.shared.currentUser?.username
-            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+            let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []) }
             previewMessages[conversationId] = msgs
         } catch {
             Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -2256,7 +2256,7 @@ class ConversationListViewModel: ObservableObject {
         let topConversations = Array(conversations.prefix(20))
         let messageService = self.messageService
         let userId = AuthManager.shared.currentUser?.id ?? ""
-        let username = AuthManager.shared.currentUser?.username
+        let username = AuthManager.shared.currentUser?.username; let prism = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
 
         Task.detached(priority: .utility) {
             await withTaskGroup(of: Void.self) { group in
@@ -2287,7 +2287,7 @@ class ConversationListViewModel: ObservableObject {
                             )
                             if response.success {
                                 let messages = response.data.reversed().map {
-                                    $0.toMessage(currentUserId: userId, currentUsername: username)
+                                    $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
                                 }
                                 try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
                             }

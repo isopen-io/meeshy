@@ -105,6 +105,19 @@ export const requetesPendantes = (emises, terminees) => Math.max(0, emises - ter
 // `page.goto` ne rend aucune réponse principale) tombe par la même porte.
 export const estCodeDeMesure = (http) => typeof http === 'number' && http >= 200 && http < 400;
 
+/**
+ * `codesSupplementaires` (#4933) — le garde-fou ci-dessus reste 200–399 par
+ * DÉFAUT, pour tous les écrans : il protège d'un identifiant mort ou deviné
+ * faux, JAMAIS élargi en silence. Mais un écran comme `/l/:token/expired`
+ * (#4496 → 410 depuis #4933, « un lien fermé n'a plus rien à servir ») a pour
+ * CONTRAT de répondre hors de cette plage — un gestionnaire de route stable,
+ * jamais un accident. Le site d'appel le DÉCLARE, un code à la fois : la
+ * mesure reste refusée pour tout code non nommé, même quand la liste est
+ * posée.
+ */
+export const estCodeMesurable = (http, codesSupplementaires = []) =>
+  estCodeDeMesure(http) || codesSupplementaires.includes(http);
+
 export const mesureIndisponible = ({ url, commande, raison }) => ({
   url,
   commande,
@@ -144,7 +157,7 @@ const mesureChiffree = ({
 });
 
 export const composeMesure = (args) =>
-  estCodeDeMesure(args.http)
+  estCodeMesurable(args.http, args.codesSupplementaires)
     ? mesureChiffree(args)
     : mesureIndisponible({
         url: args.url,
@@ -280,6 +293,15 @@ const VITALS = `() => new Promise((resolve) => {
 const AGENT_PAR_DEFAUT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
+// `cookies` — l'option que le § 12.6 réclame nommément : « le tableau de bord
+// demande une option "avec les cookies meeshy_session + meeshy_auth" ».
+//
+// La racine `/` sert DEUX écrans selon ce que le lecteur porte (§ 12.2) : sans
+// cookie la vitrine, avec eux le tableau de bord. Mesurer le second sans pouvoir
+// poser de cookie reviendrait à mesurer le premier deux fois — un gate vert sur
+// un écran jamais visité. Elle vit ICI, au site unique de la mesure, et non dans
+// le spec : un spec qui ouvrirait son propre contexte recopierait la session
+// CDP, l'écoute des trois événements réseau et le bloc VITALS.
 export const mesurePage = async ({
   url,
   commande,
@@ -288,12 +310,15 @@ export const mesurePage = async ({
   timeoutMs,
   profil,
   userAgent,
+  cookies,
+  codesSupplementaires,
 }) => {
   const contexte = await navigateur.newContext({
     viewport: viewport || { width: 390, height: 844 },
     deviceScaleFactor: 2,
     userAgent: userAgent || AGENT_PAR_DEFAUT,
   });
+  if (cookies && cookies.length > 0) await contexte.addCookies(cookies);
   const page = await contexte.newPage();
   const cdp = await contexte.newCDPSession(page);
   const reponses = [];
@@ -333,6 +358,7 @@ export const mesurePage = async ({
       fcpMs: vitals.fcp,
       lcpMs: vitals.lcp,
       cls: vitals.cls,
+      codesSupplementaires,
     });
   } catch (erreur) {
     return mesureIndisponible({ url, commande, raison: raisonLisible(erreur) });

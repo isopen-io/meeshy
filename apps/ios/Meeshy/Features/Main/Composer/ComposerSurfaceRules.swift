@@ -89,11 +89,60 @@ nonisolated enum ComposerSurfaceRouting {
 
     static func surface(opening: ComposerOpening, format: ComposerFormat) -> ComposerSurfaceKind {
         switch opening {
-        case .cameraReady, .videoCameraReady, .resume, .mediaSeeded:
+        // **Les TROIS ouvertures qui portent déjà de la MATIÈRE gardent la
+        // scène** — une dette nommée, plus une exemption raisonnée.
+        //
+        // Elles arrivent avec un média reçu d'une conversation ou un brouillon
+        // repeuplé, et l'atelier est le seul écran qui les tienne déjà.
+        // `.mediaSeeded` en fait la démonstration : `ConversationMediaComposerDoor`
+        // documente que router son média ailleurs le ferait disparaître de
+        // l'écran ET de la publication, `ComposerDocumentDraft` n'ayant ni
+        // `mediaIds`, ni fichier. Leur retirer la scène ferait perdre à
+        // l'auteur ce qu'il vient de confier.
+        //
+        // Elles tomberont quand le meuble saura REPRENDRE et SEMER (#4751) —
+        // et c'est à ce moment-là qu'on retournera leur témoin, jamais avant.
+        case .videoCameraReady, .resume, .mediaSeeded:
             return .scene
-        case .keyboardOnContent, .moodGrid:
+        // **`.cameraReady` a QUITTÉ cette liste le 2026-09-01** (#4751,
+        // directive porteur : « se concentrer sur le composer v3 et non
+        // l'ancien »).
+        //
+        // Elle y était entrée par RESSEMBLANCE. L'argument de l'exemption —
+        // « elles arrivent avec de la matière que le meuble ne tient pas » —
+        // valait pour les trois autres et pas pour elle : la caméra n'arrive
+        // avec RIEN. Elle promet un viseur, et le meuble sait l'ouvrir depuis
+        // toujours (`presentMediaIntake(.camera)`).
+        //
+        // > Une exemption qui couvre quatre cas d'un seul argument doit être
+        // > vérifiée sur les quatre. Ici le quatrième était la porte la plus
+        // > visible du Feed — « Créer une story » — et c'est elle qui montait
+        // > l'ancien écran.
+        //
+        // Ce que la promesse devient : elle est tenue DANS le meuble, par un
+        // GESTE — l'appui long sur la scène vide (#4036). Elle l'a d'abord
+        // été par un viseur présenté au montage (#4751), révoqué le
+        // 2026-09-03 : la porte annonçait un appareil photo et l'auteur qui
+        // venait composer devait fermer un plein écran noir.
+        //
+        // **Ici, l'auteur CHOISIT.** C'est le « nouveau composer » de la
+        // directive porteur du 2026-09-01, et c'est là que la story cessait
+        // d'être composée dans le meuble : `.scene` monte `StoryComposerView` —
+        // l'atelier du SDK, la vue de composition de story qui préexistait au
+        // meuble. Une story s'écrivait donc dans un composer et un post dans un
+        // autre, sur un écran que l'auteur croit unique.
+        case .cameraReady, .keyboardOnContent, .moodGrid:
             switch format {
-            case .story, .reel: return .scene
+            case .story: return .document
+            // **Le RÉEL rejoint le meuble le 2026-09-01** (#4751). Il était
+            // resté sur l'atelier au #4700 par prudence — sa timeline y vivait.
+            // Elle vit AUSSI au meuble depuis le #4082 : `ComposerSceneBand`
+            // porte une bande `timeline`, montée sous la scène.
+            //
+            // Le garder à part faisait changer de COMPOSER en changeant de
+            // format, sur un écran que l'auteur croit unique — le défaut exact
+            // que le #4700 avait corrigé pour la story et laissé pour le réel.
+            case .reel: return .document
             case .post: return .document
             case .status: return .mood
             }
@@ -117,6 +166,81 @@ nonisolated enum ComposerSurfaceRouting {
         switch opening {
         case .keyboardOnContent: return true
         case .cameraReady, .videoCameraReady, .moodGrid, .resume, .mediaSeeded: return false
+        }
+    }
+
+    /// **Le viseur ne se lève plus AU MONTAGE** (#4036, #4851 — porteur
+    /// 2026-09-03). `armsCameraOnAppear` vivait ici et présentait le viseur dès
+    /// l'ouverture ; la règle a été RETIRÉE, pas mise à `false` : une fonction
+    /// qui rend faux partout se rebranche sans qu'on s'en aperçoive.
+    ///
+    /// Ce que la porte promet est désormais tenu par un GESTE —
+    /// `ComposerSceneCaptureGesture`, l'appui long sur une scène vide, doctrine
+    /// de la planche `2b`. La promesse elle-même n'est pas perdue : elle survit
+    /// dans `ComposerCameraMode.mode(for:)` juste en dessous, qui choisit le
+    /// mode que ce geste ouvrira.
+    ///
+    /// > Une garde de source (`ComposerSceneCaptureGestureTests`) interdit le
+    /// > retour d'une présentation au montage, parce que c'est un GESTE
+    /// > D'ÉCRITURE qu'il faut retenir, pas une valeur.
+    ///
+    /// **Ce que son retrait emporte, et qu'il faut redonner un porteur.** Les
+    /// deux `switch` jumeaux — celui-ci et `focusesContentOnAppear` — se
+    /// tenaient mutuellement : leur exhaustivité garantissait, cas par cas,
+    /// qu'un viseur et un clavier ne s'ouvrent jamais ensemble. En retirant
+    /// l'un, cette garantie perd son porteur.
+    ///
+    /// Elle est désormais VRAIE PAR CONSTRUCTION — plus aucun viseur ne s'ouvre
+    /// au montage, donc aucun ne peut rencontrer un clavier — et c'est une
+    /// forme de garantie plus forte qu'un invariant vérifié. Mais elle cesse
+    /// d'être vraie à la seconde où quelqu'un rouvre un viseur au montage :
+    /// c'est exactement ce que la garde de source interdit, et c'est sa
+    /// deuxième raison d'être.
+}
+
+/// **Dans QUEL mode le viseur promis s'ouvre** (#4998, directive porteur
+/// 2026-09-03).
+///
+/// Cette règle a d'abord été la jumelle de `armsCameraOnAppear` : la première
+/// disait SI un viseur se lève, celle-ci LEQUEL. La première a été retirée le
+/// 2026-09-03 (#4036) — le viseur ne se lève plus seul — et celle-ci SURVIT :
+/// c'est elle qui porte la promesse de la porte jusqu'au geste qui l'ouvre.
+///
+/// > Retirer une règle laisse sa jumelle orpheline de sa raison d'être. Ici
+/// > la seconde question (« lequel ? ») garde tout son sens sans la première
+/// > (« si ? ») — mais il faut le DIRE, sinon elle a l'air d'un reste.
+///
+/// `ComposerOpening` distingue `.cameraReady` de `.videoCameraReady` depuis
+/// toujours, et rien n'a jamais lu la différence avant #4998.
+///
+/// > Un type SOMME qui nomme deux promesses sans qu'aucun consommateur les
+/// > distingue n'est pas une abstraction : c'est une promesse écrite deux fois
+/// > et tenue une seule.
+///
+/// ## Ce que cette règle NE fait PAS aujourd'hui, et il faut le dire
+///
+/// **`.videoCameraReady` n'a AUCUN producteur dans le dépôt** — mesuré : le cas
+/// est déclaré par `ComposerOpening` et aucune fabrique de `ComposerProfile` ne
+/// le pose. Aucune porte n'ouvre donc encore le viseur en vidéo, et cette règle
+/// ne change rien à l'écran tant que ce sera vrai.
+///
+/// Elle est écrite quand même, et ce n'est pas de l'UI morte : elle ferme un
+/// écart LATENT entre ce qu'un type SOMME promet et ce que ses consommateurs
+/// lisent. Le jour où une porte posera `.videoCameraReady`, elle sera honorée
+/// sans qu'on ait à s'en souvenir — au lieu d'ouvrir un viseur photo en silence,
+/// comme elle l'aurait fait aujourd'hui.
+///
+/// > Le contraire de cette décision serait de retirer le cas. C'est la seule
+/// > autre réponse honnête, et elle appartient au produit, pas à ce fichier.
+/// > Suivi : #4998.
+///
+/// Le `switch` est exhaustif : un sixième mode d'ouverture ne compilera pas
+/// tant qu'il n'aura pas dit quel viseur il promet.
+nonisolated enum ComposerCameraMode {
+    static func mode(for opening: ComposerOpening) -> CameraCaptureMode {
+        switch opening {
+        case .videoCameraReady: return .video
+        case .cameraReady, .keyboardOnContent, .moodGrid, .resume, .mediaSeeded: return .photo
         }
     }
 }
@@ -284,32 +408,48 @@ nonisolated enum ComposerChromeOwnership {
 /// vérification au simulateur du 2026-08-30 a montré qu'aucun écran du parcours
 /// réel n'y menait depuis le document : le chemin manquait, pas la surface.
 ///
-/// Une place, DEUX états — l'invitation quand rien n'est posé, le crédit dès
-/// qu'un son l'est. La pastille ne change pas de rôle entre les deux : elle
-/// ouvre la même porte, elle dit seulement ce qui joue.
-nonisolated enum ComposerSocleSound {
-
-    /// Le Mood en est exclu, et ce n'est pas un oubli : la vue `2k` dit « le
-    /// profil RETIRE, il n'ajoute pas » — texte seul, une heure. Son socle est
-    /// d'ailleurs vide de toute zone.
-    static func isServed(surface: ComposerSurfaceKind) -> Bool {
-        switch surface {
-        case .document, .scene: return true
-        case .mood: return false
-        }
-    }
-
-    static var emptyLabel: String {
-        String(localized: "composer.socle.sound.add",
-               defaultValue: "Ajouter un son", bundle: .main)
-    }
+/// **Le CRÉDIT d'un son — ce qui joue, et à qui on le doit** (#4669).
+///
+/// La règle a quitté le socle avec la pastille qui l'y montrait (directive
+/// porteur 2026-09-01 : « on n'a plus besoin du bouton ajouter un son en bas »)
+/// et suit le son là où il se lit maintenant : à côté de l'avatar.
+///
+/// **Le déménagement n'était pas cosmétique.** La pastille du socle était le
+/// SEUL endroit du composer qui affichait `soundAuthorUsername` ; la retirer
+/// sans emporter sa composition aurait fait disparaître l'attribution d'un son
+/// emprunté — une perte qu'aucun témoin n'aurait signalée, puisque rien
+/// n'assertait qu'elle était montrée quelque part.
+///
+/// Ce que la règle ne fait plus : inviter. « Ajouter un son » était le mot de
+/// la pastille VIDE, et une pastille vide n'existe plus — un crédit décrit un
+/// son qui joue, ou n'est pas rendu du tout. Le paramètre a donc cessé d'être
+/// optionnel : le cas « pas de son » se traite chez l'appelant, en ne montrant
+/// rien, et non ici en fabriquant une phrase.
+/// **Ce qui reste ICI, et ce qui est parti** (fusion 2026-09-01).
+///
+/// La règle avait une JUMELLE au SDK — `StoryAudioIdentity` — écrite le même
+/// jour pour la même question, et les deux ne rendaient pas la même réponse :
+/// `attribution` lisait `name` et `soundAuthorUsername` en direct, sans jamais
+/// consulter `soundId`, si bien qu'un vocal NOMMÉ s'annonçait comme un morceau
+/// de l'étagère. Ce qui décide de la FORME d'une piste est parti là-bas, en un
+/// seul exemplaire.
+///
+/// Ce qui reste ici est ce qui ne peut pas y aller : la LOCALE du lecteur. Une
+/// durée s'écrit « 0:12 » pour l'œil et se dit « douze secondes » à voix haute,
+/// et les deux dépendent de la langue de l'appareil — le SDK, qui ne connaît ni
+/// l'une ni l'autre, ne peut composer que la moitié invariable.
+///
+/// > La frontière n'est donc pas « app ou SDK » mais **ce qui dépend du lecteur
+/// > et ce qui dépend de la piste**. C'est la seule qui ne se redessine pas au
+/// > premier champ ajouté.
+nonisolated enum ComposerSoundCredit {
 
     /// **Le crédit ne se fabrique jamais.** Il tient à `soundAuthorUsername`,
     /// que seul l'EMPRUNT renseigne ; un vocal mis en fond porte le bon mixage
     /// et aucun auteur, et lui en inventer un serait mentir sur la provenance.
     /// De même une durée inconnue ne devient pas « 0:00 » — un compteur faux se
     /// lit comme une piste vide.
-    static func label(for sound: StoryAudioPlayerObject?,
+    static func label(for sound: StoryAudioPlayerObject,
                       locale: Locale = .current) -> String {
         compose(sound, locale: locale) { LocalizedNumber.duration(seconds: $0, locale: $1) }
     }
@@ -330,20 +470,36 @@ nonisolated enum ComposerSocleSound {
     /// Le titre et le crédit sont IDENTIQUES dans les deux — c'est la même
     /// pastille — et c'est pourquoi la composition est un site UNIQUE : deux
     /// fonctions écrites côte à côte auraient divergé au premier champ ajouté.
-    static func spokenLabel(for sound: StoryAudioPlayerObject?,
+    static func spokenLabel(for sound: StoryAudioPlayerObject,
                             locale: Locale = .current) -> String {
         compose(sound, locale: locale) { LocalizedNumber.spokenDuration(seconds: $0, locale: $1) }
     }
 
-    private static func compose(_ sound: StoryAudioPlayerObject?,
+    /// **Un son sans titre n'en reçoit pas un d'emprunt.**
+    ///
+    /// La composition posait « Ajouter un son » comme nom de repli — ce qui
+    /// avait un sens tant qu'elle habillait un BOUTON d'ajout, et n'en a plus
+    /// aucun sur une pastille d'état : un vocal se serait annoncé « Ajouter un
+    /// son · 0:07 », une invitation servie comme un titre. Sans titre, le crédit
+    /// est sa seule durée.
+    /// La DURÉE seule, telle qu'on la VOIT. `nil` quand elle est inconnue — un
+    /// « 0:00 » fabriqué se lit comme une piste vide.
+    static func durationLabel(for sound: StoryAudioPlayerObject,
+                              locale: Locale = .current) -> String? {
+        guard let secondes = sound.duration, secondes > 0 else { return nil }
+        return LocalizedNumber.duration(seconds: Int(secondes.rounded()), locale: locale)
+    }
+
+    /// **La composition reste UNIQUE** : elle APPELLE les deux moitiés plutôt
+    /// que de recomposer leur contenu. Deux assemblages écrits côte à côte
+    /// auraient divergé au premier champ ajouté — et c'est justement ce que la
+    /// séparation ci-dessus rendait tentant.
+    private static func compose(_ sound: StoryAudioPlayerObject,
                                 locale: Locale,
                                 duree: (Int, Locale) -> String) -> String {
-        guard let sound else { return emptyLabel }
         var morceaux: [String] = []
-        morceaux.append(sound.name?.isEmpty == false ? sound.name! : emptyLabel)
-        if let auteur = sound.soundAuthorUsername, !auteur.isEmpty {
-            morceaux.append("@\(auteur)")
-        }
+        let credit = StoryAudioIdentity.attribution(of: sound)
+        if !credit.isEmpty { morceaux.append(credit) }
         if let secondes = sound.duration, secondes > 0 {
             morceaux.append(duree(Int(secondes.rounded()), locale))
         }
@@ -373,7 +529,7 @@ nonisolated enum ComposerSocleSound {
 ///   même défaut dans l'autre sens (#4064). Sur la surface DOCUMENT, la palette
 ///   s'ouvre par l'icône de fond de la rangée d'outils ; sur la surface de
 ///   SCÈNE cette rangée n'existe plus — le chrome est passé aux deux rails — et
-///   aucune porte ne fait entrer une COULEUR, qui n'est pas un `MeeshyObject`.
+///   aucune porte ne fait entrer une COULEUR, qui n'est pas un `MeeshySceneObject`.
 ///   La palette y était donc devenue INATTEIGNABLE : on pouvait retirer le
 ///   fond, jamais en changer.
 /// - **retirer le fond** — poser une couleur était une porte à SENS UNIQUE :
@@ -385,6 +541,14 @@ nonisolated enum ComposerSocleSound {
 nonisolated enum ComposerOverflowEntry: Equatable, CaseIterable {
     case pickBackground
     case removeBackground
+    /// **Bake la scène et l'écrit dans Photos** (#4996). Ne touche JAMAIS le
+    /// backend : c'est la doctrine « RAW publish + author-only export », de
+    /// l'autre côté de la frontière que `runStoryUpload` a l'interdiction de
+    /// franchir.
+    case saveToPhotos
+    /// Même bake, remis à `UIActivityViewController` — Messages, WhatsApp,
+    /// AirDrop, Fichiers.
+    case share
     case clearAll
 }
 
@@ -403,17 +567,39 @@ nonisolated enum ComposerOverflowPolicy {
     /// montée, seulement si la palette a DÉJÀ un chemin. Son défaut est `true` —
     /// le défaut SÛR : un appelant qui l'ignore n'obtient jamais un DOUBLON de
     /// contrôle, au pire une entrée manquante que l'écran offre ailleurs.
+    /// **`hasScene` gouverne les deux entrées d'EXPORT, et rien d'autre**
+    /// (#4996).
+    ///
+    /// Elle est distincte de « il y a de la matière » : un post fait d'un texte
+    /// et d'un lieu a bien de quoi être EFFACÉ, et rien à baker — le pipeline
+    /// d'export part d'une `StorySlide`, et une composition sans scène n'en a
+    /// aucune à lui donner. Servir les deux entrées sur cette base ouvrirait un
+    /// bake qui rendrait un MP4 vide, ce que la loi 4 interdit sous sa forme la
+    /// plus coûteuse : un contrôle qui FAIT quelque chose d'inutile.
+    ///
+    /// Son défaut est `false` — le défaut SÛR : un appelant qui l'ignore
+    /// n'obtient jamais une entrée qui promet un export impossible.
     static func entries(
         hasBackground: Bool,
         hasMedia: Bool,
         hasText: Bool,
         hasLocation: Bool,
+        hasScene: Bool = false,
         backgroundPickerIsReachable: Bool = true
     ) -> [ComposerOverflowEntry] {
         var served: [ComposerOverflowEntry] = []
         if !backgroundPickerIsReachable { served.append(.pickBackground) }
         if hasBackground { served.append(.removeBackground) }
-        if hasBackground || hasMedia || hasText || hasLocation { served.append(.clearAll) }
+        if hasScene {
+            served.append(.saveToPhotos)
+            served.append(.share)
+        }
+        // **`clearAll` FERME la liste, toujours.** C'est la seule entrée
+        // destructrice ; la ranger au milieu la mettrait sous le pouce qui vise
+        // « Transférer », et un menu se lit du haut vers le bas.
+        if hasBackground || hasMedia || hasText || hasLocation || hasScene {
+            served.append(.clearAll)
+        }
         return served
     }
 }
@@ -431,6 +617,12 @@ nonisolated enum ComposerOverflowCopy {
         case .removeBackground:
             return String(localized: "composer.overflow.removeBackground",
                           defaultValue: "Retirer le fond", bundle: .main)
+        case .saveToPhotos:
+            return String(localized: "composer.overflow.saveToPhotos",
+                          defaultValue: "Enregistrer", bundle: .main)
+        case .share:
+            return String(localized: "composer.overflow.share",
+                          defaultValue: "Transférer", bundle: .main)
         case .clearAll:
             return String(localized: "composer.overflow.clearAll",
                           defaultValue: "Tout effacer", bundle: .main)
@@ -441,6 +633,11 @@ nonisolated enum ComposerOverflowCopy {
         switch entry {
         case .pickBackground: return "paintpalette.fill"
         case .removeBackground: return "paintpalette"
+        // `arrow.down.to.line` et non `square.and.arrow.down` : le second est
+        // le glyphe de TÉLÉCHARGEMENT, et ce qu'on fait ici est une écriture
+        // locale. `square.and.arrow.up` reste le partage, comme partout.
+        case .saveToPhotos: return "arrow.down.to.line"
+        case .share: return "square.and.arrow.up"
         case .clearAll: return "trash"
         }
     }

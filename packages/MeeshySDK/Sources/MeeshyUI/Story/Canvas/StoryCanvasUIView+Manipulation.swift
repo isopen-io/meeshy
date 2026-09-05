@@ -150,7 +150,7 @@ extension StoryCanvasUIView {
     private func manipulable(_ id: String) -> MeeshySceneObject? {
         guard let objet = slide.sceneObject(id: id) else { return nil }
         switch objet.kind {
-        case .text, .media, .sticker, .location: return objet
+        case .text, .media, .sticker, .place: return objet
         case .audio: return nil
         }
     }
@@ -172,7 +172,11 @@ extension StoryCanvasUIView {
                    text:     { $0.x = x; $0.y = y },
                    media:    { $0.x = x; $0.y = y },
                    sticker:  { $0.x = x; $0.y = y },
-                   location: { $0.x = x; $0.y = y })
+                   location: { $0.x = x; $0.y = y },
+                   // La chip de son porte `x`/`y` en `CGFloat` là où les quatre
+                   // autres les portent en `Double` — la conversion est écrite,
+                   // jamais laissée à l'implicite.
+                   audio:    { $0.x = CGFloat(x); $0.y = CGFloat(y) })
     }
 
     func updateScale(slideId: String, scale: Double) -> StorySlide {
@@ -180,7 +184,8 @@ extension StoryCanvasUIView {
                    text:     { $0.scale = scale },
                    media:    { $0.scale = scale },
                    sticker:  { $0.scale = scale },
-                   location: { $0.scale = scale })
+                   location: { $0.scale = scale },
+                   audio:    { $0.scale = scale })
     }
 
     func updateRotation(slideId: String, rotation: Double) -> StorySlide {
@@ -188,14 +193,37 @@ extension StoryCanvasUIView {
                    text:     { $0.rotation = rotation },
                    media:    { $0.rotation = rotation },
                    sticker:  { $0.rotation = rotation },
-                   location: { $0.rotation = rotation })
+                   location: { $0.rotation = rotation },
+                   audio:    { $0.rotation = rotation })
     }
 
+    /// **Les CINQ familles, et le paramètre `audio` est SANS défaut** (#4759).
+    ///
+    /// Il en connaissait QUATRE — le son manquait — pendant que `bringForward`
+    /// et `sendBackward` en LISAIENT cinq. Un lecteur à cinq familles servi par
+    /// un écrivain à quatre produit deux symptômes, et le second est le pire :
+    /// avancer une chip de son ne faisait rien (loi 4, contrôle inerte), mais
+    /// faire passer un TEXTE devant elle appliquait l'échange **à moitié** — le
+    /// texte prenait le rang du son, le son gardait le sien, et les deux se
+    /// retrouvaient au MÊME rang. L'utilisateur voyait alors un résultat qui
+    /// n'était ni l'avant ni l'après.
+    ///
+    /// > Une valeur lue à un seul endroit ne peut pas être lue de travers
+    /// > ailleurs — mais rien ne garantit que ce qu'on LIT soit ce qu'on puisse
+    /// > ÉCRIRE. L'asymétrie lecteur/écrivain ne rougit nulle part : les deux
+    /// > côtés compilent, et l'échange partiel a l'air d'un défaut d'affichage.
+    ///
+    /// Le paramètre n'a **aucune valeur par défaut**, délibérément : un
+    /// `audio: { _ in }` implicite aurait fait taire le compilateur sur
+    /// exactement la question qu'il faut poser à chaque nouvel appelant — « et
+    /// pour le son ? ». C'est la même raison qui a fait déclarer sans défaut
+    /// `moodSeed` et `mediaSeed` chez le meuble.
     func mutateItem(slideId: String,
-                            text:     (inout StoryTextObject)     -> Void,
-                            media:    (inout StoryMediaObject)    -> Void,
-                            sticker:  (inout StorySticker)        -> Void,
-                            location: (inout StoryLocationObject) -> Void) -> StorySlide {
+                            text:     (inout StoryTextObject)        -> Void,
+                            media:    (inout StoryMediaObject)       -> Void,
+                            sticker:  (inout StorySticker)           -> Void,
+                            location: (inout StoryLocationObject)    -> Void,
+                            audio:    (inout StoryAudioPlayerObject) -> Void) -> StorySlide {
         var newSlide = slide
         for i in newSlide.effects.textObjects.indices where newSlide.effects.textObjects[i].id == slideId {
             text(&newSlide.effects.textObjects[i])
@@ -220,6 +248,13 @@ extension StoryCanvasUIView {
             location(&badges[i])
             newSlide.locationObjects = badges
             return newSlide
+        }
+        if var arr = newSlide.effects.audioPlayerObjects {
+            for i in arr.indices where arr[i].id == slideId {
+                audio(&arr[i])
+                newSlide.effects.audioPlayerObjects = arr
+                return newSlide
+            }
         }
         return newSlide
     }
@@ -246,6 +281,10 @@ extension StoryCanvasUIView {
         newSlide.effects.mediaObjects?.removeAll { $0.id == id }
         newSlide.effects.stickerObjects?.removeAll { $0.id == id }
         newSlide.locationObjects.removeAll { $0.id == id }
+        // Cinquième famille (#4759) : sans cette ligne, une chip de son ne
+        // pouvait pas être supprimée par les chemins du canvas — menu
+        // long-press, action VoiceOver — et le geste n'avait AUCUN effet.
+        newSlide.effects.audioPlayerObjects?.removeAll { $0.id == id }
         slide = newSlide
         onItemModified?(slide)
     }
@@ -305,18 +344,19 @@ extension StoryCanvasUIView {
                            text:     { $0.zIndex = newZ },
                            media:    { $0.zIndex = newZ },
                            sticker:  { $0.zIndex = newZ },
-                           location: { $0.zIndex = newZ })
+                           location: { $0.zIndex = newZ },
+                           audio:    { $0.zIndex = newZ })
         onItemModified?(slide)
     }
 
     func bringForward(id: String) {
-        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex) }
-        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex) }
-        elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
-        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex) }
-        elements += slide.locationObjects.map { ($0.id, $0.zIndex) }
-
-        elements.sort { $0.1 < $1.1 }
+        // **La somme à cinq cas, jamais une énumération réécrite ici** (#4759).
+        // `sceneObjects` aplatit les cinq familles ET les trie déjà du fond
+        // vers l'avant, à ordre de famille stable pour les `zIndex` égaux. Les
+        // deux boucles manuelles qui vivaient ici et dans `allItemZIndexes()`
+        // ont chacune oublié une famille différente : c'est ce que le type
+        // `MeeshySceneObject` existe pour empêcher, et l'oubli a coûté #4759.
+        let elements = slide.sceneObjects.map { ($0.id, $0.zIndex) }
         
         guard let index = elements.firstIndex(where: { $0.0 == id }), index < elements.count - 1 else { return }
         
@@ -332,19 +372,23 @@ extension StoryCanvasUIView {
 
         let nextId = elements[index + 1].0
 
-        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ }, location: { $0.zIndex = newCurrentZ })
-        slide = mutateItem(slideId: nextId, text: { $0.zIndex = newNextZ }, media: { $0.zIndex = newNextZ }, sticker: { $0.zIndex = newNextZ }, location: { $0.zIndex = newNextZ })
+        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ },
+                           sticker: { $0.zIndex = newCurrentZ }, location: { $0.zIndex = newCurrentZ },
+                           audio: { $0.zIndex = newCurrentZ })
+        slide = mutateItem(slideId: nextId, text: { $0.zIndex = newNextZ }, media: { $0.zIndex = newNextZ },
+                           sticker: { $0.zIndex = newNextZ }, location: { $0.zIndex = newNextZ },
+                           audio: { $0.zIndex = newNextZ })
         onItemModified?(slide)
     }
 
     func sendBackward(id: String) {
-        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex) }
-        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex) }
-        elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
-        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex) }
-        elements += slide.locationObjects.map { ($0.id, $0.zIndex) }
-
-        elements.sort { $0.1 < $1.1 }
+        // **La somme à cinq cas, jamais une énumération réécrite ici** (#4759).
+        // `sceneObjects` aplatit les cinq familles ET les trie déjà du fond
+        // vers l'avant, à ordre de famille stable pour les `zIndex` égaux. Les
+        // deux boucles manuelles qui vivaient ici et dans `allItemZIndexes()`
+        // ont chacune oublié une famille différente : c'est ce que le type
+        // `MeeshySceneObject` existe pour empêcher, et l'oubli a coûté #4759.
+        let elements = slide.sceneObjects.map { ($0.id, $0.zIndex) }
         
         guard let index = elements.firstIndex(where: { $0.0 == id }), index > 0 else { return }
         
@@ -359,8 +403,12 @@ extension StoryCanvasUIView {
         
         let prevId = elements[index - 1].0
         
-        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ }, location: { $0.zIndex = newCurrentZ })
-        slide = mutateItem(slideId: prevId, text: { $0.zIndex = newPrevZ }, media: { $0.zIndex = newPrevZ }, sticker: { $0.zIndex = newPrevZ }, location: { $0.zIndex = newPrevZ })
+        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ },
+                           sticker: { $0.zIndex = newCurrentZ }, location: { $0.zIndex = newCurrentZ },
+                           audio: { $0.zIndex = newCurrentZ })
+        slide = mutateItem(slideId: prevId, text: { $0.zIndex = newPrevZ }, media: { $0.zIndex = newPrevZ },
+                           sticker: { $0.zIndex = newPrevZ }, location: { $0.zIndex = newPrevZ },
+                           audio: { $0.zIndex = newPrevZ })
         onItemModified?(slide)
     }
 
@@ -372,10 +420,15 @@ extension StoryCanvasUIView {
         (allItemZIndexes().min() ?? 0) - 1
     }
 
+    /// **Les rangs de TOUS les objets, son compris** (#4759).
+    ///
+    /// Cette énumération oubliait `audioPlayerObjects` — une famille de plus que
+    /// celle qu'oubliait `mutateItem`, et c'est ce décalage qui rendait le
+    /// défaut si difficile à voir : chaque site oubliait une chose différente.
+    /// Conséquence propre à celui-ci : `nextTopZ()` pouvait rendre un rang
+    /// INFÉRIEUR à celui d'une chip de son, donc « mettre au premier plan »
+    /// plaçait l'objet DERRIÈRE elle.
     private func allItemZIndexes() -> [Int] {
-        slide.effects.textObjects.map(\.zIndex)
-            + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
-            + (slide.effects.stickerObjects?.map(\.zIndex) ?? [])
-            + slide.locationObjects.map(\.zIndex)
+        slide.sceneObjects.map(\.zIndex)
     }
 }

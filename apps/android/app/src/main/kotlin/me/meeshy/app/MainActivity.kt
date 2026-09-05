@@ -20,7 +20,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.meeshy.app.navigation.LaunchExtras
 import me.meeshy.app.navigation.LaunchRouter
@@ -107,7 +106,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             DynamicShortcutsPublisher.publish(
                 context = this@MainActivity,
-                conversations = conversationRepository.cachedConversations().first(),
+                conversations = conversationRepository.recentCachedConversations(),
                 currentUserId = sessionRepository.currentUserId,
             )
         }

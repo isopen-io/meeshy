@@ -38,14 +38,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.MessageTextParser
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.search.MessageSearchHit
@@ -292,7 +298,11 @@ private fun SearchResults(
     ) {
         when (state.selectedTab) {
             GlobalSearchTab.MESSAGES -> items(state.results.messages, key = { it.message.id }) { hit ->
-                MessageHitRow(hit = hit, onClick = { onOpenConversation(hit.message.conversationId) })
+                MessageHitRow(
+                    hit = hit,
+                    query = state.resultsQuery,
+                    onClick = { onOpenConversation(hit.message.conversationId) },
+                )
             }
             GlobalSearchTab.CONVERSATIONS -> items(state.results.conversations, key = { it.id }) { conversation ->
                 ConversationHitRow(
@@ -324,7 +334,7 @@ private fun ResultCard(onClick: () -> Unit, content: @Composable androidx.compos
 }
 
 @Composable
-private fun MessageHitRow(hit: MessageSearchHit, onClick: () -> Unit) {
+private fun MessageHitRow(hit: MessageSearchHit, query: String, onClick: () -> Unit) {
     ResultCard(onClick = onClick) {
         MeeshyAvatar(name = hit.conversationTitle, size = 40.dp)
         Spacer(Modifier.width(MeeshySpacing.md))
@@ -344,8 +354,11 @@ private fun MessageHitRow(hit: MessageSearchHit, onClick: () -> Unit) {
                     maxLines = 1,
                 )
             }
+            val highlighted = remember(hit.message.content, query) {
+                buildHighlightedContent(hit.message.content, query, SEARCH_HIGHLIGHT_WASH)
+            }
             Text(
-                text = hit.message.content,
+                text = highlighted,
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
                 maxLines = 2,
@@ -353,6 +366,25 @@ private fun MessageHitRow(hit: MessageSearchHit, onClick: () -> Unit) {
         }
     }
 }
+
+/**
+ * Pure mapping glue — the accent- and case-insensitive match decision lives in
+ * [MessageTextParser.highlightedSegments] (unit-tested SSOT); this only washes the
+ * highlighted runs with [wash]. Same wash as the chat bubble's search highlight so
+ * a term reads the same in the result row and in the opened conversation.
+ */
+private fun buildHighlightedContent(content: String, query: String, wash: Color): AnnotatedString =
+    buildAnnotatedString {
+        MessageTextParser.highlightedSegments(content, query).forEach { segment ->
+            if (segment.highlighted) {
+                withStyle(SpanStyle(background = wash)) { append(segment.text) }
+            } else {
+                append(segment.text)
+            }
+        }
+    }
+
+private val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
 
 @Composable
 private fun ConversationHitRow(conversation: ApiConversation, onClick: () -> Unit) {

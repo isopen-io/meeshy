@@ -3,7 +3,7 @@ import XCTest
 
 /// **La planche parle d'« un objet » ; le code n'en avait pas** (#4591).
 ///
-/// `MeeshyObject` — renommé `MeeshySceneObject` sur arbitrage du porteur —
+/// `MeeshySceneObject` — renommé `MeeshySceneObject` sur arbitrage du porteur —
 /// apparaît 78 fois dans `docs/product/planche-meeshy-composer.html`. Le modèle
 /// n'avait ni protocole ni type somme : cinq tableaux séparés, et toute question
 /// posée à « l'objet d'id X » réécrite en cascade sur les cinq. Mesuré avant ce
@@ -163,10 +163,17 @@ final class MeeshySceneObjectTests: XCTestCase {
     /// **Le fusible du kind.** Cinq familles, cinq kinds — si la somme en
     /// oubliait une, tous les témoins ci-dessus resteraient verts sur les
     /// quatre autres.
+    ///
+    /// `place` et non `location` depuis #4960 : quatre couches employaient déjà
+    /// ce mot — le contrat du fil, son miroir Swift, la timeline et l'inspecteur
+    /// — et cet énuméré était le seul à en dire un autre.
+    /// `SceneObjectFamilyVocabularyTests` garde désormais l'alignement, ce qui
+    /// vaut plus que le renommage : ce témoin-ci épingle un JEU, celui-là
+    /// interdit la prochaine divergence.
     func test_lesCinqFamilles_ontChacune_sonKind() {
         XCTAssertEqual(MeeshySceneObject.Kind.allCases.count, 5)
         XCTAssertEqual(Set(MeeshySceneObject.Kind.allCases.map(\.rawValue)),
-                       ["text", "media", "sticker", "location", "audio"])
+                       ["text", "media", "sticker", "place", "audio"])
     }
 
     /// La slide n'est qu'une projection de ses effets : elle ne porte pas ses
@@ -257,9 +264,9 @@ final class MeeshySceneObjectTests: XCTestCase {
                                                                name: "Paris"))])
 
         XCTAssertEqual(p.sceneObjects.count, 5)
-        XCTAssertEqual(Set(p.sceneObjects.map(\.kind)), [.text, .media, .sticker, .audio, .location])
+        XCTAssertEqual(Set(p.sceneObjects.map(\.kind)), [.text, .media, .sticker, .audio, .place])
         XCTAssertEqual(p.sceneObject(id: "m1")?.kind, .media)
-        XCTAssertEqual(p.sceneObject(id: "l1")?.kind, .location)
+        XCTAssertEqual(p.sceneObject(id: "l1")?.kind, .place)
         XCTAssertNil(p.sceneObject(id: "fantome"))
     }
 

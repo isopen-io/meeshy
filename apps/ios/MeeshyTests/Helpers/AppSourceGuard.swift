@@ -121,6 +121,17 @@ enum AppSourceGuard {
         // une règle qui déménage sans emmener son adresse éteint en silence
         // toutes les gardes négatives qui la balayaient.
         "Meeshy/Features/Main/Composer/ComposerObjectChips.swift",
+        // **Le relevé du rail (#4994), entré dans l'unité au #5007.** Il vivait
+        // hors d'elle, et `test_lesBalises_neSontDeriveesQuUneFois` — qui
+        // interdit une seconde dérivation des hashtags — ne le balayait donc
+        // pas : le doublon y était INVISIBLE parce que le fichier était neuf,
+        // pas parce qu'il était subtil.
+        //
+        // > Une règle qui naît hors de l'unité de son hôte naît hors de toutes
+        // > les gardes qui protègent cet hôte. C'est le miroir de « une règle
+        // > qui déménage sans emmener son adresse les éteint en silence » :
+        // > même angle mort, à la création plutôt qu'au déplacement.
+        "Meeshy/Features/Main/Composer/ComposerRailDoorBadge.swift",
     ]
 
     static func composerHostURLs() -> [URL] {
@@ -129,6 +140,21 @@ enum AppSourceGuard {
 
     static func composerHostSource() throws -> String {
         try unit(composerHostPath, alsoIncluding: composerHostCompanions)
+    }
+
+    /// L'unité de l'écran CONVERSATION : la vue, ses extensions, et l'état du
+    /// composer sorti du fichier le 2026-09-02 (`ConversationComposerState`,
+    /// #4823 — extraire d'abord, ajouter ensuite). Il ne porte pas le nom du
+    /// type hôte, donc le glob `ConversationView+*.swift` ne le voit pas ; sans
+    /// cette adresse, la garde du brouillon d'édition lisait une unité qui ne
+    /// contenait plus son ancre (leçon 347).
+    static let conversationViewPath = "Meeshy/Features/Main/Views/ConversationView.swift"
+    static let conversationViewCompanions = [
+        "Meeshy/Features/Main/Views/ConversationComposerState.swift"
+    ]
+
+    static func conversationViewSource() throws -> String {
+        try unit(conversationViewPath, alsoIncluding: conversationViewCompanions)
     }
 
     /// L'unité de la surface DOCUMENT : la vue, plus les deux fichiers de règles

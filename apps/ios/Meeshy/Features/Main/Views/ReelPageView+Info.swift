@@ -148,6 +148,33 @@ extension ReelPageView {
                 MediaCaptionOverlay(
                     caption: displayedDescription,
                     isExpanded: descriptionExpanded,
+                    // **Aucun retrait à elle** (directive porteur 2026-09-01) :
+                    // la colonne d'information est déjà posée à 16 pt par
+                    // `ReelsPlayerView`, et les 20 pt que la couche ajoutait
+                    // indentaient la légende de 36 quand le nom de l'auteur,
+                    // juste au-dessus, restait à 16. La légende s'aligne
+                    // désormais sur ses voisines — la manière de la carte de
+                    // réel, où légende, auteur et actions partagent UN retrait.
+                    horizontalInset: 0,
+                    // **Aucun voile sous le corpus déplié** (directive porteur
+                    // 2026-09-03, capture à l'appui : « il faut enlever le fond
+                    // noir »).
+                    //
+                    // Le défaut du composant est `true`, et l'OMETTRE
+                    // repeindrait le dégradé en silence — d'où la valeur posée
+                    // explicitement plutôt que retirée du composant partagé : le
+                    // plein écran média d'une conversation n'est pas visé et
+                    // garde le sien.
+                    //
+                    // La raison qui l'avait gardé ici — « le réel ne peint qu'un
+                    // voile de BAS DE PAGE, presque transparent là où un corpus
+                    // déplié monte » — décrivait un risque de LISIBILITÉ. Il est
+                    // couvert ailleurs : le corpus passe par
+                    // `legibleOverCanvas()`, deux ombres portées qui tiennent
+                    // déjà la légende de la story sans voile depuis le
+                    // 2026-09-02. Le réel hérite d'une propriété éprouvée sur un
+                    // hôte jumeau, pas d'un pari.
+                    dimsBackgroundWhenExpanded: false,
                     onToggle: {
                         withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                     },

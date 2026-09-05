@@ -1,12 +1,9 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { generateNumericCode } from '../utils/verification-code';
 import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
-import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneWithCountry, normalizePhoneNumber } from '../utils/normalize';
-import { SecuritySanitizer } from '../utils/sanitize.js';
+import { normalizePhoneNumber } from '../utils/normalize';
 import { RequestContext } from './GeoIPService';
-import { emailSchema } from '@meeshy/shared/types/validation';
 import { EmailService } from './EmailService';
 import { smsService } from './SmsService';
 import {
@@ -20,10 +17,8 @@ import {
   initSessionService,
   SessionData
 } from './SessionService';
-import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { recipientLanguage } from '../utils/recipient-language';
-import { searchTokensFor } from '../utils/search-tokens';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import {
   isAccountLocked,
@@ -32,10 +27,7 @@ import {
   lockIsVisibleTo
 } from './LoginAttemptService';
 import { UserLockedError } from '../errors/custom-errors';
-import {
-  ensureGlobalConversationMembership,
-  type GlobalMembershipSocketManager,
-} from './conversations/ensureGlobalConversationMembership';
+import type { GlobalMembershipSocketManager } from './conversations/ensureGlobalConversationMembership';
 import { servedUserPermissions } from './admin/served-permissions';
 import {
   signSessionToken,
@@ -49,6 +41,13 @@ import {
   clearPendingTwoFactor,
 } from './auth/pending-two-factor';
 import { AUTH_USER_SELECT } from './auth/auth-user-projection';
+import {
+  registerAccount,
+  type RegisterData,
+  type RegisterResult,
+} from './auth/registration.service';
+import type { AfterResponse } from '../utils/after-response';
+import { verifyPassword } from '../utils/password-hash';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -59,19 +58,13 @@ export interface LoginCredentials {
   password: string;
 }
 
-export interface RegisterData {
-  username: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phoneNumber?: string;
-  phoneCountryCode?: string; // ISO 3166-1 alpha-2 (e.g., "FR", "US")
-  systemLanguage?: string;
-  regionalLanguage?: string;
-  phoneTransferToken?: string; // Token proving SMS verification for phone transfer
-  skipPhoneConflictCheck?: boolean; // Set to true when transfer token is validated
-}
+/**
+ * La charge d'inscription et son résultat sont DÉFINIS avec la règle qui les
+ * consomme (`./auth/registration.service`), et ré-exportés ici pour les
+ * appelants historiques — routes, `InitService`, création par un
+ * administrateur.
+ */
+export type { RegisterData, RegisterResult } from './auth/registration.service';
 
 /**
  * Charge utile d'un JWT — DÉFINIE dans `./auth/session-jwt`, ré-exportée ici
@@ -88,24 +81,6 @@ export interface AuthResult {
   session: SessionData;
   requires2FA?: boolean; // True if 2FA verification is needed
   twoFactorToken?: string; // Temporary token for 2FA flow
-}
-
-/**
- * Result of user registration
- * If phoneOwnershipConflict is true, the account was NOT created.
- * The user must choose: login, continue without phone, or transfer.
- */
-export interface RegisterResult {
-  user?: SocketIOUser; // undefined if phoneOwnershipConflict
-  phoneOwnershipConflict?: boolean; // True if phone belongs to another account (account NOT created)
-  phoneOwnerInfo?: {
-    maskedDisplayName: string;
-    maskedUsername: string;
-    maskedEmail: string;
-    avatar?: string;
-    phoneNumber: string;
-    phoneCountryCode: string;
-  };
 }
 
 export type AuthServiceOptions = {
@@ -199,7 +174,7 @@ export class AuthService {
 
 
       // Vérifier le mot de passe
-      const passwordValid = await bcrypt.compare(credentials.password, user.password);
+      const passwordValid = await verifyPassword(credentials.password, user.password);
       if (!passwordValid) {
         // L'échec se COMPTE, et le seuil ferme le compte. Sans cette ligne, les
         // trois colonnes du verrou, l'erreur 423 et le job de déverrouillage
@@ -484,225 +459,45 @@ export class AuthService {
   }
 
   /**
-   * Créer un nouveau utilisateur
+   * Créer un nouveau compte — DÉLÉGATION à `services/auth/registration.service`.
+   *
+   * La règle a quitté cette classe au #5216 : elle n'utilisait de `this` que
+   * quatre choses (Prisma, l'e-mail, l'URL du front, le résolveur de manager),
+   * elle pesait 230 lignes dans un fichier déjà hors budget (#4426), et ce lot
+   * lui en ajoutait beaucoup — identité dérivée, refus typés, travaux différés.
+   * **Un fichier hors budget est interdit d'ajout : on extrait d'abord.**
+   *
+   * La signature ne bouge pas pour les appelants historiques, à une exception
+   * assumée près : le service LÈVE désormais ses refus
+   * (`RegistrationRefusal` — pseudo pris, adresse prise, numéro illisible) au
+   * lieu de rendre `null` sur tout. Le `null` rendait un pseudo pris
+   * indiscernable d'une panne Mongo, et les branches de la route qui
+   * prétendaient les distinguer par le TEXTE de l'erreur étaient
+   * inatteignables. Le type de retour garde `| null` parce que les appelants
+   * historiques le testent ; plus rien ne le produit.
+   *
    * @param data - Données d'inscription
    * @param requestContext - Contexte de la requête (IP, user agent, géolocalisation)
-   * @returns RegisterResult with user, and optionally phoneTransferRequired info
    */
-  async register(data: RegisterData, requestContext?: RequestContext): Promise<RegisterResult | null> {
-    try {
-      // Log l'email reçu pour debug (sera retiré après)
-      logger.info(`[AUTH_SERVICE] 📧 Email reçu pour inscription: "${data.email}" (length: ${data.email?.length || 0})`);
-
-      // Valider l'email avec Zod AVANT toute opération
-      try {
-        emailSchema.parse(data.email);
-      } catch (zodError: any) {
-        // Log détaillé pour debug
-        logger.error(`[AUTH_SERVICE] ❌ Zod error details:`, {
-          email: data.email,
-          emailCharCodes: data.email?.split('').map((c: string) => c.charCodeAt(0)),
-          issues: zodError.issues,
-          message: zodError.message,
-          name: zodError.name
-        });
-        const errorMessage = zodError.issues?.[0]?.message || 'Format d\'email invalide';
-        throw new Error(`Email invalide: ${errorMessage}`);
-      }
-
-      // Normaliser les données utilisateur
-      const normalizedEmail = normalizeEmail(data.email);
-      const normalizedUsername = normalizeUsername(data.username);
-      const normalizedFirstName = SecuritySanitizer.sanitizeText(capitalizeName(data.firstName));
-      const normalizedLastName = SecuritySanitizer.sanitizeText(capitalizeName(data.lastName));
-      const normalizedDisplayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(`${normalizedFirstName} ${normalizedLastName}`));
-
-      // Normaliser le phoneNumber avec libphonenumber-js
-      // Utilise le code pays fourni, ou détecte depuis le numéro, ou utilise la géoloc
-      let cleanPhoneNumber: string | null = null;
-      let phoneCountryCode: string | null = null;
-
-      if (data.phoneNumber && data.phoneNumber.trim() !== '') {
-        // Priorité: 1) Code pays explicite, 2) Pays de la géoloc, 3) Défaut FR
-        const defaultCountry = data.phoneCountryCode
-          || requestContext?.geoData?.country
-          || 'FR';
-
-        const phoneResult = normalizePhoneWithCountry(data.phoneNumber, defaultCountry);
-        if (phoneResult && phoneResult.isValid) {
-          cleanPhoneNumber = phoneResult.phoneNumber;
-          phoneCountryCode = phoneResult.countryCode;
-        } else {
-          throw new Error('Numéro de téléphone invalide');
-        }
-      }
-
-      // Vérifier si l'username ou l'email existe déjà (pas le téléphone - géré séparément)
-      const existingUserByCredentials = await this.prisma.user.findFirst({
-        where: {
-          OR: [
-            { username: { equals: normalizedUsername, mode: 'insensitive' } },
-            { email: { equals: normalizedEmail, mode: 'insensitive' } }
-          ]
-        }
-      });
-
-      if (existingUserByCredentials) {
-        if (existingUserByCredentials.username.toLowerCase() === normalizedUsername.toLowerCase()) {
-          throw new Error('Nom d\'utilisateur déjà utilisé');
-        }
-        if (existingUserByCredentials.email.toLowerCase() === normalizedEmail.toLowerCase()) {
-          throw new Error('Email déjà utilisé');
-        }
-        throw new Error('Utilisateur déjà existant');
-      }
-
-      // Vérifier si le téléphone appartient à un autre compte
-      // Si oui, on ne crée PAS le compte et on retourne les infos pour que l'utilisateur choisisse
-      // SAUF si skipPhoneConflictCheck=true (transfer token validated)
-      if (cleanPhoneNumber && !data.skipPhoneConflictCheck) {
-        const existingUserByPhone = await this.prisma.user.findFirst({
-          where: {
-            phoneNumber: cleanPhoneNumber,
-            isActive: true,
-            phoneVerifiedAt: { not: null } // Seuls les numéros vérifiés déclenchent le conflit
-          },
-          select: {
-            id: true,
-            displayName: true,
-            username: true,
-            email: true,
-            avatar: true
-          }
-        });
-
-        if (existingUserByPhone) {
-          // Le numéro appartient à quelqu'un d'autre
-          // On NE crée PAS le compte - l'utilisateur doit choisir
-          logger.info('[AUTH_SERVICE] 📱 Phone belongs to another user - returning conflict info (account NOT created)');
-          return {
-            phoneOwnershipConflict: true,
-            phoneOwnerInfo: {
-              maskedDisplayName: maskDisplayName(existingUserByPhone.displayName),
-              maskedUsername: maskUsername(existingUserByPhone.username),
-              maskedEmail: maskEmail(existingUserByPhone.email),
-              avatar: existingUserByPhone.avatar || undefined,
-              phoneNumber: cleanPhoneNumber,
-              phoneCountryCode: phoneCountryCode || 'FR'
-            }
-          };
-        }
-      } else if (cleanPhoneNumber && data.skipPhoneConflictCheck) {
-        logger.info('[AUTH_SERVICE] 📱 Skipping phone conflict check - transfer token validated');
-      }
-
-      // Hasher le mot de passe (bcrypt cost=12 for enhanced security)
-      const BCRYPT_COST = 12;
-      const hashedPassword = await bcrypt.hash(data.password, BCRYPT_COST);
-
-      // Generate email verification token + OTP code (24h expiry)
-      const { raw: verificationToken, hash: verificationTokenHash } = this.generateVerificationToken();
-      const verificationCode = this.generatePhoneCode();
-      const tokenExpiryHours = parseInt(process.env.EMAIL_VERIFICATION_TOKEN_EXPIRY || '86400') / 3600; // Default 24h
-      const verificationExpiry = new Date(Date.now() + tokenExpiryHours * 60 * 60 * 1000);
-
-      // Créer l'utilisateur avec les données normalisées et contexte d'inscription
-      // Note: Si phoneOwnershipConflict, on a déjà fait un early return plus haut
-      const user = await this.prisma.user.create({
-        data: {
-          username: normalizedUsername,
-          password: hashedPassword,
-          firstName: normalizedFirstName,
-          lastName: normalizedLastName,
-          // Écrits en MÊME TEMPS que les noms — un compte créé sans jetons
-          // serait introuvable jusqu'à sa prochaine modification de profil
-          // (#4159). Règle unique : `utils/search-tokens.ts`.
-          searchTokens: searchTokensFor({
-            username: normalizedUsername,
-            displayName: normalizedDisplayName,
-            firstName: normalizedFirstName,
-            lastName: normalizedLastName,
-          }),
-          email: normalizedEmail,
-          phoneNumber: cleanPhoneNumber,
-          phoneCountryCode: phoneCountryCode,
-          // Mark phone as verified at registration (allows phone-based password reset)
-          phoneVerifiedAt: cleanPhoneNumber ? new Date() : null,
-          systemLanguage: data.systemLanguage || 'fr',
-          regionalLanguage: data.regionalLanguage || 'fr',
-          displayName: normalizedDisplayName,
-          isOnline: true,
-          lastActiveAt: new Date(),
-          // Email verification fields
-          emailVerificationToken: verificationTokenHash,
-          emailVerificationCode: verificationCode,
-          emailVerificationExpiry: verificationExpiry,
-          // Registration context (captured once at signup)
-          registrationIp: requestContext?.ip || null,
-          registrationLocation: requestContext?.geoData?.location || null,
-          registrationDevice: requestContext?.userAgent || null,
-          registrationCountry: requestContext?.geoData?.country || null,
-          // Set timezone from geolocation if available
-          timezone: requestContext?.geoData?.timezone || null,
-          // First login tracking
-          lastLoginIp: requestContext?.ip || null,
-          lastLoginLocation: requestContext?.geoData?.location || null,
-          lastLoginDevice: requestContext?.userAgent || null
-        }
-      });
-
-      // Send email verification email (in user's preferred language)
-      try {
-        const verificationLink = `${this.frontendUrl}/auth/verify-email?token=${verificationToken}&email=${encodeURIComponent(normalizedEmail)}`;
-
-        const emailResult = await this.emailService.sendEmailVerification({
-          to: normalizedEmail,
-          name: normalizedDisplayName,
-          verificationLink,
-          verificationCode,
-          expiryHours: tokenExpiryHours,
-          language: data.systemLanguage || 'fr'
-        });
-
-        if (emailResult.success) {
-          logger.info('[AUTH_SERVICE] ✅ Email de vérification envoyé avec succès!');
-          logger.info(`[AUTH_SERVICE] ✅ Provider emailResult.provider=${emailResult.provider}`);
-          logger.info(`[AUTH_SERVICE] ✅ Message ID emailResult.messageId=${emailResult.messageId}`);
-        } else {
-          logger.error('[AUTH_SERVICE] ❌ Échec de l\'envoi:', emailResult.error);
-        }
-      } catch (emailError) {
-        logger.error('[AUTH_SERVICE] ⚠️ Exception lors de l\'envoi de l\'email de vérification:', emailError);
-        // Don't fail registration if email fails - user can request a new one
-      }
-
-      // Ajouter automatiquement l'utilisateur à la conversation globale
-      // "meeshy" — cinquième porte d'entrée, même loi que les quatre autres
-      // (`routes/anonymous.ts`, `sharing.ts` ×2, `participants.ts`) : le salon
-      // global voit arriver l'inscrit comme n'importe quel fil.
-      // `ensureGlobalConversationMembership` est la SOURCE UNIQUE de cet
-      // ajout (#3876) — partagée par l'inscription publique, la création
-      // d'un compte par un administrateur et le seed (`InitService`).
-      try {
-        await ensureGlobalConversationMembership(
-          { prisma: this.prisma, resolveSocketManager: this.resolveSocketManager },
-          { userId: user.id, displayName: user.displayName || user.username }
-        );
-      } catch (error) {
-        logger.error('[AUTH] ❌ Erreur lors de l\'ajout à la conversation globale:', error);
-        // Ne pas faire échouer l'inscription si l'ajout à la conversation échoue
-      }
-
-      // Retourner le résultat avec l'utilisateur créé
-      // Note: Si phoneOwnershipConflict existait, on a fait un early return plus haut
-      return {
-        user: this.userToSocketIOUser(user)
-      };
-
-    } catch (error) {
-      logger.error('Error in register', error);
-      return null;
-    }
+  async register(
+    data: RegisterData,
+    requestContext?: RequestContext,
+    options?: { readonly afterResponse?: AfterResponse },
+  ): Promise<RegisterResult | null> {
+    return registerAccount(
+      {
+        prisma: this.prisma,
+        emailService: this.emailService,
+        frontendUrl: this.frontendUrl,
+        resolveSocketManager: this.resolveSocketManager,
+        toSocketIOUser: (user) => this.userToSocketIOUser(user),
+        verificationToken: () => this.generateVerificationToken(),
+        verificationCode: () => this.generatePhoneCode(),
+        afterResponse: options?.afterResponse,
+      },
+      data,
+      requestContext,
+    );
   }
 
   /**
@@ -900,7 +695,13 @@ export class AuthService {
     try {
       const normalizedEmail = email.trim().toLowerCase();
 
-      // Find user by email (include systemLanguage for i18n)
+      // Les QUATRE rangs du Prisme, jamais `systemLanguage` seul : la
+      // projection est la seule des deux moitiés de la descente qu'aucun témoin
+      // de rang ne peut voir (#4642). Un `select` étroit rend les rangs 2 à 4
+      // `undefined` chez `recipientLanguage`, donc « non réglés », donc le
+      // repli — et l'e-mail de vérification partait en `'fr'` vers tout lecteur
+      // dont la langue applicative vit dans `regionalLanguage` ou dans la seule
+      // locale appareil.
       const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: normalizedEmail, mode: 'insensitive' },
@@ -912,7 +713,7 @@ export class AuthService {
           firstName: true,
           lastName: true,
           displayName: true,
-          systemLanguage: true,
+          ...RECIPIENT_LANG_SELECT,
           emailVerifiedAt: true
         }
       });
@@ -1162,6 +963,15 @@ export class AuthService {
   /**
    * Convertir un User Prisma en SocketIOUser
    * Note: user.userFeature doit être inclus dans la requête pour les champs de préférences
+   *
+   * `banner` et `timezone` y sont depuis #4641. Ils manquaient — et c'est la
+   * forme de défaut que la garde de #4554 ne peut PAS voir : elle rougit quand
+   * ce projecteur lit un champ hors de son `select`, or ici il ne le lisait
+   * pas DU TOUT. En aval, `formatUserResponse` écrivait
+   * `banner: user.banner || null` sur un `undefined` par construction : tout
+   * compte portant une bannière recevait `null` à chaque connexion. Ce que ce
+   * projecteur doit porter n'est donc pas seulement ce que ses appelants
+   * lisent, mais ce que `userSchema` PROMET à ses clients.
    */
   private userToSocketIOUser(user: any): SocketIOUser {
     return {
@@ -1174,6 +984,7 @@ export class AuthService {
       displayName: user.displayName || `${user.firstName} ${user.lastName}`,
       bio: user.bio,
       avatar: user.avatar,
+      banner: user.banner,
       role: user.role,
       permissions: this.getUserPermissions({
         ...user,
@@ -1201,6 +1012,7 @@ export class AuthService {
       lastLoginLocation: user.lastLoginLocation,
       lastLoginDevice: user.lastLoginDevice,
       // Profile metadata
+      timezone: user.timezone,
       profileCompletionRate: user.profileCompletionRate
     };
   }

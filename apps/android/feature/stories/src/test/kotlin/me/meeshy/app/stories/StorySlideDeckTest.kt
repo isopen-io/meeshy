@@ -624,4 +624,45 @@ class StorySlideDeckTest {
         assertThat(deck.isWithinTextLimit(2)).isFalse()
         assertThat(deck.isWithinTextLimit(3)).isTrue()
     }
+
+    // --- setSelectedStrokes / hasDrawing ---
+
+    private fun strokeOf(id: String) = me.meeshy.sdk.model.StoryDrawingStroke(id = id, colorHex = "FFFFFF", width = 6.0)
+
+    @Test
+    fun `a fresh slide carries no strokes`() {
+        assertThat(StorySlideDeck.single("a").selectedSlide.strokes).isEmpty()
+    }
+
+    @Test
+    fun `setSelectedStrokes replaces the selected slide's strokes, others untouched`() {
+        val deck = deckOf("a", "b", selected = "b")
+        val strokes = listOf(strokeOf("s1"), strokeOf("s2"))
+        val after = deck.setSelectedStrokes(strokes)
+        assertThat(after.selectedSlide.strokes).isEqualTo(strokes)
+        assertThat(after.slides.first().strokes).isEmpty()
+    }
+
+    @Test
+    fun `setSelectedStrokes is inert when the strokes already match`() {
+        val deck = deckOf("a")
+        assertThat(deck.setSelectedStrokes(emptyList())).isSameInstanceAs(deck)
+    }
+
+    @Test
+    fun `hasDrawing is true once any slide carries a stroke`() {
+        val deck = deckOf("a", "b", selected = "a").setSelectedStrokes(listOf(strokeOf("s1")))
+        assertThat(deck.hasDrawing).isTrue()
+    }
+
+    @Test
+    fun `hasDrawing is false for a deck with no strokes`() {
+        assertThat(deckOf("a", "b").hasDrawing).isFalse()
+    }
+
+    @Test
+    fun `publishableSlides includes a drawing-only slide with no text, media, elements or stickers`() {
+        val deck = deckOf("a", "b", selected = "b").setSelectedStrokes(listOf(strokeOf("s1")))
+        assertThat(deck.publishableSlides.map { it.id }).containsExactly("b")
+    }
 }

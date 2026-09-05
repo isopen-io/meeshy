@@ -468,7 +468,13 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
+      # DEUX adresses de la passerelle, jamais interchangeables :
+      # MEESHY_GATEWAY_URL est l'adresse INTERNE du réseau compose (appels
+      # serveur à serveur) ; NEXT_PUBLIC_API_URL est l'adresse PUBLIQUE, celle
+      # que le NAVIGATEUR atteint — le module de participation (conception
+      # § 12.4) y ouvre le socket et y relit /sync.
       - MEESHY_GATEWAY_URL=http://gateway:3000
+      - NEXT_PUBLIC_API_URL=https://gate.${DOMAIN:-localhost}
       - NEXT_PUBLIC_FRONTEND_URL=https://${DOMAIN:-localhost}
     depends_on:
       gateway:
@@ -483,7 +489,7 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3/_next`))"
+      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/__v3/rt/`) || PathPrefix(`/__v3/sw`))"
       - "traefik.http.routers.frontend-v3.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3.middlewares=compress@file"

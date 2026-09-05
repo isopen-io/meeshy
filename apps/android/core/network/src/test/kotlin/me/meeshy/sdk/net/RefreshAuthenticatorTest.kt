@@ -133,6 +133,20 @@ class RefreshAuthenticatorTest {
     }
 
     @Test
+    fun accountDeletionEndpoint_401_invalidPassword_noRetry_noRefresh_preservesSession() {
+        val tokenStore = store()
+        val refresher = FakeRefresher("new-jwt")
+        val authenticator = RefreshAuthenticator(tokenStore, refresher)
+
+        val retry = authenticator.authenticate(null, response("/api/v1/me/account/deletion", method = "POST"))
+
+        assertThat(retry).isNull()
+        assertThat(refresher.calls).isEqualTo(0)
+        assertThat(tokenStore.jwt).isEqualTo("old-jwt")
+        assertThat(tokenStore.sessionToken).isEqualTo("session-abc")
+    }
+
+    @Test
     fun refreshEndpoint_401_ineligible_tearsDownWithoutRefreshing() {
         val tokenStore = store()
         val refresher = FakeRefresher("new-jwt")

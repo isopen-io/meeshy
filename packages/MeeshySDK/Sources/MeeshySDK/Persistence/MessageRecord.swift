@@ -95,6 +95,13 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// colonnes de position (`PostRecord`/`CommentRecord`, Task 16).
     public var locationJson: String?
 
+    /// Sticker du message (JSON `MessageSticker`), hissé depuis
+    /// `APIMessage.sticker` (#4823). Même forme que `locationJson` — texte,
+    /// pas `Data` — et même raison d'exister : le pipeline ne stocke jamais
+    /// l'`APIMessage` brut, donc un sticker affiché en ligne mais jamais
+    /// persisté ici disparaîtrait au relaunch (principe Cache-First).
+    public var stickerJson: String?
+
     // Pre-computed layout (CTFramesetter)
     public var cachedBubbleWidth: Double?
     public var cachedBubbleHeight: Double?
@@ -144,7 +151,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         callSummaryJson: Data? = nil,
         joinNoticeJson: Data? = nil,
         recipientCount: Int = 0,
-        locationJson: String? = nil
+        locationJson: String? = nil,
+        stickerJson: String? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -207,6 +215,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.joinNoticeJson = joinNoticeJson
         self.recipientCount = recipientCount
         self.locationJson = locationJson
+        self.stickerJson = stickerJson
     }
 
     // MARK: - Timestamp pre-compute helper

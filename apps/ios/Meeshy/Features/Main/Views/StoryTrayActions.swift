@@ -192,7 +192,7 @@ struct StoryComposerCover: ViewModifier {
                 intent: ComposerIntent(origin: .storyTray),
                 initialVisibility: viewModel.lastComposerVisibility,
                 draftId: viewModel.pendingDraftId,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                     viewModel.publishStoryInBackground(
                         targetType: targetType,
                         slides: slides,
@@ -200,6 +200,7 @@ struct StoryComposerCover: ViewModifier {
                         loadedImages: loadedImages,
                         loadedVideoURLs: loadedVideoURLs,
                         loadedAudioURLs: loadedAudioURLs,
+                        loadedStickerAnimations: loadedStickerAnimations,
                         originalLanguage: originalLanguage,
                         visibility: visibility,
                         visibilityUserIds: visibilityUserIds,
@@ -213,20 +214,32 @@ struct StoryComposerCover: ViewModifier {
                     // en file d'attente au lieu de rester dans le composer.
                     return true
                 },
-                onPublishDocument: { _ in
-                    // La porte du tray ouvre sur `.cameraReady`, et
-                    // `ComposerSurfaceRouting` route TOUJOURS une ouverture de
-                    // capture vers la SCÈNE, quel que soit le format choisi
-                    // ensuite. Le socle n'est donc jamais peint ici, et cette
-                    // fermeture jamais appelée — `MeeshyComposerHostGuardTests`
-                    // `.test_laPorteDuTray_nAtteintAucuneSurfaceQuiPublieParLeSocle`
-                    // en répond, et rougirait le jour où l'ouverture changerait.
+                onPublishDocument: { draft in
+                    // **Le refus est devenu un PUBLIEUR le 2026-09-01** (#4751).
                     //
-                    // Elle REFUSE plutôt qu'elle n'accepte : un `true` ferait
-                    // fermer le composer sur une publication qui n'a pas eu lieu.
-                    // Le paramètre n'a pas de défaut côté meuble, précisément
-                    // pour que ce refus s'écrive au lieu de se supposer.
-                    false
+                    // Il tenait par une prémisse qui a cessé d'être vraie :
+                    // `.cameraReady` routait TOUJOURS vers la scène, donc le
+                    // socle n'était jamais peint et cette fermeture jamais
+                    // appelée. La garde qui en répondait
+                    // (`MeeshyComposerHostGuardTests`) le disait en toutes
+                    // lettres — « le jour où cette ouverture changerait, ce
+                    // refus deviendrait une flèche qui ne publie rien, en
+                    // silence » — et c'est ce jour-là.
+                    //
+                    // Le socle est atteint dès que l'auteur bascule l'éventail
+                    // sur « Post » sans avoir rien posé sur la scène : la slide
+                    // SEMÉE ne compte pas comme matière (`ComposerScenePresence`
+                    // compte ce que la scène CONTIENT, pas ce qui l'a fait
+                    // naître), donc `documentHasScene` est faux et le meuble
+                    // monte le document.
+                    //
+                    // Ce cover n'a pas de `FeedViewModel` — aucune des deux
+                    // racines qui l'appliquent n'en tient un. Le publieur
+                    // durable est le chemin qui n'en demande pas ; il partage la
+                    // règle d'envoi et la fabrique de charge avec la porte du
+                    // fil, et n'omet que l'insertion optimiste, qu'aucun œil ne
+                    // recevrait ici.
+                    await ComposerDocumentDurablePublisher.publish(draft)
                 },
                 // La porte du tray ne sème AUCUN mood : elle n'atteint pas cette
                 // surface, pour la raison ci-dessus. Écrit en toutes lettres

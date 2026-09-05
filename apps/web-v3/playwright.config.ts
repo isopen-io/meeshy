@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { defineConfig, devices } from '@playwright/test';
 
@@ -66,8 +67,62 @@ const cadreMobile = {
   },
 };
 
-/** Les suites qui mesurent une PAGE servie par le `webServer` ci-dessus. */
-const SUITES_DE_PAGE = ['**/v3-a11y.spec.ts', '**/v3-lifecycle.spec.ts'];
+/**
+ * Les suites du projet `pages` — et le critère n'est PAS celui que son nom
+ * suggère.
+ *
+ * Deux familles y entrent, pour deux raisons distinctes :
+ *
+ *   1. celles qui mesurent la page que le `webServer` ci-dessus lève
+ *      (`v3-lifecycle`, `v3-cibles`) ;
+ *   2. **toutes celles qui importent `lib/a11y.ts` STATIQUEMENT** — la loi du
+ *      gate, gagée sans navigateur. C'est cet import qui décide, pas le
+ *      serveur : `v3-fil-a11y` monte sa propre chaîne et vit ici quand même.
+ *      Mêler un tel import aux suites de vitals réseau casse la résolution du
+ *      module imbriqué `mesure-reseau.mjs` — « ./lib/motifs.mjs does not
+ *      provide an export named plusPrecis » — et fait tomber les SEPT témoins
+ *      de plafond réseau, dont aucun n'a changé.
+ *
+ * LA SECONDE FAMILLE EST UN MOTIF, PLUS UNE LISTE (2026-09-03). Elle était
+ * énumérée nom par nom, et les deux écrans livrés cette nuit ont ajouté deux
+ * suites d'audit qui, faute d'y figurer, sont tombées dans `chaines` et y ont
+ * cassé les vitals. Une liste tenue à la main est en retard par construction,
+ * et son retard ne ressemble pas à une erreur : il ressemble à sept témoins
+ * sans rapport qui rougissent d'un coup. Le motif couvre celles d'aujourd'hui
+ * ET celles de demain — c'est la même réparation que celle de la sonde du
+ * self-test (leçon 477) : ne pas tirer d'une liste de FAITS ce qu'une RÈGLE
+ * peut dire.
+ */
+const RACINE_DES_SUITES = join(__dirname, 'e2e', 'visual');
+
+/**
+ * LES SUITES QUI IMPORTENT LA LOI, RELEVÉES SUR LE DISQUE — pas énumérées.
+ *
+ * Le critère est une PROPRIÉTÉ du fichier, et un glob de NOM n'en est qu'un
+ * indice : les quatre suites concernées s'appellent aujourd'hui `*a11y.spec.ts`,
+ * mais rien ne l'impose, et `v3-medias.spec.ts` prouve l'inverse dans l'autre
+ * sens — elle lance `axe` sans importer la loi, et vit très bien dans
+ * `chaines`. Un nom qui coïncide avec une propriété finit par s'en écarter, et
+ * ce jour-là le gate tombe en accusant sept témoins étrangers.
+ *
+ * On lit donc les fichiers. C'est la réparation que la leçon 477 prescrit,
+ * appliquée à sa propre famille : ne pas tirer d'une liste de FAITS ce qu'une
+ * RÈGLE peut dire. Le coût est une lecture de répertoire au chargement de la
+ * config — payée une fois, jamais en CI récurrent.
+ */
+const importeLaLoiDuGate = (fichier: string): boolean =>
+  /from '\.\/lib\/a11y'/.test(readFileSync(join(RACINE_DES_SUITES, fichier), 'utf8'));
+
+const SUITES_QUI_IMPORTENT_LA_LOI: readonly string[] = readdirSync(RACINE_DES_SUITES)
+  .filter((fichier) => fichier.endsWith('.spec.ts'))
+  .filter(importeLaLoiDuGate)
+  .map((fichier) => `**/${fichier}`);
+
+const SUITES_DE_PAGE = [
+  ...SUITES_QUI_IMPORTENT_LA_LOI,
+  '**/v3-lifecycle.spec.ts',
+  '**/v3-cibles.spec.ts',
+];
 
 export default defineConfig({
   testDir: './e2e',

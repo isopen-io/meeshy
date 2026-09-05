@@ -50,12 +50,32 @@ final class StatusComposerAccessibilityTests: XCTestCase {
         return ""
     }
 
-    private func publishButtonBody() throws -> String {
-        try declarationBody(startingAt: "var publishButton: some View", in: try hostSource())
+    /// **Ce que le bouton MONTRE** — son libellé, partagé par les deux flèches
+    /// depuis le #4995. Le socle et l'en-tête du mood composaient chacun le
+    /// leur, avec deux glyphes déjà divergents ; ils lisent désormais un seul
+    /// site, et cette garde le suit.
+    private func publishLabelBody() throws -> String {
+        try declarationBody(startingAt: "var publishCapsuleLabel: some View", in: try hostSource())
+    }
+
+    /// **Ce que le bouton DÉCLARE** — l'habillage, qui porte le verre, le gate
+    /// et les trois attributs d'accessibilité.
+    ///
+    /// > Une garde de source ancre sur une PLACE, pas sur une propriété : elle
+    /// > ne distingue pas « ce site a perdu sa protection » de « la protection
+    /// > a déménagé chez un voisin ». Les deux se lisent comme l'absence d'une
+    /// > chaîne, et c'est pourquoi une factorisation qui RENFORCE une règle
+    /// > fait rougir la garde qui la protégeait.
+    ///
+    /// `MeeshyComposerHostGuardTests.test_laFlecheDuSocle_estUnBouton_gateEtBranche`
+    /// exige en retour que chaque flèche passe par cet habillage — sans quoi le
+    /// déménagement coûterait à cette suite la moitié de sa portée, en silence.
+    private func publishCapsuleBody() throws -> String {
+        try declarationBody(startingAt: "func publishCapsule<Contenu: View>", in: try hostSource())
     }
 
     func test_publishButton_keepsAccessibleNameWhilePublishing() throws {
-        let body = try publishButtonBody()
+        let body = try publishLabelBody()
         XCTAssertTrue(
             body.contains("Text(\"composer.socle.publish\""),
             "La flèche doit porter un libellé TEXTE issu du catalogue : c'est lui qui lui donne son nom " +
@@ -71,7 +91,7 @@ final class StatusComposerAccessibilityTests: XCTestCase {
 
     func test_publishButton_announcesPublishingState() throws {
         XCTAssertTrue(
-            try publishButtonBody().contains("ComposerSocleCopy.publishInProgress"),
+            try publishCapsuleBody().contains("ComposerSocleCopy.publishInProgress"),
             "La flèche doit exposer son état EN VOL en `accessibilityValue` : sans lui, l'occupation n'est " +
             "portée que par la teinte."
         )
@@ -84,7 +104,7 @@ final class StatusComposerAccessibilityTests: XCTestCase {
 
     func test_publishButton_explainsWhyItIsDisabled() throws {
         XCTAssertTrue(
-            try publishButtonBody().contains(".accessibilityHint(publishBlockedHint)"),
+            try publishCapsuleBody().contains(".accessibilityHint(publishBlockedHint)"),
             "La flèche doit dire POURQUOI elle refuse : le dégradé éteint ne le porte que visuellement."
         )
         let hint = try declarationBody(startingAt: "var publishBlockedHint: String", in: try hostSource())

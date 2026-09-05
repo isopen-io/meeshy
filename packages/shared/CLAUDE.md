@@ -10,7 +10,9 @@ Single source of truth for TypeScript types, Prisma schema, encryption, validati
 ```
 types/              → 46+ TypeScript type files
   index.ts          → Public API exports
-  socketio-events.ts → Event names, rooms, server/client events
+  socketio-events.ts → Facade: re-exporte socketio-events/ (adresse stable)
+  socketio-events/   → Un fichier par domaine + event-names.ts (constantes)
+                       et event-maps.ts (ServerToClient/ClientToServer)
   message.ts        → GatewayMessage, UIMessage types
   conversation.ts   → Conversation + related types
   user.ts           → User types
@@ -38,7 +40,7 @@ prisma/
 **Format**: `entity:action-word` (colons + hyphens, NEVER underscores)
 
 ```typescript
-// packages/shared/types/socketio-events.ts
+// packages/shared/types/socketio-events/event-names.ts
 export const SERVER_EVENTS = {
   MESSAGE_NEW: 'message:new',
   REACTION_ADDED: 'reaction:added',
@@ -115,9 +117,10 @@ export const CommonSchemas = {
 5. Run `npm run build` in shared/
 
 ## Adding Socket.IO Events
-1. Add constant to `SERVER_EVENTS` or `CLIENT_EVENTS` in `socketio-events.ts`
-2. Define data interface (e.g., `ReactionUpdateEventData`)
-3. Add to `ServerToClientEvents` or `ClientToServerEvents` type map
+1. Add constant to `SERVER_EVENTS` or `CLIENT_EVENTS` in `types/socketio-events/event-names.ts`
+2. Define data interface (e.g., `ReactionUpdateEventData`) in `types/socketio-events/<domaine>.ts`
+3. Add to `ServerToClientEvents` or `ClientToServerEvents` in `types/socketio-events/event-maps.ts`
+   (le SEUL fichier qui cite tous les domaines — c'est l'assemblage, pas un domaine)
 4. Use pattern: `entity:action-word`
 
 **`SERVER_EVENTS` ou `CLIENT_EVENTS`, pas les deux** — sauf si les DEUX sens

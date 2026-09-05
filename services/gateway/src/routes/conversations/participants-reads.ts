@@ -12,7 +12,11 @@ import {
   conversationParticipantSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
+import {
+  refuserAccesConversation,
+  verdictAccesConversation,
+  type MessagesDeRefusDAcces
+} from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   disclosableEntryRights,
@@ -33,6 +37,26 @@ import {
   loadMostActiveParticipants
 } from './participants-presence';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantReadRoutes' });
+
+/**
+ * LES DEUX REFUS DE CES DEUX ROUTES NE SONT PAS LE MÊME REFUS (#4792).
+ *
+ * Les phrases `nonMembre` sont celles que les deux routes servaient déjà, avec
+ * leur `code: 'CONVERSATION_ACCESS_DENIED'` — elles étaient JUSTES, et elles ne
+ * changent pas. Ce que le booléen de `canAccessConversation` leur faisait servir
+ * EN PLUS était le refus d'une session absente ou morte, qui n'est pas un refus
+ * de droit : les deux routes sont montées en `optionalAuth`, une garde qui ne
+ * refuse rien, donc l'appelant sans identité arrivait ici et repartait en 403.
+ */
+const REFUS_DE_LISTING: MessagesDeRefusDAcces = {
+  sansSession: 'Authentication required to list the members of this conversation',
+  nonMembre: 'Access denied: you are not a member of this conversation or it no longer exists'
+};
+
+const REFUS_DE_FICHE: MessagesDeRefusDAcces = {
+  sansSession: 'Authentication required to read this member profile',
+  nonMembre: 'Access denied: you are not a member of this conversation'
+};
 
 /**
  * Routes de LECTURE des participants — `GET .../participants` (listing,
@@ -122,9 +146,9 @@ export function registerParticipantReadRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Access denied: you are not a member of this conversation or it no longer exists', { code: 'CONVERSATION_ACCESS_DENIED' });
+      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
+      if (acces.genre !== 'ok') {
+        return refuserAccesConversation(reply, acces, REFUS_DE_LISTING);
       }
 
       // SSOT guard: a malformed `?limit` (string schema, no AJV coercion)
@@ -407,9 +431,9 @@ export function registerParticipantReadRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
-      if (!canAccess) {
-        return sendForbidden(reply, 'Access denied: you are not a member of this conversation', { code: 'CONVERSATION_ACCESS_DENIED' });
+      const acces = await verdictAccesConversation(prisma, authRequest.authContext, conversationId, id);
+      if (acces.genre !== 'ok') {
+        return refuserAccesConversation(reply, acces, REFUS_DE_FICHE);
       }
 
       // Chargé SANS filtre d'activité, puis trié : un avis d'arrivée reste dans

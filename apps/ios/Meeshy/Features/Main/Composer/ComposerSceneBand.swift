@@ -16,26 +16,32 @@ import MeeshyUI
 /// > (le temps) ou d'une **comparaison latérale** (des aperçus qu'on met côte à
 /// > côte). Tout le reste est un rail.
 ///
-/// C'est ce critère, pas un goût de mise en page, qui explique les trois cas :
+/// C'est ce critère, pas un goût de mise en page, qui explique le cas servi :
 ///
 /// | cas | pourquoi une bande, et pas un rail |
 /// |---|---|
 /// | `palette` | on choisit une couleur en la COMPARANT aux voisines |
-/// | `timeline` | le temps EST un axe horizontal — un rail vertical ne peut pas le dire |
-/// | `textStyles` | les 18 styles se lisent en aperçus « Aa » alignés |
 ///
-/// ## Ce qui EXISTE aujourd'hui, dit sans détour
+/// ## `timeline` et `textStyles` sont PARTIES (directive porteur 2026-09-05)
 ///
-/// Seule `palette` a un contenu et un hôte. `timeline` et `textStyles` sont
-/// déclarées parce qu'elles appartiennent au critère — pas parce qu'elles sont
-/// livrées : la règle `opened(_:served:)` ne rend JAMAIS une bande absente du
-/// jeu servi, et c'est ce qui les tient hors de l'écran tant que rien ne les
-/// remplit. Une bande vide occuperait précisément les ≈ 170 pt que
-/// l'encastrement vient de libérer (loi 4 : un contrôle sans effet est ABSENT).
+/// > « Les éditions dans la première vue doivent être supprimées. »
+///
+/// Les deux appartenaient au critère — le temps EST un axe horizontal, les 18
+/// styles se lisent en aperçus alignés — et elles ÉDITAIENT un objet déjà
+/// posé. Elles vivent désormais dans l'éditeur plein écran, aux sections
+/// `.media(.trim)` et `.tool(.style)`, où elles avaient déjà leur jumelle
+/// depuis #4634 : ce lot ne retire aucune capacité, il en retire le DOUBLE.
+///
+/// Les retirer du TYPE plutôt que du seul jeu servi est délibéré. Une bande
+/// déclarée mais jamais servie est indiscernable d'une bande oubliée : le lot
+/// suivant la sert à nouveau sans qu'aucun témoin ne tombe, et la directive
+/// aura disparu avec le code. Ce qui reste de leur histoire vit dans
+/// `ComposerFirstView`, où la ligne de partage est ÉCRITE.
+///
+/// Le critère, lui, ne bouge pas : il gouverne la bande qui reste et celle
+/// qu'on ajoutera.
 nonisolated enum ComposerSceneBand: String, CaseIterable, Equatable, Sendable {
     case palette
-    case timeline
-    case textStyles
 
     /// **La bande réellement OUVERTE — `nil` ⇒ le bas ne porte que le socle.**
     ///
@@ -110,6 +116,101 @@ nonisolated enum ComposerLowZone: Equatable {
     }
 }
 
+/// **La ZONE CANONIQUE — ce que le bas de la scène peint hors outil, et ce qui
+/// s'efface quand un outil s'ouvre** (#5010, directive porteur 2026-09-03).
+///
+/// > « lorsqu'on affiche les options d'un outil il faut cacher les éléments
+/// > permanents de la zone canonique pour afficher ces outils ! »
+///
+/// ## Ce que la règle du dessus ne pouvait pas dire
+///
+/// `ComposerLowZone.resolve` arbitre entre les options d'un outil et la bande
+/// contextuelle : deux occupants d'une MÊME place. Elle ne dit rien des
+/// éléments qui vivent SOUS cette place et qui, eux, restaient peints — la
+/// rangée de portes et le pied des références. L'auteur ouvrait un outil et
+/// ses réglages se partageaient le bas avec deux rangées qui ne le
+/// concernaient plus.
+///
+/// L'inventaire mesuré au moment d'écrire cette règle :
+///
+/// | élément | gouverné avant #5010 ? |
+/// |---|---|
+/// | options d'outil / bande | oui (`ComposerLowZone.resolve`) |
+/// | jetons d'objet | oui (`ComposerObjectChips.isServed`) |
+/// | rangée de portes (#4072) | oui — **par construction**, voir ci-dessous |
+/// | pied des références (#5002) | **non** — le seul trou réel |
+///
+/// ## La rangée de portes N'EST PAS dans cet inventaire, et c'est mesuré
+///
+/// Le corps de l'issue la comptait parmi les éléments non gouvernés, sur la foi
+/// de son doc-comment qui la déclare « permanente » (#4072). La mesure dit
+/// l'inverse : `lowToolRow` ÉCHANGE son contenu selon `railMode` — outil
+/// ouvert, elle peint les contrôleurs de cet outil ; sinon, les portes. Les
+/// portes disparaissent donc déjà, et ce qui reste à leur place EST l'interface
+/// de l'outil.
+///
+/// > **L'y inscrire aurait caché les contrôleurs de l'outil qu'on venait
+/// > d'ouvrir** — un « correctif » qui casse, appliqué à du code correct, sur
+/// > la foi d'un doc-comment plutôt que d'une lecture. Le mot « permanente »
+/// > décrit la PLACE, pas son contenu ; c'est cette ambiguïté qui a trompé
+/// > l'inventaire, et le doc-comment de #4072 la lève dans le même lot.
+///
+/// Ce type ne gouverne donc que ce qui est peint EN PLUS de la place que
+/// l'outil réclame — et il n'y en a que deux.
+///
+/// ## Pourquoi un type, et pas `!toolIsOpen` recopié trois fois
+///
+/// Parce que la troisième copie diverge. C'est la leçon que ce fichier porte
+/// déjà : trois surfaces sont mortes d'un coup pour avoir lu la présence d'une
+/// VUE au lieu de la question qu'elles posaient.
+///
+/// Et parce qu'une fonction qui rendrait `!toolIsOpen` en ignorant son premier
+/// paramètre ne déciderait RIEN. Ce que celle-ci décide est l'APPARTENANCE :
+/// tout ce que le bas peint n'est pas de la zone canonique. L'en-tête du son de
+/// fond (#5001) vit AU-DESSUS de la carte et garde sa propre porte
+/// (`ComposerSceneSoundTrace.served`) — l'inscrire ici l'aurait fait céder une
+/// place que les options d'outil ne réclament pas.
+nonisolated enum ComposerCanonicalZone {
+
+    /// Ce que le bas de la scène peint quand aucun outil n'est ouvert.
+    ///
+    /// **Le `switch` de `yieldsToTool` est exhaustif** : un quatrième élément
+    /// ne compilera pas tant qu'il n'aura pas dit s'il cède la place. C'est la
+    /// question qu'on oublie en ajoutant une rangée — et les deux « non » du
+    /// tableau ci-dessus sont ce que coûte de l'oublier.
+    enum Element: String, CaseIterable, Sendable {
+        /// Le pied des hashtags et mentions référencées (#5002) — le seul
+        /// élément que personne ne gouvernait.
+        case references
+        /// Les jetons de l'objet sélectionné (#4073, vue `1c`). Il cédait
+        /// déjà ; ce qui change est qu'il cède au MÊME endroit que son voisin.
+        case objectChips
+    }
+
+    /// **Cet élément cède-t-il la place aux options d'un outil ?**
+    ///
+    /// Les trois cèdent aujourd'hui. La fonction existe quand même, et ce n'est
+    /// pas une précaution : elle est le SITE où un futur élément dira qu'il ne
+    /// cède pas, avec sa raison — au lieu de l'écrire dans un `body`, où
+    /// personne ne pourra l'éprouver.
+    static func yieldsToTool(_ element: Element) -> Bool {
+        switch element {
+        // Il LIT ce que la publication emporte — une lecture permanente, donc
+        // exactement le genre d'élément que la directive vise.
+        case .references: return true
+        // Il réglait déjà l'objet sélectionné et cédait déjà : la règle ne
+        // change pas son sort, elle lui donne le même site que son voisin.
+        case .objectChips: return true
+        }
+    }
+
+    /// La question que les sites de montage posent. Ils n'écrivent plus
+    /// `!toolIsOpen` : ils demandent si LEUR élément est servi.
+    static func isServed(_ element: Element, toolIsOpen: Bool) -> Bool {
+        !(toolIsOpen && yieldsToTool(element))
+    }
+}
+
 /// **La bande contextuelle de la scène.** Montée SOUS le canvas et AU-DESSUS de
 /// la description, ce qui donne au bas de l'écran un dégradé de niveaux du
 /// modèle : l'objet (les rails), la scène (cette bande), la slide (la
@@ -142,58 +243,22 @@ struct ComposerSceneBandView: View {
     var openingEffect: StoryTransitionEffect?
     var onPickOpening: ((StoryTransitionEffect?) -> Void)?
 
-    /// **Le contenu de la bande `timeline`, composé par l'HÔTE** (#4082).
-    ///
-    /// Même motif que `toolOptions` et `railSystemEntry` du meuble : ce qui
-    /// exige de connaître l'objet sélectionné, ses URL chargées et le ViewModel
-    /// est composé là où ces trois choses vivent, et voyage jusqu'ici en vue
-    /// opaque. La bande reste ignorante de ce qu'elle porte — c'est ce qui lui
-    /// permet de rester une règle de PLACE.
-    ///
-    /// `nil` ⇒ la bande n'a rien à montrer, et `ComposerSceneCapabilities.bands(canTrimSelection:)`
-    /// ne l'aura alors jamais servie : les deux disent la même chose depuis les
-    /// deux bouts, et c'est voulu — la seconde est ce qui l'empêche d'être
-    /// demandée, la première ce qui l'empêche de paraître vide si elle l'était.
-    var timelineContent: AnyView?
-
-    /// **Le contenu de la bande `textStyles`, composé par l'HÔTE** (#4083).
-    ///
-    /// Même motif que `timelineContent` : le spécimen a besoin du VRAI texte de
-    /// l'objet sélectionné et du rappel qui écrit le style — deux choses que
-    /// seul le meuble connaît. La bande reste une règle de PLACE.
-    ///
-    /// `nil` ⇒ rien à montrer, et `ComposerSceneCapabilities.bands(…)` ne
-    /// l'aura alors jamais servie.
-    var textStylesContent: AnyView?
-
     var body: some View {
         switch band {
         case .palette:
             palette
-        case .timeline:
-            // La bande de ROGNAGE depuis #4082. Elle n'a de contenu que quand
-            // l'hôte lui en compose un — pour un objet sans source à rogner,
-            // `bands(canTrimSelection:)` ne la sert pas et on n'arrive jamais
-            // ici. Le `EmptyView` de repli n'est donc pas une bande vide
-            // tolérée : c'est la trace de la loi 4, tenue des deux côtés.
-            if let timelineContent { timelineContent } else { EmptyView() }
-        case .textStyles:
-            // **Le spécimen des 18 styles** (#4083). Il a un hôte depuis le
-            // 2026-08-31 : le meuble compose `TextStyleSpecimenBand` avec le
-            // texte réel de l'objet sélectionné.
-            //
-            // > Ce cas rendait `EmptyView()` et le commentaire l'assumait —
-            // > « les 18 styles exigent un objet `text` sélectionné, qu'aucune
-            // > porte de cette surface ne pose encore ». La porte existait
-            // > depuis #4401 ; c'est la BANDE qui n'était pas servie, et le
-            // > jeton « STYLE » de l'inspecteur pointait donc sur du vide.
-            //
-            // Le repli reste, pour la même raison que celui de `timeline` : la
-            // loi 4 tenue des DEUX côtés — la capacité empêche la bande d'être
-            // demandée, ce repli l'empêche de paraître vide si elle l'était.
-            if let textStylesContent { textStylesContent } else { EmptyView() }
         }
     }
+
+    // Ce qui suit a été retiré le 2026-09-05 — conservé en mémoire de ce que
+    // les deux cas rendaient, pour le jour où quelqu'un se demandera où sont
+    // passées la bande de rognage et celle des dix-huit styles :
+    //
+    //   case .timeline:    la bande de rognage (#4082) → `.media(.trim)` de l'éditeur
+    //   case .textStyles:  le spécimen des 18 styles (#4083) → `.tool(.style)`
+    //
+    // Aucune n'a été perdue : les deux sections existaient déjà dans l'éditeur
+    // plein écran, et c'est le DOUBLE qui disparaît, pas la capacité.
 
     /// La palette de la SCÈNE. Les pastilles viennent de la palette PARTAGÉE du
     /// SDK (`StoryBackgroundPalette.colors`) — jamais recopiées : deux listes de

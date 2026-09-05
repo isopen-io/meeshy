@@ -149,7 +149,11 @@ extension StoryComposerViewModel {
     /// `SlideMiniPreview` and the canvas resolve the background image — passing
     /// only `slideImages[slide.id]` left every photo-backed slide's tiles blank
     /// because modern photos live in `mediaObjects`, not `slideImages`.
-    var currentSlideBackgroundImage: UIImage? {
+    /// **`public` depuis #5041** : l'éditeur d'objet plein écran (app) monte la
+    /// même `StoryFilterGridView` que `EmbeddedSceneInspector` (SDK) et lui doit
+    /// le même aperçu. Servir `nil` depuis l'app aurait montré les tuiles en
+    /// dégradé de repli — un aperçu qui ne ressemble pas à ce qui va changer.
+    public var currentSlideBackgroundImage: UIImage? {
         if let bgId = currentSlide.effects.resolvedBackgroundMedia?.id,
            let img = loadedImages[bgId] {
             return img
@@ -246,9 +250,25 @@ extension StoryComposerViewModel {
     /// crée une coquille VIDE — c'est l'éditeur qui la remplit —, et une
     /// coquille restée vide est supprimée à la sortie de l'éditeur
     /// (`exitTextEditingMode`). Un texte annulé ne laisse donc rien.
+    /// **Où poser un objet NEUF** (#4939) — jamais sur le précédent.
+    ///
+    /// Les trois sites qui posent écrivaient chacun `CGPoint(x: 0.5, y: 0.5)`,
+    /// le centre exact et sans condition. Deux textes se superposaient au pixel
+    /// près et se lisaient comme un seul texte cassé, pendant que la flèche de
+    /// l'éditeur annonçait « 2 objets ».
+    ///
+    /// Les FONDS sont écartés : ils occupent toute la scène et n'ont pas de
+    /// position — les compter ferait cascader le premier objet posé sur une
+    /// slide qui a un fond, sans raison.
+    func nextObjectPosition(in effects: StoryEffects) -> CGPoint {
+        StoryObjectPlacement.next(avoiding: effects.sceneObjects
+            .filter { !$0.isBackground }
+            .map { CGPoint(x: $0.x, y: $0.y) })
+    }
+
     public func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
-        let center = CGPoint(x: 0.5, y: 0.5)
+        let center = nextObjectPosition(in: currentEffects)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
         // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
         // lisible. La valeur précédente de 24 produisait du 9 pt rendu
@@ -291,14 +311,25 @@ extension StoryComposerViewModel {
     func addReference(_ reference: ComposerReference) {
         let key = reference.username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !key.isEmpty else { return }
-        let previous = references.first { $0.username.lowercased() == key }
-        references = ComposerReferences.upsert(reference, into: references)
 
-        if previous?.display == .pinned, reference.display != .pinned {
-            removeBadge(of: previous ?? reference)
+        // **La mention naît attachée à la publication COURANTE** (#4068).
+        // En profil Story, une slide EST une publication : c'est son id qui
+        // fait la portée. L'appelant n'a pas à la fournir — il ne sait pas
+        // toujours dans quel profil il est, et une clé qu'on peut oublier de
+        // passer est une portée qui se perd en silence.
+        var attachée = reference
+        if attachée.publicationKey == nil { attachée.publicationKey = currentSlide.id }
+
+        let previous = references.first {
+            $0.username.lowercased() == key && $0.publicationKey == attachée.publicationKey
         }
-        if reference.display == .pinned, previous?.display != .pinned {
-            poseBadge(for: reference)
+        references = ComposerReferences.upsert(attachée, into: references)
+
+        if previous?.display == .pinned, attachée.display != .pinned {
+            removeBadge(of: previous ?? attachée)
+        }
+        if attachée.display == .pinned, previous?.display != .pinned {
+            poseBadge(for: attachée)
         }
     }
 
@@ -408,11 +439,18 @@ extension StoryComposerViewModel {
     /// `currentEffects`, la seule source de vérité (et la seule unité persistée
     /// / envoyée au serveur). Décalage en cascade comme les stickers pour que
     /// deux lieux successifs ne se superposent pas exactement.
+    /// - Parameter styleId: le gabarit qui DÉCORE la pastille (#4717). `nil`
+    ///   rend la pastille d'origine, au pixel près — c'est le cas de la porte
+    ///   canonique du lieu, qui n'a pas à choisir une décoration.
+    /// `public` depuis le #4579 : la palette de constructions du composer
+    /// unifié — qui vit dans l'APP — pose des lieux décorés. Son voisin
+    /// `addSticker` l'était déjà pour la même raison.
     @discardableResult
-    func addLocation(place: SharedPlace) -> StoryLocationObject {
+    public func addLocation(place: SharedPlace, styleId: String? = nil) -> StoryLocationObject {
         let offset = Double(currentEffects.locationObjects.count % 5) * 0.04
         let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset,
-                                        sourceLanguage: declaredContentLanguage)
+                                        sourceLanguage: declaredContentLanguage,
+                                        styleId: styleId)
         var effects = currentEffects
         effects.locationObjects.append(badge)
         currentEffects = effects
@@ -451,6 +489,46 @@ extension StoryComposerViewModel {
         stickers.append(sticker)
         effects.stickerObjects = stickers
         currentEffects = effects
+        // Sélectionné à la pose, comme une décoration (#4824) : la feuille se
+        // referme sur le geste, et l'auteur doit retrouver ce qu'il vient de
+        // poser sous ses poignées, pas le chercher.
+        selectedElementId = sticker.id
+        bringToFront(id: sticker.id)
+        return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
+    }
+
+    /// **Pose une DÉCORATION** — un gabarit et ses emplacements déjà figés
+    /// (#4716).
+    ///
+    /// Le placement, la cascade et le z-order sont ceux de `addSticker(emoji:)` :
+    /// une décoration est un sticker, pas une sixième famille de scène.
+    ///
+    /// Deux choses lui sont propres :
+    /// - **l'échelle vient du GABARIT**, jamais de `StorySticker.posedScale` —
+    ///   ce 2,2 agrandit un glyphe nu, et ferait déborder un cartouche qui
+    ///   mesure déjà son contenu ;
+    /// - **l'emoji de repli est écrit ICI**, pas à la publication : un brouillon
+    ///   relu par une version antérieure — qui ne sait rien du gabarit — doit
+    ///   déjà montrer un glyphe. Même règle que le sticker image juste en
+    ///   dessous.
+    @discardableResult
+    public func addSticker(template: StickerTemplate,
+                           slots: [String: String]) -> StorySticker {
+        let count = currentEffects.stickerObjects?.count ?? 0
+        let offset = Double(count % 5) * 0.04
+        var sticker = StorySticker(emoji: template.fallbackEmoji,
+                                   templateId: template.id,
+                                   slots: slots,
+                                   sourceLanguage: declaredContentLanguage,
+                                   x: 0.5 + offset, y: 0.5 + offset)
+        sticker.scale = template.posedScale
+        sticker.animation = template.animation
+        var effects = currentEffects
+        var stickers = effects.stickerObjects ?? []
+        stickers.append(sticker)
+        effects.stickerObjects = stickers
+        currentEffects = effects
+        selectedElementId = sticker.id
         bringToFront(id: sticker.id)
         return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
     }
@@ -468,13 +546,21 @@ extension StoryComposerViewModel {
     /// L'emoji de repli est écrit ICI, pas à la publication : un brouillon relu
     /// par une version antérieure — qui ne sait rien de l'image — doit déjà
     /// montrer un glyphe.
+    /// - Parameter animatedData: les octets d'un GIF/APNG/WebP/HEICS collé
+    ///   (#3956) — `nil` pour une image fixe, qui ne paie donc rien. Ils sont
+    ///   retenus sous le MÊME id que le bitmap : la couche du canvas essaie les
+    ///   octets d'abord et retombe sur l'image fixe quand il n'y en a pas.
     @discardableResult
     public func addSticker(image: UIImage,
                            provider: String,
-                           scale: Double? = nil) -> StorySticker {
+                           scale: Double? = nil,
+                           animatedData: Data? = nil) -> StorySticker {
         let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
                                  provider: provider, scale: scale)
         registerLoadedImage(image, for: sticker.id)
+        if let animatedData {
+            registerLoadedStickerAnimation(animatedData, for: sticker.id)
+        }
         return sticker
     }
 
@@ -505,7 +591,10 @@ extension StoryComposerViewModel {
         }()
         guard slides.indices.contains(targetSlideIndex) else { return nil }
 
-        let center = CGPoint(x: 0.5, y: 0.5)
+        // La slide CIBLE, pas la courante : ce site peut poser sur une autre
+        // slide, et cascader d'après les objets de la mauvaise donnerait un
+        // décalage sans rapport avec ce que l'auteur voit.
+        let center = nextObjectPosition(in: slides[targetSlideIndex].effects)
         var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
         // inclus : resolvedBackgroundMedia retombe sur le 1er existant). Un fond
@@ -520,7 +609,14 @@ extension StoryComposerViewModel {
             postMediaId: "",
             kind: kind,
             placement: "media",
-            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
+            // **`nil`, et c'est la correction du #5100.** Ce site posait `1.0`
+            // avec un TODO « compute real aspectRatio from asset » : la valeur
+            // était donc une SENTINELLE qui se lisait comme un carré. Les
+            // appelants mesurent ensuite (`setMediaAspectRatio`) ; jusque-là
+            // l'objet doit DIRE qu'il ne sait pas, sans quoi un recadrage tapé
+            // pendant cette fenêtre pose une borne calculée contre 1:1 —
+            // enregistrée, publiée, et impossible à distinguer d'un choix.
+            aspectRatio: nil,
             x: center.x,
             y: center.y,
             scale: 1.0,
@@ -596,6 +692,45 @@ extension StoryComposerViewModel {
         slides[targetIndex].effects = effects
     }
 
+    /// **Adopte une PRÉ-MONTÉE** — l'asset est déjà chez le serveur, l'objet
+    /// cesse d'être local (#5086, vue `4c`).
+    ///
+    /// La recherche se fait par URL LOCALE et non par identifiant d'objet, et
+    /// balaie TOUTES les slides. Deux raisons, chacune décisive :
+    ///
+    /// - la montée est lancée à la POSE, et l'auteur peut déplacer l'objet
+    ///   d'une slide à l'autre pendant qu'elle voyage ; un index de slide
+    ///   capturé au départ désignerait la mauvaise à l'arrivée ;
+    /// - le registre de pré-montée est indexé par FICHIER, parce que c'est le
+    ///   fichier qui monte. Lui faire tenir des identifiants d'objet
+    ///   l'obligerait à suivre les créations et suppressions du document.
+    ///
+    /// Les deux champs se posent ENSEMBLE, et c'est ce qui rend l'adoption
+    /// sûre : la boucle de publication saute tout objet dont `postMediaId` est
+    /// non vide, donc un objet qui porterait l'identifiant sans l'URL distante
+    /// serait publié avec un `file://` que personne ne peut lire.
+    ///
+    /// - Returns: `true` si un objet a été adopté. `false` — l'auteur a retiré
+    ///   le média pendant la montée — n'est pas une erreur : l'appelant y lit
+    ///   qu'il peut oublier cette pré-montée.
+    /// `public` parce que le REGISTRE de pré-montée vit côté app : le SDK
+    /// fournit l'atome — muter le document —, l'app décide QUAND l'appeler.
+    @discardableResult
+    public func adoptPreUploadedMedia(localURL: String, postMediaId: String, remoteURL: String) -> Bool {
+        for slideIdx in slides.indices {
+            var effects = slides[slideIdx].effects
+            guard var medias = effects.mediaObjects,
+                  let mediaIdx = medias.firstIndex(where: { $0.mediaURL == localURL })
+            else { continue }
+            medias[mediaIdx].postMediaId = postMediaId
+            medias[mediaIdx].mediaURL = remoteURL
+            effects.mediaObjects = medias
+            slides[slideIdx].effects = effects
+            return true
+        }
+        return false
+    }
+
     /// Met à jour l'aspectRatio (width/height) d'un media. Appelé après le
     /// pick PhotosPicker / record une fois que l'asset natural size est
     /// mesurée via `UIImage.size` (image) ou `AVAssetTrack.naturalSize` +
@@ -632,17 +767,27 @@ extension StoryComposerViewModel {
     ///   personne d'autre » ;
     /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
     ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
-    @discardableResult
     /// **`public` parce que l'étagère des sons s'ouvre aussi depuis le MEUBLE.**
     /// Le composer unifié n'avait aucun chemin vers elle : sa porte « son »
     /// n'enregistrait qu'un vocal, alors que la doctrine de la vue `2c` sépare
     /// justement les deux provenances — un son EMPRUNTÉ devient le fond, une
     /// note vocale ne l'est jamais. C'est cette fonction, et elle seule, qui
     /// pose le premier.
-    public func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+    /// **Un son emprunté, éventuellement ROGNÉ** (#4657).
+    ///
+    /// `trim` porte l'intervalle conservé, en secondes depuis le début de la
+    /// piste. Il se pose en `sourceStart`/`sourceEnd` — **jamais** en découpant
+    /// un fichier : un son de la bibliothèque garde son `soundId`, et le crédit
+    /// de son auteur avec lui. Ré-encoder une copie rognée en ferait un fichier
+    /// anonyme, ce que la doctrine du crédit interdit.
+    ///
+    /// `nil` ⇒ la piste entière, comme avant ce lot.
+    @discardableResult
+    public func addBorrowedSound(_ sound: APISound,
+                                 trim: ClosedRange<TimeInterval>? = nil) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
-        let obj = StoryAudioPlayerObject(
+        var obj = StoryAudioPlayerObject(
             postMediaId: "",
             placement: "overlay",
             x: 0.5,
@@ -660,6 +805,15 @@ extension StoryComposerViewModel {
             soundId: sound.id,
             soundAuthorUsername: sound.uploader?.username
         )
+        // Le rognage se pose sur la SOURCE, pas sur un fichier : c'est ce qui
+        // laisse `soundId` intact, donc le crédit de l'auteur (#4657).
+        // `duration` suit l'intervalle — sans quoi la piste annoncerait sa
+        // longueur entière et le lecteur attendrait après la fin du segment.
+        if let trim {
+            obj.sourceStart = trim.lowerBound
+            obj.sourceEnd = trim.upperBound
+            obj.duration = Float(trim.upperBound - trim.lowerBound)
+        }
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
         audios.append(obj)
@@ -678,7 +832,11 @@ extension StoryComposerViewModel {
     /// d'appel existant ne change de comportement (#4483).
     func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
-        let center = CGPoint(x: 0.5, y: 0.5)
+        // La cascade est SANS EFFET sur un son qui bascule en fond juste après
+        // — un fond n'a pas de position. La calculer quand même coûte un
+        // parcours et évite une branche qui devrait deviner, avant la bascule,
+        // ce que la règle d'auto-fond décidera après.
+        let center = nextObjectPosition(in: currentEffects)
         // Auto-bascule en background si aucun audio n'est déjà en background
         // (ni via isBackground=true, ni via le champ legacy backgroundAudioId).
         let obj = StoryAudioPlayerObject(
@@ -745,6 +903,12 @@ extension StoryComposerViewModel {
         if let img = loadedImages.removeValue(forKey: id) { retiredImages[id] = img }
         if let url = loadedVideoURLs.removeValue(forKey: id) { retiredVideoURLs[id] = url }
         if let url = loadedAudioURLs.removeValue(forKey: id) { retiredAudioURLs[id] = url }
+        // Les octets animés suivent leur bitmap (#3956) : les laisser derrière
+        // ferait grossir le composer d'un GIF par sticker supprimé, et l'undo
+        // ramènerait un sticker figé.
+        if let bytes = loadedStickerAnimations.removeValue(forKey: id) {
+            retiredStickerAnimations[id] = bytes
+        }
         mediaAspectRatios.removeValue(forKey: id)
         zIndexMap.removeValue(forKey: id)
     }
@@ -900,7 +1064,7 @@ extension StoryComposerViewModel {
     /// Contrainte : au plus 1 media visuel en background + 1 audio en background par slide.
     /// Toggle ON sur un élément → les autres du même type sont repassés en foreground.
     /// Toggle OFF → l'élément redevient foreground (aucun autre n'est promu automatiquement).
-    func toggleBackground(id: String) {
+    public func toggleBackground(id: String) {
         var effects = currentEffects
 
         if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == id }) {
@@ -976,9 +1140,23 @@ extension StoryComposerViewModel {
         currentEffects = effects
     }
 
+    /// **Le quart de tour d'un média** (#4082, vue `2d`). La règle vit dans
+    /// `StoryMediaRotation` : elle normalise, et elle porte le SENS du glyphe.
+    ///
+    /// Contrairement au muet, ce geste vaut pour une IMAGE autant que pour une
+    /// vidéo — une photo prise de travers est le cas nominal, pas l'exception.
+    public func rotateMedia(id: String) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects,
+              let i = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[i].rotation = StoryMediaRotation.turned(medias[i].rotation)
+        effects.mediaObjects = medias
+        currentEffects = effects
+    }
+
     /// Mute un-bouton d'une piste VIDÉO (bouton canvas, rangée du panneau
     /// Médias). No-op pour une image — rien à couper.
-    func toggleMediaMute(id: String) {
+    public func toggleMediaMute(id: String) {
         var effects = currentEffects
         guard var medias = effects.mediaObjects,
               let i = medias.firstIndex(where: { $0.id == id }),

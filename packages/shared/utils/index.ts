@@ -13,6 +13,13 @@ export * from './conversation-colors.js';
 export * from './attachment-validators.js';
 export * from './language-normalize.js';
 export * from './notification-strings.js';
+/**
+ * LA LOI DE LA BANNIÈRE (#4454) — une seule, trois clients (iOS, web legacy,
+ * web v3). Elle était écrite deux fois quand le troisième client est arrivé.
+ * AJOUT PUR : aucun export existant n'est modifié, aucun consommateur actuel
+ * n'a à changer.
+ */
+export * from './notification-banner.js';
 export * from './notification-read-bulk.js';
 export * from './duration-format.js';
 export * from './call-transcript.js';

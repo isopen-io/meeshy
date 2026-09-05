@@ -6,16 +6,73 @@ import MeeshySDK
 import MeeshyUI
 
 enum CameraResult {
-    case photo(UIImage)
+    /// **La photo, ET ses octets d'origine** (directive porteur 2026-09-04 :
+    /// « la prise de la photo doit avoir les exif et metadata »).
+    ///
+    /// `AVCapturePhoto.fileDataRepresentation()` rend un fichier COMPLET :
+    /// EXIF, TIFF, marque et modèle de l'appareil, date de prise, temps de
+    /// pose, focale, orientation — et la position si l'app y a droit. Une
+    /// `UIImage` n'en garde RIEN : elle porte des pixels et une orientation, et
+    /// tout le reste est perdu à la construction.
+    ///
+    /// Les octets voyagent donc À CÔTÉ de l'image, `nil` quand la source n'en
+    /// a pas. La sauvegarde en photothèque suivait déjà cette doctrine — « les
+    /// octets ORIGINAUX, pas une `UIImage` ré-encodée » — mais elle vivait dans
+    /// le délégué et ne sortait pas de lui : les quatre consommateurs de ce
+    /// type ré-encodaient tous, chacun de son côté.
+    case photo(UIImage, data: Data?)
     case video(URL)
 }
 
+/// **Le mode dans lequel le viseur s'OUVRE** (#4998, directive porteur
+/// 2026-09-03 : « assure-toi que la caméra se déclenche bien en mode photo et
+/// vidéo sans problème ! »).
+///
+/// L'écran a toujours su faire les deux — deux onglets, deux déclencheurs, deux
+/// sorties — et naissait TOUJOURS en photo. Une porte qui promet un viseur
+/// vidéo (`ComposerOpening.videoCameraReady`) ouvrait donc un viseur photo, et
+/// rien ne rougissait : les deux modes existent, les deux marchent, c'est
+/// l'appariement qui manquait.
+///
+/// > Déplacer une porte d'un écran à l'autre ne déplace pas ce qu'elle PROMET.
+/// > Ici la promesse n'avait même jamais eu de porteur.
+/// **`nonisolated` — sinon sa conformance `Equatable` l'est au MainActor.**
+///
+/// Le fichier compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` : sans
+/// l'annotation, `==` n'est appelable que depuis le main actor, et toute règle
+/// pure qui rend un mode devient intestable — l'erreur tombe alors sur les
+/// SITES d'appel (« main actor-isolated conformance … in nonisolated context »),
+/// jamais sur la déclaration qui en est la cause.
+///
+/// > Une isolation se propage vers le HAUT par les appels. Un type de valeur à
+/// > deux cas peut ainsi retenir sur le main actor toutes les règles qui le
+/// > mentionnent, et l'erreur qu'on lit désigne partout sauf sa source.
+nonisolated enum CameraCaptureMode: Equatable, Sendable {
+    case photo
+    case video
+}
+
 struct CameraView: View {
+    /// Le mode d'ouverture. `.photo` par défaut — les trois appelants
+    /// historiques (conversation, feed, pièces jointes) n'en demandent pas
+    /// d'autre, et leur comportement ne bouge pas d'un pixel.
+    let initialMode: CameraCaptureMode
     let onCapture: (CameraResult) -> Void
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = CameraModel()
-    @State private var isVideoMode = false
+    @State private var isVideoMode: Bool
     @State private var flashMode: AVCaptureDevice.FlashMode = .off
+
+    /// **L'état de mode est SEMÉ à la construction, jamais posé dans un
+    /// `.onAppear`.** Posé après coup, le premier rendu montrerait l'onglet
+    /// Photo puis basculerait sous l'œil — et le déclencheur photo resterait
+    /// tappable pendant cette frame.
+    init(initialMode: CameraCaptureMode = .photo,
+         onCapture: @escaping (CameraResult) -> Void) {
+        self.initialMode = initialMode
+        self.onCapture = onCapture
+        _isVideoMode = State(initialValue: initialMode == .video)
+    }
 
     var body: some View {
         ZStack {
@@ -42,11 +99,23 @@ struct CameraView: View {
                     .animation(.easeOut(duration: 0.15), value: camera.isTakingPhoto)
             }
         }
-        .onAppear { camera.configure() }
+        .onAppear {
+            camera.configure()
+            // **Le micro est armé À L'OUVERTURE quand la porte a promis la
+            // vidéo**, et pas au premier appui sur le déclencheur : sans ça,
+            // l'auteur presse « enregistrer » et attend un prompt d'autorisation
+            // pendant que le viseur, lui, montre déjà la scène qu'il voulait
+            // filmer. Hors de ce cas, le prompt reste attaché à l'onglet Vidéo —
+            // le demander à qui ne prend qu'une photo est ce que le lot
+            // précédent a corrigé.
+            if initialMode == .video {
+                Task { await camera.enableAudioCaptureIfNeeded() }
+            }
+        }
         .onDisappear { camera.stop() }
         .onReceive(camera.$capturedPhotoId) { id in
             guard id != nil, let image = camera.capturedPhoto else { return }
-            onCapture(.photo(image))
+            onCapture(.photo(image, data: camera.capturedPhotoData))
             dismiss()
         }
         .onReceive(camera.$capturedVideoId) { id in
@@ -62,39 +131,10 @@ struct CameraView: View {
     /// Remplace le preview quand l'accès caméra est refusé ou restreint.
     /// Avant, `configure()` sortait en silence et l'utilisateur restait devant
     /// un écran noir sans explication ni recours.
-    private var permissionDeniedPanel: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 44, weight: .light))
-                .foregroundColor(.white.opacity(0.7))
+    /// **Le panneau est EXTRAIT** (#4080) : le viseur en scène en a besoin, et
+    /// deux écrans de refus écrits séparément auraient divergé au premier mot.
+    private var permissionDeniedPanel: some View { CameraPermissionPanel() }
 
-            Text(String(localized: "camera.permission.denied.title",
-                        defaultValue: "Accès à la caméra refusé", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundColor(.white)
-
-            Text(String(localized: "camera.permission.denied.body",
-                        defaultValue: "Autorisez Meeshy à utiliser la caméra pour prendre des photos et des vidéos.",
-                        bundle: .main))
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(.white.opacity(0.7))
-                .multilineTextAlignment(.center)
-
-            Button {
-                MediaPermissionCoordinator.openSettings()
-            } label: {
-                Text(String(localized: "camera.permission.openSettings",
-                            defaultValue: "Ouvrir les Réglages", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 24)
-                    .frame(height: 44)
-                    .background(Capsule().fill(.white))
-            }
-        }
-        .padding(.horizontal, 40)
-        .accessibilityElement(children: .contain)
-    }
 
     // MARK: - Top Bar
 
@@ -126,28 +166,16 @@ struct CameraView: View {
         .padding(.top, 8)
     }
 
-    private var flashIcon: String {
-        switch flashMode {
-        case .on: return "bolt.fill"
-        case .auto: return "bolt.badge.automatic.fill"
-        default: return "bolt.slash.fill"
-        }
-    }
+    // **Le vocabulaire du flash a été EXTRAIT** (#4080) : la barre du viseur en
+    // scène sert les mêmes trois positions, et deux cycles écrits séparément
+    // auraient divergé au premier réglage. `ComposerCameraFlash` en est le site
+    // unique — glyphe, libellé et ordre du cycle.
+    private var flashIcon: String { ComposerCameraFlash.symbol(for: flashMode) }
 
-    private var flashAccessibilityLabel: String {
-        switch flashMode {
-        case .on: return String(localized: "camera.flash.on", defaultValue: "Flash activé", bundle: .main)
-        case .auto: return String(localized: "camera.flash.auto", defaultValue: "Flash automatique", bundle: .main)
-        default: return String(localized: "camera.flash.off", defaultValue: "Flash désactivé", bundle: .main)
-        }
-    }
+    private var flashAccessibilityLabel: String { ComposerCameraFlash.label(for: flashMode) }
 
     private func cycleFlash() {
-        switch flashMode {
-        case .off: flashMode = .on
-        case .on: flashMode = .auto
-        default: flashMode = .off
-        }
+        flashMode = ComposerCameraFlash.next(after: flashMode)
         HapticFeedback.light()
     }
 
@@ -302,6 +330,9 @@ final class CameraModel: NSObject, ObservableObject {
     nonisolated deinit {}
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
+    /// Les octets tels que l'appareil les a produits — EXIF compris. `nil`
+    /// tant qu'aucune photo n'a été prise.
+    var capturedPhotoData: Data?
     var capturedVideoURL: URL?
     @Published var capturedPhotoId: String?
     @Published var capturedVideoId: String?
@@ -462,13 +493,33 @@ final class CameraModel: NSObject, ObservableObject {
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 
+    /// **Peut-on demander un enregistrement à AVFoundation ?** La question est
+    /// posée à `CameraRecordingReadiness`, et elle est POSÉE — c'est tout le
+    /// lot : `startRecording(to:recordingDelegate:)` lève une exception
+    /// Objective-C quand la connexion vidéo manque, et une exception ObjC ne se
+    /// rattrape pas en Swift. Il n'y a pas de « gérer l'erreur » ici, seulement
+    /// de la prévention.
+    private var videoRecordingIsPossible: Bool {
+        let connection = videoOutput.connection(with: .video)
+        return CameraRecordingReadiness.mayStartRecording(
+            sessionIsRunning: session.isRunning,
+            hasVideoConnection: connection != nil,
+            connectionIsActive: connection?.isActive ?? false,
+            connectionIsEnabled: connection?.isEnabled ?? false
+        )
+    }
+
     func startRecording() {
         recordedSegmentURLs = []
         isSwitchingCameraDuringRecording = false
         pendingSwitchPosition = nil
         pendingStopRequested = false
         recordingDuration = 0
-        startSegment()
+        // **Le chrono ne part QU'APRÈS le segment.** L'ordre est la moitié de
+        // la garde : démarrer le minuteur d'abord ferait courir une durée sur
+        // une vidéo que rien n'écrit — un enregistrement fantôme, avec son
+        // indicateur rouge et son compteur qui monte.
+        guard startSegment() else { return }
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.recordingDuration += 0.5
@@ -479,11 +530,41 @@ final class CameraModel: NSObject, ObservableObject {
     /// Starts (or restarts, after a mid-recording camera switch) recording to a
     /// fresh temp file. Does not touch `recordingDuration`/`recordingTimer` so a
     /// segment restart is invisible to the recording-duration UI.
-    private func startSegment() {
+    ///
+    /// **Rend son verdict** : `false` ⇒ AVFoundation n'aurait pas pu écrire, et
+    /// l'appelant doit en tenir compte plutôt que de laisser l'écran croire
+    /// qu'il filme.
+    @discardableResult
+    private func startSegment() -> Bool {
+        guard videoRecordingIsPossible else {
+            Logger.media.error("Video recording refused: no active/enabled capture connection")
+            return false
+        }
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("video_\(UUID().uuidString).mov")
         videoOutput.startRecording(to: tempURL, recordingDelegate: self)
         isRecordingVideo = true
+        return true
+    }
+
+    /// **La sortie d'un enregistrement qui n'écrira rien.**
+    ///
+    /// Elle est NOMMÉE, et pas repliée dans un `return` muet, parce qu'elle
+    /// laisse l'écran dans un état qu'il faut décrire : plus d'indicateur, plus
+    /// de chrono, et les segments déjà pris rendus au système de fichiers. Un
+    /// refus silencieux garderait `isRecordingVideo` à vrai — l'utilisateur
+    /// verrait le point rouge d'une vidéo que personne n'écrit.
+    private func endRecordingWithoutOutput() {
+        isSwitchingCameraDuringRecording = false
+        isRecordingVideo = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        for segment in recordedSegmentURLs {
+            FileManager.default.removeItemLogging(at: segment,
+                                                  context: "discarded recording segment",
+                                                  logger: .media)
+        }
+        recordedSegmentURLs = []
     }
 
     /// Ends the recording. If a camera switch is mid-flight, the stop is queued
@@ -532,8 +613,11 @@ final class CameraModel: NSObject, ObservableObject {
             if pendingStopRequested {
                 pendingStopRequested = false
                 videoOutput.stopRecording()
-            } else {
-                startSegment()
+            } else if !startSegment() {
+                // La connexion a disparu PENDANT la bascule — un cas que le
+                // changement de caméra rend possible par construction. Sans ce
+                // repli, l'enregistrement continuait « en cours » sans sortie.
+                endRecordingWithoutOutput()
             }
             return
         }
@@ -588,6 +672,15 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// **Concatène des pistes DÉJÀ ENCODÉES quand elles le permettent** — le
+    /// contrat de la vue `4b`, pas une optimisation : « valider concatène des
+    /// pistes déjà encodées, ce qui rend la sortie quasi instantanée quelle que
+    /// soit la durée ». Le preset est décidé par `CameraSegmentMergePolicy`
+    /// d'après les formats RÉELLEMENT lus : passthrough sur des segments
+    /// homogènes (le cas nominal — plusieurs `MAINTENIR` sur la même caméra),
+    /// ré-encodage quand une bascule de caméra a produit des dimensions
+    /// différentes, où le passthrough rendrait `nil` et perdrait la prise.
+    ///
     /// Concatenates ordered video segments (each a camera-switch boundary) into
     /// one continuous file via `AVMutableComposition` + export. `nonisolated`
     /// so the composition/export work (CPU-bound, can take a few seconds for
@@ -609,6 +702,11 @@ final class CameraModel: NSObject, ObservableObject {
         else { return nil }
 
         var cursor = CMTime.zero
+        // Les formats des pistes insérées — ce qui décide d'un passthrough
+        // (vue 4b : « concatène des pistes DÉJÀ ENCODÉES »). Voir
+        // `CameraSegmentMergePolicy`.
+        var videoFormats: [SegmentVideoFormat] = []
+        var insertedSegmentCount = 0
         for url in urls {
             let asset = AVURLAsset(url: url)
             let duration: CMTime
@@ -620,9 +718,13 @@ final class CameraModel: NSObject, ObservableObject {
             }
             guard duration.isValid, duration > .zero else { continue }
             let range = CMTimeRange(start: .zero, duration: duration)
+            insertedSegmentCount += 1
             do {
                 if let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first {
                     try videoTrack.insertTimeRange(range, of: assetVideoTrack, at: cursor)
+                    if let description = try await assetVideoTrack.load(.formatDescriptions).first {
+                        videoFormats.append(SegmentVideoFormat(formatDescription: description))
+                    }
                 }
             } catch {
                 Logger.media.error("Failed to insert the video track of a recording segment: \(error.localizedDescription, privacy: .public)")
@@ -636,8 +738,10 @@ final class CameraModel: NSObject, ObservableObject {
             }
             cursor = cursor + duration
         }
+        let preset = CameraSegmentMergePolicy.preset(formats: videoFormats,
+                                                     readableSegmentCount: insertedSegmentCount)
         guard cursor > .zero,
-              let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+              let exportSession = AVAssetExportSession(asset: composition, presetName: preset)
         else { return nil }
 
         let outputURL = FileManager.default.temporaryDirectory
@@ -663,6 +767,9 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image
+            // Les octets D'ORIGINE, publiés à côté de l'image : c'est eux qui
+            // portent l'EXIF, et une `UIImage` ne le rend pas.
+            self.capturedPhotoData = data
             self.capturedPhotoId = UUID().uuidString
         }
         // Persist the ORIGINAL encoded bytes (HEIC/JPEG as captured), not a
@@ -689,18 +796,41 @@ extension CameraModel: AVCaptureFileOutputRecordingDelegate {
 struct CameraPreviewLayer: UIViewRepresentable {
     let session: AVCaptureSession
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer)
-        context.coordinator.previewLayer = previewLayer
+    /// **La couche d'aperçu EST la couche de la vue** (#4080).
+    ///
+    /// Elle était un SOUS-CALQUE dont la frame se posait dans un
+    /// `Task { @MainActor }` depuis `updateUIView`. Deux défauts que la feuille
+    /// ne montrait pas et que la scène a révélés sur appareil :
+    ///
+    /// - la frame arrivait une passe de layout APRÈS la vue, donc l'aperçu
+    ///   naissait à `.zero` — un rectangle NOIR de la taille de la carte, qui
+    ///   ressemble exactement à une caméra qui ne rend rien ;
+    /// - un sous-calque ne suit pas son parent : toute reprise de disposition
+    ///   (rotation, clavier, changement de ratio) le laissait à l'ancienne
+    ///   taille jusqu'au prochain `updateUIView`.
+    ///
+    /// `layerClass` supprime les deux : le système redimensionne la couche avec
+    /// la vue, à chaque passe, sans qu'aucun code ne s'en charge.
+    final class PreviewHost: UIView {
+        nonisolated deinit {}
+        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    }
+
+    func makeUIView(context: Context) -> PreviewHost {
+        let view = PreviewHost()
+        view.backgroundColor = .black
+        view.previewLayer.session = session
+        view.previewLayer.videoGravity = .resizeAspectFill
+        context.coordinator.previewLayer = view.previewLayer
         return view
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        Task { @MainActor in
-            context.coordinator.previewLayer?.frame = uiView.bounds
+    func updateUIView(_ uiView: PreviewHost, context: Context) {
+        // La SESSION peut changer (le meuble en remet une au ré-armement) ;
+        // la frame, elle, n'a plus à être posée — `layerClass` s'en charge.
+        if uiView.previewLayer.session !== session {
+            uiView.previewLayer.session = session
         }
     }
 
@@ -734,7 +864,12 @@ extension View {
         environment(\.storyCameraCapture, StoryCameraCaptureProvider { onCapture in
             AnyView(CameraView { result in
                 switch result {
-                case .photo(let image): onCapture(.photo(image))
+                // Le pont vers le SDK PERD l'EXIF, et c'est son CONTRAT qui
+                // l'impose : `StoryCameraCaptureProvider.photo` ne porte qu'une
+                // `UIImage`. Les octets d'origine s'arrêtent donc ici — ce
+                // chemin sert l'amorce « Caméra » de la page blanche du SDK, pas
+                // le viseur en scène (#4080), qui lit `capturedPhotoData`.
+                case .photo(let image, _): onCapture(.photo(image))
                 case .video(let url):   onCapture(.video(url))
                 }
             })

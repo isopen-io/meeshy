@@ -155,24 +155,14 @@ struct MeeshyApp: App {
                     get: { shouldShowOnboarding && !showSplash && activeGuestSession == nil },
                     set: { _ in }
                 )) {
-                    OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                    WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
-                .overlay(alignment: .top) {
-                    if let toast = toastManager.currentToast {
-                        FeedbackToastView(toast: toast)
-                            .transition(.feedbackToastReveal)
-                            .padding(.top, MeeshySpacing.xxl)
-                            .onTapGesture {
-                                if let action = toastManager.onTapAction {
-                                    action()
-                                }
-                                toastManager.dismiss()
-                            }
-                            .accessibilityIdentifier(MeeshyA11yID.toastContainer)
-                            .zIndex(999)
-                    }
-                }
-                .meeshyAnimation(MeeshyAnimation.springBouncy, value: toastManager.currentToast)
+                // **L'hôte des toasts est un modificateur depuis #4872.** Il
+                // vivait ici, et ici SEULEMENT : un `fullScreenCover` — le
+                // composer — le couvrait, donc tout toast levé de là-haut était
+                // invisible. La forme n'a pas changé ; sa PLACE peut désormais
+                // se répéter sans se recopier.
+                .feedbackToastOverlay()
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
@@ -181,6 +171,21 @@ struct MeeshyApp: App {
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .onOpenURL { url in
+                    // **#5056 — `meeshy://compose-share` n'est pas une
+                    // DESTINATION.** Il ne navigue nulle part : il demande de
+                    // reprendre une fiche que l'extension vient de déposer, et
+                    // c'est le cover racine qui la présente. Le faire passer par
+                    // `DeepLinkParser` aurait demandé un cas d'énumération pour
+                    // quelque chose qui n'est pas un lieu de l'app.
+                    //
+                    // L'identifiant est PASSÉ, pas deviné : deux partages
+                    // rapides se suivent, et reprendre « la plus ancienne »
+                    // ouvrirait la première pièce sur le geste de la seconde.
+                    if ShareComposeLink.shareId(from: url) != nil {
+                        let identifiant = ShareComposeLink.shareId(from: url)
+                        Task { await ShareComposeHandoffConsumer.shared.consumeNext(id: identifiant) }
+                        return
+                    }
                     let destination = DeepLinkParser.parse(url)
                     if case .magicLink = destination {
                         handleAppLevelDeepLink(url)
@@ -271,6 +276,15 @@ struct MeeshyApp: App {
                     // bloquant pour le boot ; un échec laisse le relais sur
                     // disque pour la reprise en avant-plan.
                     Task { await SharePendingSendConsumer.shared.consumeAll() }
+
+                    // **L'entrée externe** (#5056, vue `2a`) — jumelle du
+                    // balayage ci-dessus, et pour la même raison. L'extension
+                    // tente d'ouvrir `meeshy://compose-share` après avoir déposé
+                    // sa fiche, mais `extensionContext.open` peut échouer sans
+                    // un mot : si l'ouverture était le seul déclencheur, la
+                    // pièce serait perdue. Un raccourci ne doit jamais être le
+                    // seul chemin.
+                    Task { await ShareComposeHandoffConsumer.shared.consumeNext() }
 
                     // Wire preference mutations to flush the outbox immediately after
                     // enqueue so changes don't get stuck `.pending` until boot/foreground
@@ -715,7 +729,7 @@ struct MeeshyApp: App {
                                 }
                             }
                         )
-                        Task { await requestPushPermissionIfNeeded() }
+                        Task { await PushPermissionPrompt.onSessionOpened(origin: authManager.sessionOrigin) }
                         Task { await NotificationToastManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
                         // Force a PushKit re-registration on every login so the
@@ -863,13 +877,10 @@ struct MeeshyApp: App {
 
     // MARK: - Push Notifications
 
+    /// Un RELAIS vers le site unique (`PushPermissionPrompt`), jamais une
+    /// seconde copie : le fil d'envoi la déclenche aussi (#5218).
     private func requestPushPermissionIfNeeded() async {
-        await pushManager.checkAuthorizationStatus()
-        if !pushManager.isAuthorized {
-            _ = await pushManager.requestPermission()
-        } else {
-            UIApplication.shared.registerForRemoteNotifications()
-        }
+        await PushPermissionPrompt.requestIfNeeded(using: pushManager)
     }
 
     /// VoIP registration must run unconditionally, before the notification-

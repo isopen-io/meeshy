@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.lang.resolveLastMessagePreview
 
@@ -46,8 +47,28 @@ data class ApiConversation(
     val isActive: Boolean? = null,
     val preferences: ApiConversationPreferences? = null,
     val userPreferences: List<ApiConversationPreferences> = emptyList(),
+    /**
+     * The reader's own [MemberRole], computed server-side
+     * (`currentUserRoleMap`, `services/gateway/src/routes/conversations/core-list.ts`)
+     * and shipped at the conversation root by `conversationMinimalSchema`
+     * (`packages/shared/types/api-schemas.ts`) — authoritative, unlike scanning
+     * [participants], which `GET /conversations` truncates to 5 with no `orderBy`.
+     * `null` when the caller isn't a member, or on a legacy cached row written
+     * before this field existed. See [currentUserRole] (the resolving property).
+     */
+    val currentUserRole: String? = null,
+    /**
+     * The server-computed member count (`memberCount`/`memberCountCapped`,
+     * capped at 199 for non platform-admins) — authoritative, unlike
+     * `participants.size`, which `GET /conversations` truncates to 5. `null`
+     * on a legacy cached row written before this field existed. See
+     * [memberCount] (the resolving property).
+     */
+    @SerialName("memberCount")
+    val serverMemberCount: Int? = null,
 ) {
-    val memberCount: Int get() = participants.size
+    /** Prefers the server-computed count over [participants], which is truncated to 5. */
+    val memberCount: Int get() = serverMemberCount ?: participants.size
 
     /**
      * The effective per-user preferences. The gateway sends the signed-in user's

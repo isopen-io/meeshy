@@ -236,6 +236,34 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
         canonicalRow.filter { $0.effect != nil }
     }
 
+    /// **La rangée canonique appartient au POST** (directive porteur
+    /// 2026-09-01).
+    ///
+    /// > « Enlever les éléments de la rangée canonique car destinés pour les
+    /// > posts (seule entité qui peut avoir un texte spécifiquement pour
+    /// > contenu). »
+    ///
+    /// Les sept outils servent tous la même chose : composer un CHAMP DE TEXTE
+    /// et ce qu'on y joint. Emoji et mention s'insèrent dedans ; photo, caméra,
+    /// fichier, lieu et micro y attachent une pièce. Or une story n'a pas de
+    /// champ de contenu — on y écrit en POSANT un objet texte sur un canvas,
+    /// avec sa police, sa couleur et sa place. Servir la rangée sous une story
+    /// offrirait sept gestes qui visent un champ que l'écran n'a pas.
+    ///
+    /// **Le RÉEL la garde**, et ce n'est pas un oubli : ses canvas sont ses
+    /// médias, comme ceux d'un post, et il se compose depuis le même document.
+    /// Ce qui distingue la story n'est pas d'avoir un canvas — c'est que
+    /// chacun de ses canvas est une unité d'histoire à publier, pas un média de
+    /// la publication.
+    ///
+    /// **Remis en cause le 2026-09-02, RÉTABLI le même jour** (retour porteur) :
+    /// j'y avais servi les outils qui posent un objet de scène, pour réparer un
+    /// défaut que je venais de créer en retirant les rails. Les rails sont
+    /// restaurés — la story se compose par eux et par la rangée contextuelle.
+    static func servedRow(for format: ComposerFormat) -> [ComposerDocumentTool] {
+        format == .story ? [] : servedRow
+    }
+
     /// **Le jeu SF MODERNE — décision produit 2026-08-26 : SF retravaillés
     /// d'abord, glyphes à identité forte « dans un second temps ».**
     ///
@@ -742,6 +770,48 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// La langue DÉCLARÉE du contenu. `nil` ⇒ le serveur détecte.
     let originalLanguage: String?
 
+    /// **LE CANVAS composé sur la scène** (#4756).
+    ///
+    /// Ce type portait déjà « du texte, des pièces jointes, un lieu » — et le
+    /// commentaire de `DocumentComposerDoor` affirmait qu'il ne pouvait PAS
+    /// porter de scène : « il n'a ni slides, ni effets, ni images chargées ».
+    /// C'était vrai de ses slides ; ça ne l'était pas de ses EFFETS, qui sont un
+    /// blob que `CreatePostSchema` accepte depuis toujours.
+    ///
+    /// Mesuré au simulateur le 2026-09-04 : un post composé avec un fond et un
+    /// objet texte publiait une carte de TEXTE NU. Le canvas ne s'arrêtait pas
+    /// faute de modèle — il s'arrêtait faute de champ.
+    ///
+    /// `nil` pour un mood et pour tout post sans scène. Un blob vide à sa place
+    /// ferait croire à une scène composée puis effacée.
+    let storyEffects: StoryEffects?
+
+    /// **Les LÉGENDES par média, clées par URL locale** (#4756).
+    ///
+    /// Écrites par le volet de description en profil Post
+    /// (`ComposerSlideTextRole.applyCaption`), elles n'avaient jusqu'ici aucun
+    /// lecteur sur la voie DOCUMENT — celle que prend tout post du meuble. La
+    /// légende s'affichait dans le composer, se relisait d'une ouverture à
+    /// l'autre, et mourait à l'envoi.
+    ///
+    /// Vide pour un mood, qui n'a pas de média.
+    let mediaCaptions: ComposerMediaCaptions
+
+    /// **Les textes ALTERNATIFS par média, clés par URL locale** (2026-09-05).
+    ///
+    /// Ils étaient saisis (section « Décrire » de l'éditeur d'objet), stockés
+    /// (`documentMediaAlts`, au meuble) et relus — et n'allaient nulle part sur
+    /// la voie DOCUMENT, la seule que prenne un post. Le chemin STORY, lui, les
+    /// portait depuis #4756 : deux voies pour une même saisie, dont une seule
+    /// arrivait.
+    ///
+    /// Vide pour un mood, qui n'a pas de média.
+    let mediaAlts: ComposerMediaCaptions
+
+    /// **`URL source → identifiant d'objet de canvas`** (#5280) — le chaînon
+    /// de l'adoption. Vide pour un post sans scène.
+    let mediaObjectIds: ComposerMediaCaptions
+
     /// **T2.4 — l'interrupteur POST ↔ RÉEL.** `ReelComposition.defaultType`
     /// élit `"REEL"` dès qu'une vidéo, un audio ≥ 3 s ou ≥ 2 images qualifient
     /// (`qualifiesAsReel`) ; ce champ, quand `true`, retient un POST simple
@@ -811,6 +881,17 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             // Un mood ne porte jamais de média local (`localMedia: []`
             // au-dessus) : il ne peut donc jamais qualifier comme réel, et ce
             // champ n'a pas besoin d'un paramètre pour ce geste.
+            // Un mood n'a pas de SCÈNE : sa surface est une grille de dix
+            // emojis et 122 caractères (`ComposerSurfaceKind.mood`). Aucun
+            // geste ne peut alimenter ce champ pour ce format — même raison,
+            // même forme que `mobileTranscription` plus bas.
+            storyEffects: nil,
+            // Un mood n'a pas de média, donc aucune légende par média.
+            mediaCaptions: [:],
+            // Un mood n'a pas de média, donc pas d'alternative non plus.
+            mediaAlts: [:],
+            // Un mood n'a pas de scène : aucun objet de canvas à adopter.
+            mediaObjectIds: [:],
             forcePlainPost: false,
             // Un mood n'a pas d'outil micro (rangée du document seule, T2.6) :
             // aucun geste ne peut jamais alimenter ce champ pour ce format.
@@ -889,7 +970,18 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         discoverabilityPrecision: DiscoverabilityPrecision?,
         originalLanguage: String?,
         mobileTranscription: MobileTranscriptionPayload?,
-        references: [ComposerReference]
+        references: [ComposerReference],
+        /// Le canvas de la slide courante, ou `nil` sans scène (#4756).
+        storyEffects: StoryEffects?,
+        /// Les légendes par média saisies dans le composer (#4756).
+        mediaCaptions: ComposerMediaCaptions,
+        /// Les alternatives textuelles saisies dans l'éditeur d'objet, déjà
+        /// TRADUITES en clés d'URL par le meuble — c'est lui, et lui seul, qui
+        /// tient le pont `identifiant d'objet → URL source`.
+        mediaAlts: ComposerMediaCaptions,
+        /// Le pont `URL source → identifiant d'objet`, tenu par le meuble
+        /// depuis le retour d'`applyContentMedia`.
+        mediaObjectIds: ComposerMediaCaptions
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -909,6 +1001,10 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
             originalLanguage: originalLanguage,
+            storyEffects: storyEffects,
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds,
             forcePlainPost: forcePlainPost,
             mobileTranscription: mobileTranscription
         )
@@ -933,6 +1029,18 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Outils du document", bundle: .main)
     }
 
+    /// **Ce que la rangée basse annonce depuis qu'elle n'a plus d'outils** (#5082).
+    ///
+    /// Les outils sont passés en colonne sous l'avatar ; la rangée ne porte plus
+    /// que la puce de lieu et la capsule de langue — d'où l'on publie, dans
+    /// quelle langue. Deux éléments s'annonçaient « Outils du document » le
+    /// temps d'une mesure : celui qui les porte, et celui qui ne les portait
+    /// plus. **Une étiquette qui survit à son contenu désigne le mauvais.**
+    static var publicationAccessories: String {
+        String(localized: "composer.document.a11y.publicationAccessories",
+               defaultValue: "Lieu et langue de la publication", bundle: .main)
+    }
+
     /// Le libellé du ruban de vignettes (B, #3883) — clé neuve, sur le patron
     /// de `toolRow` : `composer.a11y.removeAttachment` sert déjà le BOUTON de
     /// retrait de chaque vignette, mais aucune clé ne nommait le conteneur.
@@ -948,6 +1056,19 @@ nonisolated enum ComposerDocumentCopy {
     static var mentionStrip: String {
         String(localized: "composer.document.a11y.mentions",
                defaultValue: "Suggestions de mention", bundle: .main)
+    }
+
+    /// **Le mot qu'une bande VIDE affiche** (2026-09-05).
+    ///
+    /// La bande disparaissait quand rien ne correspondait, et l'auteur ne
+    /// pouvait pas distinguer « cette personne n'existe pas » de « la
+    /// fonctionnalité est cassée ». Le SDK dit déjà ce mot sur la même
+    /// question (`mention.suggestions.empty`, catalogue `.module`) ; la clé est
+    /// distincte parce que les deux bundles ne se lisent pas l'un l'autre, la
+    /// phrase est la même parce que c'est la même réponse.
+    static var mentionEmpty: String {
+        String(localized: "composer.mention.empty",
+               defaultValue: "Aucune personne trouvée", bundle: .main)
     }
 
     /// Le libellé du picker de couleur de fond (F2, #3883… F2, #3885) — clé
@@ -1011,6 +1132,19 @@ nonisolated enum ComposerDocumentCopy {
     static var publishError: String {
         String(localized: "feed.post.publish.error",
                defaultValue: "Erreur lors de la publication", bundle: .main)
+    }
+
+    /// **Un format qu'aucun canal ne sait porter** (#4869).
+    ///
+    /// Distincte de `publishError`, et c'est le point : « erreur lors de la
+    /// publication » envoie réessayer, quand rien de ce que l'auteur peut faire
+    /// ne changera l'issue. Une phrase qui nomme la CAUSE lui évite le second
+    /// tap — c'est la même règle que les refus de l'éventail (#4858), un cran
+    /// plus loin dans le geste.
+    static var publishFormatUnsupported: String {
+        String(localized: "composer.publish.format.unsupported",
+               defaultValue: "Ce format ne peut pas encore être publié d'ici",
+               bundle: .main)
     }
 
     /// **Aucune clé neuve pour les six outils** — la famille `composer.attach.*`

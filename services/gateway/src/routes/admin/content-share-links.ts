@@ -58,7 +58,7 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
         properties: {
           offset: { type: 'string', description: 'Pagination offset', default: '0' },
           limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
-          search: { type: 'string', description: 'Search by linkId, identifier, name' },
+          search: { type: 'string', description: 'Search by name — never by a join key (linkId/identifier), cf. #4693' },
           isActive: { type: 'string', enum: ['true', 'false'], description: 'Filter by active status' }
         }
       },
@@ -104,10 +104,23 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
       // Construire les filtres
       const where: any = {};
 
+      // #4693 — la recherche n'interroge plus AUCUNE clé de jointure.
+      //
+      // La réponse ne les sert plus (#4692), mais l'APPARTENANCE de la ligne à
+      // la page répondait encore « ce `linkId` contient-il cette sous-chaîne ? ».
+      // Un secret `mshy_` + 8 base62, comparé sans casse, s'extrait alors
+      // caractère par caractère, au seuil `canManageConversations` — MODERATOR
+      // compris. C'est la classe que #4387 a fermée sur `GET /admin/messages` :
+      // « une SÉLECTION qui dépend du champ révèle autant que le champ ».
+      //
+      // La forme y était coûteuse (le prédicat de protection n'étant pas
+      // exprimable en `where`, il fallait scanner une fenêtre bornée, filtrer,
+      // puis paginer sur les `id` restants). Ici la colonne est connue AVANT la
+      // requête : on ne l'interroge pas. Ce que ça COÛTE, et qui est assumé —
+      // on ne retrouve plus un lien en collant son secret dans la recherche ;
+      // on le retrouve par son nom, ou par la conversation qu'il ouvre.
       if (search) {
         where.OR = [
-          { linkId: { contains: search, mode: 'insensitive' } },
-          { identifier: { contains: search, mode: 'insensitive' } },
           { name: { contains: search, mode: 'insensitive' } }
         ];
       }
@@ -119,18 +132,26 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
       const [shareLinks, totalCount] = await Promise.all([
         fastify.prisma.conversationShareLink.findMany({
           where,
-          // #4157 — `linkId` EST le secret qui permet de REJOINDRE la
-          // conversation (`middleware`/résolution de lien, cf. `content.ts`
-          // ligne ~ci-dessous pour son homologue de recherche) : le servir en
-          // LISTE à tout rôle `canManageConversations` (MODERATOR compris)
-          // revient à distribuer autant d'invitations que de lignes de cette
-          // page. `id` (l'ObjectId, déjà servi) reste la référence OPAQUE sur
-          // laquelle la liste agit ; le secret lui-même ne se lit plus qu'au
-          // travers du geste dédié `POST /share-links/:id/reveal` (S6, motif
-          // écrit, tracé — voir plus bas).
+          // #4157 / #4692 — aucune colonne de `SHARE_LINK_JOIN_KEY_COLUMNS`.
+          //
+          // `linkId` ET `identifier` ouvrent la porte de jointure,
+          // indifféremment (`findShareLinkByKey`) : les servir en LISTE à tout
+          // rôle `canManageConversations` (MODERATOR compris) revient à
+          // distribuer autant d'invitations que de lignes de cette page. Le
+          // premier lot n'avait retiré que `linkId` et appelait `id` « la
+          // référence OPAQUE » — elle ne l'était pas : elle ouvrait la même
+          // porte. #4692 a retiré l'ObjectId de la LOI plutôt que de la liste,
+          // ce qui rend la phrase vraie et laisse à la console le seul
+          // identifiant sur lequel elle AGIT (`DELETE /share-links/:id`,
+          // `POST …/:id/reveal`, la navigation de la page).
+          //
+          // Les deux clés se lisent au geste dédié `POST /share-links/:id/reveal`
+          // (S6, rang souverain, motif écrit, tracé — voir plus bas), qui les
+          // rend TOUTES LES DEUX depuis #4692 : n'en révéler qu'une laisserait
+          // le rang souverain incapable de nommer un lien que l'`identifier`
+          // seul désigne.
           select: {
             id: true,
-            identifier: true,
             name: true,
             description: true,
             maxUses: true,
@@ -187,8 +208,10 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
   /**
    * POST /api/admin/share-links/:id/reveal
    *
-   * Le GESTE dédié qui révèle le `linkId` retiré de la liste ci-dessus (#4157,
-   * critère 3). Rang SOUVERAIN (BIGBOSS seul — `requireSovereign`, pas
+   * Le GESTE dédié qui révèle les DEUX clés de jointure retirées de la liste
+   * ci-dessus — `linkId` et `identifier` (#4157 critère 3, élargi par #4692 :
+   * les deux ouvrent `findShareLinkByKey`, donc en retenir une seule ne
+   * retenait rien). Rang SOUVERAIN (BIGBOSS seul — `requireSovereign`, pas
    * `canManageConversations` : une permission de domaine ne doit pas pouvoir
    * délivrer, en série, le secret de jointure de CHAQUE conversation de la
    * plateforme) ; motif écrit obligatoire, imposé par le schéma de requête
@@ -224,7 +247,11 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
-              properties: { id: { type: 'string' }, linkId: { type: 'string' } }
+              properties: {
+                id: { type: 'string' },
+                linkId: { type: 'string' },
+                identifier: { type: 'string', description: 'Seconde clé de jointure, équivalente à linkId (#4692)' }
+              }
             }
           }
         },
@@ -242,7 +269,7 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
 
       const shareLink = await fastify.prisma.conversationShareLink.findUnique({
         where: { id },
-        select: { id: true, linkId: true }
+        select: { id: true, linkId: true, identifier: true }
       });
 
       if (!shareLink) {
@@ -258,7 +285,7 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
         reason,
       });
 
-      return sendSuccess(reply, { id: shareLink.id, linkId: shareLink.linkId });
+      return sendSuccess(reply, { id: shareLink.id, linkId: shareLink.linkId, identifier: shareLink.identifier });
     } catch (error) {
       logError(fastify.log, 'Reveal admin share link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

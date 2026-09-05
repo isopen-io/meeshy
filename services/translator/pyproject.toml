@@ -19,7 +19,7 @@
 
 [project]
 name = "meeshy-translator"
-version = "1.31.1"
+version = "1.34.0"
 description = "Meeshy Translator - FastAPI ML Service for translation, STT, and TTS"
 readme = "README.md"
 license = { text = "Proprietary" }
@@ -98,6 +98,10 @@ dependencies = [
     # HTTP client (pinned for Prisma compatibility)
     "httpx>=0.24.0,<0.25.0",
     "httpcore>=0.17.0,<0.18.0",
+    # anyio 4.15.0 rend `anyio.abc` inatteignable depuis `import anyio` seul, et
+    # httpcore 0.17.3 l'annote à la création de classe : plafond obligatoire tant
+    # que la paire httpx/httpcore ci-dessus tient. Détail : requirements.txt.
+    "anyio>=4.0.0,<4.15.0",
 
     # HuggingFace transfer acceleration
     "hf_transfer>=0.1.0",

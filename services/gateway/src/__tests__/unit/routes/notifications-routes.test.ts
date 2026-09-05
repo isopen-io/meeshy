@@ -459,7 +459,27 @@ describe('GET /notifications — filtre par type', () => {
     );
 
     expect(result.data.map((n: any) => n.id)).toEqual(['men1', 'men0']);
-    expect(result.pagination.total).toBe(2);
+    // Sans `offset`, la page est servie au CURSEUR depuis #4175 : `hasMore`
+    // vient de la ligne SONDE, et la table n'est plus comptée. C'est ce
+    // `hasMore` qui prouve désormais que le filtre a bien été appliqué EN BASE
+    // — deux mentions dans toute l'inbox, pas deux parmi les vingt dernières.
+    expect(result.pagination.hasMore).toBe(false);
+    expect(result.pagination.form).toBe('keyset');
+    expect(result.pagination.total).toBeUndefined();
+  });
+
+  it('compte encore les mentions quand l’appelant demande un RANG — l’alias déprécié est intact', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'GET', '/notifications');
+    serve(pr, mixedInbox());
+
+    const result: any = await route.handler(
+      makeRequest({ query: { offset: 0, limit: 2, types: 'user_mentioned,mention' } }),
+      reply
+    );
+
+    expect(result.data.map((n: any) => n.id)).toEqual(['men1', 'men0']);
+    expect(result.pagination).toMatchObject({ total: 2, offset: 0, form: 'offset' });
   });
 
   it('déclare types dans le querystring — sinon Fastify le retire de la requête', () => {

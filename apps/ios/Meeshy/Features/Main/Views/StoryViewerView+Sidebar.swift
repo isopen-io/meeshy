@@ -396,7 +396,62 @@ struct StoryActionSidebarView: View {
     @ViewBuilder
     private func sidebarContent(spacing: CGFloat) -> some View {
         VStack(spacing: spacing) {
-            // 1. Reaction (heart) — primary action, brand-colored when active
+            // Les blocs de ce rail ne sont plus NUMÉROTÉS. Ils l'étaient — « 1.
+            // Reaction », « 4. Mute/Unmute » — et déplacer le son d'un cran a
+            // suffi à rendre la moitié de la suite fausse. Un numéro écrit à la
+            // main est une liste recopiée à côté de la liste réelle : elle se
+            // périme au premier réordonnancement, en silence, et personne ne la
+            // corrige puisque rien ne rougit. L'ordre se lit dans le code ; il
+            // n'a pas besoin qu'on le compte à côté (`tasks/lessons.md` § 433).
+            //
+            // **Le son EN TÊTE** (#4508, arbitrage écrit avant d'être codé).
+            //
+            // Il occupait la 5ᵉ position, pour la seule raison qu'il avait été
+            // ajouté au rail après les autres. La cible `2f.png` le place au
+            // sommet, et la raison tient au-delà de la maquette :
+            //
+            // > Le son est le SEUL élément du rail qui décrit ce qui est en
+            // > train de SE PASSER ; tous les autres décrivent ce qu'on peut
+            // > FAIRE. Un état se lit en premier, une action s'atteint au
+            // > pouce.
+            //
+            // Seule la POSITION change : la membership reste
+            // `hasAudibleSound` (une vidéo muette ne montre rien), le geste
+            // reste le même, et le rail garde tous ses boutons — la
+            // composition appartient au porteur (#4508, points 3 et 4).
+            // Mute/Unmute — only shown when the story has genuinely audible
+            // sound (voice note, background audio, or a video carrying a real
+            // audio track). Silent videos keep the button hidden.
+            if railPlan.showsSound {
+                StoryActionButton(
+                    icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                    label: isGlobalMuted
+                        ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
+                        : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main),
+                    isActive: !isGlobalMuted,
+                    activeColor: MeeshyColors.indigo400,
+                    activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
+                ) {
+                    // VoiceOver active un Button par son ACTION d'accessibilité,
+                    // il ne synthétise pas de `TapGesture` — laisser ce closure
+                    // vide rendait le mute inatteignable au lecteur d'écran :
+                    // le bouton était annoncé, focalisable, et le double-tap ne
+                    // faisait rien. Les deux chemins appellent donc le même
+                    // toggle. Pas de double déclenchement : un tap réel est
+                    // capté par le `highPriorityGesture` (qui gagne sur le tap
+                    // interne du Button), et une activation VoiceOver ne passe
+                    // que par ce closure.
+                    toggleGlobalMute()
+                }
+                .highPriorityGesture(
+                    // Le geste haute priorité reste nécessaire : sans lui, les
+                    // gestes parents du reader avalent le tap (cf. régression
+                    // « drags lents mangés par les Buttons »).
+                    TapGesture().onEnded { toggleGlobalMute() }
+                )
+            }
+
+            // Reaction (heart) — primary action, brand-colored when active
             if railPlan.showsReact {
                 StoryActionButton(
                     icon: "heart.fill",
@@ -463,7 +518,7 @@ struct StoryActionSidebarView: View {
                 .zIndex(10)
             }
 
-            // 2. Reply privately (opens DM with story context)
+            // Reply privately (opens DM with story context)
             if railPlan.showsReply {
                 StoryActionButton(
                     icon: "arrowshape.turn.up.left.fill",
@@ -488,7 +543,7 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 3. Forward (send to someone) — label = count when > 0
+            // Forward (send to someone) — label = count when > 0
             // (user spec 2026-05-28: « Compteur des react et des commentaires,
             // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
@@ -503,7 +558,7 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Republier la story — non-auteur, TOUTE audience (D1,
+            // Republier la story — non-auteur, TOUTE audience (D1,
             // 2026-08-19). La mention « story publique » qui figurait ici
             // décrivait le gate `isPublicStory` retiré de `railPlan` : c'est
             // désormais la loi d'audience qui borne le RÉSULTAT
@@ -660,39 +715,8 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Mute/Unmute — only shown when the story has genuinely audible
-            // sound (voice note, background audio, or a video carrying a real
-            // audio track). Silent videos keep the button hidden.
-            if railPlan.showsSound {
-                StoryActionButton(
-                    icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                    label: isGlobalMuted
-                        ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
-                        : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main),
-                    isActive: !isGlobalMuted,
-                    activeColor: MeeshyColors.indigo400,
-                    activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
-                ) {
-                    // VoiceOver active un Button par son ACTION d'accessibilité,
-                    // il ne synthétise pas de `TapGesture` — laisser ce closure
-                    // vide rendait le mute inatteignable au lecteur d'écran :
-                    // le bouton était annoncé, focalisable, et le double-tap ne
-                    // faisait rien. Les deux chemins appellent donc le même
-                    // toggle. Pas de double déclenchement : un tap réel est
-                    // capté par le `highPriorityGesture` (qui gagne sur le tap
-                    // interne du Button), et une activation VoiceOver ne passe
-                    // que par ce closure.
-                    toggleGlobalMute()
-                }
-                .highPriorityGesture(
-                    // Le geste haute priorité reste nécessaire : sans lui, les
-                    // gestes parents du reader avalent le tap (cf. régression
-                    // « drags lents mangés par les Buttons »).
-                    TapGesture().onEnded { toggleGlobalMute() }
-                )
-            }
 
-            // 5. Comments toggle — visible UNIQUEMENT quand au moins un
+            // Comments toggle — visible UNIQUEMENT quand au moins un
             // commentaire existe sur la story (pour TOUS, auteur inclus). Sous
             // la sidebar, la zone d'écriture en bas permet déjà de laisser le
             // premier commentaire, donc un bouton à 0 ne serait que du bruit
@@ -721,7 +745,7 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 6. Traductions — ouvre la BARRE RAPIDE horizontale des langues
+            // Traductions — ouvre la BARRE RAPIDE horizontale des langues
             //    prêtes (directive user 2026-07-26). Le tap toggle
             //    `showLanguageOptions` ; la barre (rendue au-dessus du composer)
             //    porte les langues prêtes + un « + » à droite qui ouvre la

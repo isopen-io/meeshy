@@ -89,7 +89,7 @@ final class FocalAudioFlatTests: XCTestCase {
             messageId: "m1", kind: .standard, text: nil, translation: nil, reply: nil,
             attachments: .audio([MeeshyMessageAttachment(id: "au1", fileName: "a", originalName: "a", mimeType: "audio/mpeg", fileSize: 1)]),
             location: nil, ephemeral: nil, isBlurred: false,
-            isViewOnce: false, isPinned: false, isForwarded: false, editedAt: nil,
+            isViewOnce: false, isPinned: false, forwardAttribution: nil, editedAt: nil,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: nil),
             isMe: false, senderName: "Ali", callNotice: nil, joinNotice: nil

@@ -49,9 +49,61 @@ env:
   # Default to bun, can be overridden by workflow_dispatch
   PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
+# `cancel-in-progress` — VRAI sur une branche de PR, FAUX sur les deux branches
+# d'intégration. C'est la piste (a) de #4395, appliquée telle qu'elle y est
+# écrite.
+#
+# CE QUE LE RÉGLAGE UNIFORME COÛTAIT, mesuré le 2026-09-01 à 22:30 UTC : ONZE
+# runs consécutifs de `dev` annulés, aucune `conclusion` sur la branche depuis
+# 20:51 UTC — près de deux heures pendant lesquelles personne ne pouvait dire
+# si `dev` était vert. Trois de ces onze commits réparaient précisément la CI.
+#
+# ET UN RUN ANNULÉ N'EST PAS GRATUIT : les huit derniers ont tourné de 2,8 à
+# 8,0 minutes avant d'être tués (moyenne 5,6, soit environ un tiers d'un run
+# complet), chacun en éventail sur dix-huit jobs. Le réglage ne fait donc pas
+# l'économie des minutes, il les dépense sans jamais rendre de verdict.
+#
+# L'ASYMÉTRIE QUI AGGRAVE LE TOUT : un run qui aboutit VERT met au moins 16,3
+# minutes (médiane 19,6) ; un run qui aboutit ROUGE conclut en ~3 minutes, en
+# s'arrêtant au premier job qui tombe. 65 % des intervalles entre poussées sont
+# sous 16,3 min, mais seulement 27 % sous 2,6 — la famine mange donc les VERTS
+# environ deux fois plus souvent que les ROUGES, et la branche paraît plus rouge
+# qu'elle n'est. C'est l'inverse de ce dont la règle `to-integrate` a besoin,
+# puisqu'elle ne peut se satisfaire que d'un `success`.
+#
+# POURQUOI FAUX PLUTÔT QUE `group: ci-${{ github.sha }}` (la piste (b)) : la
+# file de concurrence ne garde qu'UN run en attente — le dernier arrivé écrase
+# celui qui patientait — donc le run EN COURS va au bout et `dev` obtient
+# toujours un verdict, sans multiplier les runs par le nombre de commits. C'est
+# le comportement sur lequel `pilotage-pages.yml` repose déjà en production
+# depuis le 2026-08-30, et son en-tête le décrit dans ces termes ; cinq autres
+# workflows du dépôt (`release`, `ios-release`, `ios-fastlane-release`,
+# `ios-beta-trigger`, `pilotage-milestone`) portent le même réglage.
+#
+# VÉRIFIÉ SUR `dev`, une heure après la bascule. Ce bloc portait d'abord une
+# réserve — la sémantique de la file n'avait pas pu être confirmée sur
+# `docs.github.com`, bloqué par le proxy de sortie — et la mesure l'a levée :
+#
+#   • DEUX runs sont allés au bout, 28,9 et 32,8 minutes, pendant que SEPT
+#     poussées arrivaient. Sous l'ancien réglage aucun n'aurait dépassé six
+#     minutes ;
+#   • la file NE s'accumule PAS : `run_started_at == created_at` sur les dix
+#     derniers runs, sans exception. Les annulations surviennent à des âges
+#     courts et IRRÉGULIERS (0,23 · 0,60 · 1,17 · 3,00 · 7,97 min), signature
+#     d'un run qui ATTENDAIT et qu'un arrivant plus récent a évincé — un seul
+#     run en attente à la fois.
+#
+# Le symptôme d'une file qui s'accumulerait reste celui-ci, pour qui aurait à
+# le rechercher un jour : `run_started_at` - `created_at` qui GRANDIT d'un run
+# à l'autre. Il est absent. Ne pas lire une file d'attente comme une panne.
+#
+# Et le premier verdict retrouvé a immédiatement montré ce que la famine
+# coûtait : un seul test tombait sur 22 383 — une collision de numéro de leçon
+# que la branche portait depuis des heures, et que onze runs avaient traversée
+# sans jamais conclure.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
 
 jobs:
   # ===========================================================================
@@ -197,6 +249,44 @@ jobs:
       - name: web-v3 pipeline guard
         run: node scripts/check-v3-pipeline.mjs --self-test && node scripts/check-v3-pipeline.mjs
 
+      # Même raison de placement que les gardes ci-dessus : l'invariant porte sur
+      # `ci.yml`, sur `turbo.json` et sur les manifestes des workspaces — la
+      # surface est le DÉPÔT. Il ferme #4761.
+      #
+      # Le dépôt DÉCLARE la dépendance de build à deux endroits corrects
+      # (`turbo.json` → `build.dependsOn: ["^build"]`, et le `workspace:*` du
+      # manifeste), et ce fichier ne consulte ce graphe NULLE PART pour BÂTIR :
+      # mesuré, aucune invocation directe de l'orchestrateur ici, 25 étapes qui
+      # entrent dans un workspace par `cd` et y lancent un script de paquet — donc
+      # HORS du graphe — et 11 copies écrites à la main de « construis le paquet
+      # partagé ». Le jour où `01c49fcfee` a fait importer `@meeshy/shared` par
+      # `apps/web-v3`, les trois jobs de la v3 sont devenus rouges — et LE JOB QUI
+      # CASSE N'EST PAS CELUI QUI A AJOUTÉ L'IMPORT, puisque la personne qui écrit
+      # l'`import` ne touche aucun fichier de CI.
+      #
+      # Le garde ne change rien à l'exécution : il RELIE, par job et par scénario
+      # de gestionnaire de paquets, les dépendances PRODUCTRICES d'un workspace
+      # aux étapes qui les construisent plus haut. « Productrice » n'est pas une
+      # liste recopiée : c'est « a un script `build` dont la sortie, déclarée par
+      # `turbo.json`, est ce que le consommateur importe » — ce qui laisse
+      # `@meeshy/design-tokens` et `@meeshy/icons` tranquilles, deux paquets
+      # d'actifs commités sans étape de build.
+      - name: CI build-order guard
+        run: node scripts/check-ci-build-order.mjs --self-test && node scripts/check-ci-build-order.mjs
+
+      # Même placement, même raison : la surface est le DÉPÔT — ici le fichier
+      # de workflow lui-même. Le garde confronte les jobs DÉCLARÉS de `ci.yml`
+      # aux deux listes écrites à la main dont vit son résumé (le `needs:` de
+      # l'agrégateur, et les lignes de son tableau). Il ferme #4860 : `chaines-v3`
+      # — un gate écrit exprès — ne figurait dans aucune des deux, et
+      # `test-python`, rallumé au sprint 0.3, y était annoncé « disabled » par
+      # un mot écrit à la main pendant qu'il consommait un runner à chaque
+      # poussée. L'agrégateur est reconnu par ce qu'il FAIT (`if: always()` +
+      # écriture dans `$GITHUB_STEP_SUMMARY`), jamais par son nom : le renommer
+      # ne doit pas éteindre le garde en silence.
+      - name: CI summary coverage guard
+        run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
+
       # Même raison de placement que les trois gardes ci-dessus : l'invariant
       # porte sur les quatre `docker-compose*.yml` de `infrastructure/docker/compose/`
       # et sur les deux modèles d'environnement — la surface est le DÉPÔT.
@@ -305,6 +395,18 @@ jobs:
       # cette étape le manifeste est absent et la garde de non-vacuité de
       # `exigeUnManifesteLu` fait échouer le gate, au lieu de le laisser sortir
       # vert sur zéro route.
+      # `bun` EN DUR ici était un trou : `Setup bun` ci-dessus porte
+      # `if: env.PACKAGE_MANAGER == 'bun'`, donc sous
+      # `workflow_dispatch(package_manager: pnpm)` le binaire n'est pas installé
+      # et l'étape qui construit la DÉPENDANCE échoue — pendant que l'étape
+      # suivante, elle, s'adapte au gestionnaire. Trouvé par
+      # `scripts/check-ci-build-order.mjs` [#4761], qui rend chaque étape une
+      # fois par scénario déclaré au lieu de la lire à plat.
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
       - name: Build apps/web-v3 (le manifeste que le balayage lit)
         run: |
           cd apps/web-v3
@@ -316,10 +418,28 @@ jobs:
       # `playwright.config.ts` lève lui-même `next start` (webServer) : la
       # preuve d'un build se prend sur le serveur de production, jamais sur
       # `next dev`.
-      - name: Gate axe — 0 violation serious/critical sur les routes (public)
+      #
+      # LE PROJET ENTIER, JAMAIS TROIS SUITES NOMMÉES — et c'est la CINQUIÈME
+      # fois que cette leçon se paie ici (2026-09-04, #5093). Cette étape
+      # lançait `test:a11y`, `test:cibles` et `test:fil-a11y`, c'est-à-dire
+      # TROIS des ONZE suites du projet `pages`. Les huit autres —
+      # `v3-nouvelle-conversation`, `v3-nouveau-lien` et les six `*-a11y` de
+      # commentaires, contacts, feed, liens, recherche et réglages — n'étaient
+      # lancées par AUCUN job : `test:chaines` les ignore par construction
+      # (`testIgnore`), et aucune étape ne les nommait. Elles portent les
+      # critères de fin de huit issues qu'aucun gate ne pouvait donc prouver.
+      #
+      # `check-v3-pipeline.mjs` était censé l'attraper et ne le voyait pas : sa
+      # lecture de `SUITES_DE_PAGE` ne sait pas lire un `...SPREAD`, et la liste
+      # a cessé d'être un littéral le jour où elle s'est mise à RELEVER ses
+      # suites sur le disque. La garde est corrigée dans le même lot ; le
+      # correctif de fond, lui, est ici : **une étape lance un PROJET, pas une
+      # énumération** — c'est la seule forme qui fasse entrer d'office la suite
+      # écrite demain.
+      - name: Gate pages — axe, cibles tactiles, surimpressions (projet ENTIER)
         run: |
           cd apps/web-v3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:a11y
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:pages
 
       # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
       # étape nommant la v3 en porte un, et le job est de toute façon déjà rouge
@@ -398,6 +518,13 @@ jobs:
       # par le serveur — mais `playwright.config.ts` lève quand même `next start`
       # (la preuve d'un build se prend sur le serveur de production, leçon 339),
       # qui exige ce build.
+      # Même trou que dans `a11y-v3` : `bun` en dur alors que `Setup bun` est
+      # réservé au scénario `bun` (#4761).
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
       - name: Build apps/web-v3 (le serveur que playwright.config.ts lève)
         run: |
           cd apps/web-v3
@@ -416,6 +543,102 @@ jobs:
         if: failure()
         with:
           name: web-v3-lifecycle-traces
+          path: apps/web-v3/test-results/
+          retention-days: 7
+
+  # ===========================================================================
+  # CHAÎNES: les suites de CHAÎNE de la v3 — LEUR PORTEUR
+  # ===========================================================================
+  # Troisième fois que cette leçon se paie ici. Les deux jobs ci-dessus la
+  # portent déjà dans leurs commentaires — « un instrument déclaré n'est pas un
+  # instrument lancé » — et pourtant `v3-network-vitals.spec.ts` et
+  # `v3-lien-expire.spec.ts` n'étaient lancés par AUCUN job : `test:chaines`
+  # n'apparaissait que dans sa propre définition. Les deux portent les critères
+  # de fin de #4495 (une seule requête avant la 302, zéro `<script>` hors
+  # ThemeScript) et #4496 (quatre raisons distinctes, aucun composant client
+  # monté) — donc deux issues qu'aucun gate ne pouvait prouver.
+  #
+  # Ce job invoque le PROJET, jamais les fichiers. `playwright.config.ts` donne
+  # à `chaines` un `testIgnore` et non un `testMatch` : le projet prend tout ce
+  # qui n'est pas une suite de PAGE, si bien qu'une suite neuve y entre d'office
+  # et se trouve lancée sans que personne ait à penser à elle. Nommer les deux
+  # fichiers ici rouvrirait le trou au premier fichier suivant.
+  #
+  # Séparé des deux autres parce que la contrainte est d'EXÉCUTION, pas de
+  # worker : les suites de page importent `routes-emises.mjs` statiquement et
+  # installent le chargeur de Playwright pour tout `.mjs`, ce que le chargement
+  # dynamique des suites de chaîne ne supporte pas (#4510).
+  chaines-v3:
+    name: Chaînes web-v3 (lien partagé, vitals réseau)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache bun dependencies
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
+
+      # Même trou que dans `a11y-v3` : `bun` en dur alors que `Setup bun` est
+      # réservé au scénario `bun` (#4761).
+      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Build apps/web-v3 (le serveur que les suites mesurent)
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Gate chaînes — lien partagé, causes de clôture, vitals réseau
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:chaines
+
+      - name: Upload Playwright traces
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: web-v3-chaines-traces
           path: apps/web-v3/test-results/
           retention-days: 7
 
@@ -545,8 +768,18 @@ jobs:
 
   # ===========================================================================
   # TEST: Python Tests with Coverage
-  # DISABLED: Downloads ML models that fill up GitHub runner disk
-  # Specific tests (audio-pipeline, tts-stt, voice-api) run in dedicated jobs
+  #
+  # RALLUME au sprint 0.3 (`if: true` ci-dessous), et ce bloc a porté
+  # « DISABLED: Downloads ML models that fill up GitHub runner disk » pendant
+  # tout ce temps — trois lignes au-dessus du `if` qui le contredisait. Le
+  # commentaire disait une raison technique précise et plausible, ce qui le
+  # rendait crédible ; c'est ce qui a laissé le résumé annoncer « disabled »
+  # pour un job qui consomme un runner à chaque poussée (#4860).
+  #
+  # Ce qui a rendu le rallumage possible : la découpe par marqueur CPU-only et
+  # un seuil de référence, qui évitent le téléchargement des modèles lourds.
+  # Les suites spécifiques (audio-pipeline, tts-stt, voice-api) gardent leurs
+  # jobs dédiés.
   # ===========================================================================
   test-python:
     name: Test Python (translator)
@@ -1249,7 +1482,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.37.8
+        uses: github/codeql-action/upload-sarif@v4.37.9
         if: always()
         continue-on-error: true
         with:
@@ -1457,7 +1690,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, a11y-v3, lifecycle-v3, test, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [quality, a11y-v3, lifecycle-v3, chaines-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -1471,8 +1704,9 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Chaînes web-v3 | ${{ needs.chaines-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests (Python) | disabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| TTS/STT Integration | ${{ needs.test-tts-stt.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Voice API Tests | ${{ needs.test-voice-api.result }} |" >> $GITHUB_STEP_SUMMARY

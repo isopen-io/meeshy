@@ -4,16 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
 import { getFlag } from './flags';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
-
-/**
- * Égalité de langue conforme au Prisme : `languageCode` (traductions) et
- * `userLanguage` sont verbatim. Un `startsWith` de préfixe sur-matche (`fry`
- * Frisian matche une préférence `fr` ; `fil` Filipino matche `fi`) ET sous-matche
- * (un alias legacy `iw` ne matche pas `he`). SSOT : normalizeLanguageForDedup.
- */
-const sameLanguage = (a?: string, b?: string): boolean =>
-  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 
 export interface TranslationItem {
   languageCode: string;
@@ -109,8 +100,8 @@ function TranslationToggle({
         ? [userLanguage]
         : [];
     for (const lang of order) {
-      if (sameLanguage(originalLanguage, lang)) return originalVersion;
-      const match = translations.find((t) => sameLanguage(t.languageCode, lang));
+      if (isSameLanguage(originalLanguage, lang)) return originalVersion;
+      const match = translations.find((t) => isSameLanguage(t.languageCode, lang));
       if (match) return { ...match, isOriginal: false as const };
     }
     return originalVersion;
@@ -195,7 +186,7 @@ function TranslationToggle({
     const allVersions: Array<TranslationItem & { isOriginal: boolean }> = [
       originalVersion,
       ...translations
-        .filter((t) => !sameLanguage(t.languageCode, originalLanguage))
+        .filter((t) => !isSameLanguage(t.languageCode, originalLanguage))
         .map((t) => ({ ...t, isOriginal: false })),
     ];
     const hasChoice = allVersions.length > 1;
@@ -214,7 +205,7 @@ function TranslationToggle({
         {hasChoice && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {allVersions.map((version) => {
-              const isSelected = sameLanguage(version.languageCode, displayedVersion.languageCode);
+              const isSelected = isSameLanguage(version.languageCode, displayedVersion.languageCode);
               return (
                 <button
                   key={version.languageCode}

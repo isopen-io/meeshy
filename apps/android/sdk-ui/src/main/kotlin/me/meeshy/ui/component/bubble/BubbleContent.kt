@@ -63,6 +63,7 @@ public data class BubbleFile(
     val attachmentId: String,
     val name: String?,
     val sizeBytes: Int? = null,
+    val url: String? = null,
 )
 
 /**
@@ -195,6 +196,14 @@ public data class BubbleContent(
      * deleted" burned tombstone (see [me.meeshy.sdk.model.BubbleRenderKind]).
      */
     val viewOnceCount: Int = 0,
+    /**
+     * True for a conversation notice about itself (someone joined / left, a legacy
+     * call/event summary) rather than a turn at talk. Drives the
+     * [me.meeshy.sdk.model.BubbleRenderKind.Kind.System] arm — the bubble renders as a
+     * centered notice instead of a signed bubble. Set from
+     * `ApiMessage.isSystemMessage` (`messageSource == "system"`).
+     */
+    val isSystem: Boolean = false,
 )
 
 /**

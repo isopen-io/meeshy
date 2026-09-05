@@ -389,13 +389,39 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      # Appel SERVEUR à serveur : il passe par le réseau interne et n'a pas à
-      # ressortir par Traefik.
+      # DEUX adresses de la passerelle, jamais interchangeables :
+      # MEESHY_GATEWAY_URL est l'adresse INTERNE du réseau (appels serveur à
+      # serveur, qui n'ont pas à ressortir par Traefik) ; NEXT_PUBLIC_API_URL
+      # est l'adresse PUBLIQUE, celle que le NAVIGATEUR atteint — le module de
+      # participation (conception § 12.4) y ouvre le socket et y relit /sync.
       - MEESHY_GATEWAY_URL=http://gateway-staging:3000
+      - NEXT_PUBLIC_API_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       # L'URL PUBLIQUE, celle que les plateformes mettent en cache pour og:url.
       # Absente, elle retomberait sur l'en-tête Host — l'hôte INTERNE derrière
       # Traefik — et la carte d'aperçu serait cachée sous deux origines.
       - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
+      # LES PORTÉES DU TRAVAILLEUR DE ZONE (#4472) — l'AUTRE face de la règle
+      # Traefik ci-dessous, dans le MÊME fichier pour ne pas diverger (témoin :
+      # apps/web-v3/__tests__/sw-registration.test.ts). Chaque portée doit être
+      # CAPTURÉE par la règle du routeur ET couverte par V3_ZONE_PREFIXES du
+      # worker legacy. Jamais '/' avant l'étape 7 du § 4.9. Retirer la variable
+      # désarme toute registration — le retour arrière du worker de zone.
+      #
+      # POSÉE SUR CE SERVICE, PAS SUR LE LEGACY. `process.env['V3_SW_PORTEES']`
+      # (`apps/web-v3/app/connecte/fil-vue.ts`) tourne dans le processus Next
+      # de `frontend-v3-staging` — l'image `isopen/meeshy-web-v3`, celle qui
+      # embarque `apps/web-v3`. La déclarer sur `frontend-staging` (l'image
+      # `isopen/meeshy-web`, qui ne contient pas ce code) est INERTE : c'est
+      # le défaut que `scripts/check-v3-pipeline.mjs` ne pouvait pas voir tant
+      # que son `ENV_CHAIN` ignorait la notation `process.env['NOM']`.
+      - V3_SW_PORTEES=/l/,/chats,/chat/
+      # Le périmètre NAVIGABLE du navigateur de zone (#5106) — les chemins
+      # entre lesquels la navigation douce échange les documents. Même loi que
+      # V3_SW_PORTEES : chaque entrée capturée par la règle du routeur
+      # ci-dessous (témoin : sw-registration.test.ts), jamais '/'. Retirer la
+      # variable rend chaque lien à la navigation native. Posée ici pour la
+      # MÊME raison que V3_SW_PORTEES ci-dessus.
+      - V3_NAVIGABLE=/chats,/chat/,/feed,/links,/notifications,/contacts,/search
     depends_on:
       gateway-staging:
         condition: service_healthy
@@ -411,7 +437,63 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathPrefix(`/__v3/_next`)"
+      # LE PÉRIMÈTRE DE LA ZONE v3 SUR STAGING — § 4.9 de la conception.
+      #
+      # `Path` plutôt que `PathPrefix` pour les six chemins humains : `Path` est
+      # une ÉGALITÉ, donc `/about` est pris au legacy sans lui prendre
+      # `/about/quoi-que-ce-soit`, que la v3 ne sert pas et qui répondrait 404.
+      # `PathPrefix` reste la forme juste pour `/__v3/_next` (les bundles) et
+      # `/l/` (le jeton est un sous-chemin).
+      #
+      # LA BARRE FINALE DE `/l/` N'EST PAS UNE COQUETTERIE. `PathPrefix` de
+      # Traefik est un préfixe de CHAÎNE, pas de SEGMENTS : `PathPrefix(`/l`)`
+      # emportait `/login`, `/links` et `/lien` — trois routes que le legacy sert
+      # — et le visiteur y recevait le 404 du routeur Pages de la v3. Mesuré sur
+      # staging le 2026-09-01 ; `/login` est l'appel à l'action de la vitrine, et
+      # il était mort depuis la bascule de l'étape 2. Gardé par l'invariant
+      # « aucun PathPrefix ne vole une route voisine du legacy ».
+      #
+      # ORDRE, dans UN sens seulement (§ 4.4 bis) : un chemin entre d'abord dans
+      # `V3_ZONE_PREFIXES` de `apps/web/public/sw.js`, dont l'image est DÉPLOYÉE,
+      # avant d'être ajouté ici. Sans quoi le worker legacy — enregistré sur
+      # `scope: '/'` — continue de servir son shell depuis le cache aux visiteurs
+      # REVENANTS, et le retour arrière du § 4.3 est inerte chez eux. Gardé par
+      # l'invariant « le worker legacy s'efface devant ce que la règle réclame »
+      # de `scripts/check-v3-pipeline.mjs`, posé une fois par déploiement.
+      #
+      # `/chat/` — l'étape 4 du § 4.9, réécrite au § 12.3 : la porte de l'INVITÉ
+      # (`/chat/:lien`, les états CHOIX, INVITÉ et le bandeau des droits), AVEC sa
+      # barre finale — `PathPrefix(`/chat`)` emporterait `/chats`, que l'invariant
+      # « aucun PathPrefix ne vole une route voisine » refuse. Pas de `Path(`/chat`)` :
+      # la zone ne sert pas `/chat` nu, et la règle ne réclame que des chemins servis.
+      # Son commit ANTÉRIEUR a mis `/chat` dans `V3_ZONE_PREFIXES` (§ 4.4 bis).
+      #
+      # LES SIX ÉCRANS CONNECTÉS (#5075) — `/feed`, `/links`, `/search`,
+      # `/notifications`, `/contacts` et `/settings` avec ses sous-écrans. Ils
+      # sont SERVIS par `apps/web-v3/app` et déjà connus du worker DÉPLOYÉ
+      # (mesuré sur `https://staging.meeshy.me/sw.js` : les dix préfixes y
+      # sont), donc l'ordre « servi ⇒ connu du worker ⇒ réclamé » est tenu et
+      # il ne restait que la réclamation. Sans elle, aucun de ces écrans
+      # n'était éprouvé sur un déploiement : leur condition d'arrêt — « les
+      # tests sur staging sont concluants » — ne pouvait pas être satisfaite.
+      #
+      # `/settings` en `Path` ET `PathPrefix(`/settings/`)`, jamais
+      # `PathPrefix(`/settings`)` nu : ce dernier volerait une route voisine
+      # commençant par le même mot, ce que l'invariant refuse.
+      #
+      # `/post`, `/stories`, `/reels` et `/moods` RESTENT au legacy. Ils sont
+      # dans le worker, et la v3 les sert — mais ce sont des pages de partage
+      # PUBLIC : les réclamer change ce qu'un visiteur extérieur voit d'un lien
+      # reçu, et cela se décide à part. La production, elle, reste en ACTIFS
+      # SEULEMENT (« non, pas encore », porteur, 2026-09-03).
+      #
+      # `/deconnexion` (#5095) — la sortie de la v3. `Path` nu, pas de
+      # `PathPrefix` : le formulaire de l'espace membre POST une seule adresse,
+      # et un préfixe volerait une route voisine que le legacy pourrait servir
+      # un jour. Entré dans `V3_ZONE_PREFIXES` du worker legacy dans le MÊME
+      # lot (§ 4.4 bis) : sans lui, un visiteur revenant recevrait le shell
+      # mis en cache du legacy sur un POST que la v3 doit traiter.
+      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/__v3/rt/`) || PathPrefix(`/__v3/sw`) || PathPrefix(`/l/`) || Path(`/`) || Path(`/about`) || Path(`/contact`) || Path(`/partners`) || Path(`/terms`) || Path(`/privacy`) || Path(`/login`) || Path(`/signup`) || Path(`/chats`) || PathPrefix(`/chats/`) || PathPrefix(`/chat/`) || Path(`/feed`) || Path(`/links`) || Path(`/search`) || Path(`/notifications`) || Path(`/contacts`) || Path(`/settings`) || PathPrefix(`/settings/`) || Path(`/deconnexion`))"
       - "traefik.http.routers.frontend-v3-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3-staging.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3-staging.middlewares=compress@file"

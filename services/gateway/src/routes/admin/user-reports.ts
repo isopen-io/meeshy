@@ -92,7 +92,8 @@ export const SEUILS_REPORT: readonly SeuilReport[] = [
     permission: 'canViewUsers',
     raisonEcart:
       "AUDIT garde les métadonnées (son métier : auditer la modération), " +
-      "jamais `content` — retiré par le handler, même motif qu'attachmentProtectionSelect (l. 683)."
+      "jamais `content` — retiré par le handler, même motif qu'`attachmentProtectionSelect` " +
+      "(`routes/admin/users.ts`)."
   }
 ];
 

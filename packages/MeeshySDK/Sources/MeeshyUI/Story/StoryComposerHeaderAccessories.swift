@@ -153,3 +153,34 @@ public extension View {
     }
 }
 
+// MARK: - Ce que le MEUBLE pose SOUS la scène (#4742)
+
+/// **Le volet que l'hôte glisse entre la scène et la rangée d'outils.**
+///
+/// Même patron que `storyComposerToolRowLeadingAccessory` : l'atelier ne sait
+/// pas ce qu'est une « description de slide » — c'est une notion du MEUBLE, qui
+/// tient le texte, son binding de repli et le chemin vers la saisie. L'atelier
+/// sait seulement OÙ la poser.
+///
+/// `nil` par défaut, et c'est la loi 4 : un atelier monté sans hôte ne peint
+/// aucun volet plutôt qu'un volet vide.
+struct StoryComposerBelowCanvasAccessoryKey: EnvironmentKey {
+    static let defaultValue: StoryComposerHeaderAccessory? = nil
+}
+
+public extension EnvironmentValues {
+    var storyComposerBelowCanvasAccessory: StoryComposerHeaderAccessory? {
+        get { self[StoryComposerBelowCanvasAccessoryKey.self] }
+        set { self[StoryComposerBelowCanvasAccessoryKey.self] = newValue }
+    }
+}
+
+public extension View {
+    /// Pose un accessoire JUSTE SOUS la scène, au-dessus de la rangée d'outils.
+    func storyComposerBelowCanvasAccessory<Accessory: View>(
+        @ViewBuilder _ make: @escaping () -> Accessory
+    ) -> some View {
+        environment(\.storyComposerBelowCanvasAccessory,
+                    StoryComposerHeaderAccessory { AnyView(make()) })
+    }
+}

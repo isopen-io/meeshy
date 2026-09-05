@@ -13,18 +13,8 @@ import { useState, useCallback } from 'react';
 import { useMessageTranslation } from '@/hooks/useMessageTranslation';
 import { getLanguageInfo } from '@meeshy/shared/types';
 import type { User } from '@meeshy/shared/types';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
-
-/**
- * Égalité de langue conforme au Prisme : `targetLanguage` (traductions reçues) et
- * les préférences du lecteur sont verbatim et peuvent être région-tagués (`fr-FR`),
- * 3-lettres (`fra`) ou legacy (`iw`). Sans canonicalisation, `fr` et `fr-FR` sont
- * dédupliqués comme deux traductions distinctes (doublons en cache) et une
- * traduction pertinente pour le lecteur n'est jamais détectée.
- * SSOT : normalizeLanguageForDedup (packages/shared/utils/language-normalize.ts).
- */
-const sameLanguage = (a?: string, b?: string): boolean =>
-  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 
 interface UseStreamTranslationOptions {
   user: User;
@@ -115,7 +105,7 @@ export function useStreamTranslation({
 
         // Chercher si une traduction existe déjà
         const existingIndex = updatedTranslations.findIndex(
-          t => sameLanguage(t.targetLanguage, targetLang)
+          t => isSameLanguage(t.targetLanguage, targetLang)
         );
 
         const translationObject = {
@@ -144,15 +134,16 @@ export function useStreamTranslation({
       };
     });
 
-    // Vérifier si on a des traductions pertinentes pour cet utilisateur
-    const userLanguages = [
-      user.systemLanguage,
-      user.regionalLanguage,
-      user.customDestinationLanguage
-    ].filter(Boolean);
+    // Vérifier si on a des traductions pertinentes pour cet utilisateur.
+    // Le prisme du lecteur descend jusqu'au RANG 4 (locale appareil) : la SSOT
+    // getUserLanguagePreferences ordonne et déduplique system > regional > custom
+    // > deviceLocale. La liste bâtie à la main s'arrêtait au rang 3 — un lecteur
+    // dont le seul signal est la locale appareil ne voyait aucune statistique
+    // incrémentée. § Device Locale, apps/web/CLAUDE.md.
+    const userLanguages = getUserLanguagePreferences(user);
 
     const relevantTranslation = translations.find(t =>
-      userLanguages.some(lang => sameLanguage(lang as string, t.targetLanguage))
+      userLanguages.some(lang => isSameLanguage(lang, t.targetLanguage))
     );
 
     if (relevantTranslation) {

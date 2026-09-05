@@ -1,34 +1,35 @@
 /**
- * **Une bannière doit dire CE QUI vient d'arriver.**
+ * **LA BANNIÈRE DU WEB LEGACY — un LIAGE, plus une loi.**
  *
- * Le toast n'affichait que l'auteur et le contenu : un commentaire sur un réel,
- * une réaction à une story et la publication d'une humeur donnaient toutes
- * trois « elvira ndjiki » / « super ! » (signalé par le porteur produit,
- * 2026-08-30).
+ * Les 233 lignes de règles qui vivaient ici sont remontées dans
+ * `@meeshy/shared/utils/notification-banner` (#4454) : elles avaient DEUX
+ * auteurs (ici et `NotificationBannerPresentation` côté iOS) et en gagnaient un
+ * TROISIÈME avec `apps/web-v3`. Une règle écrite trois fois diverge trois fois ;
+ * l'issue le dit en toutes lettres — « le lot commence par remonter la loi web,
+ * pas par la recopier ».
  *
- * Miroir web de `NotificationBannerPresentation` (iOS,
- * `packages/MeeshySDK/Sources/MeeshySDK/Notifications/`). Les sept cadrages :
+ * CE QUI RESTE ICI, ET RIEN D'AUTRE : les trois conventions de FORMULATION de
+ * ce client — comment il nomme un acteur inconnu, comment il résume une pièce
+ * jointe, ce qu'il dit quand le serveur n'a servi aucune phrase. Elles portent
+ * des littéraux de langue et des types propres à cette application ; les
+ * remonter aurait fait de la loi partagée un module d'interface déguisé.
  *
- * | cas | titre | corps |
- * |---|---|---|
- * | commentaire de contenu | X a commenté une story / un réel / un post | vignette + commentaire |
- * | nouvelle publication | X a publié un réel / une humeur / un post / une story | vignette + contenu |
- * | message privé | X | message |
- * | message de groupe | X dans « nom du groupe » | message / média / indicateur |
- * | relation acceptée | X a accepté votre demande | — |
- * | demande de relation | X veut se connecter | — |
- * | réaction à un contenu | X a réagi à votre story / … / commentaire | vignette + réaction |
- *
- * **La phrase d'action vient du SERVEUR** (`buildNotificationDisplay`, i18n
- * serveur à la langue résolue du destinataire) et n'est jamais réécrite ici :
- * le repli client n'existe que pour les lignes anciennes et les types que le
- * builder serveur ne couvre pas.
+ * **L'API PUBLIQUE DE CE MODULE NE CHANGE PAS D'UN CARACTÈRE.** Ses appelants
+ * — et ses seize témoins — ne voient aucune différence : c'est ce qui prouve
+ * que le déplacement n'a rien changé au comportement.
  */
 
 import {
-  NotificationTypeEnum,
-  type Notification,
-} from '@/types/notification';
+  buildNotificationBanner as loiDeLaBanniere,
+  buildNotificationBannerBody as loiDuCorps,
+  buildNotificationHeadline as loiDuTitre,
+  notificationBannerFraming,
+  type ConventionsDuClient,
+  type NotificationBanner,
+} from '@meeshy/shared/utils/notification-banner';
+
+import type { Notification } from '@/types/notification';
+
 import {
   buildNotificationTitle,
   formatMessagePreview,
@@ -37,197 +38,44 @@ import {
 
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
 
-export type NotificationBanner = {
-  /** Ligne 1 : QUI, et QUOI. Jamais vide. */
-  readonly headline: string;
-  /** Ligne 2 : la charge. `null` quand la ligne 1 se suffit. */
-  readonly body: string | null;
-  /** La réaction, rendue COMME une réaction — `null` si la phrase la porte déjà. */
-  readonly reactionBadge: string | null;
-  /** Vignette du contenu visé. `null` ⇒ la bannière pose son icône typée. */
-  readonly thumbnailUrl: string | null;
+export { notificationBannerFraming };
+export type { NotificationBanner };
+
+/**
+ * LES CONVENTIONS DE CE CLIENT, liées UNE fois. Les passer à chaque appel
+ * aurait fait de chaque site d'appel une occasion d'en oublier une.
+ */
+const CONVENTIONS: ConventionsDuClient = {
+  nomDeLActeur: (acteur) => getActorDisplayName(acteur as Notification['actor']),
+  apercuDeMessage: (contenu, piecesJointes) =>
+    formatMessagePreview(contenu, piecesJointes as unknown[] | undefined),
+  titreDeRepli: (notification, t) => buildNotificationTitle(notification as Notification, t),
 };
 
-/**
- * Les trois familles de cadrage. Le TYPE décide, jamais la forme des champs :
- * sur le fil temps réel `subtitle` porte le nom du GROUPE pour un message et la
- * PHRASE D'ACTION pour tout le reste — deux sens pour un champ, et seul le type
- * les sépare.
- */
-type BannerFraming = 'conversation' | 'relation' | 'action';
-
-const CONVERSATION_TYPES = new Set<string>([
-  NotificationTypeEnum.NEW_MESSAGE,
-  NotificationTypeEnum.MESSAGE_REPLY,
-  NotificationTypeEnum.USER_MENTIONED,
-  NotificationTypeEnum.MESSAGE_REACTION,
-]);
-
-const RELATION_TYPES = new Set<string>([
-  NotificationTypeEnum.CONTACT_REQUEST,
-  NotificationTypeEnum.CONTACT_ACCEPTED,
-  NotificationTypeEnum.FRIEND_REQUEST,
-  NotificationTypeEnum.FRIEND_ACCEPTED,
-]);
-
-const REACTION_TYPES = new Set<string>([
-  NotificationTypeEnum.MESSAGE_REACTION,
-  NotificationTypeEnum.POST_LIKE,
-  NotificationTypeEnum.STORY_REACTION,
-  NotificationTypeEnum.STATUS_REACTION,
-  NotificationTypeEnum.COMMENT_LIKE,
-  NotificationTypeEnum.COMMENT_REACTION,
-]);
-
-export function notificationBannerFraming(notification: Notification): BannerFraming {
-  const type = typeof notification.type === 'string' ? notification.type : '';
-  if (CONVERSATION_TYPES.has(type)) return 'conversation';
-  if (RELATION_TYPES.has(type)) return 'relation';
-  return 'action';
-}
-
-/**
- * `metadata` est une union discriminée dont aucun membre ne porte toutes les
- * clés lues ici. On la relit comme un enregistrement de valeurs INCONNUES puis
- * on valide chaque champ — jamais `as any`, qui rendrait `string` une valeur
- * dont on ne sait rien.
- */
-const readString = (source: unknown, key: string): string | null => {
-  if (typeof source !== 'object' || source === null) return null;
-  const value = (source as Record<string, unknown>)[key];
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-};
-
-const nonBlank = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-};
-
-/**
- * Résumé média d'un contenu sans texte — le corps de repli quand l'extrait
- * manque et que la phrase d'action occupe déjà le titre.
- */
-function mediaSummary(notification: Notification, t: TranslateFunction): string | null {
-  switch (readString(notification.metadata, 'mediaType')?.toLowerCase()) {
-    case 'image': return t('attachments.photo');
-    case 'video': return t('attachments.video');
-    case 'audio': return t('attachments.audio');
-    default: return null;
-  }
-}
-
-/**
- * Le titre de la bannière.
- *
- * Deux cadrages coexistent sur le champ `title`, et le discriminant est
- * l'égalité avec le nom de l'acteur :
- *  - fil TEMPS RÉEL — `title` est l'acteur (cadrage `buildPushHeader`, imposé
- *    par la réécriture iOS des Communication Notifications) et `subtitle` porte
- *    la phrase d'action : le titre est leur SOMME ;
- *  - liste REST — `title` est déjà la phrase entière persistée, et `subtitle`
- *    nomme l'entité visée (« Votre réel ») : y ajouter le sous-titre écrirait
- *    « Alice a commenté votre réel Votre réel ».
- */
 export function buildNotificationHeadline(
   notification: Notification,
   t: TranslateFunction,
-  groupName?: string | null
+  groupName?: string | null,
 ): string {
-  const actor = getActorDisplayName(notification.actor);
-
-  if (notificationBannerFraming(notification) === 'conversation') {
-    const isDirect = notification.context?.conversationType === 'direct';
-    const group = nonBlank(groupName) ?? nonBlank(notification.context?.conversationTitle);
-    if (isDirect || !group) return actor;
-    return t('titles.inConversation', { sender: actor, title: group });
-  }
-
-  const title = nonBlank(notification.title);
-  const action = nonBlank(notification.subtitle);
-
-  if (title && title !== actor) return title;
-  if (action) return `${title ?? actor} ${action}`;
-
-  // Ni titre riche ni phrase d'action : lignes anciennes, ou type que le
-  // builder serveur ne couvre pas. Le repli client reprend la main.
-  return buildNotificationTitle(notification, t);
+  return loiDuTitre(notification, t, CONVENTIONS, groupName);
 }
 
 export function buildNotificationBannerBody(
   notification: Notification,
-  t: TranslateFunction
+  t: TranslateFunction,
 ): string | null {
-  const framing = notificationBannerFraming(notification);
-
-  // « Nouvelle demande de contact » sous « Alice veut se connecter » dit deux
-  // fois la même chose, la seconde moins bien.
-  if (framing === 'relation') return null;
-
-  const content = nonBlank(notification.content);
-
-  if (framing === 'conversation') {
-    if (!content) return null;
-    const attachments = (notification.metadata as { attachments?: unknown })?.attachments;
-    return formatMessagePreview(content, Array.isArray(attachments) ? attachments : undefined);
-  }
-
-  // Le serveur garantit que la LIGNE DE LISTE n'est jamais vide : à défaut
-  // d'extrait, `content` retombe sur la phrase d'action elle-même (« a publié
-  // une nouvelle story »). Sur une bannière qui porte déjà cette phrase en
-  // titre, la répéter est le doublon que le push dédoublonne de son côté.
-  if (!content) return mediaSummary(notification, t);
-  return content === nonBlank(notification.subtitle)
-    ? mediaSummary(notification, t)
-    : content;
+  return loiDuCorps(notification, t, CONVENTIONS);
 }
 
-/**
- * L'émoji de réaction, sous ses DEUX noms de fil : les éventails sur contenu
- * l'écrivent en `emoji`, ceux sur message en `reactionEmoji`.
- */
-export function buildNotificationReactionBadge(
-  notification: Notification,
-  headline: string
-): string | null {
-  const type = typeof notification.type === 'string' ? notification.type : '';
-  if (!REACTION_TYPES.has(type)) return null;
-
-  const emoji = readString(notification.metadata, 'emoji')
-    ?? readString(notification.metadata, 'reactionEmoji');
-  if (!emoji) return null;
-
-  // Le serveur fusionne déjà l'émoji dans la phrase d'action (« a réagi 🔥 à
-  // votre story ») : le rendre une seconde fois en pastille ferait dire deux
-  // fois la même chose à deux endroits de la même carte.
-  return headline.includes(emoji) ? null : emoji;
-}
-
-export function buildNotificationThumbnail(notification: Notification): string | null {
-  const postThumbnail = readString(notification.metadata, 'postThumbnailUrl');
-  if (postThumbnail) return postThumbnail;
-
-  // Message : la photo de la 1re pièce jointe. Elle est ABSENTE du fil quand le
-  // message est protégé (éphémère / vue unique / flouté / chiffré) — la
-  // passerelle la retient en bloc. Rien à re-garder ici, rien à fabriquer non
-  // plus depuis une autre source.
-  const mime = notification.context?.firstAttachmentMimeType;
-  if (typeof mime !== 'string' || !mime.startsWith('image/')) return null;
-  return nonBlank(notification.context?.firstAttachmentUrl);
-}
+export {
+  buildNotificationReactionBadge,
+  buildNotificationThumbnail,
+} from '@meeshy/shared/utils/notification-banner';
 
 export function buildNotificationBanner(
   notification: Notification,
   t: TranslateFunction,
-  options?: { readonly groupName?: string | null }
+  options?: { readonly groupName?: string | null },
 ): NotificationBanner {
-  const headline = buildNotificationHeadline(notification, t, options?.groupName);
-  return {
-    headline,
-    body: buildNotificationBannerBody(notification, t),
-    reactionBadge: buildNotificationReactionBadge(notification, headline),
-    thumbnailUrl: buildNotificationThumbnail(notification),
-  };
+  return loiDeLaBanniere(notification, t, CONVENTIONS, options);
 }

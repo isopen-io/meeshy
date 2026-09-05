@@ -1,4 +1,4 @@
-import { causeDeCloture } from '@/lib/api/links';
+import { causeDeCloture, type CauseDeCloture } from '@/lib/api/links';
 
 import { estUnJetonServable } from '../destination';
 import { rendDocument } from '../document';
@@ -49,10 +49,19 @@ import { documentDuLienClos } from './vue';
  * son nom, ni sa description, ni son créateur, que la passerelle sert pourtant
  * en entier. La planche dessine une ligne « Conversation » ; c'est l'écart
  * assumé, et il est pris sur l'exigence de sécurité de l'issue.
+ *
+ * LE STATUT SUIT LA CAUSE, PAS UN 200 CONSTANT (#4933, critère de fin de
+ * `links`). Un lien fermé n'a PLUS RIEN à servir — le HTTP le dit lui-même :
+ * `verification-impossible` (§ 7, « erreur réseau ≠ refus ») est la SEULE
+ * cause qui ne rende pas un lien mort, donc la SEULE en 503 ; les cinq autres
+ * — quatre refus nommés et l'inconnu qui rejoue la même page par prudence
+ * anti-oracle (§ 5.1) — rendent 410, l'exacte sémantique du refus.
  */
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const statutDeLaCause = (cause: CauseDeCloture): number => (cause === 'verification-impossible' ? 503 : 410);
 
 export async function GET(
   _requete: Request,
@@ -61,5 +70,5 @@ export async function GET(
   const { token } = await contexte.params;
   const cause = estUnJetonServable(token) ? await causeDeCloture({ token }) : 'indeterminee';
 
-  return rendDocument(documentDuLienClos({ cause, token }), 200);
+  return rendDocument(documentDuLienClos({ cause, token }), statutDeLaCause(cause));
 }

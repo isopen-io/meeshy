@@ -82,6 +82,7 @@ extension StoryComposerViewModel {
         let slideId = slide.id
         let mediaIds = (slide.effects.mediaObjects ?? []).map(\.id)
         let audioIds = (slide.effects.audioPlayerObjects ?? []).map(\.id)
+        let stickerIds = (slide.effects.stickerObjects ?? []).map(\.id)
         slides.remove(at: index)
         // C9 Inc.3 — retrait PARESSEUX (parité deleteElement) : un slide
         // supprimé reste restaurable par l'undo global avec ses ressources.
@@ -95,6 +96,15 @@ extension StoryComposerViewModel {
         }
         for id in audioIds {
             if let url = loadedAudioURLs.removeValue(forKey: id) { retiredAudioURLs[id] = url }
+            zIndexMap.removeValue(forKey: id)
+        }
+        // Parité `deleteElement` pour les stickers image (#3956) : leurs
+        // ressources partaient avec la slide sans jamais être mises de côté.
+        for id in stickerIds {
+            if let img = loadedImages.removeValue(forKey: id) { retiredImages[id] = img }
+            if let bytes = loadedStickerAnimations.removeValue(forKey: id) {
+                retiredStickerAnimations[id] = bytes
+            }
             zIndexMap.removeValue(forKey: id)
         }
         // Supprimer un slide AVANT le slide courant décale tout le contenu d'un

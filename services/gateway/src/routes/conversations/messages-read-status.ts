@@ -215,7 +215,14 @@ export function registerMarkUnreadRoute(
       const currentParticipant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
 
       if (!currentParticipant) {
-        return sendForbidden(reply, 'Participant not found in this conversation');
+        // #4856 — un 403 sous ce texte annulait la protection qu'il visait :
+        // l'appelant a déjà PROUVÉ son accès à la conversation via
+        // `canAccessConversation` deux lignes plus haut, donc distinguer
+        // « absent » d'« interdit » ici ne renseigne aucun attaquant qui ne
+        // le saurait déjà. C'est un « je ne trouve pas », comme les autres
+        // sites qui protègent la même incohérence (participant introuvable
+        // pour un accès pourtant accordé).
+        return sendNotFound(reply, 'Participant not found in this conversation');
       }
 
       // Find the latest message in the conversation (not sent by the user)

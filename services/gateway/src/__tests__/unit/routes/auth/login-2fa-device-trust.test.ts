@@ -28,10 +28,13 @@
  *
  * NOTE — l'effet gardé ici est `expiresIn` et l'appel à `markSessionTrusted`
  * (qui pose `UserSession.isTrusted` et repousse `expiresAt`), JAMAIS
- * `data.session.isTrusted` : `sessionMinimalSchema`
- * (`packages/shared/types/api-schemas.ts:173`) ne DÉCLARE pas ce champ, donc
- * fast-json-stringify le supprime de toutes les réponses de connexion. C'est
- * un défaut voisin, hors de ce lot, et le suivre ici masquerait celui-ci.
+ * `data.session.isTrusted`. Cette note disait jusqu'à #4535 que le champ était
+ * supprimé du corps servi, faute d'être déclaré par `sessionMinimalSchema` ;
+ * c'était vrai, ça ne l'est plus — il est déclaré depuis
+ * `packages/shared/types/api-schemas/session.ts`, et le corps SÉRIALISÉ le
+ * porte. La séparation reste voulue : ce fichier garde l'EFFET de session,
+ * `session-minimal-is-trusted.test.ts` garde le champ SERVI. Deux gardes, deux
+ * questions — les fondre ferait passer l'une pour l'autre.
  *
  * @jest-environment node
  */

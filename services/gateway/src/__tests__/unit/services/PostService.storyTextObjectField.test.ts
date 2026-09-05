@@ -9,7 +9,8 @@
  *
  * Pins:
  *  1. `PostService.storyTextObjectText` — pure canonical resolver.
- *  2. createPost fills the story search index from a `text`-only overlay.
+ *  2. createPost n'écrit AUCUN `content` dérivé des overlays (#4502 —
+ *     l'assertion était l'inverse jusqu'au 2026-09-02).
  *  3. `triggerStoryTextObjectTranslation` fires a ZMQ job for a `text`-only
  *     overlay (and still for a legacy `content`-only overlay).
  *
@@ -81,8 +82,30 @@ describe('PostService.storyTextObjectText — canonical overlay-text resolver', 
   });
 });
 
-describe('PostService.createPost — story search index from overlays', () => {
-  it('indexes a `text`-only overlay into Post.content (was dropped when reading `.content`)', async () => {
+/**
+ * **INVERSÉ le 2026-09-02** (directive porteur 2026-08-30, #4502).
+ *
+ * Ce témoin gardait la recopie — `createPost` remplissait `Post.content` avec la
+ * concaténation des overlays quand l'auteur n'avait saisi aucune description. Il
+ * était juste, et la propriété qu'il gardait a été RÉVOQUÉE :
+ *
+ * > « Il ne faut plus recopier le texte de scène pour mettre dans le contenu ! »
+ *
+ * Le symptôme que la recopie produisait chez les trois lecteurs : le texte de la
+ * scène rendu DEUX fois — l'objet sur le canvas, et sa copie en légende.
+ *
+ * Il n'est pas SUPPRIMÉ mais retourné, et c'est le point : une propriété
+ * révoquée sans témoin peut revenir par le premier lot qui trouve la recopie
+ * commode. Le témoin garde désormais l'ABSENCE, qui est ce que la directive
+ * demande — et il porte, ici, la raison pour laquelle le retour serait un
+ * défaut.
+ *
+ * Ce qui dépendait de la recopie dérive à la demande (`postSignalText`) : la
+ * seule perte assumée est la recherche d'ADMINISTRATION, qui cherchait dans
+ * `content`.
+ */
+describe('PostService.createPost — le texte de scène ne REJOINT PAS Post.content', () => {
+  it('n’écrit aucun content dérivé des overlays (#4502)', async () => {
     const prisma = buildPrisma();
 
     await makeService(prisma).createPost(
@@ -97,7 +120,7 @@ describe('PostService.createPost — story search index from overlays', () => {
     const contentWrite = prisma.post.update.mock.calls
       .map((c) => c[0] as { data?: { content?: string } })
       .find((arg) => arg?.data?.content !== undefined);
-    expect(contentWrite?.data?.content).toBe('searchable overlay');
+    expect(contentWrite).toBeUndefined();
   });
 });
 

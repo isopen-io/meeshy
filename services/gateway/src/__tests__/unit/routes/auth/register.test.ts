@@ -18,9 +18,32 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Le double d'un limiteur porte les TROIS méthodes que la route emploie, pas
+// seulement `middleware` : depuis #5216 un 400 REND la tentative comptée
+// (`keyFor` + `refund`). Un double partiel n'aurait pas fait rougir un témoin de
+// remboursement — il aurait fait tomber la route en 500 sur `refund is not a
+// function`, très loin du contrat mesuré (§ « un double PARTIEL perd en silence
+// ce que le module gagne »).
+const doubleDeLimiteur = () => ({
+  middleware: jest.fn(() => async () => {}),
+  refund: jest.fn(async (_key: string) => {}),
+  keyFor: jest.fn(() => 'ip:test'),
+});
+
+/** Les DEUX limiteurs de la route, retenus pour que les témoins de remboursement les lisent. */
+const limiteursMontes: Array<ReturnType<typeof doubleDeLimiteur>> = [];
+
 jest.mock('../../../../utils/rate-limiter.js', () => ({
-  createRegisterRateLimiter: jest.fn(() => ({ middleware: jest.fn(() => async () => {}) })),
-  createAuthGlobalRateLimiter: jest.fn(() => ({ middleware: jest.fn(() => async () => {}) })),
+  createRegisterRateLimiter: jest.fn(() => {
+    const l = doubleDeLimiteur();
+    limiteursMontes.push(l);
+    return l;
+  }),
+  createAuthGlobalRateLimiter: jest.fn(() => {
+    const l = doubleDeLimiteur();
+    limiteursMontes.push(l);
+    return l;
+  }),
 }));
 
 const mockGetRequestContext = jest.fn<any>().mockResolvedValue({
@@ -365,44 +388,69 @@ describe('POST /register — phone ownership conflict', () => {
   });
 });
 
-describe('POST /register — duplicate field error', () => {
-  it('returns 400 when username already taken', async () => {
+/**
+ * Les REFUS de formulaire — #5216.
+ *
+ * Ces témoins remplacent trois `describe` qui simulaient un `reject(new
+ * Error('Username déjà utilisé'))` et attendaient un 400. **La production ne
+ * produisait pas ce rejet** : `AuthService.register` rattrapait tout et rendait
+ * `null`, si bien que les branches de la route qui lisaient ce TEXTE étaient
+ * inatteignables. Trois témoins verts attestaient un comportement absent.
+ *
+ * Ce qui se mesure désormais est le contrat réel : un code, un statut, un champ
+ * à surligner — et, pour un pseudo, des remplaçants libres.
+ */
+describe('POST /register — refus typés (#5216)', () => {
+  const refus = (code: string, status: number, field: string, extra: Record<string, unknown> = {}) =>
+    Object.assign(new Error(`refus ${code}`), { code, status, field, ...extra });
+
+  const inscrire = async (app: FastifyInstance) => app.inject({
+    method: 'POST', url: '/register',
+    payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+  });
+
+  it('un pseudo pris rend 409, NOMME son champ et propose des remplaçants', async () => {
     const authService = makeAuthService();
-    authService.register = jest.fn<any>().mockRejectedValue(new Error('Username déjà utilisé'));
+    authService.register = jest.fn<any>().mockRejectedValue(
+      refus('USERNAME_TAKEN', 409, 'username', { suggestions: ['alice1', 'alice7', 'thealice'] }),
+    );
     const { app } = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
-    });
-    expect(res.statusCode).toBe(400);
+
+    const res = await inscrire(app);
+
+    expect(res.statusCode).toBe(409);
+    const body = res.json();
+    expect(body.code).toBe('USERNAME_TAKEN');
+    // `field` et `suggestions` sont étalés à la RACINE par `sendError`, et
+    // fast-json-stringify les retire de la réponse s'ils ne sont pas DÉCLARÉS
+    // au schéma 409. C'est cette moitié-là que le témoin garde.
+    expect(body.field).toBe('username');
+    expect(body.suggestions).toEqual(['alice1', 'alice7', 'thealice']);
     await app.close();
   });
-});
 
-describe('POST /register — invalid email error', () => {
-  it('returns 400 for invalid email format', async () => {
+  it('une adresse prise rend 409 sans suggestion — on ne propose pas d’e-mail de rechange', async () => {
     const authService = makeAuthService();
-    authService.register = jest.fn<any>().mockRejectedValue(new Error('Email invalide'));
+    authService.register = jest.fn<any>().mockRejectedValue(refus('EMAIL_TAKEN', 409, 'email'));
     const { app } = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret123', email: 'bad' },
-    });
-    expect(res.statusCode).toBe(400);
+
+    const res = await inscrire(app);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'EMAIL_TAKEN', field: 'email' });
+    expect(res.json().suggestions).toBeUndefined();
     await app.close();
   });
-});
 
-describe('POST /register — password error', () => {
-  it('returns 400 for weak password', async () => {
+  it('un numéro illisible rend 400 et NOMME son champ', async () => {
     const authService = makeAuthService();
-    authService.register = jest.fn<any>().mockRejectedValue(new Error('mot de passe trop court'));
+    authService.register = jest.fn<any>().mockRejectedValue(refus('PHONE_INVALID', 400, 'phoneNumber'));
     const { app } = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'short', email: 'alice@test.com' },
-    });
+
+    const res = await inscrire(app);
+
     expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ code: 'PHONE_INVALID', field: 'phoneNumber' });
     await app.close();
   });
 });
@@ -469,3 +517,113 @@ describe('POST /register — valid phone transfer token', () => {
 // Le contrat de la porte cible est couvert par
 // `directory-availability.test.ts` ; ce qui suit garde l'ALIAS, y compris
 // l'assertion NÉGATIVE qui empêche l'oracle de revenir.
+
+
+/**
+ * Le REMBOURSEMENT de tentative (#5216).
+ *
+ * `POST /register` tolère trois tentatives par cinq minutes, et le `preHandler`
+ * compte AVANT de savoir ce qu'il compte : une faute de frappe consommait le
+ * même quota qu'une création de compte, et trois corrections fermaient la porte
+ * cinq minutes à quelqu'un qui n'avait rien créé.
+ *
+ * La règle — et les deux moitiés comptent autant :
+ *
+ * - un **400** rend la tentative : la saisie est à corriger, rien n'a été
+ *   touché, rien n'a été appris sur autrui ;
+ * - un **409** la GARDE : il apprend qu'un pseudo ou une adresse EXISTE, et un
+ *   oracle remboursable est un oracle gratuit, donc énumérable à volonté.
+ */
+describe('POST /register — un 400 rend la tentative, un 409 la garde', () => {
+  const refus = (code: string, status: number, field: string) =>
+    Object.assign(new Error(`refus ${code}`), { code, status, field });
+
+  const remboursements = () =>
+    limiteursMontes.reduce((total, l) => total + l.refund.mock.calls.length, 0);
+
+  const inscrireEtCompter = async (register: jest.Mock) => {
+    limiteursMontes.length = 0;
+    const authService = makeAuthService();
+    authService.register = register;
+    const { app } = await buildApp({ authService });
+
+    await app.inject({
+      method: 'POST', url: '/register',
+      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+    });
+
+    const total = remboursements();
+    await app.close();
+    return total;
+  };
+
+  it('un 400 PHONE_INVALID rembourse les DEUX limiteurs de la route', async () => {
+    const total = await inscrireEtCompter(
+      jest.fn<any>().mockRejectedValue(refus('PHONE_INVALID', 400, 'phoneNumber')),
+    );
+
+    expect(total).toBe(2);
+  });
+
+  it('un 409 USERNAME_TAKEN ne rembourse RIEN — l’oracle se paie', async () => {
+    const total = await inscrireEtCompter(
+      jest.fn<any>().mockRejectedValue(refus('USERNAME_TAKEN', 409, 'username')),
+    );
+
+    expect(total).toBe(0);
+  });
+
+  it('un 200 ne rembourse RIEN — une inscription réussie compte', async () => {
+    const total = await inscrireEtCompter(jest.fn<any>().mockResolvedValue({ user: mockUser }));
+
+    expect(total).toBe(0);
+  });
+
+  it('un 500 ne rembourse RIEN — on ne récompense pas ce qui a fait tomber le service', async () => {
+    const total = await inscrireEtCompter(jest.fn<any>().mockRejectedValue(new Error('mongo down')));
+
+    expect(total).toBe(0);
+  });
+
+  it('un refus de VALIDATION rembourse — c’est une saisie à corriger', async () => {
+    limiteursMontes.length = 0;
+    (validateSchema as jest.Mock).mockImplementationOnce(() => {
+      throw new MeeshyError(ErrorCode.VALIDATION_ERROR, 'Données invalides', {
+        errors: [{ path: 'displayName', message: 'Nom affiché requis (ou prénom ET nom)' }],
+        context: 'register',
+      });
+    });
+    const { app } = await buildApp();
+
+    // La charge passe Ajv (le schéma de requête est RÉEL ici) : le 400 mesuré
+    // vient donc bien de la couche Zod du handler, pas du compilateur en amont.
+    const res = await app.inject({
+      method: 'POST', url: '/register',
+      payload: { displayName: 'Alice Smith', email: 'alice@test.com', password: 'secret1234' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    // `field` est étalé à la RACINE et DÉCLARÉ au schéma 400 : sans la
+    // déclaration, fast-json-stringify le retire et le client ne sait pas quel
+    // champ surligner.
+    expect(res.json().field).toBe('displayName');
+    expect(remboursements()).toBe(2);
+    await app.close();
+  });
+
+  it('un jeton de transfert invalide rembourse — la saisie est à corriger', async () => {
+    limiteursMontes.length = 0;
+    const phoneTransferService = makePhoneTransferService();
+    phoneTransferService.getTransferDataByToken = jest.fn<any>().mockResolvedValue({ valid: false });
+    const { app } = await buildApp({ phoneTransferService });
+
+    const res = await app.inject({
+      method: 'POST', url: '/register',
+      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith', phoneTransferToken: 'bad' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(remboursements()).toBe(2);
+    await app.close();
+  });
+});

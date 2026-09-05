@@ -13,6 +13,135 @@ import XCTest
 @MainActor
 final class StoryComposerPublishHandoffTests: XCTestCase {
 
+    // MARK: - La slide VIERGE ne devient pas une story vide (#4730)
+
+    /// **Publier crée un post PAR slide.** Une slide vierge devient donc une
+    /// story qui ne rend RIEN — et comme le bandeau montre la plus récente,
+    /// elle masque la vraie.
+    ///
+    /// Mesuré en production le 2026-09-01 : deux posts `STORY` à 451 ms
+    /// d'intervalle, issus d'UNE publication — l'un peuplé, l'autre avec
+    /// `{"v":3,"scenes":[{"objects":[]}]}`.
+    ///
+    /// `canPublish` ne pouvait pas l'attraper : il demande « y a-t-il DE QUOI
+    /// publier » (`slides.contains { … }`), pas « CETTE slide en vaut-elle
+    /// un ». Le doc-comment de `slideHasContent` nommait déjà la divergence —
+    /// « les deux réponses divergent dès la 2ᵉ slide » — sans que le chemin de
+    /// publication l'appelle jamais.
+    func test_handoffSlides_dropsABlankSlide_soItNeverBecomesAnEmptyStory() {
+        let slides = [Self.slideWithText("coucou", id: "pleine"),
+                      StorySlide(id: "vierge")]
+
+        let result = StoryComposerView.handoffSlides(
+            slides, currentIndex: 0, currentEffects: slides[0].effects, slideImageIds: [])
+
+        XCTAssertEqual(result.map(\.id), ["pleine"],
+                       "Une slide vierge partie en publication devient une story qui ne montre rien.")
+    }
+
+    /// **Le cas qu'un filtre naïf casserait.** La story « fond + musique » n'a
+    /// aucun contenu VISUEL : son audio est la matière narrative, et
+    /// `canPublish` la reconnaît par un second terme que `slideHasContent` ne
+    /// porte pas. La filtrer dessus seul PERDRAIT le contenu de l'auteur —
+    /// pire que le défaut qu'on corrige.
+    func test_handoffSlides_keepsAnAudioOnlySlide_becauseItsSoundIsTheContent() {
+        var son = StoryEffects()
+        son.backgroundAudioId = "sound-1"
+        let slides = [Self.slideWithText("coucou", id: "pleine"),
+                      StorySlide(id: "musique", effects: son)]
+
+        let result = StoryComposerView.handoffSlides(
+            slides, currentIndex: 0, currentEffects: slides[0].effects, slideImageIds: [])
+
+        XCTAssertEqual(result.map(\.id), ["pleine", "musique"])
+    }
+
+    /// Une slide dont le SEUL contenu est son image de fond : le bitmap ne vit
+    /// pas dans `effects` mais dans `slideImages`, sous l'id de la slide. Sans
+    /// cet argument, le filtre jetterait une story-photo.
+    func test_handoffSlides_keepsASlideWhoseOnlyContentIsItsBackgroundImage() {
+        let slides = [Self.slideWithText("coucou", id: "pleine"),
+                      StorySlide(id: "photo")]
+
+        let result = StoryComposerView.handoffSlides(
+            slides, currentIndex: 0, currentEffects: slides[0].effects,
+            slideImageIds: ["photo"])
+
+        XCTAssertEqual(result.map(\.id), ["pleine", "photo"])
+    }
+
+    /// **Si le filtre vide tout, il rend la liste d'origine.**
+    ///
+    /// Une publication qui ne part pas est un bouton SANS EFFET (loi 4), et
+    /// perdre le travail de l'auteur est pire que publier une slide pauvre.
+    /// Ce repli n'arrive que si `canPublish` a dit oui pour une raison que le
+    /// prédicat par slide ne voit pas — c'est-à-dire si le prédicat a tort.
+    func test_handoffSlides_everySlideBlank_returnsThemUnchanged_ratherThanPublishingNothing() {
+        let slides = [StorySlide(id: "a"), StorySlide(id: "b")]
+
+        let result = StoryComposerView.handoffSlides(
+            slides, currentIndex: 0, currentEffects: StoryEffects(), slideImageIds: [])
+
+        XCTAssertEqual(result.map(\.id), ["a", "b"])
+    }
+
+    /// **Le filtre passe APRÈS le rabat des effets du canvas.** Un sticker
+    /// posé sur la slide courante ne vit encore que dans `currentEffects` :
+    /// filtrer avant l'aurait fait disparaître avec sa slide.
+    func test_handoffSlides_currentSlideCarryingOnlyCanvasEffects_survivesTheFilter() {
+        var canvas = StoryEffects()
+        canvas.stickerObjects = [StorySticker(emoji: "\u{2764}\u{FE0F}")]
+        let slides = [Self.slideWithText("coucou", id: "pleine"),
+                      StorySlide(id: "sticker-en-vol")]
+
+        let result = StoryComposerView.handoffSlides(
+            slides, currentIndex: 1, currentEffects: canvas, slideImageIds: [])
+
+        XCTAssertEqual(result.map(\.id), ["pleine", "sticker-en-vol"])
+    }
+
+    /// **Le filtre doit être ALIMENTÉ.** Le paramètre est requis, donc tout
+    /// site d'appel passe quelque chose — mais passer `[]` compilerait et
+    /// jetterait en silence les stories dont le seul contenu est leur image de
+    /// fond. Les deux sites de production doivent lire les clés RÉELLES.
+    ///
+    /// Garde de SOURCE parce que ni `publishAllSlides` ni `snapshotAllSlides`
+    /// ne sont hostables en XCTest (même précédent que la garde d'absence de
+    /// point de suspension, juste au-dessus).
+    func test_bothProductionCallSites_feedTheFilterWithTheRealSlideImages() throws {
+        let code = Self.publicationSource()
+        let appels = code.components(separatedBy: "Self.handoffSlides(").dropFirst()
+        XCTAssertEqual(appels.count, 2,
+                       "Deux sites de production attendus — un troisième doit être vérifié ici.")
+        for (index, appel) in appels.enumerated() {
+            let corps = String(appel.prefix(400))
+            XCTAssertTrue(corps.contains("slideImageIds: Set(viewModel.slideImages.keys)"),
+                          "Le site \(index) alimente le filtre avec autre chose que les images réelles.")
+        }
+    }
+
+    private static func publicationSource() -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/StoryComposerView+Publication.swift")
+        let brut = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        // Les commentaires sont retirés : celui qui explique le filtre CITE
+        // `slideImageIds`, et ferait passer la garde tout seul.
+        return brut.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { ligne -> String in
+                guard let borne = ligne.range(of: "//") else { return String(ligne) }
+                return String(ligne[ligne.startIndex..<borne.lowerBound])
+            }
+            .joined(separator: "\n")
+    }
+
+    private static func slideWithText(_ texte: String, id: String) -> StorySlide {
+        var effets = StoryEffects()
+        effets.textObjects = [StoryTextObject(id: "t-\(id)", text: texte)]
+        return StorySlide(id: id, effects: effets)
+    }
+
     // MARK: - Atome pur
 
     func test_handoffSlides_currentIndexInRange_appliesCurrentEffectsToThatSlideOnly() {
@@ -20,7 +149,7 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         var effects = StoryEffects()
         effects.thumbHash = "current"
 
-        let result = StoryComposerView.handoffSlides(slides, currentIndex: 1, currentEffects: effects)
+        let result = StoryComposerView.handoffSlides(slides, currentIndex: 1, currentEffects: effects, slideImageIds: [])
 
         XCTAssertEqual(result[1].effects.thumbHash, "current")
         XCTAssertNil(result[0].effects.thumbHash, "La slide non courante n'est jamais touchée")
@@ -31,7 +160,7 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         var effects = StoryEffects()
         effects.thumbHash = "current"
 
-        let result = StoryComposerView.handoffSlides(slides, currentIndex: 7, currentEffects: effects)
+        let result = StoryComposerView.handoffSlides(slides, currentIndex: 7, currentEffects: effects, slideImageIds: [])
 
         XCTAssertEqual(result.map(\.id), ["a"])
         XCTAssertNil(result[0].effects.thumbHash)
@@ -40,7 +169,7 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
     func test_handoffSlides_returnsCopy_mutatingResultDoesNotAffectInput() {
         let slides = [StorySlide(id: "a")]
 
-        var result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: StoryEffects())
+        var result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: StoryEffects(), slideImageIds: [])
         result[0].content = "muté après le hand-off"
 
         XCTAssertNil(slides[0].content, "Le composer ne peut plus atteindre ce qui est parti")
@@ -61,7 +190,7 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         effects.textObjects = [StoryTextObject(text: "@alice")]
         let slides = [StorySlide(id: "a", effects: effects)]
 
-        let result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: effects)
+        let result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: effects, slideImageIds: [])
 
         XCTAssertNil(result[0].content, "La légende reste celle de l'auteur, ou rien.")
     }
@@ -72,7 +201,7 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         effects.textObjects = [StoryTextObject(text: "@alice")]
         let slides = [StorySlide(id: "a", content: "coucou", effects: effects)]
 
-        let result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: effects)
+        let result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: effects, slideImageIds: [])
 
         XCTAssertEqual(result[0].content, "coucou")
     }

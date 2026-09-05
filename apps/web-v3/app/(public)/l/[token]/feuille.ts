@@ -52,12 +52,6 @@
 
 const compacte = (feuille: string): string => feuille.replace(/\s*\n\s*/g, '').trim();
 
-export const SOCLE_DU_DOCUMENT = compacte(`
-*,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:var(--text-base);line-height:var(--leading-normal);-webkit-font-smoothing:antialiased}
-:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
-`);
 
 export const FEUILLE_DE_L_ECRAN = compacte(`
 .cadre{max-width:430px;min-height:100vh;margin:0 auto}

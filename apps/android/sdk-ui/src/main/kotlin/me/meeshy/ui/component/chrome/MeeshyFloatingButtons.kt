@@ -24,10 +24,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.chrome.FloatingButtonPosition
@@ -64,6 +69,10 @@ public fun MeeshyFloatingButtons(
     onRightLongPress: () -> Unit,
     leftContentDescription: String,
     rightContentDescription: String,
+    leftStateDescription: String? = null,
+    rightStateDescription: String? = null,
+    leftAccessibilityActions: List<Pair<String, () -> Unit>> = emptyList(),
+    rightAccessibilityActions: List<Pair<String, () -> Unit>> = emptyList(),
     modifier: Modifier = Modifier,
     leftContent: @Composable () -> Unit,
     rightContent: @Composable () -> Unit,
@@ -89,6 +98,8 @@ public fun MeeshyFloatingButtons(
             onTap = onLeftTap,
             onLongPress = onLeftLongPress,
             contentDescription = leftContentDescription,
+            stateDescription = leftStateDescription,
+            accessibilityActions = leftAccessibilityActions,
             travelXPx = travelXPx,
             travelYPx = travelYPx,
             content = leftContent,
@@ -100,6 +111,8 @@ public fun MeeshyFloatingButtons(
             onTap = onRightTap,
             onLongPress = onRightLongPress,
             contentDescription = rightContentDescription,
+            stateDescription = rightStateDescription,
+            accessibilityActions = rightAccessibilityActions,
             travelXPx = travelXPx,
             travelYPx = travelYPx,
             content = rightContent,
@@ -118,7 +131,10 @@ private fun DraggableFloatingButton(
     travelXPx: Float,
     travelYPx: Float,
     content: @Composable () -> Unit,
+    stateDescription: String? = null,
+    accessibilityActions: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
+    val haptic = LocalHapticFeedback.current
     // Position vivante pendant le glissement. La source de verite n'est notifiee
     // qu'au relachement : notifier a chaque pixel parcouru declencherait une
     // ecriture DataStore par image.
@@ -166,7 +182,15 @@ private fun DraggableFloatingButton(
                 scaleX = pressScale
                 scaleY = pressScale
             }
-            .semantics { this.contentDescription = contentDescription }
+            .semantics {
+                this.contentDescription = contentDescription
+                stateDescription?.let { this.stateDescription = it }
+                if (accessibilityActions.isNotEmpty()) {
+                    customActions = accessibilityActions.map { (label, action) ->
+                        CustomAccessibilityAction(label) { action(); true }
+                    }
+                }
+            }
             // combinedClickable et NON un second detectTapGestures : deux
             // pointerInput concurrents se disputent le meme evenement, et un simple
             // tap finissait par etre traite comme un glissement — observe sur
@@ -177,8 +201,14 @@ private fun DraggableFloatingButton(
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onTap,
-                onLongClick = onLongPress,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onTap()
+                },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongPress()
+                },
             )
             .pointerInput(travelXPx, travelYPx) {
                 detectDragGestures(

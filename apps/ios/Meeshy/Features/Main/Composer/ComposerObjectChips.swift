@@ -40,26 +40,39 @@ nonisolated enum ComposerObjectChips {
         /// > sous le doigt, et n'ouvraient rien. La loi 4 dans sa forme la
         /// > plus coûteuse — le contrôle n'est pas absent, il PROMET.
         ///
-        /// **La destination est une BANDE, jamais un outil du rail**, et ce
-        /// n'est pas un rangement : `isServed` cache la rangée dès qu'un outil
-        /// s'ouvre, donc un jeton menant à un outil ne pourrait JAMAIS se
-        /// montrer actif. Le choix de destination est ce qui rend l'état
-        /// encadré de la planche atteignable.
-        var destination: ComposerSceneBand?
+        /// **La destination est une SECTION DE L'ÉDITEUR** depuis la directive
+        /// porteur 2026-09-05 — plus une bande du bas de scène.
+        ///
+        /// Elle a été une `ComposerSceneBand` tant que la première vue portait
+        /// ses propres ateliers ; elle ne peut plus l'être, la première vue
+        /// n'éditant plus rien (`ComposerFirstView`). Le jeton reste ce qu'il
+        /// était — une LECTURE — et ce qu'il ouvre a changé de place : l'écran
+        /// plein, sur la section où cette valeur-là se change.
+        ///
+        /// > Retirer la destination aurait été plus simple et pire : la rangée
+        /// > serait devenue six capsules muettes, et la seule porte vers
+        /// > l'éditeur serait restée l'appui long — un geste qu'on ne découvre
+        /// > pas. Un jeton qui DIT « ALIGN ▭ » et ouvre l'alignement est la
+        /// > forme la plus courte du chemin nominal (loi 7).
+        var destination: ComposerObjectEditorSection?
     }
 
-    /// **Une destination n'est attachée que si sa bande est OUVRABLE.**
+    /// **Une destination n'est attachée que si la FAMILLE la sert.**
     ///
-    /// `ComposerSceneBand.opened` refuse déjà d'ouvrir une bande absente du jeu
-    /// servi ; attacher la destination sans regarder ce jeu fabriquerait un
-    /// jeton qui s'illumine, vibre et n'ouvre rien — exactement le défaut que
-    /// cette moitié de la règle existe pour fermer. Le jour où `.textStyles`
-    /// trouve son hôte (#4083), le jeton STYLE devient actionnable sans qu'une
-    /// ligne change ici : c'est le jeu SERVI qui décide, pas une liste tenue à
-    /// la main.
-    private static func porte(_ bande: ComposerSceneBand,
-                              parmi ouvrables: Set<ComposerSceneBand>) -> ComposerSceneBand? {
-        ouvrables.contains(bande) ? bande : nil
+    /// Le jeu servi ne dépend plus d'un état d'écran — l'éditeur est toujours
+    /// ouvrable — mais de ce que l'éditeur MONTRE pour cette famille :
+    /// `ComposerObjectEditorRail.entries(for:)` en est le juge unique. Un
+    /// sticker n'a pas de panneau d'options, donc un jeton qui pointerait sur
+    /// `.tool(.style)` s'illuminerait, vibrerait, et ouvrirait un écran où la
+    /// section n'existe pas — `selection(forFamily:keeping:)` retomberait
+    /// silencieusement sur la première servie.
+    ///
+    /// > C'est la même loi qu'avant, posée sur la question qui a remplacé
+    /// > l'ancienne : ce n'est plus « cette bande est-elle ouvrable ? » mais
+    /// > « cette famille règle-t-elle cela ? ».
+    private static func porte(_ section: ComposerObjectEditorSection,
+                              pour famille: MeeshySceneObject.Kind) -> ComposerObjectEditorSection? {
+        ComposerObjectEditorRail.entries(for: famille).contains(section) ? section : nil
     }
 
     /// **Un jeton paraît quand il a quelque chose à DIRE** (loi 8). Un style
@@ -79,22 +92,25 @@ nonisolated enum ComposerObjectChips {
     ///   machine qui la teste : un témoin qui lit `.current` rend le même
     ///   verdict avec et sans localisation, donc ne prouve rien.
     static func chips(for text: StoryTextObject,
-                      locale: Locale = .current,
-                      openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
+                      locale: Locale = .current) -> [Chip] {
         var jetons: [Chip] = []
         if let style = text.textStyle, !style.isEmpty {
             jetons.append(Chip(id: "style", label: ComposerObjectChipsCopy.style(styleName(style)),
-                               destination: porte(.textStyles, parmi: openableBands)))
+                               destination: porte(.tool(.style), pour: .text)))
         }
         let taille = LocalizedNumber.exact(Int(text.fontSize.rounded()), locale: locale)
-        jetons.append(Chip(id: "size", label: ComposerObjectChipsCopy.size(taille)))
+        // La TAILLE se règle au curseur du panneau POLICE — la même section que
+        // le style, parce que c'est la même décision typographique.
+        jetons.append(Chip(id: "size", label: ComposerObjectChipsCopy.size(taille),
+                           destination: porte(.tool(.style), pour: .text)))
         if let align = text.textAlign, !align.isEmpty {
-            jetons.append(Chip(id: "align", label: ComposerObjectChipsCopy.align(alignName(align))))
+            jetons.append(Chip(id: "align", label: ComposerObjectChipsCopy.align(alignName(align)),
+                               destination: porte(.tool(.align), pour: .text)))
         }
         if let fenetre = window(start: text.startTime,
                                 duration: text.duration, locale: locale) {
             jetons.append(Chip(id: "window", label: fenetre,
-                               destination: porte(.timeline, parmi: openableBands)))
+                               destination: porte(.timing, pour: .text)))
         }
         return jetons
     }
@@ -148,8 +164,19 @@ nonisolated enum ComposerObjectChips {
     ///
     /// Vérifié À L'ÉCRAN le 2026-08-31 : c'est la seule chose qui séparait une
     /// rangée correcte d'une rangée invisible.
+    ///
+    /// **La moitié « un outil est ouvert » a déménagé au #5010.** Elle vivait
+    /// ici en `!toolIsOpen`, et deux autres rangées du bas portaient — ou ne
+    /// portaient pas — leur propre copie de la même condition. Elle vit
+    /// désormais dans `ComposerCanonicalZone`, qui tient l'INVENTAIRE de ce que
+    /// la zone basse peint et de ce qui cède la place.
+    ///
+    /// Ce qui RESTE ici est ce qui n'appartient qu'aux jetons : une rangée
+    /// vide ne se peint pas. Composer les deux plutôt que de tout déplacer est
+    /// délibéré — la règle partagée ne connaît pas les jetons, et lui apprendre
+    /// `chips.isEmpty` la ferait connaître chaque élément qu'elle gouverne.
     static func isServed(toolIsOpen: Bool, chips: [Chip]) -> Bool {
-        !toolIsOpen && !chips.isEmpty
+        ComposerCanonicalZone.isServed(.objectChips, toolIsOpen: toolIsOpen) && !chips.isEmpty
     }
 
     // MARK: - La résolution par SÉLECTION
@@ -167,8 +194,7 @@ nonisolated enum ComposerObjectChips {
     /// cas la rangée disparaît, plutôt que de peindre un cadre vide (loi 8).
     static func chips(forSelected id: String?,
                       in slide: StorySlide,
-                      locale: Locale = .current,
-                      openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
+                      locale: Locale = .current) -> [Chip] {
         guard let id, let objet = slide.sceneObject(id: id) else { return [] }
         // **La cascade est fermée** (#4591) : `sceneObject(id:)` la porte UNE
         // fois, dans le modèle. Ce qui reste ici est le dispatch par kind — la
@@ -179,14 +205,14 @@ nonisolated enum ComposerObjectChips {
         // sixième famille ne compilera pas tant qu'elle n'aura pas dit ce
         // qu'elle inspecte.
         switch objet {
-        case .text(let o):    return chips(for: o, locale: locale, openableBands: openableBands)
-        case .media(let o):   return chips(for: o, locale: locale, openableBands: openableBands)
-        case .sticker(let o): return chips(for: o, locale: locale, openableBands: openableBands)
-        case .location, .audio:
-            // Ni l'un ni l'autre n'a d'inspecteur : le lieu ne porte que son
-            // nom, et le son n'a pas encore de forme sur la scène (#4579). Ce
-            // `return []` est le MÊME comportement qu'avant — la différence est
-            // qu'il est désormais ÉCRIT au lieu d'être un défaut de cascade.
+        case .text(let o):    return chips(for: o, locale: locale)
+        case .media(let o):   return chips(for: o, locale: locale)
+        case .sticker(let o): return chips(for: o, locale: locale)
+        case .audio(let o):   return chips(for: o, locale: locale)
+        case .place:
+            // Le lieu ne porte que son nom, et il est déjà dit par l'en-tête de
+            // la scène (#4034) : un jeton le répéterait sans rien offrir à
+            // régler. Ce `return []` est ÉCRIT, jamais un défaut de cascade.
             return []
         }
     }
@@ -212,32 +238,66 @@ nonisolated enum ComposerObjectChips {
     /// objet de premier plan (règle produit 2026-07-11, le fond n'est mouvable
     /// que par sa propre porte). Dire le plan explique donc pourquoi le doigt
     /// n'obtient pas le même effet sur deux objets d'apparence semblable.
+    /// - Parameter preUpload: l'état de la pré-montée de CET objet, quand il en
+    ///   a une (#5086, vue `4c`). Il s'ajoute au badge plutôt que d'occuper une
+    ///   surface neuve : la vue `4c` dit l'état de l'asset À CÔTÉ de ce qui le
+    ///   décrit — « porteur · plan content » puis « MONTÉE EN COURS · 34 % » —,
+    ///   et c'est déjà exactement ce que ce badge est.
+    ///
+    ///   `.idle` par défaut : la très grande majorité des objets n'a rien qui
+    ///   monte, et les quatre autres familles n'ont pas d'asset du tout.
     static func badge(forSelected id: String?,
                       in slide: StorySlide,
+                      preUpload: ComposerPreUploadState = .idle,
                       locale: Locale = .current) -> String? {
         guard let id, let objet = slide.sceneObject(id: id) else { return nil }
         // Le PLAN et le RANG viennent de la somme, qui les résout pour les cinq
         // familles — y compris l'asymétrie du `zIndex` optionnel de l'audio.
         // Seul le MOT reste à décider ici : c'est du vocabulaire produit.
-        guard let mot = badgeKind(objet.kind) else { return nil }
-        return badge(kind: mot, isBackground: objet.isBackground,
-                     zIndex: objet.zIndex, locale: locale)
+        // **Plus de `guard let` ici** : `badgeKind` est TOTAL depuis que les
+        // cinq familles ont leur mot. Le seul `nil` qui subsiste est celui du
+        // dessus — l'id qui ne désigne plus rien, un objet supprimé pendant que
+        // la sélection le tenait encore. Un état NOMINAL, pas une lacune.
+        let socle = badge(kind: badgeKind(objet.kind), isBackground: objet.isBackground,
+                          zIndex: objet.zIndex, locale: locale)
+        // **La MONTÉE ne se dit que si elle a quelque chose à dire.** `nil`
+        // plutôt qu'une chaîne vide chez `ComposerPreUploadCopy` : une chaîne
+        // vide se concaténerait en silence et laisserait un séparateur
+        // orphelin — le défaut exact du « Texte : » de VoiceOver.
+        guard let montee = ComposerPreUploadCopy.label(for: preUpload, locale: locale) else {
+            return socle
+        }
+        return "\(socle) · \(montee)"
     }
 
-    /// **Le mot d'un kind — `nil` ⇒ pas de badge.**
+    /// **Le mot d'un kind — TOTAL, plus aucun `nil`.**
     ///
-    /// Le lieu et le son n'en ont pas, et ce n'est pas un oubli : leur mot
-    /// n'existe pas au catalogue (#4559 en tient les dix-neuf), et en inventer
-    /// un ici le mettrait hors de portée du cliquet de localisation.
+    /// **Les CINQ familles ont leur mot depuis le 2026-09-02.**
     ///
-    /// Le `switch` exhaustif remplace le `return nil` implicite de l'ancienne
-    /// cascade : même comportement, décision ÉCRITE.
-    private static func badgeKind(_ kind: MeeshySceneObject.Kind) -> String? {
+    /// Le lieu et le son rendaient `nil`, et la raison écrite était vraie : leur
+    /// mot n'existait pas au catalogue, et en inventer un ici l'aurait mis hors
+    /// de portée du cliquet de localisation. Les deux clés sont désormais
+    /// posées en sept langues (`composer.chip.kind.audio` / `.location`), donc
+    /// la raison est levée et l'absence n'a plus de fondement.
+    ///
+    /// > Une absence JUSTIFIÉE par un manque réparable est une dette, pas une
+    /// > décision. Celle-ci se lisait comme une décision parce qu'elle était
+    /// > bien écrite — et le seul moyen de la distinguer était de relire ce
+    /// > qu'elle invoquait, puis d'aller voir si c'était encore vrai.
+    ///
+    /// Ce que le badge coûtait de ne pas exister : un son sélectionné affichait
+    /// ses jetons sans que le canvas dise ce qui était sélectionné. L'auteur
+    /// réglait une taille sans savoir la taille de QUOI.
+    ///
+    /// Le rendu est désormais TOTAL — plus aucun `nil`, donc plus aucune
+    /// famille silencieuse.
+    private static func badgeKind(_ kind: MeeshySceneObject.Kind) -> String {
         switch kind {
-        case .text:    return ComposerObjectChipsCopy.kindText
-        case .media:   return ComposerObjectChipsCopy.kindMedia
-        case .sticker: return ComposerObjectChipsCopy.kindSticker
-        case .location, .audio: return nil
+        case .text:     return ComposerObjectChipsCopy.kindText
+        case .media:    return ComposerObjectChipsCopy.kindMedia
+        case .sticker:  return ComposerObjectChipsCopy.kindSticker
+        case .audio:    return ComposerObjectChipsCopy.kindAudio
+        case .place: return ComposerObjectChipsCopy.kindLocation
         }
     }
 
@@ -255,36 +315,28 @@ nonisolated enum ComposerObjectChips {
                                              zIndex: LocalizedNumber.exact(zIndex, locale: locale))
     }
 
-    // MARK: - L'état ENCADRÉ, et la bascule qui le produit
+    // MARK: - Ce qu'un jeton OUVRE
 
-    /// **Le jeton actif est celui de la bande OUVERTE.** La planche l'encadre,
-    /// et c'est la seule chose de la rangée que VoiceOver ne peut pas lire dans
-    /// un libellé.
+    /// **La section de l'éditeur qu'un jeton ouvre — `nil` ⇒ il ne fait que
+    /// dire.**
     ///
-    /// Interroger la bande plutôt que de retenir un id à part évite la seule
-    /// panne que cet état puisse avoir : un cadre qui survit à la fermeture de
-    /// ce qu'il désigne. Et la comparaison porte sur la DESTINATION, jamais sur
-    /// « une bande est ouverte » — la palette de fond s'ouvre depuis la rangée
-    /// d'outils basse et ne règle aucun objet.
-    static func activeChipId(chips: [Chip], openedBand: ComposerSceneBand?) -> String? {
-        guard let openedBand else { return nil }
-        return chips.first { $0.destination == openedBand }?.id
-    }
-
-    /// **Taper le jeton actif REFERME sa bande.** Sans bascule, l'auteur n'a
-    /// aucun geste pour ranger ce qu'il vient d'ouvrir depuis le même endroit :
-    /// l'ouverture serait un aller simple.
+    /// Elle a remplacé le couple `activeChipId` / `toggled` (directive porteur
+    /// 2026-09-05). Les deux répondaient à une question qui n'existe plus : la
+    /// destination était une BANDE, montée SOUS la scène, donc simultanément
+    /// visible avec son jeton — d'où un état ENCADRÉ à tenir, et une bascule
+    /// pour la refermer depuis le même doigt.
     ///
-    /// Un jeton SANS destination laisse la bande exactement où elle est — la
-    /// refermer ferait de « TAILLE 140 % », pendant un rognage, un bouton
-    /// d'annulation déguisé.
-    static func toggled(_ chipId: String,
-                        in chips: [Chip],
-                        opened: ComposerSceneBand?) -> ComposerSceneBand? {
-        guard let destination = chips.first(where: { $0.id == chipId })?.destination else {
-            return opened
-        }
-        return opened == destination ? nil : destination
+    /// L'éditeur est MODAL. Rien de la première vue n'est visible pendant
+    /// qu'il est ouvert, donc aucun jeton n'y est « actif » ; et il se referme
+    /// par son propre en-tête, jamais par le jeton qui l'a ouvert — lequel est
+    /// hors de l'écran. Garder la bascule aurait laissé un aller-retour
+    /// possible dans le modèle et impossible sous le doigt.
+    ///
+    /// > Un état qui n'a plus de surface où se montrer n'est pas un état à
+    /// > conserver « au cas où » : c'est du modèle que plus rien ne peut
+    /// > contredire.
+    static func destination(of chipId: String, in chips: [Chip]) -> ComposerObjectEditorSection? {
+        chips.first(where: { $0.id == chipId })?.destination
     }
 
     // MARK: - Les autres kinds
@@ -299,8 +351,7 @@ nonisolated enum ComposerObjectChips {
     /// en dernier — pour la même raison : un jeton qui apparaît ne doit pas
     /// déplacer ses voisins sous le doigt.
     static func chips(for media: StoryMediaObject,
-                      locale: Locale = .current,
-                      openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
+                      locale: Locale = .current) -> [Chip] {
         var jetons: [Chip] = [sizeChip(scale: media.scale, locale: locale)]
         if let rotation = rotationChip(media.rotation, locale: locale) {
             jetons.append(rotation)
@@ -315,14 +366,63 @@ nonisolated enum ComposerObjectChips {
         if let fenetre = window(start: media.startTime,
                                 duration: media.duration, locale: locale) {
             jetons.append(Chip(id: "window", label: fenetre,
-                               destination: porte(.timeline, parmi: openableBands)))
+                               destination: porte(.timing, pour: .media)))
+        }
+        return jetons
+    }
+
+    /// **Les jetons d'une CHIP DE SON** (#4579, retour porteur 2026-09-02 :
+    /// « l'affichage des détails des outils qui manquent »).
+    ///
+    /// Le son rendait `[]`, sous un commentaire devenu faux : « le son n'a pas
+    /// encore de forme sur la scène ». Il en a une depuis `fab725c1d5` —
+    /// `AudioForegroundChip`, déplaçable et redimensionnable — et depuis
+    /// `7311d42c60` elle a même un RANG manipulable. Un objet qu'on peut poser,
+    /// déplacer, redimensionner et ranger en profondeur, mais dont la sélection
+    /// n'affiche AUCUN réglage, est le seul de la scène dans ce cas.
+    ///
+    /// > Un commentaire qui justifie une absence par un état du monde se périme
+    /// > quand cet état change — et il continue d'expliquer, avec assurance, une
+    /// > décision que plus rien ne fonde. C'est le contraire d'une garde : il
+    /// > protège l'absence au lieu de la signaler.
+    ///
+    /// Quatre jetons, et pas un de plus que ce que l'objet PORTE :
+    /// - la TAILLE, comme tout objet de scène — elle ne manque jamais ;
+    /// - la ROTATION quand elle a été touchée ;
+    /// - le VOLUME, seulement s'il s'écarte du nominal (même règle que la
+    ///   vidéo : « SON 100 % » sur une piste jamais réglée enseigne moins que
+    ///   rien) ;
+    /// - la FENÊTRE de lecture, qui mène à la timeline.
+    ///
+    /// Un son de FOND n'est pas concerné : il n'a pas de chip sur la scène,
+    /// donc pas de sélection, donc jamais de rangée. C'est `isBackground` qui
+    /// l'en écarte à la source — et le vérifier ici serait une seconde écriture
+    /// de la même règle.
+    static func chips(for audio: StoryAudioPlayerObject,
+                      locale: Locale = .current) -> [Chip] {
+        var jetons: [Chip] = [sizeChip(scale: audio.scale ?? 1, locale: locale)]
+        if let rotation = rotationChip(audio.rotation ?? 0, locale: locale) {
+            jetons.append(rotation)
+        }
+        if abs(Double(audio.volume) - 1) > 0.001 {
+            jetons.append(Chip(id: "volume",
+                               label: ComposerObjectChipsCopy.sound(
+                                LocalizedNumber.percent(Int((Double(audio.volume) * 100).rounded()),
+                                                        locale: locale))))
+        }
+        // `startTime`/`duration` sont des `Float?` sur cette famille seule —
+        // la conversion est ÉCRITE plutôt que laissée à l'inférence, qui
+        // n'existe pas ici : `window` prend des `Double?`.
+        if let fenetre = window(start: audio.startTime.map(Double.init),
+                                duration: audio.duration.map(Double.init), locale: locale) {
+            jetons.append(Chip(id: "window", label: fenetre,
+                               destination: porte(.timing, pour: .audio)))
         }
         return jetons
     }
 
     static func chips(for sticker: StorySticker,
-                      locale: Locale = .current,
-                      openableBands: Set<ComposerSceneBand> = []) -> [Chip] {
+                      locale: Locale = .current) -> [Chip] {
         var jetons: [Chip] = [sizeChip(scale: sticker.scale, locale: locale)]
         if let rotation = rotationChip(sticker.rotation, locale: locale) {
             jetons.append(rotation)
@@ -330,7 +430,7 @@ nonisolated enum ComposerObjectChips {
         if let fenetre = window(start: sticker.startTime,
                                 duration: sticker.duration, locale: locale) {
             jetons.append(Chip(id: "window", label: fenetre,
-                               destination: porte(.timeline, parmi: openableBands)))
+                               destination: porte(.timing, pour: .sticker)))
         }
         return jetons
     }

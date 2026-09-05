@@ -37,12 +37,6 @@ jest.mock('../../../services/AffiliateTrackingService', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  affiliateTokenSchema: { type: 'object', additionalProperties: true },
-  affiliateRelationSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: {} },
-}));
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import affiliateRoutes from '../../../routes/affiliate';

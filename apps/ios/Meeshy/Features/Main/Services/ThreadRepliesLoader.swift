@@ -44,8 +44,13 @@ final class ThreadRepliesLoader {
                 URLQueryItem(name: "limit", value: String(limit)),
             ]
         )
+        // Le prisme se HISSE hors du `.map` : `preferredContentLanguages` est
+        // une propriété CALCULÉE qui construit un tableau neuf à chaque lecture
+        // (quatre insertions distinctes + une normalisation de locale). Écrite
+        // dans la fermeture, elle se payait cinquante fois par ouverture de fil.
+        let prism = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         return response.data.map {
-            $0.toMessage(currentUserId: currentUserId, currentUsername: currentUsername)
+            $0.toMessage(currentUserId: currentUserId, currentUsername: currentUsername, preferredLanguages: prism)
         }
     }
 }

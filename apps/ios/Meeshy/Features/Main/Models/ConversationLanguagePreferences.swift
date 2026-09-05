@@ -34,6 +34,16 @@ import MeeshySDK
 /// (`init(userId:systemLanguage:regionalLanguage:customDestinationLanguage:)`)
 /// keeps the strict 3-level behaviour for determinism in unit tests that
 /// don't opt in to the 4th axis.
+///
+/// ### UNE descente (2026-09-03) — `ReaderPrism`, au SDK
+/// La descente elle-même ne vit plus ici : `resolved` projette
+/// `ReaderPrism.resolve(...)`, la fonction que le chemin SOCKET
+/// (`MessagePersistenceActor.readerPrism()`) emploie pour graver
+/// `replyToJson`. Deux boucles jumelles gravaient deux citations pour un
+/// même message dès que la locale appareil manquait au serveur ou qu'aucune
+/// langue n'était configurée — et chaque ouverture rejouait un changement de
+/// ligne pour un contenu identique. Ce type garde ce qui est à lui : le
+/// cache `Equatable` du ViewModel et la sentinelle de test.
 struct ConversationLanguagePreferences: Equatable, Sendable {
 
     /// The user identity these preferences were derived from. Used by the
@@ -69,10 +79,10 @@ struct ConversationLanguagePreferences: Equatable, Sendable {
         // for "skip the 4th slot entirely" so unit tests stay deterministic.
         if let override = deviceLocaleOverride {
             self.resolvedDeviceLocaleRaw = override.isEmpty ? nil : override
-        } else if let stored = user?.deviceLocale, !stored.isEmpty {
-            self.resolvedDeviceLocaleRaw = stored
         } else {
-            self.resolvedDeviceLocaleRaw = Locale.current.language.languageCode?.identifier
+            // Serveur d'abord, appareil ensuite — la règle vit au SDK, la
+            // même que celle du chemin socket.
+            self.resolvedDeviceLocaleRaw = ReaderPrism.deviceLocale(for: user)
         }
     }
 
@@ -115,15 +125,12 @@ struct ConversationLanguagePreferences: Equatable, Sendable {
     /// Pure / O(1) (max 4 elements). No "fr" fallback by design — that is
     /// the difference with `MeeshyUser.preferredContentLanguages`.
     var resolved: [String] {
-        var langs: [String] = []
-        appendIfDistinct(systemLanguage, into: &langs)
-        appendIfDistinct(regionalLanguage, into: &langs)
-        appendIfDistinct(customDestinationLanguage, into: &langs)
-        // Device locale is normalised through the mirror helper so a
-        // `Locale.current.identifier` value like `fr_FR` collapses to ISO
-        // 639-1 before matching against translation target codes.
-        appendIfDistinct(Self.normalize(resolvedDeviceLocaleRaw), into: &langs)
-        return langs
+        ReaderPrism.resolve(
+            systemLanguage: systemLanguage,
+            regionalLanguage: regionalLanguage,
+            customDestinationLanguage: customDestinationLanguage,
+            deviceLocale: resolvedDeviceLocaleRaw
+        )
     }
 
     /// Normalise un identifier de langue vers ISO 639-1 (2 lettres lowercase).
@@ -137,13 +144,5 @@ struct ConversationLanguagePreferences: Equatable, Sendable {
     /// vérifiée par `test_normalize_isMirrorOf_MeeshyUserHelper`.
     static func normalize(_ input: String?) -> String? {
         MeeshyUser.normalizeLanguageCode(input)
-    }
-
-    private func appendIfDistinct(_ candidate: String?, into langs: inout [String]) {
-        guard let candidate, !candidate.isEmpty else { return }
-        if langs.contains(where: { $0.caseInsensitiveCompare(candidate) == .orderedSame }) {
-            return
-        }
-        langs.append(candidate)
     }
 }

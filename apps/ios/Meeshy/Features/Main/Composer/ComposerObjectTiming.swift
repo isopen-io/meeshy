@@ -36,6 +36,24 @@ nonisolated struct ComposerObjectTiming: Equatable {
         return ComposerObjectTiming(start: debut, end: debut + duration)
     }
 
+    /// **Un objet permanent posé à zéro range DEUX `nil`**, jamais `0` + `nil`
+    /// (défaut mesuré au simulateur, #4634).
+    ///
+    /// `Plan2DLayout.bar()` ne rend une barre FANTÔME — celle qui dit « présent
+    /// tout du long » — que si le début ET la durée sont absents. Écrire
+    /// `startTime = 0` faisait donc dessiner au plan une barre PLEINE de six
+    /// secondes pendant que la section APPARITION, juste au-dessus, affichait
+    /// « à la fin ». Deux lectures du même objet, dans le même écran, qui se
+    /// contredisent.
+    ///
+    /// > Un zéro EXPLICITE n'est pas la même valeur qu'une absence, dès qu'un
+    /// > lecteur en aval distingue les deux. Le modèle offrait la distinction ;
+    /// > c'est l'écriture qui l'avait perdue.
+    var storedStartTime: Double? {
+        guard end != nil || start > 0 else { return nil }
+        return start
+    }
+
     /// Ce que le modèle range. **`nil` est PRÉSERVÉ** : une fin absente reste
     /// absente, elle ne devient pas « la durée de la slide » — sans quoi
     /// allonger la slide raccourcirait rétroactivement tous ses objets

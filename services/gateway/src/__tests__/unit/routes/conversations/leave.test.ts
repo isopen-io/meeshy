@@ -99,6 +99,11 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // au lieu de se transmettre — 0 ici : ces scénarios ne sont pas ce DM.
       count: jest.fn<any>().mockResolvedValue(0),
     },
+    // #3740 — la clôture désactive aussi les liens de partage encore actifs du
+    // fil, dans la MÊME transaction.
+    conversationShareLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     // La clôture et le départ committent ensemble (cycle 69).
     $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
     ...overrides,
@@ -223,6 +228,24 @@ describe('POST /conversations/:id/leave — creator alone in conversation', () =
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('#3740 — désactive les liens de partage encore actifs du fil, dans la MÊME transaction', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
+        findMany: jest.fn<any>().mockResolvedValue([]), // no other members
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { conversationId: RESOLVED_CONV_ID, isActive: true },
+      data: { isActive: false },
+    });
     await app.close();
   });
 });

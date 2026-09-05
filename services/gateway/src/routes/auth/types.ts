@@ -3,6 +3,7 @@ import { AuthService } from '../../services/AuthService';
 import { PhoneTransferService } from '../../services/PhoneTransferService';
 import { SmsService } from '../../services/SmsService';
 import type { CacheStore } from '../../services/CacheStore';
+import type { AfterResponse } from '../../utils/after-response';
 
 /**
  * Context shared across all auth route modules
@@ -16,6 +17,21 @@ export interface AuthRouteContext {
   cacheStore: CacheStore;
   redis: any;
   prisma: any;
+  /**
+   * Où partent les travaux qui ne conditionnent PAS la réponse (#5216) —
+   * l'e-mail de vérification, l'annonce d'arrivée dans le salon global, la
+   * reprise de la géolocalisation. Absent ⇒ `deferAfterResponse`, c'est-à-dire
+   * `setImmediate` avec sa garde de rejet.
+   *
+   * **C'est la surface HTTP qui décide de différer**, parce qu'elle est la
+   * seule à avoir une réponse à rendre : le service appelé sans requête (seed,
+   * création par un administrateur) exécute les mêmes travaux EN LIGNE.
+   *
+   * Injectable pour que les témoins soient déterministes : un différé leur
+   * ferait mesurer le vide, la tâche n'étant pas encore partie quand
+   * l'assertion tombe.
+   */
+  afterResponse?: AfterResponse;
 }
 
 /**
@@ -68,12 +84,18 @@ export interface UserResponseData {
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
   twoFactorEnabledAt: Date | null;
-  pendingEmail: string | null;
-  pendingPhone: string | null;
   lastPasswordChange: Date | null;
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
   lastLoginDevice: string | null;
+  /**
+   * `undefined` ⇒ l'appelant n'a pas CHARGÉ la colonne ; `null` ⇒ il l'a
+   * chargée et le compte n'a pas de fuseau. La distinction est servie telle
+   * quelle : fast-json-stringify supprime la clé dans le premier cas et sert
+   * `null` dans le second, si bien qu'aucune route ne DÉCLARE un fuseau
+   * qu'elle n'a pas lu (#4641).
+   */
+  timezone?: string | null;
   profileCompletionRate: number;
   createdAt: Date;
   updatedAt: Date;
@@ -96,6 +118,14 @@ export interface SessionResponseData {
 
 /**
  * Utility to format user data consistently across all routes
+ *
+ * **Un champ que `userSchema` déclare doit avoir un producteur ICI, et un
+ * producteur qui ne rende pas la même chose pour tout le monde (#4641).**
+ * `banner: user.banner || null` était le contre-exemple : son producteur
+ * existait, il rendait `null` pour TOUS les comptes parce que le projecteur
+ * d'amont (`AuthService.userToSocketIOUser`) ne portait pas la colonne. Une
+ * clé PRÉSENTE et constante est plus coûteuse qu'une clé absente — elle a
+ * l'air d'une donnée.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function formatUserResponse(user: any, permissions?: any): UserResponseData {
@@ -122,12 +152,11 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     emailVerifiedAt: user.emailVerifiedAt,
     phoneVerifiedAt: user.phoneVerifiedAt,
     twoFactorEnabledAt: user.twoFactorEnabledAt,
-    pendingEmail: user.pendingEmail || null,
-    pendingPhone: user.pendingPhone || user.pendingPhoneNumber || null,
     lastPasswordChange: user.lastPasswordChange,
     lastLoginIp: user.lastLoginIp,
     lastLoginLocation: user.lastLoginLocation,
     lastLoginDevice: user.lastLoginDevice,
+    timezone: user.timezone,
     profileCompletionRate: user.profileCompletionRate,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,

@@ -41,16 +41,6 @@ jest.mock('../../../utils/normalize', () => ({
   normalizePhoneWithCountry: (...a: any[]) => mockNormalizePhoneWithCountry(...a),
 }));
 
-jest.mock('@meeshy/shared/types', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Import route under test ──────────────────────────────────────────────────
 
 import { registerPhoneTransferRoutes } from '../../../routes/auth/phone-transfer';

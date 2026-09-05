@@ -171,13 +171,37 @@ const ETAPES: readonly Etape[] = [
     ],
   },
   {
-    libelle: 'étape 2 — /l entre dans la règle',
+    libelle: 'étape 2 — /l/ entre dans la règle, avec sa barre finale',
+    regle: `${ACTIFS} || PathPrefix(\`/l/\`)`,
+    sondes: [
+      ['un <Link> vers /l/ — la v3 la sert', '<Link href="/l/abc">lien</Link>', null, 0],
+      ['la MÊME cible en <a> — signalé, jamais refusé', '<a href="/l/abc">lien</a>', INTERNE, 1],
+      ['/login reste au legacy, la barre finale l’en protège', '<Link href="/login">entrer</Link>', SORTANT, 2],
+      ["un <a> vers un ACTIF — toujours pas une page", `<a href="${ZONE_DACTIFS}/x.js">x</a>`, null, 0],
+    ],
+  },
+  {
+    // LE MODÈLE SUIT TRAEFIK, ET TRAEFIK NE SEGMENTE PAS.
+    //
+    // Cette colonne a d'abord porté `PathPrefix(`/l`)` avec l'attente que
+    // `/login` en soit DEHORS. C'était le modèle du dépôt, pas celui de
+    // l'aiguilleur : mesuré sur staging le 2026-09-01, `/login`, `/links` et
+    // `/lien` étaient tous les trois servis par la ZONE, donc par le 404 du
+    // routeur Pages de la v3, alors que le legacy les sert. `/login` est
+    // l'appel à l'action de la vitrine.
+    //
+    // Un modèle PLUS PRUDENT que la réalité ne protège de rien : il déclare une
+    // frontière que personne ne trace. Le témoin dit donc désormais ce que
+    // Traefik FAIT — et c'est l'invariant « aucun PathPrefix ne vole une route
+    // voisine du legacy » de `scripts/check-v3-pipeline.mjs` qui interdit
+    // d'ÉCRIRE une telle règle.
+    libelle: 'un PathPrefix SANS barre finale emporte ses voisins de chaîne',
     regle: `${ACTIFS} || PathPrefix(\`/l\`)`,
     sondes: [
-      ['un <Link> vers /l — la v3 la sert', '<Link href="/l/abc">lien</Link>', null, 0],
-      ['la MÊME cible en <a> — signalé, jamais refusé', '<a href="/l/abc">lien</a>', INTERNE, 1],
-      ['/login ne tombe pas dans /l', '<Link href="/login">entrer</Link>', SORTANT, 2],
-      ["un <a> vers un ACTIF — toujours pas une page", `<a href="${ZONE_DACTIFS}/x.js">x</a>`, null, 0],
+      ['/l/abc — la cible voulue', '<Link href="/l/abc">lien</Link>', null, 0],
+      ['/login — emporté, et la v3 ne le sert pas', '<Link href="/login">entrer</Link>', null, 0],
+      ['/links — emporté lui aussi', '<Link href="/links">liens</Link>', null, 0],
+      ['/settings — hors du préfixe, il reste au legacy', '<Link href="/settings">réglages</Link>', SORTANT, 2],
     ],
   },
   {

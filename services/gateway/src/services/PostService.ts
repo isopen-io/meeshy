@@ -8,6 +8,8 @@ import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
+import { applyMediaText } from './posts/mediaText';
+import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
@@ -16,6 +18,7 @@ import {
   repostVisibilityInheritsAudienceList,
 } from '@meeshy/shared/utils/repost-audience';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
+import { buildViewerVisibilityFilter } from './posts/viewerAudience';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
@@ -25,7 +28,7 @@ import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/po
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
-import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
+import { composeStoryContent, isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
@@ -393,15 +396,34 @@ export class PostService {
     const textObjects = storyTranslatableTexts(data.storyEffects);
 
     if (textObjects?.length) {
-      const searchContent = composeStoryContent(textObjects);
-
-      if (searchContent && !data.content) {
-        await this.prisma.post.update({
-          where: { id: post.id },
-          data: { content: searchContent },
-        });
-      }
-
+      // **LA RECOPIE EST RETIRÉE** (directive porteur 2026-08-30, #4502).
+      //
+      // Ce bloc écrivait ici :
+      //
+      //     const searchContent = composeStoryContent(textObjects);
+      //     if (searchContent && !data.content) {
+      //       await this.prisma.post.update({ … data: { content: searchContent } });
+      //     }
+      //
+      // > « C'est le texte de scène recopié, et c'est ce que je ne veux pas !
+      // > Il ne faut plus recopier le texte de scène pour mettre dans le
+      // > contenu ! Pour la notification on peut récolter les textes de scène
+      // > si le contenu est vide, mais sinon on référence le contenu réel. »
+      //
+      // Le symptôme était visible chez les TROIS lecteurs : le texte de la
+      // scène rendu deux fois — l'objet sur le canvas, et sa copie en légende.
+      // Aucun client ne faisait rien de faux ; ils rendaient fidèlement un
+      // contenu qui n'aurait pas dû être écrit.
+      //
+      // Ce qui dépendait de cette écriture dérive désormais À LA DEMANDE, par
+      // `postSignalText` — l'aperçu de la notification d'ami et l'extraction
+      // des hashtags, tous deux dans `routes/posts/core.ts`. Le relevé complet
+      // des consommateurs est dans le commentaire de #4502 ; le seul qui perde
+      // quelque chose est la recherche d'ADMINISTRATION, qui cherchait dans
+      // `content` — une story d'overlays n'y est plus trouvable par son texte.
+      //
+      // La traduction des overlays, elle, n'a jamais dépendu du `content` : elle
+      // lit les `textObjects`, juste en dessous.
       this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch((err: unknown) => {
         log.error('triggerStoryTextObjectTranslation failed', err instanceof Error ? err : new Error(String(err)));
       });
@@ -862,69 +884,14 @@ export class PostService {
     return { recorded: mediaIds.length };
   }
 
-  /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.
-  /// Mirrors `PostFeedService.buildVisibilityFilter` so single-post fetches, view
-  /// recording, and the feed apply the SAME audience rules.
+  /// Le filtre de visibilité d'un viewer — la règle vit dans
+  /// `posts/viewerAudience.ts` (sortie le 2026-09-02 : ce fichier avait grossi
+  /// au-dessus de sa dette gelée, cliquet #4426). La méthode reste sur
+  /// l'instance parce que quatre suites la court-circuitent par affectation
+  /// (`svc.buildVisibilityFilter = …`) : c'est la couture des tests, pas une
+  /// règle.
   private async buildVisibilityFilter(viewerUserId?: string) {
-    if (!viewerUserId) {
-      return { visibility: PostVisibility.PUBLIC };
-    }
-    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
-      this.getFriendIdsForViewer(viewerUserId),
-      this.getDirectConversationContactIds(viewerUserId),
-      getCommunityCoMemberIds(this.prisma, viewerUserId),
-    ]);
-    // G5 — filtre canonique unique. Audience = friends ∪ contacts DM, ALIGNÉE sur
-    // `PostFeedService.buildVisibilityFilter` (résout la divergence story-sota §4).
-    // Sans cet alignement, un contact DM (non-ami strict) pouvait VOIR une story
-    // via son feed mais son `POST /view` était rejeté par ce filtre → aucun
-    // `PostView` créé, aucun `story:viewed` émis → l'auteur ne voyait jamais cette
-    // vue (ni en temps réel ni après relance). Cf. `recordView`.
-    const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
-    return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds);
-  }
-
-  /// Contacts DM (autres membres actifs des conversations directes du viewer).
-  /// Miroir de `PostFeedService.getDirectConversationContactIds` (sans le cache
-  /// Redis : le seul appelant chaud est `recordView`, une fois par vue). Fait
-  /// partie de l'audience FRIENDS/EXCEPT pour matcher exactement le feed.
-  private async getDirectConversationContactIds(userId: string): Promise<string[]> {
-    try {
-      const myMemberships = await this.prisma.participant.findMany({
-        where: { userId, isActive: true, conversation: { type: 'direct' } },
-        select: { conversationId: true },
-      });
-      const conversationIds = myMemberships.map((m) => m.conversationId);
-      if (conversationIds.length === 0) return [];
-
-      const otherMembers = await this.prisma.participant.findMany({
-        where: {
-          conversationId: { in: conversationIds },
-          userId: { not: userId },
-          isActive: true,
-        },
-        select: { userId: true },
-      });
-      return [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
-    } catch {
-      return [];
-    }
-  }
-
-  private async getFriendIdsForViewer(userId: string): Promise<string[]> {
-    try {
-      const friendRequests = await this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [{ senderId: userId }, { receiverId: userId }],
-        },
-        select: { senderId: true, receiverId: true },
-      });
-      return Array.from(new Set(friendRequests.flatMap((fr) => [fr.senderId, fr.receiverId])
-        .filter((id) => id !== userId)));
-    } catch {
-      return [];
-    }
+    return buildViewerVisibilityFilter(this.prisma, viewerUserId);
   }
 
   /**
@@ -950,7 +917,7 @@ export class PostService {
     mediaAlt: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await this.applyMediaText('alt', postId, requestedMediaIds, mediaAlt, client);
+    await applyMediaText('alt', postId, requestedMediaIds, mediaAlt, client);
   }
 
   /**
@@ -972,39 +939,7 @@ export class PostService {
     mediaCaption: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await this.applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
-  }
-
-  /**
-   * Le corps PARTAGÉ des deux appliqueurs de texte par média.
-   *
-   * EXTRAIT plutôt que recopié : `alt` et `caption` portent exactement les mêmes
-   * deux gardes, la même normalisation du vide et la même borne. Deux copies
-   * auraient divergé au premier ajustement de l'une — et c'est le genre de
-   * divergence qu'aucun témoin ne voit, puisque chaque copie reste cohérente
-   * avec elle-même.
-   *
-   * La colonne est un paramètre LITTÉRAL, pas une chaîne : le compilateur refuse
-   * tout nom qui n'est pas l'un des deux, si bien qu'aucun appelant ne peut
-   * écrire dans une colonne voisine par faute de frappe.
-   */
-  private async applyMediaText(
-    column: 'alt' | 'caption',
-    postId: string,
-    requestedMediaIds: string[] | undefined,
-    texts: Record<string, string> | undefined,
-    client: Pick<PrismaClient, 'postMedia'>,
-  ): Promise<void> {
-    if (!texts || !requestedMediaIds?.length) return;
-    const requested = new Set(requestedMediaIds);
-    const entries = Object.entries(texts).filter(([id]) => requested.has(id));
-    if (entries.length === 0) return;
-    await Promise.all(entries.map(([id, text]) =>
-      client.postMedia.updateMany({
-        where: { id, postId },
-        data: { [column]: text.trim().length > 0 ? text : null },
-      }),
-    ));
+    await applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
   }
 
   /**
@@ -1252,13 +1187,33 @@ export class PostService {
       if (!languageChanged) {
         updateData.translations = {};
       }
-      // Keep the search index in sync when the composition carries the text
-      // (same rule as createPost: content mirrors the textObjects).
-      if (data.content === undefined && editedTextObjects?.length) {
-        const searchContent = composeStoryContent(editedTextObjects);
-        if (searchContent) {
-          updateData.content = searchContent;
-        }
+      // **LA RECOPIE EST RETIRÉE ICI AUSSI** (directive porteur 2026-08-30, #4502).
+      //
+      // Ce bloc REJOUAIT la recopie de `createPost`, et son commentaire le
+      // disait — « same rule as createPost: content mirrors the textObjects ».
+      // Ne retirer que la création aurait laissé le défaut atteignable par
+      // l'ÉDITION : un texte de scène modifié serait revenu occuper le
+      // `content`, et la seconde publication du même auteur aurait réaffiché le
+      // doublon que la première n'a plus.
+      //
+      // > Une règle qui s'applique à une DONNÉE ne s'énumère pas par ce qui la
+      // > PRODUIT : il faut énumérer ce qui la RÉÉCRIT. Une copie dénormalisée a
+      // > deux moments, et le second est écrit par quelqu'un qui croit mettre à
+      // > jour un texte.
+      //
+      // **Et l'édition NETTOIE l'index périmé des stories d'avant.** Une story
+      // publiée avant ce lot porte l'index dans son `content` ; l'éditer sans
+      // rien faire y laisserait l'index de l'ANCIEN texte de scène — pire que
+      // le doublon, puisque le miroir client (`StoryDerivedContent`) compare le
+      // contenu aux textes COURANTS et conclurait « vraie légende ».
+      //
+      // Le test porte sur les textes d'AVANT l'édition, seuls capables de dire
+      // si ce `content` était leur dérivé. Une légende écrite par l'auteur ne
+      // leur est pas égale, donc elle survit — la garde ne détruit que ce
+      // qu'elle reconnaît.
+      if (data.content === undefined
+          && isContentDerivedFromTextObjects(post.content, storyTranslatableTexts(post.storyEffects))) {
+        updateData.content = null;
       }
     }
 
@@ -2085,7 +2040,7 @@ export class PostService {
         recorded += 1;
 
         if (isInsert) {
-          const increments = this.engagementAggregateIncrements({
+          const increments = engagementAggregateIncrements({
             surface: s.surface,
             contentType: s.contentType,
             dwellMs,
@@ -2106,55 +2061,6 @@ export class PostService {
       }
     }
     return recorded;
-  }
-
-  /**
-   * Calcule les incréments de compteurs dénormalisés pour une NOUVELLE session
-   * (spec §19.3). Renvoie un objet `Prisma.PostUpdateInput` partiel — vide si
-   * la session ne déclenche aucun compteur.
-   */
-  private engagementAggregateIncrements(s: {
-    surface: string; contentType: string; dwellMs: number;
-    watchMs?: number; mediaDurationMs?: number; completed: boolean;
-    watchSamples: unknown[];
-  }): Prisma.PostUpdateInput {
-    const SHORT_VIDEO_MS = 8300;
-    const QUALIFY_MS = 2500;
-
-    const increments: Record<string, { increment: number }> = {};
-
-    // "Ouverture" d'un post = consommation plein-cadre. Sur le feed de reels,
-    // l'ouverture (vue totale) est comptée par l'engagement (défilement plein
-    // écran). La page Detail, elle, compte sa vue IMMÉDIATEMENT à l'ouverture
-    // (route /impression?source=detail) → on ne la recompte PAS ici, sinon une
-    // ouverture de Detail vaudrait +2. Les surfaces éphémères (story/status) ont
-    // leurs propres métriques et ne comptent pas ici.
-    if (s.surface === 'reels') {
-      increments.postOpenCount = { increment: 1 };
-    }
-
-    if (s.completed) {
-      increments.playCount = { increment: 1 };
-    }
-
-    const maxPositionMs = Array.isArray(s.watchSamples)
-      ? s.watchSamples.reduce<number>((max, sample) => {
-          const pos = (sample as { positionMs?: unknown })?.positionMs;
-          return typeof pos === 'number' && pos > max ? pos : max;
-        }, 0)
-      : 0;
-
-    const duration = s.mediaDurationMs ?? 0;
-    const positionThresh = duration < SHORT_VIDEO_MS ? 0.90 : 0.30;
-    const positionQualifies = duration > 0 && (maxPositionMs / duration) >= positionThresh;
-    const watchQualifies = (s.watchMs ?? 0) >= QUALIFY_MS;
-    const dwellQualifies = s.watchMs === undefined && s.dwellMs >= QUALIFY_MS;
-
-    if (positionQualifies || watchQualifies || dwellQualifies) {
-      increments.qualifiedViewCount = { increment: 1 };
-    }
-
-    return increments as Prisma.PostUpdateInput;
   }
 
   async sharePost(postId: string, userId: string, platform?: string) {

@@ -1347,7 +1347,7 @@ struct FeedView: View {
                         await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                     }
                 },
-                onPublishBorrowed: { sound in
+                onPublishBorrowed: { sound, _ in
                     showAudioComposer = false
                     Task { await publishBorrowedSoundPost(sound) }
                 }
@@ -1687,7 +1687,11 @@ struct FeedView: View {
         .fullScreenCover(isPresented: $showCamera) {
             CameraView { result in
                 switch result {
-                case .photo(let image):
+                // Sixième et septième consommateurs de `CameraResult.photo`,
+                // élargi le 2026-09-04 pour porter l'EXIF (#4080). Le fil du
+                // feed ré-encode déjà l'image : les octets d'origine ne lui
+                // servent pas, et il les jette explicitement.
+                case .photo(let image, _):
                     handleFeedCameraCapture(image)
                 case .video(let url):
                     handleFeedCameraVideo(url)

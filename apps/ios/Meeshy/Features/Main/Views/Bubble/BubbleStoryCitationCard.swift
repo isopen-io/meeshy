@@ -293,6 +293,39 @@ nonisolated enum StoryCitationPlacement {
     }
 }
 
+extension BubbleContent {
+
+    /// **La citation qui QUITTE la bulle, ou `nil`** — vue `3h`, portée par le
+    /// CONTENU et non par une peau (#5059).
+    ///
+    /// Elle vivait en `private var` dans `BubbleStandardLayout`, où son
+    /// doc-comment se disait déjà « site UNIQUE de la décision » — et il l'était,
+    /// pour la bulle. Les deux autres peaux ne pouvaient pas l'appeler : la
+    /// rangée plate et la rivière retombaient donc sur l'aperçu PLAT, c'est-à-dire
+    /// exactement le défaut que la vue `3h` nomme — *aplatie*.
+    ///
+    /// > Un « site unique » à portée `private` n'est unique que dans son fichier.
+    /// > La question à poser à une règle qu'on déclare partagée n'est pas
+    /// > « combien de fois est-elle écrite ? » mais **« qui peut l'appeler ? »** —
+    /// > une règle que ses consommateurs n'atteignent pas se fait réécrire, ou
+    /// > pire, se fait ignorer.
+    ///
+    /// Elle est posée sur `BubbleContent` parce que c'est ce que les trois peaux
+    /// PARTAGENT : la bulle et la rangée plate le reçoivent tel quel, et la
+    /// rivière le compose depuis la même projection.
+    var detachedStoryCitation: ReplyReference? {
+        guard let reply,
+              StoryCitationPlacement.isDetached(
+                isStoryReply: reply.isStory,
+                hasMoodEmoji: reply.reference.moodEmoji != nil,
+                visualHostsReply: visualHostsReply,
+                audioHostsReply: audioHostsReply
+              )
+        else { return nil }
+        return reply.reference
+    }
+}
+
 /// Le geste d'ouverture, ou RIEN. Un `.onTapGesture` posé inconditionnellement
 /// avalerait le tap même sans gestionnaire : la carte deviendrait une cible
 /// morte au lieu de laisser passer. Le modificateur n'existe donc que quand

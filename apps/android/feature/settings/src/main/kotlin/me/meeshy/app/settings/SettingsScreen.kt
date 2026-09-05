@@ -97,6 +97,7 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenStarred: () -> Unit = {},
+    onOpenSaved: () -> Unit = {},
     onOpenShareLinks: () -> Unit = {},
     onOpenChangePassword: () -> Unit = {},
     onOpenTwoFactor: () -> Unit = {},
@@ -253,6 +254,31 @@ fun SettingsScreen(
                     enabled = notifications.pushEnabled,
                     onCheckedChange = viewModel::setVibrationEnabled,
                 )
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_show_preview),
+                    checked = notifications.showPreview,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setShowPreview,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_show_sender_name),
+                    checked = notifications.showSenderName,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setShowSenderName,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_group_notifications),
+                    checked = notifications.groupNotifications,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setGroupNotifications,
+                )
+                NotificationToggleRow(
+                    label = stringResource(R.string.settings_notif_badge_enabled),
+                    checked = notifications.notificationBadgeEnabled,
+                    enabled = notifications.pushEnabled,
+                    onCheckedChange = viewModel::setNotificationBadgeEnabled,
+                )
                 DndScheduleRows(
                     notifications = notifications,
                     onSetEnabled = viewModel::setDndEnabled,
@@ -277,6 +303,11 @@ fun SettingsScreen(
                     label = stringResource(R.string.settings_starred_messages),
                     detail = null,
                     onClick = onOpenStarred,
+                )
+                SettingsRow(
+                    label = stringResource(R.string.settings_saved_posts),
+                    detail = null,
+                    onClick = onOpenSaved,
                 )
                 SettingsRow(
                     label = stringResource(R.string.settings_share_links),
@@ -762,6 +793,7 @@ private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) 
     NotificationType.MENTION -> R.string.settings_notif_type_mention
     NotificationType.REACTION -> R.string.settings_notif_type_reaction
     NotificationType.CONVERSATION -> R.string.settings_notif_type_conversation
+    NotificationType.INCOMING_CALL -> R.string.settings_notif_type_incoming_call
     NotificationType.MISSED_CALL -> R.string.settings_notif_type_missed_call
     NotificationType.VOICEMAIL -> R.string.settings_notif_type_voicemail
     NotificationType.POST_LIKE -> R.string.settings_notif_type_post_like
@@ -770,6 +802,7 @@ private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) 
     NotificationType.STORY_REACTION -> R.string.settings_notif_type_story_reaction
     NotificationType.COMMENT_REPLY -> R.string.settings_notif_type_comment_reply
     NotificationType.COMMENT_LIKE -> R.string.settings_notif_type_comment_like
+    NotificationType.FRIEND_CONTENT -> R.string.settings_notif_type_friend_content
     NotificationType.CONTACT_REQUEST -> R.string.settings_notif_type_contact_request
     NotificationType.GROUP_INVITE -> R.string.settings_notif_type_group_invite
     NotificationType.MEMBER_JOINED -> R.string.settings_notif_type_member_joined

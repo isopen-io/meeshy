@@ -5,17 +5,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +42,7 @@ import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.auth.MagicLinkScreen
 import me.meeshy.app.auth.MagicLinkValidateScreen
 import me.meeshy.app.auth.MagicLinkValidateViewModel
-import me.meeshy.app.auth.RegistrationScreen
+import me.meeshy.app.auth.SignupScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallPillPresenter
@@ -52,6 +50,7 @@ import me.meeshy.app.calls.CallScreen
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
+import me.meeshy.sdk.model.chrome.FloatingButtonPosition
 import me.meeshy.sdk.model.chrome.menuGrowsRightward
 import me.meeshy.sdk.model.chrome.menuUnfoldsUpward
 import me.meeshy.ui.component.chrome.MeeshyMenuFab
@@ -59,6 +58,7 @@ import me.meeshy.ui.component.chrome.RadialMenuItem
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.chat.StarredMessagesScreen
@@ -70,11 +70,13 @@ import me.meeshy.app.conversations.DashboardScreen
 import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
+import me.meeshy.app.feed.NearbyScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.conversations.CreateShareLinkScreen
 import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.MyShareLinksScreen
+import me.meeshy.app.conversations.ShareLinkPickerScreen
 import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.notifications.NotificationBannerHost
@@ -104,18 +106,11 @@ import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryTray
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.size
 import me.meeshy.ui.component.chrome.MeeshyFloatingButtons
 import me.meeshy.ui.component.chrome.MeeshySplashScreen
 import kotlinx.coroutines.launch
@@ -161,6 +156,7 @@ object Routes {
         "conversations/{${CreateShareLinkViewModel.CONVERSATION_ID_ARG}}/share-link/new"
     fun createShareLink(conversationId: String): String =
         "conversations/$conversationId/share-link/new"
+    const val SHARE_LINK_PICKER = "conversations/share-link/picker"
     const val MY_SHARE_LINKS = "share-links"
     const val SHARE_LINK_DETAIL = "share-links/{${ShareLinkDetailViewModel.LINK_ID_ARG}}"
     fun shareLinkDetail(linkId: String): String = "share-links/$linkId"
@@ -181,9 +177,11 @@ object Routes {
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
     const val SAVED_POSTS = "feed/saved"
+    const val NEARBY_DISCOVERY = "feed/nearby"
     const val POST_DETAIL = "feed/post/{${PostDetailViewModel.POST_ID_ARG}}"
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
+    const val CONTACTS_DISCOVER = "contacts/discover"
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
     const val CHANGE_PASSWORD = "settings/change-password"
@@ -248,17 +246,22 @@ object Routes {
 }
 
 /**
- * Les entrees du menu deploye, dans l'ordre, par cle de libelle.
+ * Les entrees de l'echelle deployee, dans l'ordre, par cle de libelle.
  *
- * Extrait de [rememberRadialMenuItems] — qui est @Composable, donc hors de portee
- * d'un test JVM — pour que la regle « Feed sort, Reels reste » soit verifiable.
+ * Extrait de [rememberMenuLadderItems] — qui est @Composable, donc hors de portee
+ * d'un test JVM — pour que la regle « 6 barreaux » soit verifiable. Communautes
+ * est differee (aucune destination Android n'existe encore) ; Reels et les
+ * autres sections a bouton dedie (Feed, Conversations) n'y figurent plus.
+ * Contacts (`menu_contacts`) reste ici : c'est le SEUL acces restant a l'onglet
+ * Contacts par defaut depuis que l'icone People a quitte l'en-tete Conversations
+ * (§ doc du composant appelant) — le retirer des deux endroits a la fois
+ * rendrait l'onglet inatteignable en moins de trois gestes.
  */
-internal fun menuItemLabelKeys(): List<String> = listOf(
-    "menu_new_conversation",
-    "tab_messages",
-    "menu_reels",
+internal fun menuLadderLabelKeys(): List<String> = listOf(
+    "menu_my_links",
+    "menu_notifications",
     "tab_calls",
-    "tab_activity",
+    "menu_discover",
     "menu_contacts",
     "menu_settings",
 )
@@ -279,23 +282,46 @@ internal fun leftButtonTapTarget(currentRoute: String?): String =
 
 /**
  * Parite iOS : la barre d'onglets est remplacee par DEUX boutons flottants
- * deplacables. Ce menu est le contenu deploye du bouton DROIT ; le bouton gauche
- * mene au Flux (tap) et aux Reels (appui long).
+ * deplacables. Cette echelle est le contenu deploye du bouton DROIT ; le bouton
+ * gauche mene au Flux (tap) et aux Reels (appui long).
  *
- * « Feed » n'y figure plus : un simple tap du bouton gauche y mene, et deux chemins
- * pour un meme geste brouillent la carte mentale. « Reels » y reste au contraire —
- * un appui long n'est pas decouvrable et ne peut pas etre le seul acces.
+ * Sort des barreaux retires (Loi 4 — aucune fonction perdue) : « Nouvelle
+ * conversation » est une action de l'en-tete de l'ecran Conversations
+ * (`ConversationHeaderAction.NEW_CONVERSATION`, le FAB a ete retire) ;
+ * « Conversations » est l'ecran d'accueil, deja atteint par le bouton gauche ;
+ * « Contacts » (onglet par defaut) est CE barreau (`menu_contacts` ->
+ * [Routes.CONTACTS]) — l'icone People a quitte le TopAppBar de l'ecran
+ * Conversations, redondante avec un acces deja a portee d'un tap sur tout
+ * ecran ; il reste aussi joignable depuis le Dashboard (bouton People de la
+ * barre de recherche -> `DashboardScreen.onContacts`) et depuis le barreau
+ * Decouvrir (onglet `ContactsTab.Discover` du meme `ContactsScreen`), mais ce
+ * barreau-ci est le chemin nominal a un geste ; « Reels » n'est plus
+ * atteignable QUE par appui long sur le bouton gauche, parite iOS stricte.
+ * « Communautes » est differe : aucune destination Android n'existe encore
+ * (§ constat racine du lot).
  */
 @Composable
-private fun rememberRadialMenuItems(navController: NavController): List<RadialMenuItem> {
-    val messages = stringResource(R.string.tab_messages)
+private fun rememberMenuLadderItems(
+    navController: NavController,
+    unreadNotifications: Int,
+    pendingFriendRequests: Int,
+): List<RadialMenuItem> {
+    val myLinks = stringResource(R.string.menu_my_links)
+    val notifications = stringResource(R.string.menu_notifications)
     val calls = stringResource(R.string.tab_calls)
-    val activity = stringResource(R.string.tab_activity)
-    val settings = stringResource(R.string.menu_settings)
-    val newConversation = stringResource(R.string.menu_new_conversation)
-    val reels = stringResource(R.string.menu_reels)
+    val discover = stringResource(R.string.menu_discover)
     val contacts = stringResource(R.string.menu_contacts)
-    return remember(messages, calls, activity, settings, newConversation, reels, contacts) {
+    val settings = stringResource(R.string.menu_settings)
+    return remember(
+        myLinks,
+        notifications,
+        calls,
+        discover,
+        contacts,
+        settings,
+        unreadNotifications,
+        pendingFriendRequests,
+    ) {
         fun tab(route: String): () -> Unit = {
             navController.navigate(route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -304,21 +330,139 @@ private fun rememberRadialMenuItems(navController: NavController): List<RadialMe
             }
         }
         listOf(
-            RadialMenuItem(Icons.AutoMirrored.Filled.Chat, newConversation, MeeshyPalette.Indigo500) {
-                navController.navigate(Routes.NEW_CONVERSATION)
+            RadialMenuItem(Icons.Filled.AddLink, myLinks, hexColor("#F8B500")) {
+                navController.navigate(Routes.MY_SHARE_LINKS)
             },
-            RadialMenuItem(Icons.Filled.ChatBubble, messages, MeeshyPalette.Indigo500, onSelect = tab(Routes.CONVERSATIONS)),
-            RadialMenuItem(Icons.Filled.PlayCircle, reels, MeeshyPalette.Error) {
-                navController.navigate(Routes.reels())
-            },
-            RadialMenuItem(Icons.Filled.Call, calls, MeeshyPalette.Info, onSelect = tab(Routes.CALLS)),
-            RadialMenuItem(Icons.Filled.Notifications, activity, MeeshyPalette.Warning, onSelect = tab(Routes.NOTIFICATIONS)),
+            RadialMenuItem(
+                icon = Icons.Filled.Notifications,
+                label = notifications,
+                color = hexColor("#FF6B6B"),
+                badgeCount = unreadNotifications,
+                onSelect = tab(Routes.NOTIFICATIONS),
+            ),
+            RadialMenuItem(Icons.Filled.Call, calls, MeeshyPalette.Indigo500, onSelect = tab(Routes.CALLS)),
+            RadialMenuItem(
+                icon = Icons.Filled.PersonSearch,
+                label = discover,
+                color = hexColor("#8B5CF6"),
+                badgeCount = pendingFriendRequests,
+            ) { navController.navigate(Routes.CONTACTS_DISCOVER) },
             RadialMenuItem(Icons.Filled.People, contacts, MeeshyPalette.PinnedBlue) {
                 navController.navigate(Routes.CONTACTS)
             },
-            RadialMenuItem(Icons.Filled.Settings, settings, MeeshyPalette.Purple500, onSelect = tab(Routes.SETTINGS)),
+            RadialMenuItem(Icons.Filled.Settings, settings, hexColor("#64748B"), onSelect = tab(Routes.SETTINGS)),
         )
     }
+}
+
+/**
+ * Les deux boutons flottants ET tout ce qui derive du [ChromeViewModel] (avatar,
+ * badges, echelle) — isoles dans LEUR PROPRE scope de recomposition, pas celui de
+ * [MeeshyApp]. Sans cette isolation, `chromeUnread`/`chromeCurrentUser` etaient lus
+ * au niveau racine de MeeshyApp : toute variation (une notification qui arrive)
+ * invalidait le corps ENTIER de la fonction, y compris le lambda `builder` passe a
+ * `NavHost` — qui perd alors son identite et force Compose a reconstruire tout le
+ * graphe de navigation (30 destinations) pour un changement qui ne concerne qu'une
+ * pastille de 18dp. [hiltViewModel] resout ICI la MEME instance Activity-scopee
+ * que celle deja hoistee dans [MeeshyApp] (l'amorçage y reste, lui, inconditionnel
+ * — voir le commentaire sur `chromeViewModel` la-bas) : appeler `hiltViewModel()`
+ * une seconde fois pour la meme classe, sous le meme [androidx.lifecycle.ViewModelStoreOwner],
+ * rend l'instance DEJA existante, jamais une nouvelle.
+ */
+@Composable
+private fun MeeshyFloatingChrome(
+    navController: NavController,
+    currentRoute: String?,
+    leftButtonPosition: FloatingButtonPosition,
+    rightButtonPosition: FloatingButtonPosition,
+    onLeftPositionChange: (FloatingButtonPosition) -> Unit,
+    onRightPositionChange: (FloatingButtonPosition) -> Unit,
+) {
+    val chromeViewModel: ChromeViewModel = hiltViewModel()
+    val chromeCurrentUser by chromeViewModel.currentUser.collectAsStateWithLifecycle()
+    val chromeUnread by chromeViewModel.unreadNotifications.collectAsStateWithLifecycle()
+    val chromePendingFriendRequests by chromeViewModel.pendingFriendRequests.collectAsStateWithLifecycle()
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    val ladderItems = rememberMenuLadderItems(navController, chromeUnread, chromePendingFriendRequests)
+    val navigateToProfile: () -> Unit = {
+        chromeCurrentUser?.id?.let { userId ->
+            navController.navigate(Routes.profile(userId)) {
+                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
+
+    MeeshyFloatingButtons(
+        leftPosition = leftButtonPosition,
+        rightPosition = rightButtonPosition,
+        onLeftPositionChange = onLeftPositionChange,
+        onRightPositionChange = onRightPositionChange,
+        // Tap : bascule Flux <-> Conversations (parite iOS
+        // `showFeed.toggle()`) via le NavHost, avec la meme semantique
+        // save/restore que les autres destinations de premier niveau.
+        onLeftTap = {
+            navController.navigate(leftButtonTapTarget(currentRoute)) {
+                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        },
+        // Appui long : les Reels. Geste identique a celui d'iOS.
+        onLeftLongPress = { navController.navigate(Routes.reels()) },
+        // Tap 1 (menu ferme) : ouvre l'echelle — c'est le SEUL etat ou ce
+        // lambda peut s'executer : [MeeshyMenuFab] intercepte lui-meme le tap 2
+        // via [onAnchorTapWhileExpanded] ci-dessous pendant que l'echelle est
+        // deployee (son Popup, touch-modal, ne laisse plus jamais ce
+        // combinedClickable recevoir l'evenement dans cet etat).
+        onRightTap = { menuExpanded = true },
+        // Appui long sur l'avatar : raccourci direct vers le profil, sans
+        // passer par le menu.
+        onRightLongPress = {
+            menuExpanded = false
+            navigateToProfile()
+        },
+        leftContentDescription = stringResource(R.string.tab_feed),
+        leftStateDescription = if (currentRoute == Routes.FEED) stringResource(R.string.a11y_state_open) else null,
+        rightContentDescription = if (chromeUnread > 0) {
+            stringResource(R.string.a11y_floating_menu_unread, chromeUnread)
+        } else {
+            stringResource(R.string.a11y_floating_menu)
+        },
+        rightAccessibilityActions = listOf(
+            stringResource(R.string.a11y_edit_profile) to navigateToProfile,
+        ),
+        leftContent = {
+            // Icone de FLUX, pas de maison : ce bouton mene au Feed (et aux
+            // Reels par appui long), une maison promettait un "home" qui
+            // n'existe pas. Filled quand le Flux est la destination active
+            // (on peut taper pour en repartir), outline sinon (un tap y
+            // mene) — le seul signal visuel de bascule que ce bouton porte.
+            Icon(
+                imageVector = if (currentRoute == Routes.FEED) Icons.Filled.DynamicFeed else Icons.Outlined.DynamicFeed,
+                contentDescription = null,
+                tint = MeeshyPalette.Success,
+            )
+        },
+        rightContent = {
+            // Etat HISSE: le menu s'ouvre du premier tap, comme sur iOS.
+            // Direction et cote de deploiement suivent la POSITION de la
+            // pastille (geometrie pure core:model) : vers le haut si elle
+            // est en bas, libelles tournes vers l'interieur de l'ecran.
+            MeeshyMenuFab(
+                items = ladderItems,
+                expanded = menuExpanded,
+                onExpandedChange = { menuExpanded = it },
+                unfoldUpward = menuUnfoldsUpward(rightButtonPosition),
+                growRightward = menuGrowsRightward(rightButtonPosition),
+                collapsedContent = { expanded ->
+                    ChromeAvatarButton(user = chromeCurrentUser, unreadCount = chromeUnread, menuExpanded = expanded)
+                },
+                onAnchorTapWhileExpanded = navigateToProfile,
+            )
+        },
+    )
 }
 
 private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, Routes.NOTIFICATIONS, Routes.SETTINGS)
@@ -358,8 +502,18 @@ fun MeeshyApp(
     // that entry's store, never this Activity-scoped instance, so the WebRTC session
     // and every collector in [CallViewModel] stay alive while the conversation shows.
     val callViewModel: CallViewModel = hiltViewModel()
+    // Ne collecte QUE la reference : les StateFlow eux-memes (badges, avatar) sont
+    // lus a l'interieur de [MeeshyFloatingChrome], pas ici — sinon toute variation
+    // d'un badge invaliderait TOUT MeeshyApp, y compris le lambda `builder` du
+    // NavHost ci-dessous, qui perdrait alors son identite et reconstruirait le
+    // graphe de navigation entier a chaque notification.
+    val chromeViewModel: ChromeViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
     val callState by callViewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(authState.isAuthenticated) {
+        chromeViewModel.warmUpIfAuthenticated(authState.isAuthenticated)
+    }
 
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
@@ -367,7 +521,6 @@ fun MeeshyApp(
     val leftButtonPosition by floatingButtonPositions.leftPosition.collectAsStateWithLifecycle()
     val rightButtonPosition by floatingButtonPositions.rightPosition.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     val onCallScreen = currentRoute == CallRoute.PATTERN
 
     // Branded splash: shown ALWAYS on cold start (parity iOS `MeeshyApp.swift`'s
@@ -394,7 +547,6 @@ fun MeeshyApp(
     }
 
     val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
-    val radialItems = rememberRadialMenuItems(navController)
 
     // Deep-link from a notification tap / full-screen call intent: navigate once
     // the graph is live and the user is authenticated, then mark it consumed so a
@@ -513,13 +665,22 @@ fun MeeshyApp(
                     },
                 )
             }
+            // L'inscription tient en UN écran (#5219) : `Routes.REGISTRATION`
+            // conserve son chemin — le lien depuis la connexion, les tests et
+            // l'historique de navigation le nomment — mais rend `SignupScreen`.
             composable(Routes.REGISTRATION) {
-                RegistrationScreen(
+                SignupScreen(
                     onClose = { navController.popBackStack() },
                     onRegistered = {
                         navController.navigate(Routes.CONVERSATIONS) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
+                    },
+                    onOpenTerms = {
+                        navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
+                    },
+                    onOpenPrivacy = {
+                        navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
                     },
                 )
             }
@@ -561,7 +722,7 @@ fun MeeshyApp(
                         navController.navigate(Routes.chat(conversationId))
                     },
                     onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
-                    onContacts = { navController.navigate(Routes.CONTACTS) },
+                    onOpenShareLinkPicker = { navController.navigate(Routes.SHARE_LINK_PICKER) },
                     onDashboard = { navController.navigate(Routes.DASHBOARD) },
                     onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
                     onLogout = {
@@ -575,6 +736,17 @@ fun MeeshyApp(
                             onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
                             onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
                         )
+                    },
+                )
+            }
+            composable(Routes.SHARE_LINK_PICKER) {
+                ShareLinkPickerScreen(
+                    onBack = { navController.popBackStack() },
+                    onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
+                    onSelectConversation = { conversationId ->
+                        navController.navigate(Routes.createShareLink(conversationId)) {
+                            popUpTo(Routes.SHARE_LINK_PICKER) { inclusive = true }
+                        }
                     },
                 )
             }
@@ -690,11 +862,19 @@ fun MeeshyApp(
                 FeedScreen(
                     onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
                     onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
-                    onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
+                    onOpenReels = { navController.navigate(Routes.reels()) },
+                    onOpenNearby = { navController.navigate(Routes.NEARBY_DISCOVERY) },
                 )
             }
             composable(Routes.SAVED_POSTS) {
                 BookmarksScreen(
+                    onBack = { navController.popBackStack() },
+                    onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+                )
+            }
+            composable(Routes.NEARBY_DISCOVERY) {
+                NearbyScreen(
                     onBack = { navController.popBackStack() },
                     onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
                     onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
@@ -721,8 +901,20 @@ fun MeeshyApp(
             composable(Routes.CONTACTS) {
                 ContactsScreen(onBack = { navController.popBackStack() })
             }
+            composable(Routes.CONTACTS_DISCOVER) {
+                ContactsScreen(
+                    onBack = { navController.popBackStack() },
+                    initialTab = me.meeshy.app.contacts.ContactsTab.Discover,
+                )
+            }
             composable(Routes.NOTIFICATIONS) {
-                NotificationsScreen()
+                NotificationsScreen(
+                    onOpenConversation = { navController.navigate(Routes.chat(it)) },
+                    onOpenPost = { navController.navigate(Routes.postDetail(it)) },
+                    onOpenReel = { navController.navigate(Routes.reels(seed = it)) },
+                    onOpenStory = { navController.navigate(Routes.story(it)) },
+                    onOpenProfile = { navController.navigate(Routes.profile(it)) },
+                )
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
@@ -735,6 +927,7 @@ fun MeeshyApp(
                     },
                     onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                     onOpenStarred = { navController.navigate(Routes.STARRED) },
+                    onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
                     onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
                     onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
                     onOpenTwoFactor = { navController.navigate(Routes.TWO_FACTOR) },
@@ -962,62 +1155,13 @@ fun MeeshyApp(
         // et non dans le slot floatingActionButton du Scaffold : ce slot positionne
         // lui-meme son contenu, donc un bouton deplacable ne peut pas y tenir.
         if (showMenuFab) {
-            MeeshyFloatingButtons(
-                leftPosition = leftButtonPosition,
-                rightPosition = rightButtonPosition,
+            MeeshyFloatingChrome(
+                navController = navController,
+                currentRoute = currentRoute,
+                leftButtonPosition = leftButtonPosition,
+                rightButtonPosition = rightButtonPosition,
                 onLeftPositionChange = { scope.launch { floatingButtonPositions.setLeftPosition(it) } },
                 onRightPositionChange = { scope.launch { floatingButtonPositions.setRightPosition(it) } },
-                // Tap : bascule Flux <-> Conversations (parite iOS
-                // `showFeed.toggle()`) via le NavHost, avec la meme semantique
-                // save/restore que les autres destinations de premier niveau.
-                onLeftTap = {
-                    navController.navigate(leftButtonTapTarget(currentRoute)) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                // Appui long : les Reels. Geste identique a celui d'iOS.
-                onLeftLongPress = { navController.navigate(Routes.reels()) },
-                onRightTap = { menuExpanded = !menuExpanded },
-                // Appui long sur l'avatar : raccourci direct vers le profil, sans
-                // passer par le menu.
-                onRightLongPress = {
-                    menuExpanded = false
-                    navController.navigate(Routes.SETTINGS) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                leftContentDescription = stringResource(R.string.tab_feed),
-                rightContentDescription = stringResource(R.string.a11y_floating_menu),
-                leftContent = {
-                    // Icone de FLUX, pas de maison : ce bouton mene au Feed (et aux
-                    // Reels par appui long), une maison promettait un "home" qui
-                    // n'existe pas. Filled quand le Flux est la destination active
-                    // (on peut taper pour en repartir), outline sinon (un tap y
-                    // mene) — le seul signal visuel de bascule que ce bouton porte.
-                    Icon(
-                        imageVector = if (currentRoute == Routes.FEED) Icons.Filled.DynamicFeed else Icons.Outlined.DynamicFeed,
-                        contentDescription = null,
-                        tint = MeeshyPalette.Success,
-                    )
-                },
-                rightContent = {
-                    // Etat HISSE: le menu s'ouvre du premier tap, comme sur iOS.
-                    // Direction et cote de deploiement suivent la POSITION de la
-                    // pastille (geometrie pure core:model) : vers le haut si elle
-                    // est en bas, libelles tournes vers l'interieur de l'ecran.
-                    MeeshyMenuFab(
-                        items = radialItems,
-                        expanded = menuExpanded,
-                        onExpandedChange = { menuExpanded = it },
-                        unfoldUpward = menuUnfoldsUpward(rightButtonPosition),
-                        growRightward = menuGrowsRightward(rightButtonPosition),
-                        collapsedContent = { MeeshyInitialsButton(username = authState.username) },
-                    )
-                },
             )
         }
       }
@@ -1052,26 +1196,7 @@ fun MeeshyApp(
     }
 }
 
-/**
- * Le bouton droit au repos : les initiales de l'utilisateur.
- *
- * `AuthState` n'expose pas d'URL d'avatar — les initiales sont donc le chemin
- * NOMINAL, pas un cas degrade. Un nom vide rend tout de meme un cercle plein : un
- * bouton de navigation invisible rendrait l'application impilotable.
- */
-@Composable
-private fun MeeshyInitialsButton(username: String) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(MeeshyPalette.Indigo500),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = username.trim().take(1).uppercase(),
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium,
-        )
-    }
-}
+// [ChromeAvatarButton] (bouton droit au repos : avatar photo/initiales, anneau,
+// badge) et ses fonctions pures [chromeAvatarUsesPhoto]/[chromeAvatarRingColors]
+// vivent dans ChromeAvatarButton.kt — extrait pour respecter le budget de taille
+// (directive 2026-08-28).

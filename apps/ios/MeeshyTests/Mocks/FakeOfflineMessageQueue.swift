@@ -26,6 +26,8 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         let content: String?
         let clientMessageId: String
         let copyAttachmentsFromClientMessageId: String?
+        /// Sticker enfilé avec le PNG (#4823) ; nil pour un média ordinaire.
+        let sticker: MessageSticker?
         let deletesSourceFiles: Bool
         let createdAt: Date?
     }
@@ -108,6 +110,7 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         copyAttachmentsFromClientMessageId: String?,
+        sticker: MessageSticker?,
         deletesSourceFiles: Bool,
         createdAt: Date?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
@@ -118,6 +121,7 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
             conversationId: conversationId, content: content,
             clientMessageId: clientMessageId,
             copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
+            sticker: sticker,
             deletesSourceFiles: deletesSourceFiles, createdAt: createdAt))
         return OfflineQueue.EnqueueMediaResult(
             outboxId: "ofq_fake_\(clientMessageId)",

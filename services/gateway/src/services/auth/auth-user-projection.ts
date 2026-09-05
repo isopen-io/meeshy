@@ -40,7 +40,21 @@ import { AUTO_TRANSLATE_PREFERENCE_SELECT } from '../../utils/auto-translate-pre
  * pas des secrets, les deux portes de connexion les lisent (verrou, fuseau
  * détecté), et l'état du verrou voyage déjà avec l'utilisateur (#4138).
  *
+ * ## Ce que le `select` doit AUSSI porter : ce que le CONTRAT promet (#4641)
+ *
+ * `banner` a rejoint la liste pour une raison DISTINCTE de toutes les
+ * précédentes : aucun lecteur ne l'avait jamais demandé. `userToSocketIOUser`
+ * ne le projetait pas, donc rien ne rougissait — et en aval `formatUserResponse`
+ * écrivait `banner: user.banner || null` sur un `undefined` par construction,
+ * c'est-à-dire **`null`, toujours**. Tout compte portant une bannière la
+ * perdait à chaque connexion, sur les trois portes.
+ *
+ * La règle générale : un `select` d'authentification porte ce que le LECTEUR
+ * lit (#4554) **et** ce que `userSchema` PROMET (#4641) — les deux ensembles ne
+ * coïncident pas, et le second n'a aucun témoin qui le mesure côté lecteur.
+ *
  * @see services/gateway/src/__tests__/unit/services/auth-result-projection-single-site.test.ts
+ * @see services/gateway/src/__tests__/unit/services/auth-served-user-field-producers.test.ts
  */
 export const AUTH_USER_SELECT = {
   id: true,
@@ -51,6 +65,7 @@ export const AUTH_USER_SELECT = {
   lastName: true,
   displayName: true,
   avatar: true,
+  banner: true,
   bio: true,
   systemLanguage: true,
   regionalLanguage: true,

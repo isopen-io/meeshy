@@ -85,7 +85,6 @@ import MeeshySDK
 @MainActor
 enum ConversationFirstRenderWarmup {
     private static var done = false
-    private static var warmupWindow: UIWindow?
 
     static func run() {
         guard !done else { return }
@@ -105,53 +104,40 @@ enum ConversationFirstRenderWarmup {
         warmUpViewModelKeyPaths()
         warmUpReadingModeController()
 
-        let epoch = Date(timeIntervalSince1970: 1_700_000_000)
-        let conversation = MeeshyConversation(
-            id: "metadata-warmup", identifier: "metadata-warmup", type: .direct,
-            lastMessageAt: epoch, createdAt: epoch, updatedAt: epoch,
-            userState: ConversationUserState(
-                isPinned: false, isMuted: false, mentionsOnly: false,
-                isArchived: false, customName: nil, reaction: nil,
-                tags: [], sectionId: nil, version: 0
-            )
-        )
-        let host = UIHostingController(
-            rootView: ConversationView(conversation: conversation, previewMode: true)
-                .environmentObject(StoryViewModel())
-                .environmentObject(StatusViewModel())
-                .environmentObject(Router())
-                .environmentObject(ConversationListViewModel())
-        )
-        // Une VRAIE window est requise pour que SwiftUI évalue le body ;
-        // alpha 0 + windowLevel sous tout + non-key : jamais visible, ne vole
-        // pas le focus. previewMode coupe les branches interactives ; le
-        // ViewModel jetable pointe une conversation inexistante (ses loads
-        // échouent en silence, cache vide + 404).
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        window.rootViewController = host
-        window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue - 1000)
-        window.alpha = 0
-        window.isHidden = false
-        warmupWindow = window
-        host.view.layoutIfNeeded()
-
-        // Démontage SYNCHRONE, dans le MÊME tick que le rendu — jamais un
-        // second `DispatchQueue.main.async` (constaté crashogène 2026-08-17,
-        // `Meeshy-2026-08-17-161136.ips` : SIGKILL/CODESIGNING, saut dans une
-        // page de tas non signée pendant `AG::Graph::UpdateStack::update()`,
-        // à l'intérieur de `ConversationListView.mainContentZStack.getter`).
-        // Le report d'un tour de runloop laissait cette fenêtre + son
-        // `UIHostingController` + son `ConversationListViewModel` JETABLE
-        // vivants pendant que le VRAI premier rendu de `ConversationListView`
-        // (sa propre `ConversationListViewModel`) pouvait s'exécuter — deux
-        // graphes SwiftUI actifs en même temps, dont un en cours de
-        // démontage. `layoutIfNeeded()` a déjà forcé et terminé l'évaluation
-        // du body ; rien ne justifie d'attendre un tick de plus pour libérer
-        // la fenêtre.
-        warmupWindow?.isHidden = true
-        warmupWindow?.rootViewController = nil
-        warmupWindow = nil
-        NSLog("[ConversationFirstRenderWarmup] window torn down")
+        // **L'ÉTAGE DE RENDU EST RETIRÉ (2026-09-03).**
+        //
+        // Il montait un `UIHostingController(rootView: ConversationView(…))`
+        // dans une fenêtre invisible et appelait `layoutIfNeeded()` pour
+        // forcer l'évaluation du body. Cet étage NE POUVAIT PAS aboutir : il
+        // matérialise toute la chaîne de types de `ConversationView` en UNE
+        // passe, et cette passe ne tient pas dans les 1008 Ko du thread
+        // principal. Mesuré sur device (iPhone 16 Pro Max, iOS 26.6.1) —
+        // `signal 11` dans la page de garde à CHAQUE lancement, huit rapports
+        // le 2026-09-03 entre 14:12 et 17:45. La frame fautive se DÉPLAÇAIT à
+        // chaque correctif (`ephemeralDuration.getter`, puis
+        // `composerPickersAndSheets`), preuve que le budget était dépassé
+        // globalement et non par un maillon coupable.
+        //
+        // Le relevé qui le dit : sur les 91 trames, `bodyContent.getter`
+        // apparaît QUATRE fois (ré-entrée par les closures de `VStack`/
+        // `ZStack`), chacune portant la frame d'une fonction qui construit un
+        // arbre de vues géant. 72 trames non-démangleur consommaient ~685 Ko,
+        // soit ~9,5 Ko par trame — ce sont les getters de body eux-mêmes qui
+        // sont gros, pas seulement le décodeur de métadonnées.
+        //
+        // Les deux étages CONSERVÉS ci-dessus sont ceux qui payent : ils
+        // résolvent les patterns de keypath depuis une pile PLATE, et le cache
+        // de métadonnées étant global au process, le rendu réel les retrouve
+        // chauds. L'étage de rendu, lui, ne pré-chauffait rien — il plantait
+        // avant d'avoir fini.
+        //
+        // La dette de fond reste OUVERTE : découper `ConversationView` en
+        // structs `View` NOMINALES (chacune crée un nœud d'attribut où SwiftUI
+        // déroule la pile, et son getter porte une frame petite). Tant qu'elle
+        // n'est pas payée, ne PAS réintroduire un rendu de warm-up : c'est un
+        // crash au lancement, pas une optimisation.
+        //
+        // Garde : `ConversationWarmupHasNoRenderStageTests`.
         NSLog("[ConversationFirstRenderWarmup] done in %.0f ms", (CFAbsoluteTimeGetCurrent() - start) * 1000)
     }
 
@@ -161,14 +147,80 @@ enum ConversationFirstRenderWarmup {
     /// `_enclosingInstance` — celui-là même qui débordait la pile au fond du
     /// premier rendu. `topActiveMembersList` reproduit le chemin complet du
     /// crash (headerAvatarView → topActiveMembers → messages).
+    ///
+    /// **TOUS les `@Published` sont lus, et ce n'est pas du zèle (2026-09-03).**
+    /// Cette liste n'en nommait que cinq, choisies à chaque crash d'après la
+    /// trame fautive de ce crash-là. Une liste ainsi tenue n'énonce pas un
+    /// invariant : elle énonce l'historique des pannes DÉJÀ VUES, et se périme
+    /// en silence dès qu'un `body` lit un sixième `@Published`. C'est
+    /// exactement ce qui est arrivé — le composer lit `ephemeralDuration`
+    /// (`ConversationView+Composer.swift`, `composerCoreBody`), absent de la
+    /// liste, et l'app plantait AU LANCEMENT : `signal 11` dans la page de
+    /// garde, `_swift_getKeyPath` → `ephemeralDuration.getter` →
+    /// `composerCoreBody.getter` → … → `performWarmup()` (device iPhone 16 Pro
+    /// Max, `segv_backtrace.txt` du 17:41, build 1805).
+    ///
+    /// L'instanciation d'UN pattern de keypath descend sur ~43 trames à ~17 Ko
+    /// chacune ≈ 730 Ko. Au fond d'un rendu SwiftUI il ne reste pas 730 Ko des
+    /// 1008 Ko du thread principal ; depuis la pile PLATE d'ici, oui. Le coût
+    /// de les lire toutes est un accès mémoire par propriété — payé une fois,
+    /// au démarrage, contre une classe entière de crashs.
+    ///
+    /// La couverture est VÉRIFIÉE, pas promise :
+    /// `ConversationWarmupCoversEveryPublishedTests` dérive l'inventaire des
+    /// `@Published` de la source du ViewModel et échoue sur tout absent d'ici.
+    /// Une propriété `@Published` ajoutée au ViewModel fait donc rougir la
+    /// garde AVANT de faire planter un appareil.
     private static func warmUpViewModelKeyPaths() {
         let vm = ConversationViewModel(conversationId: "metadata-warmup")
         _ = vm.topActiveMembersList(accentColor: "#6366F1")
-        _ = vm.messages
+        _ = vm.accessRevoked
+        _ = vm.activeAudioLanguageOverrides
+        _ = vm.activeLiveLocations
+        _ = vm.activeTranslationOverrides
+        _ = vm.bubbleLanguageSelections
+        _ = vm.currentConversation
+        _ = vm.currentSearchQuery
+        _ = vm.editInProgress
+        _ = vm.ephemeralDuration
+        _ = vm.error
+        _ = vm.firstUnreadMessageId
+        _ = vm.hasNewerMessages
+        _ = vm.hasOlderMessages
+        _ = vm.isBlurEnabled
+        _ = vm.isConversationClosed
+        _ = vm.isInJumpedState
         _ = vm.isLoadingInitial
+        _ = vm.isLoadingNewer
+        _ = vm.isLoadingOlder
+        _ = vm.isLoadingReactions
         _ = vm.isRevalidating
+        _ = vm.isSearching
+        _ = vm.isSearchingQuotedMessage
+        _ = vm.isSending
+        _ = vm.isViewOnceEnabled
+        _ = vm.lastUnreadMessage
+        _ = vm.listenedAttachmentIds
+        _ = vm.mentionController
+        _ = vm.messageTranscriptions
+        _ = vm.messageTranscriptionsByAttachment
+        _ = vm.messageTranslatedAudios
+        _ = vm.messageTranslatedAudiosByAttachment
+        _ = vm.messageTranslations
+        _ = vm.messages
         _ = vm.otherConversationsUnread
-        NSLog("[ConversationFirstRenderWarmup] viewmodel keypaths warmed")
+        _ = vm.pendingEffects
+        _ = vm.preferredLanguageRevision
+        _ = vm.quotedMessageSearchTarget
+        _ = vm.reactionDetails
+        _ = vm.scrollAnchorId
+        _ = vm.searchHasMore
+        _ = vm.searchResults
+        _ = vm.showEffectsPicker
+        _ = vm.translatingAudioLanguages
+        _ = vm.translatingTextLanguages
+        _ = vm.voiceConsentMissing
+        NSLog("[ConversationFirstRenderWarmup] viewmodel keypaths warmed (46)")
     }
 
     /// Même patron que `warmUpViewModelKeyPaths`, pour `ReadingModeController`

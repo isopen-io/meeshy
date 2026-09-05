@@ -138,20 +138,66 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
     /// inerte, avec un état de plus pour le prouver.
     func test_leOnDismissDeLaFeuille_consommeLIntentionEnAttente() throws {
         let code = compact(try hostUnit())
-        XCTAssertTrue(code.contains("onDismiss:{resumePendingPresentation()}"),
+        // **Ancrée sur la FIN du `onDismiss`, pas sur son contenu entier.** La
+        // fermeture porte aussi l'extinction du contexte d'édition du son de
+        // contenu (#4657) ; exiger un corps d'UNE seule instruction aurait fait
+        // rougir la garde sur un ajout parfaitement légitime, sans rien dire de
+        // la reprise qu'elle protège. Ce qui compte est que la reprise soit là,
+        // et qu'elle CONCLUE la fermeture — le présentateur n'est libre qu'après.
+        XCTAssertTrue(code.contains("resumePendingPresentation()}){portailin"),
                       "La feuille des portails doit reprendre l'import en attente à sa "
-                      + "fermeture EFFECTIVE — c'est le seul instant où le présentateur "
-                      + "est libre.")
+                      + "fermeture EFFECTIVE, en DERNIER — c'est le seul instant où le "
+                      + "présentateur est libre.")
     }
 
     /// **La moitié « destination », celle que le premier défaut cachait.** Un
-    /// fichier audio va sur la SCÈNE avec son rôle, jamais dans la liste média.
-    func test_unFichierAudio_estPoseSurLaScene_avecSonRole() throws {
+    /// fichier audio suit le PLACEMENT choisi dans la feuille — un état du
+    /// MEUBLE, qui survit donc à sa fermeture.
+    ///
+    /// **Le témoin s'est resserré au #4676.** Il exigeait
+    /// `attachPastedAudio(url:destination, role: chosenSoundPlacement)`, c'est-à-dire
+    /// que le rôle VOYAGE. C'était nécessaire et pas suffisant : posé en fond,
+    /// un son passé par ce chemin ajoutait un SECOND objet `isBackground` que
+    /// `resolvedBackgroundAudio` ne regardait pas — le rôle arrivait bien, et ne
+    /// produisait rien. Les deux branches sont donc épinglées séparément,
+    /// puisqu'elles n'appellent plus la même chose.
+    func test_unFichierAudio_suitSonPlacement_etLeFondREMPLACE() throws {
         let code = compact(try hostUnit())
         XCTAssertTrue(code.contains("funcingestSoundFiles("))
-        XCTAssertTrue(code.contains("viewModel.attachPastedAudio(url:destination,role:chosenSoundRole)"),
-                      "Le rôle choisi dans la feuille doit suivre le fichier — il survit "
-                      + "à la fermeture parce qu'il est un état du MEUBLE.")
+        XCTAssertTrue(code.contains("case.background:attachBackgroundSound(url:destination)"),
+                      "posé en fond, le fichier doit REMPLACER le fond en place — "
+                      + "`attachPastedAudio` en ajouterait un second que personne ne regarde")
+        XCTAssertTrue(code.contains("ComposerSoundDestination.forForeground(on:mountedComposerView)"),
+                      "posé en premier plan, il demande d'abord OÙ ce premier plan atterrit")
+        XCTAssertTrue(code.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                      "sur une scène, il devient une puce POSÉE dessus")
+        XCTAssertTrue(code.contains("case.contentCard:documentLocalMedia.append("),
+                      "sans scène, il devient une carte de contenu — sinon l'objet de scène "
+                      + "n'est rendu par rien et part quand même à la publication")
+    }
+
+    /// **Le témoin qui vient d'être retourné, et pourquoi** (#4722).
+    ///
+    /// Il exigeait `case .foreground: viewModel.attachPastedAudio(…)` — une pose
+    /// d'objet de scène INCONDITIONNELLE. C'était juste sur une scène et faux
+    /// sur un post texte, où rien ne rend un objet de scène : le son y
+    /// disparaissait de l'écran sans quitter la publication.
+    ///
+    /// > Un témoin qui épingle un APPEL épingle aussi, sans le dire, le fait
+    /// > qu'aucune condition ne le précède. C'est la moitié de son affirmation
+    /// > que personne ne relit — et celle qui se périme quand la question gagne
+    /// > un second cas.
+    ///
+    /// Le chemin voisin (`applyCreatedAudio`, l'enregistrement) faisait
+    /// l'inverse au même moment : toujours une carte de contenu. Deux réponses
+    /// pour une intention, chacune fausse sur la surface de l'autre.
+    func test_lesDeuxCheminsDuPremierPlan_nePosentPlusChacunLeurReponse() throws {
+        let code = compact(try hostUnit())
+        XCTAssertFalse(code.contains("case.foreground:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
+                       "la pose inconditionnelle est ce que ce lot retire")
+        let consultations = code.components(separatedBy: "ComposerSoundDestination.forForeground(").count - 1
+        XCTAssertEqual(consultations, 3,
+                       "les deux poses et le libellé de la feuille interrogent la même règle")
     }
 
     /// **L'intention retombe dès la lecture.** Laissée à `.sound`, elle ferait

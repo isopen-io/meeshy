@@ -260,6 +260,16 @@ private struct CometPillModifier: ViewModifier {
     @State private var wobblePhase: CGFloat = 0
     @State private var didStart = false
 
+    /// Reduce Motion a deux interrupteurs — systeme ET override in-app — et
+    /// se composent par un OU (`MeeshyMotion.shouldReduce`, la regle du SDK).
+    /// Voir l'idiome documente dans `ReduceMotion.swift`.
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     init(isNew: Bool) {
         self.isNew = isNew
         // Pills deja vues : etat final immediat. Pills neuves : etat
@@ -296,6 +306,16 @@ private struct CometPillModifier: ViewModifier {
             .onAppear {
                 guard isNew, !didStart else { return }
                 didStart = true
+                // Regle 6 des effets (apps/ios/CLAUDE.md) : sous Reduce
+                // Motion l'INTENTION reste (la reaction est bien la, avec
+                // son haptique), mais le MOUVEMENT part — pas de comete, pas
+                // de tremblement. La pill se pose directement a son etat
+                // final.
+                guard !reduceMotion else {
+                    progress = 1
+                    HapticFeedback.light()
+                    return
+                }
                 startCometLanding()
             }
     }

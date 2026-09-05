@@ -67,9 +67,75 @@ function log(...args) {
 // du § 4.3 : retirer un `PathPrefix` ne demande aucune contrepartie ici (ne
 // pas intercepter n'est jamais faux, seulement moins mis en cache), alors que
 // l'en retirer rouvrirait le défaut le temps d'une propagation de worker.
-// Gardé par `__tests__/public/sw.v3-zone.test.ts`, qui lit la règle réelle du
-// compose de production et exige `règle Traefik ⊆ cette liste`.
-const V3_ZONE_PREFIXES = ['/__v3'];
+// Gardé par `scripts/check-v3-pipeline.mjs` — invariant « le worker legacy
+// s'efface devant ce que la règle réclame », posé une fois PAR DÉPLOIEMENT
+// (production ET staging) et qui EXÉCUTE `belongsToV3Zone` plutôt que de la
+// recopier. `__tests__/public/sw.v3-zone.test.ts` garde l'autre moitié : que
+// chaque chemin réclamé échappe VRAIMENT au listener.
+//
+// `/l` est entré ici pour l'ÉTAPE 2 du § 4.9 (« le rôle premier, une seule
+// route »), dans le commit antérieur exigé ci-dessus.
+//
+// LES SIX SUIVANTS SONT UN RATTRAPAGE, ET IL FAUT LE DIRE. `/` a été réclamé
+// par le routeur de staging quand la vitrine v3 a basculé (2026-09-01) SANS
+// entrer dans cette liste : la vitrine était donc servie aux navigateurs neufs
+// et le shell du legacy, sorti du cache, aux revenants. Aucun témoin n'a
+// rougi — celui qui existait ne lisait que le compose de PRODUCTION et ne
+// reconnaissait que `PathPrefix(…)`, jamais `Path(…)`, qui est justement la
+// forme employée pour `/`. Les cinq pages institutionnelles entrent, elles,
+// dans l'ordre nominal : ici d'abord, au routeur ensuite (#4686). `/login` et
+// `/signup` suivent le même ordre : la v3 les sert désormais par un
+// `<form method="post">` sans JavaScript, et le shell du legacy sorti du cache
+// les recouvrirait sans cela chez tout visiteur revenant. `/chats` entre au
+// meme titre : la v3 y sert desormais la liste des conversations du lecteur, et
+// un shell mis en cache par le worker y montrerait celles de la session
+// PRECEDENTE — le pire des defauts que ce cache puisse produire.
+// `/chat` (au singulier) est la porte de l'INVITE — `/chat/:lien`, conception
+// § 12.3 — servie par la v3 avec un formulaire sans JavaScript ; il entre ici
+// AVANT le routeur (§ 4.4 bis), sinon le shell legacy de `/chat/[id]` sorti du
+// cache recouvrirait la modale de choix chez tout visiteur revenant.
+// HUIT PREFIXES AJOUTES LE 2026-09-03, et la raison merite d'etre dite : ces
+// ecrans etaient LIVRES, testes et mesures depuis des jours, et sur AUCUN
+// chemin de bascule. Le worker les interceptait donc chez tout visiteur
+// revenant, et le routeur ne pouvait pas les reclamer sans les servir aux
+// seuls navigateurs neufs. Six d'entre eux (`/contacts`, `/links`, `/search`,
+// `/notifications`, `/post`, `/stories`) etaient dans ce trou depuis leur
+// livraison ; deux (`/reels`, `/moods`) y entrent avec elle.
+//
+// C'est la PREMIERE marche du § 4.4 bis — declarer, DEPLOYER, puis reclamer au
+// routeur. L'invariant « le worker legacy connait TOUT ce que la zone sert »
+// (`scripts/lib/v3-routage.mjs`) la garde desormais : un ecran servi par
+// `apps/web-v3/app` et absent de cette liste fait rougir le gate.
+const V3_ZONE_PREFIXES = [
+  '/__v3',
+  '/l',
+  '/',
+  '/about',
+  '/contact',
+  '/partners',
+  '/terms',
+  '/privacy',
+  '/login',
+  '/signup',
+  '/chats',
+  '/chat',
+  '/contacts',
+  '/links',
+  '/search',
+  '/notifications',
+  '/post',
+  '/stories',
+  '/reels',
+  '/moods',
+  '/settings',
+  '/feed',
+  '/composer',
+  '/deconnexion',
+  // `/calls` entre le 2026-09-05 — l'historique des appels (#5108, consultation
+  // seule, aucune pile WebRTC embarquee) : meme marche que les huit ci-dessus,
+  // declaree ICI avant que le routeur ne la reclame (§ 4.4 bis).
+  '/calls',
+];
 
 function belongsToV3Zone(pathname) {
   return V3_ZONE_PREFIXES.some(
