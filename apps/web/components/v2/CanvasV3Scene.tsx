@@ -2,7 +2,7 @@
 
 import { Component, useEffect, useRef, type ReactNode } from 'react';
 import type { CanvasV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
 import {
   effectiveMediaRatio,
   mediaCropStyle,
@@ -327,19 +327,6 @@ function objectStyle(o: ObjectV3, anim?: ObjectAnimation | null): React.CSSPrope
 function bandClass(anchor: ObjectV3['anchor']): string | undefined {
   if (anchor.t !== 'band') return undefined;
   return anchor.edge === 'top' ? 'band-top' : 'band-bottom';
-}
-
-/// Égalité de langue conforme au Prisme : les codes comparés ici sont verbatim
-/// (clés de `translations`, `o.locale`, préférences du lecteur) et peuvent être
-/// région-tagués (`en-US`, `fr_FR`), sous-tagués script (`zh-Hant`), 3-lettres
-/// (`fra`, `swe`) ou legacy (`iw`). Un `split('-')[0]` ne réduit ni le séparateur
-/// `_`, ni les codes 639-2/3, ni les alias dépréciés : `fr_FR` et `fr`, `fra` et
-/// `fr`, `iw` et `he` y compteraient pour des langues distinctes, et un objet
-/// déjà écrit dans la langue primaire du lecteur (ou une traduction keyée sous
-/// une forme divergente) serait manqué.
-/// SSOT de la canonicalisation : normalizeLanguageForDedup (language-normalize.ts).
-function sameLanguage(a: string, b: string): boolean {
-  return normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 }
 
 export function translationFor(translations: Record<string, unknown>, language: string): string | undefined {
