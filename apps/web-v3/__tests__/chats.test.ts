@@ -1,10 +1,14 @@
 /**
  * @jest-environment node
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
+
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/app/authentification/remise';
 import { appliqueLeGeste, GESTE_SUR_UNE_LIGNE, soumissionDuGeste } from '@/app/connecte/liste-porte';
 import { documentDesChats } from '@/app/connecte/liste-vue';
-import { ACTIONS, CHATS, CONFIRMATIONS } from '@/lib/contenu/liste';
+import { ACTIONS, CHATS, CONFIRMATIONS, NOUVELLE_CONVERSATION, vedetteDe } from '@/lib/contenu/liste';
 import type { Conversation } from '@/lib/api/compte';
 
 /**
@@ -319,5 +323,176 @@ describe('la greffe du temps réel', () => {
 
     expect(doc).not.toContain('data-participation');
     expect(doc).not.toContain('type="module"');
+  });
+});
+
+/**
+ * LA DISPOSITION DE LA CIBLE (#5164, `cible/chats.png`) — l'en-tête, les deux
+ * puces d'action, la puce du Prisme, et la conversation mise en avant.
+ */
+describe('l’en-tête et les deux actions de la cible', () => {
+  it('rend « Chats » et son sous-titre, jamais l’ancienne action primaire unique', () => {
+    const doc = document();
+
+    expect(doc).toContain(`<h1>${CHATS.titre}</h1>`);
+    expect(doc).toContain(`<p>${CHATS.accroche}</p>`);
+    expect(doc).toContain(`<title>${CHATS.titre} — Meeshy</title>`);
+    // L'action primaire unique d'avant ce lot a disparu : deux puces la
+    // remplacent, jamais un troisième contrôle qui ferait doublon.
+    expect(doc).not.toContain('class="action primaire" href="/chats?nouvelle"');
+  });
+
+  it('porte deux puces contour de même rang, dans l’ordre de la cible', () => {
+    const doc = document();
+    const corps = doc.slice(doc.indexOf('<body>'));
+
+    expect(corps).toContain('<nav class="actions-rapides" aria-label="Actions rapides">');
+    expect(corps).toContain('<a class="action contour" href="/links?nouveau">');
+    expect(corps).toContain(`href="/links?nouveau">`);
+    expect(corps).toContain(CHATS.actionLien);
+    expect(corps).toContain('<a class="action contour" href="/chats?nouvelle"');
+    expect(corps).toContain(CHATS.actionConversation);
+    // Le texte VISIBLE est raccourci ; le nom ACCESSIBLE porte le plein mot
+    // (celui du titre de la feuille qu'elle ouvre) — jamais l'inverse.
+    expect(corps).toContain(`aria-label="${NOUVELLE_CONVERSATION.ouvrir}"`);
+
+    // L'ORDRE : le lien avant la conversation, comme la cible les dessine
+    // côte à côte de gauche à droite.
+    expect(corps.indexOf('/links?nouveau')).toBeLessThan(corps.indexOf('/chats?nouvelle'));
+  });
+
+  it('place les deux puces AVANT la puce du Prisme, elle-même AVANT la section de la liste', () => {
+    const doc = document();
+    const corps = doc.slice(doc.indexOf('<body>'));
+
+    const actions = corps.indexOf('class="actions-rapides"');
+    const prisme = corps.indexOf('class="puce prisme"');
+    const liste = corps.indexOf('class="liste"');
+
+    expect(actions).toBeGreaterThan(-1);
+    expect(prisme).toBeGreaterThan(actions);
+    expect(liste).toBeGreaterThan(prisme);
+  });
+});
+
+describe('la puce Prisme de la liste', () => {
+  it('dit « AUTO · <langue> », dans la langue de RANG 1 du prisme du lecteur', () => {
+    const doc = document({ langues: ['es', 'fr'] });
+
+    expect(doc).toContain('<p class="puce prisme"');
+    expect(doc).toContain('espagnol');
+    expect(doc).not.toContain('français<');
+  });
+
+  /** Aucun chevron, aucun contrôle : la feuille des langues n'est pas servie ici non plus (règle 7). */
+  it('n’est ni un lien ni un bouton — elle n’ouvre rien', () => {
+    const doc = document();
+    const corps = doc.slice(doc.indexOf('<body>'));
+    const debut = corps.indexOf('class="puce prisme"');
+    const balise = corps.slice(Math.max(0, corps.lastIndexOf('<', debut)), debut);
+
+    expect(balise.trim().startsWith('<p')).toBe(true);
+  });
+});
+
+describe('la conversation mise en avant', () => {
+  const A = CONVERSATION({ id: 'a', titre: 'A', nonLus: 0, dernierMessageA: '2026-09-01T12:00:00.000Z' });
+  const B = CONVERSATION({ id: 'b', titre: 'B', nonLus: 3, dernierMessageA: '2026-09-01T11:00:00.000Z' });
+  const C = CONVERSATION({ id: 'c', titre: 'C', nonLus: 5, dernierMessageA: '2026-09-01T10:00:00.000Z' });
+
+  it('élit la PREMIÈRE non lue de l’ordre servi — pas la plus non lue, pas la première tout court', () => {
+    const doc = document({ conversations: [A, B, C] });
+
+    expect(doc).toContain('<li class="vedette" data-conversation="b"');
+    expect(doc).not.toContain('<li class="vedette" data-conversation="a"');
+    expect(doc).not.toContain('<li class="vedette" data-conversation="c"');
+  });
+
+  it('porte les mêmes fentes qu’une ligne plate — pistes, menu à trois gestes, compte', () => {
+    const doc = document({ conversations: [A, B, C] });
+    const ligneB = doc.slice(doc.indexOf('data-conversation="b"'), doc.indexOf('data-conversation="c"'));
+
+    expect(ligneB).toContain('piste avant');
+    expect(ligneB).toContain('piste apres');
+    expect(ligneB).toContain('<details class="actions">');
+    expect(ligneB.match(/name="geste" value="/g)?.length).toBe(3);
+    expect(ligneB).toContain('<span class="compte">');
+  });
+
+  it('n’élit personne quand rien n’est non lu', () => {
+    const doc = document({ conversations: [CONVERSATION({ id: 'a', nonLus: 0 }), CONVERSATION({ id: 'z', nonLus: 0 })] });
+
+    expect(doc).not.toContain('class="vedette"');
+  });
+
+  it('garde `.langue` AVANT `.texte` dans l’aperçu, vedette comme ligne plate (règles 15/30)', () => {
+    const doc = document({
+      conversations: [
+        B,
+        CONVERSATION({ id: 'es', nonLus: 0, apercu: 'Gracias', apercuLangueOriginale: 'es', apercuTraductions: { fr: 'Merci' } }),
+      ],
+      langues: ['fr'],
+    });
+    const ligneVedette = doc.slice(doc.indexOf('data-conversation="b"'), doc.indexOf('data-conversation="es"'));
+    const lignePlate = doc.slice(doc.indexOf('data-conversation="es"'));
+
+    expect(ligneVedette.indexOf('class="langue"')).toBeLessThan(ligneVedette.indexOf('class="texte"'));
+    expect(lignePlate.indexOf('class="langue"')).toBeLessThan(lignePlate.indexOf('class="texte"'));
+  });
+
+  it('tait le compte de participants à deux, même en vedette — et le dit à trois', () => {
+    const doc2 = document({ conversations: [CONVERSATION({ id: 'b', nonLus: 3, membres: 2 })] });
+    const doc3 = document({ conversations: [CONVERSATION({ id: 'b', nonLus: 3, membres: 3 })] });
+
+    expect(doc2).not.toContain(CHATS.participants);
+    expect(doc3).toContain(`3 ${CHATS.participants}`);
+  });
+});
+
+describe('vedetteDe', () => {
+  it('rend l’identifiant de la PREMIÈRE non lue, dans l’ordre du tableau', () => {
+    expect(vedetteDe([{ id: 'a', nonLus: 0 }, { id: 'b', nonLus: 3 }, { id: 'c', nonLus: 5 }])).toBe('b');
+  });
+
+  it('rend `null` quand personne n’est non lu', () => {
+    expect(vedetteDe([{ id: 'a', nonLus: 0 }, { id: 'b', nonLus: 0 }])).toBeNull();
+  });
+
+  it('rend `null` sur une liste vide', () => {
+    expect(vedetteDe([])).toBeNull();
+  });
+});
+
+/**
+ * LE POIDS DU DOCUMENT — le même patron que `fil-plein.test.ts` et
+ * `medias-plein.test.ts` : un RATCHET, sur une fixture FIXE, pour que le
+ * chiffre suive le CODE et non les données. `documents_de_la_liste` NAÎT dans
+ * ce commit — un poids non mesuré ne s'invente pas.
+ */
+describe('le poids du document de la liste', () => {
+  const octets = (source: string): number => gzipSync(Buffer.from(source, 'utf8'), { level: 9 }).length;
+  const mesures = JSON.parse(readFileSync(join(__dirname, '..', 'budgets-mesures.json'), 'utf8')) as {
+    readonly documents_de_la_liste: { readonly liste_o: number };
+  };
+
+  const FIXE = [
+    CONVERSATION({ id: 'a', titre: 'Équipe Lagos', nonLus: 3, membres: 4 }),
+    CONVERSATION({
+      id: 'b',
+      titre: 'Marta Ruiz',
+      nonLus: 0,
+      membres: 2,
+      apercu: 'Gracias, te envío el archivo',
+      apercuLangueOriginale: 'es',
+      apercuTraductions: { fr: 'Merci, je t’envoie le fichier' },
+    }),
+    CONVERSATION({ id: 'c', titre: 'Support produit', nonLus: 0, membres: 6, apercu: 'Appel audio manqué' }),
+  ];
+
+  it('ne laisse pas le document de la liste grossir en silence', () => {
+    const poids = octets(document({ conversations: FIXE }));
+    console.log(`[mesure] document de la liste ${poids} o gzip`);
+
+    expect(poids).toBeLessThanOrEqual(mesures.documents_de_la_liste.liste_o);
   });
 });

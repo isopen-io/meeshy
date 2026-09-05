@@ -1,4 +1,4 @@
-// GATE — `sheet:member` (#5093) : les deux ronds qui remplacent la barre
+// GATE — `sheet:member` (#5093) : les deux raccourcis qui remplacent la barre
 // d'onglets, et la feuille qu'ils ouvrent, sur les DEUX écrans que la table de
 // navigation de la planche en dote (`MeeshyWebV3.dc.html:867-868`).
 //
@@ -13,11 +13,20 @@
 //      non modal n'a ni `::backdrop`, ni piège à focus, ni Échap : le témoin
 //      attend `:modal` avant d'appuyer, sinon il mesure le socle en croyant
 //      mesurer l'amélioration.
-//   2. **Aucun contrôle couvert au repos** (charte règle 7 b/c). Les deux ronds
-//      sont `position:fixed` ; ce qui les empêche de recouvrir la dernière
-//      ligne de la page est la BANDE que leur conteneur réserve dans le flux.
-//      Cela ne se lit pas dans le HTML — seul un navigateur qui a mis en page
-//      peut dire ce qu'il y a sous un point donné (`elementFromPoint`).
+//   2. **Aucun contrôle couvert, à AUCUN défilement** (charte règle 8 b/c).
+//      Les deux raccourcis vivaient au départ dans un rail `position:fixed`
+//      (`.flottantes`) — le témoin d'ORIGINE ne regardait que le DERNIER
+//      contrôle après un défilement complet en bas, la seule position où la
+//      bande réservée par le conteneur masque le défaut. Une mesure PLUS
+//      générale (revue de #5164, portée d'abord par `v3-chats.spec.ts`) a
+//      montré qu'un élément `fixed` recouvre ce qu'il y a en dessous à TOUTE
+//      position de défilement dès que le contenu réel dépasse une fenêtre :
+//      appliquée ici au TABLEAU DE BORD, elle a trouvé le même rail couvrant
+//      la carte de conversation mise en avant AU REPOS. Les deux écrans
+//      servent désormais `raccourcisEntete` (`espace-vue.ts`) DANS le flux de
+//      l'en-tête, jamais `position:fixed` — ce que ce fichier mesure aux TROIS
+//      positions, comme `v3-chats.spec.ts`, par le même site
+//      (`lib/occlusion.ts`).
 
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
@@ -27,8 +36,11 @@ import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
 import { ESPACE, RANGEES_DE_L_ESPACE } from '../../lib/contenu/espace';
 import { violationsBloquantes, rapporteViolations } from './lib/a11y';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
+import { controlesCouvertsParUnFixe, POSITIONS_DE_DEFILEMENT } from './lib/occlusion';
 import { passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 import { COLONNES_DE_THEME } from './lib/verdict-axe';
+
+const LARGEURS = [360, 390] as const;
 
 let passerelle: PasserelleDeBouchon;
 let v3: ServeurV3;
@@ -44,27 +56,46 @@ test.afterAll(async () => {
 });
 
 /**
- * LES DEUX HÔTES, ET CE QUI LES SÉPARE. Les mêmes ronds aux mêmes coins, la
- * même feuille — mais `/chats` sert son module de participation et le tableau
- * de bord n'expédie AUCUN script. Échap n'est donc pas une propriété de la
- * feuille : c'est une propriété de l'ÉCRAN qui la sert, et `eleve` le dit.
- * L'écrire ici plutôt que de le déduire est ce qui empêche un vert d'inertie —
- * un sondage `:modal` qui expirerait en silence sortirait aussi vert qu'un
- * module absent.
+ * LES DEUX HÔTES, ET CE QUI LES SÉPARE. La même feuille — mais `/chats` sert
+ * son module de participation et le tableau de bord n'expédie AUCUN script.
+ * Échap n'est donc pas une propriété de la feuille : c'est une propriété de
+ * l'ÉCRAN qui la sert, et `eleve` le dit. L'écrire ici plutôt que de le
+ * déduire est ce qui empêche un vert d'inertie — un sondage `:modal` qui
+ * expirerait en silence sortirait aussi vert qu'un module absent.
+ *
+ * LES DEUX RACCOURCIS D'EN-TÊTE SONT PARTAGÉS PAR LES DEUX HÔTES DEPUIS LA
+ * REVUE DE #5164 (charte règle 8 b/c). `/chats` les a adoptés en premier : le
+ * pied de l'enveloppe vivait sous la bande que le rail flottant réservait, et
+ * la mesure y a trouvé un contrôle couvert (« À propos », « Conditions
+ * d'utilisation »). Une SECONDE mesure, à la revue suivante, a montré que le
+ * TABLEAU DE BORD — resté sur le rail `position:fixed` — recouvrait sa carte
+ * de conversation mise en avant dès que la liste sert plus de deux lignes, À
+ * TOUT DÉFILEMENT (pas seulement au repos) : un élément `fixed` ne se protège
+ * pas en réservant une bande en fin de flux, qui ne couvre que le
+ * tout-en-bas. Les deux hôtes servent donc désormais le MÊME raccourci
+ * `.raccourcis-entete a.raccourci`, dans le flux de l'en-tête.
  */
 const HOTES = [
   { nom: 'le tableau de bord', chemin: '/', eleve: false },
   { nom: 'la liste', chemin: '/chats', eleve: true },
 ] as const;
 
+/** Le raccourci d'en-tête vers `/feed`, partagé par les deux hôtes. */
+const lienVersLeFil = (page: Page): ReturnType<Page['locator']> => page.locator('.raccourcis-entete a[href="/feed"]');
+
 const contexte = async (
   navigateur: Browser,
-  options: { readonly schema?: 'light' | 'dark'; readonly stockage?: 'light' | 'dark' | null; readonly javaScriptEnabled?: boolean } = {},
+  options: {
+    readonly schema?: 'light' | 'dark';
+    readonly stockage?: 'light' | 'dark' | null;
+    readonly javaScriptEnabled?: boolean;
+    readonly largeur?: number;
+  } = {},
 ): Promise<BrowserContext> => {
   const ctx = await navigateur.newContext({
     colorScheme: options.schema ?? 'light',
     javaScriptEnabled: options.javaScriptEnabled ?? true,
-    viewport: { width: 390, height: 844 },
+    viewport: { width: options.largeur ?? 390, height: 844 },
   });
   await ctx.addCookies([
     { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3.base },
@@ -116,7 +147,7 @@ HOTES.forEach(({ nom, chemin, eleve }) => {
     for (const rangee of RANGEES_DE_L_ESPACE) {
       await expect(feuille(page).locator(`a.rangee[href="${rangee.href}"]`)).toHaveCount(1);
     }
-    await expect(page.locator('a.flottante.gauche')).toHaveAttribute('href', '/feed');
+    await expect(lienVersLeFil(page)).toHaveAttribute('href', '/feed');
 
     await ctx.close();
   });
@@ -189,39 +220,41 @@ HOTES.forEach(({ nom, chemin, eleve }) => {
   });
 
   /**
-   * CHARTE RÈGLE 7 b/c — « au repos, aucun élément fixe ne couvre un CONTRÔLE ».
+   * CHARTE RÈGLE 8 b/c — « au repos, aucun élément FIXE ne couvre un
+   * CONTRÔLE », À TOUTE POSITION DE DÉFILEMENT (correction de revue de
+   * #5164).
    *
-   * Le témoin descend jusqu'au BAS du document, puis demande au navigateur ce
-   * qu'il y a au centre du DERNIER contrôle de la page : si un rond le
-   * recouvre, `elementFromPoint` rend le rond. C'est la seule mesure qui
-   * l'attrape — le HTML servi est le même dans les deux cas, et une capture ne
-   * dirait pas lequel des deux reçoit le doigt.
+   * LE TÉMOIN D'ORIGINE ne descendait qu'au BAS du document puis ne
+   * regardait QUE le dernier contrôle — la seule position et le seul nœud où
+   * le rail flottant du tableau de bord ne recouvrait rien, une fois que la
+   * bande réservée par son conteneur redevenait visible. Il sortait vert
+   * pendant que le MÊME rail, resté `position:fixed`, recouvrait la carte de
+   * conversation mise en avant à toute AUTRE position (haut, milieu) — ce
+   * qu'aucune capture n'aurait montré non plus, `elementFromPoint` étant la
+   * seule façon de dire lequel des deux nœuds reçoit le doigt.
+   *
+   * `controlesCouvertsParUnFixe` (`lib/occlusion.ts`) est le site UNIQUE de
+   * la mesure GÉNÉRALE, partagé avec `v3-chats.spec.ts` : les TROIS positions
+   * de défilement, les DEUX largeurs, les DEUX schémas, sur les DEUX hôtes.
    */
-  test(`aucun rond ne couvre le dernier contrôle — ${nom}`, async ({ browser }) => {
-    const ctx = await contexte(browser);
-    const page = await ctx.newPage();
+  LARGEURS.forEach((largeur) => {
+    (['light', 'dark'] as const).forEach((schema) => {
+      test(`aucun élément fixe ne couvre un contrôle, à trois défilements — ${nom} ${largeur}px ${schema}`, async ({
+        browser,
+      }) => {
+        const ctx = await contexte(browser, { largeur, schema });
+        const page = await ctx.newPage();
 
-    await page.goto(`${v3.base}${chemin}`);
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.goto(`${v3.base}${chemin}`);
 
-    const verdict = await page.evaluate(() => {
-      const cibles = [...document.querySelectorAll('main a, main button, main summary')].filter(
-        (noeud) => !noeud.closest('.flottantes'),
-      );
-      const dernier = cibles[cibles.length - 1];
-      if (dernier === undefined) return { mesure: false, couvert: null };
-      const rect = dernier.getBoundingClientRect();
-      const dessus = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return {
-        mesure: true,
-        couvert: dessus === null ? null : dessus.closest('.flottantes') === null ? null : 'un rond flottant',
-      };
+        for (const position of POSITIONS_DE_DEFILEMENT) {
+          const couverts = await controlesCouvertsParUnFixe(page, position);
+          expect(couverts, `contrôles couverts par un élément fixe — ${nom} — ${position}`).toEqual([]);
+        }
+
+        await ctx.close();
+      });
     });
-
-    expect(verdict.mesure, 'aucun contrôle mesuré — le balayage n’a rien vu').toBe(true);
-    expect(verdict.couvert, `le dernier contrôle de ${chemin} est couvert`).toBeNull();
-
-    await ctx.close();
   });
 });
 

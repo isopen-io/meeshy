@@ -215,6 +215,25 @@ export type MessageCitable = {
   readonly citations: readonly Citation[];
 };
 
+/**
+ * LE SQUELETTE D'UNE RÉPONSE EN COURS DE COMPOSITION (issue #5163) — posé par
+ * `lib/realtime/fil-gestes.ts` quand le lecteur choisit « Répondre », AVANT
+ * que l'aperçu ne soit résolu. `resoutContreLaPage`, juste dessous, complète
+ * ce squelette contre ce que le fil affiche déjà — jamais une seconde
+ * descente du Prisme : la citation optimiste lit le texte que la bulle citée
+ * montre à l'écran.
+ */
+export const citationDeReponse = ({ cible, source }: { readonly cible: string; readonly source: string }): Citation => ({
+  genre: 'reponse',
+  source,
+  sorte: null,
+  pourMoi: false,
+  apercu: '',
+  langue: null,
+  cible,
+  surLaPage: false,
+});
+
 const citationSurLaPage = (citation: Citation, cible: MessageCitable, mentions: MentionsRetenues): Citation => {
   if (cible.supprime) return { ...citation, apercu: mentions.supprime, langue: null, surLaPage: true };
   if (cible.protege) return { ...citation, apercu: mentions.protege, langue: null, surLaPage: true };
@@ -249,4 +268,21 @@ export const citationsDeLaPage = <T extends MessageCitable>({
       ? message
       : { ...message, citations: resolues };
   });
+};
+
+/**
+ * RÉSOUDRE UNE CITATION UNIQUE CONTRE UNE TRANCHE — le même calcul que
+ * `citationsDeLaPage`, pour un site qui n'a qu'UNE citation à résoudre (le
+ * bandeau du composeur en cours d'armement, `lib/realtime/fil-gestes.ts`) et
+ * qui ne peut pas se permettre de reconstruire la tranche entière pour
+ * l'obtenir. Quand la cible manque, la citation est rendue TELLE QUELLE
+ * (régime 3) : ce n'est pas une répétition de la règle, c'est SA fonction.
+ */
+export const resoutContreLaPage = <T extends MessageCitable>(
+  citation: Citation,
+  page: readonly T[],
+  mentions: MentionsRetenues,
+): Citation => {
+  const cible = page.find((message) => message.id === citation.cible);
+  return cible === undefined ? citation : citationSurLaPage(citation, cible, mentions);
 };

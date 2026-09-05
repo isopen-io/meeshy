@@ -78,10 +78,19 @@ export const routesDeLaRecherche =
   (creanceDe: (requete: IncomingMessage) => Identite | null) =>
   ({ requete, url, json }: { readonly requete: IncomingMessage; readonly url: URL; readonly json: Reponse }): boolean => {
     const chemin = url.pathname;
+    // `/api/v1/directory/people` est une correspondance EXACTE — jamais un
+    // préfixe : la passerelle RÉELLE déclare `GET /people` (la recherche, ce
+    // module) et `GET /people/:handle` (le profil, `bouchon-annuaire.ts` via
+    // `bouchon-compte.ts`) comme DEUX routes Fastify distinctes
+    // (`routes/directory/people.ts:87`, `routes/directory/person.ts:175`), et
+    // un `startsWith` ici interceptait aussi `/people/<handle>?expand=
+    // relation` — le panneau de profil recevait alors la forme de LISTE (`data:
+    // []` sans `q`), jamais un profil, et rendait « Profil indisponible » pour
+    // tout le monde (correctif 2026-09-05).
     if (
       !(
         chemin.startsWith('/api/v1/conversations/search') ||
-        chemin.startsWith('/api/v1/directory/people') ||
+        chemin === '/api/v1/directory/people' ||
         chemin.startsWith('/api/v1/attachments/search')
       )
     ) {

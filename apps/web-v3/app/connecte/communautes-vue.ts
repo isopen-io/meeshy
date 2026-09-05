@@ -7,9 +7,10 @@ import { COMMUNAUTES, metaDeLaCommunaute } from '@/lib/contenu/communautes';
 import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 import { quand } from '@/lib/temps';
 
+import { blocDuNavigateur } from './chargeur';
 import { FEUILLE_DES_COMMUNAUTES } from './communautes-feuille';
-import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
-import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
+import { feuilleDeLEspace, raccourcisEntete } from './espace-vue';
+import { FEUILLE_DE_L_ESPACE } from './espace-feuille';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { documentPleinEcran } from './fil-vue';
@@ -77,6 +78,7 @@ const enTete = (offset: number): string =>
   `<p class="sous">${echappe(COMMUNAUTES.sous)}</p>` +
   '</div>' +
   `<a class="action discrete" href="${echappe(adresse(offset, 'nouvelle'))}">${svgDuSprite('ph-plus')}${echappe(COMMUNAUTES.creer)}</a>` +
+  raccourcisEntete('/communities') +
   '</header>';
 
 const ligne = (c: Communaute, offset: number): string =>
@@ -124,7 +126,6 @@ const corps = (etat: EtatDesCommunautes, inerte: boolean): string =>
     : `<ul class="communautes" aria-label="${echappe(COMMUNAUTES.liste)}">${etat.communautes
         .map((c) => ligne(c, etat.offset))
         .join('')}</ul>${plus(etat.suite)}`) +
-  actionsFlottantes(CHEMIN) +
   '</main>';
 
 /**
@@ -311,6 +312,10 @@ export const documentDesCommunautes = (etat: EtatDesCommunautes): string => {
           : '';
 
   return documentPleinEcran({
+    // L'écran sert la feuille de l'espace membre, donc son FORMULAIRE DE
+    // SORTIE : sans ce module, le quatrième chemin de fermeture (celui qui
+    // vient du navigateur) n'est armé nulle part sur cet écran-là.
+    script: blocDuNavigateur(),
     titre: `${COMMUNAUTES.titre} — Meeshy`,
     description: COMMUNAUTES.sous,
     corps: dessus + corps(etat, dessus !== ''),
@@ -318,7 +323,6 @@ export const documentDesCommunautes = (etat: EtatDesCommunautes): string => {
       FEUILLE_CONNECTEE +
       FEUILLE_DU_FIL +
       FEUILLE_DES_COMMUNAUTES +
-      FEUILLE_DES_FLOTTANTES +
       (etat.espace ? FEUILLE_DE_L_ESPACE : ''),
   });
 };

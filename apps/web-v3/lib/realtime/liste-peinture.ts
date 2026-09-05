@@ -1,5 +1,5 @@
 import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
-import { CHATS } from '@/lib/contenu/liste';
+import { CHATS, libelleDuGeste, vedetteDe } from '@/lib/contenu/liste';
 import { quand } from '@/lib/temps';
 
 import { ordonnees, type EtatDeLaListe, type LigneDeListe } from './liste-etat';
@@ -147,11 +147,43 @@ const peinsLaMeta = (noeud: HTMLElement, ligne: LigneDeListe): void => {
   revele(meta, phrase !== '');
 };
 
+/**
+ * LA CONVERSATION MISE EN AVANT, EN DIRECT (#5164) — la MÊME règle que le
+ * document servi (`vedetteDe`), rejouée après chaque `peins` : une ligne qui
+ * remonte en tête AVEC des non-lus DEVIENT la carte, une carte dont les
+ * non-lus tombent à zéro REDESCEND en ligne plate — sans qu'aucun nœud ne
+ * soit reconstruit, seule la CLASSE bouge (comme `.frappe`, `.langue` : une
+ * fente déjà servie que la peinture révèle ou efface).
+ */
+const marqueLaVedette = (noeud: HTMLElement, estVedette: boolean): void => {
+  noeud.classList.toggle('vedette', estVedette);
+};
+
+/**
+ * LE MENU, APRÈS LA BASCULE — le bouton et le champ caché de `sourdine`
+ * relisent le MÊME site que le serveur (`libelleDuGeste`, `lib/contenu/
+ * liste.ts`), pour la même raison que le document servi : « une bascule qui
+ * dirait toujours "Archiver" mentirait à la seconde pression ». Sans cette
+ * repeinture, le menu ouvert après une mise en sourdine EN DIRECT continuait
+ * de proposer « Mettre en sourdine » — le libellé du serveur au premier
+ * chargement, jamais mis à jour — et le champ caché valait toujours « 0 »,
+ * de sorte qu'un second geste sans JavaScript aurait re-posé la sourdine au
+ * lieu de la lever.
+ */
+const peinsLeMenu = (noeud: HTMLElement, ligne: LigneDeListe): void => {
+  const libelle = libelleDuGeste({ geste: 'sourdine', sourdine: ligne.sourdine });
+  texte(noeud.querySelector('form button[value="sourdine"]'), libelle);
+  const champ = noeud.querySelector<HTMLInputElement>('form input[name="sourdine"]');
+  const valeur = ligne.sourdine ? '1' : '0';
+  if (champ !== null && champ.value !== valeur) champ.value = valeur;
+};
+
 const peinsUneLigne = (noeud: HTMLElement, ligne: LigneDeListe, peintre: Peintre, maintenant: number): void => {
   attribut(noeud, 'data-nonlus', String(ligne.nonLus));
   attribut(noeud, 'data-sourdine', ligne.sourdine ? '1' : '0');
   attribut(noeud, 'data-quand', ligne.quand ?? '');
   if (noeud.hidden !== ligne.retiree) noeud.hidden = ligne.retiree;
+  peinsLeMenu(noeud, ligne);
 
   // La VALEUR seule : écrire dans `.compte` retirerait le libellé hors écran
   // que la pastille porte à côté du nombre (« 3 non lus »).
@@ -172,10 +204,17 @@ const peinsUneLigne = (noeud: HTMLElement, ligne: LigneDeListe, peintre: Peintre
 export const peins = (peintre: Peintre, etat: EtatDeLaListe, maintenant: number): void => {
   const parId = new Map(lignesDuDom(peintre).map((noeud) => [noeud.dataset.conversation ?? '', noeud]));
   const voulu = ordonnees(etat);
+  // La règle du serveur (`vedetteDe`), rejouée sur les lignes VISIBLES —
+  // une ligne RETIRÉE (§ 12.10.4) ne peut pas devenir la vedette pendant sa
+  // fenêtre de réversibilité.
+  const idVedette = vedetteDe(voulu.filter((ligne) => !ligne.retiree));
 
   voulu.forEach((ligne) => {
     const noeud = parId.get(ligne.id);
-    if (noeud !== undefined) peinsUneLigne(noeud, ligne, peintre, maintenant);
+    if (noeud !== undefined) {
+      peinsUneLigne(noeud, ligne, peintre, maintenant);
+      marqueLaVedette(noeud, ligne.id === idVedette);
+    }
   });
 
   // Le re-tri en DERNIER, et seulement s'il change quelque chose : `append`

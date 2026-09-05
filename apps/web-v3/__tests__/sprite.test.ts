@@ -394,8 +394,8 @@ describe('le sprite COMMITÉ de packages/icons', () => {
   const critique: { readonly glyphes: readonly { readonly nom: string; readonly pourquoi: string }[] } =
     JSON.parse(lis(join(RACINE_ICONES, 'critique.json')));
 
-  it('porte les 72 glyphes que la v3 réclame — ni plus, ni moins', () => {
-    expect(reclames).toHaveLength(72);
+  it('porte les 73 glyphes que la v3 réclame — ni plus, ni moins', () => {
+    expect(reclames).toHaveLength(73);
     expect(symbolesDuSprite(sprite)).toEqual(reclames);
   });
 
