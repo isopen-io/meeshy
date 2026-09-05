@@ -55,7 +55,7 @@ import me.meeshy.core.database.entity.TusUploadCheckpointEntity
         FriendRequestEntity::class,
         BlockedUserEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = false,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {

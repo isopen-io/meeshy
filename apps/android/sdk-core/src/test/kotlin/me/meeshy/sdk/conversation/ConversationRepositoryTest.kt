@@ -2,6 +2,7 @@ package me.meeshy.sdk.conversation
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import java.time.Instant
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -57,7 +58,7 @@ private abstract class StubConversationApi : ConversationApi {
         body: me.meeshy.sdk.model.HistoryGrantUpdate,
     ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
 
-    override suspend fun list(offset: Int?, limit: Int?) =
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) =
         ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
@@ -91,7 +92,7 @@ private abstract class StubConversationApi : ConversationApi {
 private class FakeConversationApi(
     var response: ApiResponse<List<ApiConversation>>,
 ) : StubConversationApi() {
-    override suspend fun list(offset: Int?, limit: Int?) = response
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = response
 }
 
 /**
@@ -107,7 +108,7 @@ private class PagedConversationApi(
     private val all: List<ApiConversation> =
         (0 until totalConversations).map { ApiConversation(id = "c$it", title = "Conv $it") }
 
-    override suspend fun list(offset: Int?, limit: Int?): ApiResponse<List<ApiConversation>> {
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?): ApiResponse<List<ApiConversation>> {
         val appliedOffset = offset ?: 0
         val appliedLimit = limit ?: 30
         val page = all.drop(appliedOffset).take(appliedLimit)
@@ -135,8 +136,49 @@ private class PagedConversationApi(
 private class PaginationlessConversationApi(
     private val served: List<ApiConversation>,
 ) : StubConversationApi() {
-    override suspend fun list(offset: Int?, limit: Int?): ApiResponse<List<ApiConversation>> =
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?): ApiResponse<List<ApiConversation>> =
         ApiResponse(success = true, data = served, pagination = null)
+}
+
+/**
+ * Mirrors the gateway's DELTA contract for `GET /conversations`
+ * (`services/gateway/src/routes/conversations/core-list.ts:251-264`): with
+ * [updatedSince] set, only conversations whose `updatedAt` is STRICTLY
+ * greater than it are served (`gt`, not `gte` — repassing the exact watermark
+ * must not re-serve a row already held); with it unset (a full sweep),
+ * everyone is served. [calls] records every request — offset, limit and
+ * `updatedSince` — so a test can assert both HOW MANY requests a sweep made
+ * and whether it asked for a delta or a full page at all (#5187).
+ */
+private class DeltaAwareConversationApi(
+    private val all: List<ApiConversation>,
+) : StubConversationApi() {
+    data class Call(val offset: Int?, val limit: Int?, val updatedSince: String?)
+
+    val calls: MutableList<Call> = mutableListOf()
+
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?): ApiResponse<List<ApiConversation>> {
+        calls += Call(offset, limit, updatedSince)
+        val sinceMillis = updatedSince?.let { Instant.parse(it).toEpochMilli() }
+        val matching = if (sinceMillis != null) {
+            all.filter { conversation -> Instant.parse(conversation.updatedAt!!).toEpochMilli() > sinceMillis }
+        } else {
+            all
+        }
+        val appliedOffset = offset ?: 0
+        val appliedLimit = limit ?: 30
+        val page = matching.drop(appliedOffset).take(appliedLimit)
+        return ApiResponse(
+            success = true,
+            data = page,
+            pagination = me.meeshy.sdk.model.Pagination(
+                total = matching.size,
+                offset = appliedOffset,
+                limit = appliedLimit,
+                hasMore = appliedOffset + page.size < matching.size,
+            ),
+        )
+    }
 }
 
 private class RecordingSettingsApi(
@@ -1330,6 +1372,215 @@ class ConversationRepositoryTest {
         assertThat(cachedIds).containsExactlyElementsIn(
             (0 until 5).map { "c$it" } + "new1",
         )
+    }
+
+    /**
+     * #5187 — delta-sync. A resource with a fresh, proven watermark (< 24h)
+     * asks the server for `updatedSince=<watermark>` instead of re-fetching
+     * everyone. When the server confirms nothing changed (an empty page,
+     * `hasMore = false` immediately), the sweep makes exactly ONE request —
+     * no further pages to walk — and writes NOTHING to Room: not the
+     * conversation the cache already held (its `cachedAt` — bumped by any
+     * upsert, even a same-content one — stays byte-for-byte the same), not
+     * `sync_meta.lastSyncedAt`, and not the watermark itself (there is no new
+     * `updatedAt` to advance it to).
+     */
+    @Test
+    fun `revalidate with a fresh watermark and no server changes makes one request and writes nothing`() = runTest {
+        val watermarkMillis = System.currentTimeMillis() - 60_000L
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                ConversationCacheSource.RESOURCE_KEY,
+                watermarkMillis,
+                watermarkMillis,
+            ),
+        )
+        db.conversationDao().upsertAll(
+            listOf(
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "c1",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "c1", title = "Team", updatedAt = Instant.ofEpochMilli(watermarkMillis).toString()),
+                    ),
+                    updatedAt = watermarkMillis,
+                    cachedAt = watermarkMillis,
+                ),
+            ),
+        )
+        // The server's own copy of "c1" carries the EXACT watermark instant — a
+        // `gt` filter must exclude it (repassing what you already hold must not
+        // re-serve it), so this is a genuine "nothing changed" response.
+        val api = DeltaAwareConversationApi(
+            all = listOf(ApiConversation(id = "c1", title = "Team", updatedAt = Instant.ofEpochMilli(watermarkMillis).toString())),
+        )
+        val repo = repository(api)
+        val cachedAtBefore = db.conversationDao().find("c1")?.cachedAt
+        val lastSyncedAtBefore = db.syncMetaDao().observe(ConversationCacheSource.RESOURCE_KEY).first()
+
+        repo.refresh()
+
+        assertThat(api.calls).hasSize(1)
+        assertThat(api.calls.single().updatedSince).isEqualTo(Instant.ofEpochMilli(watermarkMillis).toString())
+        assertThat(db.conversationDao().find("c1")?.cachedAt).isEqualTo(cachedAtBefore)
+        assertThat(db.syncMetaDao().watermark(ConversationCacheSource.RESOURCE_KEY)).isEqualTo(watermarkMillis)
+        assertThat(db.syncMetaDao().observe(ConversationCacheSource.RESOURCE_KEY).first()).isEqualTo(lastSyncedAtBefore)
+    }
+
+    /**
+     * #5187 — a conversation reachable only on the SECOND delta page (150
+     * conversations changed server-side, [ConversationCacheSource]'s own
+     * page size is 100) still reaches Room. This is the multi-page delta walk
+     * that pattern (b) of #5186 already established for the full sweep,
+     * reused here for the delta sweep — proving it isn't a one-page special
+     * case.
+     */
+    @Test
+    fun `a conversation updated beyond page 1 arrives via a delta sweep and updates Room`() = runTest {
+        val watermarkMillis = System.currentTimeMillis() - 60_000L
+        val total = 150
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                ConversationCacheSource.RESOURCE_KEY,
+                watermarkMillis,
+                watermarkMillis,
+            ),
+        )
+        db.conversationDao().upsertAll(
+            (0 until total).map { i ->
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "c$i",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "c$i", title = "Old $i"),
+                    ),
+                    updatedAt = watermarkMillis,
+                    cachedAt = watermarkMillis,
+                )
+            },
+        )
+        val changedAtIso = Instant.ofEpochMilli(watermarkMillis + 1_000L).toString()
+        val api = DeltaAwareConversationApi(
+            all = (0 until total).map { i ->
+                ApiConversation(id = "c$i", title = "New $i", updatedAt = changedAtIso)
+            },
+        )
+        val repo = repository(api)
+
+        repo.refresh()
+
+        assertThat(api.calls.size).isGreaterThan(1)
+        // Every page of the sweep must be a DELTA page (non-null `updatedSince`) —
+        // an unfiltered FULL sweep would also happen to update every row here
+        // (this fake's backing set has no "unchanged" rows to tell them apart by
+        // outcome), so the request shape itself is what proves the delta path ran.
+        assertThat(api.calls.all { it.updatedSince != null }).isTrue()
+        val lastRow = db.conversationDao().find("c${total - 1}")
+        val decoded = lastRow?.let {
+            me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<ApiConversation>(it.payload)
+        }
+        assertThat(decoded?.title).isEqualTo("New ${total - 1}")
+    }
+
+    /**
+     * #5187 — the core delta-sync safety property. A delta's `whereClause`
+     * only ever PROVES a conversation still matches; a conversation absent
+     * from a delta response could mean "unchanged" OR "left the account
+     * entirely" (closed, left, banned, deleted-for-me elsewhere), and a delta
+     * page cannot distinguish the two. It must therefore never delete —
+     * "untouched" survives locally even though the server's delta response
+     * never mentions it at all.
+     */
+    @Test
+    fun `a delta sweep never erases a local conversation absent from its response`() = runTest {
+        val watermarkMillis = System.currentTimeMillis() - 60_000L
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                ConversationCacheSource.RESOURCE_KEY,
+                watermarkMillis,
+                watermarkMillis,
+            ),
+        )
+        db.conversationDao().upsertAll(
+            listOf(
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "untouched",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "untouched", title = "Untouched"),
+                    ),
+                    updatedAt = watermarkMillis,
+                    cachedAt = watermarkMillis,
+                ),
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "changed",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "changed", title = "Old"),
+                    ),
+                    updatedAt = watermarkMillis,
+                    cachedAt = watermarkMillis,
+                ),
+            ),
+        )
+        // The delta response mentions ONLY "changed" — "untouched" is absent,
+        // whether because it truly didn't change or because it left the
+        // account; a delta page can't tell, and must not act as if it could.
+        val api = DeltaAwareConversationApi(
+            all = listOf(
+                ApiConversation(
+                    id = "changed",
+                    title = "Changed!",
+                    updatedAt = Instant.ofEpochMilli(watermarkMillis + 1_000L).toString(),
+                ),
+            ),
+        )
+        val repo = repository(api)
+
+        repo.refresh()
+
+        val ids = repo.cachedConversations().first().map { it.id }.toSet()
+        assertThat(ids).containsExactly("untouched", "changed")
+    }
+
+    /**
+     * #5187 — a watermark older than [CachePolicy.Conversations]' 24h retention
+     * forces the exhaustive full sweep (no `updatedSince` sent at all), and
+     * ONLY that full sweep is trusted to purge: a conversation the cache held
+     * that the server's CURRENT, exhaustive list no longer mentions is gone
+     * for real.
+     */
+    @Test
+    fun `a watermark older than 24h forces a full sweep, and only the full sweep purges`() = runTest {
+        val staleWatermarkMillis = System.currentTimeMillis() - (25 * 60 * 60 * 1000L)
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                ConversationCacheSource.RESOURCE_KEY,
+                staleWatermarkMillis,
+                staleWatermarkMillis,
+            ),
+        )
+        db.conversationDao().upsertAll(
+            listOf(
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "gone",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "gone", title = "Gone"),
+                    ),
+                    updatedAt = staleWatermarkMillis,
+                    cachedAt = staleWatermarkMillis,
+                ),
+            ),
+        )
+        // The server's exhaustive list no longer includes "gone" at all.
+        val api = DeltaAwareConversationApi(
+            all = listOf(
+                ApiConversation(id = "kept", title = "Kept", updatedAt = Instant.now().toString()),
+            ),
+        )
+        val repo = repository(api)
+
+        repo.refresh()
+
+        assertThat(api.calls.single().updatedSince).isNull()
+        val ids = repo.cachedConversations().first().map { it.id }.toSet()
+        assertThat(ids).containsExactly("kept")
     }
 
     /**

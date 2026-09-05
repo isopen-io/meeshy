@@ -36,7 +36,7 @@ private abstract class StubStatsApi : ConversationApi {
         body: me.meeshy.sdk.model.HistoryGrantUpdate,
     ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
 
-    override suspend fun list(offset: Int?, limit: Int?) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun stats(id: String) = ApiResponse<ConversationMessageStatsResponse>(success = false)

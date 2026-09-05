@@ -12,6 +12,15 @@ public interface SyncMetaDao {
     @Query("SELECT lastSyncedAt FROM sync_meta WHERE resourceKey = :key")
     public fun observe(key: String): Flow<Long?>
 
+    /**
+     * One-shot read of [SyncMetaEntity.contentWatermarkMillis] (#5187) — a
+     * revalidation snapshots this ONCE at the start to decide delta vs. full
+     * sweep, so it is a suspend function, not a [Flow]: a value that changed
+     * mid-sweep must not retroactively change that decision.
+     */
+    @Query("SELECT contentWatermarkMillis FROM sync_meta WHERE resourceKey = :key")
+    public suspend fun watermark(key: String): Long?
+
     @Upsert
     public suspend fun upsert(meta: SyncMetaEntity)
 

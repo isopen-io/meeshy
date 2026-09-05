@@ -50,10 +50,21 @@ data class ParticipantRoleUpdate(val role: String)
 data class AddParticipantRequest(val userId: String)
 
 interface ConversationApi {
+    /**
+     * `GET /conversations` — full page (default: server-side `lastMessageAt
+     * DESC`) when [updatedSince] is omitted, or a DELTA page
+     * (`updatedAt` strictly greater than [updatedSince], sorted `updatedAt
+     * ASC, id ASC`) when it is set — gateway contract:
+     * `services/gateway/src/routes/conversations/core-list.ts:251-264`.
+     * [updatedSince] is an ISO-8601 instant; an unparseable value is
+     * silently ignored server-side and the call falls back to a full page.
+     * #5187 — [ConversationCacheSource] is the sole caller that passes it.
+     */
     @GET("conversations")
     suspend fun list(
         @Query("offset") offset: Int? = null,
         @Query("limit") limit: Int? = null,
+        @Query("updatedSince") updatedSince: String? = null,
     ): ApiResponse<List<ApiConversation>>
 
     @GET("conversations/{id}")
