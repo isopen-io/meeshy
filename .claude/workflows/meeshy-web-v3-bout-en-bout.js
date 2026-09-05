@@ -812,7 +812,17 @@ A. LA REINTEGRATION
 
 B. LE RELEVE — CE QUE LES AUTRES SESSIONS TIENNENT
 Le depot est travaille par plusieurs sessions en parallele. Deux sessions sur le meme fichier, c'est
-un conflit garanti et un travail jete. Charge
+un conflit garanti et un travail jete.
+
+0. LE FAIT AVANT L'ANNONCE (#5242, defaut 3 de la lecon 322 : \"rien ne consultait git\").
+   \`cd ${REPO} && node scripts/releve-branches-vivantes.mjs --fetch\`
+   Il lit le CONTENU des branches vivantes (< 48 h) et rend les fichiers qu'ECRIVENT plusieurs
+   d'entre elles. C'est la seule source qui dise ce que les autres ont FAIT ; les points 1 a 3
+   ci-dessous relevent ce qu'ils ont ANNONCE, et ne le remplacent pas. Un fichier qui ressort
+   ici est DISPUTE : ne fonde aucun travail du tour dessus sans une raison ecrite dans \`etat\`.
+   Reprends ses branches dans \`tenus_ailleurs\` avec leur age comme preuve.
+
+Charge ensuite
 ToolSearch({query: "select:mcp__github__list_pull_requests,mcp__github__list_branches,mcp__github__list_issues,mcp__github__search_issues", max_results: 5})
 puis releve, pour \`isopen-io/meeshy\` :
 1. Les PR OUVERTES (list_pull_requests, state open, sort updated) : pour chacune, son titre, sa
@@ -1629,6 +1639,16 @@ ${ATTRIBUTION}
    N'ecris aucun nom de modele ailleurs dans le message, ni nulle part dans un fichier du depot.
    Un travail deja porte par des POINTS D'ETAPE (phase Synchroniser) n'a plus de commit a lui : son
    \`Closes #n\` va dans le corps de la PR (section Issues) — jamais un commit vide.
+2 bis. LE RELEVE REJOUE, JUSTE AVANT DE POUSSER (#5242, lecon 88 : re-verifier avant de pousser,
+   pas seulement a l'Etape 0). Le releve du debut de tour a plusieurs heures ; une branche nee
+   depuis a pu prendre tes fichiers.
+   \`cd ${REPO} && node scripts/releve-branches-vivantes.mjs --fetch --exige-frais --chemins $(git diff --name-only origin/${DEPUIS}...HEAD)\`
+   Code 0 : personne d'autre n'ecrit tes chemins — pousse.
+   Code 1 : des branches vivantes les ecrivent — pousse quand meme (ton travail est COMMITE, et la
+   lecon 322 fait ceder celui qui n'a RIEN ecrit), mais NOMME-LES dans le rapport (branche, age,
+   fichiers) pour que la fusion se fasse en connaissance de cause.
+   Code 2 : le distant n'a pas pu etre rafraichi — DIS-LE. Un relevé vide sur un distant perime a
+   la forme d'une autorisation et n'en est pas une.
 3. \`git push -u origin ${REF_PUSH}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
    Sur rejet non-reseau (non fast-forward) : \`git fetch origin ${NOM_SHELL} && git merge origin/${NOM_SHELL}\`
    — JAMAIS \`git pull --rebase\` ni \`git rebase\` (lecon 324 du depot : le rebase aplatit un commit
