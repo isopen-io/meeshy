@@ -108,11 +108,15 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
                 .authenticator(RefreshAuthenticator(tokenStore, refresher))
                 .apply {
                     if (config.enableLogging) {
-                        addInterceptor(
-                            HttpLoggingInterceptor().apply {
-                                level = HttpLoggingInterceptor.Level.BODY
-                            },
-                        )
+                        // Le garde DOIT preceder le logger : c'est lui qui pose le
+                        // niveau que le logger lit en s'executant juste apres
+                        // (#4811 — sans lui, un mot de passe partait en clair dans
+                        // logcat sur /me/account/deletion et ses pairs).
+                        val logger = HttpLoggingInterceptor().apply {
+                            level = HttpLoggingInterceptor.Level.BODY
+                        }
+                        addInterceptor(SensitiveBodyLoggingGuard(logger, HttpLoggingInterceptor.Level.BODY))
+                        addInterceptor(logger)
                     }
                 }
                 .build()
