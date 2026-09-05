@@ -28758,3 +28758,184 @@ accident, sur un empilement qui n'était pas celui rendu.
 
 Garde : `test_laBande_neSePeintAucunFond` interdit le verre ET tout fond
 opaque de remplacement.
+
+## Leçon 530 — Deux familles de résolveurs, neuf sites, trois régimes pour un même geste
+
+**Directive porteur (2026-09-05)** : « déclencher la remontée après `@` avec
+les amis/contacts (normalement existant en local et en cache) ; ensuite
+lorsqu'on tape la première lettre ça filtre parmi ses amis et contacts
+LOCALEMENT ; c'est au bout de la DEUXIÈME lettre qu'on recherche via API. **Ce
+système doit être général pour tous les emplacements où on doit mentionner un
+utilisateur.** »
+
+Recensé avant d'agir — et c'est le recensement qui a rendu le lot juste :
+
+| famille | sites | seuil AVANT |
+|---|---|---|
+| `MentionComposerController` | conversation, commentaires de post, feuille de commentaires du feed, brouillon du composer (×3 surfaces) | `minQueryLengthForAPI = 0` → appel dès le `@` NU |
+| `MentionSuggestionsModel` (SDK) | mood, éditeur de texte de story, sélecteur de mention, composer unifié | `guard !trimmed.isEmpty` → appel dès la 1ʳᵉ lettre |
+
+Neuf sites, deux seuils — donc **trois régimes** pour un même geste selon
+l'écran où le doigt se trouvait (et mon correctif du matin en ajoutait un
+quatrième, en branchant l'annuaire dès le premier caractère).
+
+> **Une constante recopiée dans deux familles n'est pas une règle partagée :
+> c'est deux règles qui se ressemblent AUJOURD'HUI.** Le jour où l'une bouge,
+> rien ne rougit — les deux compilent, les deux ont l'air délibérées, et
+> l'écart ne se voit qu'en passant d'un écran à l'autre avec le même geste.
+
+Loi unique : `MentionLookupRule` (`packages/MeeshySDK/.../Story/ComposerMentionQuery.swift`,
+posée à côté de `ComposerMentionQuery` qui découpe déjà le handle — même
+question, deux moitiés). Les deux familles l'appellent.
+
+**La raison du seuil n'est pas l'économie d'octets.** `@a` rend des dizaines de
+comptes sans rapport et les pousse DEVANT les amis de l'auteur, dans une bande
+qui n'en montre que trois ou quatre. Le premier caractère utile est le second.
+
+**Corollaire cache-first, et le piège qu'il porte.** La source locale
+(`ComposerMentionFriendsSource`) était réseau seule : le `@` nu attendait un
+aller-retour, et son échec (404 en prod) était avalé en liste vide. La rendre
+cache-first se fait en deux écritures sur la même propriété — cache, puis
+réseau — et **la seconde peut être vide**. Sans garde, servir le cache puis
+échouer EFFACE ce qu'on venait de servir : deux écritures dont la seconde peut
+être vide sont un REMPLACEMENT, pas une mise à jour.
+
+## Leçon 531 — Un instrument qui rend « 0 » partout ne mesure rien, et le prouve au palier où il devrait rendre « 1 »
+
+Pour vérifier les trois régimes ci-dessus au simulateur, j'ai grepé le journal
+sur `users/search` après chaque frappe :
+
+- `@` → **0** ✓ (attendu)
+- `@m` → **0** ✓ (attendu)
+- `@me` → **0** ✗ — alors que l'écran montrait deux résultats venus du serveur
+
+Le logger réseau de l'app ne trace que les requêtes LENTES (`Slow request:`).
+Mon grep ne pouvait donc rendre autre chose que zéro, quel que soit le
+comportement — les deux premiers « ✓ » ne prouvaient strictement rien.
+
+> **Un instrument doit être vu RENDRE LE SIGNAL au moins une fois avant qu'on
+> lise ses zéros.** Un test négatif qui n'a jamais été vu positif n'est pas un
+> test négatif : c'est un instrument dont on ignore s'il est branché. C'est la
+> forme « code de sortie lu sans son journal », déplacée du gate au terrain.
+
+Ce qui l'a remplacé est un témoin de COMPORTEMENT, lisible sans instrument :
+`@m` ne montre rien pendant que `@me` montre deux personnes. Si la recherche
+partait à une lettre, `@m` en montrerait aussi — le serveur retenant « m »
+dans bien plus de noms que « me ». **Quand l'instrument est douteux, mesurer
+la CONSÉQUENCE plutôt que la cause.**
+
+## Leçon 532 — Douter d'un instrument est juste ; conclure qu'il ment ne l'est pas
+
+**Enchaînement mesuré le 2026-09-05**, sur « le canvas d'un post part-il ? ».
+
+1. Sonde : `'storyEffects' in post` sur la réponse de l'API → **absent**.
+   Conclusion annoncée : « le canvas n'est jamais parti ».
+2. Doute légitime, une heure plus tard : *ai-je vérifié que ce champ est SERVI
+   par cette API ?* Non. La leçon 531 venait précisément de coûter un
+   instrument aveugle.
+3. **Rétractation** : « mon sondage ne pouvait rien mesurer, je retire ».
+4. Expérience DISCRIMINANTE : interroger le MÊME endpoint pour des STORIES,
+   qui ont toujours un canvas → **10 items sur 13 portent la clé**.
+
+Donc le champ est bien servi, la sonde était valide, et le canvas n'était
+réellement pas parti. **La rétractation était une SUR-CORRECTION** : j'avais
+raison au point 1, pour une raison que je n'avais pas encore établie.
+
+> **Douter d'un instrument est une bonne réaction ; en déduire qu'il ment est
+> une seconde affirmation non mesurée.** « Cet instrument est peut-être
+> aveugle » et « cet instrument est aveugle » sont deux propositions
+> différentes, et la seconde demande sa propre preuve — exactement comme celle
+> qu'elle prétend annuler.
+
+Ce qui tranche n'est jamais l'introspection, c'est une **expérience
+discriminante** : trouver un cas où les deux hypothèses prédisent des
+observations DIFFÉRENTES. Ici, une story a un canvas par construction — si
+l'API sert le champ, elle le montre ; sinon, elle ne le montre pour personne.
+Une seule requête, et le doute est clos dans un sens ou dans l'autre.
+
+**Le coût de la sur-correction n'est pas nul** : entre 3 et 4, j'ai annoncé au
+porteur que je ne savais plus si le canvas voyageait, alors que je le savais —
+et j'ai ouvert une piste (« le serveur ne projette pas le champ ») qui a coûté
+six lectures de code côté gateway avant d'être écartée par une seule requête.
+
+**Corollaire pour la formulation** : entre 1 et 4, la phrase juste n'était ni
+« le canvas n'est pas parti » ni « je retire », mais *« le champ est absent de
+la réponse ; je n'ai pas encore vérifié que cette API le sert — voici
+l'expérience qui le dira »*. Une affirmation datée de son niveau de preuve
+n'a pas à être retirée : elle se complète.
+
+## Leçon 533 — Un facteur d'échelle DÉDUIT au lieu d'être MESURÉ décale chaque geste
+
+**Coût mesuré le 2026-09-05** : une demi-douzaine de taps au mauvais endroit,
+trois ouvertures du mauvais écran, et un diagnostic (« le rail n'est pas
+accessible ») ouvert puis refermé pour rien.
+
+La capture d'un simulateur iPhone 16 Pro fait 1206 × 2622 px pour un écran de
+402 × 874 pt. Redimensionnée pour la lecture, elle fait **322 × 700 px**. Le
+facteur juste est donc **874 / 700 = 1,2486**. J'avais supposé un rendu de 672
+px de haut — jamais mesuré — d'où un facteur de 1,3006 : **4 % d'erreur**, soit
+plus de 30 points en bas d'écran, largement de quoi taper la rangée voisine
+d'un rail dont les entrées font 56 points.
+
+> **Le facteur d'échelle d'une capture se MESURE (`sips -g pixelHeight`), il ne
+> se suppose pas.** Et il se VÉRIFIE sur une ancre dont l'arbre d'accessibilité
+> donne la position exacte : si « Publier » est à y=806 pt et paraît à y=645
+> px, le facteur est 1,2496 — un contrôle qui coûte une ligne et qui aurait
+> économisé toute la série.
+
+**Corollaire, plus général que l'échelle** : une coordonnée MÉMORISÉE d'un tour
+précédent est fausse dès que la mise en page bouge. Le bouton « Flux » était à
+y=152 puis à y=254 — sa position dépend d'une bannière de signaux présente ou
+non. **Aucune coordonnée ne se réutilise d'un écran à l'autre** : elle se relit
+dans l'arbre, et à défaut elle se recalcule depuis une capture dont l'échelle
+vient d'être mesurée.
+
+**Et une non-correction, qui compte autant** : j'ai cru trouver un défaut
+d'accessibilité (« les boutons du rail ne sont pas exposés ») parce qu'`idb ui
+describe-all` ne rendait que le conteneur. Vérification faite, le rail porte
+`.accessibilityElement(children: .contain)` et chaque bouton son
+`.accessibilityLabel` — VoiceOver descend, c'est l'outil qui n'énumère pas.
+**L'absence dans un outil d'inspection n'est pas une absence dans le produit**
+(leçon 532, autre visage). Rien n'a été « corrigé ».
+
+## Leçon 534 — La moitié qui sert la VITESSE écrite, la moitié qui sert la CORRECTION oubliée
+
+**Trois défauts trouvés le 2026-09-05, tous de la même forme**, et la
+répétition est ce qui la rend nommable.
+
+| lot | la moitié ÉCRITE | la moitié OUBLIÉE |
+|---|---|---|
+| upload du fond de slide | `CacheCoordinator.images.adoptImage(localFile:for:)` — le cache adopte l'URL serveur | rien n'écrit l'id serveur dans l'objet du CANVAS |
+| `ComposerPreUploadRegistry` | téléverse dès la pose, écrit `postMediaId` dans le canvas — la composition est fluide | `stopForPublication()` l'arrête et **aucun chemin ne lit ses résultats** : la publication re-téléverse tout |
+| `PostSceneCard` (trouvé par la session voisine) | le document dit ce qu'il faut peindre | aucun `carrier` remis au player — « sans porteur, le player sert une coquille », écrit dans son propre doc-comment |
+
+> **Une PRÉSENCE rassure plus qu'une absence n'alerte.** Devant
+> `adoptImage(...)` douze lignes plus haut, l'œil enregistre « l'adoption est
+> faite » et passe. Il n'y a pas d'absence à remarquer : il y a une moitié
+> présente, correcte, et qui répond à une AUTRE question.
+
+**Ce qui distingue les deux moitiés, et permet de les chercher** : l'une sert
+la PERFORMANCE (cache, pré-montée, rendu immédiat), l'autre sert la
+CORRECTION (l'identité qui part sur le fil). La première se remarque tout de
+suite quand elle manque — l'écran rame. La seconde ne se remarque JAMAIS chez
+l'auteur : son propre appareil a le fichier en cache, la scène se peint chez
+lui, et c'est le viewer suivant qui voit du blanc.
+
+> **La question qui les attrape** : *ce que je viens d'obtenir du serveur, qui
+> d'autre doit l'apprendre ?* Posée devant chaque `let result = try await
+> upload…`, elle rend les trois défauts ci-dessus en une lecture. Posée devant
+> le code qui l'entoure, elle n'en rend aucun — parce que le voisinage est
+> juste.
+
+**Corollaire de datation.** Le porteur a dit « il y a trois jours ça
+fonctionnait », et la donnée lui a donné raison au jour près : les posts du
+02-09 n'avaient PAS de canvas (médias simples, grille de tuiles), ceux du
+05-09 en ont un et il est orphelin. **Un « ça marchait avant » se vérifie sur
+les DONNÉES produites, pas sur le code** — l'API rendait la réponse en une
+requête, là où la lecture du diff aurait demandé une heure.
+
+**Et un défaut d'isolation qui n'est pas un détail** : `nonisolated enum` ne
+transmet rien à ses `extension`. La règle pure était inatteignable depuis
+`OutboxDispatcher`, qui dispatche hors du fil principal — même piège que
+`SocialMediaCaption` (leçon 473). Une règle sur des VALEURS doit porter
+`nonisolated` sur CHAQUE déclaration, l'énuméré comme ses extensions.

@@ -255,7 +255,7 @@ struct ComposerDescriptionLayer: View {
         )
         // Les amis acceptés sont le seul jeu de candidats : mentionner qui ne
         // vous a pas accepté n'a pas de destinataire.
-        .task { mentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
+        .task { await mentionBox.loadCandidates() }
         // **Le `@` déclenche la bande, et c'est le TEXTE qui le dit** — jamais
         // un geste ni un bouton. La règle d'extraction vit dans le contrôleur
         // (`extractMentionQuery`), partagée avec les trois autres champs du

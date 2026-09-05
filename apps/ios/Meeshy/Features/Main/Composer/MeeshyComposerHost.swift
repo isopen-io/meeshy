@@ -635,6 +635,27 @@ struct MeeshyComposerHost: View {
     /// fournissent. Détail : `PublishChainCensusTests.absentsDeLaVoieDurable`.
     @State var documentMediaAlts: [String: String] = [:]
 
+    /// **`URL source → identifiant d'objet`, le chaînon qui manquait à l'alt**
+    /// (2026-09-05).
+    ///
+    /// `documentMediaAlts` est keyé par identifiant d'OBJET — c'est ce que
+    /// l'éditeur de scène édite, et c'est ce que le chemin STORY sait traduire
+    /// en `postMediaId` après l'upload (`StoryMediaTextMapping.serverKeyed`).
+    /// Le chemin DURABLE, lui, travaille par POSITION dans `localMedia`,
+    /// c'est-à-dire par URL SOURCE : `PublishIntent.document` aligne déjà les
+    /// légendes ainsi.
+    ///
+    /// Les deux clés sont justes à leur étage ; ce qui manquait était le pont.
+    /// Il ne peut venir que d'`applyContentMedia`, seul site à connaître les
+    /// deux bouts — il frappe l'`objectId` ET copie la source. Il le REND
+    /// désormais, et cette carte l'accumule.
+    ///
+    /// > **Une carte n'est pas un cache** : celle-ci est la mémoire du
+    /// > BROUILLON. Le modèle de scène ne peut pas la tenir — un objet
+    /// > remplacé, un fond rechangé, et il ne saurait plus de quel fichier il
+    /// > est né.
+    @State var documentMediaObjectIdBySource: [URL: String] = [:]
+
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
     /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois

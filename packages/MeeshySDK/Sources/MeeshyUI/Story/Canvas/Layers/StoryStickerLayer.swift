@@ -127,7 +127,7 @@ public final class StoryStickerLayer: CALayer {
                                                        scale: sticker.scale),
                screenScale: renderScale),
            taille.width > 0, taille.height > 0 {
-            contents = image?.cgImage
+            contents = CanvasImageOrientation.displayCGImage(image)
             bounds = CGRect(origin: .zero, size: taille)
         } else if let decoded = Self.synchronousAnimation(
                     for: sticker, imageCache: imageCache,
@@ -292,7 +292,7 @@ public final class StoryStickerLayer: CALayer {
                 return
             }
             let loaded = await loader.image(for: url.absoluteString)
-            guard !Task.isCancelled, let cgImage = loaded?.cgImage else { return }
+            guard !Task.isCancelled, let cgImage = CanvasImageOrientation.displayCGImage(loaded) else { return }
             self.stampBitmap(cgImage)
         }
     }

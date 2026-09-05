@@ -55,7 +55,7 @@ public final class StoryLocationLayer: CALayer {
         let (image, renderedSize) = Self.templateImage(for: location,
                                                        geometry: geometry,
                                                        screenScale: scale)
-        contents = image?.cgImage
+        contents = CanvasImageOrientation.displayCGImage(image)
         contentsScale = scale
         bounds = CGRect(origin: .zero, size: renderedSize)
 

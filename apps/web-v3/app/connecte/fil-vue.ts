@@ -590,9 +590,9 @@ export const documentPleinEcran = ({
    * croix inerte est un contrôle sans effet (charte règle 7).
    *
    * Seul le FIL la sert parmi les écrans pleins : c'est le seul dont le module
-   * tient un socket. Les neuf autres (`/notifications`, `/search`, `/contacts`,
-   * `/links`, `/post/:id`, `/feed`, `/composer`, `/stories/new`, la galerie) ne
-   * la portent pas.
+   * tient un socket. Les dix autres (`/notifications`, `/search`, `/contacts`,
+   * `/links`, `/post/:id`, `/feed`, `/composer`, `/stories/new`, `/calls`, la
+   * galerie) ne la portent pas.
    */
   readonly banniere?: string;
   /**

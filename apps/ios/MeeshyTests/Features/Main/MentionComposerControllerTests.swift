@@ -176,19 +176,33 @@ final class MentionComposerControllerTests: XCTestCase {
         XCTAssertEqual(mock.lastQuery, "ali")
     }
 
-    func test_handleQuery_emptyQuery_triggersAPIFetch_showsDefaultList() async {
+    /// **Ce témoin affirmait l'inverse jusqu'au 2026-09-05**, et il avait
+    /// raison sur le code de l'époque : `minQueryLengthForAPI` valait `0`, donc
+    /// un `@` nu partait chercher la liste par défaut du serveur (auteur du
+    /// post + commentateurs + contacts).
+    ///
+    /// La directive porteur renverse la décision — sur `@` nu, ce sont les
+    /// contacts LOCAUX qui répondent, sans réseau — et ce témoin devient donc
+    /// le gardien de la nouvelle règle sur le chemin CONTEXTUEL, celui que
+    /// `test_leRégime_vautAussiPourUneConversation` couvre de bout en bout.
+    ///
+    /// > Un témoin qui tombe parce qu'une DÉCISION a changé n'est pas un
+    /// > témoin cassé : il fait exactement son travail, qui est de rendre le
+    /// > renversement visible. Ce qu'il ne faut pas faire, c'est le supprimer —
+    /// > il faut lui faire dire la décision NOUVELLE, sans quoi rien ne
+    /// > défendra plus ce point-là.
+    func test_handleQuery_emptyQuery_neDéclenchePasDAppel() async {
         let mockService = MockMentionService()
         mockService.suggestionsResult = .success([makeSuggestion(username: "alicia")])
         let (sut, mock) = makeSUT(service: mockService)
 
-        // Taper juste « @ » (requête vide) doit afficher la liste par défaut
-        // (auteur du post + personnes ayant commenté + contacts) → appel API.
         sut.handleQuery(in: "Hey @")
+        try? await Task.sleep(nanoseconds: 500_000_000)
 
-        await waitUntil({ mock.suggestionsCallCount >= 1 }, "le débounce n'a jamais atteint le service")
-
-        XCTAssertGreaterThanOrEqual(mock.suggestionsCallCount, 1)
-        XCTAssertEqual(mock.lastQuery, "")
+        XCTAssertEqual(mock.suggestionsCallCount, 0,
+                       "un `@` nu se sert sur les candidats LOCAUX — pas d'aller-retour")
+        XCTAssertEqual(sut.activeQuery, "",
+                       "…mais la requête est bien ACTIVE : c'est elle qui monte la bande")
     }
 
     // MARK: - insertMention
@@ -425,18 +439,100 @@ final class MentionComposerControllerTests: XCTestCase {
         XCTAssertEqual(sut.suggestions.map(\.username), ["andrea"])
     }
 
-    /// **Un `@` NU ne part pas au réseau.** La requête vide rendrait l'annuaire
-    /// entier — un aller-retour par `@` tapé, pour une liste qui n'aide
-    /// personne. Les amis sont la réponse complète de ce cas.
-    func test_unArobaseNu_nInterrogePasLAnnuaire() async {
+    // MARK: - Les TROIS régimes de la directive (2026-09-05)
+
+    /// > « Il faut déclencher la remontée après `@` avec les amis/contacts
+    /// > (normalement existant en local et en cache) ; ensuite lorsqu'on tape
+    /// > la première lettre ça filtre parmi ses amis et contacts LOCALEMENT ;
+    /// > c'est au bout de la DEUXIÈME lettre qu'on recherche via API. »
+    ///
+    /// **Régime 1 — `@` nu : les contacts, zéro réseau.**
+    func test_régime1_arobaseNu_sertLesContacts_sansRéseau() async {
         let alice = makeCandidate(id: "1", username: "alice")
-        let (sut, annuaire) = makeSUTWithDirectory(localCandidates: [alice])
+        let bob = makeCandidate(id: "2", username: "bob")
+        let (sut, annuaire) = makeSUTWithDirectory(localCandidates: [alice, bob])
 
         sut.handleQuery(in: "Salut @")
         try? await Task.sleep(nanoseconds: 500_000_000)
 
-        XCTAssertEqual(annuaire.callCount, 0)
-        XCTAssertEqual(sut.suggestions.map(\.username), ["alice"])
+        XCTAssertEqual(annuaire.callCount, 0, "un `@` nu ne coûte AUCUN aller-retour")
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice", "bob"],
+                       "…et sert la liste entière : c'est la remontée que la directive demande")
+    }
+
+    /// **Régime 2 — une lettre : filtre LOCAL, toujours zéro réseau.**
+    ///
+    /// C'est le régime que le correctif du matin avait raté : il partait dès
+    /// le premier caractère. Une lettre ne discrimine pas — `@a` rend des
+    /// dizaines de comptes sans rapport, et les pousse DEVANT les amis de
+    /// l'auteur dans une bande qui n'en montre que trois.
+    func test_régime2_uneSeuleLettre_filtreLocalement_sansRéseau() async {
+        let alice = makeCandidate(id: "1", username: "alice", displayName: "Alice")
+        // **Le nom d'affichage compte, et le défaut de `makeCandidate` est
+        // « Alice »** : sans le poser ici, `bob` portait « Alice » et
+        // `filterLocals` le retenait sur « a » — le témoin serait tombé en
+        // accusant le filtre, qui faisait exactement son travail.
+        let bob = makeCandidate(id: "2", username: "bob", displayName: "Bob")
+        let (sut, annuaire) = makeSUTWithDirectory(localCandidates: [alice, bob])
+
+        sut.handleQuery(in: "Salut @a")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        XCTAssertEqual(annuaire.callCount, 0,
+                       "une seule lettre ne justifie pas un aller-retour")
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice"],
+                       "…mais elle filtre, tout de suite, ce que le cache a servi")
+    }
+
+    /// **Régime 3 — deux lettres : l'annuaire entre en jeu.**
+    func test_régime3_deuxLettres_interrogentLAnnuaire() async {
+        let (sut, annuaire) = makeSUTWithDirectory()
+        annuaire.result = .success([
+            UserSearchResult(id: "u9", username: "meeshy", displayName: "Meeshy")
+        ])
+
+        sut.handleQuery(in: "Salut @me")
+        await waitUntil({ annuaire.callCount == 1 },
+                        "au deuxième caractère, la recherche distante part")
+
+        XCTAssertEqual(annuaire.lastQuery, "me")
+    }
+
+    /// **Le seuil est celui de la LOI, pas un nombre écrit ici.** Si la
+    /// directive change, ce témoin suit sans qu'on ait à le réécrire — et il
+    /// tombe si une des deux familles de résolveurs se remet à porter le sien.
+    func test_leSeuil_estCeluiDeLaLoiPartagée() {
+        XCTAssertEqual(MentionLookupRule.minimumRemoteQueryLength, 2)
+        XCTAssertFalse(MentionLookupRule.queriesRemote(""))
+        XCTAssertFalse(MentionLookupRule.queriesRemote("a"))
+        XCTAssertFalse(MentionLookupRule.queriesRemote(" a "),
+                       "les blancs ne comptent pas : `@ ` n'ouvre pas un handle")
+        XCTAssertTrue(MentionLookupRule.queriesRemote("ab"))
+    }
+
+    /// **Le régime vaut AUSSI pour un contexte serveur.** Le contrôleur porte
+    /// deux chemins distants — l'endpoint CONTEXTUEL (conversation, post) et
+    /// l'annuaire (brouillon). Le premier partait dès le `@` nu
+    /// (`minQueryLengthForAPI = 0`), et c'est exactement la divergence que la
+    /// directive interdit : « ce système doit être général pour TOUS les
+    /// emplacements où on doit mentionner un utilisateur ».
+    func test_leRégime_vautAussiPourUneConversation() async {
+        let alice = makeCandidate(id: "1", username: "alice")
+        let mockService = MockMentionService()
+        mockService.suggestionsResult = .success([makeSuggestion(username: "alicia")])
+        let (sut, mock) = makeSUT(context: .conversation(id: "conv-1"),
+                                  localCandidates: [alice], service: mockService)
+
+        sut.handleQuery(in: "@")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertEqual(mock.suggestionsCallCount, 0, "`@` nu : les participants suffisent")
+
+        sut.handleQuery(in: "@a")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertEqual(mock.suggestionsCallCount, 0, "une lettre : filtre local")
+
+        sut.handleQuery(in: "@al")
+        await waitUntil({ mock.suggestionsCallCount == 1 }, "deux lettres : l'API répond")
     }
 
     // MARK: - showsSuggestions : les DEUX vides ne se valent pas

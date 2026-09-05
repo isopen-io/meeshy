@@ -109,15 +109,36 @@ final class ComposerDocumentSurfaceMentionMountGuardTests: XCTestCase {
         )
     }
 
-    func test_body_loadsAcceptedFriendsOnce_viaTask() throws {
+    /// **La surface CHARGE ses candidats — par la boîte, plus par une
+    /// affectation** (2026-09-05).
+    ///
+    /// Cette garde épinglait la ligne littérale
+    /// `.task { mentionBox.candidates = await …acceptedFriends() }`. Elle
+    /// gardait donc, sans le dire, un ORDRE : réseau d'abord, cache jamais.
+    /// Quand la directive a demandé que le `@` nu réponde depuis le cache,
+    /// c'est cette garde qui a rougi — en défendant le contraire de ce qu'il
+    /// fallait.
+    ///
+    /// > **Une garde de source épingle la FORME, et la forme transporte des
+    /// > décisions que personne n'a écrites.** Ici : « une seule source »,
+    /// > « réseau », « affectation directe ». Ce qu'elle voulait garder tient
+    /// > en une phrase — *quelqu'un charge les candidats au montage* — et
+    /// > c'est cette phrase qui doit être le sujet du témoin.
+    func test_body_chargeSesCandidats_auMontage() throws {
         let source = try surfaceSource()
         guard let bodyBlock = body(of: "var body: some View {", in: source) else {
             return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            bodyBlock.contains(".task { mentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }"),
-            "`body` doit charger les amis acceptés dans `mentionBox.candidates` via `.task` — sans cette "
-                + "ligne, la bande de mentions resterait vide pour toujours (aucune autre source ne les pose)."
+            bodyBlock.contains(".task { await mentionBox.loadCandidates() }"),
+            "`body` doit charger les candidats au montage — sans cette ligne, la bande de mentions "
+                + "resterait vide pour toujours (aucune autre source ne les pose). Le CHARGEMENT vit "
+                + "dans la boîte (cache d'abord, réseau ensuite) : la surface ne fait que le demander."
+        )
+        XCTAssertFalse(
+            bodyBlock.contains("mentionBox.candidates ="),
+            "…et elle ne pose PAS la liste elle-même : une affectation ici court-circuiterait le cache "
+                + "et rendrait un échec réseau indiscernable d'un carnet d'adresses vide."
         )
     }
 

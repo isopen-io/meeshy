@@ -351,7 +351,7 @@ struct ComposerDocumentSurface: View {
             value: mentionBox.controller.showsSuggestions
         )
         .onAppear { raiseKeyboardIfPromised() }
-        .task { mentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
+        .task { await mentionBox.loadCandidates() }
         .adaptiveOnChange(of: text) { _, newText in mentionBox.controller.handleQuery(in: newText) }
     }
 
