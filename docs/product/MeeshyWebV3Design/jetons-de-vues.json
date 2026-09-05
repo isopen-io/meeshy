@@ -121,6 +121,18 @@
   "links": {
    "@session": "membre"
   },
+  "search": {
+   "@session": "membre"
+  },
+  "calls": {
+   "@session": "membre"
+  },
+  "communities": {
+   "@session": "membre"
+  },
+  "notifPrefs": {
+   "@session": "membre"
+  },
   "chats": {
    "@session": "membre"
   },

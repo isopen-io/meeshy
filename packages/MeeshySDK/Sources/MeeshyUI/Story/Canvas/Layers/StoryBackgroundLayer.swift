@@ -232,8 +232,20 @@ public final class StoryBackgroundLayer: CALayer {
             StoryFilterProcessor.apply($0, to: image, imageId: imageId, intensity: activeFilterIntensity)
         } ?? image
         Self.withDisabledCAActions {
-            img?.contents = display.cgImage
-            if let layer = img, let cg = display.cgImage {
+            // **Le FOND porte l'orientation comme les autres couches**
+            // (2026-09-05). Ce site était resté sur `.cgImage` nu au premier
+            // passage : le média d'un post-photo est un FOND (`isBackground`),
+            // donc c'est ICI qu'il se peint — et pas dans `StoryMediaLayer`,
+            // que le correctif avait couvert. Mesuré : la même photo droite en
+            // détail, à 180° dans la carte, `EXIF Orientation = 3`.
+            //
+            // > **Un correctif posé sur « la couche des médias » ne couvre pas
+            // > le média qui n'est pas dans cette couche.** Le nom du fichier
+            // > décrivait la famille que je croyais viser ; la géographie du
+            // > rendu en décide autrement, et le fond a sa propre couche.
+            let redresse = CanvasImageOrientation.displayCGImage(display)
+            img?.contents = redresse
+            if let layer = img, let cg = redresse {
                 layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
                     naturalSize: CGSize(width: cg.width, height: cg.height),
                     canvasSize: self.bounds.size,
@@ -596,7 +608,7 @@ extension StoryBackgroundLayer {
                let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 Self.withDisabledCAActions {
-                    img.contents = placeholderImage.cgImage
+                    img.contents = CanvasImageOrientation.displayCGImage(placeholderImage)
                 }
                 hasVisual = true
             }
@@ -714,7 +726,7 @@ extension StoryBackgroundLayer {
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 let placeholder = CALayer()
                 placeholder.frame = bounds
-                placeholder.contents = placeholderImage.cgImage
+                placeholder.contents = CanvasImageOrientation.displayCGImage(placeholderImage)
                 placeholder.contentsGravity = .resizeAspectFill
                 placeholder.masksToBounds = true
                 addSublayer(placeholder)

@@ -252,6 +252,9 @@ describe('la lecture de GET /communities/:id/conversations', () => {
     const ouverture = await conversationsDeLaCommunaute({ jeton: 'j', id: 'comm-1', recuperer });
     if (ouverture.genre !== 'ouverte') throw new Error(ouverture.genre);
 
+    // `participants` (le COMPTE, notre propre champ) est légitime — ce qui ne
+    // doit PAS traverser, c'est la LISTE `participants[]` elle-même et ses
+    // profils : `userId`, `displayName`, `role`, `isOnline`, `lastActiveAt`.
     const projection = JSON.stringify(ouverture.conversations);
     // `participants` RESTE — c'est le COMPTE (le témoin voisin le nomme :
     // « COMPTE de participants … jamais la liste participants[] »), et un

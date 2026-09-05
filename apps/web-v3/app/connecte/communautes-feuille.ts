@@ -20,7 +20,15 @@ import { feuilleQuiMonte } from './atomes-feuille';
  *    écran).
  * 2. **La ligne est un `<a>` PLEIN**, la même cible tactile que `/calls` : une
  *    communauté s'ouvre au pouce, d'une main.
- * 3. **Les DEUX surimpressions partagent `feuilleQuiMonte`** (la géométrie
+ * 3. **LE LIEN DE PAGE SUIVANTE N'A AUCUNE RÈGLE ICI** — il porte
+ *    `plus-ancien action discrete`, le vocabulaire que le fil, la galerie,
+ *    `/notifications` et `/calls` emploient déjà, et dont la règle vit dans
+ *    `fil-feuille.ts` (composée dans ce document). Cette feuille en déclarait
+ *    une copie sous le nom `.plus` — une seconde règle GLOBALE là où
+ *    `social-feuille.ts` en déclarait déjà une autre, divergente, sous le même
+ *    nom : la jumelle que la charte interdit, et une collision qui n'attendait
+ *    qu'un document servant les deux feuilles.
+ * 4. **Les DEUX surimpressions partagent `feuilleQuiMonte`** (la géométrie
  *    d'une feuille qui monte, `atomes-feuille.ts`) — `?ouverte=` (les
  *    conversations d'une communauté) et `?nouvelle` (sa création) ne sont
  *    JAMAIS sur le même document, donc aucune ne paie l'autre.
@@ -51,7 +59,6 @@ export const FEUILLE_DES_COMMUNAUTES = compacte(`
 .communaute .chevron{flex:none;display:flex;align-items:center;color:var(--color-text-muted)}
 .communaute .chevron svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 
-.plus{display:flex;align-items:center;justify-content:center;min-height:var(--target-min);margin:var(--space-2) var(--space-4) 0}
 
 ${feuilleQuiMonte('communaute-ouverte')}
 dialog.communaute-ouverte h2{margin:0;font-size:var(--text-xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);overflow-wrap:anywhere}

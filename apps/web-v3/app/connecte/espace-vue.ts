@@ -28,9 +28,13 @@ export const versLEspace = (hote: string): string => `${hote}?${PARAMETRE_DE_L_E
  * LES DEUX RACCOURCIS D'EN-TÊTE — gauche vers le fil, droite vers l'espace
  * membre (`MeeshyWebV3.dc.html:550-556`, table de navigation `:867-868`).
  *
- * **CHACUN EST UN `<a href>` VERS UNE ROUTE SERVIE**, et c'est le mot de la
- * planche. Un raccourci qui ouvrirait `/communities` sortirait de la zone v3
- * en silence : le lecteur atterrirait sur le legacy sans que rien ne le dise.
+ * **CHACUNE EST UN `<a href>` VERS UNE ROUTE SERVIE**, et c'est le mot de la
+ * planche : un rond qui ouvrirait une route hors zone sortirait de la v3 en
+ * silence, et le lecteur atterrirait sur le legacy sans que rien ne le dise.
+ * `/communities` (matrice ordre 45) a fermé la dernière destination qui
+ * n'était pas encore servie — `espace-membre.test.ts` compare `href` aux
+ * `app/**\/route.ts` réellement émis, pour que cet invariant ne se rouvre pas
+ * en silence.
  *
  * **CE N'EST PLUS UN RAIL `position:fixed`** (correction de revue de #5164,
  * charte règle 8 b/c) — c'était le `<nav class="flottantes">` d'origine, DEUX
