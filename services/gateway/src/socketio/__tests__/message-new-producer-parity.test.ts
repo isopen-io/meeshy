@@ -987,4 +987,32 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
     expect(rest).toEqual(socket);
     expect(socket.eventType).toBe('new');
   });
+
+  it("#3614 — le producteur REST/ZMQ enfile un message SANS expéditeur (agent, système)", async () => {
+    // `Message.senderId` est requis en base (`schema.prisma`), mais l'objet
+    // JS reçu par ce transport peut en manquer — un message d'agent ou
+    // système construit sans identité de sender. `if (senderId)` englobait
+    // TOUT le bloc — participants, enfilage durable, cosmétique — donc un tel
+    // message n'était JAMAIS rejoué aux absents : la seule voie par laquelle
+    // un destinataire déconnecté apprend son existence disparaissait
+    // silencieusement. Le chemin WS (`MessageHandler.broadcastNewMessage`,
+    // ci-dessous) n'a jamais posé cette garde.
+    const messageSansExpediteur = makeContractMessage({ senderId: undefined, sender: undefined });
+
+    await manager.broadcastMessage(messageSansExpediteur as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it('le producteur WS enfile aussi un message SANS expéditeur (parité)', async () => {
+    const messageSansExpediteur = makeContractMessage({ senderId: undefined, sender: undefined });
+
+    await messageHandler.broadcastNewMessage(messageSansExpediteur as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
 });
