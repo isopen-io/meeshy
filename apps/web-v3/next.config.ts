@@ -1,10 +1,22 @@
 import type { NextConfig } from 'next';
 
+import { REECRITURES_DE_ZONE } from './scripts/lib/perimetre-de-zone.mjs';
+
 const nextConfig: NextConfig = {
   output: 'standalone',
   assetPrefix: '/__v3',
   poweredByHeader: false,
   reactStrictMode: true,
+  /**
+   * Les actifs du temps réel sont joignables DANS la zone (`/__v3/rt/…`,
+   * conception § 12.4), mais aucune route de `app/` ne peut y vivre : Next
+   * ignore tout segment qui commence par `_`. La réécriture qui les y porte
+   * est déclarée UNE fois, dans `scripts/lib/perimetre-de-zone.mjs`, et le
+   * garde de la chaîne la lit au même endroit.
+   */
+  rewrites: async () => ({
+    beforeFiles: REECRITURES_DE_ZONE.map(({ source, destination }) => ({ source, destination })),
+  }),
   /**
    * Ce que `standalone` ne trace pas tout seul.
    *
@@ -17,6 +29,12 @@ const nextConfig: NextConfig = {
    * document sans style, visible en production seulement.
    */
   outputFileTracingIncludes: {
+    /**
+     * Le travailleur de zone (#4473) : lu par CHEMIN (`lib/sw/actif-sw.ts`),
+     * donc invisible au traceur — sans cette entrée, l'image servirait 404 sur
+     * `/__v3/sw` et le worker n'existerait qu'en local, en silence.
+     */
+    '/sw': ['./.rt/sw.js'],
     /**
      * Le sous-sprite critique est inliné par la COQUILLE (§ 8.5) : il est donc
      * lu par toute page, pas par une route nommée. La clé est un glob pour cette
@@ -41,7 +59,7 @@ const nextConfig: NextConfig = {
      * dix entrées sont donc composées à partir d'UNE liste, jamais recopiées.
      */
     ...Object.fromEntries(
-      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup', '/chats', '/chats/[cle]'].map((route) => [
+      ['/', '/about', '/contact', '/partners', '/terms', '/privacy', '/login', '/signup'].map((route) => [
         route,
         [
           './node_modules/@meeshy/design-tokens/tokens.css',
@@ -55,6 +73,85 @@ const nextConfig: NextConfig = {
       './node_modules/@meeshy/design-tokens/dark.css',
       './node_modules/@meeshy/design-tokens/light.css',
       './node_modules/@meeshy/icons/sprite.svg',
+    ],
+    /**
+     * Les DEUX portes du fil composent l'adresse HACHÉE des actifs du temps
+     * réel (§ 12.4) : elles LISENT le module compilé et socket.io-client pour
+     * en calculer l'empreinte, comme elles lisent la table et le sprite. Sans
+     * ces entrées, l'image servirait un fil dont le chargeur vise une adresse
+     * calculée sur un fichier absent — un 404 que seul le lecteur en
+     * production verrait.
+     */
+    ...Object.fromEntries(
+      ['/chats/[cle]', '/chat/[lien]'].map((route) => [
+        route,
+        [
+          './node_modules/@meeshy/design-tokens/tokens.css',
+          './node_modules/@meeshy/design-tokens/dark.css',
+          './node_modules/@meeshy/design-tokens/light.css',
+          './node_modules/@meeshy/icons/sprite.svg',
+          './.rt/participate.js',
+          './node_modules/socket.io-client/dist/socket.io.esm.min.js',
+        ],
+      ]),
+    ),
+    /**
+     * `/chats/:cle/medias` (#4525) compose l'adresse hachée de SON module —
+     * `plein.js`, le seul appel qu'elle doit au clavier (Échap sur sa
+     * surimpression) — et lit le sprite et la table de jetons comme le fil.
+     * Aucun socket.io-client : la galerie n'a pas de temps réel, seulement un
+     * dialogue à élever. Sans cette entrée, l'image servirait une galerie sans
+     * style dont le chargeur vise une adresse calculée sur un fichier absent.
+     */
+    '/chats/[cle]/medias': [
+      './node_modules/@meeshy/design-tokens/tokens.css',
+      './node_modules/@meeshy/design-tokens/dark.css',
+      './node_modules/@meeshy/design-tokens/light.css',
+      './node_modules/@meeshy/icons/sprite.svg',
+      './.rt/plein.js',
+    ],
+    /**
+     * `/chats` est la TROISIÈME surface de participation (§ 12.4) : elle compose
+     * l'adresse hachée de SON module (`liste.js`) et de socket.io-client en les
+     * LISANT, comme les deux portes du fil. Elle lit de plus le sprite — la
+     * pastille de langue de chaque ligne et le chevron de son menu — et la table
+     * de jetons. Sans cette entrée, l'image servirait une liste sans style dont
+     * le chargeur vise une adresse calculée sur un fichier absent.
+     */
+    '/chats': [
+      './node_modules/@meeshy/design-tokens/tokens.css',
+      './node_modules/@meeshy/design-tokens/dark.css',
+      './node_modules/@meeshy/design-tokens/light.css',
+      './node_modules/@meeshy/icons/sprite.svg',
+      './.rt/liste.js',
+      './node_modules/socket.io-client/dist/socket.io.esm.min.js',
+    ],
+    /**
+     * LA ROUTE QUI SERT LES MODULES trace TOUS les fichiers de `.rt/` — c'est
+     * l'entrée qui fait exister chaque module dans l'arbre `standalone`. Un
+     * module absent ne casse RIEN de visible : `actifsTempsReel` rend un corps
+     * vide, la porte sert `tempsReel: null`, et l'écran perd son direct EN
+     * SILENCE — c'est ainsi que `/feed` a tourné sans module en production,
+     * `feed.js` n'ayant jamais été tracé. Le témoin de `actifs-rt.test.ts`
+     * (« chaque module que les actifs servent est tracé ») garde désormais la
+     * liste : tout module neuf doit s'y inscrire pour exister — c'est ce témoin,
+     * et lui seul, qui a rendu l'oubli de `composer.js` (#4966) au moment où il
+     * a été écrit, plutôt qu'en production trois semaines plus tard.
+     */
+    '/rt/[nom]': [
+      './.rt/participate.js',
+      './.rt/liste.js',
+      './.rt/feed.js',
+      './.rt/notifs.js',
+      './.rt/contacts.js',
+      './.rt/recherche.js',
+      './.rt/liens.js',
+      './.rt/commentaires.js',
+      './.rt/plein.js',
+      './.rt/navigateur.js',
+      './.rt/composer.js',
+      './.rt/prefs.js',
+      './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },
 };

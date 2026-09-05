@@ -164,19 +164,6 @@ struct BubbleSticker: View, Equatable {
     var onOpenReactPicker: ((String) -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.displayScale) private var displayScale
-
-    /// Le gabarit rasterisé, à sa taille NATURELLE en points. Peint par
-    /// `.task(id:)` — jamais dans `body`, qui se réévalue à chaque réaction.
-    @State private var templateImage: UIImage?
-    @State private var templateSize: CGSize = .zero
-    /// L'instant d'apparition — la référence du mouvement. Reposé à chaque
-    /// venue à l'écran, effacé au départ : c'est ce qui fait REJOUER un coup
-    /// unique quand la bulle revient (règle 3 des effets), sans aucun drapeau
-    /// « déjà joué ».
-    @State private var appearedAt: Date? = nil
-
     static func == (lhs: BubbleSticker, rhs: BubbleSticker) -> Bool {
         lhs.sticker == rhs.sticker
             && lhs.messageId == rhs.messageId
@@ -207,12 +194,13 @@ struct BubbleSticker: View, Equatable {
             // `.fixedSize()` pour que le conteneur épouse le contenu, comme
             // l'emoji libre (voir `emojiOnlyContent`).
             HStack(alignment: .bottom, spacing: 6) {
-                artwork
-                    .modifier(StickerMotion(
-                        animation: reduceMotion ? nil : sticker.animation,
-                        appearedAt: appearedAt,
-                        box: artworkBox
-                    ))
+                // **Le dessin est l'ATOME PARTAGÉ**, pas une copie locale.
+                // Focal, Script et Rivière montent le même
+                // `MessageStickerArtwork` : la priorité gabarit → image →
+                // emoji, la place réservée avant rasterisation et le mouvement
+                // ne peuvent plus diverger d'une surface à l'autre. Reduce
+                // Motion est honoré DANS l'atome — la bulle n'a plus à le lire.
+                MessageStickerArtwork(sticker: sticker, side: Self.side)
                     // Les effets du message se posent sur le sticker lui-même,
                     // jamais sur la rangée — même doctrine que la bulle.
                     .messageEffects(effects)
@@ -234,9 +222,6 @@ struct BubbleSticker: View, Equatable {
             if !isMe && !standalone { Spacer(minLength: 50) }
         }
         .padding(.bottom, bottomSpacing)
-        .onAppear { appearedAt = Date() }
-        .onDisappear { appearedAt = nil }
-        .task(id: renderKey) { renderTemplateIfNeeded() }
     }
 
     // MARK: - L'image
@@ -245,90 +230,6 @@ struct BubbleSticker: View, Equatable {
         RenderSource.resolve(sticker: sticker) { StickerTemplateRenderer.drawer(for: $0) != nil }
     }
 
-    /// `id:` du rendu — le gabarit ET ses emplacements : un sticker modifié
-    /// (autre message dans une cellule réutilisée) se redessine.
-    private var renderKey: String {
-        guard case .template(let id) = source else { return "" }
-        return id + "|" + sticker.slots.sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value)" }.joined(separator: ",")
-    }
-
-    private var metrics: StickerTemplateMetrics {
-        StickerTemplateMetrics.preview(side: Self.side)
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        switch source {
-        case .template(let id):
-            if let templateImage {
-                let size = Self.fittedSize(templateSize, within: Self.templateBox)
-                Image(uiImage: templateImage)
-                    .resizable()
-                    .frame(width: size.width, height: size.height)
-            } else {
-                // Avant la première rasterisation (un `.task`, donc une image
-                // plus tard) : on RÉSERVE la place mesurée plutôt que de
-                // laisser un trou, pour que la cellule ne saute pas.
-                let measured = StickerTemplateRenderer.measuredSize(templateID: id, slots: sticker.slots, metrics: metrics)
-                    ?? CGSize(width: Self.side, height: Self.side)
-                let size = Self.fittedSize(measured, within: Self.templateBox)
-                Color.clear.frame(width: size.width, height: size.height)
-            }
-        case .picture(let picture):
-            // `autoLoad: true` : le PNG EST le message — pas une pièce jointe
-            // que l'utilisateur choisit de télécharger. Sans lui, un sticker
-            // d'une version plus récente n'aurait rien à montrer.
-            ProgressiveCachedImage(
-                thumbHash: picture.thumbHash,
-                thumbnailUrl: picture.thumbnailUrl,
-                fullUrl: picture.fileUrl,
-                autoLoad: true,
-                targetSize: CGSize(width: Self.side, height: Self.side)
-            ) {
-                Color(hex: picture.thumbnailColor).shimmer()
-            }
-            .aspectRatio(contentMode: .fit)
-            .frame(width: Self.side, height: Self.side)
-        case .emoji(let emoji):
-            // La taille d'un emoji LIBRE (`EmojiDetector.EmojiOnlyResult.single`)
-            // — relative, donc Dynamic Type : un sticker emoji et un message
-            // emoji-only ont la même stature.
-            Text(emoji)
-                .font(MeeshyFont.relative(EmojiDetector.EmojiOnlyResult.single.fontSize ?? 90))
-                .fixedSize()
-        }
-    }
-
-    /// L'assiette des décalages du mouvement — la taille réellement rendue.
-    private var artworkBox: CGSize {
-        switch source {
-        case .template:
-            return templateSize == .zero
-                ? CGSize(width: Self.side, height: Self.side)
-                : Self.fittedSize(templateSize, within: Self.templateBox)
-        case .picture:
-            return CGSize(width: Self.side, height: Self.side)
-        case .emoji:
-            return Self.emojiBox
-        }
-    }
-
-    private func renderTemplateIfNeeded() {
-        guard case .template(let id) = source else {
-            templateImage = nil
-            templateSize = .zero
-            return
-        }
-        guard let rendered = StickerTemplateRenderer.image(
-            templateID: id,
-            slots: sticker.slots,
-            metrics: metrics,
-            screenScale: displayScale
-        ) else { return }
-        templateImage = rendered.0
-        templateSize = rendered.1
-    }
 
     // MARK: - Méta-ligne, réactions, espacement
 
@@ -398,52 +299,4 @@ struct BubbleSticker: View, Equatable {
 
 // MARK: - Le mouvement
 
-/// La pose de `StickerAnimation.pose(at:)`, posée à chaque image depuis
-/// l'instant d'apparition — fonction PURE du temps, aucune valeur animée par
-/// SwiftUI, donc rien à interpoler et rien qui puisse rester coincé.
-///
-/// Un coup unique tourne sur une `TimelineSchedule.explicit` FINIE, identifiée
-/// par `appearedAt` : chaque apparition crée un nouveau calendrier (et le
-/// rejoue), et la vue cesse de se réévaluer une fois le coup joué. Une
-/// animation continue tourne sur `.animation`, en pause tant que la feuille
-/// n'est pas apparue. `animation == nil` (immobile, ou Reduce Motion) rend le
-/// contenu tel quel — aucune `TimelineView` inerte par cellule.
-private struct StickerMotion: ViewModifier {
-    let animation: StickerAnimation?
-    let appearedAt: Date?
-    /// La taille rendue — les décalages de la pose en sont des fractions.
-    let box: CGSize
 
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let animation {
-            if animation.isOneShot {
-                TimelineView(.explicit(BubbleSticker.oneShotDates(from: appearedAt ?? .distantFuture, animation: animation))) { context in
-                    posed(content, animation.pose(at: elapsed(at: context.date)))
-                }
-                .id(appearedAt)
-            } else {
-                TimelineView(.animation(paused: appearedAt == nil)) { context in
-                    posed(content, animation.pose(at: elapsed(at: context.date)))
-                }
-            }
-        } else {
-            content
-        }
-    }
-
-    /// Le temps depuis l'apparition — zéro (l'identité) tant qu'elle n'a pas
-    /// eu lieu.
-    private func elapsed(at date: Date) -> Double {
-        guard let appearedAt else { return 0 }
-        return date.timeIntervalSince(appearedAt)
-    }
-
-    private func posed(_ content: Content, _ pose: StickerAnimation.Pose) -> some View {
-        content
-            .scaleEffect(pose.scale)
-            .rotationEffect(.degrees(pose.rotationDegrees))
-            .offset(x: pose.offsetX * box.width, y: pose.offsetY * box.height)
-            .opacity(pose.opacity)
-    }
-}

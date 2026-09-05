@@ -21,8 +21,15 @@ export type IndexDeVues = {
 // L'annexe écrite à la main. `pourquoi` porte la raison d'être du fichier, que
 // JSON ne sait pas mettre en commentaire — et qu'un lecteur doit trouver AVANT
 // de songer à replier ces valeurs dans `vues.json`.
+export type EtatDeSession = {
+  readonly pourquoi?: string;
+  readonly cookies: Readonly<Record<string, string>>;
+};
+
 export type AnnexeDeJetons = {
   readonly pourquoi?: readonly string[];
+  /** Les états de session qu'une vue peut réclamer par `@session` — leurs cookies, ceux de la passerelle de bouchon. */
+  readonly sessions?: Readonly<Record<string, EtatDeSession>>;
   readonly jetons: Readonly<Record<string, Readonly<Record<string, string>>>>;
 };
 
@@ -34,6 +41,7 @@ export type RefusDIndex = {
 export type LectureDeVues = {
   readonly source: string;
   readonly vues: readonly LigneDeVue[];
+  readonly sessions: Readonly<Record<string, EtatDeSession>>;
   readonly refus: readonly RefusDIndex[];
 };
 
@@ -63,6 +71,17 @@ export declare const vuesJointes: (entree: {
   readonly index: IndexDeVues;
   readonly jetons: AnnexeDeJetons['jetons'];
 }) => readonly LigneDeVue[];
+
+export declare const CLE_DE_SESSION: '@session';
+
+/** L'état de session qu'une vue RÉCLAME — `null` quand elle se sert sans créance. */
+export declare const sessionDeVue: (vue: LigneDeVue | undefined) => string | null;
+
+/** Les vues qui réclament un état de session que l'annexe ne déclare pas — refusées, et NOMMÉES. */
+export declare const sessionsInconnues: (entree: {
+  readonly vues: readonly LigneDeVue[];
+  readonly sessions: Readonly<Record<string, unknown>>;
+}) => readonly RefusDIndex[];
 
 export declare const jetonsHorsAnnexe: (index: IndexDeVues) => readonly RefusDIndex[];
 

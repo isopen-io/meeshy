@@ -4,6 +4,8 @@
  * @see docs/superpowers/specs/2026-06-16-notification-system-i18n-design.md
  */
 
+import type { SocialPostType } from '../types/notification.js';
+
 export const NOTIFICATION_LANGUAGES = [
   'ar', 'de', 'en', 'es', 'fr', 'it', 'pt', 'zh-Hans',
 ] as const;
@@ -30,7 +32,35 @@ export const NOTIFICATION_STRING_KEYS = [
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
-export type NotificationPostKind = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+/**
+ * Le kind qui traverse le FIL — exactement `SocialPostType`, donc exactement
+ * `enum PostType`. Le catalogue et le fil ne peuvent pas diverger : c'est le
+ * même type, pas deux listes tenues à jour en parallèle (#4906).
+ */
+export type NotificationPostKind = SocialPostType;
+
+/**
+ * La clé de PROSE du catalogue — ce n'est PAS un identifiant de fil.
+ *
+ * Elle porte `'MOOD'` en plus des quatre valeurs du fil, et c'est voulu :
+ * `docs/product/meeshy-composer-modele.md` § 7 dit que le quatrième profil
+ * s'appelle `status` dans le CODE et « mood » dans la PROSE, **et que les deux
+ * sont justes**. Ce type est la moitié PROSE de cette frontière. Il sert à
+ * deux choses, toutes deux des lectures :
+ *
+ *  1. **nommer le libellé** — « Nouvelle humeur », « votre humeur », « on
+ *     {author}'s mood » : le mot que l'auteur lit, et que le § 7 protège ;
+ *  2. **tolérer une charge déjà persistée** qui porte encore `'MOOD'` — un
+ *     contrat neuf s'ajoute à l'ancien, il ne le remplace pas, et le serveur
+ *     ne doit pas moins bien rendre une notification qu'il rendait hier.
+ *
+ * Ce qui est INTERDIT est l'inverse : émettre `'MOOD'` comme discriminant.
+ * `SocialPostType` (`types/notification.ts`) est le seul type des champs qui
+ * voyagent, et il ne le connaît plus. Cliquet :
+ * `__tests__/types/social-post-type-wire-guard.test.ts`.
+ */
+export type NotificationPostLabelKind = NotificationPostKind | 'MOOD';
+
 export type NotificationCallKind = 'audio' | 'video';
 
 export type NotificationStringParams = {
@@ -41,13 +71,18 @@ export type NotificationStringParams = {
   readonly author?: string;
   readonly count?: number;
   readonly callIcon?: string;
-  readonly postType?: NotificationPostKind;
+  /**
+   * L'entité nommée par le libellé. Typée en clé de PROSE, pas en valeur de
+   * fil : le catalogue est un dictionnaire, il RENDRA ce qu'on lui donne — y
+   * compris le nom produit « MOOD » d'une charge déjà persistée.
+   */
+  readonly postType?: NotificationPostLabelKind;
   readonly callType?: NotificationCallKind;
   readonly isStory?: boolean;
 };
 
 type Templates = Record<NotificationStringKey, string>;
-type ObjMap = Record<NotificationPostKind, string>;
+type ObjMap = Record<NotificationPostLabelKind, string>;
 type CallMap = Record<NotificationCallKind, string>;
 
 const TEMPLATES: Record<NotificationLanguage, Templates> = {
@@ -553,7 +588,7 @@ const CALL_LABEL: Record<NotificationLanguage, CallMap> = {
 };
 
 // Contexte de reaction.commentVerbose : " sur le <entité> de {author}", entité-conscient.
-// Couvre les 5 NotificationPostKind — une réaction à un commentaire sur un REEL/STATUS
+// Couvre les clés de PROSE (`NotificationPostLabelKind`) — une réaction à un commentaire sur un REEL/STATUS
 // ne s'effondre plus vers « post » (symétrie avec reaction.post qui porte déjà le postType).
 const COMMENT_CONTEXT: Record<NotificationLanguage, ObjMap> = {
   fr: { POST: ' sur le post de {author}', STORY: ' sur la story de {author}', MOOD: ' sur l’humeur de {author}', STATUS: ' sur le statut de {author}', REEL: ' sur le réel de {author}' },
@@ -659,7 +694,7 @@ export function notificationString(
 
   if (key === 'reaction.commentVerbose') {
     // postType (entité réelle) prime ; `isStory` reste un repli legacy binaire.
-    const kind: NotificationPostKind = params.postType ?? (params.isStory ? 'STORY' : 'POST');
+    const kind: NotificationPostLabelKind = params.postType ?? (params.isStory ? 'STORY' : 'POST');
     tokens.context = params.author
       ? interpolate(COMMENT_CONTEXT[L][kind], { author: params.author })
       : '';
@@ -728,28 +763,49 @@ export type NotificationDisplay = {
 };
 
 /**
- * La clé de libellé par type de contenu référençant.
+ * La clé de libellé par type de contenu référençant — UNE ligne par valeur que
+ * la base sait produire.
  *
- * MOOD et STATUS partagent la même : `PostType` n'a que quatre valeurs, MOOD
- * étant le nom PRODUIT de STATUS. `NotificationPostKind` en connaît cinq, et
- * les notifications déjà en base peuvent porter l'une ou l'autre.
+ * Elle en portait une cinquième, `MOOD: 'reference.status'`, qui était une
+ * TRADUCTION INTERNE entre deux noms d'une même chose. Le § 7 dit qu'il n'y en
+ * a qu'un sur le fil : la traduction se fait maintenant UNE fois, à la
+ * frontière (`wirePostKind`), et cette table n'a plus à la connaître (#4906).
  */
 const REFERENCE_KEY_BY_KIND: Record<NotificationPostKind, NotificationStringKey> = {
   POST: 'reference.post',
   REEL: 'reference.reel',
   STORY: 'reference.story',
   STATUS: 'reference.status',
-  MOOD: 'reference.status',
 };
 
-/** Normalise un postType potentiellement absent/inconnu vers une clé sûre. */
-function normalizePostKind(value?: string | null): NotificationPostKind | undefined {
+/**
+ * Les clés que le catalogue sait rendre — PROJECTION d'un `ObjMap`, jamais une
+ * liste tenue à la main. Une liste recopiée est exactement ce qui laisse un
+ * membre neuf de `PostType` passer pour « inconnu » et retomber sur le libellé
+ * générique : ici, le membre neuf casse d'abord les neuf tables de libellés
+ * (elles sont exhaustives par type), puis entre ici tout seul.
+ */
+const POST_LABEL_KINDS: ReadonlySet<string> = new Set(Object.keys(POST_NOUN_CAP.fr));
+
+/**
+ * Normalise un postType potentiellement absent/inconnu vers une clé de PROSE
+ * sûre. Tolérante par contrat : elle accepte encore `'MOOD'`, parce qu'une
+ * notification déjà persistée peut le porter et qu'aucun lecteur ne doit
+ * moins bien la rendre qu'hier.
+ */
+function normalizePostKind(value?: string | null): NotificationPostLabelKind | undefined {
   if (!value) return undefined;
   const up = value.toUpperCase();
-  return (['POST', 'STORY', 'MOOD', 'STATUS', 'REEL'] as const).includes(up as NotificationPostKind)
-    ? (up as NotificationPostKind)
-    : undefined;
+  return POST_LABEL_KINDS.has(up) ? (up as NotificationPostLabelKind) : undefined;
 }
+
+/**
+ * La frontière, en une fonction : une clé de PROSE devient l'identifiant que
+ * le FIL connaît. C'est le SEUL endroit du catalogue où « MOOD » se traduit —
+ * partout ailleurs il reste un mot, jamais un discriminant.
+ */
+const wirePostKind = (kind: NotificationPostLabelKind): NotificationPostKind =>
+  kind === 'MOOD' ? 'STATUS' : kind;
 
 export function buildNotificationDisplay(
   lang: string | null | undefined,
@@ -761,7 +817,7 @@ export function buildNotificationDisplay(
     : notificationString(L, 'someone');
   const emoji = input.emoji ?? undefined;
   const kind = normalizePostKind(input.postType);
-  const ns = (key: NotificationStringKey, postType?: NotificationPostKind) =>
+  const ns = (key: NotificationStringKey, postType?: NotificationPostLabelKind) =>
     notificationString(L, key, { ...(emoji ? { emoji } : {}), ...(postType ? { postType } : {}) });
   const nounCap = kind ? notificationString(L, 'comment.subtitleBare', { postType: kind }) : null;
   const author = (input.authorName && input.authorName.trim() !== '') ? input.authorName.trim() : null;
@@ -869,6 +925,10 @@ export function buildNotificationDisplay(
         notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }),
       );
     case 'friend_new_mood':
+      // « MOOD » est ici une clé de PROSE, jamais un discriminant : le
+      // sous-titre que l'auteur lit dit « Nouvelle humeur », et c'est
+      // exactement la moitié de la frontière que le § 7 protège. Le
+      // discriminant qui voyage avec la notification, lui, dit STATUS.
       return framed(
         notificationString(L, 'friend.mood'),
         notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }),
@@ -879,8 +939,12 @@ export function buildNotificationDisplay(
     case 'user_mentioned':
       // Le type du contenu décide du libellé. Absent, c'est une mention en
       // conversation ou en commentaire : le libellé générique reste le bon.
+      //
+      // Deux variables parce que deux questions : `kind` NOMME l'entité (prose,
+      // le mot que l'auteur lit), `wirePostKind(kind)` la ROUTE vers sa clé de
+      // libellé (identifiant, ce que la base sait produire).
       return kind
-        ? framed(ns(REFERENCE_KEY_BY_KIND[kind]), nounCap)
+        ? framed(ns(REFERENCE_KEY_BY_KIND[wirePostKind(kind)]), nounCap)
         : framed(notificationString(L, 'mention'), nounCap);
 
     default:

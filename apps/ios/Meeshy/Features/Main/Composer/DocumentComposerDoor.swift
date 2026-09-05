@@ -141,7 +141,7 @@ struct DocumentComposerDoor: View {
             // et volontairement : c'est le publieur de CRÉATION de story du
             // dépôt (`publishStoryInBackground`), et deux assemblages de ses
             // quatorze arguments auraient divergé au premier champ ajouté.
-            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                 storyViewModel.publishStoryInBackground(
                     targetType: targetType,
                     slides: slides,
@@ -149,6 +149,7 @@ struct DocumentComposerDoor: View {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    loadedStickerAnimations: loadedStickerAnimations,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,
@@ -354,7 +355,15 @@ struct DocumentComposerDoor: View {
             mentions: draft.mentions,
             location: draft.location,
             discoverabilityPrecision: draft.discoverabilityPrecision,
-            transcription: draft.mobileTranscription
+            transcription: draft.mobileTranscription,
+            // **Le canvas** (#4756). La porte jumelle
+            // (`ComposerDocumentDurablePublisher`) passe la même valeur au même
+            // rang : un écart entre les deux serait un champ perdu en silence
+            // chez l'une des deux — ce que leur doc-comment croisé annonce.
+            storyEffects: draft.storyEffects,
+            mediaCaptions: draft.mediaCaptions,
+            mediaAlts: draft.mediaAlts,
+            mediaObjectIds: draft.mediaObjectIds
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

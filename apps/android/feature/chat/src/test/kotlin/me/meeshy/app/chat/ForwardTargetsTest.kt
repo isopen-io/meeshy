@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.theme.accentHex
 import org.junit.Test
@@ -13,12 +14,22 @@ class ForwardTargetsTest {
         title: String? = null,
         avatar: String? = null,
         members: Int = 2,
+        active: Boolean? = null,
+        announcement: Boolean = false,
+        defaultWriteRole: String? = null,
+        currentUserRole: String? = null,
+        deletedForUserAt: String? = null,
     ) = ApiConversation(
         id = id,
         type = "group",
         title = title,
         avatar = avatar,
+        isActive = active,
+        isAnnouncementChannel = announcement,
+        defaultWriteRole = defaultWriteRole,
+        currentUserRole = currentUserRole,
         participants = (1..members).map { ApiParticipant(id = "$id-p$it", userId = "$id-u$it") },
+        preferences = ApiConversationPreferences(deletedForUserAt = deletedForUserAt),
     )
 
     private fun direct(id: String, vararg participants: ApiParticipant) =
@@ -131,5 +142,47 @@ class ForwardTargetsTest {
         assertThat(target.accentHex).isEqualTo(conv.accentHex())
         assertThat(target.memberCount).isEqualTo(5)
         assertThat(target.type).isEqualTo("group")
+    }
+
+    @Test
+    fun a_member_in_an_announcement_channel_is_not_offered_as_a_target() {
+        val targets = ForwardTargets.of(
+            listOf(group("c2", "Announcements", announcement = true, currentUserRole = "member")),
+            sourceConversationId = "c1",
+            query = "",
+            currentUserId = "u1",
+        )
+        assertThat(targets).isEmpty()
+    }
+
+    @Test
+    fun an_admin_in_an_announcement_channel_is_offered_as_a_target() {
+        val targets = ForwardTargets.of(
+            listOf(group("c2", "Announcements", announcement = true, currentUserRole = "admin")),
+            sourceConversationId = "c1",
+            query = "",
+            currentUserId = "u1",
+        )
+        assertThat(targets.map { it.conversationId }).containsExactly("c2")
+    }
+
+    @Test
+    fun an_inactive_conversation_is_not_offered_as_a_target() {
+        val targets = ForwardTargets.of(
+            listOf(group("c2", "Gone", active = false)),
+            sourceConversationId = "c1",
+            query = "",
+        )
+        assertThat(targets).isEmpty()
+    }
+
+    @Test
+    fun a_conversation_soft_deleted_for_the_reader_is_not_offered_as_a_target() {
+        val targets = ForwardTargets.of(
+            listOf(group("c2", "Hidden", deletedForUserAt = "2026-01-01T00:00:00Z")),
+            sourceConversationId = "c1",
+            query = "",
+        )
+        assertThat(targets).isEmpty()
     }
 }

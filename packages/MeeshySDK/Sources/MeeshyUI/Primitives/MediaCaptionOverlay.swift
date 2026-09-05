@@ -338,7 +338,23 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
         // puis défile. L'hôte n'a plus à déplacer quoi que ce soit.
         VStack(alignment: .leading, spacing: 8) {
             ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: true) {
+                // **Aucune barre de défilement** (directive porteur 2026-09-03).
+                //
+                // `showsIndicators` a `true` pour défaut : l'omettre repeindrait
+                // la barre en silence. Elle est donc posée EXPLICITEMENT.
+                //
+                // Ce n'est pas un paramètre d'hôte, contrairement au voile
+                // douze lignes plus bas — un indicateur blanc posé sur une photo
+                // ou une vidéo n'est ce qu'aucun des trois hôtes veut. Il n'y a
+                // rien à laisser choisir.
+                //
+                // Ce que le lecteur perd, deux choses le lui rendent sans
+                // peindre sur le média : le texte se COUPE net au plafond de
+                // `maxExpandedHeight` — une phrase tranchée est le plus ancien
+                // signal qu'il y a une suite —, et l'invite « voir moins » est
+                // posée SOUS la fenêtre, hors du défilement, donc toujours
+                // visible et jamais confondue avec la fin du corpus.
+                ScrollView(.vertical, showsIndicators: false) {
                     render(caption, 15)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)

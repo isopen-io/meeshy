@@ -283,32 +283,51 @@ describe('POST /posts/:id/impression — detail source increments postOpenCount'
   });
 });
 
+/**
+ * #4150 — l'alias délègue au point d'ingestion, donc sa forme de requête a
+ * convergé vers celle du LOT : `createMany` au lieu de `create`, et une
+ * résolution de racines de repost BORNÉE PAR LOT au lieu du `select` replié
+ * dans l'`update`.
+ *
+ * L'ancienne optimisation coûtait ZÉRO lecture — mais elle n'existe QUE pour un
+ * id unique (`updateMany` ne rend aucune ligne). L'invariant est donc réénoncé,
+ * pas abandonné : **une résolution de racines par LOT, jamais une par post**,
+ * et toujours aucune lecture `findUnique` sur ce chemin chaud.
+ */
 describe('POST /posts/:id/impression — on a repost, credits the root impressionCount too', () => {
-  it('folds repostOfId/originalRepostOfId resolution into the update select (no standalone findUnique) and increments the root once', async () => {
+  /** Double d'audience + résolution de racines, les deux passes de `post.findMany`. */
+  const findManyAvecRacines = (racines: unknown[]) =>
+    jest.fn<any>().mockImplementation(({ where }: any) => {
+      if (where?.repostOfId !== undefined) return Promise.resolve(racines);
+      return Promise.resolve(((where?.id?.in ?? []) as string[]).map(publicAcl));
+    });
+
+  it('résout les racines en UNE passe par lot (aucun findUnique) et crédite la racine une fois', async () => {
     const ROOT_ID = '507f1f77bcf86cd799439077';
     const prisma = {
-      postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
+      postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
       post: {
-        // Le `select` de `update` porte la résolution — pas de findUnique
-        // séparé sur ce chemin chaud (Important #2, revue chantier reposts).
-        update: jest.fn<any>().mockResolvedValue({ repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID }),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn<any>(),
         findFirst: aclAwareFindFirst(),
+        findMany: findManyAvecRacines([
+          { id: POST_ID, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
+        ]),
       },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
     expect(res.statusCode).toBe(200);
-    // Réduction de requêtes : plus de lecture dédiée avant l'écriture.
     expect(prisma.post.findUnique).not.toHaveBeenCalled();
-    expect(prisma.post.update).toHaveBeenCalledWith({
-      where: { id: POST_ID },
+    // UNE seule passe de résolution de racines pour tout le lot.
+    expect(prisma.post.findMany.mock.calls.filter(([a]: any[]) => a?.where?.repostOfId !== undefined))
+      .toHaveLength(1);
+    expect(prisma.post.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [POST_ID] } },
       data: { impressionCount: { increment: 1 } },
-      select: { repostOfId: true, originalRepostOfId: true },
     });
     expect(prisma.post.updateMany).toHaveBeenCalledWith({
-      where: { id: ROOT_ID, deletedAt: { isSet: false } },
+      where: { id: { in: [ROOT_ID] }, deletedAt: { isSet: false } },
       data: { impressionCount: { increment: 1 } },
     });
     await app.close();
@@ -316,19 +335,24 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
 
   it('non-repost post: no root credit attempted, no standalone findUnique either', async () => {
     const prisma = {
-      postImpression: { create: jest.fn<any>().mockResolvedValue({}) },
+      postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
       post: {
-        update: jest.fn<any>().mockResolvedValue({}),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
         findUnique: jest.fn<any>(),
         findFirst: aclAwareFindFirst(),
+        findMany: findManyAvecRacines([]),
       },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
     expect(res.statusCode).toBe(200);
     expect(prisma.post.findUnique).not.toHaveBeenCalled();
-    expect(prisma.post.updateMany).not.toHaveBeenCalled();
+    // Le seul `updateMany` est celui du post lui-même : aucun crédit de racine.
+    expect(prisma.post.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.post.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [POST_ID] } },
+      data: { impressionCount: { increment: 1 } },
+    });
     await app.close();
   });
 });
@@ -407,9 +431,13 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
     const repostResolutionCalls = prisma.post.findMany.mock.calls
       .filter(([args]: any[]) => args.where?.repostOfId !== undefined);
     expect(repostResolutionCalls).toHaveLength(1);
+    // #4150 — la lecture porte désormais son propre `take`. La borne était
+    // implicite (le plafond du lot, chez l'appelant) ; une borne qui ne vit que
+    // chez l'appelant est une convention, pas une borne.
     expect(prisma.post.findMany).toHaveBeenCalledWith({
       where: { id: { in: [REPOST_A, REPOST_B] }, repostOfId: { not: null } },
       select: { id: true, repostOfId: true, originalRepostOfId: true },
+      take: expect.any(Number),
     });
 
     // Chaque repost distinct du batch crédite la MÊME racine → +2, jamais +1
@@ -539,6 +567,9 @@ describe('POST /posts/:id/view — STORY viewer has no username uses ?? empty st
         findFirst: jest.fn<any>().mockResolvedValue({
           authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
         }),
+        // #4150 — la vue passe par la passe d'audience de LOT du point
+        // d'ingestion (`post.findMany`), pas par une lecture unitaire.
+        findMany: aclAwareFindMany(),
       },
     };
     app.decorate('prisma', prisma);

@@ -77,6 +77,20 @@ const SURFACES: Record<string, Classification> = {
   'conversations/messages-search.ts': { kind: 'applies', reads: 2, applications: 2 },
   'conversations/threads.ts': { kind: 'applies', reads: 1, applications: 2 },
 
+  // `messages-list-views.ts` — le résolveur d'ids des VUES de la collection
+  // unique (#4340). Ses DEUX lectures sont les deux moitiés de la recherche
+  // (terme dans le contenu, terme dans les traductions) et chacune porte son
+  // `applyPersonalHistoryHiding` : 2 lectures, 2 applications, aucun écart.
+  //
+  // Le masquage y est appliqué UNE SECONDE FOIS — le site partagé de
+  // `messages-list.ts` le pose déjà sur la page finale. La redondance est
+  // MESURÉE, pas supposée : retirer le masquage du seul résolveur ci-dessous
+  // ne fait tomber AUCUN témoin (le site partagé couvre), le retirer du seul
+  // site partagé en fait tomber trois (la recherche survit), et le retirer des
+  // DEUX en fait tomber quatre. Deux gardes indépendantes sur le même chemin,
+  // et c'est le régime voulu pour une porte qui sert quatre vues.
+  'conversations/messages-list-views.ts': { kind: 'applies', reads: 2, applications: 2 },
+
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
   // `sync.ts` → `sync/messages.ts` (#4171, intégré pendant ce lot : le
   // fichier unique est devenu un répertoire). Même lecture, même raison,

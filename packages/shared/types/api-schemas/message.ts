@@ -197,6 +197,29 @@ export const messageSchema = {
         createdAt: { type: 'string', format: 'date-time' },
         senderId: { type: 'string', nullable: true },
         validatedMentions: { type: 'array', items: { type: 'string' } },
+        // #4945 — la citation descend le Prisme au chargement comme en direct :
+        // la route projette `replyTo.translations` (même tableau que la racine)
+        // et, sans cette déclaration, fast-json-stringify la strippait en
+        // silence — le select et le mapping étaient justes, le fil restait vide.
+        translations: {
+          type: 'array',
+          nullable: true,
+          items: messageTranslationSchema,
+          description: 'Traductions du message cité (absentes quand il est protégé)'
+        },
+        // La protection du message CITÉ, au niveau MESSAGE — jumelle de celle
+        // que la copie inline déclare déjà sur ses `attachments`
+        // (`reply-attachment-protection-contract`). Le défaut est le même une
+        // couche plus haut : sans ces champs, un client rend le texte d'un
+        // message à VUE UNIQUE dès qu'on lui répond, la protection contournée
+        // par une réponse. Mêmes formes que le schéma racine, pour qu'un client
+        // typé sur la racine lise la même chose ici.
+        expiresAt: { type: 'string', format: 'date-time', nullable: true },
+        isViewOnce: { type: 'boolean' },
+        isBlurred: { type: 'boolean' },
+        effectFlags: { type: 'number' },
+        isEncrypted: { type: 'boolean' },
+        encryptionMode: { type: 'string', nullable: true },
         sender: {
           type: 'object',
           nullable: true,

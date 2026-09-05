@@ -231,14 +231,41 @@ final class ComposerSceneActivationTests: XCTestCase {
         XCTAssertTrue(raw.contains("var sceneDescriptionBinding"),
                       "sceneDescriptionBinding introuvable ou source vide")
         let src = compact(raw)
+        // **La règle a changé le 2026-09-02, et cette garde la suit** (#4890).
+        //
+        // Elle épinglait `get:{viewModel.currentSlide.content??""}` et
+        // `set:{viewModel.applyContentText($0)}` — la slide des DEUX côtés,
+        // quel que soit le format. Le modèle produit (§ 3) dit autre chose, et
+        // le disait déjà : en Story et en Réel le texte de la slide EST le
+        // contenu de la publication, en Post c'est la LÉGENDE de son média.
+        //
+        // > Ce qui est gardé n'est donc plus une DESTINATION mais un
+        // > AIGUILLAGE. Continuer d'exiger la slide des deux côtés aurait figé
+        // > la moitié du défaut que le lot corrige — une garde qui protège la
+        // > panne, comme celle de la flèche du socle au même moment.
         XCTAssertTrue(
-            src.contains("get:{viewModel.currentSlide.content??\"\"}"),
-            "La LECTURE doit venir de la slide COURANTE : lire le texte de la publication "
+            src.contains("switchComposerSlideTextRole.role(for:selectedFormat)"),
+            "La destination du texte se DÉCIDE par le rôle, jamais au site : c'est le "
+                + "recouvrement du mot « description » sur deux rôles qui a laissé le défaut vivre."
+        )
+        XCTAssertTrue(
+            src.contains("case.content:returnviewModel.currentSlide.content??\"\"") ,
+            "En S/R/M, la LECTURE vient de la slide COURANTE : lire le texte de la publication "
                 + "montrerait la description d'une autre slide, et la ferait écraser."
         )
         XCTAssertTrue(
-            src.contains("set:{viewModel.applyContentText($0)}"),
-            "… et l'écriture y reste."
+            src.contains("case.caption:guardletmedia=selectedSlideMediaURLelse{return\"\"}"),
+            "En Post, elle vient du MÉDIA de la slide — et sans média, rien : retomber sur le "
+                + "contenu servirait le texte du post comme légende de ce média."
+        )
+        XCTAssertTrue(
+            src.contains("case.content:viewModel.applyContentText(texte)"),
+            "… et l'écriture suit le même aiguillage."
+        )
+        XCTAssertTrue(
+            src.contains("ComposerSlideTextRole.applyCaption(texte,to:selectedSlideMediaURL,in:&documentMediaCaptions)"),
+            "La légende s'écrit par MÉDIA. Une carte par SLIDE passerait au compilateur et "
+                + "servirait le mauvais média le jour où un post en portera deux sur une slide."
         )
         XCTAssertFalse(
             src.contains("documentText=newValue"),

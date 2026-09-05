@@ -140,6 +140,55 @@ class SettingsViewModelNotificationTest {
     }
 
     @Test
+    fun setShowPreview_persists() = runTest(dispatcher) {
+        val store = InMemoryNotificationPreferencesStore()
+        val vm = vm(notificationStore = store)
+        advanceUntilIdle()
+
+        vm.setShowPreview(false)
+        advanceUntilIdle()
+
+        assertThat(store.preferences.value.showPreview).isFalse()
+    }
+
+    @Test
+    fun setShowSenderName_persistsWithoutTouchingShowPreview() = runTest(dispatcher) {
+        val store = InMemoryNotificationPreferencesStore()
+        val vm = vm(notificationStore = store)
+        advanceUntilIdle()
+
+        vm.setShowSenderName(false)
+        advanceUntilIdle()
+
+        assertThat(store.preferences.value.showSenderName).isFalse()
+        assertThat(store.preferences.value.showPreview).isTrue()
+    }
+
+    @Test
+    fun setGroupNotifications_persists() = runTest(dispatcher) {
+        val store = InMemoryNotificationPreferencesStore()
+        val vm = vm(notificationStore = store)
+        advanceUntilIdle()
+
+        vm.setGroupNotifications(false)
+        advanceUntilIdle()
+
+        assertThat(store.preferences.value.groupNotifications).isFalse()
+    }
+
+    @Test
+    fun setNotificationBadgeEnabled_persists() = runTest(dispatcher) {
+        val store = InMemoryNotificationPreferencesStore()
+        val vm = vm(notificationStore = store)
+        advanceUntilIdle()
+
+        vm.setNotificationBadgeEnabled(false)
+        advanceUntilIdle()
+
+        assertThat(store.preferences.value.notificationBadgeEnabled).isFalse()
+    }
+
+    @Test
     fun successiveToggles_composeWithoutClobberingEachOther() = runTest(dispatcher) {
         val store = InMemoryNotificationPreferencesStore()
         val vm = vm(notificationStore = store)

@@ -86,6 +86,32 @@ class ConversationRepository @Inject constructor(
     fun cachedConversations(): Flow<List<ApiConversation>> =
         cacheSource.observe().map { it ?: emptyList() }
 
+    /**
+     * The unread total across every cached conversation (#5190) — a SQL `SUM`
+     * over [ConversationDao.totalUnreadCount]'s denormalized `unreadCount`
+     * column, never a decode. The single source both the home-screen
+     * `UnreadCountWidget` and the in-app chrome badge read, so the two can
+     * never drift from each other OR from re-deriving the same sum by
+     * decoding every cached row (what [me.meeshy.sdk.model.totalUnreadCount]
+     * — the pure `List<ApiConversation>` reducer — still backs for screens
+     * that already hold the full decoded list for other reasons, e.g. the
+     * conversation list itself).
+     */
+    fun totalUnreadCount(): Flow<Int> = conversationDao.totalUnreadCount()
+
+    /**
+     * The [limit] most-recently-updated cached conversations, decoded — a
+     * BOUNDED read for callers that only ever render a handful of rows
+     * (home-screen widgets, dynamic launcher shortcuts) instead of
+     * [cachedConversations], which decodes the ENTIRE cached table (#5190: up
+     * to the 10 000-conversation full-sync ceiling [ConversationCacheSource]
+     * allows, to render 5-8 rows). Local-only, like [cachedConversations] —
+     * no network revalidation.
+     */
+    suspend fun recentCachedConversations(limit: Int = RECENT_WINDOW): List<ApiConversation> =
+        conversationDao.recentByUpdatedAt(limit)
+            .map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
+
     /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()
@@ -275,6 +301,7 @@ class ConversationRepository @Inject constructor(
                 listOf(
                     row.copy(
                         payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 0)),
+                        unreadCount = 0,
                     ),
                 ),
             )
@@ -317,6 +344,7 @@ class ConversationRepository @Inject constructor(
                 listOf(
                     row.copy(
                         payload = MeeshyApi.json.encodeToString(conversation.copy(unreadCount = 1)),
+                        unreadCount = 1,
                     ),
                 ),
             )
@@ -492,5 +520,16 @@ class ConversationRepository @Inject constructor(
          * fires on a genuinely long roster.
          */
         const val PARTICIPANTS_PAGE_SIZE: Int = 30
+
+        /**
+         * Default candidate window for [recentCachedConversations]. Every current
+         * caller renders at most 8 rows (`FavoriteContactsWidget`'s `.prefix(8)`)
+         * after re-sorting pinned-first-then-recency and/or filtering — a re-sort
+         * this bounded query cannot itself express, since `isPinned` lives in the
+         * JSON payload, not a column. 100 is generous headroom past any realistic
+         * pinned set while remaining orders of magnitude below decoding the whole
+         * cached table (#5190).
+         */
+        const val RECENT_WINDOW: Int = 100
     }
 }

@@ -37,6 +37,43 @@ final class ComposerMentionControllerBox: ObservableObject {
 
     @Published var candidates: [MentionCandidate] = []
 
+    /// **Cache d'abord, réseau ensuite — et jamais l'inverse** (directive
+    /// porteur 2026-09-05 ; principe « Cache-First, Network-Second »).
+    ///
+    /// Les trois surfaces qui montent cette boîte appelaient
+    /// `acceptedFriends()` dans un `.task`, c'est-à-dire un aller-retour
+    /// RÉSEAU avant que le `@` nu puisse proposer qui que ce soit. Deux
+    /// conséquences, l'une visible et l'autre pas :
+    ///
+    /// - à l'ouverture du composer, la bande restait vide le temps de la
+    ///   requête — soit précisément la fenêtre où l'auteur tape ;
+    /// - un ÉCHEC (la route des amis rendait 404 en production le 2026-09-05)
+    ///   se traduisait par une liste vide, indiscernable d'un carnet
+    ///   d'adresses vide.
+    ///
+    /// L'ordre ici corrige les deux, et le `guard` corrige un troisième défaut
+    /// que le simple ajout du cache aurait introduit : **un rafraîchissement
+    /// qui échoue ne doit pas EFFACER ce que le cache a déjà servi.** Deux
+    /// écritures sur une même propriété, dont la seconde peut être vide, sont
+    /// un remplacement — pas une mise à jour.
+    /// Les deux sources sont INJECTÉES, avec leurs défauts de production : sans
+    /// cette couture, l'ordre « cache puis réseau » ne serait éprouvable que
+    /// derrière un vrai `CacheCoordinator` et un vrai `FriendService` — donc
+    /// pas éprouvable du tout.
+    func loadCandidates(
+        cached: @MainActor () async -> [MentionCandidate]
+            = { await ComposerMentionFriendsSource.cachedFriends() },
+        fresh: @MainActor () async -> [MentionCandidate]
+            = { await ComposerMentionFriendsSource.acceptedFriends() }
+    ) async {
+        let enCache = await cached()
+        if !enCache.isEmpty { candidates = enCache }
+
+        let frais = await fresh()
+        guard !frais.isEmpty else { return }
+        candidates = frais
+    }
+
     private var forwardCancellable: AnyCancellable?
 
     lazy var controller: MentionComposerController = {

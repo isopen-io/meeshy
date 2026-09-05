@@ -12,7 +12,7 @@
  * DÉCISION (réservation #4494, option b) : la porte reste ouverte à AUDIT —
  * il garde les métadonnées du signalement, c'est son métier d'auditer la
  * modération — mais `content` tombe à `null` pour lui. Même motif que
- * `attachmentProtectionSelect` (`routes/admin/users.ts` l. 683) pour les
+ * `attachmentProtectionSelect` (`routes/admin/users.ts`) pour les
  * médias protégés : la ligne reste, seul le CONTENU ne voyage pas.
  *
  * POURQUOI LE TÉMOIN EST ÉCRIT SUR AUDIT, ET NULLE PART AILLEURS : USER et

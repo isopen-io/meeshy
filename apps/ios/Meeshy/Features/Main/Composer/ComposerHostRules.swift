@@ -147,8 +147,14 @@ nonisolated enum ComposerSceneFloatingRail {
     /// > chose ne se fait contredire par rien : les deux compilent, et le
     /// > doc-comment de la règle continue d'énoncer une classification juste que
     /// > le produit n'applique pas.
-    static func sideRow(from served: [ComposerRailDoor]) -> [ComposerRailDoor] {
-        served.filter { $0.level.appearsOnCanvas }
+    /// **Le format est un paramètre, pas un détail** (#4893) : depuis la
+    /// directive du 2026-09-02, lieu, hashtag, mention et corpus de texte ne
+    /// sont du niveau OBJET qu'en Story. Prendre le niveau sans dire pour quel
+    /// format rendrait une répartition figée — celle d'avant la bascule — sans
+    /// qu'aucun appelant ne rougisse.
+    static func sideRow(from served: [ComposerRailDoor],
+                        format: ComposerFormat) -> [ComposerRailDoor] {
+        served.filter { $0.level(for: format).appearsOnCanvas }
     }
 
     /// **La LIGNE CANONIQUE — ce qui appartient à l'envoi ou à la slide.**
@@ -160,8 +166,9 @@ nonisolated enum ComposerSceneFloatingRail {
     /// Les deux rangées forment une PARTITION du jeu servi — c'est la
     /// négation du même prédicat, donc aucune porte ne peut se perdre ni
     /// apparaître deux fois. Deux filtres écrits séparément l'auraient permis.
-    static func lowRow(from served: [ComposerRailDoor]) -> [ComposerRailDoor] {
-        served.filter { !$0.level.appearsOnCanvas }
+    static func lowRow(from served: [ComposerRailDoor],
+                       format: ComposerFormat) -> [ComposerRailDoor] {
+        served.filter { !$0.level(for: format).appearsOnCanvas }
     }
 }
 
@@ -473,8 +480,23 @@ nonisolated enum ComposerSceneCapabilities {
     /// complet — le texte de la publication est à lui (`documentText`), et
     /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
     /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
+    ///
+    /// **`.content` y entre le 2026-09-04** (#4890, directive porteur : « affiche
+    /// dans la rangée canonique de quoi modifier LE CONTENU du poste »). Servie
+    /// pour la même raison que `.hashtag` : le meuble possède le chemin
+    /// COMPLET — `documentText` est à lui, `postContentEditor` l'écrit, et
+    /// `ComposerDocumentDraft.document(text:)` le poste. Une porte servie sans
+    /// son chemin ouvrirait un champ dont le texte n'irait nulle part, ce qui
+    /// est exactement le défaut que ce lot referme sur les légendes.
+    ///
+    /// > **La déclarer ici est le pas qu'on oublie**, et il ne rougit nulle
+    /// > part : `offered` filtre sur `served.contains`, si bien qu'une porte
+    /// > entièrement écrite — case, niveau, glyphe, libellé, geste, pastille —
+    /// > reste INVISIBLE tant que ce jeu ne la nomme pas. Mesuré au simulateur
+    /// > le 2026-09-04 : la rangée montrait toujours ses cinq entrées.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .text, .drawing, .sticker, .mention, .hashtag, .place
+        .description, .content, .media, .sound, .text, .background, .drawing,
+        .sticker, .mention, .hashtag, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à
@@ -493,42 +515,19 @@ nonisolated enum ComposerSceneCapabilities {
     /// non servie — sans quoi un contexte déclaré avant d'avoir son contenu
     /// occuperait les ≈ 170 pt que l'encastrement des rails vient de libérer.
     ///
-    /// `timeline` et `textStyles` appartiennent au critère de
-    /// `ComposerSceneBand` — un axe horizontal, une comparaison latérale — mais
-    /// n'ont pas d'hôte ici : la timeline vit dans l'atelier (#4075), et les 18
-    /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
-    /// surface ne pose encore (#4083).
+    /// **Une seule, et le jeu ne dépend plus d'un état** (directive porteur
+    /// 2026-09-05). `bands(canTrimSelection:canStyleSelection:)` ajoutait
+    /// `timeline` quand l'objet sélectionné avait une source à rogner, et
+    /// `textStyles` quand c'était un texte. Les deux bandes ÉDITAIENT un objet
+    /// déjà posé ; la première vue n'édite plus, et elles ont quitté le type
+    /// `ComposerSceneBand` avec leurs contenus.
+    ///
+    /// Ce qui disparaît avec la fonction est une question devenue sans objet —
+    /// « cette bande a-t-elle de quoi se remplir ? » — et non la loi qu'elle
+    /// tenait : `opened(_:served:)` refuse toujours une bande hors de ce jeu.
+    /// La ligne de partage entre ce que la première vue sert et ce qui part à
+    /// l'éditeur vit dans `ComposerFirstView`.
     static let bands: Set<ComposerSceneBand> = [.palette]
-
-    /// **`timeline` est servie SEULEMENT quand elle a de quoi se remplir**
-    /// (#4082) — c'est-à-dire quand l'objet sélectionné a une source à rogner.
-    ///
-    /// Sans cette condition, la bande deviendrait un membre permanent du jeu
-    /// servi, et `ComposerSceneBand.opened` l'ouvrirait sur une sélection qui
-    /// n'a rien à rogner : une bande VIDE occupant les ≈ 170 pt que
-    /// l'encastrement des rails vient de libérer, c'est-à-dire précisément le
-    /// résultat que la règle `opened(_:served:)` existe pour interdire.
-    ///
-    /// Le jeu de base reste `bands` : il dit ce qui est servi quel que soit
-    /// l'état, et c'est lui que les gardes interrogent pour vérifier
-    /// qu'aucune bande sans hôte n'y est entrée par distraction.
-    /// **Deux capacités, deux questions distinctes** — et c'est pour cela
-    /// qu'elles sont deux paramètres et non un `Set` reçu tout fait : le jour
-    /// où l'appelant les confond, le compilateur ne dit rien, alors qu'un
-    /// paramètre nommé se relit.
-    ///
-    /// `canStyleSelection` est vrai quand l'objet sélectionné est un TEXTE
-    /// (#4083). Sans lui, la bande `textStyles` n'était jamais servie et le
-    /// jeton « STYLE » de l'inspecteur pointait sur du vide — mesuré au
-    /// simulateur le 2026-08-31 : il s'annonçait en `StaticText`, faute de
-    /// destination ouvrable.
-    static func bands(canTrimSelection: Bool,
-                      canStyleSelection: Bool = false) -> Set<ComposerSceneBand> {
-        var servies = bands
-        if canTrimSelection { servies.insert(.timeline) }
-        if canStyleSelection { servies.insert(.textStyles) }
-        return servies
-    }
 }
 
 

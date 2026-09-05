@@ -693,10 +693,11 @@ describe('AttachmentService — direct-access methods', () => {
       );
     });
 
-    it('maps attachment rows to AttachmentWithMetadata shape', async () => {
+    it('maps attachment rows to the Attachment shape — sans les deux colonnes lourdes', async () => {
+      // #4887 : la liste ne les charge plus — l'absence EST le contrat.
       const prisma = makePrisma();
       (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([
-        makeAttachmentRow({ thumbnailUrl: '/thumb.jpg', width: 100, translations: null, transcription: null }),
+        makeAttachmentRow({ thumbnailUrl: '/thumb.jpg', width: 100 }),
       ]);
       const svc = new AttachmentService(prisma as PrismaClient);
 
@@ -706,8 +707,9 @@ describe('AttachmentService — direct-access methods', () => {
       expect(result[0].id).toBe(ATTACH_ID);
       expect((result[0] as any).thumbnailUrl).toBe('/thumb.jpg');
       expect((result[0] as any).isEncrypted).toBe(false);
-      expect(result[0].translations).toEqual({});
       expect((result[0] as any).createdAt).toBe('2024-01-01T00:00:00.000Z');
+      (['translations', 'transcription', 'translatedAudios'] as const)
+        .forEach((lourde) => expect(result[0]).not.toHaveProperty(lourde));
     });
 
     it('handles unknown attachment type gracefully (empty mimeType filter)', async () => {
@@ -923,8 +925,6 @@ describe('AttachmentService — direct-access methods', () => {
           consumedCount: null,
           isEncrypted: null,
           thumbnailUrl: null,
-          translations: null,
-          transcription: null,
         },
       ]);
       const svc = new AttachmentService(prisma as PrismaClient);
@@ -933,7 +933,7 @@ describe('AttachmentService — direct-access methods', () => {
       const item = result[0] as any;
       expect(item.isForwarded).toBe(false);
       expect(item.isEncrypted).toBe(false);
-      expect(item.translations).toEqual({});
+      expect(item.thumbnailUrl).toBeUndefined();
     });
 
     it('constructor: uses /app/uploads fallback when UPLOAD_PATH not set', async () => {

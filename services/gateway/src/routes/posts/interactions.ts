@@ -1,5 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostType } from '@meeshy/shared/prisma/client';
 import type { PostVisibility } from '@meeshy/shared/prisma/client';
@@ -24,9 +23,19 @@ import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLo
 import { MutationInFlight } from '../../services/MutationLogService';
 import { validatePagination } from '../../utils/pagination';
 import { withMentions } from '../../services/posts/postReferences';
+import { servePublishedPost, hoistLocation } from './publication';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 import { registerBookmarkRoutes } from './bookmarks';
 import { registerImpressionRoutes } from './impressions';
+import { depreciee } from '../../utils/deprecation';
+import { socialEventsDeprecation } from '../social/deprecation';
+import {
+  ingestSocialEvents,
+  socialEventsRateLimit,
+  VIEW_ALIAS_SCHEMA,
+  type SocialEventsActor,
+  type SocialEventsDeps,
+} from '../social/events';
 import { registerShareRoutes } from './share';
 
 export function registerInteractionRoutes(
@@ -53,7 +62,7 @@ export function registerInteractionRoutes(
   // bouge : `registerInteractionRoutes` demeure le point d'entrée unique du
   // module, celui qu'`index.ts` et les suites de tests connaissent.
   registerBookmarkRoutes(fastify, prisma, requiredAuth, postService);
-  registerImpressionRoutes(fastify, prisma, requiredAuth);
+  registerImpressionRoutes(fastify, prisma, requiredAuth, postService);
   registerShareRoutes(fastify, prisma, requiredAuth, postService);
 
   // #4147 critère 2 — seau PARTAGÉ avec POST /posts et
@@ -353,128 +362,61 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/view
+  // ─── Quatre adresses en sursis vers `POST /social/events` (#4150) ─────────
   //
-  // #4150 — le corps est DÉCLARÉ, et `duration` borné à la frontière.
+  // Quatre des six portes qui disaient « ce contenu a été vu » vivent ici ; les
+  // deux autres — l'impression, unitaire et en lot — sont montées par
+  // `registerImpressionRoutes` ci-dessus. Toutes DÉLÈGUENT désormais à
+  // `ingestSocialEvents` : elles traduisent leur corps historique en événements
+  // typés, servent leur forme de réponse historique, et n'implémentent AUCUNE
+  // règle en propre. L'audience filtrée dans la requête, la fermeture de
+  // l'oracle d'existence, la borne de `durationMs` et les deux effets de bord
+  // de la vue vivent en UN exemplaire, dans `routes/social/events.ts`.
   //
-  // Il était lu en `(request.body as any) ?? {}` : aucun schéma, aucune borne,
-  // et le seul `any` de ce module. La valeur était bien assainie en aval
-  // (`recordView` la ramène dans [0, 300 000] ms), mais une borne posée chez
-  // l'appelé n'est pas une borne — elle vaut pour CET appelé, et le jour où un
-  // second consommateur lit le champ, il hérite d'un entier libre. Le schéma
-  // refuse désormais ce qui n'est pas un nombre dans l'intervalle, AVANT que
-  // le handler s'exécute ; l'assainissement d'aval reste, comme seconde
-  // barrière pour les appelants qui ne passent pas par cette route.
+  // Elles restent MONTÉES — le critère 10 interdit de retirer une seule des six
+  // tant que le client Kotlin n'a pas été inventorié — et annoncent leur sursis
+  // par les trois en-têtes du site unique (`utils/deprecation.ts`).
+  const socialEventDeps: SocialEventsDeps = { fastify, prisma, postService };
+
+  const acteurInscrit = (request: FastifyRequest): SocialEventsActor | null => {
+    const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
+    return registeredUser
+      ? { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' }
+      : null;
+  };
+
+  // ALIAS de `POST /social/events` — POST /posts/:postId/view
+  //
+  // Le corps est DÉCLARÉ et `duration` borné à la FRONTIÈRE. Il était lu en
+  // `(request.body as any) ?? {}` : aucun schéma, aucune borne, et le seul `any`
+  // de ce module. La valeur était bien assainie en aval (`recordView` la ramène
+  // dans [0, 300 000] ms), mais une borne posée chez l'appelé n'est pas une
+  // borne — elle vaut pour CET appelé, et le jour où un second consommateur lit
+  // le champ, il hérite d'un entier libre.
+  //
+  // `duration` (millisecondes, nom historique) se traduit ici en `durationMs`,
+  // le nom que porte le point d'ingestion : un nom qui dit son unité.
   fastify.post('/posts/:postId/view', {
-    schema: {
-      params: { type: 'object', required: ['postId'], properties: { postId: { type: 'string' } } },
-      // `['object', 'null']` et non `'object'` : les clients appellent cette
-      // route SANS corps (une vue n'a rien à dire de plus que son existence),
-      // et Fastify remet alors `null`. Un schéma `object` nu refuserait ces
-      // appels — la rigueur fermerait une porte qu'elle n'a pas à fermer.
-      body: {
-        oneOf: [
-          { type: 'null' },
-          {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              duration: {
-                type: 'integer',
-                minimum: 0,
-                maximum: 300_000,
-                description: 'Durée de consultation en millisecondes (plafond : 5 minutes)',
-              },
-            },
-          },
-        ],
-      },
-      // Le succès est DÉCLARÉ (#4531) : sans clé `response`, rien n'oblige la
-      // charge servie à rester celle qu'on annonce, et le contrat de la route
-      // n'existe que dans son handler. Une vue n'a qu'une chose à dire — elle
-      // a été enregistrée.
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                viewed: { type: 'boolean', description: 'La vue a été enregistrée' },
-              },
-            },
-          },
-        },
-        401: errorResponseSchema,
-        500: errorResponseSchema,
-      },
-    },
+    schema: VIEW_ALIAS_SCHEMA,
+    onRequest: depreciee(socialEventsDeprecation()),
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('view') },
   }, async (request: FastifyRequest<{ Params: PostParams; Body?: { duration?: number } }>, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const acteur = acteurInscrit(request);
+      if (!acteur) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
-      const { postId } = request.params;
-      const { duration } = request.body ?? {};
-      const viewerId = authContext.registeredUser.id;
-      const isNewView = await postService.recordView(postId, viewerId, duration);
+      await ingestSocialEvents(
+        socialEventDeps,
+        [{ type: 'view', postId: request.params.postId, durationMs: request.body?.duration }],
+        acteur,
+      );
 
-      // Contenu consommé (première vue réelle) → les notifications liées à ce
-      // post (X a publié une story / un statut / un post, réactions, commentaires)
-      // ne doivent plus apparaître comme non lues. Borné à la première vue pour
-      // éviter de rejouer la requête à chaque impression répétée du feed.
-      // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
-      if (isNewView) {
-        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/view]: mark post notifications as read failed', { err }));
-      }
-
-      // If this is a story, broadcast the view to the story author
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        // Fetch post to check type and get author + viewCount. Passe le viewer :
-        // sans lui, `getPostById` applique le filtre PUBLIC-seul et retourne
-        // `null` pour une story FRIENDS (le cas courant) → `broadcastStoryViewed`
-        // ne partait jamais alors que `recordView` (même filtre viewer) avait
-        // bien enregistré la vue. Le viewer d'audience vient de passer ce même
-        // filtre dans `recordView`, donc la story est retrouvée ici aussi.
-        //
-        // Un lecteur admis par sa seule RÉFÉRENCE (2026-08-19) l'est aussi :
-        // `getPostById` relit sans filtre quand l'audience ne rend rien, et la
-        // référence tranche — l'auteur reçoit donc son événement temps réel pour
-        // une vue que `recordView` vient d'enregistrer. Ces deux-là ne peuvent
-        // plus diverger.
-        //
-        // #4044 — `getPostById` est la lecture LOURDE du détail (réactions,
-        // bookmark, comptage de reposts, résolution de référence…), sans
-        // AUCUN try/catch propre, appelée ici pour trois champs seulement
-        // (type, authorId, viewCount). La vue vient déjà d'être enregistrée
-        // DURABLEMENT par `recordView` ci-dessus — un échec de CET
-        // enrichissement optionnel (diffusion temps réel) ne doit jamais
-        // faire échouer la réponse au client, qui verrait un 500 permanent
-        // (retenté 5×, jamais résolu, la vue pourtant déjà comptée) pour un
-        // post dont l'auteur ne recevra qu'une notification temps réel en moins.
-        try {
-          const post = await postService.getPostById(postId, viewerId);
-          if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
-            safeBroadcast('story:viewed', () => {
-              socialEvents.broadcastStoryViewed({
-                storyId: postId,
-                viewerId: authContext.registeredUser.id,
-                viewerUsername: authContext.registeredUser.username ?? '',
-                viewCount: post.viewCount,
-              }, post.authorId);
-            });
-          }
-        } catch (broadcastError) {
-          enhancedLogger.warn('[POST /posts/:postId/view]: story-viewed broadcast enrichment failed — view already recorded, not surfacing as an error', { err: broadcastError });
-        }
-      }
-
+      // `viewed: true` quel que soit le verdict — c'est la forme historique, et
+      // c'est aussi la seule qui ne fasse pas de cette route un oracle : un post
+      // hors audience et un post inexistant y répondaient déjà pareil.
       return sendSuccess(reply, { viewed: true });
     } catch (error) {
       enhancedLogger.error('[POST /posts/:postId/view]', error);
@@ -482,14 +424,23 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/anonymous-view — compte une ouverture ANONYME (sans compte).
-  // v1 "comptage bête" : public, dédup faible par X-Session-Token (chaîne opaque).
-  // Les clients INSCRITS (JWT présent) sont comptés via le parcours engagement →
-  // no-op ici pour éviter le double-comptage. Voir spec 2026-06-17 (§ Sécurité).
-  // Pas de preValidation auth : on lit le header directement, sans tenter de
-  // résoudre un Participant (un token navigateur n'en est pas un → éviterait un 401).
+  // ALIAS de `POST /social/events` — POST /posts/:postId/anonymous-view
+  //
+  // Compte une ouverture ANONYME (sans compte). Public, dédup faible par
+  // X-Session-Token (chaîne opaque). Les clients INSCRITS (JWT présent) sont
+  // comptés via le parcours engagement → no-op ici pour éviter le
+  // double-comptage. Voir spec 2026-06-17 (§ Sécurité). Pas de `preValidation`
+  // auth : on lit l'en-tête directement, sans tenter de résoudre un Participant
+  // (un jeton de navigateur n'en est pas un → éviterait un 401).
+  //
+  // Son SEAU DE DÉBIT change : il était `posts:view:ip:{ip}` — un seul seau pour
+  // tout ce qu'une adresse observe, quel que soit le post, donc une garde
+  // inefficace et un déni de service mutuel entre visiteurs légitimes derrière
+  // une même sortie NAT. Il est désormais `social:events:{sessionToken}:{postId}`,
+  // le même que sert la porte canonique.
   fastify.post('/posts/:postId/anonymous-view', {
-    config: { rateLimit: createPostRouteRateLimitConfig('view') },
+    onRequest: depreciee(socialEventsDeprecation()),
+    config: { rateLimit: socialEventsRateLimit },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       if (request.headers.authorization) {
@@ -499,29 +450,40 @@ export function registerInteractionRoutes(
       if (!sessionKey || sessionKey.length === 0 || sessionKey.length > 128) {
         return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
       }
-      const { postId } = request.params;
-      const counted = await postService.recordAnonymousOpen(postId, sessionKey);
-      return sendSuccess(reply, { counted });
+
+      const { legacy } = await ingestSocialEvents(
+        socialEventDeps,
+        [{ type: 'view', postId: request.params.postId }],
+        { kind: 'anonymous', sessionKey },
+      );
+      return sendSuccess(reply, { counted: legacy.anonymousCounted });
     } catch (error) {
       enhancedLogger.error('[POST /posts/:postId/anonymous-view]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
-  // POST /posts/engagement/batch — Ingest durable engagement sessions (dwell + actions)
+  // ALIAS de `POST /social/events` — POST /posts/engagement/batch
   //
-  // Append-only ingestion of finalized consumption sessions captured client-side
-  // (EngagementOutbox). Idempotent on sessionId (upsert) so a lost-ACK retry is a
-  // no-op. The userId is taken from the auth context — the client-supplied
-  // session.userId is never trusted. Skips (without 400) any session whose post
-  // was deleted between begin and flush.
+  // Ingestion append-only des sessions de consommation finalisées côté client
+  // (EngagementOutbox). Idempotente sur `sessionId` (upsert), donc rejouer un
+  // ACK perdu est un no-op. L'identité vient du contexte d'authentification — le
+  // `session.userId` fourni par le client n'est jamais cru.
+  //
+  // C'était la plus mûre des six portes : débit par COMPTE, corps typé riche.
+  // Son schéma Zod est celui que le point d'ingestion REPREND pour sa branche
+  // `dwell` (`EngagementSessionSchema` + le discriminant) — il n'est pas
+  // dégradé, il est devenu la forme commune. Le lot gagne au passage la porte
+  // d'audience qu'il n'avait pas : `recordEngagementBatch` ne consultait que
+  // `deletedAt`.
   fastify.post('/posts/engagement/batch', {
+    onRequest: depreciee(socialEventsDeprecation()),
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('engagement') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const acteur = acteurInscrit(request);
+      if (!acteur) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
@@ -530,13 +492,10 @@ export function registerInteractionRoutes(
         return sendBadRequest(reply, 'Invalid engagement batch', { code: 'VALIDATION_ERROR' });
       }
 
-      // Zod has validated + applied defaults at runtime; `.data.sessions` is the
-      // parsed output. The service re-normalizes defensively, so the structural
-      // assertion to its input shape is safe.
-      const sessions = parsed.data.sessions as Parameters<typeof postService.recordEngagementBatch>[0];
-      const recorded = await postService.recordEngagementBatch(
-        sessions,
-        authContext.registeredUser.id,
+      const { recorded } = await ingestSocialEvents(
+        socialEventDeps,
+        parsed.data.sessions.map((session) => ({ ...session, type: 'dwell' as const })),
+        acteur,
       );
       return sendSuccess(reply, { recorded });
     } catch (error) {
@@ -545,17 +504,24 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/downloads — Trace le téléchargement des médias d'un poste.
+  // ALIAS de `POST /social/events` — POST /posts/:postId/downloads
   //
-  // Batch et non unitaire : « Enregistrer » sur un poste à quatre images
-  // télécharge les quatre d'un coup, un seul aller-retour. La validation, l'ACL
-  // et la déduplication vivent dans PostService.recordMediaDownloads.
+  // Trace le téléchargement des médias d'un poste. Batch et non unitaire :
+  // « Enregistrer » sur un poste à quatre images télécharge les quatre d'un
+  // coup, un seul aller-retour. La validation des médias et la déduplication
+  // vivent dans `PostService.recordMediaDownloads`.
+  //
+  // `recorded` compte ici des MÉDIAS, pas des événements — c'est la forme que
+  // ses clients lisent, et le point d'ingestion la sert par `legacy`. Les
+  // confondre changerait la réponse sous les clients que le critère 9 confie à
+  // leur propre lot.
   fastify.post('/posts/:postId/downloads', {
+    onRequest: depreciee(socialEventsDeprecation()),
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
+      const acteur = acteurInscrit(request);
+      if (!acteur) {
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
@@ -564,25 +530,31 @@ export function registerInteractionRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const { postId } = request.params;
-      const result = await postService.recordMediaDownloads(
-        postId,
-        authContext.registeredUser.id,
-        { mediaIds: parsed.data.mediaIds, surface: parsed.data.surface },
+      const { recorded, legacy } = await ingestSocialEvents(
+        socialEventDeps,
+        [{
+          type: 'download',
+          postId: request.params.postId,
+          mediaIds: parsed.data.mediaIds,
+          surface: parsed.data.surface,
+        }],
+        acteur,
       );
 
-      // null couvre indistinctement « absent », « supprimé » et « invisible » —
-      // les distinguer révélerait l'existence du poste.
-      if (!result) {
+      // Le 404 couvre indistinctement « absent », « supprimé », « hors
+      // audience » et « malformé » — les distinguer révélerait l'existence du
+      // poste.
+      if (recorded === 0) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      return sendSuccess(reply, result);
+      return sendSuccess(reply, { recorded: legacy.mediaRecorded });
     } catch (error) {
       enhancedLogger.error('[POST /posts/:postId/downloads]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
+
 
   // POST /posts/:postId/pin — Pin a post (author only)
   fastify.post('/posts/:postId/pin', {
@@ -914,11 +886,16 @@ export function registerInteractionRoutes(
       // deux effets qui voyagent AVEC la republication, et eux seuls.
       const isFreshRepost = outcome.status === 'applied';
 
-      // Même aplatissement que partout ailleurs : la clé exposée est `mentions`,
-      // y compris sur un repost qui n'en porte aucune — une clé absente et une
-      // liste vide ne se décodent pas pareil.
-      const payload = withMentions(repost, wireReaderFromRequest(request as UnifiedAuthRequest));
-      const broadcastPayload = withMentions(repost, WIRE_BROADCAST);
+      // Composition UNIQUE des portes de publication (#4151) : même
+      // aplatissement des mentions (la clé exposée est `mentions`, même vide)
+      // ET même hoist du lieu, que ce chemin ne posait pas — un repost servait
+      // `metadata.location` sans `location`, ni `repostOf.location`.
+      const payload = servePublishedPost({
+        post: repost as unknown as Record<string, unknown>,
+        references: undefined,
+        request,
+      });
+      const broadcastPayload = withMentions(hoistLocation(repost as unknown as Record<string, unknown>), WIRE_BROADCAST);
 
       // Broadcast repost via Socket.IO — F3 : blob tel quel pour l'audience
       // hétérogène, chaque client négocie sa forme au premier fetch REST.

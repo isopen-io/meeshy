@@ -22,7 +22,10 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         location: SharedPlace? = nil,
         discoverabilityPrecision: DiscoverabilityPrecision? = nil,
         repostOfId: String? = nil,
-        mobileTranscription: MobileTranscriptionPayload? = nil
+        mobileTranscription: MobileTranscriptionPayload? = nil,
+        storyEffects: StoryEffects? = nil,
+        mediaCaption: [String: String]? = nil,
+        mediaAlt: [String: String]? = nil
     ) -> CreatePostBody {
         CreatePostBody(
             content: "Coucou",
@@ -38,7 +41,10 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
             mentions: mentions,
             discoverabilityPrecision: discoverabilityPrecision,
             repostOfId: repostOfId,
-            mobileTranscription: mobileTranscription
+            mobileTranscription: mobileTranscription,
+            storyEffects: storyEffects,
+            mediaCaption: mediaCaption,
+            mediaAlt: mediaAlt
         )
     }
 
@@ -161,5 +167,115 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
 
         XCTAssertNil(json["mobileTranscription"])
         XCTAssertFalse(json.keys.contains("mobileTranscription"))
+    }
+
+    // MARK: - #4756 — LE CANVAS, sur le corps ENCODÉ
+
+    /// **Le témoin porte sur le corps ENCODÉ, jamais sur la structure.**
+    ///
+    /// C'est le critère de fin de #4756, écrit avant le correctif : l'encodeur
+    /// de `CreatePostBody` est MANUEL — oublier une clé n'y casse aucune
+    /// compilation. Un témoin qui interrogerait la structure passerait au vert
+    /// sur un champ que `encode(to:)` ne pose pas.
+    ///
+    /// Trois champs ont déjà été perdus à ce même mètre du fil (`location`,
+    /// `discoverabilityPrecision`, `repostOfId`), chacun survivant jusqu'au
+    /// décodage de `CreatePostPayload` avant d'être jeté en silence à l'ultime
+    /// saut réseau. Le canvas était le quatrième.
+    func test_leCanvas_atteintLeCorpsEncode() throws {
+        var effets = StoryEffects()
+        effets.textObjects = [StoryTextObject(id: "t1", text: "SUR-LE-CANVAS")]
+
+        let json = try encodeToJSON(makeBody(storyEffects: effets))
+        let canvas = try XCTUnwrap(json["storyEffects"] as? [String: Any],
+                                   "`storyEffects` doit figurer dans le corps ENCODÉ — sans quoi la "
+                                    + "scène est jetée à l'ultime saut réseau, sans erreur ni log.")
+        // **La forme du FIL est le canvas v3**, pas la structure v1 :
+        // `StoryEffects.encode(to:)` rend `CanvasV3(migrating: self)`. Un témoin
+        // qui chercherait `textObjects` ici — ou même `objects` à la racine —
+        // interrogerait une forme que le fil ne porte pas, et rougirait sur un
+        // correctif juste. La forme est `{ v, scenes: [{ objects: [{ payload }] }] }`,
+        // LUE dans `CanvasV3.swift` après deux suppositions fausses.
+        let scenes = try XCTUnwrap(canvas["scenes"] as? [[String: Any]],
+                                   "Le canvas v3 porte ses scènes sous `scenes`.")
+        let objets = scenes.compactMap { $0["objects"] as? [[String: Any]] }.flatMap { $0 }
+        let textes = objets.compactMap { $0["payload"] as? [String: Any] }
+            .compactMap { $0["text"] as? String }
+        XCTAssertTrue(textes.contains("SUR-LE-CANVAS"),
+                      "Le blob voyage ENTIER, avec l'objet posé : ce n'est pas une clé à vide. "
+                        + "Scènes vues : \(scenes.count), objets : \(objets.count).")
+    }
+
+    /// **Absent quand il n'existe pas.** Un post TEXTE n'a pas de scène, et un
+    /// blob vide encodé à sa place affirmerait une scène composée puis effacée
+    /// — la même règle que `discoverabilityPrecision`, dont le schéma gateway
+    /// REJETTE un `null` explicite.
+    func test_sansScene_laCleNestPasPosee() throws {
+        let json = try encodeToJSON(makeBody())
+        XCTAssertNil(json["storyEffects"],
+                     "Pas de scène ⇒ pas de clé, jamais un objet vide.")
+    }
+
+    // MARK: - #4756 — la LÉGENDE, clée par id SERVEUR
+
+    /// **La carte part clée par `PostMedia.id`, jamais par une position.** Le
+    /// gateway filtre en SILENCE les ids qu'il ne reconnaît pas
+    /// (`PostService.applyMediaText`) : une carte mal clée se perd sans erreur,
+    /// ce qui est la forme la plus coûteuse de perte — l'auteur a saisi, vu,
+    /// validé.
+    func test_lesLegendes_partentCleesParIdServeur() throws {
+        let json = try encodeToJSON(makeBody(mediaCaption: ["pm_1": "le quai"]))
+        XCTAssertEqual(json["mediaCaption"] as? [String: String], ["pm_1": "le quai"])
+    }
+
+    /// Vide vaut ABSENT à la création : il n'y a aucune légende à effacer, et
+    /// une carte vide encodée serait un verdict là où il n'y en a aucun — même
+    /// règle que `mentions` deux témoins plus haut.
+    func test_sansLegende_laCleNestPasPosee() throws {
+        XCTAssertNil(try encodeToJSON(makeBody())["mediaCaption"])
+        XCTAssertNil(try encodeToJSON(makeBody(mediaCaption: [:]))["mediaCaption"])
+    }
+
+    // MARK: - Le texte alternatif sur le fil (2026-09-05)
+
+    /// **`mediaAlt` part sous SA clé, distincte de `mediaCaption`.**
+    ///
+    /// `CreatePostSchema` déclare les deux séparément
+    /// (`services/gateway/src/routes/posts/types.ts`) : ce sont deux textes
+    /// pour deux lecteurs — celui qui VOIT le média, et celui qui ne le voit
+    /// pas. Les encoder sous une seule clé, ou faire servir l'un de repli à
+    /// l'autre, annoncerait à un lecteur d'écran « voici ce que l'image
+    /// montre » à partir d'une phrase écrite pour accompagner ce qu'on voit
+    /// déjà.
+    func test_leTexteAlternatif_partSousSaPropreCle() throws {
+        let json = try encodeToJSON(makeBody(
+            mediaCaption: ["m1": "au bord de l'eau"],
+            mediaAlt: ["m1": "un chien court sur une plage de sable"]))
+
+        XCTAssertEqual(json["mediaCaption"] as? [String: String], ["m1": "au bord de l'eau"])
+        XCTAssertEqual(json["mediaAlt"] as? [String: String],
+                       ["m1": "un chien court sur une plage de sable"])
+    }
+
+    /// **Vide vaut ABSENT.** Une carte vide n'efface rien à la création, et le
+    /// schéma n'attend aucun verdict ici — l'encoder poserait une clé que le
+    /// gateway devrait apprendre à ignorer.
+    func test_uneAlternativeAbsente_neSEncodePas() throws {
+        let json = try encodeToJSON(makeBody(mediaAlt: nil))
+        XCTAssertNil(json["mediaAlt"])
+
+        let vide = try encodeToJSON(makeBody(mediaAlt: [:]))
+        XCTAssertNil(vide["mediaAlt"], "une carte VIDE ne s'encode pas plus qu'une absente")
+    }
+
+    /// **L'une n'entraîne pas l'autre.** Le défaut qu'on redoute ici est un
+    /// copier-coller qui encoderait l'alternative sous la clé de la légende :
+    /// le témoin ci-dessus le verrait, celui-ci dit pourquoi il compte —
+    /// servir une légende comme alternative est PIRE qu'une alternative
+    /// absente, parce que le lecteur d'écran l'annonce comme une description.
+    func test_uneLegendeSeule_nEcritAucuneAlternative() throws {
+        let json = try encodeToJSON(makeBody(mediaCaption: ["m1": "belle journée"]))
+        XCTAssertEqual(json["mediaCaption"] as? [String: String], ["m1": "belle journée"])
+        XCTAssertNil(json["mediaAlt"])
     }
 }

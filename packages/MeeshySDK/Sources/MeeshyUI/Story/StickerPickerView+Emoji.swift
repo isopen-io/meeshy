@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import MeeshySDK
 
 // MARK: - L'onglet EMOJI et l'onglet « Mes stickers »
@@ -8,51 +9,27 @@ import MeeshySDK
 /// qui marchait.
 extension StickerPickerView {
 
-    var filteredEmojis: [String] { selectedCategory.emojis }
-
     // MARK: - Emoji
 
-    var emojiTab: some View {
-        VStack(spacing: 0) {
-            categoryTabs
-            emojiGrid
-        }
-    }
+    // `emojiTab`, `categoryTabs` et `filteredEmojis` sont partis au #5012 : le
+    // ruban de catégories est devenu une liste de sections, et `selectedCategory`
+    // n'a plus d'état à porter. Les laisser aurait donné trois vues qui compilent
+    // et que personne ne monte — une vue sans consommateur n'a aucun site où
+    // rougir (leçon 483).
 
-    private var categoryTabs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(StickerCategory.allCases, id: \.self) { category in
-                    Button {
-                        withAnimation(.spring(response: 0.25)) { selectedCategory = category }
-                        HapticFeedback.light()
-                    } label: {
-                        Text(category.icon)
-                            .font(.system(size: 22))
-                            .frame(width: 40, height: 36)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedCategory == category
-                                          ? Color.white.opacity(0.2) : Color.clear)
-                            )
-                    }
-                    // .plain obligatoire : le style par défaut rend les
-                    // glyphes emoji INVISIBLES dans la sheet (vécu it.72 —
-                    // onglets et grille vides à la 1re mise en service).
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-    }
-
-    private var emojiGrid: some View {
-        ScrollView {
+    /// La grille d'UNE catégorie — sans défilement propre depuis #5012 : les
+    /// huit catégories sont des sections d'une seule liste verticale.
+    func emojiGrid(_ category: StickerCategory) -> some View {
+        Group {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                       spacing: 8) {
-                ForEach(filteredEmojis, id: \.self) { emoji in
+                ForEach(category.emojis, id: \.self) { emoji in
                     Button {
+                        // **Poser, c'est se souvenir** (2026-09-05). L'onglet
+                        // RÉCENTS n'a pas d'autre source : il ne devine pas ce
+                        // qu'on a posé, on le lui dit ici, au seul endroit qui
+                        // le sait.
+                        usage.noteUse(.emoji(emoji))
                         onStickerSelected(emoji)
                         HapticFeedback.medium()
                     } label: {
@@ -61,15 +38,17 @@ extension StickerPickerView {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)  // cf. note des onglets
+                    .stickerFavoriteMenu(.emoji(emoji), usage: usage)
                     .accessibilityLabel(String(localized: "story.sticker.a11y",
                                                defaultValue: "Autocollant \(emoji)",
                                                bundle: .module))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            // **Plus de marge horizontale ICI** (2026-09-05) : la feuille est
+            // plate, et c'est son défilement qui pose les 20 points. Une marge
+            // de grille s'y ajoutait pour en faire 32, et la rangée d'emoji y
+            // perdait une colonne entière.
         }
-        .frame(maxHeight: 240)
     }
 
     // MARK: - « Mes stickers »
@@ -79,16 +58,52 @@ extension StickerPickerView {
     /// intégrée (`postMediaId`) : taper une vignette la POSE sur le canevas, la
     /// bibliothèque n'est plus une collection sans sortie.
     var libraryTab: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // Valeurs `@MainActor` (bundle localisé) hissées hors de la closure de
+        // label de `PhotosPicker`, qui est inférée `@Sendable` — même correctif
+        // que `ConversationSettingsView.visualSection`, et pour la même raison :
+        // `.module` y est « main actor-isolated property referenced from a
+        // nonisolated context ».
+        let liftLabel = String(localized: "story.sticker.library.lift",
+                               defaultValue: "Détourer", bundle: .module)
+        let liftA11y = String(localized: "story.sticker.library.lift.a11y",
+                              defaultValue: "Détourer le sujet d'une photo", bundle: .module)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Spacer()
                 if let stickerLibrary {
+                    // **La seconde alimentation** (#3955) : détourer le sujet
+                    // d'une photo. Elle n'est rendue QUE si l'app a injecté la
+                    // capacité — le détourage est une API iOS 17 et le plancher
+                    // du projet est 16 (loi 4 : absent, jamais grisé).
+                    if stickerLibrary.canLift {
+                        PhotosPicker(selection: $liftSelection, matching: .images) {
+                            Label(liftLabel, systemImage: "person.and.background.dotted")
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonBorderShape(.capsule)
+                        .frame(minHeight: 32)
+                        .accessibilityLabel(liftA11y)
+                    }
                     PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
                         Task { libraryItems = await stickerLibrary.paste(providers) }
                     }
                     .labelStyle(.iconOnly)
                     .buttonBorderShape(.capsule)
                     .frame(minHeight: 32)
+                }
+            }
+            .task(id: liftSelection) {
+                // `nil` ⇒ rien de choisi : la tâche se relance à chaque
+                // remise à zéro de la sélection, et sortir tôt évite un
+                // détourage fantôme après chaque geste.
+                guard let liftSelection, let stickerLibrary else { return }
+                defer { self.liftSelection = nil }
+                guard let data = try? await liftSelection.loadTransferable(type: Data.self) else { return }
+                // `nil` du détourage = aucun sujet trouvé : c'est l'APP qui le
+                // dit à l'utilisateur (elle possède le toast), la grille
+                // reste simplement inchangée.
+                if let updated = await stickerLibrary.lift(imageData: data) {
+                    libraryItems = updated
                 }
             }
             if libraryItems.isEmpty {
@@ -102,21 +117,29 @@ extension StickerPickerView {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)
             } else {
-                ScrollView {
+                // **Plus de défilement intérieur** (#5012) : les sections se
+                // parcourent dans UN défilement, et une grille bornée à 200 pt
+                // au milieu volerait le geste vertical de celui qui la contient.
+                Group {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
                               spacing: 8) {
                         ForEach(libraryItems) { item in
                             Button {
+                                // **« Mes stickers » alimente les RÉCENTS et
+                                // les FAVORIS comme les deux autres grilles**
+                                // (2026-09-05). L'oublier ici aurait fait un
+                                // troisième chemin de pose sans mémoire, et
+                                // l'auteur aurait conclu que les récents ne
+                                // marchent « que parfois » — le pire mode de
+                                // panne d'une mémoire.
+                                usage.noteUse(.library(item))
                                 onLibraryStickerSelected(item)
                                 HapticFeedback.medium()
                             } label: {
-                                Image(uiImage: item.thumbnail)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 52, height: 52)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                LibraryStickerThumbnail(item: item)
                             }
                             .buttonStyle(.plain)  // cf. note des onglets
+                            .stickerFavoriteMenu(.library(item), usage: usage)
                             .accessibilityLabel(String(
                                 localized: "story.sticker.library.a11y",
                                 defaultValue: "Autocollant de votre bibliothèque",
@@ -126,11 +149,58 @@ extension StickerPickerView {
                     }
                     .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 200)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
+    }
+}
+
+/// **La vignette d'un sticker de la bibliothèque — animée si elle l'est** (#3956).
+///
+/// `Image(uiImage:)` ne joue PAS une `UIImage` animée : il lit le `cgImage` de
+/// base et ignore le tableau d'images. Une grille écrite avec lui montrerait
+/// donc la première image d'un GIF sans qu'aucune ligne soit fausse — la panne
+/// muette que `AnimatedImageView` existe pour fermer.
+///
+/// Le décodage passe par `AnimatedImageMemo` : une grille se re-rend à chaque
+/// collage, à chaque changement d'onglet et à chaque frappe dans le champ de
+/// recherche, et re-décoder N images à chacun de ces rendus ferait sauter le
+/// défilement de la palette.
+///
+/// Le budget de décodage est celui de la CASE (52 pt), jamais celui de la
+/// scène : trente images de 512 px pour une vignette coûteraient trente bitmaps
+/// dont on n'utiliserait qu'un dixième des pixels.
+/// `internal` depuis le 2026-09-05 : les onglets FAVORIS et RÉCENTS rendent les
+/// mêmes vignettes depuis un autre fichier d'extension. La recopier y aurait
+/// donné deux dessins de la même chose, à faire converger à chaque retouche.
+struct LibraryStickerThumbnail: View {
+    let item: StoryStickerLibraryItem
+
+    private static let side: CGFloat = 52
+
+    private var decoded: AnimatedImageDecoder.Decoded? {
+        guard let bytes = item.animatedData else { return nil }
+        return AnimatedImageMemo.decoded(
+            key: item.id, bytes: bytes,
+            maxPixelSize: StoryStickerLibraryItem.thumbnailPixelBudget)
+    }
+
+    var body: some View {
+        Group {
+            if let decoded {
+                // `.scaleAspectFill` : la même règle de remplissage que le
+                // `scaledToFill` du chemin fixe — deux cadrages différents dans
+                // la même grille se verraient au premier GIF posé à côté d'un
+                // PNG.
+                AnimatedImageView(decoded: decoded, contentMode: .scaleAspectFill)
+            } else {
+                Image(uiImage: item.thumbnail)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
+        .frame(width: Self.side, height: Self.side)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

@@ -49,6 +49,12 @@ export interface ConversationAttachmentsQuery {
   offset?: number;
 }
 
+export interface AttachmentSearchQuery {
+  q: string;
+  cursor?: string;
+  limit?: number;
+}
+
 export interface AttachmentParams {
   attachmentId: string;
 }

@@ -56,7 +56,11 @@ final class PublishIntentTests: XCTestCase {
         localMedia: [ComposerDocumentMedia] = [],
         forcePlainPost: Bool = false,
         originalLanguage: String? = nil,
-        transcription: MobileTranscriptionPayload? = nil
+        transcription: MobileTranscriptionPayload? = nil,
+        storyEffects: StoryEffects? = nil,
+        mediaCaptions: ComposerMediaCaptions = [:],
+        mediaAlts: ComposerMediaCaptions = [:],
+        mediaObjectIds: ComposerMediaCaptions = [:]
     ) -> PublishIntent {
         PublishIntent.document(
             localMedia: localMedia,
@@ -69,7 +73,20 @@ final class PublishIntentTests: XCTestCase {
             mentions: nil,
             location: nil,
             discoverabilityPrecision: nil,
-            transcription: transcription
+            transcription: transcription,
+            storyEffects: storyEffects,
+            // **Le paramètre était MORT jusqu'au 2026-09-05.** Cette fabrique
+            // acceptait `mediaCaptions` et passait `[:]` en dur : tout témoin
+            // qui lui donnait une carte mesurait donc une intention VIDE, et
+            // concluait ce qu'il voulait. Découvert en ajoutant `mediaAlts` —
+            // le second paramètre a rendu le premier lisible.
+            //
+            // > Un paramètre qu'une fabrique de test ignore ne fait rougir
+            // > personne : le témoin passe, et il passe pour la mauvaise
+            // > raison.
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds
         )
     }
 
@@ -212,7 +229,8 @@ final class PublishIntentTests: XCTestCase {
     func test_uneLangueDeMedia_distincteDeLaLangueDuTexte() {
         let intent = intentionDocument(
             originalLanguage: "fr",
-            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo")
+            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo"),
+            storyEffects: nil
         )
         XCTAssertEqual(
             intent.originalLanguage, "fr",
@@ -366,5 +384,54 @@ final class PublishIntentTests: XCTestCase {
                 + "une autre vue qui composerait sa propre intention de vocal serait le troisième site que "
                 + "ce lot existe pour empêcher."
         )
+    }
+
+    // MARK: - Le RÉALIGNEMENT des textes par média (2026-09-05)
+
+    private func fichier(_ nom: String) -> ComposerDocumentMedia {
+        ComposerDocumentMediaFactory.media(
+            url: URL(fileURLWithPath: "/tmp/\(nom).jpg"), declaredMimeType: "image/jpeg")
+    }
+
+    /// **La carte devient un TABLEAU, dans l'ordre des fichiers.**
+    ///
+    /// C'est le seul étage qui tienne à la fois les textes (par URL) et l'ORDRE
+    /// des fichiers ; plus bas, l'URL n'existe plus — la file relocalise et ne
+    /// garde que des chemins relatifs, et le dispatcher ne connaît que des
+    /// index. Un décalage ici pose la description d'une photo sous une autre,
+    /// et rien en aval ne peut le rattraper.
+    func test_lesAlternatives_seRéalignentSurLOrdreDesFichiers() {
+        let a = fichier("a"), b = fichier("b"), c = fichier("c")
+        let intent = intentionDocument(
+            localMedia: [a, b, c],
+            mediaAlts: [c.url: "le chien", a.url: "la mer"]
+        )
+
+        XCTAssertEqual(intent.mediaAlts, ["la mer", nil, "le chien"],
+                       "l'ordre est celui de `localMedia`, pas celui de la carte — "
+                       + "un dictionnaire n'a pas d'ordre")
+    }
+
+    /// **Légende et alternative voyagent SÉPARÉMENT.** Ce sont deux textes pour
+    /// deux lecteurs — celui qui voit le média, et celui qui ne le voit pas — et
+    /// le schéma les reçoit dans deux champs. Un repli de l'un sur l'autre
+    /// annoncerait à un lecteur d'écran « voici ce que l'image montre » à partir
+    /// d'un texte écrit pour accompagner ce qu'on voit déjà.
+    func test_uneLégende_neSertJamaisDAlternative() {
+        let a = fichier("a")
+        let intent = intentionDocument(localMedia: [a], mediaCaptions: [a.url: "au bord de l'eau"])
+
+        XCTAssertEqual(intent.mediaCaptions, ["au bord de l'eau"])
+        XCTAssertEqual(intent.mediaAlts, [nil],
+                       "aucune alternative saisie ⇒ aucune alternative servie")
+    }
+
+    /// Le pendant : une alternative sans légende ne fabrique pas de légende.
+    func test_uneAlternative_neFabriquePasDeLégende() {
+        let a = fichier("a")
+        let intent = intentionDocument(localMedia: [a], mediaAlts: [a.url: "un chien sur la plage"])
+
+        XCTAssertEqual(intent.mediaAlts, ["un chien sur la plage"])
+        XCTAssertEqual(intent.mediaCaptions, [nil])
     }
 }

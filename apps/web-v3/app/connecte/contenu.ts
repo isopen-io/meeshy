@@ -23,19 +23,22 @@ export const TABLEAU_DE_BORD = {
   total: 'Total',
   nonLus: 'Messages',
   nonLusPrecision: 'Non lus',
-  recentes: 'Conversations récentes',
-  voirTout: 'Voir tout',
-  actions: 'Accès rapides',
+  recentes: 'Reprendre',
+  voirTout: 'Tout voir',
+  liens: 'Mes liens',
+  liensVides: 'Aucun lien de partage',
+  liensVidesPrecision:
+    'Un lien de partage ouvre une conversation à qui le reçoit, sans compte. Vous n’en avez encore créé aucun.',
+  emplois: 'utilisations',
+  versLesChats: 'Mes conversations',
 } as const;
 
-export const CHATS = {
-  titre: 'Conversations',
-  accroche: 'Vos conversations, la plus récente en premier.',
-  vide: 'Aucune conversation',
-  videPrecision: 'Démarrez une nouvelle conversation pour discuter avec vos amis !',
-  participants: 'participants',
-  nonLus: 'non lus',
-} as const;
+/**
+ * LA COPIE DE LA LISTE vit sous `lib/contenu/liste.ts` — elle a DEUX auteurs
+ * (le document servi et le module qui repeint la ligne en direct), exactement
+ * comme celle du fil. Ce module la ré-exporte pour ses lecteurs historiques.
+ */
+export { ACTIONS, CHATS } from '@/lib/contenu/liste';
 
 export const PANNE = {
   titre: 'Le service ne répond pas',
@@ -43,6 +46,24 @@ export const PANNE = {
     'Vos conversations n’ont pas pu être chargées. Ce n’est pas votre connexion — réessayez dans un instant.',
   action: 'Réessayer',
 } as const;
+
+/**
+ * L'ADRESSE PUBLIQUE D'UN LIEN DE PARTAGE — telle que le lecteur la COPIE.
+ *
+ * Ce n'est pas la route que la carte ouvre : la carte mène à la conversation du
+ * lecteur (`/chats/:id`), dans l'interface connectée, tandis que ce texte est ce
+ * qu'il colle dans une conversation WhatsApp. Les deux vivent côte à côte sur la
+ * même ligne, et les confondre ferait envoyer à un invité une adresse qui le
+ * renverrait se connecter.
+ *
+ * `meeshy.me` est le domaine de service, pas une couleur : il vient de la
+ * variable que le déploiement pose déjà (`NEXT_PUBLIC_FRONTEND_URL`,
+ * `docker-compose.prod.yml:368`), jamais d'une constante recopiée ici.
+ */
+export const adresseDuLien = (identifiant: string): string => {
+  const base = (process.env.NEXT_PUBLIC_FRONTEND_URL ?? 'https://meeshy.me').replace(/\/+$/, '');
+  return `${base.replace(/^https?:\/\//, '')}/chat/${identifiant}`;
+};
 
 /**
  * `salutation` prend le prénom quand la passerelle le donne. Le repli n'est pas

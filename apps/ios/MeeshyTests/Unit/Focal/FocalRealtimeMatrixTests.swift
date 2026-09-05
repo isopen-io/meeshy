@@ -235,7 +235,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
                 nonMedia: []
             ),
             location: nil, ephemeral: nil, isBlurred: false, isViewOnce: false, isPinned: false,
-            isForwarded: false, editedAt: nil, isEditSaving: false, hasEditHistory: false, reactions: [],
+            forwardAttribution: nil, editedAt: nil, isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:00", deliveryStatus: nil), isMe: false, senderName: "A", callNotice: nil, joinNotice: nil
         )
         XCTAssertNotEqual(
@@ -268,7 +268,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     // behaviour-matrix:F09
 
     /// Preuve exhaustive du rendu : `FocalDynamicTypeTests.
-    /// test_quotedReply_lineLimitOneIsDocumentedPolicy_notAnOmission` (F-090)
+    /// test_quotedReply_lineBudgetComesFromTheSharedRule_notALiteral` (F-090)
     /// + `FocalRichBlockEquatableTests` (railWidth). Ancrage frais F09 : le
     /// SAUT vers l'original passe par `onReplyTap`, que l'hôte fait atterrir
     /// via `scrollToItem(.centeredVertically)` (mécanisme partagé avec la

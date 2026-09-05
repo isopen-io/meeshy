@@ -62,6 +62,27 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// affichait la pastille et ne prévenait personne. Optionnel pour rester
     /// rétro-compatible avec les rows persistés avant lui (→ `nil`).
     public let mentionsPayload: [PostMentionInput]?
+    /// **Les mentions PAR SLIDE** (#4068, porteur 2026-09-03).
+    ///
+    /// > Une mention est attachée à la publication. En Story, une publication
+    /// > est une slide ; en Post et en Réel, il n'y en a qu'une.
+    ///
+    /// `mentionsPayload` ci-dessus est composer-wide, et c'est exactement le
+    /// défaut : la boucle d'envoi le semait sur CHAQUE slide, si bien qu'une
+    /// NOTE posée en pensant à la première notifiait la personne trois fois et
+    /// la faisait apparaître sous trois stories.
+    ///
+    /// Le champ s'AJOUTE plutôt que de remplacer, et c'est délibéré : des rows
+    /// écrites avant ce lot dorment déjà dans la file d'un appareil hors-ligne.
+    /// Quand la carte est présente elle PRIME ; sinon on retombe sur
+    /// `mentionsPayload`, c'est-à-dire sur l'ancien comportement pour ces
+    /// rows-là seulement.
+    ///
+    /// > Un contrat neuf s'AJOUTE à l'ancien tant que des porteurs de l'ancien
+    /// > existent. Remplacer la clé aurait fait échouer le décodage d'une
+    /// > publication en attente — et une publication perdue est pire qu'une
+    /// > mention répétée.
+    public let mentionsBySlidePayload: [String: [PostMentionInput]]?
     /// Le texte alternatif par média saisi par l'auteur, keyé par ID D'ÉLÉMENT
     /// DU COMPOSER — les ids serveur n'existent qu'après l'upload, que le rejeu
     /// refera lui-même. Persisté ici pour la même raison que
@@ -93,7 +114,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
-        case originalLanguage, draftId, mentionsPayload
+        case originalLanguage, draftId, mentionsPayload, mentionsBySlidePayload
         case mediaAltPayload, mediaCaptionPayload, allowSoundExtractionPayload, targetTypePayload
     }
 
@@ -107,6 +128,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         originalLanguage: String? = nil,
         draftId: String? = nil,
         mentionsPayload: [PostMentionInput]? = nil,
+        mentionsBySlidePayload: [String: [PostMentionInput]]? = nil,
         mediaAltPayload: [String: String]? = nil,
         mediaCaptionPayload: [String: String]? = nil,
         allowSoundExtractionPayload: Bool? = nil,
@@ -126,6 +148,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.originalLanguage = originalLanguage
         self.draftId = draftId
         self.mentionsPayload = mentionsPayload
+        self.mentionsBySlidePayload = mentionsBySlidePayload
         self.mediaAltPayload = mediaAltPayload
         self.mediaCaptionPayload = mediaCaptionPayload
         self.allowSoundExtractionPayload = allowSoundExtractionPayload
@@ -147,6 +170,10 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
         self.draftId = try container.decodeIfPresent(String.self, forKey: .draftId)
         self.mentionsPayload = try container.decodeIfPresent([PostMentionInput].self, forKey: .mentionsPayload)
+        // Row écrite avant #4068 : pas de clé, donc `nil` — l'envoi retombe
+        // alors sur `mentionsPayload`, l'ancien comportement, plutôt que de
+        // perdre la publication au décodage.
+        self.mentionsBySlidePayload = try container.decodeIfPresent([String: [PostMentionInput]].self, forKey: .mentionsBySlidePayload)
         self.mediaAltPayload = try container.decodeIfPresent([String: String].self, forKey: .mediaAltPayload)
         // Row écrite avant #4055 : pas de clé, donc `nil` — jamais un échec de
         // décodage, qui perdrait la publication en attente TOUT ENTIÈRE.

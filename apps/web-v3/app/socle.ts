@@ -8,16 +8,76 @@
  * interdit la seconde table ; il interdit aussi le second socle.
  *
  * Il ne porte que ce qui est vrai de TOUT écran : la marge du document, les
- * couleurs de fond et de texte prises aux jetons, et l'anneau de focus. Tout ce
- * qui appartient à un écran reste dans sa feuille.
+ * couleurs de fond et de texte prises aux jetons, l'anneau de focus et la
+ * coupure du mouvement. Tout ce qui appartient à un écran reste dans sa
+ * feuille.
+ *
+ * CE QUE LA CHARTE Y A CHANGÉ (conception § 12.5, directive du 2026-09-01)
+ *
+ * 1. **Le corps se lit à 17 px, interligne 1,6, sur la pile SYSTÈME**
+ *    (règle 2). `--text-base` (15 px) et `--leading-normal` étaient un corps de
+ *    tableau de bord servi à un lecteur qui tient son téléphone à bout de bras
+ *    au soleil ; `--font-body` nommait Inter, une police que personne ne sert et
+ *    qu'un jour quelqu'un aurait fini par charger.
+ * 2. **L'anneau de focus est DOUBLE** (règle 15) : un anneau d'une seule
+ *    couleur disparaît dès qu'il touche une surface de sa luminance — et il en
+ *    touchait une, puisqu'il était peint à l'accent, comme l'action primaire
+ *    qu'il entoure le plus souvent. Le contre-anneau le détoure ; les deux
+ *    jetons sont mesurés l'un contre l'autre par `check-jetons.mjs`.
+ * 3. **Le mouvement se coupe pour qui le demande** (règle 24). La coupure vit
+ *    ici et non dans une feuille d'écran : une préférence d'accessibilité qui
+ *    dépendrait de l'écran servi n'en est pas une.
+ *
+ * `[hidden]` l'emporte sur TOUTE règle de display — et c'est le seul
+ * `!important` du socle. L'attribut `hidden` ne vaut, dans la feuille de
+ * l'agent, qu'un `display:none` de spécificité nulle : la première règle de
+ * classe qui pose `display:inline-flex` le rend inerte, et c'est exactement ce
+ * qui est arrivé — mesuré sur le fil : la pastille « N nouveaux messages »,
+ * le composeur fermé et la pastille de langue d'une ligne clonée restaient
+ * VISIBLES sous leur attribut `hidden`. Les gabarits que le module de
+ * participation remplit (§ 12.4) montrent et cachent par cet attribut ; ils
+ * doivent pouvoir le faire sans connaître la feuille.
+ */
+/*
+ * LA NAVIGATION FOND-ENCHAÎNE (#5104, directive porteur 2026-09-04).
+ * `@view-transition{navigation:auto}` vit ICI parce que les DEUX documents
+ * d'une navigation doivent l'opter — le socle est le seul CSS que tous
+ * partagent. C'est un no-op sur un navigateur non supportant. La durée est
+ * celle de la charte (règle 32 : ≤ 150 ms) et le crossfade d'OPACITÉ est
+ * l'exception nommée de cette règle — aucune géométrie ne bouge, aucun
+ * `@keyframes` n'est écrit. `prefers-reduced-motion` coupe la transition
+ * ENTIÈRE : le sélecteur universel du bloc au-dessus ne matche pas les
+ * pseudo-éléments `::view-transition-*`, d'où la coupure explicite.
+ *
+ * L'opt-in est GATÉ sur `@media (scripting: enabled)`, et c'est une décision de
+ * produit autant que de test. Mesuré (Chromium 152 headless, contextes
+ * `javaScriptEnabled: false`) : sur un document sans script, AUCUNE frame
+ * n'avance, la transition entrante ne se termine jamais, le contenu réel reste
+ * non peint (paint-holding) et `<html>` intercepte tous les pointeurs — chaque
+ * clic qui suit une navigation expire (sept chaînes rouges à 15 s–2 min ;
+ * `::view-transition{pointer-events:none}` n'y peut rien, le contenu n'est pas
+ * hit-testable tant que la transition vit). Un environnement sans script n'a
+ * aucun moyen de garantir la fin d'un fondu ; il ne l'opte donc pas — les
+ * lecteurs no-JS gardent la navigation nue, ce que l'amélioration progressive
+ * promet déjà. `--force-prefers-reduced-motion` n'est PAS honoré par ce
+ * Chromium (sondé : matchMedia rend false sous le drapeau), d'où un gate par
+ * media de scripting plutôt que par émulation de reduce.
+ * `::view-transition{pointer-events:none}` reste : un tap pendant les 150 ms
+ * du fondu ne doit jamais être avalé.
  */
 const compacte = (feuille: string): string => feuille.replace(/\s*\n\s*/g, '').trim();
 
 export const SOCLE_DU_DOCUMENT = compacte(`
 *,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:var(--text-base);line-height:var(--leading-normal);-webkit-font-smoothing:antialiased}
-:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px}
+body{margin:0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-native);font-size:var(--text-md);line-height:var(--leading-relaxed);-webkit-font-smoothing:antialiased}
+:focus-visible{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:var(--stroke-strong);box-shadow:0 0 0 var(--stroke-strong) var(--color-focus-contra)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:0s;animation-duration:0s}}
+@media (scripting: enabled){@view-transition{navigation:auto}}
+::view-transition-old(root),::view-transition-new(root){animation-duration:150ms}
+::view-transition{pointer-events:none}
+@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}::view-transition-old(root),::view-transition-new(root){animation:none}}
 `);
 
 /**

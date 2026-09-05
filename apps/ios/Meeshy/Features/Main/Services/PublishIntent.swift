@@ -87,6 +87,93 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// serveur re-transcrit et jette ce travail en silence.
     let mobileTranscription: MobileTranscriptionPayload?
 
+    /// **LE CANVAS — ce que l'auteur a COMPOSÉ sur la scène** (#4756).
+    ///
+    /// ## Le défaut, mesuré à l'écran le 2026-09-04
+    ///
+    /// Un post composé avec un fond et un objet texte a été publié depuis
+    /// `Meeshy-iOS26` : la carte du fil affichait **le texte seul**. Ni fond, ni
+    /// objet, ni dessin, ni sticker — la scène entière perdue, sans une erreur,
+    /// sans un log, sans un état d'échec.
+    ///
+    /// La cause tenait en une ligne : `PublishIntent` portait douze champs et
+    /// aucun n'était `storyEffects`. Le blob existe pourtant de bout en bout —
+    /// `CreatePostRequest.storyEffects` le déclare, `CreatePostSchema` l'accepte,
+    /// et `createCanvasPost` s'en sert déjà. Seule la voie DOCUMENT, celle que
+    /// prend tout post du meuble, ne le transportait pas.
+    ///
+    /// > **Un champ absent d'une charge ne rougit nulle part.** Le compilateur
+    /// > ne le réclame pas, le schéma le tolère, le serveur publie. Le seul
+    /// > témoin possible est ce que l'auteur VOIT — et il faut aller le
+    /// > regarder.
+    ///
+    /// ## Pourquoi ici, et pas seulement dans le brouillon du meuble
+    ///
+    /// Parce que ce type est la matière composée UNE fois. La voie durable
+    /// (`CreatePostPayload` → `OutboxDispatcher`) est la seule que prenne un
+    /// post du meuble, en ligne comme hors ligne : un canvas qui s'arrêterait au
+    /// brouillon serait perdu au premier flush, silencieusement.
+    ///
+    /// `nil` ⇒ aucune scène. C'est le cas nominal d'un post TEXTE, et un blob
+    /// vide encodé à sa place ferait croire à une scène composée puis effacée.
+    let storyEffects: StoryEffects?
+
+    /// **La LÉGENDE de chaque fichier, alignée par INDEX sur `localMediaURLs`**
+    /// (#4756, seconde moitié).
+    ///
+    /// ## Pourquoi un tableau plutôt qu'une carte
+    ///
+    /// La destination est `PostMedia.caption`, une colonne clée par un id
+    /// SERVEUR — attribué à l'upload, dans `OutboxDispatcher`, bien après que
+    /// cette matière soit composée. Poser ici une carte clée par URL locale
+    /// aurait produit une charge dont aucune clé n'existe chez le destinataire :
+    /// le gateway filtre en silence les ids qu'il ne reconnaît pas
+    /// (`PostService.applyMediaText`), et la légende serait perdue SANS erreur.
+    ///
+    /// L'INDEX est la seule identité qui survive au voyage : `localMediaURLs[i]`
+    /// devient `relativePaths[i]` à l'enfilage, puis `uploadedIds[i]` à
+    /// l'upload. C'est la même discipline que `localMediaMimeTypes` juste
+    /// au-dessus, et pour la même raison — ce champ-là avait déjà été « reçu
+    /// puis jeté », et son doc-comment porte la leçon.
+    ///
+    /// `nil` à une position ⇒ ce fichier n'a pas de légende. Vide et `nil` s'y
+    /// disent pareil, et c'est voulu : une chaîne vide poserait une légende
+    /// BLANCHE sur le média, le contraire de « pas de légende »
+    /// (`ComposerSlideTextRole.applyCaption`).
+    let mediaCaptions: [String?]
+
+    /// **Le texte ALTERNATIF par média, dans le même ordre que les fichiers**
+    /// (2026-09-05).
+    ///
+    /// Jumeau de `mediaCaptions` dans sa FORME, et distinct dans son SENS : la
+    /// légende s'adresse à qui VOIT le média, l'alternative à qui ne le voit
+    /// pas. Ce sont deux textes, deux champs du schéma (`CreatePostSchema.
+    /// mediaCaption` / `.mediaAlt`), et jamais un repli l'un sur l'autre —
+    /// servir une légende comme alternative dirait à un lecteur d'écran
+    /// « voici ce que l'image montre » à partir d'un texte écrit pour
+    /// accompagner ce qu'on voit déjà.
+    ///
+    /// Même convention que ci-dessus : `nil` à une position ⇒ ce fichier n'a
+    /// pas d'alternative.
+    let mediaAlts: [String?]
+
+    /// **L'identifiant d'OBJET de canvas que chaque fichier représente**
+    /// (#5280, 2026-09-05).
+    ///
+    /// Ni un texte ni une donnée d'affichage : le chaînon qui permet au
+    /// dispatcher d'ADOPTER, dans le canvas, l'identité serveur qu'il vient de
+    /// créer. Sans lui, le canvas publié désigne la ligne `PostMedia` de la
+    /// PRÉ-MONTÉE — celle faite à la pose sur la scène — et le lecteur cherche
+    /// un id absent de `post.media` : la scène se peint VIDE.
+    ///
+    /// Même forme et même alignement que les deux textes ci-dessus, pour la
+    /// même raison : c'est la POSITION dans `localMedia` qui survit à la
+    /// relocalisation des fichiers, jamais l'URL.
+    ///
+    /// `nil` à une position ⇒ ce fichier ne correspond à aucun objet de canvas
+    /// (un post sans scène, une pièce jointe simple).
+    let mediaObjectIds: [String?]
+
     private init(
         clientMutationId: String,
         type: String,
@@ -99,7 +186,11 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         mentions: [PostMentionInput]?,
         location: SharedPlace?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        storyEffects: StoryEffects?,
+        mediaCaptions: [String?],
+        mediaAlts: [String?],
+        mediaObjectIds: [String?]
     ) {
         self.clientMutationId = clientMutationId
         self.type = type
@@ -113,6 +204,10 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         self.location = location
         self.discoverabilityPrecision = discoverabilityPrecision
         self.mobileTranscription = mobileTranscription
+        self.storyEffects = storyEffects
+        self.mediaCaptions = mediaCaptions
+        self.mediaAlts = mediaAlts
+        self.mediaObjectIds = mediaObjectIds
     }
 
     /// Le geste « **j'ai composé un document** » — un post ou un réel né du
@@ -144,7 +239,26 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         mentions: [PostMentionInput]?,
         location: SharedPlace?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
-        transcription: MobileTranscriptionPayload?
+        transcription: MobileTranscriptionPayload?,
+        /// **Le canvas composé sur la scène** (#4756). `nil` pour un post
+        /// TEXTE — la règle 1 de ce fichier interdit un défaut : un site qui
+        /// n'a pas de scène l'écrit en toutes lettres, sinon le champ
+        /// disparaîtrait demain d'un appelant sans casser la compilation.
+        storyEffects: StoryEffects?,
+        /// **Les légendes du composer, clées par URL LOCALE** (#4756). Elles
+        /// sont RÉALIGNÉES sur l'index de `localMedia` ci-dessous — c'est le
+        /// seul endroit qui voie les deux, la carte et l'ordre des fichiers.
+        mediaCaptions: ComposerMediaCaptions,
+        /// **Les alternatives textuelles, clées par URL LOCALE elles aussi.**
+        /// Le meuble les tient par identifiant d'OBJET (c'est ce que l'éditeur
+        /// de scène édite) et les traduit en URL avant de les remettre :
+        /// `documentMediaObjectIdBySource` est le pont, et il ne peut vivre
+        /// que là où les deux clés coexistent.
+        mediaAlts: ComposerMediaCaptions,
+        /// `URL source → identifiant d'objet de canvas`, tel que
+        /// `applyContentMedia` l'a rendu et que le meuble l'accumule
+        /// (`documentMediaObjectIdBySource`). Vide pour un post sans scène.
+        mediaObjectIds: ComposerMediaCaptions
     ) -> PublishIntent {
         PublishIntent(
             clientMutationId: ClientMutationId.generate(),
@@ -186,7 +300,21 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: transcription
+            mobileTranscription: transcription,
+            storyEffects: storyEffects,
+            // **La carte devient un tableau, ICI et nulle part ailleurs.** Ce
+            // site est le seul qui tienne à la fois les légendes (par URL) et
+            // l'ORDRE des fichiers ; plus bas, l'URL n'existe plus — la file
+            // relocalise les fichiers et n'en garde que des chemins relatifs.
+            mediaCaptions: localMedia.map { mediaCaptions[$0.url] },
+            // Le MÊME réalignement, sur la même liste et dans le même ordre :
+            // deux boucles écrites séparément se décaleraient au premier
+            // fichier sauté.
+            mediaAlts: localMedia.map { mediaAlts[$0.url] },
+            // Le TROISIÈME réalignement, sur la même liste et dans le même
+            // ordre — un quatrième tableau écrit séparément se décalerait au
+            // premier fichier sauté.
+            mediaObjectIds: localMedia.map { mediaObjectIds[$0.url] }
         )
     }
 
@@ -238,7 +366,21 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: transcription
+            mobileTranscription: transcription,
+            // **Un vocal n'a pas de scène**, et ce `nil` est écrit ici plutôt
+            // que porté par un défaut : la règle 1 de ce fichier veut que
+            // chaque geste DÉCLARE tout ce qu'il publie. Le jour où un
+            // enregistrement gagnera un canvas, c'est cette ligne qui refusera
+            // de rester fausse en silence.
+            storyEffects: nil,
+            // Un vocal n'a pas non plus de légende par média : il EST le média,
+            // et ce qui le décrit est sa transcription.
+            mediaCaptions: [nil],
+            // Ni alternative : un vocal ne se REGARDE pas. Ce qui le rend
+            // accessible est sa transcription, déjà portée ci-dessus.
+            mediaAlts: [nil],
+            // Un vocal n'a pas de canvas : aucun objet à adopter.
+            mediaObjectIds: [nil]
         )
     }
 }

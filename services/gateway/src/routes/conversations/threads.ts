@@ -17,6 +17,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
 import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -44,6 +45,11 @@ const threadMessageSelect = {
   // message cité (replyTo) — sans `metadata`, un message géolocalisé perd
   // sa position dans ce thread alors qu'il la restitue ailleurs.
   metadata: true,
+  // #4885 — les quatre drapeaux de protection : `formatThreadMessage` étale
+  // `...message`, donc les sélectionner suffit à les servir. Sans eux, un
+  // message à vue unique ouvert par son fil de réponses était FORWARDABLE
+  // au même titre que celui trouvé par `GET .../messages/search`.
+  ...MESSAGE_PROTECTION_SELECT,
   sender: {
     select: {
       id: true,

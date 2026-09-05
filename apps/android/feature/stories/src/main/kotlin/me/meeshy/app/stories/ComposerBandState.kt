@@ -16,13 +16,15 @@ enum class BandCategory {
 
 /**
  * A tool tile inside the **Contenu** band. Each maps to an existing composer action
- * (add an on-canvas text element / pick media); the band renders them in declaration
- * order. Effets surfaces the visibility control directly rather than via tiles.
+ * (add an on-canvas text element / pick media / add a sticker / enter the freehand
+ * drawing tool); the band renders them in declaration order. Effets surfaces the
+ * visibility control directly rather than via tiles.
  */
 enum class ComposerContentTile {
     TEXT,
     MEDIA,
-    STICKER;
+    STICKER,
+    DRAW;
 
     /** Every content tile belongs to [BandCategory.CONTENU]. */
     val category: BandCategory get() = BandCategory.CONTENU

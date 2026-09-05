@@ -516,6 +516,11 @@ extension StoryCanvasUIView {
         // clock alive on ProMotion while editing AND (WS2.1) re-feeds the glass
         // text backdrop so it tracks a playing video background between rebuilds.
         refreshEditGlassBackdropIfNeeded(now: now)
+        // #4999 — et repose la pose des décorations animées sur les couches
+        // déjà montées. Aucune reconstruction : la passe ne touche que la
+        // transformation et l'opacité, et elle sort au premier `guard` quand la
+        // scène ne porte aucune décoration animée — le cas courant.
+        refreshStickerMotion(now: now)
     }
 
     /// `true` while a media clock genuinely needs `editDisplayLink` at full

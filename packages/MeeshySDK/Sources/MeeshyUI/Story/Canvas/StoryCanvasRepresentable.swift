@@ -17,6 +17,14 @@ import MeeshySDK
 /// (UIImage non Equatable, dict hashable seulement via clés).
 struct ComposerImageCacheReader: ImageCacheReader {
     let images: [String: UIImage]
+    /// **Les octets ANIMÉS des stickers collés, keyés comme les bitmaps**
+    /// (#3956) — vide tant qu'aucun GIF n'a été posé.
+    ///
+    /// Ils voyagent À CÔTÉ des images, jamais à leur place : `images[key]` reste
+    /// la première image du même sticker, et c'est elle que peignent la cover,
+    /// l'export et le thumbHash. La couche essaie les octets d'abord ; leur
+    /// absence n'est pas un échec, c'est le cas nominal d'une image fixe.
+    var animations: [String: Data] = [:]
     let version: UInt64
 
     func cachedImage(for key: String) async -> UIImage? {
@@ -78,6 +86,14 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// composer. Le composer applique son propre clamp + commit à `.ended`.
     public var onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)?
     public var onBackgroundTapped: (() -> Void)?
+    /// Appui long sur une zone VIDE — inerte chez qui ne le branche pas.
+    public var onBackgroundLongPressed: (() -> Void)?
+    /// L'appui long sur un média DE FOND — voir `StoryCanvasBackgroundLongPress`.
+    public var onBackgroundMediaLongPressed: ((String) -> Void)?
+    /// La translation pendant qu'un appui long ARMÉ est tenu.
+    public var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    /// Le relâchement — ou l'annulation — d'un appui long armé.
+    public var onBackgroundLongPressEnded: (() -> Void)?
     /// Notifié quand le drag du background se termine (.ended). Le composer
     /// l'utilise pour resynchroniser son cache `viewModel.backgroundTransform`
     /// avec la nouvelle valeur typée. Le `slide` lui-même est déjà mis à jour
@@ -104,6 +120,13 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
     public var loadedImagesVersion: UInt64 = 0
+    /// Octets animés des stickers collés, keyés par `sticker.id` (miroir de
+    /// `viewModel.loadedStickerAnimations`, #3956). Sans ce fil, un GIF posé sur
+    /// la scène s'y peint FIGÉ sur son image 1 pendant que la publication, elle,
+    /// l'envoie animé — l'aperçu mentirait sur ce qui va être publié (loi 6).
+    /// Le cookie ci-dessus couvre aussi ce dictionnaire :
+    /// `registerLoadedStickerAnimation` le bump.
+    public var loadedStickerAnimations: [String: Data] = [:]
     /// URLs locales (file://) des clips audio importés, keyées par `audio.id`
     /// (miroir de `viewModel.loadedAudioURLs`). Wiré vers
     /// `readerContext.localAudioURLResolver` pour que le mixer joue le son en
@@ -139,11 +162,16 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onEditClockThrottleChanged: ((Bool) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
+                onBackgroundLongPressed: (() -> Void)? = nil,
+                onBackgroundMediaLongPressed: ((String) -> Void)? = nil,
+                onBackgroundLongPressChanged: ((CGPoint) -> Void)? = nil,
+                onBackgroundLongPressEnded: (() -> Void)? = nil,
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
                 isViewportZoomed: Bool = false,
                 onViewportZoomResetRequested: (() -> Void)? = nil,
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
+                loadedStickerAnimations: [String: Data] = [:],
                 loadedImagesVersion: UInt64 = 0,
                 loadedAudioURLs: [String: URL] = [:],
                 canvasCornerRadius: CGFloat = 0,
@@ -165,11 +193,16 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onEditClockThrottleChanged = onEditClockThrottleChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
+        self.onBackgroundLongPressed = onBackgroundLongPressed
+        self.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        self.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        self.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
         self.isViewportZoomed = isViewportZoomed
         self.onViewportZoomResetRequested = onViewportZoomResetRequested
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.loadedImages = loadedImages
+        self.loadedStickerAnimations = loadedStickerAnimations
         self.loadedImagesVersion = loadedImagesVersion
         self.loadedAudioURLs = loadedAudioURLs
         self.canvasCornerRadius = canvasCornerRadius
@@ -191,7 +224,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     private func makeComposerContext() -> StoryReaderContext {
         let audioURLs = loadedAudioURLs
         let audioResolver: @Sendable (String) -> URL? = { audioURLs[$0] }
-        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
+        let reader = ComposerImageCacheReader(images: loadedImages,
+                                              animations: loadedStickerAnimations,
+                                              version: loadedImagesVersion)
         return StoryReaderContext(imageCache: reader, localAudioURLResolver: audioResolver)
     }
 
@@ -204,6 +239,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // la suivante. Le prefetcher hors-écran, lui aussi en `.edit`, ne lève
         // jamais ce drapeau et reste silencieux.
         view.playsVideoInEditMode = true
+        // Troisième famille vivante sur le canvas d'édition (#4999) : une
+        // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
+        // comme la vidéo et le son juste au-dessus et juste en dessous.
+        view.playsStickerMotionInEditMode = true
         view.onItemModified = { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
@@ -220,6 +259,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onEditClockThrottleChanged = onEditClockThrottleChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
+        view.onBackgroundLongPressed = onBackgroundLongPressed
+        view.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        view.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        view.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
         view.isViewportZoomed = isViewportZoomed
         view.onViewportZoomResetRequested = onViewportZoomResetRequested
@@ -252,6 +295,13 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // pushing sheets, etc.). This is cheap — just a property assignment.
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
+        // **Remis à jour à CHAQUE passe**, comme `onItemDoubleTapped` juste
+        // au-dessus : une closure posée au seul `makeUIView` capture l'état de
+        // la première composition. L'hôte qui présente le menu de fond lit le
+        // modèle courant — figée, elle agirait sur une slide périmée.
+        uiView.onBackgroundMediaLongPressed = onBackgroundMediaLongPressed
+        uiView.onBackgroundLongPressChanged = onBackgroundLongPressChanged
+        uiView.onBackgroundLongPressEnded = onBackgroundLongPressEnded
         uiView.editableKinds = editableKinds
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged

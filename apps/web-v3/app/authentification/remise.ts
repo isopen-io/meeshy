@@ -1,4 +1,6 @@
 import type { DeuxiemeFacteur, Session } from '@/lib/api/authentification';
+import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/lib/api/cookies';
+import { CLES, CLES_DEUXIEME_FACTEUR } from '@/lib/api/session-legacy';
 
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
@@ -44,26 +46,17 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
  */
 
 /**
- * Miroirs de `apps/web/constants/auth.ts` — les clés que le legacy relit.
- * `AUTH_STORAGE_KEYS` pour la session, `SESSION_STORAGE_KEYS` pour l'étape de
- * vérification. Gardés par un témoin de source qui les oppose au fichier.
+ * Les clés vivent désormais dans `lib/api/session-legacy.ts` (§ `deconnexion`,
+ * #5095) — un module de navigateur en a besoin, et ce fichier-ci importe des
+ * lecteurs de disque qu'un tel module ne peut pas embarquer. Ré-exportées ici
+ * pour que ce récit reste le leur.
  */
-export const CLES = {
-  jeton: 'meeshy_auth_token',
-  jetonDeSession: 'meeshy_session_token',
-  utilisateur: 'meeshy_user_data',
-} as const;
-
-export const CLES_DEUXIEME_FACTEUR = {
-  jetonTemporaire: 'meeshy_2fa_temp_token',
-  identifiantUtilisateur: 'meeshy_2fa_user_id',
-  pseudonyme: 'meeshy_2fa_username',
-} as const;
+export { CLES, CLES_DEUXIEME_FACTEUR };
 
 /** L'écran de vérification du legacy. Il franchit la zone, comme `/forgot-password`. */
 export const ECRAN_DEUXIEME_FACTEUR = '/auth/verify-2fa';
 
-export const COOKIE_DE_SESSION = 'meeshy_session';
+export { COOKIE_DE_SESSION };
 
 /**
  * LE JETON, EN COOKIE — ce qui rend la zone connectée RENDABLE PAR LE SERVEUR.
@@ -86,7 +79,7 @@ export const COOKIE_DE_SESSION = 'meeshy_session';
  * le retient sur toute requête de sous-ressource venue d'un autre site et sur
  * tout POST inter-site ; la v3 ne s'en sert que pour RENDRE, jamais pour agir.
  */
-export const COOKIE_DE_JETON = 'meeshy_auth';
+export { COOKIE_DE_JETON };
 
 /**
  * MIROIR EXACT de `AuthManagerService.setSessionCookie`

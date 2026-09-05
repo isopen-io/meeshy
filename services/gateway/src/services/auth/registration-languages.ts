@@ -43,14 +43,40 @@
  * les lecteurs qui la tiennent aujourd'hui pour non-nulle
  * (`SocketIOUser.systemLanguage: string`, `userSchema`). C'est un lot à part.
  *
- * ## Ce que la descente ne fait PAS
+ * ## Où la locale appareil intervient — et où elle n'intervient PAS (#5216)
  *
- * Elle s'arrête au rang 3. `deviceLocale` (rang 4) est une OBSERVATION du client
- * — l'en-tête `X-Device-Locale` — et non une préférence d'inscription : l'écrire
- * au rang 1 servirait en priorité ABSOLUE une langue que le lecteur n'a jamais
- * choisie, ce qui est le défaut qu'on corrige, avec une autre provenance. Cette
- * colonne a son écrivain (`middleware/deviceLocale.ts`, sur les requêtes
- * authentifiées) et reste `null` à la création.
+ * Ce doc-comment affirmait l'inverse jusqu'au 2026-09-05 : « `deviceLocale`
+ * (rang 4) […] reste `null` à la création ». La phrase était juste sur le
+ * DANGER — écrire la locale appareil au rang 1 « servirait en priorité ABSOLUE
+ * une langue que le lecteur n'a jamais choisie » — et fausse sur le remède,
+ * parce qu'elle comparait la locale à une PRÉFÉRENCE alors qu'elle ne concourt
+ * qu'au repli terminal.
+ *
+ * **La locale appareil n'écrase JAMAIS une préférence exprimée.** Elle ne
+ * remplit le rang 1 que lorsque l'inscription n'exprime AUCUN rang — c'est-à-dire
+ * exactement là où le code écrivait auparavant le littéral `'fr'`. Le choix
+ * n'est donc pas entre « la locale » et « la préférence » : il est entre
+ * « la locale » et « le français, quoi qu'il arrive ». Un compte créé depuis un
+ * appareil espagnol, sans aucune langue au formulaire, repartait en français.
+ *
+ * L'ordre est celui du Prisme, et il est TOTAL :
+ *
+ * | rang | source |
+ * |---|---|
+ * | 1 | `systemLanguage` explicite |
+ * | 2-3 | le plus haut rang exprimé par l'inscription (`resolveUserLanguagesOrdered`) |
+ * | 4 | `deviceLocale`, normalisée |
+ * | — | `REGISTRATION_FALLBACK_LANGUAGE`, quand rien n'est connu |
+ *
+ * La colonne `deviceLocale` est de plus PERSISTÉE à la création quand elle est
+ * connue, plutôt qu'attendue de la première requête authentifiée
+ * (`middleware/deviceLocale.ts`) : la connaître dès la ligne d'origine évite
+ * qu'un tout premier message parte avant que le rang 4 n'existe.
+ *
+ * Un `default` de schéma rendait cette descente INATTEIGNABLE : Ajv et Zod
+ * posaient tous deux `'fr'` sur `systemLanguage`/`regionalLanguage` avant le
+ * handler, donc l'inscription exprimait TOUJOURS un rang. Les deux sont retirés
+ * (#5216) — c'est le témoin de ce lot.
  *
  * La descente vient de `resolveUserLanguagesOrdered` — la SSOT partagée — et non
  * du raccord de lecture du gateway (`utils/recipient-language.ts`) : celui-ci
@@ -59,6 +85,7 @@
  */
 
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 /**
  * Le repli TERMINAL du Prisme. C'est un PARAMÈTRE de résolution, pas une
@@ -68,18 +95,30 @@ import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-h
  */
 export const REGISTRATION_FALLBACK_LANGUAGE = 'fr';
 
-/** Les trois rangs du Prisme qu'une inscription peut exprimer. */
+/**
+ * Ce qu'une inscription peut exprimer : les trois rangs de PRÉFÉRENCE, plus la
+ * locale APPAREIL — qui n'est pas une préférence et se tient donc à part, au
+ * rang 4, jamais mêlée aux trois autres.
+ */
 export type RegistrationLanguageInput = {
   readonly systemLanguage?: string;
   readonly regionalLanguage?: string;
   readonly customDestinationLanguage?: string;
+  /** L'en-tête `X-Device-Locale`, ou l'étiquette la mieux notée d'`Accept-Language`. */
+  readonly deviceLocale?: string;
 };
 
-/** Les trois colonnes de langue que le `user.create` de l'inscription reçoit. */
+/** Les colonnes de langue que le `user.create` de l'inscription reçoit. */
 export type RegistrationLanguages = {
   readonly systemLanguage: string;
   readonly regionalLanguage: string | null;
   readonly customDestinationLanguage: string | null;
+  /**
+   * La colonne du rang 4, persistée dès la création quand elle est connue —
+   * `null` sinon. Normalisée, comme le fait `middleware/deviceLocale.ts` :
+   * la base ne garde que des codes servables.
+   */
+  readonly deviceLocale: string | null;
 };
 
 /**
@@ -99,13 +138,16 @@ const preferenceRenseignee = (valeur?: string | null): string | undefined =>
 export function registrationLanguages(data: RegistrationLanguageInput): RegistrationLanguages {
   const regionalLanguage = preferenceRenseignee(data.regionalLanguage) ?? null;
   const customDestinationLanguage = preferenceRenseignee(data.customDestinationLanguage) ?? null;
+  const deviceLocale = normalizeLanguageCode(data.deviceLocale) ?? null;
 
   return {
     systemLanguage:
       preferenceRenseignee(data.systemLanguage) ??
       resolveUserLanguagesOrdered({ regionalLanguage, customDestinationLanguage })[0] ??
+      deviceLocale ??
       REGISTRATION_FALLBACK_LANGUAGE,
     regionalLanguage,
     customDestinationLanguage,
+    deviceLocale,
   };
 }

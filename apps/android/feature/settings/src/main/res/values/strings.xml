@@ -13,6 +13,7 @@
     <string name="settings_section_chats">Chats</string>
     <string name="settings_starred_messages">Starred messages</string>
     <string name="settings_share_links">Share links</string>
+    <string name="settings_saved_posts">Saved posts</string>
     <string name="settings_section_privacy">Privacy &amp; Security</string>
     <string name="settings_section_data">Data</string>
     <string name="settings_section_about">About</string>
@@ -29,6 +30,10 @@
     <string name="settings_new_message_notifications">New messages</string>
     <string name="settings_notification_sound">Sound</string>
     <string name="settings_notification_vibration">Vibration</string>
+    <string name="settings_notif_show_preview">Message preview</string>
+    <string name="settings_notif_show_sender_name">Sender name</string>
+    <string name="settings_notif_group_notifications">Group notifications</string>
+    <string name="settings_notif_badge_enabled">App icon badge</string>
     <string name="settings_dnd">Do Not Disturb</string>
     <string name="settings_dnd_start">From</string>
     <string name="settings_dnd_end">Until</string>
@@ -204,8 +209,11 @@
     <string name="delete_account_warning_preferences">Your preferences and settings</string>
     <string name="delete_account_confirm_prompt">Type %1$s to confirm</string>
     <string name="delete_account_confirm_label">Confirmation phrase</string>
+    <string name="delete_account_password_label">Current password</string>
     <string name="delete_account_button">Permanently delete my account</string>
+    <string name="delete_account_error_invalid_password">Incorrect password. Please try again.</string>
     <string name="delete_account_error_pending">A deletion request is already in progress. Check your inbox.</string>
+    <string name="delete_account_error_no_email">Add and verify an email address before you can delete your account.</string>
     <string name="delete_account_error_network">No connection. Check your network and try again.</string>
     <string name="delete_account_error_generic">Something went wrong. Please try again.</string>
     <string name="delete_account_email_title">A confirmation email is on its way</string>

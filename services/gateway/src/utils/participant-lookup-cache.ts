@@ -19,11 +19,21 @@
  */
 
 import { BoundedTtlCache } from './bounded-cache.js';
+import type { ParticipantPermissions, AnonymousRightsOverride } from '@meeshy/shared/prisma/client';
 
 export type CachedParticipant = {
   id: string;
   conversationId: string;
   isActive: boolean;
+  /**
+   * L'instantané figé au join — porté depuis #4855 pour que
+   * `MessagingService.handleMessage` puisse résoudre `canSendMessages` sans
+   * lecture Prisma supplémentaire. `PATCH …/participants/:id/rights` doit
+   * invalider cette entrée (voir son appelant) : sans quoi une révocation ne
+   * prend effet qu'au bout du TTL.
+   */
+  permissions: ParticipantPermissions;
+  anonymousSession: { rights: AnonymousRightsOverride | null } | null;
 };
 
 const TTL_MS = 30_000;

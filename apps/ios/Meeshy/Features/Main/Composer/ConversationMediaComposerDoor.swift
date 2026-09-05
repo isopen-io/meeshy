@@ -280,7 +280,7 @@ struct ConversationMediaComposerDoor: View {
             // elle, le SDK retombe sur `PostVisibility.friends` sans un mot, et
             // le dernier choix de l'auteur est perdu (loi 10).
             initialVisibility: storyViewModel.lastComposerVisibility,
-            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, loadedStickerAnimations, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                 storyViewModel.publishStoryInBackground(
                     targetType: targetType,
                     slides: slides,
@@ -288,6 +288,7 @@ struct ConversationMediaComposerDoor: View {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    loadedStickerAnimations: loadedStickerAnimations,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,

@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
@@ -20,16 +21,16 @@ import MeeshyUI
 ///
 /// Une scène n'est pas un document avec une image. Elle a ses portes, ses
 /// contrôleurs, sa géométrie et sa description ; les loger dans le document
-/// obligeait ce dernier à savoir ce qu'est un `MeeshyObject`.
+/// obligeait ce dernier à savoir ce qu'est un `MeeshySceneObject`.
 ///
 /// ## Ce qu'elle porte, et sur quel niveau du modèle
 ///
 /// | zone | niveau |
 /// |---|---|
 /// | barre haute (`ComposerTopBar`) | la `MeeshyPublication` |
-/// | rail *leading* — les portes | crée un `MeeshyObject` (sauf « description ») |
+/// | rail *leading* — les portes | crée un `MeeshySceneObject` (sauf « description ») |
 /// | la scène 9:16, encastrée | une `MeeshyScene` |
-/// | rail *trailing* — les contrôleurs | UN `MeeshyObject` |
+/// | rail *trailing* — les contrôleurs | UN `MeeshySceneObject` |
 /// | la description | la `MeeshySlide` |
 ///
 /// Le SOCLE n'est pas ici : il vit au meuble, sous les trois surfaces, et ne
@@ -41,6 +42,12 @@ struct ComposerSceneSurface: View {
     let localMedia: [ComposerDocumentMedia]
     let selectedMediaURL: URL?
     let selectableMediaURLs: Set<URL>
+    /// **Le format COURANT, parce que la géographie des rails en dépend**
+    /// (#4893). Lieu, hashtag, mention et corpus de texte ne se posent sur la
+    /// scène qu'en Story ; ailleurs ils qualifient la publication et vivent en
+    /// bas. La surface ne décide de rien — elle ne peut simplement pas
+    /// interroger `ComposerSceneFloatingRail` sans dire pour quoi elle compose.
+    let format: ComposerFormat
     let formatFan: AnyView?
     let overflowMenu: AnyView?
     let onClose: () -> Void
@@ -53,6 +60,8 @@ struct ComposerSceneSurface: View {
     let aspectRatio: CGFloat
     let plateauTint: Color
     var sceneImages: [String: UIImage] = [:]
+    /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
+    var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
     var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
 
@@ -65,9 +74,59 @@ struct ComposerSceneSurface: View {
     /// média n'y est monté (#4082) — pour que « Modifier » ne paraisse jamais
     /// sur un objet que personne n'éditera.
     var onItemEdit: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
-    var editableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = [.text]
+    /// **Les familles dont l'hôte sait ouvrir l'éditeur** (#4937).
+    ///
+    /// Elle valait `[.text]` tant que l'éditeur d'objet ne savait éditer qu'un
+    /// texte. Depuis que les cinq familles y ont leur fenêtre et leur timeline,
+    /// les quatre autres s'y ouvrent aussi.
+    ///
+    /// **Ce jeu et le `switch` d'`onItemEdit` se tiennent la main** : servir
+    /// l'un sans l'autre rend « Modifier » offert et INERTE — le doc-comment de
+    /// l'hôte le dit depuis #4082, et `ComposerSceneEditableKindsTests` le garde
+    /// désormais plutôt que de le rappeler.
+    var editableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = defaultEditableSceneKinds
+
+    /// Le défaut, NOMMÉ pour que la garde puisse le lire — un littéral posé dans
+    /// une valeur par défaut n'est interrogeable que par la source.
+    static let defaultEditableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = [
+        .text, .media, .sticker, .place, .audio
+    ]
 
     var onBackgroundTapped: (() -> Void)?
+
+    /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, planche
+    /// `2b`). L'hôte décide du mode ; la surface ne fait que transmettre.
+    var onBackgroundLongPressed: (() -> Void)?
+
+    /// **L'appui long sur un média DE FOND demande son MENU** (#5041).
+    ///
+    /// Distinct du jumeau ci-dessus, qui appartient au viseur : une scène qui
+    /// porte un fond n'est pas vide. Tant que le meuble ne le branche pas, la
+    /// règle du canvas (`StoryCanvasBackgroundLongPress`) retombe sur le viseur
+    /// — le geste ne devient jamais muet en attendant son hôte.
+    var onBackgroundMediaLongPressed: ((String) -> Void)?
+
+    /// **La durée d'un appui long ARMÉ** (#5041) : la translation pendant qu'on
+    /// tient, puis le relâchement. Le `.began` seul ouvrait un objectif ; ces
+    /// deux-là permettent de TENIR une prise.
+    var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
+    var onBackgroundLongPressEnded: (() -> Void)?
+
+    /// **L'étape du viseur — la seule chose que la scène ait encore besoin de
+    /// savoir de la caméra** (directive porteur 2026-09-04).
+    ///
+    /// La surface PEIGNAIT le viseur ; elle n'en publie plus que la place
+    /// (`ComposerSceneCameraFrameKey`), le meuble le montant en un site unique
+    /// pour couvrir le socle. Tout le reste du contrat caméra — session,
+    /// permission, taille, mode, flash, segments et leurs onze rappels — est
+    /// parti AVEC la vue qui les lisait.
+    ///
+    /// Ce champ reste parce qu'un autre consommateur le lit ici : la zone de
+    /// description s'efface pendant qu'on cadre
+    /// (`ComposerSceneCameraOverlay.isServed(.description, stage:)`). Le
+    /// garder « au cas où » aurait été une dette ; le garder pour un lecteur
+    /// nommé est un contrat.
+    var cameraStage: ComposerSceneCameraStage = .off
 
     // MARK: - Les deux rails
 
@@ -75,6 +134,11 @@ struct ComposerSceneSurface: View {
     /// `ComposerRailMode.resolve`. Cette vue ne re-filtre rien : une seconde
     /// loi 4 divergerait de la première.
     var railMode: ComposerRailMode = .doors([])
+
+    /// **Ce que chaque porte PORTE DÉJÀ** (#4994) — déjà compté par
+    /// `ComposerRailDoorBadge`. Cette vue ne compte rien : elle relaie, comme
+    /// pour les portes elles-mêmes. Une entrée absente vaut « rien à dire ».
+    var railBadges: [ComposerRailDoor: Int] = [:]
     var onRailDoor: ((ComposerRailDoor) -> Void)?
     var onRailToolControl: ((ComposerToolControl) -> Void)?
     var onRailExitTool: (() -> Void)?
@@ -118,7 +182,10 @@ struct ComposerSceneSurface: View {
         return false
     }
 
-    var activeObjectChipId: String?
+    /// **Plus d'`activeObjectChipId`** (2026-09-05) : un jeton ouvrait une
+    /// bande montée SOUS la scène, donc visible en même temps que lui — d'où un
+    /// état encadré. Il ouvre désormais l'éditeur plein écran, qui couvre cette
+    /// surface : aucun jeton n'est visible en même temps que ce qu'il a ouvert.
     var onObjectChip: ((String) -> Void)?
 
     /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (#4073, vue `1c`).
@@ -136,11 +203,12 @@ struct ComposerSceneSurface: View {
     /// le bas ne porte que le socle (#4064). Cette vue ne re-filtre rien : une
     /// seconde loi 4 divergerait de la première, exactement comme pour les
     /// deux rails.
+    ///
+    /// **Les deux contenus injectés sont partis avec leurs bandes**
+    /// (2026-09-05) : `timeline` (#4082) et `textStyles` (#4083) éditaient un
+    /// objet déjà posé, et la première vue n'édite plus. Leurs jumelles vivent
+    /// dans l'éditeur plein écran — `.media(.trim)` et `.tool(.style)`.
     var band: ComposerSceneBand?
-    /// Ce que la bande `timeline` montre — composé par le meuble (#4082).
-    var bandTimelineContent: AnyView?
-    /// Ce que la bande `textStyles` montre — composé par le meuble (#4083).
-    var bandTextStylesContent: AnyView?
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
 
@@ -151,7 +219,13 @@ struct ComposerSceneSurface: View {
 
     /// **Le panneau d'OPTIONS de l'outil déplié**, monté sous la scène
     /// (directive porteur 2026-08-30). Les BULLES vivent au rail ; ce qui a
-    /// besoin de largeur — palette, glissière, dix-huit styles — vit ici.
+    /// besoin de largeur — palette, glissière — vit ici.
+    ///
+    /// **Il ne porte plus que le DESSIN depuis le 2026-09-05.** Les dix-huit
+    /// styles et les sept autres outils de texte sont partis à l'éditeur plein
+    /// écran avec le reste de l'édition ; ce qui reste ici règle le PINCEAU,
+    /// c'est-à-dire le geste qui AJOUTE — pas un objet déjà posé. Le meuble
+    /// tient la distinction (`ComposerFirstView.lowZoneShowsToolOptions`).
     var toolOptions: AnyView?
 
     /// L'édition EN LIGNE, relayée au canvas : le texte se saisit à sa vraie
@@ -160,15 +234,17 @@ struct ComposerSceneSurface: View {
     var onInlineTextChanged: ((String, String) -> Void)?
     var onInlineTextEditEnded: ((String) -> Void)?
 
-    /// **La bande de mention du texte de SCÈNE** (#4475), montée sous le canvas
-    /// pendant l'édition. `nil` ⇒ aucune requête `@` en cours, ou aucune
-    /// personne à proposer — dans les deux cas, rien de peint (loi 4).
+    /// **La bande de mention du texte de SCÈNE a quitté cette surface**
+    /// (2026-09-05).
     ///
-    /// Elle vit ICI et pas dans le canvas : `StoryCanvasUIView` est du UIKit et
-    /// n'a aucune raison de connaître les amis de l'auteur. Ce qu'il donne — le
-    /// texte, à chaque frappe — suffit, et c'est le meuble qui en tire une
-    /// requête.
-    var mentionStrip: AnyView?
+    /// Elle interprétait la frappe INLINE sur le canvas (#4475). Or la frappe
+    /// n'a plus lieu ici : `openObjectEditor` est le seul chemin vers l'édition
+    /// d'un texte — mesuré, `enterTextEditingMode` n'a que deux appelants, et
+    /// tous deux montent l'écran modal par-dessus cette surface. La bande était
+    /// donc peinte sous un écran plein, pour une requête `@` qui se formait
+    /// ailleurs.
+    ///
+    /// Elle vit désormais dans `ComposerObjectEditorView`, où le doigt tape.
 
     /// **Le volet de description, replié ou non** (#4742). Construit par le
     /// MEUBLE — la surface n'a ni le texte, ni le binding de repli, ni le
@@ -212,6 +288,65 @@ struct ComposerSceneSurface: View {
                     ratio: aspectRatio,
                     horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
         }
+    }
+
+    /// **Borne un contenu AU DESSIN** (#4080) — ni au-dessus, ni en dessous :
+    /// DEDANS.
+    ///
+    /// `ancreAuDessin` pose au BAS du dessin ; celle-ci lui donne exactement le
+    /// rectangle du dessin, de sorte que ce qu'on y met flotte sur l'image et
+    /// jamais dans le letterbox. C'est ce que le viseur exige : ses contrôles
+    /// posés sur la frame paraîtraient hors de la scène, ce que la directive du
+    /// 2026-09-04 corrige mot pour mot.
+    @ViewBuilder
+    private func ancreDansLeDessin<Contenu: View>(_ contenu: Contenu) -> some View {
+        GeometryReader { geo in
+            let inset = ComposerRailGeometry.sceneBottomInset(
+                overlay: geo.size,
+                ratio: aspectRatio,
+                horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true))
+            contenu
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, inset)
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+        }
+    }
+
+    /// **Ancre un contenu JUSTE AU-DESSUS du dessin** (#5017) — la jumelle
+    /// haute de `ancreAuDessin`, et pour la même raison.
+    ///
+    /// > Directive porteur 2026-09-03 : « il faut mettre **juste au dessus de la
+    /// > scene** ! »
+    ///
+    /// Posée en frère dans la pile, la trace du son se collait sous la barre
+    /// haute — deux cents points au-dessus de la carte. L'écart n'est pas une
+    /// marge à régler : la carte est ajustée à son ratio et se CENTRE dans la
+    /// hauteur qu'on lui donne, donc le vide du haut vaut celui du bas et varie
+    /// avec le ratio.
+    ///
+    /// > Une étiquette séparée de ce qu'elle étiquette cesse d'être une
+    /// > étiquette. Le vide la rattachait visuellement à la barre haute —
+    /// > c'est-à-dire à la PUBLICATION — alors qu'elle parle de la SCÈNE.
+    ///
+    /// `padding(.top, inset)` porte la ligne d'alignement sur le bord HAUT du
+    /// dessin ; `alignmentGuide(.top) { $0[.bottom] }` fait tomber le BAS du
+    /// contenu sur cette ligne. Aucune hauteur n'est mesurée ni écrite : le
+    /// contenu se soulève de la sienne, quelle que soit la taille de texte.
+    @ViewBuilder
+    private func ancreAuDessusDuDessin<Contenu: View>(_ contenu: Contenu) -> some View {
+        GeometryReader { geo in
+            contenu
+                .alignmentGuide(.top) { dimensions in dimensions[.bottom] }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, ComposerRailGeometry.sceneBottomInset(
+                    overlay: geo.size,
+                    ratio: aspectRatio,
+                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+        }
+        // La bande ne prend AUCUN doigt : elle flotte au-dessus de la carte, et
+        // le canvas doit continuer de recevoir les gestes sur toute sa surface.
+        // Seule la capsule elle-même est touchable.
+        .allowsHitTesting(true)
     }
 
     // MARK: - Les sons POSÉS sur la scène (#4722)
@@ -289,6 +424,59 @@ struct ComposerSceneSurface: View {
             }
     }
 
+    // MARK: - Le son de FOND de la slide (#4918)
+
+    /// **Le fond sonore dont la scène montre la trace** — `nil` ⇒ aucun fond,
+    /// et le bas de l'écran reste ce qu'il était.
+    ///
+    /// La surface le REÇOIT, elle ne le cherche pas : le meuble le résout par
+    /// `avatarBadgeSound`, qui applique la loi de `ComposerSoundColumn` — la
+    /// place dit le FOND, et un son de CONTENU n'y paraît jamais.
+    ///
+    /// **La même valeur qu'affiche la surface document**, et c'est le point du
+    /// lot : un son de fond posé sur une story se lisait nulle part pendant
+    /// qu'il se lisait à côté de l'avatar sur un post.
+    var backgroundSound: StoryAudioPlayerObject?
+
+    /// **Ce que le doigt ouvre sur la trace** — `nil` ⇒ elle reste une lecture.
+    ///
+    /// Le RETRAIT passe par là (critère 2 de #4918) : la feuille porte le (x)
+    /// de `deleteEditedSound`, et son doc-comment dit pourquoi le geste vit là
+    /// et nulle part ailleurs — « trois boutons dispersés auraient été trois
+    /// lois ». Deux gestes, ce que la dimension 7 demande.
+    var onEditBackgroundSound: (() -> Void)?
+
+    /// **Le RETRAIT du son de fond, par appui long** (#4930).
+    ///
+    /// `nil` ⇒ aucun menu. Deux cas le rendent : aucun fond, et un fond LEGACY
+    /// — celui que `resolvedBackgroundAudio` synthétise depuis
+    /// `backgroundAudioId`, qui n'a aucun objet à supprimer. Le meuble tranche ;
+    /// la surface ne fait que peindre ce qu'elle reçoit.
+    var onDeleteBackgroundSound: (() -> Void)?
+
+    /// **Sortir le son du FOND pour le poser sur la scène** (#5018), par l'appui
+    /// long de la trace. `nil` ⇒ l'entrée disparaît — un fond LEGACY n'a aucun
+    /// objet à basculer, et l'hôte le sait avant nous.
+    var onPromoteBackgroundSound: (() -> Void)?
+
+    // MARK: - Ce que la publication EMPORTE (#5002)
+
+    /// Les balises DÉRIVÉES du texte de la publication, sans leur `#`. La
+    /// surface les REÇOIT : les dériver ici ouvrirait un second chemin vers le
+    /// même fait, et `ComposerHashtags` est le premier.
+    var sceneHashtags: [String] = []
+
+    /// Les personnes que la publication nomme, **tous modes confondus**. Ni
+    /// l'hôte ni la surface ne filtrent : le pied monte `ReferenceNoteRow`, qui
+    /// est le site unique de l'exclusion `.inline` / `.silent` / `.pinned`.
+    /// Filtrer en amont recréerait la divergence que ce montage évite.
+    var sceneReferences: [ComposerReference] = []
+
+    /// Les deux feuilles qui existent déjà — `nil` ⇒ le pied reste une lecture
+    /// et ne s'annonce pas activable (loi 4).
+    var onOpenHashtags: (() -> Void)?
+    var onOpenMentions: (() -> Void)?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -309,7 +497,7 @@ struct ComposerSceneSurface: View {
     /// change de sens selon l'état n'apprend rien.
     private var floatingRail: AnyView {
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
-        let portes = ComposerSceneFloatingRail.sideRow(from: servies)
+        let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
         return AnyView(
             ComposerLeadingRail(mode: .doors(portes),
@@ -318,7 +506,8 @@ struct ComposerSceneSurface: View {
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
-                                pushesToThumb: false)
+                                pushesToThumb: false,
+                                badges: railBadges)
                 // Les MÊMES deux marges que le rail *trailing* : elles le
                 // posent dans le couloir du plateau, jamais sur la scène.
                 .padding(.leading, ComposerRailGeometry.outerMargin)
@@ -347,7 +536,7 @@ struct ComposerSceneSurface: View {
             )
         }
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
-        let portes = ComposerSceneFloatingRail.lowRow(from: servies)
+        let portes = ComposerSceneFloatingRail.lowRow(from: servies, format: format)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
         return AnyView(
             // L'ordre des arguments suit l'ordre de DÉCLARATION — lu, jamais
@@ -357,12 +546,37 @@ struct ComposerSceneSurface: View {
                                 onDoor: onRailDoor,
                                 axis: .horizontal,
                                 systemEntry: railSystemEntry,
-                                systemEntryAfter: railSystemEntryAfter)
+                                systemEntryAfter: railSystemEntryAfter,
+                                badges: railBadges)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, ComposerRailGeometry.outerMargin)
                 .padding(.bottom, 4)
         )
     }
+
+    /// **Le volet de description, borné à la CARTE** (#4993).
+    ///
+    /// Les marges reprennent les deux couloirs (`sceneInset`) plus l'air qui
+    /// l'écarte du bord : sans elles, le volet s'étalerait sur toute la largeur
+    /// paddée et croiserait les deux rails, qui vivent précisément dans ces
+    /// couloirs et à cette hauteur.
+    @ViewBuilder
+    private var descriptionOverlay: some View {
+        if let descriptionPanel {
+            descriptionPanel
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true) + 10)
+                .padding(.bottom, 10)
+        }
+    }
+
+    /// Le bord gauche du DESSIN, mesuré par le canvas et lu par l'en-tête son
+    /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
+    @State private var sceneCardLeading: CGFloat = 0
+
+    /// Le letterbox BAS du dessin, remonté par `ComposerSceneCardBottomKey`
+    /// (#5036). Le pied des références s'en sert pour COLLER à la carte plutôt
+    /// qu'au bas de la frame.
+    @State private var sceneCardBottom: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -377,6 +591,22 @@ struct ComposerSceneSurface: View {
                 onSelectMedia: onSelectMedia
             )
 
+            // **La trace du son de FOND, EN TÊTE de la scène** (#5001, directive
+            // porteur 2026-09-03 : « il faut ajouter au dessus de la scene une
+            // note suivi du detail de l'audio de fond »).
+            //
+            // Elle vivait SOUS la carte, au niveau SLIDE de l'escalier du bas
+            // (#4918). Ce lot la DÉPLACE, et il faut dire ce que cela amende :
+            // l'escalier reste juste pour ce qui se RÈGLE, il l'était moins
+            // pour ce qui se CONSTATE. Un son de fond n'est pas un réglage
+            // qu'on descend chercher — il commence avec la scène, dure autant
+            // qu'elle, et n'apparaît sur aucun de ses pixels. Sous la carte, il
+            // partageait la place avec la bande d'outil et les jetons d'objet
+            // et se lisait en dernier ; au-dessus, il se lit AVEC la scène,
+            // comme un titre se lit avec ce qu'il titre.
+            //
+            // Dans le COULOIR, jamais sur la carte (`apps/ios/CLAUDE.md` § 1,
+            // loi 6) : un son de fond ne produit aucun pixel au rendu.
             VStack(spacing: 8) {
                 EmbeddedSceneCanvas(
                     slide: $slide,
@@ -399,7 +629,12 @@ struct ComposerSceneSurface: View {
                     onItemDoubleTapped: onItemEdit,
                     editableKinds: editableSceneKinds,
                     onBackgroundTapped: onBackgroundTapped,
+                    onBackgroundLongPressed: onBackgroundLongPressed,
+                    onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,
+                    onBackgroundLongPressChanged: onBackgroundLongPressChanged,
+                    onBackgroundLongPressEnded: onBackgroundLongPressEnded,
                     loadedImages: sceneImages,
+                    loadedStickerAnimations: sceneStickerAnimations,
                     loadedImagesVersion: sceneImagesVersion,
                     // Le canvas retire son calque de dessin persisté pendant
                     // qu'une surface live est posée dessus — sinon le trait
@@ -417,6 +652,51 @@ struct ComposerSceneSurface: View {
                     selectionBadge: selectionBadge
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // **Le viseur OCCUPE la carte** (#4080, vue `2b`) — il ne
+                // s'ouvre pas par-dessus elle.
+                //
+                // > « utiliser le fond de la scène comme caméra » — porteur,
+                // > 2026-09-04
+                //
+                // Posé AVANT le padding des couloirs, exprès : le repère est
+                // alors celui dans lequel la carte se `fit`, donc un
+                // `aspectRatio(.fit)` y reproduit EXACTEMENT le rectangle du
+                // dessin. Posé après, il couvrirait aussi les couloirs — et le
+                // viseur déborderait sur les rails, qui sont précisément ce
+                // qu'on garde visible pour que la caméra reste une ENTRÉE et
+                // non un mode.
+                //
+                // `allowsHitTesting(false)` : l'aperçu ne prend aucun doigt.
+                // Les gestes de la scène — déplacer, pincer, l'appui long qui
+                // a armé ce viseur — continuent d'atteindre le canvas dessous.
+                // **La surface ne PEINT plus le viseur — elle PUBLIE sa
+                // place** (directive porteur 2026-09-04).
+                //
+                // Le viseur avait deux montages : ici pour la carte, et un
+                // overlay de la surface entière pour le plein écran. Passer de
+                // l'un à l'autre DÉTRUISAIT l'aperçu pour en construire un
+                // second, qui doit ensuite attendre sa première image — c'est
+                // le « trop de temps » du porteur, et aucune courbe
+                // d'animation ne le rattrape.
+                //
+                // Il n'y a plus qu'un montage, et il est chez le MEUBLE : le
+                // socle (audience · aperçu · publier) est le FRÈRE de cette
+                // surface dans la `VStack` de l'hôte, donc aucun overlay posé
+                // ici ne peut le couvrir. La directive demande précisément
+                // qu'il disparaisse en plein écran.
+                //
+                // Ce qui reste ici est la seule chose que la surface sache et
+                // que le meuble ignore : OÙ la scène dessine. `Color.clear` +
+                // `aspectRatio(.fit)` reproduit exactement le rectangle du
+                // dessin — la même construction que l'aperçu occupait — et
+                // l'ancre le fait descendre sans repère partagé.
+                .overlay {
+                    Color.clear
+                        .aspectRatio(aspectRatio, contentMode: .fit)
+                        .anchorPreference(key: ComposerSceneCameraFrameKey.self,
+                                          value: .bounds) { $0 }
+                        .allowsHitTesting(false)
+                }
 
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
@@ -429,6 +709,37 @@ struct ComposerSceneSurface: View {
                 // C'est la loi 6 — un rail posé sur la scène ferait mentir
                 // l'aperçu sur le rendu final.
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
+                // **Le bord gauche du DESSIN, mesuré ici et remonté** (#5011).
+                // La carte se centre dans la largeur qu'on lui donne : son bord
+                // n'est pas celui du couloir, et l'écart dépend du ratio ET de
+                // la hauteur. L'en-tête est un FRÈRE de ce canvas — il ne peut
+                // pas le calculer, seulement le recevoir.
+                //
+                // Posé APRÈS le padding, comme les deux `ancreAuDessin` : le
+                // repère doit inclure les couloirs, sans quoi `sceneLeadingInset`
+                // calculerait le `fit` sur une largeur que la carte n'occupe
+                // jamais.
+                .background {
+                    GeometryReader { geo in
+                        Color.clear
+                            .preference(
+                                key: ComposerSceneCardLeadingKey.self,
+                                value: ComposerRailGeometry.sceneLeadingInset(
+                                    overlay: geo.size,
+                                    ratio: aspectRatio,
+                                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                            // **Le letterbox BAS, par le MÊME lecteur** (#5036).
+                            // Deux `GeometryReader` sur la même vue mesureraient
+                            // la même chose deux fois et pourraient diverger d'une
+                            // passe de layout ; un seul lecteur, deux préférences.
+                            .preference(
+                                key: ComposerSceneCardBottomKey.self,
+                                value: ComposerRailGeometry.sceneBottomInset(
+                                    overlay: geo.size,
+                                    ratio: aspectRatio,
+                                    horizontalInset: ComposerRailGeometry.sceneInset(railsShown: true)))
+                    }
+                }
                 // **L'ORDRE des modificateurs EST la disposition** (#4633,
                 // directive porteur 2026-08-31) :
                 //
@@ -452,6 +763,22 @@ struct ComposerSceneSurface: View {
                 // jumeau, à portée du pouce, et avec les MÊMES marges — deux
                 // rails qui encadrent la même scène à deux hauteurs différentes
                 // se voient avant de se comprendre.
+                // **La trace du son, JUSTE au-dessus de la carte** (#5017).
+                //
+                // Aucun `tint:` — et c'est mesuré, pas oublié : `plateauTint`
+                // est le FOND du plateau (`indigo950`), et le passer en couleur
+                // de CONTENU peint la capsule dans la couleur de ce qu'elle
+                // recouvre. Vérifié au simulateur au #5011 : l'arbre
+                // d'accessibilité portait la ligne, l'écran ne montrait rien.
+                .overlay(alignment: .topLeading) {
+                    ancreAuDessusDuDessin(
+                        ComposerSceneSoundHeader(backgroundSound: backgroundSound,
+                                                 toolIsOpen: toolIsOpen,
+                                                 leadingInset: sceneCardLeading,
+                                                 onEdit: onEditBackgroundSound,
+                                                 onDelete: onDeleteBackgroundSound,
+                                                 onPromote: onPromoteBackgroundSound))
+                }
                 .overlay(alignment: .bottomLeading) { ancreAuDessin(floatingRail, alignment: .bottomLeading) }
                 // **Les deux rails vivent dans les COULOIRS du plateau**
                 // (directive porteur 2026-08-31, #4561) :
@@ -486,7 +813,102 @@ struct ComposerSceneSurface: View {
                         alignment: .bottomTrailing
                     )
                 }
+                // **La description, ANCRÉE AU BAS DE LA CARTE** (#4993,
+                // directive porteur 2026-09-03).
+                //
+                // Troisième overlay posé APRÈS le padding, comme ses deux
+                // voisins — mais avec `alignment: .bottom` et une marge qui
+                // REPREND les couloirs, si bien qu'il tombe sur la carte et non
+                // dans le couloir. C'est l'exception que le doc-comment de la
+                // loi 6 nomme : la description est le seul contenu du composer
+                // que le lecteur peint DÉJÀ par-dessus le canvas.
+                //
+                // `ancreAuDessin` est réemployé tel quel : le volet suit la
+                // COMPOSITION, jamais la frame — sans lui il flotterait sous la
+                // carte de la moitié de la hauteur perdue dès que le ratio
+                // n'est pas plein (#4119).
+                .overlay(alignment: .bottom) {
+                    // **Le volet CÈDE au viseur** (#4080) : il est ancré au bas
+                    // du dessin, c'est-à-dire exactement là où le déclencheur se
+                    // pose — mesuré au simulateur, ils se chevauchaient de
+                    // quarante points. La question passe par la règle, jamais
+                    // par un `cameraStage != .off` écrit ici : les trois meubles
+                    // de la carte n'ont pas la même réponse, et c'est ce qui en
+                    // fait une décision.
+                    if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage) {
+                        ancreAuDessin(descriptionOverlay, alignment: .bottom)
+                    }
+                }
+                // **Le chrome du viseur vit DANS la carte** (#4080, directive
+                // porteur 2026-09-04 : « tout doit être dans la scène »).
+                //
+                // La loi 6 protège l'APERÇU d'une composition, pour qu'il ne
+                // mente pas sur le rendu. Un VISEUR n'est pas un aperçu de
+                // composition — c'est un instrument de cadrage, et son chrome
+                // ne part avec aucune publication. La planche `2b` le dessine
+                // d'ailleurs par-dessus l'image.
+                //
+                // `ancreAuDessin` le borne au DESSIN et non à la frame : posé
+                // sur celle-ci, les contrôles flotteraient dans le letterbox,
+                // c'est-à-dire hors de la scène — exactement ce que la
+                // directive corrige.
                 .padding(.top, 8)
+
+                // **Ce que la publication EMPORTE, COLLÉ au bas de la scène**
+                // (#5002 pour son contenu, #5036 pour sa place).
+                //
+                // > Directive porteur 2026-09-03 : « les hashtag et mention
+                // > doivent être **directement en bas de la scene** aligné comme
+                // > le son de fond de la scene ! »
+                //
+                // **La loi : ce qui QUALIFIE la scène la touche ; ce qui
+                // l'OUTILLE vient après.** D'où sa remontée en TÊTE de la zone
+                // basse — devant la bande de mention, la bande contextuelle et
+                // les jetons d'objet, qui outillent tous. C'est la jumelle basse
+                // de #5017, qui a posé la même loi en haut pour la trace du son,
+                // et le porteur fait lui-même le rapprochement.
+                //
+                // **L'ordre ne suffisait pas, et c'est ce que la mesure a
+                // appris.** Le pied était DÉJÀ avant la rangée d'outils, et il
+                // flottait pourtant à 77 pt sous le dessin. Ces points ne sont
+                // ni une marge ni un espacement : le canvas est
+                // `maxHeight: .infinity` et la carte s'y CENTRE — c'est la
+                // moitié basse du letterbox, que rien n'occupe. Un `VStack` ne
+                // pouvait pas la fermer ; seule la mesure remontée le peut.
+                //
+                // La remontée passe par `referencesLift`, jamais par un
+                // littéral : elle vaut zéro dès que la carte est contrainte par
+                // la hauteur (iPad, format non 9:16), cas où il n'y a rien à
+                // remonter et où une valeur écrite en dur ferait chevaucher le
+                // pied avec la rangée qui le suit.
+                //
+                // `padding` NÉGATIF et non `offset` : il collapse la mise en
+                // page, donc ce qui suit remonte avec lui. Un `offset`
+                // déplacerait le dessin du pied en laissant sa place réservée —
+                // le trou serait simplement descendu d'un cran.
+                //
+                // **Il CÈDE la place aux options d'un outil** (#5010, directive
+                // porteur 2026-09-03 : « lorsqu'on affiche les options d'un
+                // outil il faut cacher les éléments permanents de la zone
+                // canonique »). C'était le SEUL élément du bas que personne ne
+                // gouvernait. La question passe par `ComposerCanonicalZone`,
+                // jamais par un `!toolIsOpen` écrit ici : la troisième copie
+                // d'une condition diverge, et ce fichier a déjà payé cette leçon.
+                //
+                // Dans le couloir, sous la carte — jamais dessus : aucun hashtag
+                // ni aucune personne nommée ne se peint sur un pixel du rendu, et
+                // les poser là volerait les touches de la bande qu'ils
+                // couvriraient (loi 6).
+                if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen) {
+                    ComposerSceneReferenceFooter(hashtags: sceneHashtags,
+                                                 references: sceneReferences,
+                                                 leadingInset: sceneCardLeading,
+                                                 onOpenHashtags: onOpenHashtags,
+                                                 onOpenMentions: onOpenMentions)
+                        .padding(.top, -ComposerRailGeometry.referencesLift(
+                            cardBottomInset: sceneCardBottom,
+                            gutter: ComposerRailGeometry.referencesGutter))
+                }
 
                 // **La bande contextuelle, entre la scène et la description**
                 // (#4064). L'ordre n'est pas un rangement : de haut en bas, le
@@ -497,10 +919,6 @@ struct ComposerSceneSurface: View {
                 // Montée sans transition ni animation : la bande est un frère
                 // du canvas, et animer son insertion ferait varier la frame de
                 // `StoryCanvasUIView` sur chaque image du ressort.
-                // **La bande de mention passe avant tout le reste du bas** : une
-                // liste de personnes qui apparaît pendant qu'on écrit doit
-                // toucher le texte, pas se ranger sous des réglages.
-                if let mentionStrip { mentionStrip }
                 // Le panneau d'options passe AVANT la bande de fond : c'est
                 // l'outil ouvert qui a la priorité sur le bas de l'écran, et
                 // les deux ne coexistent jamais (ouvrir un outil ferme la
@@ -522,9 +940,7 @@ struct ComposerSceneSurface: View {
                                           colors: bandColors,
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
-                                          onPickOpening: onPickBandOpening,
-                                          timelineContent: bandTimelineContent,
-                                          textStylesContent: bandTextStylesContent)
+                                          onPickOpening: onPickBandOpening)
                 case .nothing:
                     EmptyView()
                 }
@@ -552,23 +968,50 @@ struct ComposerSceneSurface: View {
                 // invisible le reste du temps. Un texte qui part avec la
                 // publication et que l'auteur ne voit jamais est un texte qu'il
                 // oublie.
-                if let descriptionPanel { descriptionPanel }
+                // **La trace du son de fond a QUITTÉ cette marche** (#5001) :
+                // elle est montée en tête de la surface, juste sous la barre
+                // haute. Le raisonnement qui l'a déplacée est écrit là-bas, à
+                // l'endroit où elle se peint désormais — le laisser ici en
+                // double aurait fait deux doctrines pour une capsule.
                 if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
-                                           activeChipId: activeObjectChipId,
                                            onSelect: onObjectChip)
                 }
-                // **La rangée d'outils BASSE, permanente** (#4072). Elle fait
-                // ENTRER de la matière — une photo, un lieu, un tracé — quand le
-                // rail agit sur ce qui est déjà là. L'arbitrage la nomme
-                // explicitement comme conservée ; la surface n'en avait aucune,
-                // et choisir un fond faisait donc disparaître toutes les portes
-                // d'entrée d'un coup.
+                // **La rangée basse — une PLACE permanente, un contenu qui
+                // change** (#4072, précisé au #5010).
+                //
+                // « Permanente » qualifie la place, jamais ce qu'elle peint :
+                // `lowToolRow` ÉCHANGE son contenu selon `railMode` — outil
+                // ouvert, elle porte les contrôleurs de cet outil ; sinon, les
+                // portes qui font ENTRER de la matière.
+                //
+                // Cette ambiguïté a trompé l'inventaire du #5010, qui comptait
+                // la rangée parmi les éléments non gouvernés et prescrivait de
+                // la cacher. L'y soumettre aurait caché les contrôleurs de
+                // l'outil qu'on venait d'ouvrir — un « correctif » qui casse,
+                // appliqué à du code correct, sur la foi d'un mot plutôt que
+                // d'une lecture. Elle n'entre donc PAS dans
+                // `ComposerCanonicalZone.Element`, et ce commentaire dit
+                // pourquoi pour que personne ne l'y remette.
+                // **Le viseur PREND la rangée basse** (#4080), exactement
+                // comme les contrôleurs d'un outil ouvert la prennent depuis
+                // #4072 : la place est permanente, son contenu change.
+                //
+                // La cible `2b` dessine ces contrôles SUR un aperçu plein
+                // écran ; le plateau n'a pas cette géographie — ses rails et sa
+                // rangée d'entrées vivent dans les couloirs, et un contrôle
+                // posé sur le canvas vole les touches de la bande qu'il couvre
+                // (directive porteur 2026-08-31). Ce qui est PRESCRIT par la
+                // planche — l'ordre des modes, du déclencheur et de la phrase,
+                // et leurs états — est tenu ; c'est la géographie qui suit le
+                // plateau, comme pour les rails.
                 lowToolRow
 
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onPreferenceChange(ComposerSceneCardLeadingKey.self) { sceneCardLeading = $0 }
+        .onPreferenceChange(ComposerSceneCardBottomKey.self) { sceneCardBottom = $0 }
     }
 
     // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :

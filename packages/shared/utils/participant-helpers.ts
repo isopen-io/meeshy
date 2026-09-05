@@ -216,7 +216,15 @@ export const serializeConversationParticipant = (
     systemLanguage: user?.systemLanguage ?? language,
     regionalLanguage: user?.regionalLanguage ?? language,
     customDestinationLanguage: user?.customDestinationLanguage ?? language,
-    autoTranslateEnabled: true,
+    // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat
+    // qui ne disait rien de vrai (`User` ne porte aucune colonne de ce nom ;
+    // le magasin réel est `UserPreferences.application`). #4161 avait retiré
+    // le même littéral du profil PUBLIC ; ce chemin PARTICIPANT portait le
+    // défaut identique, jamais compté par ce correctif. Retiré (#4643) plutôt
+    // que servi depuis le magasin réel : la directive du 2026-08-25 sur la
+    // présence est explicite — la co-participation à une conversation ne
+    // donne accès à AUCUNE préférence personnelle d'un tiers, et
+    // `autoTranslateEnabled` en est une, au même titre que `isOnline`.
     isActive: participant.isActive ?? false,
     createdAt: user?.createdAt ?? joinedAt,
     updatedAt: user?.updatedAt ?? joinedAt,

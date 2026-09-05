@@ -40,6 +40,35 @@ struct ComposerSceneDescriptionEditor: View {
     let onDone: () -> Void
     let onHeightChange: (CGFloat) -> Void
 
+    /// **La langue du texte, servie AU-DESSUS de la coche** (#5137). Simple
+    /// relais : la zone ne construit pas la capsule — elle ne sait ni quelle
+    /// langue est déclarée, ni quel portail ouvre le sélecteur. Le calque la
+    /// peint, l'hôte la fabrique, et personne au milieu ne décide.
+    var languageAccessory: AnyView?
+
+    /// Relais du libellé de la coche (#4890) — voir
+    /// `ComposerDescriptionLayer.validationLabel`. Le défaut garde ce que
+    /// l'appelant historique avait.
+    var validationLabel: String = ComposerDescriptionCopy.done
+
+    /// **Combien de lignes la zone montre avant de défiler** (directive porteur
+    /// 2026-09-05 : « quand on active la zone d'édition de texte en bas, il faut
+    /// rétrécir plus la scène pour le mode édition du CONTENU de poste que pour
+    /// le mode ajout de description de scène »).
+    ///
+    /// C'est le SEUL levier honnête de cette différence. Les deux zones sont le
+    /// même composant — c'est le fond de #4890 — donc leur hauteur mesurée est
+    /// identique à texte égal, et la réserve basse qu'elles déclarent à
+    /// l'atelier l'est aussi. Poser un supplément en points chez l'hôte aurait
+    /// fait mentir la mesure : le canvas se rétracterait de plus que ce que la
+    /// zone occupe, laissant une bande vide entre les deux.
+    ///
+    /// Le nombre de lignes, lui, change ce que la zone occupe RÉELLEMENT — donc
+    /// la scène se rétracte d'autant, sans qu'aucun littéral de hauteur ne
+    /// circule. Six pour une légende, plus pour un corps de post : ils n'ont ni
+    /// la même longueur attendue ni le même usage.
+    var collapsedLineLimit: Int = 6
+
     var body: some View {
         // **Le glissement est CONTRÔLÉ, pas déclenché** (directive porteur
         // 2026-08-30, precision) :
@@ -84,15 +113,21 @@ struct ComposerSceneDescriptionEditor: View {
         ComposerDescriptionLayer(
             text: $text,
             placeholder: placeholder,
-            // Six lignes : au-delà, la zone mangerait la scène qu'elle est
-            // censée laisser voir. Le champ défile — il ne tronque pas.
-            collapsedLineLimit: 6,
+            // Six lignes par défaut : au-delà, la zone mangerait la scène
+            // qu'elle est censée laisser voir. Le champ défile — il ne tronque
+            // pas. Le CORPS d'un post en demande plus (voir la propriété).
+            collapsedLineLimit: collapsedLineLimit,
             opensEditingOnAppear: true,
             // La coche du champ EST la validation (directive porteur
             // 2026-08-30) : elle range la zone, comme le glissement vers le bas.
             // Deux gestes, un seul acte — et plus de « Terminé » en doublon sur
             // la barre du clavier.
-            onValidate: onDone
+            onValidate: onDone,
+            // APRÈS `onValidate:` — l'ordre suit la DÉCLARATION du calque, que
+            // Swift n'autorise pas à réordonner (`fillsAvailableHeight` garde sa
+            // valeur par défaut entre les deux).
+            languageAccessory: languageAccessory,
+            validationLabel: validationLabel
         )
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

@@ -34,13 +34,13 @@ describe('destinationDe — un lien ouvre le contenu de la v3, jamais une route 
    * PREMIER. Tant que l'issue passerelle n'est pas livrée, la clé qui ouvre la
    * conversation est le JETON du lien, jamais l'identifiant de la conversation.
    */
-  it('CONVERSATION mène à /chats/<jeton>, jamais à /conversations/<id>', () => {
+  it('CONVERSATION mène à /chat/<jeton> — la porte de l’invité —, jamais à /conversations/<id>', () => {
     const chemin = destinationDe({
       token: 'mshy_lagos',
       cible: cible({ genre: 'conversation', typeDeCible: 'CONVERSATION', idDeCible: 'c1' }),
     });
 
-    expect(chemin).toBe('/chats/mshy_lagos');
+    expect(chemin).toBe('/chat/mshy_lagos');
     expect(chemin).not.toContain('c1');
   });
 

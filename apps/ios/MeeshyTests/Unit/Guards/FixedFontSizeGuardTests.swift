@@ -113,9 +113,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// `ProfileUserPostsList.swift` n'y est PAS : ses deux sites sont partis
     /// avec le correctif du 264i, et un nom qui sort ne revient jamais.
     private static let bearingFiles: Set<String> = [
-        "Features/Auth/Onboarding/OnboardingAnimations.swift",
-        "Features/Auth/Onboarding/OnboardingFlowView.swift",
-        "Features/Auth/Onboarding/OnboardingStepViews.swift",
+        // #5218 — les trois fichiers du wizard d'inscription ont QUITTÉ la
+        // liste avec leur code : dix-neuf sites figés (dix-huit glyphes de
+        // décor, un drapeau) sont partis d'un coup, et la règle 4 exige que
+        // leurs noms sortent dans le même commit — une liste qui garde un nom
+        // sans site cesse de dire la vérité (#4302). `SignupView`, qui les
+        // remplace, n'en introduit AUCUN : il n'emploie que
+        // `MeeshyFont.relative(…)` et les styles relatifs.
         "Features/Contacts/KeypadTab.swift",
         "Features/Main/Components/AddParticipantSheet.swift",
         "Features/Main/Components/AttachmentLoadingTile.swift",
@@ -162,7 +166,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
         // Le fichier principal n'en porte plus aucun : il sort de la liste et
         // n'y revient jamais.
-        "Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        // **Le `⋯` a quitté `+Intake` le 2026-09-03** (#4996) : le fichier
+        // franchissait le plafond de 1 200 lignes, et la responsabilité du
+        // menu est partie dans `MeeshyComposerHost+Overflow.swift`. La seule
+        // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
+        // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
+        // aucune et sort de la liste, comme la règle 4 l'exige.
+        "Features/Main/Composer/MeeshyComposerHost+Overflow.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
@@ -227,9 +237,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/MyStoriesView.swift",
         "Features/Main/Views/MyStoryActionBar.swift",
         "Features/Main/Views/MyStoryCard.swift",
-        "Features/Main/Views/OnboardingView.swift",
+        // #5218 — le carrousel de cinq pages est parti avec son unique site
+        // figé (le glyphe de 80 pt de chaque page). `WelcomeView` n'en a pas.
         "Features/Main/Views/ParticipantProfileSheet.swift",
-        "Features/Main/Views/PostDetailView.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         "Features/Main/Views/ReelRepostEmbedCell.swift",
         "Features/Main/Views/ReelsPlayerView.swift",
@@ -274,7 +284,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// valait 37 juste avant, ce qui rend ce cliquet rouge sur l'état d'où il
     /// vient. Pinner sur l'avant aurait scellé le défaut dans la garde, la
     /// faute même reprochée au cliquet i18n par #4292.
-    private static let textCeiling = 36
+    /// **35 depuis #5218** : le seul site figé porté par un TEXTE dans le
+    /// wizard d'inscription — la rangée de drapeaux de son décor de langue
+    /// (`Text(flags[i])`, 20 pt) — est parti avec le fichier. Un cliquet qui ne
+    /// descend pas quand la population descend cesse d'être un cliquet.
+    private static let textCeiling = 35
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -331,7 +345,18 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// > Un plafond qui ne baisse pas quand la population baisse cesse d'être un
     /// > cliquet et devient un plafond : il ne rougirait plus que sur une
     /// > régression plus grosse que l'écart accumulé.
-    private static let totalCeiling = 247
+    /// 246 et non 247 : `PostDetailView` a quitté la liste. Ses deux tailles
+    /// figées sont parties dans `PostDetailView+AbsenceStates` à l'extraction,
+    /// puis ont été converties en `MeeshyFont.relative(40)` — une icône d'état
+    /// vide n'a pas de cadre fixe, donc rien ne justifiait qu'elle ignore
+    /// Dynamic Type. Le cliquet DESCEND avec la dette : c'est ce qu'il exige,
+    /// et c'est ce qui l'empêche de devenir un plancher.
+    /// **226 depuis #5218** : vingt crans de MOINS d'un coup. Le wizard
+    /// d'inscription en portait dix-neuf (quinze dans son décor animé, un dans
+    /// sa barre haute, trois dans ses étapes) et le carrousel d'accueil un — et
+    /// les vingt sont partis avec leurs fichiers. `SignupView` et `WelcomeView`
+    /// n'en introduisent aucun.
+    private static let totalCeiling = 226
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

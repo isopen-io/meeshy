@@ -1,9 +1,10 @@
 {
-  "source": "docs/product/MeeshyWebV3Design/conception-web-v3.md § 8.3, § 8.4 et § 8.5",
+  "source": "docs/product/MeeshyWebV3Design/conception-web-v3.md § 8.3, § 8.4, § 8.5, § 12.5 et § 12.6 (directive du porteur 2026-09-01, charte du 2026-09-02)",
   "lu_par": [
     "apps/web-v3/scripts/check-bundle-budget.mjs (groupes, routes)",
     "apps/web-v3/scripts/mesure-reseau.mjs (reseau)",
-    "packages/icons/scripts/build-sprite.ts (actifs)"
+    "packages/icons/scripts/build-sprite.ts (actifs)",
+    "apps/web-v3/__tests__/charte.test.ts (feuilles, et reseau.transverses.css_ko)"
   ],
   "note": "Un plafond « À ÉTABLIR » n'est comparé à rien : la conception ne le donne pas, et un chiffre qu'on n'a pas mesuré ne s'invente pas. Il se remplit par la première mesure de l'écran qui le porte, dans le commit de cet écran. Les valeurs MESURÉES vivent dans budgets-mesures.json — ce fichier-ci ne porte que des PLAFONDS.",
   "motifs": "Un motif s'écrit contre l'URL servie (« /stories/* »). Next conserve pourtant le segment de groupe dans la clé du manifeste (« /(public)/stories/[id]/page ») : le gate normalise donc la clé avant de la classer. Un motif qui porte lui-même un segment « (…) » est, lui, comparé à la clé BRUTE — seule façon de distinguer (public)/page de (connected)/page.",
@@ -25,6 +26,15 @@
       "consequence": "Les DEUX écrans de /l/:token y échappent en étant des GESTIONNAIRES DE ROUTE : un Route Handler compose sa réponse à la main (new Response(html)) sans traverser le pipeline de rendu de Next, donc son <head> ne porte aucun chunk framework — /l/:token sert 1 requête, /l/:token/expired 1 également (jetons et glyphes inlinés). C'est la seconde branche de l'arbitrage — « sortir les écrans du rôle premier de l'hydratation d'App Router » — prise là où elle était gratuite. Elle reste À TRANCHER pour la lecture partagée (/stories/:id, /posts/:id, /reels/:id, /moods/:id) et pour /chats/:key, qui ont besoin d'une page : soit le gate monte, soit ces écrans sortent eux aussi de l'hydratation. Tant que ce n'est pas tranché, tout franchissement est DÉCLARÉ et ratchété — jamais effacé.",
       "renvoi": "conception § 11 — question 12 ; issue #4496",
       "temoin": "apps/web-v3/e2e/visual/v3-lien-expire.spec.ts § « tient tous les plafonds réseau de budgets.json » (l'écran clos ne franchit plus rien) et apps/web-v3/__tests__/bundle-budget.test.ts § « le plancher mesuré contre le plafond du rôle premier »"
+    },
+    {
+      "id": "chrome-public-sur-les-ecrans-connectes-plafonne-le-score-structure",
+      "constat": "`documentDuSite()` (`app/enveloppe/vue.ts`) sert INCONDITIONNELLEMENT le bandeau de marque (« Meeshy / Retour à l'accueil ») et le pied institutionnel (devise, 4 liens, mentions) sur TOUT écran composé à la main, ÉCRANS CONNECTÉS compris (`/chats`, `/`, le fil…). Aucune cible d'écran connecté (`cible/chats.png`, `cible/home.png`, `cible/thread.png`) ne dessine ce chrome — ce sont des captures d'app mobile. Mesuré sur `/chats` après la correction de revue de #5164 (fixture à 4 conversations, header sans les ronds flottants — disposition par ailleurs très proche de la cible à l'œil, voir `rendu/chats.dark.png` vs `cible/chats.png`) : `structure` reste à 0,4661 (sombre) / 0,4666 (clair), très au-dessus du seuil 0,15 — le diff montre un rouge continu sur toute la hauteur, causé par le décalage vertical que le bandeau introduit puis que le pied prolonge en bas.",
+      "mesure": "bun run scripts/conformite-des-vues.ts chats → rapport-conformite.json (structure 0.4661/0.4666, conforme=false, dans_le_budget=true)",
+      "commande": "cd apps/web-v3 && bun run scripts/conformite-des-vues.ts chats",
+      "consequence": "Le gate de conformité structurelle (§ 12.5 règle 15, seuil ≤ 0,15) reste ROUGE par construction sur TOUT écran connecté tant que ce chrome public y est servi, quel que soit le soin mis sur la disposition propre de l'écran — /chats en est la démonstration : le travail de disposition (deux puces, puce Prisme, carte mise en avant, lignes plates) est fait et vérifié visuellement, mais le gate ne le dit plus. Retirer ce chrome des écrans connectés (ou exclure sa région de la mesure, si un besoin produit le justifie) est un changement TRANSVERSE — hors du périmètre d'un seul écran — reporté à l'issue ci-dessous.",
+      "renvoi": "issue #5203 (isopen-io/meeshy) — décision à trancher : retirer le chrome des écrans connectés, ou exclure sa région de `compare-rendu.js` / `conformite-des-vues.ts`",
+      "temoin": "apps/web-v3/scripts/conformite-des-vues.ts chats — restera rouge jusqu'à ce que #5203 soit tranchée et livrée"
     }
   ],
   "actifs_note": "Les plafonds du § 8.5 qui portent sur un ACTIF commité, et qu'aucun manifeste de build ne rend : ils se lisent sur le fichier lui-même. Le sous-sprite critique est borné par son NOMBRE de glyphes et non par un poids — le § 8.5 ne lui en donne aucun, et un poids non mesuré ne s'invente pas ; ses octets sont MESURÉS dans budgets-mesures.json → sprite_phosphor.",
@@ -43,11 +53,44 @@
       }
     }
   },
+  "feuilles_note": "Les plafonds de CSS DÉCIDÉS par la charte du 2026-09-02 (conception § 12.5 règle 5, § 12.6). Ils portent sur ce qu'un document PORTE — feuilles inlinées, gzip niveau 9 sur la source servie —, jamais sur ce qui VOYAGE : reseau.transverses.css_ko (20 Ko, § 8.5) somme les ressources de type Stylesheet (mesure-reseau.mjs:209-211) et rend donc 0 Ko sur les cinq écrans du focus, qui sont autoporteurs. Deux sujets, deux plafonds : ce n'est pas une jumelle, et le second n'est pas baissé. Le sujet de css_document_ko est UNE composition servie (chrome + les feuilles de son écran), pas la somme de toutes les feuilles du dépôt — un témoin qui additionnerait la liste mesurerait sa longueur, pas un poids (leçon 419). Valeurs MESURÉES le 2026-09-02 sur les feuilles du dépôt, re-mesurées au tour 3 avec les CINQ compositions (« médias » manquait aux relevés précédents) : chrome 1 067 o, table 1 325 o, vitrine 1 412 o, connecté 1 708 o, médias 4 500 o, fil 4 249 o, fil EN PLEIN ÉCRAN 4 496 o, choix (/chat/:lien) 4 845 o — le fil et le choix ont pris 501 o gzip quand les pièces jointes sont passées d'une affiche PLUS un lecteur natif à UN bloc par pièce (poster de lecture, pastille de durée·poids, transcrit annoncé), puis 96 o de plus au tour 4 (le saut d'une citation, la ligne mise en évidence par `:target`, le poster d'une vidéo, la fiche d'un vocal). La feuille du PLEIN ÉCRAN (760 o gzip seule) n'est servie QUE dans l'état `?media=` : un fil ordinaire n'en paie pas un octet — elles vivent dans budgets-mesures.json, pas ici. Relevé le 2026-09-03 après `/feed` (#5031, sixième composition) : chrome + connecté + FEUILLE_DU_FIL_SOCIAL pèse 2 204 o gzip (feuille seule : 861 o) — très en dessous du plafond de 20 Ko par route (§ 8.5).",
+  "feuilles_unite": "octets gzip (niveau 9) de la source CSS servie",
+  "feuilles": {
+    "chrome_o": {
+      "valeur": 4096,
+      "statut": "DECIDE",
+      "sujet": "SOCLE_DU_DOCUMENT + FEUILLE_DU_CHROME — ce que TOUT écran sert",
+      "source": "conception § 12.5 charte règle 5 (« feuille de chrome compactée ≤ 4 Ko gzip »)"
+    },
+    "css_document_o": {
+      "valeur": 6144,
+      "statut": "DECIDE",
+      "sujet": "chrome + les feuilles de l'écran, telles qu'UN document les inline",
+      "source": "conception § 12.5 charte règle 5 (« total CSS d'une route ≤ 6 Ko gzip — plafond neuf : le § 8.5 en cite 20, trop lâche pour arbitrer »)"
+    },
+    "table_inlinee_o": {
+      "valeur": 1536,
+      "statut": "DECIDE",
+      "sujet": "tableDeJetons() — la table de packages/design-tokens inlinée dans le document",
+      "source": "conception § 12.5 charte règle 5 (« la table inlinée ≤ 1,5 Ko gzip »)"
+    }
+  },
+  "documents_note": "Le plafond DÉCIDÉ par la charte du 2026-09-02 (conception § 12.5 règle 4, § 12.6) sur ce qu'un écran REMET EN UNE FOIS : le HTML, la table de jetons, la feuille et les symboles qu'il inline. Sujet DISTINCT de « feuilles » — l'une pèse une feuille, l'autre le document qui la porte, et c'est le second que le lecteur télécharge, une fois par écran (rien ne se met en cache d'un écran à l'autre puisque tout est inliné, règle 5). Le chiffre vient du pire document MESURÉ sur la direction retenue de la charte (8 362 o) et laisse 7 % de marge. Les documents du DÉPÔT ne sont PAS mesurés : la première mesure se fait dans le commit du premier écran repris et s'inscrit dans budgets-mesures.json — un poids non mesuré ne s'invente pas.",
+  "documents_unite": "octets gzip (niveau 9) du document HTML servi",
+  "documents": {
+    "document_o": {
+      "valeur": 9216,
+      "statut": "DECIDE",
+      "sujet": "le HTML servi par UN écran, table de jetons, feuille et symboles compris",
+      "source": "conception § 12.5 charte règle 4 (« Plafond ≤ 9 Ko gzip par document, ratchet obligatoire pour le franchir »)",
+      "temoin": "apps/web-v3/__tests__/charte.test.ts — gzip -9 sur le HTML servi, par écran (À CÂBLER : aucun témoin ne l'oppose aujourd'hui). MESURÉ sur le fil depuis le 2026-09-03 : budgets-mesures.json › documents_du_fil, où le plafond est FRANCHI (11 679 o) et RATCHETÉ en attendant qu'un lot le règle."
+    }
+  },
   "groupes_unite": "Ko gzip de JS client",
   "groupes": [
     {
       "id": "(public)",
-      "role": "rôle premier — lecture partagée et jonction anonyme, sans compte",
+      "role": "rôle premier — lecture partagée et jonction anonyme, sans compte ; la vitrine (`/` sans session) et `/chat/:lien` (états CHOIX et INVITÉ) y vivent, en gestionnaires de route",
       "motifs": [
         "/l/*",
         "/stories/*",
@@ -55,7 +98,7 @@
         "/post/*",
         "/reels/*",
         "/moods/*",
-        "/chats/[key]/*",
+        "/chat/*",
         "/login/*",
         "/signup/*",
         "/_not-found/page"
@@ -80,7 +123,7 @@
     },
     {
       "id": "(connected)",
-      "role": "rôle secondaire — après authentification",
+      "role": "rôle secondaire — après authentification ; `/chats` (liste) et `/chats/:cle` (fil du membre) sont ici, le fil de l'invité vit sous `/chat/*` dans (public) — deux portes, un module de vue (§ 12.3)",
       "motifs": [
         "/page",
         "/chats/*",
@@ -238,14 +281,14 @@
       },
       {
         "motifs": [
-          "/chats/*"
+          "/chat/*"
         ],
-        "role": "aperçu de lien puis conversation anonyme",
+        "role": "/chat/:lien — état CHOIX (cadre flouté + modale, rien de la conversation ne part) puis état INVITÉ (le fil de l'invité) ; § 12.3",
         "plafonds": {
           "requetes_avant_premier_pixel": {
             "valeur": 4,
             "statut": "GATE",
-            "source": "§ 8.3 — aperçu de lien (/chats/:key, non rejoint) ≤ 4 ; après « Rejoindre » le § 8.3 en autorise 6, mesuré par le spec de cycle de vie et non par ce gate de premier pixel"
+            "source": "§ 8.3 — aperçu de lien (non rejoint) ≤ 4, porté de /chats/:key à /chat/:lien par le § 12.3 ; l'état INVITÉ, mesuré par le spec de cycle de vie, en autorise 6 après la jonction (§ 8.3)"
           },
           "lcp_ms": {
             "valeur": 2200,
@@ -261,13 +304,53 @@
       },
       {
         "motifs": [
-          "/",
+          "/chats/*"
+        ],
+        "role": "le fil du MEMBRE (/chats/:cle) et la liste (/chats) — documents autoporteurs composés par un gestionnaire de route ; le module de participation arrive APRÈS le premier pixel et n'entre pas dans ce compte",
+        "plafonds": {
+          "requetes_avant_premier_pixel": {
+            "valeur": 4,
+            "statut": "GATE",
+            "source": "§ 8.3 — le § 8.3 gate à 4 l'aperçu de lien non rejoint ; la directive du 2026-09-01 (§ 12.3) déplace cet aperçu sous /chat/:lien et fait de /chats/:cle le fil du membre ; le plafond de 4 est CONSERVÉ pour /chats/* (jamais baissé, § 12.6) et posé à l'identique sur /chat/*"
+          },
+          "lcp_ms": {
+            "valeur": 2200,
+            "statut": "CIBLE",
+            "source": "§ 8.3"
+          },
+          "cls": {
+            "valeur": 0.05,
+            "statut": "GATE",
+            "source": "§ 8.5 — toute route (public)"
+          }
+        }
+      },
+      {
+        "motifs": [
+          "/"
+        ],
+        "role": "la racine — vitrine (visiteur) OU tableau de bord (lecteur connecté), deux documents autoporteurs composés par app/route.ts (§ 12.1, § 12.2) ; sans cookie la mesure rend la vitrine, avec le cookie meeshy_session + meeshy_auth elle rend le tableau de bord (option de mesure-reseau.mjs à porter — § 12.6)",
+        "plafonds": {
+          "requetes_avant_premier_pixel": {
+            "valeur": 1,
+            "statut": "GATE",
+            "source": "§ 12.6 et charte règle 3 — le HTML porte sa table de jetons, sa feuille et ses glyphes (0 image, 0 police, 0 script avant le premier pixel) : la même forme que /l/:token/expired, mesurée à 1 (budgets-mesures.json → l_token_expired_requetes) ; le module de participation du tableau de bord arrive APRÈS le premier pixel"
+          },
+          "lcp_ms": {
+            "valeur": 3000,
+            "statut": "CIBLE",
+            "source": "§ 8.3 — accueil connecté ≤ 3,0 s ; la vitrine, plus légère, vise ce même plafond en attendant sa première mesure"
+          }
+        }
+      },
+      {
+        "motifs": [
           "/feed/*",
           "/notifications/*",
           "/contacts/*",
           "/search/*"
         ],
-        "role": "accueil connecté / chats",
+        "role": "fil, notifications, contacts, recherche (connecté)",
         "plafonds": {
           "requetes_avant_premier_pixel": {
             "valeur": 8,
@@ -301,5 +384,6 @@
         }
       }
     ]
-  }
+  },
+  "temps_reel_note": "Les DEUX modules de participation (§ 12.4) — lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, compilés en deux modules ES servis dans la zone sous /__v3/rt/ — et socket.io-client (12 849 o gzip mesurés), chargé par l'un ou l'autre, arrivent APRÈS le premier pixel de /chats, /chats/:cle et /chat/:lien (état INVITÉ) : ils n'entrent ni dans requetes_avant_premier_pixel ni dans le JS de page (0 Ko : ces écrans sont des gestionnaires de route). DEUX modules et non un : /chats n'exécute pas une ligne du composeur, de la réserve, du plein écran ni de la peinture de bulles, et lui faire télécharger les 26 Ko gzip du fil après son premier pixel coûterait plus d'une seconde sur la 3G rurale du § 12.6. Le socle qu'ils PARTAGENT — socket.io-client — reste UN actif, à UNE adresse, donc mis en cache une seule fois pour les deux écrans. Leurs poids propres sont MESURÉS dans budgets-mesures.json → participate, jamais inventés."
 }

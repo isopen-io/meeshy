@@ -72,12 +72,10 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
-import { resolveForwardSourceForBroadcast } from '../../services/preferences/forward-source-visibility.js';
-import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import {
-  carriesForwardSource,
-  withoutForwardSource,
-} from '@meeshy/shared/utils/forward-source-visibility';
+  resolveForwardSourceBroadcastPayload,
+  withoutForwardSourceOrItsPath,
+} from '../../services/preferences/forward-source-visibility.js';
 import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
@@ -171,29 +169,6 @@ export interface MessageHandlerDependencies {
    */
   trackingLinkService?: LinkReconciler | null;
 }
-
-/**
- * Le retrait COMPLET d'une source de transfert : le nom ET le chemin.
- *
- * `withoutForwardSource` (shared, pur) retire `forwardedFrom` et
- * `forwardedFromConversation`. Il ne peut pas faire plus : la seconde fuite ne
- * vit pas dans ces champs mais dans `attachments[].fileUrl`, où le chemin de
- * stockage de la copie porte le `User.id` de l'auteur d'origine — un transfert
- * réutilise le fichier plutôt que de le recopier.
- *
- * Les trois émissions qui masquent une source passent par ici, et non par le
- * seul `withoutForwardSource` : masquer sur un canal en laissant l'autre ouvert
- * ne masque rien. La porte REST ferme la même fuite avec le même helper.
- */
-const withoutForwardSourceOrItsPath = <T extends object>(payload: T): T => {
-  const stripped = withoutForwardSource(payload) as T & { attachments?: unknown };
-  if (!Array.isArray(stripped.attachments)) return stripped;
-
-  return {
-    ...stripped,
-    attachments: redactForwardedAttachmentUrlsIn(stripped.attachments as never[]),
-  } as T;
-};
 
 export class MessageHandler {
   private io: MeeshyIOServer;
@@ -1442,42 +1417,18 @@ export class MessageHandler {
       // original language is always kept (Prisme source fallback). The sender's
       // own devices still receive the full, cid-aware `senderPayload`.
 
-      // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23).
-      //
-      // `visible ⇔ auteur ET lecteur`. L'auteur du transfert est FIXE pour ce
-      // message : son refus tranche pour tout le salon d'un coup. Son accord ne
-      // laisse que la moitié « lecteur », qui partage les destinataires en
-      // exactement DEUX groupes — jamais plus. C'est ce qui rend la règle
-      // finançable sur une diffusion de salon.
-      //
-      // Le découpage passe par les SALONS UTILISATEUR : l'adaptateur Redis les
-      // propage, donc un destinataire connecté à un AUTRE nœud est exclu comme
-      // il faut. Surtout PAS le motif de `_emitMessageNewByLanguage`, qui
-      // énumère des socket ids locaux et dont le repli multi-nœud rediffuse le
-      // payload COMPLET au salon : reproduire ce motif ici ferait fuiter le nom
-      // sur tout déploiement multi-nœud, en silence.
-      //
-      // Rien n'est payé quand le message ne nomme aucune source — c'est
-      // l'immense majorité des envois.
-      let peerPayload = broadcastPayload;
-      let forwardSourceHiddenRooms: string[] = [];
-      let forwardSourceHiddenUserIds: ReadonlySet<string> = new Set<string>();
-      if (carriesForwardSource(broadcastPayload)) {
-        const verdict = await resolveForwardSourceForBroadcast(
-          this.prisma,
+      // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23) —
+      // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
+      // inconnue. Extrait dans `resolveForwardSourceBroadcastPayload`
+      // (services/preferences/forward-source-visibility.ts), qui documente le
+      // découpage par SALONS UTILISATEUR et le fail-closed en détail.
+      const { peerPayload, forwardSourceHiddenRooms, forwardSourceHiddenUserIds } =
+        await resolveForwardSourceBroadcastPayload(this.prisma, {
           senderUserId,
-          (sharedParticipants ?? []).map((participant) => participant.userId)
-        );
-        if (!verdict.forwarderAllows) {
-          // L'auteur s'est retiré : plus personne n'apprend la provenance —
-          // sauf lui-même, servi par `senderPayload` (se cacher des autres
-          // n'est pas s'aveugler).
-          peerPayload = withoutForwardSourceOrItsPath(broadcastPayload);
-        } else {
-          forwardSourceHiddenUserIds = verdict.refusingReaderIds;
-          forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
-        }
-      }
+          sharedParticipants,
+          broadcastPayload,
+          userRoom: (userId) => ROOMS.user(userId),
+        });
 
       // Opt-in (OFF by default) — flip per-deploy after staging measurement.
       //

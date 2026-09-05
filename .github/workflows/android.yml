@@ -73,7 +73,7 @@ jobs:
       # JDK 21 matches the toolchain the routine documents; the modules
       # themselves target JVM 17 via compileOptions/jvmTarget.
       - name: Setup JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'

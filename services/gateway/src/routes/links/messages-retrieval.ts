@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { validatePagination } from '../../utils/pagination';
 import {
   createUnifiedAuthMiddleware,
@@ -70,6 +70,10 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
             }
           }
         },
+        401: {
+          description: 'No identity at all (neither account nor guest session) — #4808',
+          ...errorResponseSchema
+        },
         403: {
           description: 'Access denied to this conversation',
           ...errorResponseSchema
@@ -122,6 +126,20 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
 
       if (!shareLink) {
         return sendNotFound(reply, 'Lien de partage non trouvé');
+      }
+
+      // #4808 — deux refus structurellement différents, deux statuts.
+      // `hybridRequest.isAuthenticated` est vrai pour un compte ET (nommage
+      // legacy, cf. `createLegacyHybridRequest`) pour un invité de lien ; on
+      // teste donc les deux drapeaux pour couvrir aussi bien cette convention
+      // que celle, plus lisible, où l'invité porte `isAuthenticated: false`.
+      // Ni l'un ni l'autre ⇒ aucune identité — ni compte, ni session invitée
+      // — n'accompagne la requête. Cette route sert un parcours SANS compte
+      // (rejoindre en anonyme), donc un 401 sec ne route personne vers
+      // `/login` : il donne au client de quoi proposer « anonyme ou compte »
+      // plutôt qu'un 403, qui affirmerait à tort connaître ce visiteur.
+      if (!hybridRequest.isAuthenticated && !hybridRequest.isAnonymous) {
+        return sendUnauthorized(reply, 'Session requise pour lire ce lien', { code: 'LINK_SESSION_REQUIRED' });
       }
 
       let hasAccess = false;

@@ -15,7 +15,7 @@ import MeeshyUI
 /// qu'elle casse.
 ///
 /// La loi 6 est ce qui interdit l'autre solution — poser les rails PAR-DESSUS.
-/// Un FAB sur la scène occupe exactement la place où un `MeeshyObject` peut
+/// Un FAB sur la scène occupe exactement la place où un `MeeshySceneObject` peut
 /// vivre : l'aperçu mentirait sur le rendu final.
 final class ComposerRailGeometryTests: XCTestCase {
 
@@ -134,7 +134,7 @@ final class ComposerRailGeometryTests: XCTestCase {
 
     // MARK: - Ce que l'encastrement NE touche pas
 
-    /// Les `anchor` d'un `MeeshyObject` sont NORMALISÉS (0…1) : rétrécir la
+    /// Les `anchor` d'un `MeeshySceneObject` sont NORMALISÉS (0…1) : rétrécir la
     /// scène ne déplace donc rien DANS le document. C'est ce qui rend le
     /// changement sûr — et c'est une propriété à vérifier, pas à supposer.
     func test_unePosePlaceeAuCentre_resteAuCentreQuelleQueSoitLaLargeur() {
@@ -193,9 +193,11 @@ final class ComposerRailGeometryTests: XCTestCase {
 
     /// **Le débordement de la rangée d'outils est ARITHMÉTIQUE.**
     ///
-    /// Sept contrôleurs de texte plus le `(x)` font huit entrées. À 44 pt de
-    /// cible tactile et 10 pt d'écart : `8 × 44 + 7 × 10 = 422 pt`, quand un
-    /// iPhone de 393 pt en offre 373 une fois les marges retirées.
+    /// Sept contrôleurs de texte plus le `(x)` faisaient huit entrées — huit
+    /// contrôleurs depuis l'EFFET (#4870), donc neuf. À 44 pt de cible tactile
+    /// et 10 pt d'écart : `8 × 44 + 7 × 10 = 422 pt` déjà, `9 × 44 + 8 × 10 =
+    /// 476 pt` désormais, quand un iPhone de 393 pt en offre 373 une fois les
+    /// marges retirées.
     ///
     /// Il ne dépend ni du contenu, ni de la locale, ni de la taille de texte —
     /// il tient à un compte d'entrées. C'est ce qui le rend calculable, donc

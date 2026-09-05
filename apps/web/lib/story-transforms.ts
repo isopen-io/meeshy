@@ -2,6 +2,7 @@ import type { Post, PostAuthor } from '@meeshy/shared/types/post';
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { parseTextEffect } from '@/lib/story-text-effect';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
 import type { CanvasV3MediaResolution } from '@/components/v2/CanvasV3Scene';
@@ -136,6 +137,7 @@ function parseTextObjects(value: unknown): StoryTextObjectData[] | undefined {
       fontSizeDesign: typeof r.fontSize === 'number' ? r.fontSize : undefined,
       textAlign: typeof r.textAlign === 'string' ? r.textAlign : undefined,
       textBg: typeof r.textBg === 'string' ? r.textBg : undefined,
+      textEffect: parseTextEffect(r.textEffect),
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
     });
   }
@@ -316,7 +318,7 @@ export interface BackgroundSoundCredit {
 // `StoryComposerViewModel+Elements.swift:674`) : il ne peut donc jamais
 // poser une `locale` HONNÊTE sur le texte racine à l'ÉMISSION — deviner
 // depuis la locale d'interface rouvre la règle 3 du Prisme (arbitrage 4 vs
-// 8). Sans repli, `CanvasV3Scene.resolveText` (`sameLanguage(language,
+// 8). Sans repli, `CanvasV3Scene.resolveText` (`isSameLanguage(language,
 // o.locale)`) ne peut jamais faire concourir l'origine à son rang : un
 // texte anglais sans `locale`, prisme `['en','fr']`, traduction `fr`
 // disponible, sert « Bonjour » à un lecteur anglais-primaire.

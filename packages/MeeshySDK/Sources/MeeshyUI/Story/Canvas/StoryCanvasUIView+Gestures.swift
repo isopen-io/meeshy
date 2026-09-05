@@ -30,16 +30,81 @@ extension StoryCanvasUIView {
         // qu'un double-tap déclenche deux fois le format panel (open puis
         // open-via-double). Pattern UIKit standard.
         singleTapRecognizer.require(toFail: doubleTapRecognizer)
+        backgroundLongPressRecognizer = UILongPressGestureRecognizer(
+            target: self, action: #selector(handleBackgroundLongPress(_:)))
         canvasZoomPinchRecognizer = ThreeFingerPinchGestureRecognizer(
             target: self,
             action: #selector(handleCanvasZoomPinch(_:))
         )
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, canvasZoomPinchRecognizer] {
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, backgroundLongPressRecognizer, canvasZoomPinchRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
         addInteraction(UIPointerInteraction(delegate: self))
         addInteraction(UIContextMenuInteraction(delegate: self))
+    }
+
+    /// **L'appui long sur le FOND, et rien d'autre.**
+    ///
+    /// Trois conditions, chacune pour une raison distincte :
+    ///
+    /// - `mode == .edit` — en lecture, la scène se regarde ;
+    /// - `.began` — l'appui long émet `.began` puis `.changed`/`.ended` ; sans
+    ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste, et
+    ///   ouvrirait plusieurs viseurs ;
+    /// - `hitTestItem(at:) == nil` — sur un objet, `UIContextMenuInteraction`
+    ///   possède déjà ce geste. Le lui disputer ferait clignoter le menu.
+    @objc func handleBackgroundLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        // **La LEVÉE d'abord** (#5041) : un appui long ARMÉ doit rendre sa durée
+        // et sa fin, sinon le viseur n'a de quoi ouvrir un objectif, jamais de
+        // quoi tenir une prise.
+        //
+        // `backgroundLongPressOrigin` porte la condition à lui seul : sa présence
+        // EST la preuve que `.began` a passé les trois gardes ci-dessous. Sans
+        // elle, relâcher un appui long REFUSÉ — en lecture, sur un objet, pendant
+        // une saisie — terminerait une prise que rien n'avait armée.
+        switch recognizer.state {
+        case .changed:
+            guard let origine = backgroundLongPressOrigin else { return }
+            let ici = recognizer.location(in: self)
+            onBackgroundLongPressChanged?(CGPoint(x: ici.x - origine.x,
+                                                  y: ici.y - origine.y))
+            return
+        case .ended, .cancelled, .failed:
+            guard backgroundLongPressOrigin != nil else { return }
+            backgroundLongPressOrigin = nil
+            onBackgroundLongPressEnded?()
+            return
+        default:
+            break
+        }
+        guard mode == .edit, recognizer.state == .began else { return }
+        guard hitTestItem(at: recognizer.location(in: self)) == nil else { return }
+        guard inlineEditingTextId == nil else { return }
+        // **« Aucun objet devant » n'est pas « scène vide »** (#5041). La garde
+        // ci-dessus interroge `itemsContainer`, qui ne contient que le PREMIER
+        // PLAN ; un média de fond n'y figure pas et laissait donc le geste filer
+        // au viseur — proposant de reprendre une photo par-dessus celle qu'on
+        // voulait retoucher. La règle porte le raisonnement et ses témoins ; ici
+        // on ne fait que router.
+        switch StoryCanvasBackgroundLongPress.outcome(
+            backgroundMediaObjectId: backgroundMediaObjectId,
+            hostServesBackgroundMenu: onBackgroundMediaLongPressed != nil) {
+        case .presentBackgroundMenu(let id):
+            // **Un menu, pas l'éditeur.** Sur un objet de premier plan, l'appui
+            // long ouvre déjà `UIContextMenuInteraction` — supprimer, dupliquer,
+            // modifier. Router le fond droit vers l'éditeur aurait donné au même
+            // geste deux effets selon que le média est devant ou derrière, et
+            // laissé « ramener en avant » — la seule action qui fait SORTIR un
+            // média du plan de fond — sans aucun chemin.
+            //
+            // Aucune prise n'est armée : ce geste-ci ouvre un menu, il ne tient
+            // pas un déclencheur.
+            onBackgroundMediaLongPressed?(id)
+        case .openViewfinder:
+            backgroundLongPressOrigin = recognizer.location(in: self)
+            onBackgroundLongPressed?()
+        }
     }
 
     @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
@@ -130,7 +195,7 @@ extension StoryCanvasUIView {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
-        if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
+        if slide.locationObjects.contains(where: { $0.id == id }) { return .place }
         if (slide.effects.audioPlayerObjects ?? []).contains(where: { $0.id == id }) { return .audio }
         return nil
     }

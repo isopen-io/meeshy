@@ -229,12 +229,33 @@ final class ComposerObjectEditorTests: XCTestCase {
         XCTAssertTrue(code.contains("ForEach(TextEditTool.all.filter{$0 != .style}".replacingOccurrences(of: " ", with: "")),
                       "Les outils doivent venir de `TextEditTool.all` — une liste écrite à "
                       + "la main divergerait au premier outil ajouté au SDK.")
-        XCTAssertTrue(code.contains("TextEditToolOptions(tool:tool,textObject:binding)"))
+        // **#5045 — deux fragments plutôt qu'une signature entière.** Ce témoin
+        // épinglait l'appel COMPLET, `TextEditToolOptions(tool:tool,textObject:binding)` ;
+        // ajouter un argument le faisait rougir alors que rien de ce qu'il
+        // garde n'avait bougé. Une garde qui cite une signature devient un
+        // inventaire à tenir à jour, et son rouge ne dit pas ce qui a cassé.
+        //
+        // Les deux fragments ci-dessous survivent à une reformulation de la
+        // liste d'arguments, et tombent sur ce qui compte : que l'écran monte
+        // bien le panneau du SDK, et qu'il lui demande la GRILLE — la
+        // disposition que la directive du 2026-09-03 exige ici, et que les
+        // deux hôtes SDK ne demandent PAS (ils n'ont pas la hauteur, cf.
+        // `TextEditOptionsLayout`).
+        XCTAssertTrue(code.contains("TextEditToolOptions("),
+                      "L'écran monte le panneau d'options du SDK, jamais une copie locale.")
+        XCTAssertTrue(code.contains("layout:.grid"),
+                      "L'écran plein demande la grille verticale (#5045) — sans elle, "
+                      + "douze fonds défilent horizontalement dans un panneau qui a la "
+                      + "hauteur de les montrer tous.")
         XCTAssertFalse(code.contains("expandedTool"),
                        "L'écran ne doit dépendre d'AUCUN outil déplié du ViewModel : c'est "
                        + "cette condition qui rendait la zone basse vide pendant l'édition.")
-        XCTAssertTrue(code.contains("ComposerObjectEditorDisclosure"),
-                      "Le dépliage LOCAL passe par sa règle — voir #4842.")
+        // **#4936 — la règle a changé de nature, pas d'intention.** Le dépliage
+        // local est devenu une SÉLECTION de rail : la loi doit toujours vivre
+        // dans une règle nommée, jamais dans un `if` du corps de vue, et c'est
+        // exactement ce que ce témoin garde depuis #4842. Seul son sujet bouge.
+        XCTAssertTrue(code.contains("ComposerObjectEditorRail"),
+                      "La sélection de l'outil passe par sa règle — #4842, puis #4936.")
     }
 
     /// **#4850 — l'aperçu plein écran n'ENCADRE plus l'objet.**
@@ -244,7 +265,7 @@ final class ComposerObjectEditorTests: XCTestCase {
     ///
     /// Le cadre est justifié SUR LA SCÈNE : là il désigne, parmi plusieurs
     /// objets, celui que le doigt saisit. Sur cet écran l'objet EST le sujet —
-    /// le titre le nomme, les neuf sections le règlent, il n'y a rien dont le
+    /// le titre le nomme, les dix sections le règlent, il n'y a rien dont le
     /// distinguer. Un signe qui n'apprend rien occupe la place de ce qui
     /// apprend (loi 8, appliquée à un ornement plutôt qu'à un panneau).
     ///
@@ -276,15 +297,37 @@ final class ComposerObjectEditorTests: XCTestCase {
     ///
     /// Sept des dix-huit sont donc des polices DÉGUISÉES en effets, et c'est ce
     /// mélange de vocabulaire — pas le mélange d'axes — que l'auteur voyait.
-    /// Les vrais effets ont déjà leurs sections : FOND, CADRE, CONTOUR.
     ///
-    /// Ce témoin tombera le jour où un style appliquera un effet : ce sera le
-    /// moment de rouvrir la question des deux axes, pas avant.
+    /// **L'axe EFFET est né à part le même jour (#4870)** — un champ
+    /// `textEffect`, jamais un regroupement des dix-huit. Ce témoin garde donc
+    /// que POLICE reste POLICE ; le suivant, que l'EFFET a SA section.
     func test_laSectionDesPolices_neSAppellePlusSTYLE() throws {
         let code = try source("ComposerObjectEditorView.swift")
         XCTAssertTrue(code.contains("defaultValue: \"POLICE\""),
                       "STYLE nommait un axe que la section ne porte pas (#4850).")
         XCTAssertFalse(code.contains("defaultValue: \"STYLE\""))
+    }
+
+    /// **#4870 — l'EFFET a sa section, et elle vient juste après POLICE.**
+    ///
+    /// > « Soit tu proposes des style Effet + Police soit tu proposes Police et
+    /// > une autre section Effet ! » — directive porteur, 2026-09-02.
+    ///
+    /// La mesure de #4850 a tranché pour la seconde forme, et pour une raison
+    /// que la directive ne pouvait pas voir : l'axe n'existait PAS. `neon`
+    /// brillait sur web et Android et pas sur iOS — un effet caché derrière un
+    /// nom de police. Il est désormais un CHAMP (`textEffect`), et sa section
+    /// s'obtient sans qu'une ligne de cet écran change : les sections viennent
+    /// de `TextEditTool.all`, et l'outil y est second — c'est la question que
+    /// l'auteur se posait devant la grille des polices.
+    func test_lEffet_aSaSection_justeApresLaPolice() throws {
+        let code = try source("ComposerObjectEditorView.swift")
+        XCTAssertTrue(code.contains("defaultValue: \"EFFET\""),
+                      "La section EFFET doit avoir son mot (#4870).")
+        XCTAssertEqual(TextEditTool.all.first, .style)
+        XCTAssertEqual(TextEditTool.all.dropFirst().first, .effect,
+                       "L'EFFET se règle juste après la POLICE — les deux questions "
+                       + "que la grille des dix-huit mélangeait, dans l'ordre où l'auteur les pose.")
     }
 
     /// Le style prend la forme du spécimen `2e` — le vrai texte, sur son vrai
@@ -318,4 +361,114 @@ final class ComposerObjectEditorTests: XCTestCase {
         XCTAssertTrue(code.contains("varttiming:ComposerObjectTiming{")
                       || code.contains("vartiming:ComposerObjectTiming{"))
     }
+
+    // MARK: - La frontière entre le rail et les options (#5097)
+
+    /// **Les DEUX couloirs portent la MÊME pièce.**
+    ///
+    /// > Directive porteur 2026-09-04 : « la liste des tools à gauche […]
+    /// > toujours être au dessus des options qui apparaissent en base et non pas
+    /// > se confondre avec les option lorsqu'on a le clavier qui s'affiche. »
+    ///
+    /// Le rail était déjà à gauche (#5026) et déjà défilable : ce qui manquait
+    /// n'était ni la place ni la course, mais une FRONTIÈRE. Posé nu, il se
+    /// terminait au contact de la zone d'options sur le même fond — et clavier
+    /// levé, ce qui reste au `HStack` se réduit d'autant, donc les deux se
+    /// touchent.
+    ///
+    /// Le témoin ne mesure pas des pixels : il mesure la COHÉRENCE (dimension
+    /// 6). Le couloir droit portait déjà cette carte ; le gauche doit porter la
+    /// même — même rayon dérivé de la largeur, même teinte, même respiration.
+    /// Écrire un autre dessin ici passerait ce test s'il ne citait que le
+    /// gauche, et c'est précisément la divergence qu'on veut interdire.
+    func test_lesDeuxCouloirs_portentLaMemeCarte() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let trailing = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+
+        for (nom, source, largeur) in [
+            ("le couloir d'OUTILS", editeur, "ComposerObjectEditorRail.railWidth"),
+            ("le couloir d'HISTORIQUE", trailing, "ComposerRailGeometry.railWidth")
+        ] {
+            let nu = AppSourceGuard.stripComments(source)
+                .replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "\n", with: "")
+            XCTAssertTrue(
+                nu.contains("RoundedRectangle(cornerRadius:\(largeur)/2,style:.continuous)"),
+                "\(nom) doit porter la carte arrondie du plateau")
+            XCTAssertTrue(
+                nu.contains(".fill(plateauTint.opacity(0.55))"),
+                "\(nom) doit porter la teinte du plateau — la même que son jumeau")
+            XCTAssertTrue(
+                nu.contains(".padding(.vertical,8)"),
+                "\(nom) doit respirer comme son jumeau")
+        }
+    }
+
+    /// **Non-vacuité** — sans elle, le témoin ci-dessus passerait sur un fichier
+    /// renommé ou vidé, et dirait « les deux couloirs sont cohérents » d'une
+    /// source qu'il n'a pas lue. C'est le motif qui a fait passer trois gardes
+    /// au vert en mesurant zéro fichier.
+    func test_leTemoinDeLaCarte_litBienDeuxRails() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let trailing = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerTrailingRail.swift")
+        XCTAssertTrue(editeur.contains("private var toolRail"),
+                      "l'éditeur doit bien porter le rail d'outils que le témoin mesure")
+        XCTAssertTrue(trailing.contains("struct ComposerTrailingRail"),
+                      "le jumeau de référence doit exister")
+    }
+
+
+    // MARK: - Le filtre, atteignable des DEUX surfaces (#5041)
+
+    /// **Une capacité qui n'existe que d'une surface sur deux est une capacité
+    /// manquante.**
+    ///
+    /// `StoryFilterGridView` et `applyFilter` existaient de bout en bout, et
+    /// `EmbeddedSceneInspector` les montait déjà — mais **dans l'écran document
+    /// seulement**. L'éditeur d'objet plein écran, où l'on va justement pour
+    /// régler un média, ne les offrait nulle part.
+    ///
+    /// > Directive porteur 2026-09-04 : « longpress sur la minipreview pour
+    /// > editer l'image general avec **filtre** et taille de la scene ».
+    ///
+    /// Le témoin vérifie la chose qui compte vraiment : les deux surfaces
+    /// montent **la même vue** avec **le même modèle**. Deux écrivains d'un même
+    /// champ depuis deux surfaces est la forme la plus commune des jumelles
+    /// divergentes — ici il n'y en a qu'un, `viewModel.applyFilter`, et aucune
+    /// des deux surfaces n'écrit `currentEffects.filter` de sa main.
+    func test_leFiltre_estLaMemeGrilleDepuisLesDeuxSurfaces() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        let nu = AppSourceGuard.stripComments(editeur)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+
+        // **La parenthèse FERMANTE fait tout le travail.** Écrite en préfixe —
+        // `StoryFilterGridView(viewModel:viewModel,` — cette garde passerait au
+        // vert le jour exact où un argument de plus s'ajoute, donc elle ne
+        // tomberait que sur un RENOMMAGE, jamais sur un AJOUT. Or un argument
+        // ajouté est précisément la façon dont un appel dérive de son jumeau.
+        XCTAssertTrue(
+            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:viewModel.currentSlideBackgroundImage)"),
+            "l'éditeur monte LA grille du SDK avec le MÊME aperçu que l'inspecteur du "
+            + "document — le montage entier, fermante comprise, pas son préfixe")
+        XCTAssertFalse(nu.contains("currentEffects.filter="),
+                       "aucune surface n'écrit le champ de sa main : `applyFilter` est l'unique écrivain")
+    }
+
+    /// **Non-vacuité du témoin ci-dessus** : sans elle, un fichier renommé ferait
+    /// passer les trois assertions sur une source vide — dont la négative, qui
+    /// serait alors vraie pour la pire des raisons.
+    func test_leTemoinDuFiltre_litBienLEditeur() throws {
+        let editeur = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+        XCTAssertTrue(editeur.contains("struct ComposerObjectEditorView"))
+        XCTAssertTrue(editeur.contains("var mediaOptions"),
+                      "les options média — l'unité inclut l'extension `+Media` où vit la grille")
+    }
+
 }

@@ -627,7 +627,13 @@ struct ThemedFeedOverlay: View {
                 storyViewerCoordinator.present(
                     StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
                 )
-            }
+            },
+            // Ce fil AGRÈGE déjà les frames et élit une surface (`onPreferenceChange`
+            // plus bas) — il ne le REMETTAIT à aucune carte standard. Un repost de
+            // réel y restait donc sur son poster figé, et depuis le 2026-09-05 une
+            // scène y resterait en pause, pendant que le fil voisin (`FeedView`) les
+            // joue. Une élection tenue mais jamais servie ne se voit nulle part.
+            reelAutoplay: reelAutoplay
         )
     }
 

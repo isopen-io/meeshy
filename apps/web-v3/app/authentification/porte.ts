@@ -1,3 +1,4 @@
+import { origineEtrangere, refusDOrigine } from '@/app/provenance';
 import {
   connexion,
   inscription,
@@ -5,7 +6,7 @@ import {
   type Recuperateur,
 } from '@/lib/api/authentification';
 
-import { CONNEXION, INSCRIPTION, type Ecran } from './contenu';
+import { CONNEXION, INSCRIPTION, selecteursDe, type Ecran, type Selecteur } from './contenu';
 import {
   ECRAN_DEUXIEME_FACTEUR,
   destination,
@@ -33,6 +34,12 @@ import { rendLEcran } from './vue';
  * LE CHAMP `returnUrl` PORTE LE NOM DU LEGACY, pas un nom à nous : les liens
  * existants de l'application (`/login?returnUrl=…`) continuent de marcher, et
  * il n'y a rien à traduire d'un bord à l'autre de la frontière de zone.
+ *
+ * LA PORTE NE SAIT PAS CE QU'EST UN PAYS. Elle sait qu'un écran peut porter des
+ * SÉLECTEURS, que chacun connaît ses options et ce qu'il propose à un visiteur
+ * dont on ne sait qu'un en-tête `Accept-Language`. Lui apprendre les pays y
+ * ferait entrer un catalogue de 245 lignes pour un écran sur deux, et la
+ * connexion paierait la lecture d'un en-tête qu'elle n'utilise pas.
  */
 
 const RETOUR = 'returnUrl';
@@ -51,6 +58,33 @@ const retourDeLURL = (url: string): string | null =>
   new URL(url).searchParams.get(RETOUR);
 
 /**
+ * CE QU'UN SÉLECTEUR VAUT — la valeur soumise si elle EXISTE, sinon celle que
+ * le sélecteur propose.
+ *
+ * Le contrôle n'est pas une politesse : `<select>` est un contrôle du
+ * navigateur, mais un POST se fabrique à la main aussi bien qu'il se soumet.
+ * Un `pays=ZZ` partirait tel quel vers la passerelle en `phoneCountryCode`, et
+ * un `pays` absent — ce que rend un formulaire tronqué — laisserait un numéro
+ * sans indicatif. Retomber sur la proposition rend les deux cas identiques au
+ * cas nominal du lecteur qui n'a touché à rien.
+ */
+const valeurDuSelecteur = (
+  selecteur: Selecteur,
+  formulaire: FormData,
+  acceptLanguage: string | null,
+): string => {
+  const soumise = texte(formulaire.get(selecteur.nom));
+  return selecteur.options().some(({ valeur }) => valeur === soumise)
+    ? soumise
+    : selecteur.propose(acceptLanguage);
+};
+
+const proposees = (ecran: Ecran, acceptLanguage: string | null): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    selecteursDe(ecran).map((selecteur) => [selecteur.nom, selecteur.propose(acceptLanguage)]),
+  );
+
+/**
  * `buildVerifyTwoFactorUrl` du legacy, à l'identique : l'écran de vérification
  * lit `returnUrl` dans SA propre barre d'adresse. Le chemin passe par la même
  * garde de redirection ouverte que la destination d'une session.
@@ -63,31 +97,63 @@ const versLaVerification = (retour: string | null): string =>
 export const porteDe = (ecran: Ecran, soumets: Soumission) => ({
   GET: (requete: Request): Response =>
     rendLEcran(
-      { ecran, erreur: null, valeurs: {}, retour: retourDeLURL(requete.url) },
+      {
+        ecran,
+        refus: null,
+        valeurs: proposees(ecran, requete.headers.get('accept-language')),
+        retour: retourDeLURL(requete.url),
+      },
       200,
     ),
 
   POST: async (requete: Request): Promise<Response> => {
+    // Un formulaire d'accès soumis depuis un autre site n'est pas le lecteur qui se connecte (`app/provenance.ts`).
+    if (origineEtrangere(requete)) return refusDOrigine(requete);
+    const acceptLanguage = requete.headers.get('accept-language');
     const formulaire = await requete.formData().catch(() => null);
     if (formulaire === null) {
       return rendLEcran(
-        { ecran, erreur: CHAMPS_MANQUANTS, valeurs: {}, retour: retourDeLURL(requete.url) },
+        {
+          ecran,
+          refus: { message: CHAMPS_MANQUANTS, champ: null, recours: null },
+          valeurs: proposees(ecran, acceptLanguage),
+          retour: retourDeLURL(requete.url),
+        },
         400,
       );
     }
 
-    const valeurs = Object.fromEntries(
-      ecran.champs.map(({ nom }) => [nom, texte(formulaire.get(nom))]),
+    const choix = Object.fromEntries(
+      selecteursDe(ecran).map((selecteur) => [
+        selecteur.nom,
+        valeurDuSelecteur(selecteur, formulaire, acceptLanguage),
+      ]),
     );
+    const valeurs = {
+      ...choix,
+      ...Object.fromEntries(ecran.champs.map(({ nom }) => [nom, texte(formulaire.get(nom))])),
+    };
     // Le mot de passe ne repart jamais au navigateur (`vue.ts`) ; l'écarter ici
     // aussi rend la propriété vraie de la DONNÉE, pas seulement du rendu.
-    const saisie = Object.fromEntries(
-      ecran.champs.filter(({ type }) => type !== 'password').map(({ nom }) => [nom, valeurs[nom] ?? '']),
-    );
+    const saisie = {
+      ...choix,
+      ...Object.fromEntries(
+        ecran.champs.filter(({ type }) => type !== 'password').map(({ nom }) => [nom, valeurs[nom] ?? '']),
+      ),
+    };
     const retour = texte(formulaire.get(RETOUR)) || retourDeLURL(requete.url);
 
-    if (ecran.champs.some(({ nom }) => (valeurs[nom] ?? '') === '')) {
-      return rendLEcran({ ecran, erreur: CHAMPS_MANQUANTS, valeurs: saisie, retour }, 400);
+    // Le vide d'un champ NON REQUIS est une réponse, pas une omission : le
+    // téléphone laissé vide ne doit pas faire rendre « tous les champs sont
+    // requis » sur un formulaire que la passerelle aurait accepté.
+    const manquant = ecran.champs
+      .filter(({ requis }) => requis !== false)
+      .some(({ nom }) => (valeurs[nom] ?? '') === '');
+    if (manquant) {
+      return rendLEcran(
+        { ecran, refus: { message: CHAMPS_MANQUANTS, champ: null, recours: null }, valeurs: saisie, retour },
+        400,
+      );
     }
 
     const issue = await soumets(valeurs);
@@ -98,7 +164,15 @@ export const porteDe = (ecran: Ecran, soumets: Soumission) => ({
     if (issue.genre === 'deuxieme-facteur') {
       return rendLaRemise(remiseDeDeuxiemeFacteur(issue.etape, versLaVerification(retour)));
     }
-    return rendLEcran({ ecran, erreur: issue.message, valeurs: saisie, retour }, 400);
+    return rendLEcran(
+      {
+        ecran,
+        refus: { message: issue.message, champ: issue.champ, recours: issue.recours },
+        valeurs: saisie,
+        retour,
+      },
+      400,
+    );
   },
 });
 
@@ -111,10 +185,11 @@ export const PORTE_DE_CONNEXION = porteDe(CONNEXION, (valeurs) =>
 
 export const PORTE_D_INSCRIPTION = porteDe(INSCRIPTION, (valeurs) =>
   inscription({
-    prenom: valeurs.prenom ?? '',
-    nom: valeurs.nom ?? '',
-    identifiant: valeurs.identifiant ?? '',
+    nomAffiche: valeurs.nomAffiche ?? '',
     courriel: valeurs.courriel ?? '',
     motDePasse: valeurs.motDePasse ?? '',
+    telephone: valeurs.telephone ?? '',
+    pays: valeurs.pays ?? '',
+    langue: valeurs.langue ?? '',
   }),
 );

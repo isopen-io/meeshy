@@ -334,7 +334,7 @@ describe('les cinq pages institutionnelles', () => {
     // l'exemption mord : « Mot de passe oublié ? » sort de la zone, et la seule
     // façon de savoir qu'il ne meurt pas est de le NOMMER.
     const ecran = (e: typeof CONNEXION): string =>
-      documentDeLEcran({ ecran: e, erreur: null, valeurs: {}, retour: null });
+      documentDeLEcran({ ecran: e, refus: null, valeurs: {}, retour: null });
 
     const documents = [
       ['/', documentDeLaVitrine()] as const,
@@ -399,13 +399,43 @@ describe('les cinq pages institutionnelles', () => {
    * observable TOUT DE SUITE.
    */
   it('ne déclare aucun sélecteur deux fois : une règle, une feuille', () => {
+    // UN SÉLECTEUR SOUS `@media` N'EST PAS UNE JUMELLE, C'EST UNE VARIATION.
+    // `.action` déclaré une fois hors requête et une fois sous
+    // `(min-width:600px)` est la façon MÊME dont la charte écrit un point de
+    // rupture (règle 4 : pleine largeur en dessous, automatique au-dessus). Les
+    // confondre transformerait le témoin de la jumelle en interdiction du
+    // responsive. La comparaison se fait donc CONTEXTE PAR CONTEXTE : le niveau
+    // supérieur d'abord, puis chaque bloc de média pour lui-même — deux `.action`
+    // dans la MÊME requête restent un doublon.
     const doublons = (doc: string): readonly string[] => {
       const style = doc.slice(doc.indexOf('<style>'), doc.indexOf('</style>'));
-      const selecteurs = (style.slice(style.indexOf('*,*::before')).match(/[^{}]+\{[^{}]*\}/g) ?? [])
-        .map((regle) => regle.slice(0, regle.indexOf('{')))
-        .filter((selecteur) => !selecteur.startsWith('@'));
-      return selecteurs.filter((selecteur, rang) => selecteurs.indexOf(selecteur) !== rang);
+      const feuille = style.slice(style.indexOf('*,*::before'));
+      const contextes = [
+        feuille.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*\}/g, ''),
+        ...[...feuille.matchAll(/@media[^{]*\{((?:[^{}]*\{[^{}]*\})*)\}/g)].map(
+          ([, corps]) => corps ?? '',
+        ),
+      ];
+      return contextes.flatMap((contexte) => {
+        const selecteurs = (contexte.match(/[^{}]+\{[^{}]*\}/g) ?? [])
+          .map((regle) => regle.slice(0, regle.indexOf('{')))
+          .filter((selecteur) => !selecteur.startsWith('@'));
+        return selecteurs.filter((selecteur, rang) => selecteurs.indexOf(selecteur) !== rang);
+      });
     };
+
+    // LE TÉMOIN DU TÉMOIN. Le contexte a été ajouté le jour où la charte a
+    // introduit un point de rupture ; une comparaison contexte par contexte
+    // pourrait aussi bien ne plus rien comparer du tout. Ces deux sondes fixent
+    // ce que le témoin DOIT dire : un doublon au niveau supérieur ET un doublon
+    // dans une même requête de média sont l'un comme l'autre des jumelles ;
+    // la même règle de part et d'autre d'un point de rupture ne l'est pas.
+    const sonde = (feuille: string): readonly string[] =>
+      doublons(`<style>${feuille}</style>`);
+
+    expect(sonde('*,*::before{a:1}.x{b:1}.x{c:1}')).toEqual(['.x']);
+    expect(sonde('*,*::before{a:1}@media (min-width:600px){.x{b:1}.x{c:1}}')).toEqual(['.x']);
+    expect(sonde('*,*::before{a:1}.x{b:1}@media (min-width:600px){.x{c:1}}')).toEqual([]);
 
     expect(doublons(documentDeLaVitrine())).toEqual([]);
     for (const [, page] of PAGES) {

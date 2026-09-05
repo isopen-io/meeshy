@@ -116,7 +116,18 @@ nonisolated struct BubbleContent: Equatable {
         let reference: ReplyReference
         let isStory: Bool
 
+        /// Trois groupes plutôt qu'une seule chaîne de `&&` : la projection
+        /// compare dix-huit champs, et une conjonction de cette longueur est ce
+        /// que l'inféreur de types met le plus longtemps à résoudre. Chaque
+        /// groupe dit AUSSI ce qu'il garde — identité, média cité, story.
         static func == (lhs: Reply, rhs: Reply) -> Bool {
+            lhs.isStory == rhs.isStory
+                && sameIdentity(lhs, rhs)
+                && sameQuotedMedia(lhs, rhs)
+                && sameStory(lhs, rhs)
+        }
+
+        private static func sameIdentity(_ lhs: Reply, _ rhs: Reply) -> Bool {
             lhs.reference.messageId == rhs.reference.messageId
                 && lhs.reference.previewText == rhs.reference.previewText
                 // L'avatar de l'auteur cite est une ZONE TACTILE de la citation
@@ -124,9 +135,17 @@ nonisolated struct BubbleContent: Equatable {
                 // coup (refresh serveur, hydratation du cache), son absence de
                 // ce comparateur figeait la citation en initiales pour toujours.
                 && lhs.reference.authorAvatarUrl == rhs.reference.authorAvatarUrl
-                && lhs.isStory == rhs.isStory
                 && lhs.reference.moodEmoji == rhs.reference.moodEmoji
-                && lhs.reference.storyPublishedAt == rhs.reference.storyPublishedAt
+        }
+
+        private static func sameQuotedMedia(_ lhs: Reply, _ rhs: Reply) -> Bool {
+            // Le GENRE du média cité — il décide du glyphe, du badge play, et
+            // depuis #4946 du fait qu'un document n'annonce pas de pixels. Il
+            // manquait à ce comparateur alors que la peau bulle le porte dans
+            // sa projection depuis toujours : une bulle optimiste posant le
+            // rawValue court (« image ») puis un écho serveur posant le MIME
+            // (« image/jpeg ») laissaient la rangée plate sur son premier rendu.
+            lhs.reference.attachmentType == rhs.reference.attachmentType
                 && lhs.reference.attachmentThumbnailUrl == rhs.reference.attachmentThumbnailUrl
                 // La protection DECIDE si cette vignette est rendue et si la
                 // zone 2 est armee : elle influence le rendu autant que l'URL
@@ -134,6 +153,24 @@ nonisolated struct BubbleContent: Equatable {
                 // premiere resolution silencieuse (blob de cache ancien) ne se
                 // redessinerait jamais quand la protection arrive enfin.
                 && lhs.reference.attachmentIsProtected == rhs.reference.attachmentIsProtected
+                // Les SEPT faits du média cité (#4945) : le flou ThumbHash de la
+                // miniature et la ligne « 1024×768 · 0:42 · 1,2 Mo » que la
+                // citation rend depuis #4946. Ils arrivent APRÈS coup — la bulle
+                // optimiste ne connaît que ce que l'appareil tient, l'écho
+                // serveur apporte le reste. Absents de ce comparateur, la
+                // citation resterait figée sur sa PREMIÈRE résolution, exactement
+                // comme l'avatar et la protection avant eux.
+                && lhs.reference.attachmentThumbHash == rhs.reference.attachmentThumbHash
+                && lhs.reference.attachmentWidth == rhs.reference.attachmentWidth
+                && lhs.reference.attachmentHeight == rhs.reference.attachmentHeight
+                && lhs.reference.attachmentDurationMs == rhs.reference.attachmentDurationMs
+                && lhs.reference.attachmentFileSize == rhs.reference.attachmentFileSize
+                && lhs.reference.attachmentPageCount == rhs.reference.attachmentPageCount
+                && lhs.reference.attachmentMimeType == rhs.reference.attachmentMimeType
+        }
+
+        private static func sameStory(_ lhs: Reply, _ rhs: Reply) -> Bool {
+            lhs.reference.storyPublishedAt == rhs.reference.storyPublishedAt
                 && lhs.reference.storyThumbnailUrl == rhs.reference.storyThumbnailUrl
                 && lhs.reference.storyReactionCount == rhs.reference.storyReactionCount
                 && lhs.reference.storyCommentCount == rhs.reference.storyCommentCount
@@ -243,7 +280,29 @@ nonisolated struct BubbleContent: Equatable {
     let isBlurred: Bool                    // gates le composant de blur reveal
     let isViewOnce: Bool
     let isPinned: Bool
-    let isForwarded: Bool
+    /// **Qui est nommé sous un message transféré — DÉJÀ TRANCHÉ** (#5058).
+    ///
+    /// `nil` ⇒ le message n'a pas été transféré. Un booléen à côté d'une
+    /// attribution serait la paire redondante que le dépôt proscrit ; ici
+    /// l'absence EST le fait, et `isForwarded` n'en est qu'une lecture.
+    ///
+    /// **Pourquoi la valeur est résolue en amont et non par la peau.** Ce champ
+    /// portait `isForwarded: Bool`, et les trois peaux n'en tiraient pas la même
+    /// chose : la bulle appelait `ForwardBadgePolicy.attribution(for:)` sur le
+    /// `Message` qu'elle avait sous la main, la rangée plate ne l'avait PAS et
+    /// retombait sur `.anonymous`. Le doc-comment de `FocalRow` nommait
+    /// l'écart et son motif — « écart signalé, pas une seconde résolution
+    /// inventée » —, et le repli était le bon : jamais celui qui nommerait
+    /// quelqu'un. Mais ce qui manquait était en AMONT, pas dans la peau.
+    ///
+    /// Une règle de CONFIDENTIALITÉ résolue à deux endroits est une règle qui
+    /// divergera : la liste blanche de `ForwardBadgePolicy` échoue FERMÉ, et
+    /// une peau qui la contourne pour « faire pareil » ouvrirait la fuite que
+    /// la liste existe pour fermer. Un seul site résout, trois peaux rendent.
+    let forwardAttribution: ForwardAttribution?
+
+    /// Lecture de commodité — dérivée, jamais stockée à côté.
+    var isForwarded: Bool { forwardAttribution != nil }
     let editedAt: Date?
     let isEditSaving: Bool
     let hasEditHistory: Bool
@@ -336,7 +395,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce
             && lhs.isPinned == rhs.isPinned
-            && lhs.isForwarded == rhs.isForwarded
+            && lhs.forwardAttribution == rhs.forwardAttribution
             && lhs.editedAt == rhs.editedAt
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory

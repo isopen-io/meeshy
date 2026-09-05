@@ -1110,7 +1110,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
         let long = String(repeating: "a", count: 300)
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
 
         XCTAssertEqual(brouillon.text?.count, 300)
@@ -1122,7 +1122,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
@@ -1153,12 +1153,31 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "ce qu'elle mesure."
         )
         XCTAssertTrue(
-            compacte.contains(compact(".disabled(!canPublishDocument)")),
-            "Un bouton sans gate de matière publierait une page blanche depuis le socle."
-        )
-        XCTAssertTrue(
             compacte.contains("performSoclePublish()"),
             "… et un bouton qui ne déclenche rien est l'affordance sans effet que ce chantier retire partout."
+        )
+        // **Le GATE a déménagé dans l'habillage partagé le 2026-09-03**
+        // (#4995) : les deux flèches — socle et en-tête du mood — passent par
+        // `publishCapsule(_:)`, qui porte le verre proéminent, l'opacité du
+        // refus, le nom accessible et le `.disabled`. La garde suit son objet
+        // plutôt que de rougir sur une factorisation qui la RENFORCE : un gate
+        // écrit une fois ne peut pas être oublié au second site.
+        //
+        // Les deux moitiés sont exigées : que la flèche passe par l'habillage,
+        // ET que l'habillage porte le gate. Vérifier la seconde seule
+        // laisserait une flèche s'en écarter en silence.
+        XCTAssertTrue(
+            compacte.contains("publishCapsule("),
+            "La flèche doit passer par l'habillage PARTAGÉ : c'est lui qui porte le gate, et s'en écarter "
+                + "rendrait à ce bouton la possibilité de publier une page blanche."
+        )
+        guard let habillage = declarationBody(startingAt: "func publishCapsule<Contenu: View>",
+                                              in: try hostCode()) else {
+            return XCTFail("L'habillage de la flèche est introuvable — la garde ne mesurerait RIEN")
+        }
+        XCTAssertTrue(
+            compact(habillage).contains(compact(".disabled(!canPublishDocument)")),
+            "Un bouton sans gate de matière publierait une page blanche depuis le socle."
         )
         // #4135 — la flèche presse désormais un AIGUILLAGE, pas un chemin, et
         // l'aiguillage est une DÉCLARATION VOISINE : la garde va l'y lire plutôt
@@ -1193,9 +1212,26 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // est exigée, pas ses deux appels séparément : un `else` qui
         // disparaîtrait, ou une condition qui glisserait sur `.reel`, rougirait.
         XCTAssertTrue(
-            branche.contains("case.document,.mood:ifselectedFormat==.story{publishStoryScene()}else{publishDocument()}"),
-            "… et sous les deux autres surfaces, UN chemin par format : la story par le canal de la "
-                + "scène (#4700), le document et le mood par le brouillon."
+            branche.contains("case.document,.mood:switchComposerPublishChannel.channel(for:selectedFormat)"),
+            "… et sous les deux autres surfaces, le routage est une RÈGLE (#4869), plus une liste "
+                + "de formats écrite dans le corps du publieur."
+        )
+        // **Cette garde épinglait le défaut qu'elle avertissait de surveiller.**
+        //
+        // Sa forme précédente exigeait `ifselectedFormat==.story{…}else{…}`, en
+        // écrivant qu'« une condition qui glisserait sur `.reel` rougirait ».
+        // C'est exactement ce qui s'était produit : le réel tombait dans le
+        // `else`, descendait sur `DocumentComposerDoor` qui le refuse, et ne
+        // partait JAMAIS — flèche peinte, sans effet.
+        //
+        // > Une garde qui fige une CONDITION fige aussi ce que la condition
+        // > oublie. Épingler la règle (`ComposerPublishChannel`) plutôt que sa
+        // > forme laisse le `switch` exhaustif refuser de compiler quand un
+        // > cinquième format arrive — ce qu'aucune chaîne de `if` ne fait.
+        XCTAssertTrue(
+            branche.contains("case.unsupported:refuseUnsupportedFormat()"),
+            "Un format sans canal se REFUSE à voix haute. Le silence est ce qui a laissé le réel "
+                + "ne jamais partir, et un refus muet se relit comme une flèche cassée."
         )
         XCTAssertFalse(
             branche.contains("case.document,.mood:publishDocument()"),
@@ -1587,9 +1623,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// l'écran et RE-VISÉ cette suite-là sur ce même bouton, où elle mesure
     /// désormais ce que celle-ci ne mesure pas : le NOM que la flèche garde
     /// pendant l'envoi.
+    ///
+    /// **Re-ancrée le 2026-09-03 (#4995)** sur `publishCapsule(_:)`, l'habillage
+    /// que les DEUX flèches partagent désormais. La suite y mesure exactement
+    /// ce qu'elle mesurait, pour deux boutons au lieu d'un — et la garde
+    /// voisine (`…estUnBouton_gateEtBranche`) exige que chaque flèche y passe,
+    /// sans quoi ce déménagement lui coûterait la moitié de sa portée.
     func test_laFlecheDuSocle_porteSonEtatAccessible() throws {
-        guard let bloc = declarationBody(startingAt: "var publishButton", in: try hostCode()) else {
-            return XCTFail("La zone de publication du socle est introuvable — la garde ne mesurerait RIEN")
+        guard let bloc = declarationBody(startingAt: "func publishCapsule<Contenu: View>",
+                                         in: try hostCode()) else {
+            return XCTFail("L'habillage de la flèche est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
 

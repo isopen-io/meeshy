@@ -101,6 +101,33 @@ export const vuesJointes = ({ index, jetons }) =>
     return declares === undefined ? projette(vue) : { ...projette(vue), jetons: declares };
   });
 
+// LA CLÉ D'UN ÉTAT DE SESSION. Elle commence par `@` pour qu'aucune lecture ne
+// puisse la confondre avec un jeton de route : `motifJeton` de
+// `vues-comparables.mjs` ne reconnaît que `:nom`, donc `@session` ne peut ni
+// remplacer un jeton ni en manquer un.
+export const CLE_DE_SESSION = '@session';
+
+export const sessionDeVue = (vue) => vue.jetons?.[CLE_DE_SESSION] ?? null;
+
+/**
+ * Une vue qui RÉCLAME une session que l'annexe ne déclare pas est refusée, et
+ * NOMMÉE : sans ce refus, `compare-rendu.js` naviguerait sans créance et
+ * mesurerait l'écran de connexion contre la cible d'un fil — un chiffre rendu
+ * sur le mauvais écran, exactement le défaut que `RC_NON_COMPARABLE` existe
+ * pour éviter.
+ */
+export const sessionsInconnues = ({ vues, sessions }) =>
+  vues
+    .map((vue) => ({ vue, nom: sessionDeVue(vue) }))
+    .filter(({ nom }) => nom !== null && sessions[nom] === undefined)
+    .map(({ vue, nom }) => ({
+      id: vue.id,
+      raison:
+        `état de session non déclaré : « ${vue.id} » réclame « ${nom} », qui n'est dans aucune ` +
+        `entrée « sessions » de ${NOM_JETONS} — naviguer sans créance servirait l'écran de ` +
+        `connexion, jamais cette vue`,
+    }));
+
 export const jetonsHorsAnnexe = (index) =>
   index.vues
     .filter((vue) => vue.jetons !== undefined)
@@ -119,10 +146,15 @@ export const litLesVues = (dossier) => {
   const presente = existsSync(chemin);
   const annexe = presente ? JSON.parse(readFileSync(chemin, 'utf8')) : {};
 
+  const sessions = annexe.sessions ?? {};
+  const vues = vuesJointes({ index, jetons: annexe.jetons ?? {} });
+
   return {
     source: index.source,
-    vues: vuesJointes({ index, jetons: annexe.jetons ?? {} }),
+    vues,
+    sessions,
     refus: [
+      ...sessionsInconnues({ vues, sessions }),
       ...(presente
         ? []
         : [

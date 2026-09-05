@@ -1262,7 +1262,7 @@ extension StoryComposerView {
                     // posé ci-dessus. L'éditeur d'image plein écran s'ouvre
                     // au double-tap.
                     break
-                case .sticker, .location, .audio:
+                case .sticker, .place, .audio:
                     // Pastille de lieu ou de son : sélection seule (le canvas
                     // l'a remontée au premier plan). Elle se déplace,
                     // se redimensionne au doigt et se retire par le menu
@@ -1281,7 +1281,7 @@ extension StoryComposerView {
                 case .media:
                     // Open dedicated full-screen media editor (image crop / video editor)
                     openMediaEditor(elementId: id)
-                case .sticker, .location, .audio:
+                case .sticker, .place, .audio:
                     // L'atelier n'ouvre pas d'éditeur audio : sa timeline porte
                     // déjà le rognage et le volume d'une piste. Le composer
                     // unifié, lui, le câble (#4671) — `editableKinds` est ce qui
@@ -1400,6 +1400,10 @@ extension StoryComposerView {
             // La version sert de cookie au Coordinator pour ne déclencher
             // un rebuild qu'aux mutations utiles.
             loadedImages: viewModel.loadedImages,
+            // #3956 — un GIF collé anime DANS le composer : sans ce fil,
+            // l'aperçu montrerait une image fixe de ce que la publication
+            // envoie animé.
+            loadedStickerAnimations: viewModel.loadedStickerAnimations,
             loadedImagesVersion: viewModel.loadedImagesVersion,
             loadedAudioURLs: viewModel.loadedAudioURLs,
             canvasCornerRadius: cornerRadius,

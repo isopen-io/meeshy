@@ -206,6 +206,18 @@ public struct OffsetPagination: Decodable, Sendable {
     public let hasMore: Bool?
     public let limit: Int?
     public let offset: Int?
+    /// LA RAMPE DE #4175/#4901 : la page 1 servie AU RANG porte l'ancre de la
+    /// suite AU CURSEUR. Sans cette clé, le curseur servi était JETÉ au
+    /// décodage et aucun client ne pouvait emprunter la rampe.
+    public let nextCursor: String?
+
+    public init(total: Int?, hasMore: Bool?, limit: Int?, offset: Int?, nextCursor: String? = nil) {
+        self.total = total
+        self.hasMore = hasMore
+        self.limit = limit
+        self.offset = offset
+        self.nextCursor = nextCursor
+    }
 }
 
 public struct OffsetPaginatedAPIResponse<T: Decodable>: Decodable {
@@ -325,12 +337,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         let logLabel: String
         let authKind: MeeshyEndpointAuthKind
         let retryPolicy: MeeshyEndpointRetryPolicy
+        let rejectionPolicy: MeeshyEndpointRejectionPolicy
 
         init(legacyPath: String, baseURL: String) {
             self.urlString = "\(baseURL)\(legacyPath)"
             self.logLabel = legacyPath
             self.authKind = MeeshyEndpointPolicy.authKind(forLegacyPath: legacyPath)
             self.retryPolicy = MeeshyEndpointPolicy.retryPolicy(forLegacyPath: legacyPath)
+            self.rejectionPolicy = MeeshyEndpointPolicy.rejectionPolicy(forLegacyPath: legacyPath)
         }
 
         init(endpoint: any MeeshyEndpoint) {
@@ -338,6 +352,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             self.logLabel = endpoint.path
             self.authKind = endpoint.authKind
             self.retryPolicy = endpoint.retryPolicy
+            self.rejectionPolicy = endpoint.rejectionPolicy
         }
     }
 
@@ -735,6 +750,29 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     if statusCode == 426 {
                         UpgradeGateSignal.signal(statusCode: statusCode, body: data)
                         throw MeeshyError.server(statusCode: 426, message: errorMsg ?? "Mise a jour requise")
+                    }
+
+                    // Refus TYPÉ (#5218) : `code` et `field` vivent à la RACINE
+                    // de l'enveloppe (`sendError`, gateway) et n'étaient lus par
+                    // personne — un écran de formulaire ne recevait qu'une
+                    // phrase, donc ne pouvait la poser QUE en bandeau. Réservé
+                    // aux adresses qui le DÉCLARENT (`rejectionPolicy`) :
+                    // partout ailleurs, la forme d'erreur ne bouge pas d'un iota.
+                    //
+                    // Quatre codes restent HORS de cette porte, et chacun pour sa
+                    // raison : 426 (rupture de binaire, traité juste au-dessus —
+                    // la porte de mise à jour doit se montrer), 401 (session /
+                    // identifiants, le rafraîchissement en dépend), 403 (accès à
+                    // une ressource, la purge en dépend) et 429 (débit). Aucun ne
+                    // parle d'une SAISIE, qui est tout ce que ce refus décrit.
+                    if resolved.rejectionPolicy == .structured,
+                       (400...499).contains(statusCode),
+                       ![401, 403, 429].contains(statusCode) {
+                        let envelope = try? decoder.decode(APIRejectionEnvelope.self, from: data)
+                        throw MeeshyError.rejected(
+                            envelope?.rejection(statusCode: statusCode, fallbackMessage: errorMsg ?? "Erreur inconnue")
+                                ?? APIRejection(statusCode: statusCode, message: errorMsg ?? "Erreur inconnue")
+                        )
                     }
 
                     if statusCode == 401 {

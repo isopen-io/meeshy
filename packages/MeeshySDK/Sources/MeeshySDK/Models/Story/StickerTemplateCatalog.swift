@@ -44,12 +44,29 @@ public enum StickerTemplateCatalog {
     /// **Une famille, un fichier** (#4820) : `location`, `time` et `love`
     /// vivent ici — les premières —, chaque famille suivante dans son
     /// `StickerTemplateCatalog+<Famille>.swift`, sous le budget de lignes.
-    public static let all: [StickerTemplate] =
+    /// **Deux sommes plutôt qu'une chaîne** : le type-checker de Swift résout
+    /// un `+` variadique par essais successifs, et le coût monte vite avec le
+    /// nombre de termes — une famille de plus finirait par rendre
+    /// « unable to type-check this expression in reasonable time ». Couper la
+    /// chaîne en deux constantes annotées coûte deux lignes et supprime le
+    /// risque ; ce n'est pas une catégorie de produit, juste une borne de
+    /// compilation.
+    public static let all: [StickerTemplate] = ancrées + thématiques
+
+    /// Ce que la décoration ANCRE à une donnée du monde : un lieu, une heure,
+    /// une date, un temps qu'il fait, les mots de l'auteur.
+    private static let ancrées: [StickerTemplate] =
         location + locationMore
         + time + timeExtra
         + love + loveExtra
         + weather + text
-        + joy + surprise + mood + greeting + reaction + party + availability
+
+    /// Ce qu'elle dit d'une HUMEUR ou d'une intention — rien à remplir, le
+    /// gabarit porte son sens entier.
+    private static let thématiques: [StickerTemplate] =
+        joy + surprise + mood + greeting + reaction + party + availability
+        + nature + cheer + answer + food + sport
+        + travel + work + music
 
     public static let location: [StickerTemplate] = [
         StickerTemplate(id: ID.locationPill,

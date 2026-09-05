@@ -48,9 +48,8 @@ import MeeshyUI
 /// **L'état de repos n'est pas la cible de l'animation.**
 ///
 /// Le remède qu'on copie d'instinct — se poser sur la valeur vers laquelle
-/// l'animation tendait — est juste pour une décoration qui converge
-/// (`OnboardingAnimations.settleWithoutMotion`), et **faux pour un indicateur
-/// de statut** :
+/// l'animation tendait — est juste pour une décoration qui converge, et **faux
+/// pour un indicateur de statut** :
 ///
 /// - le point d'appel en cours s'anime vers `opacity 0.3` ; s'y poser rend
 ///   l'indicateur presque invisible ;

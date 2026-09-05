@@ -216,6 +216,24 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a drawn stroke on the story projects onto the slide so a drawing-only story is not shown blank`() = runTest {
+        val stroke = me.meeshy.sdk.model.StoryDrawingStroke(id = "st1", colorHex = "FFFFFF", width = 6.0)
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(drawingStrokes = listOf(stroke))),
+            ),
+        )
+        assertThat(vm.state.value.current?.strokes).containsExactly(stroke)
+    }
+
+    @Test
+    fun `a slide with no drawing carries no strokes`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.strokes).isEmpty()
+    }
+
+    @Test
     fun `a blank background string leaves the projected background null`() = runTest {
         val vm = viewModel(
             startUserId = "a",
@@ -737,7 +755,7 @@ class StoryViewerViewModelTest {
         val vm = viewModel(startUserId = "a", posts = listOf(post))
 
         val transform = vm.state.value.current?.backgroundTransform
-        assertThat(transform?.scale).isWithin(1e-6f).of(1.5f)
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(1.5f)
         assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.2f)
         assertThat(transform?.offsetYFraction).isEqualTo(0f)
         assertThat(transform?.isIdentity).isFalse()
@@ -787,7 +805,7 @@ class StoryViewerViewModelTest {
 
         val transform = vm.state.value.current?.backgroundTransform
         assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
-        assertThat(transform?.scale).isWithin(1e-6f).of(2.0f)
+        assertThat(transform?.scaleX).isWithin(1e-6f).of(2.0f)
         assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.3f)
         assertThat(transform?.offsetYFraction).isEqualTo(0f)
         assertThat(transform?.isIdentity).isFalse()

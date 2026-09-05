@@ -42,9 +42,40 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     // MARK: - Ce qui SE VOIT sur la scène
 
     func test_laRangeeDeGauche_porteCeQuiApparaitSurLaScene() {
-        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: toutes),
+        // **Le corpus de texte est REVENU à gauche** (directive porteur
+        // 2026-09-05 : « mettre sur la rangée colonne gauche toutes les
+        // modifications spécifiques à la scène et non à la publication de type
+        // Post »).
+        //
+        // #4893 l'avait rangé en bas hors Story, sur l'idée qu'il « qualifie la
+        // publication ». La mesure dit le contraire : `handleRailDoor(.text)`
+        // appelle `viewModel.addText()` puis ouvre l'éditeur d'objet, dans TOUS
+        // les formats. Il pose un objet sur la scène ; le corps de la
+        // publication a sa propre porte depuis #4890.
+        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: toutes, format: .post),
                        [.media, .sound, .sticker, .drawing, .text],
-                       "texte, sticker, son posé, média de premier plan, tracé")
+                       "sticker, son posé, média de premier plan, tracé, corpus de texte")
+    }
+
+    /// **Le corpus de texte ne bascule plus par format.** Le témoin porte sur
+    /// les DEUX formats parce que c'est la bascule elle-même qui a disparu :
+    /// vérifier le seul POST laisserait revenir un `format == .story ? …`
+    /// silencieux.
+    func test_leCorpusDeTexte_poseDansTousLesFormats() {
+        // Les trois formats qui ONT une toile. Le `status` n'en a pas : la
+        // porte n'y est pas OFFERTE du tout (`removedFromStatus`), et l'y
+        // chercher à gauche testerait une répartition sans objet.
+        for format in [ComposerFormat.post, .story, .reel] {
+            XCTAssertEqual(ComposerRailDoor.text.level(for: format), .object,
+                           "le corpus pose un objet en \(format) aussi — `addText()` ne " +
+                           "regarde pas le format")
+            XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: [.text], format: format).contains(.text),
+                          "donc il vit à GAUCHE en \(format)")
+        }
+        XCTAssertFalse(
+            ComposerRailDoor.offered(served: [.text], format: .status, allowsCapture: true).contains(.text),
+            "sans toile, rien à poser — le corpus ne survit pas au status"
+        )
     }
 
     /// **La mention et le lieu ont CHANGÉ DE CÔTÉ**, et ce n'est pas un
@@ -52,18 +83,30 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     /// (`presentedPortal = .mention` / `.location`) et ne posent rien sur la
     /// scène. Les laisser à gauche promettait un objet qui n'arrive jamais.
     func test_laMentionEtLeLieu_viventSurLaLigneCanonique() {
-        let bas = ComposerSceneFloatingRail.lowRow(from: toutes)
+        // **Hors STORY** (#4893) : en Story ces deux-là se POSENT, avec une
+        // position fixée par story. Le rangement décrit ici reste celui du
+        // Réel, du Post et du Mood.
+        // `.description` n'est plus servie par le rail (directive porteur
+        // 2026-09-05) — elle reste dans `toutes` ici parce que la fixture
+        // décrit un jeu SERVI arbitraire, et que la répartition doit rester
+        // juste pour toute porte qu'un hôte lui donne. Ce qui la retire est
+        // `canonicalRail`, mesuré par `ComposerRailDoorTests`.
+        let bas = ComposerSceneFloatingRail.lowRow(from: toutes, format: .post)
         XCTAssertEqual(bas, [.description, .mention, .place])
-        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes).contains(.mention))
-        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes).contains(.place))
+        XCTAssertFalse(bas.contains(.text),
+                       "le corpus POSE : il a quitté la ligne canonique (2026-09-05)")
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes, format: .post).contains(.mention))
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes, format: .post).contains(.place))
     }
 
     /// **Le dessin a changé de côté dans l'AUTRE sens.** L'axe précédent le
     /// rangeait en bas parce qu'un tracé « entre » dans la scène. Il s'y VOIT,
     /// donc il est à gauche : c'est le résultat qui décide, pas le verbe.
     func test_leDessin_estAGauche_carUnTraceSeVoit() {
-        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: toutes).contains(.drawing))
-        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: toutes).contains(.drawing))
+        for format in ComposerFormat.allComposable {
+            XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: toutes, format: format).contains(.drawing), "\(format)")
+            XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: toutes, format: format).contains(.drawing), "\(format)")
+        }
     }
 
     // MARK: - La partition
@@ -73,8 +116,8 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     /// coïncidence à vérifier : deux filtres écrits séparément auraient permis
     /// les deux fautes.
     func test_lesDeuxRangees_partagentLesPortesSansPerteNiDoublon() {
-        let gauche = ComposerSceneFloatingRail.sideRow(from: toutes)
-        let bas = ComposerSceneFloatingRail.lowRow(from: toutes)
+        let gauche = ComposerSceneFloatingRail.sideRow(from: toutes, format: .post)
+        let bas = ComposerSceneFloatingRail.lowRow(from: toutes, format: .post)
 
         XCTAssertEqual(Set(gauche).union(bas), Set(toutes), "aucune porte ne se perd")
         XCTAssertTrue(Set(gauche).isDisjoint(with: Set(bas)), "aucune porte à deux places")
@@ -84,8 +127,8 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     /// Les deux rangées se DÉRIVENT du jeu servi : une porte que l'hôte ne sert
     /// pas n'apparaît nulle part.
     func test_unePorteNonServie_nApparaitNullePart() {
-        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: [.media, .description]), [.media])
-        XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: [.media, .description]), [.description])
+        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: [.media, .description], format: .post), [.media])
+        XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: [.media, .description], format: .post), [.description])
     }
 
     // MARK: - Le prédicat lui-même
@@ -105,8 +148,8 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     /// partition ci-dessus resteraient verts — une partition dont un côté est
     /// vide est toujours une partition.
     func test_lesDeuxRangees_sontNonVides() {
-        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes).isEmpty)
-        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: toutes).isEmpty)
+        XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes, format: .post).isEmpty)
+        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: toutes, format: .post).isEmpty)
     }
 
     /// **Sans scène, la rangée de gauche disparaît d'elle-même.** La loi 8 n'a
@@ -116,8 +159,8 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     func test_sansScene_laRangeeDeGaucheEstVide() {
         let offertes = ComposerRailDoor.offered(served: Set(toutes),
                                                 format: .status, allowsCapture: true)
-        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: offertes).isEmpty)
-        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: offertes).isEmpty,
+        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: offertes, format: .status).isEmpty)
+        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: offertes, format: .status).isEmpty,
                        "la ligne canonique survit — elle ne vise pas la toile")
     }
 
@@ -180,8 +223,8 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     func test_laPorteSon_vitAGauche_avecCeQuiApparaitSurLaToile() {
         let servies = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
                                                format: .story, allowsCapture: true)
-        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: servies).contains(.sound))
-        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: servies).contains(.sound))
+        XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: servies, format: .story).contains(.sound))
+        XCTAssertFalse(ComposerSceneFloatingRail.lowRow(from: servies, format: .story).contains(.sound))
     }
 
     /// **Le fusible.** Si le jeu servi devenait vide, les deux témoins ci-dessus
@@ -192,13 +235,19 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         // L'ordre est celui de `canonicalRail`, LU et non déduit : c'est la
         // troisième fois de la session que j'affirme une valeur déduite au lieu
         // de l'avoir lue, et la troisième fois que le témoin me rattrape.
-        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: servies),
-                       [.media, .sound, .text, .drawing, .sticker],
-                       "cinq entrées à gauche — `.sound` est revenue le 2026-09-01 (#4722), à sa "
-                       + "place de `canonicalRail`, entre le média et le texte")
-        XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: servies),
-                       [.description, .mention, .hashtag, .place],
-                       "`.hashtag` rejoint la ligne canonique (#4636) — un hashtag classe "
-                       + "ce qui part, il n'apparaît pas sur la scène.")
+        // **En STORY, la rangée du bas est VIDE, et c'est une DÉCISION** (#4893).
+        // La directive du 2026-09-02 fait passer lieu, hashtag, mention et
+        // corpus de texte à gauche « afin de fixer chaque position à chaque
+        // story », et remplace le paragraphe par le corpus. Il ne reste donc
+        // rien à qualifier en bas : le plateau y laisse la place aux
+        // contrôleurs de l'outil ouvert, et le socle vit au meuble, plus bas.
+        XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: servies, format: .story),
+                       [.media, .sound, .text, .background, .drawing, .sticker,
+                        .mention, .hashtag, .place],
+                       "en Story TOUTES les portes se posent — `.sound` est revenue le "
+                       + "2026-09-01 (#4722) et `.background` le 2026-09-02 (#4919), "
+                       + "chacune à sa place de `canonicalRail`")
+        XCTAssertEqual(ComposerSceneFloatingRail.lowRow(from: servies, format: .story), [],
+                       "rien ne QUALIFIE une story depuis le bas : tout s'y pose.")
     }
 }

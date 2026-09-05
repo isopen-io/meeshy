@@ -17,15 +17,21 @@ import MeeshySDK
 /// le patron d'état — celui-là même dont le doc-comment ci-dessus explique
 /// qu'il est subtil (resync `.adaptiveOnChange`, commit à la perte de focus et
 /// au démontage). Ce qui change se lit en UN endroit, `labels`.
-struct MediaAltTextField: View {
-    let kind: PostMediaText
-    let text: String
-    let onCommit: (String) -> Void
+public struct MediaAltTextField: View {
+    public let kind: PostMediaText
+    public let text: String
+    public let onCommit: (String) -> Void
 
     @State private var draft: String
     @FocusState private var isFocused: Bool
 
-    init(kind: PostMediaText = .alt, text: String, onCommit: @escaping (String) -> Void) {
+    /// **Public depuis #4756** : l'atome est agnostique — trois paramètres
+    /// opaques, aucun singleton Meeshy, aucune règle « quand faire X ». C'est
+    /// le test du grain du § SDK Purity, et il le passe. Le rendre public est
+    /// ce qui évite qu'un second champ « qui ressemble » naisse côté app et
+    /// diverge au premier réglage — la faute exacte que le composer a déjà
+    /// payée sur les légendes.
+    public init(kind: PostMediaText = .alt, text: String, onCommit: @escaping (String) -> Void) {
         self.kind = kind
         self.text = text
         self.onCommit = onCommit
@@ -52,7 +58,7 @@ struct MediaAltTextField: View {
         }
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(labels.label)
                 .font(.system(size: 11, weight: .semibold))

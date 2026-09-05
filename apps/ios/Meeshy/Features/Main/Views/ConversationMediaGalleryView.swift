@@ -43,6 +43,17 @@ struct ConversationMediaGalleryView: View {
     let accentColor: String
     /// Maps attachment.id → caption text (message content or attachment caption)
     var captionMap: [String: String] = [:]
+    /// **Ce que la légende POURRAIT dire, langue par langue** (#4934).
+    ///
+    /// `captionMap` reste le chemin simple — une légende, sans alternative — et
+    /// tous ses appelants continuent de fonctionner tels quels. `captionServings`
+    /// est le chemin RICHE : il porte le texte servi ET ses langues, donc il
+    /// permet la bascule que la carte du fil offrait déjà et que le plein écran
+    /// perdait.
+    ///
+    /// Vide, ou avec des `alternatives` vides, ⇒ aucun contrôle n'est peint
+    /// (loi 4 : un contrôle sans effet est ABSENT, jamais grisé).
+    var captionServings: [String: SocialMediaCaptionServing] = [:]
 
     /// **Le repli de la légende est un état d'ÉCRAN, pas de média** (#4768) —
     /// mais il se REMET à chaque page. Feuilleter vers un autre média présente
@@ -50,6 +61,10 @@ struct ConversationMediaGalleryView: View {
     /// que l'utilisateur n'a pas demandé à lire, et masquerait le média qu'il
     /// vient d'atteindre.
     @State private var captionExpanded = false
+    /// La langue choisie PAR MÉDIA. Par média et non globale : deux pièces d'un
+    /// même lot peuvent porter des légendes de provenances différentes, et une
+    /// langue choisie sur l'une ne dit rien de l'autre.
+    @State private var captionLanguage: [String: String] = [:]
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
@@ -93,6 +108,7 @@ struct ConversationMediaGalleryView: View {
         allAttachments: [MessageAttachment],
         startAttachmentId: String,
         accentColor: String,
+        captionServings: [String: SocialMediaCaptionServing] = [:],
         captionMap: [String: String] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
@@ -101,6 +117,7 @@ struct ConversationMediaGalleryView: View {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
         self.accentColor = accentColor
+        self.captionServings = captionServings
         self.captionMap = captionMap
         self.senderInfoMap = senderInfoMap
         self.onComposeWithMedia = onComposeWithMedia
@@ -142,10 +159,47 @@ struct ConversationMediaGalleryView: View {
         )
     }
 
+    /// **Le texte de la légende, dans la langue courante** — source UNIQUE pour
+    /// l'affichage ET pour VoiceOver (#4934).
+    ///
+    /// Les deux la partagent parce qu'un lecteur d'écran qui énoncerait une
+    /// autre langue que celle affichée serait pire qu'un lecteur muet : il
+    /// affirmerait quelque chose de faux. C'est la leçon de
+    /// `reference_one_string_for_sight_and_for_voiceover_serves_one_of_them`,
+    /// prise par l'autre bout.
+    private func servedCaption(_ id: String) -> String? {
+        if let serving = captionServings[id] {
+            if let chosen = captionLanguage[id], let texte = serving.alternatives[chosen] {
+                return texte.isEmpty ? nil : texte
+            }
+            return serving.text.isEmpty ? nil : serving.text
+        }
+        guard let simple = captionMap[id], !simple.isEmpty else { return nil }
+        return simple
+    }
+
+    /// Les langues offertes pour CE média — vides quand il n'y a rien à
+    /// basculer. Ordonnées pour que la rangée ne danse pas d'un rendu à l'autre :
+    /// un dictionnaire n'a pas d'ordre, et une rangée de drapeaux qui se
+    /// réarrange à chaque redessin serait illisible.
+    private func captionLanguages(_ id: String) -> [String] {
+        guard let serving = captionServings[id], serving.alternatives.count > 1 else { return [] }
+        return serving.alternatives.keys.sorted()
+    }
+
+    /// La langue ACTIVE : celle que le lecteur a choisie, sinon celle dont le
+    /// texte est servi. Déduire l'active du TEXTE plutôt que de la supposer
+    /// évite qu'un drapeau se dise actif au-dessus d'une autre langue.
+    private func activeCaptionLanguage(_ id: String) -> String? {
+        if let chosen = captionLanguage[id] { return chosen }
+        guard let serving = captionServings[id] else { return nil }
+        return serving.alternatives.first(where: { $0.value == serving.text })?.key
+    }
+
     /// Libellé VoiceOver d'une image plein écran : la légende si le call site en
     /// fournit une, sinon un libellé générique (l'image ne doit jamais être muette).
     private func imageAccessibilityLabel(_ attachment: MessageAttachment) -> String {
-        if let caption = captionMap[attachment.id], !caption.isEmpty {
+        if let caption = servedCaption(attachment.id) {
             return caption
         }
         return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
@@ -317,10 +371,57 @@ struct ConversationMediaGalleryView: View {
     /// l'invite, l'ancrage bas-gauche déplié. Le retrait reste 16 pt, celui de
     /// `bottomMetadataOverlay` juste au-dessus : la légende s'aligne sur sa
     /// colonne, comme en réel (directive porteur 2026-09-01).
+    /// **La rangée de langues de la légende** (#4934) — au-DESSUS du bandeau,
+    /// jamais dedans.
+    ///
+    /// Deux raisons, et la seconde est celle qui décide : le bandeau se DÉPLIE
+    /// au tap (`captionExpanded`), donc y loger des boutons ferait cohabiter
+    /// deux gestes sur la même surface — taper pour lire plus, taper pour
+    /// changer de langue. La rangée vit donc au-dessus, comme la rangée méta
+    /// d'un réel, et emprunte ses métriques (`.overlay`, 32 pt) pour la même
+    /// raison qu'elle : au-dessus d'un média, une bande de 44 pt volerait le tap
+    /// qui pilote la lecture.
+    ///
+    /// **Absente dès qu'il n'y a rien à basculer** — pas grisée, pas vide : le
+    /// cas nominal d'un post à plusieurs médias n'offre aucune traduction de
+    /// légende (#4904), et une rangée fantôme y occuperait la place pour rien.
+    @ViewBuilder
+    private func captionLanguageRow(_ id: String) -> some View {
+        let langues = captionLanguages(id)
+        if !langues.isEmpty {
+            let active = activeCaptionLanguage(id)
+            HStack(spacing: 6) {
+                ForEach(langues, id: \.self) { code in
+                    LanguageFlagChip(code: code,
+                                     isActive: active == code,
+                                     metrics: .overlay) {
+                        // L'écriture est la SEULE ; le texte affiché et le
+                        // libellé VoiceOver la relisent tous deux par
+                        // `servedCaption`. Deux états parallèles auraient permis
+                        // à l'un de dire une langue que l'autre ne sert pas.
+                        captionLanguage[id] = code
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 2)
+            .accessibilityLabel(String(localized: "gallery.caption.languages",
+                                       defaultValue: "Langue de la légende",
+                                       bundle: .main))
+        }
+    }
+
     private func captionOverlay(_ text: String) -> some View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
                             horizontalInset: 16,
+                            // **« JUSTE afficher le texte déplié avec effet
+                            // ombre »** — donc pas de voile en plus. Le
+                            // dégradé noir du composant sert les hôtes qui
+                            // n'ont rien d'autre pour détacher le texte ; ici
+                            // l'ombre suffit, et le voile masquait le média
+                            // que l'utilisateur est venu regarder.
+                            dimsBackgroundWhenExpanded: false,
                             onToggle: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     captionExpanded.toggle()
@@ -422,19 +523,22 @@ struct ConversationMediaGalleryView: View {
                 // (`StoryViewerView+Canvas`). Deux surfaces, deux réponses à la
                 // même question — « où trouver la place ? » — parce qu'elles
                 // n'ont pas le même voisinage.
-                if CaptionExpansionSpace.showsAuthorDetails(captionExpanded: captionExpanded) {
-                    bottomMetadataOverlay(att)
-                        // **Un FONDU, jamais un glissement** (directive porteur
-                        // 2026-09-02) : « il ne faut pas faire remonter l'auteur
-                        // de l'image mais le faire disparaître fade out puis
-                        // fade-in ». Un `.move` ferait monter la carte d'auteur
-                        // à travers la légende qui grandit — deux mouvements en
-                        // sens contraire sur la même bande, que l'œil lit comme
-                        // une bousculade. Le fondu ne déplace rien : l'auteur
-                        // s'efface sur place et revient sur place.
-                        .transition(.opacity)
-                }
-                if let caption = captionMap[att.id], !caption.isEmpty {
+                // **L'auteur ne s'efface plus : il est POUSSÉ vers le haut**
+                // (directive porteur 2026-09-05).
+                //
+                // > « le "voir plus" de la légende doit juste afficher le texte
+                // > déplié avec effet ombre, en repoussant le détail de
+                // > l'auteur vers le haut »
+                //
+                // Le fondu et son gate viennent de la directive du 2026-09-02,
+                // qui demandait l'inverse. Ils sont retirés, pas commentés :
+                // c'est la pile ancrée en bas qui fait le travail — la légende
+                // grandit, ses voisins montent — et la lisibilité est portée
+                // par l'ombre de `MediaCaptionOverlay`, jamais par la place
+                // qu'on prendrait à quelqu'un d'autre.
+                bottomMetadataOverlay(att)
+                if let caption = servedCaption(att.id) {
+                    captionLanguageRow(att.id)
                     captionOverlay(caption)
                 }
                 if allAttachments.count > 1 {

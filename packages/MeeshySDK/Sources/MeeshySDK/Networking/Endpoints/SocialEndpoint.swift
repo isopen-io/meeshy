@@ -12,10 +12,12 @@
 import Foundation
 
 public enum SocialEndpoint: MeeshyEndpoint, Sendable {
+    case events
     case posts
 
     public var path: String {
         switch self {
+        case .events: return "/api/v1/social/events"
         case .posts: return "/api/v1/social/posts"
         }
     }

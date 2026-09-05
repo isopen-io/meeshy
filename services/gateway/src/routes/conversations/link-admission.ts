@@ -550,8 +550,27 @@ export async function endGuestSession(params: GuestSessionParams): Promise<EndGu
  * /anonymous/join|refresh` — exportée pour que l'adaptateur
  * (`routes/anonymous.ts`) la partage plutôt que de la retaper une troisième
  * fois (le canonique a la sienne, propre au contrat cible).
+ *
+ * ELLE SERT L'ENSEMBLE RÉSOLU, JAMAIS L'INSTANTANÉ. Cette forme lisait
+ * `participant.permissions.*` BRUT — c'est-à-dire l'instantané figé au join —
+ * pendant que la loi unique du dépôt (`services/participantRights.ts`, dont le
+ * doc-comment dit « trois lecteurs de la même règle divergeraient ») classe
+ * `anonymousSession.rights` AU-DESSUS de lui, et que `middleware/auth.ts:571`
+ * la fait respecter à chaque envoi. Elle était donc un QUATRIÈME lecteur, et le
+ * seul à ignorer le levier que `PATCH …/participants/:id/rights` rend à l'hôte :
+ * un lien ouvert en écriture, un droit retiré ensuite, et la charge continuait
+ * d'annoncer « vous pouvez écrire » à quelqu'un que la passerelle refuse.
+ *
+ * `canViewHistory` EST UN DROIT DU PARTICIPANT ; `conversation.allowViewHistory`
+ * reste la COLONNE DU LIEN. Les deux divergent dès qu'une surcharge existe, et
+ * dès qu'une RE-jonction sert la valeur courante du lien à qui lit sa valeur
+ * figée. Le champ du lien ne bouge pas — trois clients le lisent — mais ce qui
+ * décide de la lecture d'un participant est celui du participant, et c'est le
+ * même que `historyFloorFor` (`services/historyFloor.ts`) applique.
  */
 export function participantConversationPayload(participant: ParticipantRow, shareLink: ShareLinkWithConversation) {
+  const rights = resolveEntryRights(participant, undefined, shareLink.allowViewHistory);
+
   return {
     participant: {
       id: participant.id,
@@ -563,9 +582,10 @@ export function participantConversationPayload(participant: ParticipantRow, shar
       banner: null,
       language: participant.language,
       isMeeshyer: false,
-      canSendMessages: participant.permissions?.canSendMessages ?? false,
-      canSendFiles: participant.permissions?.canSendFiles ?? false,
-      canSendImages: participant.permissions?.canSendImages ?? false,
+      canSendMessages: rights.canSendMessages,
+      canSendFiles: rights.canSendFiles,
+      canSendImages: rights.canSendImages,
+      canViewHistory: rights.canViewHistory,
     },
     conversation: {
       id: shareLink.conversation.id,
@@ -800,6 +820,11 @@ export function registerLinkAdmissionRoutes(
                       banner: { type: 'string', nullable: true }, language: { type: 'string' },
                       isMeeshyer: { type: 'boolean' }, canSendMessages: { type: 'boolean' },
                       canSendFiles: { type: 'boolean' }, canSendImages: { type: 'boolean' },
+                      // Le droit RÉSOLU de CE participant — distinct de
+                      // `conversation.allowViewHistory`, qui est la colonne du
+                      // LIEN. Non déclaré, il serait supprimé par
+                      // fast-json-stringify sans qu'aucun témoin ne tombe.
+                      canViewHistory: { type: 'boolean' },
                     },
                   },
                   conversation: {

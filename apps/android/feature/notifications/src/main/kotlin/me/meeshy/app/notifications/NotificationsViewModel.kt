@@ -13,6 +13,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.notification.NotificationRepository
+import me.meeshy.sdk.notification.observeNotificationSync
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.sync.SyncSeqTracker
 import javax.inject.Inject
@@ -101,19 +102,19 @@ class NotificationsViewModel @Inject constructor(
     }
 
     /**
-     * A `notification:new` arriving while this screen is alive/backing the badge is prepended
-     * live into the shared repository cache — an already-known id (REST list beat the socket, or
-     * a duplicate delivery) is a no-op rather than a second row (see
-     * [NotificationRepository.prependLive]). Mirrors iOS `NotificationCoordinator`'s optimistic
-     * unread increment, minus the toast/dedup-window machinery (feature-parity §M — the toast
-     * itself is a separate, not-yet-scoped slice; this is real-time DATA only).
+     * A `notification:new` arriving while this screen is alive/backing the badge, plus the four
+     * lifecycle events a notification emits afterward (`notification:read`,
+     * `notification:read-bulk`, `notification:deleted`, `notification:deleted-bulk`) and the
+     * server-authoritative `notification:counts` resync (issue notif-sync) — all applied to the
+     * SAME repository-owned cache via [observeNotificationSync]. That binding is ALSO run from an
+     * app-scoped ViewModel ([me.meeshy.app.navigation.ChromeViewModel]): this screen's own copy
+     * only covers the SharedFlow events (`replay = 0`) that happen to arrive while it is open —
+     * every apply here is idempotent, so running it from both scopes at once is safe, never a
+     * double count. Mirrors iOS/web's equivalent socket handlers
+     * (`notification-socketio.singleton.ts`).
      */
     private fun observeRealtime() {
-        viewModelScope.launch {
-            messageSocketManager.notificationReceived.collect { notification ->
-                notificationRepository.prependLive(notification)
-            }
-        }
+        viewModelScope.observeNotificationSync(notificationRepository, messageSocketManager)
     }
 
     /**

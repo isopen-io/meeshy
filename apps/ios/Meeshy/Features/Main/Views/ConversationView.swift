@@ -342,7 +342,11 @@ struct ConversationView: View {
     /// ancré. FIGÉE tant qu'un message est en cours de rédaction : voir
     /// `resolvedScrollButtonAnchor(current:composerHeight:isComposing:)`.
     @State var composerScrollButtonAnchor: CGFloat = 130
-    @State private var keyboardHeight: CGFloat = 0
+    /// La dernière animation ANNONCÉE par le clavier — hauteur d'arrivée,
+    /// durée et courbe (`ConversationView+Keyboard`). Sa hauteur gèle la mesure
+    /// du composeur ; sa courbe est celle sur laquelle le fil rejoint sa
+    /// réserve basse, au lieu de s'y téléporter (#4949).
+    @State var keyboardTransition: KeyboardTransition?
     @State private var initialScrollCompleted: Bool = false
 
 
@@ -983,6 +987,11 @@ struct ConversationView: View {
                     isStarred: viewModel.isStarred(messageId: msg.id),
                     isEdited: msg.isEdited,
                     hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
+                    // **La décoration du message, et son état d'épinglage**
+                    // (2026-09-05). `nil` ⇒ ce n'est pas un sticker, et
+                    // l'entrée n'existe pas — la loi 4 tenue par la RÈGLE, pas
+                    // par un grisé.
+                    stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
                     isForwardable: msg.isForwardable
                 )
@@ -1025,6 +1034,10 @@ struct ConversationView: View {
                     onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                     onToggleStar: {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
+                    },
+                    onToggleStickerFavorite: {
+                        MessageStickerFavorite.toggle(for: msg.sticker)
+                        HapticFeedback.light()
                     },
                     onDeleteMessage: { requestDeleteMessage(msg.id) },
                     onEdit: { beginEdit(msg) },
@@ -1315,13 +1328,7 @@ struct ConversationView: View {
                 FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
                 dismiss()
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-                keyboardHeight = frame.height
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                keyboardHeight = 0
-            }
+            .observingKeyboardTransition($keyboardTransition)
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                 // Le debounce de 400 ms a remplacé la persistance par frappe :
                 // sans ce flush, backgrounder l'app (ou la tuer depuis
@@ -1579,6 +1586,7 @@ struct ConversationView: View {
                 // qu'il traverse s'ajoute à la réserve du composeur pour que
                 // le repos du fil ne bouge pas d'un point.
                 bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                bottomInsetTransition: listInsetTransition,
                 // 0 en preview : la vue y est hébergée dans une `.sheet` à
                 // détentes, dont le bord haut est déjà sous la status bar —
                 // réserver la bande îlot y décalerait le flux dans le vide.

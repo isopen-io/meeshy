@@ -15,12 +15,15 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.StorySourceWindow
+import me.meeshy.sdk.model.StorySourceWindowMs
 import me.meeshy.sdk.model.EngagementSessions
 import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryClipTransition
+import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryKeyframe
@@ -67,6 +70,13 @@ data class StoryForegroundMediaView(
     val fadeOut: Double = 0.0,
     val keyframes: List<StoryKeyframe> = emptyList(),
     val clipTransitions: List<StoryClipTransition> = emptyList(),
+    /**
+     * Fenêtre de LECTURE dans la source (#5129) — `null` quand la source joue en
+     * entier. À ne pas confondre avec [startTime]/[duration], qui disent quand
+     * l'objet est à l'écran : ceci dit quelle partie du fichier joue une fois
+     * qu'il y est.
+     */
+    val sourceWindow: StorySourceWindowMs? = null,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -168,6 +178,10 @@ data class StorySlideView(
     val textObjects: List<StoryTextObjectView> = emptyList(),
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
+    /** Fenêtres de LECTURE des trois pistes de la slide (#5129) — `null` = entière. */
+    val backgroundVideoWindow: StorySourceWindowMs? = null,
+    val backgroundAudioWindow: StorySourceWindowMs? = null,
+    val foregroundAudioWindow: StorySourceWindowMs? = null,
     val languageCode: String? = null,
     /**
      * How long this slide stays on screen before auto-advancing, in milliseconds.
@@ -211,6 +225,14 @@ data class StorySlideView(
      * story that is not a repost — the header then shows only the author's name.
      */
     val repostAttribution: StoryRepostAttribution? = null,
+    /**
+     * The author's freehand drawing (`storyEffects.drawingStrokes`), rendered read-only
+     * on top of [foregroundMedia]/[textObjects] by [StoryDrawingLayer] — a drawing-only
+     * slide (no other publishable content) would otherwise reach the reader as a bare
+     * background: the composer already lets it publish ([StorySlideDeck.publishableSlides]),
+     * so the viewer must be able to show what was drawn.
+     */
+    val strokes: List<StoryDrawingStroke> = emptyList(),
 )
 
 /**
@@ -785,6 +807,9 @@ class StoryViewerViewModel @Inject constructor(
         val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
         val textObjects = storyEffects?.textObjects.orEmpty()
             .map { StoryTextObjectProjection.project(it, preferredLanguages) }
+        // UNE lecture par piste, deux faits chacune (#5129).
+        val backgroundTrack = resolveAudioTrack(preferBackground = true)
+        val foregroundTrack = resolveAudioTrack(preferBackground = false)
         return StorySlideView(
             id = id,
             text = resolved.content,
@@ -794,18 +819,22 @@ class StoryViewerViewModel @Inject constructor(
             reactionCount = reactionCount,
             languageCode = resolved.languageCode,
             backgroundVideoUrl = background.videoUrl,
+            backgroundVideoWindow = background.window,
             backgroundLoop = background.loop,
             backgroundTransform = background.transform,
             backgroundThumbHash = StorySlidePlaceholder.resolve(this),
             foregroundMedia = foreground,
             textObjects = textObjects,
-            backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
-            foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
+            backgroundAudioUrl = backgroundTrack?.url,
+            backgroundAudioWindow = backgroundTrack?.window,
+            foregroundAudioUrl = foregroundTrack?.url,
+            foregroundAudioWindow = foregroundTrack?.window,
             autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
             background = storyEffects?.background
                 ?.takeIf { it.isNotBlank() }
                 ?.let { StoryBackgroundValue.parse(it) },
             repostAttribution = StoryRepostAttribution.resolve(this),
+            strokes = storyEffects?.drawingStrokes.orEmpty(),
         )
     }
 
@@ -814,6 +843,8 @@ class StoryViewerViewModel @Inject constructor(
         val videoUrl: String?,
         val loop: Boolean,
         val transform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
+        /** Fenêtre de lecture d'un fond VIDÉO (#5129) ; une image n'en a pas. */
+        val window: StorySourceWindowMs? = null,
     )
 
     /**
@@ -852,6 +883,12 @@ class StoryViewerViewModel @Inject constructor(
                 videoUrl = resolvedUrl,
                 loop = backgroundObject?.loop ?: true,
                 transform = videoTransform,
+                // La fenêtre ne vient QUE d'un objet moderne : un fond hérité
+                // (plat, sans objet) n'a jamais porté de bornes, et lui en
+                // fabriquer une serait inventer une coupe.
+                window = StorySourceWindow.clippingMs(
+                    backgroundObject?.sourceStart, backgroundObject?.sourceEnd,
+                ),
             )
         }
         val imageUrl = resolvedUrl
@@ -883,6 +920,7 @@ class StoryViewerViewModel @Inject constructor(
             fadeOut = fadeOut ?: 0.0,
             keyframes = keyframes.orEmpty(),
             clipTransitions = clipTransitions,
+            sourceWindow = StorySourceWindow.clippingMs(sourceStart, sourceEnd),
         )
     }
 
@@ -895,17 +933,37 @@ class StoryViewerViewModel @Inject constructor(
      * the story's direct `audioUrl` (voice attachment) then its library
      * `backgroundAudio` entry — both already resolved URLs, no lookup needed.
      */
-    private fun StoryItem.resolveAudioUrl(preferBackground: Boolean): String? {
+    /**
+     * L'URL d'une piste ET sa fenêtre de lecture, résolues d'UNE SEULE lecture
+     * (#5129).
+     *
+     * **Deux fonctions auraient dû s'accorder sur l'objet élu**, et rien ne
+     * l'aurait garanti : `firstOrNull` sur une liste dont l'ordre n'est pas
+     * contractuel peut rendre deux objets différents à deux appels si la liste
+     * change entre-temps. Un seul parcours, deux faits.
+     *
+     * La fenêtre ne vient QUE de l'objet moderne : les replis hérités
+     * (`audioUrl`, `backgroundAudio.fileUrl`) n'ont jamais porté de bornes.
+     */
+    private fun StoryItem.resolveAudioTrack(preferBackground: Boolean): AudioTrack? {
         val match = storyEffects?.audioPlayerObjects.orEmpty()
             .firstOrNull { (it.isBackground == true) == preferBackground }
         val fromObject = match?.postMediaId
             ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
             ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-        if (fromObject != null) return fromObject
+        if (fromObject != null) {
+            return AudioTrack(
+                url = fromObject,
+                window = StorySourceWindow.clippingMs(match.sourceStart, match.sourceEnd),
+            )
+        }
         if (!preferBackground) return null
-        return audioUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+        val legacy = audioUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
             ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+        return legacy?.let { AudioTrack(url = it, window = null) }
     }
+
+    private data class AudioTrack(val url: String, val window: StorySourceWindowMs?)
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
         override val systemLanguage: String? = null

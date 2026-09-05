@@ -117,10 +117,10 @@ final class EditParityInventoryTests: XCTestCase {
         // d'envoi refuse un brouillon blanc, et le socle peint la fleche sous le
         // document. C'est une capacite REPRISE, la premiere des sept.
         let brouillonBlanc = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         let brouillonPlein = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         let refuseLeBlanc = ComposerDocumentSendPlan.plan(for: brouillonBlanc, isOffline: false)
             == .refuse(.emptyDraft)
@@ -196,7 +196,7 @@ final class EditParityInventoryTests: XCTestCase {
         // document, et le brouillon porte la liste nominative que ONLY et EXCEPT
         // exigent. Seconde des deux capacites tenues.
         let brouillonNomme = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         let audienceEtListe = ComposerChromeOwnership.socleZones(for: .document).contains(.audience)
             && brouillonNomme.visibilityUserIds == ["u1"]
@@ -276,11 +276,16 @@ final class EditParityInventoryTests: XCTestCase {
     /// compte serait reste vert le jour ou un format en remplacerait un autre,
     /// et c'est exactement la substitution qui a produit le defaut d'origine.
     func test_lEdition_routeParFORMAT_etCesseDeFairePasserUnPostPourUneStory() {
-        XCTAssertEqual(
+        // **#5053** — `storyEditComposerCover` existe toujours, aux mêmes quatre
+        // montages ; ce qu'il MONTE a changé. Il présente `StoryEditComposer`,
+        // donc `MeeshyComposerHost`, hydraté par
+        // `ComposerHydration.editingStory`. La table n'a plus d'historique à
+        // nommer pour ce format.
+        XCTAssertNil(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .story)).routesToLegacy,
-            .storyEdit,
-            "Editer une STORY monte `storyEditComposerCover` — quatre montages de production. C'est le "
-            + "seul format dont `.storyEdit` dise la verite."
+            "Editer une STORY monte le MEUBLE depuis #5053. `.storyEdit` reste DÉCLARÉ dans "
+            + "`LegacyComposer` — l'inventaire de ce fichier compte par ce vocabulaire, et retirer le "
+            + "mot ferait rougir un inventaire pour une raison sans rapport avec ce qu'il mesure."
         )
         XCTAssertEqual(
             ComposerIntent(origin: .edit(postId: "d", documentFormat: .post)).routesToLegacy,
@@ -320,10 +325,17 @@ final class EditParityInventoryTests: XCTestCase {
             let route = ComposerIntent(origin: .edit(postId: "d", documentFormat: format)).routesToLegacy
             let estUneStory = format == .story
 
+            // **#5053 — l'édition d'une STORY ne route plus vers l'historique.**
+            // `storyEditComposerCover` monte `StoryEditComposer`, donc le
+            // MEUBLE, hydraté par `ComposerHydration.editingStory`. Le fait que
+            // ce test tenait — « un post n'a pas de `StoryEditSession` » — reste
+            // VRAI et reste gardé : c'est l'autre moitié de l'assertion, qui
+            // exige `.editPostSheet` pour tout format non-story.
             XCTAssertEqual(
-                route == LegacyComposer.storyEdit, estUneStory,
-                "L'edition en \(format) route vers `.storyEdit` : `storyEditComposerCover` monte "
-                + "`StoryComposerView` sur une `StoryEditSession`, qu'un post n'a pas."
+                route == nil, estUneStory,
+                "L'edition en \(format) doit être servie par le MEUBLE (route `nil`) si et seulement "
+                + "si c'est une story : les autres formats montent `EditPostSheet`, la seule surface "
+                + "du depot qui bascule POST vers REEL."
             )
             XCTAssertEqual(
                 route == LegacyComposer.editPostSheet, !estUneStory,

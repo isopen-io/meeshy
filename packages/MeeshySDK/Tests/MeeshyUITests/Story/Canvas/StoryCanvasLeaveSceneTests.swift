@@ -10,7 +10,7 @@ import MeeshySDK
 /// loi 4 (`StoryCanvasContextAction.offered`, gardée par
 /// `StoryCanvasLockedItemGuardTests`). Celle-ci ne l'était pas, et elle est
 /// d'une autre NATURE : les deux premières écrivent le `z` d'un
-/// `MeeshyObject` (son ordre DANS son plan), celle-ci écrit son `plane` — le
+/// `MeeshySceneObject` (son ordre DANS son plan), celle-ci écrit son `plane` — le
 /// média quitte la scène et redevient une slide du post.
 ///
 /// Les confondre ferait passer un objet devant un fond au lieu de le sortir.

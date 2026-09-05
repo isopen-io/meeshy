@@ -24,8 +24,19 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
+
+/// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
+/// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
+/// transcription. Le prédicat ET la composition de ce qui est SERVI vivent au
+/// site unique `servedQuotedMessage`, partagé avec les deux producteurs de
+/// `message:new` : la garde ne retenait ici que les traductions pendant que
+/// `...message.replyTo` répandait le texte et qu'`attachmentFullSelect`
+/// servait le média (leçon 275 — une garde se mesure sur tout ce que la charge
+/// TRANSPORTE).
 
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
@@ -146,6 +157,70 @@ export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Da
 }
 
 /**
+ * Bandwidth opt-in `?languages=` — restreint les traductions servies (texte
+ * `transformTranslationsToArray`, message cité `servedQuotedMessage`, pistes
+ * audio du Prisme `cleanAttachmentsForApi`) aux seules langues demandées.
+ * Canonicalise via {@link normalizeLanguageForDedup} (SSOT) : les codes
+ * arrivent VERBATIM du client — locale appareil (`en_US`/`pt_BR`, rang 4 du
+ * Prisme) sur iOS, `Accept-Language` (`en-US`/`pt-BR`) sur le web — quand les
+ * traductions sont stockées sous des clés canoniques 2 lettres (`'pt'`).
+ * Symétrique du chemin socket (`normalizeGroupLanguage` →
+ * `normalizeLanguageCode`, `socketio/utils/message-payload-filter.ts`).
+ *
+ * Absent/vide → `undefined` (comportement historique : toutes les langues).
+ * Dédupliqué (un même code sous deux graphies ne compte qu'une fois) et borné
+ * à 20 entrées.
+ */
+export function parseLanguageFilterParam(languagesStr?: string): string[] | undefined {
+  if (!languagesStr) return undefined;
+  const parsed = Array.from(new Set(
+    languagesStr.split(',')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map(normalizeLanguageForDedup)
+  )).slice(0, 20);
+  return parsed.length > 0 ? parsed : undefined;
+}
+
+/**
+ * Les quatre familles de protection d'un message — vue unique, flou,
+ * expiration, et le bitfield qui les résume — plus les deux compteurs de
+ * limite/vues de la vue unique. Source UNIQUE du `select` Prisma ET de la
+ * projection servie : #4885 a mesuré que `GET .../messages/search` les
+ * réécrivait à la main sans elles, laissant un message à vue unique trouvé
+ * par recherche FORWARDABLE (le garde côté client lit `isViewOnce`, absent
+ * de la réponse). Toute route qui sert `Message.content` doit ce bloc, ou
+ * dire pourquoi non (#4885 critère 4).
+ */
+export const MESSAGE_PROTECTION_SELECT = {
+  isViewOnce: true,
+  maxViewOnceCount: true,
+  viewOnceCount: true,
+  isBlurred: true,
+  effectFlags: true,
+  expiresAt: true,
+} as const;
+
+/** Projette les mêmes six champs depuis une ligne Prisma déjà chargée — le pendant servi de `MESSAGE_PROTECTION_SELECT`. */
+export function mapMessageProtectionFields(message: any): {
+  isViewOnce: any;
+  maxViewOnceCount: any;
+  viewOnceCount: any;
+  isBlurred: any;
+  effectFlags: any;
+  expiresAt: any;
+} {
+  return {
+    isViewOnce: message.isViewOnce,
+    maxViewOnceCount: message.maxViewOnceCount,
+    viewOnceCount: message.viewOnceCount,
+    isBlurred: message.isBlurred,
+    effectFlags: message.effectFlags,
+    expiresAt: message.expiresAt,
+  };
+}
+
+/**
  * Construit le `select` Prisma de `GET /conversations/:id/messages` selon les
  * paramètres d'inclusion (traductions, réponses citées).
  */
@@ -184,12 +259,7 @@ export function buildMessageListSelect(options: {
         forwardedFromConversationId: true,
 
         // ===== VIEW-ONCE / BLUR / EXPIRATION =====
-        isViewOnce: true,
-        maxViewOnceCount: true,
-        viewOnceCount: true,
-        isBlurred: true,
-        effectFlags: true,
-        expiresAt: true,
+        ...MESSAGE_PROTECTION_SELECT,
 
         // ===== ÉPINGLAGE =====
         pinnedAt: true,
@@ -267,10 +337,36 @@ export function buildMessageListSelect(options: {
             createdAt: true,
             senderId: true,
             validatedMentions: true,
+            // La protection du message CITÉ — le niveau que ce select ne
+            // demandait pas du tout, alors que `attachmentFullSelect` la sert
+            // déjà sur ses PIÈCES JOINTES (`reply-attachment-protection-contract`).
+            // Sans ces champs, un client ne peut pas savoir qu'il rend le texte
+            // d'un message à vue unique : répondre à un message protégé en
+            // publiait le contenu entier dans chaque bulle-citation du fil.
+            // Même famille, une couche plus haut : ce que la route CONSTRUIT et
+            // ce que le schéma DÉCLARE sont deux vérités séparées — les deux
+            // ont dû bouger.
+            isViewOnce: true,
+            isBlurred: true,
+            expiresAt: true,
+            effectFlags: true,
+            isEncrypted: true,
+            encryptionMode: true,
+            // Le TYPE porte l'icône du placeholder servi à un message protégé
+            // (`protectedPreview` : « 👁️ 🖼️ ») ; sans lui toute citation
+            // masquée se lit « 👁️ 💬 », quel que soit son média.
+            messageType: true,
             // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
             // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
             // le message qui cite.
             metadata: true,
+            // #4945 — la citation descend le Prisme au CHARGEMENT comme à
+            // l'arrivée en direct : le fil socket `include` la ligne entière
+            // (`translations` compris) quand ce select nommé ne le demandait
+            // pas, et un lecteur francophone lisait la même citation en anglais
+            // après un rechargement et en français en temps réel. Même garde
+            // que la racine : le client qui n'en veut pas ne les paie pas.
+            ...(includeTranslations ? { translations: true } : {}),
             sender: {
               select: {
                 id: true,
@@ -520,12 +616,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           forwardedFromConversationId: message.forwardedFromConversationId,
 
           // View-once / Blur / Expiration
-          isViewOnce: message.isViewOnce,
-          maxViewOnceCount: message.maxViewOnceCount,
-          viewOnceCount: message.viewOnceCount,
-          isBlurred: message.isBlurred,
-          effectFlags: message.effectFlags,
-          expiresAt: message.expiresAt,
+          ...mapMessageProtectionFields(message),
 
           // Épinglage
           pinnedAt: message.pinnedAt,
@@ -622,6 +713,16 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           mappedMessage.replyTo = hoistStickerOnto(hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
+            // #4945 — même projection JSON → tableau que la racine, même filtre
+            // de langues ; sans elle le blob Prisma brut voyagerait sous un
+            // nom que les clients lisent comme un tableau. Et le TEXTE et le
+            // MÉDIA de la citation passent par la même garde que ses
+            // traductions : ils sont étalés APRÈS `...message.replyTo`, donc
+            // ils la remplacent.
+            ...servedQuotedMessage(message.replyTo, {
+              includeTranslations,
+              languages: hasLanguageFilter ? languageFilter : undefined,
+            }),
             sender: replySender ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,

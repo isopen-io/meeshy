@@ -3,10 +3,11 @@
  */
 
 import { CHATS, TABLEAU_DE_BORD } from '@/app/connecte/contenu';
+import { liensDuLecteur } from '@/lib/api/compte';
 import { serviteurDe } from '@/app/connecte/porte';
-import { documentDesChats, documentDuTableau, quand } from '@/app/connecte/vue';
+import { documentDuTableau, quand, teinteDeLAvatar } from '@/app/connecte/vue';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/app/authentification/remise';
-import type { Conversation } from '@/lib/api/compte';
+import type { Conversation, LienDePartage } from '@/lib/api/compte';
 
 /**
  * **Le tableau de bord et la liste des conversations sont RENDUS PAR LE
@@ -26,6 +27,23 @@ const CONVERSATION = (attributs: Partial<Conversation> = {}): Conversation => ({
   membres: 199,
   nonLus: 0,
   dernierMessageA: '2026-09-01T12:00:00.000Z',
+  apercu: null,
+  apercuTraductions: null,
+  apercuLangueOriginale: null,
+  sourdine: false,
+  archivee: false,
+  participantsInscrits: [],
+  ...attributs,
+});
+
+const LIEN = (attributs: Partial<LienDePartage> = {}): LienDePartage => ({
+  identifiant: 'mshy_lagos',
+  nom: 'Ops Lagos',
+  utilisations: 12,
+  conversation: '68f2a81417a557e8ce4ddfbb',
+  actif: true,
+  capacite: null,
+  expireA: null,
   ...attributs,
 });
 
@@ -60,7 +78,7 @@ const NOMINALE = passerelle({
 
 describe('la porte de la zone connectée', () => {
   it('renvoie se connecter quand aucun jeton n’accompagne la demande, en gardant le chemin', async () => {
-    const porte = serviteurDe('/chats', () => 'jamais rendu', NOMINALE);
+    const porte = serviteurDe({ chemin: '/chats', ecran: () => 'jamais rendu', recuperer: NOMINALE });
     const reponse = await porte(requete('/chats', `${COOKIE_DE_SESSION}=abc`));
 
     expect(reponse.status).toBe(302);
@@ -73,14 +91,14 @@ describe('la porte de la zone connectée', () => {
    * simplement se reconnecter — et le ferait RESTER là, sans issue.
    */
   it('renvoie se connecter quand la passerelle refuse le jeton (401)', async () => {
-    const porte = serviteurDe(
-      '/',
-      () => 'jamais rendu',
-      passerelle({
+    const porte = serviteurDe({
+      chemin: '/',
+      ecran: () => 'jamais rendu',
+      recuperer: passerelle({
         '/api/v1/auth/me': () => json({}, 401),
         '/api/v1/conversations': () => json({}, 401),
       }),
-    );
+    });
     const reponse = await porte(requete('/', AVEC_JETON));
 
     expect(reponse.status).toBe(302);
@@ -101,14 +119,14 @@ describe('la porte de la zone connectée', () => {
    * POUR ce défaut, est partie avec lui.
    */
   it('renvoie se connecter sur le 401 de /conversations, /auth/me étant nominale', async () => {
-    const porte = serviteurDe(
-      '/',
-      () => 'jamais rendu',
-      passerelle({
+    const porte = serviteurDe({
+      chemin: '/',
+      ecran: () => 'jamais rendu',
+      recuperer: passerelle({
         '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
         '/api/v1/conversations': () => json({ success: false, code: 'UNAUTHORIZED' }, 401),
       }),
-    );
+    });
     const reponse = await porte(requete('/', AVEC_JETON));
 
     expect(reponse.status).toBe(302);
@@ -124,14 +142,14 @@ describe('la porte de la zone connectée', () => {
    * sait pas lire — et l'écran de panne est DESSINÉ, jamais blanc.
    */
   it('ne prend plus le 403 de /conversations pour une session expirée', async () => {
-    const porte = serviteurDe(
-      '/',
-      () => 'jamais rendu',
-      passerelle({
+    const porte = serviteurDe({
+      chemin: '/',
+      ecran: () => 'jamais rendu',
+      recuperer: passerelle({
         '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
         '/api/v1/conversations': () => json({}, 403),
       }),
-    );
+    });
     const reponse = await porte(requete('/', AVEC_JETON));
 
     expect(reponse.status).toBe(503);
@@ -147,24 +165,66 @@ describe('la porte de la zone connectée', () => {
    * cet appelant ne sait pas lire.
    */
   it('ne prend PAS le 403 de /auth/me pour une session expirée', async () => {
-    const porte = serviteurDe(
-      '/',
-      (charge) => `prenom=${charge.lecteur?.prenom ?? 'aucun'} n=${charge.conversations.length}`,
-      passerelle({
+    const porte = serviteurDe({
+      chemin: '/',
+      ecran: (charge) => `prenom=${charge.lecteur?.prenom ?? 'aucun'} n=${charge.conversations.length}`,
+      recuperer: passerelle({
         '/api/v1/auth/me': () => json({}, 403),
         '/api/v1/conversations': () =>
           json({ success: true, data: [CONVERSATION({})], pagination: { total: 1 } }),
       }),
-    );
+    });
     const reponse = await porte(requete('/', AVEC_JETON));
 
     expect(reponse.status).toBe(200);
     expect(await reponse.text()).toContain('prenom=aucun n=1');
   });
 
+  /**
+   * UNE CONVERSATION ARCHIVÉE N'ATTEINT AUCUN DES DEUX ÉCRANS.
+   *
+   * `GET /conversations` NE LES FILTRE PAS : `whereClause`
+   * (`routes/conversations/core-list.ts:176-247`) ne mentionne pas
+   * `isArchived`, dont la seule occurrence de la route est le `select` qui le
+   * SERT (`core-selects.ts:65`, déclaré au wire par
+   * `conversationMinimalSchema.userPreferences`). C'est donc au client
+   * d'écarter la ligne — la webapp legacy le fait déjà
+   * (`useConversationFiltering.ts:56-59`). Tant qu'il ne le faisait pas,
+   * « Archiver » ÉCRIVAIT une préférence que rien ne relisait : sans
+   * JavaScript, le `POST` menait à un `GET` qui re-servait la ligne SOUS la
+   * bannière « Conversation archivée. ».
+   *
+   * Le témoin porte sur la CHARGE, pas sur un écran : le filtre est posé une
+   * fois, dans la porte que le tableau de bord et `/chats` partagent.
+   */
+  it('écarte de la charge les conversations archivées, que la passerelle sert', async () => {
+    const porte = serviteurDe({
+      chemin: '/chats',
+      ecran: (charge) => charge.conversations.map((conversation) => conversation.id).join(','),
+      recuperer: passerelle({
+        '/api/v1/auth/me': () => json({ success: true, data: { firstName: 'Sonde' } }),
+        '/api/v1/conversations': () =>
+          json({
+            success: true,
+            data: [
+              { id: 'vive', title: 'Vive', type: 'group', userPreferences: [{ isMuted: false, isArchived: false }] },
+              { id: 'rangee', title: 'Rangée', type: 'group', userPreferences: [{ isMuted: false, isArchived: true }] },
+            ],
+            pagination: { total: 2 },
+          }),
+      }),
+    });
+
+    expect(await (await porte(requete('/chats', AVEC_JETON))).text()).toBe('vive');
+  });
+
   it('dessine la panne plutôt qu’une page blanche quand la passerelle se tait', async () => {
-    const porte = serviteurDe('/', () => 'jamais rendu', async () => {
-      throw new Error('ECONNREFUSED');
+    const porte = serviteurDe({
+      chemin: '/',
+      ecran: () => 'jamais rendu',
+      recuperer: async () => {
+        throw new Error('ECONNREFUSED');
+      },
     });
     const reponse = await porte(requete('/', AVEC_JETON));
 
@@ -178,24 +238,162 @@ describe('la porte de la zone connectée', () => {
    * d'être de l'écran — leur absence est une panne.
    */
   it('sert l’écran même sans profil, mais jamais sans conversations', async () => {
-    const porte = serviteurDe(
-      '/',
-      (charge) => `prenom=${charge.lecteur?.prenom ?? 'aucun'} n=${charge.conversations.length}`,
-      passerelle({
+    const porte = serviteurDe({
+      chemin: '/',
+      ecran: (charge) => `prenom=${charge.lecteur?.prenom ?? 'aucun'} n=${charge.conversations.length}`,
+      recuperer: passerelle({
         '/api/v1/auth/me': () => json({}, 500),
         '/api/v1/conversations': () => json({ success: true, data: [CONVERSATION()], pagination: { total: 1 } }),
       }),
-    );
+    });
 
     expect(await (await porte(requete('/', AVEC_JETON))).text()).toBe('prenom=aucun n=1');
   });
 
+  /**
+   * LES LIENS SONT DEMANDÉS PAR LE TABLEAU DE BORD, ET PAR LUI SEUL. Les trois
+   * appels partent ENSEMBLE — les enchaîner tripleraient la latence du seul
+   * aller-retour que cette page paie — et `/chats`, qui ne rend aucune section
+   * « Mes liens », n'en paie aucun.
+   */
+  it('demande les liens pour le tableau de bord, jamais pour la liste', async () => {
+    const vus: string[] = [];
+    const journalise = passerelle({
+      '/api/v1/auth/me': () => json({ success: true, data: {} }),
+      '/api/v1/conversations': () => json({ success: true, data: [], pagination: { total: 0 } }),
+      '/api/v1/links': () => json({ success: true, data: [] }),
+    });
+    const recuperer = async (url: string): Promise<Response> => {
+      vus.push(new URL(url).pathname);
+      return journalise(url);
+    };
+
+    await serviteurDe({ chemin: '/', ecran: () => 'ok', avecLiens: true, recuperer })(
+      requete('/', AVEC_JETON),
+    );
+    expect(vus).toContain('/api/v1/links');
+
+    vus.length = 0;
+    await serviteurDe({ chemin: '/chats', ecran: () => 'ok', recuperer })(requete('/chats', AVEC_JETON));
+    expect(vus).not.toContain('/api/v1/links');
+  });
+
   it('ne met jamais la zone connectée en cache ni dans un index', async () => {
-    const porte = serviteurDe('/', () => 'ok', NOMINALE);
+    const porte = serviteurDe({ chemin: '/', ecran: () => 'ok', recuperer: NOMINALE });
     const reponse = await porte(requete('/', AVEC_JETON));
 
     expect(reponse.headers.get('cache-control')).toBe('no-store, private');
     expect(reponse.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+});
+
+/**
+ * `GET /api/v1/links` — la route RÉELLE que le tableau de bord attaque
+ * (`services/gateway/src/routes/links/user.ts:314`, `onRequest: [authRequired]`
+ * avec `requireAuth: true, allowAnonymous: false` — donc `Authorization:
+ * Bearer`). Elle rend `{ success, data: LinkItem[], pagination }` ; `conversation`
+ * n'est servi qu'avec `?expand=conversation` (`user.ts:571-581`).
+ */
+describe('les liens de partage du lecteur', () => {
+  const appel = async (reponse: () => Response): Promise<{ url: string; entetes: HeadersInit | undefined }> => {
+    let vu = { url: '', entetes: undefined as HeadersInit | undefined };
+    await liensDuLecteur({
+      jeton: 'JWT.xyz',
+      base: 'https://gate.test',
+      recuperer: async (url, options) => {
+        vu = { url, entetes: options.headers };
+        return reponse();
+      },
+    });
+    return vu;
+  };
+
+  it('demande l’extension de la conversation, sans quoi le lien ne mènerait nulle part', async () => {
+    const { url, entetes } = await appel(() => json({ success: true, data: [] }));
+
+    expect(url).toBe('https://gate.test/api/v1/links?limit=3&expand=conversation');
+    expect(new Headers(entetes).get('authorization')).toBe('Bearer JWT.xyz');
+  });
+
+  it('projette l’identifiant, le nom, l’emploi mesuré et la conversation', async () => {
+    const liens = await liensDuLecteur({
+      jeton: 'JWT.xyz',
+      base: 'https://gate.test',
+      recuperer: async () =>
+        json({
+          success: true,
+          data: [
+            {
+              id: 'l1',
+              linkId: 'mshy_lagos',
+              identifier: 'lagos-q1',
+              name: 'Ops Lagos',
+              isActive: true,
+              currentUses: 12,
+              conversation: { id: 'c1', title: 'Équipe Lagos', type: 'group' },
+            },
+          ],
+        }),
+    });
+
+    expect(liens).toEqual({
+      genre: 'liste',
+      liens: [
+        {
+          identifiant: 'mshy_lagos',
+          nom: 'Ops Lagos',
+          utilisations: 12,
+          conversation: 'c1',
+          actif: true,
+          // La charge de ce témoin ne porte ni `maxUses` ni `expiresAt` — ce
+          // qu'un lien sans capacité ni échéance sert. Les deux sortent `null`,
+          // jamais `0` ni une date fabriquée.
+          capacite: null,
+          expireA: null,
+        },
+      ],
+    });
+  });
+
+  /**
+   * Un lien DÉSACTIVÉ n'ouvre plus rien : l'afficher sur le tableau de bord
+   * dirait au lecteur qu'il peut encore le partager. `isActive` est servi par la
+   * route (`user.ts` schéma de réponse) — il est LU, pas ignoré.
+   */
+  it('écarte les liens que la passerelle dit inactifs', async () => {
+    const liens = await liensDuLecteur({
+      jeton: 'JWT.xyz',
+      base: 'https://gate.test',
+      recuperer: async () =>
+        json({
+          success: true,
+          data: [{ identifier: 'a', isActive: false, currentUses: 1 }],
+        }),
+    });
+
+    expect(liens).toEqual({ genre: 'liste', liens: [] });
+  });
+
+  it.each([401, 403, 500])('rend « indisponible » plutôt que de renvoyer se connecter (%s)', async (statut) => {
+    const liens = await liensDuLecteur({
+      jeton: 'JWT.xyz',
+      base: 'https://gate.test',
+      recuperer: async () => json({}, statut),
+    });
+
+    expect(liens).toEqual({ genre: 'indisponible' });
+  });
+
+  it('rend « indisponible » quand la passerelle se tait', async () => {
+    const liens = await liensDuLecteur({
+      jeton: 'JWT.xyz',
+      base: 'https://gate.test',
+      recuperer: async () => {
+        throw new Error('ECONNREFUSED');
+      },
+    });
+
+    expect(liens).toEqual({ genre: 'indisponible' });
   });
 });
 
@@ -209,10 +407,16 @@ describe('le tableau de bord', () => {
       systemLanguage: 'fr',
       regionalLanguage: null,
       customDestinationLanguage: null,
+      nom: null,
+      bio: null,
+      email: null,
+      telephone: null,
     },
     conversations: [CONVERSATION({ nonLus: 3 }), CONVERSATION({ id: 'b', titre: 'Marta Ruiz', nonLus: 2 })],
     total: 7,
+    liens: { genre: 'liste', liens: [LIEN()] },
     maintenant: MAINTENANT,
+      espace: false,
   });
 
   it('salue par le prénom et porte le mot du legacy', () => {
@@ -231,8 +435,271 @@ describe('le tableau de bord', () => {
     expect(doc).toContain('<span class="valeur">5</span>');
   });
 
-  it('mène à /chats, par l’accès rapide comme par « voir tout »', () => {
-    expect(doc.split('href="/chats"').length - 1).toBe(2);
+  /**
+   * UNE porte vers `/chats`, et elle change de FORME selon l'état — jamais deux
+   * à la fois. Quand il y a des fils, c'est « Tout voir » à côté du titre de la
+   * section (la cible `home.png`) ; quand il n'y en a pas, c'est l'action
+   * primaire de l'état vide, seul endroit de l'écran où le lecteur a encore
+   * quelque chose à faire. Deux portes empilées, c'était le tableau de bord
+   * « accès rapides » du legacy — un bouton pleine largeur au-dessus d'une
+   * liste qui mène au même endroit.
+   */
+  it('mène à /chats par « Tout voir », une seule fois', () => {
+    expect(doc.split('href="/chats"').length - 1).toBe(1);
+    expect(doc).toContain(TABLEAU_DE_BORD.voirTout);
+  });
+
+  /**
+   * LA CIBLE `home.png` : « Reprendre » est une liste de CARTES à avatar, pas la
+   * liste plate de `/chats` (charte règle 12). L'avatar porte les initiales sur
+   * l'une des quatre teintes de la table — celles qui disent QUI (règle 11).
+   */
+  it('rend « Reprendre » en cartes à avatar, chacune menant à son fil', () => {
+    expect(doc).toContain(TABLEAU_DE_BORD.recentes);
+    expect(doc).toContain('<a class="carte" href="/chats/68f2a81417a557e8ce4ddfbb">');
+    expect(doc).toMatch(/<span class="avatar t[1-4]" aria-hidden="true">MG<\/span>/);
+  });
+
+  /**
+   * La carte du tableau de bord tient le MÊME seuil que la ligne de `/chats` et
+   * que le fil (§ 12.10.2).
+   *
+   * Le témoin garde les DEUX moitiés du seuil, et la seconde n'est pas
+   * décorative : un témoin qui n'exigerait que le silence à deux resterait vert
+   * si la mention disparaissait pour tout le monde — c'est exactement ce
+   * qu'obtient une comparaison `>` là où la règle dit `>=`. C'est donc à TROIS,
+   * la première valeur qui parle, que le témoin sait rougir ; la carte à 199 de
+   * la fixture, elle, ne distingue aucun de ces deux défauts.
+   */
+  const tableauDUneCarte = (membres: number): string =>
+    documentDuTableau({
+      lecteur: { id: 'u1', prenom: 'Sonde', nomAffiche: 'Sonde Neuf', pseudonyme: 's1', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, nom: null, bio: null, email: null, telephone: null },
+      conversations: [CONVERSATION({ titre: 'Marta Ruiz', membres })],
+      total: 1,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
+
+  it('tait le compte de participants sur une carte à deux', () => {
+    expect(tableauDUneCarte(2)).not.toContain(CHATS.participants);
+  });
+
+  it('rend le compte de participants dès trois', () => {
+    expect(tableauDUneCarte(3)).toContain(`3 ${CHATS.participants}`);
+  });
+
+  /**
+   * **CE QUE LA CIBLE MET SOUS LE NOM EST L'APERÇU DU DERNIER MESSAGE**
+   * (`cible/home.png` : la carte « Marta Ruiz » porte la pastille `ES` puis
+   * « Merci, je t'envoie le fichier ») — servi AU PRISME, depuis le site UNIQUE
+   * `apercuServi` (`lib/api/compte.ts`), comme la ligne de `/chats`.
+   *
+   * C'est le cycle 122 du `CLAUDE.md` posé sur la v3 : la donnée descendait
+   * (`Conversation.apercuTraductions` était projetée, le résolveur existait,
+   * `/chats` l'appelait) et la carte du tableau de bord ne l'AFFICHAIT pas. Une
+   * descente juste dont la valeur n'atteint aucun lecteur n'a corrigé personne.
+   */
+  const tableauDe = (attributs: Partial<Conversation>, langues?: readonly string[]): string =>
+    documentDuTableau({
+      lecteur: {
+        id: 'u1',
+        prenom: 'Sonde',
+        nomAffiche: 'Sonde Neuf',
+        pseudonyme: 's1',
+        systemLanguage: langues?.[0] ?? 'fr',
+        regionalLanguage: langues?.[1] ?? null,
+        customDestinationLanguage: null,
+      nom: null,
+      bio: null,
+      email: null,
+      telephone: null,
+      },
+      conversations: [CONVERSATION({ titre: 'Marta Ruiz', membres: 2, ...attributs })],
+      total: 1,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
+
+  const APERCU_ESPAGNOL = {
+    apercu: 'Gracias, te envío el archivo',
+    apercuLangueOriginale: 'es',
+    apercuTraductions: { fr: 'Merci, je t’envoie le fichier' },
+  } as const;
+
+  it('sert l’aperçu du dernier message TRADUIT, avec la pastille de sa langue d’origine', () => {
+    const doc = tableauDe(APERCU_ESPAGNOL);
+
+    expect(doc).toContain('Merci, je t’envoie le fichier');
+    expect(doc).not.toContain('Gracias');
+    expect(doc).toContain('<span class="code">es</span>');
+  });
+
+  /**
+   * LE TÉMOIN DE RANG S'ÉCRIT SUR UN RANG AUTRE QUE LE PREMIER (leçon 261) :
+   * prisme `['de','fr']`, message espagnol, traduction française disponible ⇒
+   * le français. Un résolveur qui ne consulterait que le rang 1 rendrait
+   * l'original — et au rang 1, la règle juste et le court-circuit interdit
+   * rendent le même verdict, donc le témoin ne saurait pas rougir.
+   */
+  it('descend le prisme ORDONNÉ, jamais le rang 1 seul', () => {
+    expect(tableauDe(APERCU_ESPAGNOL, ['de', 'fr'])).toContain('Merci, je t’envoie le fichier');
+  });
+
+  /**
+   * CE QUI PART À CÔTÉ DU TEXTE (cycle 123) : `lang=` sur tout nœud rendu dans
+   * une langue ≠ celle du document. Le témoin s'écrit donc sur une langue
+   * SERVIE qui n'est pas `DOCUMENT_LANGUAGE` — sur du français, l'attribut est
+   * justement absent, et un témoin qui l'exigerait garderait le contraire de la
+   * règle.
+   */
+  it('porte `lang=` quand le texte servi n’est pas dans la langue du document', () => {
+    const doc = tableauDe(
+      { apercu: 'The review lands tomorrow.', apercuLangueOriginale: 'en', apercuTraductions: { es: 'La revisión llega mañana.' } },
+      ['es'],
+    );
+
+    expect(doc).toContain('lang="es"');
+    expect(doc).toContain('<span class="code">en</span>');
+  });
+
+  /**
+   * UN APERÇU DÉJÀ ÉCRIT DANS LA LANGUE DU LECTEUR N'ANNONCE RIEN : la pastille
+   * dit « traduit depuis », elle n'apprendrait rien sur un texte natif (charte
+   * règle 22). C'est la seconde moitié du témoin de la pastille — sans elle,
+   * une pastille rendue TOUJOURS resterait verte.
+   */
+  it('n’annonce aucune traduction sur un aperçu déjà dans la langue du lecteur', () => {
+    const doc = tableauDe({ apercu: 'On se cale à 15 h ?', apercuLangueOriginale: 'fr', apercuTraductions: null });
+
+    expect(doc).toContain('On se cale à 15 h ?');
+    expect(doc).not.toContain('class="langue"');
+  });
+
+  /**
+   * L'ÉTAT « RIEN N'A ENCORE ÉTÉ DIT » RESTE DESSINÉ. Sans aperçu, la carte
+   * garde la méta que la cible remplace — le compte au seuil du § 12.10.2 et
+   * l'écart relatif. Une carte réduite à son seul nom n'est pas un état : c'est
+   * une ligne vide (charte règle 18).
+   */
+  it('garde la méta sur une conversation qui n’a encore rien dit', () => {
+    expect(tableauDe({ membres: 4, apercu: null })).toContain(`4 ${CHATS.participants}`);
+  });
+
+  /**
+   * UNE TEINTE D'AVATAR DÉSAMBIGUÏSE, ELLE N'IDENTIFIE PAS — et le témoin doit
+   * dire lequel des deux, sinon il exige l'impossible. La table n'en porte que
+   * QUATRE : avec trois conversations à l'écran, deux partagent une couleur une
+   * fois sur deux, et aucun choix de fonction n'y change quoi que ce soit. Ce
+   * qui se garde est donc : la STABILITÉ (la couleur ne clignote pas d'un
+   * chargement à l'autre), la couverture des quatre teintes, et l'ABSENCE de
+   * dégénérescence — une somme de points de code donne la même teinte à toute
+   * PERMUTATION d'un nom, si bien que « Marta Ruiz » et « Ruiz Marta » seraient
+   * mécaniquement jumelles, et avec elles toute famille de noms permutés.
+   */
+  it('donne à un même nom la MÊME teinte — la couleur ne clignote pas', () => {
+    expect(teinteDeLAvatar('Meeshy Global')).toBe(teinteDeLAvatar('Meeshy Global'));
+  });
+
+  it('ne donne pas la même teinte à deux permutations d’un même nom', () => {
+    expect(teinteDeLAvatar('Marta Ruiz')).not.toBe(teinteDeLAvatar('Ruiz Marta'));
+  });
+
+  it('atteint les quatre teintes de la table, jamais un sous-ensemble', () => {
+    const noms = Array.from({ length: 40 }, (_, index) => `Conversation ${index}`);
+
+    expect(new Set(noms.map(teinteDeLAvatar))).toEqual(new Set(['t1', 't2', 't3', 't4']));
+  });
+
+  /**
+   * Charte règle 6 — « chacun est un `<a href>` vers une route SERVIE ; tant que
+   * sa destination n'existe pas, il n'est pas rendu — jamais inerte ».
+   *
+   * **CE TÉMOIN A CHANGÉ DE SENS DEUX FOIS, ET C'EST SA PRÉMISSE QUI A BOUGÉ,
+   * PAS LA RÈGLE.** Il gardait « aucun rond flottant » pour la raison qu'il
+   * portait écrite : « la v3 ne sert aujourd'hui ni compte ni réglages ». Elle
+   * sert désormais les six écrans de `/settings`, `/feed`, `/contacts`,
+   * `/notifications`, `/search` et `/links` — et c'est exactement ce que la
+   * règle 6 attendait pour que les deux cibles soient RENDUES (#5093). La
+   * revue de #5164 a ensuite déplacé ces deux cibles hors du rail flottant
+   * (charte règle 8 b/c : un élément `position:fixed` recouvrait la carte de
+   * conversation mise en avant, à tout défilement) — elles sont désormais
+   * `.raccourci` DANS le flux de l'en-tête. Ce que la règle 6 interdit — une
+   * cible inerte, un `href="#"`, un `onclick` — n'a jamais bougé et reste
+   * gardé ligne pour ligne ; ce que valait le premier `expect` est repris, et
+   * durci, par `__tests__/espace-membre.test.ts`, qui oppose chaque
+   * destination aux `app/**\/route.ts` réellement présents.
+   */
+  it('rend les deux raccourcis vers des routes servies, et aucune cible inerte', () => {
+    expect(doc).toContain('class="raccourci" href="/feed"');
+    expect(doc).toContain('class="raccourci" href="/?espace"');
+    expect(doc).not.toContain('href="#"');
+    expect(doc).not.toContain('onclick');
+  });
+
+  /**
+   * « Mes liens » (charte règle 12) : une carte à TUILE par lien du lecteur,
+   * l'adresse qu'il a partagée en titre et son emploi RÉEL en méta —
+   * `currentUses`, servi par `GET /api/v1/links`
+   * (`services/gateway/src/routes/links/user.ts:314`). Aucun chiffre fabriqué :
+   * « ont rejoint » n'existe pas sur cette route, il n'est donc pas affiché.
+   */
+  it('rend « Mes liens » avec l’adresse partagée et son emploi mesuré', () => {
+    expect(doc).toContain(TABLEAU_DE_BORD.liens);
+    expect(doc).toContain('meeshy.me/chat/mshy_lagos');
+    expect(doc).toContain('12 utilisations');
+  });
+
+  it('mène du lien à la conversation qu’il ouvre, quand la passerelle l’étend', () => {
+    expect(doc).toContain('<a class="carte" href="/chats/68f2a81417a557e8ce4ddfbb">');
+  });
+
+  /**
+   * Un lien dont la passerelle n'a pas étendu la conversation ne peut mener
+   * nulle part : il reste une CARTE d'information (`<li class="carte">`), jamais
+   * un lien mort (charte règle 7).
+   */
+  it('rend un lien sans conversation en carte inerte plutôt qu’en lien mort', () => {
+    const orphelin = documentDuTableau({
+      lecteur: null,
+      conversations: [],
+      total: 0,
+      liens: { genre: 'liste', liens: [LIEN({ conversation: null })] },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
+
+    expect(orphelin).toContain('<li class="carte">');
+    expect(orphelin).not.toContain('href="/chats/null"');
+  });
+
+  /**
+   * La section se TAIT quand la passerelle n'a pas répondu : afficher « aucun
+   * lien » à qui en a douze est une donnée FAUSSE, pas une donnée manquante —
+   * c'est la doctrine déjà écrite dans `app/connecte/contenu.ts` pour les quatre
+   * compteurs que la v3 ne mesure pas.
+   */
+  it('tait « Mes liens » quand la passerelle n’a pas répondu, et le dit vide quand il l’est', () => {
+    const muette = documentDuTableau({
+      lecteur: null,
+      conversations: [],
+      total: 0,
+      liens: { genre: 'indisponible' },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
+    const aucun = documentDuTableau({
+      lecteur: null,
+      conversations: [],
+      total: 0,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
+
+    expect(muette).not.toContain(TABLEAU_DE_BORD.liens);
+    expect(aucun).toContain(TABLEAU_DE_BORD.liensVides);
   });
 
   it('n’embarque QUE le script de thème', () => {
@@ -240,50 +707,22 @@ describe('le tableau de bord', () => {
   });
 
   it('dessine l’état VIDE plutôt qu’une section muette', () => {
-    const nu = documentDuTableau({ lecteur: null, conversations: [], total: 0, maintenant: MAINTENANT });
+    const nu = documentDuTableau({
+      lecteur: null,
+      conversations: [],
+      total: 0,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
     expect(nu).toContain(CHATS.vide);
     expect(nu).toContain(TABLEAU_DE_BORD.salutationSansNom);
-    // Sans conversation, « voir tout » ne mène nulle part : il n'est pas rendu.
+    // Sans conversation, « Tout voir » ne qualifie rien : la porte vers /chats
+    // prend la forme de l'action primaire de l'état vide (charte règle 18), et
+    // elle reste UNIQUE.
+    expect(nu).not.toContain(TABLEAU_DE_BORD.voirTout);
     expect(nu.split('href="/chats"').length - 1).toBe(1);
-  });
-});
-
-describe('la liste des conversations', () => {
-  const doc = documentDesChats({
-    conversations: [CONVERSATION({ nonLus: 3 })],
-    maintenant: MAINTENANT,
-  });
-
-  it('rend le nom, les participants et l’écart de temps', () => {
-    expect(doc).toContain('Meeshy Global');
-    expect(doc).toContain(`199 ${CHATS.participants}`);
-    expect(doc).toContain('il y a 30 min');
-  });
-
-  /**
-   * La pastille de non-lus est un nombre NU : à l'œil le contexte le dit, à la
-   * voix « 3 » ne dit rien. Le mot voyage donc avec, hors écran.
-   */
-  it('annonce le compteur de non-lus, en plus de l’afficher', () => {
-    expect(doc).toContain('class="compte">3<span class="hors-ecran"> non lus</span>');
-  });
-
-  it('mène au fil servi par la v3, par l’identifiant de BASE', () => {
-    expect(doc).toContain('href="/chats/68f2a81417a557e8ce4ddfbb"');
-    // `identifier` est facultatif et peut changer ; une adresse partagée doit
-    // survivre au renommage.
-    expect(doc).not.toContain('href="/chats/meeshy"');
-  });
-
-  it('échappe le titre d’une conversation, qui vient du réseau', () => {
-    const injectee = documentDesChats({
-      conversations: [CONVERSATION({ titre: '</a><img src=x onerror=alert(1)>' })],
-      maintenant: MAINTENANT,
-    });
-    const corps = injectee.slice(injectee.indexOf('<body>'));
-
-    expect(corps).not.toContain('<img src=x');
-    expect(corps).toContain('&lt;img src=x');
+    expect(nu).toContain('class="carte-vide"');
   });
 });
 

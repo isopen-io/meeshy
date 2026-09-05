@@ -90,6 +90,22 @@ function log(...args) {
 // meme titre : la v3 y sert desormais la liste des conversations du lecteur, et
 // un shell mis en cache par le worker y montrerait celles de la session
 // PRECEDENTE — le pire des defauts que ce cache puisse produire.
+// `/chat` (au singulier) est la porte de l'INVITE — `/chat/:lien`, conception
+// § 12.3 — servie par la v3 avec un formulaire sans JavaScript ; il entre ici
+// AVANT le routeur (§ 4.4 bis), sinon le shell legacy de `/chat/[id]` sorti du
+// cache recouvrirait la modale de choix chez tout visiteur revenant.
+// HUIT PREFIXES AJOUTES LE 2026-09-03, et la raison merite d'etre dite : ces
+// ecrans etaient LIVRES, testes et mesures depuis des jours, et sur AUCUN
+// chemin de bascule. Le worker les interceptait donc chez tout visiteur
+// revenant, et le routeur ne pouvait pas les reclamer sans les servir aux
+// seuls navigateurs neufs. Six d'entre eux (`/contacts`, `/links`, `/search`,
+// `/notifications`, `/post`, `/stories`) etaient dans ce trou depuis leur
+// livraison ; deux (`/reels`, `/moods`) y entrent avec elle.
+//
+// C'est la PREMIERE marche du § 4.4 bis — declarer, DEPLOYER, puis reclamer au
+// routeur. L'invariant « le worker legacy connait TOUT ce que la zone sert »
+// (`scripts/lib/v3-routage.mjs`) la garde desormais : un ecran servi par
+// `apps/web-v3/app` et absent de cette liste fait rougir le gate.
 const V3_ZONE_PREFIXES = [
   '/__v3',
   '/l',
@@ -102,6 +118,29 @@ const V3_ZONE_PREFIXES = [
   '/login',
   '/signup',
   '/chats',
+  '/chat',
+  '/contacts',
+  '/links',
+  '/search',
+  '/notifications',
+  '/post',
+  '/stories',
+  '/reels',
+  '/moods',
+  '/settings',
+  '/feed',
+  '/composer',
+  '/deconnexion',
+  // `/calls` entre le 2026-09-05 — l'historique des appels (#5108, consultation
+  // seule, aucune pile WebRTC embarquee) : meme marche que les huit ci-dessus,
+  // declaree ICI avant que le routeur ne la reclame (§ 4.4 bis).
+  '/calls',
+  // `/communities` entre le 2026-09-05 — l'ecran des communautes du lecteur,
+  // livre par le point d'etape du chantier web-v3. Il etait servi par
+  // `apps/web-v3/app` sans etre ici : exactement le trou que les huit prefixes
+  // du 2026-09-03 ont solde, et que l'invariant garde depuis. Meme marche —
+  // declarer ICI, DEPLOYER, puis reclamer au routeur (§ 4.4 bis).
+  '/communities',
 ];
 
 function belongsToV3Zone(pathname) {

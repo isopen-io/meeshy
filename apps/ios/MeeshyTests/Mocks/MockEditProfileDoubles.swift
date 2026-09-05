@@ -72,6 +72,20 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         /// vocal routé par la file durable pourrait perdre en silence la
         /// transcription faite sur l'appareil, et le serveur la referait.
         let mobileTranscription: MobileTranscriptionPayload?
+        /// **LE CANVAS — observable ici, sinon rien ne peut le voir** (#4756).
+        ///
+        /// Un mock qui reçoit un paramètre et ne l'enregistre PAS ne teste pas
+        /// ce paramètre : le témoin passe, et le champ peut disparaître du
+        /// chemin sans que rien ne rougisse. C'est la raison écrite au-dessus
+        /// pour le MIME déclaré, pour l'audience nommée et pour la
+        /// transcription — trois champs qui ont déjà été perdus en silence.
+        let storyEffects: StoryEffects?
+        /// Les légendes par fichier (#4756) — observables ici, même raison que
+        /// les quatre champs au-dessus : un mock qui reçoit sans enregistrer
+        /// ne teste pas ce qu'il reçoit.
+        let mediaCaptions: [String?]?
+        let mediaAlts: [String?]?
+        let mediaObjectIds: [String?]?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -92,7 +106,11 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         location: SharedPlace?,
         mentions: [PostMentionInput]?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        storyEffects: StoryEffects?,
+        mediaCaptions: [String?]?,
+        mediaAlts: [String?]?,
+        mediaObjectIds: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
@@ -106,7 +124,11 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             location: location,
             mentions: mentions,
             discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: mobileTranscription
+            mobileTranscription: mobileTranscription,
+            storyEffects: storyEffects,
+            mediaCaptions: mediaCaptions,
+            mediaAlts: mediaAlts,
+            mediaObjectIds: mediaObjectIds
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(

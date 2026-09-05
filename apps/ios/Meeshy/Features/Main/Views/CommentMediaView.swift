@@ -147,6 +147,19 @@ struct CommentMediaView: View {
     /// `ConversationViewModel.mediaCaptionMap` côté conversation). Résolu par le
     /// Prisme en amont (`FeedComment.displayContent`).
     var carrierText: String? = nil
+    /// Langue d'ORIGINE du commentaire porteur (`FeedComment.originalLanguage`),
+    /// pour le Prisme audio (#4926).
+    ///
+    /// C'est un REPLI, pas la source principale : la langue qui concourt au rang
+    /// de l'origine est celle de la PISTE
+    /// (`MessageTranscription.language`), et un commentaire vocal transcrit la
+    /// porte toujours. Le porteur ne sert qu'au cas où la transcription n'est
+    /// pas encore revenue — cas où il n'y a de toute façon aucune piste
+    /// traduite, donc où l'élection rend l'original.
+    ///
+    /// `nil` par défaut : un hôte qui ne le sert pas ne casse rien, il retombe
+    /// sur la transcription. Ce qui serait FAUX, c'est de fabriquer une langue.
+    var carrierOriginalLanguage: String? = nil
     /// Infos auteur pour le label expéditeur du viewer plein écran (parité
     /// conversation : avatar + nom + date au-dessus du média).
     let authorName: String
@@ -195,21 +208,34 @@ struct CommentMediaView: View {
 
     // MARK: - Image
 
+    /// La largeur maximale d'une image de commentaire — nommée parce qu'elle
+    /// sert DEUX fois : au cadrage, et comme plafond de décodage d'un GIF.
+    private static let imageMaxWidth: CGFloat = 260
+
     private var imageView: some View {
         let aspectRatio: CGFloat? = {
             guard let w = media.width, let h = media.height, w > 0, h > 0 else { return nil }
             return CGFloat(w) / CGFloat(h)
         }()
-        return ProgressiveCachedImage(
-            thumbHash: media.thumbHash,
-            thumbnailUrl: media.thumbnailUrl,
-            fullUrl: media.url,
-            autoLoad: true
+        // **Un GIF de commentaire JOUE** (#4925) : l'enveloppe tente les octets
+        // et ne monte le chemin animé que s'ils animent. Une photo — le cas
+        // nominal — garde le chemin progressif, son thumbHash et son coût.
+        return AnimatedCachedImage(
+            urlString: media.url,
+            pointSize: Self.imageMaxWidth,
+            contentMode: .scaleAspectFill
         ) {
-            Color(hex: media.thumbnailColor).shimmer()
+            ProgressiveCachedImage(
+                thumbHash: media.thumbHash,
+                thumbnailUrl: media.thumbnailUrl,
+                fullUrl: media.url,
+                autoLoad: true
+            ) {
+                Color(hex: media.thumbnailColor).shimmer()
+            }
         }
         .aspectRatio(aspectRatio, contentMode: .fill)
-        .frame(maxWidth: 260, minHeight: 120, maxHeight: 220)
+        .frame(maxWidth: Self.imageMaxWidth, minHeight: 120, maxHeight: 220)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
@@ -274,6 +300,17 @@ struct CommentMediaView: View {
                     accentColor: accentColor,
                     transcription: media.transcription,
                     translatedAudios: media.translatedAudios,
+                    // Prisme AUDIO (#4926). `carrier` vient du commentaire
+                    // porteur, quand l'hôte le sert — la transcription prime de
+                    // toute façon, et c'est elle qui existe dans le cas nominal
+                    // d'un commentaire vocal.
+                    initialTranscriptionLanguage: SocialAudioTrack.servedLanguage(
+                        originalLanguage: SocialAudioTrack.originalLanguage(
+                            transcription: media.transcription,
+                            carrier: carrierOriginalLanguage
+                        ),
+                        translatedAudios: media.translatedAudios
+                    ),
                     onFullscreen: {
                         audioFullscreen = .fromFeed(
                             media: media, author: author,
@@ -296,6 +333,19 @@ struct CommentMediaView: View {
     }
 
     // MARK: - Fullscreen
+
+    /// **Aucune bascule de langue ici, et ce n'est PAS un oubli** (#4934).
+    ///
+    /// Le plein écran d'un média de POST offre les langues de son porteur ; un
+    /// commentaire n'en offre aucune, parce que `FeedComment` ne transporte pas
+    /// de carte de traductions — il porte le texte d'ORIGINE et le texte SERVI,
+    /// sans jamais dire dans quelle langue ce dernier est écrit. Nommer la
+    /// seconde langue demanderait de la deviner, et un drapeau sans nom sûr est
+    /// un drapeau qui ment.
+    ///
+    /// La galerie retombe donc sur `captionMap` et ne peint aucune rangée — le
+    /// comportement juste. `SocialCarrierText.from(comment:)` porte la raison en
+    /// entier.
 
     /// Galerie de CE média seul — repli quand l'hôte n'a pas déclaré la liste des
     /// commentaires (`.commentMediaGallery(_:)`), ou quand ce média n'y figure

@@ -106,7 +106,11 @@ struct StoryViewerView: View {
     var targetCommentId: String? = nil
     var targetParentCommentId: String? = nil
 
-    static let heartEmoji = "\u{2764}\u{FE0F}"
+    /// Projection de `MeeshyQuickReactions.heart` — le détail d'un post et le
+    /// lecteur de réels l'empruntaient à CETTE surface, si bien que leur cœur
+    /// dépendait du fichier du lecteur de story. Le nom reste (les deux
+    /// surfaces le citent), la valeur vient d'ailleurs.
+    static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
@@ -876,92 +880,63 @@ struct StoryViewerView: View {
                 senderName: currentGroup?.username
             )
         }
+        // **« Éditer et republier en POST » — la MÊME porte, ouverte ailleurs**
+        // (#5055).
+        //
+        // Ce cover montait `UnifiedPostComposer`, le dernier composer historique
+        // présenté nu du dépôt. Il n'avait plus de raison d'être depuis #5053 :
+        // la porte de republication offre `[.story, .post]` par son éventail, et
+        // publier en post y est un ANCRAGE — le même `POST /posts/:id/repost`,
+        // la même charge (`comment` + lien vers l'original).
+        //
+        // Ce que le geste apporte encore, et qui justifie de le GARDER plutôt
+        // que de le fondre dans « Republier » : l'auteur a DIT son format. La
+        // porte ouvre donc dessus, sans le lui redemander — et l'éventail reste
+        // peint, donc il peut changer d'avis (loi 9).
+        //
+        // ÉCART ASSUMÉ : `UnifiedPostComposer` reprojetait la scène de la story
+        // dans sa surface d'édition (`CanvasReprojector`, `onStoryImported`).
+        // Le meuble ouvert en `.post` monte la surface DOCUMENT — du texte, une
+        // audience. La scène n'est pas perdue : un geste sur l'éventail la
+        // ramène. La CHARGE publiée, elle, est identique — les deux chemins
+        // n'envoyaient jamais que le commentaire et le lien.
         .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
-            UnifiedPostComposer(
-                repostingStory: wrapper.story,
-                authorHandle: wrapper.authorHandle,
-                onPublishRepost: { content, sourceStory, visibility in
-                    do {
-                        try await RepostPublisher.shared.publish(
-                            .quoted(
-                                postId: sourceStory.id,
-                                targetType: .post,
-                                comment: content,
-                                visibility: visibility
-                            )
-                        )
-                        editAndRepostAsPostSource = nil
-                        FeedbackToastManager.shared.show(String(localized: "story.publish.success", defaultValue: "Publié", bundle: .main))
-                    } catch {
-                        FeedbackToastManager.shared.showError(String(localized: "story.publish.error", defaultValue: "Échec de la publication", bundle: .main))
-                        throw error
-                    }
-                },
-                onStoryImported: { result in
-                    Logger.stories.info(
-                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) locations=\(result.locations.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
-                    )
-                },
-                onDismiss: { editAndRepostAsPostSource = nil }
+            StoryRepublishComposer(
+                source: wrapper,
+                viewModel: viewModel,
+                onFinish: { editAndRepostAsPostSource = nil },
+                opening: .post
             )
-            .storyLocationPickerProvided()
-            .storyCameraCaptureProvided()
-            .storyRecentCameraRollProvided()
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
         }
-        // Republication en STORY — le composeur s'ouvre prérempli avec la
-        // slide source et un badge d'attribution VERROUILLÉ (le republieur ne
-        // peut pas le retirer, cf. `StoryComposerViewModel+Repost`).
+        // **Republication en STORY — par le MEUBLE** (#5053).
         //
-        // Audience : la story source est le DÉFAUT, et `allowedVisibilities`
-        // plafonne le sélecteur — même audience ou plus restreinte, jamais plus
-        // large. Le serveur refuse l'élargissement de son côté (403
-        // `REPOST_AUDIENCE_WIDENING`) ; ce plafond n'est qu'une affordance.
+        // Ce cover montait `StoryComposerView` NU jusqu'au 2026-09-03 : ni
+        // éventail de format, ni plateau, ni socle. La table des portes déclare
+        // pourtant l'ANCRAGE en post depuis le lot 4.7 (« garder la chose pour
+        // de bon ») — l'option était écrite et n'atteignait aucun écran.
         //
-        // `repostOfId` descend jusqu'à `createStory` via la file de
-        // publication : sans lui la republication naîtrait sans lien vers son
-        // original, donc sans attribution ni crédit de vues.
+        // Tout ce qu'il portait — hydratation, plafond d'audience, `repostOfId`,
+        // fournisseurs d'environnement — vit désormais dans
+        // `StoryRepublishComposer`, une porte à part. L'extraction n'est pas un
+        // rangement de passage : ce fichier fait 2 400 lignes, très au-delà du
+        // plafond DUR de 1 200, et la directive de budget interdit d'AJOUTER à
+        // un fichier hors budget avant d'avoir extrait.
         .fullScreenCover(item: $republishStorySource, onDismiss: { resumeTimer() }) { wrapper in
-            StoryComposerView(
-                viewModel: StoryComposerViewModel(
-                    reposting: wrapper.story,
-                    authorHandle: wrapper.authorHandle
-                ),
-                initialVisibility: wrapper.story.visibility ?? PostVisibility.private.rawValue,
-                initialVisibilityUserIds: wrapper.story.visibilityUserIds ?? [],
-                allowedVisibilities: StoryRepostAudience.allowed(fromRawValue: wrapper.story.visibility),
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
-                    viewModel.publishStoryInBackground(
-                        targetType: targetType,
-                        slides: slides,
-                        slideImages: slideImages,
-                        loadedImages: loadedImages,
-                        loadedVideoURLs: loadedVideoURLs,
-                        loadedAudioURLs: loadedAudioURLs,
-                        originalLanguage: originalLanguage,
-                        visibility: visibility,
-                        visibilityUserIds: visibilityUserIds,
-                        draftId: draftId,
-                        repostOfId: wrapper.story.id,
-                        references: references,
-                        composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
-                                                               caption: accessibility.mediaCaption ?? [:]),
-                        allowSoundExtraction: accessibility.allowSoundExtraction
-                    )
-                    republishStorySource = nil
-                    // La création accepte TOUJOURS : hors-ligne, la story part
-                    // en file d'attente au lieu de rester dans le composeur —
-                    // même contrat que la publication nominale.
-                    return true
-                },
-                onDismiss: { republishStorySource = nil }
+            StoryRepublishComposer(
+                source: wrapper,
+                viewModel: viewModel,
+                onFinish: { republishStorySource = nil }
             )
-            .storyLocationPickerProvided()
-            .storyCameraCaptureProvided()
-            .storyRecentCameraRollProvided()
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
+            // Les trois modèles d'environnement ne traversent PAS un
+            // `fullScreenCover` (cf. la remarque de ce fichier, l. 263). La
+            // porte les redéclare en `@EnvironmentObject` ; c'est ici qu'ils
+            // lui sont remis.
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
         }
     }
 
@@ -1390,7 +1365,11 @@ struct StoryViewerView: View {
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
-    private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
+    /// La liste vit au SDK (`MeeshyQuickReactions.standard`) : elle était
+    /// écrite ici ET dans le composer, avec quatre émojis communs sur six et
+    /// un ordre différent. Le post et le réel la servent désormais aussi —
+    /// une troisième copie aurait divergé de même.
+    private let quickEmojis = MeeshyQuickReactions.standard
 
     // MARK: - Comments Overlay (Instagram-style)
 

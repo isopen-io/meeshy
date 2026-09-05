@@ -129,7 +129,14 @@ jest.mock('../../services/PrivacyPreferencesService', () => ({
 }));
 
 let mockNotificationServiceInstance: any;
+// Double PROLONGÉ, jamais remplacé : ce module exporte aussi les fonctions PURES
+// du masquage de protection (`protectedPreview`, `maskedAttachment`), que la
+// composition de `message:new` appelle pour la citation. Un double partiel les
+// rendait `undefined` — le broadcast levait, et les DEUX producteurs n'émettaient
+// plus rien (cf. § « Un double PARTIEL d'un module perd en silence tout ce que le
+// module GAGNE » du CLAUDE.md de la passerelle).
 jest.mock('../../services/notifications/NotificationService', () => ({
+  ...(jest.requireActual('../../services/notifications/NotificationService') as Record<string, unknown>),
   NotificationService: jest.fn().mockImplementation(() => {
     mockNotificationServiceInstance = {
       setSocketIO: jest.fn(),
@@ -420,7 +427,14 @@ jest.mock('../../utils/logger-enhanced', () => ({
 // Import under test (after all mocks are set up)
 // ---------------------------------------------------------------------------
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
-import { makeTranslationService, makePrisma, makeContractMessage, CONVERSATION_ID } from './helpers/message-new-parity-fixtures';
+import {
+  makeTranslationService,
+  makePrisma,
+  makeContractMessage,
+  seedParticipantsAlways,
+  seedParticipantsBySelect,
+  CONVERSATION_ID,
+} from './helpers/message-new-parity-fixtures';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
   declaredConversationUpdatedFields,
@@ -619,6 +633,48 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     expect(contractOf(restKeys)).toEqual(contractOf(socketKeys));
   });
 
+  /**
+   * La citation d'un message PROTÉGÉ, sur les DEUX producteurs.
+   *
+   * `replyTo` est HORS du contrat de parité ci-dessus — les deux transports lui
+   * donnent délibérément deux formes — et c'est exactement ce qui a laissé le
+   * producteur REST/ZMQ reconstruire sa citation champ par champ SANS un seul
+   * champ de protection : répondre à un message à vue unique republiait son
+   * texte EN CLAIR dans la bulle temps réel, pendant que le même fil rechargé
+   * par REST affichait « 👁️ 💬 ». La FORME diverge ; ce que la charge a le
+   * DROIT de transporter, non.
+   */
+  const messageCitantUnSecret = () => makeContractMessage({
+    replyTo: {
+      id: 'msg-cite-000000000',
+      senderId: 'sender-participantId',
+      content: 'le code du coffre est 4271',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      createdAt: new Date('2026-08-22T09:59:00.000Z'),
+      isViewOnce: true,
+      translations: { en: { text: 'the vault code is 4271', translationModel: 'basic', createdAt: new Date() } },
+    },
+  });
+
+  const attendCitationMasquee = (payload: Record<string, unknown>) => {
+    const citation = payload.replyTo as Record<string, unknown>;
+    expect(citation).toBeDefined();
+    expect(String(citation['content'])).not.toContain('4271');
+    expect(citation['translations']).toBeUndefined();
+    // La protection VOYAGE : sans elle, un client ne peut pas SAVOIR qu'il rend
+    // le placeholder d'un secret plutôt qu'un texte.
+    expect(citation['isViewOnce']).toBe(true);
+  };
+
+  it('ne republie pas le texte d’un message cité à vue unique — producteur socket', async () => {
+    attendCitationMasquee(await payloadFromSocketPath(messageCitantUnSecret()));
+  });
+
+  it('ne republie pas le texte d’un message cité à vue unique — producteur REST/ZMQ', async () => {
+    attendCitationMasquee(await payloadFromRestPath(messageCitantUnSecret()));
+  });
+
   // -------------------------------------------------------------------------
   // `conversation:updated` — le JUMEAU que les deux mêmes producteurs émettent
   // -------------------------------------------------------------------------
@@ -637,42 +693,9 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     return call?.[1] as Record<string, unknown> | undefined;
   }
 
-  /**
-   * Le `conversation:updated` n'est émis qu'AUX PARTICIPANTS : les deux
-   * producteurs abandonnent sur une liste vide (`sharedParticipants.length > 0`
-   * côté socket, `senderId` + `findMany` côté REST). Le double partagé de ce
-   * fichier en rend une VIDE — c'est ce qu'il faut aux témoins `message:new`,
-   * qui ne veulent aucun enrichissement. On la peuple donc ICI, pour les seuls
-   * témoins du jumeau, plutôt que de changer le double sous les autres.
-   *
-   * Forme : `PREVIEW_PRISM_PARTICIPANT_SELECT` + `joinedAt`, ce que les deux
-   * producteurs sélectionnent réellement.
-   */
+  /** Fabrique unique : `helpers/message-new-parity-fixtures.ts`. */
   function seedParticipants(): void {
-    (prisma.participant.findMany as any).mockResolvedValue([
-      {
-        id: 'sender-participantId',
-        userId: 'sender-userId',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        user: {
-          systemLanguage: 'fr',
-          regionalLanguage: null,
-          customDestinationLanguage: null,
-          deviceLocale: null,
-        },
-      },
-      {
-        id: 'peer-participantId',
-        userId: 'peer-userId',
-        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-        user: {
-          systemLanguage: 'en',
-          regionalLanguage: null,
-          customDestinationLanguage: null,
-          deviceLocale: null,
-        },
-      },
-    ]);
+    seedParticipantsAlways(prisma);
   }
 
   async function updatedFromSocketPath(message: unknown): Promise<Record<string, unknown>> {
@@ -770,41 +793,9 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
   let ioState: ReturnType<typeof getIoState>;
   let queue: { enqueue: jest.Mock };
 
-  /**
-   * Deux participants ACTIFS : l'expéditeur (exclu de la file — il a déjà son
-   * message) et un pair hors ligne (la carte `connectedUsers` du manager reste
-   * vide dans ce harnais, donc tout le monde est absent).
-   *
-   * La forme rendue est celle du SUPERSET que les deux producteurs demandent
-   * pour la ligne de liste ; `select` est inspecté pour que le témoin de panne
-   * puisse ne faire tomber QUE cette requête-là.
-   */
+  /** Fabrique unique : `helpers/message-new-parity-fixtures.ts`. */
   function seedParticipants(): void {
-    (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
-      const wantsSuperset = Boolean(args?.select?.joinedAt);
-      return [
-        {
-          id: 'sender-participantId',
-          userId: 'sender-userId',
-          ...(wantsSuperset
-            ? {
-                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-                user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
-              }
-            : {}),
-        },
-        {
-          id: 'peer-participantId',
-          userId: 'peer-userId',
-          ...(wantsSuperset
-            ? {
-                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-                user: { systemLanguage: 'en', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
-              }
-            : {}),
-        },
-      ];
-    });
+    seedParticipantsBySelect(prisma);
   }
 
   /** L'entrée réellement déposée pour ce destinataire, si elle existe. */
@@ -937,5 +928,33 @@ describe('message:new — la file hors ligne ne dépend pas de la synchro de lis
 
     expect(rest).toEqual(socket);
     expect(socket.eventType).toBe('new');
+  });
+
+  it("#3614 — le producteur REST/ZMQ enfile un message SANS expéditeur (agent, système)", async () => {
+    // `Message.senderId` est requis en base (`schema.prisma`), mais l'objet
+    // JS reçu par ce transport peut en manquer — un message d'agent ou
+    // système construit sans identité de sender. `if (senderId)` englobait
+    // TOUT le bloc — participants, enfilage durable, cosmétique — donc un tel
+    // message n'était JAMAIS rejoué aux absents : la seule voie par laquelle
+    // un destinataire déconnecté apprend son existence disparaissait
+    // silencieusement. Le chemin WS (`MessageHandler.broadcastNewMessage`,
+    // ci-dessous) n'a jamais posé cette garde.
+    const messageSansExpediteur = makeContractMessage({ senderId: undefined, sender: undefined });
+
+    await manager.broadcastMessage(messageSansExpediteur as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it('le producteur WS enfile aussi un message SANS expéditeur (parité)', async () => {
+    const messageSansExpediteur = makeContractMessage({ senderId: undefined, sender: undefined });
+
+    await messageHandler.broadcastNewMessage(messageSansExpediteur as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
   });
 });

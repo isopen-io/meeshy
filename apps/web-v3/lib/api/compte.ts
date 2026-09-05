@@ -1,4 +1,7 @@
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
+
 import { baseDeLaPasserelle } from './links';
+import { DELAI_DE_REPONSE_MS } from './passerelle';
 
 /**
  * CE QUE LA ZONE CONNECTÉE DEMANDE À LA PASSERELLE, au nom du lecteur.
@@ -65,6 +68,114 @@ export type Conversation = {
   readonly membres: number;
   readonly nonLus: number;
   readonly dernierMessageA: string | null;
+  /**
+   * L'APERÇU DU DERNIER MESSAGE, tel que la passerelle le sert — le texte
+   * ORIGINAL (`lastMessage.content`, déjà plafonné par `truncateMessagePreview`),
+   * sa carte de traductions restreinte au prisme du lecteur
+   * (`lastMessageTranslations`) et sa langue d'origine
+   * (`lastMessageOriginalLanguage`). Les trois voyagent ENSEMBLE parce que la
+   * descente du Prisme a besoin des trois : servir le texte sans sa carte
+   * afficherait l'original en croyant l'avoir traduit.
+   *
+   * Ils ne sont PAS résolus ici, et c'est la raison de leur présence brute : la
+   * porte lance `/auth/me` et `/conversations` EN PARALLÈLE (`app/connecte/
+   * porte.ts`), si bien que les langues du lecteur ne sont pas connues au
+   * moment où la charge est projetée. La descente se fait à la peinture, par
+   * `apercuServi` — le site unique, partagé par le document servi et par le
+   * module de participation qui repeint la ligne (§ 5.4).
+   */
+  readonly apercu: string | null;
+  readonly apercuTraductions: Readonly<Record<string, string>> | null;
+  readonly apercuLangueOriginale: string | null;
+  /** `userPreferences[0].isMuted` — ce que la ligne annonce et ce que son menu bascule. */
+  readonly sourdine: boolean;
+  /**
+   * `userPreferences[0].isArchived` — ce que le geste « Archiver » ÉCRIT, et
+   * que la v3 ne relisait pas.
+   *
+   * **`GET /conversations` NE FILTRE PAS les archivées.** Mesuré :
+   * `whereClause` (`routes/conversations/core-list.ts:176-247`) ne porte aucune
+   * mention de `isArchived` — la seule occurrence du dépôt côté liste est le
+   * `select` (`core-selects.ts:65`), qui la SERT. C'est donc au client
+   * d'écarter la ligne, comme la webapp legacy le fait
+   * (`apps/web/components/conversations/hooks/useConversationFiltering.ts:56-59`,
+   * `return !isArchived`). Sans cette lecture, « Archiver » était un contrôle
+   * qui MENT : le POST sans JavaScript re-rendait la ligne sous la bannière
+   * « Conversation archivée. », et la ligne retirée optimistiquement revenait au
+   * chargement suivant.
+   *
+   * Le drapeau est PROJETÉ plutôt que la ligne jetée ici : le jour où la v3
+   * rend une vue « Archivées », elle a besoin de le connaître. Ce qui l'écarte
+   * est `sansArchivees`, appelé une seule fois, par la porte de la zone
+   * connectée.
+   */
+  readonly archivee: boolean;
+  /**
+   * LES PARTICIPANTS INSCRITS D'UN TÊTE-À-TÊTE — un `User.id` chacun, jamais un
+   * pseudonyme composé ici (`lib/api/profil.ts` accepte les deux
+   * indifféremment). VIDE pour un GROUPE : la question « qui, dans cette
+   * conversation, a un profil à ouvrir ? » n'a de réponse à un TAP QUE dans un
+   * tête-à-tête (§ 12.10.3, l'avatar d'une ligne de `/chats`).
+   *
+   * `GET /conversations` sert TOUS les participants actifs — le lecteur
+   * compris (`core-list.ts:353-358`, `take:5`) — et ce module ne connaît PAS
+   * son identité au moment où il MAPPE la charge : `/auth/me` et
+   * `/conversations` partent EN PARALLÈLE (`app/connecte/porte.ts`), et les
+   * enchaîner coûterait un aller-retour de plus sur la 3G rurale. `homologueDe`
+   * fait l'EXCLUSION une fois `moiId` connu, au moment du RENDU.
+   */
+  readonly participantsInscrits: readonly { readonly id: string; readonly nom: string }[];
+};
+
+/**
+ * CE QUE LES ÉCRANS MONTRENT — la passerelle sert les archivées, le client les
+ * écarte (voir `Conversation.archivee`). UN site, partagé par le tableau de
+ * bord et par la liste : les mettre chacun leur filtre, c'est la garantie qu'un
+ * des deux l'oublie.
+ */
+export const sansArchivees = (conversations: readonly Conversation[]): readonly Conversation[] =>
+  conversations.filter((conversation) => !conversation.archivee);
+
+/**
+ * LE PRISME D'UNE LIGNE DE LISTE, DESCENDU — le texte servi, la langue dans
+ * laquelle il l'est, et celle DEPUIS laquelle il a été traduit.
+ *
+ * La descente elle-même n'est pas réécrite : `resolvePrismTranslation`
+ * (`@meeshy/shared`) est le site unique, et `null` y veut dire « servir
+ * l'original » (règle 1 du Prisme) — jamais « pas de résultat ». Ce module
+ * n'ajoute que la PROJECTION dont une ligne a besoin : la pastille de langue
+ * n'a rien à annoncer sur un message déjà écrit dans la langue du lecteur.
+ *
+ * `traduitDe` reste `null` quand la passerelle ne nomme pas la langue d'origine :
+ * une pastille sans code n'apprendrait rien, et en inventer un serait mentir.
+ */
+export type ApercuServi = {
+  readonly texte: string;
+  /** La langue du texte SERVI — ce que `lang=` porte quand elle diffère de celle du document. */
+  readonly langue: string | null;
+  /** La langue d'ORIGINE, seulement quand une traduction est servie à sa place. */
+  readonly traduitDe: string | null;
+};
+
+export type SourceDApercu = {
+  readonly apercu: string | null;
+  readonly apercuTraductions: Readonly<Record<string, string>> | null;
+  readonly apercuLangueOriginale: string | null;
+};
+
+export const apercuServi = (source: SourceDApercu, langues: readonly string[]): ApercuServi | null => {
+  if (source.apercu === null) return null;
+
+  const traduite = resolvePrismTranslation({
+    translations: source.apercuTraductions,
+    originalLanguage: source.apercuLangueOriginale,
+    preferredLanguages: langues,
+  });
+
+  if (traduite === null) {
+    return { texte: source.apercu, langue: source.apercuLangueOriginale, traduitDe: null };
+  }
+  return { texte: traduite.text, langue: traduite.language, traduitDe: source.apercuLangueOriginale };
 };
 
 export type Fil =
@@ -72,10 +183,42 @@ export type Fil =
   | { readonly genre: 'session-expiree' }
   | { readonly genre: 'panne' };
 
-const DELAI_MS = 6000;
+const DELAI_MS = DELAI_DE_REPONSE_MS;
 
 const CHEMIN_CONVERSATIONS = '/api/v1/conversations';
 const CHEMIN_MOI = '/api/v1/auth/me';
+
+/**
+ * `GET /links` — les liens de partage du lecteur connecté
+ * (`services/gateway/src/routes/links/user.ts:314`, `onRequest: [authRequired]`
+ * posé avec `requireAuth: true, allowAnonymous: false` : donc un porteur, jamais
+ * une session invitée).
+ *
+ * `?expand=conversation` n'est pas une commodité : SANS lui, la charge ne porte
+ * ni `conversationId` ni `conversation` (`user.ts:571-581` — l'extension est le
+ * seul site qui les pose), et une carte de lien ne pourrait alors mener nulle
+ * part. Un contrôle qui ne mène nulle part n'est pas rendu (charte règle 7) :
+ * demander l'extension est ce qui lui donne son effet.
+ *
+ * `limit=3` parce que le tableau de bord RÉCAPITULE : la cible `home.png` en
+ * dessine une, la page des liens n'existe pas encore dans la v3, et rapatrier
+ * cinquante liens pour en peindre trois se paierait sur une 3G rurale.
+ */
+const CHEMIN_LIENS = '/api/v1/links?limit=3&expand=conversation';
+
+/**
+ * L'inventaire de `/links` : la page ENTIÈRE du lecteur, ses agrégats avec.
+ *
+ * `?include=summary` ÉVITE un second aller-retour — il absorbe
+ * `GET /links/stats`, que la passerelle déclare déprécié en le nommant
+ * (`user.ts:649`). Sur une 3G rurale, un appel économisé vaut mieux qu'un
+ * chiffre calculé deux fois.
+ *
+ * `?expand=conversation` pour la même raison que le tableau de bord : SANS lui
+ * la charge ne porte ni `conversationId` ni `conversation` (`user.ts:571-581`),
+ * et une carte de lien ne mènerait nulle part.
+ */
+const CHEMIN_CARNET_DE_LIENS = '/api/v1/links?expand=conversation&include=summary&limit=';
 
 const objet = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
   typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur)
@@ -110,7 +253,63 @@ const nomAffiche = (brut: Readonly<Record<string, unknown>>): string => {
   return noms.length === 0 ? SANS_TITRE : noms.slice(0, 3).join(', ');
 };
 
-const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | null => {
+/**
+ * `lastMessageTranslations` — une carte `{ langue: aperçu tronqué }` que la
+ * passerelle restreint déjà au prisme du lecteur
+ * (`buildLastMessagePreviewTranslations`). Elle est relue ENTRÉE PAR ENTRÉE :
+ * `additionalProperties: { type: 'string' }` décrit le contrat, il ne le
+ * garantit pas de l'autre côté du réseau, et une valeur non-chaîne remise telle
+ * quelle à la descente lui ferait servir un `[object Object]`.
+ */
+const carteDeTraductions = (valeur: unknown): Readonly<Record<string, string>> | null => {
+  const brut = objet(valeur);
+  if (brut === null) return null;
+  const entrees = Object.entries(brut).filter((entree): entree is [string, string] => typeof entree[1] === 'string' && entree[1] !== '');
+  return entrees.length === 0 ? null : Object.fromEntries(entrees);
+};
+
+/** `userPreferences` est un TABLEAU d'au plus une entrée (`take: 1` sur `userId`), jamais un objet. */
+const preferences = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
+  Array.isArray(valeur) ? objet(valeur[0]) : null;
+
+/**
+ * EXPORTÉE pour la RECHERCHE, qui lit la même forme.
+ *
+ * `GET /conversations/search` sert `conversationMinimalSchema`, exactement ce
+ * que `GET /conversations` sert — mêmes clés, `participants` compris, dont
+ * `nomAffiche` a besoin pour nommer un fil direct sans titre. Écrire une
+ * seconde projection dans le module de recherche en ferait une jumelle, qui
+ * divergerait au premier champ ajouté : c'est le motif que le dépôt paie
+ * cycle après cycle (§ « Cette entité a-t-elle une JUMELLE ? »).
+ */
+/** Les participants INSCRITS d'un tête-à-tête — vide pour un groupe, ou sans participant qui en ait un. */
+const participantsInscrits = (brut: Readonly<Record<string, unknown>>): Conversation['participantsInscrits'] => {
+  if ((chaine(brut.type) ?? 'direct') !== 'direct') return [];
+  const participants = Array.isArray(brut.participants) ? brut.participants : [];
+  return participants
+    .map((brutParticipant) => objet(brutParticipant))
+    .filter((p): p is Readonly<Record<string, unknown>> => p !== null)
+    .map((p) => {
+      const id = chaine(p.userId);
+      if (id === null) return null;
+      return { id, nom: chaine(p.displayName) ?? chaine(objet(p.user)?.displayName) ?? SANS_TITRE };
+    })
+    .filter((p): p is { readonly id: string; readonly nom: string } => p !== null);
+};
+
+/**
+ * L'AUTRE PERSONNE D'UN TÊTE-À-TÊTE — celle dont l'identifiant N'EST PAS
+ * `moiId`, parmi les participants INSCRITS que la conversation porte. `null`
+ * sans `moiId` connu (aucune exclusion honnête), pour un GROUPE (le champ est
+ * vide par construction) ou pour un tête-à-tête dont le pair est un invité de
+ * lien, sans compte.
+ */
+export const homologueDe = (conversation: Conversation, moiId: string | null): { readonly id: string; readonly nom: string } | null => {
+  if (moiId === null) return null;
+  return conversation.participantsInscrits.find((p) => p.id !== moiId) ?? null;
+};
+
+export const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | null => {
   const id = chaine(brut.id);
   if (id === null) return null;
 
@@ -122,14 +321,96 @@ const conversation = (brut: Readonly<Record<string, unknown>>): Conversation | n
     membres: entier(brut.memberCount),
     nonLus: entier(brut.unreadCount),
     dernierMessageA: chaine(brut.lastMessageAt),
+    apercu: chaine(objet(brut.lastMessage)?.content),
+    apercuTraductions: carteDeTraductions(brut.lastMessageTranslations),
+    apercuLangueOriginale: chaine(brut.lastMessageOriginalLanguage),
+    sourdine: preferences(brut.userPreferences)?.isMuted === true,
+    archivee: preferences(brut.userPreferences)?.isArchived === true,
+    participantsInscrits: participantsInscrits(brut),
   };
 };
+
+/**
+ * UN LIEN DE PARTAGE, PROJETÉ — quatre champs, pris dans la charge que la
+ * passerelle sert. Ce qui n'est pas ici n'est pas relayé : `creator` porte
+ * l'identité complète de qui a créé le lien, et la projection se fait AVANT que
+ * quoi que ce soit n'entre dans le HTML (même règle que `apercuDuLien`).
+ */
+export type LienDePartage = {
+  readonly identifiant: string;
+  readonly nom: string;
+  /**
+   * `currentUses` — et il compte des ADMISSIONS, jamais des VUES.
+   *
+   * Son unique producteur est `claimLinkUse`
+   * (`services/gateway/src/routes/conversations/link-admission.ts:192`), appelé
+   * sur le chemin d'admission et borné par `maxUses` : il s'incrémente quand
+   * quelqu'un ENTRE, pas quand quelqu'un regarde. Aucun compteur de vues
+   * n'existe sur un lien de partage — `clickCount` vit sur `AffiliateToken`,
+   * un autre modèle.
+   *
+   * D'où le libellé de l'écran : « N ont rejoint », jamais « N vues ». Écrire
+   * « vues » au-dessus de ce nombre serait plus faux que de ne rien écrire :
+   * un chiffre plausible sous le mauvais nom ne se signale jamais.
+   */
+  readonly utilisations: number;
+  /** L'identifiant de la conversation qu'il ouvre, `null` si la passerelle ne l'a pas étendu. */
+  readonly conversation: string | null;
+  /** `isActive` — un lien fermé n'ouvre plus rien, et l'écran le DIT au lieu de le cacher. */
+  readonly actif: boolean;
+  /** `maxUses` — la capacité, quand le lien en déclare une. */
+  readonly capacite: number | null;
+  /** `expiresAt` — l'échéance, quand le lien en porte une. */
+  readonly expireA: string | null;
+};
+
+export type LiensDuLecteur =
+  | { readonly genre: 'liste'; readonly liens: readonly LienDePartage[] }
+  | { readonly genre: 'indisponible' };
+
+/**
+ * LE CARNET DE LIENS DE L'ÉCRAN `/links` — la MÊME route que le tableau de
+ * bord, une autre question.
+ *
+ * Le tableau de bord RÉCAPITULE : trois liens actifs, et rien d'autre. Cet
+ * écran INVENTORIE : tous les liens, actifs ET fermés, avec le compte que la
+ * passerelle mesure elle-même. Deux projections d'un seul appel — écrire un
+ * second module ferait une jumelle de `lienDePartage`, qui divergerait sur le
+ * premier champ ajouté.
+ *
+ * `activeLinks` VIENT DU SERVEUR, jamais d'un `filter().length` sur la page.
+ * `?include=summary` rend des agrégats RÉELS (`user.ts:430`, « aucun champ non
+ * mesurable ») portant sur TOUT le carnet ; les compter sur la page servie
+ * donnerait un total plafonné par `limit`, qui se contredirait dès la page
+ * suivante. C'est la faute exacte du compteur de non-lues (leçon 476), et elle
+ * se paie ici en « 2 liens actifs » sous une liste qui en montre trente.
+ */
+export type Carnet =
+  | {
+      readonly genre: 'liste';
+      readonly liens: readonly LienDePartage[];
+      /** `meta.summary.activeLinks` — SERVI, jamais recompté sur la page. */
+      readonly actifs: number;
+      readonly total: number;
+    }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
 
 export type Lecteur = {
   readonly id: string | null;
   readonly prenom: string | null;
+  readonly nom: string | null;
   readonly nomAffiche: string | null;
   readonly pseudonyme: string | null;
+  readonly bio: string | null;
+  /**
+   * LES DEUX COORDONNÉES SONT LUES ET NE S'ÉCRIVENT PAS. `PATCH /users/me` les
+   * exclut explicitement (#4184) : elles demandent une preuve de possession et
+   * passent par `change-email` / `change-phone`. `/settings/profile` les MONTRE
+   * — c'est ce que la cible dessine — et dit où elles se changent.
+   */
+  readonly email: string | null;
+  readonly telephone: string | null;
   /**
    * LES TROIS RANGS DU PRISME, servis tels que la passerelle les donne. Ils ne
    * sont ni normalisés ni repliés ici : `resolveUserLanguagesOrdered`
@@ -139,6 +420,36 @@ export type Lecteur = {
   readonly systemLanguage: string | null;
   readonly regionalLanguage: string | null;
   readonly customDestinationLanguage: string | null;
+};
+
+const lienDePartage = (brut: Readonly<Record<string, unknown>>): LienDePartage | null => {
+  /**
+   * `linkId` EST L'IDENTIFIANT PUBLIC — celui qui compose l'adresse
+   * partageable, comme `creeUnLien` le documente plus bas. `identifier` est un
+   * SLUG dérivé du nom (`mshy_beta-staging`) : la route d'aperçu anonyme prend
+   * tout `mshy_*` pour un `linkId` (#5077), donc une adresse composée du slug
+   * rendait « Ce lien ne mène nulle part » — mesuré sur staging, 2026-09-04.
+   * Le slug reste le REPLI quand la passerelle ne sert pas `linkId` : une
+   * adresse qui s'ouvre parfois vaut mieux qu'une ligne disparue.
+   */
+  const identifiant = chaine(brut.linkId) ?? chaine(brut.identifier);
+  if (identifiant === null) return null;
+
+  return {
+    identifiant,
+    nom: chaine(brut.name) ?? chaine(brut.conversationTitle) ?? identifiant,
+    utilisations: entier(brut.currentUses),
+    conversation: chaine(objet(brut.conversation)?.id),
+    // ABSENT ⇒ ACTIF, et c'est la lecture juste : `isActive` est déclaré
+    // `type: 'boolean'` non nullable par le schéma de la route
+    // (`routes/links/user.ts:349`), donc toujours servi. Traiter une absence
+    // comme « fermé » ferait disparaître des liens vivants au premier champ
+    // que le serveur cesserait d'envoyer ; la traiter comme « ouvert » les
+    // laisse visibles, et l'écran dit la vérité qu'il a.
+    actif: brut.isActive !== false,
+    capacite: typeof brut.maxUses === 'number' && Number.isFinite(brut.maxUses) ? brut.maxUses : null,
+    expireA: chaine(brut.expiresAt),
+  };
 };
 
 export type Identite =
@@ -190,8 +501,12 @@ export const moi = async ({
     lecteur: {
       id: chaine(brut.id),
       prenom: chaine(brut.firstName),
+      nom: chaine(brut.lastName),
       nomAffiche: chaine(brut.displayName),
       pseudonyme: chaine(brut.username),
+      bio: chaine(brut.bio),
+      email: chaine(brut.email),
+      telephone: chaine(brut.phoneNumber),
       systemLanguage: chaine(brut.systemLanguage),
       regionalLanguage: chaine(brut.regionalLanguage),
       customDestinationLanguage: chaine(brut.customDestinationLanguage),
@@ -232,4 +547,422 @@ export const conversations = async ({
     conversations: liste,
     total: entier(objet(enveloppe.pagination)?.total) || liste.length,
   };
+};
+
+/**
+ * LES LIENS DU LECTEUR, ET LE SEUL ÉTAT D'ÉCHEC QU'ILS CONNAISSENT.
+ *
+ * Ils ne rendent JAMAIS `session-expiree`, et ce n'est pas un oubli : la porte
+ * décide de renvoyer se connecter d'après `/auth/me` et `/conversations`, les
+ * deux appels qui font l'écran. Si `GET /links` refusait un jeton que ces deux-là
+ * viennent d'accepter, ce serait un fait sur la ROUTE des liens, jamais sur la
+ * session — et le lecteur serait éjecté d'un tableau de bord parfaitement
+ * servable. Un seul état d'échec, donc : « indisponible », et la section se tait.
+ *
+ * UN LIEN INACTIF N'EST PAS SERVI. `isActive` dit qu'il n'ouvre plus rien ; le
+ * peindre sur le tableau de bord dirait au lecteur qu'il peut encore le
+ * partager.
+ */
+export const liensDuLecteur = async ({
+  jeton,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LiensDuLecteur> => {
+  const reponse = await demande(`${base ?? baseDeLaPasserelle()}${CHEMIN_LIENS}`, jeton, recuperer);
+
+  if (reponse === null || !reponse.ok) return { genre: 'indisponible' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'indisponible' };
+
+  return {
+    genre: 'liste',
+    liens: enveloppe.data
+      .map((brut) => objet(brut))
+      .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+      .filter((brut) => brut.isActive !== false)
+      .map(lienDePartage)
+      .filter((lien): lien is LienDePartage => lien !== null),
+  };
+};
+
+
+/**
+ * TOUS LES LIENS DU LECTEUR, fermés compris.
+ *
+ * TROIS ISSUES, et pas les deux de `liensDuLecteur`. La différence n'est pas
+ * une hésitation : sur le tableau de bord, les liens sont une SECTION parmi
+ * d'autres, et un refus de leur route ne doit pas éjecter un lecteur dont
+ * `/auth/me` et `/conversations` viennent d'être acceptés. Ici les liens SONT
+ * l'écran : un 401 n'a plus rien à dégrader, il renvoie se connecter.
+ *
+ * ET LES LIENS FERMÉS RESTENT. `liensDuLecteur` les écarte, parce qu'un lien
+ * mort peint sur le tableau de bord dirait au lecteur qu'il peut encore le
+ * partager. Cet écran-ci est l'endroit où il apprend qu'il ne le peut plus —
+ * les cacher ferait disparaître un lien qu'il vient de révoquer, ce qui se lit
+ * comme une perte, pas comme une fermeture.
+ */
+export const carnetDeLiens = async ({
+  jeton,
+  limite = 50,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly limite?: number;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Carnet> => {
+  const url = `${base ?? baseDeLaPasserelle()}${CHEMIN_CARNET_DE_LIENS}${limite}`;
+  const reponse = await demande(url, jeton, recuperer);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'panne' };
+
+  const liens = enveloppe.data
+    .map((brut) => objet(brut))
+    .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+    .map(lienDePartage)
+    .filter((lien): lien is LienDePartage => lien !== null);
+
+  // Le résumé vit sous `meta.summary` (`user.ts:613` — `meta.summary = summary`),
+  // pas à la racine : les non-lues des notifications sont à la racine, ces
+  // agrégats-ci ne le sont pas, et supposer une règle commune aux deux routes
+  // rendrait `undefined`, donc ZÉRO — « 0 lien actif » sous une liste qui en
+  // montre deux.
+  const resume = objet(objet(enveloppe.meta)?.summary);
+
+  return {
+    genre: 'liste',
+    liens,
+    actifs: entier(resume?.activeLinks),
+    total: entier(resume?.totalLinks),
+  };
+};
+
+export type LiensDeLaRecherche =
+  | { readonly genre: 'liens'; readonly liens: readonly LienDePartage[]; readonly encore: boolean }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+/**
+ * LES LIENS TROUVÉS PAR LE GROUPE « Liens » DE `/search` (#5171) — la MÊME
+ * route que `liensDuLecteur`/`carnetDeLiens`, une QUATRIÈME question.
+ *
+ * `?q=` COMPOSE APRÈS le scope `{ createdBy: userId }` que la passerelle pose
+ * SANS `conversationId` (`routes/links/user.ts:480-521`) : aucun autre
+ * utilisateur ne peut apparaître dans ce groupe, quel que soit le terme tapé.
+ * `?expand=conversation` reste requis pour la même raison qu'ailleurs — sans
+ * lui, une rangée ne mène nulle part (règle 7).
+ *
+ * `?include=summary` N'EST PAS DEMANDÉ : aucun agrégat n'est affiché sur cet
+ * écran, et le payer à chaque frappe serait un calcul serveur pour rien.
+ *
+ * `lienDePartage` EST RÉUTILISÉ, jamais réimplémenté : c'est la même carte que
+ * `liensDuLecteur` et `carnetDeLiens` projettent, et une seconde projection en
+ * deviendrait la jumelle qui diverge au premier champ ajouté.
+ */
+export const liensTrouves = async ({
+  jeton,
+  requete,
+  limite = 20,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly requete: string;
+  readonly limite?: number;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LiensDeLaRecherche> => {
+  const terme = requete.trim();
+  if (terme === '') return { genre: 'liens', liens: [], encore: false };
+
+  const url = `${base ?? baseDeLaPasserelle()}/api/v1/links?q=${encodeURIComponent(terme)}&expand=conversation&limit=${limite}`;
+  const reponse = await demande(url, jeton, recuperer);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'panne' };
+
+  return {
+    genre: 'liens',
+    liens: enveloppe.data
+      .map((brut) => objet(brut))
+      .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+      .map(lienDePartage)
+      .filter((lien): lien is LienDePartage => lien !== null),
+    // Pagination OFFSET — la forme que `/links?q=` sert SANS `?cursor=`
+    // (`createPaginationMeta`, `services/gateway/src/utils/response.ts:254`) :
+    // `{ total, offset, limit, hasMore }`. Seul `hasMore` est relayé, même
+    // règle que `liensDuLecteur`/`carnetDeLiens` sur leur propre pagination.
+    encore: objet(enveloppe.pagination)?.hasMore === true,
+  };
+};
+
+/**
+ * CRÉER UN LIEN DE PARTAGE — `POST /links`
+ * (`services/gateway/src/routes/links/creation.ts:29`, `requireAuth: true,
+ * allowAnonymous: false` : un porteur, jamais une session invitée).
+ *
+ * IL VIT ICI, À CÔTÉ DE `carnetDeLiens`, et non dans `lib/api/links.ts` : ce
+ * dernier est la porte de l'INVITÉ (`/l/:token`), qui ne connaît pas de
+ * lecteur. Les liens QU'ON POSSÈDE se lisent et s'écrivent au même endroit —
+ * les séparer ferait deux modules « liens » dont l'un des deux hériterait du
+ * prochain changement de schéma.
+ *
+ * CHAQUE CHAMP EST COPIÉ DU SCHÉMA QUI LE DÉCLARE (`createLinkSchema`,
+ * `routes/links/types.ts:39`). Un champ inventé ici se ferait refuser EN BLOC
+ * par Zod, et le lecteur perdrait sa saisie pour une faute qu'il n'a pas
+ * commise.
+ *
+ * `allowedCountries` N'EST PAS SERVI, ET C'EST DÉLIBÉRÉ. Le schéma le déclare
+ * `CHAMP_PAYS_INERTE` : la passerelle l'ACCEPTE et ne l'APPLIQUE pas. L'offrir
+ * ferait cocher une restriction qui ne restreint rien — le champ décoratif que
+ * le critère de fin de `sheet:link` interdit nommément.
+ *
+ * LA CONVERSATION NAÎT AVEC LE LIEN, DEPUIS `/links` — il n'y a aucune
+ * conversation à désigner ; `newConversation.title` en crée une, et c'est la
+ * branche que la passerelle prévoit pour ce cas (« If conversationId is not
+ * provided, a new public conversation will be created »).
+ *
+ * DEPUIS LE FIL (`?lien`, #5034), LA CONVERSATION EST DÉJÀ OUVERTE — c'est
+ * l'AUTRE branche de la même route (`mintConversationShareLink`,
+ * `routes/links/utils/share-link-mint.ts:150-212`) : `conversationId` porte
+ * la clé de la conversation servie, jamais `newConversation`. Les deux champs
+ * sont donc optionnels ICI, et c'est à l'appelant de n'en poser qu'un — la
+ * passerelle refuserait de toute façon `conversationId` ET `newConversation`
+ * à la fois pour un lecteur qui n'a droit qu'à l'un des deux (§ 5 de la
+ * spécification #5034).
+ */
+
+/** Les champs de `createLinkSchema` que la feuille sert — aucun autre ne part. */
+export type LienACreer = {
+  readonly newConversation?: { readonly title: string };
+  /** La conversation OUVERTE dont ce lien hérite (`?lien`, #5034) — jamais posé avec `newConversation`. */
+  readonly conversationId?: string;
+  readonly name?: string;
+  readonly description?: string;
+  readonly expiresAt?: string;
+  readonly maxUses?: number;
+  readonly allowAnonymousMessages?: boolean;
+  readonly allowAnonymousFiles?: boolean;
+  readonly allowAnonymousImages?: boolean;
+  readonly allowViewHistory?: boolean;
+  readonly requireNickname?: boolean;
+};
+
+export type LienCree =
+  | { readonly genre: 'fait'; readonly identifiant: string }
+  | { readonly genre: 'refus'; readonly message: string }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+/**
+ * LE REFUS DE LA PASSERELLE EST RENDU TEL QUEL quand elle en donne un — la
+ * même règle que les réglages (`lib/api/reglages.ts`). Son message porte la
+ * raison (« Conversation is closed », « Utilisateur enregistré requis ») ; la
+ * recomposer ici ferait une seconde vérité, qui divergerait au premier
+ * changement de politique.
+ */
+export const creeUnLien = async ({
+  jeton,
+  champs,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly champs: LienACreer;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LienCree> => {
+  const reponse = await (recuperer ?? ((u, o) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/links`,
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(champs),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status >= 500) return { genre: 'panne' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (!reponse.ok) {
+    const message =
+      chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.error) ?? chaine(enveloppe?.message);
+    return { genre: 'refus', message: message ?? '' };
+  }
+
+  // `linkId` EST L'IDENTIFIANT PUBLIC (`mshy_…`), celui qui compose l'adresse
+  // partageable. `shareLink.id` est la clé de base de données : les confondre
+  // servirait une adresse que personne ne peut ouvrir.
+  const donnees = objet(enveloppe?.data);
+  const identifiant = chaine(donnees?.linkId) ?? chaine(objet(donnees?.shareLink)?.linkId);
+  if (identifiant === null) return { genre: 'panne' };
+
+  return { genre: 'fait', identifiant };
+};
+
+/**
+ * FERMER UN LIEN DE PARTAGE — `PATCH /links/:linkId`
+ * (`services/gateway/src/routes/links/management.ts:183`, `onRequest:
+ * [authRequired]` = `requireAuth: true, allowAnonymous: false` : un porteur,
+ * jamais une session invitée).
+ *
+ * LE CORPS EST STRICT : `{ isActive: false }`, et rien d'autre. La route
+ * accepte dix-huit champs optionnels (`updateLinkSchema`) ; en poser un autre
+ * ferait cette écriture faire deux choses à la fois, dont une qu'aucun geste
+ * de l'écran ne demande. Fermer un lien RÉVOQUE les invités déjà entrés
+ * (`applyShareLinkUpdate`, `management.ts:118-146`, `revokeShareLinkGuests`
+ * AVANT l'écriture) — c'est l'effet que `FERMETURE.aide` annonce.
+ *
+ * LA POLICE EST CRÉATEUR OU MODÉRATEUR, jamais le seul créateur
+ * (`loadShareLinkForManagement`, `management.ts:56-96`) : un 403 sur ce
+ * chemin dit « ni l'un ni l'autre », pas « pas le créateur ».
+ *
+ * `/toggle` (`admin.ts:226`) N'EST PAS APPELÉE : c'est une route ADMIN
+ * (#3734), et `PATCH /links/:linkId` porte la MÊME révocation
+ * (`applyShareLinkUpdate`, site unique depuis #4351) sans exiger ce rang.
+ *
+ * LE REFUS EST RENDU TEL QUEL, la même lecture que `creeUnLien` : `error` est
+ * une CHAÎNE (`sendError`, `utils/response.ts:66-88`), jamais un objet — les
+ * deux formes sont lues pour ne pas dépendre d'un détail d'implémentation.
+ */
+export type LienFerme =
+  | { readonly genre: 'fait' }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+export const fermeUnLien = async ({
+  jeton,
+  identifiant,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly identifiant: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LienFerme> => {
+  const reponse = await (recuperer ?? ((u, o) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/links/${encodeURIComponent(identifiant)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ isActive: false }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status >= 500) return { genre: 'panne' };
+
+  if (!reponse.ok) {
+    const enveloppe = objet(await reponse.json().catch(() => null));
+    const message =
+      chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.error) ?? chaine(enveloppe?.message);
+    return { genre: 'refus', message: message ?? '', statut: reponse.status };
+  }
+
+  return { genre: 'fait' };
+};
+
+/**
+ * CRÉER UNE CONVERSATION — `POST /conversations`
+ * (`services/gateway/src/routes/conversations/core-lifecycle.ts:73`).
+ *
+ * `type` EST TOUJOURS `group`, et c'est la feuille qui le décide, pas
+ * l'appelant : les cinq types du schéma ne sont pas cinq choix offerts au
+ * lecteur (`global` demande ADMIN, `broadcast` un droit de diffusion, `direct`
+ * part d'une personne et non d'un formulaire). Un seul type sert ici, donc un
+ * seul est écrit.
+ *
+ * LE LECTEUR NE FIGURE JAMAIS DANS `participantIds`. La passerelle refuse
+ * explicitement qu'on s'y inclue (« Vous ne devez pas vous inclure dans la
+ * liste des participants ») — elle vous ajoute elle-même. C'est mesuré sur le
+ * handler, pas déduit.
+ */
+export type ConversationACreer = {
+  readonly title: string;
+  readonly description?: string;
+  readonly participantIds?: readonly string[];
+};
+
+export type ConversationCreee =
+  | { readonly genre: 'faite'; readonly id: string }
+  | { readonly genre: 'refus'; readonly message: string }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+export const creeUneConversation = async ({
+  jeton,
+  champs,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly champs: ConversationACreer;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<ConversationCreee> => {
+  const reponse = await (recuperer ?? ((u, o) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}${CHEMIN_CONVERSATIONS}`,
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'group', ...champs }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status >= 500) return { genre: 'panne' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (!reponse.ok) {
+    const message =
+      chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.error) ?? chaine(enveloppe?.message);
+    return { genre: 'refus', message: message ?? '' };
+  }
+
+  // La charge sert la conversation à la racine de `data` ou sous
+  // `data.conversation` selon la forme du schéma de réponse : les deux sont
+  // acceptées, et l'ABSENCE d'identifiant est une panne — sans lui, il n'y a
+  // nulle part où mener le lecteur.
+  const donnees = objet(enveloppe?.data);
+  const id = chaine(donnees?.id) ?? chaine(objet(donnees?.conversation)?.id);
+  if (id === null) return { genre: 'panne' };
+
+  return { genre: 'faite', id };
 };

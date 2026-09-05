@@ -24,6 +24,13 @@ import XCTest
 /// | `ComposerSceneBand.palette` ×17 | disque de 28 pt | 28 × 28 pt |
 /// | `ComposerDocumentSurface` ×17 | disque de 28 pt | 28 × 28 pt |
 ///
+/// **Le premier site n'existe plus depuis #5218** : la barre de progression du
+/// wizard d'inscription est partie avec ses huit étapes. Sa ligne reste écrite
+/// ci-dessus parce qu'elle porte la RAISON de la règle — un trait de 5 pt qui
+/// fait sa propre cible — et que la règle, elle, balaie toujours tout le dépôt.
+/// Seule l'assertion qui interrogeait son type a dû partir : un test ne peut pas
+/// lire la constante d'un type supprimé.
+///
 /// Les deux palettes portaient bien 8 pt de marge verticale — mais posée sur le
 /// `HStack` PARENT, donc **hors du bouton**. La bande mesurait 44 pt de haut et
 /// n'en écoutait que 28. C'est le trait commun de la famille : un espace qui
@@ -33,7 +40,7 @@ import XCTest
 /// nue doit déclarer sa zone sensible** — un cadre d'au moins 44 pt, un
 /// `maxWidth: .infinity` qui remplit sa cellule, ou `meeshyTapTarget`. Elle ne
 /// juge pas la valeur : c'est aux tests unitaires des hôtes de la fixer
-/// (`InteractiveProgressBar.rowHeight`, `BackgroundColorPalette.hitSide`).
+/// (`BackgroundColorPalette.hitSide`).
 final class BareShapeTapTargetGuardTests: XCTestCase {
 
     private var appRoot: URL {
@@ -98,11 +105,16 @@ final class BareShapeTapTargetGuardTests: XCTestCase {
                       "un cadre de 44 pt doit être reconnu comme une zone sensible déclarée")
     }
 
-    /// Et les deux hôtes soldés ici fixent bien leur cible à la valeur de la
-    /// HIG — la garde de forme ne le dit pas, ces deux assertions oui.
+    /// Et l'hôte soldé ici fixe bien sa cible à la valeur de la HIG — la garde
+    /// de forme ne le dit pas, ces assertions oui.
+    ///
+    /// `InteractiveProgressBar.rowHeight` y figurait ; le type est parti avec le
+    /// wizard d'inscription (#5218). Une assertion qui cite un type supprimé ne
+    /// COMPILE pas, et la garder « pour mémoire » aurait fait échouer tout le
+    /// bundle de tests — la panne « TEST FAILED / exit 65 » que
+    /// `apps/ios/CLAUDE.md` décrit.
     @MainActor
-    func test_lesDeuxHotesFixentLeurCibleAuMinimumDeLaHIG() {
-        XCTAssertEqual(InteractiveProgressBar.rowHeight, 44)
+    func test_lHoteFixeSaCibleAuMinimumDeLaHIG() {
         XCTAssertEqual(BackgroundColorPalette.hitSide, 44)
         XCTAssertEqual(BackgroundColorPalette.swatchDiameter, 28,
                        "le DESSIN ne change pas : c'est la cible qui grandit")

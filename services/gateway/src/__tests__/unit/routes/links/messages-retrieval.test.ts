@@ -47,7 +47,19 @@ jest.mock('../../../../routes/links/utils/link-helpers', () => ({
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: { type: 'object', properties: {} },
+  // Forme réelle (`packages/shared/types/api-schemas/error.ts`) — un schéma
+  // sans `properties` efface tout ce qu'il ne déclare pas au sérialiseur
+  // (`fast-json-stringify`), `code` compris : le témoin #4808 qui distingue
+  // les deux refus par leur `code` a besoin qu'il survive à la sérialisation.
+  errorResponseSchema: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      error: { type: 'string' },
+      message: { type: 'string' },
+      code: { type: 'string' },
+    },
+  },
 }));
 
 jest.mock('../../../../routes/links/types', () => ({
@@ -209,10 +221,32 @@ describe('GET /links/:identifier/messages — link not found by DB id', () => {
 // ─── GET /links/:identifier/messages — no access ─────────────────────────────
 
 describe('GET /links/:identifier/messages — unauthenticated, no anonymous participant', () => {
-  it('returns 403 when user has no auth and no anonymous participant', async () => {
+  it('returns 401 with LINK_SESSION_REQUIRED when no identity accompanies the request (#4808)', async () => {
     const app = await buildApp({ auth: 'none' });
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('LINK_SESSION_REQUIRED');
+    await app.close();
+  });
+});
+
+describe('GET /links/:identifier/messages — anonymous participant on the wrong link', () => {
+  it('returns 403 without LINK_SESSION_REQUIRED when a known identity points at another link (#4808)', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ auth: 'anonymous-member', prisma });
+    // Le participant anonyme du fixture pointe vers LINK_DB_ID ; interroger
+    // ce même lien via son identifiant public reste la même conversation, donc
+    // on force ici un mésappariement en réutilisant l'identifiant DB d'un
+    // AUTRE lien pour prouver que le 403 (identité connue, mauvais lien)
+    // reste distinct du 401 (aucune identité) — cf. critère 2 de #4808.
+    const otherLinkId = '507f1f77bcf86cd799439099';
+    prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+      ...mockShareLink,
+      id: otherLinkId,
+    });
+    const res = await app.inject({ method: 'GET', url: `/links/${otherLinkId}/messages` });
     expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBeUndefined();
     await app.close();
   });
 });

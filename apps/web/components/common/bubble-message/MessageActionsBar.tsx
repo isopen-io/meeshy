@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useSingleTap } from '@/hooks/use-single-tap';
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 import type { Message } from '@meeshy/shared/types/conversation';
 
 // 30 emojis les plus fréquemment utilisés pour les réactions (6x5 grid)
@@ -106,7 +107,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
   }, [onLanguageSwitch]);
 
   const handleFlagToggle = useCallback(() => {
-    const targetLang = currentDisplayLanguage === originalLanguage
+    const targetLang = isSameLanguage(currentDisplayLanguage, originalLanguage)
       ? userLanguage
       : originalLanguage;
     onLanguageSwitch(targetLang);
@@ -173,17 +174,17 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                   }}
                   className={cn(
                     "p-0 rounded-full transition-colors",
-                    currentDisplayLanguage === originalLanguage
+                    isSameLanguage(currentDisplayLanguage, originalLanguage)
                       ? "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                       : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700"
                   )}
-                  aria-label={currentDisplayLanguage === originalLanguage ? t('showInUserLanguage') : t('showOriginal')}
+                  aria-label={isSameLanguage(currentDisplayLanguage, originalLanguage) ? t('showInUserLanguage') : t('showOriginal')}
                 >
                   <span style={{ fontSize: '12px' }}>{getLanguageInfo(originalLanguage).flag}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{currentDisplayLanguage === originalLanguage ? t('showInUserLanguage') : t('showOriginal')}</p>
+                <p>{isSameLanguage(currentDisplayLanguage, originalLanguage) ? t('showInUserLanguage') : t('showOriginal')}</p>
               </TooltipContent>
             </Tooltip>
 
@@ -234,7 +235,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                     onClick={() => handleLanguageSwitch(originalLanguage)}
                     className={cn(
                       "w-full flex items-start gap-2 p-2 rounded-md text-left transition-colors",
-                      currentDisplayLanguage === originalLanguage
+                      isSameLanguage(currentDisplayLanguage, originalLanguage)
                         ? "bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700"
                         : "hover:bg-gray-50 dark:hover:bg-gray-700"
                     )}
@@ -246,7 +247,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                         <Badge variant="secondary" className="text-xs h-4 px-1">
                           {t('original')}
                         </Badge>
-                        {currentDisplayLanguage === originalLanguage && (
+                        {isSameLanguage(currentDisplayLanguage, originalLanguage) && (
                           <CheckCircle2 className="h-3 w-3 text-indigo-600" />
                         )}
                       </div>
@@ -261,7 +262,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                     .filter(v => !v.isOriginal)
                     .map((version, index) => {
                       const langInfo = getLanguageInfo(version.language);
-                      const isCurrentlyDisplayed = currentDisplayLanguage === version.language;
+                      const isCurrentlyDisplayed = isSameLanguage(currentDisplayLanguage, version.language);
 
                       return (
                         <button

@@ -50,12 +50,20 @@ private final class WeakBox: @unchecked Sendable {
 /// sinon cette fonction libre au MainActor — or elle est désormais appelée
 /// depuis la lecture DÉTACHÉE de `refreshFromDB`/`loadInitialSnapshot`
 /// (audit fluidité 2026-08-26), hors de toute isolation.
+/// `anchoredRowCap` — plafond de la lecture `.latest` ANCRÉE, en nombre de
+/// lignes comptées depuis la PLUS RÉCENTE. `nil` ⇒ aucun plafond (lecture de
+/// toute la profondeur paginée). Une lecture plafonnée ne se sert qu'aux
+/// appelants qui FUSIONNENT en mémoire (`mergeInMemory: true`) : la queue
+/// tronquée y est préservée par la fusion protectrice de `publish`, alors
+/// qu'un REMPLACEMENT sec (transition de fenêtre) amputerait le fil de tout
+/// ce que l'utilisateur a remonté.
 private nonisolated func fetchMessageWindow(
     reader: any DatabaseWriter,
     convId: String,
     mode: WindowMode,
     anchor: Date?,
-    initialWindowSize: Int
+    initialWindowSize: Int,
+    anchoredRowCap: Int? = nil
 ) throws -> [MessageRecord] {
     switch mode {
     case .search(let ids):
@@ -101,6 +109,24 @@ private nonisolated func fetchMessageWindow(
         }
     case .latest:
         if let anchor {
+            if let anchoredRowCap {
+                // Relecture temps réel d'une fenêtre PROFONDE : on ne relit
+                // que les `anchoredRowCap` lignes les plus RÉCENTES au-dessus
+                // de l'ancre — là où tombent les messages entrants, les
+                // accusés et les réactions. Ce qui est plus ancien est
+                // préservé par la fusion en mémoire, donc rien ne disparaît
+                // de l'écran ; seule l'E/S SQLite cesse de croître avec la
+                // profondeur remontée.
+                return try reader.read { db in
+                    try Array(MessageRecord
+                        .filter(Column("conversationId") == convId)
+                        .filter(Column("createdAt") >= anchor)
+                        .order(Column("createdAt").desc)
+                        .limit(anchoredRowCap)
+                        .fetchAll(db)
+                        .reversed())
+                }
+            }
             // Dynamic window: when the user has scrolled up, load ALL
             // messages from the anchor to the newest. No cap — the window
             // grows as the user paginates deeper into history.
@@ -163,6 +189,29 @@ public final class MessageStore: ObservableObject {
     static let initialWindowSize = 200
     static let prefetchThreshold = 30
 
+    /// Plafond de la relecture ANCRÉE en temps réel (#4943, D-RT-02). Après
+    /// une remontée profonde du fil, la fenêtre `.latest` ancrée n'avait
+    /// AUCUNE borne haute : chaque écriture GRDB — message entrant, accusé de
+    /// livraison, réaction, tick de retry — rematérialisait des milliers de
+    /// lignes SQLite, une E/S proportionnelle à ce que l'utilisateur avait
+    /// remonté et non à ce qui avait changé. La relecture temps réel s'arrête
+    /// donc aux 500 lignes les plus récentes de la fenêtre ; le reste est
+    /// PRÉSERVÉ par la fusion protectrice de `publish` (`.latest` +
+    /// `mergeInMemory`), si bien qu'aucune bulle ne quitte l'écran. Les
+    /// transitions de fenêtre (jump / restore / pagination), qui REMPLACENT,
+    /// relisent toujours sans plafond.
+    ///
+    /// CE QUE LA BORNE COÛTE, dit franchement : au-delà de 500 lignes remontées,
+    /// une modification d'une bulle PLUS ANCIENNE que la borne (édition,
+    /// suppression, réaction) n'est plus reflétée par le refresh temps réel —
+    /// la fusion préserve alors la version en mémoire. Elle revient à la
+    /// prochaine transition de fenêtre ou à la réouverture. Le compromis est
+    /// assumé : ces lignes sont hors écran de plusieurs centaines de rangées,
+    /// alors que la lecture non bornée coûtait des milliers de lignes SQLite à
+    /// CHAQUE accusé de lecture émis pendant le défilement. Une lecture
+    /// réellement DELTA (par `changeVersion`) est la suite naturelle.
+    static let realtimeAnchoredWindowCap = 500
+
     // MARK: - Public State
 
     @Published private(set) var messages: [MessageRecord] = []
@@ -197,6 +246,24 @@ public final class MessageStore: ObservableObject {
 
     // Change signal for UICollectionView observation
     let messagesDidChange = PassthroughSubject<Void, Never>()
+
+    /// Points d'accès de test (#4943) — `internal`, lus par `@testable import
+    /// Meeshy`, jamais par une autre cible app.
+    ///
+    /// `lastWindowRowsReadForTesting` — nombre de LIGNES rendues par la
+    /// dernière lecture : le seul témoin qui distingue « la relecture temps
+    /// réel est bornée » de « elle relit toute la profondeur paginée ».
+    /// `windowReadsForTesting` — nombre de lectures de fenêtre effectuées :
+    /// le seul témoin qui distingue « la conversation s'ouvre en UNE lecture »
+    /// de « deux chemins lisent la même fenêtre ».
+    ///
+    /// Compilés en DEBUG seulement — la règle que le diagnostic BUG1 plus bas
+    /// applique déjà : un témoin que personne ne consomme en production ne s'y
+    /// paie pas, fût-ce deux entiers sur le chemin chaud.
+    #if DEBUG
+    private(set) var lastWindowRowsReadForTesting: Int = 0
+    private(set) var windowReadsForTesting: Int = 0
+    #endif
 
     struct MessageSection: Sendable {
         let date: DateComponents
@@ -283,13 +350,15 @@ public final class MessageStore: ObservableObject {
         let reader = persistence.reader
 
         // La lecture de fenêtre part HORS du MainActor (audit fluidité
-        // 2026-08-26). En `.latest` ancré elle est SANS PLAFOND — après une
+        // 2026-08-26). En `.latest` ancré elle était SANS PLAFOND — après une
         // remontée profonde du fil, chaque notification d'écriture GRDB
         // (message entrant, accusé de livraison/lecture, réaction, tick de
         // retry) rematérialisait des MILLIERS de lignes SQLite sur la boucle
         // principale, en plein défilement : les accusés de lecture émis par
         // le suivi de lecture pendant le scroll refermaient la boucle sur
-        // elle-même. Même patron détaché éprouvé que `loadOlder(before:)` —
+        // elle-même. Elle est désormais BORNÉE sur le chemin temps réel
+        // (`realtimeAnchoredWindowCap`, #4943). Même patron détaché éprouvé
+        // que `loadOlder(before:)` —
         // `fetchMessageWindow` est une fonction libre nonisolated, aucun état
         // isolé ne traverse la fermeture (le crash historique Task.detached +
         // reader.read venait de fermetures HÉRITANT une isolation d'acteur).
@@ -297,13 +366,19 @@ public final class MessageStore: ObservableObject {
         // Garde de génération : deux refreshes peuvent désormais
         // s'entrelacer pendant l'await — seule la demande la PLUS RÉCENTE
         // publie, sinon une fenêtre périmée réordonnerait l'affichage.
+        //
+        // Plafond de la lecture ANCRÉE : seul l'appelant qui FUSIONNE (le
+        // temps réel) peut se contenter de la queue de la fenêtre, puisque
+        // `publish` y préserve ce qui manque. Cf. `realtimeAnchoredWindowCap`.
+        let anchoredRowCap = mergeInMemory ? Self.realtimeAnchoredWindowCap : nil
         refreshGeneration &+= 1
         let generation = refreshGeneration
         let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
             Result {
                 try fetchMessageWindow(
                     reader: reader, convId: convId, mode: mode,
-                    anchor: anchor, initialWindowSize: initialWindowSize
+                    anchor: anchor, initialWindowSize: initialWindowSize,
+                    anchoredRowCap: anchoredRowCap
                 )
             }
         }.value
@@ -316,9 +391,13 @@ public final class MessageStore: ObservableObject {
             Logger.messages.error("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
             return
         }
+        #if DEBUG
+        lastWindowRowsReadForTesting = newRecords.count
+        windowReadsForTesting += 1
+        #endif
 
         guard generation == refreshGeneration else { return }
-        guard newRecords != messages else { return }
+        guard !publishWouldBeNoOp(records: newRecords, mergeInMemory: mergeInMemory) else { return }
 
         // Yield to a fresh runloop iteration before publishing the @Published
         // mutation. When refreshFromDB is invoked from a view's .task /
@@ -337,7 +416,7 @@ public final class MessageStore: ObservableObject {
             // Re-check: state could have changed during the runloop yield (e.g.,
             // a socket message arrived and another refresh wrote first).
             guard generation == refreshGeneration else { return }
-            guard newRecords != messages else { return }
+            guard !publishWouldBeNoOp(records: newRecords, mergeInMemory: mergeInMemory) else { return }
         }
 
         publish(records: newRecords, mergeInMemory: mergeInMemory)
@@ -390,13 +469,15 @@ public final class MessageStore: ObservableObject {
     /// in `.around(date:)` mode (jump-to-message) and on explicit straight
     /// replaces (window transitions) so a stale slice never pollutes the view.
     private func publish(records: [MessageRecord], mergeInMemory: Bool) {
-        // BUG1 diagnostics — capture the pre-state to detect any publish that
-        // DROPS currently-displayed messages (the suspected "all sent messages
-        // vanish while one is pending" path). Le chemin nominal ne paie que
-        // deux Sets d'ids ; le dictionnaire de classification (copie des
-        // records) n'est construit QUE sur drop détecté.
-        let beforeCount = messages.count
-        let beforeIds = Set(messages.map(\.localId))
+        // Une publication qui rendrait EXACTEMENT le tableau déjà affiché n'est
+        // pas gratuite : elle réveille le sink du ViewModel, la cartographie de
+        // la fenêtre et un `applySnapshot()` O(n) de la liste. `refreshFromDB`
+        // s'en gardait depuis toujours (`newRecords != messages`), `apply` pas
+        // du tout — d'où les deux à trois re-dispositions de la liste dans la
+        // seconde qui suivait l'ouverture d'une conversation déjà en cache
+        // (#4943, D-OPEN-01). La règle vit ici, au seul point de publication,
+        // pour que les deux chemins ne puissent plus diverger.
+        guard !publishWouldBeNoOp(records: records, mergeInMemory: mergeInMemory) else { return }
 
         let next: [MessageRecord]
         if mergeInMemory, windowMode == .latest {
@@ -418,6 +499,16 @@ public final class MessageStore: ObservableObject {
         // mistaken for an unintended drop (the prior publish was deduped too).
         let published = Self.collapsingDuplicateServerIds(next)
 
+        #if DEBUG
+        // BUG1 diagnostics — detect any publish that DROPS currently-displayed
+        // messages (the suspected "all sent messages vanish while one is
+        // pending" path). Compilé en DEBUG SEULEMENT (#4943) : les deux `Set`
+        // d'ids sont O(n) et se payaient à CHAQUE publication, donc à chaque
+        // événement temps réel, sur la boucle principale — pour alimenter un
+        // journal qu'aucun lecteur du dépôt ne consomme. Le diagnostic garde
+        // toute sa valeur là où on l'utilise : sur un build de développement.
+        let beforeCount = messages.count
+        let beforeIds = Set(messages.map(\.localId))
         let afterIds = Set(published.map(\.localId))
         let droppedIds = beforeIds.subtracting(afterIds)
         if !droppedIds.isEmpty {
@@ -458,6 +549,7 @@ public final class MessageStore: ObservableObject {
         } else if next.count != beforeCount {
             Logger.messages.debug("[MessageStore] publish before=\(beforeCount) -> after=\(next.count) records=\(records.count) merge=\(mergeInMemory) window=\(String(describing: self.windowMode))")
         }
+        #endif
 
         messages = published
         _idIndex = nil
@@ -472,6 +564,34 @@ public final class MessageStore: ObservableObject {
         }
         recomputeSections()
         messagesDidChange.send()
+    }
+
+    /// `true` quand publier `records` rendrait EXACTEMENT le tableau déjà
+    /// affiché — auquel cas la publication n'a rien à dire et tout à coûter.
+    ///
+    /// Deux formes, et la seconde n'est pas une commodité :
+    /// 1. lecture ÉGALE au tableau affiché — le cas de l'ouverture, où deux
+    ///    chemins lisaient la même fenêtre ;
+    /// 2. lecture PLAFONNÉE (temps réel ancré) égale à la QUEUE du tableau
+    ///    affiché. La fusion protectrice y préserve le préfixe manquant, donc
+    ///    le résultat serait `messages` à l'identique. Sans cette forme, une
+    ///    fenêtre profonde republierait à chaque événement — le plafond aurait
+    ///    économisé l'E/S SQLite pour redonner le O(n) au rendu.
+    ///
+    /// Sous-ensemble strict SANS fusion (remplacement sec) : la troncature est
+    /// réelle et DOIT être publiée — d'où la garde `mergeInMemory` + `.latest`.
+    private func publishWouldBeNoOp(records: [MessageRecord], mergeInMemory: Bool) -> Bool {
+        if records == messages { return true }
+        guard mergeInMemory, windowMode == .latest, records.count < messages.count
+        else { return false }
+        // `elementsEqual` sur la TRANCHE, jamais `Array(...)` : matérialiser la
+        // queue allouait — et détruisait — un tableau de jusqu'à 500 structs à
+        // chaque appel, sur le MainActor, au moment précis du défilement. La
+        // forme 2 étant le chemin NOMINAL d'une fenêtre ancrée profonde, ce
+        // coût se payait à chaque accusé de lecture, chaque réaction, chaque
+        // tick d'outbox. La comparaison est paresseuse et s'arrête au premier
+        // écart.
+        return records.elementsEqual(messages.suffix(records.count))
     }
 
     /// Collapses physical rows that share a server id down to a single survivor.
@@ -527,6 +647,14 @@ public final class MessageStore: ObservableObject {
 
     // MARK: - Load Initial
 
+    /// Lecture de fenêtre + publication en un appel.
+    ///
+    /// Plus AUCUN appelant de production depuis #4943 : l'ouverture d'une
+    /// conversation passe par `loadInitialSnapshot()` + `apply(records:)`, qui
+    /// séparent la lecture de la publication et permettent de poser messages
+    /// ET métadonnées audio dans le MÊME slice MainActor (discipline
+    /// d'atomicité). Conservée parce qu'elle reste le chemin le plus court
+    /// pour amorcer un magasin dans un harnais de test.
     func loadInitial() async {
         await refreshFromDB()
     }
@@ -572,6 +700,10 @@ public final class MessageStore: ObservableObject {
             Logger.messages.error("[MessageStore] loadInitialSnapshot failed: \(error.localizedDescription)")
             return []
         }
+        #if DEBUG
+        lastWindowRowsReadForTesting = records.count
+        windowReadsForTesting += 1
+        #endif
 
         // Yield off the current SwiftUI view update cycle so the caller's
         // subsequent `apply` (which mutates @Published) lands on a fresh
@@ -598,6 +730,11 @@ public final class MessageStore: ObservableObject {
     /// disabled : preserving messages from a previous `.latest` view would
     /// pollute the jumped window with messages from a different time slice,
     /// breaking the search-result navigation. Replace strictly instead.
+    ///
+    /// IDEMPOTENT depuis #4943 : appliquer deux fois la MÊME fenêtre ne
+    /// publie qu'une fois (`publishWouldBeNoOp`). L'appelant n'a donc pas à
+    /// savoir si quelqu'un d'autre a déjà lu cette fenêtre — c'est ce qui
+    /// permet à la revalidation REST de rappliquer sans re-disposer la liste.
     public func apply(records: [MessageRecord]) {
         publish(records: records, mergeInMemory: true)
     }

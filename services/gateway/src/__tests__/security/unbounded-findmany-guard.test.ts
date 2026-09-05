@@ -290,7 +290,6 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // AILLEURS — la clause `id: { in: distinctIds }` sur un lot que le schema de
   // `/posts/impressions/batch` plafonne a 100. Une borne transitive reste une
   // borne ; ce cliquet compte les take/skip, il ne sait pas les lire.
-  'posts/impressions.ts': 1,
   'posts/postConsumptionGate.ts': 1,
   'posts/nearby.ts': 1,
   'push-tokens.ts': 1,
