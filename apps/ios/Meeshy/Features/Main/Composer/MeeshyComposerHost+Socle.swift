@@ -513,6 +513,9 @@ extension MeeshyComposerHost {
             .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
             .opacity(canPublishDocument ? 1 : 0.45)
             .disabled(!canPublishDocument)
+            // **L'indice de blocage se VOIT, il ne s'entend plus seulement**
+            // (2026-09-05). Voir `publishBlockedNotice`.
+            .overlay(alignment: .top) { publishBlockedNotice }
             // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
             // flèche perdrait son nom à l'instant même où elle devient compacte
             // — le défaut que `StatusComposerView` a dû corriger, dans l'autre
@@ -520,6 +523,60 @@ extension MeeshyComposerHost {
             .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
             .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
             .accessibilityHint(publishBlockedHint)
+    }
+
+    /// **Pourquoi la flèche est grise — DIT à l'œil** (directive porteur
+    /// 2026-09-05 : « corrige le refus muet »).
+    ///
+    /// ## Le défaut mesuré
+    ///
+    /// Au simulateur : photo posée, texte tapé, flèche pressée — **rien**. Ni
+    /// post, ni mot, ni mouvement. J'ai d'abord cru à une publication refusée
+    /// en silence ; la mesure dit autre chose, et c'est pire :
+    ///
+    /// `publishBlockedHint` EXISTE. Elle est calculée, elle est traduite en
+    /// sept langues, elle sait distinguer les surfaces — et elle n'était servie
+    /// qu'à **`.accessibilityHint`**. Un utilisateur de VoiceOver s'entendait
+    /// donc expliquer pourquoi la flèche ne part pas ; **un utilisateur voyant
+    /// voyait une flèche grise et rien d'autre.**
+    ///
+    /// > **Une explication réservée à VoiceOver n'est pas une explication, c'est
+    /// > une asymétrie.** Le travail avait été fait — la règle, la phrase, les
+    /// > traductions — et il manquait le pixel. C'est la forme exacte du « qui
+    /// > AFFICHE ce que tu résous ? » que ce dépôt a déjà payée trois fois cette
+    /// > semaine, appliquée cette fois à un texte qu'on croyait rendu parce
+    /// > qu'il était PASSÉ à un modificateur.
+    ///
+    /// ## Pourquoi un overlay, et pas un toast au tap
+    ///
+    /// La capsule est `.disabled` : aucun tap ne l'atteint, donc aucun geste ne
+    /// peut déclencher un message. L'explication doit être là AVANT qu'on
+    /// essaie — c'est d'ailleurs mieux : elle évite l'essai plutôt que de le
+    /// commenter.
+    ///
+    /// Vide quand il n'y a rien à dire (`publishBlockedHint` rend `""` dès que
+    /// la flèche est armée, ou quand l'indice serait FAUX — audience nominative
+    /// incomplète). Un `EmptyView` alors, jamais une bulle vide : la règle de
+    /// l'indice décide déjà, cette vue ne la re-décide pas.
+    @ViewBuilder
+    var publishBlockedNotice: some View {
+        if !publishBlockedHint.isEmpty {
+            Text(publishBlockedHint)
+                .font(MeeshyFont.relative(11, weight: .medium))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
+                .lineLimit(2)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 190, alignment: .trailing)
+                // AU-DESSUS de la capsule : le socle est la dernière rangée de
+                // l'écran, et poser l'indice dessous le mettrait sous le bord.
+                .offset(y: -26)
+                .allowsHitTesting(false)
+                // VoiceOver l'entend déjà par `accessibilityHint` sur la
+                // capsule ; le lire une seconde fois ici ferait entendre la
+                // même phrase deux fois pour un seul fait.
+                .accessibilityHidden(true)
+        }
     }
 
     var publishButton: some View {

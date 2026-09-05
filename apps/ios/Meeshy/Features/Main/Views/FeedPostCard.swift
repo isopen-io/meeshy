@@ -344,6 +344,14 @@ struct FeedPostCard: View {
         post.media.first { $0.type == .image || $0.type == .video }
     }
 
+    /// **La légende que la carte de scène affiche** — celle du média que la
+    /// scène montre, résolue par le MÊME juge que les deux autres surfaces du
+    /// fil (`SocialMediaCaption`), et jamais le texte du post : celui-ci est
+    /// déjà rendu au-dessus de la carte.
+    private var cardSceneCaption: String? {
+        cardSceneFullscreenMedia?.caption
+    }
+
     /// L'indice VoiceOver DIT ce que le doigt fait — et il change avec lui.
     private var cardSceneOpenHint: String {
         cardSceneFullscreenMedia != nil
@@ -514,6 +522,19 @@ struct FeedPostCard: View {
                             { openFullscreen(media) }
                         }
                     )
+                        // **La légende PAR-DESSUS la scène** (directive porteur
+                        // 2026-09-05). La carte de scène n'en affichait aucune :
+                        // l'auteur composait sa légende, la retrouvait en plein
+                        // écran, et le fil n'en montrait rien — alors que c'est
+                        // là qu'on décide d'ouvrir ou de passer.
+                        //
+                        // Posée en `overlay` plutôt que dans la scène : elle
+                        // décrit le contenu, elle n'en fait pas partie. L'y
+                        // peindre la ferait entrer dans l'aperçu ET dans
+                        // l'export (loi 6).
+                        .overlay(alignment: .bottom) {
+                            FeedCaptionOverlay(caption: cardSceneCaption)
+                        }
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(cardSceneAccessibilityLabel)
                         // **L'annonce SUIT le geste** — sinon le contrôle ment.
