@@ -554,7 +554,10 @@ public protocol OfflineQueueing: Sendable {
         mobileTranscription: MobileTranscriptionPayload?,
         /// Le canvas composé sur la scène (#4756) — sans défaut, comme
         /// `mobileTranscription` : chaque appelant DÉCLARE s'il en a un.
-        storyEffects: StoryEffects?
+        storyEffects: StoryEffects?,
+        /// Les légendes par fichier, alignées par INDEX sur `sourceMediaURLs`
+        /// (#4756). Sans défaut, même raison.
+        mediaCaptions: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -2063,7 +2066,11 @@ public actor OfflineQueue {
         /// scène écrit `nil` en toutes lettres. Un défaut ferait disparaître le
         /// canvas d'un site d'appel sans casser la moindre compilation — le
         /// mode de panne exact que ce champ vient de payer une fois.
-        storyEffects: StoryEffects?
+        storyEffects: StoryEffects?,
+        /// Les légendes par fichier, alignées par INDEX sur `sourceMediaURLs`
+        /// (#4756) — l'index est la seule identité qui survive à la
+        /// relocalisation des fichiers.
+        mediaCaptions: [String?]?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -2085,7 +2092,8 @@ public actor OfflineQueue {
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: mobileTranscription,
             localMediaMimeTypes: sourceMediaMimeTypes,
-            storyEffects: storyEffects
+            storyEffects: storyEffects,
+            mediaCaptions: mediaCaptions
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

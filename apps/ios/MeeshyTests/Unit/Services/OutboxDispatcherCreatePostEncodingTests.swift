@@ -23,7 +23,8 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         discoverabilityPrecision: DiscoverabilityPrecision? = nil,
         repostOfId: String? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
-        storyEffects: StoryEffects? = nil
+        storyEffects: StoryEffects? = nil,
+        mediaCaption: [String: String]? = nil
     ) -> CreatePostBody {
         CreatePostBody(
             content: "Coucou",
@@ -40,7 +41,8 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
             discoverabilityPrecision: discoverabilityPrecision,
             repostOfId: repostOfId,
             mobileTranscription: mobileTranscription,
-            storyEffects: storyEffects
+            storyEffects: storyEffects,
+            mediaCaption: mediaCaption
         )
     }
 
@@ -210,5 +212,25 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         let json = try encodeToJSON(makeBody())
         XCTAssertNil(json["storyEffects"],
                      "Pas de scène ⇒ pas de clé, jamais un objet vide.")
+    }
+
+    // MARK: - #4756 — la LÉGENDE, clée par id SERVEUR
+
+    /// **La carte part clée par `PostMedia.id`, jamais par une position.** Le
+    /// gateway filtre en SILENCE les ids qu'il ne reconnaît pas
+    /// (`PostService.applyMediaText`) : une carte mal clée se perd sans erreur,
+    /// ce qui est la forme la plus coûteuse de perte — l'auteur a saisi, vu,
+    /// validé.
+    func test_lesLegendes_partentCleesParIdServeur() throws {
+        let json = try encodeToJSON(makeBody(mediaCaption: ["pm_1": "le quai"]))
+        XCTAssertEqual(json["mediaCaption"] as? [String: String], ["pm_1": "le quai"])
+    }
+
+    /// Vide vaut ABSENT à la création : il n'y a aucune légende à effacer, et
+    /// une carte vide encodée serait un verdict là où il n'y en a aucun — même
+    /// règle que `mentions` deux témoins plus haut.
+    func test_sansLegende_laCleNestPasPosee() throws {
+        XCTAssertNil(try encodeToJSON(makeBody())["mediaCaption"])
+        XCTAssertNil(try encodeToJSON(makeBody(mediaCaption: [:]))["mediaCaption"])
     }
 }

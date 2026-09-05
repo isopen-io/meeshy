@@ -80,6 +80,10 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         /// pour le MIME déclaré, pour l'audience nommée et pour la
         /// transcription — trois champs qui ont déjà été perdus en silence.
         let storyEffects: StoryEffects?
+        /// Les légendes par fichier (#4756) — observables ici, même raison que
+        /// les quatre champs au-dessus : un mock qui reçoit sans enregistrer
+        /// ne teste pas ce qu'il reçoit.
+        let mediaCaptions: [String?]?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -101,7 +105,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         mentions: [PostMentionInput]?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
         mobileTranscription: MobileTranscriptionPayload?,
-        storyEffects: StoryEffects?
+        storyEffects: StoryEffects?,
+        mediaCaptions: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
@@ -116,7 +121,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             mentions: mentions,
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: mobileTranscription,
-            storyEffects: storyEffects
+            storyEffects: storyEffects,
+            mediaCaptions: mediaCaptions
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(

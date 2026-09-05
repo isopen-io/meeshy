@@ -456,6 +456,17 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// scène à transporter.
     public let storyEffects: StoryEffects?
 
+    /// **La LÉGENDE de chaque fichier, alignée par INDEX sur
+    /// `localMediaPaths`** (#4756).
+    ///
+    /// Clée par index et non par id serveur, parce que l'id n'existe pas encore
+    /// quand cette ligne est écrite : c'est l'upload qui l'attribue, au flush.
+    /// Le dispatcher fait la traduction, seul étage à connaître les deux.
+    ///
+    /// `nil` à une position ⇒ ce fichier n'a pas de légende. Optionnel :
+    /// un enregistrement persisté avant ce lot décode sans cette clé.
+    public let mediaCaptions: [String?]?
+
     /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
     /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
     ///
@@ -485,7 +496,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         repostOfId: String? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
         localMediaMimeTypes: [String]? = nil,
-        storyEffects: StoryEffects? = nil
+        storyEffects: StoryEffects? = nil,
+        mediaCaptions: [String?]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -505,6 +517,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.mobileTranscription = mobileTranscription
         self.localMediaMimeTypes = localMediaMimeTypes
         self.storyEffects = storyEffects
+        self.mediaCaptions = mediaCaptions
     }
 }
 

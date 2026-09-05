@@ -44,7 +44,8 @@ final class RepublishAnchorPublisherTests: XCTestCase {
             originalLanguage: "fr",
             mobileTranscription: nil,
             references: [],
-            storyEffects: nil
+            storyEffects: nil,
+            mediaCaptions: [:]
         )
     }
 

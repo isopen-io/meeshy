@@ -354,7 +354,8 @@ extension FeedView {
                     // qu'un champ neuf ne disparaisse pas d'un site d'appel en
                     // silence.
                     mobileTranscription: nil,
-                    storyEffects: nil   // le composer inline n'a pas de scène, #4756
+                    storyEffects: nil,  // le composer inline n'a pas de scène, #4756
+                    mediaCaptions: nil
                 )
             }
             return
@@ -1774,7 +1775,8 @@ struct FeedComposerSheet: View {
                     mentions: declared,
                     discoverabilityPrecision: nearbyPrecision,
                     mobileTranscription: nil,
-                    storyEffects: nil
+                    storyEffects: nil,
+                    mediaCaptions: nil
                 )
             }
             return

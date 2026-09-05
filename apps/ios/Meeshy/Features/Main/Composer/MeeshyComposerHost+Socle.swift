@@ -717,7 +717,11 @@ extension MeeshyComposerHost {
                 // vide (cf. `sceneIsPresent`). Sans scène à l'écran, aucun blob
                 // ne part — un canvas vide encodé ferait croire à une scène
                 // composée puis effacée.
-                storyEffects: sceneIsPresent ? viewModel.currentSlide.effects : nil
+                storyEffects: sceneIsPresent ? viewModel.currentSlide.effects : nil,
+                // **Les légendes du composer, enfin remises** (#4756). Cette
+                // carte avait un écrivain et aucun lecteur sur cette voie : ce
+                // qui manquait n'était pas la saisie, c'était ce passage-ci.
+                mediaCaptions: documentMediaCaptions
             )
         }
     }

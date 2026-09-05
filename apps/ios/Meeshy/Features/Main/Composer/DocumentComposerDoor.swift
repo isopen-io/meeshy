@@ -360,7 +360,8 @@ struct DocumentComposerDoor: View {
             // (`ComposerDocumentDurablePublisher`) passe la même valeur au même
             // rang : un écart entre les deux serait un champ perdu en silence
             // chez l'une des deux — ce que leur doc-comment croisé annonce.
-            storyEffects: draft.storyEffects
+            storyEffects: draft.storyEffects,
+            mediaCaptions: draft.mediaCaptions
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

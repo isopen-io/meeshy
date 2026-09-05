@@ -118,6 +118,30 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// vide encodé à sa place ferait croire à une scène composée puis effacée.
     let storyEffects: StoryEffects?
 
+    /// **La LÉGENDE de chaque fichier, alignée par INDEX sur `localMediaURLs`**
+    /// (#4756, seconde moitié).
+    ///
+    /// ## Pourquoi un tableau plutôt qu'une carte
+    ///
+    /// La destination est `PostMedia.caption`, une colonne clée par un id
+    /// SERVEUR — attribué à l'upload, dans `OutboxDispatcher`, bien après que
+    /// cette matière soit composée. Poser ici une carte clée par URL locale
+    /// aurait produit une charge dont aucune clé n'existe chez le destinataire :
+    /// le gateway filtre en silence les ids qu'il ne reconnaît pas
+    /// (`PostService.applyMediaText`), et la légende serait perdue SANS erreur.
+    ///
+    /// L'INDEX est la seule identité qui survive au voyage : `localMediaURLs[i]`
+    /// devient `relativePaths[i]` à l'enfilage, puis `uploadedIds[i]` à
+    /// l'upload. C'est la même discipline que `localMediaMimeTypes` juste
+    /// au-dessus, et pour la même raison — ce champ-là avait déjà été « reçu
+    /// puis jeté », et son doc-comment porte la leçon.
+    ///
+    /// `nil` à une position ⇒ ce fichier n'a pas de légende. Vide et `nil` s'y
+    /// disent pareil, et c'est voulu : une chaîne vide poserait une légende
+    /// BLANCHE sur le média, le contraire de « pas de légende »
+    /// (`ComposerSlideTextRole.applyCaption`).
+    let mediaCaptions: [String?]
+
     private init(
         clientMutationId: String,
         type: String,
@@ -131,7 +155,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         location: SharedPlace?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
         mobileTranscription: MobileTranscriptionPayload?,
-        storyEffects: StoryEffects?
+        storyEffects: StoryEffects?,
+        mediaCaptions: [String?]
     ) {
         self.clientMutationId = clientMutationId
         self.type = type
@@ -146,6 +171,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         self.discoverabilityPrecision = discoverabilityPrecision
         self.mobileTranscription = mobileTranscription
         self.storyEffects = storyEffects
+        self.mediaCaptions = mediaCaptions
     }
 
     /// Le geste « **j'ai composé un document** » — un post ou un réel né du
@@ -182,7 +208,11 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         /// TEXTE — la règle 1 de ce fichier interdit un défaut : un site qui
         /// n'a pas de scène l'écrit en toutes lettres, sinon le champ
         /// disparaîtrait demain d'un appelant sans casser la compilation.
-        storyEffects: StoryEffects?
+        storyEffects: StoryEffects?,
+        /// **Les légendes du composer, clées par URL LOCALE** (#4756). Elles
+        /// sont RÉALIGNÉES sur l'index de `localMedia` ci-dessous — c'est le
+        /// seul endroit qui voie les deux, la carte et l'ordre des fichiers.
+        mediaCaptions: ComposerMediaCaptions
     ) -> PublishIntent {
         PublishIntent(
             clientMutationId: ClientMutationId.generate(),
@@ -225,7 +255,12 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
             mobileTranscription: transcription,
-            storyEffects: storyEffects
+            storyEffects: storyEffects,
+            // **La carte devient un tableau, ICI et nulle part ailleurs.** Ce
+            // site est le seul qui tienne à la fois les légendes (par URL) et
+            // l'ORDRE des fichiers ; plus bas, l'URL n'existe plus — la file
+            // relocalise les fichiers et n'en garde que des chemins relatifs.
+            mediaCaptions: localMedia.map { mediaCaptions[$0.url] }
         )
     }
 
@@ -283,7 +318,10 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             // chaque geste DÉCLARE tout ce qu'il publie. Le jour où un
             // enregistrement gagnera un canvas, c'est cette ligne qui refusera
             // de rester fausse en silence.
-            storyEffects: nil
+            storyEffects: nil,
+            // Un vocal n'a pas non plus de légende par média : il EST le média,
+            // et ce qui le décrit est sa transcription.
+            mediaCaptions: [nil]
         )
     }
 }

@@ -74,7 +74,8 @@ enum ComposerDocumentDurablePublisher {
             // **Le canvas suit la voie durable** (#4756) — c'est la SEULE que
             // prenne un post du meuble, en ligne comme hors ligne. Un blob
             // qui s'arrêterait au brouillon serait perdu au premier flush.
-            storyEffects: draft.storyEffects
+            storyEffects: draft.storyEffects,
+            mediaCaptions: draft.mediaCaptions
         )
 
         do {
@@ -96,7 +97,8 @@ enum ComposerDocumentDurablePublisher {
                 // remis ici AUSSI, ou la moitié des posts du meuble perdrait
                 // encore sa scène. C'est le mode de panne que la règle « aucune
                 // valeur par défaut » existe pour rendre impossible.
-                storyEffects: intent.storyEffects
+                storyEffects: intent.storyEffects,
+                mediaCaptions: intent.mediaCaptions
             )
         } catch {
             return refuse()
