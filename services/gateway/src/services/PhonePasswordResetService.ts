@@ -338,7 +338,8 @@ export class PhonePasswordResetService {
         await this.logSecurityEvent(token.userId, 'PHONE_RESET_IDENTITY_BLOCKED', 'HIGH', {
           tokenId: token.id,
           attempts: token.identityAttempts,
-          ipAddress
+          ipAddress,
+          userAgent
         });
         return { success: false, error: 'max_attempts_exceeded' };
       }
@@ -356,7 +357,8 @@ export class PhonePasswordResetService {
           attempt: token.identityAttempts + 1,
           usernameMatch,
           emailMatch,
-          ipAddress
+          ipAddress,
+          userAgent
         });
 
         return {
@@ -396,7 +398,8 @@ export class PhonePasswordResetService {
       await this.logSecurityEvent(token.userId, 'PHONE_RESET_CODE_SENT', 'MEDIUM', {
         tokenId: token.id,
         smsProvider: smsResult.provider,
-        ipAddress
+        ipAddress,
+        userAgent
       });
 
       logger.info('[PhonePasswordReset] ✅ Identity verified, SMS sent');
@@ -724,7 +727,11 @@ export class PhonePasswordResetService {
           status: 'SUCCESS',
           description: `${eventType} event`,
           metadata,
-          ipAddress: metadata.ipAddress
+          ipAddress: metadata.ipAddress,
+          // #4859 — `SecurityEvent.userAgent` (schema.prisma) est resté NUL sur
+          // chaque événement de ce service : seul `ipAddress` était extrait du
+          // côté métadonnées vers sa colonne dédiée.
+          userAgent: metadata.userAgent
         }
       });
     } catch (error) {

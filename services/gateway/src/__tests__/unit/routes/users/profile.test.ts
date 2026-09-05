@@ -919,6 +919,31 @@ describe('PATCH /users/me/username — rate limited', () => {
     expect(res.statusCode).toBe(429);
     await app.close();
   });
+
+  // #4859 — le schéma 429 déclare `nextChangeAllowedAt` depuis toujours ; la
+  // valeur était calculée puis jamais transmise à `sendError`, si bien qu'un
+  // champ que le CONTRAT promet n'atteignait jamais un client.
+  it('tells the client when the next change is allowed', async () => {
+    mockBcryptCompare.mockResolvedValueOnce(true);
+    const changedAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const recentHistory = [{ newUsername: 'alice', changedAt: changedAt.toISOString() }];
+    const prisma = makePrisma({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: recentHistory }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update: jest.fn<any>().mockResolvedValue(mockUser),
+      },
+    });
+    const app = await buildApp({ routes: [updateUsername], prisma });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me/username',
+      payload: { newUsername: 'bob', currentPassword: 'correctpass' },
+    });
+    expect(res.statusCode).toBe(429);
+    const expected = new Date(changedAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    expect(res.json().nextChangeAllowedAt).toBe(expected);
+    await app.close();
+  });
 });
 
 describe('PATCH /users/me/username — success', () => {
