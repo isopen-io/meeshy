@@ -112,9 +112,10 @@ import { avisDEcran, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, PUCE_DU_PRISME, rondDEnT
  * LE CORPS A DEUX COLONNES (#5136, jumelle iOS #5135) — la bulle, et au bas de
  * sa droite la datation (heure + accusé). Elles vivaient dans `.meta`, la ligne
  * posée SOUS le texte, dont `<time>` était le seul contributeur de hauteur :
- * `.reagir-slot` est en `height:0`, `.langue` et `.modifie` sont conditionnels.
- * Cette ligne réservait donc, sous chaque message, la hauteur d'un texte pour
- * deux informations qui se lisent aussi bien à côté.
+ * `.reagir-slot` réserve `height:var(--target-min)` DÈS le SSR (revue CLS
+ * ci-dessous), `.langue` et `.modifie` sont conditionnels. Cette ligne
+ * réservait donc, sous chaque message, la hauteur d'un texte pour deux
+ * informations qui se lisent aussi bien à côté.
  *
  * `colonnes` est une classe EXPLICITE, pas un `:has(> .bulle)` : le message
  * système garde son corps d'une seule colonne, et le serveur connaît déjà la
@@ -131,23 +132,41 @@ import { avisDEcran, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, PUCE_DU_PRISME, rondDEnT
  * RÉTRÉCIR à l'arrivée du module — un défaut de CLS, jamais un choix.
  *
  * La MÉTA VIDÉE ne réserve plus sa marge. Le sélecteur énumère ce qui ne compte
- * pas — `.reagir-slot` (réservé, `height:0`), `.attente` et `.echec` (masqués
- * par `display:none`, donc invisibles à `:not([hidden])`) — et les états
- * d'envoi la reprennent par la règle suivante, puisqu'ils s'affichent là. Un
- * navigateur sans `:has()` ignore la règle et garde `var(--space-1)` : la
- * dégradation coûte quatre pixels, jamais une ligne.
+ * pas — `.reagir-slot` (réservé, toujours plein — voir REVUE CLS ci-dessous),
+ * `.attente` et `.echec` (masqués par `display:none`, donc invisibles à
+ * `:not([hidden])`) — et les états d'envoi la reprennent par la règle
+ * suivante, puisqu'ils s'affichent là. Un navigateur sans `:has()` ignore la
+ * règle et garde `var(--space-1)` : la dégradation coûte quatre pixels,
+ * jamais une ligne.
  *
- * REVUE DE #5061 — le slot VIDE reste à `height:0` (aucune ligne blanche
+ * REVUE DE #5061 — le slot VIDE restait à `height:0` (aucune ligne blanche
  * avant que `poseLeBoutonReagir`, `fil-peinture.ts`, n'y insère le bouton),
- * mais un slot qui PORTE le bouton doit réserver sa hauteur : sans ça,
- * `overflow:visible` centre le `button.reagir` (44 px) SUR la ligne nulle de
- * `.meta`, pour moitié au-dessus d'elle — recouvrant le dernier mot du
- * `.texte` qui précède (mesuré sur `rich-capture-{light,dark}.png`).
- * `.reagir-slot:has(>.reagir)` réserve alors `var(--target-min)`, seulement
- * quand le bouton y est déjà, jamais avant : la marge de la ligne ci-dessus
- * n'en dépend pas, seule sa hauteur change. Un navigateur sans `:has()`
- * ignore cette seconde règle et garde `height:0` : la dégradation retrouve
- * l'ancien recouvrement, jamais une exception nouvelle.
+ * et un slot qui PORTAIT le bouton réservait sa hauteur via
+ * `:has(>.reagir)` : sans ça, `overflow:visible` centrait le `button.reagir`
+ * (44 px) SUR la ligne nulle de `.meta`, pour moitié au-dessus d'elle —
+ * recouvrant le dernier mot du `.texte` qui précède (mesuré sur
+ * `rich-capture-{light,dark}.png`). Ce `:has()` corrigeait le recouvrement
+ * mais ROUVRAIT un décalage : le module insère le bouton APRÈS le premier
+ * pixel (chargement différé, § 12.4), donc la bascule `height:0` →
+ * `var(--target-min)` déplaçait tout ce qui suit CHAQUE bulle d'un coup —
+ * mesuré CLS 0,089 sur `/chats/:cle`, au-dessus du budget 0,05
+ * (`test:chaines` › `v3-fil.spec.ts`, gate 8a, cycle correctif 2026-09-05).
+ *
+ * REVUE CLS (2026-09-05) — `.reagir-slot` réserve désormais
+ * `height:var(--target-min)` INCONDITIONNELLEMENT, dès le SSR : la place du
+ * bouton existe avant même que le module ne le pose, donc son insertion ne
+ * déplace plus rien (CLS supprimé À LA SOURCE, pas atténué) — et parce que le
+ * slot a déjà sa hauteur réelle quand le bouton y arrive, le centrage ne
+ * recouvre plus rien non plus : les DEUX défauts partageaient la même cause
+ * (une boîte de hauteur nulle), pas deux correctifs opposés. Le prix assumé
+ * (directive porteur, dimension 4 « une lenteur est un bug ») : sur un
+ * message éligible (ni système, ni supprimé, ni protégé — `poseLeBoutonReagir`
+ * en décide déjà côté script, le SERVEUR le sait tout autant), un carré
+ * `--target-min` (44 px) reste VIDE, jamais un contrôle inerte (rien n'y est
+ * cliquable), tant que le module de participation n'a pas chargé — un espace,
+ * pas une ligne blanche pleine largeur : `width` reste `--target-min`, la
+ * bascule ne portait que sur `height`. Un navigateur sans `:has()` n'entre
+ * plus en jeu ici : la réservation ne dépend plus de `:has()`.
  *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
@@ -243,8 +262,7 @@ ${PUCE_DU_PRISME}
 .ligne .echec{display:none;align-items:center;gap:var(--space-2);color:var(--color-danger);font-weight:var(--font-weight-medium)}
 .ligne.envoi-echec .echec{display:inline-flex}
 .ligne .echec .action{width:auto;min-height:var(--target-min);padding:0 var(--space-3);font-size:var(--text-sm)}
-.ligne .reagir-slot{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:0;overflow:visible}
-.ligne .reagir-slot:has(>.reagir){height:var(--target-min)}
+.ligne .reagir-slot{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min)}
 .ligne .reagir{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);margin:0;padding:0;border:0;border-radius:var(--radius-pill);background:transparent;color:var(--color-text-subtle);cursor:pointer;transition:color 150ms,background-color 150ms}
 .ligne .reagir:hover{color:var(--color-primary);background:var(--color-tint-primary)}
 .ligne .reagir svg{width:var(--glyph);height:var(--glyph)}

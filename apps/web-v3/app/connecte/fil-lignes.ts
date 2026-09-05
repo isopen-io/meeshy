@@ -411,10 +411,11 @@ const accuse = (message: Message): string => (message.deMoi && !message.systeme 
  * l'information de réception si nécessaire »).
  *
  * L'heure et l'accusé vivaient dans `.meta`, la ligne posée SOUS le texte.
- * `<time>` en était le seul contributeur de hauteur — `.reagir-slot` est en
- * `height:0`, `.langue` et `.modifie` sont conditionnels — donc cette ligne
- * réservait, sous chaque message, la hauteur d'un texte pour deux informations
- * qui se lisent aussi bien à côté.
+ * `<time>` en était le seul contributeur de hauteur — `.reagir-slot` réserve
+ * `height:var(--target-min)` dès le SSR (revue CLS, `fil-feuille.ts`),
+ * `.langue` et `.modifie` sont conditionnels — donc cette ligne réservait,
+ * sous chaque message, la hauteur d'un texte pour deux informations qui se
+ * lisent aussi bien à côté.
  *
  * **« si nécessaire »** est rendu par `accuse` lui-même, qui ne peint rien pour
  * un message reçu : la colonne d'un message d'autrui ne porte que son heure.
@@ -624,9 +625,11 @@ export const ligne = ({
     '<p class="meta">' +
     pastille(message) +
     (message.edite ? `<span class="modifie">${echappe(FIL.modifie)}</span>` : '') +
-    // La PLACE du bouton « Réagir », réservée : le module y pose le bouton sans
-    // déplacer ce qui suit (sondé : sans elle, ça glissait de 56 px à l'arrivée
-    // du module). Vide, elle n'est pas un contrôle — rien d'inerte.
+    // La PLACE du bouton « Réagir », réservée à SA TAILLE RÉELLE dès le SSR
+    // (`fil-feuille.ts`, revue CLS) : le module y pose le bouton sans déplacer
+    // ce qui suit (sondé : une place réservée à `height:0` glissait de 44 px
+    // à l'arrivée du module — CLS 0,089, gate 8a). Vide, elle n'est pas un
+    // contrôle — rien d'inerte.
     //
     // Ce qu'elle protégeait — l'heure et l'accusé — a quitté cette ligne pour
     // la datation. Elle reste néanmoins réservée : `.langue` et `.modifie` la
