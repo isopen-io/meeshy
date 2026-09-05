@@ -2,20 +2,27 @@ import XCTest
 @testable import MeeshyUI
 
 /// Deep links & join flow lane (2026-07-20 audit backlog, item P3) —
-/// `JoinFlowViewModel` and `RegistrationViewModel` used to assign hardcoded
-/// French error strings directly to their `@Published` state
-/// (`errorMessage`, `usernameError`, `emailError`, `phoneError`), bypassing
-/// the i18n catalog entirely — an English/Spanish/German/Portuguese user
-/// would see raw French error copy regardless of their configured language.
-/// Both now route through `String(localized:defaultValue:bundle:)` against
-/// the MeeshyUI `Localizable.xcstrings` catalog (`joinFlow.error.*` /
-/// `auth.registration.*` keys).
+/// `JoinFlowViewModel` used to assign hardcoded French error strings directly
+/// to its `@Published` state (`errorMessage`), bypassing the i18n catalog
+/// entirely — an English/Spanish/German/Portuguese user would see raw French
+/// error copy regardless of their configured language. It now routes through
+/// `String(localized:defaultValue:bundle:)` against the MeeshyUI
+/// `Localizable.xcstrings` catalog (`joinFlow.error.*` keys).
+///
+/// **La moitié « inscription » de cette suite est partie au #5218**, avec son
+/// sujet : `RegistrationViewModel` (le wizard en huit étapes) est supprimé, et
+/// l'écran qui le remplace — `SignupView` — vit côté APP, donc ses clés
+/// (`auth.signup.*`) sont dans le catalogue de l'app et gardées par
+/// `LocalizationConsistencyTests`, qui l'épingle parmi les écrans
+/// « fully localized ». Garder ici des assertions sur un fichier supprimé ne
+/// compilerait pas ; les garder sur des CLÉS orphelines attesterait d'un
+/// produit qui ne dit plus rien.
 ///
 /// `Bundle.module` is `@MainActor`-isolated under MeeshyUI's
 /// `defaultIsolation(MainActor)` (see `feedback_bundle_module_mainactor_isolation.md`);
 /// the test class is therefore `@MainActor`.
 @MainActor
-final class JoinFlowRegistrationLocalizationTests: XCTestCase {
+final class JoinFlowLocalizationTests: XCTestCase {
 
     // MARK: - Constants
 
@@ -33,24 +40,11 @@ final class JoinFlowRegistrationLocalizationTests: XCTestCase {
         "joinFlow.error.unexpected",
     ]
 
-    private static let registrationErrorKeys: [String] = [
-        "auth.registration.usernameTaken",
-        "auth.registration.verificationFailed",
-        "auth.registration.emailTaken",
-        "auth.registration.phoneInvalid",
-        "auth.registration.phoneTaken",
-        "auth.registration.registrationFailed",
-    ]
-
     // MARK: - Catalog completeness (proves the keys exist and are translated,
     // not just present with an empty/echoed value)
 
     func test_joinFlowErrorKeys_resolveInAll5Locales() {
         assertResolvesInAllLocales(Self.joinFlowErrorKeys)
-    }
-
-    func test_registrationErrorKeys_resolveInAll5Locales() {
-        assertResolvesInAllLocales(Self.registrationErrorKeys)
     }
 
     private func assertResolvesInAllLocales(
@@ -111,45 +105,5 @@ final class JoinFlowRegistrationLocalizationTests: XCTestCase {
         XCTAssertFalse(source.contains(#"errorMessage = "Trop d'utilisateurs connectes""#))
         XCTAssertFalse(source.contains(#"?? "Erreur lors de la connexion""#))
         XCTAssertFalse(source.contains(#"errorMessage = "Erreur inattendue""#))
-    }
-
-    func test_registrationViewModel_errorsRouteThroughCatalog_notRawFrenchLiterals() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Auth/RegistrationViewModel.swift")
-
-        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.usernameTaken", defaultValue: "Ce pseudo est deja pris!", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)"#))
-        // `emailTaken` et `phoneTaken` ont DISPARU du produit avec #4158, et
-        // c'est le correctif, pas une régression : dire à un appelant NON
-        // authentifié qu'une adresse ou un numéro appartient à un compte est un
-        // oracle d'énumération — la dé-anonymisation d'un numéro de téléphone à
-        // partir d'un carnet d'adresses. Le serveur n'en juge plus que la
-        // FORME, et l'écran ne parle plus que de forme.
-        //
-        // Ce témoin épinglait les deux anciennes clés et RESTAIT DONC ROUGE
-        // depuis ce lot : une garde de source qui exige un texte que le produit
-        // ne dit plus n'atteste rien — elle réclame le retour du défaut.
-        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.emailInvalid", defaultValue: "Cette adresse ne semble pas valide", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.phoneInvalid", defaultValue: "Ce numero semble invalide", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.registrationFailed", defaultValue: "Erreur lors de l'inscription", bundle: .module)"#))
-
-        // Regression guard: the old bare-literal assignments must be gone.
-        XCTAssertFalse(source.contains(#"usernameError = "Ce pseudo est deja pris!""#))
-        XCTAssertFalse(source.contains(#"usernameError = "Verification non effectuee""#))
-        XCTAssertFalse(source.contains(#"emailError = "Cet email est deja utilise!""#))
-        XCTAssertFalse(source.contains(#"emailError = "Verification non effectuee""#))
-        XCTAssertFalse(source.contains(#"phoneError = "Ce numero semble invalide""#))
-        XCTAssertFalse(source.contains(#"phoneError = "Ce numero est deja utilise!""#))
-        XCTAssertFalse(source.contains(#"phoneError = "Verification non effectuee""#))
-        XCTAssertFalse(source.contains(#"?? "Erreur lors de l'inscription""#))
-
-        // Et l'ORACLE lui-même, sous quelque forme qu'il revienne (#4158) :
-        // aucune erreur de disponibilité ne doit dire qu'un identifiant de
-        // contact APPARTIENT à un compte. Ce sont les deux clés de catalogue et
-        // les deux phrases, la garde survivant donc à une reformulation comme à
-        // un retour au littéral nu.
-        XCTAssertFalse(source.contains("auth.registration.emailTaken"))
-        XCTAssertFalse(source.contains("auth.registration.phoneTaken"))
-        XCTAssertFalse(source.contains("Cet email est deja utilise"))
-        XCTAssertFalse(source.contains("Ce numero est deja utilise"))
     }
 }

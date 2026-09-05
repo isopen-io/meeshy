@@ -21,42 +21,119 @@ public struct LoginResponseData: Decodable, Sendable {
     public let expiresIn: Int?
     public let requires2FA: Bool?
     public let twoFactorToken: String?
+
+    /// `POST /auth/register` sert DEUX charges sous le même 200 : le compte
+    /// créé, ou — quand le numéro appartient déjà à un compte vérifié — un
+    /// refus qui ne crée RIEN et se signale par ce seul drapeau
+    /// (`services/gateway/src/routes/auth/register.ts`). Sans ce champ, la
+    /// branche du conflit se décodait en `user: nil, token: nil` et remontait
+    /// en « Response missing token/user data » : un refus MOTIVÉ rendu comme
+    /// une panne, donc irrattrapable par l'écran.
+    public let phoneOwnershipConflict: Bool?
+
+    public init(
+        user: MeeshyUser?,
+        token: String?,
+        sessionToken: String?,
+        expiresIn: Int?,
+        requires2FA: Bool?,
+        twoFactorToken: String?,
+        phoneOwnershipConflict: Bool? = nil
+    ) {
+        self.user = user
+        self.token = token
+        self.sessionToken = sessionToken
+        self.expiresIn = expiresIn
+        self.requires2FA = requires2FA
+        self.twoFactorToken = twoFactorToken
+        self.phoneOwnershipConflict = phoneOwnershipConflict
+    }
 }
 
 // MARK: - Register
 
+/// La charge de `POST /auth/register`.
+///
+/// **#5218 — `username`, `firstName` et `lastName` ne partent plus.** La
+/// passerelle les DÉRIVE de `displayName` ; les envoyer depuis le client
+/// obligeait l'utilisateur à composer un pseudo unique et à découper son nom en
+/// deux, soit trois écrans de wizard pour trois valeurs que le serveur sait
+/// fabriquer. Ils restent déclarés — optionnels — parce que la reprise après un
+/// transfert de numéro réémet une inscription dont le serveur a déjà écho ; un
+/// champ `nil` est ABSENT du JSON (l'`Encodable` synthétisé encode un
+/// `Optional` avec `encodeIfPresent`), donc ne rien passer ne pose rien.
 public struct RegisterRequest: Encodable, Sendable {
-    public let username: String
-    public let password: String
-    public let firstName: String
-    public let lastName: String
+    /// Le nom que l'utilisateur se donne. Unique champ d'identité de
+    /// l'inscription : la passerelle en dérive `username`, `firstName` et
+    /// `lastName`.
+    public let displayName: String?
     public let email: String
+    public let password: String
+    /// Numéro complet (indicatif + chiffres). `nil` ⇒ absent de la charge —
+    /// le téléphone n'est jamais obligatoire.
     public let phoneNumber: String?
+    /// ISO 3166-1 alpha-2 du pays choisi. Voyage avec `phoneNumber` ou pas du tout.
     public let phoneCountryCode: String?
     public let systemLanguage: String
-    public let regionalLanguage: String
+    public let regionalLanguage: String?
+    public let username: String?
+    public let firstName: String?
+    public let lastName: String?
 
     public init(
-        username: String,
-        password: String,
-        firstName: String,
-        lastName: String,
+        displayName: String? = nil,
         email: String,
+        password: String,
         phoneNumber: String? = nil,
         phoneCountryCode: String? = nil,
         systemLanguage: String = "fr",
-        regionalLanguage: String = "fr"
+        regionalLanguage: String? = nil,
+        username: String? = nil,
+        firstName: String? = nil,
+        lastName: String? = nil
     ) {
-        self.username = username
-        self.password = password
-        self.firstName = firstName
-        self.lastName = lastName
+        self.displayName = displayName
         self.email = email
+        self.password = password
         self.phoneNumber = phoneNumber
         self.phoneCountryCode = phoneCountryCode
         self.systemLanguage = systemLanguage
         self.regionalLanguage = regionalLanguage
+        self.username = username
+        self.firstName = firstName
+        self.lastName = lastName
     }
+}
+
+/// Le refus « ce numéro appartient déjà à un compte vérifié ».
+///
+/// Servi en **200**, avec `phoneOwnershipConflict: true` et AUCUN compte créé
+/// (`services/gateway/src/routes/auth/register.ts`). C'est donc un succès HTTP
+/// qui n'a rien créé : sans type dédié, il ne pouvait se distinguer d'une
+/// réponse tronquée, et l'écran rendait « erreur inconnue » pour un refus dont
+/// il connaît pourtant le remède exact (laisser le numéro vide).
+public struct PhoneOwnershipConflict: Error, Sendable, Equatable {
+    public init() {}
+}
+
+// MARK: - Origine d'une session
+
+/// D'OÙ vient la session courante — et non « y a-t-il une session », que
+/// `isAuthenticated` dit déjà.
+///
+/// Une inscription et une connexion posent le même booléen, et pourtant elles
+/// n'autorisent pas la même chose : demander la permission de notification à
+/// quelqu'un qui vient de créer son compte, c'est une alerte système avant le
+/// premier message. Sans ce type, le seul moyen de les distinguer était de
+/// deviner — et un `isAuthenticated` ne se laisse pas interroger sur son passé.
+public enum SessionOrigin: String, Sendable, Equatable {
+    /// L'utilisateur s'est connecté à un compte existant (mot de passe, 2FA,
+    /// lien magique).
+    case login
+    /// Le compte vient d'être CRÉÉ sur cet appareil.
+    case registration
+    /// Session relue du trousseau au démarrage, ou jeton renouvelé.
+    case restored
 }
 
 // MARK: - Magic Link
