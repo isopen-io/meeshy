@@ -78,6 +78,52 @@ public enum StorySlidePublishMatter {
         return false
     }
 
+    /// **Un canvas doit porter un OBJET, pas seulement un fond** (directive
+    /// porteur 2026-09-06).
+    ///
+    /// > « Il faut juste rendre impossible la publication de canvas vide sans
+    /// > texte, ni autre type d'object ! »
+    ///
+    /// C'est une règle DISTINCTE de `carriesMatter`, et les deux coexistent
+    /// parce qu'elles répondent à deux questions :
+    ///
+    /// | question | règle | le fond de COULEUR y compte-t-il ? |
+    /// |---|---|---|
+    /// | « cette slide mérite-t-elle un post ? » (story : N slides = N posts) | `carriesMatter` | oui — décision #4741, testée |
+    /// | « ce canvas a-t-il un CONTENU à publier ? » (post) | `carriesObject` | **non** |
+    ///
+    /// Une image de fond COMPTE : c'est du contenu, elle occupe la scène et
+    /// se regarde. Seule la couleur nue est écartée — elle décore une page qui
+    /// reste vide, et publier une page vide ne dit rien à personne.
+    ///
+    /// > **Fusionner les deux ferait de deux questions justes une seule
+    /// > fausse** — c'est ce que le doc-comment de ce type dit déjà de
+    /// > `slideHasContent`, et la raison vaut une troisième fois ici.
+    public static func carriesObject(_ effets: StoryEffects) -> Bool {
+        if effets.textObjects.contains(where: carriesRealText) { return true }
+        if effets.mediaObjects?.isEmpty == false { return true }
+        if effets.stickerObjects?.isEmpty == false { return true }
+        if !effets.locationObjects.isEmpty { return true }
+        if effets.drawingStrokes?.isEmpty == false { return true }
+        if effets.drawingData != nil { return true }
+        if effets.audioPlayerObjects?.isEmpty == false { return true }
+        if effets.backgroundAudioId != nil { return true }
+        return false
+    }
+
+    /// La même question, posée à TOUT le composer — l'image de fond vivant
+    /// hors des `effects`, elle arrive par `slideImageIds` comme partout.
+    public static func anySlideCarriesObject(_ slides: [StorySlide],
+                                             slideImageIds: Set<String>) -> Bool {
+        slides.contains { slide in
+            if slideImageIds.contains(slide.id) { return true }
+            if slide.mediaURL?.isEmpty == false { return true }
+            if slide.mediaData != nil { return true }
+            if slide.content?.isEmpty == false { return true }
+            return carriesObject(slide.effects)
+        }
+    }
+
     /// Y a-t-il, dans TOUT le composer, de quoi publier ?
     ///
     /// - Parameter slideImageIds: les slides qui portent un bitmap de fond.

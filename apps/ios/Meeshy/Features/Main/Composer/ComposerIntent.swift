@@ -107,6 +107,33 @@ nonisolated enum ComposerOrigin: Equatable {
     case conversationMedia(messageId: String, attachmentId: String?)
 }
 
+nonisolated extension ComposerFormat {
+
+    /// **Le format d'une publication RENDUE**, pour rouvrir un composer dessus
+    /// (2026-09-06, unification des composers).
+    ///
+    /// `FeedPost.type` est une CHAÎNE du fil ; `ComposerFormat` est une somme
+    /// fermée. La traduction vit ici, une fois, plutôt qu'au site qui ouvre la
+    /// porte : citer un post, le reposter et le modifier posent la même
+    /// question, et trois `switch` recopiés auraient divergé sur la valeur
+    /// inconnue — celle qu'un serveur plus récent peut servir.
+    ///
+    /// **Le défaut est `.post`, et il est le seul sûr.** Un type inconnu
+    /// traité en `.story` ouvrirait un atelier de scène sur un contenu qui
+    /// n'en est pas un ; en `.post`, il ouvre le composer le plus général, qui
+    /// sait tout porter. Se tromper vers le plus capable coûte un format
+    /// inattendu ; se tromper vers le plus étroit coûte une composition
+    /// impossible.
+    init(postType: String?) {
+        switch (postType ?? "").uppercased() {
+        case "STORY": self = .story
+        case "REEL": self = .reel
+        case "STATUS": self = .status
+        default: self = .post
+        }
+    }
+}
+
 nonisolated extension ComposerOrigin {
     /// **La publication que cette porte REPARTAGE**, quand elle en repartage
     /// une — sinon `nil`.

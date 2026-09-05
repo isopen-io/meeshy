@@ -433,6 +433,69 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
     }
 
+    /// **Un FOND DE COULEUR NU ne publie pas un post** (directive porteur
+    /// 2026-09-06).
+    ///
+    /// > « Il faut juste rendre impossible la publication de canvas vide sans
+    /// > texte, ni autre type d'object ! »
+    ///
+    /// Mesuré au simulateur : trois scènes composées de trois fonds, sans un
+    /// seul objet, partaient — et la carte du fil n'était qu'un rectangle
+    /// coloré muet. La règle du fond-est-de-la-matière reste JUSTE pour une
+    /// story (#4741) ; elle ne l'est pas pour un post.
+    func test_unFondDeCouleurNU_nePublieP0sUnPost() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Une page de couleur sans aucun objet ne dit rien à personne — sa carte dans le fil " +
+            "serait un rectangle muet."
+        )
+    }
+
+    /// …mais le MÊME fond avec un objet part : c'est l'objet qui fait la
+    /// publication, jamais la décoration qui l'entoure.
+    func test_leMemeFond_avecUnTexte_publie() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        effets.textObjects = [StoryTextObject(text: "SANS PHOTO")]
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertNotEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Un texte posé sur la scène est un objet — le canvas a un contenu."
+        )
+    }
+
+    /// **Un texte VIDE n'est pas un objet.** C'est la coquille que le tap sur
+    /// la page blanche pose avant la première frappe ; la compter ferait
+    /// partir une intention qui n'existe pas encore.
+    func test_uneCoquilleDeTexteVIDE_nePublieP0s() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        effets.textObjects = [StoryTextObject(text: "   ")]
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Une coquille de texte vide n'est pas une composition."
+        )
+    }
+
     /// …et un canvas VIDE reste vide. La règle compte la matière, pas la
     /// présence d'un blob : un `StoryEffects` neuf accompagne toute
     /// composition dès le premier geste, et l'accepter ferait partir des

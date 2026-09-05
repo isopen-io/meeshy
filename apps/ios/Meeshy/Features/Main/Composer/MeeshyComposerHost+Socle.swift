@@ -684,9 +684,17 @@ extension MeeshyComposerHost {
             // Le RÉEL reste dehors, et pour la raison d'origine, inchangée :
             // son canal est `.unsupported` (`ComposerPublishChannel`). L'y
             // faire entrer armerait une flèche qui promet ce que rien ne livre.
+            //
+            // **Et la matière se mesure comme le PLAN la mesure** (directive
+            // porteur 2026-09-06). Un post exige un OBJET — un fond de couleur
+            // nu ne suffit plus ; une story garde sa règle, où un fond CHOISI
+            // est de la matière (#4741). Servir la même règle aux deux ferait
+            // mentir la flèche chez l'un des deux : armée sur un post que le
+            // plan refuse, ou éteinte sur une story qu'il accepte.
             hasMedia: !documentLocalMedia.isEmpty
                 || (ComposerPublishChannel.channel(for: selectedFormat) != .unsupported
-                    && ComposerStoryCanvas.hasMatter(
+                    && ComposerStoryCanvas.hasPublishableCanvas(
+                        format: selectedFormat,
                         slides: viewModel.slides,
                         // L'image de fond ne vit pas dans `effects` : sans elle
                         // une story-photo n'armerait pas la flèche (#4741).

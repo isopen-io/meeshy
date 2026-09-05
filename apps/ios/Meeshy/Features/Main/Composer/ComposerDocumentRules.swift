@@ -516,7 +516,13 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
         //
         // La règle n'est pas réécrite : `StorySlidePublishMatter` est le site
         // unique depuis #4741, et il expose désormais le grain des EFFETS.
-        let canvasSansMatiere = !(draft.storyEffects.map(StorySlidePublishMatter.carriesMatter) ?? false)
+        // **Un fond de couleur NU ne publie pas** (directive porteur
+        // 2026-09-06) : « rendre impossible la publication de canvas vide sans
+        // texte, ni autre type d'object ». D'où `carriesObject` et non
+        // `carriesMatter` — la seconde compte le fond, ce qui reste juste pour
+        // une STORY (#4741) et ne l'est pas pour un post, dont ce plan est le
+        // seul juge (`format == .post` en tête de fonction).
+        let canvasSansMatiere = !(draft.storyEffects.map(StorySlidePublishMatter.carriesObject) ?? false)
         guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil || !canvasSansMatiere else {
             return .refuse(.emptyDraft)
         }
