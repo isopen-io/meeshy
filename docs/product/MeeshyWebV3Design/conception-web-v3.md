@@ -831,7 +831,7 @@ cd apps/web && npx jest __tests__/public/sw.v3-zone.test.ts __tests__/utils/serv
 | — | `reelShared` *(hors planche)* | Réel partagé | **P0** | `/reels/:id` | `/reels` | `story` | `gw:optionalAuth-post` | **Réécriture de la logique de `apps/web/components/feed/ReelPlayer.tsx:54-85`** : `preferredLanguages`, `resolvePrismTranslation()`, `TranslationToggle` monté, sortie (chevron) présente |
 | — | `moods` *(hors planche)* | Humeur partagée | **P0** | `/moods/:id` | `/moods` | `story` | `gw:optionalAuth-post` | `Post.type=STATUS` rendu par **le même lecteur** ; OG dédié |
 | — | `login` | Se connecter | **P1** | `/login?next=/l/:token` | `/login` | — | — | `?next=` restauré après succès ; bandeau « lien gardé de côté » **conditionnel** (aujourd'hui `pending:true` en dur) |
-| — | `signup` | Créer un compte | **P1** | `/signup?next=/l/:token` | `/signup` | `login` | — | Disponibilité pseudo/e-mail/téléphone en **UN SEUL** appel |
+| — | `signup` | Créer un compte | **P1** | `/signup?next=/l/:token` | `/signup` | `login` | — | Aucune vérification avant l'envoi : la passerelle propose le pseudo ; refus rendu sur son champ |
 | — | `home` | Accueil connecté | **P1** | `/` | `/` **(dernier)** | `login` | — | **Cache-first** : aucun spinner si le cache a des données |
 | — | `chats` | Liste des conversations | **P1** | `/chats` | `/chats` | `thread`, `login` | — | Delta via `GET /sync` (304), **pas** de refetch complet au focus |
 | — | `feed` | Fil | **P1** | `/feed` | `/feed` | `comments`, `reelShared` | — | Rail de stories scrollable **au clavier** ; like/repost **câblés** (sans `onClick` aujourd'hui) |

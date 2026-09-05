@@ -142,11 +142,24 @@ export function parseUserAgent(userAgent: string | null): DeviceInfo | null {
   }
 }
 
+/** Combien de temps attendre le tiers de géolocalisation, par défaut. */
+const GEO_TIMEOUT_MS = 3000;
+
 /**
  * Look up geolocation data for an IP address
  * Uses ip-api.com free tier (no API key needed)
+ *
+ * `timeoutMs` est un PARAMÈTRE parce que la patience acceptable dépend du
+ * chemin (#5216). Trois secondes sont raisonnables sur une tâche de fond ;
+ * elles sont inacceptables sur l'inscription, où elles s'ajoutent telles quelles
+ * au temps que la personne passe devant un écran de chargement. La porte
+ * d'inscription accorde 400 ms, puis reprend la recherche APRÈS la réponse :
+ * la ligne se complète, et personne n'attend.
  */
-export async function lookupGeoIp(ip: string): Promise<GeoIpData | null> {
+export async function lookupGeoIp(
+  ip: string,
+  options?: { readonly timeoutMs?: number }
+): Promise<GeoIpData | null> {
   // Don't lookup localhost/private IPs
   if (isPrivateIp(ip)) {
     return {
@@ -172,7 +185,7 @@ export async function lookupGeoIp(ip: string): Promise<GeoIpData | null> {
     // ip-api.com free tier (HTTP only, 45 req/min)
     const response = await fetch(
       `http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,timezone,lat,lon`,
-      { signal: AbortSignal.timeout(3000) } // 3s timeout
+      { signal: AbortSignal.timeout(options?.timeoutMs ?? GEO_TIMEOUT_MS) }
     );
 
     if (!response.ok) {
@@ -212,11 +225,19 @@ export async function lookupGeoIp(ip: string): Promise<GeoIpData | null> {
 
 /**
  * Get full request context including IP, user agent, geo data, and device info
+ *
+ * `geoTimeoutMs` borne l'attente du tiers de géolocalisation — voir
+ * {@link lookupGeoIp}. Un contexte dont `geoData` vaut `null` reste
+ * parfaitement utilisable : l'appelant qui tient à la localisation la reprend
+ * après avoir répondu.
  */
-export async function getRequestContext(request: FastifyRequest): Promise<RequestContext> {
+export async function getRequestContext(
+  request: FastifyRequest,
+  options?: { readonly geoTimeoutMs?: number }
+): Promise<RequestContext> {
   const ip = extractIpFromRequest(request);
   const userAgent = extractUserAgent(request);
-  const geoData = await lookupGeoIp(ip);
+  const geoData = await lookupGeoIp(ip, { timeoutMs: options?.geoTimeoutMs });
   const deviceInfo = parseUserAgent(userAgent);
 
   const { deviceInfo: enrichedDevice, geoData: enrichedGeo } =
@@ -303,12 +324,15 @@ function formatLocation(city: string | null, country: string | null): string | n
  * Check if IP is private/localhost.
  *
  * This is the gate that keeps an internal address from being sent to the
- * third-party geo API (ip-api.com). It must recognise BOTH families: a private
+ * third-party geo API (ip-api.com). Exportée depuis #5216 : l'inscription
+ * reprend la géolocalisation APRÈS avoir répondu, et n'a de raison de la
+ * reprendre que pour une adresse PUBLIQUE — une adresse privée a déjà rendu
+ * tout ce qu'elle rendra jamais (`location: 'Local'`), sans appel réseau. It must recognise BOTH families: a private
  * IPv6 address that slips through would leak internal network topology to an
  * external service AND burn the 45/min rate-limit budget on a lookup that can
  * only fail.
  */
-function isPrivateIp(ip: string): boolean {
+export function isPrivateIp(ip: string): boolean {
   // IPv4-mapped IPv6 (`::ffff:a.b.c.d`) — re-check on the embedded IPv4.
   const mapped = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
   if (mapped) return isPrivateIp(mapped[1]);

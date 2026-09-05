@@ -42,7 +42,7 @@ import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.auth.MagicLinkScreen
 import me.meeshy.app.auth.MagicLinkValidateScreen
 import me.meeshy.app.auth.MagicLinkValidateViewModel
-import me.meeshy.app.auth.RegistrationScreen
+import me.meeshy.app.auth.SignupScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallPillPresenter
@@ -665,13 +665,22 @@ fun MeeshyApp(
                     },
                 )
             }
+            // L'inscription tient en UN écran (#5219) : `Routes.REGISTRATION`
+            // conserve son chemin — le lien depuis la connexion, les tests et
+            // l'historique de navigation le nomment — mais rend `SignupScreen`.
             composable(Routes.REGISTRATION) {
-                RegistrationScreen(
+                SignupScreen(
                     onClose = { navController.popBackStack() },
                     onRegistered = {
                         navController.navigate(Routes.CONVERSATIONS) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
+                    },
+                    onOpenTerms = {
+                        navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
+                    },
+                    onOpenPrivacy = {
+                        navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
                     },
                 )
             }

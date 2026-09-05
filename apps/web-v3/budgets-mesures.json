@@ -163,6 +163,18 @@
     "temoin": "apps/web-v3/__tests__/fil-plein.test.ts § « le poids du document du fil, et le surcoût de l'état `?media=` » — un RATCHET : toute valeur au-dessus de celle enregistrée ici rend rouge, et la faire monter exige un diff relu.",
     "consequence": "12 021 o > 9 216 o : le document du fil FRANCHIT le plafond `documents.document_o` de la charte (§ 12.5 règle 4), et le franchissait AVANT ce tour — la surimpression n'en est pas la cause (elle pèse 578 o, soit 5 %). Le plafond n'a pas de témoin (budgets.json le dit : « À CÂBLER ») ; le ratchet ci-dessus empêche la croissance silencieuse en attendant qu'un lot le règle. À porter en issue : le fil est le seul écran mesuré au-dessus."
   },
+  "documents_de_l_inscription": {
+    "quoi": "Ce que /signup REMET EN UNE FOIS — le HTML, la table de jetons, la feuille et le sprite inlinés — depuis que l'écran tient en un seul formulaire (#5217). La mesure est prise sur le GET nominal (`Accept-Language: fr-FR`) : le document ne dépend pas du lecteur, seule l'option `selected` change. Le poids est DOMINÉ par le sélecteur de pays : 245 options, 3 817 o gzip à lui seul (40 % du document), contre 1 137 o pour les 83 langues et 4 103 o pour l'écran de CONNEXION entier, qui sert le même chrome sans aucun sélecteur. C'est le prix d'un choix de pays rendu par le NAVIGATEUR : 0 Ko de JavaScript de page, la recherche au clavier et l'affichage plein écran de l'OS compris.",
+    "signup_o": 9542,
+    "login_o": 4103,
+    "selecteur_de_pays_o": 3817,
+    "selecteur_de_langue_o": 1137,
+    "unite": "octets gzip (niveau 9) du document HTML servi",
+    "commande": "cd apps/web-v3 && bunx jest __tests__/authentification.test.ts -t 'grossir en silence'",
+    "date": "2026-09-05",
+    "temoin": "apps/web-v3/__tests__/authentification.test.ts § « le poids du document d'inscription » — un RATCHET : toute valeur au-dessus de celle enregistrée ici rend rouge. La valeur suit deux données EXTERNES — la table de pays de `libphonenumber-js` et les noms de région d'`Intl.DisplayNames` (donc l'ICU du runtime) : une montée de version est un diff LÉGITIME à re-mesurer, jamais un octet à laisser passer en silence.",
+    "consequence": "9 542 o > 9 216 o : le document d'inscription FRANCHIT de 3,4 % le plafond `documents.document_o` de la charte (§ 12.5 règle 4), qui n'a pas de témoin (budgets.json : « À CÂBLER »). Le franchissement est DÉCLARÉ et ratcheté, jamais effacé (§ 12.6). Il tient tout entier au catalogue des pays : le réduire demande une décision PRODUIT (servir une liste courte des pays d'usage plutôt que les 245 de la bibliothèque), pas un réglage — à porter en issue. L'écran de CONNEXION, lui, reste à 4 103 o, très en dessous."
+  },
   "documents_indisponible": {
     "quoi": "Ce que le document de REFUS MOTIVÉ (issue #4967, storyFail) pèse — servi quand une story, un post ou un reel demandé n'existe plus, a expiré ou n'est pas accessible au lecteur. RATCHETÉ comme `documents_du_fil` : ce champ n'empêche que la croissance SILENCIEUSE, jamais une régression du plafond dur de la charte (`documents.document_o`, 9 216 o, hors d'atteinte ici).",
     "indisponible_o": 4411,

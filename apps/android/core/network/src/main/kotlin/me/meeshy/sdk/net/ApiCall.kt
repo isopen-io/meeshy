@@ -12,6 +12,23 @@ import java.io.IOException
 data class PagedResult<T>(val data: T, val pagination: Pagination?)
 
 /**
+ * Projette une enveloppe de refus en [ApiError] — le SITE UNIQUE qui décide ce
+ * qu'un refus TRANSPORTE. Les trois clés qui QUALIFIENT le refus (`field`,
+ * `suggestions`, `violations`) vivent à la RACINE de l'enveloppe, à côté de
+ * `code` et jamais sous `error` ; les lire ici, et non chez chaque appelant,
+ * est ce qui permet à un écran de poser chaque refus sous SON champ.
+ */
+private fun ApiResponse<*>.toApiError(fallbackMessage: String, fallbackCode: String?, httpStatus: Int?): ApiError =
+    ApiError(
+        message = error ?: message ?: fallbackMessage,
+        code = code ?: fallbackCode,
+        httpStatus = httpStatus,
+        fieldName = fieldName,
+        suggestions = suggestions.orEmpty(),
+        violations = violations.orEmpty(),
+    )
+
+/**
  * Turns a Retrofit [HttpException] into an [ApiError] carrying the GATEWAY'S OWN
  * `code`/`error` when its body decodes as an [ApiResponse] envelope, instead of only
  * the synthetic `"HTTP_$status"` — otherwise two endpoints answering the same status
@@ -24,11 +41,11 @@ data class PagedResult<T>(val data: T, val pagination: Pagination?)
 private fun apiErrorFromHttpException(e: HttpException): ApiError {
     val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
     val envelope = body?.let { runCatching { MeeshyApi.json.decodeFromString<ApiResponse<Unit>>(it) }.getOrNull() }
-    return ApiError(
-        message = envelope?.error ?: envelope?.message ?: e.message(),
-        code = envelope?.code ?: "HTTP_${e.code()}",
+    return envelope?.toApiError(
+        fallbackMessage = e.message(),
+        fallbackCode = "HTTP_${e.code()}",
         httpStatus = e.code(),
-    )
+    ) ?: ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code())
 }
 
 /**
@@ -43,10 +60,7 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
             NetworkResult.Success(data)
         } else {
             NetworkResult.Failure(
-                ApiError(
-                    message = response.error ?: response.message ?: "Unknown error",
-                    code = response.code,
-                ),
+                response.toApiError(fallbackMessage = "Unknown error", fallbackCode = null, httpStatus = null),
             )
         }
     } catch (e: HttpException) {
@@ -74,10 +88,7 @@ suspend fun <T> pagedApiCall(block: suspend () -> ApiResponse<T>): NetworkResult
             NetworkResult.Success(PagedResult(data, response.pagination))
         } else {
             NetworkResult.Failure(
-                ApiError(
-                    message = response.error ?: response.message ?: "Unknown error",
-                    code = response.code,
-                ),
+                response.toApiError(fallbackMessage = "Unknown error", fallbackCode = null, httpStatus = null),
             )
         }
     } catch (e: HttpException) {
@@ -209,9 +220,13 @@ sealed interface ConditionalResult<out T> {
 private fun apiErrorFromResponse(response: Response<*>): ApiError {
     val body = runCatching { response.errorBody()?.string() }.getOrNull()
     val envelope = body?.let { runCatching { MeeshyApi.json.decodeFromString<ApiResponse<Unit>>(it) }.getOrNull() }
-    return ApiError(
-        message = envelope?.error ?: envelope?.message ?: "HTTP ${response.code()}",
-        code = envelope?.code ?: "HTTP_${response.code()}",
+    return envelope?.toApiError(
+        fallbackMessage = "HTTP ${response.code()}",
+        fallbackCode = "HTTP_${response.code()}",
+        httpStatus = response.code(),
+    ) ?: ApiError(
+        message = "HTTP ${response.code()}",
+        code = "HTTP_${response.code()}",
         httpStatus = response.code(),
     )
 }
@@ -237,10 +252,11 @@ suspend fun <T> conditionalApiCall(block: suspend () -> Response<ApiResponse<T>>
                     ConditionalResult.Fresh(data, envelope.pagination, response.headers()["ETag"])
                 } else {
                     ConditionalResult.Failure(
-                        ApiError(
-                            message = envelope?.error ?: envelope?.message ?: "Unknown error",
-                            code = envelope?.code,
-                        ),
+                        envelope?.toApiError(
+                            fallbackMessage = "Unknown error",
+                            fallbackCode = null,
+                            httpStatus = null,
+                        ) ?: ApiError(message = "Unknown error"),
                     )
                 }
             }
