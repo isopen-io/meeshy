@@ -197,6 +197,24 @@ describe('POST /links/:identifier/messages — anonymous', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // #4855 — le check lisait `permissions.canSendMessages` BRUT : la surcharge
+  // que l'hôte pose ensuite par `PATCH …/participants/:id/rights` vit dans
+  // `anonymousSession.rights` et n'était jamais vue. Non-régression : ce
+  // témoin tombait tant que le site lisait l'instantané au lieu de
+  // `resolveParticipantRights`.
+  it('returns 403 quand l’hôte a retiré canSendMessages APRÈS le join (surcharge, jamais l’instantané brut)', async () => {
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      ...mockAnonParticipant,
+      anonymousSession: { ...mockAnonParticipant.anonymousSession, rights: { canSendMessages: false } },
+    });
+    const res = await app.inject({
+      method: 'POST', url: '/links/' + IDENTIFIER + '/messages',
+      headers: { 'x-session-token': SESSION_TOKEN },
+      payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('returns 500 on service error', async () => {
     (app as any).prisma.conversationShareLink.findUnique.mockRejectedValueOnce(new Error('DB'));
     const res = await app.inject({
