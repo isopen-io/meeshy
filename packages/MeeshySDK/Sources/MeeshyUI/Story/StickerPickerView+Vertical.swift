@@ -146,6 +146,24 @@ extension StickerPickerView {
         } else {
             let gabarits = entrees.compactMap { StickerPickerView.template(for: $0) }
             let smileys = entrees.filter { $0.kind == .emoji }.map(\.value)
+            // **Les images de « Mes stickers » se résolvent contre la
+            // bibliothèque CHARGÉE**, jamais contre l'entrée seule : celle-ci
+            // ne porte qu'un identifiant, et le dessin vit sur le disque. Une
+            // entrée dont l'image a été effacée disparaît de la liste sans
+            // être purgée — la même tolérance qu'un gabarit retiré du
+            // catalogue.
+            let miennes = entrees
+                .filter { $0.kind == .library }
+                .compactMap { entree in libraryItems.first { $0.id == entree.value } }
+            if !miennes.isEmpty {
+                Section {
+                    usageLibraryGrid(miennes)
+                } header: {
+                    sectionHeader(symbole: "photo.on.rectangle.angled",
+                                  titre: String(localized: "story.sticker.library.title",
+                                                defaultValue: "Mes stickers", bundle: .module))
+                }
+            }
             if !gabarits.isEmpty {
                 Section {
                     usageTemplateGrid(gabarits)
@@ -233,6 +251,27 @@ extension StickerPickerView {
     }
 
     @ViewBuilder
+    private func usageLibraryGrid(_ items: [StoryStickerLibraryItem]) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
+                  spacing: 8) {
+            ForEach(items) { item in
+                Button {
+                    usage.noteUse(.library(item))
+                    onLibraryStickerSelected(item)
+                    HapticFeedback.medium()
+                } label: {
+                    LibraryStickerThumbnail(item: item)
+                }
+                .buttonStyle(.plain)
+                .stickerFavoriteMenu(.library(item), usage: usage)
+                .accessibilityLabel(String(localized: "story.sticker.library.a11y",
+                                           defaultValue: "Autocollant de votre bibliothèque",
+                                           bundle: .module))
+            }
+        }
+    }
+
+    @ViewBuilder
     private func usageEmojiGrid(_ emojis: [String]) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                   spacing: 8) {
@@ -268,9 +307,19 @@ extension StickerPickerView {
             Section {
                 stickerSectionContent(onglet)
             } header: {
-                sectionHeader(icone: nil,
-                              symbole: onglet.symbolName,
-                              titre: StickerPickerView.tabTitle(onglet))
+                // **Seule la section LIEU porte un accessoire** — les lieux
+                // alentour, qui disent DE QUEL lieu parlent les dix vignettes
+                // du dessous. Les autres familles n'ont rien à qualifier : leur
+                // contenu ne dépend d'aucune donnée choisie.
+                if onglet == .place {
+                    sectionHeader(symbole: onglet.symbolName,
+                                  titre: StickerPickerView.tabTitle(onglet)) {
+                        placeChips
+                    }
+                } else {
+                    sectionHeader(symbole: onglet.symbolName,
+                                  titre: StickerPickerView.tabTitle(onglet))
+                }
             }
         }
     }
@@ -334,10 +383,24 @@ extension StickerPickerView {
     /// en-têtes ne rend rien et la liste redevient un mur — c'est la moitié
     /// d'accessibilité qu'un ruban d'onglets donnait gratuitement (chaque onglet
     /// était un bouton nommé) et qu'une liste doit rendre à la main.
+    /// - Parameter accessoire: ce que l'en-tête porte SOUS son titre — les
+    ///   lieux les plus proches, pour la section LIEU (directive porteur
+    ///   2026-09-05 : « avec en en-tête de section les lieux les plus proches
+    ///   ou les plus connus de sa position »).
+    ///
+    ///   Il vit dans l'EN-TÊTE et non au-dessus de la grille parce que c'est
+    ///   ce qu'il QUALIFIE : les dix vignettes montrent toutes le même lieu,
+    ///   celui que ces puces choisissent. Posé entre le titre et la grille sans
+    ///   appartenir à l'un ni à l'autre, il se serait lu comme une onzième
+    ///   option.
     @ViewBuilder
-    private func sectionHeader(icone: String? = nil,
-                               symbole: String? = nil,
-                               titre: String) -> some View {
+    private func sectionHeader<Accessoire: View>(
+        icone: String? = nil,
+        symbole: String? = nil,
+        titre: String,
+        @ViewBuilder accessoire: () -> Accessoire = { EmptyView() }
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
         HStack(spacing: 6) {
             if let icone {
                 Text(icone).font(.system(size: 13))
@@ -356,8 +419,10 @@ extension StickerPickerView {
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
-        .padding(.bottom, MeeshySpacing.xs)
         .accessibilityAddTraits(.isHeader)
+            accessoire()
+        }
+        .padding(.bottom, MeeshySpacing.xs)
     }
 }
 

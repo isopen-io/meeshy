@@ -110,12 +110,14 @@ extension StickerPickerView {
             // Sans mots, rien à poser : la grille est désactivée, ceci est la
             // ceinture.
             if family == .text, (slots[StickerSlotFiller.textSlot] ?? "").isEmpty { return }
+            usage.noteUse(.template(gabarit))
             onTemplateSelected(gabarit, slots)
             return
         }
-        // Sans lieu choisi il n'y a rien à poser — la grille du lieu n'est
-        // d'ailleurs rendue que lorsque `places` n'est pas vide.
+        // Sans lieu choisi il n'y a rien à poser — la grille du lieu est
+        // d'ailleurs DÉSACTIVÉE tant que `currentPlace` est nil.
         guard let lieu = currentPlace else { return }
+        usage.noteUse(.template(gabarit))
         onLocationTemplateSelected(lieu, gabarit)
     }
 
@@ -139,7 +141,24 @@ extension StickerPickerView {
         case .text:
             return [StickerSlotFiller.textSlot: typedStickerTextTrimmed]
         case .location:
-            guard let lieu = currentPlace else { return [:] }
+            // **Un SPÉCIMEN quand aucun lieu n'est encore connu** (2026-09-05).
+            // `[:]` rendait dix cadres vides — le dessinateur mesure sur son
+            // texte, donc dix rectangles étroits et identiques, ce qui ne
+            // montre AUCUN style. Le spécimen est un nom générique et traduit,
+            // jamais un lieu inventé : « Paris » ferait croire à une position
+            // trouvée, et la vignette mentirait sur ce que la pose donnera.
+            //
+            // La grille reste DÉSACTIVÉE tant que ce spécimen est ce qu'elle
+            // montre (`enabled: currentPlace != nil`) : on regarde, on ne pose
+            // pas — la même règle que la grille de TEXTE avant la frappe.
+            guard let lieu = currentPlace else {
+                return [StickerSlotFiller.placeNameSlot:
+                            String(localized: "sticker.place.specimen.name",
+                                   defaultValue: "Votre lieu", bundle: .module),
+                        StickerSlotFiller.placeDetailSlot:
+                            String(localized: "sticker.place.specimen.detail",
+                                   defaultValue: "autour de vous", bundle: .module)]
+            }
             return StickerSlotFiller.placeSlots(for: lieu)
         }
     }
@@ -154,29 +173,74 @@ extension StickerPickerView {
     /// **Le chemin nominal tient en UN geste** : le lieu le plus proche est
     /// présélectionné, taper une décoration la pose. Choisir un autre lieu
     /// coûte le second geste — et seulement quand on le veut (dimension 7).
+    /// **Les DIX styles se montrent AVANT qu'un lieu soit connu** (directive
+    /// porteur 2026-09-05 : « il manque les Localisation, plusieurs styles pour
+    /// montrer la localisation ! »).
+    ///
+    /// ## Le défaut, et pourquoi il ressemblait à une absence de styles
+    ///
+    /// La grille vivait dans la branche `else` de `places.isEmpty`. Le
+    /// catalogue déclare pourtant **dix** pastilles de lieu — pastille, carte
+    /// postale, étiquette, timbre, boussole, enseigne, carte pliée, panneau,
+    /// étiquette de bagage, globe — et les dix ont leur dessinateur. Toutes
+    /// étaient invisibles tant que le GPS n'avait rien rendu : autorisation pas
+    /// encore accordée, simulateur sans position, intérieur d'un bâtiment,
+    /// aucun POI alentour. Le cas le plus FRÉQUENT, donc, montrait zéro style.
+    ///
+    /// > Le gate était motivé — « ne pas peindre une grille qu'on ne peut pas
+    /// > remplir » — et il retirait la capacité ENTIÈRE au lieu de retirer son
+    /// > contenu. Un catalogue complet, dessiné, traduit, et inatteignable :
+    /// > vu de l'écran, c'est indiscernable d'un catalogue qui n'existe pas.
+    ///
+    /// ## Le précédent qui donne la forme juste
+    ///
+    /// `textTab` fait exactement ce qu'il fallait faire : il montre ses styles
+    /// AVANT que l'auteur ait tapé un mot, avec un spécimen dans chaque cadre,
+    /// et n'active la pose qu'une fois la donnée présente
+    /// (`enabled: !typedStickerTextTrimmed.isEmpty`). L'auteur voit ce qu'il
+    /// peut obtenir, puis fournit ce qu'il faut pour l'obtenir — jamais
+    /// l'inverse.
+    ///
+    /// Le LIEU adopte la même grammaire : la grille est toujours peinte, avec
+    /// un spécimen quand aucun lieu n'est encore connu, et elle s'active dès
+    /// qu'un lieu l'est. La différence tient au geste qui apporte la donnée —
+    /// on TAPE un texte, on ATTEND un lieu — et c'est pourquoi l'attente est
+    /// dite au-dessus de la grille plutôt qu'à sa place.
     @ViewBuilder
     var placeTab: some View {
         VStack(alignment: .leading, spacing: 10) {
             if places.isEmpty {
                 // L'onglet EXISTE (l'app sait chercher) mais n'a rien trouvé :
                 // ce n'est pas la même chose qu'une capacité absente, et l'écran
-                // doit le dire plutôt que de laisser une grille vide.
-                Text(String(localized: "sticker.place.empty",
-                            defaultValue: "Aucun lieu trouvé autour de vous",
-                            bundle: .module))
+                // doit le dire — SANS retirer les styles, que l'auteur peut
+                // parcourir pendant que la position arrive.
+                // Deux ATTENTES distinctes, et l'auteur doit savoir laquelle :
+                // « le fournisseur n'est pas là » (position coupée pour Meeshy)
+                // ne se répare pas au même endroit que « on cherche, rien
+                // trouvé ». Une seule phrase pour les deux enverrait la moitié
+                // des auteurs dans les mauvais réglages.
+                Text(nearbyPlaces == nil
+                     ? String(localized: "sticker.place.noPermission",
+                              defaultValue: "Active la position pour épingler un lieu",
+                              bundle: .module)
+                     : String(localized: "sticker.place.empty",
+                              defaultValue: "Aucun lieu trouvé autour de vous",
+                              bundle: .module))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 28)
-            } else {
-                placeChips
-                templateGrid(family: .location)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
             }
+            // **Les puces ont déménagé dans l'EN-TÊTE de la section** (directive
+            // porteur 2026-09-05). Elles ne sont pas une option de plus : elles
+            // disent DE QUEL lieu parlent les dix vignettes du dessous, ce qui
+            // est le rôle d'un en-tête. Voir `sectionHeader(accessoire:)`.
+            templateGrid(family: .location, enabled: currentPlace != nil)
         }
         .padding(.top, 6)
     }
 
-    private var placeChips: some View {
+    var placeChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(Array(places.enumerated()), id: \.offset) { index, lieu in

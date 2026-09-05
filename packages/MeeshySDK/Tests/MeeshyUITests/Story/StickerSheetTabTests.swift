@@ -59,15 +59,38 @@ final class StickerSheetTabTests: XCTestCase {
                        [.text, .place, .time, .weather])
     }
 
-    /// **Et la loi 4 y tient**: sans autorisation de position, LIEU sort de
-    /// l'onglet — jamais grisé, absent. Le témoin s'écrit sur ce cas et non sur
-    /// le nominal : au nominal, la règle juste et une règle qui ignorerait le
-    /// jeu servi rendraient le même verdict.
-    func test_dynamique_perdLeLieu_quandAucunFournisseurNEstInjecte() {
+    /// **Le LIEU reste servi SANS fournisseur de position** (directive porteur
+    /// 2026-09-05).
+    ///
+    /// Ce témoin affirmait l'inverse jusqu'à ce jour, au nom de la loi 4 — « un
+    /// outil qu'on ne peut pas servir est absent, jamais grisé ». Le motif est
+    /// juste et ne s'appliquait pas : **les dix styles de lieu n'ont pas besoin
+    /// du GPS**, seule la DONNÉE en a besoin. Autorisation refusée, et le
+    /// catalogue entier — dessinateurs et traductions compris — disparaissait.
+    ///
+    /// > « On ne peut pas servir » et « on n'a pas encore de quoi remplir » sont
+    /// > deux états, et un seul justifie une absence. Le second se DIT : la
+    /// > section montre ses styles, désactivés, sous la phrase qui nomme ce
+    /// > qui manque. C'est ce que l'onglet TEXTE fait depuis toujours.
+    ///
+    /// Le témoin est conservé plutôt que supprimé, et retourné : c'est lui qui
+    /// empêchera qu'on rétablisse le gate au nom de la même loi mal appliquée.
+    func test_dynamique_gardeLeLieu_memeSansFournisseurDePosition() {
         let sansLieu = StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: false)
-        XCTAssertFalse(StickerSheetTab.sections(of: .dynamic, offered: sansLieu).contains(.place))
-        XCTAssertTrue(StickerSheetTab.sections(of: .dynamic, offered: sansLieu).contains(.text),
-                      "les trois autres restent : une absence ne doit pas en emporter d'autres")
+        XCTAssertTrue(StickerSheetTab.sections(of: .dynamic, offered: sansLieu).contains(.place),
+                      "les dix styles de lieu ne dépendent pas du GPS — seule leur donnée en dépend")
+        XCTAssertTrue(StickerSheetTab.sections(of: .dynamic, offered: sansLieu).contains(.text))
+    }
+
+    /// **Une entrée de « Mes stickers » est une TROISIÈME nature.**
+    ///
+    /// Ni un emoji ni un gabarit : son dessin vit sur le disque de l'auteur,
+    /// pas au catalogue. La confondre avec un `template` aurait fait chercher
+    /// son identifiant dans `StickerTemplateCatalog`, qui ne le connaît pas —
+    /// et l'entrée aurait disparu des favoris sans un mot.
+    func test_uneEntreeDeBibliotheque_neSeResoutPasAuCatalogue() {
+        let entree = StickerUsageEntry(kind: .library, value: "abc123")
+        XCTAssertNil(StickerPickerView.template(for: entree))
     }
 
     func test_smileys_nePorteQueLEmoji() {
@@ -162,6 +185,10 @@ final class StickerUsageStoreTests: XCTestCase {
 
     /// **Les récents sont BORNÉS.** Au-delà, retrouver quelque chose y coûte
     /// autant que dans le catalogue : la liste cesse d'être un raccourci.
+    /// Cinquante depuis le 2026-09-05 (directive porteur). Le témoin ne cite
+    /// PAS le nombre : il interroge la constante, donc il survit au prochain
+    /// arbitrage sans mentir entre-temps. Ce qu'il garde est la BORNE, pas sa
+    /// valeur.
     func test_lesRecents_sontBornes() {
         let sut = makeSUT()
         for i in 0...(StickerUsageStore.recentsLimit + 10) {
