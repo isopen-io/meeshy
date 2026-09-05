@@ -169,13 +169,22 @@ final class SyncDeltaClientTests: XCTestCase {
         }
     }
 
-    func test_reseauTombe_refus_etCorpsIllisible_rendentMuet() async {
+    func test_reseauTombe_estMuet_unRefusEstNomme_etUnCorpsIllisibleEstMuet() async {
         let tombe = MockSyncDeltaTransport()
         guard case .muet = await demande(tombe) else { return XCTFail("réseau tombé ⇒ muet") }
 
+        // Un REFUS (4xx) n'est PLUS fondu dans le silence (#4172 critère 2) :
+        // il porte son statut et le code du serveur — c'est la condition
+        // NOMMÉE sur laquelle le repli du plein se déclenche.
         let refus = MockSyncDeltaTransport()
-        refus.resultat = .success((Data("{\"success\":false}".utf8), reponse(401)))
-        guard case .muet = await demande(refus) else { return XCTFail("401 ⇒ muet") }
+        refus.resultat = .success((Data("{\"success\":false,\"error\":{\"code\":\"UNSUPPORTED_COLLECTION\"}}".utf8), reponse(400)))
+        guard case let .refuse(statut, code) = await demande(refus) else { return XCTFail("400 ⇒ refuse nommé") }
+        XCTAssertEqual(statut, 400)
+        XCTAssertEqual(code, "UNSUPPORTED_COLLECTION")
+
+        let refusSansCorps = MockSyncDeltaTransport()
+        refusSansCorps.resultat = .success((Data("{\"success\":false}".utf8), reponse(401)))
+        guard case .refuse(401, nil) = await demande(refusSansCorps) else { return XCTFail("401 sans code ⇒ refuse(401, nil)") }
 
         let illisible = MockSyncDeltaTransport()
         illisible.resultat = .success((Data("pas du json".utf8), reponse(200)))
