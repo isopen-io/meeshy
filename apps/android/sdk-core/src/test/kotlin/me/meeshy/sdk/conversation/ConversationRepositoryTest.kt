@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiConversation
@@ -91,6 +92,36 @@ private class FakeConversationApi(
     var response: ApiResponse<List<ApiConversation>>,
 ) : StubConversationApi() {
     override suspend fun list(offset: Int?, limit: Int?) = response
+}
+
+/**
+ * Mirrors the gateway's own defaults for `GET /conversations`
+ * (`services/gateway/src/routes/conversations/core-list.ts`, `validatePagination`):
+ * `offset ?: 0`, `limit ?: 30`, and `hasMore = appliedOffset + returned < total`.
+ * Backs the #5186 regression test — a caller that omits `limit` (the pre-fix
+ * [ConversationCacheSource]) only ever sees the first 30 of [totalConversations].
+ */
+private class PagedConversationApi(
+    totalConversations: Int,
+) : StubConversationApi() {
+    private val all: List<ApiConversation> =
+        (0 until totalConversations).map { ApiConversation(id = "c$it", title = "Conv $it") }
+
+    override suspend fun list(offset: Int?, limit: Int?): ApiResponse<List<ApiConversation>> {
+        val appliedOffset = offset ?: 0
+        val appliedLimit = limit ?: 30
+        val page = all.drop(appliedOffset).take(appliedLimit)
+        return ApiResponse(
+            success = true,
+            data = page,
+            pagination = me.meeshy.sdk.model.Pagination(
+                total = all.size,
+                offset = appliedOffset,
+                limit = appliedLimit,
+                hasMore = appliedOffset + page.size < all.size,
+            ),
+        )
+    }
 }
 
 private class RecordingSettingsApi(
@@ -1151,6 +1182,43 @@ class ConversationRepositoryTest {
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat((result as NetworkResult.Failure).error.message)
             .isEqualTo("Vous ne pouvez pas bannir un participant de rang égal ou supérieur")
+    }
+
+    /**
+     * #5186 — `ConversationCacheSource.revalidate()` used to call
+     * `conversationApi.list()` with NO pagination (≤ 30 rows, the server's own
+     * default), then `deleteNotIn` everything outside that single page. An
+     * account with more than 30 cached conversations lost the rest on every
+     * revalidation, even though every one of them still existed server-side.
+     *
+     * 245 previously-synced rows are seeded directly into Room (bypassing
+     * `revalidate`, so the test doesn't depend on the fix under test to
+     * populate the cache), then [ConversationRepository.refresh] runs ONCE
+     * against a server that still serves all 245 conversations — spanning
+     * several pages, since [PagedConversationApi] answers `GET /conversations`
+     * exactly like the gateway. None of the 245 should be pruned.
+     */
+    @Test
+    fun `revalidate does not drop cached conversations that live beyond the first page`() = runTest {
+        val total = 245
+        db.conversationDao().upsertAll(
+            (0 until total).map { i ->
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "c$i",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "c$i", title = "Conv $i"),
+                    ),
+                    updatedAt = i.toLong(),
+                    cachedAt = i.toLong(),
+                )
+            },
+        )
+        val repo = repository(PagedConversationApi(totalConversations = total))
+
+        repo.refresh()
+
+        val cachedIds = repo.cachedConversations().first().map { it.id }.toSet()
+        assertThat(cachedIds).containsExactlyElementsIn((0 until total).map { "c$it" })
     }
 
     /**
