@@ -58,6 +58,7 @@ import type {
   VoiceProfileData
 } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
+import { attachmentTranscriptionView, type AttachmentTranscriptionView } from './audio/attachmentTranscriptionView';
 
 // Response timeout in milliseconds
 const DEFAULT_TIMEOUT = 60000; // 60 seconds for fast voice ops (status, profile, …)
@@ -917,61 +918,15 @@ export class AudioTranslateService extends EventEmitter {
   }
 
   /**
-   * Récupérer un attachement avec sa transcription et ses traductions
+   * Récupérer un attachement avec sa transcription et ses traductions.
+   *
+   * Le corps vit dans `audio/attachmentTranscriptionView.ts` — une LECTURE
+   * et une conversion de forme, sans état ni événement, donc rien d'un
+   * service. La méthode reste ici parce que les témoins des routes la
+   * doublent par son nom.
    */
-  async getAttachmentWithTranscription(attachmentId: string): Promise<{
-    attachment: any;
-    transcription: any | null;
-    translatedAudios: any[];
-  } | null> {
-    const attachment = await this.prisma.messageAttachment.findUnique({
-      where: { id: attachmentId },
-      select: {
-        id: true,
-        messageId: true,
-        fileName: true,
-        fileUrl: true,
-        mimeType: true,
-        fileSize: true,
-        duration: true,
-        transcription: true,
-        translations: true,
-        createdAt: true
-      }
-    });
-
-    if (!attachment) return null;
-
-    // Convertir transcription JSON → ancien format
-    const transcriptionData = attachment.transcription as unknown as AttachmentTranscription | null;
-    const transcription = transcriptionData ? {
-      id: attachmentId,
-      attachmentId,
-      text: transcriptionData.text,
-      language: transcriptionData.language,
-      confidence: transcriptionData.confidence,
-      source: transcriptionData.source,
-      segments: transcriptionData.segments,
-      durationMs: transcriptionData.durationMs,
-      createdAt: new Date()
-    } : null;
-
-    // Convertir translations JSON → ancien format
-    const translationsData = attachment.translations as unknown as AttachmentTranslations | undefined;
-    const translatedAudios = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
-      id: `${attachmentId}_${lang}`,
-      attachmentId,
-      targetLanguage: lang,
-      translatedText: t.transcription,
-      audioUrl: t.url || '',
-      audioPath: t.path || '',
-      durationMs: t.durationMs || 0,
-      voiceCloned: t.cloned || false,
-      voiceQuality: t.quality || 0,
-      createdAt: new Date()
-    })) : [];
-
-    return { attachment, transcription, translatedAudios };
+  async getAttachmentWithTranscription(attachmentId: string): Promise<AttachmentTranscriptionView | null> {
+    return attachmentTranscriptionView(this.prisma, attachmentId);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

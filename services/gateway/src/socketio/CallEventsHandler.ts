@@ -33,6 +33,7 @@ import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS, CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
+import { handleMediaToggle as handleMediaToggleBody } from './call-media-toggle';
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
@@ -1710,12 +1711,10 @@ export class CallEventsHandler {
   }
 
   /**
-   * Shared body of `call:toggle-audio` / `call:toggle-video` — the two
-   * handlers were ~90-line copies differing only by the `mediaType` literal,
-   * which meant every future fix (auth, rate limit, validation, participant
-   * resolution) had to be applied twice and could silently drift between
-   * audio and video. CVE-002 (rate limiting) / CVE-006 (input validation)
-   * comments below apply identically to both media types.
+   * Le corps partagé de `call:toggle-audio` / `call:toggle-video` vit dans
+   * `call-media-toggle.ts` — la plus grande unité de ce fichier qui ne
+   * dépende que de QUATRE membres, donc la seule dont la liste de
+   * dépendances reste lisible une fois explicitée.
    */
   private async handleMediaToggle(
     socket: Socket,
@@ -1723,105 +1722,15 @@ export class CallEventsHandler {
     data: CallMediaToggleClientEvent,
     mediaType: 'audio' | 'video'
   ): Promise<void> {
-    try {
-      const userId = getUserId(socket.id);
-      if (!userId) {
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: 'NOT_AUTHENTICATED',
-          message: 'User not authenticated',
-          callId: data?.callId
-        } as CallError);
-        return;
-      }
-
-      // CVE-002: Rate limiting check
-      const rateLimitPassed = await checkSocketRateLimit(
-        socket,
-        userId,
-        SOCKET_RATE_LIMITS.MEDIA_TOGGLE,
-        this.rateLimiter,
-        CALL_EVENTS.ERROR
-      );
-      if (!rateLimitPassed) return;
-
-      // CVE-006: Validate input data
-      const validation = validateSocketEvent(socketMediaToggleSchema, data);
-      if (isValidationFailure(validation)) {
-        const { error: validationError, details: validationDetails } = validation;
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: CALL_ERROR_CODES.VALIDATION_ERROR,
-          message: validationError,
-          details: validationDetails ? { issues: validationDetails } : undefined,
-          callId: data?.callId
-        } as CallError);
-        return;
-      }
-
-      logger.info(`📞 Socket: call:toggle-${mediaType}`, {
-        socketId: socket.id,
-        userId,
-        callId: data.callId,
-        enabled: data.enabled
-      });
-
-      // Audit P2-GW-5 — `updateParticipantMedia` queries on
-      // `participantId` (Participant.id ObjectId), NOT userId. Passing
-      // userId here matched nothing and the toggle silently failed.
-      // Resolve to the real participantId before calling the service.
-      const resolved = await this.resolveActiveCallParticipant(userId, data.callId);
-      if (!resolved) {
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-          message: 'You are not a participant in this call',
-          callId: data?.callId
-        } as CallError);
-        return;
-      }
-      const { participantId } = resolved;
-      await this.callService.updateParticipantMedia(
-        data.callId,
-        participantId,
-        mediaType,
-        data.enabled
-      );
-
-      // P0-3 — broadcast to the OTHER participants only. The sender already
-      // updated its own state locally and must NOT receive its own echo:
-      // iOS treats any received call:media-toggled as the REMOTE peer's state
-      // (drives the muted indicator / avatar placeholder). `socket.to`
-      // excludes the sender; `io.to` would include it.
-      //
-      // Vague 140 — `participantId` alone (CallParticipant.participantId, the
-      // FK to Participant.id) never matches a web roster entry's `.id`
-      // (CallParticipant.id, its own PK) NOR its `.userId`/`.participantId`
-      // lookup fields (the latter is never populated client-side) for a
-      // registered peer — `updateParticipant` silently no-op'd on every
-      // remote mute/camera toggle, leaving the peer's indicator permanently
-      // stale. Include `userId`, same fix/rationale as `call:quality-alert`/
-      // `call:screen-capture-alert` (Vague 132).
-      const toggleEvent: CallMediaToggleEvent = {
-        callId: data.callId,
-        participantId,
-        userId: resolved.userId,
-        mediaType,
-        enabled: data.enabled
-      };
-
-      socket.to(ROOMS.call(data.callId)).emit(
-        CALL_EVENTS.MEDIA_TOGGLED,
-        toggleEvent
-      );
-
-      logger.info(`✅ Socket: ${mediaType === 'audio' ? 'Audio' : 'Video'} toggled`, {
-        callId: data.callId,
-        userId,
-        enabled: data.enabled
-      });
-    } catch (error) {
-      logger.error(`❌ Socket: Error toggling ${mediaType}`, error);
-
-      socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, `Failed to toggle ${mediaType}`), callId: data?.callId } as CallError);
-    }
+    return handleMediaToggleBody(
+      {
+        callService: this.callService,
+        rateLimiter: this.rateLimiter,
+        mapMediaToggleError: (error, fallback) => this.mapMediaToggleError(error, fallback),
+        resolveActiveCallParticipant: (userId, callId) => this.resolveActiveCallParticipant(userId, callId),
+      },
+      socket, getUserId, data, mediaType
+    );
   }
 
   /**
