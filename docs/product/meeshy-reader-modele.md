@@ -281,31 +281,57 @@ défendable prise seule ; c'est leur somme qui était fausse, et **une somme n'a
 aucun site où rougir**. D'où des témoins qui interrogent les surfaces ENSEMBLE —
 `FeedSceneCoherenceGuardTests` — plutôt qu'une de plus par surface.
 
-### Le corpus de la garde est une liste TENUE À LA MAIN
+### Le corpus de la garde se BALAIE (SOLDÉ le 2026-09-05)
 
-`FeedSceneCoherenceGuardTests.sceneSurfaces` énumère deux chemins. Sa doctrine
-est pourtant universelle — « toute surface qui monte une scène 9:16 dans le fil
-rapporte sa frame » —, et **une troisième surface née dans un fichier NEUF n'est
-lue par personne** : quantifiée en prose, la règle est vérifiée existentiellement
-sur deux fichiers. C'est le piège que ce document énonce déjà au § 3 (« la parade
-n'est pas d'énumérer mieux — c'est de publier la COMMANDE »), reproduit dans le
-témoin qui garde la cohérence.
+`FeedSceneCoherenceGuardTests` a d'abord énuméré deux chemins à la main pour une
+doctrine **universelle** — « toute surface qui monte une scène 9:16 dans le fil
+rapporte sa frame ». Quantifiée en prose, vérifiée existentiellement sur deux
+fichiers : une troisième surface née dans un fichier NEUF n'aurait été lue par
+personne, et aurait pu réinventer la quatrième politique que le § 3 bis vient de
+supprimer. C'était le piège du § 3 (« la parade n'est pas d'énumérer mieux —
+c'est de publier la COMMANDE ») reproduit dans le témoin qui garde la cohérence.
 
-La commande qui liste les candidats — les surfaces du fil qui montent une scène
-sans concourir à l'élection :
+`b579357011` (#5230) l'a soldé : le corpus est **balayé**, commentaires
+dépouillés, et la seule frontière qu'un balayage ne sait pas trancher —
+« **est-ce une LISTE ?** » — se déclare par une table d'exclusions NOMMÉES
+portant chacune sa raison. Ajouter un fichier au territoire oblige à passer là.
+
+La commande qui rend les candidats :
 
 ```bash
 git grep -l "MeeshyScenePlayer(\|StoryReaderRepresentable(" \
-    -- 'apps/ios/Meeshy/Features/Main/Views/*.swift' | xargs grep -L "reportReelFrame"
+    -- 'apps/ios/Meeshy/**/*.swift' | xargs grep -L "reportReelFrame"
 ```
 
-Mesurée le 2026-09-05, elle rend quatre fichiers, et **aucun n'est un défaut** :
-`FeedPostCard` est un faux positif (le nom n'y apparaît qu'en COMMENTAIRE — le
-corpus de la garde, lui, dépouille les commentaires) ; `PostDetailView+Canvas`,
+Mesurée le 2026-09-05, elle rend cinq fichiers et **aucun n'est un défaut** :
+`FeedPostCard` et `MeeshyComposerHost+Socle` sont des faux positifs (le nom n'y
+apparaît qu'en **commentaire** — pour le second, un doc-comment qui raconte qu'il
+montait un player *jadis*) ; `PostDetailView+Canvas`,
 `PostDetailView+RepostEmbed` et `StoryViewerView+Canvas` ne sont pas des LISTES,
-et une surface seule à l'écran n'a personne à qui disputer l'élection. La
-frontière de la loi est donc « **est-ce une liste ?** », et c'est elle que la
-commande ne sait pas trancher seule. Suivi : #5230.
+et une surface seule à l'écran n'a personne à qui disputer l'élection.
+
+> **La version de cette commande publiée le matin même était bornée à
+> `Views/*.swift` et rendait quatre fichiers.** Le cinquième vivait sous
+> `Composer/`. Une commande publiée à la place d'une liste ne vaut que par son
+> TERRITOIRE : la borne, elle, reste une énumération — plus courte, plus discrète,
+> et exactement aussi périssable. Borner au plus large, puis classer.
+
+Deux leçons que la correction a mesurées, et qui valent au-delà d'elle :
+
+- **La table d'exclusions a d'abord reproduit le faux positif que le balayage
+  existe pour retirer.** Elle avait été composée depuis un `git grep` NU — donc
+  sans dépouiller les commentaires — et inscrivait `MeeshyComposerHost+Socle`
+  comme « monteur de scène exclu ». Une table qui déclare la FRONTIÈRE d'un
+  balayage doit être construite par le balayage LUI-MÊME ; composée à la main à
+  côté, elle hérite précisément des défauts qu'il corrige. C'est le témoin
+  `test_everyExclusionStillDescribesARealSceneMounter` qui l'a rendu, dès sa
+  première exécution.
+- **Et ce témoin-là est né INVISIBLE** : écrit
+  `func test_…(file: StaticString = #filePath) throws`, il n'était pas découvert
+  par XCTest — **un paramètre, même à valeur par défaut, suffit**. Aucun échec,
+  aucun avertissement, aucune ligne rouge : six cas rapportés au lieu de sept,
+  et seul le COMPTE le disait. La signature d'un `func test_` reste NUE ; le
+  paramètre `#filePath` va sur le helper.
 
 ### Le mécanisme a débordé son nom
 
@@ -319,6 +345,29 @@ lisible — un « genre de média de RÉEL » dont un cas s'appelle `scene`.
 Réutiliser le mécanisme était juste ; le renommer est une dette à part, à solder
 quand les deux sessions qui travaillent ces fichiers auront convergé. Suivi :
 #5231.
+
+**Ce que ce renommage coûtera, et qui ne rougira pas.** Le compilateur suit un
+membre renommé jusqu'à tous ses consommateurs — mais **pas les gardes de source**,
+qui cherchent des chaînes LITTÉRALES. Une garde négative qui a perdu son terrain
+ne trouve rien *par métier* : elle ne signale jamais qu'elle ne garde plus rien.
+Les suites concernées doivent donc bouger dans le MÊME commit, et elles se
+listent par commande plutôt qu'à la main :
+
+```bash
+git grep -l 'reportReelFrame\|ReelFrame(\|activeReelId\|mostCenteredReel\|ReelMediaKind\|ReelFeedAutoplayCoordinator' \
+    -- 'apps/ios/MeeshyTests/**/*.swift'
+```
+
+Quatre suites au 2026-09-05 : `FeedPostCardScenePlayerGuardTests`,
+`FeedSceneCoherenceGuardTests`, `ReelFeedAutoplayCoordinatorTests`,
+`ReelFeedLayoutTests`.
+
+> **Les deux sessions qui ont vu cette dette en ont dressé la liste à la main, et
+> les deux se sont trompées** — une entrée en trop (`ReelFeedSoundButtonWiring‑
+> GuardTests`, qui ne cite aucun de ces six symboles : il garde le BOUTON, que ce
+> renommage ne touche pas) et une manquante (`ReelFeedLayoutTests`). Sur une
+> dette dont le sujet EST « une énumération ne survit pas à ce qu'elle décrit »,
+> c'est la démonstration la moins coûteuse qu'on pouvait en obtenir.
 
 ## 4. Ce que le lecteur reçoit de la PROJECTION
 
