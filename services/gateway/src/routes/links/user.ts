@@ -42,6 +42,7 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 interface ListLinksQuery {
   conversationId?: string;
   mine?: string;
+  q?: string;
   cursor?: string;
   offset?: string;
   limit?: string;
@@ -314,7 +315,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: ListLinksQuery }>('/links', {
     onRequest: [authRequired],
     schema: {
-      description: 'List share links. Without conversationId: the authenticated user\'s own links, globally. With conversationId: the links of that conversation — a moderator sees all of them, a regular member only their own (unless ?mine=true forces the narrower view for everyone). Supports offset pagination (legacy, still used by iOS/Android) and cursor pagination (?cursor=<linkId>, the forward-looking form — offset stays accepted for backward compatibility, it is not removed). ?expand=conversation,creator,policy adds the corresponding fields (policy = permissions/restrictions, already-loaded scalar columns, no extra query); ?include=summary adds real (never fabricated) aggregates in meta.summary, sparing a second call to the now-deprecated /links/stats. ?fields=a,b,c returns a sparse item.',
+      description: 'List share links. Without conversationId: the authenticated user\'s own links, globally. With conversationId: the links of that conversation — a moderator sees all of them, a regular member only their own (unless ?mine=true forces the narrower view for everyone). ?q=text filters on name OR identifier (case-insensitive substring), composed with the scope above — it never widens what the route already serves. Supports offset pagination (legacy, still used by iOS/Android) and cursor pagination (?cursor=<linkId>, the forward-looking form — offset stays accepted for backward compatibility, it is not removed). ?expand=conversation,creator,policy adds the corresponding fields (policy = permissions/restrictions, already-loaded scalar columns, no extra query); ?include=summary adds real (never fabricated) aggregates in meta.summary, sparing a second call to the now-deprecated /links/stats. ?fields=a,b,c returns a sparse item.',
       tags: ['links'],
       summary: 'List share links (own, or scoped to a conversation)',
       querystring: {
@@ -322,6 +323,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         properties: {
           conversationId: { type: 'string', description: 'Scope the listing to one conversation the caller is a member of' },
           mine: { type: 'string', enum: ['true', 'false'], description: 'With conversationId: force "my links only" even for a moderator' },
+          q: { type: 'string', description: 'Case-insensitive substring filter on name OR identifier — composes with the scope above, never widens it' },
           cursor: { type: 'string', description: 'Opaque keyset cursor — the `id` of the last item of the previous page' },
           offset: { type: 'number', minimum: 0, default: 0, description: 'Legacy offset pagination (kept for iOS/Android backward compatibility)' },
           limit: { type: 'number', minimum: 1, maximum: 100, default: 50, description: 'Maximum number of links to return' },
@@ -497,6 +499,26 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
 
         const forceMineOnly = query.mine === 'true' || !viewerIsModerator;
         where = forceMineOnly ? { conversationId, createdBy: userId } : { conversationId };
+      }
+
+      // #4962 — `q` se compose APRÈS le scope ci-dessus, une seule fois,
+      // plutôt que d'être ajouté dans chacune des deux branches : la même
+      // clause s'applique donc identiquement que l'appelant filtre par
+      // conversation ou non, sans jumelle à tenir synchronisée. `name` et
+      // `identifier` sont les deux colonnes qu'un lecteur reconnaît, déjà
+      // chargées — aucune jointure supplémentaire. Un `q` ne retire jamais
+      // le filtre d'appartenance déjà posé sur `where` : il s'AJOUTE en `AND`
+      // implicite (clé `OR` à côté des clés déjà présentes), il ne le remplace
+      // jamais.
+      const q = typeof query.q === 'string' && query.q.trim().length > 0 ? query.q.trim() : null;
+      if (q !== null) {
+        where = {
+          ...where,
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { identifier: { contains: q, mode: 'insensitive' } },
+          ],
+        };
       }
 
       // Trois `new Set` écrits en ligne vivaient ici, avec trois bornes
