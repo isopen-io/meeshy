@@ -467,6 +467,28 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// un enregistrement persisté avant ce lot décode sans cette clé.
     public let mediaCaptions: [String?]?
 
+    /// **Le texte ALTERNATIF par fichier, même alignement par INDEX**
+    /// (2026-09-05).
+    ///
+    /// Jumeau de `mediaCaptions` par la forme, distinct par le destinataire :
+    /// la légende s'adresse à qui VOIT le média, l'alternative à qui ne le voit
+    /// pas. Le gateway les reçoit dans deux champs séparés
+    /// (`CreatePostSchema.mediaCaption` / `.mediaAlt`), et aucun des deux ne
+    /// sert de repli à l'autre.
+    ///
+    /// Optionnel pour la même raison : une ligne persistée avant ce lot décode
+    /// sans cette clé.
+    public let mediaAlts: [String?]?
+
+    /// **L'identifiant d'OBJET de canvas de chaque fichier** (#5280).
+    ///
+    /// Il ne part PAS au serveur : il sert au dispatcher, une fois les ids
+    /// serveur créés, à réécrire le canvas pour qu'il désigne les médias que
+    /// le post possède réellement. Persisté avec le reste parce que le
+    /// dispatch peut avoir lieu des heures après l'enfilage — et que ce lien
+    /// n'existe nulle part ailleurs à ce moment-là.
+    public let mediaObjectIds: [String?]?
+
     /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
     /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
     ///
@@ -497,7 +519,9 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         mobileTranscription: MobileTranscriptionPayload? = nil,
         localMediaMimeTypes: [String]? = nil,
         storyEffects: StoryEffects? = nil,
-        mediaCaptions: [String?]? = nil
+        mediaCaptions: [String?]? = nil,
+        mediaAlts: [String?]? = nil,
+        mediaObjectIds: [String?]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -518,6 +542,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.localMediaMimeTypes = localMediaMimeTypes
         self.storyEffects = storyEffects
         self.mediaCaptions = mediaCaptions
+        self.mediaAlts = mediaAlts
+        self.mediaObjectIds = mediaObjectIds
     }
 }
 

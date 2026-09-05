@@ -299,7 +299,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "bonjour", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:]
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertEqual(brouillon.location, lieu, "Le brouillon doit porter le lieu tel que la fabrique l'a reçu.")
 
@@ -316,7 +316,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             discoverabilityPrecision: brouillon.discoverabilityPrecision,
             transcription: brouillon.mobileTranscription,
             storyEffects: brouillon.storyEffects,
-            mediaCaptions: brouillon.mediaCaptions
+            mediaCaptions: brouillon.mediaCaptions, mediaAlts: brouillon.mediaAlts, mediaObjectIds: brouillon.mediaObjectIds
         )
         XCTAssertEqual(intent.location, lieu, "Le lieu choisi doit atteindre l'intention publiée, jamais s'y perdre.")
     }
@@ -394,7 +394,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:]
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertNotEqual(
             ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
@@ -423,7 +423,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [vocal], location: nil,
-            discoverabilityPrecision: nil, originalLanguage: "fr", mobileTranscription: transcrit, references: [], storyEffects: nil, mediaCaptions: [:]
+            discoverabilityPrecision: nil, originalLanguage: "fr", mobileTranscription: transcrit, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertEqual(
             brouillon.mobileTranscription, transcrit,
@@ -443,7 +443,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             discoverabilityPrecision: brouillon.discoverabilityPrecision,
             transcription: brouillon.mobileTranscription,
             storyEffects: brouillon.storyEffects,
-            mediaCaptions: brouillon.mediaCaptions
+            mediaCaptions: brouillon.mediaCaptions, mediaAlts: brouillon.mediaAlts, mediaObjectIds: brouillon.mediaObjectIds
         )
         XCTAssertNotNil(
             intent.mobileTranscription,
@@ -485,7 +485,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             discoverabilityPrecision: nil,
             transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo"),
             storyEffects: nil,
-            mediaCaptions: [:]
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertEqual(
             intent.originalLanguage, "wo",
@@ -513,7 +513,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             discoverabilityPrecision: nil,
             transcription: nil,
             storyEffects: nil,
-            mediaCaptions: [:]
+            mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertEqual(
             intent.originalLanguage, "en",

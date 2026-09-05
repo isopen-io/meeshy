@@ -24,7 +24,8 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         repostOfId: String? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil,
         storyEffects: StoryEffects? = nil,
-        mediaCaption: [String: String]? = nil
+        mediaCaption: [String: String]? = nil,
+        mediaAlt: [String: String]? = nil
     ) -> CreatePostBody {
         CreatePostBody(
             content: "Coucou",
@@ -42,7 +43,8 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
             repostOfId: repostOfId,
             mobileTranscription: mobileTranscription,
             storyEffects: storyEffects,
-            mediaCaption: mediaCaption
+            mediaCaption: mediaCaption,
+            mediaAlt: mediaAlt
         )
     }
 
@@ -232,5 +234,48 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
     func test_sansLegende_laCleNestPasPosee() throws {
         XCTAssertNil(try encodeToJSON(makeBody())["mediaCaption"])
         XCTAssertNil(try encodeToJSON(makeBody(mediaCaption: [:]))["mediaCaption"])
+    }
+
+    // MARK: - Le texte alternatif sur le fil (2026-09-05)
+
+    /// **`mediaAlt` part sous SA clé, distincte de `mediaCaption`.**
+    ///
+    /// `CreatePostSchema` déclare les deux séparément
+    /// (`services/gateway/src/routes/posts/types.ts`) : ce sont deux textes
+    /// pour deux lecteurs — celui qui VOIT le média, et celui qui ne le voit
+    /// pas. Les encoder sous une seule clé, ou faire servir l'un de repli à
+    /// l'autre, annoncerait à un lecteur d'écran « voici ce que l'image
+    /// montre » à partir d'une phrase écrite pour accompagner ce qu'on voit
+    /// déjà.
+    func test_leTexteAlternatif_partSousSaPropreCle() throws {
+        let json = try encodeToJSON(makeBody(
+            mediaCaption: ["m1": "au bord de l'eau"],
+            mediaAlt: ["m1": "un chien court sur une plage de sable"]))
+
+        XCTAssertEqual(json["mediaCaption"] as? [String: String], ["m1": "au bord de l'eau"])
+        XCTAssertEqual(json["mediaAlt"] as? [String: String],
+                       ["m1": "un chien court sur une plage de sable"])
+    }
+
+    /// **Vide vaut ABSENT.** Une carte vide n'efface rien à la création, et le
+    /// schéma n'attend aucun verdict ici — l'encoder poserait une clé que le
+    /// gateway devrait apprendre à ignorer.
+    func test_uneAlternativeAbsente_neSEncodePas() throws {
+        let json = try encodeToJSON(makeBody(mediaAlt: nil))
+        XCTAssertNil(json["mediaAlt"])
+
+        let vide = try encodeToJSON(makeBody(mediaAlt: [:]))
+        XCTAssertNil(vide["mediaAlt"], "une carte VIDE ne s'encode pas plus qu'une absente")
+    }
+
+    /// **L'une n'entraîne pas l'autre.** Le défaut qu'on redoute ici est un
+    /// copier-coller qui encoderait l'alternative sous la clé de la légende :
+    /// le témoin ci-dessus le verrait, celui-ci dit pourquoi il compte —
+    /// servir une légende comme alternative est PIRE qu'une alternative
+    /// absente, parce que le lecteur d'écran l'annonce comme une description.
+    func test_uneLegendeSeule_nEcritAucuneAlternative() throws {
+        let json = try encodeToJSON(makeBody(mediaCaption: ["m1": "belle journée"]))
+        XCTAssertEqual(json["mediaCaption"] as? [String: String], ["m1": "belle journée"])
+        XCTAssertNil(json["mediaAlt"])
     }
 }

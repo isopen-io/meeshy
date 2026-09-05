@@ -355,7 +355,13 @@ extension FeedView {
                     // silence.
                     mobileTranscription: nil,
                     storyEffects: nil,  // le composer inline n'a pas de scène, #4756
-                    mediaCaptions: nil
+                    mediaCaptions: nil,
+                // **La feuille du FIL n'a ni éditeur d'objet ni scène** : pas
+                // d'alternative textuelle à porter, aucun objet de canvas à
+                // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
+                // site en silence, et rien n'aurait dit le jour où cette
+                // feuille gagnerait un champ « Décrire ».
+                mediaAlts: nil, mediaObjectIds: nil
                 )
             }
             return
@@ -1776,7 +1782,13 @@ struct FeedComposerSheet: View {
                     discoverabilityPrecision: nearbyPrecision,
                     mobileTranscription: nil,
                     storyEffects: nil,
-                    mediaCaptions: nil
+                    mediaCaptions: nil,
+                // **La feuille du FIL n'a ni éditeur d'objet ni scène** : pas
+                // d'alternative textuelle à porter, aucun objet de canvas à
+                // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
+                // site en silence, et rien n'aurait dit le jour où cette
+                // feuille gagnerait un champ « Décrire ».
+                mediaAlts: nil, mediaObjectIds: nil
                 )
             }
             return

@@ -540,7 +540,7 @@ public final class StoryMediaLayer: CALayer {
         // le fichier tmp et le file:// servirait l'original obsolète.
         if let imageCache,
            let synchronousReader = imageCache as? ComposerImageCacheReader,
-           let cached = synchronousReader.images[cacheKey]?.cgImage {
+           let cached = CanvasImageOrientation.displayCGImage(synchronousReader.images[cacheKey]) {
             contents = cached
             return
         }
@@ -552,7 +552,7 @@ public final class StoryMediaLayer: CALayer {
         // through the async cache.
         if let url = resolvedURL, url.isFileURL {
             if let data = try? Data(contentsOf: url),
-               let cgImage = UIImage(data: data)?.cgImage {
+               let cgImage = CanvasImageOrientation.displayCGImage(UIImage(data: data)) {
                 contents = cgImage
             }
             return
@@ -576,7 +576,7 @@ public final class StoryMediaLayer: CALayer {
             guard !Task.isCancelled else { return }
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
-               let cached = await imageCache.cachedImage(for: cacheKey)?.cgImage {
+               let cached = CanvasImageOrientation.displayCGImage(await imageCache.cachedImage(for: cacheKey)) {
                 guard !Task.isCancelled else { return }
                 self.contents = cached
                 return
@@ -585,7 +585,7 @@ public final class StoryMediaLayer: CALayer {
             guard let url = resolvedURL else { return }
             let loaded = await loader.image(for: url.absoluteString)
             guard !Task.isCancelled,
-                  let cgImage = loaded?.cgImage else { return }
+                  let cgImage = CanvasImageOrientation.displayCGImage(loaded) else { return }
             self.contents = cgImage
         }
     }
@@ -998,7 +998,7 @@ public final class StoryMediaLayer: CALayer {
         guard let hash, let img = ThumbHashDecoder.decodeIfAvailable(hash) else { return }
         let placeholder = CALayer()
         placeholder.frame = bounds
-        placeholder.contents = img.cgImage
+        placeholder.contents = CanvasImageOrientation.displayCGImage(img)
         placeholder.contentsGravity = .resizeAspectFill
         placeholder.masksToBounds = true
         // Insert sous l'AVPlayerLayer (placeholderLayer = z minimum). Si
