@@ -14,10 +14,15 @@ import me.meeshy.sdk.model.StoryTextEffectInk
  */
 fun StoryTextEffect.composeShadow(fontSizePx: Float, textColor: Color): Shadow? {
     val spec = shadow ?: return null
-    val base = when (spec.ink) {
-        StoryTextEffectInk.TEXT -> textColor
-        StoryTextEffectInk.DARK -> Color.Black
-        StoryTextEffectInk.LIGHT -> Color.White
+    val base = when (val ink = spec.ink) {
+        StoryTextEffectInk.Text -> textColor
+        StoryTextEffectInk.Dark -> Color.Black
+        StoryTextEffectInk.Light -> Color.White
+        // La teinte d'un effet colore (2026-09-05) : une couleur PROPRE a
+        // l'effet, opaque — l'opacite de la table s'applique en dessous,
+        // comme pour les trois autres encres. Miroir de `hexToRgb` (web) et
+        // `UIColor(effectHex:)` (iOS) : RVB seul, pas d'alpha dans le hex.
+        is StoryTextEffectInk.Tint -> Color(0xFF000000L or ink.hex.toLong(16))
     }
     return Shadow(
         color = base.copy(alpha = spec.opacity.toFloat()),
