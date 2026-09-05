@@ -32,9 +32,12 @@ jest.mock('../../../../utils/normalize', () => ({
 }));
 
 const mockBcryptCompare = jest.fn<any>().mockResolvedValue(true);
-jest.mock('bcryptjs', () => ({
-  default: { compare: (...args: any[]) => mockBcryptCompare(...args) },
-  compare: (...args: any[]) => mockBcryptCompare(...args),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216. Doubler
+// `bcryptjs` ne suffirait plus : le module charge d'abord le binaire NATIF, et
+// le repli JavaScript n'est atteint que s'il manque.
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...args: any[]) => mockBcryptCompare(...args),
 }));
 
 const mockSendEmailChangeVerification = jest.fn<any>().mockResolvedValue(undefined);
