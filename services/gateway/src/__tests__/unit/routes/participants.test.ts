@@ -414,7 +414,6 @@ describe('registerParticipantsRoutes', () => {
               systemLanguage: 'en',
               regionalLanguage: 'fr',
               customDestinationLanguage: 'es',
-              autoTranslateEnabled: true,
               canSendMessages: true,
               canSendFiles: true,
               canSendImages: true,
@@ -427,6 +426,7 @@ describe('registerParticipantsRoutes', () => {
       // participants (aucun client ne l'affiche ; les modos ont les endpoints admin).
       const participantData = reply.send.mock.calls[0][0].data[0];
       expect(participantData.email).toBeUndefined();
+      expect(participantData.autoTranslateEnabled).toBeUndefined(); // #4643, cf. #4161
     });
 
     it('should use default limit of 20 when not provided', async () => {
