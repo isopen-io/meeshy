@@ -1,3 +1,6 @@
+import type { CleDePreference } from '@/lib/contenu/prefs-de-notif';
+import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+
 import { baseDeLaPasserelle } from './links';
 import { DELAI_DE_REPONSE_MS } from './passerelle';
 
@@ -101,5 +104,109 @@ export const supprimePourMoi = async ({ jeton, conversation, base, recuperer }: 
   appelle(
     `${base ?? baseDeLaPasserelle()}/api/v1/conversations/${encodeURIComponent(conversation)}/delete-for-me`,
     { method: 'DELETE', headers: enTetes(jeton) },
+    recuperer,
+  );
+
+/**
+ * LES PRÉFÉRENCES DE NOTIFICATION DU COMPTE (`/notifications/preferences`,
+ * #4899) — deux routes RÉELLES, lues dans
+ * `services/gateway/src/routes/me/preferences/unified-routes.ts` :
+ *
+ *   • `GET /api/v1/me/preferences?categories=notification` (`:150`), gardée
+ *     par `createUnifiedAuthMiddleware({ requireAuth: true, allowAnonymous:
+ *     false })` (`preferences/index.ts:67`) — rend
+ *     `{ success, data: { notification: {…complétée par les défauts…} } }` ;
+ *   • `PATCH /api/v1/me/preferences` (`:229`, `mode=merge` par DÉFAUT — jamais
+ *     `replace` ici) — corps `{ "notification": { [clé]: valeur } }`.
+ *
+ * UNE ÉCRITURE = UNE CLÉ. Le legacy (`apps/web/app/notifications/
+ * preferences/page.tsx`) envoyait l'état ENTIER et gravait dans ses
+ * commentaires la leçon inverse : un envoi construit sur un chargement raté
+ * réécrit des réglages que le lecteur n'a jamais touchés. Ici la protection
+ * est STRUCTURELLE — `basculeUnePreference` ne PEUT composer qu'une seule
+ * clé, ce n'est pas un garde-fou qu'on pourrait oublier d'appeler.
+ *
+ * LA RÉPONSE DU `PATCH` EST UNE RELECTURE : le mode `merge` rend le document
+ * complet, comme le `GET` — l'appelant (la porte, le module de participation)
+ * réconcilie SUR CE QUE LA PASSERELLE A ÉCRIT, jamais sur ce qu'il a envoyé.
+ * Les deux fonctions rendent donc la MÊME forme d'issue.
+ */
+export type IssueDePreferences =
+  | { readonly genre: 'document'; readonly reglages: NotificationPreference }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'refus'; readonly statut: number }
+  | { readonly genre: 'panne' };
+
+const corpsDeNotification = (valeur: unknown): NotificationPreference | null => {
+  if (typeof valeur !== 'object' || valeur === null || Array.isArray(valeur)) return null;
+  const data = (valeur as { readonly data?: unknown }).data;
+  if (typeof data !== 'object' || data === null) return null;
+  const notification = (data as { readonly notification?: unknown }).notification;
+  if (typeof notification !== 'object' || notification === null) return null;
+  return notification as NotificationPreference;
+};
+
+const issueDePreferences = async (reponse: Response | null): Promise<IssueDePreferences> => {
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (!reponse.ok) return reponse.status >= 500 ? { genre: 'panne' } : { genre: 'refus', statut: reponse.status };
+
+  const corps = await reponse.json().catch(() => null);
+  const reglages = corpsDeNotification(corps);
+  // La passerelle a répondu 2xx sans le document attendu : c'est le CONTRAT
+  // qui n'est pas tenu, pas un refus du lecteur — la même distinction que le
+  // 5xx ci-dessus.
+  return reglages === null ? { genre: 'panne' } : { genre: 'document', reglages };
+};
+
+const appellePreferences = async (
+  url: string,
+  options: RequestInit,
+  recuperer?: (url: string, options: RequestInit) => Promise<Response>,
+): Promise<IssueDePreferences> =>
+  issueDePreferences(
+    await (recuperer ?? ((u, o) => fetch(u, o)))(url, {
+      ...options,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    }).catch(() => null),
+  );
+
+export type ArgumentsDeLecture = {
+  readonly jeton: string;
+  readonly base?: string;
+  readonly recuperer?: (url: string, options: RequestInit) => Promise<Response>;
+};
+
+export const preferencesDeNotification = async ({
+  jeton,
+  base,
+  recuperer,
+}: ArgumentsDeLecture): Promise<IssueDePreferences> =>
+  appellePreferences(
+    `${base ?? baseDeLaPasserelle()}/api/v1/me/preferences?categories=notification`,
+    { method: 'GET', headers: enTetes(jeton) },
+    recuperer,
+  );
+
+export type ArgumentsDeLaBascule = ArgumentsDeLecture & {
+  readonly cle: CleDePreference;
+  readonly valeur: boolean;
+};
+
+export const basculeUnePreference = async ({
+  jeton,
+  cle,
+  valeur,
+  base,
+  recuperer,
+}: ArgumentsDeLaBascule): Promise<IssueDePreferences> =>
+  appellePreferences(
+    `${base ?? baseDeLaPasserelle()}/api/v1/me/preferences`,
+    {
+      method: 'PATCH',
+      headers: { ...enTetes(jeton), 'content-type': 'application/json' },
+      body: JSON.stringify({ notification: { [cle]: valeur } }),
+    },
     recuperer,
   );

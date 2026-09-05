@@ -70,12 +70,32 @@ describe('SCRIPT_DU_TRAVAILLEUR — la registration que le document sert', () =>
 describe('les deux faces de la frontière — le compose de staging ne peut pas mentir', () => {
   const compose = fs.readFileSync(path.join(RACINE_DU_DEPOT, 'docker-compose.staging.yml'), 'utf8');
 
+  // LE BLOC DU SERVICE, PAS LE FICHIER ENTIER — c'est ce qui distingue « la
+  // variable existe quelque part dans le compose » de « la variable est
+  // déclarée sur le service qui LIT l'environnement à l'exécution ». Un
+  // `find` sans borne de bloc avait laissé `V3_SW_PORTEES`/`V3_NAVIGABLE`
+  // migrer sur `frontend-staging` (le LEGACY, une image qui ne contient pas
+  // `apps/web-v3`) sans qu'aucun témoin ne rougisse : le texte matchait,
+  // le service qui tourne ne les lisait jamais.
+  const blocDuServiceV3 = (): string => {
+    const lignes = compose.split('\n');
+    const debut = lignes.findIndex((l) => l.trim() === 'frontend-v3-staging:');
+    if (debut === -1) {
+      throw new Error('le service frontend-v3-staging est absent du compose de staging');
+    }
+    const suite = lignes.slice(debut + 1);
+    const fin = suite.findIndex((l) => /^ {2}\S/.test(l));
+    return suite.slice(0, fin === -1 ? suite.length : fin).join('\n');
+  };
+
   const listeDuCompose = (variable: string): readonly string[] => {
-    const ligne = compose
+    const ligne = blocDuServiceV3()
       .split('\n')
       .map((l) => l.trim())
       .find((l) => l.startsWith(`- ${variable}=`));
-    if (ligne === undefined) throw new Error(`${variable} absente du compose de staging`);
+    if (ligne === undefined) {
+      throw new Error(`${variable} absente du SERVICE frontend-v3-staging du compose de staging`);
+    }
     return porteesDuTravailleur(ligne.slice(`- ${variable}=`.length));
   };
 

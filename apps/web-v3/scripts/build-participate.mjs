@@ -23,7 +23,7 @@ import { gzipSync } from 'node:zlib';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, '..');
-// ONZE modules, pas un — et la raison est un POIDS mesuré, pas un goût
+// DOUZE modules, pas un — et la raison est un POIDS mesuré, pas un goût
 // d'architecture. `participate.js` pèse 26 173 o gzip (budgets-mesures.json) :
 // c'est le prix du fil — composeur, réserve, plein écran, réactions, peinture
 // de bulles. La LISTE n'a besoin d'aucun d'eux, et le FIL SOCIAL (#5031)
@@ -36,8 +36,12 @@ const RACINE = join(ICI, '..');
 // l'autre NI de socket : elle n'a besoin que d'Échap sur sa surimpression, un
 // seul appel à `prendsLePleinEcran()` — le lui faire payer via `participate.js`
 // aurait été le défaut même que ces huit autres modules existent pour éviter.
+// LES PRÉFÉRENCES DE NOTIFICATION (`prefs`, /notifications/preferences, #4899)
+// n'ont ni composeur ni socket non plus : une bascule est un ALLER SIMPLE,
+// exactement comme aimer ou reposter sur `/feed` — le même arbitrage,
+// mesuré à la même conclusion.
 // Le socle que `participate` et `liste` PARTAGENT — socket.io-client — reste
-// UN actif, à UNE adresse ; `feed` et `plein` ne l'importent pas du tout.
+// UN actif, à UNE adresse ; `feed`, `plein` et `prefs` ne l'importent pas du tout.
 const SOURCES = [
   { base: 'participate', chemin: join(RACINE, 'lib', 'realtime', 'participate.ts') },
   { base: 'liste', chemin: join(RACINE, 'lib', 'realtime', 'liste.ts') },
@@ -50,6 +54,7 @@ const SOURCES = [
   { base: 'plein', chemin: join(RACINE, 'lib', 'realtime', 'plein.ts') },
   { base: 'navigateur', chemin: join(RACINE, 'lib', 'realtime', 'navigateur.ts') },
   { base: 'composer', chemin: join(RACINE, 'lib', 'realtime', 'composer.ts') },
+  { base: 'prefs', chemin: join(RACINE, 'lib', 'realtime', 'prefs.ts') },
 ];
 const DOSSIER = join(RACINE, '.rt');
 const SOCKET = join(RACINE, 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js');
@@ -90,7 +95,7 @@ const ecrisLaMesure = (poids) => {
   const mesures = JSON.parse(readFileSync(MESURES, 'utf8'));
   mesures.participate = {
     quoi:
-      'Le poids des ONZE modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], lib/realtime/plein.ts pour /chats/:cle/medias [#4525], lib/realtime/navigateur.ts pour la navigation de zone [§ 12.11], lib/realtime/composer.ts pour /composer [#4966], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
+      'Le poids des DOUZE modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], lib/realtime/plein.ts pour /chats/:cle/medias [#4525], lib/realtime/navigateur.ts pour la navigation de zone [§ 12.11], lib/realtime/composer.ts pour /composer [#4966], lib/realtime/prefs.ts pour /notifications/preferences [#4899], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js et prefs.js ne l’importent pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
     // LES POIDS SE RÉPANDENT, ILS NE SE RECOPIENT PAS. Cette table était un
     // INVENTAIRE tenu à la main : `navigateur` figurait dans les SOURCES et
     // dans le `quoi` ci-dessus (« ONZE modules »), mais aucune de ses deux
