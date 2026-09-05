@@ -21,6 +21,7 @@ import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding
 } from '../../services/personalHistoryFilter';
+import { MESSAGE_PROTECTION_SELECT, mapMessageProtectionFields } from './messages-list-query';
 import { validatePagination } from '../../utils/pagination';
 import {
   messageSchema,
@@ -185,6 +186,12 @@ export function registerMessageSearchRoute(
         // aussi — sans `metadata`, un message géolocalisé trouvé par
         // recherche n'affiche jamais sa position.
         metadata: true,
+        // #4885 — les quatre drapeaux de protection (vue unique / flou /
+        // expiration / bitfield), source unique avec `messages-list-query.ts`.
+        // Sans eux un message à vue unique trouvé par recherche arrivait
+        // FORWARDABLE : le garde web/iOS qui interdit le transfert lit
+        // `isViewOnce`, absent de cette réponse.
+        ...MESSAGE_PROTECTION_SELECT,
         sender: {
           // `sender` is a `Participant`, which has no `username`/`isOnline` of
           // its own — those live on the related `User`. Selecting `username`
@@ -291,6 +298,9 @@ export function registerMessageSearchRoute(
         // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
         return hoistStickerOnto(hoistLocationOnto({
           ...msg,
+          // #4885 — les quatre drapeaux de protection, servis à l'identique
+          // de `GET .../messages` (même source, `mapMessageProtectionFields`).
+          ...mapMessageProtectionFields(msg),
           // #4177 — même résolution que `GET .../messages` : `msg.senderId`
           // (spread ci-dessus) est le `Participant.id` BRUT stocké en base,
           // jamais le `User.id` que les clients comparent à LEUR `userId`.

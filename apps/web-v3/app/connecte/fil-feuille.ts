@@ -8,6 +8,19 @@ import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
  *
  *   • le fil est PLAT (règle 26) : une ligne = avatar + nom + texte + méta,
  *     jamais une bulle ; mes messages sont la même ligne, sous le nom « Vous » ;
+ *     Ce nom-là est LE plus court du fil, et il est devenu un LIEN vers son
+ *     propre compte (#5030) : à 40 × 44 px il tombait sous la règle 4, mesuré
+ *     au navigateur (`v3-fil-riche.spec.ts` § « aucune cible sous 44 px »),
+ *     d'où le `min-width` sur `.nom-lien` — un idiome de CIBLE, pas de texte ;
+ *   • un lien SANS destination n'est pas une cible : le gabarit que le module
+ *     clone porte les deux « a » du profil en permanence (une bulle peinte doit
+ *     mener où mène une bulle servie), et le module RETIRE leur `href` quand
+ *     l'auteur n'a pas de compte. `display:contents` leur retire alors leur
+ *     BOÎTE, exactement comme la ligne servie qui n'écrit aucune balise — sans
+ *     quoi la mesure des cibles compterait un `<a>` que personne ne peut viser.
+ *     La raison vit ICI plutôt qu'en commentaire CSS : la feuille est INLINE
+ *     dans chaque document, et `compacte()` ne retire pas les commentaires —
+ *     sept lignes de prose y coûtaient 303 o gzip par document, mesuré ;
  *   • en-tête et composeur OPAQUES (règle 11) — `--color-bg`, aucun flou de
  *     fond ; ils ne sont plus « collants » : l'écran est une COLONNE de la
  *     hauteur de la fenêtre, et seule la zone des messages défile ;
@@ -175,7 +188,8 @@ export const FEUILLE_DU_FIL = compacte(`
 /* La cible du NOM atteint 44 px SANS agrandir le TEXTE — le même idiome que
    .original summary (charte règle 4) : min-height centré, jamais un
    padding qui pousserait la ligne suivante. */
-.ligne .nom-lien{display:inline-flex;align-items:center;min-height:var(--target-min);color:inherit;text-decoration:none}
+.ligne .nom-lien{display:inline-flex;align-items:center;min-height:var(--target-min);min-width:var(--target-min);color:inherit;text-decoration:none}
+.ligne .avatar-lien:not([href]),.ligne .nom-lien:not([href]){display:contents}
 .ligne.suite .qui{display:none}
 .ligne .anonyme{display:inline-flex;align-items:center;gap:var(--space-1);font-size:var(--text-sm);font-weight:var(--font-weight-regular);color:var(--color-text-muted)}
 .ligne .anonyme svg{width:var(--glyph-inline);height:var(--glyph-inline)}
@@ -248,8 +262,8 @@ ${PASTILLE_DE_LANGUE}
 .pieces audio{display:block;width:100%;border-radius:var(--radius-lg);background:var(--color-bg-sunken)}
 .pieces>li[data-genre=image] .etiquette,.pieces>li[data-genre=video] .etiquette{position:absolute;left:var(--space-3);bottom:var(--space-3);margin:0;padding:0 var(--space-2);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-pill);background:var(--color-surface)}
 .pieces .transcription{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;line-clamp:4;margin:0;padding-left:var(--space-3);border-left:var(--stroke-strong) solid var(--color-border-interactive);font-size:var(--text-base);overflow:hidden}
-.pieces .fiche{display:inline-flex;align-items:center;gap:var(--space-2);justify-self:start;min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-primary);text-decoration:none}
-.pieces .fiche svg{width:var(--glyph-inline);height:var(--glyph-inline)}
+.fiche{display:inline-flex;align-items:center;gap:var(--space-2);justify-self:start;min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-primary);text-decoration:none}
+.fiche svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .pieces .transcrit{display:flex;align-items:center;gap:var(--space-1);margin:0;font-size:var(--text-sm);color:var(--color-text-muted)}
 .pieces .transcrit-original{margin:0}
 .pieces .transcrit-original summary{display:inline-flex;align-items:center;gap:var(--space-1);min-height:var(--target-min);font-size:var(--text-sm);color:var(--color-primary);list-style:none;cursor:pointer}

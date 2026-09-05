@@ -285,4 +285,11 @@ export const documentIndisponible = (): string =>
     titre: COMMENTAIRES.introuvable,
     paragraphes: [COMMENTAIRES.introuvablePrecision],
     feuille: FEUILLE_CONNECTEE,
+    // AUCUNE CARTE SOCIALE sur un refus — la MÊME raison que sur
+    // l'indisponible d'une story (`app/(public)/partage-vue.ts`, #4967) : un
+    // aperçu qui se déplie dans une messagerie serait un SECOND CANAL pour ce
+    // que l'écran refuse de dire, sur un document qui doit rester
+    // indistinguable d'un contenu inexistant. L'INVITATION juste au-dessus la
+    // garde : c'est le seul aperçu qu'une adresse partagée produise.
+    ogEtTwitter: false,
   });

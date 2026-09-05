@@ -30,7 +30,7 @@ export const FEUILLE_AUTHENTIFICATION = compacte(`
 .acces form{display:grid;gap:18px}
 .champ{display:grid;gap:6px}
 .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
-.champ input{min-height:52px;padding:0 16px;font-size:var(--text-md);font-family:inherit;color:var(--color-text);background:var(--color-surface);border:1px solid var(--color-border-interactive);border-radius:var(--radius-md);width:100%}
+.champ input{min-height:52px;padding:0 16px;font-size:var(--text-md);font-family:inherit;color:var(--color-text);background:var(--color-surface);border:1px solid var(--color-border-interactive);border-radius:var(--radius-lg);width:100%}
 .champ .aide{margin:0;font-size:var(--text-xs);line-height:var(--leading-relaxed);color:var(--color-text-subtle)}
 .acces button{margin-top:6px;width:100%;cursor:pointer;font-family:inherit;font-size:var(--text-base)}
 

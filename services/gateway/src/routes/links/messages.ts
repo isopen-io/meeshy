@@ -17,6 +17,7 @@ import {
   describeConversationWriteRefusal
 } from '../../services/messaging/conversationWriteAdmission.js';
 import type { ConversationWriteRefused } from '../../services/messaging/conversationWriteAdmission.js';
+import { resolveParticipantRights } from '../../services/participantRights.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -294,7 +295,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         return sendWriteRefusal(reply, anonymousAdmission);
       }
 
-      if (!anonymousParticipant.permissions.canSendMessages) {
+      // `resolveParticipantRights` — jamais `permissions` brut : un hôte peut
+      // avoir retiré `canSendMessages` APRÈS le join via
+      // `PATCH …/participants/:id/rights`, et cette surcharge vit dans
+      // `anonymousSession.rights`, pas dans l'instantané (#4855, même loi que
+      // `participantConversationPayload` / `historyFloorFor`).
+      if (!resolveParticipantRights(anonymousParticipant).canSendMessages) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à envoyer des messages');
       }
 

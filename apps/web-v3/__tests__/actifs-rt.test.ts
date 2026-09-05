@@ -14,16 +14,19 @@ import { PREFIXE_RT, actifParNom, actifsTempsReel } from '@/lib/actifs-rt';
  * l'adresse et le nom viennent d'une seule lecture ; un nom inconnu — ou un
  * hash périmé — rend 404 ; ce qui est servi est immuable.
  *
- * HUIT MODULES, PAS UN. Le fil (`participate`), la liste (`liste`), le fil
+ * NEUF MODULES, PAS UN. Le fil (`participate`), la liste (`liste`), le fil
  * social (`feed`, #5031), la boîte (`notifs`, #4898), le carnet (`contacts`,
- * #4921), la recherche (`recherche`, #4897), les liens (`liens`, #5090) et
- * les commentaires (`commentaires`, #5091) sont compilés séparément parce qu'un écran ne doit
+ * #4921), la recherche (`recherche`, #4897), les liens (`liens`, #5090), les
+ * commentaires (`commentaires`, #5091) et la galerie (`plein`,
+ * `/chats/:cle/medias`, #4525) sont compilés séparément parce qu'un écran ne doit
  * télécharger que ce qu'il exécute : `participate.js` pèse 26 Ko gzip
  * (composeur, réserve, plein écran, peinture de bulles), dont ni `/chats` ni
- * `/feed` n'exécutent une ligne. Le socle que `participate` et `liste`
- * PARTAGENT — socket.io-client — reste UN actif, à UNE adresse ; `feed` ne le
- * référence pas du tout (aimer et reposter sont des allers simples, aucun
- * socket).
+ * `/feed` n'exécutent une ligne ; `plein.js` ne pèse que 241 o gzip — UN seul
+ * appel à `prendsLePleinEcran()`, tout ce que la galerie doit au clavier. Le
+ * socle que `participate` et `liste` PARTAGENT — socket.io-client — reste UN
+ * actif, à UNE adresse ; `feed` et `plein` ne le référencent pas du tout
+ * (aimer et reposter sont des allers simples, aucun socket ; la galerie n'a
+ * pas de temps réel non plus).
  */
 
 const RACINE = join(__dirname, '..');
@@ -40,6 +43,7 @@ describe('les quatre actifs', () => {
     expect(actifs.recherche.url).toBe(`${PREFIXE_RT}/${actifs.recherche.nom}`);
     expect(actifs.liens.url).toBe(`${PREFIXE_RT}/${actifs.liens.nom}`);
     expect(actifs.commentaires.url).toBe(`${PREFIXE_RT}/${actifs.commentaires.nom}`);
+    expect(actifs.plein.url).toBe(`${PREFIXE_RT}/${actifs.plein.nom}`);
     expect(actifs.socket.url).toBe(`${PREFIXE_RT}/${actifs.socket.nom}`);
     expect(actifs.participate.nom).toMatch(/^participate\.[0-9a-f]{16}\.js$/);
     expect(actifs.liste.nom).toMatch(/^liste\.[0-9a-f]{16}\.js$/);
@@ -49,11 +53,12 @@ describe('les quatre actifs', () => {
     expect(actifs.recherche.nom).toMatch(/^recherche\.[0-9a-f]{16}\.js$/);
     expect(actifs.liens.nom).toMatch(/^liens\.[0-9a-f]{16}\.js$/);
     expect(actifs.commentaires.nom).toMatch(/^commentaires\.[0-9a-f]{16}\.js$/);
+    expect(actifs.plein.nom).toMatch(/^plein\.[0-9a-f]{16}\.js$/);
     expect(actifs.socket.nom).toMatch(/^socket\.io\.[0-9a-f]{16}\.js$/);
   });
 
   /**
-   * Les huit modules ne partagent AUCUNE adresse : servir la liste au fil (ou
+   * Les neuf modules ne partagent AUCUNE adresse : servir la liste au fil (ou
    * l'inverse) ferait exécuter un module qui ne trouve pas sa surface et
    * n'échouerait nulle part — un temps réel silencieusement mort.
    */
@@ -86,6 +91,14 @@ describe('les quatre actifs', () => {
     expect(actifs.commentaires.url).not.toBe(actifs.contacts.url);
     expect(actifs.commentaires.url).not.toBe(actifs.recherche.url);
     expect(actifs.commentaires.url).not.toBe(actifs.liens.url);
+    expect(actifs.plein.url).not.toBe(actifs.participate.url);
+    expect(actifs.plein.url).not.toBe(actifs.liste.url);
+    expect(actifs.plein.url).not.toBe(actifs.feed.url);
+    expect(actifs.plein.url).not.toBe(actifs.notifs.url);
+    expect(actifs.plein.url).not.toBe(actifs.contacts.url);
+    expect(actifs.plein.url).not.toBe(actifs.recherche.url);
+    expect(actifs.plein.url).not.toBe(actifs.liens.url);
+    expect(actifs.plein.url).not.toBe(actifs.commentaires.url);
   });
 
   /**

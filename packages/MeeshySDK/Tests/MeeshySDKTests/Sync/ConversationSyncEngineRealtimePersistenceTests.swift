@@ -23,7 +23,8 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
             messageService: MockMessageService(),
             messageSocket: socket,
             socialSocket: MockSocialSocket(),
-            api: MockAPIClient()
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
         )
         return (engine, socket, cache)
     }

@@ -44,6 +44,26 @@
  *      lui : on revient là où l'on regardait, jamais au bas du fil.
  */
 
+/**
+ * ET L'OUVERTURE DU PROFIL D'UN AUTEUR (§ 12.10.3) EST DE LA MÊME FAMILLE — un
+ * ÉTAT de l'adresse hôte, composé par le serveur (`app/connecte/fil-lignes.ts`,
+ * `liste-vue.ts`) ET par le module de participation (`fil-peinture.ts`).
+ *
+ * ELLE VIT ICI, ET NON DANS `app/connecte/profil-vue.ts`, POUR UNE RAISON
+ * MESURÉE : le module de participation qui l'importait DE LÀ-BAS tirait tout le
+ * module de vue dans son graphe — `getLanguageInfo` de `@meeshy/shared` avec —,
+ * et `participate.js` passait de **26 719 à 41 107 o gzip (+14 388, +54 %)**
+ * sur l'actif que le lecteur en 3G rurale télécharge. Une composition de chaîne
+ * de trente caractères ne se paie pas quatorze kilo-octets : les deux rendus
+ * partagent la RÈGLE, jamais le module qui la rend. `profil-vue.ts` la
+ * RÉ-EXPORTE, donc aucun appelant ne change et le site reste unique.
+ */
+export const PARAM_DU_PROFIL = 'profil';
+
+/** L'ouverture : l'adresse de l'hôte, plus `?profil=`. */
+export const adresseDuProfil = (adresseHote: string, handle: string): string =>
+  `${adresseHote}?${PARAM_DU_PROFIL}=${encodeURIComponent(handle)}`;
+
 /** Le paramètre qui porte l'état « plein écran » — lu par les deux portes du fil. */
 export const PARAM_DU_PLEIN = 'media';
 

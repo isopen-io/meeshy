@@ -1,20 +1,21 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { echappe } from '@/app/socle';
-import { adresseDuPlein } from '@/lib/api/adresses-du-fil';
+import { adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
 import { formeDePiece, GENRES_DE_PIECE, sEcouteSurPlace, type GenreDePiece } from '@/lib/api/formes';
-import type { Fil, PieceJointe } from '@/lib/api/fil';
-import { adresseDesMedias, type Galerie, type Media } from '@/lib/api/medias';
+import type { PieceJointe } from '@/lib/api/fil';
+import { adresseDesMedias, adresseDuPleinDeLaGalerie, type Galerie, type Media } from '@/lib/api/medias';
 import { FIL } from '@/lib/contenu/fil';
 import { MEDIAS } from '@/lib/contenu/medias';
 import { metaDePiece } from '@/lib/poids';
 
+import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { documentPleinEcran } from './fil-vue';
 import { FEUILLE_DES_MEDIAS } from './medias-feuille';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
-import { pieceEnPlein, pleinEcran } from './plein-vue';
+import { aFiche, ficheDePiece, gesteDePiece, pieceEnPlein, pleinEcran } from './plein-vue';
 import { blocDeTranscription } from './transcrit';
 import { carteVide } from './vue';
 
@@ -23,13 +24,13 @@ import { carteVide } from './vue';
  * on la parcourt, on l'ouvre, et **le poids de chaque pièce est annoncé avant
  * qu'un octet ne parte**.
  *
- * ZÉRO OCTET DE MÉDIA À L'OUVERTURE. La grille ne rend AUCUNE `<img>` et
- * AUCUNE `<video>` : une tuile est un `<a>` au glyphe de son genre, sous lequel
- * son poids (et sa durée quand elle en a une) est écrit. C'est la décision qui
- * porte l'écran : « très faible consommation de données » se joue ici, et une
- * grille de 48 vignettes qui précharge est le contraire de la mission. La cible
- * dessine cette tuile-là — celle qui annonce « ↓ 420 Ko » —, et cet écran
- * n'en connaît pas d'autre, puisque rien n'y est jamais préchargé.
+ * ZÉRO OCTET DE MÉDIA À L'OUVERTURE DE LA GRILLE. La grille ne rend AUCUNE
+ * `<img>` et AUCUNE `<video>` : une tuile est un `<a>` au glyphe de son genre,
+ * sous lequel son poids (et sa durée quand elle en a une) est écrit. C'est la
+ * décision qui porte l'écran : « très faible consommation de données » se joue
+ * ici, et une grille de 48 vignettes qui précharge est le contraire de la
+ * mission. La cible dessine cette tuile-là — celle qui annonce « ↓ 420 Ko » —,
+ * et cet écran n'en connaît pas d'autre, puisque rien n'y est jamais préchargé.
  *
  * LE CLS EST NUL PAR CONSTRUCTION, et pas par un `width`/`height` : chaque
  * tuile est un carré (`aspect-ratio:1`) dont la boîte est connue avant tout
@@ -37,12 +38,23 @@ import { carteVide } from './vue';
  * par un moyen plus fort que celui qu'elle nomme — il n'y a pas d'image à
  * dimensionner.
  *
+ * UNE TUILE OUVRE LE MÊME PLEIN ÉCRAN QUE LE FIL (#4525, #5024 point 2, § 4
+ * étape 3). Le tap sur une image ou une vidéo mène à l'état `?media=<pièce>`
+ * de CETTE adresse — la tranche `?genre=&avant=` conservée, jamais `?autour=`,
+ * qui n'a pas de sens ici : la pièce est cherchée dans la galerie SERVIE, pas
+ * dans une tranche nommée par un message. La surimpression rendue est CELLE DU
+ * FIL (`app/connecte/plein-vue.ts`), le site UNIQUE de son balisage — un
+ * second visionneur écrit ici serait la jumelle que la charte interdit
+ * (leçon 465). `gesteDePiece`, `aFiche` et `ficheDePiece` viennent du même
+ * site, pour la même raison.
+ *
  * UN VOCAL N'EST PAS UNE TUILE. La cible le dessine en lecteur pleine largeur,
  * avec sa durée et son Prisme (« Transcrit · yo → fr ») : il porte du TEXTE,
  * que la grille doit pouvoir servir. C'est le `<details>` du fil, au balisage
  * près (`app/connecte/fil-lignes.ts`), et sa transcription est rendue par le
  * site UNIQUE de ce bloc (`app/connecte/transcrit.ts`) — `preload="none"`,
- * donc zéro octet avant la pression.
+ * donc zéro octet avant la pression. Il porte sa FICHE dans les mêmes
+ * conditions que la ligne du fil : la transcription entière, en plein écran.
  *
  * LES PUCES FILTRENT VRAIMENT. La cible en dessine quatre ; elles y sont
  * inertes. Ici elles sont des liens vers la MÊME adresse avec `?genre=`, la
@@ -67,13 +79,25 @@ export type EtatDesMedias = {
   /** L'identifiant du message le plus ancien servi : la page précédente existe (curseur `?avant=`). */
   readonly plusAncien: string | null;
   /**
-   * Le fil SERVI, dont `galerie` est une projection — c'est en son sein que
-   * `?media=` se résout (`pieceEnPlein()`), sans une requête de plus : la
-   * route l'a déjà en main (`fil()`, `app/chats/[cle]/medias/route.ts`).
+   * Le curseur `?avant=` DEMANDÉ — la tranche SERVIE. Sans lui, la tuile d'une
+   * page d'historique renverrait la première page (le défaut du § 12.10.1 :
+   * « la porte re-servait la tranche par défaut »). `null` sur la première
+   * page — REQUIS, jamais optionnel : un champ qu'on peut omettre laisse un
+   * hôte perdre la tranche EN SILENCE, ce qui est exactement le défaut que ce
+   * champ existe pour empêcher.
    */
-  readonly fil: Fil;
-  /** `?media=<pièce>` — la pièce ouverte en plein écran, ou `null` hors de cet état. */
+  readonly avant: string | null;
+  /** `?media=<pièce>` — l'état plein écran, résolu contre `galerie.medias`. */
   readonly plein: string | null;
+  /**
+   * Ce qu'un module de participation doit savoir pour se charger — ici, UN
+   * appel : `prendsLePleinEcran()`, qui donne à la surimpression servie le
+   * voile, le piège à focus et Échap, comme sur le fil et la liste (défaut
+   * trouvé en revue : Échap ne fermait rien ici, `data-retour` n'ayant aucun
+   * lecteur). La galerie n'a ni composeur ni socket : son module
+   * (`lib/realtime/plein.ts`) est le plus léger des neuf.
+   */
+  readonly tempsReel: TempsReel;
 };
 
 const enTete = ({ cle, titre, galerie }: EtatDesMedias): string =>
@@ -97,35 +121,17 @@ const puces = ({ cle, galerie }: EtatDesMedias): string =>
   '</nav>';
 
 /**
- * UNE TUILE — CE QUE LE TAP OUVRE VIENT DE LA MÊME TABLE que la ligne du fil
- * (`FORME_PAR_GENRE.ouvre`, `lib/api/formes.ts`) : la galerie n'écrit pas sa
- * propre règle, elle lit celle du fil, sous peine des DEUX gestes homonymes
- * que la première version de cet écran a laissés diverger (image touchée dans
- * le fil ⇒ plein écran ; la MÊME pièce touchée ici ⇒ onglet vers le fichier
- * brut, sans cadre ni retour).
- *
- *   • `ouvre === 'plein'` (image, vidéo, audio) ⇒ le MÊME état de la MÊME
- *     adresse hôte que le fil (`adresseDuPlein`, `?autour=&media=`), ici
- *     l'adresse de la galerie elle-même (`adresseDesMedias`, filtre gardé) :
- *     la surimpression s'ouvre SANS quitter la grille, SANS onglet, SANS le
- *     moindre octet de plus — `documentDesMedias` la sert plus bas ;
- *   • `ouvre === 'fichier'` (le reste) ⇒ le fichier SERVI, DANS UN ONGLET
- *     (`fileUrl`, résolu par `lib/api/fil.ts`, jamais reconstruit ici) :
- *     `download` est ignoré hors origine — et la passerelle est une autre
- *     origine que le document —, si bien que toucher la tuile NAVIGUERAIT
- *     l'onglet vers le fichier brut sans l'annoncer.
- *
- * Les deux gestes ont deux noms parce qu'ils font deux choses
- * (`FIL.pleinEcran` / `FIL.telecharger`), exactement comme sur l'affiche du
- * fil.
+ * UNE TUILE — un lien vers le MÊME geste que la ligne du fil (`plein-vue.ts`,
+ * `gesteDePiece`) : l'image et la vidéo mènent à l'état `?media=` de CETTE
+ * adresse (la galerie, tranche conservée) ; un fichier ouvre son onglet, geste
+ * nommé — `download` est IGNORÉ hors origine, et la passerelle est une autre
+ * origine que le document, si bien que toucher une tuile SANS le nommer
+ * NAVIGUERAIT l'onglet vers le fichier brut sans que rien ne l'annonce.
  */
-const tuile = (media: Media, meta: string, cle: string, genreFiltre: GenreDePiece | null): string => {
-  const { piece, messageId } = media;
-  const enPlein = formeDePiece(piece.genre).ouvre === 'plein';
-  const href = enPlein ? adresseDuPlein(adresseDesMedias(cle, genreFiltre), messageId, piece.id) : piece.url;
-  const libelle = enPlein ? FIL.pleinEcran(piece.nom, meta) : FIL.telecharger(piece.nom, meta);
+const tuile = (piece: PieceJointe, meta: string, contexte: { readonly cle: string; readonly genre: GenreDePiece | null; readonly avant: string | null }): string => {
+  const geste = gesteDePiece({ piece, meta, plein: adresseDuPleinDeLaGalerie({ ...contexte, piece: piece.id }) });
   return (
-    `<a class="tuile" href="${echappe(href)}"${enPlein ? '' : ' target="_blank" rel="noopener"'} aria-label="${echappe(libelle)}">` +
+    `<a class="tuile" href="${echappe(geste.href)}"${geste.onglet ? ' target="_blank" rel="noopener"' : ''} aria-label="${echappe(geste.libelle)}">` +
     `<span class="vignette" aria-hidden="true">${svgDuSprite(formeDePiece(piece.genre).glyphe)}</span>` +
     `<span class="poids">${svgDuSprite('ph-arrow-down')}${echappe(meta)}</span>` +
     '</a>'
@@ -155,40 +161,22 @@ const lecteur = (piece: PieceJointe, meta: string): string =>
 const entree = (piece: PieceJointe, bloc: string): string =>
   `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}</li>`;
 
-const entreeDeTuile = (media: Media, cle: string, genreFiltre: GenreDePiece | null): string =>
-  entree(media.piece, tuile(media, metaDePiece(media.piece), cle, genreFiltre));
+const entreeDeTuile = ({ piece }: Media, contexte: { readonly cle: string; readonly genre: GenreDePiece | null; readonly avant: string | null }): string =>
+  entree(piece, tuile(piece, metaDePiece(piece), contexte));
 
-const entreeDeLecteur = ({ piece }: Media): string =>
-  entree(piece, lecteur(piece, metaDePiece(piece)) + blocDeTranscription(piece, DOCUMENT_LANGUAGE));
+const entreeDeLecteur = ({ piece }: Media, contexte: { readonly cle: string; readonly genre: GenreDePiece | null; readonly avant: string | null }): string => {
+  const fiche = aFiche(piece) ? ficheDePiece(adresseDuPleinDeLaGalerie({ ...contexte, piece: piece.id }), piece.nom) : '';
+  return entree(piece, lecteur(piece, metaDePiece(piece)) + blocDeTranscription(piece, DOCUMENT_LANGUAGE) + fiche);
+};
 
-/**
- * L'ÉTAT VIDE DIT LA VÉRITÉ SUR SA PORTÉE. La galerie ne connaît que la
- * fenêtre que la passerelle vient de servir (50 messages, `PAR_PAGE`) : quand
- * cette fenêtre est vide mais qu'une page PLUS ANCIENNE existe
- * (`plusAncien !== null`), affirmer « Aucun média partagé » — ou, sous filtre,
- * conseiller « un autre type » — ment sur la raison réelle, qui est la
- * PROFONDEUR. Le lien qui remonte devient alors l'ACTION PRINCIPALE de la
- * carte, jamais un lien orphelin sous une phrase qui le contredit.
- * « Aucun média partagé » ne reste vrai QUE quand la galerie a vu toute la
- * conversation (`plusAncien === null`).
- */
-const rien = ({ galerie, cle, plusAncien }: { readonly galerie: Galerie; readonly cle: string; readonly plusAncien: string | null }): string => {
-  if (plusAncien !== null) {
-    return carteVide({
-      glyphe: 'ph-stack',
-      titre: galerie.genre === null ? MEDIAS.videTranche : MEDIAS.videFiltre(MEDIAS.parGenre[galerie.genre]),
-      phrase: galerie.genre === null ? MEDIAS.videTranchePrecision : MEDIAS.videFiltreTranchePrecision,
-      action: { libelle: MEDIAS.plusAnciens, href: adresseDesMedias(cle, galerie.genre, plusAncien) },
-    });
-  }
-  return galerie.genre === null
+const rien = (galerie: Galerie): string =>
+  galerie.genre === null
     ? carteVide({ glyphe: 'ph-stack', titre: MEDIAS.vide, phrase: MEDIAS.videPrecision })
     : carteVide({
         glyphe: 'ph-stack',
         titre: MEDIAS.videFiltre(MEDIAS.parGenre[galerie.genre]),
         phrase: MEDIAS.videFiltrePrecision,
       });
-};
 
 /**
  * DEUX LISTES, PARCE QUE LA CIBLE EN DESSINE DEUX : la grille de tuiles
@@ -198,29 +186,30 @@ const rien = ({ galerie, cle, plusAncien }: { readonly galerie: Galerie; readonl
  * à côté — et `grid-auto-flow:dense` les aurait bouchés en désaccordant l'ordre
  * VISUEL de l'ordre du DOM, c'est-à-dire l'ordre du clavier. Chaque liste garde
  * son ordre chronologique, du plus récent au plus ancien.
+ *
+ * `inerte` — LE CONTENU EST STRICTEMENT LE MÊME, avec ou sans surimpression :
+ * c'est ce que « grille inchangée » (§ critère de fin) veut dire. Seul
+ * l'attribut change, comme `corpsDuFil` (`fil-vue.ts`) le fait pour le fil.
  */
-const corps = (etat: EtatDesMedias, { inerte }: { readonly inerte: boolean }): string => {
+const corps = (etat: EtatDesMedias, { inerte = false }: { readonly inerte?: boolean } = {}): string => {
   const { cle, galerie, plusAncien } = etat;
+  const contexte = { cle, genre: galerie.genre, avant: etat.avant };
   const tuiles = galerie.medias.filter((media) => !sEcouteSurPlace(media.piece.genre));
   const lecteurs = galerie.medias.filter((media) => sEcouteSurPlace(media.piece.genre));
-  // Vide, la carte PORTE déjà « Médias plus anciens » comme action principale
-  // (`rien()`) : un second lien identique sous elle serait une redite, jamais
-  // un second accès.
-  const videEtCourt = galerie.total === 0 && plusAncien !== null;
 
   return (
-    `<main id="main-content" class="medias-ecran"${inerte ? ' inert' : ''}>` +
+    `<main id="main-content" class="medias-ecran"${inerte ? ' inert' : ''} data-module="${echappe(etat.tempsReel.actifs.plein.url)}">` +
     enTete(etat) +
     puces(etat) +
     `<section class="galerie" aria-label="${echappe(MEDIAS.titre)}">` +
-    (galerie.total === 0 ? rien({ galerie, cle, plusAncien }) : '') +
+    (galerie.total === 0 ? rien(galerie) : '') +
     (tuiles.length === 0
       ? ''
-      : `<ul class="grille" aria-label="${echappe(MEDIAS.grille(galerie.genre))}">${tuiles.map((media) => entreeDeTuile(media, cle, galerie.genre)).join('')}</ul>`) +
+      : `<ul class="grille" aria-label="${echappe(MEDIAS.grille(galerie.genre))}">${tuiles.map((media) => entreeDeTuile(media, contexte)).join('')}</ul>`) +
     (lecteurs.length === 0
       ? ''
-      : `<ul class="lecteurs" aria-label="${echappe(MEDIAS.vocaux)}">${lecteurs.map(entreeDeLecteur).join('')}</ul>`) +
-    (plusAncien === null || videEtCourt
+      : `<ul class="lecteurs" aria-label="${echappe(MEDIAS.vocaux)}">${lecteurs.map((media) => entreeDeLecteur(media, contexte)).join('')}</ul>`) +
+    (plusAncien === null
       ? ''
       : `<a class="plus-ancien action discrete" href="${echappe(adresseDesMedias(cle, galerie.genre, plusAncien))}">${echappe(MEDIAS.plusAnciens)}</a>`) +
     '</section>' +
@@ -229,25 +218,43 @@ const corps = (etat: EtatDesMedias, { inerte }: { readonly inerte: boolean }): s
 };
 
 /**
- * LE PLEIN ÉCRAN DE LA GALERIE — le MÊME état de la MÊME adresse hôte que
- * celui du fil (`documentDuFil`, `fil-vue.ts`), résolu contre le `Fil` que la
- * route a déjà en main : aucune requête de plus, aucun second balisage
- * (§ 12.10.1). La galerie n'ouvre plus jamais le fichier brut dans un onglet
- * pour un genre que la table dit `plein`.
+ * LA SURIMPRESSION — la MÊME que le fil (`plein-vue.ts`), retour et lien « voir
+ * dans la conversation » fournis par CET hôte. `retour` est l'adresse de la
+ * galerie SERVIE (`?genre=&avant=`, jamais `?autour=`) : fermer — croix,
+ * `data-retour`, ou retour arrière — rend la grille inchangée, filtre et page
+ * conservés.
  */
-export const documentDesMedias = (etat: EtatDesMedias): string => {
-  const plein = pieceEnPlein(etat.fil, etat.plein);
-  const dessus = plein === null
-    ? ''
-    : pleinEcran({ plein, adresse: adresseDesMedias(etat.cle, etat.galerie.genre), langueDuDocument: DOCUMENT_LANGUAGE });
+const dessus = (etat: EtatDesMedias): string => {
+  const plein = pieceEnPlein(etat.galerie.medias, etat.plein);
+  if (plein === null) return '';
+  const { cle, galerie } = etat;
+  return pleinEcran({
+    piece: plein.piece,
+    retour: adresseDesMedias(cle, galerie.genre, etat.avant),
+    langueDuDocument: DOCUMENT_LANGUAGE,
+    versLeMessage: {
+      href: adresseDuRetourDuPlein(`/chats/${encodeURIComponent(cle)}`, plein.messageId),
+      libelle: MEDIAS.voirDansLaConversation,
+    },
+  });
+};
 
+export const documentDesMedias = (etat: EtatDesMedias): string => {
+  const surimpression = dessus(etat);
   return documentPleinEcran({
     titre: `${MEDIAS.titre} — ${etat.titre}`,
     description: `${etat.titre} · ${MEDIAS.elements(etat.galerie.total)}`,
     // LA SURIMPRESSION AVANT LA GRILLE, et la grille INERTE derrière elle — la
-    // même règle que le fil (`documentDuFil`), pour les deux mêmes raisons :
-    // l'ordre (CLS) et l'accès (`inert` sans JavaScript).
-    corps: dessus + corps(etat, { inerte: dessus !== '' }),
-    feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS + (dessus === '' ? '' : FEUILLE_DU_PLEIN),
+    // même règle que le fil (`fil-vue.ts`, `documentDuFil`), pour les deux
+    // mêmes raisons : le CLS d'abord (rendue après un corps déjà arrivé, une
+    // surimpression grandirait le document sous les yeux du lecteur), l'accès
+    // ensuite (sans JavaScript il n'y a ni Échap ni piège à focus, et `inert`
+    // est ce que le navigateur donne gratuitement).
+    corps: surimpression + corps(etat, { inerte: surimpression !== '' }),
+    // Échap doit fermer la surimpression ICI comme sur le fil (§ ci-dessus) :
+    // le chargeur est le MÊME que celui du fil (`chargeur.ts`), le module visé
+    // est le SEUL que la galerie exécute (`lib/realtime/plein.ts`).
+    script: CHARGEUR_DE_PARTICIPATION,
+    feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS + (surimpression === '' ? '' : FEUILLE_DU_PLEIN),
   });
 };

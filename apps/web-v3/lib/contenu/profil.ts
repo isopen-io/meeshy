@@ -11,6 +11,8 @@ export const PROFIL = {
   demandeEnvoyee: 'Demande envoyée',
   demandeRecue: 'Demande reçue',
   cEstVous: 'C’est vous',
+  /** L’action UNIQUE de la branche soi — vers `ADRESSE_DE_MON_COMPTE` (#5030). */
+  monCompte: 'Mon compte',
   ecrire: (prenom: string): string => `Écrire à ${prenom}`,
   ajouterEnAmi: 'Ajouter en ami',
   bloquerOuSignaler: 'Bloquer ou signaler',

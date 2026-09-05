@@ -16,6 +16,7 @@ import {
   type FilDeCommentairesDeBouchon,
   type FilSocialDeBouchon,
 } from './bouchon-compte';
+import { carnetDeBouchon, routesDuCarnet, type CarnetDeBouchon } from './bouchon-carnet';
 import {
   placeDeLInvite,
   porteDeLHote,
@@ -27,7 +28,9 @@ import {
   type PlaceDeLInvite,
   type PorteDeLHote,
 } from './bouchon-fil';
+import { routesDeLaGalerie } from './bouchon-galerie';
 import { creanceSelonLaPasserelle, lienParDefaut, routesDuLien, type LienDeBouchon } from './bouchon-lien';
+import { routesDeLaStory } from './bouchon-story';
 import {
   AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
@@ -59,10 +62,11 @@ import { bouchonSocket, magasinDeReactions, type BouchonSocket, type Emission, t
  * clic est arrivé ».
  *
  * CE FICHIER MONTE, IL NE SERT PAS. Les routes vivent par famille, chacune
- * nommant l'émetteur qu'elle copie : le fil (`bouchon-fil.ts`), le lien
- * (`bouchon-lien.ts`), le compte (`bouchon-compte.ts`), le socket
- * (`bouchon-socket.ts`) ; le monde qu'elles servent (`bouchon-monde.ts`) est
- * ré-exporté ici pour que les specs gardent une seule porte d'entrée. L'état
+ * nommant l'émetteur qu'elle copie : le fil (`bouchon-fil.ts`), la galerie
+ * (`bouchon-galerie.ts`), le lien (`bouchon-lien.ts`), le compte
+ * (`bouchon-compte.ts`), le socket (`bouchon-socket.ts`) ; le monde qu'elles
+ * servent (`bouchon-monde.ts`) est ré-exporté ici pour que les specs gardent
+ * une seule porte d'entrée. L'état
  * — places, lien, messages, réactions, pièces, présences — est construit UNE
  * fois ici et passé PAR RÉFÉRENCE aux quatre familles : un spec qui règle
  * `passerelle.lien.actif = false` fait répondre l'aperçu, la jonction, le
@@ -104,6 +108,8 @@ export {
   type MessageServi,
 } from './bouchon-monde';
 export { lienParDefaut, type LienDeBouchon } from './bouchon-lien';
+/** Ce que chaque fixture de média PÈSE réellement — la table que les témoins CDP lisent, jamais un chiffre recopié. */
+export { OCTETS_DE_LA_FIXTURE } from './bouchon-galerie';
 
 export type AppelRecu = {
   readonly methode: string;
@@ -167,6 +173,12 @@ export type PasserelleDeBouchon = {
    * la jonction ; chaque champ produit le refus que la passerelle produirait.
    */
   readonly lien: LienDeBouchon;
+  /**
+   * LE CARNET DE LIENS (#4933) — `retarde`/`createdBy`/`supprime` éprouvent
+   * l'optimisme et les refus de `PATCH /api/v1/links/:linkId` ; `remets()`
+   * les efface ET remet `lien.actif` à `true` entre deux témoins.
+   */
+  readonly carnet: CarnetDeBouchon;
   /**
    * La place de l'invité en TROIS couches (`bouchon-fil.ts` › `PlaceDeLInvite`) : les `allow*`
    * du lien (`place.lien`, ce que l'hôte règle sur le lien), l'instantané du join que le
@@ -301,6 +313,7 @@ export const passerelleDeBouchon = async (options?: {
     creanceDe,
   };
   const duFil = routesDuFil(etatDuFil);
+  const deLaGalerie = routesDeLaGalerie();
   const duLien = routesDuLien({
     conversationId,
     lien,
@@ -325,6 +338,7 @@ export const passerelleDeBouchon = async (options?: {
   const publicationsRecues: Record<string, unknown>[] = [];
   const boite = boiteDeNotifsDeBouchon(conversationId);
   const filDeCommentaires = filDeCommentairesDeBouchon();
+  const deLaStory = routesDeLaStory({ creanceDe });
   const filSocial = filSocialDeBouchon();
   const duCompte = routesDuCompte({
     creanceDe,
@@ -333,13 +347,18 @@ export const passerelleDeBouchon = async (options?: {
     masquees,
     profil,
     appareils,
-    liensCrees,
     conversationsCreees,
     publicationsRecues,
     boite,
     filDeCommentaires,
     filSocial,
   });
+  const carnet = carnetDeBouchon(lien);
+  const duCarnet = routesDuCarnet(
+    { creanceDe, lecteurSansRien: options?.lecteurSansRien ?? false, liensCrees },
+    lien,
+    carnet,
+  );
 
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';
@@ -402,8 +421,23 @@ export const passerelleDeBouchon = async (options?: {
     // L'ORDRE est celui des chemins les plus PRÉCIS d'abord : le fil (`/conversations/:id…`) avant
     // le compte (`/conversations` nu), le lien (`/links/:key/members`, `/links/:identifier`) avant
     // le compte (`/links` nu) — comme Fastify les distingue par leur route, pas par un préfixe.
+    //
+    // LA GALERIE (`bouchon-galerie.ts`) est branchée AVANT le fil : `bouchon-fil.ts`
+    // capture `/attachments/file/<segment>/…` et répond 404 pour tout chemin hors
+    // `etat.pieces` (les fichiers TÉLÉVERSÉS pendant un spec) — passée après lui, la
+    // requête d'une fixture de `messagesRiches` (chemins ABSOLUS, pas des clés de
+    // stockage) ne l'atteindrait jamais.
+    if (deLaGalerie({ requete, url, reponse })) return;
     if (await duFil({ requete, reponse, url, corps: octets, json, erreur })) return;
     if (await duLien({ requete, url, corps: octets, json, erreur })) return;
+    // `/api/v1/posts/:postId` AVANT le compte : la story indisponible
+    // (issue #4967) porte des identifiants FIXES que `duCompte` avalerait
+    // sinon dans sa réponse générique `PUBLICATION_DU_BOUCHON`.
+    if (deLaStory({ requete, url, json })) return;
+    // Le carnet de liens (#4933) AVANT le compte, APRÈS le lien : `duLien`
+    // absorbe `/api/v1/links/:key/members` (la jonction), `duCarnet` le
+    // reste de `/api/v1/links` (`GET`, `POST`, `PATCH /:linkId`).
+    if (await duCarnet({ requete, url, corps: octets, json })) return;
     if (duCompte({ requete, url, corps: octets, json })) return;
 
     json({ success: true, data: { clickId: 'clic-1' } });
@@ -446,6 +480,7 @@ export const passerelleDeBouchon = async (options?: {
     hote: porteDeLHote(etatDuFil),
     invite,
     lien,
+    carnet,
     sync,
     creuseUnTrou: () => {
       sync.curseur += SEUIL_DE_TROU + 1;
@@ -492,17 +527,14 @@ const attend = async (url: string, jusqua: number): Promise<void> => {
 
 /**
  * Tue le GROUPE de processus d'un enfant lancé `detached: true` — pas
- * seulement l'enfant direct.
+ * seulement l'enfant direct. `next dev`/`next start` forke un `next-server`
+ * qui, sans cela, survit reparenté à PID 1 et s'accumule d'une session à
+ * l'autre (mesuré côté #5118 : 71 orphelins à ~250 Mo). `detached: true` fait
+ * de l'enfant le CHEF d'un groupe dont son PID est l'identifiant ; viser le PID
+ * NÉGATIF atteint TOUT le groupe, `next-server` forké compris.
  *
- * `next start`, même appelé sans `npx`, FORKE son propre serveur de rendu
- * (`next-server`) : un `enfant.kill()` simple ne tue que le processus CLI
- * (`npx`/`next`), et `next-server` — le processus qui écoute réellement le
- * port — lui survit, reparenté à PID 1, jusqu'à épuiser la mémoire de la
- * machine une session après l'autre (mesuré : 71 `next-server` orphelins
- * accumulés avant ce correctif, chacun ~250 Mo, cf. `tasks/lessons.md`).
- * `detached: true` fait de l'enfant le CHEF d'un nouveau groupe dont son PID
- * devient l'identifiant ; envoyer le signal au PID NÉGATIF l'envoie à TOUT le
- * groupe — `next-server` forké compris, qui hérite du groupe de son parent.
+ * Site unique de ce geste, et la raison pour laquelle il est extrait : `ferme()`
+ * le répétait à l'identique et n'était donc éprouvable par aucun témoin.
  */
 export const tueLeGroupeDeProcessus = (pid: number, signal: NodeJS.Signals = 'SIGTERM'): void => {
   try {
@@ -551,8 +583,13 @@ export const serveurDeLaV3 = async (
         ...environnement,
       },
       stdio: 'ignore',
-      // § tueLeGroupeDeProcessus juste au-dessus : sans ce drapeau, `next
-      // start` fuit son propre `next-server` à chaque fermeture de suite.
+      // LE SERVEUR EST UN ARBRE, PAS UN PROCESSUS : `npx` lance `next`, qui
+      // lance `next-server`. `detached` en fait un GROUPE, seule façon de
+      // signaler le petit-fils — sans quoi `ferme()` tuait `npx` et laissait
+      // `next-server` orphelin, ~120 Mo chacun. Mesuré le 2026-09-04 : 122
+      // orphelins, 14,5 Go de 16, et le noyau abattait alors `eslint` et les
+      // ouvriers de jest au milieu des gates. Un harnais de test qui rend la
+      // machine inutilisable EST un défaut du harnais.
       detached: true,
     },
   );
@@ -563,12 +600,28 @@ export const serveurDeLaV3 = async (
     base,
     ferme: () =>
       new Promise((resoud) => {
-        enfant.once('exit', () => resoud());
-        if (enfant.pid === undefined) {
+        const groupe = enfant.pid;
+        if (groupe === undefined) {
           resoud();
           return;
         }
-        tueLeGroupeDeProcessus(enfant.pid);
+        const fini = setTimeout(() => {
+          // Le filet : ce que SIGTERM n'a pas fermé en trois secondes, on
+          // l'abat — un orphelin de plus coûte plus cher qu'un arrêt brutal.
+          tueLeGroupeDeProcessus(groupe, 'SIGKILL');
+          resoud();
+        }, 3_000);
+        fini.unref();
+        enfant.once('exit', () => {
+          clearTimeout(fini);
+          tueLeGroupeDeProcessus(groupe, 'SIGKILL');
+          resoud();
+        });
+        try {
+          process.kill(-groupe, 'SIGTERM');
+        } catch {
+          enfant.kill('SIGTERM');
+        }
       }),
   };
 };

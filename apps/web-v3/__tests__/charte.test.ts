@@ -116,10 +116,9 @@ export const regles = (source: string): readonly { selecteur: string; corps: str
   }));
 
 /**
- * Règle 20 (tour 3, § 12.5 — remplace la citation « règle 13 » du tour 2,
- * périmée depuis la renumérotation du 2026-09-02) — un accent, six emplois.
- * Rend les sélecteurs qui peignent avec `--color-primary` : le témoin les
- * oppose à la liste NOMMÉE, jamais à un compte.
+ * Règle 13 — un accent, cinq emplois. Rend les sélecteurs qui peignent avec
+ * `--color-primary` : le témoin les oppose à la liste NOMMÉE, jamais à un
+ * compte.
  */
 export const selecteursDAccent = (source: string): readonly string[] =>
   regles(source)
@@ -127,10 +126,8 @@ export const selecteursDAccent = (source: string): readonly string[] =>
     .map(({ selecteur }) => selecteur);
 
 /**
- * Règle 32 (tour 3, § 12.5 — remplace la citation « règle 24 » du tour 2,
- * périmée depuis la renumérotation du 2026-09-02) — le mouvement ne déplace
- * rien. Rend les PROPRIÉTÉS animées par une transition : la charte n'en
- * autorise que trois, et aucune n'est géométrique.
+ * Règle 24 — le mouvement ne déplace rien. Rend les PROPRIÉTÉS animées par une
+ * transition : la charte n'en autorise que trois, et aucune n'est géométrique.
  */
 export const proprietesEnTransition = (source: string): readonly string[] =>
   [...source.matchAll(/transition:([^;}]*)/g)].flatMap(([, valeur]) =>
@@ -230,9 +227,7 @@ describe('règle 2 — corps 17 px, pile système, aucune police demandée', () 
 });
 
 /**
- * RÈGLE 5 (tour 3, § 12.5 — remplace la citation « règle 3 » du tour 2,
- * périmée depuis la renumérotation du 2026-09-02) — le poids par ROUTE. Deux
- * plafonds, deux sujets, et il faut les tenir séparés :
+ * RÈGLE 3 — le poids. Deux plafonds, deux sujets, et il faut les tenir séparés :
  * « feuille de CHROME compactée ≤ 4 Ko gzip » (plafond décidé, mesuré 3 041 o
  * pour la base retenue) porte sur le chrome — le socle et la feuille du site,
  * ce que TOUT écran sert — ; « CSS ≤ 20 Ko gzip par route » (§ 8.5, GATE de
@@ -249,7 +244,7 @@ describe('règle 2 — corps 17 px, pile système, aucune police demandée', () 
  * plus la modale). Mesurées au 2026-09-02 : 1 067 · 1 412 · 1 695 · 3 550 ·
  * 4 100 o gzip.
  */
-describe('règle 5 — le poids, plafonds décidés du § 12.6', () => {
+describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
   const CHROME = SOCLE_DU_DOCUMENT + FEUILLE_DU_CHROME;
   const COMPOSITIONS: readonly { readonly nom: string; readonly source: string }[] = [
     { nom: 'vitrine', source: CHROME + FEUILLE_DE_LA_VITRINE },
@@ -267,6 +262,13 @@ describe('règle 5 — le poids, plafonds décidés du § 12.6', () => {
     { nom: 'fil en plein écran', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_PLEIN },
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
     { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
+    // L'état `?media=` de la galerie (#4525, + point 2 de #5024) : la SEULE
+    // composition qui porte la feuille du plein écran sur cet écran — une
+    // galerie ordinaire n'en paie pas un octet, comme « fil en plein écran ».
+    {
+      nom: 'médias en plein écran',
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS + FEUILLE_DU_PLEIN,
+    },
     { nom: 'story', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY },
     // `/feed` (#5031) — le fil social, servi par `documentPleinEcran` comme le
     // fil, la liste et les commentaires : chrome + connecté + sa feuille.
@@ -320,7 +322,7 @@ describe('règle 5 — le poids, plafonds décidés du § 12.6', () => {
   });
 });
 
-describe('règle 7 — les hauteurs d’action viennent de la table', () => {
+describe('règle 4 — les hauteurs d’action viennent de la table', () => {
   it('sert 56 px en primaire, 52 en contour, 44 en tertiaire', () => {
     expect(FEUILLE_DU_CHROME).toContain('min-height:var(--action-height)');
     expect(FEUILLE_DU_CHROME).toContain('min-height:var(--action-height-secondary)');
@@ -330,9 +332,7 @@ describe('règle 7 — les hauteurs d’action viennent de la table', () => {
 });
 
 /**
- * RÈGLE 10 (tour 3, § 12.5 — remplace la citation « règle 8 » du tour 2,
- * périmée depuis la renumérotation du 2026-09-02) — l'échelle est FERMÉE, et
- * chaque pas y a un RÔLE : « gouttière
+ * RÈGLE 8 — l'échelle est FERMÉE, et chaque pas y a un RÔLE : « gouttière
  * `--space-5`, titre d'écran `--space-6` sous la marque, section `--space-7`,
  * cartes `--space-4`, actions empilées `--space-3` ».
  *
@@ -345,7 +345,7 @@ describe('règle 7 — les hauteurs d’action viennent de la table', () => {
  * et 16 px de gouttière interne en trop suffisaient à faire passer « Créer son
  * compte maintenant » sur DEUX lignes, là où la cible le tient sur une.
  */
-describe('règle 10 — chaque pas de l’échelle a son rôle', () => {
+describe('règle 8 — chaque pas de l’échelle a son rôle', () => {
   const paddingsDe = (source: string, selecteurs: readonly string[]): readonly string[] =>
     selecteurs.map((selecteur) => {
       const bloc = new RegExp(`\\${selecteur}\\{([^}]*)\\}`).exec(source)?.[1] ?? '';
@@ -367,7 +367,7 @@ describe('règle 10 — chaque pas de l’échelle a son rôle', () => {
 
   /**
    * Le tableau de bord est le SECOND écran à porter des cartes, et il a hérité
-   * de l'échelle inventée que la règle 10 a chassée de la vitrine : `48px 0 8px`
+   * de l'échelle inventée que la règle 8 a chassée de la vitrine : `48px 0 8px`
    * de salutation, `14px` de gouttière de grille, `20px` de carte, `32px` de
    * section. Une carte de tableau de bord et une carte de vitrine se lisent sur
    * le même écran d'un lecteur qui vient de se connecter : deux vocabulaires
@@ -412,15 +412,11 @@ describe('règle 16 — le contour de l’état vide est --color-border-interact
 /**
  * RÈGLE 18 (tour 3, § 12.5) — « L'encre du CONTENU est `--color-text` ; le
  * gris est réservé à ce qu'on peut ne pas lire. » La règle NOMME `.carte-vide
- * p` ET `.heros p` dans la même liste de sélecteurs où `--color-text-
- * muted|subtle` est interdit : la phrase de l'état vide se lisait en gris,
- * alors que c'est le texte pour lequel on ouvre l'état — et le paragraphe du
- * héros (`.accroche`, le `<p>` de `.heros`, `app/vitrine/vue.ts`) le lisait
- * pareillement, alors que la règle nomme « le paragraphe du héros » en toutes
- * lettres dans son corps ET dans son témoin. Les deux sélecteurs sont testés
- * ensemble : un même numéro de règle ne doit pas rester à moitié gardé.
+ * p` dans la liste des sélecteurs où `--color-text-muted|subtle` est interdit :
+ * la phrase de l'état vide se lisait en gris, alors que c'est le texte pour
+ * lequel on ouvre l'état.
  */
-describe('règle 18 — l’encre de la phrase de l’état vide et du héros est --color-text', () => {
+describe('règle 18 — l’encre de la phrase de l’état vide est --color-text', () => {
   it('pose --color-text sur .carte-vide p, jamais --color-text-muted ni --color-text-subtle', () => {
     const [carteVideP] = regles(FEUILLE_CONNECTEE).filter(({ selecteur }) => selecteur === '.carte-vide p');
 
@@ -434,13 +430,6 @@ describe('règle 18 — l’encre de la phrase de l’état vide et du héros es
     expect(bandeauP?.corps).toContain('color:var(--color-text)');
     expect(bandeauP?.corps ?? '').not.toMatch(/--color-text-(?:muted|subtle)\b/);
   });
-
-  it('pose --color-text sur .accroche (.heros p), jamais --color-text-muted ni --color-text-subtle', () => {
-    const [accroche] = regles(FEUILLE_DE_LA_VITRINE).filter(({ selecteur }) => selecteur === '.accroche');
-
-    expect(accroche?.corps).toContain('color:var(--color-text)');
-    expect(accroche?.corps ?? '').not.toMatch(/--color-text-(?:muted|subtle)\b/);
-  });
 });
 
 /**
@@ -449,6 +438,16 @@ describe('règle 18 — l’encre de la phrase de l’état vide et du héros es
  * avant, carte d'état vide. » `.heros` et `.carte-vide` portaient encore
  * `--radius-lg` — le rayon des CARTES, pas celui que le tour 3 leur donne en
  * propre.
+ *
+ * `--radius-md` EST RETIRÉ DES RAYONS AUTORISÉS (#5123) : la règle le déclare
+ * « hors des cinq rôles », et huit sites l'écrivaient encore — les champs de
+ * formulaire (`.champ input/textarea/select`, `.chercher input`) sont passés à
+ * `--radius-lg` (rôle « champs »), les tuiles d'icône (`.marque .tuile`,
+ * `.atouts .tuile`, `.carte .tuile`, `dialog.espace .rangee .tuile`) ont rejoint
+ * `--radius-lg` (rôle « tuile de liste », déjà celui de `.tuile` dans
+ * `medias-feuille.ts`), et `.saut` (le lien d'évitement) a rejoint
+ * `--radius-pill` (rôle « raccourcis »). Absent de `AUTORISES`, le premier
+ * témoin ci-dessous rougit désormais sur toute réintroduction.
  */
 describe('règle 9 — cinq rayons, un rôle chacun', () => {
   // Les coins HAUTS de la feuille modale (règle 9 : « `2xl` feuille modale »)
@@ -456,7 +455,6 @@ describe('règle 9 — cinq rayons, un rôle chacun', () => {
   const AUTORISES = new Set([
     'var(--radius-pill)',
     'var(--radius-lg)',
-    'var(--radius-md)',
     'var(--radius-xl)',
     'var(--radius-xs)',
     'var(--radius-2xl) var(--radius-2xl) 0 0',
@@ -478,18 +476,8 @@ describe('règle 9 — cinq rayons, un rôle chacun', () => {
     expect(`${heros?.corps ?? ''};${carteVide?.corps ?? ''}`).not.toMatch(/border-radius:var\(--radius-(?:lg|md)\)/);
   });
 
-  /**
-   * `--radius-md` est hors des cinq rôles (règle 9) ; la tuile de liste
-   * (`.atouts .tuile` de la vitrine, `.carte .tuile` du tableau de bord) est
-   * une TUILE DE LISTE et prend donc `--radius-lg`, jamais `--radius-md`.
-   * `--radius-md` reste dans `AUTORISES` ci-dessus parce que huit sites hors
-   * du périmètre de cet écran (authentification, liens, réglages, espace,
-   * social, recherche, liste, la marque du chrome) l'écrivent encore — leur
-   * portage est une issue de solde, pas ce test.
-   */
-  it('n’écrit jamais --radius-md sur la vitrine ni sur le tableau de bord', () => {
-    expect(FEUILLE_DE_LA_VITRINE).not.toContain('var(--radius-md)');
-    expect(FEUILLE_CONNECTEE).not.toContain('var(--radius-md)');
+  it('ne pose --radius-md nulle part (#5123) — les champs et les tuiles vivent en --radius-lg', () => {
+    expect(TOUTES).not.toContain('var(--radius-md)');
   });
 });
 
@@ -574,13 +562,11 @@ describe('règles 14 et 16 — plans, filets, et ce qui ne se peint jamais', () 
   });
 });
 
-describe('règle 20 — un accent, six emplois', () => {
+describe('règle 13 — un accent, cinq emplois', () => {
   /**
-   * RÈGLE 20 (tour 3, § 12.5 — remplace la citation « règle 13 » du tour 2,
-   * périmée depuis la renumérotation du 2026-09-02). La liste NOMMÉE de la
-   * règle 20, projetée sur les sélecteurs que la vitrine et le chrome
-   * écrivent. Chaque entrée dit lequel des six emplois elle sert ; un
-   * sélecteur qui n'en sert aucun n'entre pas, quelle que soit sa beauté.
+   * La liste NOMMÉE de la règle 13, projetée sur les sélecteurs que la vitrine
+   * et le chrome écrivent. Chaque entrée dit lequel des cinq emplois elle sert ;
+   * un sélecteur qui n'en sert aucun n'entre pas, quelle que soit sa beauté.
    */
   const EMPLOIS: readonly string[] = [
     'a', // le cliquable — tout lien du site
@@ -612,7 +598,12 @@ describe('règle 20 — un accent, six emplois', () => {
     '.lecteur .lire', // le cliquable — le rond de lecture d'un vocal ou d'une vidéo
     '.pieces .transcrit-original summary', // le cliquable — l'original d'un transcrit
     '.pieces>li[data-genre=video] .media .lire', // le cliquable — le rond de lecture d'une vidéo, sur son poster
-    '.pieces .fiche', // le cliquable — la fiche d'un vocal, où sa transcription se lit entière
+    // Le cliquable — la fiche d'un vocal, où sa transcription se lit entière.
+    // Sélecteur NU : le balisage a UN site (`plein-vue.ts` › `ficheDePiece`) et
+    // DEUX hôtes — le fil (`.pieces`) et la galerie (`.lecteurs`, #4525) ; le
+    // scoper aurait demandé de recopier la déclaration dans la feuille de la
+    // galerie, c'est-à-dire une jumelle.
+    '.fiche',
     // Le plein écran (§ 12.10.1) : le cliquable — la croix qui ferme, l'original
     // d'un transcrit. La scène, le nom du fichier et son poids restent sur l'encre.
     'dialog.plein .fermer',
@@ -705,7 +696,7 @@ describe('règle 20 — un accent, six emplois', () => {
   });
 });
 
-describe('règle 17 — focus double, jamais supprimé', () => {
+describe('règle 15 — focus double, jamais supprimé', () => {
   it('pose l’anneau et son contre-anneau sur les jetons de focus', () => {
     expect(SOCLE_DU_DOCUMENT).toContain('outline:var(--stroke-focus) solid var(--color-focus)');
     expect(SOCLE_DU_DOCUMENT).toContain('var(--color-focus-contra)');
@@ -716,7 +707,7 @@ describe('règle 17 — focus double, jamais supprimé', () => {
   });
 });
 
-describe('règle 32 — le mouvement ne déplace rien', () => {
+describe('règle 24 — le mouvement ne déplace rien', () => {
   const AUTORISEES = new Set(['background-color', 'border-color', 'color']);
 
   it('n’anime que la couleur, jamais la géométrie', () => {
@@ -739,7 +730,7 @@ describe('règle 32 — le mouvement ne déplace rien', () => {
   });
 });
 
-describe('règle 34 — les interdits, chacun avec sa sonde', () => {
+describe('règle 28 — les interdits, chacun avec sa sonde', () => {
   it('n’écrit aucune couleur littérale : la table est la seule source', () => {
     expect(TOUTES).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(TOUTES).not.toMatch(/\b(?:rgb|hsl)a?\(/);

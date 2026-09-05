@@ -404,6 +404,55 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
       );
   };
 
+  const environmentEntriesOf = (compose, service) => {
+    const block = blockOf(compose, `  ${service}:`);
+    if (block === null) return null;
+    return new Map(
+      listValues(block, '    environment:').map((entry) => {
+        const separateur = entry.indexOf('=');
+        return separateur === -1 ? [entry, ''] : [entry.slice(0, separateur), entry.slice(separateur + 1)];
+      }),
+    );
+  };
+
+  // L'ORIGINE PUBLIQUE DE LA PASSERELLE EST JOIGNABLE PAR UN NAVIGATEUR.
+  //
+  // Le défaut qui l'appelle (staging, 2026-09-05) : le conteneur de la v3
+  // tournait sans `NEXT_PUBLIC_API_URL`, et chaque document remettait au
+  // navigateur `http://gateway-staging:3000` — l'adresse INTERNE des
+  // conteneurs, bloquée en contenu mixte sous une page HTTPS. L'invariant
+  // voisin (« le service déclare ce que son code lit ») était VERT : il vérifie
+  // qu'une variable de la chaîne est déclarée, pas que la valeur déclarée est
+  // une origine qu'un navigateur atteint. Deux questions, deux gardes :
+  // celui-ci lit la VALEUR — https, et distincte de l'adresse interne.
+  const lOriginePubliqueEstJoignableParUnNavigateur = (dep) => (world) => {
+    const env = environmentEntriesOf(dep.source(world), dep.v3);
+    if (env === null) return [];
+    const publique = env.get('NEXT_PUBLIC_API_URL');
+    const interne = env.get('MEESHY_GATEWAY_URL');
+    if (publique === undefined) {
+      return [
+        `le service ${dep.v3} de ${dep.fichier} ne déclare pas NEXT_PUBLIC_API_URL : le document n'aurait ` +
+          `plus que MEESHY_GATEWAY_URL, l'adresse INTERNE des conteneurs qu'un navigateur ne résout pas — ` +
+          `il refuserait de la servir et /healthz répondrait 503`,
+      ];
+    }
+    const failures = [];
+    if (!/^https:\/\//.test(publique)) {
+      failures.push(
+        `le service ${dep.v3} de ${dep.fichier} déclare NEXT_PUBLIC_API_URL=${publique}, qui n'est pas une ` +
+          `origine https : remise dans un document HTTPS, elle est bloquée en contenu mixte`,
+      );
+    }
+    if (interne !== undefined && publique === interne) {
+      failures.push(
+        `le service ${dep.v3} de ${dep.fichier} déclare NEXT_PUBLIC_API_URL à l'adresse INTERNE ` +
+          `(${interne}) : le navigateur ne la résout pas`,
+      );
+    }
+    return failures;
+  };
+
   const theV3ContainerIsDisjointFromTheLegacy = (dep) => (world) => {
     const block = blockOf(dep.source(world), `  ${dep.v3}:`);
     if (block === null) return [];
@@ -427,6 +476,7 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
     leDeploiementRouteLaV3,
     theLegacyRouterKeepsItsFloor,
     theV3ServiceDeclaresWhatItsCodeReads,
+    lOriginePubliqueEstJoignableParUnNavigateur,
     theV3ContainerIsDisjointFromTheLegacy,
   };
 };

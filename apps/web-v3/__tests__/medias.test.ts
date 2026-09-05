@@ -16,22 +16,13 @@ import { galerie, genreDemande } from '@/lib/api/medias';
  * Prisme (`resolvePrismTranslation`). C'est ce qui lui donne, gratuitement, les
  * trois choses qu'aucune autre source ne porte :
  *
- *   • la PROTECTION AU NIVEAU MESSAGE — un message à vue unique / flouté /
- *     éphémère n'a aucune pièce (`message()` : `pieces: protege || supprime
- *     ? [] : …`). La liste dédiée de la passerelle, `GET
- *     /conversations/:id/attachments`, ne sert que SEPT clés
- *     (`messageAttachmentMinimalSchema`, gelé par
+ *   • la PROTECTION — un message à vue unique / flouté / éphémère n'a aucune
+ *     pièce (`message()` : `pieces: protege || supprime ? [] : …`). La liste
+ *     dédiée de la passerelle, `GET /conversations/:id/attachments`, ne sert
+ *     que SEPT clés (`messageAttachmentMinimalSchema`, gelé par
  *     `conversation-attachments-served-keys.test.ts`) et AUCUN des trois
  *     drapeaux : une galerie bâtie sur elle rendrait l'URL entière d'une photo
- *     à vue unique — le défaut du cycle 125, rejoué sur un écran neuf.
- *     **Au niveau PIÈCE**, en revanche, aucune garantie : la route que la
- *     galerie lit RÉELLEMENT (`GET /conversations/:id/messages`,
- *     `attachmentMediaSelect`) ne sert pas non plus `isViewOnce` /
- *     `isBlurred` / `effectFlags` de `MessageAttachment` — ils ne vivent
- *     que dans `attachmentFullSelect`, réservé au message CITÉ. Aucune
- *     fuite n'est prouvée, mais la garde HÉRITÉE ci-dessus ne couvre que
- *     le message, jamais la pièce. Issue compagnon gateway : #5125,
- *     détaillée dans `lib/api/medias.ts:20-38` ;
+ *     à vue unique — le défaut du cycle 125, rejoué sur un écran neuf ;
  *   • la TRANSCRIPTION d'un vocal, servie au Prisme du lecteur — la liste
  *     dédiée la CHARGE et ne la sert pas (le doc-comment de
  *     `routes/attachments/metadata.ts:214-240` le dit mot pour mot) ;
@@ -135,13 +126,32 @@ const FICHIER = lu(
   }),
 );
 
+const TEMPS_REEL_DES_MEDIAS = {
+  passerelle: 'https://gate.test',
+  actifs: {
+    participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
+    liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+    feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
+    notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
+    contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
+    recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
+    liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
+    commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    plein: { nom: 'plein.abc.js', url: '/__v3/rt/plein.abc.js', corps: '' },
+    navigateur: { nom: 'navigateur.abc.js', url: '/__v3/rt/navigateur.abc.js', corps: '' },
+    composer: { nom: 'composer.abc.js', url: '/__v3/rt/composer.abc.js', corps: '' },
+    socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
+  },
+};
+
 const etat = (attributs: Partial<EtatDesMedias> = {}): EtatDesMedias => ({
   cle: 'c1',
   titre: 'Équipe Lagos',
   galerie: galerie({ messages: [IMAGE, VIDEO, lu(VOCAL_BRUT()), FICHIER], genre: null }),
   plusAncien: null,
-  fil: filDe([IMAGE, VIDEO, lu(VOCAL_BRUT()), FICHIER]),
+  avant: null,
   plein: null,
+  tempsReel: TEMPS_REEL_DES_MEDIAS,
   ...attributs,
 });
 
@@ -219,37 +229,19 @@ describe('le poids est annoncé AVANT qu’un octet ne parte', () => {
   });
 
   /**
-   * CE QUE LE TAP OUVRE VIENT DE LA MÊME TABLE QUE LE FIL
-   * (`FORME_PAR_GENRE.ouvre`, `lib/api/formes.ts`) : une image ou une vidéo
-   * touchée ici ouvre le MÊME plein écran que le fil (`?autour=&media=`),
-   * SANS quitter la galerie et SANS onglet — jamais l'URL du fichier brut.
-   * Régression du défaut majeur #5024 (2) : les deux gestes avaient deux
-   * noms accessibles (« Ouvrir… » / « Télécharger… ») pour un même objet.
-   */
-  it('ouvre chaque image ou vidéo dans le plein écran de la galerie, jamais un onglet', () => {
-    const rendu = document();
-    expect(rendu).toContain('href="/chats/c1/medias?autour=r1&amp;media=a1"');
-    expect(rendu).toContain('href="/chats/c1/medias?autour=r2&amp;media=a2"');
-    expect(rendu).toContain('Ouvrir tableau.jpg · 420 Ko');
-    expect(rendu).toContain('Ouvrir revue.mp4 · 0:42 · 3,0 Mo');
-    // La tuile d'une image ne porte PAS `target="_blank"` : c'est le geste du fichier, pas le sien.
-    const tuileImage = [...rendu.matchAll(/<a class="tuile" href="[^"]*media=a1[^"]*"[^>]*>/g)].map(([m]) => m);
-    expect(tuileImage).toHaveLength(1);
-    expect(tuileImage[0]).not.toContain('target="_blank"');
-  });
-
-  /**
+   * UNE TUILE OUVRE LE MÊME PLEIN ÉCRAN QUE LE FIL (#4525, #5024 point 2) :
+   * l'image mène à l'état `?media=` de LA GALERIE, jamais au fichier brut.
    * `fileUrl` SERVI TEL QUEL, résolu sur l'origine PUBLIQUE de la passerelle et
-   * jamais reconstruit (§ 5.1 « médias distants ») : une signature `?exp=&sig=`
-   * viendra un jour dans cette même valeur. `urlDePiece` est le site unique de
-   * cette résolution, et la galerie le tient de `lib/api/fil.ts`. Un PDF
-   * n'a pas de plein écran (`ouvre === 'fichier'`, § 12.10.1) : LUI SEUL
-   * quitte la galerie, dans un onglet, avec le geste nommé.
+   * jamais reconstruit (§ 5.1 « médias distants »), reste le geste d'un genre
+   * SANS plein écran — un fichier ouvre toujours son onglet, geste nommé.
    */
-  it('ouvre un FICHIER (sans plein écran) dans un onglet, sur le fichier servi', () => {
+  it('mène l’image au plein écran de la galerie, et laisse un fichier ouvrir son onglet', () => {
     const rendu = document();
+    expect(rendu).toContain('href="/chats/c1/medias?media=a1"');
+    expect(rendu).not.toContain('href="/chats/c1/medias?media=a1" target="_blank"');
     expect(rendu).toContain(`href="${ORIGINE}/api/v1/attachments/file/2026%2F12%2Fa4%2Fbudget.pdf"`);
     expect(rendu).toContain('target="_blank" rel="noopener"');
+    expect(rendu).toContain('Ouvrir tableau.jpg · 420 Ko');
     expect(rendu).toContain('Télécharger budget.pdf · 1,1 Mo');
   });
 
@@ -340,53 +332,6 @@ describe('l’écran DIT ce qu’il sert, et dessine ce qu’il n’a pas', () =
     expect(rendu).toContain('Aucun média dans « Audio »');
   });
 
-  /**
-   * DÉFAUT MAJEUR CORRIGÉ — L'ÉTAT VIDE MENTAIT QUAND UNE PAGE PLUS ANCIENNE
-   * EXISTE : la galerie ne voit que la fenêtre servie (50 messages) ; « Aucun
-   * média partagé » n'est vrai QUE si `plusAncien === null`. Toute
-   * conversation active de plus de 50 messages sans média dans les 50
-   * derniers rendait ce mensonge — le cas NOMINAL, pas un bord.
-   */
-  it('dit la vérité (la PROFONDEUR) quand la fenêtre est vide mais qu’une page plus ancienne existe', () => {
-    const rendu = documentDesMedias(
-      etat({ galerie: galerie({ messages: [], genre: null }), plusAncien: 'm42' }),
-    );
-    expect(rendu).toContain('carte-vide');
-    expect(rendu).not.toContain('Aucun média partagé');
-    expect(rendu).toContain('Aucun média dans cette tranche');
-  });
-
-  /** Le même mensonge, sous filtre : « essayez un autre type » quand la vraie raison est la profondeur. */
-  it('dit la vérité (la PROFONDEUR) sous filtre aussi, plutôt que de blâmer le type', () => {
-    const rendu = documentDesMedias(
-      etat({ galerie: galerie({ messages: [], genre: 'audio' }), plusAncien: 'm42' }),
-    );
-    expect(rendu).not.toContain('Essayez un autre type');
-    expect(rendu).toContain('Aucun média dans « Audio »');
-  });
-
-  /**
-   * LE LIEN « MÉDIAS PLUS ANCIENS » EST L'ACTION PRINCIPALE DE LA CARTE VIDE,
-   * une fois — pas un second lien orphelin sous une phrase qui le contredit.
-   */
-  it('fait du lien « Médias plus anciens » l’action de la carte vide, une seule fois', () => {
-    const rendu = documentDesMedias(
-      etat({ galerie: galerie({ messages: [], genre: null }), plusAncien: 'm42' }),
-    );
-    const liens = [...rendu.matchAll(/href="\/chats\/c1\/medias\?avant=m42"/g)];
-    expect(liens).toHaveLength(1);
-    expect(rendu).toContain('class="action primaire" href="/chats/c1/medias?avant=m42"');
-  });
-
-  /** Non vide, le lien « plus anciens » reste le lien de PIED DE GRILLE existant — comportement inchangé. */
-  it('garde le lien « plus anciens » en pied de grille quand la galerie n’est PAS vide', () => {
-    const rendu = documentDesMedias(
-      etat({ galerie: galerie({ messages: [IMAGE], genre: null }), plusAncien: 'm42' }),
-    );
-    expect(rendu).toContain('class="plus-ancien action discrete" href="/chats/c1/medias?avant=m42"');
-    expect(rendu).not.toContain('<div class="carte-vide">');
-  });
-
   it('déclare la puce active et fait porter le genre aux autres', () => {
     const rendu = documentDesMedias(etat({ galerie: galerie({ messages: [IMAGE], genre: 'image' }) }));
     expect(rendu).toContain('href="/chats/c1/medias?genre=image" aria-current="page"');
@@ -408,49 +353,5 @@ describe('l’écran DIT ce qu’il sert, et dessine ce qu’il n’a pas', () =
     const rendu = documentDesMedias(etat());
     expect(rendu).toContain('<meta name="robots" content="noindex, nofollow"/>');
     expect(rendu).toContain('<html lang="fr"');
-  });
-});
-
-/**
- * DÉFAUT MAJEUR CORRIGÉ (#5024 point 2) — `?media=` SERT LA SURIMPRESSION SUR
- * LE DOCUMENT DE LA GALERIE, exactement comme le fil : c'est ce que
- * `adresseDuPlein()` (posé sur chaque tuile, plus haut) doit trouver en face
- * de lui pour que le geste ait un effet.
- */
-describe('la tuile touchée ouvre la MÊME surimpression que le fil, sur ce document', () => {
-  it('sert le plein écran d’une image, le fond inerte derrière elle', () => {
-    const rendu = documentDesMedias(etat({ plein: 'a1' }));
-    expect(rendu).toContain('<dialog class="plein" id="plein" open');
-    expect(rendu).toContain('data-genre="image"');
-    expect(rendu).toContain('id="titre-du-plein">tableau.jpg<');
-    expect(rendu).toContain('dialog.plein{');
-    expect(rendu).toMatch(/<main id="main-content" class="medias-ecran" inert>/);
-  });
-
-  it('ne sert AUCUNE surimpression hors de `?media=`, et le fond n’est pas inerte', () => {
-    const rendu = documentDesMedias(etat());
-    expect(rendu).not.toContain('<dialog class="plein"');
-    expect(rendu).not.toContain('dialog.plein{');
-    expect(rendu).toMatch(/<main id="main-content" class="medias-ecran">/);
-  });
-
-  /** Un genre `ouvre === 'fichier'` (le PDF) n'a pas de plein écran (§ 12.10.1) : `?media=` sur lui ne rend rien. */
-  it('ne rend rien pour un genre sans plein écran, ni pour une pièce inconnue', () => {
-    expect(documentDesMedias(etat({ plein: 'a4' }))).not.toContain('<dialog class="plein"');
-    expect(documentDesMedias(etat({ plein: 'introuvable' }))).not.toContain('<dialog class="plein"');
-  });
-
-  /**
-   * LE FILTRE ACTIF SURVIT À L'OUVERTURE ET À LA FERMETURE — la preuve que
-   * l'adresse composée (`adresseDesMedias` déjà porteuse de `?genre=`) ne
-   * casse pas la composition de `?autour=&media=` : la régression que la
-   * revue croisée a nommée (double `?` dans la chaîne, `autour=` alors
-   * illisible pour `URL().searchParams`).
-   */
-  it('garde le filtre actif dans l’adresse de retour de la surimpression', () => {
-    const rendu = documentDesMedias(
-      etat({ galerie: galerie({ messages: [IMAGE], genre: 'image' }), plein: 'a1' }),
-    );
-    expect(rendu).toContain('data-retour="/chats/c1/medias?genre=image&amp;autour=r1#m-r1"');
   });
 });

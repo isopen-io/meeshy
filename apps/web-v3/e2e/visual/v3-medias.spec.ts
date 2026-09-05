@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import AxeBuilder from '@axe-core/playwright';
@@ -6,18 +6,19 @@ import { expect, test, type Browser, type BrowserContext, type CDPSession, type 
 
 import { THEME_STORAGE_KEY } from '../../app/theme-script';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
-import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
+import { chargeDeMessage, JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { ciblesMesurees, ciblesTropPetites, LARGEURS } from './lib/cibles';
 // `lib/a11y.ts` importe un `.mjs` que le transpile CommonJS de Playwright ne charge pas dans le
 // projet `chaines` : ce spec monte sa propre chaîne, donc il prend le verdict et les colonnes à
 // leur site sans `.mjs` — la même frontière que `v3-fil-riche.spec.ts` nomme dans son en-tête.
 import { COLONNES_DE_THEME, rapporteViolations, violationsBloquantes } from './lib/verdict-axe';
 import {
+  chargeMesureReseau,
   CONVERSATION_DU_LECTEUR,
   CONVERSATION_RICHE,
-  messageDeFichier,
-  messageProtege,
+  INVITE,
   messagesRiches,
+  OCTETS_DE_LA_FIXTURE,
   passerelleDeBouchon,
   PISTE_TRADUITE,
   RACINE_V3,
@@ -34,30 +35,90 @@ import {
  *
  * Ce que ces témoins gardent, dans l'ordre du critère de fin :
  *
- *   • **chaque tuile est cliquable et OUVRE le média** — la loi « un contrôle
- *     existe s'il a un effet », mesurée sur l'EFFET (un onglet s'ouvre sur le
- *     fichier, la galerie n'est pas quittée), jamais sur un attribut ;
+ *   • **une tuile ouvre le MÊME plein écran que le fil** (#4525, + point 2 de
+ *     #5024) — une NAVIGATION vers `?media=<pièce>` de CETTE adresse, jamais un
+ *     onglet ; un fichier (PDF), lui, garde son onglet, geste nommé ;
  *   • **le poids est affiché AVANT le téléchargement, et AUCUN octet de média
- *     n'est transféré à l'ouverture de la grille** — assertion CDP sur
- *     `encodedDataLength`, doublée du journal de la passerelle : zéro requête
- *     ET zéro octet, deux origines de mesure pour un même fait ;
- *   • **l'audio rend sa transcription au Prisme, avec `lang=`** ;
- *   • 0 violation `axe` `serious`/`critical`, sur les QUATRE colonnes de thème ;
- *   • la grille est atteignable AU CLAVIER, dans l'ordre du document ;
+ *     n'est transféré à l'ouverture de la grille — puis, à l'ouverture de la
+ *     surimpression, SEULE l'image demandée part** — assertion CDP sur
+ *     `encodedDataLength`, doublée du journal de la passerelle ;
+ *   • **la fiche d'un vocal se lit ENTIÈRE, au Prisme, avec sa piste servie** ;
+ *   • **fermer — croix, `data-retour`, retour arrière — rend l'adresse de la
+ *     galerie SANS `?media=`**, trois chemins pour un seul effet ;
+ *   • **un genre sans plein écran (PDF) n'en a pas, même forcé** ;
+ *   • 0 violation `axe` `serious`/`critical`, sur les QUATRE colonnes de thème,
+ *     grille ET surimpression ;
+ *   • la grille ET la surimpression sont atteignables AU CLAVIER ;
  *   • aucune cible sous 44 px et aucun débordement horizontal, à 360 comme à
  *     390 px (charte règles 4 et 9) ;
- *   • les deux captures 390×844, claire et sombre, que le rapport REGARDE.
+ *   • le régime `?media=` tient les plafonds de `/chats/*` et son document est
+ *     pesé ;
+ *   • aucun accusé de lecture, plein écran ouvert ou fermé ;
+ *   • les captures 390×844, claire et sombre, grille ET surimpression, que le
+ *     rapport REGARDE.
  */
 
 const COMMANDE = 'bunx playwright test e2e/visual/v3-medias.spec.ts';
 
 const DOSSIER_DES_RENDUS = process.env.RENDUS_DIR ?? join(RACINE_V3, 'test-results', 'rendus');
 
+const budgets = JSON.parse(readFileSync(join(RACINE_V3, 'budgets.json'), 'utf8'));
+
 let passerelle: PasserelleDeBouchon;
 let v3: ServeurV3;
 
 const MEDIAS = (genre?: string): string =>
   `${v3.base}/chats/${CONVERSATION_DU_LECTEUR.id}/medias${genre === undefined ? '' : `?genre=${genre}`}`;
+
+/** Un PDF — le quatrième genre de la table, que `messagesRiches` ne porte pas. */
+const messageDeFichier = (conversationId: string) => ({
+  ...chargeDeMessage({
+    id: 'r7',
+    conversationId,
+    senderId: INVITE.id,
+    content: '',
+    originalLanguage: 'fr',
+    sender: { id: INVITE.id, displayName: INVITE.nom, type: 'anonymous' },
+    attachments: [
+      {
+        id: 'ar7',
+        fileUrl: '2026/09/ar7/budget.pdf',
+        originalName: 'budget.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1_258_291,
+      },
+    ],
+    createdAt: new Date(Date.now() - 17 * 60_000).toISOString(),
+  }),
+  senderParticipantId: INVITE.id,
+});
+
+/**
+ * UN MESSAGE PROTÉGÉ QUI PORTE UNE PHOTO — le témoin du cycle 125, posé sur un
+ * écran neuf : la galerie ne doit JAMAIS servir l'URL d'une pièce à vue unique.
+ */
+const messageProtege = (conversationId: string) => ({
+  ...chargeDeMessage({
+    id: 'r8',
+    conversationId,
+    senderId: INVITE.id,
+    content: '',
+    originalLanguage: 'fr',
+    sender: { id: INVITE.id, displayName: INVITE.nom, type: 'anonymous' },
+    attachments: [
+      {
+        id: 'ar8',
+        fileUrl: '/api/v1/attachments/file/2026/secret-vue-unique.jpg',
+        originalName: 'secret-vue-unique.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 512_000,
+      },
+    ],
+    createdAt: new Date(Date.now() - 16 * 60_000).toISOString(),
+  }),
+  senderParticipantId: INVITE.id,
+  isViewOnce: true,
+});
 
 const contexteDuMembre = async (
   navigateur: Browser,
@@ -159,60 +220,26 @@ test.describe('la grille — parcourir sans rien télécharger', () => {
   });
 
   /**
-   * CE QUE LE TAP OUVRE VIENT DE LA MÊME TABLE QUE LE FIL
-   * (`FORME_PAR_GENRE.ouvre`, § 12.10.1) — le défaut majeur #5024 (2), corrigé
-   * ici : une image ou une vidéo ouvre le MÊME plein écran que le fil, SANS
-   * quitter le document ; SEUL un genre sans plein écran (le fichier) ouvre
-   * encore un onglet, sur le fichier servi — comme l'affiche du fil, pour la
-   * même raison (`download` est ignoré hors origine).
+   * L'EFFET, JAMAIS L'ATTRIBUT. La planche dessine des tuiles inertes ; celle
+   * d'un FICHIER ouvre son onglet, geste nommé, et la galerie reste où elle
+   * est — comme l'affiche du fil, pour la même raison (`download` est ignoré
+   * hors origine). L'image et la vidéo, elles, mènent au MÊME plein écran que
+   * le fil (§ ci-dessous) : ce test garde le SEUL genre qui ouvre encore un
+   * onglet.
    */
-  test('ouvre image et vidéo dans le plein écran de la galerie, jamais dans un onglet', async ({ browser }) => {
+  test('ouvre un fichier dans un onglet, geste nommé, sans quitter la galerie', async ({ browser }) => {
     const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
     const page = await contexte.newPage();
     await page.goto(MEDIAS(), { waitUntil: 'load' });
     const avant = page.url();
 
-    const tuiles = page.locator('.grille .tuile');
-    expect(await tuiles.count()).toBe(3);
+    expect(await page.locator('.grille .tuile').count()).toBe(3);
     expect(await page.locator('.lecteurs > li').count()).toBe(1);
 
-    // Seule la tuile FICHIER (ar7, un PDF — aucun plein écran) mène à la
-    // passerelle ; image et vidéo restent sur le DOCUMENT de la galerie.
-    const hrefFichier = await page.locator('li[data-piece="ar7"] .tuile').getAttribute('href');
-    expect(hrefFichier).toContain(passerelle.base);
-    const hrefImage = await page.locator('li[data-piece="ar1"] .tuile').getAttribute('href');
-    const hrefVideo = await page.locator('li[data-piece="ar2"] .tuile').getAttribute('href');
-    [hrefImage, hrefVideo].forEach((href) => {
-      expect(href).not.toContain(passerelle.base);
-      expect(href).toContain('autour=');
-      expect(href).toContain('media=');
-    });
-
-    const image = page.locator('li[data-piece="ar1"] .tuile');
-    await expect(image).toHaveAttribute('aria-label', /Ouvrir tableau\.jpg · 420 Ko/);
-    await image.click();
-    await page.waitForLoadState('load');
-    expect(page.url()).not.toBe(avant);
-    expect(page.url().startsWith(v3.base)).toBe(true);
-    await expect(page.locator('dialog.plein')).toHaveAttribute('data-genre', 'image');
-    await expect(page.locator('main#main-content')).toHaveJSProperty('inert', true);
-
-    // Fermer ramène EXACTEMENT à la tranche d'où l'on vient — jamais un onglet perdu.
-    await page.locator('dialog.plein .fermer').click();
-    await page.waitForLoadState('load');
-    await expect(page.locator('dialog.plein')).toHaveCount(0);
-    await contexte.close();
-  });
-
-  /** LE SEUL GESTE QUI QUITTE ENCORE L'ÉCRAN : un genre sans plein écran (§ 12.10.1). */
-  test('ouvre un FICHIER dans un onglet, la galerie restant où elle est', async ({ browser }) => {
-    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
-    const page = await contexte.newPage();
-    await page.goto(MEDIAS(), { waitUntil: 'load' });
-    const avant = page.url();
-
     const fichier = page.locator('li[data-piece="ar7"] .tuile');
-    await expect(fichier).toHaveAttribute('aria-label', /Télécharger budget\.pdf/);
+    await expect(fichier).toHaveAttribute('href', new RegExp(`^${passerelle.base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    await expect(fichier).toHaveAttribute('target', '_blank');
+    await expect(fichier).toHaveAttribute('aria-label', /Télécharger budget\.pdf · 1,2 Mo/);
     const [ouvert] = await Promise.all([contexte.waitForEvent('page'), fichier.click()]);
     await ouvert.waitForLoadState('domcontentloaded').catch(() => undefined);
     expect(page.url()).toBe(avant);
@@ -257,6 +284,254 @@ test.describe('la grille — parcourir sans rien télécharger', () => {
     await expect(page.locator('.carte-vide h3')).toHaveText('Aucun média dans « Fichiers »');
     expect(await page.locator('.grille').count()).toBe(0);
     await expect(page.getByRole('link', { name: 'Tous', exact: true })).toBeVisible();
+    await contexte.close();
+  });
+});
+
+/**
+ * UNE TUILE OUVRE LE MÊME PLEIN ÉCRAN QUE LE FIL (#4525, + point 2 de #5024) —
+ * la surimpression rendue par `app/connecte/plein-vue.ts`, le site UNIQUE de
+ * son balisage (`__tests__/fil-source-unique.test.ts`), par-dessus la grille
+ * INCHANGÉE et `inert`.
+ */
+test.describe('une tuile ouvre le même plein écran que le fil', () => {
+  test('ouvre une tuile image dans le même plein écran que le fil, grille inchangée derrière', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    const compteur = await compteLesOctetsDeMedia(page);
+    await page.goto(MEDIAS(), { waitUntil: 'load' });
+
+    await page.locator('li[data-piece="ar1"] .tuile').click();
+    await page.waitForLoadState('load');
+
+    expect(page.url()).toBe(`${MEDIAS()}?media=ar1`);
+    // Une NAVIGATION, pas un onglet : la même page a changé d'adresse.
+    expect(contexte.pages().length).toBe(1);
+    await expect(page.locator('dialog.plein')).toBeVisible();
+    await expect(page.locator('#titre-du-plein')).toHaveText('tableau.jpg');
+    expect(await page.locator('main[inert]').count()).toBe(1);
+    expect(await page.locator('.grille > li').count()).toBe(3);
+
+    await page.waitForTimeout(300);
+    const CHEMIN_DE_L_IMAGE = '/api/v1/attachments/file/2026/tableau.jpg';
+    expect(compteur.reponses()).toEqual([`${passerelle.base}${CHEMIN_DE_L_IMAGE}`]);
+    // L'IMAGE ENTIÈRE, pas « quelque chose » : `> 0` aurait été vert sur un 404,
+    // dont le corps pèse aussi des octets. `encodedDataLength` compte l'en-tête
+    // EN PLUS du corps, d'où le `>=` — la table du bouchon dit ce que le corps pèse.
+    expect(compteur.octets()).toBeGreaterThanOrEqual(OCTETS_DE_LA_FIXTURE[CHEMIN_DE_L_IMAGE] ?? 0);
+    const requetesDeMedia = passerelle.journal.filter((appel) => appel.chemin.includes('/attachments/file/2026/'));
+    expect(requetesDeMedia).toHaveLength(1);
+    expect(requetesDeMedia[0]?.chemin).toContain('tableau.jpg');
+    await contexte.close();
+  });
+
+  /**
+   * FERMER REND L'ADRESSE DE LA GALERIE SANS `?media=` — trois chemins, un seul
+   * effet : la croix, `data-retour` (ce qu'un module suit à Échap — témoin
+   * séparé ci-dessous, avec JavaScript, § « ce que le module ajoute »), le
+   * retour arrière du navigateur (l'état est une navigation).
+   */
+  test('ferme par la croix, par le retour arrière, et data-retour dit la même adresse', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(`${MEDIAS('image')}&media=ar1`, { waitUntil: 'load' });
+
+    const fermer = page.locator('dialog.plein a.fermer');
+    await expect(fermer).toHaveAttribute('href', `/chats/${CONVERSATION_DU_LECTEUR.id}/medias?genre=image`);
+    await expect(page.locator('dialog.plein')).toHaveAttribute('data-retour', `/chats/${CONVERSATION_DU_LECTEUR.id}/medias?genre=image`);
+
+    await fermer.click();
+    await expect(page).toHaveURL(`${MEDIAS('image')}`);
+    expect(await page.locator('main[inert]').count()).toBe(0);
+    await expect(page.locator('.grille > li')).toHaveCount(1);
+    await expect(page.getByRole('link', { name: 'Images', exact: true })).toHaveAttribute('aria-current', 'page');
+
+    await page.goto(`${MEDIAS('image')}&media=ar1`, { waitUntil: 'load' });
+    await page.goBack();
+    await expect(page).toHaveURL(`${MEDIAS('image')}`);
+    await contexte.close();
+  });
+
+  /**
+   * « VOIR DANS LA CONVERSATION » A UN EFFET (charte règle 7). C'est le geste
+   * que le legacy offrait (`AttachmentGallery.tsx` › « Voir dans le message »),
+   * repris ici : il doit AMENER au message d'où la pièce vient, dans le FIL, et
+   * non seulement porter la bonne adresse — un `href` juste vers une porte qui
+   * ne sait pas le lire serait un contrôle inerte, et l'assertion unitaire ne
+   * l'aurait pas vu.
+   */
+  test('« Voir dans la conversation » mène au message, dans le fil', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(`${MEDIAS()}?media=ar1`, { waitUntil: 'load' });
+
+    await page.getByRole('link', { name: 'Voir dans la conversation' }).click();
+    await page.waitForLoadState('load');
+
+    expect(page.url()).toBe(`${v3.base}/chats/${CONVERSATION_DU_LECTEUR.id}?autour=r1#m-r1`);
+    await expect(page.locator('#m-r1')).toBeVisible();
+    expect(await page.locator('dialog.plein').count()).toBe(0);
+    await contexte.close();
+  });
+
+  /**
+   * LA VIDÉO S'OUVRE AVEC SA BOÎTE, SANS UN OCTET AVANT LA PRESSION —
+   * `preload="none"` : la surimpression MONTRE, elle ne dépense pas les octets
+   * à la place du lecteur.
+   */
+  test('la vidéo s’ouvre en plein écran sans un octet avant la pression', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    const compteur = await compteLesOctetsDeMedia(page);
+    await page.goto(`${MEDIAS()}?media=ar2`, { waitUntil: 'load' });
+
+    const video = page.locator('video.media-plein');
+    await expect(video).toHaveAttribute('preload', 'none');
+    await expect(page.locator('dialog.plein .poids')).toHaveText('0:42 · 3,0 Mo');
+
+    await page.waitForTimeout(500);
+    expect(compteur.reponses()).toEqual([]);
+    expect(passerelle.journal.filter((appel) => appel.chemin.includes('/attachments/file/'))).toEqual([]);
+    await contexte.close();
+  });
+
+  /**
+   * LA FICHE D'UN VOCAL SE LIT ENTIÈRE, AU PRISME — jamais tronquée, avec sa
+   * piste JOUÉE élue par le texte SERVI (cycle 128), comme dans le fil.
+   */
+  test('la fiche d’un vocal se lit entière, au Prisme', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    const compteur = await compteLesOctetsDeMedia(page);
+    await page.goto(MEDIAS(), { waitUntil: 'load' });
+
+    await page.locator('li[data-piece="ar3"] a.fiche').click();
+    await expect(page).toHaveURL(`${MEDIAS()}?media=ar3`);
+
+    const transcription = page.locator('dialog.plein .transcription');
+    await expect(transcription).toContainText('J’apporte les chiffres de mars, tout est prêt.');
+    expect(await transcription.evaluate((noeud) => getComputedStyle(noeud).webkitLineClamp)).toBe('none');
+    await expect(page.locator('dialog.plein .transcrit')).toHaveText('Transcrit du yo · lire en fr');
+    await expect(page.locator('dialog.plein .transcrit-original p')).toHaveAttribute('lang', 'yo');
+    await expect(page.locator('dialog.plein audio.media-plein')).toHaveAttribute('src', `${passerelle.base}${PISTE_TRADUITE}`);
+    await expect(page.locator('dialog.plein audio.media-plein')).toHaveAttribute('preload', 'none');
+
+    await page.waitForTimeout(300);
+    expect(compteur.reponses()).toEqual([]);
+    await contexte.close();
+  });
+
+  /** UN GENRE SANS PLEIN ÉCRAN N'EN A PAS, MÊME FORCÉ — la tuile PDF garde son onglet. */
+  test('un PDF n’a pas de plein écran, même forcé', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(`${MEDIAS()}?media=ar7`, { waitUntil: 'load' });
+
+    expect(await page.locator('dialog.plein').count()).toBe(0);
+    expect(await page.locator('main[inert]').count()).toBe(0);
+    await expect(page.locator('li[data-piece="ar7"] .tuile')).toHaveAttribute('target', '_blank');
+    await contexte.close();
+  });
+
+  /**
+   * LA SURIMPRESSION RETIENT LE FOCUS SANS JAVASCRIPT — `inert` sur la grille :
+   * le premier `Tab` atteint la croix, et aucune tabulation n'entre dans la
+   * grille recouverte.
+   */
+  test('la surimpression est atteignable au clavier, et rien derrière elle', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(`${MEDIAS()}?media=ar1`, { waitUntil: 'load' });
+
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.activeElement?.className)).toContain('fermer');
+
+    let entreDansLaGrille = false;
+    for (let pas = 0; pas < 12; pas += 1) {
+      await page.keyboard.press('Tab');
+      entreDansLaGrille ||= await page.evaluate(() => (document.activeElement as HTMLElement | null)?.closest('main[inert]') !== null);
+    }
+    expect(entreDansLaGrille).toBe(false);
+    await contexte.close();
+  });
+
+  /**
+   * LE RÉGIME `?media=` DE LA GALERIE TIENT LES PLAFONDS DE `/chats/*` — la
+   * surimpression est servie DANS le même document (aucune requête de plus),
+   * sous les MÊMES plafonds réseau que la grille : 4 requêtes avant le premier
+   * pixel, LCP ≤ 2,2 s, CLS ≤ 0,05 (patron `v3-fil-riche.spec.ts` § « le coût du
+   * plein écran, mesuré »).
+   */
+  test('le régime ?media= de la galerie tient les plafonds de /chats/*, et son document est pesé', async ({ browser }, info) => {
+    const { mesurePage, franchissementsReseau } = await chargeMesureReseau();
+    const cookies = [
+      { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3.base },
+      { name: COOKIE_DE_SESSION, value: 'ouverte', url: v3.base },
+    ];
+    const mesure = await mesurePage({
+      url: `${MEDIAS()}?media=ar1`,
+      commande: COMMANDE,
+      navigateur: browser,
+      cookies,
+      profil: budgets.reseau.profil,
+    });
+    console.log(
+      `[mesure] /chats/:cle/medias?media= Fast 3G — requêtes avant le premier pixel ${mesure.requetes_avant_premier_pixel} · FCP ${mesure.fcp_ms} ms · LCP ${mesure.lcp_ms} ms · CLS ${mesure.cls} · ${mesure.octets_transferes} o`,
+    );
+    info.annotations.push({
+      type: 'plein écran de la galerie en Fast 3G',
+      description: `req. avant le premier pixel ${mesure.requetes_avant_premier_pixel ?? '?'} · FCP ${mesure.fcp_ms ?? '?'} ms · LCP ${mesure.lcp_ms ?? '?'} ms · CLS ${mesure.cls ?? '?'} · ${mesure.octets_transferes ?? '?'} o`,
+    });
+    expect(mesure.http).toBe(200);
+    expect(franchissementsReseau(mesure, budgets.reseau).filter((f) => f.statut === 'GATE').map((f) => f.texte)).toEqual([]);
+  });
+
+  /**
+   * PARCOURIR UNE GALERIE N'EST PAS LIRE (`route.ts:21-25`) — et ouvrir ou
+   * fermer un plein écran, encore moins : aucun `POST …/receipts` sur cette
+   * adresse, jamais.
+   */
+  test('n’écrit aucun accusé de lecture, plein écran ouvert ou fermé', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await contexte.newPage();
+    await page.goto(MEDIAS(), { waitUntil: 'load' });
+    await page.locator('li[data-piece="ar1"] .tuile').click();
+    await page.waitForLoadState('load');
+    await page.locator('dialog.plein a.fermer').click();
+    await page.waitForLoadState('load');
+
+    expect(passerelle.journal.filter((appel) => appel.methode === 'POST' && appel.chemin.includes('/receipts'))).toEqual([]);
+    await contexte.close();
+  });
+});
+
+/**
+ * CE QUE LE MODULE DE LA GALERIE AJOUTE — ET RIEN DE PLUS (défaut trouvé en
+ * revue : `data-retour` était servi SANS lecteur sur cet écran, alors que le
+ * fil en a un depuis `participate.ts`. Même surimpression, deux comportements
+ * clavier). `lib/realtime/plein.ts` est le plus léger des neuf modules
+ * (241 o gzip, `budgets-mesures.json → participate`) : un seul appel à
+ * `prendsLePleinEcran()`, le site UNIQUE de cette élévation
+ * (`lib/realtime/plein-ecran.ts`), déjà utilisé par le fil et par la liste.
+ * Le témoin ci-dessous est le jumeau EXACT de
+ * `v3-fil-riche.spec.ts` § « ce que le module AJOUTE à la surimpression ».
+ */
+test.describe('ce que le module de la galerie AJOUTE — et rien de plus', () => {
+  test('Échap ferme le plein écran et rend la galerie', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await contexte.newPage();
+    await page.goto(`${MEDIAS('image')}&media=ar1`, { waitUntil: 'load' });
+
+    // Le module élève le `<dialog open>` servi en MODALE : c'est ce qui donne
+    // Échap, le voile et le piège à focus — jamais une seconde surimpression.
+    await expect
+      .poll(() => page.evaluate(() => document.querySelector('dialog.plein')?.matches(':modal') ?? false), { timeout: 15_000 })
+      .toBe(true);
+
+    await page.keyboard.press('Escape');
+    await page.waitForURL((url) => url.searchParams.get('media') === null, { timeout: 15_000 });
+    await expect(page.locator('.grille > li')).toHaveCount(1);
+    await expect(page.getByRole('link', { name: 'Images', exact: true })).toHaveAttribute('aria-current', 'page');
     await contexte.close();
   });
 });
@@ -325,6 +600,20 @@ test.describe('l’écran est atteignable — clavier, cibles, cadre', () => {
       expect(debordement.largeur).toBeLessThanOrEqual(debordement.cadre);
       await contexte.close();
     });
+
+    test(`ne laisse aucune cible sous 44 px ni débordement horizontal (${largeur} px), plein écran ouvert`, async ({ browser }) => {
+      const contexte = await contexteDuMembre(browser, { viewport: { width: largeur, height: 844 } });
+      const page = await contexte.newPage();
+      await page.goto(`${MEDIAS()}?media=ar1`, { waitUntil: 'load' });
+
+      expect(ciblesTropPetites(await ciblesMesurees(page))).toEqual([]);
+      const debordement = await page.evaluate(() => ({
+        largeur: document.documentElement.scrollWidth,
+        cadre: document.documentElement.clientWidth,
+      }));
+      expect(debordement.largeur).toBeLessThanOrEqual(debordement.cadre);
+      await contexte.close();
+    });
   });
 });
 
@@ -348,6 +637,21 @@ COLONNES_DE_THEME.forEach((colonne) => {
     await audite(page, `/chats/:cle/medias [${colonne.id}]`);
     await contexte.close();
   });
+
+  test(`0 violation axe serious/critical — la galerie en plein écran (${colonne.id})`, async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { colorScheme: colonne.colorScheme });
+    if (colonne.stockage !== null) {
+      await contexte.addInitScript(
+        ([cle, valeur]) => window.localStorage.setItem(cle as string, valeur as string),
+        [THEME_STORAGE_KEY, colonne.stockage],
+      );
+    }
+    const page = await contexte.newPage();
+    await page.goto(`${MEDIAS()}?media=ar1`, { waitUntil: 'load' });
+    await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colonne.classeAttendue}\\b`));
+    await audite(page, `/chats/:cle/medias?media= [${colonne.id}]`);
+    await contexte.close();
+  });
 });
 
 test.describe('les captures que le rapport REGARDE', () => {
@@ -360,6 +664,17 @@ test.describe('les captures que le rapport REGARDE', () => {
 
       mkdirSync(DOSSIER_DES_RENDUS, { recursive: true });
       await page.screenshot({ path: join(DOSSIER_DES_RENDUS, `media-${schema}.png`) });
+      await contexte.close();
+    });
+
+    test(`rend la galerie en plein écran en 390×844 (${schema})`, async ({ browser }) => {
+      const contexte = await contexteDuMembre(browser, { colorScheme: schema, viewport: { width: 390, height: 844 } });
+      const page = await contexte.newPage();
+      await page.goto(`${MEDIAS()}?media=ar1`, { waitUntil: 'load' });
+      await expect(page.locator('dialog.plein')).toBeVisible();
+
+      mkdirSync(DOSSIER_DES_RENDUS, { recursive: true });
+      await page.screenshot({ path: join(DOSSIER_DES_RENDUS, `media-plein-${schema}.png`) });
       await contexte.close();
     });
   });

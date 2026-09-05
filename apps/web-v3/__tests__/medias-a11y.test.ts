@@ -1,7 +1,7 @@
 import { axe } from 'jest-axe';
 
 import { documentDesMedias, type EtatDesMedias } from '@/app/connecte/medias-vue';
-import { message, type Fil, type Message } from '@/lib/api/fil';
+import { message, type Message } from '@/lib/api/fil';
 import { galerie } from '@/lib/api/medias';
 
 /**
@@ -71,24 +71,38 @@ const messages = PIECES.map((piece, rang) =>
   ),
 );
 
-const filDe = (msgs: readonly Message[], plusAncien: string | null = 'm0'): Fil => ({
-  id: 'c1',
-  titre: 'Équipe Lagos',
-  membres: 12,
-  presence: { participants: [], presents: [] },
-  messages: msgs,
-  plusAncien,
-});
+const TEMPS_REEL_DES_MEDIAS = {
+  passerelle: 'https://gate.test',
+  actifs: {
+    participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
+    liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+    feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
+    notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
+    contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
+    recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
+    liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
+    commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    plein: { nom: 'plein.abc.js', url: '/__v3/rt/plein.abc.js', corps: '' },
+    navigateur: { nom: 'navigateur.abc.js', url: '/__v3/rt/navigateur.abc.js', corps: '' },
+    composer: { nom: 'composer.abc.js', url: '/__v3/rt/composer.abc.js', corps: '' },
+    socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
+  },
+};
 
 const etat = (attributs: Partial<EtatDesMedias> = {}): EtatDesMedias => ({
   cle: 'c1',
   titre: 'Équipe Lagos',
   galerie: galerie({ messages, genre: null }),
   plusAncien: 'm0',
-  fil: filDe(messages),
+  avant: null,
   plein: null,
+  tempsReel: TEMPS_REEL_DES_MEDIAS,
   ...attributs,
 });
+
+/** L'identifiant de l'image et celui du vocal, dans les fixtures ci-dessus. */
+const IMAGE_ID = 'a1';
+const VOCAL_ID = 'a3';
 
 describe('la galerie des médias — gate B', () => {
   it('ne porte aucune violation grave, grille pleine', async () => {
@@ -107,17 +121,17 @@ describe('la galerie des médias — gate B', () => {
   });
 
   /**
-   * LA FENÊTRE VIDE AVEC UNE PAGE PLUS ANCIENNE — défaut majeur corrigé : la
-   * carte porte désormais une action, jamais un lien orphelin en double.
+   * LE MÊME PLEIN ÉCRAN QUE LE FIL (#4525) — gate B sur ses DEUX formes : une
+   * image (`<img>`, `<dialog aria-modal>`, `<main inert>`) et la fiche d'un
+   * vocal (transcription entière, `lang=` sur l'original).
    */
-  it('ne porte aucune violation grave, fenêtre vide avec une page plus ancienne', async () => {
-    ecris(documentDesMedias(etat({ galerie: galerie({ messages: [], genre: null }), plusAncien: 'm42' })));
+  it('ne porte aucune violation grave, plein écran d’une image', async () => {
+    ecris(documentDesMedias(etat({ plein: IMAGE_ID })));
     expect(await graves()).toEqual([]);
   });
 
-  /** LA SURIMPRESSION PLEIN ÉCRAN DE LA GALERIE — défaut majeur corrigé (#5024). */
-  it('ne porte aucune violation grave, la surimpression plein écran ouverte', async () => {
-    ecris(documentDesMedias(etat({ plein: 'a1' })));
+  it('ne porte aucune violation grave, fiche d’un vocal', async () => {
+    ecris(documentDesMedias(etat({ plein: VOCAL_ID })));
     expect(await graves()).toEqual([]);
   });
 
@@ -150,5 +164,17 @@ describe('la galerie des médias — gate B', () => {
       expect(liste.querySelectorAll('div[role], span[role]')).toHaveLength(0);
     });
     expect(document.querySelectorAll('.galerie a[href], .galerie summary').length).toBeGreaterThanOrEqual(5);
+  });
+
+  /**
+   * SANS JAVASCRIPT, LA SURIMPRESSION RETIENT LE FOCUS. Servie devant la
+   * grille et `inert` posé dessus, la seule cible que le clavier peut atteindre
+   * est la croix qui ferme — exactement la règle que `fil-plein.test.ts` garde
+   * pour le fil (`app/connecte/fil-vue.ts`).
+   */
+  it('n’expose au clavier que la surimpression quand elle recouvre la grille', () => {
+    ecris(documentDesMedias(etat({ plein: IMAGE_ID })));
+    expect(document.querySelector('main')?.hasAttribute('inert')).toBe(true);
+    expect(document.querySelector('dialog.plein a.fermer')).not.toBeNull();
   });
 });

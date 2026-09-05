@@ -191,8 +191,18 @@ struct CanvasV3ExhaustivityTests {
             ("place", fullPlace(), try encoded(fullPlace())),
         ]
         for (nom, instance, dict) in familles {
+            // **Un alias se VÉRIFIE, il ne s'exempte pas.** Chaque propriété
+            // rangée dans `persistedUnderAnotherKey` doit prouver que la clé
+            // sous laquelle elle voyage est bien là — sans quoi la table
+            // deviendrait le trou qu'elle prétend documenter.
+            let alias = Self.persistedUnderAnotherKey[nom] ?? [:]
+            for (propriete, cle) in alias {
+                #expect(dict[cle] != nil,
+                        "Famille « \(nom) » : `\(propriete)` est déclarée persistée sous `\(cle)`, et cette clé est ABSENTE de la charge — l'alias ne documente plus rien, il masque")
+            }
             let manquantes = storedProperties(of: instance)
                 .subtracting(dict.keys)
+                .subtracting(alias.keys)
                 .subtracting(Self.nonPersistedProperties[nom] ?? [])
             #expect(manquantes.isEmpty,
                     """
@@ -247,6 +257,34 @@ struct CanvasV3ExhaustivityTests {
     /// **Vide, et c'est un résultat** : les cinq familles persistent tout leur
     /// stockage.
     private static let nonPersistedProperties: [String: Set<String>] = [:]
+
+    /// **Propriétés stockées qui voyagent sous un AUTRE nom que le leur.**
+    ///
+    /// Troisième catégorie, distincte des deux autres et nécessaire : une
+    /// propriété peut être parfaitement persistée sans porter son propre nom.
+    /// La ranger dans `nonPersistedProperties` affirmerait une fausseté — elle
+    /// EST persistée ; ne la ranger nulle part fait rougir un témoin sur un
+    /// comportement voulu, et le premier réflexe devant ce rouge serait de
+    /// l'exempter en bloc.
+    ///
+    /// Chaque entrée est VÉRIFIÉE, jamais crue : le témoin exige que la clé
+    /// citée soit présente dans la charge.
+    ///
+    /// **`measuredAspectRatio` → `aspectRatio`** (#5100, mesuré par #5182). Le
+    /// lot a rendu « pas encore mesuré » représentable EN MÉMOIRE en renommant
+    /// le stockage, et a délibérément laissé le FIL inchangé — `aspectRatio`
+    /// reste la clé sérialisée, et `MeasuredAspectRatioTests.test_leFil_neChangePas`
+    /// le verrouille. Ce témoin-ci est rouge depuis ce renommage, sur `dev`,
+    /// sans rapport avec le pont : `encoded()` passe par `JSONEncoder`.
+    ///
+    /// > **Renommer une propriété stockée traverse les gardes qui l'observent
+    /// > PAR SON NOM.** Le compilateur suit le renommage partout ; un témoin
+    /// > qui réfléchit (`Mirror`) ne le suit nulle part — il lit le nom neuf et
+    /// > le compare à un fil qui porte l'ancien. C'est la même forme que le
+    /// > `?? 1.0` du pont : la règle a été portée là où elle était visible.
+    private static let persistedUnderAnotherKey: [String: [String: String]] = [
+        "media": ["measuredAspectRatio": "aspectRatio"],
+    ]
 
     /// Clés persistées que le pont ne transporte PAS, chacune avec sa raison.
     /// Une exemption est une DÉCISION, pas un constat — la remplir sans raison

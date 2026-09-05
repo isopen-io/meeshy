@@ -55,4 +55,6 @@ export const MEDIAS = {
   /** Le même mensonge, sous filtre : la raison est la profondeur, pas le type. */
   videFiltreTranchePrecision: 'Les messages les plus récents n’en portent aucun de ce type — il y en a peut-être plus loin.',
   plusAnciens: 'Médias plus anciens',
+  /** Le plein écran de la galerie (§ 9 Q3) — le geste du legacy (« Voir dans le message »), repris ici. */
+  voirDansLaConversation: 'Voir dans la conversation',
 } as const;

@@ -216,4 +216,15 @@ describe('serializeConversationParticipant — ce qui ne doit PAS sortir', () =>
 
     expect(serializeConversationParticipant(row)).not.toHaveProperty(field);
   });
+
+  // #4643 — `autoTranslateEnabled: true` était un littéral, jamais lu depuis
+  // aucun magasin (`User` ne porte pas cette colonne ; le magasin réel est
+  // `UserPreferences.application`, jamais chargé ici). Même défaut, même
+  // correctif que #4161 sur le profil public : retiré plutôt que servi, la
+  // co-participation à une conversation ne donnant accès à aucune préférence
+  // personnelle d'un tiers. Un retour du littéral doit faire tomber ce témoin.
+  it('ne sert jamais autoTranslateEnabled — plus de littéral fabriqué', () => {
+    expect(serializeConversationParticipant(registeredRow())).not.toHaveProperty('autoTranslateEnabled');
+    expect(serializeConversationParticipant(anonymousRow())).not.toHaveProperty('autoTranslateEnabled');
+  });
 });
