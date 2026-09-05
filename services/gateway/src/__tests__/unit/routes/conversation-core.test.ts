@@ -232,7 +232,7 @@ const makePrisma = (): any => ({
   },
   agentAnalysisSnapshot: {
     findMany: jest.fn().mockResolvedValue([]),
-  },
+  }, conversationShareLink: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) }, $transaction: jest.fn((ops: any) => Promise.all(ops)), // #3740
 });
 
 type Routes = Record<string, Record<string, Function>>;

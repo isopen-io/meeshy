@@ -24,6 +24,7 @@ import {
   type ColumnPlan,
 } from '../../utils/sparse-fieldset';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #4170 — GET /links absorbe GET /links/my-links, GET /links/stats et
@@ -106,6 +107,10 @@ const CLES_SOCLE = [
   'expiresAt',
   'createdAt',
   'conversationTitle',
+  // #3740 — pourquoi CE lien-là est inactif, plutôt que de le laisser
+  // disparaître de la liste sans explication (« un lien qui disparaît sans
+  // explication est un second mystère »).
+  'inactiveReason',
 ] as const;
 
 /** Les seize clés de POLICE — celles que `mapPolicyFields` compose sur `?expand=policy`. */
@@ -162,7 +167,10 @@ const COLONNES_LIEN = {
   allowedCountries: true,
   allowedLanguages: true,
   allowedIpRanges: true,
-  conversation: { select: { id: true, title: true, type: true, description: true } },
+  // `closedAt`/`isActive` du conteneur : jamais servis tels quels, ils
+  // n'alimentent que `inactiveReason` ci-dessous (§ #3740). Le chargement est
+  // gratuit — c'est la MÊME jointure que `conversationTitle` exige déjà.
+  conversation: { select: { id: true, title: true, type: true, description: true, closedAt: true, isActive: true } },
   creator: {
     select: { id: true, username: true, firstName: true, lastName: true, displayName: true, avatar: true },
   },
@@ -184,7 +192,10 @@ const COLONNES_LIEN = {
 const linkPlan: ColumnPlan<typeof COLONNES_LIEN> = {
   full: COLONNES_LIEN,
   pinned: ['id', 'createdAt'],
-  columns: { conversationTitle: ['conversation'] },
+  columns: {
+    conversationTitle: ['conversation'],
+    inactiveReason: ['conversation', 'isActive', 'expiresAt'],
+  },
 };
 
 /**
@@ -228,7 +239,14 @@ type LinkRow = {
   currentUses?: number;
   maxUses?: number | null;
   expiresAt?: Date | null;
-  conversation?: { id?: string; title?: string | null; type?: string; description?: string | null } | null;
+  conversation?: {
+    id?: string;
+    title?: string | null;
+    type?: string;
+    description?: string | null;
+    closedAt?: Date | null;
+    isActive?: boolean;
+  } | null;
   creator?: {
     id: string;
     username: string;
@@ -240,13 +258,33 @@ type LinkRow = {
 } & Partial<Record<(typeof CLES_POLICE)[number], unknown>>;
 
 /**
+ * Pourquoi CE lien est inactif — #3740. Trois causes, dans l'ordre de leur
+ * FORCE : la clôture du conteneur rend le lien inutilisable quoi que son
+ * propriétaire en pense (`isConversationClosed`, la même loi que
+ * `admitLinkEntry` applique déjà à l'admission) ; l'expiration est la
+ * prochaine cause opposable ; tout le reste (une désactivation manuelle,
+ * `POST /links/:linkId/revoke`) n'a pas de trace propre — `REVOKED` en est le
+ * repli honnête plutôt qu'un mensonge par omission.
+ *
+ * `null` pour un lien actif : il n'y a rien à expliquer.
+ */
+function deriveInactiveReason(l: LinkRow): 'CONVERSATION_CLOSED' | 'LINK_EXPIRED' | 'REVOKED' | null {
+  if (l.isActive) return null;
+  if (isConversationClosed(l.conversation ?? null)) return 'CONVERSATION_CLOSED';
+  if (l.expiresAt != null && l.expiresAt.getTime() < Date.now()) return 'LINK_EXPIRED';
+  return 'REVOKED';
+}
+
+/**
  * Le mapping DE BASE — identique, champ pour champ, à ce que `GET /links`
  * rendait avant ce lot. iOS (`MyShareLink`, `ShareLinkModels.swift:216`) et
  * Android (`MyShareLink`, `ShareLink.kt:172`) le décodent tous deux
  * aujourd'hui via `?offset=&limit=` : y toucher casse deux clients qu'aucun
  * autre agent de ce lot ne peut mettre à jour. `expand`/`fields` n'ajoutent
  * ou ne retirent donc jamais rien à CE socle, ils l'augmentent ou le filtrent
- * par-dessus.
+ * par-dessus. `inactiveReason` est la seule addition (#3740) — un champ EN
+ * PLUS, jamais une clé existante réécrite, donc sans risque pour ces deux
+ * décodeurs stricts.
  */
 function mapBaseLinkItem(l: LinkRow): LinkItem {
   return {
@@ -260,6 +298,7 @@ function mapBaseLinkItem(l: LinkRow): LinkItem {
     expiresAt: l.expiresAt?.toISOString() ?? null,
     createdAt: l.createdAt.toISOString(),
     conversationTitle: l.conversation?.title ?? null,
+    inactiveReason: deriveInactiveReason(l),
   };
 }
 
@@ -353,6 +392,17 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
                   expiresAt: { type: 'string', format: 'date-time', nullable: true },
                   createdAt: { type: 'string', format: 'date-time' },
                   conversationTitle: { type: 'string', nullable: true },
+                  // #3740 — pourquoi CE lien est inactif : `null` pour un lien
+                  // actif, sinon la cause la plus FORTE (clôture du conteneur
+                  // avant expiration avant retrait manuel). Un lien qui
+                  // disparaît de la liste sans explication est un second
+                  // mystère — il n'en disparaît donc jamais : `isActive` reste
+                  // servi tel quel, `inactiveReason` l'accompagne.
+                  inactiveReason: {
+                    type: 'string',
+                    nullable: true,
+                    enum: ['CONVERSATION_CLOSED', 'LINK_EXPIRED', 'REVOKED', null]
+                  },
                   conversation: {
                     type: 'object',
                     nullable: true,

@@ -237,7 +237,7 @@ describe('GET /directory/people/:handle — `fields` réduit la REQUÊTE', () =>
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
-/** Le socle, relevé sur `mapBaseLinkItem` — dix clés, inchangées depuis #4170. */
+/** Le socle, relevé sur `mapBaseLinkItem` — onze clés depuis #3740 (`inactiveReason`). */
 const CLES_LIEN_NU = [
   'conversationTitle',
   'createdAt',
@@ -245,6 +245,7 @@ const CLES_LIEN_NU = [
   'expiresAt',
   'id',
   'identifier',
+  'inactiveReason',
   'isActive',
   'linkId',
   'maxUses',
@@ -351,6 +352,7 @@ describe('GET /links — sans paramètre, rien ne bouge', () => {
       expiresAt: null,
       createdAt: '2025-01-01T00:00:00.000Z',
       conversationTitle: 'Test Chat',
+      inactiveReason: null,
     });
     await app.close();
   });
