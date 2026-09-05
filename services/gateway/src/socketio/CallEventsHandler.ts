@@ -37,6 +37,7 @@ import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-pa
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
@@ -1988,8 +1989,15 @@ export class CallEventsHandler {
         startMs: data.segment.startMs,
         endMs: data.segment.endMs,
         isFinal: data.segment.isFinal,
-        sourceLanguage: data.segment.language,
-        targetLanguage,
+        // The client-declared segment language reaches us verbatim (the socket
+        // schema accepts a 2–10 char code, so speech recognizers' locale
+        // identifiers like `en-US`/`fr-FR` pass through). Every emitted label is
+        // canonicalised through the shared SSOT so `sourceLanguage`/`targetLanguage`
+        // match the canonical listener/target codes clients resolve against —
+        // and so a translated segment never carries a raw source label beside a
+        // canonical target. Idempotent for already-canonical values.
+        sourceLanguage: normalizeLanguageForDedup(data.segment.language),
+        targetLanguage: normalizeLanguageForDedup(targetLanguage),
         confidence: data.segment.confidence,
         capturedAtMs: data.segment.capturedAtMs ?? Date.now()
       }
@@ -2090,6 +2098,17 @@ export class CallEventsHandler {
     // Grouped BY target language, listener userIds and all — the per-language
     // relay below must reach ONLY the listeners who resolved to that language,
     // never the whole call room (see `emitTranslatedSegmentTo`).
+    // The client-declared source language arrives VERBATIM (socket schema:
+    // `z.string().min(2).max(10)`), so a speech recognizer's locale identifier
+    // (`en-US`, `fr-FR`, mixed case) reaches us un-normalised — while the
+    // listener languages below are canonical (`resolveUserLanguage`). Canonicalise
+    // ONCE through the shared SSOT, exactly as the chat twin
+    // (`MessageTranslationService._normalizeSourceLanguage`) does before its own
+    // ZMQ dispatch. Without this: `en-US !== en` strands a same-language listener
+    // into a needless translation, AND `en-US`/`fr-FR` is sent as the NLLB SOURCE
+    // for the whole segment — a code the translator does not recognise, so every
+    // target falls back to the original (a Prisme violation).
+    const segmentLanguage = normalizeLanguageForDedup(data.segment.language);
     const listenersByLanguage = new Map<string, string[]>();
     // Auditeurs qui lisent DÉJÀ la langue du locuteur : rien à traduire pour
     // eux, mais ils ont droit aux sous-titres comme tout le monde. Les
@@ -2109,7 +2128,7 @@ export class CallEventsHandler {
       const userId = p.participant?.userId;
       if (!userId || userId === speaker.userId) continue;
       const lang = resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined });
-      if (typeof lang !== 'string' || lang === data.segment.language) {
+      if (typeof lang !== 'string' || lang === segmentLanguage) {
         sameLanguageListeners.push(userId);
         continue;
       }
@@ -2166,7 +2185,7 @@ export class CallEventsHandler {
         try {
           const taskId = await zmqClient.translateText(
             data.segment.text,
-            data.segment.language,
+            segmentLanguage,
             targetLanguage,
             messageId,
             data.callId
