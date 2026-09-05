@@ -661,7 +661,7 @@ côté elle se pose (§ « Le composer met ses portes SUR LE PLATEAU », `apps/i
 | inventaire | ce qu'il énumère | contenu mesuré |
 |---|---|---|
 | **`ComposerRailDoor`** — les CAS déclarés (11) | les portes qui posent ou règlent quelque chose | `description` · `content` · `media` · `sound` · `sticker` · `mention` · `place` · `drawing` · `text` · `hashtag` · `background` |
-| **`ComposerRailDoor.canonicalRail`** — les entrées SERVIES | ce que la rangée du bas de scène propose vraiment | **11 au 2026-09-05, et ce n'est pas une constante** — voir l'encadré ci-dessous |
+| **`ComposerRailDoor.canonicalRail`** — les entrées SERVIES | ce que la rangée du bas de scène propose vraiment | **10** — `description` est un cas SANS entrée de rail ; voir l'encadré ci-dessous |
 | **`ComposerRailLevel`** (4) | ce que la porte VISE — et donc où elle se pose | `publication` · `slide` · `object` · `scene` |
 | **`ComposerOrigin`** (8) | par où l'on ENTRE dans le composer | `storyTray` · `feedComposer` · `moodChip` · `repost` · `edit` · `draft` · `share` · `conversationMedia` |
 | `ComposerDocumentTool.canonicalRow` (7) | les outils d'attache du document | `photo` · `camera` · `emoji` · `document` · `place` · `microphone` · `mention` |
@@ -727,10 +727,11 @@ une décoration — et ce document en a déjà porté trois qui ne tombaient pas
 #### Ce type a DEUX inventaires, et la commande ci-dessus n'en compte qu'un
 
 `ComposerRailDoor` déclare ses cas ; `ComposerRailDoor.canonicalRail` déclare
-**lesquels la rangée SERT**. Les deux listes coïncident au 2026-09-05 — 11 et 11 —
-et c'est précisément ce qui rendait le défaut invisible : **deux inventaires qui
-coïncident ont l'air d'un seul.** La commande publiée plus haut compte les CAS ;
-elle continuerait d'afficher 11 pendant que la rangée n'en sert que 10.
+**lesquels la rangée SERT**. Les deux listes ont coïncidé jusqu'au 2026-09-05 —
+11 et 11 — et c'est précisément ce qui rendait le défaut invisible : **deux
+inventaires qui coïncident ont l'air d'un seul.** La commande publiée plus haut
+compte les CAS ; elle affiche toujours 11, pendant que la rangée n'en sert plus
+que **10**.
 
 La commande de l'inventaire SERVI, à rejouer avec l'autre et jamais à sa place :
 
@@ -746,11 +747,32 @@ sed -n '/static let canonicalRail/,/^    \]/p' \
 > ; la retirer de la rangée ne retire qu'une entrée. **Publier un seul nombre
 > pour les deux, c'est promettre que la porte offerte est la porte déclarée.**
 
-*Directive porteur en vol au 2026-09-05* : `.description` quitte la rangée (le
-volet sous la scène, #4993, est déjà son moyen et il se peint par-dessus le média
-décrit) tout en restant un cas classé `.slide`. La rangée passera donc à **10
-entrées pour 11 cas** — le premier écart entre les deux inventaires, et la raison
-pour laquelle ce paragraphe existe avant le commit plutôt qu'après.
+*Écart ouvert le 2026-09-05* par `87a7e3c049` (directive porteur) :
+`.description` a quitté la rangée — le volet sous la scène (#4993) est déjà son
+moyen, et il se peint par-dessus le média décrit — tout en restant un cas classé
+`.slide`. **10 entrées pour 11 cas**, le premier écart entre les deux
+inventaires.
+
+> Ce paragraphe a été écrit AVANT ce commit, et il a quand même dû être corrigé :
+> la DISTINCTION et les deux commandes ont survécu, les deux NOMBRES non. C'est
+> la démonstration la plus courte de sa propre thèse — un nombre recopié se
+> périme, une commande se rejoue.
+
+**Un cas hors rangée n'est pas un silence, et c'est gardé.**
+`ComposerRailDoorTests` exige que `Set(allCases).subtracting(canonicalRail)` soit
+exactement `[.description]`, **avec sa raison inscrite dans le message d'échec** —
+la même forme que la table d'exclusions nommées de `FeedSceneCoherenceGuardTests`
+(#5230), et posée du premier coup ici.
+
+**Deux formes légitimes, à ne pas uniformiser.** L'inventaire frère,
+`ComposerDocumentTool`, résout la même question par PROJECTION : `servedRow` vaut
+`canonicalRow.filter { $0.effect != nil }` — jamais une seconde liste, « l'ordre
+vient de `canonicalRow` et de nulle part ailleurs ». `canonicalRail`, lui, est un
+littéral écrit à la main, et il doit le rester : **son ORDRE est une décision de
+design** (la position que les doigts connaissent), que rien dans l'énuméré ne
+dérive. Ce qui doit être garanti n'est donc pas que la liste soit dérivée, mais
+que **tout cas qui n'y figure pas soit NOMMÉ avec sa raison** — ce que le témoin
+ci-dessus fait.
 
 ### Les mots du chrome qui n'ont aucune autorité sémantique
 
