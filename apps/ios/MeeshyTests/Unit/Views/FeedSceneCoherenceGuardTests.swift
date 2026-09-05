@@ -17,7 +17,10 @@ import XCTest
 ///
 /// 1. toute surface qui monte une scène 9:16 dans le fil RAPPORTE sa frame —
 ///    sans quoi elle ne concourt pas à l'élection et reste éteinte pour
-///    toujours, sans qu'aucun test de coordinateur puisse le voir ;
+///    toujours, sans qu'aucun test de coordinateur puisse le voir. Le
+///    territoire se BALAIE (#5230) : une liste tenue à la main vérifierait
+///    existentiellement ce que la doctrine quantifie universellement, et une
+///    troisième surface née dans un fichier neuf ne serait lue par personne ;
 /// 2. aucune ne joue INCONDITIONNELLEMENT — la pause d'un embed est dérivée de
 ///    l'élection, jamais laissée à son défaut ;
 /// 3. l'identité d'élection est celle du POST CONTENANT — un même canvas
@@ -26,12 +29,56 @@ import XCTest
 ///    feuille : une élection ne doit pas ré-évaluer le `ForEach` entier.
 final class FeedSceneCoherenceGuardTests: XCTestCase {
 
-    /// Les fichiers qui montent une scène dans le FIL. Un fichier absent est
-    /// ignoré par le corpus, jamais fatal — la liste anticipe la découpe.
-    private static let sceneSurfaces = [
-        "Meeshy/Features/Main/Views/FeedSceneAutoplay.swift",
-        "Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",
+    /// **Le territoire se BALAIE, il ne s'énumère pas** (#5230).
+    ///
+    /// La première version de cette garde tenait deux chemins à la main pour
+    /// une doctrine UNIVERSELLE — « toute surface qui monte une scène 9:16 dans
+    /// le fil rapporte sa frame ». Une troisième surface née dans un fichier
+    /// NEUF n'aurait été lue par personne, et aurait donc pu inventer la
+    /// quatrième politique que #5227 vient de supprimer. Une liste vérifie
+    /// EXISTENTIELLEMENT ce que la prose quantifie UNIVERSELLEMENT ; l'écart
+    /// n'a aucun site où rougir.
+    ///
+    /// Le balayage dépouille les commentaires : `FeedPostCard.swift` cite
+    /// `MeeshyScenePlayer(` dans un doc-comment depuis l'extraction, et un
+    /// `git grep` nu l'aurait rendu en faux positif.
+    private static let sceneMountingCalls = ["MeeshyScenePlayer(", "StoryReaderRepresentable("]
+
+    /// **La frontière que le balayage ne sait pas trancher : « est-ce une
+    /// LISTE ? »** Une surface seule à l'écran n'a personne à qui disputer
+    /// l'élection ; lui demander de rapporter sa frame serait faux. Chaque
+    /// exclusion porte donc sa RAISON, et ajouter un fichier au territoire
+    /// oblige à passer ici — un silence rouvrirait la porte que le balayage
+    /// vient de fermer.
+    private static let notAFeedList: [String: String] = [
+        "PostDetailView+Canvas.swift": "plein écran de détail — une seule scène, aucune élection à disputer",
+        "PostDetailView+RepostEmbed.swift": "idem, l'embed cité d'un détail",
+        "StoryViewerView+Canvas.swift": "viewer story plein écran — la lecture y est commandée par le lecteur",
     ]
+    // `MeeshyComposerHost+Socle.swift` a figuré ici une heure : je l'avais tiré
+    // d'un `git grep` NU, où il apparaît parce qu'un doc-comment RACONTE qu'il
+    // montait jadis un player (« Il montait `MeeshyScenePlayer(mode: .preview)`
+    // sur… »). Le témoin ci-dessous l'a rendu dès sa première exécution — c'est
+    // exactement le faux positif contre lequel le balayage dépouille les
+    // commentaires, reproduit dans la table censée le corriger.
+
+    /// Les vues de l'app qui montent réellement une scène, commentaires
+    /// dépouillés, moins les non-listes NOMMÉES ci-dessus.
+    private func feedSceneSurfaces(file: StaticString = #filePath) throws -> [(name: String, text: String)] {
+        let root = MyStoriesSourceCorpus.appRoot(file: file).appendingPathComponent("Meeshy")
+        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        var found: [(String, String)] = []
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            let name = url.lastPathComponent
+            guard Self.notAFeedList[name] == nil else { continue }
+            guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let text = MyStoriesSourceCorpus.strippingComments(raw)
+            guard Self.sceneMountingCalls.contains(where: text.contains) else { continue }
+            found.append((name, text))
+        }
+        return found.sorted { $0.0 < $1.0 }
+    }
 
     private func source(of relativePath: String) throws -> String {
         try MyStoriesSourceCorpus.text(of: relativePath)
@@ -47,13 +94,74 @@ final class FeedSceneCoherenceGuardTests: XCTestCase {
     /// obéit correctement à ce qu'elle reçoit) : il vit dans ce qui n'est écrit
     /// nulle part.
     func test_everySceneSurface_reportsItsFrame() throws {
-        for path in Self.sceneSurfaces {
-            let text = try source(of: path)
-            guard text.contains("MeeshyScenePlayer(") || text.contains("StoryReaderRepresentable(") else { continue }
+        let surfaces = try feedSceneSurfaces()
+        XCTAssertFalse(surfaces.isEmpty,
+                       "Le balayage ne voit plus aucune surface de scène — il a perdu son " +
+                       "terrain, et une garde qui ne regarde rien passe au vert pour rien.")
+        for (name, text) in surfaces {
             XCTAssertTrue(
                 text.contains(".reportReelFrame("),
-                "\(path) monte une scène sans rapporter sa frame : elle ne concourt donc " +
-                "jamais à l'élection du viewport et reste éteinte quoi qu'il arrive."
+                "\(name) monte une scène dans le fil sans rapporter sa frame : elle ne " +
+                "concourt donc jamais à l'élection du viewport et reste éteinte quoi qu'il " +
+                "arrive. Si cette vue n'est PAS une liste, l'inscrire dans `notAFeedList` " +
+                "avec sa raison — jamais la laisser en silence."
+            )
+        }
+    }
+
+    /// **Le balayage doit VOIR ce qu'un `git grep` nu rendrait en faux
+    /// positif — et l'inverse.** Témoin de mutation sur la fonction de
+    /// détection elle-même : sans lui, un balayage qui aurait cessé de
+    /// reconnaître les montages passerait au vert en ne trouvant rien.
+    func test_theSweepReadsCodeNotComments() throws {
+        let commentOnly = MyStoriesSourceCorpus.strippingComments("""
+        /// Cette vue documentait MeeshyScenePlayer( sans le monter.
+        struct Innocent: View { var body: some View { EmptyView() } }
+        """)
+        XCTAssertFalse(
+            Self.sceneMountingCalls.contains(where: commentOnly.contains),
+            "Un montage cité en COMMENTAIRE ne doit pas entrer dans le territoire — " +
+            "c'est le cas de FeedPostCard.swift depuis l'extraction de #5227."
+        )
+
+        let realMount = MyStoriesSourceCorpus.strippingComments("""
+        struct Coupable: View {
+            var body: some View { MeeshyScenePlayer(document: d, mode: .card) }
+        }
+        """)
+        XCTAssertTrue(
+            Self.sceneMountingCalls.contains(where: realMount.contains),
+            "Un montage RÉEL doit entrer dans le territoire, sans quoi la garde ne peut " +
+            "plus rougir sur personne."
+        )
+    }
+
+    /// Une exclusion NOMMÉE doit désigner un fichier qui existe et qui monte
+    /// vraiment une scène — sinon la table devient un cimetière de noms qui
+    /// dispense en silence des fichiers qu'elle ne décrit plus.
+    /// **Un paramètre, même à valeur par défaut, rend un test INVISIBLE à
+    /// XCTest.** Ce témoin est né avec `(file: StaticString = #filePath)` et
+    /// n'a pas été exécuté une seule fois — 6 cas rapportés au lieu de 7, ce
+    /// que seul le COMPTE révèle : aucun échec, aucun avertissement. Un test
+    /// qui ne s'exécute pas est vert par omission.
+    func test_everyExclusionStillDescribesARealSceneMounter() throws {
+        let root = MyStoriesSourceCorpus.appRoot().appendingPathComponent("Meeshy")
+        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        var mounters: Set<String> = []
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift",
+                  let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let text = MyStoriesSourceCorpus.strippingComments(raw)
+            if Self.sceneMountingCalls.contains(where: text.contains) {
+                mounters.insert(url.lastPathComponent)
+            }
+        }
+        for (name, reason) in Self.notAFeedList {
+            XCTAssertTrue(
+                mounters.contains(name),
+                "`notAFeedList` dispense \(name) (« \(reason) ») mais ce fichier ne monte " +
+                "plus aucune scène : le retirer de la table. Une exclusion périmée dispense " +
+                "en silence, et c'est ainsi qu'un territoire se vide sans que rien ne le dise."
             )
         }
     }
@@ -62,8 +170,7 @@ final class FeedSceneCoherenceGuardTests: XCTestCase {
     /// ou du réel cité. Même règle que `ReelRepostEmbedCell.reelCellId` : une
     /// story affichée nativement ET repostée doit élire une seule surface.
     func test_electionIdentity_isTheContainingPost() throws {
-        for path in Self.sceneSurfaces {
-            let text = try source(of: path)
+        for (path, text) in try feedSceneSurfaces() {
             guard text.contains(".reportReelFrame(") else { continue }
             XCTAssertTrue(
                 text.contains(".reportReelFrame(id: post.id"),
