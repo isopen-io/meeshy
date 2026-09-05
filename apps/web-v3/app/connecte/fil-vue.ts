@@ -24,6 +24,7 @@ import { BANDEAUX, compteDeParticipants, ETATS_DU_TEMPS_REEL, FIL, INTROUVABLE, 
 import { nomDeLangue } from '@/lib/contenu/langues';
 import { MEDIAS } from '@/lib/contenu/medias';
 
+import { bandeau } from './bandeau-vue';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
 import { REGION_DE_LA_BANNIERE } from './banniere-vue';
@@ -312,30 +313,6 @@ const bandeauDesDroits = (porte: Porte, titre: string): string => {
     '</details>'
   );
 };
-
-const bandeau = ({
-  classe,
-  identifiant,
-  role,
-  glyphe,
-  titre,
-  corps,
-  action,
-  cache,
-}: {
-  readonly classe: string;
-  readonly identifiant: string;
-  readonly role: 'status' | 'alert';
-  readonly glyphe: string;
-  readonly titre: string;
-  readonly corps: string;
-  readonly action: { readonly libelle: string; readonly href: string };
-  readonly cache: boolean;
-}): string =>
-  `<div class="bandeau ${classe}" id="${identifiant}" role="${role}"${cache ? ' hidden' : ''}>` +
-  `<div class="entete">${svgDuSprite(glyphe)}<div><b>${echappe(titre)}</b><p>${echappe(corps)}</p></div></div>` +
-  `<a class="action discrete" href="${echappe(action.href)}">${echappe(action.libelle)}</a>` +
-  '</div>';
 
 /**
  * Les bandeaux que seul le TEMPS RÉEL déclenche — hors ligne, place fermée

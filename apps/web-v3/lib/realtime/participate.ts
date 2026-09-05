@@ -15,6 +15,7 @@ import { rafraichis, raisonDeFermeture, type Droits } from '@/lib/api/invite';
 import { BANDEAUX, ETATS_DU_TEMPS_REEL, FIL } from '@/lib/contenu/fil';
 
 import { brancheLaBanniere } from './banniere';
+import { montreLeBandeau } from './bandeau';
 import { prendsLeComposeur, type ControleurDuComposeur } from './composeur';
 import { defilement, type Defilement } from './defilement';
 import { droitsDuChangement, oublieLaJonctionFraiche, peinsLesDroits, peinsLeTrombone } from './droits-peinture';
@@ -246,10 +247,8 @@ const point = (ctx: Contexte, etat: 'connecte' | 'creux' | 'hors-ligne'): void =
   if (nom !== null) nom.textContent = ETATS_DU_TEMPS_REEL[etat];
 };
 
-const bandeau = (ctx: Contexte, identifiant: string, visible: boolean): void => {
-  const noeud = ctx.main.querySelector<HTMLElement>(`#${identifiant}`);
-  if (noeud !== null) noeud.hidden = !visible;
-};
+const bandeau = (ctx: Contexte, identifiant: string, visible: boolean): void =>
+  montreLeBandeau(ctx.main, identifiant, visible);
 
 /**
  * DIRE ce qui vient d'être affiché — d'autrui seulement (`aAccuser`), groupé

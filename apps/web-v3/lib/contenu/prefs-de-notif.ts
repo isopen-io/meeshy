@@ -129,4 +129,17 @@ export const PREFS = {
   echec: 'Le réglage n’a pas été enregistré. Réessayez.',
   panne: 'Vos préférences de notification n’ont pas pu être chargées',
   panneePrecision: 'La connexion au service a échoué. Réessayez dans un instant.',
+  /**
+   * UN 401 EN COURS DE SESSION N'EST PAS UN ÉCHEC RÉSEAU : le rollback est le
+   * même, le MESSAGE ne l'est pas — un « réessayez » sur une session qui n'est
+   * plus valide ferait boucler le lecteur sans jamais lui dire ce qu'il doit
+   * faire. Même bandeau, même loi que le fil (`lib/contenu/fil.ts` ›
+   * `BANDEAUX.sessionExpiree`) : ce que vous avez réglé reste à l'écran,
+   * reconnectez-vous pour continuer à le modifier.
+   */
+  bandeauSessionExpiree: {
+    titre: 'Votre session a expiré',
+    corps: 'Ce réglage n’a pas été enregistré. Reconnectez-vous pour continuer à modifier vos préférences.',
+    action: 'Se reconnecter',
+  },
 } as const;

@@ -2,6 +2,7 @@ import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
 import { BASCULES_DE_PREFS, PREFS, SECTIONS_DE_PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
+import { bandeau } from './bandeau-vue';
 import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
@@ -49,6 +50,8 @@ export type EtatDesPrefs = {
   readonly tempsReel: { readonly module: string; readonly passerelle: string } | null;
 };
 
+const CHEMIN = '/notifications/preferences';
+
 const LIBELLE_PAR_CLE: Readonly<Record<CleDePreference, string>> = Object.fromEntries(
   BASCULES_DE_PREFS.map((b) => [b.cle, b.libelle]),
 ) as Record<CleDePreference, string>;
@@ -69,6 +72,25 @@ const avis = (regleAppliquee: CleDePreference | null): string =>
 
 const echecBandeau = (echec: boolean): string =>
   `<p class="echec" role="alert"${echec ? '' : ' hidden'}>${echec ? svgDuSprite('ph-warning-circle') + echappe(PREFS.echec) : ''}</p>`;
+
+/**
+ * SERVI CACHÉ, COMME LES BANDEAUX DIFFÉRÉS DU FIL — un 401 en cours de
+ * session (jeton expiré ENTRE le chargement de l'écran et une bascule) n'a
+ * pas d'autre fenêtre où naître : la loi tient même si `etat.tempsReel` est
+ * `null`, exactement comme `avis`/`echecBandeau` ci-dessus, jamais devenu un
+ * nœud construit après coup.
+ */
+const sessionExpireeBandeau = (): string =>
+  bandeau({
+    classe: 'attention',
+    identifiant: 'bandeau-session-expiree',
+    role: 'alert',
+    glyphe: 'ph-warning-circle',
+    titre: PREFS.bandeauSessionExpiree.titre,
+    corps: PREFS.bandeauSessionExpiree.corps,
+    action: { libelle: PREFS.bandeauSessionExpiree.action, href: `/login?returnUrl=${encodeURIComponent(CHEMIN)}` },
+    cache: true,
+  });
 
 /**
  * UNE RANGÉE — un commutateur qui porte lui-même son texte, sa piste et son
@@ -113,6 +135,7 @@ const corps = (etat: EtatDesPrefs, participation: string): string =>
   enTete() +
   avis(etat.regleAppliquee) +
   echecBandeau(etat.echec) +
+  sessionExpireeBandeau() +
   SECTIONS_DE_PREFS.map((s) => section(s, etat.reglages, PREFS.fenetre(etat.dndStartTime, etat.dndEndTime))).join('') +
   '</main>';
 
