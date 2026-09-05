@@ -37,9 +37,6 @@ function makeUser(overrides: Record<string, unknown> = {}) {
     emailVerifiedAt: new Date('2025-01-01T00:00:00Z'),
     phoneVerifiedAt: null,
     twoFactorEnabledAt: null,
-    pendingEmail: null,
-    pendingPhone: null,
-    pendingPhoneNumber: null,
     lastPasswordChange: null,
     lastLoginIp: null,
     lastLoginLocation: null,
@@ -90,6 +87,13 @@ describe('formatUserResponse', () => {
     expect(result.autoTranslateEnabled).toBe(true);
   });
 
+  it('does not compose pendingEmail/pendingPhone — no client reads them on a connection response (#4653)', () => {
+    const user = makeUser({ pendingEmail: 'new@meeshy.me', pendingPhone: '+33699999999' });
+    const result = formatUserResponse(user) as unknown as Record<string, unknown>;
+    expect('pendingEmail' in result).toBe(false);
+    expect('pendingPhone' in result).toBe(false);
+  });
+
   it('maps date fields correctly', () => {
     const user = makeUser();
     const result = formatUserResponse(user);
@@ -107,31 +111,6 @@ describe('formatUserResponse', () => {
   it('uses banner value when present', () => {
     const user = makeUser({ banner: 'https://cdn.meeshy.me/banners/b.jpg' });
     expect(formatUserResponse(user).banner).toBe('https://cdn.meeshy.me/banners/b.jpg');
-  });
-
-  it('falls back to null for missing pendingEmail', () => {
-    const user = makeUser({ pendingEmail: undefined });
-    expect(formatUserResponse(user).pendingEmail).toBeNull();
-  });
-
-  it('uses pendingEmail value when present', () => {
-    const user = makeUser({ pendingEmail: 'newemail@meeshy.me' });
-    expect(formatUserResponse(user).pendingEmail).toBe('newemail@meeshy.me');
-  });
-
-  it('uses pendingPhone from pendingPhone field', () => {
-    const user = makeUser({ pendingPhone: '+33699999999' });
-    expect(formatUserResponse(user).pendingPhone).toBe('+33699999999');
-  });
-
-  it('falls back to pendingPhoneNumber when pendingPhone is absent', () => {
-    const user = makeUser({ pendingPhone: undefined, pendingPhoneNumber: '+33688888888' });
-    expect(formatUserResponse(user).pendingPhone).toBe('+33688888888');
-  });
-
-  it('returns null for pendingPhone when both are absent', () => {
-    const user = makeUser({ pendingPhone: undefined, pendingPhoneNumber: undefined });
-    expect(formatUserResponse(user).pendingPhone).toBeNull();
   });
 
   it('uses explicit permissions argument over user.permissions', () => {
