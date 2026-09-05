@@ -312,6 +312,7 @@ internal class ConversationCacheSource(
                         ?: conversation.createdAt,
                 ),
                 cachedAt = now,
+                unreadCount = conversation.unreadCount,
             )
         }
         // The watermark's own value — NEVER the fallback-adjusted one above —
