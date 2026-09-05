@@ -224,6 +224,37 @@ describe('groupSocketsByLanguage — BCP-47 recipient language normalization', (
     expect([...g.languages].sort()).toEqual(['fr', 'zz']);
   });
 
+  // An IRREDUCIBLE, out-of-catalogue code that is ALSO region/script-tagged
+  // ('yue-HK', Cantonese) must still be reduced to its region-blind primary
+  // subtag ('yue') — the shared dedup SSOT does this for every code, not only
+  // those it can map to a supported language. The old whole-string fallback
+  // ('.trim().toLowerCase()') left 'yue-hk', so a 'yue-HK' recipient and a 'yue'
+  // recipient split into two payload emissions where one suffices.
+  it('strips the region tag from an out-of-catalogue code (yue-HK → yue)', () => {
+    const groups = groupSocketsByLanguage({
+      socketIds: ['s-yue'],
+      originalLanguage: 'fr',
+      socketToUser: () => 'u-yue',
+      resolveLanguages: () => [],
+      userLanguage: () => 'yue-HK',
+    });
+    const g = groups.find((grp) => grp.socketIds.includes('s-yue'))!;
+    expect([...g.languages].sort()).toEqual(['fr', 'yue']);
+  });
+
+  it('collapses region-variants of an out-of-catalogue code into ONE group', () => {
+    const groups = groupSocketsByLanguage({
+      socketIds: ['s-a', 's-b'],
+      originalLanguage: 'fr',
+      socketToUser: (id) => (id === 's-a' ? 'u-a' : 'u-b'),
+      resolveLanguages: () => [],
+      userLanguage: (id) => (id === 'u-a' ? 'yue-HK' : 'yue'),
+    });
+    expect(groups).toHaveLength(1);
+    expect(groups[0].socketIds.sort()).toEqual(['s-a', 's-b']);
+    expect([...groups[0].languages].sort()).toEqual(['fr', 'yue']);
+  });
+
   it('end-to-end: an anonymous pt-BR recipient keeps their pt translation (Prisme)', () => {
     const payload = {
       id: 'msg-pt',
