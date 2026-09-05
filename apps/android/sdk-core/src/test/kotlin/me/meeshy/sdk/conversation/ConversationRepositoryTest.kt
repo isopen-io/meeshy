@@ -31,6 +31,7 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.kindEnum
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -60,6 +61,13 @@ private abstract class StubConversationApi : ConversationApi {
 
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) =
         ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> =
+        retrofit2.Response.success(ApiResponse(success = false))
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun stats(id: String) = ApiResponse<ConversationMessageStatsResponse>(success = false)
@@ -93,6 +101,17 @@ private class FakeConversationApi(
     var response: ApiResponse<List<ApiConversation>>,
 ) : StubConversationApi() {
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = response
+
+    // #5188 — page 1 now always goes through the conditional call; this fake
+    // never simulates a 304 (no existing test here holds a validator), so it
+    // always answers 200 with the SAME body [list] would have returned.
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> =
+        retrofit2.Response.success(list(offset, limit, updatedSince))
 }
 
 /**
@@ -123,6 +142,17 @@ private class PagedConversationApi(
             ),
         )
     }
+
+    // #5188 — page 1 now always goes through the conditional call; this fake
+    // never simulates a 304 (no test here holds a validator), so it always
+    // answers 200 with the SAME body [list] would have returned.
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> =
+        retrofit2.Response.success(list(offset, limit, updatedSince))
 }
 
 /**
@@ -138,6 +168,14 @@ private class PaginationlessConversationApi(
 ) : StubConversationApi() {
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?): ApiResponse<List<ApiConversation>> =
         ApiResponse(success = true, data = served, pagination = null)
+
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> =
+        retrofit2.Response.success(list(offset, limit, updatedSince))
 }
 
 /**
@@ -179,7 +217,90 @@ private class DeltaAwareConversationApi(
             ),
         )
     }
+
+    // #5188 — page 1 now always goes through the conditional call; this fake
+    // never simulates a 304 (no #5187 test holds a validator), so it always
+    // answers 200 with the SAME body [list] would have returned.
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> =
+        retrofit2.Response.success(list(offset, limit, updatedSince))
 }
+
+/**
+ * Simulates the gateway's ETag/If-None-Match contract for `GET /conversations`
+ * (`sendWithETag`, `services/gateway/src/routes/conversations/core-list.ts:
+ * 892-906`): the validator is a pure function of the exact response body a
+ * query produces (offset/limit/updatedSince + [served]'s current content), so
+ * the SAME query repeated against an UNCHANGED [served] always recomputes the
+ * SAME validator — which is exactly what makes `If-None-Match` match and a 304
+ * possible. [served] is mutable so a test can simulate the server changing
+ * between two `revalidate()` calls. #5188.
+ */
+private class EtagAwareConversationApi(
+    var served: List<ApiConversation>,
+) : StubConversationApi() {
+    data class Call(val offset: Int?, val limit: Int?, val updatedSince: String?, val ifNoneMatch: String?)
+
+    val calls: MutableList<Call> = mutableListOf()
+
+    override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?): ApiResponse<List<ApiConversation>> {
+        val appliedOffset = offset ?: 0
+        val appliedLimit = limit ?: 30
+        val sinceMillis = updatedSince?.let { Instant.parse(it).toEpochMilli() }
+        val matching = if (sinceMillis != null) {
+            served.filter { conversation -> Instant.parse(conversation.updatedAt!!).toEpochMilli() > sinceMillis }
+        } else {
+            served
+        }
+        val page = matching.drop(appliedOffset).take(appliedLimit)
+        return ApiResponse(
+            success = true,
+            data = page,
+            pagination = me.meeshy.sdk.model.Pagination(
+                total = matching.size,
+                offset = appliedOffset,
+                limit = appliedLimit,
+                hasMore = appliedOffset + page.size < matching.size,
+            ),
+        )
+    }
+
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> {
+        calls += Call(offset, limit, updatedSince, ifNoneMatch)
+        val envelope = list(offset, limit, updatedSince)
+        val etag = "\"${envelope.hashCode()}\""
+        return if (ifNoneMatch != null && ifNoneMatch == etag) {
+            retrofit2.Response.error(
+                "".toResponseBody(null),
+                notModifiedRawResponse(),
+            )
+        } else {
+            retrofit2.Response.success(envelope, okhttp3.Headers.headersOf("ETag", etag))
+        }
+    }
+}
+
+/**
+ * A raw 304 `okhttp3.Response` — [retrofit2.Response]'s `(Int, ResponseBody)`
+ * error factory REQUIRES `code >= 400` (Retrofit's own precondition), so a 304
+ * must go through the raw-response overload instead. #5188.
+ */
+private fun notModifiedRawResponse(): okhttp3.Response =
+    okhttp3.Response.Builder()
+        .code(304)
+        .message("Not Modified")
+        .protocol(okhttp3.Protocol.HTTP_1_1)
+        .request(okhttp3.Request.Builder().url("http://localhost/").build())
+        .build()
 
 private class RecordingSettingsApi(
     private val response: ApiResponse<UpdateConversationResponse>,
@@ -1581,6 +1702,140 @@ class ConversationRepositoryTest {
         assertThat(api.calls.single().updatedSince).isNull()
         val ids = repo.cachedConversations().first().map { it.id }.toSet()
         assertThat(ids).containsExactly("kept")
+    }
+
+    /**
+     * #5188 — the FIRST revalidate ever (cold start: no watermark, no `etag`)
+     * must not send `If-None-Match` at all — there is no validator to send.
+     */
+    @Test
+    fun `the first-ever revalidate call sends no If-None-Match`() = runTest {
+        val api = EtagAwareConversationApi(
+            served = listOf(ApiConversation(id = "c1", title = "Team", updatedAt = Instant.now().toString())),
+        )
+        val repo = repository(api)
+
+        repo.refresh()
+
+        assertThat(api.calls).hasSize(1)
+        assertThat(api.calls.single().ifNoneMatch).isNull()
+        assertThat(api.calls.single().updatedSince).isNull()
+    }
+
+    /**
+     * #5188 — core witness. A delta sweep primes a real `ETag` (server
+     * confirms "nothing new since the watermark" — the dominant, common
+     * revalidation outcome per the issue). Repeating the EXACT same request
+     * against an UNCHANGED server must get a 304: the second call sends
+     * `If-None-Match`, no body is ever decoded (there is none to decode), and
+     * NOTHING is written to the `conversations` table — proven by the
+     * seeded row's `cachedAt` staying byte-identical (an upsert, even of
+     * identical content, would bump it). Freshness (`lastSyncedAt`) DOES
+     * advance — a 304 is still a successful revalidation.
+     */
+    @Test
+    fun `revalidate with a held validator and an unchanged server gets a 304 and writes nothing`() = runTest {
+        val watermarkMillis = System.currentTimeMillis() - 60_000L
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                ConversationCacheSource.RESOURCE_KEY,
+                watermarkMillis,
+                watermarkMillis,
+            ),
+        )
+        db.conversationDao().upsertAll(
+            listOf(
+                me.meeshy.core.database.entity.ConversationEntity(
+                    id = "untouched",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "untouched", title = "Untouched"),
+                    ),
+                    updatedAt = watermarkMillis,
+                    cachedAt = watermarkMillis,
+                ),
+            ),
+        )
+        // Nothing new since the watermark: an empty delta page, both times.
+        val api = EtagAwareConversationApi(served = emptyList())
+        val repo = repository(api)
+
+        repo.refresh() // primes a real ETag for this exact delta query
+        val etagAfterPriming = db.syncMetaDao().etag(ConversationCacheSource.RESOURCE_KEY)
+        assertThat(etagAfterPriming).isNotNull()
+        val cachedAtBeforeSecondCall = db.conversationDao().find("untouched")?.cachedAt
+        val lastSyncedAtBeforeSecondCall = db.syncMetaDao().observe(ConversationCacheSource.RESOURCE_KEY).first()!!
+
+        repo.refresh() // repeat — server unchanged, must 304
+
+        assertThat(api.calls).hasSize(2)
+        assertThat(api.calls[1].ifNoneMatch).isEqualTo(etagAfterPriming)
+        assertThat(db.conversationDao().find("untouched")?.cachedAt).isEqualTo(cachedAtBeforeSecondCall)
+        assertThat(db.syncMetaDao().etag(ConversationCacheSource.RESOURCE_KEY)).isEqualTo(etagAfterPriming)
+        assertThat(db.syncMetaDao().observe(ConversationCacheSource.RESOURCE_KEY).first())
+            .isGreaterThan(lastSyncedAtBeforeSecondCall)
+    }
+
+    /**
+     * #5188 — the server DID change between two revalidations: the second
+     * call gets 200 (not 304), the stored `ETag` is REPLACED, and Room
+     * reflects the new content.
+     */
+    @Test
+    fun `revalidate when the server changed gets 200, a replaced validator, and updates Room`() = runTest {
+        val watermarkMillis = System.currentTimeMillis() - 60_000L
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                ConversationCacheSource.RESOURCE_KEY,
+                watermarkMillis,
+                watermarkMillis,
+            ),
+        )
+        val api = EtagAwareConversationApi(served = emptyList())
+        val repo = repository(api)
+        repo.refresh() // primes an ETag for "nothing changed yet"
+        val etagBefore = db.syncMetaDao().etag(ConversationCacheSource.RESOURCE_KEY)
+        assertThat(etagBefore).isNotNull()
+
+        api.served = listOf(
+            ApiConversation(
+                id = "new1",
+                title = "New",
+                updatedAt = Instant.ofEpochMilli(watermarkMillis + 1_000L).toString(),
+            ),
+        )
+        repo.refresh()
+
+        val etagAfter = db.syncMetaDao().etag(ConversationCacheSource.RESOURCE_KEY)
+        assertThat(etagAfter).isNotEqualTo(etagBefore)
+        val ids = repo.cachedConversations().first().map { it.id }.toSet()
+        assertThat(ids).containsExactly("new1")
+    }
+
+    /**
+     * #5188 — a 304 proves "nothing new since I last asked", never "I have
+     * now seen everything up to this instant": it must NEVER advance
+     * [me.meeshy.core.database.entity.SyncMetaEntity.contentWatermarkMillis]
+     * (#5187's content watermark), even though it IS a successful
+     * revalidation for freshness purposes.
+     */
+    @Test
+    fun `a 304 never advances the content watermark from 5187`() = runTest {
+        val watermarkMillis = System.currentTimeMillis() - 60_000L
+        db.syncMetaDao().upsert(
+            me.meeshy.core.database.entity.SyncMetaEntity(
+                ConversationCacheSource.RESOURCE_KEY,
+                watermarkMillis,
+                watermarkMillis,
+            ),
+        )
+        val api = EtagAwareConversationApi(served = emptyList())
+        val repo = repository(api)
+        repo.refresh() // primes an ETag
+
+        repo.refresh() // must 304
+
+        assertThat(api.calls).hasSize(2)
+        assertThat(db.syncMetaDao().watermark(ConversationCacheSource.RESOURCE_KEY)).isEqualTo(watermarkMillis)
     }
 
     /**

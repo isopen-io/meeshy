@@ -31,6 +31,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -56,6 +57,17 @@ private class FakeMessageApi(
         lastLimit = limit
         return if (before != null) olderResponse else response
     }
+
+    // #5188 — [MessageCacheSource.revalidate] now always goes through the
+    // conditional call for its recent-window fetch; this fake never simulates
+    // a 304 (no existing test here holds a validator), so it always answers
+    // 200 with the SAME body [list] would have returned.
+    override suspend fun listConditional(
+        conversationId: String,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiMessage>>> =
+        retrofit2.Response.success(list(conversationId, null, null, null))
+
     override suspend fun send(conversationId: String, body: SendMessageRequest) =
         ApiResponse<ApiMessage>(success = false)
     override suspend fun edit(messageId: String, body: EditMessageRequest) =
@@ -68,6 +80,66 @@ private class FakeMessageApi(
     override suspend fun unpin(conversationId: String, messageId: String) =
         ApiResponse<Unit>(success = true)
 }
+
+/**
+ * Simulates the gateway's ETag/If-None-Match contract for the recent-message
+ * window (`sendWithETag`, `services/gateway/src/routes/conversations/
+ * messages-list.ts:825-829`): the validator is a pure function of [served]'s
+ * current content, so the SAME request against an UNCHANGED [served] always
+ * recomputes the SAME validator — which is what makes `If-None-Match` match
+ * and a 304 possible. [served] is mutable so a test can simulate the server
+ * changing between two `revalidate()` calls. #5188.
+ */
+private class EtagAwareMessageApi(
+    var served: List<ApiMessage>,
+) : MessageApi {
+    val calls: MutableList<String?> = mutableListOf()
+
+    override suspend fun list(conversationId: String, offset: Int?, limit: Int?, before: String?) =
+        ApiResponse(success = true, data = served)
+
+    override suspend fun listConditional(
+        conversationId: String,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiMessage>>> {
+        calls += ifNoneMatch
+        val envelope = ApiResponse(success = true, data = served)
+        val etag = "\"${envelope.hashCode()}\""
+        return if (ifNoneMatch != null && ifNoneMatch == etag) {
+            retrofit2.Response.error(
+                "".toResponseBody(null),
+                messagesNotModifiedRawResponse(),
+            )
+        } else {
+            retrofit2.Response.success(envelope, okhttp3.Headers.headersOf("ETag", etag))
+        }
+    }
+
+    override suspend fun send(conversationId: String, body: SendMessageRequest) =
+        ApiResponse<ApiMessage>(success = false)
+    override suspend fun edit(messageId: String, body: EditMessageRequest) =
+        ApiResponse<ApiMessage>(success = false)
+    override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
+    override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
+        ApiResponse<List<ApiMessage>>(success = false)
+    override suspend fun pin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun unpin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = false)
+}
+
+/**
+ * A raw 304 `okhttp3.Response` — [retrofit2.Response]'s `(Int, ResponseBody)`
+ * error factory REQUIRES `code >= 400` (Retrofit's own precondition), so a 304
+ * must go through the raw-response overload instead. #5188.
+ */
+private fun messagesNotModifiedRawResponse(): okhttp3.Response =
+    okhttp3.Response.Builder()
+        .code(304)
+        .message("Not Modified")
+        .protocol(okhttp3.Protocol.HTTP_1_1)
+        .request(okhttp3.Request.Builder().url("http://localhost/").build())
+        .build()
 
 private class FakeTranslationApi(
     var response: ApiResponse<TranslateResponse> = ApiResponse(success = false, error = "no translator"),
@@ -305,6 +377,71 @@ class MessageRepositoryTest {
         val thrown = runCatching { repo.refresh("c1") }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(MessageSyncException::class.java)
+    }
+
+    /**
+     * #5188 — the FIRST revalidate ever for this conversation (no held
+     * `etag`) must not send `If-None-Match` at all.
+     */
+    @Test
+    fun `the first-ever refresh sends no If-None-Match`() = runTest {
+        val api = EtagAwareMessageApi(served = listOf(apiMessage("m1")))
+        val repo = repository(api)
+
+        repo.refresh("c1")
+
+        assertThat(api.calls).hasSize(1)
+        assertThat(api.calls.single()).isNull()
+    }
+
+    /**
+     * #5188 — core witness. A first refresh primes a real `ETag`. Repeating
+     * the exact same refresh against an UNCHANGED server must get a 304: the
+     * second call sends `If-None-Match`, no body is ever decoded, and NOTHING
+     * is written to the `messages` table — proven by the seeded row's
+     * `cachedAt` staying byte-identical (an upsert, even of identical
+     * content, would bump it). Freshness (`lastSyncedAt`) DOES advance — a
+     * 304 is still a successful revalidation.
+     */
+    @Test
+    fun `refresh with a held validator and an unchanged server gets a 304 and writes nothing`() = runTest {
+        val api = EtagAwareMessageApi(served = listOf(apiMessage("m1", createdAt = T1)))
+        val repo = repository(api)
+
+        repo.refresh("c1") // primes a real ETag
+        val etagAfterPriming = db.syncMetaDao().etag("messages:c1")
+        assertThat(etagAfterPriming).isNotNull()
+        val cachedAtBeforeSecondCall = db.messageDao().find("m1")?.cachedAt
+        val lastSyncedAtBeforeSecondCall = db.syncMetaDao().observe("messages:c1").first()!!
+
+        repo.refresh("c1") // repeat — server unchanged, must 304
+
+        assertThat(api.calls).hasSize(2)
+        assertThat(api.calls[1]).isEqualTo(etagAfterPriming)
+        assertThat(db.messageDao().find("m1")?.cachedAt).isEqualTo(cachedAtBeforeSecondCall)
+        assertThat(db.syncMetaDao().etag("messages:c1")).isEqualTo(etagAfterPriming)
+        assertThat(db.syncMetaDao().observe("messages:c1").first()).isGreaterThan(lastSyncedAtBeforeSecondCall)
+    }
+
+    /**
+     * #5188 — the server DID change between two refreshes: the second call
+     * gets 200 (not 304), the stored `ETag` is REPLACED, and Room reflects
+     * the new content.
+     */
+    @Test
+    fun `refresh when the server changed gets 200, a replaced validator, and updates Room`() = runTest {
+        val api = EtagAwareMessageApi(served = listOf(apiMessage("m1", createdAt = T1)))
+        val repo = repository(api)
+        repo.refresh("c1") // primes an ETag
+        val etagBefore = db.syncMetaDao().etag("messages:c1")
+        assertThat(etagBefore).isNotNull()
+
+        api.served = listOf(apiMessage("m1", createdAt = T1), apiMessage("m2", createdAt = T2))
+        repo.refresh("c1")
+
+        val etagAfter = db.syncMetaDao().etag("messages:c1")
+        assertThat(etagAfter).isNotEqualTo(etagBefore)
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1", "m2")
     }
 
     @Test
