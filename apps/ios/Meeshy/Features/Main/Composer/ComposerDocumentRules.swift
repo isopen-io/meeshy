@@ -502,7 +502,22 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
         // texte ni média, et `emptyDraft` ne doit se refuser que quand il n'y a
         // NI texte NI média NI lieu.
         let texteVide = draft.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-        guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil else {
+        // **Un CANVAS est de la matière** (2026-09-05). L'énumération ci-dessus
+        // disait « NI texte NI média NI lieu » et le canvas n'y figurait pas :
+        // une composition de texte, de dessin, de stickers ou à fond de couleur
+        // seul — celles que le porteur demande d'éprouver — se faisait refuser
+        // comme « brouillon vide » APRÈS que la flèche se soit armée.
+        //
+        // > **Le même oubli, deux étages plus bas.** La porte de la flèche
+        // > ignorait la matière du canvas (corrigé le même jour) ; le PLAN
+        // > d'envoi l'ignorait aussi. Corriger le premier a rendu le second
+        // > visible — et sans lui, l'auteur passait d'un bouton mort à un
+        // > bouton qui échoue, ce qui est pire.
+        //
+        // La règle n'est pas réécrite : `StorySlidePublishMatter` est le site
+        // unique depuis #4741, et il expose désormais le grain des EFFETS.
+        let canvasSansMatiere = !(draft.storyEffects.map(StorySlidePublishMatter.carriesMatter) ?? false)
+        guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil || !canvasSansMatiere else {
             return .refuse(.emptyDraft)
         }
         // La complétude de l'audience passe par la MÊME règle que le gate de la

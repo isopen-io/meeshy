@@ -36,25 +36,6 @@ export interface DashboardData {
   recentCommunities: DashboardCommunity[];
 }
 
-export interface ShareLink {
-  id: string;
-  linkId: string;
-  name?: string;
-  description?: string;
-  conversationId: string;
-  conversation: {
-    id: string;
-    type: string;
-    title?: string;
-    description?: string;
-  };
-  isActive: boolean;
-  currentUses: number;
-  maxUses?: number;
-  expiresAt?: Date;
-  createdAt: Date;
-}
-
 /**
  * Service pour gérer les données du dashboard utilisateur
  */
@@ -90,86 +71,22 @@ export const dashboardService = {
       logger.error('[Service]', 'Erreur lors de la récupération des données du dashboard', { error });
       throw error;
     }
-  },
-
-  /**
-   * Récupère les liens de partage créés par l'utilisateur
-   */
-  async getShareLinks(): Promise<ApiResponse<ShareLink[]>> {
-    try {
-      const response = await apiService.get<{ success: boolean; data: ShareLink[] }>('/share-links');
-      return {
-        success: true,
-        data: response.data!.data,
-        message: response.message
-      };
-    } catch (error) {
-      logger.error('[Service]', 'Erreur lors de la récupération des liens de partage', { error });
-      throw error;
-    }
-  },
-
-  /**
-   * Crée un nouveau lien de partage pour une conversation
-   */
-  async createShareLink(data: {
-    conversationId: string;
-    name?: string;
-    description?: string;
-    maxUses?: number;
-    expiresAt?: string;
-  }): Promise<ApiResponse<ShareLink>> {
-    try {
-      const response = await apiService.post<{ success: boolean; data: ShareLink }>('/share-links', data);
-      return {
-        success: true,
-        data: response.data!.data,
-        message: response.message
-      };
-    } catch (error) {
-      logger.error('[Service]', 'Erreur lors de la création du lien de partage', { error });
-      throw error;
-    }
-  },
-
-  /**
-   * Désactive un lien de partage
-   */
-  async deactivateShareLink(linkId: string): Promise<ApiResponse<{ success: boolean }>> {
-    try {
-      const response = await apiService.patch<{ success: boolean }>(`/share-links/${linkId}/deactivate`);
-      return response;
-    } catch (error) {
-      logger.error('[Service]', 'Erreur lors de la désactivation du lien de partage', { error });
-      throw error;
-    }
-  },
-
-  /**
-   * Obtient les informations d'un lien de partage public
-   */
-  async getShareLinkInfo(linkId: string): Promise<ApiResponse<ShareLink>> {
-    try {
-      const response = await apiService.get<ShareLink>(`/share-links/${linkId}`);
-      return response;
-    } catch (error) {
-      logger.error('[Service]', 'Erreur lors de la récupération des informations du lien', { error });
-      throw error;
-    }
-  },
-
-  /**
-   * Rejoint une conversation via un lien de partage
-   */
-  async joinViaShareLink(linkId: string): Promise<ApiResponse<{ conversation: Conversation; message: string }>> {
-    try {
-      const response = await apiService.post<{ conversation: Conversation; message: string }>(`/share-links/${linkId}/join`);
-      return response;
-    } catch (error) {
-      logger.error('[Service]', 'Erreur lors de la tentative de rejoindre via le lien', { error });
-      throw error;
-    }
   }
+
+  // #5299 — `getShareLinks`/`createShareLink`/`deactivateShareLink`/
+  // `getShareLinkInfo`/`joinViaShareLink` ont été retirées : les cinq
+  // ciblaient un espace `/share-links/*` qui n'a jamais existé côté
+  // passerelle (seul `/share-links` ADMIN existe, pour `admin.service.ts`,
+  // sans rapport avec ce service). Zéro appelant dans tout le dépôt web en
+  // dehors de leur propre test, qui ne faisait que rejouer le mock —
+  // `apiService` étant entièrement doublé, aucun des cinq témoins ne pouvait
+  // jamais tomber sur une route absente. La fonctionnalité réelle (créer,
+  // activer/désactiver, rejoindre un lien) est déjà servie ailleurs, contre
+  // les VRAIES routes : `app/links/page.tsx` (`PATCH /links/:linkId`) et
+  // `admin.service.ts`/`app/admin/share-links/page.tsx` (`/share-links`
+  // admin). Retirer plutôt que corriger une redirection : republier un
+  // adaptateur vers `POST /links/:key/members` sans un seul appelant réel
+  // aurait fabriqué un contrat que rien ne peut vérifier depuis le produit.
 };
 
 export default dashboardService;

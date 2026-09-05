@@ -45,8 +45,22 @@ public enum StorySlidePublishMatter {
         if slide.mediaURL?.isEmpty == false { return true }
         if slide.mediaData != nil { return true }
         if slide.content?.isEmpty == false { return true }
+        return carriesMatter(slide.effects)
+    }
 
-        let effets = slide.effects
+    /// **La même règle, au grain des EFFETS seuls** (2026-09-05).
+    ///
+    /// Un brouillon de document ne porte pas une `StorySlide` mais son
+    /// `StoryEffects` — et la question « y a-t-il de quoi publier ? » s'y pose
+    /// à l'identique. Elle était réécrite nulle part : elle n'était simplement
+    /// pas posée, et un canvas de texte, de dessin ou à fond de couleur se
+    /// faisait refuser comme « brouillon vide » par `ComposerDocumentSendPlan`.
+    ///
+    /// > Exposer le grain manquant vaut mieux que recopier la liste des
+    /// > champs : une seconde écriture serait une seconde occasion de la
+    /// > corriger à moitié — c'est exactement ce que ce type a été créé pour
+    /// > empêcher (#4741).
+    public static func carriesMatter(_ effets: StoryEffects) -> Bool {
         if effets.background?.isEmpty == false { return true }
         // Un texte VIDE n'est pas de la matière : c'est la coquille que le tap
         // sur la page blanche pose AVANT la première frappe. La compter

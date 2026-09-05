@@ -402,6 +402,55 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
     }
 
+    // MARK: - Un CANVAS seul, sans texte ni média ni lieu, peut partir
+
+    /// **Le cas mesuré au simulateur le 2026-09-05** (directive porteur : « des
+    /// tests de canvas sans image avec texte sticker dessin, avec fond couleur
+    /// uniquement »).
+    ///
+    /// Un fond de couleur + un texte posé sur la scène : le composer peint
+    /// tout, la flèche s'arme — et le plan refusait `.emptyDraft`. L'auteur
+    /// voyait « Erreur lors de la publication » sur une composition entière.
+    ///
+    /// > **Le même oubli à deux étages.** La porte de la flèche ne comptait pas
+    /// > la matière du canvas ; le plan d'envoi non plus. Corriger la première
+    /// > a rendu le second visible — et sans lui, l'auteur passait d'un bouton
+    /// > mort à un bouton qui échoue, ce qui est pire : le premier ne promet
+    /// > rien, le second promet et trahit.
+    func test_unCanvasSeul_sansTexteNiMediaNiLieu_peutPartir() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertNotEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Un canvas est de la matière — un fond CHOISI est le geste le plus court qui produise " +
+            "une publication qu'on peut regarder."
+        )
+    }
+
+    /// …et un canvas VIDE reste vide. La règle compte la matière, pas la
+    /// présence d'un blob : un `StoryEffects` neuf accompagne toute
+    /// composition dès le premier geste, et l'accepter ferait partir des
+    /// publications que personne n'a composées.
+    func test_unCanvasVIDE_neSuffitPas() {
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: StoryEffects(), mediaCaptions: [:], mediaAlts: [:],
+            mediaObjectIds: [:]
+        )
+        XCTAssertEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Un blob d'effets sans aucune matière n'est pas une composition."
+        )
+    }
+
     // MARK: - T2.6 — Un vocal composé dans le meuble part AVEC sa transcription
 
     /// **Round-trip pur, sans lire de source** — même patron que

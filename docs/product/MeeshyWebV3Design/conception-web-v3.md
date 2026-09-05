@@ -841,7 +841,7 @@ cd apps/web && npx jest __tests__/public/sw.v3-zone.test.ts __tests__/utils/serv
 | — | `links` | Mes liens | **P1** | `/links` | `/links` | `home` | — | Création **exige un compte côté UI** malgré `authOptional` serveur (§ 11) |
 | — | `sheet:link` *(hors planche)* | Feuille lien de partage | **P1** | overlay | — | `links` | — | QR, expiration, anonymes autorisés — **chaque champ a un effet** |
 | — | `sheet:conv` *(hors planche)* | Feuille nouvelle conversation | **P1** | overlay | — | `chats` | — | — |
-| — | `sheet:attach` *(hors planche)* | Feuille pièce jointe | **P1** | overlay | — | `thread` | — | Limite 10 Mo appliquée **et annoncée** |
+| — | `sheet:attach` *(hors planche)* | Feuille pièce jointe | **P1** | overlay | — | `thread` | — | Aucune limite chiffrée annoncée (#5070 — la passerelle n'en applique aucune sur ce chemin, un chiffre ne s'invente pas) ; poids annoncé dès la sélection, refus serveur affiché |
 | — | `sheet:member` *(hors planche)* | Feuille espace membre | **P1** | overlay | — | `home` | — | Remplace la barre d'onglets absente de la planche (§ 11) |
 | — | `notifs` | Notifications | **P1** | `/notifications` | `/notifications` | `home` | — | Action « Tout lire » **câblée** |
 | — | `notifPrefs` | Préférences de notification | **P1** | `/notifications/preferences` | `/notifications` | `notifs` | — | **11 toggles réellement mutants** (purement visuels aujourd'hui) |

@@ -1028,7 +1028,7 @@
    "depend_de": [
     "thread"
    ],
-   "critere_de_fin": "Limite de 10 Mo APPLIQUÉE et ANNONCÉE avant sélection ; poids affiché après compression.",
+   "critere_de_fin": "Aucun chiffre inventé (#5070 — la passerelle n'applique aucune limite produit sur ce chemin, seulement un plafond d'infrastructure à 4 Go ; un chiffre ne s'invente pas, cf. lib/contenu/droits.ts). Poids du fichier ANNONCÉ dès la sélection ; un refus serveur est affiché au lecteur, jamais avalé.",
    "dimensions_visees": [
     "Expérience utilisateur",
     "Complétude"
