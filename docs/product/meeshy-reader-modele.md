@@ -134,16 +134,27 @@ persistant, piloté au rail.
 
 Le tableau ci-dessus énumère les hôtes de **`MeeshyScenePlayer`**. Il en existe
 un **quatrième chemin**, qui ne passe par aucun `ScenePlayerConfig` :
-`StoryReaderRepresentable`, monté à quatre sites —
-`PostDetailView+Canvas.swift:69`, `PostDetailView+RepostEmbed.swift:178`, et
-`StoryViewerView+Canvas.swift:1045` et `:1107`.
+`StoryReaderRepresentable`, monté à **sept** fichiers (recompté le 2026-09-05) :
 
-Le viewer story monte donc **les deux** : le player à `:1034`/`:1090`, le
-représentable à `:1045`/`:1107`.
+```bash
+git grep -l "StoryReaderRepresentable(" -- '*.swift'
+```
+
+`FeedPostCard` · `PostDetailView+Canvas` · `PostDetailView+RepostEmbed` ·
+`StoryRepostEmbedCell` · `StoryViewerView+Canvas` · `MeeshyScenePlayer` ·
+`UnifiedPostComposer`.
+
+Le viewer story monte donc **les deux** : le player et le représentable.
 
 > **« Trois chromes, un moteur » décrit les hôtes du PLAYER, pas les surfaces qui
 > rendent une scène.** La loi 6 reste vraie de ce qu'elle nomme ; elle ne couvre
 > pas tout ce qui peint. Ne pas lire son énumération comme un inventaire.
+
+> **Et ce paragraphe s'était lui-même pris au piège qu'il énonce** : il disait
+> « quatre sites », trois lignes au-dessus d'un avertissement contre les
+> énumérations lues comme des inventaires. Trois manquaient. La parade n'est pas
+> d'énumérer mieux — c'est de publier la COMMANDE, ce que fait la version
+> ci-dessus : une liste se périme en silence, une commande se rejoue.
 
 ### La scène 0 est figée PARTOUT, et c'est une décision que personne n'a écrite
 

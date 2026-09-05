@@ -672,7 +672,8 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 | pertes silencieuses corrigées en deux jours | **8** | commits |
 
 † **Ces deux-là étaient chiffrés 65 / 58, et leur somme faisait l'ancien 123.**
-Les recopier tels quels sous un recensement de 120 aurait produit une
+Les recopier tels quels sous le recensement recompté (121 depuis le 2026-09-04)
+aurait produit une
 arithmétique fausse — et une somme qui ne tombe pas juste est le premier endroit
 où un lecteur cesse de croire un tableau. Ils sont donc rendus à ce qu'ils
 mesurent VRAIMENT : une proportion, qui porte l'argument entière.
@@ -759,7 +760,7 @@ carte de chaînes. Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
 Trois façons de fermer le trou, non exclusives, par coût croissant :
 1. **répandre** au lieu de recomposer — **fait** (#4905) : quatre inventaires
    supprimés ;
-2. **compléter le blob v1 partagé** pour que le golden exerce les 123 champs —
+2. **compléter le blob v1 partagé** pour que le golden exerce les 121 champs —
    utile après (1), pour les clés dérivées que le `rest` ne couvre pas ;
 3. **typer la charge par kind au contrat** — le seul remède qui rendrait la
    structure connue *par déclaration* plutôt que par convention. C'est une
