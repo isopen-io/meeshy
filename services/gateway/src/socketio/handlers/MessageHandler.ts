@@ -1463,19 +1463,32 @@ export class MessageHandler {
       let forwardSourceHiddenRooms: string[] = [];
       let forwardSourceHiddenUserIds: ReadonlySet<string> = new Set<string>();
       if (carriesForwardSource(broadcastPayload)) {
-        const verdict = await resolveForwardSourceForBroadcast(
-          this.prisma,
-          senderUserId,
-          (sharedParticipants ?? []).map((participant) => participant.userId)
-        );
-        if (!verdict.forwarderAllows) {
-          // L'auteur s'est retiré : plus personne n'apprend la provenance —
-          // sauf lui-même, servi par `senderPayload` (se cacher des autres
-          // n'est pas s'aveugler).
+        if (sharedParticipants === undefined) {
+          // La requête participants est tombée : on ne sait PAS qui a refusé
+          // la provenance des transferts. `[]` affirmerait « aucun lecteur »,
+          // ce qui revient à ne masquer personne — fail-OPEN d'une règle de
+          // confidentialité sur une panne de base. Fail-CLOSED à la place :
+          // la source est retirée pour tout le salon, comme si l'auteur
+          // s'était lui-même retiré — sauf lui, servi par `senderPayload`.
+          handlerLogger.warn(
+            'forward source: participant list unavailable — stripping for all peers (fail-closed)'
+          );
           peerPayload = withoutForwardSourceOrItsPath(broadcastPayload);
         } else {
-          forwardSourceHiddenUserIds = verdict.refusingReaderIds;
-          forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
+          const verdict = await resolveForwardSourceForBroadcast(
+            this.prisma,
+            senderUserId,
+            sharedParticipants.map((participant) => participant.userId)
+          );
+          if (!verdict.forwarderAllows) {
+            // L'auteur s'est retiré : plus personne n'apprend la provenance —
+            // sauf lui-même, servi par `senderPayload` (se cacher des autres
+            // n'est pas s'aveugler).
+            peerPayload = withoutForwardSourceOrItsPath(broadcastPayload);
+          } else {
+            forwardSourceHiddenUserIds = verdict.refusingReaderIds;
+            forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
+          }
         }
       }
 
