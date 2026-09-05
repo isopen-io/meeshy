@@ -43,6 +43,7 @@ const etatServi = (): EtatDuFil => ({
   brouillon: '',
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
+  contexte: null,
   plein: null,
   profil: null,
   tempsReel: {
@@ -56,7 +57,10 @@ const etatServi = (): EtatDuFil => ({
       recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
       liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
       commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+      plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
       navigateur: { nom: 'n.js', url: '/__v3/rt/n.js', corps: '' },
+      composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+      prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
       socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' },
     },
   },
@@ -164,12 +168,56 @@ describe('une bulle qui arrive', () => {
     expect(ligne.querySelector('.langue .code')?.textContent).toBe('es');
     expect(ligne.querySelector<HTMLElement>('.langue')?.hidden).toBe(false);
     expect(ligne.querySelector('.avatar')?.textContent).toBe('MR');
-    // Les fentes des deux rendus portent les mêmes classes : rien n'a été composé.
     const servie = p.liste.querySelector<HTMLElement>('li[data-id="m1"]')!;
-    ['.avatar', '.qui .nom', '.texte', 'details.original', '.meta .langue', '.meta time', 'ul.reactions'].forEach((fente) => {
+    // Les fentes des deux rendus portent les mêmes classes : rien n'a été composé.
+    // `a.avatar-lien` / `a.nom-lien` sont entrées dans cette liste avec #5030 : elles
+    // manquaient au GABARIT depuis #4958, donc une bulle PEINTE n'avait aucun chemin
+    // vers le profil quand la MÊME bulle rechargée en avait deux — et cette
+    // énumération, écrite avant elles, ne pouvait pas le dire. `.corps.colonnes >
+    // .bulle` et `.corps.colonnes > .datation time` remplacent `.meta time` depuis
+    // #5136 : l'heure et l'accusé ont quitté la ligne méta pour la SECONDE COLONNE
+    // du corps — servie et directe doivent porter la MÊME géographie, pas
+    // seulement les mêmes classes.
+    [
+      'a.avatar-lien',
+      '.avatar',
+      'a.nom-lien',
+      '.qui .nom',
+      '.texte',
+      'details.original',
+      '.meta .langue',
+      '.corps.colonnes > .bulle',
+      '.corps.colonnes > .datation time',
+      'ul.reactions',
+    ].forEach((fente) => {
       expect(ligne.querySelector(fente)).not.toBeNull();
       expect(servie.querySelector(fente)).not.toBeNull();
     });
+  });
+
+  /**
+   * ET LA FENTE MÈNE QUELQUE PART — la même règle que la ligne servie
+   * (`handleDeLAuteur`) : un auteur avec compte a son `href`, un auteur
+   * ANONYME (lui-même compris) n'en a pas. Un `<a>` sans `href` n'est ni
+   * focusable ni cliquable : c'est le patron de la fiche d'un vocal.
+   */
+  it('pose le href du profil sur une bulle PEINTE — et le RETIRE pour un auteur sans compte', () => {
+    const { p } = monte();
+    const etat = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
+    peins(p, insere(etat, arrivee()), Date.parse('2026-09-01T12:30:00.000Z'));
+
+    const ligne = p.liste.querySelector<HTMLElement>('li[data-id="m2"]')!;
+    const attendu = `${p.adresse}?profil=u3`;
+    expect(ligne.querySelector('a.avatar-lien')?.getAttribute('href')).toBe(attendu);
+    expect(ligne.querySelector('a.nom-lien')?.getAttribute('href')).toBe(attendu);
+    expect(ligne.querySelector('a.avatar-lien')?.getAttribute('aria-label')).toBe(FIL.voirLeProfil('Marta Ruiz'));
+
+    const anonyme = { ...arrivee({ id: 'm9' }), anonyme: true, auteur: 'Tolu', auteurId: 'p9' };
+    peins(p, insere(etat, anonyme), Date.parse('2026-09-01T12:30:00.000Z'));
+    const sans = p.liste.querySelector<HTMLElement>('li[data-id="m9"]')!;
+    expect(sans.querySelector('a.avatar-lien')?.hasAttribute('href')).toBe(false);
+    expect(sans.querySelector('a.nom-lien')?.hasAttribute('href')).toBe(false);
+    expect(sans.querySelector('a.avatar-lien')?.hasAttribute('aria-label')).toBe(false);
   });
 
   /** Le DOM va du plus récent au plus ancien : ce qui arrive se pose EN TÊTE, et l'état se relit dans l'ordre d'écriture. */
@@ -784,5 +832,114 @@ describe('la forme d’une pièce dérive d’UNE table, servie comme peinte', (
 
     expect(peinte).toEqual(attendu);
     expect(attendu.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * LE MENU D'UNE LIGNE PEINTE (issue #5163) — une ligne reçue en direct naît
+ * d'un CLONE du gabarit, qui porte déjà son `<details class="actions">` : ce
+ * qu'un menu doit à sa ligne (son nom accessible, l'identifiant de ses
+ * boutons, l'action de son formulaire) se pose donc à CHAQUE peinture, jamais
+ * au seul clonage. Sans cela, chaque message reçu portait un `<summary>` SANS
+ * NOM — « Summary elements must have discernible text », violation axe
+ * SERIOUS, mesurée par `e2e/visual/v3-fil-a11y.spec.ts`.
+ */
+describe('le menu d’une ligne PEINTE dit à qui il appartient', () => {
+  const MAINTENANT = Date.parse('2026-09-01T12:30:00.000Z');
+
+  it('nomme son summary, pose l’action et l’identifiant sur chaque bouton', () => {
+    const { p } = monte();
+    const etat = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
+    peins(p, insere(etat, arrivee()), MAINTENANT);
+
+    const menu = p.liste.querySelector<HTMLElement>('li[data-id="m2"] details.actions')!;
+    expect(menu.querySelector('summary .hors-ecran')?.textContent).toBe(FIL.actionsSurLeMessage('Marta Ruiz'));
+    expect(menu.querySelector('form')?.getAttribute('action')).toBe('/chats/c1');
+    expect(menu.querySelector<HTMLButtonElement>('button[name="repondre"]')?.value).toBe('m2');
+    // Le message d'AUTRUI ne se modifie ni ne se retire : les deux boutons sont là mais MASQUÉS.
+    expect(menu.querySelector<HTMLButtonElement>('button[name="modifier"]')?.hidden).toBe(true);
+    expect(menu.querySelector<HTMLButtonElement>('button[name="retirer"]')?.hidden).toBe(true);
+  });
+
+  it('« modifié » APPARAÎT sur une ligne servie que l’édition atteint en direct', () => {
+    const { p } = monte();
+    const etat = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
+    // La ligne servie de m1 n'était PAS éditée : le document ne porte donc
+    // aucun `.modifie` à révéler — il faut le poser.
+    expect(p.liste.querySelector('li[data-id="m1"] .modifie')).toBeNull();
+    const apres = { ...etat, bulles: etat.bulles.map((b) => (b.id === 'm1' ? { ...b, edite: true, texte: 'Bonjour, corrigé' } : b)) };
+    peins(p, apres, MAINTENANT);
+    const mention = p.liste.querySelector<HTMLElement>('li[data-id="m1"] .modifie');
+    expect(mention).not.toBeNull();
+    expect(mention!.hidden).toBe(false);
+    expect(mention!.textContent).toBe(FIL.modifie);
+  });
+});
+
+/**
+ * UN LIEU PARTAGÉ QUI ARRIVE EN DIRECT (#5061) — la ligne peinte porte le
+ * MÊME `.lieu-lien` que la ligne servie (`app/connecte/fil-lignes.ts` ›
+ * `lieuHtml`), cloné du gabarit et rempli par `remplisLeLieu`
+ * (`fil-peinture.ts`) — jamais composé à part.
+ */
+describe('un lieu partagé qui arrive en direct, et se relit du document', () => {
+  const MAINTENANT = Date.parse('2026-09-01T12:30:00.000Z');
+
+  it('peint .lieu-lien (href geo:), le nom et l’adresse — jamais deux nombres bruts', () => {
+    const { p } = monte();
+    const etat = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
+    const bulleAvecLieu = arrivee({ content: '', location: { latitude: 6.5244, longitude: 3.3792, name: 'Marché de Balogun' } });
+    peins(p, insere(etat, bulleAvecLieu), MAINTENANT);
+
+    const ligne = p.liste.querySelector<HTMLElement>('li[data-id="m2"]')!;
+    const lien = ligne.querySelector<HTMLAnchorElement>('.lieu-lien')!;
+    expect(lien.getAttribute('href')).toBe('geo:6.5244,3.3792');
+    expect(ligne.querySelector('.nom-du-lieu')?.textContent).toBe('Marché de Balogun');
+  });
+
+  it('ne retire JAMAIS un lieu déjà peint — un repeint identique le laisse en place', () => {
+    const { p } = monte();
+    const etat = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
+    const avecLieu = insere(etat, arrivee({ content: '', location: { latitude: 1, longitude: 2 } }));
+    peins(p, avecLieu, MAINTENANT);
+    // Un second passage — la même bulle, mais l'état RELU du document (bullesDuDocument)
+    // ne reconstruit pas `lieu` : il ne doit PAS effacer ce qui est déjà peint.
+    const relu = { bulles: bullesDuDocument(p), frappeurs: [], presents: [] };
+    peins(p, relu, MAINTENANT);
+    expect(p.liste.querySelector<HTMLElement>('li[data-id="m2"] .lieu-lien')).not.toBeNull();
+  });
+
+  it('bullesDuDocument relit un lieu SERVI depuis son geo: — round-trip exact', () => {
+    document.open();
+    document.write(
+      documentDuFil({
+        ...etatServi(),
+        fil: {
+          id: 'c1',
+          titre: 'T',
+          membres: 2,
+          presence: { participants: [], presents: [] },
+          messages: [
+            message(
+              { id: 'm9', content: '', createdAt: '2026-09-01T12:10:00.000Z', senderId: 'u2', sender: { id: 'p2', displayName: 'Ibrahim' }, location: { latitude: 48.8566, longitude: 2.3522, name: 'Le Central', address: '12 rue de Rivoli' } },
+              'u1',
+              LANGUES,
+              ORIGINE,
+            )!,
+          ],
+          plusAncien: null,
+        },
+      }),
+    );
+    document.close();
+    const main = document.querySelector<HTMLElement>('main')!;
+    const p = peintre(main)!;
+    const bulles = bullesDuDocument(p);
+    expect(bulles.find((b) => b.id === 'm9')?.lieu).toEqual({ latitude: 48.8566, longitude: 2.3522, nom: 'Le Central', adresse: '12 rue de Rivoli' });
+  });
+
+  it('un message SANS lieu relu du document rend lieu: null', () => {
+    const { p } = monte();
+    expect(bullesDuDocument(p).find((b) => b.id === 'm1')?.lieu).toBeNull();
   });
 });

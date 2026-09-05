@@ -353,7 +353,15 @@ extension FeedView {
                     // fabrique de charge ne pose aucun défaut, précisément pour
                     // qu'un champ neuf ne disparaisse pas d'un site d'appel en
                     // silence.
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil,  // le composer inline n'a pas de scène, #4756
+                    mediaCaptions: nil,
+                // **La feuille du FIL n'a ni éditeur d'objet ni scène** : pas
+                // d'alternative textuelle à porter, aucun objet de canvas à
+                // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
+                // site en silence, et rien n'aurait dit le jour où cette
+                // feuille gagnerait un champ « Décrire ».
+                mediaAlts: nil, mediaObjectIds: nil
                 )
             }
             return
@@ -1772,7 +1780,15 @@ struct FeedComposerSheet: View {
                     location: pendingPlace,
                     mentions: declared,
                     discoverabilityPrecision: nearbyPrecision,
-                    mobileTranscription: nil
+                    mobileTranscription: nil,
+                    storyEffects: nil,
+                    mediaCaptions: nil,
+                // **La feuille du FIL n'a ni éditeur d'objet ni scène** : pas
+                // d'alternative textuelle à porter, aucun objet de canvas à
+                // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
+                // site en silence, et rien n'aurait dit le jour où cette
+                // feuille gagnerait un champ « Décrire ».
+                mediaAlts: nil, mediaObjectIds: nil
                 )
             }
             return

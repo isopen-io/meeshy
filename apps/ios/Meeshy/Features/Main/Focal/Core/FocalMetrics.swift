@@ -344,6 +344,32 @@ nonisolated public enum FocalMetrics {
         public static let darkOpacity: Double = 0.55
     }
 
+    /// **La seconde colonne de la rangée — date et accusé, au bas de la bulle**
+    /// (#5135, directive porteur 2026-09-04).
+    ///
+    /// La méta vivait sur une LIGNE à elle, qui se montait toujours et ne
+    /// montrait rien au repos : `FocalRevealedDetail` masque l'heure et les
+    /// coches par OPACITÉ, jamais par démontage. C'était une hauteur pleine et
+    /// un espacement vertical réservés à de l'invisible, sous chaque message.
+    ///
+    /// **`minWidth` et non `width`, et c'est la seule nuance de l'arbitrage.**
+    /// Le porteur a tranché « largeur réservée pour toutes » — pour que les
+    /// dates s'alignent verticalement d'une rangée à l'autre. Une largeur DURE
+    /// tiendrait cette promesse aux tailles courantes et la trahirait aux
+    /// grandes : `MeeshyFont.relative(10.5)` suit le Dynamic Type, et « 14:32 »
+    /// en accessibilité XXL déborderait ou s'éliderait. Un plancher donne
+    /// l'alignement voulu — toutes les rangées subissent la MÊME échelle, donc
+    /// toutes atteignent la même largeur — sans jamais tronquer l'heure.
+    ///
+    /// La cote tient « 88:88 » suivi de deux coches à la taille nominale.
+    nonisolated public enum MetaColumn {
+        public static let reservedWidth: CGFloat = 62
+        /// L'écart entre la bulle et sa colonne. Aligné sur l'espacement
+        /// horizontal de la ligne basse (`flagAndReactionsRow`), pour que la
+        /// méta ne paraisse pas plus détachée du texte qu'un drapeau ne l'est.
+        public static let spacing: CGFloat = 6
+    }
+
     // MARK: - Teinte de surface neutre (cartes plates hors focus)
 
     /// Fond de carte neutre translucide — utilisé par les surfaces plates

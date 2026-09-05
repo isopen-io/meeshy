@@ -42,12 +42,40 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
     // MARK: - Ce qui SE VOIT sur la scène
 
     func test_laRangeeDeGauche_porteCeQuiApparaitSurLaScene() {
-        // **En POST** — depuis #4893 la géographie dépend du format, et ce
-        // témoin décrit celle des formats qui ne POSENT pas : le corpus de
-        // texte y qualifie la publication, donc il a quitté cette rangée.
+        // **Le corpus de texte est REVENU à gauche** (directive porteur
+        // 2026-09-05 : « mettre sur la rangée colonne gauche toutes les
+        // modifications spécifiques à la scène et non à la publication de type
+        // Post »).
+        //
+        // #4893 l'avait rangé en bas hors Story, sur l'idée qu'il « qualifie la
+        // publication ». La mesure dit le contraire : `handleRailDoor(.text)`
+        // appelle `viewModel.addText()` puis ouvre l'éditeur d'objet, dans TOUS
+        // les formats. Il pose un objet sur la scène ; le corps de la
+        // publication a sa propre porte depuis #4890.
         XCTAssertEqual(ComposerSceneFloatingRail.sideRow(from: toutes, format: .post),
-                       [.media, .sound, .sticker, .drawing],
-                       "sticker, son posé, média de premier plan, tracé")
+                       [.media, .sound, .sticker, .drawing, .text],
+                       "sticker, son posé, média de premier plan, tracé, corpus de texte")
+    }
+
+    /// **Le corpus de texte ne bascule plus par format.** Le témoin porte sur
+    /// les DEUX formats parce que c'est la bascule elle-même qui a disparu :
+    /// vérifier le seul POST laisserait revenir un `format == .story ? …`
+    /// silencieux.
+    func test_leCorpusDeTexte_poseDansTousLesFormats() {
+        // Les trois formats qui ONT une toile. Le `status` n'en a pas : la
+        // porte n'y est pas OFFERTE du tout (`removedFromStatus`), et l'y
+        // chercher à gauche testerait une répartition sans objet.
+        for format in [ComposerFormat.post, .story, .reel] {
+            XCTAssertEqual(ComposerRailDoor.text.level(for: format), .object,
+                           "le corpus pose un objet en \(format) aussi — `addText()` ne " +
+                           "regarde pas le format")
+            XCTAssertTrue(ComposerSceneFloatingRail.sideRow(from: [.text], format: format).contains(.text),
+                          "donc il vit à GAUCHE en \(format)")
+        }
+        XCTAssertFalse(
+            ComposerRailDoor.offered(served: [.text], format: .status, allowsCapture: true).contains(.text),
+            "sans toile, rien à poser — le corpus ne survit pas au status"
+        )
     }
 
     /// **La mention et le lieu ont CHANGÉ DE CÔTÉ**, et ce n'est pas un
@@ -58,8 +86,15 @@ final class ComposerSceneFloatingRailTests: XCTestCase {
         // **Hors STORY** (#4893) : en Story ces deux-là se POSENT, avec une
         // position fixée par story. Le rangement décrit ici reste celui du
         // Réel, du Post et du Mood.
+        // `.description` n'est plus servie par le rail (directive porteur
+        // 2026-09-05) — elle reste dans `toutes` ici parce que la fixture
+        // décrit un jeu SERVI arbitraire, et que la répartition doit rester
+        // juste pour toute porte qu'un hôte lui donne. Ce qui la retire est
+        // `canonicalRail`, mesuré par `ComposerRailDoorTests`.
         let bas = ComposerSceneFloatingRail.lowRow(from: toutes, format: .post)
-        XCTAssertEqual(bas, [.description, .mention, .place, .text])
+        XCTAssertEqual(bas, [.description, .mention, .place])
+        XCTAssertFalse(bas.contains(.text),
+                       "le corpus POSE : il a quitté la ligne canonique (2026-09-05)")
         XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes, format: .post).contains(.mention))
         XCTAssertFalse(ComposerSceneFloatingRail.sideRow(from: toutes, format: .post).contains(.place))
     }

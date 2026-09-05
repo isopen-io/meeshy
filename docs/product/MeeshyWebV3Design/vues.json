@@ -1,6 +1,6 @@
 {
  "source": "MeeshyWebV3.dc.html",
- "count": 39,
+ "count": 40,
  "vues": [
   {
    "id": "vitrine",
@@ -109,6 +109,15 @@
    "title": "Équipe Lagos",
    "subtitle": "4 en ligne",
    "png": "cible/profilMembre.png"
+  },
+  {
+   "id": "lienDepuisLeFil",
+   "label": "Nouveau lien de partage",
+   "route": "/chats/:cle?lien",
+   "group": "MEMBRE — PRINCIPAL",
+   "title": "Équipe Lagos",
+   "subtitle": "4 en ligne",
+   "png": "cible/lienDepuisLeFil.png"
   },
   {
    "id": "media",

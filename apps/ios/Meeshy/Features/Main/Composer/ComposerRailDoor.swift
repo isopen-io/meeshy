@@ -79,6 +79,37 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// publication ; en P c'est la légende du média courant (#4045).
     case description
 
+    /// **Le CORPS du post — son `content`, et rien d'autre** (#4890, directive
+    /// porteur 2026-09-04 : « affiche dans la rangée canonique de quoi modifier
+    /// LE CONTENU du poste »).
+    ///
+    /// ## Pourquoi une porte de plus à côté de `.description`
+    ///
+    /// Parce qu'en Post ces deux mots désignent DEUX textes, et que le composer
+    /// n'en offrait qu'un. `ComposerSlideTextRole` porte la table : en Post, le
+    /// texte d'une slide est la LÉGENDE de son média (`PostMedia.caption`), et
+    /// le `content` de la publication a son propre logement. `.description`
+    /// ouvre le premier ; personne n'ouvrait le second.
+    ///
+    /// Mesuré au simulateur `Meeshy-iOS26` le 2026-09-04 : un post composé avec
+    /// une scène monte `ComposerSceneSurface`, qui n'a **aucun** champ de
+    /// contenu — ni la rangée du document, ni son `TextEditor`. L'auteur ne
+    /// pouvait pas écrire le corps de son propre post, et rien ne le disait.
+    ///
+    /// > Deux rôles séparés au bon endroit (le binding, #4890) et aucun des deux
+    /// > avals mis à jour : le rôle `.caption` n'avait pas de lecteur, le rôle
+    /// > `.content` n'avait plus d'écrivain. Le défaut est invisible depuis le
+    /// > site du partage — c'est chez les VOISINS qu'il se voit.
+    ///
+    /// ## Niveau `.publication`, sans bascule de format
+    ///
+    /// Un corps de post ne se pose nulle part : il n'a ni position, ni taille,
+    /// ni rotation. Il ne suit donc pas les quatre outils que #4893 fait
+    /// basculer en Story — il n'y existe simplement pas (voir
+    /// `removedFromFormat`), puisqu'en Story le texte de la slide EST le
+    /// contenu.
+    case content
+
     /// Image ou vidéo, quelle que soit la source — photothèque, caméra,
     /// importateur. **Une seule porte**, là où le document en montre trois :
     /// sur une scène, ce que l'auteur choisit est un MÉDIA, pas un chemin
@@ -228,11 +259,34 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         switch self {
         case .description:
             return .slide
-        // Les quatre outils que la directive DÉPLACE. Le prédicat porte sur le
-        // format et non sur une liste de formats « autres » : ajouter un
-        // cinquième format le rangera du bon côté sans qu'on y pense, et c'est
-        // le sens de la règle — seule la Story pose.
-        case .mention, .place, .hashtag, .text:
+        // Le CORPS du post vise la publication entière, dans tous les formats
+        // où il existe — c'est-à-dire le Post seul. Aucune bascule : il n'a rien
+        // à poser, donc rien qui puisse devenir un objet.
+        case .content:
+            return .publication
+        // **Le corpus de texte POSE, dans TOUS les formats** (directive porteur
+        // 2026-09-05 : « mettre sur la rangée colonne gauche toutes les
+        // modifications spécifiques à la scène et non à la publication de type
+        // Post »).
+        //
+        // Il basculait par format depuis #4893, et la mesure a tranché contre
+        // cette bascule : `handleRailDoor(.text)` appelle `viewModel.addText()`
+        // puis ouvre l'éditeur d'objet — **quel que soit le format**. Un objet
+        // texte se pose, se déplace, se pince et se tourne sur la scène d'un
+        // POST exactement comme sur celle d'une Story.
+        //
+        // > La porte était donc rangée en bas d'après ce que le format LAISSAIT
+        // > croire, jamais d'après ce qu'elle FAIT. Le corps du post a sa propre
+        // > porte (`.content`) depuis #4890 ; c'est elle qui qualifie la
+        // > publication, et son existence est ce qui rend le classement de
+        // > `.text` en `.publication` non seulement faux mais inutile.
+        case .text:
+            return .object
+        // La mention, le lieu et le hashtag, eux, gardent leur bascule : hors
+        // Story ils ouvrent un sélecteur de la PUBLICATION
+        // (`handleDocumentTool`) et ne posent rien sur la scène — mesuré, pas
+        // supposé.
+        case .mention, .place, .hashtag:
             return format == .story ? .object : .publication
         // La MATIÈRE se pose toujours, quel que soit le format : une image de
         // premier plan, une piste et un sticker sont des objets par nature.
@@ -250,8 +304,23 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// L'ordre du rail, de haut en bas. Écrit en toutes lettres plutôt que
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
+    /// **`.description` n'y figure plus** (directive porteur 2026-09-05 : « il
+    /// existe déjà un moyen de mettre à jour la description de la scène, il
+    /// faut enlever cela de la rangée canonique »).
+    ///
+    /// Le volet sous la scène (`sceneDescriptionPanel`, son chevron toujours
+    /// disponible depuis #4993) EST ce moyen, et il est meilleur que la porte :
+    /// il se peint PAR-DESSUS le média que la description décrit, donc l'auteur
+    /// voit ce qu'il légende. Une porte qui ouvre le même volet est un second
+    /// bouton pour un seul chemin — le motif que le § 3 d'`apps/ios/CLAUDE.md`
+    /// nomme « une porte n'a pas de JUMELLE ».
+    ///
+    /// La porte reste un CAS de l'énuméré : `level`, le badge et le glyphe la
+    /// décrivent toujours, et la retirer de l'énuméré ferait tomber des sites
+    /// qui la classent sans l'offrir. Ce qui disparaît est son entrée de rail.
     static let canonicalRail: [ComposerRailDoor] = [
-        .description, .media, .sound, .text, .background, .drawing, .sticker, .mention, .hashtag, .place
+        .content, .media, .sound, .text, .background, .drawing,
+        .sticker, .mention, .hashtag, .place
     ]
 
     /// Jeu SF LIGNE, cohérent avec la rangée du document — chaque glyphe DIT le
@@ -260,6 +329,14 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     var symbolName: String {
         switch self {
         case .description: return "text.alignleft"
+        // **Le corps, pas une ligne.** `text.alignleft` dit « décrire » — des
+        // lignes alignées à gauche ; `doc.plaintext` dit une PAGE de texte,
+        // c'est-à-dire ce que le `content` d'un post est. Les deux portes
+        // vivent côte à côte dans la rangée : deux glyphes qui se ressemblent y
+        // seraient deux boutons qu'on tape au hasard.
+        //
+        // Disponible dès iOS 16, notre plancher : aucune garde de version.
+        case .content:     return "doc.plaintext"
         case .media:       return "photo"
         case .sound:       return "music.note"
         // **Pas un smiley** (directive porteur 2026-09-01) : cette porte
@@ -348,8 +425,19 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// Le corpus (`.text`) prend donc la place, et il y est POSABLE : c'est la
     /// même bascule que `level(for:)`, vue depuis la présence plutôt que
     /// depuis le niveau.
+    ///
+    /// **Le CORPS (`.content`) n'existe QU'EN POST** (#4890). Ailleurs, le texte
+    /// de la slide EST le contenu de la publication — lui offrir une porte
+    /// distincte ouvrirait, là aussi, un second champ pour un seul texte : la
+    /// faute symétrique de celle que `.description` évite en Story.
+    ///
+    /// Le prédicat est écrit `format != .post`, jamais une liste des trois
+    /// autres : un cinquième format sera exclu par défaut, ce qui est le sens
+    /// de la règle — seul le Post a un contenu SÉPARÉ de ses canvas.
     private static func removedFromFormat(_ format: ComposerFormat) -> Set<ComposerRailDoor> {
-        format == .story ? [.description] : []
+        var retirees: Set<ComposerRailDoor> = format == .story ? [.description] : []
+        if format != .post { retirees.insert(.content) }
+        return retirees
     }
 
     /// **Ce que le profil MOOD retire EN PLUS, et pour une autre raison.**

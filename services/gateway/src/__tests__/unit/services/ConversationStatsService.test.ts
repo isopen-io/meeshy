@@ -1405,4 +1405,107 @@ describe('ConversationStatsService — coverage gap-fill', () => {
       expect(stats.onlineUsers).toEqual([]);
     });
   });
+
+  // ==============================================
+  // LANGUAGE-CODE CANONICALIZATION (SSOT dedup)
+  // ==============================================
+  //
+  // `Message.originalLanguage` and `User.systemLanguage` are persisted verbatim,
+  // so BCP-47 region-tagged / mixed-case variants (`'en-US'`, `'FR'`, `'pt-BR'`,
+  // `'fr_FR'`) reach the per-language counters intact. Without canonicalizing
+  // through the SSOT `normalizeLanguageForDedup`, `'en'`/`'EN'`/`'en-US'` would
+  // split into distinct buckets and inflate the derived languageCount — the same
+  // defect already closed on the `spokenLanguages` aggregate (routes/anonymous.ts).
+  describe('language-code canonicalization', () => {
+    const convObj = {
+      id: testConversationId,
+      identifier: `conv_${testConversationId.slice(-4)}`,
+      type: 'private',
+    };
+
+    beforeEach(() => {
+      const service = ConversationStatsService.getInstance();
+      service.getActiveConversationIds().forEach(id => service.invalidate(id));
+    });
+
+    it('should merge region-tagged/mixed-case message language variants into one canonical bucket (summing counts)', async () => {
+      const service = ConversationStatsService.getInstance();
+      const mockPrisma: any = makeBasePrisma();
+      mockPrisma.conversation.findFirst.mockResolvedValue(convObj);
+      mockPrisma.message.groupBy.mockResolvedValue([
+        { originalLanguage: 'en', _count: { _all: 3 } },
+        { originalLanguage: 'en-US', _count: { _all: 4 } },
+        { originalLanguage: 'EN', _count: { _all: 2 } },
+        { originalLanguage: 'fr-FR', _count: { _all: 5 } }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.user.findMany.mockResolvedValue([]);
+
+      const stats = await service.getOrCompute(mockPrisma as any, testConversationId, () => []);
+
+      // 3 + 4 + 2 collapse into a single 'en' bucket; region stripped for 'fr'.
+      expect(stats.messagesPerLanguage).toEqual({ en: 9, fr: 5 });
+    });
+
+    it('should merge region-tagged/mixed-case participant language variants into one canonical bucket', async () => {
+      const service = ConversationStatsService.getInstance();
+      const mockPrisma: any = makeBasePrisma();
+      mockPrisma.conversation.findFirst.mockResolvedValue(convObj);
+      mockPrisma.message.groupBy.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { user: { id: '507f1f77bcf86cd799439201', systemLanguage: 'en-US' } },
+        { user: { id: '507f1f77bcf86cd799439202', systemLanguage: 'EN' } },
+        { user: { id: '507f1f77bcf86cd799439203', systemLanguage: 'pt-BR' } }
+      ]);
+      mockPrisma.user.findMany.mockResolvedValue([]);
+
+      const stats = await service.getOrCompute(mockPrisma as any, testConversationId, () => []);
+
+      expect(stats.participantsPerLanguage).toEqual({ en: 2, pt: 1 });
+      expect(stats.participantCount).toBe(3);
+    });
+
+    it('should canonicalize the incremental message-language bucket (updateOnNewMessage)', async () => {
+      const service = ConversationStatsService.getInstance();
+      const mockPrisma: any = makeBasePrisma();
+      mockPrisma.conversation.findFirst.mockResolvedValue(convObj);
+      mockPrisma.message.groupBy.mockResolvedValue([
+        { originalLanguage: 'en', _count: { _all: 1 } }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.user.findMany.mockResolvedValue([]);
+
+      await service.getOrCompute(mockPrisma as any, testConversationId, () => []);
+
+      // A region-tagged incoming message must land on the SAME 'en' bucket,
+      // not create a distinct 'en-us' one.
+      const stats = await service.updateOnNewMessage(
+        mockPrisma as any,
+        testConversationId,
+        'en-US',
+        () => []
+      );
+
+      expect(stats.messagesPerLanguage).toEqual({ en: 2 });
+    });
+
+    it('should canonicalize global-conversation participant languages (user.findMany branch)', async () => {
+      const service = ConversationStatsService.getInstance();
+      service.getActiveConversationIds().forEach(id => service.invalidate(id));
+      const globalConvId = '507f1f77bcf86cd799439098';
+      const mockPrisma: any = makeBasePrisma();
+      mockPrisma.conversation.findFirst.mockResolvedValue({ id: globalConvId, identifier: 'meeshy' });
+      mockPrisma.message.groupBy.mockResolvedValue([]);
+      mockPrisma.user.findMany.mockResolvedValue([
+        { id: '507f1f77bcf86cd799439211', systemLanguage: 'fr' },
+        { id: '507f1f77bcf86cd799439212', systemLanguage: 'fr-FR' },
+        { id: '507f1f77bcf86cd799439213', systemLanguage: 'FR' }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      const stats = await service.getOrCompute(mockPrisma as any, 'meeshy', () => []);
+
+      expect(stats.participantsPerLanguage).toEqual({ fr: 3 });
+    });
+  });
 });

@@ -29,8 +29,9 @@
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-import { RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
-import { actionsFlottantes, feuilleDeLEspace, versLEspace } from '@/app/connecte/espace-vue';
+import { ESPACE, RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
+import { feuilleDeLEspace, raccourcisEntete, versLEspace } from '@/app/connecte/espace-vue';
+import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 
 const RACINE = join(__dirname, '..', 'app');
 
@@ -55,7 +56,7 @@ const adresseServie = (fichier: string): string => {
 
 const ROUTES_SERVIES: readonly string[] = fichiersDeRoute(RACINE).map(adresseServie);
 
-/** Les destinations que le lot promet — les deux ronds, les rangées, le champ du tableau. */
+/** Les destinations que le lot promet — les deux raccourcis, les rangées, le champ du tableau. */
 const DESTINATIONS: readonly string[] = [
   '/feed',
   ...RANGEES_DE_L_ESPACE.map((rangee) => rangee.href),
@@ -84,11 +85,32 @@ describe('l’espace membre n’ouvre que sur des routes que la v3 SERT', () => 
     },
   );
 
+  /**
+   * `/communities` (matrice ordre 45, L7) a fermé la dernière destination
+   * qui n'était pas encore servie — cette rangée entre dans le MÊME commit
+   * que `app/communities/route.ts` (§ 4 étape 6 de la spécification).
+   */
+  it('sert désormais /communities — la dernière frontière refermée', () => {
+    expect(ROUTES_SERVIES).toContain('/communities');
+    expect(DESTINATIONS).toContain('/communities');
+  });
+
+  /**
+   * LA SENTINELLE — une route que la v3 ne sert PAS, pour prouver que
+   * `ROUTES_SERVIES` distingue vraiment. Sans elle, une liste qui rendrait
+   * TOUT passerait les témoins ci-dessus au vert sans rien vérifier.
+   *
+   * C'ÉTAIT `/communities`, et l'écran est désormais SERVI (le témoin
+   * ci-dessus le dit) : la sentinelle serait devenue un rouge permanent.
+   * Elle ne vise pas `/moods` non plus — la v3 sert `/moods/[id]`, donc le
+   * témoin ne passerait que par la chance d'une comparaison EXACTE, et
+   * tomberait le jour d'une page d'index. `/groups` est servi par le LEGACY
+   * et jamais repris par la v3 : le jour où elle le servira, ce témoin le
+   * DIRA au lieu de mentir.
+   */
   it('rougirait sur une destination hors zone', () => {
-    expect(ROUTES_SERVIES).not.toContain('/communities');
-    expect(ROUTES_SERVIES).not.toContain('/calls');
-    expect(DESTINATIONS).not.toContain('/communities');
-    expect(DESTINATIONS).not.toContain('/calls');
+    expect(ROUTES_SERVIES).not.toContain('/groups');
+    expect(DESTINATIONS).not.toContain('/groups');
   });
 });
 
@@ -118,6 +140,38 @@ describe('la feuille se ferme sans un octet de JavaScript', () => {
   it('ouvre depuis l’hôte, et y revient', () => {
     expect(versLEspace('/')).toBe('/?espace');
     expect(versLEspace('/chats')).toBe('/chats?espace');
-    expect(actionsFlottantes('/chats')).toContain('href="/chats?espace"');
+    expect(raccourcisEntete('/chats')).toContain('href="/chats?espace"');
+  });
+});
+
+/**
+ * LE CONTRÔLE DE SORTIE (#5095) — un `<form method=post>` RÉEL, atteignable
+ * au clavier PAR CONSTRUCTION (un `<button>` natif, jamais un `<a>` ni un
+ * `div`), sur une cible de la charte, dans les deux thèmes.
+ */
+describe('la feuille sert le formulaire de sortie', () => {
+  const feuille = feuilleDeLEspace({ lecteur: null, hote: '/chats' });
+
+  it('un <form> POST vers /deconnexion, un <button> natif, un champ session vide', () => {
+    expect(feuille).toContain('<form class="sortie" method="post" action="/deconnexion">');
+    expect(feuille).toContain('<input type="hidden" name="session" value="" />');
+    expect(feuille).toContain(`<button type="submit">${ESPACE.deconnecter}</button>`);
+  });
+
+  it('le formulaire vient APRÈS les rangées, DANS le dialogue', () => {
+    const finDesRangees = feuille.indexOf('</ul>');
+    const debutDuFormulaire = feuille.indexOf('<form class="sortie"');
+    const finDuDialogue = feuille.indexOf('</dialog>');
+    expect(finDesRangees).toBeGreaterThan(-1);
+    expect(debutDuFormulaire).toBeGreaterThan(finDesRangees);
+    expect(debutDuFormulaire).toBeLessThan(finDuDialogue);
+  });
+
+  it('le bouton est une cible de la charte, sans couleur en dur', () => {
+    expect(FEUILLE_DE_L_ESPACE).toContain('.sortie button{');
+    expect(FEUILLE_DE_L_ESPACE).toContain('min-height:var(--action-height-secondary)');
+    expect(FEUILLE_DE_L_ESPACE).toContain('width:100%');
+    expect(FEUILLE_DE_L_ESPACE).not.toMatch(/\.sortie[^}]*#[0-9a-fA-F]{3,8}/);
+    expect(FEUILLE_DE_L_ESPACE).toContain('var(--color-danger)');
   });
 });

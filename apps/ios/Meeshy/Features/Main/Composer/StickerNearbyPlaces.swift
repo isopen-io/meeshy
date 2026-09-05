@@ -31,8 +31,26 @@ enum StickerNearbyPlaces {
     /// l'onglet montre alors son état VIDE, qui dit « on a cherché, on n'a rien
     /// trouvé ». Ce n'est pas la même chose qu'une capacité absente, et c'est
     /// pourquoi l'absence, elle, se décide en amont (`stickerNearbyPlacesProvided`).
-    static func nearby() async -> [SharedPlace] {
-        guard let position = await currentCoordinate() else {
+    /// - Parameter centre: le lieu AUTOUR duquel chercher (2026-09-05).
+    ///   `nil` ⇒ la position de l'appareil.
+    ///
+    ///   Un centre CHOISI court-circuite `currentCoordinate()` — donc la
+    ///   permission ET l'attente du premier point GPS. C'est ce qui rend la
+    ///   section utile à l'intérieur d'un bâtiment, en avion, ou quand
+    ///   l'auteur compose une story sur un lieu où il n'est pas.
+    static func nearby(around centre: SharedPlace? = nil) async -> [SharedPlace] {
+        let choisi = centre.map {
+            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+        }
+        // `??` est un AUTOCLOSURE : il n'accepte pas d'`await` à droite. La
+        // forme explicite dit d'ailleurs mieux ce qui se passe — un centre
+        // choisi n'interroge JAMAIS le GPS, donc ni permission ni attente.
+        let position: CLLocationCoordinate2D
+        if let choisi {
+            position = choisi
+        } else if let courante = await currentCoordinate() {
+            position = courante
+        } else {
             log.info("nearby: aucune position, onglet vide")
             return []
         }
@@ -158,7 +176,7 @@ extension View {
         let servable = statut != .denied && statut != .restricted
         return environment(\.stickerNearbyPlaces,
                            servable ? StickerNearbyPlacesProvider(
-                               nearby: { await StickerNearbyPlaces.nearby() }
+                               nearby: { centre in await StickerNearbyPlaces.nearby(around: centre) }
                            ) : nil)
     }
 }

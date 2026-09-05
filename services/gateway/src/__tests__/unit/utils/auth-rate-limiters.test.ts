@@ -490,3 +490,102 @@ describe('createBatchRateLimiter — anonymous fallback', () => {
     expect(reply.statusCode).toBe(429);
   });
 });
+
+/**
+ * Le REMBOURSEMENT d'une tentative (#5216).
+ *
+ * `POST /auth/register` tolère trois tentatives par cinq minutes, et le
+ * `preHandler` compte AVANT de savoir ce qu'il compte : une faute de frappe dans
+ * une adresse consommait donc le même quota qu'une création de compte, et trois
+ * corrections successives fermaient la porte cinq minutes à quelqu'un qui n'avait
+ * encore rien créé. C'est un limiteur qui punit l'hésitation plutôt que l'abus.
+ *
+ * Ce que ces témoins gardent est le remboursement lui-même ET ses deux bornes :
+ * jamais sous zéro, jamais sur une fenêtre morte. Un `DECR` naïf sur une clé
+ * absente la créerait à -1 SANS expiration, ce qui offrirait une tentative de
+ * plus à la fenêtre suivante — un remboursement doit annuler un décompte, pas en
+ * créditer un.
+ */
+describe('RateLimiter.refund — une tentative rendue', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  const limiteur = () => createRegisterRateLimiter();
+
+  it('rend la tentative : la 4e passe quand une des trois a été remboursée', async () => {
+    const rl = limiteur();
+    const mw = rl.middleware();
+    const req = makeReq({ ip: '203.0.113.200' });
+
+    await exhaust(mw, req, 3);
+    await rl.refund(rl.keyFor(req));
+
+    const reply = makeReply();
+    await mw(req, reply);
+    expect(reply.statusCode).not.toBe(429);
+  });
+
+  it('sans remboursement, la 4e est refusée — la contre-épreuve', async () => {
+    const rl = limiteur();
+    const mw = rl.middleware();
+    const req = makeReq({ ip: '203.0.113.201' });
+
+    await exhaust(mw, req, 3);
+
+    const reply = makeReply();
+    await mw(req, reply);
+    expect(reply.statusCode).toBe(429);
+  });
+
+  it('ne descend JAMAIS sous zéro — trois remboursements pour un décompte', async () => {
+    const rl = limiteur();
+    const mw = rl.middleware();
+    const req = makeReq({ ip: '203.0.113.202' });
+
+    await mw(req, makeReply());
+    await rl.refund(rl.keyFor(req));
+    await rl.refund(rl.keyFor(req));
+    await rl.refund(rl.keyFor(req));
+
+    // Le compteur est à zéro, pas à -2 : trois tentatives restent, la quatrième
+    // est refusée. Sans la borne, il en resterait cinq.
+    await exhaust(mw, req, 3);
+    const reply = makeReply();
+    await mw(req, reply);
+    expect(reply.statusCode).toBe(429);
+  });
+
+  it("ne CRÉE rien quand la clé n'a jamais été comptée", async () => {
+    const rl = limiteur();
+    const mw = rl.middleware();
+    const req = makeReq({ ip: '203.0.113.203' });
+
+    await rl.refund(rl.keyFor(req));
+
+    await exhaust(mw, req, 3);
+    const reply = makeReply();
+    await mw(req, reply);
+    expect(reply.statusCode).toBe(429);
+  });
+
+  it('ne rembourse pas une fenêtre EXPIRÉE — la suivante démarre à plein quota', async () => {
+    const rl = limiteur();
+    const mw = rl.middleware();
+    const req = makeReq({ ip: '203.0.113.204' });
+
+    await exhaust(mw, req, 3);
+    jest.advanceTimersByTime(5 * 60 * 1000 + 1);
+    await rl.refund(rl.keyFor(req));
+
+    await exhaust(mw, req, 3);
+    const reply = makeReply();
+    await mw(req, reply);
+    expect(reply.statusCode).toBe(429);
+  });
+
+  it('keyFor rend la clé que le middleware a comptée — sinon on rembourse un inconnu', () => {
+    const rl = limiteur();
+
+    expect(rl.keyFor(makeReq({ ip: '203.0.113.205' }))).toBe('ip:203.0.113.205');
+  });
+});

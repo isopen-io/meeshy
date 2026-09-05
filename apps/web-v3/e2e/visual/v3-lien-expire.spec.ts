@@ -387,6 +387,11 @@ test.describe('linkExpired — un lien fermé dit pourquoi', () => {
       commande: COMMANDE,
       navigateur: browser,
       profil: budgets.reseau.profil,
+      // #4933 : le CONTRAT de cet écran est de répondre 410, jamais 200 — un
+      // gestionnaire de route stable, pas un identifiant deviné faux. Sans
+      // cette déclaration EXPLICITE, `estCodeDeMesure` (200–399) rendrait la
+      // page « à établir » pour toujours, un gate rendu muet par construction.
+      codesSupplementaires: [410],
     });
 
     info.annotations.push({
@@ -394,7 +399,8 @@ test.describe('linkExpired — un lien fermé dit pourquoi', () => {
       description: `${mesure.requetes_avant_premier_pixel} requête(s) avant le premier pixel, FCP ${mesure.fcp_ms} ms, LCP ${mesure.lcp_ms} ms, CLS ${mesure.cls}, ${JSON.stringify(mesure.octets_par_type)}`,
     });
 
-    expect(mesure.http).toBe(200);
+    // #4933 : un lien fermé n'a plus rien à servir — le statut le dit lui-même.
+    expect(mesure.http).toBe(410);
     expect(mesure.requetes_avant_premier_pixel).toBeLessThanOrEqual(gateDeRequetes());
     expect(mesure.requetes_avant_premier_pixel).toBeLessThan(plancherDeRequetes());
     expect(

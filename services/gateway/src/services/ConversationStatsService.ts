@@ -1,4 +1,25 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+
+/**
+ * Canonicalise un code de langue avant qu'il ne serve de CLÉ à un compteur.
+ *
+ * `Message.originalLanguage` et `User.systemLanguage` sont persistés VERBATIM
+ * (aucune normalisation à l'écriture) : des valeurs BCP-47 région-taguées ou en
+ * casse mixte issues du web (`Accept-Language`) et d'iOS
+ * (`Locale.current.identifier`) — `'en-US'`, `'pt-BR'`, `'FR'`, `'fr_FR'` — les
+ * atteignent intactes. Sans passer par la SSOT de déduplication
+ * ({@link normalizeLanguageForDedup} : casse repliée ET région strippée),
+ * `'en'`, `'EN'` et `'en-US'` compteraient pour TROIS langues distinctes et le
+ * `languageCount` dérivé serait gonflé — le défaut exact déjà fermé sur
+ * l'agrégat `spokenLanguages` (`routes/anonymous.ts`).
+ *
+ * Un code vide/blanc est préservé tel quel (repli terminal `''`), sans quoi la
+ * SSOT le replierait sur `''` : le comportement d'un bucket vide historique
+ * reste inchangé, seule la canonicalisation des codes réels est ajoutée.
+ */
+const canonicalStatLanguage = (code: string): string =>
+  code && code.trim() !== '' ? normalizeLanguageForDedup(code) : code;
 
 export interface OnlineUserInfo {
   id: string;
@@ -104,7 +125,8 @@ export class ConversationStatsService {
       // Incremental update on message language count
       const stats = { ...existing!.stats };
       stats.messagesPerLanguage = { ...stats.messagesPerLanguage };
-      stats.messagesPerLanguage[messageLanguage] = (stats.messagesPerLanguage[messageLanguage] || 0) + 1;
+      const incLang = canonicalStatLanguage(messageLanguage);
+      stats.messagesPerLanguage[incLang] = (stats.messagesPerLanguage[incLang] || 0) + 1;
 
       // Refresh online users snapshot quickly (cheap intersection)
       stats.onlineUsers = await this.computeOnlineUsers(prisma, conversationId, getConnectedUserIds());
@@ -204,7 +226,11 @@ export class ConversationStatsService {
 
     const messagesPerLanguage: Record<string, number> = {};
     for (const row of messagesAgg) {
-      messagesPerLanguage[row.originalLanguage] = row._count._all;
+      // Somme (jamais assignation) : deux codes bruts distincts — `'en'` et
+      // `'en-US'` — canonicalisent vers la même clé, leurs comptes doivent
+      // fusionner, pas s'écraser l'un l'autre.
+      const lang = canonicalStatLanguage(row.originalLanguage);
+      messagesPerLanguage[lang] = (messagesPerLanguage[lang] || 0) + row._count._all;
     }
 
     // Participants and participants per language
@@ -218,7 +244,8 @@ export class ConversationStatsService {
       }).catch(() => []);
       participantCount = users.length;
       for (const u of users) {
-        participantsPerLanguage[u.systemLanguage] = (participantsPerLanguage[u.systemLanguage] || 0) + 1;
+        const lang = canonicalStatLanguage(u.systemLanguage);
+        participantsPerLanguage[lang] = (participantsPerLanguage[lang] || 0) + 1;
       }
     } else {
       const members = await prisma.participant.findMany({
@@ -233,7 +260,7 @@ export class ConversationStatsService {
       for (const m of members) {
         // Sécurité supplémentaire si user est null
         if (m.user) {
-          const lang = m.user.systemLanguage;
+          const lang = canonicalStatLanguage(m.user.systemLanguage);
           participantsPerLanguage[lang] = (participantsPerLanguage[lang] || 0) + 1;
         }
       }

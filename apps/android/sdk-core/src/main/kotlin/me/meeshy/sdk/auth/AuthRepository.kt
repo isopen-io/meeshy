@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
@@ -29,9 +30,38 @@ class AuthRepository @Inject constructor(
         apiCall { authApi.login(LoginRequest(username, password)) }
             .also { if (it is NetworkResult.Success) storeSession(it.data) }
 
-    suspend fun register(request: RegisterRequest): NetworkResult<AuthSession> =
-        apiCall { authApi.register(request) }
-            .also { if (it is NetworkResult.Success) storeSession(it.data) }
+    /**
+     * Crée le compte. Le `200` de la passerelle porte DEUX issues distinctes —
+     * le compte créé, ou le refus « ce numéro appartient déjà à quelqu'un »,
+     * qui n'a créé aucun compte — donc le succès de transport ne suffit pas à
+     * dire qu'on est inscrit : c'est [RegisterOutcome] qui le dit.
+     *
+     * La session n'est adoptée que sur [RegisterOutcome.Created] : un conflit
+     * de numéro laisse le porte-jetons intact, faute de quoi l'app se croirait
+     * connectée sans compte.
+     */
+    suspend fun register(request: RegisterRequest): NetworkResult<RegisterOutcome> =
+        when (val result = apiCall { authApi.register(request) }) {
+            is NetworkResult.Failure -> result
+            is NetworkResult.Success -> {
+                val session = result.data.asSession()
+                when {
+                    result.data.phoneOwnershipConflict ->
+                        NetworkResult.Success(RegisterOutcome.PhoneOwnershipConflict)
+                    session != null -> {
+                        storeSession(session)
+                        NetworkResult.Success(RegisterOutcome.Created(session))
+                    }
+                    // Ni identité, ni conflit déclaré : la charge ne dit rien
+                    // d'exploitable. Un échec explicite vaut mieux qu'un conflit
+                    // supposé, qui enverrait l'utilisateur corriger un numéro
+                    // que personne n'a mis en cause.
+                    else -> NetworkResult.Failure(
+                        ApiError(message = "Registration response carried no session", code = "PARSE"),
+                    )
+                }
+            }
+        }
 
     /**
      * Probe the availability of a single signup field (username / email / phone).
@@ -139,4 +169,21 @@ class AuthRepository @Inject constructor(
         /** Validite par defaut si le gateway omet expiresInSeconds (60 s cote serveur). */
         const val DEFAULT_MAGIC_LINK_VALIDITY_SECONDS: Int = 60
     }
+}
+
+/**
+ * Ce que `POST /auth/register` a réellement produit.
+ *
+ * Deux issues sous le même `200` : le compte est créé, ou le numéro fourni
+ * appartient déjà à un compte vérifié et **rien n'a été créé**. Les distinguer
+ * par un type, et non par un booléen dans la charge, force chaque appelant à
+ * traiter le refus — un `AuthSession` nullable se serait lu « échec réseau ».
+ */
+sealed interface RegisterOutcome {
+
+    /** Le compte existe et la session est déjà adoptée. */
+    data class Created(val session: AuthSession) : RegisterOutcome
+
+    /** Le numéro est rattaché à un autre compte vérifié ; aucun compte créé. */
+    data object PhoneOwnershipConflict : RegisterOutcome
 }

@@ -35,21 +35,28 @@ public enum TextEditOptionsLayout: String, Sendable, CaseIterable {
 
     /// **Quels outils la grille gouverne — et pourquoi les autres non.**
     ///
-    /// La directive en nomme deux, et les six restants ne s'y prêtent pas de
-    /// la même façon : POLICE porte un curseur et sa propre grille de dix-huit
-    /// spécimens, ALIGNEMENT tient en trois pictogrammes qu'aucune ligne ne
-    /// déborde, CADRE et LISERÉ empilent déjà curseurs et palettes, LANGUE et
-    /// COULEUR n'ont pas de nom à poser sous une boîte — une pastille de
-    /// couleur EST son propre nom.
+    /// **POLICE a rejoint la grille le 2026-09-05** (directive porteur : « aligne
+    /// les polices rangée par rangée comme les effets », #5244). Elle en était
+    /// exclue pour une raison écrite — « POLICE porte un curseur et sa propre
+    /// grille de dix-huit spécimens » — que la directive supplante : le curseur
+    /// de taille vit au-dessus et n'a jamais empêché un enroulement, et la
+    /// « grille de spécimens » est une bande HORIZONTALE à deux rangs
+    /// (`TextStyleSpecimenBand`), montée ailleurs, qui ne dispensait donc pas
+    /// ce panneau-ci d'avoir la même anatomie que ses voisins.
+    ///
+    /// Les cinq restants ne s'y prêtent toujours pas : ALIGNEMENT tient en
+    /// trois pictogrammes qu'aucune ligne ne déborde, CADRE et LISERÉ empilent
+    /// déjà curseurs et palettes, LANGUE et COULEUR n'ont pas de nom à poser
+    /// sous une boîte — une pastille de couleur EST son propre nom.
     ///
     /// Règle EXHAUSTIVE plutôt qu'un `default` : un neuvième outil ajouté à
     /// `TextEditTool` doit forcer une décision ici, pas hériter d'un silence.
     public nonisolated func wraps(_ tool: TextEditTool) -> Bool {
         guard self == .grid else { return false }
         switch tool {
-        case .background, .effect:
+        case .background, .effect, .style:
             return true
-        case .style, .color, .align, .frame, .border, .language:
+        case .color, .align, .frame, .border, .language:
             return false
         }
     }
@@ -60,13 +67,26 @@ public enum TextEditOptionsLayout: String, Sendable, CaseIterable {
 /// celle-ci décide combien d'options l'auteur voit sans défiler.
 nonisolated enum TextEditOptionsGridMetrics {
 
-    /// Largeur MINIMALE d'une colonne — `GridItem(.adaptive(minimum:))` en
-    /// dérive le nombre de colonnes qui entrent dans la largeur servie, ce
-    /// qui est exactement la formulation de la directive (« sur le nombre de
-    /// rangé qui entre dans l'écran »).
-    static let minimumColumnWidth: CGFloat = 72
+    /// **CINQ par rangée, sur tout appareil** (directive porteur 2026-09-05 :
+    /// « il faut 5 éléments par rangée »).
+    ///
+    /// Le gabarit était ADAPTATIF — `GridItem(.adaptive(minimum: 72))`, qui
+    /// laissait SwiftUI décider du compte selon la largeur servie. Mesuré au
+    /// simulateur : quatre colonnes sur un iPhone 16 Pro, donc cinq rangées
+    /// pour vingt effets. La directive fixe le compte, et c'est un meilleur
+    /// contrat : une grille dont le nombre de colonnes dépend de l'appareil ne
+    /// se dessine pas, ne se maquette pas, et ne se compare pas d'un écran à
+    /// l'autre.
+    ///
+    /// > Un gabarit adaptatif répond à « combien en tient-il ? ». Une planche
+    /// > répond à « combien en montre-t-on ? ». La seconde question est celle
+    /// > du produit, et elle a priorité.
+    static let columns = 5
 
-    static let columnSpacing: CGFloat = 10
+    /// L'espace entre colonnes. Resserré de 10 à 8 avec le passage à cinq :
+    /// c'est ce qui rend le compte tenable sur le plus étroit des appareils
+    /// servis (voir `fitsNarrowestDevice`).
+    static let columnSpacing: CGFloat = 8
     static let rowSpacing: CGFloat = 14
 
     /// Le côté de la BOÎTE, où l'exemple est rendu à l'échelle. 56 pt : bien
@@ -76,19 +96,29 @@ nonisolated enum TextEditOptionsGridMetrics {
 
     static let boxCornerRadius: CGFloat = 12
 
-    /// **Le nombre de colonnes qu'une largeur permet.**
+    /// La largeur du plus étroit des appareils servis — iPhone SE (2ᵉ/3ᵉ
+    /// génération) et iPhone 8, plancher réel du projet à iOS 16.
+    static let narrowestDeviceWidth: CGFloat = 375
+
+    /// La marge horizontale que le panneau d'options pose de chaque côté.
+    static let hostHorizontalPadding: CGFloat = 16
+
+    /// **Cinq boîtes entrent-elles dans le plus étroit des appareils ?**
     ///
-    /// C'est la règle que `.adaptive(minimum:)` applique pour son compte ;
-    /// elle est écrite ici pour être TESTABLE — non pour être appelée par la
-    /// vue. Ce qu'elle garde n'est pas l'arithmétique de SwiftUI mais le
-    /// gabarit : que `minimumColumnWidth` reste assez petit pour que l'iPhone
-    /// le plus étroit rende plusieurs colonnes. Une valeur trop grande y
-    /// dégraderait la grille en COLONNE UNIQUE — douze fonds sur douze
-    /// rangées, soit pire que la rangée qu'on remplace.
-    static func columnCount(forWidth width: CGFloat) -> Int {
-        guard width > 0 else { return 1 }
-        let unit = minimumColumnWidth + columnSpacing
-        return max(1, Int((width + columnSpacing) / unit))
+    /// Le compte étant désormais FIXE, ce n'est plus SwiftUI qui protège du
+    /// débordement : une boîte trop large rognerait la cinquième colonne, ou
+    /// pire, écraserait les cinq. Cette règle est ce qui remplace
+    /// `columnCount(forWidth:)` — l'ancienne gardait « le minimum reste assez
+    /// petit pour tenir plusieurs colonnes » ; celle-ci garde l'invariant
+    /// devenu vrai : **la boîte reste assez petite pour que CINQ tiennent**.
+    ///
+    /// Elle s'éprouve sur la largeur du PLUS ÉTROIT appareil, jamais sur celle
+    /// de la machine qui la teste : un témoin qui lit l'écran courant rend le
+    /// même verdict sur un iPad et ne prouve rien.
+    static func fitsNarrowestDevice() -> Bool {
+        let utile = narrowestDeviceWidth - 2 * hostHorizontalPadding
+        let requis = CGFloat(columns) * boxSide + CGFloat(columns - 1) * columnSpacing
+        return requis <= utile
     }
 }
 
@@ -96,9 +126,13 @@ nonisolated enum TextEditOptionsGridMetrics {
 
 extension TextEditToolOptions {
 
+    /// **Cinq colonnes FLEXIBLES**, jamais adaptatives (directive porteur
+    /// 2026-09-05). `.flexible()` partage la largeur servie en parts égales :
+    /// le compte est tenu, et chaque boîte reste centrée dans sa part.
     var gridColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: TextEditOptionsGridMetrics.minimumColumnWidth),
-                  spacing: TextEditOptionsGridMetrics.columnSpacing)]
+        Array(repeating: GridItem(.flexible(),
+                                  spacing: TextEditOptionsGridMetrics.columnSpacing),
+              count: TextEditOptionsGridMetrics.columns)
     }
 
     /// L'encre du spécimen est celle que l'auteur a CHOISIE, jamais une encre
@@ -119,6 +153,25 @@ extension TextEditToolOptions {
         LazyVGrid(columns: gridColumns, spacing: TextEditOptionsGridMetrics.rowSpacing) {
             ForEach(StoryTextEffect.allCases, id: \.self) { effect in
                 effectGridCell(effect)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// **La grille des POLICES** (#5244) — même gabarit que les fonds et les
+    /// effets, par le MÊME `gridCell` : le spécimen dans la boîte, le nom
+    /// dessous. Écrire une seconde cellule « comme celle-ci mais pour les
+    /// polices » aurait fait diverger les trois anatomies à la première
+    /// retouche de l'une.
+    ///
+    /// Le spécimen est rendu AVEC l'effet courant du texte : on choisit une
+    /// police pour ce qu'elle donnera, et l'effet en change la lecture — c'est
+    /// la réciproque exacte de la vignette d'effet, qui rend « Aa » dans la
+    /// police courante.
+    var styleGrid: some View {
+        LazyVGrid(columns: gridColumns, spacing: TextEditOptionsGridMetrics.rowSpacing) {
+            ForEach(StoryTextStyle.allCases, id: \.self) { style in
+                styleGridCell(style)
             }
         }
         .padding(.vertical, 4)
@@ -197,6 +250,30 @@ extension TextEditToolOptions {
         // VoiceOver lirait deux fois le libellé pour une seule cible.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(TextEditLabels.title(for: effect))
+        .accessibilityAddTraits(isSel ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func styleGridCell(_ style: StoryTextStyle) -> some View {
+        let isSel = textObject.parsedTextStyle == style
+        let ink = specimenInk
+        return Button {
+            textObject.textStyle = style.rawValue
+            HapticFeedback.light()
+        } label: {
+            gridCell(name: TextEditLabels.title(for: style), selected: isSel) {
+                specimenCanvas
+                Text(verbatim: "Aa")
+                    .font(storyFont(for: style, size: 22))
+                    .foregroundStyle(ink)
+                    .storyTextEffect(textObject.parsedTextEffect, fontSize: 22, textColor: ink)
+            }
+        }
+        .buttonStyle(.plain)
+        // La boîte et le nom disent la MÊME chose — sans cette fusion,
+        // VoiceOver lirait deux fois le libellé pour une seule cible. Et
+        // c'est ici que dix-huit boutons cessent d'être annoncés « Aa ».
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(TextEditLabels.title(for: style))
         .accessibilityAddTraits(isSel ? [.isButton, .isSelected] : .isButton)
     }
 

@@ -25,9 +25,21 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Le double d'un limiteur porte les TROIS méthodes que la route emploie, pas
+// seulement `middleware` : depuis #5216 un 400 REND la tentative comptée
+// (`keyFor` + `refund`). Un double partiel n'aurait pas fait rougir un témoin de
+// remboursement — il aurait fait tomber la route en 500 sur `refund is not a
+// function`, très loin du contrat mesuré (§ « un double PARTIEL perd en silence
+// ce que le module gagne »).
+const doubleDeLimiteur = () => ({
+  middleware: jest.fn(() => async () => {}),
+  refund: jest.fn(async () => {}),
+  keyFor: jest.fn(() => 'ip:test'),
+});
+
 jest.mock('../../../../utils/rate-limiter.js', () => ({
-  createRegisterRateLimiter: jest.fn(() => ({ middleware: jest.fn(() => async () => {}) })),
-  createAuthGlobalRateLimiter: jest.fn(() => ({ middleware: jest.fn(() => async () => {}) })),
+  createRegisterRateLimiter: jest.fn(() => doubleDeLimiteur()),
+  createAuthGlobalRateLimiter: jest.fn(() => doubleDeLimiteur()),
 }));
 
 const mockGetRequestContext = jest.fn<any>().mockResolvedValue({
@@ -184,42 +196,41 @@ describe('POST /register — invalid phone transfer token (line 82)', () => {
   });
 });
 
-// ─── POST /register — INVALID_EMAIL error branch (line 164) ──────────────────
-// Provide a valid payload so the handler runs; authService.register throws email error.
+// ─── POST /register — une erreur NON typée vaut 500, jamais 400 (#5216) ──────
+//
+// Deux `describe` vivaient ici, nommés d'après des branches de la route
+// (« INVALID_EMAIL error branch (line 164) », « INVALID_PASSWORD … (line 168) »)
+// qui lisaient le TEXTE de l'erreur pour deviner un motif. **La production n'a
+// jamais produit ces rejets** : `AuthService.register` rattrapait tout et
+// rendait `null`. Les branches étaient inatteignables, et ces témoins verts
+// attestaient un comportement absent — la forme exacte du témoin qui ne peut
+// pas tomber.
+//
+// Ce qui les remplace mesure la règle qui EXISTE : un refus est typé (voir
+// `register.test.ts` § refus typés), et tout le reste est une panne, donc 500.
 
-describe('POST /register — INVALID_EMAIL error branch (line 164)', () => {
-  it('returns 400 when authService throws email validation error', async () => {
-    const authService = makeAuthService();
-    authService.register = jest.fn<any>().mockRejectedValue(new Error('Email invalide: format incorrect'));
-    const { app } = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST', url: '/register',
-      payload: {
-        username: 'alice', password: 'secret1234', email: 'alice@test.com',
-        firstName: 'Alice', lastName: 'Smith',
-      },
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
+describe('POST /register — une erreur non typée est une PANNE', () => {
+  const inscrire = async (app: FastifyInstance) => app.inject({
+    method: 'POST', url: '/register',
+    payload: {
+      username: 'alice', password: 'secret1234', email: 'alice@test.com',
+      firstName: 'Alice', lastName: 'Smith',
+    },
   });
-});
 
-// ─── POST /register — INVALID_PASSWORD error branch (line 168) ───────────────
-// Provide a valid payload so the handler runs; authService.register throws password error.
-
-describe('POST /register — INVALID_PASSWORD error branch (line 168)', () => {
-  it('returns 400 when authService throws password validation error', async () => {
+  it.each([
+    ['une adresse illisible côté service', 'Email invalide: format incorrect'],
+    ['une panne de base', 'Database error'],
+    ['une erreur dont le texte MENTIONNE un champ', 'Invalid username format'],
+  ])('%s rend 500 REGISTRATION_ERROR — le texte ne décide plus du statut', async (_cas, message) => {
     const authService = makeAuthService();
-    authService.register = jest.fn<any>().mockRejectedValue(new Error('mot de passe trop court'));
+    authService.register = jest.fn<any>().mockRejectedValue(new Error(message));
     const { app } = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST', url: '/register',
-      payload: {
-        username: 'alice', password: 'validpass1', email: 'alice@test.com',
-        firstName: 'Alice', lastName: 'Smith',
-      },
-    });
-    expect(res.statusCode).toBe(400);
+
+    const res = await inscrire(app);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('REGISTRATION_ERROR');
     await app.close();
   });
 });
@@ -246,24 +257,6 @@ describe('POST /register — valid transfer token but executeRegistrationTransfe
   });
 });
 
-// ─── POST /register — INVALID_USERNAME error branch (line 172) ───────────────
-
-describe('POST /register — INVALID_USERNAME error branch', () => {
-  it('returns 400 when authService throws username-specific error (line 172)', async () => {
-    const authService = makeAuthService();
-    authService.register = jest.fn<any>().mockRejectedValue(new Error('Invalid username format'));
-    const { app } = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST', url: '/register',
-      payload: {
-        username: 'alice', password: 'secret1234', email: 'alice@test.com',
-        firstName: 'Alice', lastName: 'Smith',
-      },
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
 
 // ─── GET /check-availability — username taken → suggestions loop ──────────────
 

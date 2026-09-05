@@ -1,6 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { SIGNAL_DE_DECONNEXION } from '../lib/sw/signal';
+
 /**
  * LE TRAVAILLEUR DE ZONE (#4473) — et ce qu'il n'a PAS le droit de faire.
  *
@@ -159,6 +161,19 @@ const dispatchActivate = async (monde: Monde): Promise<void> => {
   const attentes: Promise<unknown>[] = [];
   for (const fn of monde.ecouteurs['activate'] ?? []) {
     fn({
+      waitUntil: (p: Promise<unknown>) => {
+        attentes.push(p);
+      },
+    });
+  }
+  await Promise.all(attentes);
+};
+
+const dispatchMessage = async (monde: Monde, data: unknown): Promise<void> => {
+  const attentes: Promise<unknown>[] = [];
+  for (const fn of monde.ecouteurs['message'] ?? []) {
+    fn({
+      data,
       waitUntil: (p: Promise<unknown>) => {
         attentes.push(p);
       },
@@ -337,5 +352,45 @@ describe('les actifs immuables — cache-first, le retour instantané que le has
     const reponse = await dispatchFetch(monde, requete(url, { destination: 'script' }));
     expect(reponse).toEqual({ corps: 'actif connu' });
     expect(monde.fetchAppels).toHaveLength(0);
+  });
+});
+
+/**
+ * LA PURGE À LA DÉCONNEXION (#5095) — le lot que la décision 2 annonçait.
+ * `lib/realtime/deconnexion.ts` poste ce message à chaque registration active ;
+ * le travailleur purge alors TOUT le namespace v3, jamais le legacy.
+ */
+describe('la purge à la déconnexion — le lot que la décision 2 annonçait', () => {
+  it('le signal purge TOUTES les entrées du namespace v3, et n’y laisse aucune entrée d’API', async () => {
+    const monde = monteLeMonde({
+      nomsDeCaches: [
+        'meeshy-v3-sw-a1',
+        'meeshy-v3-sw-__V3_SW_EMPREINTE__',
+        'meeshy-cache-legacy',
+        'tiers',
+      ],
+    });
+    const cache = await monde.caches.open('meeshy-v3-sw-__V3_SW_EMPREINTE__');
+    await cache.put(
+      'https://gate.staging.meeshy.me/api/v1/conversations?__lecteur=abc',
+      { corps: 'n-1' },
+    );
+
+    await dispatchMessage(monde, { type: SIGNAL_DE_DECONNEXION });
+
+    expect(monde.caches.supprimes.sort()).toEqual(['meeshy-v3-sw-__V3_SW_EMPREINTE__', 'meeshy-v3-sw-a1']);
+    expect(monde.caches.supprimes).not.toContain('meeshy-cache-legacy');
+    expect(monde.caches.supprimes).not.toContain('tiers');
+  });
+
+  it('un message d’un autre type, ou sans forme reconnaissable, ne touche à rien', async () => {
+    const monde = monteLeMonde({ nomsDeCaches: ['meeshy-v3-sw-__V3_SW_EMPREINTE__'] });
+
+    await dispatchMessage(monde, { type: 'autre' });
+    await dispatchMessage(monde, 'pas-un-objet');
+    await dispatchMessage(monde, null);
+    await dispatchMessage(monde, undefined);
+
+    expect(monde.caches.supprimes).toEqual([]);
   });
 });

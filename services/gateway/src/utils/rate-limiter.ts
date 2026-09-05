@@ -148,6 +148,19 @@ class MemoryStore {
   async reset(key: string): Promise<void> {
     this.store.delete(key);
   }
+
+  /**
+   * Rend une tentative — jamais sous zéro, et jamais sur une fenêtre EXPIRÉE.
+   *
+   * Rembourser une fenêtre morte reviendrait à en ouvrir une neuve à -1, donc
+   * à offrir une tentative de plus au tour suivant : un remboursement doit
+   * annuler un décompte, pas en créditer un.
+   */
+  async decrement(key: string): Promise<void> {
+    const existing = this.store.get(key);
+    if (!existing || existing.resetAt <= Date.now()) return;
+    existing.count = Math.max(0, existing.count - 1);
+  }
 }
 
 /**
@@ -186,6 +199,23 @@ class RedisStore {
 
   async reset(key: string): Promise<void> {
     await this.redis.del(`ratelimit:${key}`);
+  }
+
+  /**
+   * Rend une tentative — jamais sous zéro.
+   *
+   * `DECR` sur une clé ABSENTE la crée à -1 avec une durée de vie infinie :
+   * la fenêtre suivante démarrerait sous zéro et n'expirerait jamais. On ne
+   * décrémente donc que si la clé existe, et on remonte à zéro si un
+   * remboursement en trop l'a fait passer sous la barre.
+   */
+  async decrement(key: string): Promise<void> {
+    const windowKey = `ratelimit:${key}`;
+    const existe = await this.redis.exists(windowKey);
+    if (!existe) return;
+
+    const restant = await this.redis.decr(windowKey);
+    if (restant < 0) await this.redis.set(windowKey, '0', 'KEEPTTL');
   }
 }
 
@@ -294,6 +324,43 @@ export class RateLimiter {
   async reset(key: string): Promise<void> {
     const fullKey = `${this.config.keyPrefix}:${key}`;
     await this.store.reset(fullKey);
+  }
+
+  /**
+   * REND la tentative que `middleware()` vient de compter (#5216).
+   *
+   * ## Ce qu'un limiteur compte, et ce qu'il devrait compter
+   *
+   * `POST /auth/register` tolère trois tentatives par cinq minutes. Le
+   * `preHandler` compte AVANT de savoir ce qu'il compte : une faute de frappe
+   * dans une adresse consomme donc le même quota qu'une création de compte, et
+   * trois corrections successives ferment la porte pendant cinq minutes à
+   * quelqu'un qui n'a encore rien créé. C'est un limiteur qui punit l'hésitation
+   * plutôt que l'abus.
+   *
+   * La règle retenue : **un 400 rend la tentative ; un 409, un 200 et un 429 la
+   * gardent.** Un 400 dit « ta saisie est mal formée » — aucun état n'a été
+   * touché, aucune information sur autrui n'a été rendue. Un 409, lui, apprend
+   * qu'un pseudo ou une adresse EXISTE : c'est un oracle, et un oracle
+   * remboursable est un oracle gratuit.
+   *
+   * Le remboursement est BEST-EFFORT : une panne du magasin ne doit jamais
+   * empêcher une réponse de partir. Il se contente de journaliser, comme
+   * `middleware()` le fait déjà de ses propres pannes.
+   */
+  async refund(key: string): Promise<void> {
+    if (rateLimitDisabled()) return;
+
+    try {
+      await this.store.decrement(`${this.config.keyPrefix}:${key}`);
+    } catch (error) {
+      logger.error('Rate limiter refund error', error as Error);
+    }
+  }
+
+  /** La clé que `middleware()` a comptée pour cette requête — celle à rembourser. */
+  keyFor(request: FastifyRequest): string {
+    return this.config.keyGenerator(request);
   }
 }
 

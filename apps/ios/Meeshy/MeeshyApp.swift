@@ -155,7 +155,7 @@ struct MeeshyApp: App {
                     get: { shouldShowOnboarding && !showSplash && activeGuestSession == nil },
                     set: { _ in }
                 )) {
-                    OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                    WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
                 // **L'hôte des toasts est un modificateur depuis #4872.** Il
                 // vivait ici, et ici SEULEMENT : un `fullScreenCover` — le
@@ -729,7 +729,7 @@ struct MeeshyApp: App {
                                 }
                             }
                         )
-                        Task { await requestPushPermissionIfNeeded() }
+                        Task { await PushPermissionPrompt.onSessionOpened(origin: authManager.sessionOrigin) }
                         Task { await NotificationToastManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
                         // Force a PushKit re-registration on every login so the
@@ -877,13 +877,10 @@ struct MeeshyApp: App {
 
     // MARK: - Push Notifications
 
+    /// Un RELAIS vers le site unique (`PushPermissionPrompt`), jamais une
+    /// seconde copie : le fil d'envoi la déclenche aussi (#5218).
     private func requestPushPermissionIfNeeded() async {
-        await pushManager.checkAuthorizationStatus()
-        if !pushManager.isAuthorized {
-            _ = await pushManager.requestPermission()
-        } else {
-            UIApplication.shared.registerForRemoteNotifications()
-        }
+        await PushPermissionPrompt.requestIfNeeded(using: pushManager)
     }
 
     /// VoIP registration must run unconditionally, before the notification-

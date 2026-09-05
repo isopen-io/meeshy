@@ -3,7 +3,7 @@ import XCTest
 
 /// **La planche parle d'« un objet » ; le code n'en avait pas** (#4591).
 ///
-/// `MeeshyObject` — renommé `MeeshySceneObject` sur arbitrage du porteur —
+/// `MeeshySceneObject` — renommé `MeeshySceneObject` sur arbitrage du porteur —
 /// apparaît 78 fois dans `docs/product/planche-meeshy-composer.html`. Le modèle
 /// n'avait ni protocole ni type somme : cinq tableaux séparés, et toute question
 /// posée à « l'objet d'id X » réécrite en cascade sur les cinq. Mesuré avant ce

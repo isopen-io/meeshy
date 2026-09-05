@@ -89,6 +89,11 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // itself, so a non-direct conversation would also resolve to 0 here).
       count: jest.fn<any>().mockResolvedValue(0),
     },
+    // #3740 — la clôture désactive aussi les liens de partage encore actifs du
+    // fil, dans la MÊME transaction.
+    conversationShareLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     // La clôture (ou la promotion du successeur) et le masquage de l'appelant
     // committent ensemble (cycle 69).
     $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
@@ -288,6 +293,25 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no other memb
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('#3740 — désactive les liens de partage encore actifs du fil, dans la MÊME transaction', async () => {
+    const creatorParticipant = { ...mockParticipant, role: 'creator' };
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        findMany: jest.fn<any>().mockResolvedValue([]), // plus aucun membre
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { conversationId: 'conv-resolved-id', isActive: true },
+      data: { isActive: false },
+    });
     await app.close();
   });
 });

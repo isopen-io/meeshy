@@ -12,13 +12,13 @@
  * sans effet de la charte règle 7 pris par l'autre bout, non pas un bouton qui
  * ne fait rien mais un écran que rien n'ouvre.
  *
- * SEPT RANGÉES DANS LA PLANCHE, CINQ SERVIES. `Appels` (`/calls`) et
- * `Communautés` (`/communities`) sont P2 dans la matrice, et la v3 ne sert
- * aucune des deux routes : les dessiner ouvrirait sur un 404 rendu par le
- * legacy, et un lien mort se pré-charge, s'indexe et se tabule. C'est la
- * doctrine déjà écrite pour le carrefour des réglages (`reglages.ts`) — les
- * rangées servies sont motivées par ce qu'elles PROMETTENT, jamais par ce qui
- * manque à côté.
+ * SEPT RANGÉES DANS LA PLANCHE, SEPT SERVIES. `Appels` (`/calls`, #44) puis
+ * `Communautés` (`/communities`, matrice ordre 45, L7) sont livrées : la v3
+ * sert la CONSULTATION de l'historique des appels, et celle des communautés
+ * du lecteur (liste, ouverture sur les conversations, création) — dans
+ * l'ordre de la planche (`MeeshyWebV3.dc.html:1126`) : Contacts, Appels,
+ * Communautés. `Communautés` fermait la dernière frontière que ce fichier
+ * documentait encore : la dessiner n'ouvre plus sur un 404 du legacy.
  *
  * AUCUNE PASTILLE DE COMPTE, et c'est la même famille de raison. La planche
  * montre « 5 non lues » et « 3 demandes en attente » ; les servir demanderait
@@ -29,6 +29,16 @@
  * (`app/connecte/contenu.ts`). Le jour où la porte a une raison INDÉPENDANTE de
  * lire ces deux routes, la pastille devient gratuite.
  */
+
+/**
+ * L’ADRESSE DE LA FICHE DU COMPTE DU LECTEUR — le SITE UNIQUE de cette
+ * destination côté contenu. `app/connecte/profil-vue.ts` la LIT pour l’action
+ * « Mon compte » de la branche « c’est vous » (#5030) : le fil et l’espace
+ * mènent au compte par la MÊME adresse, jamais par deux littéraux jumeaux.
+ * L’identité de la ROUTE, elle, reste chez la route (`CHEMIN_DU_PROFIL`,
+ * `app/connecte/reglages-porte.ts`) — c’est une porte, pas une copie.
+ */
+export const ADRESSE_DE_MON_COMPTE = '/settings/profile';
 
 export const ESPACE = {
   /** Le nom accessible de l'action qui ouvre la feuille, et son titre une fois ouverte. */
@@ -41,6 +51,8 @@ export const ESPACE = {
   fil: 'Le fil',
   /** Le champ de recherche du tableau de bord (planche : « Rechercher partout »). */
   rechercher: 'Rechercher partout',
+  /** Le contrôle de sortie (#5095) — un `<form method=post>`, pas un lien. */
+  deconnecter: 'Se déconnecter',
 } as const;
 
 /**
@@ -54,7 +66,7 @@ export const ESPACE = {
 export const RANGEES_DE_L_ESPACE = [
   {
     glyphe: 'ph-user-circle',
-    href: '/settings/profile',
+    href: ADRESSE_DE_MON_COMPTE,
     quoi: 'Votre profil',
     sous: 'Nom, langues du Prisme, bio',
   },
@@ -69,6 +81,18 @@ export const RANGEES_DE_L_ESPACE = [
     href: '/contacts',
     quoi: 'Contacts',
     sous: 'Votre carnet et vos demandes',
+  },
+  {
+    glyphe: 'ph-phone',
+    href: '/calls',
+    quoi: 'Appels',
+    sous: 'Historique',
+  },
+  {
+    glyphe: 'ph-users-three',
+    href: '/communities',
+    quoi: 'Communautés',
+    sous: 'Vos espaces',
   },
   {
     glyphe: 'ph-magnifying-glass',

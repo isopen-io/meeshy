@@ -72,6 +72,13 @@ export type EtatDesNotifs = {
   readonly curseurSuivant: string | null;
 };
 
+/**
+ * L'ACTION D'EN-TÊTE VERS `/notifications/preferences` (#4899, planche
+ * `headerAction` ligne 1174 : `notifs → notifPrefs`) — le glyphe `ph-sliders`,
+ * dans la classe `.medias` que `fil-feuille.ts` stylise déjà pour cette
+ * position (une action à 44 px, à droite du titre) : un vocabulaire visuel,
+ * jamais une seconde règle CSS pour la même géographie.
+ */
 const enTete = (nonLues: number): string =>
   '<header class="fil-tete">' +
   `<a class="retour" href="/" aria-label="${echappe(NOTIFS.retour)}">${svgDuSprite('ph-caret-left')}</a>` +
@@ -79,6 +86,7 @@ const enTete = (nonLues: number): string =>
   `<h1>${echappe(NOTIFS.titre)}</h1>` +
   `<p class="sous"${nonLues === 0 ? ' hidden' : ''}>${nonLues === 0 ? '' : echappe(NOTIFS.nonLues(nonLues))}</p>` +
   '</div>' +
+  `<a class="medias" href="/notifications/preferences" aria-label="${echappe(NOTIFS.reglages)}">${svgDuSprite('ph-sliders')}</a>` +
   '</header>';
 
 /**

@@ -15,7 +15,7 @@ import MeeshyUI
 /// qu'elle casse.
 ///
 /// La loi 6 est ce qui interdit l'autre solution — poser les rails PAR-DESSUS.
-/// Un FAB sur la scène occupe exactement la place où un `MeeshyObject` peut
+/// Un FAB sur la scène occupe exactement la place où un `MeeshySceneObject` peut
 /// vivre : l'aperçu mentirait sur le rendu final.
 final class ComposerRailGeometryTests: XCTestCase {
 
@@ -134,7 +134,7 @@ final class ComposerRailGeometryTests: XCTestCase {
 
     // MARK: - Ce que l'encastrement NE touche pas
 
-    /// Les `anchor` d'un `MeeshyObject` sont NORMALISÉS (0…1) : rétrécir la
+    /// Les `anchor` d'un `MeeshySceneObject` sont NORMALISÉS (0…1) : rétrécir la
     /// scène ne déplace donc rien DANS le document. C'est ce qui rend le
     /// changement sûr — et c'est une propriété à vérifier, pas à supposer.
     func test_unePosePlaceeAuCentre_resteAuCentreQuelleQueSoitLaLargeur() {

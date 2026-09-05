@@ -17,13 +17,14 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
+// `utils/password-hash` est le SITE UNIQUE du hachage depuis #5216 : c'est lui
+// qu'on double, et non `bcryptjs`, que le module n'atteint que si le binaire
+// natif manque.
 const mockCompare = jest.fn() as jest.Mock<any>;
-jest.mock('bcryptjs', () => ({
-  __esModule: true,
-  default: {
-    compare: (...a: any[]) => mockCompare(...a),
-    hash: jest.fn(async () => 'hashed'),
-  },
+jest.mock('../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...a: any[]) => mockCompare(...a),
+  hashPassword: jest.fn(async () => 'hashed'),
 }));
 
 jest.mock('../../../services/SessionService', () => ({

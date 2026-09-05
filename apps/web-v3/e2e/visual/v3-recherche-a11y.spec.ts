@@ -7,8 +7,9 @@
 // qu'on tape à l'aveugle.
 //
 // LES DEUX ÉTATS SONT AUDITÉS, et c'est le fond du témoin : l'écran VIDE (son invitation) et
-// l'écran GARNI (ses deux groupes) n'ont presque aucun nœud en commun. N'auditer que le second
-// laisserait l'état d'ouverture — celui que tout le monde voit en premier — sans mesure.
+// l'écran GARNI (ses QUATRE groupes, #5174/#5171) n'ont presque aucun nœud en commun. N'auditer
+// que le second laisserait l'état d'ouverture — celui que tout le monde voit en premier — sans
+// mesure.
 //
 // Il vit dans le projet `pages`, comme `v3-fil-a11y.spec.ts` : c'est l'import STATIQUE de
 // `lib/a11y.ts` qui le décide, jamais le serveur qu'il monte (`playwright.config.ts`, dont la
@@ -65,7 +66,7 @@ const contexteDuMembre = async (navigateur: Browser, schema: 'light' | 'dark'): 
 
       await page.goto(`${v3.base}/search?q=a`);
       await expect(page.locator('main.recherche-ecran')).toBeVisible();
-      await expect(page.locator('.groupe')).toHaveCount(2);
+      await expect(page.locator('.groupe')).toHaveCount(4);
 
       const { violations } = await new AxeBuilder({ page }).analyze();
       const bloquantes = violationsBloquantes(violations);
@@ -89,13 +90,15 @@ test('le formulaire cherche pour de vrai, et son adresse porte la question', asy
   // Un `GET` de formulaire : la question est dans l'ADRESSE, donc le résultat
   // est rechargeable, partageable, et le bouton « précédent » y revient.
   await expect(page).toHaveURL(`${v3.base}/search?q=lagos`);
-  await expect(page.locator('.groupe')).toHaveCount(2);
+  await expect(page.locator('.groupe')).toHaveCount(4);
   // Le champ RE-SERT le terme : sans quoi l'écran aurait oublié la question.
   await expect(page.locator('#recherche-q')).toHaveValue('lagos');
 
   const appels = passerelle.journal.map((appel) => appel.chemin);
   expect(appels.some((chemin) => chemin.includes('/api/v1/conversations/search?q=lagos'))).toBe(true);
   expect(appels.some((chemin) => chemin.includes('/api/v1/directory/people?q=lagos'))).toBe(true);
+  expect(appels.some((chemin) => chemin.includes('/api/v1/attachments/search?q=lagos'))).toBe(true);
+  expect(appels.some((chemin) => chemin.includes('/api/v1/links?q=lagos'))).toBe(true);
   expect(appels.some((chemin) => chemin.includes('/users/search'))).toBe(false);
   expect(appels.some((chemin) => chemin.includes('/auth/me'))).toBe(false);
 

@@ -2,7 +2,7 @@ import { moi } from '@/lib/api/compte';
 import { fil, languesDuLecteur, type Creance } from '@/lib/api/fil';
 import { galerie, genreDemande } from '@/lib/api/medias';
 
-import { CACHE_PRIVE, curseurDemande, rendu } from '@/app/connecte/fil-porte';
+import { CACHE_PRIVE, curseurDemande, pleinDemande, rendu, tempsReelDuDocument } from '@/app/connecte/fil-porte';
 import { documentIntrouvable } from '@/app/connecte/fil-vue';
 import { documentDesMedias } from '@/app/connecte/medias-vue';
 import { documentDePanne } from '@/app/connecte/vue';
@@ -16,7 +16,10 @@ import { jetonDuLecteur } from '@/app/session';
  * la passerelle accepte les deux, et la v3 lui passe ce qu'elle a reçu.
  * `?genre=image|video|audio|fichier` filtre la grille ; `?avant=<id>` remonte
  * d'une page — le MÊME curseur que le fil, puisque c'est le MÊME lot de
- * messages qui est lu.
+ * messages qui est lu. `?media=<pièce>` (`pleinDemande`, `fil-porte.ts` — le
+ * MÊME lecteur que les deux portes du fil) est l'état PLEIN ÉCRAN : résolu
+ * contre la galerie SERVIE, jamais par une requête de plus (#4525, #5024
+ * point 2).
  *
  * UNE SEULE MÉTHODE. Cet écran ne mute rien : pas de POST, et pas d'accusé de
  * lecture — parcourir une galerie n'est pas LIRE la conversation, et poser
@@ -62,13 +65,17 @@ export const GET = async (
 
   const lecteur = identite.genre === 'lecteur' ? identite.lecteur : null;
   const creance: Creance = { genre: 'membre', jeton };
+  // LU UNE FOIS, SERVI DEUX FOIS : la tranche DEMANDÉE gouverne à la fois ce
+  // que la passerelle rend et l'adresse que les tuiles composent. Deux lectures
+  // du même paramètre, c'était deux valeurs à tenir d'accord.
+  const avant = curseurDemande(requete);
   const issue = await fil({
     cle,
     creance,
     moi: lecteur?.id ?? null,
     langues: languesDuLecteur(lecteur ?? {}),
     limite: PAR_PAGE,
-    avant: curseurDemande(requete),
+    avant,
   });
 
   if (issue.genre === 'session-expiree') return versLaConnexion(chemin);
@@ -83,6 +90,9 @@ export const GET = async (
       titre: issue.fil.titre,
       galerie: galerie({ messages: issue.fil.messages, genre }),
       plusAncien: issue.fil.plusAncien,
+      avant,
+      plein: pleinDemande(requete),
+      tempsReel: tempsReelDuDocument(),
     }),
   );
 };

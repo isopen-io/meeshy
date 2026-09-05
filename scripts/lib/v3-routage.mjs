@@ -365,6 +365,16 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
    */
   const ENV_REPLI_SUR = new Map([
     ['NODE_ENV', "posée par le Dockerfile (ENV NODE_ENV=production) et par Next lui-même"],
+    // Ni l'une ni l'autre n'est INCONDITIONNELLEMENT nécessaire — leur absence
+    // est SÛRE tant que le déploiement ne route rien au-delà des actifs de
+    // zone (`/__v3/_next`, `/__v3/rt/`, `/__v3/sw`), ce que la règle GÉNÉRALE
+    // ci-dessous ne sait pas exprimer (elle exige la déclaration, point). La
+    // question conditionnelle est posée par l'invariant DÉDIÉ,
+    // `unDeploiementQuiRouteAuDelaDesActifsDeclareLaNavigationDeZone`, plus
+    // bas dans ce fichier — c'est lui qui rougit le jour où un déploiement
+    // franchit le préfixe de zone sans les poser.
+    ['V3_NAVIGABLE', "gouvernée par l'invariant dédié « actifs seulement » ci-dessous, pas par cette règle générale"],
+    ['V3_SW_PORTEES', "même exemption que V3_NAVIGABLE, même invariant dédié, même raison"],
   ]);
 
   const environmentOf = (compose, service) => {
@@ -404,6 +414,95 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
       );
   };
 
+  // «ACTIFS SEULEMENT» N'A RIEN À DÉCLARER ; TOUT LE RESTE DOIT DÉCLARER LA
+  // NAVIGATION DE ZONE.
+  //
+  // `V3_NAVIGABLE` (`blocDuNavigateur`, #5106) et `V3_SW_PORTEES`
+  // (`SCRIPT_DU_TRAVAILLEUR`, #4472/#4473) sont servies par TOUT document
+  // PLEIN ÉCRAN (`documentPleinEcran`, `/l/` compris) ET par les écrans
+  // connectés que compose `documentDuSite` — pas seulement par un sous-
+  // ensemble nommé « écrans connectés » au sens étroit. Un déploiement dont
+  // la règle Traefik ne réclame RIEN au-delà du préfixe de zone
+  // (`/__v3/_next`, `/__v3/rt/`, `/__v3/sw`) est en ACTIFS SEULEMENT : aucun
+  // humain n'atteint encore ce code, et l'absence des deux variables est
+  // SÛRE — c'est le régime de `docker-compose.prod.yml` aujourd'hui (§ 4.9,
+  // aucun `PathPrefix`/`Path` humain n'y est encore posé). Dès qu'UNE seule
+  // route franchit le préfixe de zone (le cas de `docker-compose.staging.yml`,
+  // qui sert déjà `/l/`, `/chats`, `/chat/`…), le code qui lit ces deux
+  // variables devient joignable, et leur absence redevient un défaut.
+  //
+  // C'est un invariant DISTINCT de `theV3ServiceDeclaresWhatItsCodeReads` (la
+  // règle générale, inconditionnelle) : les deux variables en sont exemptées
+  // (`ENV_REPLI_SUR`) précisément parce que leur nécessité DÉPEND du routage
+  // — une condition que la règle générale ne sait pas exprimer.
+  const NAVIGATION_DE_ZONE = ['V3_NAVIGABLE', 'V3_SW_PORTEES'];
+
+  const theV3ServiceDeclaresZoneNavigationWhenItRoutesBeyondAssets = (dep) => (world) => {
+    const rule = v3RuleOf(world, dep);
+    if (rule === null) return [];
+    const cheminsHumains = cheminsReclames(rule).filter(
+      ({ valeur }) => !valeur.startsWith(V3_PATH_PREFIX),
+    );
+    if (cheminsHumains.length === 0) return [];
+    const declared = environmentOf(dep.source(world), dep.v3);
+    if (declared === null) return [];
+    return NAVIGATION_DE_ZONE.filter((name) => !declared.includes(name)).map(
+      (name) =>
+        `le service ${dep.v3} de ${dep.fichier} route ${cheminsHumains[0].valeur} au-delà des actifs de ` +
+        `zone mais ne déclare pas ${name} : le code qui la lit (blocDuNavigateur / SCRIPT_DU_TRAVAILLEUR) ` +
+        `est déjà joignable, et sa chaîne de replis retombe sur le poste de développement`,
+    );
+  };
+
+  const environmentEntriesOf = (compose, service) => {
+    const block = blockOf(compose, `  ${service}:`);
+    if (block === null) return null;
+    return new Map(
+      listValues(block, '    environment:').map((entry) => {
+        const separateur = entry.indexOf('=');
+        return separateur === -1 ? [entry, ''] : [entry.slice(0, separateur), entry.slice(separateur + 1)];
+      }),
+    );
+  };
+
+  // L'ORIGINE PUBLIQUE DE LA PASSERELLE EST JOIGNABLE PAR UN NAVIGATEUR.
+  //
+  // Le défaut qui l'appelle (staging, 2026-09-05) : le conteneur de la v3
+  // tournait sans `NEXT_PUBLIC_API_URL`, et chaque document remettait au
+  // navigateur `http://gateway-staging:3000` — l'adresse INTERNE des
+  // conteneurs, bloquée en contenu mixte sous une page HTTPS. L'invariant
+  // voisin (« le service déclare ce que son code lit ») était VERT : il vérifie
+  // qu'une variable de la chaîne est déclarée, pas que la valeur déclarée est
+  // une origine qu'un navigateur atteint. Deux questions, deux gardes :
+  // celui-ci lit la VALEUR — https, et distincte de l'adresse interne.
+  const lOriginePubliqueEstJoignableParUnNavigateur = (dep) => (world) => {
+    const env = environmentEntriesOf(dep.source(world), dep.v3);
+    if (env === null) return [];
+    const publique = env.get('NEXT_PUBLIC_API_URL');
+    const interne = env.get('MEESHY_GATEWAY_URL');
+    if (publique === undefined) {
+      return [
+        `le service ${dep.v3} de ${dep.fichier} ne déclare pas NEXT_PUBLIC_API_URL : le document n'aurait ` +
+          `plus que MEESHY_GATEWAY_URL, l'adresse INTERNE des conteneurs qu'un navigateur ne résout pas — ` +
+          `il refuserait de la servir et /healthz répondrait 503`,
+      ];
+    }
+    const failures = [];
+    if (!/^https:\/\//.test(publique)) {
+      failures.push(
+        `le service ${dep.v3} de ${dep.fichier} déclare NEXT_PUBLIC_API_URL=${publique}, qui n'est pas une ` +
+          `origine https : remise dans un document HTTPS, elle est bloquée en contenu mixte`,
+      );
+    }
+    if (interne !== undefined && publique === interne) {
+      failures.push(
+        `le service ${dep.v3} de ${dep.fichier} déclare NEXT_PUBLIC_API_URL à l'adresse INTERNE ` +
+          `(${interne}) : le navigateur ne la résout pas`,
+      );
+    }
+    return failures;
+  };
+
   const theV3ContainerIsDisjointFromTheLegacy = (dep) => (world) => {
     const block = blockOf(dep.source(world), `  ${dep.v3}:`);
     if (block === null) return [];
@@ -427,6 +526,8 @@ export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
     leDeploiementRouteLaV3,
     theLegacyRouterKeepsItsFloor,
     theV3ServiceDeclaresWhatItsCodeReads,
+    theV3ServiceDeclaresZoneNavigationWhenItRoutesBeyondAssets,
+    lOriginePubliqueEstJoignableParUnNavigateur,
     theV3ContainerIsDisjointFromTheLegacy,
   };
 };

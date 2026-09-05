@@ -96,6 +96,11 @@ export declare const percentile: (
 
 export declare const estCodeDeMesure: (http: number | null) => boolean;
 
+export declare const estCodeMesurable: (
+  http: number | null,
+  codesSupplementaires?: readonly number[],
+) => boolean;
+
 export declare const budgetsReseau: () => BudgetReseau | null;
 
 export declare const profilReseau: () => ProfilReseau | null;
@@ -113,6 +118,8 @@ export declare const composeMesure: (args: {
   readonly fcpMs: number | null;
   readonly lcpMs: number | null;
   readonly cls: number | null;
+  /** Des codes HORS 200–399 déclarés MESURABLES pour CET appel — jamais un élargissement global (#4933). */
+  readonly codesSupplementaires?: readonly number[];
 }) => Mesure;
 
 export declare const mesureIndisponible: (args: {
@@ -189,6 +196,8 @@ export declare const mesurePage: (args: {
    * connecté mesurerait l'écran public (§ 12.6).
    */
   readonly cookies?: readonly CookieDeMesure[];
+  /** Des codes HORS 200–399 déclarés MESURABLES pour CET appel — jamais un élargissement global (#4933). */
+  readonly codesSupplementaires?: readonly number[];
 }) => Promise<Mesure>;
 
 export declare const mesureUrls: (

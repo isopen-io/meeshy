@@ -131,7 +131,9 @@ extension MeeshyComposerHost {
                 // Il rejoint la scène COURANTE et n'y fonde rien : pas de
                 // `addSlide`, pas d'entrée dans l'index des fondations, donc
                 // pas de tuile. C'est tout le lot.
-                viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+                documentMediaObjectIdBySource.merge(
+                    viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+                ) { _, neuf in neuf }
 
             case .background:
                 let target: String
@@ -149,7 +151,9 @@ extension MeeshyComposerHost {
                     viewModel.addSlide()
                     target = viewModel.currentSlide.id
                 }
-                viewModel.applyContentMedia([media], intoSlideId: target)
+                documentMediaObjectIdBySource.merge(
+                    viewModel.applyContentMedia([media], intoSlideId: target)
+                ) { _, neuf in neuf }
                 slideIdByMediaURL[media.sourceURL] = target
             }
         }
@@ -217,7 +221,9 @@ extension MeeshyComposerHost {
         viewModel.declaredContentLanguage = documentLanguage
         // B1 — le texte ET le média déjà composés SUIVENT dans la scène.
         viewModel.applyContentText(documentText)
-        viewModel.applyContentMedia(documentContentMedia)
+        documentMediaObjectIdBySource.merge(
+            viewModel.applyContentMedia(documentContentMedia)
+        ) { _, neuf in neuf }
     }
 
     /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
@@ -384,7 +390,22 @@ extension MeeshyComposerHost {
             // depuis le 2026-08-30 : le champ permanent qui l'affichait dès
             // qu'un texte existait a été retiré sur directive porteur.
             HapticFeedback.light()
+            // **Ouvrir l'une FERME l'autre** (#4890). Les deux zones s'ancrent
+            // en bas : ouvertes ensemble, elles se recouvriraient, et l'auteur
+            // taperait dans celle qu'il ne regarde pas. Le `body` le rend déjà
+            // impossible à l'affichage ; le fermer ICI garde l'ÉTAT d'accord
+            // avec ce qui est peint, sans quoi refermer la description
+            // rouvrirait le contenu par surprise.
+            editsPostContent = false
             editsSceneDescription = true
+        case .content:
+            // **Le CORPS du post** (#4890) — jamais la légende, que
+            // `.description` ouvre juste au-dessus. Deux portes voisines, deux
+            // textes réellement distincts : c'est la table de
+            // `ComposerSlideTextRole`, rendue atteignable.
+            HapticFeedback.light()
+            editsSceneDescription = false
+            editsPostContent = true
         case .drawing:
             // **Une porte à BASCULE, la seule du rail.** Les six autres font
             // entrer quelque chose et se referment ; celle-ci ouvre un MODE qui
@@ -459,14 +480,14 @@ extension MeeshyComposerHost {
     /// sans destination rend la bande INCHANGÉE — la refermer ferait de
     /// « TAILLE 140 % », pendant un rognage, un bouton d'annulation déguisé.
     func handleObjectChip(_ chipId: String) {
-        let suivante = ComposerObjectChips.toggled(chipId,
-                                                   in: sceneObjectChips,
-                                                   opened: requestedSceneBand)
         // Le retour haptique suit l'EFFET, jamais le doigt : faire vibrer
         // l'appareil pour un geste qui ne change rien est précisément le retour
-        // trompeur que la loi 4 combat.
-        guard suivante != requestedSceneBand else { return }
-        requestedSceneBand = suivante
+        // trompeur que la loi 4 combat. Un jeton sans destination est une
+        // LECTURE — la vue ne l'annonce même pas comme bouton.
+        guard let id = selectedSceneItemId,
+              let section = ComposerObjectChips.destination(of: chipId, in: sceneObjectChips)
+        else { return }
+        openObjectEditor(id, section: section)
         HapticFeedback.light()
     }
 
@@ -481,10 +502,15 @@ extension MeeshyComposerHost {
         case .bringForward: viewModel.bringForward(id: id)
         case .sendBackward: viewModel.sendBackward(id: id)
         case .trim:
-            // La bande BASCULE : re-toucher « Rogner » la referme. Un
-            // contrôleur qui n'ouvre que dans un sens laisse l'auteur chercher
-            // par où sortir, alors que le geste de sortie est celui d'entrée.
-            requestedSceneBand = requestedSceneBand == .timeline ? nil : .timeline
+            // **« Rogner » ouvre l'ÉDITEUR sur ses bornes** (2026-09-05). Il
+            // basculait une bande sous la scène ; la première vue n'édite plus,
+            // et les bornes de lecture vivent à `.media(.trim)`.
+            //
+            // La bascule disparaît avec la bande, et ce n'est pas une perte :
+            // elle existait parce que la bande RESTAIT visible à côté de son
+            // contrôleur, donc il fallait un geste pour la ranger. Un écran
+            // modal se referme par son propre en-tête.
+            openObjectEditor(id, section: .media(.trim))
             HapticFeedback.light()
         case .edit, .leaveScene:
             // Injoignables DEPUIS LE RAIL, et pour deux raisons distinctes que
@@ -696,7 +722,13 @@ extension MeeshyComposerHost {
     /// précaution : `enterTextEditingMode` ouvre le curseur en ligne sur le
     /// canvas. L'appeler sur un sticker mettrait l'écran dans un état qu'aucune
     /// vue ne rend.
-    func openObjectEditor(_ id: String) {
+    /// - Parameter section: la section sur laquelle OUVRIR — `nil` ⇒ celle que
+    ///   la famille sert en premier. Elle vient des jetons de l'inspecteur
+    ///   (2026-09-05), qui nomment chacun un réglage : l'auteur a désigné
+    ///   « ALIGN ▭ » du doigt, l'écran ne doit pas lui demander de le
+    ///   retrouver. Les autres portes — appui long, création, plan 2D — ne
+    ///   désignent rien et passent `nil`.
+    func openObjectEditor(_ id: String, section: ComposerObjectEditorSection? = nil) {
         presentedPortal = nil
         selectedSceneItemId = id
         let famille = viewModel.currentSlide.sceneObject(id: id)?.kind
@@ -704,7 +736,7 @@ extension MeeshyComposerHost {
         if famille == .text || famille == nil {
             viewModel.enterTextEditingMode(textId: id)
         }
-        editedObject = ComposerEditedObject(id: id)
+        editedObject = ComposerEditedObject(id: id, section: section)
     }
 
     /// La traduction entre la famille du MODÈLE et le kind du CANVAS — deux

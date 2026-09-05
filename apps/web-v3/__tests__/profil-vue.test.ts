@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { svgDuSprite } from '@/app/actifs-inlines';
 import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
 import { documentDesChats, type EtatDesChats } from '@/app/connecte/liste-vue';
 import type { Message } from '@/lib/api/fil';
@@ -6,6 +10,7 @@ import type { ProfilServi } from '@/lib/api/profil';
 import { PROFIL } from '@/lib/contenu/profil';
 import { FIL } from '@/lib/contenu/fil';
 import { CHATS } from '@/lib/contenu/liste';
+import { ADRESSE_DE_MON_COMPTE, RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
 
 /**
  * LE PROFIL D'UN PARTICIPANT (§ 12.10.3) — un ÉTAT (`?profil=`) rendu par UN
@@ -21,8 +26,11 @@ import { CHATS } from '@/lib/contenu/liste';
  *     la surimpression, comme le plein écran d'un média ;
  *   • ce que le panneau NE LIT ni NE FABRIQUE JAMAIS : une langue du profil
  *     (elle vient du FIL), une présence hors de ce qui est servi ;
- *   • les trois actions gardées par `peutAgir` (un compte) ET `!estSoi` — un
+ *   • les trois actions d'AUTRUI gardées par `peutAgir` (un compte) — un
  *     invité anonyme n'en voit AUCUNE, y compris « Écrire » ;
+ *   • la branche SOI (#5030) : « C'est vous », UNE action « Mon compte » vers
+ *     `ADRESSE_DE_MON_COMPTE`, et aucune des trois d'autrui — un membre qui
+ *     touche son propre avatar dans le fil atteint son compte ;
  *   • le sous-état de confirmation d'un blocage, sans un octet de
  *     `confirm()`.
  */
@@ -60,6 +68,7 @@ const MESSAGE = (attributs: Partial<Message> = {}): Message => ({
   edite: false,
   supprime: false,
   pieces: [],
+  lieu: null,
   citations: [],
   reactions: [],
   accuse: 'lu',
@@ -75,6 +84,7 @@ const ETAT_FIL = (messages: readonly Message[], attributs: Partial<EtatDuFil> = 
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  contexte: null,
   plein: null,
   profil: null,
   ...attributs,
@@ -148,14 +158,42 @@ describe('le profil d’un participant — surimpression du fil (membre)', () =>
     expect(doc).toContain(PROFIL.bloquerOuSignaler);
   });
 
-  it('relation=self : aucune des trois actions, « C’est vous »', () => {
+  it('relation=self : « C’est vous », UNE action « Mon compte », et aucune des trois d’autrui', () => {
     const doc = dialogue(
       servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u1', servi: PROFIL_TROUVE({ relation: 'self', estSoi: true }), confirmerBlocage: false } })),
     );
+    expect(doc).toContain('data-relation="self"');
     expect(doc).toContain(PROFIL.cEstVous);
+    expect(doc.match(/<a class="action primaire"/g)).toHaveLength(1);
+    expect(doc).toContain(`<a class="action primaire" href="${ADRESSE_DE_MON_COMPTE}">`);
+    expect(doc).toContain(PROFIL.monCompte);
+    expect(doc).toContain(svgDuSprite('ph-user-circle'));
     expect(doc).not.toContain(PROFIL.ecrire('Marta'));
     expect(doc).not.toContain(PROFIL.ajouterEnAmi);
     expect(doc).not.toContain(PROFIL.bloquerOuSignaler);
+    expect(doc).not.toContain('<form');
+  });
+
+  it('relation=self : ?confirmer=bloquer est ignoré — on ne se bloque pas', () => {
+    const doc = dialogue(
+      servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u1', servi: PROFIL_TROUVE({ relation: 'self', estSoi: true }), confirmerBlocage: true } })),
+    );
+    expect(doc).not.toContain(PROFIL.confirmer);
+    expect(doc).toContain(PROFIL.monCompte);
+  });
+
+  it('relation=self : ni « en commun » ni la langue — ces deux phrases parlent de l’AUTRE', () => {
+    const doc = dialogue(
+      servi(
+        ETAT_FIL([MESSAGE({ auteurId: 'u1', langueOriginale: 'es' })], {
+          profil: { handle: 'u1', servi: PROFIL_TROUVE({ relation: 'self', estSoi: true }), confirmerBlocage: false },
+        }),
+      ),
+    );
+    expect(doc).not.toContain(PROFIL.participeA('Équipe Lagos'));
+    expect(doc).not.toContain(PROFIL.ecritDansCeFil('Español'));
+    expect(doc).not.toContain(PROFIL.lecteurPrisme('Español'));
+    expect(doc).toMatch(/mars 2024/);
   });
 
   it('rend introuvable, limite et panne — chacun sa phrase, aucune action', () => {
@@ -232,6 +270,29 @@ describe('le profil d’un participant — surimpression du fil (invité)', () =
     expect(doc).toContain(PROFIL.pasEncoreAmis);
   });
 
+  it('estSoi SANS compte : « C’est vous », et AUCUNE action — /settings/profile rendrait /login', () => {
+    const doc = dialogue(
+      servi(
+        ETAT_INVITE({
+          lecteur: { id: 'p9', nom: 'Tolu', langues: ['fr'] },
+          profil: { handle: 'p9', servi: PROFIL_TROUVE({ relation: 'self', estSoi: true }), confirmerBlocage: false },
+        }),
+      ),
+    );
+    expect(doc).toContain(PROFIL.cEstVous);
+    expect(doc).not.toContain(ADRESSE_DE_MON_COMPTE);
+    expect(doc).not.toContain(PROFIL.monCompte);
+    expect(doc).not.toContain('actions-profil');
+  });
+
+  it('rend la MÊME surimpression de SOI aux deux portes du fil — au retour et aux actions près', () => {
+    const soi = { handle: 'u1', servi: PROFIL_TROUVE({ relation: 'self', estSoi: true }), confirmerBlocage: false } as const;
+    const membre = dialogue(servi(ETAT_FIL([MESSAGE()], { profil: soi })));
+    const invite = dialogue(servi(ETAT_INVITE({ profil: soi })));
+    const sansActions = (html: string): string => html.replace(/<div class="actions-profil">[\s\S]*?<\/div>/, '');
+    expect(sansActions(invite).replaceAll('/chat/lagos-q1', '/chats/c1')).toBe(sansActions(membre));
+  });
+
   it('ferme vers l’adresse NUE de l’invité — /chat/:lien', () => {
     const doc = servi(ETAT_INVITE({ profil: { handle: 'u-marta', servi: PROFIL_TROUVE(), confirmerBlocage: false } }));
     expect(doc).toContain('<a class="voile" href="/chat/lagos-q1"');
@@ -294,7 +355,7 @@ describe('le profil d’un participant — surimpression de la LISTE (/chats)', 
 
   it('l’AVATAR d’un tête-à-tête ouvre le profil de l’AUTRE personne', () => {
     const doc = documentDesChats(ETAT_LISTE());
-    expect(doc).toContain('<a class="avatar-lien" href="/chats?profil=u-marta"');
+    expect(doc).toContain('<a class="avatar-lien" draggable="false" href="/chats?profil=u-marta"');
     expect(doc).toContain(CHATS.voirLeProfil('Marta Ruiz'));
   });
 
@@ -324,16 +385,70 @@ describe('l’avatar et le nom d’un auteur ouvrent son profil, dans le fil', (
     expect(doc).not.toContain('class="nom-lien"');
   });
 
-  it('ne lie RIEN pour SES PROPRES messages — pas de destination « mon compte »', () => {
-    const doc = servi(ETAT_FIL([MESSAGE({ deMoi: true, auteurId: 'u1' })]));
+  /**
+   * LE TÉMOIN RETOURNÉ (#5030). Il affirmait l'INVERSE : « ne lie RIEN pour
+   * SES PROPRES messages ». Il disait vrai de l'implémentation d'alors, et
+   * FAUX du produit — un membre a un compte, `/settings/profile` est servi
+   * (#5093), et un écran sans issue n'est pas un choix de design. On le
+   * RETOURNE plutôt que de le supprimer : c'est la même question, l'autre
+   * réponse (leçon 507).
+   */
+  it('lie l’avatar ET le nom de SES PROPRES messages — le membre a un compte', () => {
+    const doc = servi(ETAT_FIL([MESSAGE({ deMoi: true, auteurId: 'u1', auteur: 'Amina' })]));
+    expect(doc).toContain('<a class="avatar-lien" href="/chats/c1?profil=u1"');
+    expect(doc).toContain('<a class="nom-lien" href="/chats/c1?profil=u1">');
+    expect(doc).toContain(`<span class="nom">${FIL.vous}</span>`);
+    expect(doc).toContain(FIL.voirVotreProfil);
+    expect(doc).not.toContain(FIL.voirLeProfil('Amina'));
+  });
+
+  it('ne lie RIEN pour SES PROPRES messages quand on est l’INVITÉ — deMoi sans compte', () => {
+    const doc = servi(ETAT_FIL([MESSAGE({ deMoi: true, anonyme: true, auteurId: 'p9', auteur: 'Tolu' })]));
     expect(doc).not.toContain('class="avatar-lien"');
     expect(doc).not.toContain('class="nom-lien"');
     expect(doc).toContain(`>${FIL.vous}<`);
+  });
+
+  it('ne lie RIEN pour un message de soi SANS identifiant — un href="?profil=null" mentirait', () => {
+    const doc = servi(ETAT_FIL([MESSAGE({ deMoi: true, auteurId: null })]));
+    expect(doc).not.toContain('class="avatar-lien"');
+    expect(doc).not.toContain('class="nom-lien"');
   });
 
   it('ne lie RIEN pour une ligne SYSTÈME', () => {
     const doc = servi(ETAT_FIL([MESSAGE({ systeme: true, texte: 'A rejoint la conversation' })]));
     expect(doc).not.toContain('class="avatar-lien"');
     expect(doc).not.toContain('class="nom-lien"');
+  });
+});
+
+/**
+ * LA DESTINATION DE « MON COMPTE » EST LUE, JAMAIS ÉCRITE (#5030). Deux
+ * littéraux `/settings/profile` — un dans l'espace membre, un dans le panneau
+ * de profil — seraient deux sources de vérité pour UNE adresse : le jour où la
+ * route déménage, l'une des deux mentirait en silence. `espace-membre.test.ts`
+ * oppose déjà `RANGEES_DE_L_ESPACE[].href` aux `app/**\/route.ts` réellement
+ * émis, donc lire la constante fait hériter ce témoin-là au panneau.
+ */
+describe('la destination « Mon compte » — un seul site', () => {
+  const source = (chemin: string): string =>
+    readFileSync(join(__dirname, '..', chemin), 'utf8');
+
+  it('n’est écrite NULLE PART dans le panneau de profil ni dans sa copie', () => {
+    expect(source('app/connecte/profil-vue.ts')).not.toContain(ADRESSE_DE_MON_COMPTE);
+    expect(source('lib/contenu/profil.ts')).not.toContain(ADRESSE_DE_MON_COMPTE);
+  });
+
+  it('est celle de la première rangée de l’espace membre — même adresse, même glyphe', () => {
+    const rangee = RANGEES_DE_L_ESPACE.find((item) => item.href === ADRESSE_DE_MON_COMPTE);
+    expect(rangee).toBeDefined();
+    expect(rangee?.glyphe).toBe('ph-user-circle');
+  });
+
+  it('est bien celle que le panneau REND — la constante, pas une chaîne voisine', () => {
+    const doc = dialogue(
+      servi(ETAT_FIL([MESSAGE()], { profil: { handle: 'u1', servi: PROFIL_TROUVE({ relation: 'self', estSoi: true }), confirmerBlocage: false } })),
+    );
+    expect(doc).toContain(`href="${ADRESSE_DE_MON_COMPTE}"`);
   });
 });

@@ -820,6 +820,24 @@ const everyV3SuiteIsLaunched = (world) => {
     .map((suite) => `la suite e2e ${suite} n'est lancée par aucune étape de ci.yml`);
 };
 
+// L'IMAGE DE LA V3 NE FIGE AUCUNE VARIABLE PUBLIQUE AU BUILD.
+//
+// Next inline toute variable `NEXT_PUBLIC_*` PRÉSENTE au moment du `next build`
+// — jusque dans le code serveur (mesuré : absente au build, `process.env.NEXT_PUBLIC_API_URL`
+// reste une lecture d'exécution dans `.next/server`, et c'est ce qui permet au
+// compose de la poser). La v3 tient ses deux origines de l'ENVIRONNEMENT du
+// conteneur, staging et prod partageant la même image : un `ARG` ou un `ENV`
+// `NEXT_PUBLIC_*` dans le Dockerfile figerait la valeur d'UN déploiement dans
+// l'image de tous, et la valeur du compose serait ignorée sans qu'aucun témoin
+// ne rougisse. Le legacy vit avec ce piège (placeholders `__RUNTIME_*__`
+// réécrits au démarrage) ; la v3 s'en garde à la source.
+const theV3ImageFreezesNoPublicVariable = (world) =>
+  [...world.dockerfile.matchAll(/^\s*(?:ARG|ENV)\s+(NEXT_PUBLIC_[A-Z0-9_]*)/gm)].map(
+    ([, name]) =>
+      `${V3_DIRECTORY}/Dockerfile déclare ${name} au build : Next l'inlinerait dans l'image et la ` +
+      `valeur du compose serait ignorée`,
+  );
+
 const CHECKS = [
   ['le type-check de la v3 est BLOQUANT', theV3TypeCheckIsBlocking],
   ['le lint de la v3 est BLOQUANT', theV3LintIsBlocking],
@@ -840,6 +858,7 @@ const CHECKS = [
   ['chaque option du dispatch sélectionne un service', everyDispatchOptionSelectsAService],
   ["l'image de la v3 se construit depuis un Dockerfile existant", theV3ImageIsBuiltFromAnExistingDockerfile],
   ["l'image de la v3 ne se construit pas pour le legacy seul", theV3ImageIsNeverBuiltForTheLegacyAlone],
+  ["l'image de la v3 ne fige aucune variable NEXT_PUBLIC_ au build", theV3ImageFreezesNoPublicVariable],
   // Les invariants de ROUTAGE, une fois par déploiement qui sert la zone.
   // Déroulés plutôt que recopiés : c'est la recopie qui avait laissé staging
   // hors surface (#4630), et un troisième déploiement repartirait du même
@@ -849,6 +868,8 @@ const CHECKS = [
     [`${dep.fichier} : le routeur legacy garde son plancher attrape-tout`, routage.theLegacyRouterKeepsItsFloor(dep)],
     [`${dep.fichier} : le conteneur de la v3 est disjoint du legacy`, routage.theV3ContainerIsDisjointFromTheLegacy(dep)],
     [`${dep.fichier} : le service de la v3 déclare ce que son code lit`, routage.theV3ServiceDeclaresWhatItsCodeReads(dep)],
+    [`${dep.fichier} : au-delà des actifs de zone, le service déclare la navigation de zone`, routage.theV3ServiceDeclaresZoneNavigationWhenItRoutesBeyondAssets(dep)],
+    [`${dep.fichier} : l'origine publique de la passerelle est joignable par un navigateur`, routage.lOriginePubliqueEstJoignableParUnNavigateur(dep)],
     [`${dep.fichier} : aucun actif servi à la racine n'échappe à la zone`, routage.noRootServedAssetEscapesTheZone(dep)],
     [`${dep.fichier} : la règle ne réclame que des chemins servis`, routage.theRouterClaimsNothingTheZoneDoesNotServe(dep)],
     [`${dep.fichier} : le worker legacy s'efface devant ce que la règle réclame`, routage.leWorkerLegacySEfface(dep)],

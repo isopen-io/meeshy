@@ -108,6 +108,14 @@ describe('la porte de /notifications', () => {
     expect(html).toContain('Tout marquer comme lu');
   });
 
+  it('porte une action d’en-tête vers /notifications/preferences (#4899)', async () => {
+    const { recuperer } = NOMINALE();
+
+    const html = await (await BOITE(requete('https://meeshy.test/notifications'), recuperer)).text();
+
+    expect(html).toContain('href="/notifications/preferences"');
+  });
+
   it('sert « Tout lire » CACHÉ quand il n’y a rien à lire — la fente existe, le contrôle n’est pas rendu', async () => {
     const { recuperer } = passerelle({
       '/auth/me': () => json({ success: true, data: { id: 'u1', displayName: 'Moi' } }),

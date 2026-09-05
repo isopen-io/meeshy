@@ -1,5 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify from 'fastify';
+import { findFirstHonouringWhere as findFirstHonouringWhereShared } from '../../helpers/find-first-honouring-where';
 
 // ─── Module mocks (hoisted before imports) ───────────────────────────────────
 
@@ -47,26 +48,20 @@ const LINK_PUBLIC_ID = 'mshy_abc123_def456';
 const CONV_ID = '507f1f77bcf86cd799439044';
 
 /**
- * **Un `findFirst` qui HONORE son `where`.**
+ * **Un `findFirst` qui HONORE son `where`** — adaptateur au helper PARTAGÉ
+ * (`__tests__/helpers/find-first-honouring-where.ts`, #4585/#4867), pour
+ * garder l'API « une ligne ou `null` » que ce fichier emploie partout.
  *
- * Les tests voisins de `links-admin.test.ts` posent `mockResolvedValue(row)` :
- * la ligne revient quel que soit le filtre demandé. C'est ce qui a laissé vivre
- * #4007 — « returns 200 when user is conversation ADMIN » y était VERT pendant
- * que la production rendait 404, parce que le seul `where` que le test ne
- * jouait pas était justement celui qui décidait.
- *
- * Ce faux applique la sémantique Prisma sur les champs scalaires du `where` :
- * la ligne ne revient que si elle satisfait TOUTES les contraintes. Un site qui
- * pré-filtre sur `createdBy` rend donc `null` pour un hôte non-créateur — et le
- * 404 qu'il produit devient visible.
+ * L'ancien double LOCAL de ce fichier ne comparait que les scalaires de tête
+ * du `where` et ignorait ENTIÈREMENT l'arbre `include` — donc le `where`
+ * imbriqué `conversation.include.participants.where: { userId, isActive }`,
+ * qui est pourtant celui que la garde REGARDE (`loadShareLinkForManagement`
+ * lit `link.conversation.participants` déjà filtré par Prisma). Un double qui
+ * n'honore que le `where` de tête est pire qu'un double absent : il rassure
+ * (#4867, la même leçon que #4585 sur les relations imbriquées).
  */
 function findFirstHonouringWhere(row: Record<string, any> | null) {
-  return jest.fn<any>(async (args: any) => {
-    if (!row) return null;
-    const where = (args?.where ?? {}) as Record<string, unknown>;
-    const satisfied = Object.entries(where).every(([field, expected]) => row[field] === expected);
-    return satisfied ? row : null;
-  });
+  return jest.fn<any>(findFirstHonouringWhereShared(row ? [row] : []));
 }
 
 function makePrisma(overrides: Record<string, any> = {}) {

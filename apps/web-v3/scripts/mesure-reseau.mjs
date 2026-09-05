@@ -105,6 +105,19 @@ export const requetesPendantes = (emises, terminees) => Math.max(0, emises - ter
 // `page.goto` ne rend aucune réponse principale) tombe par la même porte.
 export const estCodeDeMesure = (http) => typeof http === 'number' && http >= 200 && http < 400;
 
+/**
+ * `codesSupplementaires` (#4933) — le garde-fou ci-dessus reste 200–399 par
+ * DÉFAUT, pour tous les écrans : il protège d'un identifiant mort ou deviné
+ * faux, JAMAIS élargi en silence. Mais un écran comme `/l/:token/expired`
+ * (#4496 → 410 depuis #4933, « un lien fermé n'a plus rien à servir ») a pour
+ * CONTRAT de répondre hors de cette plage — un gestionnaire de route stable,
+ * jamais un accident. Le site d'appel le DÉCLARE, un code à la fois : la
+ * mesure reste refusée pour tout code non nommé, même quand la liste est
+ * posée.
+ */
+export const estCodeMesurable = (http, codesSupplementaires = []) =>
+  estCodeDeMesure(http) || codesSupplementaires.includes(http);
+
 export const mesureIndisponible = ({ url, commande, raison }) => ({
   url,
   commande,
@@ -144,7 +157,7 @@ const mesureChiffree = ({
 });
 
 export const composeMesure = (args) =>
-  estCodeDeMesure(args.http)
+  estCodeMesurable(args.http, args.codesSupplementaires)
     ? mesureChiffree(args)
     : mesureIndisponible({
         url: args.url,
@@ -298,6 +311,7 @@ export const mesurePage = async ({
   profil,
   userAgent,
   cookies,
+  codesSupplementaires,
 }) => {
   const contexte = await navigateur.newContext({
     viewport: viewport || { width: 390, height: 844 },
@@ -344,6 +358,7 @@ export const mesurePage = async ({
       fcpMs: vitals.fcp,
       lcpMs: vitals.lcp,
       cls: vitals.cls,
+      codesSupplementaires,
     });
   } catch (erreur) {
     return mesureIndisponible({ url, commande, raison: raisonLisible(erreur) });

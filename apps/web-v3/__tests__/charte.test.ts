@@ -10,7 +10,7 @@ import { FEUILLE_DE_LA_STORY } from '@/app/(public)/partage-feuille';
 import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from '@/app/connecte/feuille';
-import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
+import { FEUILLE_DU_FIL, FEUILLE_DU_LIEN_DEPUIS_LE_FIL } from '@/app/connecte/fil-feuille';
 import { FEUILLE_DU_PLEIN } from '@/app/connecte/plein-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
@@ -18,8 +18,12 @@ import { FEUILLE_DES_LIENS, FEUILLE_DU_NOUVEAU_LIEN } from '@/app/connecte/liens
 import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from '@/app/connecte/liste-feuille';
-import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
+import { FEUILLE_DE_LA_BANNIERE } from '@/app/connecte/banniere-feuille';
+import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
+import { FEUILLE_DES_APPELS } from '@/app/connecte/appels-feuille';
+import { FEUILLE_DES_COMMUNAUTES } from '@/app/connecte/communautes-feuille';
+import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
 import { FEUILLE_DES_REGLAGES } from '@/app/connecte/reglages-feuille';
@@ -81,8 +85,12 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/reglages-feuille.ts', source: FEUILLE_DES_REGLAGES },
   { nom: 'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN', source: FEUILLE_DU_NOUVEAU_LIEN },
   { nom: 'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV', source: FEUILLE_DE_LA_NOUVELLE_CONV },
-  { nom: 'app/connecte/espace-feuille.ts', source: FEUILLE_DES_FLOTTANTES },
   { nom: 'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE', source: FEUILLE_DE_L_ESPACE },
+  { nom: 'app/connecte/banniere-feuille.ts', source: FEUILLE_DE_LA_BANNIERE },
+  { nom: 'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL', source: FEUILLE_DU_LIEN_DEPUIS_LE_FIL },
+  { nom: 'app/connecte/prefs-feuille.ts', source: FEUILLE_DES_PREFS },
+  { nom: 'app/connecte/appels-feuille.ts', source: FEUILLE_DES_APPELS },
+  { nom: 'app/connecte/communautes-feuille.ts', source: FEUILLE_DES_COMMUNAUTES },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -160,8 +168,12 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/reglages-feuille.ts',
       'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN',
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV',
-      'app/connecte/espace-feuille.ts',
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE',
+      'app/connecte/banniere-feuille.ts',
+      'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL',
+      'app/connecte/prefs-feuille.ts',
+      'app/connecte/appels-feuille.ts',
+      'app/connecte/communautes-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -259,6 +271,13 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     { nom: 'fil en plein écran', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_PLEIN },
     { nom: 'choix', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_CHOIX },
     { nom: 'médias', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS },
+    // L'état `?media=` de la galerie (#4525, + point 2 de #5024) : la SEULE
+    // composition qui porte la feuille du plein écran sur cet écran — une
+    // galerie ordinaire n'en paie pas un octet, comme « fil en plein écran ».
+    {
+      nom: 'médias en plein écran',
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS + FEUILLE_DU_PLEIN,
+    },
     { nom: 'story', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_STORY },
     // `/feed` (#5031) — le fil social, servi par `documentPleinEcran` comme le
     // fil, la liste et les commentaires : chrome + connecté + sa feuille.
@@ -267,6 +286,10 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     // connectée, l'en-tête du fil (qu'ils réemploient) et leur feuille. Une
     // seule ligne suffit donc à les opposer tous les six au plafond.
     { nom: 'réglages', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_REGLAGES },
+    // `/notifications/preferences` (#4899) emprunte le même en-tête que la
+    // boîte (`.fil-tete`, `FEUILLE_DU_FIL`) — la même composition que
+    // « réglages » ci-dessus, avec sa propre feuille de treize commutateurs.
+    { nom: 'notifications — préférences', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_PREFS },
     // L'état `/links?nouveau` : la SEULE composition qui porte la feuille de
     // création — un carnet ordinaire n'en paie pas un octet.
     {
@@ -278,22 +301,21 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
       nom: 'liste avec la feuille de conversation',
       source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DE_LA_NOUVELLE_CONV,
     },
-    // Les DEUX écrans qui portent les ronds flottants (#5093) les servent AU
-    // REPOS ; leur état `?espace` ajoute seul la feuille. Quatre compositions,
-    // parce que ce sont quatre documents réellement servis — et parce que
-    // n'opposer que l'état ouvert laisserait le cas nominal hors du plafond.
-    {
-      nom: 'tableau de bord avec les ronds',
-      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DES_FLOTTANTES,
-    },
+    // NI LE TABLEAU DE BORD NI `/chats` NE SERVENT PLUS LES RONDS FLOTTANTS
+    // (revue de #5164, charte règle 8 b/c — le rail `position:fixed`
+    // recouvrait le pied de l'enveloppe sur `/chats`, puis la carte mise en
+    // avant du tableau dès que la liste sert plus de deux lignes, à N'IMPORTE
+    // QUEL défilement). Les deux raccourcis d'en-tête (`RACCOURCIS_D_ENTETE`)
+    // sont désormais dans `FEUILLE_DU_TABLEAU` et `FEUILLE_DE_LA_LISTE`
+    // elles-mêmes (toujours servies) : leur état `?espace` n'ajoute QUE
+    // `FEUILLE_DE_L_ESPACE`, sur les deux écrans.
     {
       nom: 'tableau de bord avec l’espace membre',
-      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DES_FLOTTANTES + FEUILLE_DE_L_ESPACE,
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DE_L_ESPACE,
     },
-    { nom: 'liste avec les ronds', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DES_FLOTTANTES },
     {
       nom: 'liste avec l’espace membre',
-      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DES_FLOTTANTES + FEUILLE_DE_L_ESPACE,
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DE_L_ESPACE,
     },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
@@ -378,30 +400,74 @@ describe('règle 8 — chaque pas de l’échelle a son rôle', () => {
 });
 
 /**
- * RÈGLE 18 — l'état VIDE est DESSINÉ : « contour `--stroke-strong` pointillé
- * `--color-border-strong`, glyphe 40 px `--color-text-muted`, titre, phrase
- * ≤ `--measure` ».
- *
- * Ce que la charte demande et que la v3 ne servait pas : un contour POINTILLÉ
- * (le plein se lit comme une carte pleine, donc comme du contenu) et le glyphe
- * qui dit de quoi l'écran est vide. L'ACTION primaire de la règle 18 n'entre
- * pas ici : elle mènerait à une route que la v3 ne sert pas encore, et la
- * règle 7 — « un contrôle existe s'il a un EFFET » — l'emporte sur elle.
+ * RÈGLE 16 (tour 3, § 12.5 — remplace la citation « règle 18 » du tour 2,
+ * périmée depuis la renumérotation du 2026-09-02 : § 12.8 en fait la loi de
+ * portage) : « État vide et `trou` : pointillé `--stroke-strong`
+ * `--color-border-interactive`, jamais `--color-border-strong`. » Le contour
+ * de `.carte-vide` portait encore le filet des cartes PLEINES — un contour qui
+ * porte SEUL le sens de l'état (rien d'autre ne le distingue d'un bloc de
+ * texte) doit tenir le contraste d'un CONTRÔLE, pas celui d'un filet.
  */
-describe('règle 18 — l’état vide est dessiné', () => {
-  it('pose le contour pointillé et le glyphe de 40 px', () => {
-    expect(FEUILLE_CONNECTEE).toContain('var(--stroke-strong) dashed var(--color-border-strong)');
+describe('règle 16 — le contour de l’état vide est --color-border-interactive', () => {
+  it('pose le pointillé sur .carte-vide en --color-border-interactive, jamais --color-border-strong', () => {
+    const [carteVide] = regles(FEUILLE_CONNECTEE).filter(({ selecteur }) => selecteur === '.carte-vide');
+
+    expect(carteVide?.corps).toContain('var(--stroke-strong) dashed var(--color-border-interactive)');
+    expect(carteVide?.corps ?? '').not.toContain('--color-border-strong');
+  });
+
+  it('garde le glyphe de 40 px de l’état vide', () => {
     expect(FEUILLE_CONNECTEE).toContain('width:var(--glyph-large)');
   });
 });
 
-describe('règle 5 — quatre rayons, pas onze', () => {
-  // Les coins HAUTS de la feuille modale (règle 5 : « `--radius-2xl` : coins
-  // hauts de la feuille modale ») sont la seule forme composée admise.
+/**
+ * RÈGLE 18 (tour 3, § 12.5) — « L'encre du CONTENU est `--color-text` ; le
+ * gris est réservé à ce qu'on peut ne pas lire. » La règle NOMME `.carte-vide
+ * p` dans la liste des sélecteurs où `--color-text-muted|subtle` est interdit :
+ * la phrase de l'état vide se lisait en gris, alors que c'est le texte pour
+ * lequel on ouvre l'état.
+ */
+describe('règle 18 — l’encre de la phrase de l’état vide est --color-text', () => {
+  it('pose --color-text sur .carte-vide p, jamais --color-text-muted ni --color-text-subtle', () => {
+    const [carteVideP] = regles(FEUILLE_CONNECTEE).filter(({ selecteur }) => selecteur === '.carte-vide p');
+
+    expect(carteVideP?.corps).toContain('color:var(--color-text)');
+    expect(carteVideP?.corps ?? '').not.toMatch(/--color-text-(?:muted|subtle)\b/);
+  });
+
+  it('pose --color-text sur .bandeau p (fil), jamais --color-text-muted ni --color-text-subtle', () => {
+    const [bandeauP] = regles(FEUILLE_DU_FIL).filter(({ selecteur }) => selecteur === '.bandeau p');
+
+    expect(bandeauP?.corps).toContain('color:var(--color-text)');
+    expect(bandeauP?.corps ?? '').not.toMatch(/--color-text-(?:muted|subtle)\b/);
+  });
+});
+
+/**
+ * RÈGLE 9 (tour 3, § 12.5 — remplace la citation « règle 5 » du tour 2,
+ * périmée) : « Cinq rayons, un rôle chacun : … `xl` héros, carte mise en
+ * avant, carte d'état vide. » `.heros` et `.carte-vide` portaient encore
+ * `--radius-lg` — le rayon des CARTES, pas celui que le tour 3 leur donne en
+ * propre.
+ *
+ * `--radius-md` EST RETIRÉ DES RAYONS AUTORISÉS (#5123) : la règle le déclare
+ * « hors des cinq rôles », et huit sites l'écrivaient encore — les champs de
+ * formulaire (`.champ input/textarea/select`, `.chercher input`) sont passés à
+ * `--radius-lg` (rôle « champs »), les tuiles d'icône (`.marque .tuile`,
+ * `.atouts .tuile`, `.carte .tuile`, `dialog.espace .rangee .tuile`) ont rejoint
+ * `--radius-lg` (rôle « tuile de liste », déjà celui de `.tuile` dans
+ * `medias-feuille.ts`), et `.saut` (le lien d'évitement) a rejoint
+ * `--radius-pill` (rôle « raccourcis »). Absent de `AUTORISES`, le premier
+ * témoin ci-dessous rougit désormais sur toute réintroduction.
+ */
+describe('règle 9 — cinq rayons, un rôle chacun', () => {
+  // Les coins HAUTS de la feuille modale (règle 9 : « `2xl` feuille modale »)
+  // sont la seule forme composée admise.
   const AUTORISES = new Set([
     'var(--radius-pill)',
     'var(--radius-lg)',
-    'var(--radius-md)',
+    'var(--radius-xl)',
     'var(--radius-xs)',
     'var(--radius-2xl) var(--radius-2xl) 0 0',
   ]);
@@ -412,28 +478,64 @@ describe('règle 5 — quatre rayons, pas onze', () => {
     expect(rayons.length).toBeGreaterThan(0);
     expect(rayons.filter((rayon) => !AUTORISES.has(rayon))).toEqual([]);
   });
+
+  it('pose --radius-xl sur .heros et .carte-vide, jamais --radius-lg ni --radius-md', () => {
+    const [heros] = regles(FEUILLE_DE_LA_VITRINE).filter(({ selecteur }) => selecteur === '.heros');
+    const [carteVide] = regles(FEUILLE_CONNECTEE).filter(({ selecteur }) => selecteur === '.carte-vide');
+
+    expect(heros?.corps).toContain('border-radius:var(--radius-xl)');
+    expect(carteVide?.corps).toContain('border-radius:var(--radius-xl)');
+    expect(`${heros?.corps ?? ''};${carteVide?.corps ?? ''}`).not.toMatch(/border-radius:var\(--radius-(?:lg|md)\)/);
+  });
+
+  it('ne pose --radius-md nulle part (#5123) — les champs et les tuiles vivent en --radius-lg', () => {
+    expect(TOUTES).not.toContain('var(--radius-md)');
+  });
 });
 
-describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', () => {
+/**
+ * RÈGLE 35 (tour 3, § 12.5) — « UN dégradé, et un seul : `.heros` de la
+ * vitrine, entre DEUX jetons voisins (`--color-tint-primary` → `--color-
+ * surface`). » Le tour 2 bannissait tout dégradé (c'était l'un des trois
+ * interdits du bloc « règles 9, 10 et 11 » ci-dessous, avant ce commit) ; le
+ * tour 3 en autorise nommément UN, borné à un seul sélecteur — le compte seul
+ * ne suffit pas, c'est le SÉLECTEUR qui doit porter le nom.
+ */
+describe('règle 35 — un dégradé, et un seul, sur .heros', () => {
+  it('n’écrit qu’un gradient(, uniquement sur .heros, entre --color-tint-primary et --color-surface', () => {
+    expect((TOUTES.match(/gradient\(/g) ?? []).length).toBe(1);
+
+    const selecteursDuDegrade = regles(TOUTES)
+      .filter(({ corps }) => corps.includes('gradient('))
+      .map(({ selecteur }) => selecteur);
+    expect(selecteursDuDegrade).toEqual(['.heros']);
+
+    const [heros] = regles(FEUILLE_DE_LA_VITRINE).filter(({ selecteur }) => selecteur === '.heros');
+    expect(heros?.corps).toContain('var(--color-tint-primary)');
+    expect(heros?.corps).toContain('var(--color-surface)');
+  });
+});
+
+describe('règles 14 et 16 — plans, filets, et ce qui ne se peint jamais', () => {
   it('bannit --color-border, invisible au soleil (1,28:1 en clair)', () => {
     expect(TOUTES).not.toContain('var(--color-border)');
   });
 
-  it('n’écrit ni ombre hors focus, ni dégradé, ni flou de fond', () => {
+  // Le dégradé de .heros a son propre témoin, nommé — règle 35 ci-dessus.
+  it('n’écrit ni ombre hors focus, ni flou de fond', () => {
     expect((TOUTES.match(/box-shadow:/g) ?? []).length).toBe(1);
     expect(SOCLE_DU_DOCUMENT).toContain('box-shadow:');
-    expect(TOUTES).not.toContain('gradient(');
     expect(TOUTES).not.toContain('backdrop-filter');
   });
 
-  /** Le SEUL `filter:blur` du dépôt : le cadre INERTE de `/chat/:lien` (règle 11, règle 25) — la modale, elle, n'en porte aucun. */
+  /** Le SEUL `filter:blur` du dépôt : le cadre INERTE de `/chat/:lien` (règle 27, règle 34) — la modale, elle, n'en porte aucun. */
   it('ne floute qu’une chose : le cadre inerte du fil', () => {
     expect((TOUTES.match(/filter:blur\(/g) ?? []).length).toBe(1);
     expect(FEUILLE_DU_FIL).toContain('.fil-ecran[inert]{filter:blur(var(--frame-blur))}');
   });
 
   /**
-   * Règle 9 — « `--color-surface-raised` = ce qui FLOTTE au-dessus du contenu,
+   * Règle 14 (tour 3, § 12.5) — « `--color-surface-raised` = ce qui FLOTTE au-dessus du contenu,
    * rien d'autre ». La feuille modale de jonction a été le seul emploi tant
    * que rien d'autre ne flottait ; le panneau de profil (§ 12.10.3) est le
    * SECOND et la feuille « nouveau lien » (#5071) le TROISIÈME — trois emplois
@@ -446,6 +548,12 @@ describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', 
    * exactement celui sous lequel le formulaire défile, sans quoi le bouton
    * « Créer » se lirait sur une bande d'une autre couleur. Un second jeton
    * l'aurait fait diverger au premier changement de surface.
+   *
+   * LA BANNIÈRE (#4454) EST LE PREMIER EMPLOI QUI NE SOIT PAS UNE MODALE, et
+   * c'est ce qui rend la règle 9 plus large qu'on ne la lisait : elle réserve
+   * le jeton à ce qui FLOTTE, jamais à ce qui prend le focus. Un toast ne rend
+   * rien `inert` et ne piège aucun clavier — il est bien, pour les sept
+   * secondes qu'il dure, au-dessus du contenu.
    */
   it('ne réserve --color-surface-raised qu’à ce qui flotte', () => {
     const peints = FEUILLES.flatMap(({ nom, source }) =>
@@ -461,6 +569,10 @@ describe('règles 9, 10 et 11 — plans, filets, et ce qui ne se peint jamais', 
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV › dialog.nouvelle-conv',
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV › dialog.nouvelle-conv .pied',
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE › dialog.espace',
+      'app/connecte/banniere-feuille.ts › .banniere',
+      'app/connecte/communautes-feuille.ts › dialog.communaute-ouverte',
+      'app/connecte/communautes-feuille.ts › dialog.nouvelle-communaute',
+      'app/connecte/communautes-feuille.ts › dialog.nouvelle-communaute .pied',
     ]);
   });
 });
@@ -493,6 +605,7 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // prennent JAMAIS l'accent.
     '.fil-tete .retour', // le cliquable — chevron de retour
     '.fil-tete .medias', // le cliquable — la galerie des médias, à un tap du fil
+    '.fil-tete .partager', // le cliquable — créer un lien de partage pour CETTE conversation (#5034) ; même rond, même emploi 1 que ses deux voisins
     '.puce', // le cliquable — puce du Prisme
     '.ligne .accuse', // l'accusé de mes messages, comme le compte de non-lus
     '.langue', // la pastille de langue
@@ -501,7 +614,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.lecteur .lire', // le cliquable — le rond de lecture d'un vocal ou d'une vidéo
     '.pieces .transcrit-original summary', // le cliquable — l'original d'un transcrit
     '.pieces>li[data-genre=video] .media .lire', // le cliquable — le rond de lecture d'une vidéo, sur son poster
-    '.pieces .fiche', // le cliquable — la fiche d'un vocal, où sa transcription se lit entière
+    // Le cliquable — la fiche d'un vocal, où sa transcription se lit entière.
+    // Sélecteur NU : le balisage a UN site (`plein-vue.ts` › `ficheDePiece`) et
+    // DEUX hôtes — le fil (`.pieces`) et la galerie (`.lecteurs`, #4525) ; le
+    // scoper aurait demandé de recopier la déclaration dans la feuille de la
+    // galerie, c'est-à-dire une jumelle.
+    '.fiche',
     // Le plein écran (§ 12.10.1) : le cliquable — la croix qui ferme, l'original
     // d'un transcrit. La scène, le nom du fichier et son poids restent sur l'encre.
     'dialog.plein .fermer',
@@ -509,6 +627,16 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.frappe', // « écrit… », charte règle 27
     '.composeur .envoyer', // le cliquable — action primaire du fil
     '.composeur .joindre', // le cliquable — joindre une pièce
+    // Le micro et la position (#5061) : le MÊME emploi que le trombone
+    // juste au-dessus — un cliquable de plus, à côté de lui.
+    '.composeur .micro',
+    '.composeur .position',
+    // « Envoyer le vocal » — la MÊME action primaire que `.composeur .envoyer`,
+    // dans la barre d'enregistrement qui le remplace pendant la capture.
+    '.composeur .envoyer-vocal',
+    // Un lieu partagé (#5061) — le cliquable, comme `.pieces .media` juste
+    // plus bas : l'affiche entière (glyphe, nom, adresse) prend l'accent.
+    '.lieu-lien',
     '.ligne .reagir:hover', // le cliquable — « Réagir », survolé
     '.reaction[aria-pressed=true]', // la pastille qui est la MIENNE, comme l'accusé
     // La modale de `/chat/:lien` (règle 25) : l'accordéon des droits est un
@@ -567,19 +695,37 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // L'anneau NON VU d'une vignette de story — même emploi que `.compte`/
     // `.notif .pastille` : « ceci vous attend », pas encore lu.
     '.rail .cercle[data-vu="0"]',
-    // L'espace membre (`sheet:member`, #5093) : QUATRE cliquables, emploi 1, et
+    // L'espace membre (`sheet:member`, #5093) : TROIS cliquables, emploi 1, et
     // rien d'autre. Le champ « Rechercher partout » du tableau de bord porte
     // son glyphe à l'accent (le texte de repli, lui, reste sur l'encre
-    // sourde) ; le rond de GAUCHE est une action de contour — même emploi que
-    // `.action.contour`, l'accent en trait et en glyphe — et celui de DROITE
-    // l'action primaire de l'écran, l'accent en FOND, comme `.action.primaire` ;
-    // la tuile d'une rangée est le glyphe d'une destination, comme
+    // sourde) ; la tuile d'une rangée est le glyphe d'une destination, comme
     // `.marque .tuile` est celui de la marque. Le titre de la feuille, le nom
     // du lecteur, le libellé d'une rangée et son chevron restent sur l'encre.
     '.chercher svg',
-    '.flottante.gauche',
-    '.flottante.droite',
     'dialog.espace .rangee .tuile',
+    // LES DEUX RACCOURCIS D'EN-TÊTE (`RACCOURCIS_D_ENTETE`, correction de
+    // revue de #5164, charte règle 8 b/c) — REMPLACENT, sur le tableau de bord
+    // ET sur `/chats`, les deux ronds flottants `.flottante.gauche` /
+    // `.flottante.droite` d'origine (rail `position:fixed`, retiré des deux
+    // écrans : la mesure l'a trouvé recouvrant un contrôle réel à chaque fois
+    // que le contenu dépassait une fenêtre). `.raccourci` est TERTIAIRE
+    // (§ 12.5 règle 7, jamais primaire) : un seul emploi, l'accent en trait et
+    // en glyphe, jamais en fond.
+    '.raccourci',
+    // Les préférences de notification (`cible/notifPrefs.png`, #4899) : la
+    // piste d'un commutateur ACTIVÉ — un contrôle SÉLECTIONNÉ, l'accent en
+    // FOND, même emploi que `.reaction[aria-pressed=true]` et
+    // `.geste-aime[aria-pressed="true"]`. Le libellé, la fenêtre DND et le
+    // pouce lui-même restent sur l'encre — l'état se DIT par le texte
+    // (« Activé »/« Désactivé »), la couleur ne fait que le CONFIRMER.
+    '.commutateur[aria-checked="true"] .piste',
+    // L'historique des appels (`cible/calls.png`, #5108) : la tuile d'une ligne
+    // VIDÉO — même emploi que `dialog.espace .rangee .tuile` et `.marque
+    // .tuile` : le glyphe d'une NATURE, ici celle de l'appel plutôt que celle
+    // d'une destination ou de la marque. Les deux AUTRES teintes de tuile
+    // (manqué, répondu) restent sur `--color-danger`/`--color-success`, hors
+    // de cette liste — règle 13 ne gouverne que l'ACCENT.
+    '.appel .tuile.video',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {
@@ -640,5 +786,84 @@ describe('règle 28 — les interdits, chacun avec sa sonde', () => {
 
   it('rougit sur une feuille qui déclarerait la sienne', () => {
     expect('.sonde{--x:1}').toMatch(/--[\w-]+\s*:/);
+  });
+});
+
+/**
+ * RÈGLE 18 (#5164) — « l'aperçu d'une ligne prend l'encre pleine ». L'aperçu
+ * du dernier message n'est pas une précision secondaire (une heure, un
+ * compte de participants) : c'est le CONTENU que le lecteur vient consulter,
+ * sur les DEUX écrans qu'`apercuDeLigne` sert — `/chats` (`.liste .apercu`) et
+ * le tableau de bord (`.carte .apercu`), depuis le MÊME atome paramétré.
+ */
+describe('règle 18 — l’aperçu d’une ligne prend l’encre pleine', () => {
+  it('pose --color-text sur .liste .apercu et .carte .apercu, jamais --color-text-muted ni --color-text-subtle', () => {
+    const [liste] = regles(FEUILLE_DE_LA_LISTE).filter(({ selecteur }) => selecteur === '.liste .apercu');
+    const [carte] = regles(FEUILLE_DU_TABLEAU).filter(({ selecteur }) => selecteur === '.carte .apercu');
+
+    expect(liste?.corps).toContain('color:var(--color-text)');
+    expect(carte?.corps).toContain('color:var(--color-text)');
+    expect(`${liste?.corps ?? ''};${carte?.corps ?? ''}`).not.toMatch(/--color-text-(?:muted|subtle)\b/);
+  });
+});
+
+/**
+ * RÈGLE 15 (#5164) — « la conversation mise en avant ». La PREMIÈRE non lue,
+ * dans l'ordre servi, devient une carte (`li.vedette`) : grand rayon, fond
+ * `--color-surface` (règle 14 : « ce qui se POSE, pas ce qui FLOTTE » — elle
+ * n'entre donc pas dans la liste fermée des emplois de `--color-surface-raised`
+ * ci-dessus). L'avatar, lui, garde `--avatar`. Aucune autre feuille de la liste ne
+ * régresse vers `--radius-md`.
+ */
+describe('règle 15 — la carte mise en avant de `/chats`', () => {
+  it('pose le rayon de carte et le fond « posé », jamais « flottant »', () => {
+    const [carte] = regles(FEUILLE_DE_LA_LISTE).filter(({ selecteur }) => selecteur === '.liste>ul>li.vedette');
+
+    expect(carte?.corps).toContain('border-radius:var(--radius-xl)');
+    expect(carte?.corps).toContain('background:var(--color-surface)');
+    expect(carte?.corps).not.toContain('--color-surface-raised');
+  });
+
+  /**
+   * L'AVATAR NE GROSSIT PAS. `cible/chats.png` est capturée à
+   * `deviceScaleFactor: 2` (`compare-rendu.js:194-195`, `capture-cibles.js:110`) :
+   * le disque « ÉL » de la carte y mesure 92 px D'APPAREIL, soit 46 px CSS —
+   * la même taille que les lignes plates (`--avatar`, 48 px). Un jeton
+   * `--avatar-large: 96px` avait été ajouté sur la lecture du chiffre BRUT, et
+   * la carte rendait alors un avatar DEUX FOIS trop grand (mesuré : 192 px
+   * d'appareil sur `rendu/chats.dark.png`), qui écrasait l'aperçu en colonne.
+   */
+  it('ne redimensionne aucun avatar — la mise en avant se fait au fond et au rayon', () => {
+    const feuille = regles(FEUILLE_DE_LA_LISTE)
+      .filter(({ selecteur }) => selecteur.includes('.avatar'))
+      .map(({ corps }) => corps)
+      .join(';');
+
+    expect(feuille).not.toMatch(/\b(?:width|height)\s*:/);
+    expect(FEUILLE_DE_LA_LISTE).not.toContain('--avatar-large');
+  });
+
+  /**
+   * ET LA GOUTTIÈRE DE LA CARTE EST PORTÉE PAR LA GLISSIÈRE, jamais par le
+   * `li` : les deux pistes du balayage sont `inset:0` sur le `li`, donc un
+   * `padding` posé là leur laisse peindre leurs teintes dans les marges de la
+   * carte AU REPOS (mesuré rgb(44,31,43) à x=55 de `rendu/chats.dark.png`).
+   */
+  it('porte la gouttière de la carte sur la glissière, jamais sur le li', () => {
+    const [li] = regles(FEUILLE_DE_LA_LISTE).filter(({ selecteur }) => selecteur === '.liste>ul>li.vedette');
+    const [glissiere] = regles(FEUILLE_DE_LA_LISTE).filter(
+      ({ selecteur }) => selecteur === '.liste>ul>li.vedette .glissiere',
+    );
+
+    expect(li?.corps).not.toContain('padding');
+    expect(glissiere?.corps).toContain('padding:0 var(--space-3)');
+  });
+
+  it('ne fait régresser aucune règle de cette feuille vers --radius-md', () => {
+    const rayons = regles(FEUILLE_DE_LA_LISTE)
+      .map(({ corps }) => corps)
+      .join(';');
+
+    expect(rayons).not.toContain('--radius-md');
   });
 });

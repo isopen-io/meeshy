@@ -10,6 +10,7 @@ import { invalidateParticipantLookup } from '../../utils/participant-lookup-cach
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
+import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
 
 /** Ce que rend un « delete-for-me » réussi — identique sur les deux adresses qui le servent. */
 export type ConversationDeleteForMeResult = {
@@ -149,6 +150,9 @@ export async function performConversationDeleteForMe(
           include: { participants: { select: { id: true, userId: true, isActive: true } } },
         }),
         prisma.participant.update(hideSelf),
+        // #3740 — même geste que `core-lifecycle.ts` : un lien qui reste actif
+        // vers un fil déjà clos est un contrôle qui ment.
+        deactivateShareLinksOnClose(prisma, conversationId),
       ])
       closedAudience = (closed.participants ?? []).filter(p => p.isActive)
     }

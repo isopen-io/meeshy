@@ -47,9 +47,15 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         )
         // 3 → 2 le 2026-08-24 : la méta a REJOINT la ligne drapeaux+réactions,
         // il n'y a donc plus qu'une ligne basse à effacer en focus.
+        // 2 → 3 le 2026-09-04 (#5135) : la méta est repartie, en COLONNE cette
+        // fois — elle a donc de nouveau son propre effacement. Ce qui compte
+        // n'est pas le nombre mais ce qu'il dénombre : trois surfaces que la
+        // bande du bas remplace en focus, chacune s'effaçant SANS céder sa
+        // place (opacité, jamais démontage) — c'est ce qui rend l'élection
+        // instantanée et sans relayout.
         XCTAssertEqual(
-            row.components(separatedBy: ".opacity(input.isFocused ? 0 : 1)").count - 1, 2,
-            "en-tête ET ligne basse (drapeaux + réactions + méta) s'effacent en focus — la bande du bas les remplace"
+            row.components(separatedBy: ".opacity(input.isFocused ? 0 : 1)").count - 1, 3,
+            "en-tête, ligne basse (drapeaux + réactions) ET colonne méta s'effacent en focus — la bande du bas les remplace"
         )
         XCTAssertTrue(row.contains("BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)"), "la coche d'état de réception dans la chip de date")
     }
@@ -59,9 +65,14 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// ne tiendrait que pour la moitié des messages.
     func test_everyRow_carriesTheMetaRow_headOfGroupIncluded() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertFalse(row.contains("if !input.isFirstInGroup { FocalMetaRow("), "la méta n'est plus réservée aux rangées de suite")
-        XCTAssertTrue(row.contains("FocalMetaRow("), "toute rangée porte sa méta")
-        XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches du bas ouvrent les détails de lecture")
+        XCTAssertFalse(row.contains("if !input.isFirstInGroup { FocalMetaColumn("), "la méta n'est plus réservée aux rangées de suite")
+        // `FocalMetaColumn` depuis #5135 : la méta a quitté la ligne basse pour
+        // la SECONDE COLONNE de la rangée. La propriété gardée ici n'a pas
+        // changé d'un mot — toute rangée porte sa méta, tête de groupe comprise
+        // —, seule son adresse a bougé. C'est ce que cette garde doit suivre :
+        // la règle, pas le site.
+        XCTAssertTrue(row.contains("FocalMetaColumn("), "toute rangée porte sa méta")
+        XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches ouvrent les détails de lecture")
     }
 
     /// Garde NÉGATIVE — l'en-tête d'identité ne redevient jamais porteur de
@@ -89,7 +100,10 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // vue UIKit bornée à la cellule qui dérivait avant la pose.
         XCTAssertTrue(row.contains(".background { if input.isFocused { focusCardBackground } }"), "carte = fond SwiftUI du contenu")
         XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
-        XCTAssertTrue(row.contains("FocalMetaRow("), "la méta-rangée reste, focus ou pas")
+        // La colonne est MONTÉE en focus comme hors focus — elle s'efface par
+        // opacité (voir le compte ci-dessus), jamais par démontage : c'est ce
+        // qui garantit qu'aucune largeur ne change à l'élection.
+        XCTAssertTrue(row.contains("FocalMetaColumn("), "la méta reste montée, focus ou pas")
         XCTAssertTrue(row.contains("if let precomputed = input.focusTimestamp { return precomputed }"), "date pré-calculée")
         let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
         XCTAssertTrue(controller.contains("if electionChanged { syncFocalFocusDetails() }"), "détails synchronisés au tick d'élection")
@@ -445,38 +459,47 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         )
     }
 
-    /// **UNE seule ligne basse** (directive 2026-08-24) : « les date et coche
-    /// devraient être tout à droite mais sur la même ligne que les drapeaux ou
-    /// réactions ».
+    /// **DEUX COLONNES** (directive porteur 2026-09-04, #5135) : « mettre la
+    /// date et coche au niveau de la bulle et non sur une ligne […] la seconde
+    /// colonne alignée en bas contient la date et l'information de réception ».
     ///
-    /// La méta vivait sur une ligne à elle — qui, au repos, ne montre RIEN
-    /// (l'heure et les coches ne paraissent qu'au défilement) tout en gardant
-    /// sa hauteur. C'était l'essentiel du blanc entre deux messages : une
-    /// ligne réservée à une information invisible.
-    func test_theBottomLine_carriesFlagsReactionsAndMeta_together() throws {
+    /// Histoire de cette ligne en deux temps, parce que le second annule la
+    /// raison du premier. La directive 2026-08-24 y avait ramené la méta,
+    /// jusque-là sur une ligne à elle qui gardait sa hauteur sans rien montrer
+    /// au repos. Elle en laissait une : cette ligne-ci se montait TOUJOURS,
+    /// *parce que* c'est elle qui portait désormais la méta. La méta passée en
+    /// colonne, la ligne redevient ce qu'elle dit être — drapeaux et réactions,
+    /// et rien quand il n'y en a pas.
+    func test_theBottomLine_carriesFlagsAndReactions_theMetaHavingLeftForTheColumn() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         let line = try XCTUnwrap(row.range(of: "private var flagAndReactionsRow: some View {"))
         let body = String(row[line.lowerBound...].prefix(1800))
         let iFlags = try XCTUnwrap(body.range(of: "plainLanguageFlags(")).lowerBound
         let iReactions = try XCTUnwrap(body.range(of: "BubbleReactionsOverlay(")).lowerBound
-        let iSpacer = try XCTUnwrap(body.range(of: "Spacer(minLength: 4)")).lowerBound
-        let iMeta = try XCTUnwrap(body.range(of: "FocalMetaRow(")).lowerBound
         XCTAssertTrue(iFlags < iReactions, "drapeaux d'abord")
-        XCTAssertTrue(iReactions < iSpacer && iSpacer < iMeta, "la méta est poussée TOUT À DROITE")
-        XCTAssertTrue(body.contains("fillsWidth: false"), "en ligne, la méta ne pousse plus elle-même")
+        // Ce que la ligne ne porte PLUS. Sans cette contre-épreuve, un retour
+        // en arrière rendrait la méta à la ligne basse sans qu'aucune garde ne
+        // tombe : les deux dispositions compilent.
+        XCTAssertFalse(body.contains("FocalMetaRow("), "la méta a quitté la ligne basse")
+        XCTAssertFalse(body.contains("Spacer(minLength: 4)"), "plus rien à pousser à droite : la ligne se rétracte sur ce qu'elle porte")
     }
 
-    /// La ligne se monte TOUJOURS : un message sans traduction ni réaction
-    /// date quand même. L'ancien garde ne couvrait que son ancien contenu.
-    func test_theBottomLine_isMountedEvenWithoutFlagsOrReactions() throws {
+    /// **La ligne basse ne se monte QUE si elle a quelque chose à montrer**
+    /// (#5135). C'est le blanc que la directive vient chercher : sans drapeau
+    /// ni réaction — le cas nominal — plus aucune ligne n'est réservée.
+    ///
+    /// La condition vit chez l'APPELANT, pas dans le corps de la ligne : une
+    /// garde qui n'inspecterait que `flagAndReactionsRow` la manquerait et
+    /// resterait verte en affirmant le contraire.
+    func test_theBottomLine_isNotMountedWithoutFlagsNorReactions() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        let line = try XCTUnwrap(row.range(of: "private var flagAndReactionsRow: some View {"))
-        let body = String(row[line.lowerBound...].prefix(400))
-        XCTAssertFalse(
-            body.contains("if (content.translation != nil && !content.isBlurred) || showsReactions {"),
-            "plus de garde d'ensemble — sinon la meta disparaitrait avec les drapeaux"
+        XCTAssertTrue(row.contains("if mountsBottomLine { flagAndReactionsRow"), "la ligne basse est conditionnelle")
+        // La règle est éprouvée ailleurs (`FocalMetaColumnTests`) et n'est pas
+        // réécrite ici — c'est ce qui la rend interrogeable sans monter de vue.
+        XCTAssertTrue(
+            row.contains("FocalMetaColumn.mountsBottomLine( hasTranslation: content.translation != nil,"),
+            "la condition délègue à la règle éprouvée, jamais un `if` réécrit sur place"
         )
-        XCTAssertTrue(body.contains("return HStack(alignment: .center, spacing: 6)"), "montee inconditionnellement")
     }
 
     func test_theGuardAbove_wouldCatchTheWholeLineBeingGatedAgain() {

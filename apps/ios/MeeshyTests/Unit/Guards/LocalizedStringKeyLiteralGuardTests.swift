@@ -28,8 +28,10 @@ import XCTest
 /// Toutes les gardes i18n du dépôt s'accrochent à `String(localized:` — le
 /// marqueur de `LocalizationConsistencyTests`, le cliquet `fullyLocalizedScreens`
 /// (#4309), le ratchet `defaultValue`. **Un littéral nu n'est vu par aucune**,
-/// alors qu'il est tout aussi localisé. `OnboardingStepViews.swift` était même
-/// ÉPINGLÉ parmi les 43 écrans « fully localized ».
+/// alors qu'il est tout aussi localisé. Le fichier qui a payé cette faille
+/// (`OnboardingStepViews.swift`, supprimé depuis avec le wizard d'inscription,
+/// #5218) était même ÉPINGLÉ parmi les 43 écrans « fully localized » : c'est
+/// bien l'épinglage qui ne voyait rien, pas le fichier qui était une exception.
 ///
 /// Et le mécanisme avait déjà été RENCONTRÉ : `FrenchDefaultValueRatchetTests`
 /// portait une exception `notAnInterfaceString = ["Jean-Pierre"]`, dont le

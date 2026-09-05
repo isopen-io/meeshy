@@ -29,7 +29,7 @@ Exemples :
 """
 
 import re
-from typing import List, Optional
+from typing import Callable, List, Optional
 from dataclasses import dataclass
 
 
@@ -91,11 +91,13 @@ def _ends_with_sentence_boundary(text: str) -> bool:
     if not text:
         return False
 
-    text = text.rstrip()  # Enlever les espaces de fin
-
-    # Vérifier les retours à la ligne
+    # Vérifier les retours à la ligne AVANT rstrip() : un `rstrip()` nu mange le
+    # `\n` de fin, exactement le cas — un segment qui se termine SUR un saut de
+    # ligne — que cette règle existe pour couper.
     if '\n' in text:
         return True
+
+    text = text.rstrip()  # Enlever les espaces de fin
 
     # Vérifier les ponctuations fortes
     if text and text[-1] in SENTENCE_ENDING_PUNCTUATION:
@@ -234,6 +236,29 @@ def _merge_by_criteria(
     return merged
 
 
+def _duration_weighted_mean(
+    group: List[TranscriptionSegment],
+    value: Callable[[TranscriptionSegment], Optional[float]],
+) -> Optional[float]:
+    """
+    Moyenne pondérée par la durée des segments dont `value(s)` est non-None.
+
+    Repli arithmétique quand la durée totale est nulle ; rend None si aucun
+    segment ne porte de valeur.
+    """
+    scored = [
+        (value(s), s.end_ms - s.start_ms)
+        for s in group
+        if value(s) is not None
+    ]
+    if not scored:
+        return None
+    total_duration = sum(duration for _, duration in scored)
+    if total_duration > 0:
+        return sum(v * duration / total_duration for v, duration in scored)
+    return sum(v for v, _ in scored) / len(scored)
+
+
 def _merge_group(group: List[TranscriptionSegment]) -> TranscriptionSegment:
     """
     Fusionne un groupe de segments en un seul.
@@ -255,14 +280,7 @@ def _merge_group(group: List[TranscriptionSegment]) -> TranscriptionSegment:
     end_ms = group[-1].end_ms
 
     # Confiance moyenne pondérée par la durée
-    total_duration = sum(s.end_ms - s.start_ms for s in group)
-    if total_duration > 0:
-        confidence = sum(
-            s.confidence * (s.end_ms - s.start_ms) / total_duration
-            for s in group
-        )
-    else:
-        confidence = sum(s.confidence for s in group) / len(group)
+    confidence = _duration_weighted_mean(group, lambda s: s.confidence) or 0.0
 
     # Speaker ID (prendre le premier, ou None si divergent)
     speaker_ids = [s.speaker_id for s in group if s.speaker_id is not None]
@@ -271,8 +289,10 @@ def _merge_group(group: List[TranscriptionSegment]) -> TranscriptionSegment:
     else:
         speaker_id = group[0].speaker_id
 
-    # is_current_user (True si tous True)
-    is_current_user = all(s.voice_similarity_score for s in group)
+    # Score de similarité vocale : moyenne pondérée par la durée (float, jamais bool)
+    voice_similarity_score = _duration_weighted_mean(
+        group, lambda s: s.voice_similarity_score
+    )
 
     return TranscriptionSegment(
         text=merged_text,
@@ -280,7 +300,7 @@ def _merge_group(group: List[TranscriptionSegment]) -> TranscriptionSegment:
         end_ms=end_ms,
         confidence=confidence,
         speaker_id=speaker_id,
-        voice_similarity_score=is_current_user
+        voice_similarity_score=voice_similarity_score
     )
 
 

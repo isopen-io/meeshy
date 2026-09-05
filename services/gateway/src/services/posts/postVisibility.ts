@@ -10,6 +10,7 @@ import { doUsersShareCommunity } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
 import { verdictFor } from './referenceAccess';
 import { NOT_DELETED } from './softDelete';
+import { amitieAcceptee } from '../friendship';
 
 export type PostVisibilityRecord = {
   /**
@@ -191,17 +192,7 @@ async function matchesPostAudience(
       if (post.visibility === PostVisibility.EXCEPT && post.visibilityUserIds.includes(userId)) {
         return false;
       }
-      const friendship = await prisma.friendRequest.findFirst({
-        where: {
-          status: 'accepted',
-          OR: [
-            { senderId: post.authorId, receiverId: userId },
-            { senderId: userId, receiverId: post.authorId },
-          ],
-        },
-        select: { id: true },
-      });
-      if (friendship !== null) return true;
+      if (await amitieAcceptee(prisma, post.authorId, userId)) return true;
       // Le contact DM n'est consulté qu'en second — l'amitié est le cas
       // dominant et coûte une seule requête bornée.
       return options.includeDirectContacts === true

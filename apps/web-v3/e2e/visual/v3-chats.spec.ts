@@ -3,14 +3,31 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 
 import { SEUIL_DE_RATTRAPAGE_MS } from '../../lib/realtime/reconnect-policy';
 import { avance, figeLHorloge, installeLHorloge } from './lib/navigateur-cycle';
+import { controlesCouvertsParUnFixe, POSITIONS_DE_DEFILEMENT } from './lib/occlusion';
 import {
   AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
   passerelleDeBouchon,
+  QUATRIEME_CONVERSATION,
   serveurDeLaV3,
+  TROISIEME_CONVERSATION,
   type PasserelleDeBouchon,
   type ServeurV3,
 } from './lib/serveurs';
+
+/**
+ * LES QUATRE LIGNES SERVIES (#5164, correction de revue) — `ORDRE_AU_REPOS`
+ * est ce que `/chats` sert avant tout événement temps réel : les DEUX lignes
+ * fixes (`TROISIEME_CONVERSATION`, `QUATRIEME_CONVERSATION`) ne bougent dans
+ * AUCUN des témoins ci-dessous — seules `CONVERSATION_DU_LECTEUR` et
+ * `AUTRE_CONVERSATION` s'échangent la tête au fil des événements.
+ */
+const ORDRE_AU_REPOS = [
+  CONVERSATION_DU_LECTEUR.id,
+  AUTRE_CONVERSATION.id,
+  TROISIEME_CONVERSATION.id,
+  QUATRIEME_CONVERSATION.id,
+] as const;
 
 /**
  * `/chats` — LA LISTE DES CONVERSATIONS, EN DIRECT (issue #4753, § 12.4,
@@ -38,11 +55,16 @@ const cookiesDuLecteur = (base: string) => [
 
 const contexteDuLecteur = async (
   browser: Browser,
-  options: { readonly largeur?: number; readonly javaScriptEnabled?: boolean } = {},
+  options: {
+    readonly largeur?: number;
+    readonly javaScriptEnabled?: boolean;
+    readonly colorScheme?: 'light' | 'dark';
+  } = {},
 ): Promise<BrowserContext> => {
   const contexte = await browser.newContext({
     viewport: { width: options.largeur ?? 390, height: 844 },
     ...(options.javaScriptEnabled === undefined ? {} : { javaScriptEnabled: options.javaScriptEnabled }),
+    ...(options.colorScheme === undefined ? {} : { colorScheme: options.colorScheme }),
   });
   await contexte.addCookies(cookiesDuLecteur(v3.base));
   return contexte;
@@ -101,6 +123,136 @@ test.describe('la liste des conversations', () => {
       expect(mesurees, `cibles sous ${TARGET_MIN} px : ${JSON.stringify(mesurees)}`).toEqual([]);
       await page.context().close();
     });
+
+    /**
+     * ET RIEN NE DÉBORDE (charte : « le corps de la page ne défile jamais
+     * horizontalement »). Les DEUX puces d'action se partagent la largeur en
+     * `flex:1` avec `white-space:nowrap` : c'est exactement la disposition qui
+     * déborde en silence dès qu'un libellé s'allonge d'un mot ou qu'une police
+     * système est plus large — et 360 px est le premier écran où ça se voit.
+     */
+    test(`ne déborde pas horizontalement à ${largeur} px`, async ({ browser }) => {
+      const page = await ouvre(browser, largeur);
+
+      const debord = await page.evaluate(() => ({
+        corps: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        coupables: [...document.querySelectorAll<HTMLElement>('main *')]
+          .filter((noeud) => noeud.getBoundingClientRect().right > document.documentElement.clientWidth + 1)
+          .map((noeud) => `${noeud.tagName}.${String(noeud.className).split(' ')[0]}`),
+      }));
+
+      expect(debord.corps, `débord horizontal : ${JSON.stringify(debord.coupables)}`).toBeLessThanOrEqual(0);
+      await page.context().close();
+    });
+  });
+
+  /**
+   * CHARTE RÈGLE 12 — « le premier écran d'un écran de LISTE montre au moins
+   * TROIS lignes actionnables, à 360 × 844 » (`matrice.json#chats.critere_de_
+   * fin`, `conception-web-v3.md:1214`). Correction de revue : la fixture ne
+   * servait que deux conversations (une carte + une ligne), et le premier
+   * écran ne pouvait donc jamais en montrer trois — corrigé en portant
+   * `bouchon-monde.ts` à quatre lignes (une carte + trois lignes plates),
+   * comme `cible/chats.png` en dessine.
+   *
+   * CE QUE CE TÉMOIN COMPTE, ET POURQUOI CE N'EST PAS LE COMPTE « PLEINE
+   * LARGEUR » AU SENS LE PLUS STRICT : la règle 12 nomme des `<a>` « pleine
+   * largeur ». Ici, `a.ligne` porte déjà tout le CONTENU de la ligne (nom,
+   * méta, aperçu, compte de non-lus) — seul le bouton du MENU (`<details
+   * class="actions">`) vit hors de lui, en flex à côté, pour rester un
+   * contrôle NOMMÉ séparément (§ 12.10.4 : le menu est le chemin clavier /
+   * lecteur d'écran du même geste que le balayage). Une ligne actionnable se
+   * mesure donc ici par la hauteur de son `<a>` (≥ 56 px, le plancher que la
+   * règle nomme) et par le fait qu'elle est ENTIÈREMENT contenue dans les 844
+   * premiers pixels — la largeur relative de `a.ligne` dans sa `li` ne change
+   * pas ce qu'un pouce peut toucher.
+   */
+  test('règle 12 — montre au moins trois lignes actionnables au premier écran, à 360 × 844', async ({ browser }) => {
+    const page = await ouvre(browser, 360);
+
+    const lignes = await page.evaluate(() => {
+      const HAUTEUR_MIN = 56;
+      return [...document.querySelectorAll<HTMLElement>('.liste > ul > li')]
+        .filter((li) => !li.hidden)
+        .map((li) => {
+          const lien = li.querySelector<HTMLElement>('a.ligne');
+          const rectLi = li.getBoundingClientRect();
+          const rectLien = lien?.getBoundingClientRect() ?? null;
+          return {
+            basDeLaLigne: rectLi.bottom,
+            hauteurDuLien: rectLien?.height ?? 0,
+          };
+        })
+        .filter((ligne) => ligne.hauteurDuLien >= HAUTEUR_MIN && ligne.basDeLaLigne <= 844);
+    });
+
+    expect(lignes.length, `lignes actionnables entièrement visibles à 844 px : ${JSON.stringify(lignes)}`).toBeGreaterThanOrEqual(3);
+    await page.context().close();
+  });
+
+  /**
+   * CHARTE RÈGLE 8 b/c, EXCEPTION NOMMÉE POUR `/chats` (correction de revue) —
+   * la mesure a trouvé les liens du pied de l'enveloppe couverts par le rail
+   * flottant, au repos ET à mi-défilement, aux deux largeurs et dans les deux
+   * schémas (« À propos », « Conditions d'utilisation », « Politique de
+   * confidentialité »). La règle nomme la sortie mot pour mot pour ce cas :
+   * « le rail cède la place à deux raccourcis de 44 px dans l'en-tête ». Ce
+   * témoin prouve les DEUX moitiés de la sortie : (1) `/chats` ne sert PLUS
+   * `.flottantes` — rien qui puisse un jour recouvrir de nouveau le pied — et
+   * (2) les deux raccourcis existent, à leur place, ≥ 44 px.
+   */
+  test('remplace le rail flottant par deux raccourcis d’en-tête, jamais fixes', async ({ browser }) => {
+    const page = await ouvre(browser);
+
+    await expect(page.locator('.flottantes')).toHaveCount(0);
+
+    const raccourcis = page.locator('.raccourcis-entete .raccourci');
+    await expect(raccourcis).toHaveCount(2);
+    await expect(raccourcis.first()).toHaveAttribute('href', '/feed');
+    await expect(raccourcis.last()).toHaveAttribute('href', '/chats?espace');
+
+    for (const raccourci of await raccourcis.all()) {
+      const boite = await raccourci.boundingBox();
+      expect(boite?.width, 'raccourci d’en-tête').toBeGreaterThanOrEqual(44);
+      expect(boite?.height, 'raccourci d’en-tête').toBeGreaterThanOrEqual(44);
+      expect(
+        await raccourci.evaluate((noeud) => getComputedStyle(noeud).position),
+        'un raccourci d’en-tête reste DANS le flux, jamais fixe',
+      ).not.toBe('fixed');
+    }
+    await page.context().close();
+  });
+
+  /**
+   * CHARTE RÈGLE 8 b/c, LA MESURE ELLE-MÊME — « aucun élément FIXE ne couvre
+   * un contrôle », à TROIS positions de défilement (haut, milieu, bas), aux
+   * DEUX largeurs et dans les DEUX schémas — ce que la règle décrit, et ce que
+   * le témoin retourné au développeur avait rétréci à une seule position (le
+   * bas, la seule où le défaut n'apparaissait pas). `/chats` ne sert plus
+   * `.flottantes`, mais la mesure reste GÉNÉRALE — tout élément dont le style
+   * calculé est `position:fixed` (la bannière temps réel comprise) — pour
+   * qu'un futur élément fixe reste tenu par le même témoin.
+   *
+   * `controlesCouvertsParUnFixe` (`lib/occlusion.ts`) est le site UNIQUE de
+   * cette mesure : `v3-espace-membre.spec.ts` l'applique désormais au TABLEAU
+   * DE BORD avec la même prédicat — la revue suivante y a trouvé le même
+   * défaut, sous un rail resté `position:fixed`.
+   */
+  LARGEURS.forEach((largeur) => {
+    (['light', 'dark'] as const).forEach((schema) => {
+      test(`aucun élément fixe ne couvre un contrôle, à trois défilements — ${largeur}px ${schema}`, async ({
+        browser,
+      }) => {
+        const contexte = await contexteDuLecteur(browser, { largeur, colorScheme: schema });
+        const page = await ouvreLaListe(contexte);
+
+        for (const position of POSITIONS_DE_DEFILEMENT) {
+          const couverts = await controlesCouvertsParUnFixe(page, position);
+          expect(couverts, `contrôles couverts par un élément fixe — ${position}`).toEqual([]);
+        }
+        await contexte.close();
+      });
+    });
   });
 
   test('ne porte aucune violation axe serious/critical', async ({ browser }) => {
@@ -110,6 +262,97 @@ test.describe('la liste des conversations', () => {
     const graves = rapport.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
 
     expect(graves.map((v) => `${v.id} — ${v.help}`)).toEqual([]);
+    await page.context().close();
+  });
+
+  /**
+   * LA CONVERSATION MISE EN AVANT (#5164, `cible/chats.png`) — la PREMIÈRE non
+   * lue de l'ordre servi (`CONVERSATION_DU_LECTEUR`, `nonLus:3`) devient une
+   * carte ; `AUTRE_CONVERSATION` (`nonLus:0`) reste une ligne plate.
+   */
+  test('rend la première conversation non lue en carte, et les autres à plat', async ({ browser }) => {
+    const page = await ouvre(browser);
+
+    await expect(page.locator('li.vedette')).toHaveCount(1);
+    await expect(page.locator('li.vedette')).toHaveAttribute('data-conversation', CONVERSATION_DU_LECTEUR.id);
+    await expect(page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"]`)).not.toHaveClass(/vedette/);
+
+    // L'AVATAR DE LA CARTE A LA TAILLE DE CELUI D'UNE LIGNE PLATE. La cible est
+    // capturée à `deviceScaleFactor: 2` (`compare-rendu.js:194-195`) : le disque
+    // « ÉL » y mesure 92 px D'APPAREIL, soit 46 px CSS — `--avatar`. Un premier
+    // jet avait lu le chiffre BRUT et posé 96 px CSS, deux fois trop grand.
+    const avatarVedette = await page.locator('li.vedette .avatar').boundingBox();
+    const avatarAPlat = await page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"] .avatar`).boundingBox();
+    expect(avatarVedette?.width, 'avatar de la vedette').toBe(avatarAPlat?.width);
+    expect(avatarVedette?.height, 'avatar de la vedette').toBe(avatarAPlat?.height);
+
+    // ET LES PISTES DU BALAYAGE NE DÉBORDENT PAS DE LA CARTE AU REPOS : la
+    // glissière couvre le `li` sur toute sa largeur — un `padding` posé sur le
+    // `li` laissait les deux teintes peindre ses marges (mesuré sur
+    // `rendu/chats.dark.png`, rgb(44,31,43) à x=55 et x=725).
+    const carte = await page.locator('li.vedette').boundingBox();
+    const glissiere = await page.locator('li.vedette .glissiere').boundingBox();
+    expect(glissiere?.width, 'la glissière couvre la carte').toBe(carte?.width);
+
+    // L'APERÇU EST SUR SA PROPRE LIGNE, PLEINE LARGEUR (cible chats.png) : il
+    // commence au bord GAUCHE de l'avatar et court jusqu'au bord droit de la
+    // carte — c'est ce que la mise en avant donne de plus qu'une ligne plate,
+    // où l'aperçu partage sa colonne avec le nom.
+    const ligneVedette = await page.locator('li.vedette a.ligne').boundingBox();
+    const apercu = await page.locator('li.vedette .apercu').boundingBox();
+    expect(apercu?.x, 'l’aperçu part du bord de l’avatar').toBeCloseTo(avatarVedette?.x ?? -1, 0);
+    expect(apercu?.width, 'l’aperçu court sur toute la ligne').toBe(ligneVedette?.width);
+
+    const apercuAPlat = await page
+      .locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"] .apercu`)
+      .boundingBox();
+    expect(apercuAPlat?.x ?? 0, 'la ligne plate garde sa colonne').toBeGreaterThan(avatarAPlat?.x ?? 0);
+
+    const ligneAPlat = await page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"] a.ligne`).boundingBox();
+    expect(ligneAPlat?.height, 'ligne plate').toBeGreaterThanOrEqual(80);
+    await page.context().close();
+  });
+
+  /**
+   * LA VEDETTE SE DÉPLACE EN DIRECT, SANS RECHARGEMENT — la MÊME règle que le
+   * document servi (`vedetteDe`), rejouée à chaque `conversation:updated` +
+   * `conversation:unread-updated` (`MeeshySocketIOManager.ts:3216`,
+   * `emitUnreadCountsToRecipients.ts:214-217`).
+   */
+  test('la vedette se déplace en direct quand une autre conversation devient non lue', async ({ browser }) => {
+    const page = await ouvre(browser);
+    await attendsLeModule(page);
+
+    await expect(page.locator('li.vedette')).toHaveAttribute('data-conversation', CONVERSATION_DU_LECTEUR.id);
+
+    passerelle.socket.diffuseLaLigne({
+      conversationId: AUTRE_CONVERSATION.id,
+      pour: 'u1',
+      lastMessageAt: new Date().toISOString(),
+      lastMessagePreview: 'Le fichier est parti',
+      lastMessageOriginalLanguage: 'fr',
+      unreadCount: 4,
+    });
+
+    await expect
+      .poll(() => page.locator('li.vedette').getAttribute('data-conversation'))
+      .toBe(AUTRE_CONVERSATION.id);
+    await expect(page.locator(`li[data-conversation="${CONVERSATION_DU_LECTEUR.id}"]`)).not.toHaveClass(/vedette/);
+
+    // Et la vedette REVIENT quand cette conversation retombe à zéro non lu —
+    // celle qui reste non lue (CONVERSATION_DU_LECTEUR, toujours 3) la reprend.
+    passerelle.socket.diffuseLaLigne({
+      conversationId: AUTRE_CONVERSATION.id,
+      pour: 'u1',
+      lastMessageAt: new Date().toISOString(),
+      lastMessagePreview: 'Le fichier est parti',
+      lastMessageOriginalLanguage: 'fr',
+      unreadCount: 0,
+    });
+
+    await expect
+      .poll(() => page.locator('li.vedette').getAttribute('data-conversation'))
+      .toBe(CONVERSATION_DU_LECTEUR.id);
     await page.context().close();
   });
 
@@ -159,7 +402,7 @@ test.describe('la liste des conversations', () => {
     const page = await ouvre(browser);
     await attendsLeModule(page);
 
-    expect(await ordre(page)).toEqual([CONVERSATION_DU_LECTEUR.id, AUTRE_CONVERSATION.id]);
+    expect(await ordre(page)).toEqual(ORDRE_AU_REPOS);
 
     passerelle.socket.diffuseLaLigne({
       conversationId: AUTRE_CONVERSATION.id,
@@ -172,7 +415,7 @@ test.describe('la liste des conversations', () => {
 
     await expect
       .poll(() => ordre(page))
-      .toEqual([AUTRE_CONVERSATION.id, CONVERSATION_DU_LECTEUR.id]);
+      .toEqual([AUTRE_CONVERSATION.id, CONVERSATION_DU_LECTEUR.id, TROISIEME_CONVERSATION.id, QUATRIEME_CONVERSATION.id]);
     await expect(page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"] .compte`)).toContainText('4');
     await expect(page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"] .apercu .texte`)).toHaveText('Le fichier est parti');
     await page.context().close();
@@ -224,6 +467,41 @@ test.describe('la liste des conversations', () => {
     await page.getByRole('button', { name: 'Annuler' }).click();
     await expect(ligne).toBeVisible();
     expect(passerelle.journal.filter((appel) => appel.chemin.includes('user-preferences'))).toEqual([]);
+    await page.context().close();
+  });
+
+  /**
+   * L'AVATAR N'EST PAS UN QUART DE LIGNE SANS BALAYAGE (correction de revue,
+   * #5164) — `a.avatar-lien` (le disque qui ouvre le profil de l'autre
+   * personne d'un tête-à-tête, § 12.10.3) occupe tout le bord gauche de la
+   * ligne, l'endroit le plus naturel où un pouce amorce un balayage vers la
+   * droite. Sans `draggable="false"`, Chromium ouvrait un glisser-déposer
+   * natif dès que le pointeur bougeait, ce qui annulait le geste — mesuré :
+   * AUCUN effet. Même geste, même ligne (`AUTRE_CONVERSATION` porte un
+   * `a.avatar-lien` — `homologueDe` l'élit sur un tête-à-tête), amorcé sur
+   * l'avatar plutôt que sur le corps.
+   */
+  test('archive au doigt même quand le balayage part de l’avatar', async ({ browser }) => {
+    const page = await ouvre(browser);
+    await attendsLeModule(page);
+    const ligne = page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"]`);
+    const avatar = ligne.locator('a.avatar-lien');
+
+    await expect(avatar).toHaveAttribute('draggable', 'false');
+
+    const boite = await avatar.boundingBox();
+    expect(boite).not.toBeNull();
+
+    const y = (boite?.y ?? 0) + (boite?.height ?? 0) / 2;
+    await page.mouse.move((boite?.x ?? 0) + (boite?.width ?? 0) / 2, y);
+    await page.mouse.down();
+    await page.mouse.move((boite?.x ?? 0) + (boite?.width ?? 0) + 140, y, { steps: 10 });
+    await page.mouse.up();
+
+    await expect(ligne).toBeHidden();
+    await expect(page.locator('#journal-des-gestes')).toContainText('archivée');
+    await page.getByRole('button', { name: 'Annuler' }).click();
+    await expect(ligne).toBeVisible();
     await page.context().close();
   });
 
@@ -434,7 +712,7 @@ test.describe('la liste des conversations', () => {
 
     try {
       await expect.poll(() => passerelle.socket.connectes()).toBe(1);
-      expect(await ordre(page)).toEqual([CONVERSATION_DU_LECTEUR.id, AUTRE_CONVERSATION.id]);
+      expect(await ordre(page)).toEqual(ORDRE_AU_REPOS);
 
       passerelle.socket.coupe();
       await expect.poll(() => passerelle.socket.connectes()).toBe(0);
@@ -461,7 +739,7 @@ test.describe('la liste des conversations', () => {
       }
 
       expect(passerelle.socket.connectes(), 'le socket doit s’être rétabli').toBe(1);
-      await expect.poll(() => ordre(page), { timeout: 20_000 }).toEqual([AUTRE_CONVERSATION.id, CONVERSATION_DU_LECTEUR.id]);
+      await expect.poll(() => ordre(page), { timeout: 20_000 }).toEqual([AUTRE_CONVERSATION.id, CONVERSATION_DU_LECTEUR.id, TROISIEME_CONVERSATION.id, QUATRIEME_CONVERSATION.id]);
     } finally {
       passerelle.socket.retablis();
       passerelle.sync.conversations = [];

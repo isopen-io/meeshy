@@ -101,7 +101,77 @@ export const NOUVEAU_LIEN = {
   cree: 'Votre lien est créé.',
   refuse: 'Le lien n’a pas été créé.',
   sansTitre: 'Donnez un nom à la conversation.',
+
+  /**
+   * LE SECOND HÔTE (#5034) — le fil du membre (`?lien`) : la conversation y
+   * est déjà ouverte, ce que le sous-titre de la feuille annonce, et l'en-tête
+   * du fil porte un bouton qui y mène.
+   */
+  depuisLeFil: 'Créer un lien de partage depuis cette conversation',
+  /**
+   * SANS BOUTON « COPIER » — un contrôle qui n'existerait qu'avec JavaScript,
+   * refusé sur les DEUX hôtes (`liens-vue.ts`) —, l'adresse se prend à la
+   * main : elle se sélectionne d'un geste (`user-select:all`), et cette
+   * phrase le DIT, faute de quoi rien ne le laisse deviner.
+   */
+  copiez: 'Sélectionnez l’adresse pour la partager.',
+  pour: (nomDeLaConversation: string): string => `Pour « ${nomDeLaConversation} » · conversation déjà ouverte`,
 } as const;
+
+/**
+ * LA COPIE DU GESTE DE FERMETURE (#4933) — un lien qu'on ferme, jamais qu'on
+ * détruit : la ligne RESTE (`LIENS.ferme` la dit déjà), seul son geste change
+ * de nom, du menu au bandeau de retour.
+ *
+ * `aide` DIT VRAI, et c'est mesuré : `applyShareLinkUpdate`
+ * (`services/gateway/src/routes/links/management.ts:118-146`) révoque les
+ * invités déjà entrés AVANT d'écrire `isActive:false`.
+ */
+export const FERMETURE = {
+  /** Le nom du menu d'une ligne, au lecteur d'écran — jamais lu à l'œil. */
+  menu: (nom: string): string => `Actions pour ${nom}`,
+  geste: 'Fermer ce lien',
+  aide: 'Les personnes entrées par ce lien en seront retirées. Cette action ne se défait pas.',
+  enCours: 'Fermeture…',
+  fait: 'Le lien est fermé.',
+  refuse: 'Le lien n’a pas été fermé.',
+  echec: 'Le lien n’a pas pu être fermé. Vérifiez la connexion et réessayez.',
+} as const;
+
+/**
+ * LES DEUX MOTIFS DE REFUS À LA CRÉATION QUE LA PASSERELLE RÉPOND EN
+ * ANGLAIS — `mayMintShareLink` et sa garde `direct`
+ * (`services/gateway/src/routes/links/utils/share-link-mint.ts:196-209`),
+ * les deux SEULS messages de cette route qui ne sont pas déjà en français
+ * (`Conversation non trouvée`, `Vous n'êtes pas membre de cette
+ * conversation`, `Cette conversation est terminée` le sont déjà — vérifié
+ * par lecture du fichier, ligne à ligne).
+ *
+ * `peutCreerUnLien` (`fil-vue.ts`) tait la puce dans ces deux cas ; cette
+ * table reste la ligne de défense SUIVANTE — un rang rétrogradé entre le
+ * chargement du fil et la soumission du formulaire atteint quand même la
+ * passerelle, et le refus qu'elle sert ne doit pas apparaître en anglais
+ * dans une interface française (défaut de revue, #5034).
+ *
+ * TOUT AUTRE MOTIF PASSE TEL QUEL — la même règle que le reste de la v3
+ * (`compte.ts` › `creeUnLien`, `lib/api/reglages.ts`) : le recomposer
+ * fabriquerait une seconde vérité qui divergerait au premier changement de
+ * politique côté passerelle. Cette table ne couvre que ce qui est
+ * PROUVÉ anglais aujourd'hui, rien de plus.
+ */
+const MOTIFS_DE_REFUS_TRADUITS: ReadonlyMap<string, string> = new Map([
+  [
+    'Cannot create share links for direct conversations',
+    'Impossible de créer un lien de partage pour une conversation privée à deux.',
+  ],
+  [
+    'You do not have the necessary rights to perform this operation',
+    'Vous n’avez pas les droits nécessaires pour créer un lien sur cette conversation.',
+  ],
+]);
+
+/** Traduit le motif d'un refus de création — ou le rend TEL QUEL s'il n'est pas dans la table ci-dessus. */
+export const traduisLeMotifDuLien = (motif: string): string => MOTIFS_DE_REFUS_TRADUITS.get(motif) ?? motif;
 
 /** Les trois échéances offertes, et ce qu'elles valent en millisecondes. */
 export const ECHEANCES = {

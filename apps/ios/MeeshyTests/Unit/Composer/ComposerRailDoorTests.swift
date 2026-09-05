@@ -25,7 +25,7 @@ import XCTest
 ///
 /// | porte | niveau |
 /// |---|---|
-/// | média · son · sticker · lieu | crée un `MeeshyObject` |
+/// | média · son · sticker · lieu | crée un `MeeshySceneObject` |
 /// | description | vise la `MeeshySlide` |
 /// | **mention** | vise la **`MeeshyPublication`** |
 ///
@@ -87,7 +87,7 @@ final class ComposerRailDoorTests: XCTestCase {
     }
 
     /// **Le point que ce lot a mesuré plutôt que supposé.** L'issue annonçait
-    /// une porte qui poserait un `MeeshyObject` de kind `mention` — ce qui
+    /// une porte qui poserait un `MeeshySceneObject` de kind `mention` — ce qui
     /// aurait été un contrôle SANS EFFET, ce kind n'ayant aucun producteur et
     /// étant jeté à la relecture. La porte livrée vise la publication.
     func test_laMention_viseLaPublication_pasUnObjetDeScene() {
@@ -134,19 +134,40 @@ final class ComposerRailDoorTests: XCTestCase {
     /// côte à côte fait lire au doigt « ici on règle la scène elle-même, plus
     /// bas on y pose des choses ». L'issue laisse explicitement l'ordre final à
     /// la planche ; ce voisinage est ce qui se défend en attendant.
+    /// **`.content` s'insère JUSTE APRÈS `.description` (#4890)**, et le motif
+    /// est la parenté : ce sont les deux seules portes qui ouvrent un CHAMP DE
+    /// TEXTE, et en Post elles en ouvrent deux différents — la légende du média
+    /// courant et le corps de la publication. Les poser côte à côte fait lire au
+    /// doigt « ici on écrit », et laisse la distinction au glyphe et au libellé,
+    /// que `test_lesDeuxPortesDeTexte_…` tient distincts.
     func test_lOrdreDuRail_estCeluiDeLaPlanche() {
+        // **`.description` a quitté la rangée le 2026-09-05** (directive
+        // porteur) : le volet sous la scène est déjà son moyen, et il montre le
+        // texte par-dessus le média qu'il décrit. L'ordre des DIX restantes ne
+        // bouge pas — une position que les doigts ont apprise ne se recompose
+        // pas parce qu'une voisine part.
         XCTAssertEqual(ComposerRailDoor.canonicalRail,
-                       [.description, .media, .sound, .text, .background, .drawing,
+                       [.content, .media, .sound, .text, .background, .drawing,
                         .sticker, .mention, .hashtag, .place],
                        "`.hashtag` se range JUSTE APRÈS `.mention` (#4636) : les deux "
                        + "désignent une entité que le serveur dérive du texte, et la "
                        + "position que les doigts apprennent suit cette parenté.")
     }
 
-    func test_leRailCanonique_neManqueAucunePorte() {
-        XCTAssertEqual(Set(ComposerRailDoor.canonicalRail),
-                       Set(ComposerRailDoor.allCases),
-                       "Une porte déclarée hors du rail canonique ne serait jamais peinte.")
+    /// **Une seule porte est hors du rail, et elle est NOMMÉE.**
+    ///
+    /// Le témoin exigeait l'égalité avec `allCases` — juste tant qu'aucune porte
+    /// n'avait de raison d'en sortir. `.description` en a une (elle a déjà son
+    /// volet), et l'égalité l'aurait interdite. La forme qui reste utile est
+    /// l'écart EXPLICITE : une onzième porte qui disparaîtrait du rail sans
+    /// passer par cette liste rougit, et c'est ce que le témeur gardait.
+    func test_leRailCanonique_neManqueAucunePorte_saufCellesQuiOntDejaLeurMoyen() {
+        let horsRail = Set(ComposerRailDoor.allCases).subtracting(ComposerRailDoor.canonicalRail)
+        XCTAssertEqual(horsRail, [.description],
+                       "Une porte déclarée hors du rail canonique ne serait jamais peinte — "
+                       + "sauf celles dont un AUTRE moyen tient le rôle, qui doivent être "
+                       + "nommées ici avec leur raison. `.description` : le volet sous la "
+                       + "scène (#4993), qui la montre par-dessus le média décrit.")
     }
 
     // MARK: - Loi 4 : une porte non servie est ABSENTE
@@ -156,15 +177,18 @@ final class ComposerRailDoorTests: XCTestCase {
         // pas de la géographie. Le poser sur `.story` y mêlerait le retrait du
         // paragraphe (#4893), qui est une autre règle — et un témoin qui teste
         // deux règles à la fois ne dit plus laquelle est tombée.
+        // `.media` et `.sound` : deux portes SERVIES et toutes deux au rail. La
+        // fixture n'emploie plus `.description`, que le rail n'offre plus — elle
+        // aurait fait tomber ce témoin pour une raison étrangère à la loi 4.
         let offertes = ComposerRailDoor.offered(
-            served: [.description, .media], format: .post, allowsCapture: true)
-        XCTAssertEqual(offertes, [.description, .media])
+            served: [.sound, .media], format: .post, allowsCapture: true)
+        XCTAssertEqual(offertes, [.media, .sound])
     }
 
     func test_lOrdreSurvit_auxPortesRetirees() {
         let offertes = ComposerRailDoor.offered(
-            served: [.place, .description, .sound], format: .post, allowsCapture: true)
-        XCTAssertEqual(offertes, [.description, .sound, .place],
+            served: [.place, .content, .sound], format: .post, allowsCapture: true)
+        XCTAssertEqual(offertes, [.content, .sound, .place],
                        "L'ordre du rail ne se recompose pas au gré de ce qui reste.")
     }
 
@@ -178,10 +202,13 @@ final class ComposerRailDoorTests: XCTestCase {
             served: Set(ComposerRailDoor.allCases), format: .status, allowsCapture: true)
         XCTAssertFalse(offertes.contains { $0.level(for: .status) == .object },
                        "Un mood n'a pas de scène : rien à y poser.")
-        XCTAssertEqual(offertes, [.description, .mention, .hashtag],
-                       "…et les TROIS portes qui ne visent pas la scène restent. "
+        XCTAssertEqual(offertes, [.mention, .hashtag],
+                       "…et les DEUX portes qui ne visent pas la scène restent. "
                        + "`.hashtag` y est entrée le 2026-09-01 (#4636) : comme la mention, "
-                       + "elle vise la publication, donc l'absence de toile ne la retire pas.")
+                       + "elle vise la publication, donc l'absence de toile ne la retire pas. "
+                       + "`.description` en est sortie le 2026-09-05 — pas parce qu'un mood "
+                       + "n'aurait rien à décrire, mais parce que le rail ne l'offre plus "
+                       + "nulle part.")
     }
 
     /// **Le LIEU disparaît du Mood pour une raison qui n'est PAS l'absence de
@@ -221,12 +248,21 @@ final class ComposerRailDoorTests: XCTestCase {
         }
     }
 
+    /// **Le POST offre TOUT ; le RÉEL tout sauf le corps** (#4890). Les deux
+    /// formats portent une scène, mais un réel n'a pas de `content` distinct de
+    /// ses canvas — le texte de sa slide EST le contenu. Le témoin les sépare
+    /// plutôt que de relâcher son égalité en inclusion : c'est l'égalité qui
+    /// attrape une porte ajoutée au mauvais format.
     func test_dansLesTroisFormatsAScene_lesPortesDObjet_sontOffertes() {
-        for format in [ComposerFormat.reel, .post] {
-            let offertes = ComposerRailDoor.offered(
-                served: Set(ComposerRailDoor.allCases), format: format, allowsCapture: true)
-            XCTAssertEqual(offertes, ComposerRailDoor.canonicalRail, "\(format)")
-        }
+        XCTAssertEqual(
+            ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
+                                     format: .post, allowsCapture: true),
+            ComposerRailDoor.canonicalRail)
+        XCTAssertEqual(
+            ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
+                                     format: .reel, allowsCapture: true),
+            ComposerRailDoor.canonicalRail.filter { $0 != .content },
+            "Un réel n'a pas de corps distinct de ses canvas — le texte de sa slide EST le contenu.")
     }
 
     /// **La STORY offre tout SAUF le paragraphe** (#4893) — elle est le seul
@@ -238,7 +274,12 @@ final class ComposerRailDoorTests: XCTestCase {
     func test_uneStory_offreToutSaufLeParagraphe() {
         let offertes = ComposerRailDoor.offered(
             served: Set(ComposerRailDoor.allCases), format: .story, allowsCapture: true)
-        XCTAssertEqual(offertes, ComposerRailDoor.canonicalRail.filter { $0 != .description })
+        // **Deux retraits, pas un**, et pour la MÊME raison retournée : en Story
+        // le texte de la slide EST le contenu de la publication. `.description`
+        // part parce qu'il n'y a pas de légende à côté du contenu ; `.content`
+        // part parce que le contenu n'a pas de champ à côté de la slide.
+        XCTAssertEqual(offertes,
+                       ComposerRailDoor.canonicalRail.filter { $0 != .description && $0 != .content })
         XCTAssertTrue(offertes.contains(.text),
                       "le corpus de texte prend la place du paragraphe")
     }
@@ -287,6 +328,100 @@ final class ComposerRailDoorTests: XCTestCase {
     func test_lePorteEmojiDuDocument_gardeSonSmiley() {
         XCTAssertEqual(ComposerDocumentTool.emoji.symbolName, "face.smiling")
     }
+
+    // MARK: - #4890 — la porte CONTENU, le corps du post
+
+    /// **Elle n'existe QU'EN POST.** Ailleurs le texte de la slide EST le
+    /// contenu de la publication : lui offrir une porte distincte ouvrirait un
+    /// second champ pour un seul texte — la faute symétrique de celle que
+    /// `.description` évite en Story.
+    func test_laPorteContenu_nExisteQuEnPost() {
+        for format in [ComposerFormat.post, .story, .reel, .status] {
+            let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                                  format: format,
+                                                  allowsCapture: true)
+            XCTAssertEqual(portes.contains(.content), format == .post,
+                           "\(format) : la porte CONTENU doit exister en Post et NULLE PART ailleurs.")
+        }
+    }
+
+    /// **Elle vise la PUBLICATION dans tous les formats — aucune bascule.** Un
+    /// corps de post n'a ni position, ni taille, ni rotation : il ne suit pas
+    /// les quatre outils que #4893 fait basculer en Story. Le témoin balaie les
+    /// quatre formats, sinon il ne mesurerait que l'absence de bascule là où
+    /// aucune n'était possible.
+    func test_leCorps_viseTOUJOURS_laPublication() {
+        for format in [ComposerFormat.post, .story, .reel, .status] {
+            XCTAssertEqual(ComposerRailDoor.content.level(for: format), .publication,
+                           "\(format) : le corps du post ne se pose sur aucune scène.")
+        }
+        XCTAssertFalse(ComposerRailDoor.content.level(for: .post).appearsOnCanvas,
+                       "Il ne se voit pas sur la scène — donc la rangée canonique, jamais le rail gauche.")
+    }
+
+    /// **Les deux textes restent distincts À L'ŒIL — et la question a changé de
+    /// forme le 2026-09-05.**
+    ///
+    /// Le témoin gardait deux choses : l'ADJACENCE des deux portes dans la
+    /// rangée, et leur DISTINCTION. La première est caduque — `.description` a
+    /// quitté le rail, il n'y a plus de voisinage à tenir.
+    ///
+    /// **La seconde survit, et compte davantage.** Les deux champs existent
+    /// toujours en Post, à deux mètres l'un de l'autre : la porte CONTENU dans
+    /// la rangée basse, le volet de légende sous la scène. Un auteur qui les
+    /// confond écrit son corps de post dans la légende d'un média — et rien ne
+    /// le lui dira. C'est précisément parce que l'adjacence a disparu que le
+    /// glyphe et la phrase doivent porter seuls la différence.
+    ///
+    /// > Retirer la moitié caduque d'un témoin et garder l'autre est le geste
+    /// > qui manque le plus souvent : on supprime le témoin entier, et la
+    /// > garantie qui tenait encore part avec lui.
+    func test_lesDeuxTextesDUnPost_nePartagentNiGlypheNiLibelle() {
+        XCTAssertNotEqual(ComposerRailDoor.content.symbolName,
+                          ComposerRailDoor.description.symbolName,
+                          "Deux glyphes qui se ressemblent seraient deux boutons qu'on tape au hasard.")
+        XCTAssertNotEqual(ComposerRailCopy.label(.content),
+                          ComposerRailCopy.label(.description),
+                          "VoiceOver n'a pas le glyphe : c'est la phrase qui doit les distinguer.")
+    }
+
+    // MARK: - Ce qui a DÉJÀ un moyen ne prend pas une porte (2026-09-05)
+
+    /// **La description a quitté la rangée canonique.**
+    ///
+    /// > « Il existe déjà un moyen de mettre à jour la description de la scène,
+    /// > il faut enlever cela de la rangée canonique. » — directive porteur
+    /// > 2026-09-05.
+    ///
+    /// Ce moyen est le volet sous la scène, dont le chevron reste disponible en
+    /// permanence (#4993) — et il est MEILLEUR que la porte : il se peint
+    /// par-dessus le média qu'il décrit, donc l'auteur voit ce qu'il légende.
+    /// Une porte qui ouvre le même volet est un second bouton pour un seul
+    /// chemin, exactement ce que le § 3 d'`apps/ios/CLAUDE.md` interdit.
+    func test_laDescription_nEstPlusOfferteParLeRail() {
+        XCTAssertFalse(ComposerRailDoor.canonicalRail.contains(.description),
+                       "Le volet sous la scène est déjà le moyen ; la porte en était la jumelle.")
+
+        for format in [ComposerFormat.post, .story, .reel, .status] {
+            XCTAssertFalse(
+                ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
+                                         format: format,
+                                         allowsCapture: true).contains(.description),
+                "aucun format ne doit la servir — y compris en \(format), où un `served` " +
+                "généreux la proposerait si `canonicalRail` la portait encore"
+            )
+        }
+    }
+
+    /// **Elle reste un CAS de l'énuméré, et c'est délibéré.** La retirer de
+    /// l'enum ferait tomber `level`, le glyphe et le badge, qui la classent sans
+    /// l'offrir — et un `switch` exhaustif qui perd un cas ne rougit nulle part,
+    /// il change simplement de sens.
+    func test_laDescription_resteClassee_memeSansPorte() {
+        XCTAssertEqual(ComposerRailDoor.description.level(for: .post), .slide)
+        XCTAssertFalse(ComposerRailDoor.description.symbolName.isEmpty)
+    }
+
 }
 
 /// La VUE du rail — trois faits qu'un rendu ne prouverait pas plus vite, et que
@@ -450,33 +585,22 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
     /// La bande de la scène passe par la même capacité — sans quoi le littéral
     /// qu'elle portait aurait survécu à la garde négative de la suite suivante.
     ///
-    /// **Une seule bande servie**, et la garde ne se relâche pas : elle vérifie
-    /// que chacune a un CONTENU. Le dessin a eu la sienne pendant un lot, puis
-    /// l'a perdue — ses réglages sont le contrôleur FLOTTANT de l'atelier, dont
-    /// la forme ne tient pas dans une bande. `timeline` et `textStyles` restent
-    /// dehors faute d'hôte.
+    /// **Une seule bande, et le jeu ne dépend plus d'un état** (directive
+    /// porteur 2026-09-05). `timeline` et `textStyles` n'en étaient pas
+    /// absentes « faute d'hôte » : elles en sont sorties parce qu'elles
+    /// ÉDITAIENT un objet posé, et que la première vue n'édite plus. Les
+    /// nommer ici serait devenu impossible — elles ne sont plus des cas du
+    /// type.
+    ///
+    /// Le témoin qui les remplace est POSITIF et exhaustif : toute bande du
+    /// type est servie, donc aucune ne peut être déclarée sans hôte. C'est la
+    /// même loi 4, prise par l'autre bout.
     func test_lesBandesServies_ontTouteUnContenu() {
         XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette])
-        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.timeline),
-                       "Le jeu de BASE ne sert pas la timeline : elle n'a de contenu que pour un objet rognable (#4082).")
-        XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.textStyles),
-                       "Les 18 styles exigent un objet `text` sélectionné, qu'aucune porte ne pose (#4401).")
-    }
-
-    /// **La bande de rognage n'est servie que quand elle a de quoi se remplir**
-    /// (#4082). Le témoin s'écrit sur les DEUX verdicts : n'éprouver que le cas
-    /// « servie » laisserait passer une bande servie en permanence, c'est-à-dire
-    /// exactement le défaut que la loi 4 refuse.
-    func test_laTimeline_nEstServieQuePourUnObjetRognable() {
-        XCTAssertTrue(
-            ComposerSceneCapabilities.bands(canTrimSelection: true).contains(.timeline),
-            "un objet à rogner sélectionné doit rendre la bande ouvrable")
-        XCTAssertFalse(
-            ComposerSceneCapabilities.bands(canTrimSelection: false).contains(.timeline),
-            "sans objet rognable, la bande occuperait 170 pt pour ne rien montrer")
-        XCTAssertTrue(
-            ComposerSceneCapabilities.bands(canTrimSelection: false).contains(.palette),
-            "la condition ne doit RETIRER aucune bande de base")
+        XCTAssertEqual(
+            Set(ComposerSceneBand.allCases), ComposerSceneCapabilities.bands,
+            "une bande DÉCLARÉE et non servie est indiscernable d'une bande oubliée : "
+                + "le lot suivant la sert à nouveau sans qu'aucun témoin ne tombe")
     }
 
     /// **Rogner est offert par l'OBJET, pas par le meuble.** Le meuble déclare
@@ -515,6 +639,18 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
                        "L'inspecteur par kind n'est pas monté : servir `edit` ouvrirait un éditeur inexistant.")
         XCTAssertFalse(ComposerSceneCapabilities.controllers.contains(.leaveScene),
                        "Rien ne dit encore ce que l'objet DEVIENT hors de la scène (#4038).")
+    }
+
+    // MARK: - #4890 — la porte CONTENU est DÉCLARÉE servie
+
+    /// **Servie, sinon invisible.** `offered` filtre sur `served.contains` : une
+    /// porte entièrement écrite — case, niveau, glyphe, libellé, geste,
+    /// pastille — reste INVISIBLE tant que ce jeu ne la nomme pas, et rien ne
+    /// rougit. Mesuré au simulateur le 2026-09-04 : la rangée montrait encore
+    /// ses cinq entrées après que tout le reste fut écrit.
+    func test_laPorteContenu_estDeclareeSERVIE_parLeMeuble() {
+        XCTAssertTrue(ComposerSceneCapabilities.doors.contains(.content),
+                      "Sans cette déclaration, la porte est écrite et jamais peinte.")
     }
 }
 
@@ -1660,5 +1796,71 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
     func test_lesCandidats_viennentDeLaSourcePartagee() throws {
         let source = compact(try hostSource())
         XCTAssertTrue(source.contains("ComposerMentionFriendsSource.acceptedFriends()"))
+    }
+}
+
+/// **#4890 — le CÂBLAGE de la porte CONTENU.**
+///
+/// Classe DÉDIÉE, et ce n'est pas du rangement : ce fichier porte seize classes,
+/// et un témoin ajouté EN FIN DE FICHIER tombe dans la DERNIÈRE — ici
+/// `ComposerSceneMentionWiringGuardTests`, dont il n'a ni le sujet ni les
+/// hypothèses. Il compile (les aides sont homonymes), il s'exécute, et son nom
+/// de classe désigne alors une garde de mentions. Mesuré le 2026-09-04 : c'est
+/// exactement où ces deux témoins avaient atterri.
+final class ComposerContentDoorWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// Le corps d'une déclaration, borné par ses ACCOLADES — jamais une fenêtre
+    /// de N caractères.
+    ///
+    /// > La première version de la garde ci-dessous lisait 600 caractères après
+    /// > l'ouverture et débordait sur le membre SUIVANT — qui se trouve être
+    /// > `sceneDescriptionBinding`, précisément ce qu'elle interdit. Elle
+    /// > rougissait sur un VOISIN, en accusant le bon site.
+    private func corpsDeclaration(_ ouverture: String, dans source: String) -> String? {
+        guard let debut = source.range(of: ouverture) else { return nil }
+        var profondeur = 1
+        var i = debut.upperBound
+        while i < source.endIndex, profondeur > 0 {
+            if source[i] == "{" { profondeur += 1 }
+            if source[i] == "}" { profondeur -= 1 }
+            i = source.index(after: i)
+        }
+        return profondeur == 0 ? String(source[debut.upperBound..<i]) : nil
+    }
+
+    /// **La porte CONTENU écrit le CORPS, jamais la légende.** C'est le défaut
+    /// que ce lot referme, et il ne se voit pas dans la porte : il se voit dans
+    /// le BINDING que sa zone reçoit. `sceneDescriptionBinding` est la légende
+    /// du média courant (`ComposerSlideTextRole`) ; `$documentText` est le corps.
+    func test_laZoneDuContenu_ecritDocumentText_jamaisLaLegende() throws {
+        let source = compact(try hostSource())
+        guard let corps = corpsDeclaration("varpostContentEditor:someView{", dans: source) else {
+            return XCTFail("`postContentEditor` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        XCTAssertTrue(corps.contains("text:$documentText"),
+                      "La zone du contenu doit écrire `documentText` — le corps de la publication.")
+        XCTAssertFalse(corps.contains("sceneDescriptionBinding"),
+                       "Elle ne doit JAMAIS écrire la légende : ce serait une seconde entrée vers "
+                        + "le champ de la description, sous un libellé qui promet le contenu.")
+    }
+
+    /// **Ouvrir l'une FERME l'autre.** Les deux zones s'ancrent en bas : ouvertes
+    /// ensemble, elles se recouvriraient et l'auteur taperait dans celle qu'il
+    /// ne regarde pas. Le témoin lit les DEUX branches — une seule refermée
+    /// laisserait la moitié du défaut.
+    func test_lesDeuxZonesDeTexte_neSouvrentJamaisEnsemble() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("editsPostContent=falseeditsSceneDescription=true"),
+                      "Ouvrir la description doit fermer le contenu.")
+        XCTAssertTrue(source.contains("editsSceneDescription=falseeditsPostContent=true"),
+                      "Ouvrir le contenu doit fermer la description.")
     }
 }

@@ -14,21 +14,38 @@ import { compacte } from '@/app/enveloppe/feuille';
  * « les pages EXISTANTES de la v3 sont TERNES : il faut les STYLISER, sans les
  * alourdir » :
  *
+ * TOUTES LES CITATIONS DE RÈGLE CI-DESSOUS SONT EN NUMÉROTATION TOUR 3 (§ 12.5,
+ * jugement du 2026-09-02, table de correspondance § 12.5). Les bullets 1 à 5
+ * citaient encore la numérotation tour 2 jusqu'à #5115 ; portées dans le même
+ * commit qui a ajouté les bullets 6 et 7, pour qu'un même numéro ne désigne
+ * plus deux règles différentes dans ce bloc (§ 12.8).
+ *
  * 1. **Le héros est une CARTE** posée sur le voile `--color-tint-primary`
- *    (règle 11, qui l'autorise pour la vitrine et pour elle seule). C'est le
+ *    (règle 15, qui l'autorise pour la vitrine et pour elle seule). C'est le
  *    seul plan de couleur de l'écran, et il ne coûte pas un octet de plus : un
  *    `color-mix` sur deux jetons déjà servis.
- * 2. **Les deux appels à l'action s'EMPILENT** (règle 4) : 56 px puis 52 px,
+ *
+ * PORTAGE TOUR 3 (jugement du 2026-09-02, § 12.5 renuméroté — voir « À
+ * corriger dans le dépôt tel qu'il est ») :
+ *
+ * 6. **`.heros` porte `--radius-xl`, pas `--radius-lg`** (règle 9 : « `xl`
+ *    héros, carte mise en avant, carte d'état vide »). Le héros n'est plus une
+ *    carte comme les autres — il a son propre rayon.
+ * 7. **`.heros` porte le SEUL dégradé de la v3** (règle 35), entre
+ *    `--color-tint-primary` et `--color-surface` : « la seule chose qu'une
+ *    capture d'application a et qu'une page de texte n'a pas, une lumière ».
+ *    Un plan uni, sans direction, ne rendait qu'un bloc teinté.
+ * 2. **Les deux appels à l'action s'EMPILENT** (règle 7) : 56 px puis 52 px,
  *    pleine largeur, `--space-3` entre eux. Ils partageaient une ligne, ce qui
  *    les rendait étroits — donc durs à viser — sur un téléphone de 360 px.
- * 3. **Chaque atout porte sa TUILE** (règle 12, `home › Mes liens` : un glyphe
+ * 3. **Chaque atout porte sa TUILE** (règle 15, `home › Mes liens` : un glyphe
  *    sur `--color-tint-primary`). Neuf cartes de texte pur se lisaient comme une
  *    liste de courses ; la tuile donne à chacune son point d'entrée.
- * 4. **Les espacements viennent des neuf pas de la table** (règles 1 et 8) :
+ * 4. **Les espacements viennent des neuf pas de la table** (règles 1 et 10) :
  *    `--space-7` entre deux sections, `--space-6` dans une carte, `--space-3`
  *    entre deux actions. Ils étaient en pixels littéraux (64, 72, 26, 20, 18,
  *    14…), c'est-à-dire une échelle inventée par écran.
- * 5. **L'accent ne peint plus que `h1 em`** (règle 13). Le badge et la devise de
+ * 5. **L'accent ne peint plus que `h1 em`** (règle 20). Le badge et la devise de
  *    la mission le prenaient aussi : trois accents sur un même écran, dont deux
  *    sur des mots qu'on ne clique pas — exactement l'inflation que la règle
  *    interdit. Le badge garde son glyphe et son contour ; la devise garde ses
@@ -38,19 +55,19 @@ import { compacte } from '@/app/enveloppe/feuille';
  * règle 1). Témoin : `__tests__/charte.test.ts`.
  */
 export const FEUILLE_DE_LA_VITRINE = compacte(`
-.heros{margin-top:var(--space-6);padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-tint-primary)}
+.heros{margin-top:var(--space-6);padding:var(--space-4);border-radius:var(--radius-xl);background:linear-gradient(180deg,var(--color-tint-primary),var(--color-surface))}
 .badge{display:inline-flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-5);padding:var(--space-2) var(--space-4);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
 .badge svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}
 .heros h1{margin:0 0 var(--space-4);font-size:var(--text-4xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.02em}
 .heros h1 em{font-style:normal;color:var(--color-primary)}
-.accroche{margin:0 0 var(--space-6);max-width:var(--measure);color:var(--color-text-muted)}
+.accroche{margin:0 0 var(--space-6);max-width:var(--measure);color:var(--color-text)}
 .actions{display:flex;flex-direction:column;gap:var(--space-3)}
 
 .atouts{margin-top:var(--space-7)}
 .atouts .sous{margin:0 0 var(--space-5);max-width:var(--measure);color:var(--color-text-muted)}
 .atouts ul{display:grid;gap:var(--space-3);margin:0;padding:0;list-style:none}
 .atouts li{display:flex;align-items:flex-start;gap:var(--space-4);padding:var(--space-4);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface)}
-.atouts .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-7);height:var(--space-7);border-radius:var(--radius-md);background:var(--color-tint-primary)}
+.atouts .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-7);height:var(--space-7);border-radius:var(--radius-lg);background:var(--color-tint-primary)}
 .atouts .tuile svg{width:var(--glyph);height:var(--glyph)}
 .atouts h3{margin:0 0 var(--space-1);font-size:var(--text-base);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
 .atouts p{margin:0;font-size:var(--text-base);color:var(--color-text-muted)}

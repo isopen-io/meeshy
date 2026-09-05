@@ -437,14 +437,27 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
     /// l'enregistrement au trousseau en fin d'inscription.
+    ///
+    /// **UN seul site depuis #5218**, contre deux auparavant : la confirmation
+    /// de mot de passe a disparu avec le wizard. Le compte est donc EXACT et non
+    /// « au moins un » — un second `.newPassword` sur cet écran signifierait que
+    /// la confirmation est revenue, ce que la refonte a retiré exprès.
+    ///
+    /// L'IDENTIFIANT que le trousseau associe au mot de passe n'est plus un
+    /// pseudo mais l'ADRESSE : Apple accepte `.username` **ou** `.emailAddress`
+    /// comme champ de compte, et l'écran n'a plus de champ pseudo à offrir. La
+    /// garde vérifie donc qu'un identifiant est déclaré, sans imposer lequel —
+    /// l'imposer reviendrait à exiger le retour d'un champ supprimé.
     func test_signupPasswordFields_optIntoKeychainSave() throws {
-        let src = try source("Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift")
+        let src = try source("Meeshy/Features/Auth/Signup/SignupView.swift")
         XCTAssertEqual(
-            src.components(separatedBy: ".textContentType(.newPassword)").count - 1, 2,
-            "Le mot de passe ET sa confirmation doivent être `.newPassword`."
+            src.components(separatedBy: ".textContentType(.newPassword)").count - 1, 1,
+            "Une seule saisie de mot de passe, et elle doit être `.newPassword`."
         )
-        XCTAssertTrue(src.contains(".textContentType(.username)"),
-                      "iOS a besoin de l'identifiant pour savoir quoi enregistrer avec le mot de passe.")
+        XCTAssertTrue(
+            src.contains(".textContentType(.emailAddress)") || src.contains(".textContentType(.username)"),
+            "iOS a besoin de l'identifiant pour savoir quoi enregistrer avec le mot de passe."
+        )
     }
 
     /// `webcredentials:` est ce qui associe l'app au domaine dans le trousseau

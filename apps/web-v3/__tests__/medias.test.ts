@@ -126,11 +126,33 @@ const FICHIER = lu(
   }),
 );
 
+const TEMPS_REEL_DES_MEDIAS = {
+  passerelle: 'https://gate.test',
+  actifs: {
+    participate: { nom: 'participate.abc.js', url: '/__v3/rt/participate.abc.js', corps: '' },
+    liste: { nom: 'liste.abc.js', url: '/__v3/rt/liste.abc.js', corps: '' },
+    feed: { nom: 'feed.abc.js', url: '/__v3/rt/feed.abc.js', corps: '' },
+    notifs: { nom: 'notifs.f.js', url: '/__v3/rt/notifs.f.js', corps: '' },
+    contacts: { nom: 'contacts.f.js', url: '/__v3/rt/contacts.f.js', corps: '' },
+    recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
+    liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
+    commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    plein: { nom: 'plein.abc.js', url: '/__v3/rt/plein.abc.js', corps: '' },
+    navigateur: { nom: 'navigateur.abc.js', url: '/__v3/rt/navigateur.abc.js', corps: '' },
+    composer: { nom: 'composer.abc.js', url: '/__v3/rt/composer.abc.js', corps: '' },
+    prefs: { nom: 'prefs.abc.js', url: '/__v3/rt/prefs.abc.js', corps: '' },
+    socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
+  },
+};
+
 const etat = (attributs: Partial<EtatDesMedias> = {}): EtatDesMedias => ({
   cle: 'c1',
   titre: 'Équipe Lagos',
   galerie: galerie({ messages: [IMAGE, VIDEO, lu(VOCAL_BRUT()), FICHIER], genre: null }),
   plusAncien: null,
+  avant: null,
+  plein: null,
+  tempsReel: TEMPS_REEL_DES_MEDIAS,
   ...attributs,
 });
 
@@ -208,17 +230,20 @@ describe('le poids est annoncé AVANT qu’un octet ne parte', () => {
   });
 
   /**
+   * UNE TUILE OUVRE LE MÊME PLEIN ÉCRAN QUE LE FIL (#4525, #5024 point 2) :
+   * l'image mène à l'état `?media=` de LA GALERIE, jamais au fichier brut.
    * `fileUrl` SERVI TEL QUEL, résolu sur l'origine PUBLIQUE de la passerelle et
-   * jamais reconstruit (§ 5.1 « médias distants ») : une signature `?exp=&sig=`
-   * viendra un jour dans cette même valeur. `urlDePiece` est le site unique de
-   * cette résolution, et la galerie le tient de `lib/api/fil.ts`.
+   * jamais reconstruit (§ 5.1 « médias distants »), reste le geste d'un genre
+   * SANS plein écran — un fichier ouvre toujours son onglet, geste nommé.
    */
-  it('ouvre chaque tuile sur le fichier servi, sans quitter l’écran, et nomme le geste', () => {
+  it('mène l’image au plein écran de la galerie, et laisse un fichier ouvrir son onglet', () => {
     const rendu = document();
-    expect(rendu).toContain(`href="${ORIGINE}/api/v1/attachments/file/2026/tableau.jpg"`);
+    expect(rendu).toContain('href="/chats/c1/medias?media=a1"');
+    expect(rendu).not.toContain('href="/chats/c1/medias?media=a1" target="_blank"');
     expect(rendu).toContain(`href="${ORIGINE}/api/v1/attachments/file/2026%2F12%2Fa4%2Fbudget.pdf"`);
     expect(rendu).toContain('target="_blank" rel="noopener"');
-    expect(rendu).toContain('Télécharger tableau.jpg · 420 Ko');
+    expect(rendu).toContain('Ouvrir tableau.jpg · 420 Ko');
+    expect(rendu).toContain('Télécharger budget.pdf · 1,1 Mo');
   });
 
   it('n’offre aucun contrôle inerte : chaque lien a une destination', () => {

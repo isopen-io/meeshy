@@ -448,7 +448,14 @@ public extension CanvasV3 {
         if media.loop { payload["loop"] = .bool(true) }
         if media.isBackground { payload["isBackground"] = .bool(true) }
         if let duration = media.duration { payload["duration"] = .number(duration) }
-        if media.aspectRatio != 1 { payload["aspectRatio"] = .number(media.aspectRatio) }
+        // **La clé sort quand la MESURE existe, pas quand la valeur diffère de 1**
+        // (#5182, suivi de #5100). Le test `!= 1` interrogeait la PROJECTION
+        // (`measured ?? 1.0`) : il omettait donc la clé pour un non-mesuré — ce
+        // qui est juste — mais AUSSI pour un carré RÉELLEMENT mesuré, effaçant
+        // à l'aller la seule distinction que #5100 existe pour créer. Le pont
+        // d'en face lit la PRÉSENCE de la clé, comme le décodeur JSON : lui
+        // taire un carré mesuré, c'est le lui rendre inconnu.
+        if let measured = media.measuredAspectRatio { payload["aspectRatio"] = .number(measured) }
         if media.anchor != centerPivot { payload["anchor"] = pivotWire(media.anchor) }
         if let intrinsic = media.intrinsicDuration { payload["intrinsicDuration"] = .number(intrinsic) }
         if let memento = media.mutedVolumeMemento {
@@ -810,7 +817,15 @@ public extension StoryEffects {
             mediaURL: object.payload.string("mediaURL"),
             mediaType: object.payload.string("mediaType") ?? "image",
             placement: object.payload.string("placement") ?? "media",
-            aspectRatio: object.payload.double("aspectRatio") ?? 1.0,
+            // **Aucun `?? 1.0` ici** (#5182, suivi de #5100) : le paramètre est
+            // `Double?` SANS défaut, et l'absence de la clé DOIT traverser.
+            // Le repli fabriquait une mesure que la charge ne portait pas —
+            // `measuredAspectRatio` cessait donc d'être `nil`, et
+            // `StoryItem.toRenderableSlide` sautait l'hydratation read-time
+            // depuis `FeedMedia.width/height`, sa source de dimensionnement
+            // PRIMAIRE. Un 1080×1920 s'affichait squishé en carré chez le
+            // lecteur, sur le chemin que prend TOUT document v3.
+            aspectRatio: object.payload.double("aspectRatio"),
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
             anchor: pivotPoint(object.payload),

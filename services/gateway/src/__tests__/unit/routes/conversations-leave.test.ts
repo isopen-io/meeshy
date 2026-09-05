@@ -81,6 +81,12 @@ function makePrisma(overrides: Record<string, any> = {}) {
       count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.conversation ?? {}),
     },
+    // #3740 — la clôture désactive aussi les liens de partage encore actifs du
+    // fil, dans la MÊME transaction.
+    conversationShareLink: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      ...(overrides.conversationShareLink ?? {}),
+    },
     // La clôture et le départ committent ensemble (cycle 69) : le double rend
     // les résultats dans l'ordre, ce dont la route se sert pour lire l'audience
     // ramenée par l'écriture de clôture.

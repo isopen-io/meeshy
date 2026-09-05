@@ -78,6 +78,18 @@ export const CHARGEUR_DU_NAVIGATEUR = scriptDifere(
  * exécuterait le chargeur, donc les modules, donc leurs sockets — pour un
  * écran que personne ne regarde. La garde `speculation.test.ts` fige la
  * liste : une adresse à effet de bord qui y entrerait rougit.
+ *
+ * ET `/calls` N'Y ENTRE PAS, alors qu'il est un hub de l'espace membre comme
+ * les sept ci-dessus et qu'il ne PORTE aucun effet de bord. La raison n'est
+ * pas dans le document mais dans ce qu'il COÛTE au serveur : la seule route
+ * qu'il demande, `GET /api/v1/calls/history`, est limitée à DIX appels par
+ * minute et par lecteur (`RATE_LIMITS.CALL_OPERATIONS`,
+ * `services/gateway/src/middleware/rate-limit.ts:56`) — la borne la plus
+ * étroite qu'un écran connecté de cette zone attaque, d'un ordre de grandeur
+ * sous les autres. Au SURVOL, dix passages de souris sur la rangée « Appels »
+ * épuiseraient le quota du lecteur, et l'écran qu'il finirait par ouvrir
+ * rendrait sa panne. Un préchargement doit être GRATUIT pour le serveur qu'il
+ * sonde ; celui-ci ne l'est pas.
  */
 export const HUBS_PRECHARGEABLES = [
   '/chats',

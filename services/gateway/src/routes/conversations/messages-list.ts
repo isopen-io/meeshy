@@ -60,7 +60,8 @@ import {
   loadMessageReadStatusMap,
   mapMessageRowForList,
   enrichForwardedMessagesForList,
-  enrichPostReplyMessagesForList
+  enrichPostReplyMessagesForList,
+  parseLanguageFilterParam
 } from './messages-list-query';
 
 /**
@@ -206,13 +207,9 @@ export function registerMessagesListRoute(
       const includeReplies = includeRepliesStr === 'true';
 
       // Bandwidth opt-in : filtrage des traductions (texte + audio) aux seules
-      // langues du Prisme demandées par le client. Absent/vide = toutes les
-      // langues (comportement historique). Normalisé, dédupliqué, borné.
-      const languageFilter = languagesStr
-        ? Array.from(new Set(
-            languagesStr.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)
-          )).slice(0, 20)
-        : undefined;
+      // langues du Prisme demandées par le client. Voir `parseLanguageFilterParam`
+      // (canonicalisation SSOT, symétrique du chemin socket).
+      const languageFilter = parseLanguageFilterParam(languagesStr);
       const hasLanguageFilter = !!languageFilter && languageFilter.length > 0;
 
       // Forward watermark mode (local-first incremental gap backfill): fetch

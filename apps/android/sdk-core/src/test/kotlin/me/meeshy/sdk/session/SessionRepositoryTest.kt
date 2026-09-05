@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.RegisterResponse
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
@@ -16,7 +17,7 @@ import org.junit.Test
 
 private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
     override suspend fun login(body: LoginRequest) = ApiResponse<AuthSession>(success = false)
-    override suspend fun register(body: RegisterRequest) = ApiResponse<AuthSession>(success = false)
+    override suspend fun register(body: RegisterRequest) = ApiResponse<RegisterResponse>(success = false)
     override suspend fun refresh(body: RefreshTokenRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun me() = meResponse
     override suspend fun forgotPassword(body: me.meeshy.sdk.net.api.ForgotPasswordRequest) =

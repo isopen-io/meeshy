@@ -98,6 +98,21 @@ export const errorResponseSchema = {
 
 /**
  * Validation error response schema
+ *
+ * PAS de `required: ['success']` ici — mesuré (#4863) : ce schéma sert aussi
+ * de réponse `400` de route (`400: validationErrorResponseSchema`) pour des
+ * routes qui n'ont AUCUN gestionnaire d'erreur global au-dessus d'elles (tout
+ * harnais de test qui monte un Fastify nu autour d'un seul fichier de route,
+ * patron courant du dépôt). Sur ce chemin, un refus Ajv de `body` est rendu
+ * par le comportement PAR DÉFAUT de Fastify — jamais par
+ * `schemaValidationErrorResponse` — et ce corps ne pose pas `success`.
+ * `fast-json-stringify` REFUSE de sérialiser un objet à qui il manque un
+ * champ `required` : la réponse 400 devenait un 500. Mesuré en CI sur
+ * `register.test.ts` / `tracking.test.ts` (#4863, PR #5205) — `success` n'est
+ * donc PAS un invariant de ce schéma, seulement du producteur
+ * `schemaValidationErrorResponse`, dont
+ * `services/gateway/.../__tests__/unit/routes/schema-validation-error-required-fields.test.ts`
+ * reste le témoin dédié.
  */
 export const validationErrorResponseSchema = {
   type: 'object',
