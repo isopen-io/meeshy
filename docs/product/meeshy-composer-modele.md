@@ -292,8 +292,9 @@ faut que la scène voyage avec lui.
 > et il faut les lire ensemble** : le brouillon n'emporte que
 > `viewModel.currentSlide.effects`, donc **UNE seule slide** (c'est exactement la
 > dette de cardinalité de ce §, #4770) ; et les objets média du canvas ne sont
-> pas reliés aux `PostMedia` créés à l'upload, donc un fond local part sans son
-> image (#5184, deux régimes — voir § 6 bis-2).
+> pas reliés aux `PostMedia` créés à l'upload (#5184 — un fond simple s'affiche
+> quand même, par la route du backdrop legacy ; voir § 6 bis-2 pour ce que cette
+> route ne couvre pas).
 >
 > Reste vrai : **#4756 n'était pas un confort, c'était le préalable de cette
 > règle pour les profils P et R.** Il est levé ; la cardinalité, non.
@@ -868,15 +869,39 @@ tout champ de publication :
 
 - **UNE seule slide.** Le brouillon emporte `viewModel.currentSlide.effects` — un
   document à M scènes n'en publie qu'une (#4770, la dette de cardinalité du § 1 bis).
-- **Le canvas part sans ses images locales.** `sanitizedForServerPublish()` annule
-  les `mediaURL` en `file://` et le journalise ; les objets média ne sont pas
-  reliés aux `PostMedia` créés à l'upload. **Deux régimes, et le second est le
-  plus vicieux** (#5184) : un objet fraîchement posé naît avec `postMediaId: ""`,
-  que `str()` écarte côté passerelle — le cas nominal passe donc, dégradé. Mais
-  un canvas portant un `postMediaId` NON VIDE absent de `body.mediaIds` — reprise
-  de brouillon après upload, édition, repost, média semé depuis une conversation —
-  sera **REFUSÉ** (400 `MEDIA_NOT_CLAIMED`) dès que `CANVAS_V3_WRITE_STRICT`
-  s'armera. Ce sont exactement les chemins qu'on teste le moins.
+- **Les objets média du canvas ne reçoivent pas leur `postMediaId`** (#5184).
+  `sanitizedForServerPublish()` annule les `mediaURL` en `file://` et le
+  journalise ; le lien vers les `PostMedia` créés à l'upload n'est jamais posé.
+
+  > **CORRECTION du 2026-09-05.** Ce paragraphe disait « le canvas part sans ses
+  > images locales » et « un fond local part sans son image ». **C'est faux,
+  > mesuré à l'écran** : un post à photo de fond affiche bien sa photo, sur la
+  > carte comme en plein écran. Le diagnostic avait suivi le champ jusqu'à son
+  > écriture, pas jusqu'au PIXEL.
+  >
+  > La photo arrive par une route que le lien manquant ne bloque pas : le média
+  > téléversé voyage par `mediaIds`, et `toRenderableSlide` élit comme backdrop
+  > **l'entrée `media` qu'AUCUN objet ne référence**
+  > (`legacyMediaURL = self.media.first(where: { !referencedIds.contains($0.id) })`).
+  > Un objet dont le `postMediaId` est vide ne référence rien — la photo est donc
+  > adoptée comme fond, précisément PARCE QUE le lien manque.
+  >
+  > **Ce qui n'en est pas réparé pour autant** : la route du backdrop n'élit
+  > qu'UNE entrée. Un canvas à plusieurs médias, ou un média de PREMIER PLAN qui
+  > n'est pas le fond, n'a pas de route de secours. Le lien reste à poser.
+
+  **Le second régime, lui, n'est pas infirmé.** Un objet fraîchement posé naît
+  avec `postMediaId: ""`, que `str()` écarte côté passerelle : le cas nominal
+  passe. Mais un canvas portant un `postMediaId` NON VIDE absent de
+  `body.mediaIds` — reprise de brouillon après upload, édition, repost, média
+  semé depuis une conversation — sera **REFUSÉ** (400 `MEDIA_NOT_CLAIMED`) dès
+  que `CANVAS_V3_WRITE_STRICT` s'armera. Ce sont exactement les chemins qu'on
+  teste le moins.
+
+  > **Un diagnostic qui s'arrête à l'écriture d'un champ décrit une cause, pas un
+  > symptôme.** Entre les deux, il y a toutes les routes de secours que le code
+  > porte déjà — et l'une d'elles rendait ici le résultat JUSTE pour une raison
+  > fausse.
 
 ## 6 ter. La frontière SDK ↔ app : un vocabulaire de VERBES (mesure 2026-09-03)
 

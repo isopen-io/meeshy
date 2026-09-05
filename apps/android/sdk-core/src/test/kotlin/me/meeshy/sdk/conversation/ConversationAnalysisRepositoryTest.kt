@@ -37,6 +37,13 @@ private abstract class StubAnalysisApi : ConversationApi {
     ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
 
     override suspend fun list(offset: Int?, limit: Int?, updatedSince: String?) = ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun listConditional(
+        offset: Int?,
+        limit: Int?,
+        updatedSince: String?,
+        ifNoneMatch: String?,
+    ): retrofit2.Response<ApiResponse<List<ApiConversation>>> =
+        retrofit2.Response.success(ApiResponse(success = false))
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun stats(id: String) = ApiResponse<ConversationMessageStatsResponse>(success = false)
