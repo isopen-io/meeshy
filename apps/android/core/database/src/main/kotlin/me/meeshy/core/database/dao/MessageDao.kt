@@ -34,6 +34,23 @@ public interface MessageDao {
     )
     public suspend fun recentForConversation(conversationId: String, limit: Int): List<MessageEntity>
 
+    /**
+     * Observes a conversation's most recent [limit] rows, newest first — the
+     * bounded counterpart to [observeForConversation] (#5189). The nominal
+     * chat screen only needs a growing window of recent history: an
+     * unbounded observe re-decodes the WHOLE conversation from SQLite on
+     * every write (a reaction, a translation arriving, a read receipt),
+     * however far back that history goes. Callers restore ascending order
+     * themselves ([kotlin.collections.List.asReversed], the same convention
+     * [recentForConversation]'s callers already use). [observeForConversation]
+     * remains for legitimate full-history consumers.
+     */
+    @Query(
+        "SELECT * FROM messages WHERE conversationId = :conversationId " +
+            "ORDER BY createdAt DESC LIMIT :limit",
+    )
+    public fun observeRecentForConversation(conversationId: String, limit: Int): Flow<List<MessageEntity>>
+
     @Upsert
     public suspend fun upsertAll(rows: List<MessageEntity>)
 

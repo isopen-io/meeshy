@@ -2,8 +2,10 @@ package me.meeshy.sdk.conversation
 
 import androidx.room.withTransaction
 import java.time.Instant
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
@@ -40,19 +42,34 @@ internal class MessageCacheSource(
     private val syncMetaDao: SyncMetaDao,
     private val messageApi: MessageApi,
     private val clock: CacheClock,
+    private val historyWindow: Flow<Int>,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = "messages:$conversationId"
 
+    /**
+     * #5189 — bounded to [historyWindow] rather than the conversation's whole
+     * cached history: [MessageDao.observeForConversation] (unbounded) re-decoded
+     * EVERY row on every Room write in the conversation — a reaction, a
+     * translation arriving, a read receipt — however far back the history
+     * went. [historyWindow] grows as [MessageRepository.loadOlder] pages more
+     * history in, so backwards scroll is unaffected: a row that becomes
+     * cached stays observable once the window covers it. `flatMapLatest`
+     * re-subscribes [MessageDao.observeRecentForConversation] whenever the
+     * window itself grows.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observe(): Flow<List<LocalMessage>?> =
-        combine(
-            messageDao.observeForConversation(conversationId),
-            syncMetaDao.observe(resourceKey),
-        ) { rows, syncedAt ->
-            if (rows.isEmpty() && syncedAt == null) {
-                null
-            } else {
-                rows.map { it.toLocalMessage() }
+        historyWindow.flatMapLatest { limit ->
+            combine(
+                messageDao.observeRecentForConversation(conversationId, limit),
+                syncMetaDao.observe(resourceKey),
+            ) { rows, syncedAt ->
+                if (rows.isEmpty() && syncedAt == null) {
+                    null
+                } else {
+                    rows.asReversed().map { it.toLocalMessage() }
+                }
             }
         }
 

@@ -258,6 +258,9 @@ private const val T2 = "2026-06-01T11:00:00Z"
 private const val T3 = "2026-06-01T12:00:00Z"
 private const val T4 = "2026-06-01T13:00:00Z"
 
+/** A strictly increasing timestamp for [seconds] — #5189's bounded-window tests. */
+private fun isoAt(seconds: Int): String = Instant.ofEpochSecond(seconds.toLong()).toString()
+
 private val sender = MeeshyUser(id = "me", username = "atabeth", displayName = "Atabeth")
 
 @RunWith(RobolectricTestRunner::class)
@@ -294,6 +297,14 @@ class MessageRepositoryTest {
 
     private suspend fun sentRequest(lane: String): SendMessageRequest =
         MeeshyApi.json.decodeFromString<SendMessageRequest>(outbox.deliverable(lane).last().payload)
+
+    /** Unwraps a [CacheResult]'s carried value, empty for [CacheResult.Empty] — #5189 tests. */
+    private fun CacheResult<List<LocalMessage>>.valueOrEmpty(): List<LocalMessage> = when (this) {
+        is CacheResult.Fresh -> value
+        is CacheResult.Stale -> value
+        is CacheResult.Syncing -> value.orEmpty()
+        CacheResult.Empty -> emptyList()
+    }
 
     @Test
     fun `requestTranslation stores the returned translation and reports success`() = runTest {
@@ -1273,6 +1284,52 @@ class MessageRepositoryTest {
         val thrown = runCatching { repo.loadOlder("c1") }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(MessageSyncException::class.java)
+    }
+
+    @Test
+    fun `messagesStream observes only a bounded recent window, not the whole synced history`() = runTest {
+        // 30 rows land inside a single recent-window fetch; #5189's bounded
+        // observe (MessageRepository.INITIAL_HISTORY_WINDOW) trims the
+        // OLDEST rows off, keeping the newest 30 — never the full 35 Room holds.
+        val api = FakeMessageApi(
+            response = ApiResponse(
+                success = true,
+                data = (1..35).map { i -> apiMessage("m$i", createdAt = isoAt(i)) },
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+
+        val observed = repo.messagesStream("c1").first().valueOrEmpty().map { it.message.id }
+
+        assertThat(observed).hasSize(30)
+        assertThat(observed).containsNoneOf("m1", "m2", "m3", "m4", "m5")
+        assertThat(observed).contains("m35")
+    }
+
+    @Test
+    fun `loadOlder extends the bounded window so newly-fetched older rows become visible`() = runTest {
+        val api = FakeMessageApi(
+            response = ApiResponse(
+                success = true,
+                // The 30-row recent window, already at the bound.
+                data = (6..35).map { i -> apiMessage("m$i", createdAt = isoAt(i)) },
+            ),
+            olderResponse = ApiResponse(
+                success = true,
+                data = (1..5).map { i -> apiMessage("m$i", createdAt = isoAt(i)) },
+                pagination = Pagination(hasMore = false),
+            ),
+        )
+        val repo = repository(api)
+        repo.refresh("c1")
+        val before = repo.messagesStream("c1").first().valueOrEmpty().map { it.message.id }
+        assertThat(before).doesNotContain("m5")
+
+        repo.loadOlder("c1")
+
+        val after = repo.messagesStream("c1").first().valueOrEmpty().map { it.message.id }
+        assertThat(after).containsAtLeast("m1", "m2", "m3", "m4", "m5")
     }
 
     @Test
