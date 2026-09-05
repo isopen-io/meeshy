@@ -45,6 +45,18 @@
  */
 
 /**
+ * L'ADRESSE DU FIL D'UNE CONVERSATION, PAR SON IDENTIFIANT — le site UNIQUE.
+ *
+ * `app/connecte/vue.ts` (`versLeFil`) la composait sur une `Conversation`
+ * entière, et `app/connecte/liens-vue.ts` la recomposait en ligne — deux
+ * écritures de la même chaîne pour un lecteur qui n'a souvent qu'un
+ * IDENTIFIANT (une pièce jointe trouvée par la recherche, § search) et jamais
+ * de `Conversation` complète. `versLeFil` DÉLÈGUE désormais ici plutôt que de
+ * garder sa propre formule.
+ */
+export const adresseDuFil = (conversationId: string): string => `/chats/${encodeURIComponent(conversationId)}`;
+
+/**
  * ET L'OUVERTURE DU PROFIL D'UN AUTEUR (§ 12.10.3) EST DE LA MÊME FAMILLE — un
  * ÉTAT de l'adresse hôte, composé par le serveur (`app/connecte/fil-lignes.ts`,
  * `liste-vue.ts`) ET par le module de participation (`fil-peinture.ts`).

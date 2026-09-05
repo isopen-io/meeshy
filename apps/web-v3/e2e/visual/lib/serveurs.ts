@@ -17,6 +17,7 @@ import {
   type FilSocialDeBouchon,
 } from './bouchon-compte';
 import { carnetDeBouchon, routesDuCarnet, type CarnetDeBouchon } from './bouchon-carnet';
+import { routesDeLaRecherche } from './bouchon-recherche';
 import {
   placeDeLInvite,
   porteDeLHote,
@@ -338,6 +339,7 @@ export const passerelleDeBouchon = async (options?: {
   const filDeCommentaires = filDeCommentairesDeBouchon();
   const deLaStory = routesDeLaStory({ creanceDe });
   const filSocial = filSocialDeBouchon();
+  const deLaRecherche = routesDeLaRecherche(creanceDe);
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -436,6 +438,10 @@ export const passerelleDeBouchon = async (options?: {
     // absorbe `/api/v1/links/:key/members` (la jonction), `duCarnet` le
     // reste de `/api/v1/links` (`GET`, `POST`, `PATCH /:linkId`).
     if (await duCarnet({ requete, url, corps: octets, json })) return;
+    // La RECHERCHE, avant `/api/v1/conversations` et `/api/v1/directory/`
+    // nues : Fastify distingue ces routes par leur chemin complet, et un
+    // bouchon qui teste des préfixes ordonne du plus PRÉCIS au plus général.
+    if (deLaRecherche({ requete, url, json })) return;
     if (duCompte({ requete, url, corps: octets, json })) return;
 
     json({ success: true, data: { clickId: 'clic-1' } });

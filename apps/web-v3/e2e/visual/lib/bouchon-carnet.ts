@@ -219,46 +219,70 @@ export const routesDuCarnet =
       return true;
     }
 
-    /** `GET /api/v1/links?expand=conversation&include=summary` (`routes/links/user.ts:314`). */
+    /**
+     * `GET /api/v1/links?expand=conversation&include=summary` (`routes/links/
+     * user.ts:314`), ET `GET /api/v1/links?q=` (`:513-521`, #5171) — le groupe
+     * « Liens » de `/search` : MÊME route, un `q` de plus, jamais une seconde.
+     * Le filtre COPIE la loi réelle — `contains` insensible à la casse sur
+     * `name` OU `identifier` — et la pagination sert la forme OFFSET RÉELLE
+     * (`createPaginationMeta`, `services/gateway/src/utils/response.ts:254`) :
+     * `{ total, offset, limit, hasMore }`, `total` compté AVEC le filtre.
+     */
     if (chemin === '/api/v1/links' && (requete.method ?? 'GET') === 'GET') {
+      const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+      const correspond = (l: Readonly<Record<string, unknown>>): boolean =>
+        q === '' ||
+        String(l.name ?? '').toLowerCase().includes(q) ||
+        String(l.identifier ?? '').toLowerCase().includes(q);
+      const pagine = (liste: readonly Readonly<Record<string, unknown>>[]) => ({
+        total: liste.length,
+        offset: 0,
+        limit: liste.length,
+        hasMore: false,
+      });
+
       if (etat.lecteurSansRien) {
-        json({ success: true, data: etat.liensCrees, pagination: { total: etat.liensCrees.length } });
+        const filtres = etat.liensCrees.filter(correspond);
+        json({ success: true, data: filtres, pagination: pagine(filtres) });
         return true;
       }
+
+      const tous = [
+        // LES LIENS CRÉÉS EN TÊTE : c'est là que le lecteur les cherche, et
+        // c'est ce qui rend la création VISIBLE au témoin.
+        ...etat.liensCrees,
+        {
+          id: 'l1',
+          linkId: LIEN_DU_FIL,
+          identifier: IDENTIFIANT_DU_LIEN_PARTAGE,
+          name: 'Ops Lagos',
+          // MUTABLE : le MÊME `lien.actif` que l'aperçu, la jonction et
+          // `/resolve` relisent — révoquer ce lien le ferme PARTOUT.
+          isActive: lien.actif,
+          currentUses: 12,
+          maxUses: null,
+          expiresAt: null,
+          conversation: { id: CONVERSATION_DU_LECTEUR.id, title: CONVERSATION_DU_LECTEUR.titre, type: 'group' },
+        },
+        // Un lien FERMÉ, avec sa capacité et son échéance : c'est la ligne que
+        // le tableau de bord ÉCARTE et que l'écran `/links` doit garder.
+        {
+          id: 'l2',
+          linkId: 'mshy_demo',
+          identifier: 'demo-sept',
+          name: 'Démo septembre',
+          isActive: false,
+          currentUses: 3,
+          maxUses: 10,
+          expiresAt: '2026-12-31T12:00:00.000Z',
+          conversation: null,
+        },
+      ];
+      const filtres = tous.filter(correspond);
       json({
         success: true,
-        data: [
-          // LES LIENS CRÉÉS EN TÊTE : c'est là que le lecteur les cherche, et
-          // c'est ce qui rend la création VISIBLE au témoin.
-          ...etat.liensCrees,
-          {
-            id: 'l1',
-            linkId: LIEN_DU_FIL,
-            identifier: IDENTIFIANT_DU_LIEN_PARTAGE,
-            name: 'Ops Lagos',
-            // MUTABLE : le MÊME `lien.actif` que l'aperçu, la jonction et
-            // `/resolve` relisent — révoquer ce lien le ferme PARTOUT.
-            isActive: lien.actif,
-            currentUses: 12,
-            maxUses: null,
-            expiresAt: null,
-            conversation: { id: CONVERSATION_DU_LECTEUR.id, title: CONVERSATION_DU_LECTEUR.titre, type: 'group' },
-          },
-          // Un lien FERMÉ, avec sa capacité et son échéance : c'est la ligne que
-          // le tableau de bord ÉCARTE et que l'écran `/links` doit garder.
-          {
-            id: 'l2',
-            linkId: 'mshy_demo',
-            identifier: 'demo-sept',
-            name: 'Démo septembre',
-            isActive: false,
-            currentUses: 3,
-            maxUses: 10,
-            expiresAt: '2026-12-31T12:00:00.000Z',
-            conversation: null,
-          },
-        ],
-        pagination: { total: 2 },
+        data: filtres,
+        pagination: pagine(filtres),
         // `meta.summary` — les agrégats de TOUT le carnet. `activeLinks` se
         // DÉCRÉMENTE quand `mshy_lagos` ferme : c'est le compte que le § 12.10.4
         // exige SERVI, jamais recompté sur la page.

@@ -91,26 +91,18 @@ const ecrisLaMesure = (poids) => {
   mesures.participate = {
     quoi:
       'Le poids des ONZE modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], lib/realtime/plein.ts pour /chats/:cle/medias [#4525], lib/realtime/navigateur.ts pour la navigation de zone [§ 12.11], lib/realtime/composer.ts pour /composer [#4966], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js ne l’importe pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
-    participate_brut_octets: poids.participate.brut,
-    participate_gzip_9_octets: poids.participate.gzip,
-    liste_brut_octets: poids.liste.brut,
-    liste_gzip_9_octets: poids.liste.gzip,
-    feed_brut_octets: poids.feed.brut,
-    feed_gzip_9_octets: poids.feed.gzip,
-    notifs_brut_octets: poids.notifs.brut,
-    notifs_gzip_9_octets: poids.notifs.gzip,
-    contacts_brut_octets: poids.contacts.brut,
-    contacts_gzip_9_octets: poids.contacts.gzip,
-    recherche_brut_octets: poids.recherche.brut,
-    recherche_gzip_9_octets: poids.recherche.gzip,
-    liens_brut_octets: poids.liens.brut,
-    liens_gzip_9_octets: poids.liens.gzip,
-    commentaires_brut_octets: poids.commentaires.brut,
-    commentaires_gzip_9_octets: poids.commentaires.gzip,
-    plein_brut_octets: poids.plein.brut,
-    plein_gzip_9_octets: poids.plein.gzip,
-    composer_brut_octets: poids.composer.brut,
-    composer_gzip_9_octets: poids.composer.gzip,
+    // LES POIDS SE RÉPANDENT, ILS NE SE RECOPIENT PAS. Cette table était un
+    // INVENTAIRE tenu à la main : `navigateur` figurait dans les SOURCES et
+    // dans le `quoi` ci-dessus (« ONZE modules »), mais aucune de ses deux
+    // clés n'était écrite — son poids n'a JAMAIS été mesuré, et un module
+    // qu'on alourdit sans témoin est un chiffre qui n'existe pas. Répandre
+    // depuis SOURCES retient chaque module ajouté en amont, par construction.
+    ...Object.fromEntries(
+      SOURCES.flatMap(({ base }) => [
+        [`${base}_brut_octets`, poids[base].brut],
+        [`${base}_gzip_9_octets`, poids[base].gzip],
+      ]),
+    ),
     socket_io_client_brut_octets: poids.socket?.brut ?? null,
     socket_io_client_gzip_9_octets: poids.socket?.gzip ?? null,
     commande: 'cd apps/web-v3 && node scripts/build-participate.mjs --mesure',

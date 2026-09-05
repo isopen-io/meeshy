@@ -1,4 +1,5 @@
 import { baseDeLaPasserelle } from './links';
+import { DELAI_DE_REPONSE_MS } from './passerelle';
 
 /**
  * LES DEUX APPELS D'AUTHENTIFICATION QUE LA V3 PASSE À LA PASSERELLE.
@@ -232,3 +233,37 @@ export const inscription = (parametres: {
     relayer('La création du compte a échoué.'),
     parametres,
   );
+
+/**
+ * LA DÉCONNEXION (#5095) — `POST /api/v1/auth/logout`
+ * (`services/gateway/src/routes/auth/login.ts:350`), en `fastify.authenticate`
+ * : un `Authorization: Bearer` est requis, `x-session-token` optionnel (posé
+ * seulement quand le formulaire le porte — il invalide LA session ET coupe le
+ * socket de CET appareil, #4213).
+ *
+ * BEST-EFFORT, DÉLIBÉRÉMENT : le résultat n'est jamais lu. `app/deconnexion/route.ts`
+ * appelle cette fonction dans un `try/catch` qui l'avale — une panne, un 401
+ * ou un délai dépassé ne retiennent jamais la sortie (même raisonnement que le
+ * gateway lui-même sur `updateOnlineStatus`, `login.ts:384-391` : une
+ * déconnexion qui échoue est pire qu'un socket laissé ouvert).
+ */
+export const deconnexion = ({
+  jeton,
+  jetonDeSession,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly jetonDeSession?: string | null;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Response> =>
+  (recuperer ?? ((u, o) => fetch(u, o)))(`${base ?? baseDeLaPasserelle()}/api/v1/auth/logout`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${jeton}`,
+      ...(jetonDeSession ? { 'x-session-token': jetonDeSession } : {}),
+    },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(DELAI_DE_REPONSE_MS),
+  });
