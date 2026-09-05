@@ -9,8 +9,7 @@ import { z } from 'zod';
 import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from '@meeshy/shared/utils/time-range';
 import {
   callTypeEnum,
-  CommonSchemas,
-  type VCallType,
+  CommonSchemas
 } from '@meeshy/shared/utils/validation';
 
 /**

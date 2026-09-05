@@ -9,7 +9,6 @@
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { promises as fs } from 'fs';
-import * as crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient, TranslationRequest, TranslationResult } from '../zmq-translation';
 import { isMessageTranslationTarget } from '../zmq-translation/utils/zmq-helpers';
@@ -21,7 +20,7 @@ import { TranslationStats, TranslationServiceStats } from './TranslationStats';
 import { EncryptionHelper } from './EncryptionHelper';
 import { ConsentValidationService } from '../ConsentValidationService';
 import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
-import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
+import type { AttachmentTranscription, AttachmentTranslations, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { isBlankTranscriptionText } from '../../utils/transcription';

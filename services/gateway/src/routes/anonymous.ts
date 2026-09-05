@@ -8,11 +8,7 @@ import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normali
 import { linkJoinProfileSchema } from '@meeshy/shared/types/link-join';
 import {
   errorResponseSchema,
-  validationErrorResponseSchema,
-  anonymousParticipantSchema,
-  conversationLinkSchema,
-  conversationMinimalSchema,
-  userMinimalSchema
+  validationErrorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 // #4167 — `POST /anonymous/join|refresh|leave` sont désormais des
 // ADAPTATEURS MINCES vers la loi d'admission UNIQUE (`admitLinkEntry`,

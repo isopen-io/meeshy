@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } from '../../validation/admin-schemas.js';
 import { requirePermission } from '../../middleware/authorize';

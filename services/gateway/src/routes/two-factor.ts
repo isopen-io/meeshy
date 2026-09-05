@@ -26,7 +26,7 @@ import { TwoFactorService } from '../services/TwoFactorService';
 import { validateBody } from '../validation/helpers.js';
 import { EnableBodySchema, DisableBodySchema, VerifyBodySchema, BackupCodesBodySchema } from '../validation/two-factor-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendInternalError, sendBadRequest } from '../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createTwoFactorAccountRateLimiter } from '../utils/rate-limiter.js';
 

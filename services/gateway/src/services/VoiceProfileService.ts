@@ -20,7 +20,6 @@ import path from 'path';
 import {
   ZmqTranslationClient,
   VoiceProfileAnalyzeRequest,
-  VoiceProfileVerifyRequest,
   VoiceProfileAnalyzeResult,
   VoiceProfileVerifyResult,
   VoiceProfileEvent
@@ -31,10 +30,8 @@ import {
   VoiceProfileDetails as SharedVoiceProfileDetails,
   VoiceProfileTranscription,
   BrowserTranscription,
-  VoiceProfileSegment,
   ServiceResult,
   VoiceCloningUserSettings,
-  DEFAULT_VOICE_CLONING_SETTINGS,
   VoicePreviewSample
 } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced';

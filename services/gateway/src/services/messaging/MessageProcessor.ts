@@ -6,7 +6,6 @@
 import * as path from 'path';
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
-import type { MessageRequest } from '@meeshy/shared/types';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
 import { MentionService } from '../MentionService';

@@ -14,7 +14,7 @@ import path from 'path';
 import { AudioTranslateService } from './AudioTranslateService';
 import { ZmqTranslationClient } from './zmq-translation';
 import { MultiLevelJobMappingCache } from './MultiLevelJobMappingCache';
-import type { VoiceTranslationResult, ServiceResult, VoiceProfileData } from '@meeshy/shared/types';
+import type { VoiceTranslationResult, ServiceResult } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
 import {
   attachmentTranslateSelect,

@@ -3,7 +3,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendBadRequest } from '../../utils/response';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { logger } from '../../utils/logger';
 import {

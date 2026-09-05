@@ -13,13 +13,12 @@
  * - AttachmentStatusEntry est conservé pour le suivi granulaire des médias (audio écouté, vidéo vue).
  */
 
-import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
+import { PrismaClient } from "@meeshy/shared/prisma/client";
 import { MessageMediaConsumptionService } from './MessageMediaConsumptionService';
 // `withRetry` a suivi ses cinq appelants dans le module de consommation média
 // (#4605) ; le sixième, ici, l'importe. Le helper n'a pas de domaine — il
 // rejoue une transaction sur conflit d'écriture — donc il vit là où il sert le
 // plus, jamais dupliqué.
-import { withRetry } from './MessageMediaConsumptionService';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
@@ -35,7 +34,6 @@ import {
 } from './personalHistoryFilter';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import {
-  appendPlaybackStretches,
   parsePlaybackTrace,
   traceCoverage,
 } from '../utils/playback-trace';

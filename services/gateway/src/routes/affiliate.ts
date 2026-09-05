@@ -8,15 +8,13 @@ import { AffiliateTrackingService } from '../services/AffiliateTrackingService';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { validatePagination } from '../utils/pagination';
 import {
-  affiliateTokenSchema,
-  affiliateRelationSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { affiliateStatsResponseSchema } from './affiliate-response-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { generateUniquePublicIdentifier } from '../utils/public-identifier';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 

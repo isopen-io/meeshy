@@ -41,7 +41,6 @@ import type {
   VoiceJobProgressEvent,
   VoiceTranslationResult,
   TranslationJob,
-  VoiceAnalysisResult,
   VoiceQualityAnalysis,
   VoiceComparisonResult,
   TranslationHistoryEntry,
@@ -53,10 +52,8 @@ import type {
   VoiceStatsPeriod,
   // Types partagés pour l'API audio
   TranscriptionResult,
-  TranslatedAudioResult,
   AudioTranslationOptions,
-  ServiceResult,
-  VoiceProfileData
+  ServiceResult
 } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
 import { attachmentTranscriptionView, type AttachmentTranscriptionView } from './audio/attachmentTranscriptionView';

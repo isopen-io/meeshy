@@ -4,7 +4,6 @@ import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import {
   userMinimalSchema,
-  userStatsSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';

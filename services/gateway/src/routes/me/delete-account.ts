@@ -9,7 +9,6 @@ import { verifyPassword } from '../../utils/password-hash.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
-import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 

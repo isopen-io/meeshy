@@ -14,7 +14,6 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { replaceLiteral } from '../utils/string-replace';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });

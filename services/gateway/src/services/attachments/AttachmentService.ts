@@ -8,10 +8,8 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type {
   Attachment,
-  AttachmentType,
-  ACCEPTED_MIME_TYPES,
+  AttachmentType
 } from '@meeshy/shared/types/attachment';
-import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 import {
   AttachmentEncryptionService,

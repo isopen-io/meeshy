@@ -4,7 +4,7 @@ import { type RankingQuery } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { RankingsQuerySchema } from '../../validation/admin-schemas.js';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from '../../services/admin/permissions.service';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { requirePermission } from '../../middleware/authorize';

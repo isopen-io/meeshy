@@ -4,11 +4,9 @@ import {
   sendSuccess,
   sendPaginatedSuccess,
   sendUnauthorized,
-  sendBadRequest,
   sendInternalError
 } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
 import { ContactDirectoryService, type DirectoryFilter, type SyncMode } from '../../services/ContactDirectoryService';
 import { directoryEntrySchema } from './contacts-schemas';
 import { viewerFromRequest } from './presence-gate';

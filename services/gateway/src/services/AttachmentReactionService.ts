@@ -1,7 +1,6 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
-import { ConflictError } from '../errors/custom-errors';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;

@@ -1,6 +1,6 @@
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { AuthSessionRevokedEventData } from '@meeshy/shared/types/socketio-events';
-import type { RevokedSessionIO, RevokedSessionSocket } from './disconnectRevokedSessions';
+import type { RevokedSessionSocket } from './disconnectRevokedSessions';
 
 /**
  * La clé où l'identifiant de session est rangé sur un socket.

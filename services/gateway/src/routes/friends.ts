@@ -1,16 +1,13 @@
 import { validatePagination } from '../utils/pagination';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { SecuritySanitizer } from '../utils/sanitize';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone } from '../utils/response.js';
-import type { NotificationService } from '../services/notifications/NotificationService';
-import { withMutationLog, MutationResultGone } from '../utils/withMutationLog';
+import { sendSuccess, sendBadRequest, sendInternalError, sendGone } from '../utils/response.js';
+import { MutationResultGone } from '../utils/withMutationLog';
 import {
   sendFriendRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { envoyerDemande, repondreDemande, servirParties, INCLUDE_PARTIES } from './directory/friend-requests-core';
 import {
   repondreDemandeHTTP,

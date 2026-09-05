@@ -11,7 +11,7 @@ import {
   verifyPhoneRequestSchema
 } from '@meeshy/shared/types';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
-import { createUnifiedAuthMiddleware, findTrustedSession, UnifiedAuthRequest} from '../../middleware/auth';
+import { createUnifiedAuthMiddleware, findTrustedSession} from '../../middleware/auth';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';

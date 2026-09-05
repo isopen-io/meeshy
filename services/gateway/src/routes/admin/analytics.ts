@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger';
-import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 import { getCacheStore } from '../../services/CacheStore';

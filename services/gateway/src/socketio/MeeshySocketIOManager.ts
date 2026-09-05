@@ -95,7 +95,7 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
-import { emitServerEvent, type ServerEventName } from './serverEmit';
+import { emitServerEvent } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';

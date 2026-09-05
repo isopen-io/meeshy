@@ -11,7 +11,6 @@ import { registerDeleteForMeRoutes } from './delete-for-me';
 import { registerBanRoutes } from './ban';
 import { registerStatsRoutes } from './stats';
 import { registerThreadsRoutes } from './threads';
-import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 
 /**
  * Point d'entrée principal pour toutes les routes de conversations

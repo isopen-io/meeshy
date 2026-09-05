@@ -8,7 +8,7 @@
  * - GET /api/reactions/user/:userId - Récupérer les réactions d'un utilisateur
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import {
   sendSuccess,
@@ -23,18 +23,11 @@ import { ReactionService, CLOSED_CONVERSATION_REACTION_ERROR } from '../services
 import { ConflictError } from '../errors/custom-errors.js';
 import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../services/messaging/messageEditAdmission.js';
 import { notifyReactionAdded, notifyReactionRemoved } from '../services/notifications/reactionNotify.js';
-import type {
-  ReactionAddData,
-  ReactionRemoveData,
-  ReactionUpdateEventData,
-  ReactionSyncEventData,
-} from '@meeshy/shared/types';
 import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation.js';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import {
   reactionSchema,
   reactionSummarySchema,
-  addReactionRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 

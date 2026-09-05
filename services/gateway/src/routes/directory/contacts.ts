@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { ContactDirectoryService, type DirectoryFilter, type SyncMode } from '../../services/ContactDirectoryService';
+import { ContactDirectoryService, type DirectoryFilter } from '../../services/ContactDirectoryService';
 import { directoryEntrySchema } from '../users/contacts-schemas';
 import { viewerFromRequest } from '../users/presence-gate';
 import type { AuthenticatedRequest } from '../users/types';

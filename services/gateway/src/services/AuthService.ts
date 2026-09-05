@@ -1,7 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import crypto from 'crypto';
 import { generateNumericCode } from '../utils/verification-code';
-import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
+import { SocketIOUser } from '@meeshy/shared/types';
 import { normalizePhoneNumber } from '../utils/normalize';
 import { RequestContext } from './GeoIPService';
 import { EmailService } from './EmailService';
