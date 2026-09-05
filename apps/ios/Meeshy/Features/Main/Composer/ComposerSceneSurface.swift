@@ -182,7 +182,10 @@ struct ComposerSceneSurface: View {
         return false
     }
 
-    var activeObjectChipId: String?
+    /// **Plus d'`activeObjectChipId`** (2026-09-05) : un jeton ouvrait une
+    /// bande montée SOUS la scène, donc visible en même temps que lui — d'où un
+    /// état encadré. Il ouvre désormais l'éditeur plein écran, qui couvre cette
+    /// surface : aucun jeton n'est visible en même temps que ce qu'il a ouvert.
     var onObjectChip: ((String) -> Void)?
 
     /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (#4073, vue `1c`).
@@ -200,11 +203,12 @@ struct ComposerSceneSurface: View {
     /// le bas ne porte que le socle (#4064). Cette vue ne re-filtre rien : une
     /// seconde loi 4 divergerait de la première, exactement comme pour les
     /// deux rails.
+    ///
+    /// **Les deux contenus injectés sont partis avec leurs bandes**
+    /// (2026-09-05) : `timeline` (#4082) et `textStyles` (#4083) éditaient un
+    /// objet déjà posé, et la première vue n'édite plus. Leurs jumelles vivent
+    /// dans l'éditeur plein écran — `.media(.trim)` et `.tool(.style)`.
     var band: ComposerSceneBand?
-    /// Ce que la bande `timeline` montre — composé par le meuble (#4082).
-    var bandTimelineContent: AnyView?
-    /// Ce que la bande `textStyles` montre — composé par le meuble (#4083).
-    var bandTextStylesContent: AnyView?
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
 
@@ -215,7 +219,13 @@ struct ComposerSceneSurface: View {
 
     /// **Le panneau d'OPTIONS de l'outil déplié**, monté sous la scène
     /// (directive porteur 2026-08-30). Les BULLES vivent au rail ; ce qui a
-    /// besoin de largeur — palette, glissière, dix-huit styles — vit ici.
+    /// besoin de largeur — palette, glissière — vit ici.
+    ///
+    /// **Il ne porte plus que le DESSIN depuis le 2026-09-05.** Les dix-huit
+    /// styles et les sept autres outils de texte sont partis à l'éditeur plein
+    /// écran avec le reste de l'édition ; ce qui reste ici règle le PINCEAU,
+    /// c'est-à-dire le geste qui AJOUTE — pas un objet déjà posé. Le meuble
+    /// tient la distinction (`ComposerFirstView.lowZoneShowsToolOptions`).
     var toolOptions: AnyView?
 
     /// L'édition EN LIGNE, relayée au canvas : le texte se saisit à sa vraie
@@ -224,15 +234,17 @@ struct ComposerSceneSurface: View {
     var onInlineTextChanged: ((String, String) -> Void)?
     var onInlineTextEditEnded: ((String) -> Void)?
 
-    /// **La bande de mention du texte de SCÈNE** (#4475), montée sous le canvas
-    /// pendant l'édition. `nil` ⇒ aucune requête `@` en cours, ou aucune
-    /// personne à proposer — dans les deux cas, rien de peint (loi 4).
+    /// **La bande de mention du texte de SCÈNE a quitté cette surface**
+    /// (2026-09-05).
     ///
-    /// Elle vit ICI et pas dans le canvas : `StoryCanvasUIView` est du UIKit et
-    /// n'a aucune raison de connaître les amis de l'auteur. Ce qu'il donne — le
-    /// texte, à chaque frappe — suffit, et c'est le meuble qui en tire une
-    /// requête.
-    var mentionStrip: AnyView?
+    /// Elle interprétait la frappe INLINE sur le canvas (#4475). Or la frappe
+    /// n'a plus lieu ici : `openObjectEditor` est le seul chemin vers l'édition
+    /// d'un texte — mesuré, `enterTextEditingMode` n'a que deux appelants, et
+    /// tous deux montent l'écran modal par-dessus cette surface. La bande était
+    /// donc peinte sous un écran plein, pour une requête `@` qui se formait
+    /// ailleurs.
+    ///
+    /// Elle vit désormais dans `ComposerObjectEditorView`, où le doigt tape.
 
     /// **Le volet de description, replié ou non** (#4742). Construit par le
     /// MEUBLE — la surface n'a ni le texte, ni le binding de repli, ni le
@@ -907,10 +919,6 @@ struct ComposerSceneSurface: View {
                 // Montée sans transition ni animation : la bande est un frère
                 // du canvas, et animer son insertion ferait varier la frame de
                 // `StoryCanvasUIView` sur chaque image du ressort.
-                // **La bande de mention passe avant tout le reste du bas** : une
-                // liste de personnes qui apparaît pendant qu'on écrit doit
-                // toucher le texte, pas se ranger sous des réglages.
-                if let mentionStrip { mentionStrip }
                 // Le panneau d'options passe AVANT la bande de fond : c'est
                 // l'outil ouvert qui a la priorité sur le bas de l'écran, et
                 // les deux ne coexistent jamais (ouvrir un outil ferme la
@@ -932,9 +940,7 @@ struct ComposerSceneSurface: View {
                                           colors: bandColors,
                                           onPickColor: onPickBandColor,
                                           openingEffect: bandOpeningEffect,
-                                          onPickOpening: onPickBandOpening,
-                                          timelineContent: bandTimelineContent,
-                                          textStylesContent: bandTextStylesContent)
+                                          onPickOpening: onPickBandOpening)
                 case .nothing:
                     EmptyView()
                 }
@@ -969,7 +975,6 @@ struct ComposerSceneSurface: View {
                 // double aurait fait deux doctrines pour une capsule.
                 if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                     ComposerObjectChipsRow(chips: objectChips,
-                                           activeChipId: activeObjectChipId,
                                            onSelect: onObjectChip)
                 }
                 // **La rangée basse — une PLACE permanente, un contenu qui

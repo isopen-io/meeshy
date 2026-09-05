@@ -21,6 +21,7 @@ import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from '@/app/connecte
 import { FEUILLE_DE_LA_BANNIERE } from '@/app/connecte/banniere-feuille';
 import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
+import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
 import { FEUILLE_DES_REGLAGES } from '@/app/connecte/reglages-feuille';
@@ -85,6 +86,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE', source: FEUILLE_DE_L_ESPACE },
   { nom: 'app/connecte/banniere-feuille.ts', source: FEUILLE_DE_LA_BANNIERE },
   { nom: 'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL', source: FEUILLE_DU_LIEN_DEPUIS_LE_FIL },
+  { nom: 'app/connecte/prefs-feuille.ts', source: FEUILLE_DES_PREFS },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -165,6 +167,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE',
       'app/connecte/banniere-feuille.ts',
       'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL',
+      'app/connecte/prefs-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -277,6 +280,10 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     // connectée, l'en-tête du fil (qu'ils réemploient) et leur feuille. Une
     // seule ligne suffit donc à les opposer tous les six au plafond.
     { nom: 'réglages', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_REGLAGES },
+    // `/notifications/preferences` (#4899) emprunte le même en-tête que la
+    // boîte (`.fil-tete`, `FEUILLE_DU_FIL`) — la même composition que
+    // « réglages » ci-dessus, avec sa propre feuille de treize commutateurs.
+    { nom: 'notifications — préférences', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_PREFS },
     // L'état `/links?nouveau` : la SEULE composition qui porte la feuille de
     // création — un carnet ordinaire n'en paie pas un octet.
     {
@@ -696,6 +703,13 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // (§ 12.5 règle 7, jamais primaire) : un seul emploi, l'accent en trait et
     // en glyphe, jamais en fond.
     '.raccourci',
+    // Les préférences de notification (`cible/notifPrefs.png`, #4899) : la
+    // piste d'un commutateur ACTIVÉ — un contrôle SÉLECTIONNÉ, l'accent en
+    // FOND, même emploi que `.reaction[aria-pressed=true]` et
+    // `.geste-aime[aria-pressed="true"]`. Le libellé, la fenêtre DND et le
+    // pouce lui-même restent sur l'encre — l'état se DIT par le texte
+    // (« Activé »/« Désactivé »), la couleur ne fait que le CONFIRMER.
+    '.commutateur[aria-checked="true"] .piste',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

@@ -22,8 +22,11 @@ import MeeshyUI
 /// et coûte la place en prime.
 struct ComposerObjectChipsRow: View {
     let chips: [ComposerObjectChips.Chip]
-    /// Le jeton dont le réglage est OUVERT — la planche le montre encadré.
-    var activeChipId: String?
+    /// **Plus d'`activeChipId`** (directive porteur 2026-09-05). L'état encadré
+    /// de la planche disait « la bande de ce jeton est ouverte SOUS la scène » ;
+    /// la première vue n'édite plus, et ce qu'un jeton ouvre est un écran
+    /// MODAL. Aucun jeton n'est donc visible en même temps que ce qu'il a
+    /// ouvert : l'état n'a plus de surface où se montrer.
     var onSelect: ((String) -> Void)?
 
     var body: some View {
@@ -50,10 +53,9 @@ struct ComposerObjectChipsRow: View {
                         }
                         .buttonStyle(.plain)
                         // Le jeton DIT déjà sa valeur : la redire en libellé
-                        // d'accessibilité la ferait entendre deux fois. Ce qui
-                        // manque à VoiceOver est l'état — ouvert ou non.
-                        .accessibilityAddTraits(estActif(chip) ? [.isSelected, .isButton] : .isButton)
-                        .accessibilityIdentifier("composer.objectChip.\(chip.id).\(destination.rawValue)")
+                        // d'accessibilité la ferait entendre deux fois.
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityIdentifier("composer.objectChip.\(chip.id).\(destination.identifier)")
                     } else {
                         capsule(chip)
                             .accessibilityIdentifier("composer.objectChip.\(chip.id)")
@@ -73,8 +75,7 @@ struct ComposerObjectChipsRow: View {
         Text(chip.label)
             .font(MeeshyFont.relative(12, weight: .semibold))
             .lineLimit(1)
-            .foregroundColor(estActif(chip) ? MeeshyColors.indigo300
-                                            : MeeshyColors.textSecondary(isDark: true))
+            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
             .padding(.horizontal, 14)
             // Le plancher de 44 pt est POSÉ, pas déduit du contenu :
             // « TAILLE 38 » et « 0:00 → 0:06 » n'ont pas la même largeur, et la
@@ -82,13 +83,8 @@ struct ComposerObjectChipsRow: View {
             .frame(minHeight: 44)
             .background(
                 Capsule().strokeBorder(
-                    estActif(chip) ? MeeshyColors.indigo400.opacity(0.9)
-                                   : MeeshyColors.textSecondary(isDark: true).opacity(0.28),
-                    lineWidth: estActif(chip) ? 1.5 : 1)
+                    MeeshyColors.textSecondary(isDark: true).opacity(0.28),
+                    lineWidth: 1)
             )
-    }
-
-    private func estActif(_ chip: ComposerObjectChips.Chip) -> Bool {
-        chip.id == activeChipId
     }
 }

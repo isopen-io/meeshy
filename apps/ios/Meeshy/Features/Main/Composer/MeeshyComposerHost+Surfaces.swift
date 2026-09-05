@@ -154,8 +154,22 @@ extension MeeshyComposerHost {
         // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de
         // cadrage), exactement comme il le fait déjà devant une band. `0` quand
         // la saisie est fermée : la scène retrouve sa géométrie de repos.
+        // **La réserve vaut pour les DEUX zones d'écriture** (directive porteur
+        // 2026-09-05). Elle ne testait que `editsSceneDescription` : en mode
+        // CONTENU la scène ne se rétractait donc pas du tout, et la zone lui
+        // passait par-dessus — alors que la directive demande l'inverse, un
+        // retrait PLUS grand pour le contenu que pour la description.
+        //
+        // > Les deux zones écrivaient déjà la même hauteur mesurée
+        // > (`sceneDescriptionEditorHeight`, posée par leurs deux
+        // > `onHeightChange`). Seule la CONDITION qui la sert en avait oublié
+        // > une — le défaut ne se voyait donc ni dans la mesure, ni dans la
+        // > zone, mais dans le prédicat entre les deux.
+        //
+        // `textEditingZones` garantit qu'elles sont exclusives : la hauteur
+        // servie est toujours celle de la zone montée.
         .storyComposerCanvasBottomReservation(
-            editsSceneDescription ? sceneDescriptionEditorHeight : 0
+            (editsSceneDescription || editsPostContent) ? sceneDescriptionEditorHeight : 0
         )
     }
 
@@ -221,153 +235,18 @@ extension MeeshyComposerHost {
                                  ? ComposerDescriptionCopy.amorce
                                  : documentText))
     }
+    // **La bande de mentions du texte de scène est partie à l'ÉDITEUR**
+    // (2026-09-05). Elle interprétait la frappe INLINE sur le canvas de cette
+    // surface ; or la frappe n'a plus lieu ici. `enterTextEditingMode` n'a que
+    // DEUX appelants — `openObjectEditor` et l'éditeur lui-même — et tous deux
+    // montent l'écran modal par-dessus cette surface. La bande était donc
+    // construite, conditionnée, et peinte sous un écran plein.
+    //
+    // Son site est désormais `ComposerObjectEditorView.mentionStrip`, où le
+    // doigt tape. `sceneMentionBox` reste ici : c'est le MEUBLE qui possède le
+    // contrôleur et le remet à l'écran modal (`+Portals`), une seule boîte pour
+    // une seule requête.
 
-    /// La surface « document sans scène » (V2).
-    ///
-    /// Elle ne porte PAS le plateau — une garde de source le tient. Ce que le
-    /// plateau porte depuis le 2026-08-24 est le seul éventail, et le
-    /// paragraphe sur l'ÉVENTAIL plus bas dit ce qu'il en coûte ici.
-    ///
-    /// `profile.showsSlides` et `profile.showsTimeline` n'ont plus AUCUN
-    /// lecteur de production depuis que les trois pictogrammes inertes du
-    /// plateau sont partis ; seuls les tests de la table de C1 les lisent
-    /// encore. Ce n'est pas un oubli à combler ici : la table décrit ce que la
-    /// porte offre, et le meuble n'a aujourd'hui aucun moyen de l'honorer.
-    ///
-    /// **La rangée d'outils s'y peint depuis le 2026-08-24 — et elle en compte
-    /// UN.** Ce n'est pas un demi-travail, c'est la loi 4 appliquée jusqu'au
-    /// bout : `ComposerDocumentTool.effect` ne concède un outil que si son
-    /// RÉSULTAT a une destination, et cinq des six n'en ont pas. Le pipeline
-    /// d'ingestion du dépôt tourne bien (`ComposerDropResolver` /
-    /// `ComposerIngestRouter`, six sites de production) mais le trou n'est pas
-    /// là : `ComposerDocumentDraft` ne porte ni `mediaIds`, ni fichier, ni
-    /// lieu, et le seul publieur que le meuble atteigne n'en accepte aucun.
-    /// Peindre une photothèque au-dessus de ce trou rendrait une image que rien
-    /// ne transporterait.
-    ///
-    /// L'emoji, lui, n'ingère rien : il écrit dans `documentText`, que le
-    /// brouillon emporte déjà. Sa chaîne est complète, donc il se peint.
-    ///
-    /// **Elle ne porte pas non plus l'ÉVENTAIL**, qui vit dans le plateau — et
-    /// depuis le lot 4.7 le plateau est monté par le `body`, sous une RÈGLE.
-    ///
-    /// Jusque-là, le plateau était monté par `composerSurface` : la scène seule
-    /// le portait, et l'impasse était tenue par un ACCIDENT DE MONTAGE plutôt
-    /// que par un raisonnement. Elle l'est désormais par
-    /// `ComposerFormatFanPlacement`, qui répond à la seule question qui compte :
-    /// *tous les formats offerts atterrissent-ils sur une surface qui partage
-    /// l'état du meuble ?*
-    ///
-    /// Ce qui SÉPARE les deux portes qui atteignent cette surface :
-    ///
-    /// - **`.repost(sourceFormat: .status)`** offre `[.status, .post]`, deux
-    ///   formats qui restent sur des surfaces sans atelier. `documentText`,
-    ///   `moodEmoji` et l'audience sont l'état du MEUBLE et suivent la bascule.
-    ///   L'éventail s'y peint donc, des DEUX côtés — sans quoi l'ancrage serait
-    ///   une porte à sens unique.
-    /// - **`.feedComposer`** offre `.story`, que `ComposerSurfaceRouting` envoie
-    ///   à la SCÈNE. Un auteur qui taperait son post ici puis choisirait
-    ///   « Story » verrait le routage lui monter l'atelier, et `documentText`
-    ///   n'aurait aucun chemin pour l'y suivre — la saisie disparaîtrait sans un
-    ///   mot, sur la surface de création la plus fréquentée de l'app.
-    ///
-    /// Mesuré le 2026-08-24 sur les 14 fichiers `StoryComposerViewModel*.swift`,
-    /// et le fait n'a pas bougé : ses écrivains publics sont l'adoption de
-    /// brouillon (`adoptDraft(id:)`, `detachFromAdoptedDraft()`,
-    /// `adoptDeclaredReferences(_:)`), la timeline
-    /// (`loadCurrentSlideIntoTimeline()`, `commitTimelineToCurrentSlide()`,
-    /// `applyPersistedCommandHistory(_:)`, `shutdownTimelineIfNeeded()`, et
-    /// `timelineViewModel` qui rend une référence écrivant à son tour) et deux
-    /// inits de reprise (`init(editing:)`, `init(reposting:authorHandle:)`) —
-    /// **aucun n'écrit du TEXTE** : `currentEffects` est `public internal(set)`,
-    /// et rien dans `+Elements.swift` n'expose publiquement la création d'un
-    /// élément de texte. La liste est plus large que le blocage, et c'est le
-    /// blocage qui compte : un `grep` de contrôle doit CONFIRMER cette phrase,
-    /// jamais la démentir.
-    ///
-    /// **Condition de levée pour `.feedComposer`, côté SDK** : un écrivain
-    /// public de texte atteignable par le meuble. L'éventail y descend alors
-    /// AVEC le transfert de la saisie, jamais avant lui — et la règle de
-    /// placement le dira d'elle-même, sans qu'on ait à toucher ce fichier.
-    ///
-    /// La TABLE de C1 désigne le meuble pour `.feedComposer`
-    /// (`routesToLegacy: nil`) depuis le lot 3, et depuis T3.1 le PLEIN composer
-    /// du fil PASSE ici : `RootViewComponents` monte
-    /// `DocumentComposerDoor(intent: ComposerIntent(origin: .feedComposer))`.
-    /// Ce qui n'a pas bougé, c'est le reste — les deux CITATIONS montent encore
-    /// leur feuille (T3.2, levée 7.5) et le composer inline iPad son propre
-    /// booléen (T3.3 le nomme ; sa migration T3.4 est descopée). La porte la
-    /// plus utilisée, elle, passe désormais par le meuble.
-    ///
-    /// **Ne pas confondre les deux blocages, ils n'ont ni la même cause ni la
-    /// même levée.** Celui de `.feedComposer` est côté SDK (le transfert de la
-    /// saisie). Celui que la republication portait était app-side — le plafond
-    /// d'audience de la loi 10 — et il ne RETIENT plus l'éventail : ce que la
-    /// loi 10 pouvait fermer sans connaître la source l'a été au lot 4.9
-    /// (`ComposerAudienceOffer` retire `ONLY`/`EXCEPT` d'une republication), et
-    /// l'ÉLARGISSEMENT qui reste pèse EXACTEMENT autant sur le ruban du mood,
-    /// peint sur un écran réel depuis le lot 4.6. L'ancrage hérite d'un trou
-    /// déjà nommé et déjà gardé ; il n'en ajoute aucun. Gardes :
-    /// `ComposerDocumentSurfaceTests`
-    /// `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint` et
-    /// `.test_lAncrageDUnMood_nAToujoursAucunPlafondDAudience_etLEventailDescendQuandMeme`.
-    ///
-    /// **Sa SORTIE est celle du meuble.** `onDismiss` n'était atteignable que
-    /// sous la scène, où l'atelier du SDK peint la croix ; le document n'a pas
-    /// d'atelier, et la surface serait restée un écran sans issue au moment
-    /// même où V3 devait la brancher sur la porte la plus utilisée de l'app.
-    /// Le host ne fabrique pas une seconde fermeture : il passe la SIENNE, la
-    /// même que reçoit l'atelier deux blocs plus haut.
-    /// **La surface de SCÈNE** (#4070) — montée quand le document a une scène.
-    ///
-    /// Elle réemploie les MÊMES expressions que `documentSurface` pour tout ce
-    /// qui appartient à la publication (barre haute, rail des slides, éventail,
-    /// `⋯`) : deux dérivations d'une même valeur auraient divergé au premier
-    /// ajustement. Ce qui diffère est ce qui n'a de sens QUE sur une scène —
-    /// les deux rails et la géométrie d'encastrement.
-    /// **La bande de mention du texte de scène** (#4475).
-    ///
-    /// Trois conditions, et la troisième est celle qu'on oublie :
-    /// 1. un texte est en cours d'édition — hors édition, il n'y a pas de
-    ///    frappe à interpréter ;
-    /// 2. une requête `@` est active ;
-    /// 3. **des personnes correspondent** — sans quoi la bande de verre serait
-    ///    peinte vide. « Aucun ami accepté » et « aucune correspondance » sont
-    ///    des états NOMINAUX, pas des chargements en attente : ce champ n'a
-    ///    aucun appel réseau qui remplirait la liste plus tard.
-    ///
-    /// **Le choix écrit dans l'OBJET, pas dans un champ de vue.** Le texte
-    /// courant vient du modèle et y retourne par `updateTextContent` — le même
-    /// site que la frappe. Un `@State` intermédiaire aurait fait diverger ce que
-    /// le canvas affiche de ce que la publication emporte.
-    var sceneMentionStrip: AnyView? {
-        if let id = viewModel.textEditingMode.activeTextId,
-           sceneMentionBox.controller.activeQuery != nil,
-           !sceneMentionBox.controller.suggestions.isEmpty,
-           let objet = viewModel.currentEffects.textObjects.first(where: { $0.id == id }) {
-            // **`return` — sans lui, cette bande était CONSTRUITE puis JETÉE.**
-            // La propriété rend `AnyView?` ; une expression nue dans un `if`
-            // n'est pas la valeur de retour d'un accesseur à corps multiple, et
-            // le `return nil` du bas gagnait TOUJOURS. La suggestion `@` du
-            // texte de scène n'a donc jamais pu paraître, sur aucun chemin.
-            //
-            // Le compilateur le disait — « result of 'AnyView' initializer is
-            // unused » — et un avertissement noyé dans un build vert ne se lit
-            // pas. C'est la loi 4 dans sa forme la plus coûteuse : le contrôle
-            // est écrit, testé de l'œil, et sans effet.
-            return AnyView(
-                ComposerMentionStrip(
-                    controller: sceneMentionBox.controller,
-                    currentText: objet.text,
-                    onSelect: { remplace in
-                        viewModel.updateTextContent(id: id, text: remplace)
-                    }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            )
-        }
-        return nil
-    }
 
     /// **Ce que chaque porte du rail PORTE DÉJÀ** (#4994).
     ///
@@ -516,9 +395,16 @@ extension MeeshyComposerHost {
             // ouvert** (directive porteur 2026-08-30). La résolution est une
             // règle pure : le meuble ne décide pas ici quel outil l'emporte,
             // il fournit l'état.
+            // **Le rail ne montre PLUS les bulles d'un texte** (directive
+            // porteur 2026-09-05) : l'édition de texte appartient à l'éditeur
+            // plein écran, qui couvre cette surface. L'état d'édition EXISTE
+            // toujours pendant qu'il est monté — `openObjectEditor` appelle
+            // `enterTextEditingMode` — et c'est précisément lui que la règle
+            // apprend à ignorer, plutôt qu'un état qu'on interdirait.
             railMode: ComposerRailMode.resolve(
                 drawing: viewModel.isDrawingActive,
-                textEditing: viewModel.textEditingMode.activeTextId != nil,
+                textEditing: ComposerFirstView.railShowsTextTools(
+                    textEditing: viewModel.textEditingMode.activeTextId != nil),
                 expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
                 expandedTextTool: viewModel.textEditingMode.expandedTool,
                 doors: ComposerRailDoor.offered(
@@ -591,8 +477,6 @@ extension MeeshyComposerHost {
             // une donnée jusqu'à son consommateur s'arrête un cran trop tôt —
             // il faut la suivre jusqu'au PIXEL, et demander ce que le doigt
             // OBTIENT.
-            activeObjectChipId: ComposerObjectChips.activeChipId(
-                chips: sceneObjectChips, openedBand: requestedSceneBand),
             onObjectChip: { id in handleObjectChip(id) },
             // **Ce que le canvas ENCADRE** (#4073). Le meuble tient déjà l'id
             // de l'objet sélectionné pour les jetons et pour le rail — le lui
@@ -619,8 +503,6 @@ extension MeeshyComposerHost {
             // regle `opened(_:served:)` existe pour interdire.
             band: ComposerSceneBand.opened(requestedSceneBand,
                                            served: openableSceneBands),
-            bandTimelineContent: composerTrimBand,
-            bandTextStylesContent: composerTextStylesBand,
             bandColors: StoryBackgroundPalette.colors,
             onPickBandColor: { hex in
                 documentBackground = hex
@@ -652,14 +534,33 @@ extension MeeshyComposerHost {
             // palette, la glissière, les dix-huit styles. `MeeshyToolOptionsPanel`
             // rend `EmptyView` quand rien n'est déplié, donc le montage est
             // inconditionnel et la loi 4 est tenue par la vue elle-même.
-            toolOptions: AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)),
+            // **Les options du DESSIN seulement** (2026-09-05).
+            // `MeeshyToolOptionsPanel` sert deux familles — le pinceau et le
+            // texte — et rendait la seconde dès qu'un outil de texte était
+            // déplié. C'était la voie par laquelle les réglages de texte
+            // revenaient dans la première vue, sans passer par une bande.
+            //
+            // `nil` plutôt qu'un panneau vide : `ComposerLowZone` arbitre sur
+            // `railMode`, qui ne rend plus `.tool` pour un texte — mais le
+            // dire ICI aussi tient la loi des DEUX côtés, comme les deux
+            // bandes le faisaient avant leur retrait.
+            toolOptions: ComposerFirstView.lowZoneShowsToolOptions(
+                drawing: viewModel.isDrawingActive)
+                ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
             editingTextId: viewModel.textEditingMode.activeTextId,
+            // **Le rappel reste, la requête `@` non** (2026-09-05). Ce canvas
+            // ne reçoit plus de frappe : la saisie d'un texte se fait dans
+            // l'éditeur plein écran, qui a son propre `onInlineTextChanged` et
+            // nourrit `handleQuery` là où le doigt tape. La nourrir ici en
+            // plus n'aurait servi qu'à donner deux écrivains à une requête qui
+            // n'en a qu'un.
+            //
+            // L'écriture du TEXTE, elle, reste — le canvas est toujours monté,
+            // et une écriture qu'on retire « parce qu'elle ne doit plus se
+            // produire » est un pari, là où une écriture idempotente sur le
+            // modèle ne coûte rien.
             onInlineTextChanged: { id, texte in
                 viewModel.updateTextContent(id: id, text: texte)
-                // La frappe nourrit la requête `@` — même contrat que le champ
-                // de description et celui du document, sur le troisième champ
-                // de saisie du composer (#4475).
-                sceneMentionBox.controller.handleQuery(in: texte)
             },
             // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
             // ce qu'il advient d'une coquille vide — il la supprime.
@@ -682,11 +583,6 @@ extension MeeshyComposerHost {
                 guard editedObject == nil else { return }
                 viewModel.exitTextEditingMode()
             },
-            // **La bande n'existe que pendant l'édition ET avec des personnes à
-            // proposer.** Gater sur la seule requête peindrait une bande de
-            // verre vide quand aucun ami accepté ne correspond — un état
-            // NOMINAL, pas une erreur.
-            mentionStrip: sceneMentionStrip,
             descriptionPanel: sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
@@ -898,7 +794,14 @@ extension MeeshyComposerHost {
             // est en train de remplir. Une phrase plus spécifique demanderait
             // une clé neuve et ses sept traductions ; elle se fera si le
             // porteur la demande, mais un libellé FAUX ne pouvait pas rester.
-            validationLabel: ComposerDescriptionCopy.doneShort
+            validationLabel: ComposerDescriptionCopy.doneShort,
+            // **Le corps du post rétrécit PLUS la scène que la légende**
+            // (directive porteur 2026-09-05). Dix lignes contre six : un corps
+            // de publication se relit en entier pendant qu'on l'écrit, une
+            // légende de média tient en deux phrases. La différence passe par
+            // ce qu'occupe RÉELLEMENT la zone — jamais par un supplément en
+            // points chez l'hôte, qui décollerait la scène de la zone.
+            collapsedLineLimit: 10
         )
     }
 
@@ -1075,14 +978,6 @@ extension MeeshyComposerHost {
     }
 
 
-    // MARK: - La bande de ROGNAGE (#4082)
-
-    /// L'objet sélectionné, quand il a une source à rogner — `nil` sinon.
-    ///
-    /// C'est ce `nil` qui tient la loi 4 des deux côtés : il retire `.timeline`
-    /// du jeu servi, donc la bande n'est pas ouvrable, ET il laisse
-    /// `composerTrimBand` à `nil`, donc elle n'aurait rien à montrer si elle
-    /// l'était. Une seule question posée une fois, deux conséquences.
     /// L'unique lecture du juge de l'historique. Le socle posait la même
     /// question à deux endroits ; le rail la pose une fois.
     var composerServesHistory: Bool {
@@ -1094,8 +989,7 @@ extension MeeshyComposerHost {
     /// trois résolutions du même jeu peuvent diverger.
     var sceneObjectChips: [ComposerObjectChips.Chip] {
         ComposerObjectChips.chips(forSelected: selectedSceneItemId,
-                                  in: viewModel.currentSlide,
-                                  openableBands: openableSceneBands)
+                                  in: viewModel.currentSlide)
     }
 
     /// **Les bandes qu'on peut OUVRIR à cet instant** — un site unique.
@@ -1107,8 +1001,7 @@ extension MeeshyComposerHost {
     /// que `opened` refuse — un contrôle inerte qui a l'air vivant, c'est-à-dire
     /// exactement le défaut que ce câblage vient de fermer.
     var openableSceneBands: Set<ComposerSceneBand> {
-        ComposerSceneCapabilities.bands(canTrimSelection: trimmableSelection != nil,
-                                        canStyleSelection: styleableSelection != nil)
+        ComposerSceneCapabilities.bands
     }
 
 }

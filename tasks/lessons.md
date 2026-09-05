@@ -28612,7 +28612,154 @@ qu'une.
    dans un appel. Après avoir branché une valeur, compter les HÔTES qui la
    servent, pas les sites qui la produisent.
 
-## Leçon 526 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
+## Leçon 526 — Une recommandation qui ajoute de la friction à l'utilisateur est une décision-produit, jamais un défaut adopté « avec le reste »
+
+**Cycle #3684 (2026-09-05).** Le brouillon « Inscription en un écran » rangeait six décisions dans une
+même liste, dont « passer le mot de passe à 12 caractères avec zxcvbn ». Le porteur a adopté les cinq
+autres et REFUSÉ celle-là : le minimum reste à 6. Il a aussi demandé que le téléphone RESTE sur
+l'écran — drapeau et indicatif pré-sélectionnés — sans être annoncé comme facultatif : vide, on n'en
+fait rien ; rempli, on le prend.
+
+**Ce que la liste cachait.** Cinq recommandations retiraient de la friction (écran unique, CGU par le
+bouton, nom affiché, accueil à deux boutons, limite comptée sur les créations) ; une seule en AJOUTAIT,
+au nom d'une issue de sécurité d'un autre milestone. Les présenter d'un bloc, c'était laisser croire
+qu'elles allaient dans le même sens — et faire porter à « adopter les recommandations » un choix que le
+porteur n'avait pas fait.
+
+**La règle.**
+1. Quand un lot vise à RACCOURCIR un parcours, toute proposition qui l'ALLONGE (longueur de mot de
+   passe, case à cocher, vérification préalable) se présente À PART, avec son coût en secondes et
+   l'issue qui la motive — jamais dans la liste des allègements.
+2. Un champ qui sert la RÉCUPÉRATION ou le CONTACT (téléphone, e-mail de secours) ne se retire pas
+   au nom de la vitesse : il se pré-remplit au maximum (pays depuis la locale), ne se signale pas comme
+   facultatif, et ne coûte rien à qui le laisse vide. La vitesse se gagne sur les ATTENTES et les
+   ÉCRANS, pas sur les données que le produit a besoin de retrouver un jour.
+3. Une recommandation refusée est une DÉCISION du porteur : elle s'écrit dans le rapport de clôture
+   (« maintenu à 6 par directive »), et l'issue de sécurité qui la portait (#3629) garde son cours
+   sans que ce lot la préjuge.
+
+## Leçon 527 — `git stash` dans un arbre PARTAGÉ applique le stash d'un AUTRE lot
+
+Constat du 2026-09-05, incident causé et réparé dans la même session : un
+correctif d'écran a lancé `git stash push -- <chemins de l'écran>` puis
+`git stash pop`, dans un arbre où plusieurs lots (agents parallèles) écrivent
+en même temps. Le `push` par chemins n'a RIEN pris — un commit de point
+d'étape venait déjà d'absorber ces fichiers, donc rien n'était modifié à cet
+instant précis — et `git stash` reste une pile UNIQUE, partagée par tout
+l'arbre : le `pop` qui a suivi a donc réappliqué `stash@{0}`, le WIP d'un
+AUTRE lot (« recherche »), sur les fichiers de CET écran — neuf fichiers en
+conflit (`<<<<<<< Updated upstream` / `>>>>>>> Stashed changes`) sur des
+chemins que le lot courant ne possédait même pas.
+
+**`git stash` n'a pas de PORTÉE.** `push -- <chemins>` filtre ce qu'il MET
+DANS le stash, jamais ce qu'un `pop` ultérieur en RETIRE — le stash est
+toujours dépilé en entier, sur l'état COURANT de l'arbre, quel que soit le
+lot qui l'a créé. Dans un arbre à un seul agent, la pile n'a qu'un
+propriétaire et l'ambiguïté ne se voit jamais. Dans un arbre PARTAGÉ, la pile
+est un canal commun : n'importe quel agent qui pop lit le sommet, pas SON
+propre dépôt.
+
+1. **Ne jamais employer `git stash` (ni aucune commande qui touche un état
+   GLOBAL du dépôt — l'index, la pile de stash, `git bisect`, un hook global)
+   dans un arbre que plusieurs agents éditent en parallèle.** Un worktree
+   dédié (`git worktree add`) ou une copie de fichiers dans le scratchpad
+   isolent l'opération ; un simple `git diff`/`git status` avant d'agir
+   n'aurait pas suffi ici — le push avait réussi (silencieusement, sur rien)
+   et rien ne distinguait un stash vide d'un stash correctement ciblé.
+2. **Un `push -- <chemins>` qui ne modifie rien mérite un contrôle** : si
+   `git status` montre les mêmes chemins avant et après le `push`, c'est que
+   rien n'a été empilé — poursuivre par un `pop` dépile alors le sommet de
+   quelqu'un d'autre, pas un vide inoffensif.
+3. **La réparation se vérifie à TROIS niveaux, pas un** : `git diff HEAD --
+   <chemins touchés>` doit rendre vide (rien ne reste de l'application
+   erronée), `grep -rln '^<<<<<<< '` sur l'arbre doit rendre vide (aucun
+   marqueur oublié), et `git stash list` doit encore montrer le stash
+   d'origine INTACT (le "ours" repris pendant la résolution de conflit ne
+   doit pas avoir aussi supprimé l'entrée de la pile — un `stash pop` réussi
+   la retire automatiquement ; un conflit la LAISSE, ce qui est le filet de
+   sécurité qui a permis de tout récupérer ici).
+
+## Leçon 528 — Une cause MESURÉE peut être vraie et secondaire ; seule la réparation les départage
+
+**Symptôme (porteur, 2026-09-05)** : « j'ai tapé `@meeshy` et aucune rangée de
+mentions potentiel n'est apparu nulle part ». Capture jointe : dans le post
+PUBLIÉ, `@meeshy` est un lien qui ouvre le profil. Le rendu marche, la
+composition non.
+
+Deux faits mesurés le même quart d'heure, tous deux solides :
+
+1. `GET /api/v1/directory/friend-requests` rend **404 en production** (vérifié
+   au `curl` ; toute la famille `/directory/*` manque à la passerelle
+   déployée, alors que le dépôt a les routes et les enregistre).
+   `ComposerMentionFriendsSource` avale l'échec en `catch { return [] }`.
+2. Un brouillon n'avait **aucune recherche d'utilisateurs** :
+   `Context.composerDraft.remoteContext == nil` → sortie anticipée. Seuls les
+   amis ACCEPTÉS pouvaient être proposés.
+
+J'ai classé (1) en premier — un 404 en production est spectaculaire, daté,
+citable. C'était le mauvais ordre.
+
+Le porteur a fait basculer le simulateur sur **staging**, où `/directory/*`
+répond. Retapé `@` : **toujours aucune rangée**. Mesuré à l'API, jeton en
+main : `friend-requests?status=accepted` → **0 ami** ;
+`users/search?q=meeshy` → **1 : @meeshy**. La personne visée n'était l'amie de
+personne, donc injoignable sur les DEUX serveurs, 404 ou pas.
+
+> **Deux causes mesurées ne se hiérarchisent ni par leur gravité, ni par leur
+> netteté, ni par l'ordre où on les a trouvées.** Le seul test qui les sépare
+> est : *réparer l'une, et regarder si le symptôme survit.* Ici il a survécu —
+> (1) était réelle et secondaire, (2) était la racine.
+
+Corollaire de méthode : **quand un banc d'essai neuf devient disponible
+(ici : un second serveur), il ne sert pas qu'à « reproduire » — c'est une
+EXPÉRIENCE qui isole une variable.** Basculer sur staging n'était pas une
+commodité de test, c'était la manipulation qui a rendu le verdict.
+
+Et une forme à retenir sur le défaut lui-même : **l'impossibilité d'un appel
+CONTEXTUEL avait été lue comme l'impossibilité de TOUTE recherche.** Le
+doc-comment de `.composerDraft` le disait presque bien — « aucun id serveur
+n'existe, donc aucun appel réseau n'est possible » — la première moitié étant
+vraie (l'endpoint `/mentions/suggestions` exige un post ou une conversation)
+et la seconde fausse : `users/search` n'a jamais eu besoin de contexte, et la
+surface MOOD du MÊME composer l'employait déjà. Une jumelle divergente, dont
+la pauvre était montée sur la surface la plus utilisée.
+
+## Leçon 529 — Un chrome hérité d'un écran voisin arrive avec les hypothèses de CET écran-là
+
+**Retour porteur (2026-09-05)** : « la ligne des propositions doit avoir un
+fond transparent ».
+
+`ComposerMentionStrip` portait `.adaptiveGlass(in: Rectangle())`, justifié en
+commentaire par « même chrome neutre que `MentionSuggestionPanel` : une bande
+d'assistance à la saisie, pas du contenu de conversation ». La justification
+est correcte SUR SON SUJET — les deux vues jouent bien le même rôle — et
+fausse sur ce qu'elle sert à décider : `MentionSuggestionPanel` vit sur un
+écran CLAIR, le plateau du composer est sombre par doctrine (`PlateauTint`
+n'offre que trois teintes sombres). Le verre y peignait une barre pâle en
+travers de la scène, juste au-dessus du clavier.
+
+> **« Même chrome que X » n'est une raison que si X a le même FOND.** Une
+> analogie de RÔLE ne transporte pas les hypothèses de RENDU, et c'est
+> précisément ce qu'un commentaire d'analogie donne l'air d'avoir vérifié.
+
+**Ce que le retrait a réparé en plus, et que personne ne cherchait.** Les
+trois témoins de `ComposerMentionStripContrastTests` mesurent « la capsule à
+6 % de `textPrimary` par-dessus la teinte du plateau » — un empilement à DEUX
+couches, explicitement énoncé. Avec le verre, l'écran en avait TROIS, et la
+couche du milieu n'était mesurée nulle part : les ratios étaient justes par
+accident, sur un empilement qui n'était pas celui rendu.
+
+> **Un témoin de contraste décrit un EMPILEMENT.** Insérer une couche entre
+> deux de celles qu'il nomme ne le fait pas rougir : il continue de mesurer,
+> scrupuleusement, un écran qui n'existe plus. La question à poser à un témoin
+> de contraste n'est donc pas « ses couleurs sont-elles les bonnes ? » mais
+> **« l'empilement qu'il décrit est-il celui que la vue peint ? »** — et elle
+> se répond en lisant les modificateurs de fond de la vue, pas le témoin.
+
+Garde : `test_laBande_neSePeintAucunFond` interdit le verre ET tout fond
+opaque de remplacement.
+
+## Leçon 530 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
 
 Constat du 2026-09-05 (gate `test:chaines` › `v3-fil.spec.ts`, tour v3, écran
 `thread`) : `.reagir-slot` était à `height:0` tant que le module de temps réel
@@ -28647,7 +28794,7 @@ CHAQUE bulle au moment où le module chargeait.
    si oui, les deux ne se corrigent qu'ENSEMBLE, par une réservation
    inconditionnelle, jamais par deux correctifs qui se contredisent.
 
-## Leçon 527 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
+## Leçon 531 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
 
 Constat du 2026-09-05 (`compare-rendu.js` / `v3-rapport.mjs`, tour v3) : après
 la livraison du chantier de navigation en une page (§ 12.11, #5104/#4472/

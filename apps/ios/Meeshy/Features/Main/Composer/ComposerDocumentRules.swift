@@ -1030,6 +1030,19 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Suggestions de mention", bundle: .main)
     }
 
+    /// **Le mot qu'une bande VIDE affiche** (2026-09-05).
+    ///
+    /// La bande disparaissait quand rien ne correspondait, et l'auteur ne
+    /// pouvait pas distinguer « cette personne n'existe pas » de « la
+    /// fonctionnalité est cassée ». Le SDK dit déjà ce mot sur la même
+    /// question (`mention.suggestions.empty`, catalogue `.module`) ; la clé est
+    /// distincte parce que les deux bundles ne se lisent pas l'un l'autre, la
+    /// phrase est la même parce que c'est la même réponse.
+    static var mentionEmpty: String {
+        String(localized: "composer.mention.empty",
+               defaultValue: "Aucune personne trouvée", bundle: .main)
+    }
+
     /// Le libellé du picker de couleur de fond (F2, #3883… F2, #3885) — clé
     /// neuve sur le patron de `mediaStrip` (dotée, à l'abri du cliquet
     /// français), traduite dans les sept locales.

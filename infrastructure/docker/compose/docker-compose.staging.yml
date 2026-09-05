@@ -402,20 +402,25 @@ services:
       - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
       # LES PORTÉES DU TRAVAILLEUR DE ZONE (#4472) — l'AUTRE face de la règle
       # Traefik ci-dessous, dans le MÊME fichier pour ne pas diverger (témoin :
-      # apps/web-v3/__tests__/sw-registration.test.ts). Déclarées ICI, sur le
-      # service qui SERT `apps/web-v3` et LIT `process.env['V3_SW_PORTEES']`
-      # (`app/connecte/chargeur.ts`) — jamais sur `frontend-staging`, le
-      # LEGACY, dont le `sw.js` connaît sa zone par une constante compilée
-      # (`V3_ZONE_PREFIXES`), pas par l'environnement. Chaque portée doit être
+      # apps/web-v3/__tests__/sw-registration.test.ts). Chaque portée doit être
       # CAPTURÉE par la règle du routeur ET couverte par V3_ZONE_PREFIXES du
       # worker legacy. Jamais '/' avant l'étape 7 du § 4.9. Retirer la variable
       # désarme toute registration — le retour arrière du worker de zone.
+      #
+      # POSÉE SUR CE SERVICE, PAS SUR LE LEGACY. `process.env['V3_SW_PORTEES']`
+      # (`apps/web-v3/app/connecte/fil-vue.ts`) tourne dans le processus Next
+      # de `frontend-v3-staging` — l'image `isopen/meeshy-web-v3`, celle qui
+      # embarque `apps/web-v3`. La déclarer sur `frontend-staging` (l'image
+      # `isopen/meeshy-web`, qui ne contient pas ce code) est INERTE : c'est
+      # le défaut que `scripts/check-v3-pipeline.mjs` ne pouvait pas voir tant
+      # que son `ENV_CHAIN` ignorait la notation `process.env['NOM']`.
       - V3_SW_PORTEES=/l/,/chats,/chat/
       # Le périmètre NAVIGABLE du navigateur de zone (#5106) — les chemins
       # entre lesquels la navigation douce échange les documents. Même loi que
       # V3_SW_PORTEES : chaque entrée capturée par la règle du routeur
       # ci-dessous (témoin : sw-registration.test.ts), jamais '/'. Retirer la
-      # variable rend chaque lien à la navigation native.
+      # variable rend chaque lien à la navigation native. Posée ici pour la
+      # MÊME raison que V3_SW_PORTEES ci-dessus.
       - V3_NAVIGABLE=/chats,/chat/,/feed,/links,/notifications,/contacts,/search
     depends_on:
       gateway-staging:
@@ -481,7 +486,14 @@ services:
       # PUBLIC : les réclamer change ce qu'un visiteur extérieur voit d'un lien
       # reçu, et cela se décide à part. La production, elle, reste en ACTIFS
       # SEULEMENT (« non, pas encore », porteur, 2026-09-03).
-      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/__v3/rt/`) || PathPrefix(`/__v3/sw`) || PathPrefix(`/l/`) || Path(`/`) || Path(`/about`) || Path(`/contact`) || Path(`/partners`) || Path(`/terms`) || Path(`/privacy`) || Path(`/login`) || Path(`/signup`) || Path(`/chats`) || PathPrefix(`/chats/`) || PathPrefix(`/chat/`) || Path(`/feed`) || Path(`/links`) || Path(`/search`) || Path(`/notifications`) || Path(`/contacts`) || Path(`/settings`) || PathPrefix(`/settings/`))"
+      #
+      # `/deconnexion` (#5095) — la sortie de la v3. `Path` nu, pas de
+      # `PathPrefix` : le formulaire de l'espace membre POST une seule adresse,
+      # et un préfixe volerait une route voisine que le legacy pourrait servir
+      # un jour. Entré dans `V3_ZONE_PREFIXES` du worker legacy dans le MÊME
+      # lot (§ 4.4 bis) : sans lui, un visiteur revenant recevrait le shell
+      # mis en cache du legacy sur un POST que la v3 doit traiter.
+      - "traefik.http.routers.frontend-v3-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && (PathPrefix(`/__v3/_next`) || PathPrefix(`/__v3/rt/`) || PathPrefix(`/__v3/sw`) || PathPrefix(`/l/`) || Path(`/`) || Path(`/about`) || Path(`/contact`) || Path(`/partners`) || Path(`/terms`) || Path(`/privacy`) || Path(`/login`) || Path(`/signup`) || Path(`/chats`) || PathPrefix(`/chats/`) || PathPrefix(`/chat/`) || Path(`/feed`) || Path(`/links`) || Path(`/search`) || Path(`/notifications`) || Path(`/contacts`) || Path(`/settings`) || PathPrefix(`/settings/`) || Path(`/deconnexion`))"
       - "traefik.http.routers.frontend-v3-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-v3-staging.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-v3-staging.middlewares=compress@file"

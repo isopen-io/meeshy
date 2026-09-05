@@ -29,12 +29,24 @@ struct StoryTextEffectModifier: ViewModifier {
         if let spec = effect.shadow {
             let offset = spec.offset(fontSize: Double(fontSize))
             content.shadow(
-                color: (spec.usesTextColor ? textColor : Color.black).opacity(spec.opacity),
+                color: Self.ink(spec.ink, textColor: textColor).opacity(spec.opacity),
                 radius: spec.blurRadius(fontSize: Double(fontSize)),
                 x: offset.x,
                 y: offset.y)
         } else {
             content
+        }
+    }
+
+    /// L'encre SwiftUI de la table — jumelle de
+    /// `StoryTextEffectRendering.shadowColor` côté UIKit, et exhaustive pour
+    /// la même raison : une encre neuve doit dire sa couleur ICI aussi, sans
+    /// quoi les deux moteurs peindraient le même effet différemment.
+    static func ink(_ ink: StoryTextEffectInk, textColor: Color) -> Color {
+        switch ink {
+        case .text:  return textColor
+        case .dark:  return .black
+        case .light: return .white
         }
     }
 }

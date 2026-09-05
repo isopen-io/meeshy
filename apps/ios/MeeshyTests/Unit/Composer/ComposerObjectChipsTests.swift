@@ -325,117 +325,91 @@ final class ComposerObjectChipsTests: XCTestCase {
     ///
     /// C'est la loi 4 dans sa forme la plus coûteuse : le contrôle n'est pas
     /// absent, il est INERTE — et il PROMET par son cadre, son retour haptique
-    /// et son trait d'accessibilité. Trouvé en cherchant, sur la surface de
-    /// scène, le motif que `PostCard` avait déjà rendu au cycle 123 : une zone
-    /// cliquable dont le clic ne change rien.
+    /// et son trait d'accessibilité.
     ///
     /// > **Suivre une donnée jusqu'à son consommateur s'arrête un cran trop
     /// > tôt : la suivre jusqu'au PIXEL.** Le témoin qui l'attrape n'interroge
     /// > ni le libellé ni la présence — il demande ce que le doigt OBTIENT.
     ///
-    /// La réponse tient en une phrase : **un jeton mène là où sa valeur se
-    /// CHANGE**, et une valeur qui ne se change nulle part ne mène nulle part.
-    func test_laFenetreDeTemps_meneAuRognage() {
+    /// **Ce que le doigt obtient a changé de place le 2026-09-05** : un jeton
+    /// ouvrait une BANDE sous la scène, il ouvre désormais l'éditeur plein
+    /// écran sur la SECTION où la valeur se change. La première vue n'édite
+    /// plus (`ComposerFirstView`) ; la réponse, elle, ne bouge pas — **un
+    /// jeton mène là où sa valeur se CHANGE**.
+    func test_laFenetreDeTemps_meneAuTempsDeLObjet() {
         let jetons = ComposerObjectChips.chips(for: media(duree: 6),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [.timeline])
-        XCTAssertEqual(jetons.first { $0.id == "window" }?.destination, .timeline,
-                       "une fenêtre de temps se règle à la timeline — \(libelles(jetons))")
+                                               locale: Locale(identifier: "fr_FR"))
+        XCTAssertEqual(jetons.first { $0.id == "window" }?.destination, .timing,
+                       "une fenêtre de temps se règle au TEMPS — \(libelles(jetons))")
     }
 
-    /// **Une destination NON SERVIE n'est pas proposée**, et c'est ce qui
-    /// distingue ce câblage d'une promesse. `ComposerSceneBand.opened` refuse
-    /// déjà d'ouvrir une bande absente du jeu servi : attacher la destination
-    /// sans regarder ce jeu aurait fabriqué un jeton qui s'illumine, vibre, et
-    /// n'ouvre rien — exactement le défaut qu'on répare.
-    func test_uneDestinationNonServie_nEstPasProposee() {
-        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [])
-        XCTAssertNil(jetons.first { $0.id == "window" }?.destination,
-                     "aucune bande ouvrable ⇒ aucun jeton actionnable")
-    }
-
-    /// **Le style mène aux dix-huit styles** — la bande n'a pas encore d'hôte
-    /// (#4083), donc elle n'est pas servie aujourd'hui. La règle la nomme quand
-    /// même : le jour où la bande arrive, le jeton devient actionnable sans
-    /// qu'aucune ligne ne change ici. C'est le jeu SERVI qui décide, pas une
-    /// liste écrite à la main.
+    /// **Le style mène à la POLICE de l'éditeur**, section `.tool(.style)` — la
+    /// grille des dix-huit, à l'endroit unique où elle vit désormais.
     func test_leStyle_meneAuxDixHuitStyles() {
         let jetons = ComposerObjectChips.chips(for: texte(style: "neon"),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [.textStyles])
-        XCTAssertEqual(jetons.first { $0.id == "style" }?.destination, .textStyles)
+                                               locale: Locale(identifier: "fr_FR"))
+        XCTAssertEqual(jetons.first { $0.id == "style" }?.destination, .tool(.style))
     }
 
-    /// **Une valeur qui ne se change NULLE PART ne ment pas sur son pouvoir.**
-    /// La taille, l'alignement, la rotation et le volume n'ont aujourd'hui
-    /// aucune bande — les annoncer cliquables serait la même promesse creuse un
-    /// cran plus bas.
-    func test_unJetonSansDestination_neSePresentePasCommeUnBouton() {
+    /// **La TAILLE mène à la police, l'ALIGNEMENT à l'alignement.**
+    ///
+    /// Les deux n'avaient AUCUNE destination tant que les destinations étaient
+    /// des bandes : ni la taille ni l'alignement n'avait de bande, donc les
+    /// deux jetons étaient des lectures muettes. L'éditeur les sert tous les
+    /// deux — la taille au curseur du panneau POLICE, l'alignement au sien.
+    ///
+    /// > Une destination absente peut être une LOI (« ça ne se change nulle
+    /// > part ») ou un MANQUE (« ça ne se change pas ICI »). Les deux se
+    /// > lisaient `nil`. Changer de destination a séparé les deux cas, et il
+    /// > n'en restait aucun du premier genre.
+    func test_laTailleEtLAlignement_menentAuxOutilsQuiLesReglent() {
         let jetons = ComposerObjectChips.chips(for: texte(style: "neon", align: "center"),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: Set(ComposerSceneBand.allCases))
-        for sansPorte in ["size", "align"] {
+                                               locale: Locale(identifier: "fr_FR"))
+        XCTAssertEqual(jetons.first { $0.id == "size" }?.destination, .tool(.style))
+        XCTAssertEqual(jetons.first { $0.id == "align" }?.destination, .tool(.align))
+    }
+
+    /// **Une destination que la FAMILLE ne sert pas n'est pas proposée.**
+    ///
+    /// C'est la même loi qu'avant, posée sur la question qui a remplacé
+    /// l'ancienne : ce n'est plus « cette bande est-elle ouvrable ? » mais
+    /// « cette famille règle-t-elle cela ? ». Un sticker n'a aucun panneau
+    /// d'options dans l'éditeur ; ses jetons de taille et de rotation ne
+    /// mènent donc nulle part, et la vue ne les annonce pas comme des boutons.
+    func test_uneDestinationQueLaFamilleNeSertPas_nEstPasProposee() {
+        let jetons = ComposerObjectChips.chips(for: sticker(scale: 1.4, rotation: 0.3),
+                                               locale: Locale(identifier: "fr_FR"))
+        for sansPorte in ["size", "rotation"] {
             XCTAssertNil(jetons.first { $0.id == sansPorte }?.destination,
-                         "\(sansPorte) ne se règle dans aucune bande")
+                         "\(sansPorte) ne se règle nulle part pour un sticker")
         }
     }
 
-    /// **Le jeton ACTIF est celui de la bande OUVERTE** — la planche l'encadre,
-    /// et c'est la seule chose que VoiceOver ne peut pas lire dans le libellé.
+    /// **Toute destination servie EXISTE dans l'éditeur pour sa famille.**
     ///
-    /// Cet état est OBSERVABLE parce que la destination est une BANDE et non un
-    /// outil du rail : `isServed` cache la rangée dès qu'un outil s'ouvre, donc
-    /// un jeton qui mènerait à un outil ne pourrait jamais se montrer actif. Le
-    /// choix de destination n'est pas un rangement — c'est ce qui rend l'état
-    /// atteignable.
-    func test_leJetonActif_estCeluiDeLaBandeOuverte() {
-        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [.timeline])
-        XCTAssertEqual(ComposerObjectChips.activeChipId(chips: jetons, openedBand: .timeline),
-                       "window")
-    }
-
-    func test_aucuneBandeOuverte_aucunJetonActif() {
-        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [.timeline])
-        XCTAssertNil(ComposerObjectChips.activeChipId(chips: jetons, openedBand: nil))
-    }
-
-    /// **Une bande ouverte par AUTRE CHOSE n'allume aucun jeton.** La palette
-    /// de fond s'ouvre depuis la rangée d'outils basse et ne règle aucun objet ;
-    /// encadrer un jeton parce qu'une bande est ouverte, sans regarder LAQUELLE,
-    /// aurait fait clignoter la taille chaque fois qu'on choisit une couleur.
-    func test_uneBandeSansJeton_nEnAllumeAucun() {
-        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [.timeline])
-        XCTAssertNil(ComposerObjectChips.activeChipId(chips: jetons, openedBand: .palette))
-    }
-
-    /// **Taper le jeton actif REFERME sa bande.** Sans cette bascule, l'auteur
-    /// n'a aucun geste pour ranger ce qu'il vient d'ouvrir depuis le même
-    /// endroit — il doit aller chercher une autre sortie, ce qui fait de
-    /// l'ouverture un aller simple.
-    func test_taperLeJetonActif_refermeSaBande() {
-        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [.timeline])
-        XCTAssertEqual(ComposerObjectChips.toggled("window", in: jetons, opened: nil), .timeline)
-        XCTAssertNil(ComposerObjectChips.toggled("window", in: jetons, opened: .timeline))
-    }
-
-    /// **Un jeton sans destination laisse la bande EXACTEMENT où elle est.** Il
-    /// ne la referme pas : taper « TAILLE 140 % » pendant qu'on rogne fermerait
-    /// le rognage sans rien ouvrir, ce qui se lit comme une panne.
-    func test_unJetonSansDestination_neTouchePasALaBandeOuverte() {
-        let jetons = ComposerObjectChips.chips(for: media(duree: 6),
-                                               locale: Locale(identifier: "fr_FR"),
-                                               openableBands: [.timeline])
-        XCTAssertEqual(ComposerObjectChips.toggled("size", in: jetons, opened: .timeline), .timeline)
+    /// Le témoin structurel du lot : il ne vérifie pas une destination
+    /// particulière, il interdit qu'un jeton pointe sur une section que
+    /// `ComposerObjectEditorRail.entries(for:)` ne rend pas. Sans lui,
+    /// `selection(forFamily:keeping:)` retomberait EN SILENCE sur la première
+    /// section servie — un jeton qui ouvre l'écran, mais pas au bon endroit,
+    /// et rien pour le dire.
+    func test_chaqueDestination_estUneSectionServieParSaFamille() {
+        let cas: [(MeeshySceneObject.Kind, [ComposerObjectChips.Chip])] = [
+            (.text, ComposerObjectChips.chips(for: texte(style: "neon", align: "center",
+                                                         debut: 0, duree: 6))),
+            (.media, ComposerObjectChips.chips(for: media(duree: 6))),
+            (.sticker, ComposerObjectChips.chips(for: sticker(scale: 1.4, rotation: 0.3)))
+        ]
+        for (famille, jetons) in cas {
+            let servies = ComposerObjectEditorRail.entries(for: famille)
+            for jeton in jetons {
+                guard let destination = jeton.destination else { continue }
+                XCTAssertTrue(
+                    servies.contains(destination),
+                    "le jeton « \(jeton.id) » d'un \(famille) pointe sur \(destination), "
+                        + "que l'éditeur ne sert pas pour cette famille")
+            }
+        }
     }
 
     // MARK: - Le badge de l'objet sélectionné

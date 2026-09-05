@@ -474,14 +474,14 @@ extension MeeshyComposerHost {
     /// sans destination rend la bande INCHANGÉE — la refermer ferait de
     /// « TAILLE 140 % », pendant un rognage, un bouton d'annulation déguisé.
     func handleObjectChip(_ chipId: String) {
-        let suivante = ComposerObjectChips.toggled(chipId,
-                                                   in: sceneObjectChips,
-                                                   opened: requestedSceneBand)
         // Le retour haptique suit l'EFFET, jamais le doigt : faire vibrer
         // l'appareil pour un geste qui ne change rien est précisément le retour
-        // trompeur que la loi 4 combat.
-        guard suivante != requestedSceneBand else { return }
-        requestedSceneBand = suivante
+        // trompeur que la loi 4 combat. Un jeton sans destination est une
+        // LECTURE — la vue ne l'annonce même pas comme bouton.
+        guard let id = selectedSceneItemId,
+              let section = ComposerObjectChips.destination(of: chipId, in: sceneObjectChips)
+        else { return }
+        openObjectEditor(id, section: section)
         HapticFeedback.light()
     }
 
@@ -496,10 +496,15 @@ extension MeeshyComposerHost {
         case .bringForward: viewModel.bringForward(id: id)
         case .sendBackward: viewModel.sendBackward(id: id)
         case .trim:
-            // La bande BASCULE : re-toucher « Rogner » la referme. Un
-            // contrôleur qui n'ouvre que dans un sens laisse l'auteur chercher
-            // par où sortir, alors que le geste de sortie est celui d'entrée.
-            requestedSceneBand = requestedSceneBand == .timeline ? nil : .timeline
+            // **« Rogner » ouvre l'ÉDITEUR sur ses bornes** (2026-09-05). Il
+            // basculait une bande sous la scène ; la première vue n'édite plus,
+            // et les bornes de lecture vivent à `.media(.trim)`.
+            //
+            // La bascule disparaît avec la bande, et ce n'est pas une perte :
+            // elle existait parce que la bande RESTAIT visible à côté de son
+            // contrôleur, donc il fallait un geste pour la ranger. Un écran
+            // modal se referme par son propre en-tête.
+            openObjectEditor(id, section: .media(.trim))
             HapticFeedback.light()
         case .edit, .leaveScene:
             // Injoignables DEPUIS LE RAIL, et pour deux raisons distinctes que
@@ -711,7 +716,13 @@ extension MeeshyComposerHost {
     /// précaution : `enterTextEditingMode` ouvre le curseur en ligne sur le
     /// canvas. L'appeler sur un sticker mettrait l'écran dans un état qu'aucune
     /// vue ne rend.
-    func openObjectEditor(_ id: String) {
+    /// - Parameter section: la section sur laquelle OUVRIR — `nil` ⇒ celle que
+    ///   la famille sert en premier. Elle vient des jetons de l'inspecteur
+    ///   (2026-09-05), qui nomment chacun un réglage : l'auteur a désigné
+    ///   « ALIGN ▭ » du doigt, l'écran ne doit pas lui demander de le
+    ///   retrouver. Les autres portes — appui long, création, plan 2D — ne
+    ///   désignent rien et passent `nil`.
+    func openObjectEditor(_ id: String, section: ComposerObjectEditorSection? = nil) {
         presentedPortal = nil
         selectedSceneItemId = id
         let famille = viewModel.currentSlide.sceneObject(id: id)?.kind
@@ -719,7 +730,7 @@ extension MeeshyComposerHost {
         if famille == .text || famille == nil {
             viewModel.enterTextEditingMode(textId: id)
         }
-        editedObject = ComposerEditedObject(id: id)
+        editedObject = ComposerEditedObject(id: id, section: section)
     }
 
     /// La traduction entre la famille du MODÈLE et le kind du CANVAS — deux

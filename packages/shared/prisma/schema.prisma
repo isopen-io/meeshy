@@ -261,6 +261,16 @@ model User {
   /// Consentement pour le traitement général des données
   dataProcessingConsentAt DateTime?
 
+  /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
+  /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
+  /// est posée au `create` — jamais un booléen à côté, la date suffit.
+  termsAcceptedAt DateTime?
+
+  /// La version des CGU acceptée, telle que publiée (`YYYY-MM-DD`). Source
+  /// unique : `CURRENT_TERMS_VERSION` (@meeshy/shared/types/terms). Sans elle,
+  /// `termsAcceptedAt` dit QUAND sans dire À QUOI.
+  termsVersion String?
+
   /// Clonage vocal activé (DateTime non-null = activé)
   voiceCloningEnabledAt DateTime?
 

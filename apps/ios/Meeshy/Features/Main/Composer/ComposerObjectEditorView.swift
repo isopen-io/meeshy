@@ -43,6 +43,21 @@ import MeeshyUI
 struct ComposerObjectEditorView: View {
 
     @ObservedObject var viewModel: StoryComposerViewModel
+
+    /// **La boîte de mentions du MEUBLE, pas une nouvelle** (2026-09-05).
+    ///
+    /// Cet écran est un `fullScreenCover` : sa vue est reconstruite à chaque
+    /// rendu, donc un contrôleur né ici perdrait sa requête et ses candidats à
+    /// la première frappe. Le meuble le tient (`@StateObject sceneMentionBox`)
+    /// et charge ses candidats une fois, au montage du portail.
+    ///
+    /// C'est la BOÎTE qui est observée, jamais le contrôleur directement :
+    /// `MentionComposerController` est un `ObservableObject` imbriqué, et
+    /// Combine ne traverse pas l'imbrication tout seul — sans le relais
+    /// `objectWillChange` de la boîte, lire `showsSuggestions` dans ce `body`
+    /// ne le ré-évaluerait à aucune frappe.
+    @ObservedObject var mentionBox: ComposerMentionControllerBox
+
     let objectId: String
     let aspectRatio: CGFloat
     let plateauTint: Color
@@ -55,6 +70,15 @@ struct ComposerObjectEditorView: View {
     /// qui possède `editedObject`, et deux sources pour « quel objet est ouvert »
     /// divergeraient au premier tap.
     let onSelectObject: (String) -> Void
+    /// **Le texte alternatif du média ouvert** (#4756) — porté par le MEUBLE,
+    /// jamais par cet écran : c'est lui qui remet la charge d'accessibilité au
+    /// publieur, et un magasin local ici mourrait à la fermeture de l'éditeur,
+    /// exactement comme la légende avant #4890.
+    ///
+    /// Optionnel parce que l'écran s'ouvre aussi sur un TEXTE, un sticker ou une
+    /// pastille de lieu — familles qui n'ont pas d'alternative textuelle. `nil`
+    /// n'affiche pas la section : un champ inerte serait un contrôle sans effet.
+    var mediaAltText: Binding<String>? = nil
 
     /// **Ce qui est DÉPLIÉ, une section à la fois** (#4842). L'état est LOCAL
     /// à l'écran, et jamais celui que le ViewModel porte pour la rangée
@@ -73,6 +97,21 @@ struct ComposerObjectEditorView: View {
     /// fermer. Le type porte donc l'invariant : le vide est irreprésentable.
     @State private var selectedTool: ComposerObjectEditorSection =
         ComposerObjectEditorRail.initiallySelected
+
+    /// **La section demandée par la PORTE D'ENTRÉE** (2026-09-05) — `nil` ⇒
+    /// l'écran s'ouvre sur ce que la famille sert en premier, comme avant.
+    ///
+    /// Elle ne peut pas initialiser `selectedTool` directement : un `@State`
+    /// alimenté par un paramètre exige un `init` écrit à la main, que cette vue
+    /// n'a pas et dont l'ajout obligerait à recopier ses onze propriétés. Elle
+    /// est donc CONSOMMÉE à la première résolution de famille, ci-dessous.
+    var initialSection: ComposerObjectEditorSection?
+
+    /// **La demande n'a lieu qu'une fois.** Sans ce drapeau, changer d'objet
+    /// depuis le plan 2D ramènerait l'auteur à la section par laquelle il est
+    /// entré, en effaçant l'outil qu'il réglait — le contraire exact de ce que
+    /// `selection(forFamily:keeping:)` existe pour préserver.
+    @State private var initialSectionPending = true
 
     /// **Le panneau de l'outil est-il REPLIÉ ?** (#5027)
     ///
@@ -233,8 +272,10 @@ struct ComposerObjectEditorView: View {
         // pas qu'elle soit SERVIE par la famille courante. Deux propriétés
         // distinctes, et la seconde demande sa règle.
         .adaptiveOnChange(of: family, initial: true) { _, nouvelle in
+            let demandee = initialSectionPending ? (initialSection ?? selectedTool) : selectedTool
+            initialSectionPending = false
             selectedTool = ComposerObjectEditorRail.selection(forFamily: nouvelle,
-                                                              keeping: selectedTool)
+                                                              keeping: demandee)
         }
     }
 
@@ -369,6 +410,19 @@ struct ComposerObjectEditorView: View {
             editingTextId: viewModel.textEditingMode.activeTextId,
             onInlineTextChanged: { id, texte in
                 viewModel.updateTextContent(id: id, text: texte)
+                // **C'est ICI que la frappe a lieu, et nulle part ailleurs**
+                // (2026-09-05). `MeeshyComposerHost+Surfaces` nourrit la même
+                // requête depuis le canvas de la PREMIÈRE VUE — mais depuis
+                // #4634, `openObjectEditor` présente cet écran modal EN MÊME
+                // TEMPS qu'il entre en édition de texte, et les deux seuls
+                // appelants d'`enterTextEditingMode` du dépôt passent par lui.
+                // Le canvas du dessous est donc couvert : sa bande de mentions
+                // interprétait une frappe qui n'a pas lieu là.
+                //
+                // > Une vue montée sous un écran modal n'a aucun site où
+                // > rougir : elle compile, elle se construit, ses conditions
+                // > s'évaluent — et aucun œil ne la voit jamais.
+                mentionBox.controller.handleQuery(in: texte)
             },
             // **Vide, et c'est le comportement voulu.** Sur la scène incrustée,
             // fermer la saisie SORT du mode d'édition ; ici l'écran EST
@@ -581,42 +635,81 @@ struct ComposerObjectEditorView: View {
         HapticFeedback.light()
     }
 
+    /// **Le panneau bas — UNE boîte, quelle que soit la famille qu'elle montre**
+    /// (#5083, corrigé le 2026-09-05).
+    ///
+    /// ## Le défaut mesuré au simulateur
+    ///
+    /// La boîte se DIMENSIONNE sur une préférence que son contenu publie. Le
+    /// branchement MÉDIA montait bien la boîte et lisait bien la préférence — et
+    /// ne la publiait nulle part. `height(content:cap:)` rendait donc son
+    /// PLANCHER, **1 point**, et les options d'un média se peignaient sous le
+    /// bord de l'écran : section « Décrire » ouverte, son titre tombait à
+    /// y=839 et son champ de saisie à **y=884 sur un écran de 874 points**.
+    /// L'arbre d'accessibilité le décrivait ; aucun doigt ne pouvait l'atteindre.
+    ///
+    /// Les trois autres outils du média — filtre, rognage, actions — vivaient
+    /// sous la même règle depuis #5083. « Décrire » n'a rien cassé : il a rendu
+    /// le défaut VISIBLE en étant le premier de la famille à porter un champ de
+    /// SAISIE, donc le premier dont l'inaccessibilité se constate au doigt
+    /// plutôt qu'à l'œil.
+    ///
+    /// > **Deux branches qui montent la même boîte en partagent la TAILLE, pas
+    /// > la MESURE** — celle-ci se recopie, donc elle s'oublie. Une boîte qui
+    /// > mesure ce qu'on lui DONNE ferme la question pour la troisième famille
+    /// > comme pour les deux premières.
     @ViewBuilder
     private var options: some View {
+        VStack(spacing: 0) {
+            mentionStrip
+            toolOptions
+        }
+    }
+
+    @ViewBuilder
+    private var toolOptions: some View {
         if !optionsAreCollapsed, family == .media {
-            ScrollView { mediaOptions }
-                .frame(height: ComposerObjectEditorOptions.height(
-                    content: optionsContentHeight,
-                    cap: ComposerObjectEditorRail.optionsMaxHeight))
-                .onPreferenceChange(ComposerObjectEditorOptionsHeightKey.self) {
-                    optionsContentHeight = $0
-                }
+            optionsBand(scrollDisabled: false) { mediaOptions }
+        } else if !optionsAreCollapsed, family == .audio {
+            // **La puce de son a une zone basse depuis le 2026-09-05.** Elle
+            // n'en avait aucune : ni `mediaObject`, ni binding de texte, donc
+            // les deux autres branches la laissaient tomber et l'écran
+            // s'ouvrait sur un bas VIDE. Son rognage vivait dans la bande
+            // `timeline` du bas de scène, que la directive du jour retire —
+            // sans cette branche, le lot supprimerait la capacité au lieu du
+            // doublon.
+            optionsBand(scrollDisabled: false) { audioOptions }
         } else if !optionsAreCollapsed, let binding = viewModel.textObjectBinding(for: objectId) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    styleSection(binding)
-                    // Les autres outils, dans l'ordre que la rangée du SDK
-                    // a fixé — le même ordre que les bulles du rail, pour que
-                    // passer de l'un à l'autre ne demande pas de réapprendre.
-                    ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
-                        section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
-                            // **L'écran plein demande la GRILLE** (#5045).
-                            // Les deux hôtes SDK gardent la rangée : au-dessus
-                            // du clavier et dans la zone basse de la scène, la
-                            // hauteur d'une grille n'existe pas.
-                            TextEditToolOptions(tool: tool,
-                                                textObject: binding,
-                                                layout: .grid)
-                        }
-                    }
-                    timingSection
-                    planSection
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 28)
-                // La hauteur RÉELLE du contenu, remontée au panneau. Mesurée en
-                // fond plutôt qu'en overlay : un `GeometryReader` posé en
-                // overlay imposerait sa propre taille au contenu qu'il mesure.
+            optionsBand(scrollDisabled: planHoldsGesture) { textOptions(binding) }
+        }
+    }
+
+    /// **Le bas prend ce qu'il LUI faut, jamais tout ce qui reste** (#4997).
+    ///
+    /// Un `ScrollView` est glouton : posé en `maxHeight: .infinity`, il
+    /// réclamait toute la hauteur libre et laissait une bande VIDE de ≈ 250 pt
+    /// sous la grille des polices — mesurée au simulateur —, pendant que la
+    /// carte 9:16 restait à 247 pt là où sa largeur lui en permet 594.
+    ///
+    /// **`maxHeight:` seul ne suffisait pas** (#5083), et c'est la vraie cause :
+    /// le `ScrollView` prend les 260 points qu'on l'autorise à prendre même
+    /// quand son contenu en occupe 168, et le contenu se cale en HAUT de la
+    /// boîte. Les quatre-vingt-douze points restants n'appartenaient à personne
+    /// et ressemblaient à une marge voulue. L'ancrage au bord (`safeAreaInset`)
+    /// déplaçait la BOÎTE sans rien changer à ce qu'elle contenait : les deux
+    /// correctifs sont nécessaires, aucun ne suffit seul.
+    ///
+    /// La mesure se prend en FOND et non en overlay — un `GeometryReader` posé
+    /// en overlay imposerait sa propre taille au contenu qu'il mesure — et elle
+    /// est bornée par le bas à 1 : une hauteur nulle à la première passe ferait
+    /// disparaître le panneau une frame, ce qui se voit comme un clignotement à
+    /// chaque ouverture d'outil.
+    private func optionsBand<Content: View>(
+        scrollDisabled: Bool,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ScrollView {
+            content()
                 .background {
                     GeometryReader { geo in
                         Color.clear.preference(
@@ -624,44 +717,39 @@ struct ComposerObjectEditorView: View {
                             value: geo.size.height)
                     }
                 }
-            }
-            // **Le bas prend ce qu'il LUI faut, jamais tout ce qui reste**
-            // (#4997). Un `ScrollView` est greedy : posé en `maxHeight:
-            // .infinity`, il réclamait toute la hauteur libre et laissait une
-            // bande VIDE de ≈ 250 pt sous la grille des polices — mesurée au
-            // simulateur —, pendant que la carte 9:16 restait à 247 pt là où sa
-            // largeur lui en permet 594.
-            //
-            // Le plafond est celui du plus grand panneau servi (la grille des
-            // dix-huit styles, deux rangées) : au-delà, le contenu défile,
-            // et en deçà la place revient au sujet. C'est le sens même de la
-            // directive — « laisser la place au canvas d'occuper suffisamment
-            // l'espace ».
-            // **Le panneau fait la hauteur de son CONTENU, plafonnée** (#5083).
-            //
-            // `maxHeight:` seul ne suffisait pas, et c'est la vraie cause du
-            // défaut : un `ScrollView` est GLOUTON dans son axe — il prend les
-            // 260 points qu'on l'autorise à prendre, même quand son contenu en
-            // occupe 168, et le contenu se cale en HAUT de la boîte. Les
-            // quatre-vingt-douze points restants n'appartenaient à personne et
-            // ressemblaient à une marge voulue.
-            //
-            // Mesuré avant : la grille des polices finissait à 748 sur un écran
-            // de 874. L'ancrage au bord (`safeAreaInset`, ci-dessus) déplaçait
-            // la BOÎTE sans rien changer à ce qu'elle contenait — les deux
-            // correctifs sont nécessaires, et aucun ne suffit seul.
-            //
-            // La hauteur mesurée est bornée par le bas à 1 : une hauteur nulle
-            // à la première passe ferait disparaître le panneau une frame, ce
-            // qui se voit comme un clignotement à chaque ouverture d'outil.
-            .frame(height: ComposerObjectEditorOptions.height(
-                content: optionsContentHeight,
-                cap: ComposerObjectEditorRail.optionsMaxHeight))
-            .onPreferenceChange(ComposerObjectEditorOptionsHeightKey.self) {
-                optionsContentHeight = $0
-            }
-            .scrollDisabled(planHoldsGesture)
         }
+        .frame(height: ComposerObjectEditorOptions.height(
+            content: optionsContentHeight,
+            cap: ComposerObjectEditorRail.optionsMaxHeight))
+        .onPreferenceChange(ComposerObjectEditorOptionsHeightKey.self) {
+            optionsContentHeight = $0
+        }
+        .scrollDisabled(scrollDisabled)
+    }
+
+    /// Les options d'un objet TEXTE, dans l'ordre que la rangée du SDK a fixé —
+    /// le même que les bulles du rail, pour que passer de l'un à l'autre ne
+    /// demande pas de réapprendre.
+    @ViewBuilder
+    private func textOptions(_ binding: Binding<StoryTextObject>) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            styleSection(binding)
+            ForEach(TextEditTool.all.filter { $0 != .style }, id: \.self) { tool in
+                section(ComposerObjectEditorCopy.tool(tool), .tool(tool)) {
+                    // **L'écran plein demande la GRILLE** (#5045).
+                    // Les deux hôtes SDK gardent la rangée : au-dessus
+                    // du clavier et dans la zone basse de la scène, la
+                    // hauteur d'une grille n'existe pas.
+                    TextEditToolOptions(tool: tool,
+                                        textObject: binding,
+                                        layout: .grid)
+                }
+            }
+            timingSection
+            planSection
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 28)
     }
 
     /// **Le spécimen `2e`, à sa vraie place** — pendant l'édition, sur le fond
@@ -870,6 +958,21 @@ struct ComposerObjectEditorView: View {
 /// autre question : celui-là est SÉLECTIONNÉ, celui-ci est OUVERT.
 nonisolated struct ComposerEditedObject: Identifiable, Equatable {
     let id: String
+
+    /// **La section sur laquelle l'écran s'OUVRE — `nil` ⇒ celle que la famille
+    /// sert en premier** (directive porteur 2026-09-05).
+    ///
+    /// Elle existe parce que la première vue n'édite plus : taper le jeton
+    /// « ALIGN ▭ » de l'inspecteur ouvrait une bande sous la scène, il ouvre
+    /// désormais cet écran — et l'ouvrir sur POLICE demanderait à l'auteur de
+    /// retrouver lui-même le réglage qu'il vient de désigner du doigt.
+    ///
+    /// Elle voyage sur l'ITEM de présentation plutôt que dans un `@State` du
+    /// meuble : `fullScreenCover(item:)` reconstruit la vue à chaque
+    /// présentation, donc la valeur arrive AVEC l'objet qu'elle qualifie. Un
+    /// état séparé se désynchroniserait au premier changement d'objet sans
+    /// fermeture — ce que le plan 2D permet précisément de faire.
+    var section: ComposerObjectEditorSection?
 }
 
 /// Les mots de l'éditeur d'objet. Hors du `body` — une chaîne composée dans une
@@ -987,6 +1090,14 @@ nonisolated enum ComposerObjectEditorCopy {
         switch tool {
         case .trim:    return trim
         case .actions: return mediaActions
+        case .altText:
+            // « Décrire » plutôt que « Texte alternatif » : la rangée nomme le
+            // VERBE (loi 7), et c'est le champ lui-même qui porte l'étiquette
+            // technique — `MediaAltTextField` la rend déjà, dans le catalogue
+            // du SDK. Deux libellés pour un champ se liraient comme deux
+            // réglages.
+            return String(localized: "composer.object.editor.altText",
+                          defaultValue: "Décrire", bundle: .main)
         case .crop:
             return String(localized: "composer.object.editor.crop",
                           defaultValue: "Recadrer", bundle: .main)

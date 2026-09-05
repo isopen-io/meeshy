@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import me.meeshy.sdk.model.StoryTextEffect
+import me.meeshy.sdk.model.StoryTextEffectInk
 
 /**
  * Projects the pure [StoryTextEffect] table onto a Compose [Shadow] for a text painted at
@@ -13,7 +14,11 @@ import me.meeshy.sdk.model.StoryTextEffect
  */
 fun StoryTextEffect.composeShadow(fontSizePx: Float, textColor: Color): Shadow? {
     val spec = shadow ?: return null
-    val base = if (spec.usesTextColor) textColor else Color.Black
+    val base = when (spec.ink) {
+        StoryTextEffectInk.TEXT -> textColor
+        StoryTextEffectInk.DARK -> Color.Black
+        StoryTextEffectInk.LIGHT -> Color.White
+    }
     return Shadow(
         color = base.copy(alpha = spec.opacity.toFloat()),
         offset = Offset(

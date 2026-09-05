@@ -21,6 +21,8 @@ import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS, type CleDePreference } from '@/li
  *   - la rangée DND affiche la fenêtre comme VALEUR, sans contrôle d'édition.
  */
 
+// `Object.fromEntries` ne peut pas préserver les clés LITTÉRALES : l'assertion
+// ci-dessous porte sur une fixture de test, jamais sur une donnée servie.
 const REGLAGES_SERVIS = Object.fromEntries(
   BASCULES_DE_PREFS.map((b) => [b.cle, b.cle !== 'reactionEnabled']),
 ) as Record<CleDePreference, boolean>;
@@ -93,6 +95,22 @@ describe('la vue des réglages de notification', () => {
 
     expect(html).toMatch(/<p class="avis" role="status" hidden>/);
     expect(html).toMatch(/<p class="echec" role="alert" hidden>/);
+  });
+
+  /**
+   * DÉFAUT RELEVÉ EN REVUE (#4899) : un 401 en cours de session (le module
+   * de participation, `lib/realtime/prefs.ts`) était confondu avec un échec
+   * réseau — « réessayez » sur une session qui n'est plus valide. Le bandeau
+   * qui répare est SERVI CACHÉ, comme les bandeaux différés du fil : rien ne
+   * peut naître après le premier pixel sans un nœud déjà là pour l'annoncer.
+   */
+  it('sert le bandeau de session expirée, caché, avec son lien de reconnexion', () => {
+    const html = documentDesPrefs(ETAT_NOMINAL);
+
+    expect(html).toMatch(/<div class="bandeau attention" id="bandeau-session-expiree" role="alert" hidden>/);
+    expect(html).toMatch(
+      /<a class="action discrete" href="\/login\?returnUrl=%2Fnotifications%2Fpreferences">Se reconnecter<\/a>/,
+    );
   });
 
   it('révèle l’avis de réussite quand une règle vient d’être appliquée', () => {

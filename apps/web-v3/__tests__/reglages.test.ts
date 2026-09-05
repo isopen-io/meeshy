@@ -43,10 +43,14 @@ const APPAREIL: Appareil = { id: 'd1', nom: 'iPhone d’Amina', plateforme: 'ios
 describe('le carrefour des réglages', () => {
   const html = documentDuCarrefour();
 
-  it('mène aux trois écrans que la passerelle sert', () => {
+  it('mène aux quatre écrans que la passerelle sert', () => {
     expect(html).toContain('href="/settings/profile"');
     expect(html).toContain('href="/settings/security"');
     expect(html).toContain('href="/settings/application"');
+    // Les préférences de notification (#4899) vivent à leur PROPRE adresse,
+    // `/notifications/preferences` — jamais `/settings/notification`, que la
+    // passerelle ne sert toujours pas (témoin suivant).
+    expect(html).toContain('href="/notifications/preferences"');
   });
 
   /**

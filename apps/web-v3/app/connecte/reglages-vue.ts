@@ -167,6 +167,14 @@ export const documentDuCarrefour = (): string =>
             href: CHEMIN.application,
             quoi: REGLAGES.carrefour.application.titre,
             sous: REGLAGES.carrefour.application.phrase,
+          }) +
+          // Vit à SA PROPRE adresse (`/notifications/preferences`, #4899),
+          // pas sous `/settings/*` : la planche la range sous la boîte de
+          // notifications (`lib/contenu/reglages.ts`, doc-comment de tête).
+          rangeeLien({
+            href: '/notifications/preferences',
+            quoi: REGLAGES.carrefour.notifications.titre,
+            sous: REGLAGES.carrefour.notifications.phrase,
           }),
         REGLAGES.carrefour.liste,
       ),

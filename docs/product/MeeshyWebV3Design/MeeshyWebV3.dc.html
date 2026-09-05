@@ -1107,7 +1107,7 @@ class Component extends DCLogic {
       isLogin, pending: true,
       fields: isLogin
         ? [{ label: 'Identifiant ou e-mail', value: 'amina@meeshy.me', hint: '', tone: 'var(--color-text)' }, { label: 'Mot de passe', value: '••••••••', hint: 'Afficher', tone: 'var(--color-text)' }]
-        : [{ label: 'Nom affiché', value: 'Tolu Adeyemi', hint: '', tone: 'var(--color-text)' }, { label: 'E-mail', value: 'tolu@exemple.com', hint: '', tone: 'var(--color-text)' }, { label: 'Mot de passe', value: '••••••••', hint: '8 car. min', tone: 'var(--color-text)' }, { label: 'Langue parlée', value: '🇳🇬 Yoruba', hint: 'Changer', tone: 'var(--color-text)' }],
+        : [{ label: 'Nom affiché', value: 'Tolu Adeyemi', hint: '', tone: 'var(--color-text)' }, { label: 'E-mail', value: 'tolu@exemple.com', hint: '', tone: 'var(--color-text)' }, { label: 'Téléphone', value: '🇳🇬 +234 · 0801 234 5678', hint: '', tone: 'var(--color-text)' }, { label: 'Mot de passe', value: '••••••••', hint: '6 car. min', tone: 'var(--color-text)' }, { label: 'Langue parlée', value: '🇳🇬 Yoruba', hint: 'Changer', tone: 'var(--color-text)' }],
       submit: isLogin ? 'Se connecter et rejoindre' : 'Créer le compte et rejoindre',
       submitGo: () => this.go('rights'),
       alt: isLogin ? "Pas encore de compte ? Créer un compte" : 'Déjà un compte ? Se connecter',

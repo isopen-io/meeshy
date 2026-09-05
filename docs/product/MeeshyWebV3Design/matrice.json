@@ -368,7 +368,7 @@
   {
    "ordre": 12,
    "vue_id": "signup",
-   "titre_issue": "On crée son compte en une passe, la disponibilité des identifiants vérifiée d'un seul appel",
+   "titre_issue": "On crée son compte en une passe : nom, e-mail, téléphone avec indicatif pré-sélectionné, mot de passe, langue pré-remplie — aucune vérification avant l’envoi",
    "lot": "L4",
    "priorite": "P1-role-secondaire",
    "route": "/signup?returnUrl=/chat/:lien",
@@ -376,7 +376,7 @@
    "depend_de": [
     "login"
    ],
-   "critere_de_fin": "Assertion CDP : pseudo, e-mail et téléphone sont vérifiés en UN SEUL appel groupé (aucune requête par champ, aucun débounce triple) ; ?next= restauré après succès ; validation Zod partagée exécutée côté serveur et rejouée côté client sans seconde définition de schéma ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "critere_de_fin": "Assertion CDP : AUCUNE requête vers la passerelle avant la soumission (ni disponibilité, ni débounce) ; le pays de l’indicatif et la langue de lecture sont pré-sélectionnés depuis Accept-Language ; un refus typé (EMAIL_TAKEN, PHONE_INVALID, conflit de numéro) est rendu SUR son champ avec aria-invalid et aria-describedby, la saisie conservée sauf le mot de passe ; ?returnUrl= restauré après succès ; 0 Ko de JavaScript de page ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
    "dimensions_visees": [
     "Performance",
     "Facilité d'usage",
@@ -384,7 +384,7 @@
     "Facilité d'accès",
     "Complétude"
    ],
-   "corps_issue": "**Contexte** — Trois vérifications de disponibilité = trois requêtes par frappe si on suit la pente naturelle, contre l'exigence « très faible consommation de données ».\n\n**Preuve attendue** — `GET /auth/check-availability` appelé UNE fois pour les trois critères, isolé dans `lib/api/identity.ts` (seul endroit à changer le jour où `/identity/availability` est monté).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (disponibilité pseudo), § 10.1 ; `cible/signup.png` ; `vues.json#signup`."
+   "corps_issue": "**Contexte** — La passerelle dérive le pseudo, le prénom et le nom du nom affiché, et déduit la langue quand elle n’est pas donnée (#5216) : l’écran n’a plus rien à vérifier avant d’envoyer, et chaque vérification retirée est une attente en moins (analyse du 2026-09-05 sur #3684).\n\n**Preuve attendue** — `POST /auth/register` est le SEUL appel du parcours ; les refus se lisent en UN site (`lib/api/authentification.ts`, table code → champ) et se posent sous leur champ.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; `cible/signup.png` ; `vues.json#signup` ; #5217."
   },
   {
    "ordre": 13,
@@ -628,14 +628,14 @@
    "depend_de": [
     "notifs"
    ],
-   "critere_de_fin": "Test : les onze bascules envoient chacune sa mutation et sont relues du serveur après rechargement (onze allers-retours vérifiés — elles sont purement visuelles aujourd'hui) ; échec réseau ⇒ rollback VISIBLE, jamais un état affiché divergent du serveur ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "critere_de_fin": "Test : les treize bascules (la planche en dessine treize, DETAILS.notification lignes 750-776 — le compte de onze était un plancher daté avant la section APPELS ET SYSTÈME) envoient chacune sa mutation et sont relues du serveur après rechargement (treize allers-retours vérifiés par les témoins contre le bouchon, en boucle sur la table importée) ; échec réseau ⇒ rollback VISIBLE, jamais un état affiché divergent du serveur ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
    "dimensions_visees": [
     "Complétude",
     "Utilité",
     "Expérience utilisateur",
     "Maintenabilité"
    ],
-   "corps_issue": "**Contexte** — Onze bascules rendues sans effet : la loi « un contrôle existe s'il a un effet » est enfreinte onze fois sur un seul écran.\n\n**Preuve attendue** — Une mutation par bascule, un rollback visible, une relecture serveur qui prouve la persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; `cible/notifPrefs.png` ; `vues.json#notifPrefs`."
+   "corps_issue": "**Contexte** — Treize bascules rendues sans effet : la loi « un contrôle existe s'il a un effet » est enfreinte treize fois sur un seul écran.\n\n**Preuve attendue** — Une mutation par bascule, un rollback visible, une relecture serveur qui prouve la persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; `cible/notifPrefs.png` ; `vues.json#notifPrefs`."
   },
   {
    "ordre": 25,

@@ -20,14 +20,70 @@ package me.meeshy.sdk.model
 enum class StoryTextEffect(val wire: String, val shadow: StoryTextEffectShadow?) {
     NONE("none", null),
 
+    // --- Glows: the TEXT ink, no offset
+
     /** A halo in the text colour, no offset. */
-    GLOW("glow", StoryTextEffectShadow(offsetXEm = 0.0, offsetYEm = 0.0, blurEm = 0.36, usesTextColor = true, opacity = 1.0)),
+    GLOW("glow", StoryTextEffectShadow(0.0, 0.0, 0.36, StoryTextEffectInk.TEXT, 1.0)),
+
+    /** The same halo, half-voiced — for light text on a light ground. */
+    GLOW_SOFT("glowSoft", StoryTextEffectShadow(0.0, 0.0, 0.24, StoryTextEffectInk.TEXT, 0.55)),
+
+    /** A very wide, half-voiced glow — the text does not shine, it BATHES. */
+    AURA("aura", StoryTextEffectShadow(0.0, 0.0, 0.85, StoryTextEffectInk.TEXT, 0.45)),
+
+    /** A wide, full glow: the neon sign. */
+    NEON("neon", StoryTextEffectShadow(0.0, 0.0, 0.60, StoryTextEffectInk.TEXT, 1.0)),
+
+    // --- Outlines: the DARK ink, no offset
+
+    /** A diffuse dark halo all around — the text holds on a busy light ground. */
+    HALO("halo", StoryTextEffectShadow(0.0, 0.0, 0.30, StoryTextEffectInk.DARK, 0.75)),
+
+    /** A TIGHT dark halo — the eye reads it as an outline. */
+    OUTLINE("outline", StoryTextEffectShadow(0.0, 0.0, 0.09, StoryTextEffectInk.DARK, 1.0)),
+
+    /** The outline in LIGHT ink — the only one that holds dark text on a dark photo. */
+    OUTLINE_LIGHT("outlineLight", StoryTextEffectShadow(0.0, 0.0, 0.07, StoryTextEffectInk.LIGHT, 1.0)),
+
+    // --- Shadows: the DARK ink, offset
 
     /** A soft black drop shadow, offset downwards. */
-    SHADOW("shadow", StoryTextEffectShadow(offsetXEm = 0.03, offsetYEm = 0.06, blurEm = 0.16, usesTextColor = false, opacity = 0.6)),
+    SHADOW("shadow", StoryTextEffectShadow(0.03, 0.06, 0.16, StoryTextEffectInk.DARK, 0.6)),
+
+    /** The same, diffused and half-voiced: it DETACHES without being seen. */
+    SHADOW_SOFT("shadowSoft", StoryTextEffectShadow(0.02, 0.04, 0.28, StoryTextEffectInk.DARK, 0.45)),
+
+    /** A hard, dense drop shadow. */
+    DROP("drop", StoryTextEffectShadow(0.06, 0.10, 0.08, StoryTextEffectInk.DARK, 0.75)),
+
+    /** A shadow centred UNDER the text: it does not shift, it LIFTS. */
+    LIFT("lift", StoryTextEffectShadow(0.0, 0.10, 0.22, StoryTextEffectInk.DARK, 0.45)),
+
+    /** A hard shadow cast SIDEWAYS, no descent — raking light. */
+    SIDE_SHADOW("sideShadow", StoryTextEffectShadow(0.08, 0.0, 0.03, StoryTextEffectInk.DARK, 0.7)),
+
+    /** A low, diffuse shadow with no lateral offset: the text FLOATS. */
+    FLOAT("float", StoryTextEffectShadow(0.0, 0.18, 0.30, StoryTextEffectInk.DARK, 0.32)),
+
+    /** A long diagonal shadow, no blur — poster depth. */
+    LONG_SHADOW("longShadow", StoryTextEffectShadow(0.14, 0.14, 0.0, StoryTextEffectInk.DARK, 0.35)),
+
+    // --- Reliefs: the text looks carved
 
     /** A hard offset shadow, no blur — the text stands out as if cut out. */
-    RELIEF("relief", StoryTextEffectShadow(offsetXEm = 0.05, offsetYEm = 0.05, blurEm = 0.0, usesTextColor = false, opacity = 0.85)),
+    RELIEF("relief", StoryTextEffectShadow(0.05, 0.05, 0.0, StoryTextEffectInk.DARK, 0.85)),
+
+    /** Light at the top left: the text comes OUT of the surface. */
+    EMBOSS("emboss", StoryTextEffectShadow(-0.03, -0.03, 0.02, StoryTextEffectInk.LIGHT, 0.7)),
+
+    /** Light just below: the text goes INTO the surface (letterpress). */
+    LETTERPRESS("letterpress", StoryTextEffectShadow(0.0, 0.025, 0.01, StoryTextEffectInk.LIGHT, 0.6)),
+
+    /** A displaced double in the text's OWN colour — the screen-print echo. */
+    ECHO("echo", StoryTextEffectShadow(0.09, 0.09, 0.0, StoryTextEffectInk.TEXT, 0.35)),
+
+    /** The echo pushed far and nearly erased — the trace, not the double. */
+    GHOST("ghost", StoryTextEffectShadow(0.16, 0.16, 0.06, StoryTextEffectInk.TEXT, 0.22)),
     ;
 
     /** The wire value to publish, or `null` for [NONE] — a text without effect keeps the JSON it had. */
@@ -50,7 +106,30 @@ data class StoryTextEffectShadow(
     val offsetXEm: Double,
     val offsetYEm: Double,
     val blurEm: Double,
-    /** `true` ⇒ the TEXT colour (glow); `false` ⇒ black. */
-    val usesTextColor: Boolean,
+    /** The shadow ink — see [StoryTextEffectInk]. */
+    val ink: StoryTextEffectInk,
     val opacity: Double,
 )
+
+/**
+ * The ink of an effect shadow — three values, not a boolean (#5244).
+ *
+ * The field was `usesTextColor: Boolean`, and that boolean blocked a third of
+ * the classic effects: `EMBOSS` and `LETTERPRESS` only read with a LIGHT
+ * highlight on one side of the glyph, which "text colour OR black" cannot say.
+ *
+ * This is NOT on the wire: the v3 payload carries the effect NAME only
+ * (`StoryTextObject.textEffect`), never its table. Widening the ink therefore
+ * touches no schema, no version and no migration — only the three render
+ * mirrors, which must stay identical.
+ */
+enum class StoryTextEffectInk {
+    /** The TEXT's own colour — the glows. */
+    TEXT,
+
+    /** Black — shadows, outlines, dark reliefs. */
+    DARK,
+
+    /** White — the highlight of a carved relief. */
+    LIGHT,
+}

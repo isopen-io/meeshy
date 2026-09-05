@@ -515,42 +515,19 @@ nonisolated enum ComposerSceneCapabilities {
     /// non servie — sans quoi un contexte déclaré avant d'avoir son contenu
     /// occuperait les ≈ 170 pt que l'encastrement des rails vient de libérer.
     ///
-    /// `timeline` et `textStyles` appartiennent au critère de
-    /// `ComposerSceneBand` — un axe horizontal, une comparaison latérale — mais
-    /// n'ont pas d'hôte ici : la timeline vit dans l'atelier (#4075), et les 18
-    /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
-    /// surface ne pose encore (#4083).
+    /// **Une seule, et le jeu ne dépend plus d'un état** (directive porteur
+    /// 2026-09-05). `bands(canTrimSelection:canStyleSelection:)` ajoutait
+    /// `timeline` quand l'objet sélectionné avait une source à rogner, et
+    /// `textStyles` quand c'était un texte. Les deux bandes ÉDITAIENT un objet
+    /// déjà posé ; la première vue n'édite plus, et elles ont quitté le type
+    /// `ComposerSceneBand` avec leurs contenus.
+    ///
+    /// Ce qui disparaît avec la fonction est une question devenue sans objet —
+    /// « cette bande a-t-elle de quoi se remplir ? » — et non la loi qu'elle
+    /// tenait : `opened(_:served:)` refuse toujours une bande hors de ce jeu.
+    /// La ligne de partage entre ce que la première vue sert et ce qui part à
+    /// l'éditeur vit dans `ComposerFirstView`.
     static let bands: Set<ComposerSceneBand> = [.palette]
-
-    /// **`timeline` est servie SEULEMENT quand elle a de quoi se remplir**
-    /// (#4082) — c'est-à-dire quand l'objet sélectionné a une source à rogner.
-    ///
-    /// Sans cette condition, la bande deviendrait un membre permanent du jeu
-    /// servi, et `ComposerSceneBand.opened` l'ouvrirait sur une sélection qui
-    /// n'a rien à rogner : une bande VIDE occupant les ≈ 170 pt que
-    /// l'encastrement des rails vient de libérer, c'est-à-dire précisément le
-    /// résultat que la règle `opened(_:served:)` existe pour interdire.
-    ///
-    /// Le jeu de base reste `bands` : il dit ce qui est servi quel que soit
-    /// l'état, et c'est lui que les gardes interrogent pour vérifier
-    /// qu'aucune bande sans hôte n'y est entrée par distraction.
-    /// **Deux capacités, deux questions distinctes** — et c'est pour cela
-    /// qu'elles sont deux paramètres et non un `Set` reçu tout fait : le jour
-    /// où l'appelant les confond, le compilateur ne dit rien, alors qu'un
-    /// paramètre nommé se relit.
-    ///
-    /// `canStyleSelection` est vrai quand l'objet sélectionné est un TEXTE
-    /// (#4083). Sans lui, la bande `textStyles` n'était jamais servie et le
-    /// jeton « STYLE » de l'inspecteur pointait sur du vide — mesuré au
-    /// simulateur le 2026-08-31 : il s'annonçait en `StaticText`, faute de
-    /// destination ouvrable.
-    static func bands(canTrimSelection: Bool,
-                      canStyleSelection: Bool = false) -> Set<ComposerSceneBand> {
-        var servies = bands
-        if canTrimSelection { servies.insert(.timeline) }
-        if canStyleSelection { servies.insert(.textStyles) }
-        return servies
-    }
 }
 
 

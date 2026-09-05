@@ -64,7 +64,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MeeshyApp.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
-        "OnboardingStepViews.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "PostDetailViewModel.swift",
@@ -254,7 +253,23 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// 30, `ConversationViewModel.swift` étant sorti de la dette — les deux
     /// nombres décrivent le même arbre avec deux listes. REMESURÉ sur les
     /// 30 noms de l'arbre fusionné, jamais soustrait.
-    private static let legacyLineCeiling = 62_203
+    /// **60 862 depuis #5218** (−1 341). `OnboardingStepViews.swift` a quitté la
+    /// dette non par découpage mais par SUPPRESSION : le wizard d'inscription en
+    /// huit étapes est remplacé par un écran unique, `SignupView` (536 lignes,
+    /// dans le budget). Le nom sort de la liste ENTIER et le plafond baisse de
+    /// tout ce que le fichier pesait — laisser son mou accueillerait en silence
+    /// l'ajout suivant, ce que ce cliquet existe pour refuser.
+    ///
+    /// Les vingt lignes de plus que le seul retrait ne dit pas viennent de
+    /// `MeeshyApp.swift`, qui est DANS la dette : le lot devait y brancher le
+    /// report de la permission de notification, et la directive 2026-08-28
+    /// interdit d'AJOUTER à un fichier hors budget. La règle est donc partie
+    /// vivre chez `PushPermissionPrompt` — le `body` ne fait plus que lui
+    /// passer l'origine de la session — et la séquence de demande, recopiée
+    /// dans le `body`, a suivi. Net : le fichier est plus COURT qu'avant le lot.
+    ///
+    /// REMESURÉ sur les 29 noms restants, jamais soustrait de tête.
+    private static let legacyLineCeiling = 60_862
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

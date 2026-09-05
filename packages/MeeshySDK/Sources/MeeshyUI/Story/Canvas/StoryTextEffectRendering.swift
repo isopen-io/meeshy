@@ -19,12 +19,21 @@ import MeeshySDK
 /// Seules les mutations de `CALayer` sont `@MainActor`.
 public nonisolated enum StoryTextEffectRendering {
 
-    /// Couleur de l'ombre : celle du texte pour la lueur, noir sinon, à
-    /// l'opacité de la table.
+    /// Couleur de l'ombre : l'encre de la table, à l'opacité de la table.
+    ///
+    /// Le `switch` est EXHAUSTIF sur `StoryTextEffectInk` : une quatrième
+    /// encre ne compilera pas tant qu'elle n'aura pas dit quelle couleur elle
+    /// vaut ici — plutôt que d'hériter du noir par un `default`, ce qui
+    /// rendrait l'effet neuf visuellement identique à une ombre.
     public static func shadowColor(_ shadow: StoryTextEffectShadow,
                                    textColor: UIColor) -> UIColor {
-        (shadow.usesTextColor ? textColor : UIColor.black)
-            .withAlphaComponent(CGFloat(shadow.opacity))
+        let base: UIColor
+        switch shadow.ink {
+        case .text:  base = textColor
+        case .dark:  base = .black
+        case .light: base = .white
+        }
+        return base.withAlphaComponent(CGFloat(shadow.opacity))
     }
 
     /// L'`NSShadow` TextKit d'un texte pour une taille de police RENDUE, ou

@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct CountryCode: Identifiable {
+public struct CountryCode: Identifiable, Equatable {
     public let id: String // ISO code
     public let name: String
     public let dialCode: String

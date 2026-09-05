@@ -46,11 +46,15 @@ public protocol MeeshyEndpoint: Sendable {
 
     /// Ce qui se réessaie, et ce qui échoue vite.
     var retryPolicy: MeeshyEndpointRetryPolicy { get }
+
+    /// Ce qu'un refus 4xx TRANSPORTE, et donc ce que l'appelant peut en lire.
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy { get }
 }
 
 public extension MeeshyEndpoint {
     var authKind: MeeshyEndpointAuthKind { .bearer }
     var retryPolicy: MeeshyEndpointRetryPolicy { .standard }
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy { .opaque }
 
     /// L'URL absolue, composée depuis l'ORIGINE et non depuis `apiBaseURL`.
     ///
@@ -89,4 +93,26 @@ public enum MeeshyEndpointRetryPolicy: Sendable, Equatable {
     /// passagère — réessayer brûle 2 s + 4 s de temporisation et ne peut pas
     /// aboutir, pendant que l'appelant attend son repli.
     case never
+}
+
+/// Ce qu'un refus 4xx rend à l'appelant.
+///
+/// La distinction n'est pas cosmétique : `.opaque` ne rend qu'une PHRASE, donc
+/// un écran ne peut que la mettre en bandeau ; `.structured` rend le `code`
+/// machine et le `field` visé, donc la phrase peut se poser SOUS la saisie
+/// fautive. C'est la seule différence, et elle décide de ce qu'un formulaire
+/// peut faire d'un refus.
+///
+/// Le défaut est `.opaque` — l'état d'avant #5218 — pour que basculer une route
+/// soit une DÉCLARATION, jamais un effet de bord : les sites qui filtrent
+/// `.server(400, _)` (vérification de téléphone, changement de mot de passe)
+/// continuent de voir la forme qu'ils attendent.
+public enum MeeshyEndpointRejectionPolicy: Sendable, Equatable {
+    /// `MeeshyError.server(statusCode:message:)`. Le cas nominal.
+    case opaque
+
+    /// `MeeshyError.rejected(APIRejection)` sur 400/409 : `code`, `field`,
+    /// `suggestions`, `violations`. Réservé aux routes dont le contrat les
+    /// DOCUMENTE — un code inventé côté client ne serait jamais servi.
+    case structured
 }
