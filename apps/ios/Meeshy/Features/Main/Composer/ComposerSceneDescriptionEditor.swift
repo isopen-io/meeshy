@@ -51,6 +51,24 @@ struct ComposerSceneDescriptionEditor: View {
     /// l'appelant historique avait.
     var validationLabel: String = ComposerDescriptionCopy.done
 
+    /// **Combien de lignes la zone montre avant de défiler** (directive porteur
+    /// 2026-09-05 : « quand on active la zone d'édition de texte en bas, il faut
+    /// rétrécir plus la scène pour le mode édition du CONTENU de poste que pour
+    /// le mode ajout de description de scène »).
+    ///
+    /// C'est le SEUL levier honnête de cette différence. Les deux zones sont le
+    /// même composant — c'est le fond de #4890 — donc leur hauteur mesurée est
+    /// identique à texte égal, et la réserve basse qu'elles déclarent à
+    /// l'atelier l'est aussi. Poser un supplément en points chez l'hôte aurait
+    /// fait mentir la mesure : le canvas se rétracterait de plus que ce que la
+    /// zone occupe, laissant une bande vide entre les deux.
+    ///
+    /// Le nombre de lignes, lui, change ce que la zone occupe RÉELLEMENT — donc
+    /// la scène se rétracte d'autant, sans qu'aucun littéral de hauteur ne
+    /// circule. Six pour une légende, plus pour un corps de post : ils n'ont ni
+    /// la même longueur attendue ni le même usage.
+    var collapsedLineLimit: Int = 6
+
     var body: some View {
         // **Le glissement est CONTRÔLÉ, pas déclenché** (directive porteur
         // 2026-08-30, precision) :
@@ -95,9 +113,10 @@ struct ComposerSceneDescriptionEditor: View {
         ComposerDescriptionLayer(
             text: $text,
             placeholder: placeholder,
-            // Six lignes : au-delà, la zone mangerait la scène qu'elle est
-            // censée laisser voir. Le champ défile — il ne tronque pas.
-            collapsedLineLimit: 6,
+            // Six lignes par défaut : au-delà, la zone mangerait la scène
+            // qu'elle est censée laisser voir. Le champ défile — il ne tronque
+            // pas. Le CORPS d'un post en demande plus (voir la propriété).
+            collapsedLineLimit: collapsedLineLimit,
             opensEditingOnAppear: true,
             // La coche du champ EST la validation (directive porteur
             // 2026-08-30) : elle range la zone, comme le glissement vers le bas.

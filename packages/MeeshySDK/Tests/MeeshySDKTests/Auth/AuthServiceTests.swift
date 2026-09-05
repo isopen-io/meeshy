@@ -134,11 +134,9 @@ final class AuthServiceTests: XCTestCase {
         mock.stub("/auth/register", result: response)
 
         let request = RegisterRequest(
-            username: "newuser",
-            password: "securePass",
-            firstName: "John",
-            lastName: "Doe",
-            email: "john@test.com"
+            displayName: "John Doe",
+            email: "john@test.com",
+            password: "securePass"
         )
         let result = try await service.register(request: request)
 
@@ -153,8 +151,7 @@ final class AuthServiceTests: XCTestCase {
         mock.errorToThrow = MeeshyError.server(statusCode: 409, message: "Username taken")
 
         let request = RegisterRequest(
-            username: "taken", password: "pass",
-            firstName: "A", lastName: "B", email: "a@b.com"
+            displayName: "A B", email: "a@b.com", password: "pass"
         )
 
         do {

@@ -80,10 +80,23 @@ const RUNTIME_TREES = ['app', 'lib'];
 // est-elle déclarée ? ». Découpée en variables indépendantes, la lecture
 // réclamerait la déclaration des DEUX, ce qui est faux — l'une est l'alternative
 // de l'autre.
-const ENV_CHAIN =
-  /process\.env\.[A-Z][A-Z0-9_]*(?:\s*\?\?\s*process\.env\.[A-Z][A-Z0-9_]*)*/g;
+//
+// DEUX NOTATIONS, UN SEUL TERME. `process.env.NOM` et `process.env['NOM']`
+// lisent la MÊME chose — la seconde s'écrit quand `NOM` doit rester une
+// chaîne calculable (`blocDuNavigateur` et `SCRIPT_DU_TRAVAILLEUR` la
+// choisissent pour ça). Un terme qui ne reconnaît que le point est aveugle à
+// la moitié des lectures : `V3_NAVIGABLE` (`app/connecte/chargeur.ts`) et
+// `V3_SW_PORTEES` (`app/connecte/fil-vue.ts`) ne matchaient JAMAIS, et
+// `theV3ServiceDeclaresWhatItsCodeReads` ne les voyait donc jamais manquer —
+// la garde était aveugle à 100 % des variables lues en crochets du dépôt.
+const ENV_TERM = /process\.env(?:\.[A-Z][A-Z0-9_]*|\['[A-Z][A-Z0-9_]*'\])/;
 
-const ENV_NAME = /process\.env\.([A-Z][A-Z0-9_]*)/g;
+const ENV_CHAIN = new RegExp(
+  `${ENV_TERM.source}(?:\\s*\\?\\?\\s*${ENV_TERM.source})*`,
+  'g',
+);
+
+const ENV_NAME = /process\.env(?:\.([A-Z][A-Z0-9_]*)|\['([A-Z][A-Z0-9_]*)'\])/g;
 
 export const runtimeEnvChains = (root, packageDirectory) =>
   RUNTIME_TREES.flatMap((tree) =>
@@ -94,7 +107,7 @@ export const runtimeEnvChains = (root, packageDirectory) =>
         const source = readFileSync(join(root, packageDirectory, tree, relative), 'utf8');
         return [...source.matchAll(ENV_CHAIN)].map((match) => ({
           file: `${packageDirectory}/${tree}/${relative}`,
-          variables: [...match[0].matchAll(ENV_NAME)].map(([, name]) => name),
+          variables: [...match[0].matchAll(ENV_NAME)].map(([, dotted, bracketed]) => dotted ?? bracketed),
         }));
       }),
   );

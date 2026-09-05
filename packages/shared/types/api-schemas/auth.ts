@@ -104,9 +104,6 @@ export const loginRequestSchema = {
 } as const;
 
 /**
- * Register request body schema
- */
-/**
  * Nom de personne (prénom / nom) : au moins une lettre, uniquement lettres,
  * marques combinantes (NFD), espaces, apostrophes — droite `'` ET
  * typographiques `’` (U+2019, insérée par défaut par le clavier iOS) / `ʼ`
@@ -140,16 +137,91 @@ export const personNamePatternSource = "^(?=.*\\p{L})[\\p{L}\\p{M}\\s'’ʼ.-]+$
  */
 export const usernamePatternSource = "^[a-zA-Z0-9_-]+$";
 
+/**
+ * Les trois champs d'identité, déclarés UNE fois et cités deux — dans
+ * `properties`, et dans la branche d'`anyOf` qui les exige.
+ *
+ * La duplication n'est pas cosmétique : Ajv en mode strict REFUSE (ou journalise,
+ * selon le réglage) un `required` dont la propriété n'est pas déclarée dans le
+ * MÊME sous-schéma — `strict mode: required property "displayName" is not
+ * defined at "#/anyOf/0" (strictRequired)`. Des branches nues compilent, mais
+ * bruitent le démarrage du serveur d'un avertissement par propriété, et un
+ * durcissement du réglage les transformerait en refus de compilation, donc en
+ * route qui ne se monte plus. Citer les mêmes objets, plutôt que les recopier,
+ * garantit que les deux emplacements ne peuvent pas diverger.
+ */
+const displayNameProperty = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 100,
+  pattern: personNamePatternSource,
+  description: 'Display name as typed (1-100 chars, at least one letter). Required unless firstName AND lastName are provided — firstName/lastName are derived from it when absent.'
+} as const;
+
+const firstNameProperty = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 50,
+  pattern: personNamePatternSource,
+  description: 'User first name (must contain at least one Unicode letter). Optional: derived from displayName when absent.'
+} as const;
+
+const lastNameProperty = {
+  type: 'string',
+  minLength: 1,
+  maxLength: 50,
+  pattern: personNamePatternSource,
+  description: 'User last name (must contain at least one Unicode letter). Optional: derived from displayName when absent.'
+} as const;
+
+/**
+ * L'inscription tient sur UN écran à TROIS champs — nom affiché, e-mail, mot
+ * de passe (#5216) — sans cesser d'accepter la charge HÉRITÉE
+ * (`username` + `firstName` + `lastName`) que les applications en circulation
+ * envoient encore.
+ *
+ * ## Ce que `required` et `anyOf` disent chacun
+ *
+ * `required: ['email','password']` porte ce qu'AUCUN parcours ne peut omettre.
+ * L'identité, elle, se donne de deux façons — d'où l'`anyOf` : soit un
+ * `displayName` (le formulaire court), soit le couple `firstName`/`lastName`
+ * (le formulaire hérité). Ce que le serveur ne reçoit pas, il le DÉRIVE : le
+ * pseudo est généré, les deux noms sont découpés depuis le nom affiché.
+ *
+ * Une moitié de couple ne vaut pas identité : `firstName` seul est refusé, la
+ * branche exigeant les deux.
+ *
+ * ## Aucun `default` de langue, et c'est la partie qui coûte
+ *
+ * `systemLanguage` et `regionalLanguage` portaient `default: 'fr'`. Ajv
+ * APPLIQUE les défauts : il ÉCRIT la clé dans le corps avant que le handler ne
+ * le voie. Une inscription qui n'exprime aucune langue arrivait donc au service
+ * en DEMANDANT du français, ce qui rendait inatteignable la descente de
+ * `services/gateway/src/services/auth/registration-languages.ts` — laquelle ne
+ * consulte la locale appareil (rang 4) que si l'inscription n'exprime AUCUN
+ * rang. Le littéral était déjà là.
+ *
+ * > Un `default` de schéma n'est pas une commodité de documentation : c'est une
+ * > écriture dans la charge, faite avant le seul code qui saurait s'en passer.
+ */
 export const registerRequestSchema = {
   type: 'object',
-  required: ['username', 'password', 'firstName', 'lastName', 'email'],
+  required: ['email', 'password'],
+  anyOf: [
+    { required: ['displayName'], properties: { displayName: displayNameProperty } },
+    {
+      required: ['firstName', 'lastName'],
+      properties: { firstName: firstNameProperty, lastName: lastNameProperty }
+    }
+  ],
   properties: {
+    displayName: displayNameProperty,
     username: {
       type: 'string',
       minLength: 2,
       maxLength: 16,
       pattern: usernamePatternSource,
-      description: 'Unique username (2-16 chars: letters, digits, - and _ only — no spaces)'
+      description: 'Unique username (2-16 chars: letters, digits, - and _ only — no spaces). Optional: generated from the display name when absent.'
     },
     // Borne alignée sur `PASSWORD_MIN_LENGTH` (utils/validation.ts). C'est CE
     // schéma que Fastify applique avant le handler : il rendait
@@ -160,20 +232,8 @@ export const registerRequestSchema = {
       minLength: 6,
       description: 'Password (minimum 6 characters)'
     },
-    firstName: {
-      type: 'string',
-      minLength: 1,
-      maxLength: 50,
-      pattern: personNamePatternSource,
-      description: 'User first name (must contain at least one Unicode letter)'
-    },
-    lastName: {
-      type: 'string',
-      minLength: 1,
-      maxLength: 50,
-      pattern: personNamePatternSource,
-      description: 'User last name (must contain at least one Unicode letter)'
-    },
+    firstName: firstNameProperty,
+    lastName: lastNameProperty,
     email: {
       type: 'string',
       format: 'email',
@@ -189,15 +249,19 @@ export const registerRequestSchema = {
       maxLength: 2,
       description: 'ISO 3166-1 alpha-2 country code (e.g., "FR", "US")'
     },
+    // Aucun `default` — voir le doc-comment ci-dessus : Ajv les ÉCRIT dans le
+    // corps, ce qui rendait la descente du Prisme à l'inscription inatteignable.
     systemLanguage: {
       type: 'string',
-      default: 'fr',
-      description: 'Interface language (ISO 639-1 code)'
+      description: 'Interface language (ISO 639-1 code). Omit it and the server derives rank 1 from the other ranks, then from the device locale.'
     },
     regionalLanguage: {
       type: 'string',
-      default: 'fr',
       description: 'Regional language for translations'
+    },
+    phoneTransferToken: {
+      type: 'string',
+      description: 'Token proving SMS verification when the phone number is being transferred from another account'
     }
   }
 } as const;

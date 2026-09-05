@@ -68,6 +68,7 @@ const MESSAGE = (attributs: Partial<Message> = {}): Message => ({
   edite: false,
   supprime: false,
   pieces: [],
+  lieu: null,
   citations: [],
   reactions: [],
   accuse: 'lu',
@@ -83,6 +84,7 @@ const ETAT_FIL = (messages: readonly Message[], attributs: Partial<EtatDuFil> = 
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  contexte: null,
   plein: null,
   profil: null,
   ...attributs,
@@ -353,7 +355,7 @@ describe('le profil d’un participant — surimpression de la LISTE (/chats)', 
 
   it('l’AVATAR d’un tête-à-tête ouvre le profil de l’AUTRE personne', () => {
     const doc = documentDesChats(ETAT_LISTE());
-    expect(doc).toContain('<a class="avatar-lien" href="/chats?profil=u-marta"');
+    expect(doc).toContain('<a class="avatar-lien" draggable="false" href="/chats?profil=u-marta"');
     expect(doc).toContain(CHATS.voirLeProfil('Marta Ruiz'));
   });
 

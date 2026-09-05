@@ -19,7 +19,7 @@ import MeeshySDK
 /// silencieuse, le dépôt l'a payée sept fois : ni le compilateur, ni le schéma,
 /// ni le serveur ne la signalent, puisque le serveur publie sans le champ —
 /// **soit une CAPACITÉ qu'aucune porte du meuble n'offre**. Les deux se
-/// corrigent différemment, et `sansTransportNiProducteur` porte la distinction.
+/// corrigent différemment, et `absentsDeLaVoieDurable` porte la distinction.
 ///
 /// `CreatePostBody` porte lui-même le diagnostic :
 ///
@@ -77,7 +77,7 @@ final class PublishChainCensusTests: XCTestCase {
             audioUrl: nil, audioDuration: nil, visibilityUserIds: nil,
             location: nil, mentions: nil, discoverabilityPrecision: nil,
             repostOfId: nil, mobileTranscription: nil, storyEffects: nil,
-            mediaCaption: nil
+            mediaCaption: nil, mediaAlt: nil
         )
     }
 
@@ -91,37 +91,72 @@ final class PublishChainCensusTests: XCTestCase {
     /// client, documenté sur `OutboxDispatcher`. Il n'entre donc pas ici.
     private static let alias: [String: String] = [:]
 
-    /// **Les champs SANS TRANSPORT ni PRODUCTEUR sur la voie durable.**
+    /// **Les champs du contrat que la voie DURABLE n'atteint pas** — et ils n'y
+    /// manquent pas pour la même raison, ce qui change le correctif de chacun.
     ///
-    /// Le nom compte, et il a été corrigé le 2026-09-05 : cette table disait
-    /// « tombent », et « tomber » suppose une chute qui n'a pas lieu. Mesuré —
-    /// **rien ne peut écrire ces deux champs sur cette voie** :
+    /// **Réécrit le 2026-09-05, après `a372e2484e`.** Cette table s'appelait
+    /// `sansTransportNiProducteur`, et le nom est devenu FAUX pour la moitié de
+    /// son contenu le jour où le meuble a gagné une porte de texte alternatif.
+    /// Le verdict n'a pas changé ; sa RAISON, si.
     ///
-    /// | champ | seul producteur | monté par |
+    /// | champ | producteur atteignable depuis le meuble | pourquoi il n'atteint pas la file |
     /// |---|---|---|
-    /// | `mediaAlt` | `MediaAccessibilityPanel` | `ComposerToolPanelHost` → `ComposerBottomBand` — **l'ATELIER seul** |
-    /// | `allowSoundExtraction` | `SoundExtractionToggle` | idem |
+    /// | `allowSoundExtraction` | non — `SoundExtractionToggle`, monté par `ComposerToolPanelHost` → `ComposerBottomBand`, **l'ATELIER seul** | aucune porte ne l'écrit sur cette voie |
     ///
-    /// Or un post du meuble monte `ComposerSceneSurface` ou
-    /// `ComposerDocumentSurface`, jamais l'atelier — et quand l'atelier EST
-    /// monté, il publie en DIRECT (`createCanvasPost`), sans toucher la file.
+    /// **`mediaAlt` a QUITTÉ cette liste le 2026-09-05, dans la journée où il y
+    /// était entré.** Il y est resté le temps d'un correctif : la voie durable
+    /// le porte désormais de bout en bout — `ComposerDocumentDraft.mediaAlts` →
+    /// `PublishIntent.document` (réaligné sur l'index de `localMedia`, comme les
+    /// légendes) → `enqueuePostMedia` → `CreatePostPayload.mediaAlts` →
+    /// `serverKeyedTexts` → `CreatePostBody.mediaAlt`.
     ///
-    /// > **La distinction change le correctif.** « Le champ se perd » demande de
-    /// > le TRANSPORTER ; « rien ne peut l'écrire » demande d'ouvrir une PORTE,
-    /// > *puis* de le transporter. Porter le champ seul fabriquerait un champ
-    /// > INERTE — la faute que ce dossier a déjà payée sur la légende, dans
-    /// > l'autre sens : un champ écrit que personne ne lisait.
+    /// > **Une justification de garde se périme comme un compte.** L'ancienne
+    /// > disait « rien ne peut écrire ces deux champs » ; c'est resté vrai pour
+    /// > `allowSoundExtraction` et c'est devenu faux pour `mediaAlt` sans que ce
+    /// > fichier bouge — le verdict identique masquait le changement. Ce qui a
+    /// > sauvé la table n'est pas un témoin : c'est d'avoir relu le commit
+    /// > voisin qui ouvrait la porte.
     ///
-    /// **Ce n'est pas une exemption pour autant.** Une exemption dirait « ce
-    /// champ n'a pas à traverser » ; celui-ci l'aurait à traverser dès qu'une
-    /// porte s'ouvrira, et `mediaAlt` porte alors le TEXTE ALTERNATIF
-    /// d'accessibilité de chaque média — la dimension 5. La liste est ÉPINGLÉE :
-    /// aucun champ NEUF ne peut la rejoindre en silence, et en retirer un exige
-    /// de passer ici. C'est l'interruption qui fait le travail, pas le nombre.
+    /// ## Ce que cette entrée a coûté et appris, en une journée
     ///
-    /// Suivi : #5196.
-    private static let sansTransportNiProducteur: Set<String> = [
-        "mediaAlt",
+    /// Le matin, `mediaAlt` était rangé ici sous « rien ne l'écrit ». Un commit
+    /// voisin (`a372e2484e`) a ouvert la porte de saisie, et la ligne est
+    /// devenue fausse **sans que ce fichier bouge** : le verdict — « absent de
+    /// la voie durable » — restait identique, seule sa RAISON avait changé.
+    ///
+    /// > **Une garde peut décrire correctement une perte à venir et ne pas la
+    /// > voir arriver.** Sa condition de bascule (« le jour où un post portera
+    /// > une description ») n'était vérifiée par aucun témoin — c'était de la
+    /// > prose. Le seul témoin possible est celui qui COMPTE les champs, et il
+    /// > était neutralisé par l'exemption même qui portait cette prose.
+    ///
+    /// Ce qui bloquait le correctif n'était aucun des quatre maillons : c'était
+    /// un PONT manquant en amont. `applyContentMedia` frappe l'`objectId`,
+    /// copie la source vers `tmp/<objectId>.<ext>` — et jetait la
+    /// correspondance. Le meuble tient les alternatives par identifiant
+    /// d'OBJET (la seule clé qui survive au remplacement d'un fichier sur la
+    /// même scène) ; la voie durable réaligne par URL SOURCE. Les deux clés
+    /// sont justes à leur étage, et un seul site connaissait les deux.
+    ///
+    /// > Reconstruire ce pont par l'ORDRE aurait tenu jusqu'au premier des
+    /// > trois `continue` de cette boucle — que #4879 a rendus bruyants parce
+    /// > qu'ils arrivent. L'alternative d'une photo serait passée sous la
+    /// > suivante, en silence, sur le chemin dont on venait de rendre les
+    /// > échecs visibles.
+    ///
+    /// Sur l'autre voie — celle de la SCÈNE, que prend une story — le champ
+    /// voyage depuis le même jour : `publishStoryScene()` y posait
+    /// `ComposerMediaAccessibility.empty`, la greffe n'étant câblée que sur la
+    /// remise à l'atelier (`ComposerMediaAltDoorTests
+    /// .test_chaqueRemiseDeLaCharge_passeParLaGreffe`).
+    ///
+    /// **Il ne reste donc qu'`allowSoundExtraction`**, et pour l'autre raison :
+    /// aucune porte ne l'écrit sur cette voie. La liste est ÉPINGLÉE — aucun
+    /// champ NEUF ne peut la rejoindre en silence, et en RETIRER un exige de
+    /// passer ici. C'est l'interruption qui fait le travail, pas le nombre.
+    ///
+    /// Suivi : #5196 · le recensement face au CONTRAT : #5239.
+    private static let absentsDeLaVoieDurable: Set<String> = [
         "allowSoundExtraction",
     ]
 
@@ -140,7 +175,7 @@ final class PublishChainCensusTests: XCTestCase {
     /// attraper la huitième : il ne connaît aucun champ en particulier.
     func test_aucunChampNeuf_neManqueALaVoieDurable() {
         let nouveaux = manquantsSurLaVoieDurable()
-            .subtracting(Self.sansTransportNiProducteur)
+            .subtracting(Self.absentsDeLaVoieDurable)
 
         XCTAssertTrue(
             nouveaux.isEmpty,
@@ -154,7 +189,7 @@ final class PublishChainCensusTests: XCTestCase {
 
             1. Un site atteignable depuis le meuble peut-il ÉCRIRE ce champ ? Si non, le porter \
                seul fabriquerait un champ INERTE — il faut d'abord une PORTE. Inscris-le alors \
-               dans `sansTransportNiProducteur` avec son producteur et l'endroit où il est monté.
+               dans `absentsDeLaVoieDurable` avec son producteur et l'endroit où il est monté.
             2. Si oui, c'est une PERTE, et elle est silencieuse : ni le compilateur, ni le schéma, \
                ni le serveur ne la signalent. Porte le champ sur les quatre maillons — \
                `PublishIntent` → `OfflineQueue.enqueuePostMedia` → `CreatePostPayload` → \
@@ -165,19 +200,21 @@ final class PublishChainCensusTests: XCTestCase {
         )
     }
 
-    /// **La liste des champs tombés est EXACTE.**
+    /// **La liste des champs ABSENTS de la voie durable est EXACTE.**
     ///
     /// Le pendant du témoin ci-dessus, et il tombe dans l'autre sens : réparer
-    /// un champ rend ce témoin rouge, ce qui oblige à venir retirer son nom.
+    /// un champ rend ce témoin rouge, ce qui oblige à venir retirer son nom —
+    /// et donc à relire la RAISON inscrite en face, qui est ce qui se périme
+    /// le plus vite dans cette table.
     /// C'est voulu — une liste de défauts qu'on peut vider sans la relire
     /// redevient un inventaire à tenir à la main, exactement ce que ce fichier
     /// existe pour supprimer.
-    func test_laListeDesChampsTombes_estExacte() {
+    func test_laListeDesAbsentsDeLaVoieDurable_estExacte() {
         XCTAssertEqual(
-            manquantsSurLaVoieDurable(), Self.sansTransportNiProducteur,
+            manquantsSurLaVoieDurable(), Self.absentsDeLaVoieDurable,
             """
             La liste épinglée ne décrit plus la réalité. Si un champ a été RÉPARÉ — porte OUVERTE \
-            et transport posé —, retirer son nom de `sansTransportNiProducteur` (et fermer sa part \
+            et transport posé —, retirer son nom de `absentsDeLaVoieDurable` (et fermer sa part \
             de #5196). S'il a été AJOUTÉ, lire le \
             message du témoin voisin avant d'y toucher.
             """
@@ -194,7 +231,12 @@ final class PublishChainCensusTests: XCTestCase {
         XCTAssertEqual(champs(voieEnLigne()).count, 18,
                        "`CreatePostRequest` (voie EN LIGNE) a changé de taille — ce champ neuf "
                        + "traverse-t-il la voie DURABLE ?")
-        XCTAssertEqual(champs(voieDurable()).count, 16,
+        // 17 depuis le 2026-09-05 : `mediaAlt`. Il ne NAÎT pas ici — il vient
+        // des quatre maillons amont, chacun ajouté dans le même lot
+        // (`ComposerDocumentDraft.mediaAlts` → `PublishIntent.document` →
+        // `enqueuePostMedia` → `CreatePostPayload.mediaAlts`), et c'est
+        // exactement la question que ce compte pose.
+        XCTAssertEqual(champs(voieDurable()).count, 17,
                        "`CreatePostBody` (voie DURABLE) a changé de taille — ce champ neuf "
                        + "vient-il des quatre maillons amont, ou naît-il ici ?")
     }

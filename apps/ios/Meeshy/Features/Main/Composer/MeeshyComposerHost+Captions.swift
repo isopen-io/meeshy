@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
@@ -59,11 +60,40 @@ extension MeeshyComposerHost {
             slideIdByMediaURL: slideIdByMediaURL,
             slides: slides
         )
-        guard !duComposer.isEmpty else { return base }
+        let altsDuComposer = documentMediaAlts.filter {
+            !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard !duComposer.isEmpty || !altsDuComposer.isEmpty else { return base }
         return ComposerMediaAccessibility(
-            mediaAlt: base.mediaAlt,
+            mediaAlt: (base.mediaAlt ?? [:]).merging(altsDuComposer) { _, composer in composer },
             mediaCaption: (base.mediaCaption ?? [:]).merging(duComposer) { _, composer in composer },
             allowSoundExtraction: base.allowSoundExtraction
+        )
+    }
+
+    /// **Le texte alternatif d'UN objet média** — lu et écrit par l'éditeur
+    /// d'objet (#4756).
+    ///
+    /// Un `Binding` plutôt qu'un couple lecture/écriture : le champ du SDK
+    /// (`MediaAltTextField`) commet à la perte de focus et au démontage, et lui
+    /// donner deux chemins séparés ferait diverger ce qu'il affiche de ce qu'il
+    /// écrit — la faute que le volet de description a déjà évitée en ne LISANT
+    /// que ce que son éditeur écrit.
+    ///
+    /// La chaîne vide n'est pas conservée : un texte alternatif effacé doit
+    /// disparaître de la carte, sans quoi la charge porterait une clé vide que
+    /// le gateway filtrerait en silence — une perte qui ressemble à un envoi.
+    func mediaAltBinding(for objectId: String) -> Binding<String> {
+        Binding(
+            get: { documentMediaAlts[objectId] ?? "" },
+            set: { nouveau in
+                let net = nouveau.trimmingCharacters(in: .whitespacesAndNewlines)
+                if net.isEmpty {
+                    documentMediaAlts.removeValue(forKey: objectId)
+                } else {
+                    documentMediaAlts[objectId] = nouveau
+                }
+            }
         )
     }
 }

@@ -28,6 +28,7 @@ const TEMPS_REEL = {
     plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
     navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
     composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+    prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
   },
 };
@@ -42,6 +43,7 @@ const sers = (droits: Droits, tempsReel: EtatDuFil['tempsReel'] = TEMPS_REEL): H
     maintenant: 0,
     composeur: { genre: 'ouvert' },
     tempsReel,
+    contexte: null,
     plein: null,
     profil: null,
   } satisfies EtatDuFil);

@@ -9,7 +9,7 @@ import {
   UpdateStatusDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
-import * as bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword } from '../../utils/password-hash';
 import { logger, logWarn } from '../../utils/logger';
 import { searchTokensFor } from '../../utils/search-tokens';
 import {
@@ -179,8 +179,12 @@ export class UserManagementService {
    * global ne doit pas faire échouer la création du compte.
    */
   async createUser(data: CreateUserDTO, creatorId: string): Promise<FullUser> {
-    // Hash du mot de passe
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+    // Le coût de hachage était 10 ICI et 12 aux trois autres portes (#3629,
+    // soldé au #5216) : un compte créé par un administrateur repartait avec un
+    // hash quatre fois moins cher à casser que celui d'un compte inscrit par la
+    // porte publique, sans que rien ne le signale. Le facteur vit désormais dans
+    // `utils/password-hash`, et il n'y a plus de site où le retaper.
+    const hashedPassword = await hashPassword(data.password);
 
     const user = await this.prisma.user.create({
       data: {
@@ -257,7 +261,7 @@ export class UserManagementService {
       throw new Error('User not found');
     }
 
-    const isPasswordValid = await bcrypt.compare(data.password, user.password);
+    const isPasswordValid = await verifyPassword(data.password, user.password);
     if (!isPasswordValid) {
       throw new Error('Invalid password');
     }
@@ -341,7 +345,7 @@ export class UserManagementService {
     data: ResetPasswordDTO,
     resetById: string
   ): Promise<FullUser> {
-    const hashedPassword = await bcrypt.hash(data.newPassword, 10);
+    const hashedPassword = await hashPassword(data.newPassword);
 
     const user = await this.prisma.user.update({
       where: { id: userId },

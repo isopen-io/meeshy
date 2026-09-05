@@ -105,7 +105,7 @@ extension MeeshyComposerHost {
         // acceptés que la bande du document, par la même source. Deux
         // chargements auraient donné deux listes à faire diverger, et deux
         // moments où « aucun ami » se lit différemment.
-        .task { sceneMentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
+        .task { await sceneMentionBox.loadCandidates() }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
         // ici disait « montés ICI, sur le meuble, jamais dans
         // `ComposerDocumentSurface` » — et « ici » désignait l'expression
@@ -133,6 +133,50 @@ extension MeeshyComposerHost {
         // (#4657) et celui du son de fond (#4668). N'en éteindre qu'un ferait
         // survivre l'autre, et `applyCreatedAudio` supprimerait au retour un
         // objet que l'auteur n'avait pas ouvert.
+        // **LES SIX MAGASINS DE LA COMPOSITION — posés ICI, au-dessus du
+        // `.sheet`** (régression mesurée au simulateur le 2026-09-05, directive
+        // porteur : « la vue de sticker n'a plus les offres de sticker de
+        // position alors que j'en avais construit il y a peu »).
+        //
+        // ## Le défaut, et pourquoi rien ne rougissait
+        //
+        // Ils vivaient sur `composerSurface`, qui est un DESCENDANT de cette
+        // expression. L'environnement SwiftUI descend : une feuille présentée
+        // ici hérite de l'environnement de CE point, jamais de celui d'un
+        // enfant. `StickerPickerView`, montée par le `.sheet` ci-dessous,
+        // lisait donc `\.stickerNearbyPlaces` et `\.storyStickerLibrary` à
+        // `nil` — et `StickerPaletteTab.offered(hasLibrary:hasNearbyPlaces:)`
+        // faisait exactement ce qu'on lui demande : elle retirait les deux
+        // sections.
+        //
+        // > **Deux décisions justes, et un signal orphelin entre les deux.**
+        // > Injecter au plus près de ce qui consomme est une bonne règle ;
+        // > présenter TOUS les portails à un seul endroit (#4467) en est une
+        // > autre. Leur somme place l'injecteur SOUS le présentateur, et une
+        // > somme n'a pas de site où rougir : la loi 4 était tenue à la lettre
+        // > — un onglet non servi est absent — sur une capacité qui n'était
+        // > pas absente.
+        //
+        // La question qui l'attrape n'est pas « l'injecteur est-il posé ? »
+        // mais **« est-il posé AU-DESSUS de tout ce qui le lit ? »** — et la
+        // réponse se lit dans l'arbre de vues, jamais dans le fichier qui
+        // porte l'injecteur.
+        //
+        // Les six voyagent ENSEMBLE et non un par un : ils partagent la même
+        // condition d'être vus (être au-dessus du présentateur), et les
+        // séparer rejouerait le défaut sur celui qu'on aurait oublié. Cinq des
+        // six alimentent une feuille ; `storyPaste` alimente AUSSI le canvas,
+        // qui est plus bas — un injecteur posé haut sert les deux, l'inverse
+        // n'est pas vrai.
+        .storyLocationPickerProvided()
+        .storyCameraCaptureProvided()
+        .storyRecentCameraRollProvided()
+        .storyPasteProvided()
+        .storyStickerLibraryProvided()
+        // L'onglet « Lieu » de la palette (#4579). Absent — jamais grisé —
+        // quand l'autorisation de localisation est refusée : c'est l'injecteur
+        // qui le décide, pas la feuille.
+        .stickerNearbyPlacesProvided()
         .sheet(item: $presentedPortal,
                onDismiss: { forgetEditedSound(); resumePendingPresentation() }) { portail in
             switch portail {
@@ -160,6 +204,10 @@ extension MeeshyComposerHost {
         .fullScreenCover(item: $editedObject) { objet in
             ComposerObjectEditorView(
                 viewModel: viewModel,
+                // La MÊME boîte que la surface du dessous : le portail charge
+                // ses candidats une fois (`.task` plus bas), et l'écran modal
+                // — où la frappe a réellement lieu depuis #4634 — la reçoit.
+                mentionBox: sceneMentionBox,
                 objectId: objet.id,
                 aspectRatio: viewModel.currentCanvasRatio,
                 plateauTint: tint.color,
@@ -170,7 +218,23 @@ extension MeeshyComposerHost {
                 // Le plan 2D peut désigner un autre objet : c'est le MEUBLE qui
                 // possède « quel objet est ouvert », et deux sources pour ce
                 // fait divergeraient au premier tap sur une barre voisine.
-                onSelectObject: { id in editedObject = ComposerEditedObject(id: id) }
+                onSelectObject: { id in editedObject = ComposerEditedObject(id: id) },
+                // **La carte vit au MEUBLE** (#4756) : c'est lui qui greffe la
+                // charge d'accessibilité sur ce que l'atelier remet au publieur
+                // (`accessibilityCarryingComposerCaptions`). Un magasin tenu par
+                // l'éditeur mourrait à sa fermeture — le défaut que la légende a
+                // payé avant #4890.
+                mediaAltText: mediaAltBinding(for: objet.id),
+                // **La section par laquelle on ENTRE** (2026-09-05). Un jeton
+                // de l'inspecteur nomme un réglage précis ; l'écran s'ouvre
+                // dessus au lieu de le faire rechercher. `nil` pour les autres
+                // portes — appui long, création, plan 2D — qui ne désignent
+                // rien.
+                //
+                // L'ordre des arguments SUIT la déclaration : cette vue n'a pas
+                // d'`init` écrit à la main, donc son init memberwise impose
+                // l'ordre des propriétés.
+                initialSection: objet.section
             )
         }
         .photosPicker(

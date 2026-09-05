@@ -12,13 +12,14 @@
  * sans effet de la charte règle 7 pris par l'autre bout, non pas un bouton qui
  * ne fait rien mais un écran que rien n'ouvre.
  *
- * SEPT RANGÉES DANS LA PLANCHE, CINQ SERVIES. `Appels` (`/calls`) et
- * `Communautés` (`/communities`) sont P2 dans la matrice, et la v3 ne sert
- * aucune des deux routes : les dessiner ouvrirait sur un 404 rendu par le
- * legacy, et un lien mort se pré-charge, s'indexe et se tabule. C'est la
- * doctrine déjà écrite pour le carrefour des réglages (`reglages.ts`) — les
- * rangées servies sont motivées par ce qu'elles PROMETTENT, jamais par ce qui
- * manque à côté.
+ * SEPT RANGÉES DANS LA PLANCHE, SIX SERVIES. `Appels` (`/calls`, #44) est
+ * livré : la v3 sert la CONSULTATION de l'historique, entre Contacts et
+ * Communautés — l'ordre de la planche (`MeeshyWebV3.dc.html:1126`).
+ * `Communautés` (`/communities`) reste P2 et n'est pas servie : la dessiner
+ * ouvrirait sur un 404 rendu par le legacy, et un lien mort se pré-charge,
+ * s'indexe et se tabule. C'est la doctrine déjà écrite pour le carrefour des
+ * réglages (`reglages.ts`) — les rangées servies sont motivées par ce
+ * qu'elles PROMETTENT, jamais par ce qui manque à côté.
  *
  * AUCUNE PASTILLE DE COMPTE, et c'est la même famille de raison. La planche
  * montre « 5 non lues » et « 3 demandes en attente » ; les servir demanderait
@@ -81,6 +82,12 @@ export const RANGEES_DE_L_ESPACE = [
     href: '/contacts',
     quoi: 'Contacts',
     sous: 'Votre carnet et vos demandes',
+  },
+  {
+    glyphe: 'ph-phone',
+    href: '/calls',
+    quoi: 'Appels',
+    sous: 'Historique',
   },
   {
     glyphe: 'ph-magnifying-glass',

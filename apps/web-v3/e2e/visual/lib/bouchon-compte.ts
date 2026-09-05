@@ -1,10 +1,11 @@
 import type { IncomingMessage } from 'node:http';
 
+import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+
 import { serviParLAnnuaire } from './bouchon-annuaire';
 import type { Identite } from './bouchon-socket';
 import {
-  AUTRE_CONVERSATION,
-  CONVERSATION_DU_LECTEUR,
+  LIGNES_DE_CONVERSATIONS_SERVIES,
   MEMBRE,
   PAIR_ANGLOPHONE,
   PAIR_HISPANOPHONE,
@@ -110,6 +111,16 @@ export type EtatDuCompteDeBouchon = {
   readonly filDeCommentaires: FilDeCommentairesDeBouchon;
   /** Le fil social — MUTABLE, pour prouver le rafraîchissement au retour (#5031). */
   readonly filSocial: FilSocialDeBouchon;
+  /**
+   * LES TREIZE PRÉFÉRENCES DE NOTIFICATION DU COMPTE (#4899) — MUTABLE, écrite
+   * par `PATCH /api/v1/me/preferences` et RELUE par le `GET` : un bouchon qui
+   * répond 200 sans écrire ferait passer un client qui n'a rien changé (même
+   * loi que `boite.litTout()`). `reactionEnabled` naît FAUX — la planche
+   * (`cible/notifPrefs.png`) dessine cette bascule éteinte, et un document
+   * amorcé à TOUT vrai ne pourrait jamais prouver qu'un état SERVI, pas un
+   * défaut local, gouverne le rendu.
+   */
+  readonly notificationPrefs: NotificationPreference;
 };
 
 /**
@@ -535,6 +546,28 @@ export const APPAREILS_DU_BOUCHON = [
   { id: 'd2', deviceName: 'Chrome — Dakar', platform: 'web', lastUsedAt: null },
 ];
 
+/**
+ * L'ÉTAT INITIAL DES PRÉFÉRENCES DE NOTIFICATION (#4899) — amorcé aux défauts
+ * IMPORTÉS de `@meeshy/shared/types/preferences` (jamais recopiés, § « la
+ * passerelle de bouchon MIME la passerelle réelle »), `reactionEnabled`
+ * éteint pour que le document GET s'oppose, dès la première ouverture, à un
+ * client qui afficherait « Activé » partout par défaut local.
+ *
+ * UN `import()` DYNAMIQUE, PAS UN `import` STATIQUE — `@meeshy/shared` est
+ * publié en ESM PUR (`"type": "module"`, `dist/**\/*.js`), et le harnais de
+ * Playwright transpile chaque spec `.ts` en CommonJS avant de l'exécuter : un
+ * `require()` transitif sur un module qui n'écrit que des `export` ÉCHOUE
+ * (« require() of ES Module … not supported », mesuré au premier lancement de
+ * `v3-notif-prefs.spec.ts`). `import()` reste un VRAI import dynamique même
+ * depuis un module transpilé en CommonJS — Node le résout nativement — et
+ * Jest, qui EXCLUT `/e2e/` de son périmètre (`jest.config.mjs`), n'est de
+ * toute façon jamais témoin de ce fichier.
+ */
+export const notificationPrefsDeBouchon = async (): Promise<NotificationPreference> => {
+  const { NOTIFICATION_PREFERENCE_DEFAULTS } = await import('@meeshy/shared/types/preferences');
+  return { ...NOTIFICATION_PREFERENCE_DEFAULTS, reactionEnabled: false };
+};
+
 export const routesDuCompte =
   (etat: EtatDuCompteDeBouchon) =>
   ({ requete, url, corps, json }: { readonly requete: IncomingMessage; readonly url: URL; readonly corps: Buffer; readonly json: Reponse }): boolean => {
@@ -556,6 +589,11 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/social/') ||
         chemin.startsWith('/api/v1/users/me') ||
         chemin.startsWith('/api/v1/notifications') ||
+        // Les TREIZE préférences de notification du compte (#4899) —
+        // `GET`/`PATCH /api/v1/me/preferences`, DISTINCT de
+        // `/api/v1/user-preferences/conversations/:id` (par CONVERSATION,
+        // ci-dessus) : « me/preferences » est le COMPTE entier.
+        chemin.startsWith('/api/v1/me/preferences') ||
         estUnePreference
       )
     ) {
@@ -632,6 +670,72 @@ export const routesDuCompte =
         },
         unreadCount: etat.boite.nonLues,
       });
+      return true;
+    }
+
+    /**
+     * `GET`/`PATCH /api/v1/me/preferences` (#4899) — les TREIZE (et plus)
+     * préférences de notification du COMPTE, copiées sur
+     * `services/gateway/src/routes/me/preferences/unified-routes.ts:150,229` :
+     * `GET` sert `{ success, data: { notification: {…complet…} } }`, filtré
+     * par `categories=notification` comme la v3 le demande ; `PATCH` FUSIONNE
+     * (`mode=merge`, le seul que la v3 envoie — jamais `replace`) les clés
+     * soumises sur le document que le bouchon TIENT — un 200 qui n'écrirait
+     * rien ferait passer un client qui n'a rien changé (même loi que
+     * `boite.litTout()`). Une catégorie autre que `notification` est 400
+     * `UNKNOWN_CATEGORY` ; une clé absente du schéma, ou d'un type qui ne
+     * concorde pas avec son défaut, est 400 `VALIDATION_ERROR` — la MÊME
+     * distinction que la passerelle réelle (`unified-routes.ts:308,441`).
+     */
+    if (chemin === '/api/v1/me/preferences' && (requete.method ?? 'GET') === 'GET') {
+      // `?categories=` SÉLECTIONNE : la passerelle ne sert que les catégories
+      // nommées, et sert TOUT quand rien n'est nommé (`unified-routes.ts:206`,
+      // `parsed.selection.categories`, dont l'ETag hache le RÉSULTAT — « il
+      // varie avec `categories` », `:210`). Le bouchon ne connaît que
+      // `notification` — il l'omet donc quand la sélection ne la nomme pas,
+      // plutôt que de la servir quoi qu'on demande : sans cela, un client qui
+      // aurait perdu son `?categories=notification` resterait vert ici et
+      // vide en production.
+      const demandees = url.searchParams.get('categories');
+      const servie = demandees === null || demandees.split(',').includes('notification');
+      json({ success: true, data: servie ? { notification: etat.notificationPrefs } : {} });
+      return true;
+    }
+    if (chemin === '/api/v1/me/preferences' && requete.method === 'PATCH') {
+      const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
+      const categories = Object.keys(soumis);
+      const categorieInconnue = categories.find((categorie) => categorie !== 'notification');
+      if (categorieInconnue !== undefined) {
+        json({ success: false, error: 'UNKNOWN_CATEGORY', message: `Unknown preference category '${categorieInconnue}'` }, 400);
+        return true;
+      }
+
+      const bloc = soumis.notification;
+      if (typeof bloc !== 'object' || bloc === null || Array.isArray(bloc)) {
+        json({ success: false, error: 'VALIDATION_ERROR', message: 'Body must be an object keyed by preference category' }, 400);
+        return true;
+      }
+
+      const document = etat.notificationPrefs as unknown as Record<string, unknown>;
+      const soumises = bloc as Record<string, unknown>;
+      const cleInvalide = Object.keys(soumises).find(
+        (cle) => !(cle in document) || typeof soumises[cle] !== typeof document[cle],
+      );
+      if (cleInvalide !== undefined) {
+        json(
+          {
+            success: false,
+            error: 'VALIDATION_ERROR',
+            message: `Unknown field '${cleInvalide}'`,
+            details: { issues: [{ path: [cleInvalide], message: 'Unrecognized field' }] },
+          },
+          400,
+        );
+        return true;
+      }
+
+      Object.assign(etat.notificationPrefs, soumises);
+      json({ success: true, data: { notification: etat.notificationPrefs } });
       return true;
     }
 
@@ -976,59 +1080,27 @@ export const routesDuCompte =
        * Prisme au niveau CONVERSATION (`lastMessageOriginalLanguage`,
        * `lastMessageTranslations` — une carte `{ langue: aperçu }` restreinte au
        * prisme du lecteur) et `userPreferences`, un TABLEAU d'au plus une
-       * entrée (`take: 1` sur `userId`).
+       * entrée (`take: 1` sur `userId`). Les QUATRE lignes (#5164, correction de
+       * revue) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
+       * gestionnaire boucle dessus au lieu de porter le littéral.
+       *
+       * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN
+       * PRODUCTION : `whereClause` exclut les participations dont
+       * `deletedForMe` est posé (`routes/conversations/core-list.ts:176-190`).
+       * `isArchived`, LUI, N'EST PAS FILTRÉ PAR LA PASSERELLE — sa seule
+       * occurrence dans la route est le `select` qui le SERT
+       * (`core-selects.ts:65`, déclaré au contrat wire
+       * `conversationMinimalSchema.userPreferences`). Le bouchon le filtrait,
+       * et ce filtre rendait VERTS onze témoins de `/chats` contre un serveur
+       * qui n'existe pas : c'est exactement le « vert obtenu contre un bouchon
+       * qui ne ressemble pas au serveur ». Écarter l'archivée est le travail
+       * du CLIENT (`lib/api/compte.ts` › `sansArchivees`), et c'est lui que la
+       * suite doit prouver.
        */
       const prefs = (id: string) => [{ isPinned: false, isMuted: false, isArchived: false, ...(etat.preferences.get(id) ?? {}) }];
-      const lignes = [
-        {
-          id: CONVERSATION_DU_LECTEUR.id,
-          identifier: 'lagos',
-          title: CONVERSATION_DU_LECTEUR.titre,
-          type: 'group',
-          memberCount: CONVERSATION_DU_LECTEUR.membres,
-          unreadCount: CONVERSATION_DU_LECTEUR.nonLus,
-          lastMessageAt: new Date(Date.now() - 30 * 60_000).toISOString(),
-          lastMessage: { id: 'm-apercu', content: 'On se cale à 15 h pour la revue ?' },
-          lastMessageOriginalLanguage: 'fr',
-          lastMessageTranslations: null,
-          userPreferences: prefs(CONVERSATION_DU_LECTEUR.id),
-        },
-        {
-          id: AUTRE_CONVERSATION.id,
-          identifier: 'marta',
-          title: AUTRE_CONVERSATION.titre,
-          type: 'direct',
-          memberCount: AUTRE_CONVERSATION.membres,
-          unreadCount: AUTRE_CONVERSATION.nonLus,
-          lastMessageAt: new Date(Date.now() - 3 * 3_600_000).toISOString(),
-          lastMessage: { id: 'm-apercu-2', content: AUTRE_CONVERSATION.apercu },
-          lastMessageOriginalLanguage: AUTRE_CONVERSATION.langueOriginale,
-          lastMessageTranslations: AUTRE_CONVERSATION.traductions,
-          userPreferences: prefs(AUTRE_CONVERSATION.id),
-          // L'AUTRE personne du tête-à-tête (§ 12.10.3) : son avatar, dans
-          // `/chats`, ouvre son profil — `homologueDe` l'élit en excluant
-          // `MEMBRE.id` de cette liste.
-          participants: [
-            { userId: PAIR_HISPANOPHONE.id, displayName: PAIR_HISPANOPHONE.nom },
-            { userId: MEMBRE.id, displayName: MEMBRE.nom },
-          ],
-        },
-        /**
-         * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN
-         * PRODUCTION : `whereClause` exclut les participations dont
-         * `deletedForMe` est posé (`routes/conversations/core-list.ts:176-190`).
-         *
-         * `isArchived`, LUI, N'EST PAS FILTRÉ PAR LA PASSERELLE — sa seule
-         * occurrence dans la route est le `select` qui le SERT
-         * (`core-selects.ts:65`, déclaré au contrat wire
-         * `conversationMinimalSchema.userPreferences`). Le bouchon le filtrait,
-         * et ce filtre rendait VERTS onze témoins de `/chats` contre un serveur
-         * qui n'existe pas : c'est exactement le « vert obtenu contre un bouchon
-         * qui ne ressemble pas au serveur ». Écarter l'archivée est le travail
-         * du CLIENT (`lib/api/compte.ts` › `sansArchivees`), et c'est lui que la
-         * suite doit prouver.
-         */
-      ].filter((ligne) => !etat.masquees.has(ligne.id));
+      const lignes = LIGNES_DE_CONVERSATIONS_SERVIES.map((ligne) => ({ ...ligne, userPreferences: prefs(ligne.id) })).filter(
+        (ligne) => !etat.masquees.has(ligne.id),
+      );
 
       json({ success: true, data: lignes, pagination: { total: 7 } });
       return true;

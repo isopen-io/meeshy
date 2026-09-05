@@ -398,11 +398,34 @@ extension MeeshyComposerHost {
     ///
     /// Les treize arguments sont ceux que `StoryComposerView+Publication`
     /// assemble, lus sur le MÊME modèle de vue : le meuble ne recalcule rien,
-    /// il relaie. `ComposerMediaAccessibility.empty` est le seul écart, et il
-    /// est honnête — la surface de scène du meuble n'offre pas encore d'éditeur
-    /// d'alternative textuelle, donc il n'y a rien à transmettre. Fabriquer un
-    /// dictionnaire vide plutôt que de lire un magasin absent dit la vérité ;
-    /// lire un magasin par défaut aurait fait croire à un relais.
+    /// il relaie.
+    ///
+    /// ## L'accessibilité VOYAGE désormais par ici (#4756, corrigé 2026-09-05)
+    ///
+    /// Ce site posait `ComposerMediaAccessibility.empty`, et son commentaire le
+    /// justifiait ainsi : « la surface de scène du meuble n'offre pas encore
+    /// d'éditeur d'alternative textuelle, donc il n'y a rien à transmettre ».
+    ///
+    /// **C'était vrai à l'écriture et faux depuis deux lots.** #4890 a donné au
+    /// meuble un éditeur de LÉGENDE (`documentMediaCaptions`), `a372e2484e` un
+    /// éditeur de TEXTE ALTERNATIF (`documentMediaAlts`) — et ni l'un ni l'autre
+    /// n'est passé ici : la greffe n'était câblée que sur la remise à l'ATELIER
+    /// (`MeeshyComposerHost+Surfaces`), l'autre bouche du même entonnoir. Une
+    /// story publiée depuis le socle partait donc sans une seule des deux
+    /// cartes, silencieusement, pendant que les deux champs s'affichaient,
+    /// se validaient et se relisaient à l'écran.
+    ///
+    /// > **Un commentaire qui justifie une valeur PAR une absence se périme
+    /// > quand l'absence se comble — et il se périme en SILENCE**, puisque
+    /// > combler l'absence se fait ailleurs, dans le fichier qui ouvre la porte.
+    /// > La question à poser en ouvrant une porte de saisie n'est pas « où
+    /// > est-ce lu ? » mais « **quels sites remettent cette charge, et les
+    /// > ai-je TOUS visités ?** ». Ils étaient deux ; un seul avait la greffe.
+    ///
+    /// `accessibilityCarryingComposerCaptions` reste le site UNIQUE de la
+    /// greffe : ce qui change ici est la BASE qu'on lui donne — `.empty`, parce
+    /// que le meuble n'a pas de magasin d'atelier à relayer sur ce chemin, et
+    /// c'est toujours honnête.
     func publishStoryScene() {
         guard canPublishDocument else { return }
         isPublishingDocument = true
@@ -418,7 +441,7 @@ extension MeeshyComposerHost {
             composerVisibilityUserIds,
             viewModel.draftId,
             composerReferences,
-            ComposerMediaAccessibility.empty,
+            accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides),
             selectedFormat.postType
         )
         isPublishingDocument = false
@@ -616,6 +639,25 @@ extension MeeshyComposerHost {
     /// `nil` sous la scène — le socle n'y est pas peint, et fabriquer un
     /// brouillon pour une surface qui publie par l'atelier aurait été le second
     /// chemin d'envoi que la doctrine, C2 et le lot 7 interdisent tous les trois.
+    /// **`identifiant d'objet → alternative` devient `URL source →
+    /// alternative`** (2026-09-05).
+    ///
+    /// Le pont est `documentMediaObjectIdBySource`, alimenté par le retour
+    /// d'`applyContentMedia` — le seul site qui ait jamais connu les deux
+    /// bouts. Une source dont l'objet n'a pas d'alternative n'entre pas dans
+    /// la carte : un `nil` et une chaîne vide se disent pareil à l'arrivée, et
+    /// une chaîne vide poserait une alternative BLANCHE — un lecteur d'écran
+    /// annoncerait alors « image » suivi de rien, ce qui est pire que rien.
+    var altsParURLSource: ComposerMediaCaptions {
+        documentMediaObjectIdBySource.reduce(into: ComposerMediaCaptions()) { carte, entree in
+            let (source, objectId) = entree
+            guard let texte = documentMediaAlts[objectId],
+                  !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return }
+            carte[source] = texte
+        }
+    }
+
     var documentDraft: ComposerDocumentDraft? {
         switch mountedSurface {
         case .scene:
@@ -721,7 +763,24 @@ extension MeeshyComposerHost {
                 // **Les légendes du composer, enfin remises** (#4756). Cette
                 // carte avait un écrivain et aucun lecteur sur cette voie : ce
                 // qui manquait n'était pas la saisie, c'était ce passage-ci.
-                mediaCaptions: documentMediaCaptions
+                mediaCaptions: documentMediaCaptions,
+                // **La traduction de clé se fait ICI, et nulle part ailleurs.**
+                //
+                // L'éditeur d'objet écrit par identifiant d'OBJET — c'est ce
+                // qu'il édite, et c'est la seule clé qui survive au
+                // remplacement d'un fichier sur la même scène. Le chemin
+                // durable, lui, réaligne par URL SOURCE, comme les légendes.
+                //
+                // Ce site est le seul qui tienne les DEUX : la carte des alts
+                // et le pont `URL source → identifiant d'objet` qu'a rendu
+                // `applyContentMedia`. Traduire plus tôt aurait accroché
+                // l'alternative à un fichier plutôt qu'à l'objet ; plus tard,
+                // le pont n'existe plus.
+                mediaAlts: altsParURLSource,
+                // Le pont que `applyContentMedia` a rendu, remis TEL QUEL : la
+                // traduction en positions se fait un étage plus bas, là où
+                // l'ORDRE des fichiers existe.
+                mediaObjectIds: documentMediaObjectIdBySource
             )
         }
     }

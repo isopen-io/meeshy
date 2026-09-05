@@ -232,6 +232,31 @@ describe('MessageTranslationService._extractConversationLanguages', () => {
     expect(languages).not.toContain('ES-ES');
   });
 
+  it('collapses an out-of-catalog region-tagged anonymous language onto its base (fil-PH → fil)', async () => {
+    // Filipino is NOT in the Meeshy catalogue, so `normalizeLanguageCode`
+    // returns undefined and the dedup fallback decides. The inline
+    // `?? language.toLowerCase()` kept the whole tag (`'fil-ph'`) — a target
+    // NLLB cannot resolve — and let `'fil-PH'` and `'fil'` count as TWO
+    // distinct languages. The SSOT `normalizeLanguageForDedup` strips the
+    // region, so both fold onto the canonical `'fil'` (same class as the
+    // registered `deviceLocale` path). `Locale.current` on a Filipino device
+    // is `fil_PH`, so this is a real anonymous participant, not a corner case.
+    const { prisma } = makePrismaMock({
+      participants: [
+        { type: 'anonymous', language: 'fil-PH' },
+        { type: 'anonymous', language: 'fil' },
+      ],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const languages = await extractLanguages(svc, 'conv-fil');
+
+    expect(languages).toEqual(['fil']);
+    expect(languages).not.toContain('fil-ph');
+    expect(languages).not.toContain('fil-PH');
+  });
+
   it('returns [] when autoTranslateEnabled is false on the conversation', async () => {
     const { prisma } = makePrismaMock({
       conversationAutoTranslate: false,

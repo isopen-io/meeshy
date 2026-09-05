@@ -30,7 +30,7 @@ import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import { ESPACE, RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
-import { actionsFlottantes, feuilleDeLEspace, versLEspace } from '@/app/connecte/espace-vue';
+import { feuilleDeLEspace, raccourcisEntete, versLEspace } from '@/app/connecte/espace-vue';
 import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 
 const RACINE = join(__dirname, '..', 'app');
@@ -56,7 +56,7 @@ const adresseServie = (fichier: string): string => {
 
 const ROUTES_SERVIES: readonly string[] = fichiersDeRoute(RACINE).map(adresseServie);
 
-/** Les destinations que le lot promet — les deux ronds, les rangées, le champ du tableau. */
+/** Les destinations que le lot promet — les deux raccourcis, les rangées, le champ du tableau. */
 const DESTINATIONS: readonly string[] = [
   '/feed',
   ...RANGEES_DE_L_ESPACE.map((rangee) => rangee.href),
@@ -85,11 +85,20 @@ describe('l’espace membre n’ouvre que sur des routes que la v3 SERT', () => 
     },
   );
 
+  /**
+   * LA SENTINELLE — une route que la v3 ne sert PAS, pour prouver que
+   * `ROUTES_SERVIES` distingue vraiment. Sans elle, une liste qui rendrait
+   * TOUT passerait les témoins ci-dessus au vert sans rien vérifier.
+   *
+   * C'ÉTAIT `/communities`, et l'écran a été servi (`communautes-porte.ts`) :
+   * la sentinelle est alors devenue un rouge permanent qui n'accusait rien.
+   * Une sentinelle se choisit donc parmi les routes que le LEGACY sert et que
+   * la v3 n'a pas reprises — `/groups` en est une, et le jour où la v3 la
+   * servira, ce témoin le dira au lieu de mentir.
+   */
   it('rougirait sur une destination hors zone', () => {
-    expect(ROUTES_SERVIES).not.toContain('/communities');
-    expect(ROUTES_SERVIES).not.toContain('/calls');
-    expect(DESTINATIONS).not.toContain('/communities');
-    expect(DESTINATIONS).not.toContain('/calls');
+    expect(ROUTES_SERVIES).not.toContain('/groups');
+    expect(DESTINATIONS).not.toContain('/groups');
   });
 });
 
@@ -119,7 +128,7 @@ describe('la feuille se ferme sans un octet de JavaScript', () => {
   it('ouvre depuis l’hôte, et y revient', () => {
     expect(versLEspace('/')).toBe('/?espace');
     expect(versLEspace('/chats')).toBe('/chats?espace');
-    expect(actionsFlottantes('/chats')).toContain('href="/chats?espace"');
+    expect(raccourcisEntete('/chats')).toContain('href="/chats?espace"');
   });
 });
 

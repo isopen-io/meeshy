@@ -20,8 +20,11 @@ public protocol AudienceContactsProviding: Sendable {
 /// Default: reads the shared friends GRDB cache (the same store/key the
 /// contacts list uses) and maps `FriendRequestUser` to the picker's
 /// `UserSearchResult`. Read-only, never hits the network.
-struct FriendsCacheAudienceContacts: AudienceContactsProviding {
-    func cachedContacts() async -> [UserSearchResult] {
+public struct FriendsCacheAudienceContacts: AudienceContactsProviding {
+
+    public init() {}
+
+    public func cachedContacts() async -> [UserSearchResult] {
         let cached = await CacheCoordinator.shared.friends.load(
             for: FriendshipCache.PersistenceKeys.friendsList
         )

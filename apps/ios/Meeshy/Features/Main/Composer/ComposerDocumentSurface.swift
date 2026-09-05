@@ -300,13 +300,15 @@ struct ComposerDocumentSurface: View {
             // curseur sans faire passer `TextEditor` par un pont UIKit
             // (`UITextView` + `caretRect`, qu'aucun composant du dépôt ne
             // fait aujourd'hui) — décision confirmée avec le porteur.
-            // `!suggestions.isEmpty`, pas seulement `activeQuery != nil` (revue
-            // Opus 2026-08-27) : en `.composerDraft`, il n'y a AUCUN appel
-            // réseau en attente qui remplirait la liste plus tard — pas d'ami
-            // accepté, une requête sans correspondance, ou le temps du `.task`
-            // de chargement sont tous des états NOMINAUX. Gater sur la seule
-            // requête active peindrait une bande de verre vide dans chacun.
-            if mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty {
+            // **La condition de montage a quitté ce site** (2026-09-05).
+            //
+            // Elle disait « en `.composerDraft`, il n'y a AUCUN appel réseau
+            // en attente qui remplirait la liste plus tard ». C'était vrai
+            // d'une liste d'amis chargée une fois ; un brouillon interroge
+            // désormais l'annuaire, donc « vide » a cessé d'être un seul
+            // état. `showsSuggestions` porte la distinction, à un seul
+            // endroit — cette phrase-ci vivait en trois copies.
+            if mentionBox.controller.showsSuggestions {
                 ComposerMentionStrip(
                     controller: mentionBox.controller,
                     currentText: text,
@@ -346,10 +348,10 @@ struct ComposerDocumentSurface: View {
         }
         .animation(
             .spring(response: 0.3, dampingFraction: 0.8),
-            value: mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty
+            value: mentionBox.controller.showsSuggestions
         )
         .onAppear { raiseKeyboardIfPromised() }
-        .task { mentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
+        .task { await mentionBox.loadCandidates() }
         .adaptiveOnChange(of: text) { _, newText in mentionBox.controller.handleQuery(in: newText) }
     }
 

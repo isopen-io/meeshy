@@ -68,13 +68,13 @@ jest.mock('../../../../utils/normalize', () => ({
 const mockBcryptCompare = jest.fn<any>();
 const mockBcryptHash = jest.fn<any>().mockResolvedValue('hashed_new_password');
 
-jest.mock('bcryptjs', () => ({
-  default: {
-    compare: (...args: any[]) => mockBcryptCompare(...args),
-    hash: (...args: any[]) => mockBcryptHash(...args),
-  },
-  compare: (...args: any[]) => mockBcryptCompare(...args),
-  hash: (...args: any[]) => mockBcryptHash(...args),
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216. Doubler
+// `bcryptjs` ne suffirait plus : le module charge d'abord le binaire NATIF, et
+// le repli JavaScript n'est atteint que s'il manque.
+jest.mock('../../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...args: any[]) => mockBcryptCompare(...args),
+  hashPassword: (...args: any[]) => mockBcryptHash(...args),
 }));
 
 // `updateUserProfileSchema` est le SCHÉMA RÉEL (#4184), pas un passe-plat.

@@ -86,6 +86,7 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
     plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
     navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
     composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+    prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
@@ -99,6 +100,7 @@ const ETAT = (messages: readonly Message[], attributs: Partial<EtatDuFil> = {}):
   maintenant: Date.parse('2026-09-01T12:30:00.000Z'),
   composeur: { genre: 'ouvert' },
   tempsReel: null,
+  contexte: null,
   plein: null,
   profil: null,
   ...attributs,
@@ -552,19 +554,28 @@ describe('le poids du document du fil, et le surcoût de l’état `?media=`', (
   const FIXE = [IMAGE, VIDEO, VOCAL, FICHIER];
   const octets = (source: string): number => gzipSync(Buffer.from(source, 'utf8'), { level: 9 }).length;
   const mesures = JSON.parse(readFileSync(join(__dirname, '..', 'budgets-mesures.json'), 'utf8')) as {
-    readonly documents_du_fil: { readonly fil_o: number; readonly fil_media_o: number };
+    readonly documents_du_fil: { readonly fil_o: number; readonly fil_media_o: number; readonly fil_repondre_o: number };
   };
 
   const ordinaire = octets(documentDuFil(ETAT(FIXE, { tempsReel: TEMPS_REEL })));
   const enPlein = octets(documentDuFil(ETAT(FIXE, { tempsReel: TEMPS_REEL, plein: 'ar1' })));
+  // Le TROISIÈME relevé (§ 6 de la spécification #5163) : le document `?repondre=<id>`, bandeau de citation compris.
+  const enReponse = octets(documentDuFil(ETAT(FIXE, { tempsReel: TEMPS_REEL, contexte: { genre: 'reponse', cible: IMAGE } })));
 
   it('ne laisse pas le document du fil grossir en silence', () => {
-    console.log(`[mesure] document du fil ${ordinaire} o gzip · en plein écran ${enPlein} o gzip · surcoût ${enPlein - ordinaire} o`);
+    console.log(
+      `[mesure] document du fil ${ordinaire} o gzip · en plein écran ${enPlein} o gzip · en réponse ${enReponse} o gzip · surcoût ${enPlein - ordinaire} o`,
+    );
     expect(ordinaire).toBeLessThanOrEqual(mesures.documents_du_fil.fil_o);
   });
 
   it('ne laisse pas l’état `?media=` grossir en silence', () => {
     expect(enPlein).toBeLessThanOrEqual(mesures.documents_du_fil.fil_media_o);
+  });
+
+  /** Le menu d'une ligne (§ 12.10.1, issue #5163) et le bandeau de citation ne grossissent pas en silence non plus. */
+  it('ne laisse pas l’état `?repondre=` grossir en silence', () => {
+    expect(enReponse).toBeLessThanOrEqual(mesures.documents_du_fil.fil_repondre_o);
   });
 
   /** Et le surcoût reste un SURCOÛT : le fil ordinaire ne paie pas un octet de la surimpression. */

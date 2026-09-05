@@ -616,20 +616,24 @@ describe('le tableau de bord', () => {
    * Charte règle 6 — « chacun est un `<a href>` vers une route SERVIE ; tant que
    * sa destination n'existe pas, il n'est pas rendu — jamais inerte ».
    *
-   * **LA MOITIÉ DE CE TÉMOIN A CHANGÉ DE SENS, ET C'EST SA PRÉMISSE QUI A
-   * BOUGÉ, PAS LA RÈGLE.** Il gardait « aucun rond flottant » pour la raison
-   * qu'il portait écrite : « la v3 ne sert aujourd'hui ni compte ni réglages ».
-   * Elle sert désormais les six écrans de `/settings`, `/feed`, `/contacts`,
+   * **CE TÉMOIN A CHANGÉ DE SENS DEUX FOIS, ET C'EST SA PRÉMISSE QUI A BOUGÉ,
+   * PAS LA RÈGLE.** Il gardait « aucun rond flottant » pour la raison qu'il
+   * portait écrite : « la v3 ne sert aujourd'hui ni compte ni réglages ». Elle
+   * sert désormais les six écrans de `/settings`, `/feed`, `/contacts`,
    * `/notifications`, `/search` et `/links` — et c'est exactement ce que la
-   * règle 6 attendait pour que les ronds soient RENDUS (#5093). Ce qu'elle
-   * interdit — une cible inerte, un `href="#"`, un `onclick` — n'a jamais
-   * bougé et reste gardé ligne pour ligne ; ce que valait le premier `expect`
-   * est repris, et durci, par `__tests__/espace-membre.test.ts`, qui oppose
-   * chaque destination aux `app/**\/route.ts` réellement présents.
+   * règle 6 attendait pour que les deux cibles soient RENDUES (#5093). La
+   * revue de #5164 a ensuite déplacé ces deux cibles hors du rail flottant
+   * (charte règle 8 b/c : un élément `position:fixed` recouvrait la carte de
+   * conversation mise en avant, à tout défilement) — elles sont désormais
+   * `.raccourci` DANS le flux de l'en-tête. Ce que la règle 6 interdit — une
+   * cible inerte, un `href="#"`, un `onclick` — n'a jamais bougé et reste
+   * gardé ligne pour ligne ; ce que valait le premier `expect` est repris, et
+   * durci, par `__tests__/espace-membre.test.ts`, qui oppose chaque
+   * destination aux `app/**\/route.ts` réellement présents.
    */
-  it('rend les deux ronds vers des routes servies, et aucune cible inerte', () => {
-    expect(doc).toContain('class="flottante gauche" href="/feed"');
-    expect(doc).toContain('class="flottante droite" href="/?espace"');
+  it('rend les deux raccourcis vers des routes servies, et aucune cible inerte', () => {
+    expect(doc).toContain('class="raccourci" href="/feed"');
+    expect(doc).toContain('class="raccourci" href="/?espace"');
     expect(doc).not.toContain('href="#"');
     expect(doc).not.toContain('onclick');
   });
