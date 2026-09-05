@@ -23,6 +23,7 @@ import {
 } from '../../services/attachments/AnonymousUploadIdentity';
 import { classifyAnonymousAttachment, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { originIsAllowed } from '../../config/cors-origins';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
 
@@ -243,6 +244,17 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
     datastore: uploadDataStore,
     maxSize: getMaxFileSize(),
     respectForwardedHeaders: true,
+    // #5298 — sans cette option, `@tus/server` 2.4.4 rend `'*'` sur CHAQUE
+    // réponse (`getCorsOrigin` : `if (!allowedOrigins) return '*';`), et
+    // c'est cette porte qui décide seule (`tusServer.handle` écrit sur la
+    // réponse BRUTE : les en-têtes de `@fastify/cors` posés sur `reply` ne
+    // l'atteignent jamais). Même règle que les portes HTTP et Socket.IO
+    // (`config/cors-origins.ts`) : appelants réels mesurés — le web
+    // (`tusUploadService.ts`, navigateur, sert un `Origin`) et les clients
+    // natifs iOS/Android (aucun `Origin` envoyé, donc inertes à cette
+    // option). La fonction est évaluée par requête, jamais figée à la
+    // construction, pour suivre `CORS_ORIGINS` sans redémarrage de process.
+    allowedOrigins: (origin: string) => originIsAllowed(origin),
     async onIncomingRequest(req, uploadId) {
       // task-1-fix-round-3, I1 — AVANT : ce serveur était construit SANS
       // `onIncomingRequest`. `onUploadCreate` n'est invoqué QUE par le

@@ -4,22 +4,52 @@
 Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Protocol
-1. At the start of each iteration: create the working branch from the **Last Merged Base** below (or sync the assigned branch with `main`)
+
+> ### ⛔ La base est `dev`, pas `main` (correction 2026-09-05)
+>
+> **`main` est une branche de PUBLICATION, alimentée par `dev` — un correctif iOS
+> s'y porte PAR `dev`.** Les itérations 251i → 270i ont toutes visé `main`, et ce
+> fichier le prescrivait encore ; 271i l'a suivi et sa PR (#4541) a été **fermée
+> sans merge** pour cette raison, entre autres.
+>
+> Ce que cette base fausse coûte, au-delà de la PR perdue : `dev` avait déjà, au
+> moment où 271i était écrite, le scanner qu'elle extrayait
+> (`LocalizationConsistencyTests+Scanning.swift`) et une garde plus forte que la
+> sienne (`LocalizationDefaultValueCatalogGuardTests`, #4620). **Partir de `main`,
+> c'est partir d'un dépôt où le travail des autres n'est pas encore arrivé** — on
+> y trouve donc des défauts déjà corrigés, et on livre des jumelles.
+>
+> | | |
+> |---|---|
+> | base de la branche de travail | **`origin/dev`** |
+> | cible de la PR | **`dev`** |
+> | `main` | publication seulement — on n'y ouvre pas de PR iOS |
+>
+> Avant d'ouvrir une itération : **lire `dev`, pas `main`**, et vérifier que le
+> défaut visé y existe encore.
+
+1. Au début de chaque itération : réinitialiser la branche de travail sur
+   **`origin/dev`** (`git checkout -B <branche> origin/dev`), après avoir vérifié
+   sur `dev` que le défaut visé n'y est pas déjà corrigé
 2. Develop, commit, push on the working branch
-3. Once CI passes: merge into main via PR
+3. Once CI passes: ouvrir la PR **vers `dev`**
 4. After merge: update this file with the new base
-5. **Réinitialiser** la branche de travail sur le nouveau `main`
-   (`git checkout -B <branche> origin/main` + `push --force-with-lease`) —
+5. **Réinitialiser** la branche de travail sur le nouveau `dev`
+   (`git checkout -B <branche> origin/dev` + `push --force-with-lease`) —
    **ne pas la SUPPRIMER** : les caches Actions sont scopés par ref, et
    supprimer la ref les évince, ce qui fait repartir le gate iOS à froid et lui
    fait dépasser son plafond de 50 min (mesure : § « La branche de travail se
    RÉINITIALISE » ci-dessous).
 
+> Les mentions d'`origin/main` dans les blocs d'itérations ci-dessous sont
+> HISTORIQUES : elles disent d'où 249i → 270i sont réellement parties. Elles ne
+> se lisent pas comme une consigne.
+
 ---
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 270i, 2026-08-30)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 271i, 2026-09-05)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.** ⛔ La base est `dev` — voir l'encadré du § Protocol avant d'ouvrir une itération.
 >
 > | itération | PR | squash sur `main` | issue |
 > |---|---|---|---|
@@ -44,6 +74,44 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 269i | [#4330](https://github.com/isopen-io/meeshy/pull/4330) | `5c2c6387` | #4328, #4329 (ouvertes) |
 >
 > - **Branche de travail** : `claude/intelligent-noether-m8jpj8`, **réinitialisée** (jamais supprimée) sur `origin/main` `56bc5fd9` — base de 270i.
+>
+> ### 271i — FERMÉE SANS MERGE (#4541, issue #4540) — bâtie sur la mauvaise branche
+>
+> | | |
+> |---|---|
+> | PR | [#4541](https://github.com/isopen-io/meeshy/pull/4541) — **closed without merging**, 2026-09-05 |
+> | base | `origin/main` `09d94823` — **la faute**, cf. l'encadré du Protocol |
+> | ce qu'elle visait | `feed.media.item`, appelée cinq fois avec cinq replis (« Media 1 of … » … « Media 5 of … ») |
+>
+> **Trois raisons, et chacune se serait vue en partant de `dev`** :
+>
+> 1. **Le scanner qu'elle extrayait était déjà extrait.**
+>    `LocalizationConsistencyTests+Scanning.swift` porte `LocalizedCall` sur `dev`
+>    depuis #4328 — doc-comment compris. Le fichier autonome de 271i
+>    (`Unit/Architecture/LocalizedCallScanner.swift`) en aurait été une SECONDE
+>    copie, dans un dépôt dont la règle 11 interdit les jumelles.
+> 2. **Sa garde est subsumée par une plus forte.**
+>    `LocalizationDefaultValueCatalogGuardTests` (#4620) exige que toute clé
+>    portant un `defaultValue` vive au catalogue ; `LocalizationConsistencyTests`
+>    compare alors chaque site AU CATALOGUE. Le cas que 271i redoutait — « une clé
+>    que le catalogue n'a pas » — **ne peut plus exister** sur `dev`.
+> 3. **La surface avait été refaite.** La mosaïque de `mediaPreview` est devenue
+>    un CARROUSEL (`FeedPostCardCarousel.swift`, #4096), dont le libellé prend
+>    déjà la position en argument (`slideAccessibilityLabel(item, at: offset)`).
+>    271i corrigeait cinq tuiles qui n'existent plus.
+>
+> > **Une itération se mesure contre l'état où elle sera MERGÉE, jamais contre
+> > celui d'où elle est partie.** Le défaut de 271i était réel sur `main` et sa
+> > preuve était bonne — le gate CI a exécuté ses neuf tests neufs, tous verts,
+> > sur 9 298. Ce que la mesure ne pouvait pas dire, c'est que la question avait
+> > déjà été répondue ailleurs : **une preuve valide sur la mauvaise base
+> > démontre la justesse d'un travail redondant.**
+>
+> Ce qui SURVIT de ce cycle — sur constat de la CI, pas de la PR :
+> **#4545** (cliquet de dette de types `apps/web`) et **#4546** (huit gardes iOS
+> rouges), toutes deux ouvertes le même jour, la seconde triée `Urgent` par le
+> porteur. Le rouge n'était pas celui de la PR : les huit échecs étaient ceux de
+> `main` à `b5e21ff0`, à l'identique.
 >
 > ### 270i — le widget parlait sept langues, et la garde ne le savait pas (#4364)
 >
