@@ -168,12 +168,30 @@ const SceneV3Schema = z.object({
   carrierAspect: z.number().positive().finite().optional(),
 });
 
+/**
+ * Comment l'auteur veut que ses scènes soient PRÉSENTÉES (#5322).
+ *
+ * Décision d'AUTEUR, donc elle voyage avec la publication : deux lecteurs
+ * doivent voir la même mise en page, et la recalculer côté lecteur (d'après le
+ * nombre de scènes, leur format, l'appareil) rendrait deux réponses pour un
+ * même post.
+ *
+ * Miroirs à tenir ENSEMBLE : `MosaicLayoutMode` (Swift, `CanvasV3.swift`) et le
+ * miroir Kotlin. Le défaut de lecture est `wave` sur les trois plateformes.
+ */
+export const MosaicLayoutModeSchema = z.enum(['wave', 'hero', 'reel', 'sine']);
+export type MosaicLayoutMode = z.infer<typeof MosaicLayoutModeSchema>;
+
 export const CanvasV3Schema = z.object({
   v: z.literal(3),
   // O3 — `scenes` absent tant qu'aucun objet visuel : jamais de cadre vide.
   // Présent, il porte au moins une scène.
   scenes: z.array(SceneV3Schema).min(1).max(10).optional(),
   sound: BackgroundSoundSchema.optional(),
+  // OPTIONNEL et ADDITIF : absent de toute publication antérieure au
+  // 2026-09-06, et le lecteur retombe alors sur `wave`. Un canvas mono-scène
+  // n'a rien à en dire — une mosaïque d'un élément n'est pas une mosaïque.
+  layout: MosaicLayoutModeSchema.optional(),
 });
 
 export type CanvasV3 = z.infer<typeof CanvasV3Schema>;
