@@ -376,9 +376,28 @@ struct FeedPostCard: View {
         cardSceneFullscreenMedia?.caption
     }
 
+    /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (corrigé
+    /// le 2026-09-05, dans le lot qui a introduit le plein écran de scène).
+    ///
+    /// La première écriture demandait « ce post a-t-il une image à agrandir ? »
+    /// — hérité du temps où le plein écran feuilletait des médias. Depuis que
+    /// le player rejoue le canvas, la question est « ce post a-t-il une scène à
+    /// rejouer ? », et les deux divergent sur exactement les cas que le porteur
+    /// demande d'éprouver : un canvas de TEXTE, de DESSIN, de STICKERS, ou à
+    /// fond de COULEUR n'a aucun média — et se peint pourtant parfaitement.
+    ///
+    /// > **Un correctif qui change la NATURE d'une destination doit relire la
+    /// > condition qui y mène.** La route neuve savait rendre une scène sans
+    /// > média ; la porte, restée sur l'ancienne question, n'y menait pas. Rien
+    /// > ne rougissait : le repli sur le détail est un comportement licite, et
+    /// > c'est ce qui rend l'écart invisible.
+    private var cardSceneOpensFullscreen: Bool {
+        SocialFullscreenRoute.scene(of: post) != nil || cardSceneFullscreenMedia != nil
+    }
+
     /// L'indice VoiceOver DIT ce que le doigt fait — et il change avec lui.
     private var cardSceneOpenHint: String {
-        cardSceneFullscreenMedia != nil
+        cardSceneOpensFullscreen
             ? String(localized: "a11y.feed.scene.fullscreen.hint",
                      defaultValue: "Touche deux fois pour voir en plein écran", bundle: .main)
             : String(localized: "a11y.feed.post.open.hint",
@@ -542,9 +561,7 @@ struct FeedPostCard: View {
                         // (directive porteur 2026-09-05), jamais le détail du
                         // post. La scène EST le contenu : la toucher demande à
                         // la voir en grand, pas à lire ses commentaires.
-                        onTapScene: cardSceneFullscreenMedia.map { media in
-                            { openFullscreen(media) }
-                        }
+                        onTapScene: cardSceneOpensFullscreen ? { openSceneFullscreen() } : nil
                     )
                         // **La légende PAR-DESSUS la scène** (directive porteur
                         // 2026-09-05). La carte de scène n'en affichait aucune :
@@ -569,7 +586,7 @@ struct FeedPostCard: View {
                         .accessibilityHint(cardSceneOpenHint)
                         .accessibilityAddTraits(.isButton)
                         .accessibilityAction {
-                            if let media = cardSceneFullscreenMedia { openFullscreen(media) }
+                            if cardSceneOpensFullscreen { openSceneFullscreen() }
                             else { onTapPost?(post) }
                         }
                 } else if isStoryRepost {
