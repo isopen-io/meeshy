@@ -42,7 +42,7 @@ export const FEUILLE_DE_LA_RECHERCHE = compacte(`
 .chercher{display:flex;flex-direction:column;gap:var(--space-2);margin:0;padding:0 var(--space-4) var(--space-4)}
 .chercher label{font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-text)}
 .chercher .ligne{display:flex;align-items:center;gap:var(--space-2)}
-.chercher input{flex:1 1 auto;min-width:0;min-height:var(--action-height-secondary);padding:0 var(--space-4);font-size:var(--text-md);font-family:inherit;color:var(--color-text);background:var(--color-surface);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-md)}
+.chercher input{flex:1 1 auto;min-width:0;min-height:var(--action-height-secondary);padding:0 var(--space-4);font-size:var(--text-md);font-family:inherit;color:var(--color-text);background:var(--color-surface);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg)}
 .chercher button{flex:none;min-height:var(--target-min)}
 .chercher svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}
 

@@ -81,7 +81,7 @@ dialog.espace .fermer svg{width:var(--glyph);height:var(--glyph)}
 dialog.espace .rangs{display:flex;flex-direction:column;gap:var(--space-2);margin:var(--space-4) 0 0;padding:0;list-style:none}
 dialog.espace .rangee{display:flex;align-items:center;gap:var(--space-3);min-height:var(--row-height);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);color:inherit;text-decoration:none}
 dialog.espace .rangee:hover{background:var(--color-tint-primary)}
-dialog.espace .rangee .tuile{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--avatar-small);height:var(--avatar-small);border-radius:var(--radius-md);background:var(--color-tint-primary);color:var(--color-primary)}
+dialog.espace .rangee .tuile{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--avatar-small);height:var(--avatar-small);border-radius:var(--radius-lg);background:var(--color-tint-primary);color:var(--color-primary)}
 dialog.espace .rangee .tuile svg{width:var(--glyph);height:var(--glyph)}
 dialog.espace .rangee .dit{flex:1;min-width:0}
 dialog.espace .rangee .quoi{display:block;font-weight:var(--font-weight-medium)}

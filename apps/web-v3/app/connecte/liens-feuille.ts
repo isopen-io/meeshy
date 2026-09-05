@@ -89,7 +89,7 @@ dialog.nouveau-lien .groupe{display:flex;flex-direction:column;gap:var(--space-2
 dialog.nouveau-lien legend{padding:0;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--color-text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide)}
 dialog.nouveau-lien .champ{display:flex;flex-direction:column;gap:var(--space-2)}
 dialog.nouveau-lien .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
-dialog.nouveau-lien .champ input{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text);font:inherit}
+dialog.nouveau-lien .champ input{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}
 dialog.nouveau-lien .aide{font-size:var(--text-sm);color:var(--color-text-muted)}
 dialog.nouveau-lien .coche{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg)}
 dialog.nouveau-lien .pied{position:sticky;bottom:0;padding:var(--space-3) 0 0;background:var(--color-surface-raised)}

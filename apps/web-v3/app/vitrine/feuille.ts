@@ -61,7 +61,7 @@ export const FEUILLE_DE_LA_VITRINE = compacte(`
 .atouts .sous{margin:0 0 var(--space-5);max-width:var(--measure);color:var(--color-text-muted)}
 .atouts ul{display:grid;gap:var(--space-3);margin:0;padding:0;list-style:none}
 .atouts li{display:flex;align-items:flex-start;gap:var(--space-4);padding:var(--space-4);border:var(--stroke-hair) solid var(--color-border-strong);border-radius:var(--radius-lg);background:var(--color-surface)}
-.atouts .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-7);height:var(--space-7);border-radius:var(--radius-md);background:var(--color-tint-primary)}
+.atouts .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-7);height:var(--space-7);border-radius:var(--radius-lg);background:var(--color-tint-primary)}
 .atouts .tuile svg{width:var(--glyph);height:var(--glyph)}
 .atouts h3{margin:0 0 var(--space-1);font-size:var(--text-base);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
 .atouts p{margin:0;font-size:var(--text-base);color:var(--color-text-muted)}

@@ -77,7 +77,7 @@ a.carte:hover{background:var(--color-tint-primary)}
 .carte .corps{flex:1;min-width:0}
 .carte .nom{display:block;font-weight:var(--font-weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .carte .meta{display:block;margin-top:var(--space-1);font-size:var(--text-base);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.carte .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--avatar);height:var(--avatar);border-radius:var(--radius-md);background:var(--color-tint-primary)}
+.carte .tuile{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--avatar);height:var(--avatar);border-radius:var(--radius-lg);background:var(--color-tint-primary)}
 .carte .tuile svg{width:var(--glyph);height:var(--glyph)}
 
 .avatar{display:grid;place-items:center;flex:none;width:var(--avatar);height:var(--avatar);border-radius:var(--radius-pill);font-size:var(--text-base);font-weight:var(--font-weight-semibold);color:var(--color-on-avatar)}
