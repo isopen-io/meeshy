@@ -70,8 +70,8 @@ class StoryTextEffectTest {
      * that can say so, the table not being on the wire.
      */
     @Test
-    fun `the axis carries fourteen effects`() {
-        assertThat(StoryTextEffect.entries).hasSize(14)
+    fun `the axis carries twenty effects`() {
+        assertThat(StoryTextEffect.entries).hasSize(20)
     }
 
     /** Every effect but NONE carries a shadow — an entry-less case renders like "none". */

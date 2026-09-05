@@ -25,6 +25,10 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     case glow
     /// La même lueur, à mi-voix — pour un texte clair sur fond clair.
     case glowSoft
+    /// Lueur très large et diffuse, à mi-voix — le texte ne brille pas, il
+    /// BAIGNE. Distincte de `neon` par le rayon (0.85 em contre 0.60) autant
+    /// que par l'opacité : la même géométrie à pleine encre ferait un pâté.
+    case aura
     /// Lueur large et pleine : l'enseigne au néon.
     case neon
 
@@ -36,15 +40,28 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     /// Halo sombre SERRÉ — l'œil y lit un contour, ce qu'une ombre unique ne
     /// sait pas tracer autrement (une seule ombre par effet, § du haut).
     case outline
+    /// Le contour de `outline`, en encre CLAIRE — le seul qui tienne un texte
+    /// sombre posé sur une photo sombre, cas où les six autres contours et
+    /// ombres ajoutent du noir sur du noir.
+    case outlineLight
 
     // MARK: Ombres — l'encre SOMBRE, décalée
 
     /// Ombre portée douce, décalée vers le bas.
     case shadow
+    /// La même, diffusée et à mi-voix : elle DÉTACHE sans se voir.
+    case shadowSoft
     /// Ombre portée franche et dense.
     case drop
     /// Ombre centrée sous le texte : il ne se décale pas, il s'ÉLÈVE.
     case lift
+    /// Ombre franche projetée SUR LE CÔTÉ, sans descente — l'éclairage
+    /// rasant. Le seul effet à décalage purement horizontal : l'œil y lit une
+    /// lumière qui vient d'à côté, pas d'en haut.
+    case sideShadow
+    /// Ombre basse et diffuse, sans décalage latéral : le texte FLOTTE
+    /// au-dessus de la scène. `lift` en est la version courte et discrète.
+    case float
     /// Ombre longue en diagonale, sans flou — la profondeur d'affiche.
     case longShadow
 
@@ -58,6 +75,8 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     case letterpress
     /// Double du texte décalé, dans SA couleur — l'écho sérigraphié.
     case echo
+    /// L'écho poussé loin et presque effacé — la trace, pas le double.
+    case ghost
 
     /// La géométrie de l'ombre que cet effet pose, ou `nil` pour `.none`.
     ///
@@ -79,6 +98,9 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
         case .glowSoft:
             return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.24,
                                          ink: .text, opacity: 0.55)
+        case .aura:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.85,
+                                         ink: .text, opacity: 0.45)
         case .neon:
             return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.60,
                                          ink: .text, opacity: 1)
@@ -89,16 +111,28 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
         case .outline:
             return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.09,
                                          ink: .dark, opacity: 1)
+        case .outlineLight:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.07,
+                                         ink: .light, opacity: 1)
 
         case .shadow:
             return StoryTextEffectShadow(offsetX: 0.03, offsetY: 0.06, blur: 0.16,
                                          ink: .dark, opacity: 0.6)
+        case .shadowSoft:
+            return StoryTextEffectShadow(offsetX: 0.02, offsetY: 0.04, blur: 0.28,
+                                         ink: .dark, opacity: 0.45)
         case .drop:
             return StoryTextEffectShadow(offsetX: 0.06, offsetY: 0.10, blur: 0.08,
                                          ink: .dark, opacity: 0.75)
         case .lift:
             return StoryTextEffectShadow(offsetX: 0, offsetY: 0.10, blur: 0.22,
                                          ink: .dark, opacity: 0.45)
+        case .sideShadow:
+            return StoryTextEffectShadow(offsetX: 0.08, offsetY: 0, blur: 0.03,
+                                         ink: .dark, opacity: 0.7)
+        case .float:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0.18, blur: 0.30,
+                                         ink: .dark, opacity: 0.32)
         case .longShadow:
             return StoryTextEffectShadow(offsetX: 0.14, offsetY: 0.14, blur: 0,
                                          ink: .dark, opacity: 0.35)
@@ -115,6 +149,9 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
         case .echo:
             return StoryTextEffectShadow(offsetX: 0.09, offsetY: 0.09, blur: 0,
                                          ink: .text, opacity: 0.35)
+        case .ghost:
+            return StoryTextEffectShadow(offsetX: 0.16, offsetY: 0.16, blur: 0.06,
+                                         ink: .text, opacity: 0.22)
         }
     }
 }

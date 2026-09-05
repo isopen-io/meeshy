@@ -28,6 +28,9 @@ enum class StoryTextEffect(val wire: String, val shadow: StoryTextEffectShadow?)
     /** The same halo, half-voiced — for light text on a light ground. */
     GLOW_SOFT("glowSoft", StoryTextEffectShadow(0.0, 0.0, 0.24, StoryTextEffectInk.TEXT, 0.55)),
 
+    /** A very wide, half-voiced glow — the text does not shine, it BATHES. */
+    AURA("aura", StoryTextEffectShadow(0.0, 0.0, 0.85, StoryTextEffectInk.TEXT, 0.45)),
+
     /** A wide, full glow: the neon sign. */
     NEON("neon", StoryTextEffectShadow(0.0, 0.0, 0.60, StoryTextEffectInk.TEXT, 1.0)),
 
@@ -39,16 +42,28 @@ enum class StoryTextEffect(val wire: String, val shadow: StoryTextEffectShadow?)
     /** A TIGHT dark halo — the eye reads it as an outline. */
     OUTLINE("outline", StoryTextEffectShadow(0.0, 0.0, 0.09, StoryTextEffectInk.DARK, 1.0)),
 
+    /** The outline in LIGHT ink — the only one that holds dark text on a dark photo. */
+    OUTLINE_LIGHT("outlineLight", StoryTextEffectShadow(0.0, 0.0, 0.07, StoryTextEffectInk.LIGHT, 1.0)),
+
     // --- Shadows: the DARK ink, offset
 
     /** A soft black drop shadow, offset downwards. */
     SHADOW("shadow", StoryTextEffectShadow(0.03, 0.06, 0.16, StoryTextEffectInk.DARK, 0.6)),
+
+    /** The same, diffused and half-voiced: it DETACHES without being seen. */
+    SHADOW_SOFT("shadowSoft", StoryTextEffectShadow(0.02, 0.04, 0.28, StoryTextEffectInk.DARK, 0.45)),
 
     /** A hard, dense drop shadow. */
     DROP("drop", StoryTextEffectShadow(0.06, 0.10, 0.08, StoryTextEffectInk.DARK, 0.75)),
 
     /** A shadow centred UNDER the text: it does not shift, it LIFTS. */
     LIFT("lift", StoryTextEffectShadow(0.0, 0.10, 0.22, StoryTextEffectInk.DARK, 0.45)),
+
+    /** A hard shadow cast SIDEWAYS, no descent — raking light. */
+    SIDE_SHADOW("sideShadow", StoryTextEffectShadow(0.08, 0.0, 0.03, StoryTextEffectInk.DARK, 0.7)),
+
+    /** A low, diffuse shadow with no lateral offset: the text FLOATS. */
+    FLOAT("float", StoryTextEffectShadow(0.0, 0.18, 0.30, StoryTextEffectInk.DARK, 0.32)),
 
     /** A long diagonal shadow, no blur — poster depth. */
     LONG_SHADOW("longShadow", StoryTextEffectShadow(0.14, 0.14, 0.0, StoryTextEffectInk.DARK, 0.35)),
@@ -66,6 +81,9 @@ enum class StoryTextEffect(val wire: String, val shadow: StoryTextEffectShadow?)
 
     /** A displaced double in the text's OWN colour — the screen-print echo. */
     ECHO("echo", StoryTextEffectShadow(0.09, 0.09, 0.0, StoryTextEffectInk.TEXT, 0.35)),
+
+    /** The echo pushed far and nearly erased — the trace, not the double. */
+    GHOST("ghost", StoryTextEffectShadow(0.16, 0.16, 0.06, StoryTextEffectInk.TEXT, 0.22)),
     ;
 
     /** The wire value to publish, or `null` for [NONE] — a text without effect keeps the JSON it had. */

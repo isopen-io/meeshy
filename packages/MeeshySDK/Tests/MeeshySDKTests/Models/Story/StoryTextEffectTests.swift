@@ -53,13 +53,13 @@ struct StoryTextEffectTests {
         #expect(!json.contains("textEffect"))
     }
 
-    // MARK: - Les quatorze effets (#5244)
+    // MARK: - Les vingt effets (#5244, portés à vingt le 2026-09-05)
 
     /// **Le compte, et il INTERROMPT.** Un effet ajouté sans passer par les
     /// trois miroirs rend ce témoin rouge — c'est le seul endroit du dépôt qui
     /// puisse le dire, la table n'étant pas sur le fil.
-    @Test func theEffects_areFourteen() {
-        #expect(StoryTextEffect.allCases.count == 14)
+    @Test func theEffects_areTwenty() {
+        #expect(StoryTextEffect.allCases.count == 20)
     }
 
     /// **Tout effet SAUF `none` porte une ombre.** Un cas ajouté à l'énuméré
@@ -86,7 +86,7 @@ struct StoryTextEffectTests {
     /// **Deux effets ne peuvent pas avoir la MÊME ombre.** Deux vignettes
     /// identiques dans la grille sont un choix qui n'en est pas un — et le
     /// doublon ne se voit ni au compilateur ni à la lecture d'un `switch` de
-    /// quatorze branches.
+    /// vingt branches.
     @Test func noTwoEffects_shareTheSameShadow() {
         let ombres = StoryTextEffect.allCases.compactMap(\.shadow)
         for (i, a) in ombres.enumerated() {

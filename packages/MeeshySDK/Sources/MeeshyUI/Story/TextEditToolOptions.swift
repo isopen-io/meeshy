@@ -36,17 +36,23 @@ enum TextEditLabels {
         case .none:        return String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module)
         case .glow:        return String(localized: "story.textEdit.effect.glow", defaultValue: "Lueur", bundle: .module)
         case .glowSoft:    return String(localized: "story.textEdit.effect.glowSoft", defaultValue: "Halo doux", bundle: .module)
+        case .aura:        return String(localized: "story.textEdit.effect.aura", defaultValue: "Aura", bundle: .module)
         case .neon:        return String(localized: "story.textEdit.effect.neon", defaultValue: "Néon", bundle: .module)
         case .halo:        return String(localized: "story.textEdit.effect.halo", defaultValue: "Auréole", bundle: .module)
         case .outline:     return String(localized: "story.textEdit.effect.outline", defaultValue: "Contour", bundle: .module)
+        case .outlineLight: return String(localized: "story.textEdit.effect.outlineLight", defaultValue: "Contour clair", bundle: .module)
         case .shadow:      return String(localized: "story.textEdit.effect.shadow", defaultValue: "Ombre", bundle: .module)
+        case .shadowSoft:  return String(localized: "story.textEdit.effect.shadowSoft", defaultValue: "Ombre douce", bundle: .module)
         case .drop:        return String(localized: "story.textEdit.effect.drop", defaultValue: "Ombre portée", bundle: .module)
         case .lift:        return String(localized: "story.textEdit.effect.lift", defaultValue: "Élévation", bundle: .module)
+        case .sideShadow:  return String(localized: "story.textEdit.effect.sideShadow", defaultValue: "Ombre latérale", bundle: .module)
+        case .float:       return String(localized: "story.textEdit.effect.float", defaultValue: "Flottant", bundle: .module)
         case .longShadow:  return String(localized: "story.textEdit.effect.longShadow", defaultValue: "Ombre longue", bundle: .module)
         case .relief:      return String(localized: "story.textEdit.effect.relief", defaultValue: "Relief", bundle: .module)
         case .emboss:      return String(localized: "story.textEdit.effect.emboss", defaultValue: "Gaufré", bundle: .module)
         case .letterpress: return String(localized: "story.textEdit.effect.letterpress", defaultValue: "Imprimé", bundle: .module)
         case .echo:        return String(localized: "story.textEdit.effect.echo", defaultValue: "Écho", bundle: .module)
+        case .ghost:       return String(localized: "story.textEdit.effect.ghost", defaultValue: "Fantôme", bundle: .module)
         }
     }
 
