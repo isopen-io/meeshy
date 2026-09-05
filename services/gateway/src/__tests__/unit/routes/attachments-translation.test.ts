@@ -619,3 +619,119 @@ describe('POST /attachments/:attachmentId/transcribe', () => {
     await app.close();
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST /attachments/:attachmentId/transcribe — #5152 appartenance à la conversation
+//
+// Avant ce correctif, la route ne vérifiait AUCUNE appartenance : `uploadedBy`
+// était chargé sur la pièce jointe et jamais lu, si bien que `transcribeAttachment`
+// déclenchait Whisper (coût de calcul) pour n'importe quel compte authentifié
+// connaissant l'id — quelle que soit la conversation d'origine. Ces témoins
+// assertent sur l'EFFET (le service de transcription N'EST PAS appelé pour un
+// non-membre), pas seulement sur le statut (#5152 critère 3). Même verdict que
+// le détail (#4923) et les octets (`download.ts`) : `resolveAttachmentReadVerdict`.
+// ═════════════════════════════════════════════════════════════════════════════
+
+const CONVERSATION_ID = 'ccccccccccccccccccccccc';
+const OWNING_MESSAGE_ID = 'mmmmmmmmmmmmmmmmmmmmmmmm';
+const OTHER_USER_ID = '507f1f77bcf86cd799439099';
+
+function makeMembershipPrisma(opts: {
+  attachment?: Record<string, unknown> | null;
+  message?: Record<string, unknown> | null;
+  participant?: Record<string, unknown> | null;
+} = {}) {
+  const attachment =
+    opts.attachment === undefined
+      ? { id: ATTACHMENT_ID, messageId: OWNING_MESSAGE_ID, mimeType: 'audio/mp4', uploadedBy: OTHER_USER_ID }
+      : opts.attachment;
+  const message =
+    opts.message === undefined
+      ? { id: OWNING_MESSAGE_ID, conversationId: CONVERSATION_ID, deletedAt: null, expiresAt: null }
+      : opts.message;
+  const participant = opts.participant === undefined ? { id: 'participant-1' } : opts.participant;
+
+  return {
+    messageAttachment: {
+      findUnique: jest.fn<any>().mockResolvedValue(attachment),
+    },
+    message: {
+      findUnique: jest.fn<any>().mockResolvedValue(message),
+    },
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(participant),
+    },
+  };
+}
+
+describe('POST /attachments/:attachmentId/transcribe — #5152 appartenance à la conversation', () => {
+  it("refuse un compte authentifié qui n'est PAS membre de la conversation — 403, sans déclencher AUCUNE transcription", async () => {
+    const transcribeAttachment = jest.fn<any>();
+    const getAttachmentWithTranscription = jest.fn<any>();
+    const app = await buildApp({
+      prisma: makeMembershipPrisma({ participant: null }) as any,
+      translationService: makeTranslationService({ transcribeAttachment, getAttachmentWithTranscription }),
+    });
+
+    const res = await injectTranscribe(app);
+
+    expect(res.statusCode).toBe(403);
+    expect(getAttachmentWithTranscription).not.toHaveBeenCalled();
+    expect(transcribeAttachment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sert la transcription à un membre INSCRIT de la conversation', async () => {
+    const app = await buildApp({ prisma: makeMembershipPrisma() as any });
+
+    const res = await injectTranscribe(app);
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('refuse — sans appeler le service — quand le message porteur a été SUPPRIMÉ (404)', async () => {
+    const transcribeAttachment = jest.fn<any>();
+    const app = await buildApp({
+      prisma: makeMembershipPrisma({
+        message: { id: OWNING_MESSAGE_ID, conversationId: CONVERSATION_ID, deletedAt: new Date('2026-01-01T00:00:00Z'), expiresAt: null },
+      }) as any,
+      translationService: makeTranslationService({ transcribeAttachment }),
+    });
+
+    const res = await injectTranscribe(app);
+
+    expect(res.statusCode).toBe(404);
+    expect(transcribeAttachment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sert le DÉPOSANT sur une pièce jointe pas encore rattachée à un message (messageId null)', async () => {
+    const app = await buildApp({
+      prisma: makeMembershipPrisma({
+        attachment: { id: ATTACHMENT_ID, messageId: null, mimeType: 'audio/mp4', uploadedBy: USER_ID },
+      }) as any,
+    });
+
+    const res = await injectTranscribe(app);
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("refuse quiconque N'EST PAS le déposant tant que l'envoi est en cours (messageId null), sans déclencher de transcription", async () => {
+    const transcribeAttachment = jest.fn<any>();
+    const app = await buildApp({
+      prisma: makeMembershipPrisma({
+        attachment: { id: ATTACHMENT_ID, messageId: null, mimeType: 'audio/mp4', uploadedBy: OTHER_USER_ID },
+      }) as any,
+      translationService: makeTranslationService({ transcribeAttachment }),
+    });
+
+    const res = await injectTranscribe(app);
+
+    expect(res.statusCode).toBe(403);
+    expect(transcribeAttachment).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
