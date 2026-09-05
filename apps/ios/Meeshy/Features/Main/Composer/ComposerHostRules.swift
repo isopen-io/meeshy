@@ -366,20 +366,46 @@ nonisolated enum ComposerSocleCopy {
     /// > DISJONCTION : nommer le seul texte ferait croire qu'une photo ne suffit
     /// > pas. L'ancrage (`repostOfId`) n'y figure pas — sous un ancrage la flèche
     /// > n'est jamais grise, donc la phrase ne se lit jamais dans ce cas.
-    static func publishBlockedHint(surface: ComposerSurfaceKind) -> String? {
+    static func publishBlockedHint(surface: ComposerSurfaceKind,
+                                   format: ComposerFormat) -> String? {
         switch surface {
         case .mood:
             return String(localized: "a11y.status.publish.disabled.hint",
                           defaultValue: "Choisissez un emoji pour publier votre status", bundle: .main)
-        case .document:
-            return String(localized: "composer.socle.blocked.document",
-                          defaultValue: "Ajoutez du texte, une photo ou un lieu pour publier",
-                          bundle: .main)
         case .scene:
-            return String(localized: "composer.socle.blocked.scene",
-                          defaultValue: "Posez au moins un élément sur la scène pour publier",
-                          bundle: .main)
+            return sceneHint
+        case .document:
+            // **Le FORMAT tranche ici, pas la seule surface** (2026-09-05,
+            // seconde passe). Une STORY et un RÉEL montent `.document` par le
+            // routage (#4751, pour se composer dans le meuble) alors que leur
+            // matière entre par le CANVAS : `hasMedia` reçoit
+            // `ComposerStoryCanvas.hasMatter(...)`.
+            //
+            // Leur servir « ajoutez du texte, une photo ou un lieu » nommerait
+            // donc trois actions que l'auteur d'une story ne fera pas — il pose
+            // des objets sur sa scène. La phrase serait VRAIE du gate et FAUSSE
+            // du geste, ce qui est la pire des deux façons d'avoir tort : elle
+            // envoie chercher ailleurs.
+            //
+            // > La surface décide de la VUE, le format décide de ce qu'on y
+            // > FAIT. Un indice parle du geste, donc il suit le format.
+            switch format {
+            case .story, .reel: return sceneHint
+            case .post, .status: return documentHint
+            }
         }
+    }
+
+    private static var sceneHint: String {
+        String(localized: "composer.socle.blocked.scene",
+               defaultValue: "Posez au moins un élément sur la scène pour publier",
+               bundle: .main)
+    }
+
+    private static var documentHint: String {
+        String(localized: "composer.socle.blocked.document",
+               defaultValue: "Ajoutez du texte, une photo ou un lieu pour publier",
+               bundle: .main)
     }
 
     /// **L'audience nominative VIDE — le refus le plus opaque des trois, et le

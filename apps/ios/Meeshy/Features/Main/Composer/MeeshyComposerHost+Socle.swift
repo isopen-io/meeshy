@@ -703,7 +703,8 @@ extension MeeshyComposerHost {
             composerVisibility,
             userIds: composerVisibilityUserIds
         ) else { return ComposerSocleCopy.publishBlockedAudienceHint }
-        return ComposerSocleCopy.publishBlockedHint(surface: mountedSurface) ?? ""
+        return ComposerSocleCopy.publishBlockedHint(surface: mountedSurface,
+                                                    format: selectedFormat) ?? ""
     }
 
     /// Ce que la flèche remet au site de montage.
