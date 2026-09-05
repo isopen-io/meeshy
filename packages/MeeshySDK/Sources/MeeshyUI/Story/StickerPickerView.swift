@@ -78,6 +78,12 @@ public struct StickerPickerView: View {
     /// la tâche l'a consommée, sinon rouvrir l'onglet re-détourerait la
     /// même image.
     @State var liftSelection: PhotosPickerItem?
+    /// Le sélecteur de lieu, injecté par l'app (`storyLocationPickerProvided`).
+    /// `nil` ⇒ la puce « Ma position… » n'est pas peinte : elle ouvrirait le
+    /// vide, et un chip qui ouvre le vide est pire que pas de chip.
+    @Environment(\.storyLocationPicker) var storyLocationPicker
+    /// La feuille du sélecteur est-elle ouverte ? (2026-09-05)
+    @State var showsPlacePicker = false
     @State var places: [SharedPlace] = []
     @State var selectedPlaceIndex: Int = 0
     /// L'instant lu à l'OUVERTURE. Une seule lecture, figée ensuite : relire
@@ -154,6 +160,19 @@ public struct StickerPickerView: View {
                 StickerSheetTabBar(selection: $selectedTab)
                     .padding(.bottom, MeeshySpacing.sm)
                 tabbedContent
+            }
+        }
+        // **Le sélecteur de position exacte** (2026-09-05). Il est monté ICI,
+        // sur la feuille entière, et non dans la puce : une feuille présentée
+        // depuis une branche conditionnelle disparaît avec elle, et la puce vit
+        // dans un `ScrollView` horizontal que le moindre changement d'état
+        // reconstruit.
+        .sheet(isPresented: $showsPlacePicker) {
+            if let storyLocationPicker {
+                storyLocationPicker.makeView { lieu in
+                    showsPlacePicker = false
+                    adopterLieuChoisi(lieu)
+                }
             }
         }
         .task {

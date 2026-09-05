@@ -15,7 +15,16 @@ import MeeshySDK
 /// grisé. Un onglet grisé promettrait une capacité que le site de montage ne
 /// possède pas.
 public nonisolated struct StickerNearbyPlacesProvider {
-    public typealias Nearby = @MainActor () async -> [SharedPlace]
+    /// **Le CENTRE de la recherche — `nil` ⇒ la position de l'appareil**
+    /// (directive porteur 2026-09-05 : « il faut permettre de choisir sa
+    /// position exacte et ça charge les autres éléments autour »).
+    ///
+    /// Le paramètre est arrivé APRÈS coup, et le `nil` porte exactement
+    /// l'ancien comportement : sans centre choisi, on cherche là où l'appareil
+    /// est. Ce qui change est qu'un centre CHOISI devienne exprimable — il ne
+    /// l'était pas, et c'est ce qui rendait la demande impossible à servir sans
+    /// toucher au contrat.
+    public typealias Nearby = @MainActor (SharedPlace?) async -> [SharedPlace]
 
     private let nearbyProvider: Nearby
 
@@ -27,9 +36,12 @@ public nonisolated struct StickerNearbyPlacesProvider {
     /// rend quand même, avec son état vide : l'auteur a autorisé la
     /// localisation, il doit voir qu'on cherche et qu'on n'a rien trouvé —
     /// ce qui n'est pas la même chose que « cette app ne sait pas faire ».
+    ///
+    /// - Parameter around: le lieu autour duquel chercher. `nil` ⇒ la position
+    ///   de l'appareil, le cas nominal à l'ouverture.
     @MainActor
-    public func nearby() async -> [SharedPlace] {
-        await nearbyProvider()
+    public func nearby(around centre: SharedPlace? = nil) async -> [SharedPlace] {
+        await nearbyProvider(centre)
     }
 }
 

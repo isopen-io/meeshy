@@ -165,6 +165,32 @@ extension StickerPickerView {
 
     // MARK: - Lieu
 
+    /// **Le lieu choisi devient le centre, ET la tête de liste** (2026-09-05).
+    ///
+    /// Deux effets, et le second est celui qu'on oublierait : le poser en tête
+    /// le rend SÉLECTIONNÉ, donc les dix vignettes le montrent immédiatement —
+    /// sans quoi l'auteur choisirait un lieu et verrait la grille continuer à
+    /// nommer l'ancien pendant que la recherche tourne.
+    ///
+    /// La recherche qui suit REMPLACE la liste, le lieu choisi remis en tête :
+    /// il n'est pas forcément dans ce que MapKit rend autour de lui — un
+    /// « chez moi » nommé à la main n'est un point d'intérêt pour personne.
+    @MainActor
+    func adopterLieuChoisi(_ lieu: SharedPlace) {
+        places = [lieu] + places.filter { $0.latitude != lieu.latitude || $0.longitude != lieu.longitude }
+        selectedPlaceIndex = 0
+        HapticFeedback.light()
+        guard let nearbyPlaces else { return }
+        Task {
+            let autour = await nearbyPlaces.nearby(around: lieu)
+            // La liste se recompose autour du lieu CHOISI, lui d'abord.
+            places = [lieu] + autour.filter {
+                $0.latitude != lieu.latitude || $0.longitude != lieu.longitude
+            }
+            selectedPlaceIndex = 0
+        }
+    }
+
     var currentPlace: SharedPlace? {
         guard places.indices.contains(selectedPlaceIndex) else { return places.first }
         return places[selectedPlaceIndex]
@@ -240,9 +266,54 @@ extension StickerPickerView {
         .padding(.top, 6)
     }
 
+    /// **La PREMIÈRE puce choisit la position exacte** (directive porteur
+    /// 2026-09-05 : « dans les stickers de lieux en première position, il faut
+    /// permettre de choisir sa position exacte et ça charge les autres éléments
+    /// autour »).
+    ///
+    /// ## Pourquoi en tête, et pourquoi elle RECHARGE
+    ///
+    /// Les puces suivantes sont un RÉSULTAT — ce que le GPS a trouvé autour de
+    /// l'appareil. Celle-ci est la CAUSE : elle décide d'où l'on cherche. La
+    /// mettre en tête range la question avant ses réponses, et c'est aussi la
+    /// place que le doigt atteint en premier.
+    ///
+    /// Recharger n'est pas un extra : choisir « Tour Eiffel » sans recharger
+    /// laisserait à côté les cafés du quartier où l'auteur se trouve — une
+    /// liste dont la tête et la queue parlent de deux endroits. Le centre
+    /// choisi gouverne donc TOUTE la liste.
+    ///
+    /// **Et il court-circuite la permission.** `nearby(around:)` n'appelle
+    /// `currentCoordinate()` que sans centre : un lieu choisi rend la section
+    /// utile à l'intérieur d'un bâtiment, en avion, ou quand on compose une
+    /// story sur un lieu où l'on n'est pas — trois cas où le GPS ne répond
+    /// rien et où la section était muette.
+    @ViewBuilder
     var placeChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                if storyLocationPicker != nil {
+                    Button {
+                        showsPlacePicker = true
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "sticker.place.pickExact",
+                                     defaultValue: "Ma position…", bundle: .module),
+                              systemImage: "location.magnifyingglass")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .labelStyle(.titleAndIcon)
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 32)
+                            .foregroundStyle(MeeshyColors.brandGradient)
+                            .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.10)))
+                            .overlay(Capsule().stroke(MeeshyColors.indigo400.opacity(0.35), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(String(localized: "sticker.place.pickExact.hint",
+                                              defaultValue: "Choisit le lieu autour duquel chercher",
+                                              bundle: .module))
+                }
                 ForEach(Array(places.enumerated()), id: \.offset) { index, lieu in
                     let choisi = index == selectedPlaceIndex
                     Button {
