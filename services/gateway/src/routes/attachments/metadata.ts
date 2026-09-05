@@ -18,8 +18,9 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
-import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../../services/historyFloor';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
+import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -91,15 +92,91 @@ export async function registerMetadataRoutes(
   const attachmentService = new AttachmentService(prisma);
 
   /**
+   * #4923 — le DÉTAIL exige désormais les MÊMES bornes que la LISTE, plus bas
+   * dans ce fichier : appartenance à la conversation (résolue sous les DEUX
+   * colonnes, `userId` pour un inscrit et `id` pour un invité de lien —
+   * `socketio/utils/participant-resolver.ts`), plancher d'historique du lien
+   * partagé, masquage personnel, et cycle de vie du message porteur
+   * (`carrierMessageStillServesBytes`, partagée avec `GET /attachments/:id`,
+   * `services/attachments/attachmentReadVerdict.ts`).
+   *
+   * Rend un BOOLÉEN, jamais un motif : un id hors périmètre (existe, mais
+   * ailleurs) et un id inexistant doivent rendre la MÊME réponse au site
+   * d'appel, sinon la route redevient un oracle d'existence de pièce jointe —
+   * le défaut que #4150 a fermé sur les impressions.
+   */
+  async function attachmentDetailIsVisible(
+    request: FastifyRequest,
+    attachment: { messageId: string | null; uploadedBy: string | null }
+  ): Promise<boolean> {
+    const authContext = (request as UnifiedAuthRequest).authContext;
+
+    if (!attachment.messageId) {
+      // Pas encore rattachée à un message (envoi en cours) : seul le
+      // déposant y accède. Même repli que `resolveAttachmentReadVerdict`.
+      const caller = authContext.isAnonymous ? authContext.participantId : authContext.userId;
+      return Boolean(caller) && caller === attachment.uploadedBy;
+    }
+
+    const message = await prisma.message.findUnique({
+      where: { id: attachment.messageId },
+      select: { id: true, conversationId: true, deletedAt: true, expiresAt: true },
+    });
+    if (!message) return false;
+
+    // Même discriminant et même projection que la LISTE ci-dessous : un
+    // participant sans ligne `User` (invité de lien) se résout par `id`,
+    // jamais par `userId`.
+    const isAnonymous = Boolean(authContext.isAnonymous && authContext.participantId);
+    const participantSelect = { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT } as const;
+    const participant = isAnonymous
+      ? await prisma.participant.findUnique({ where: { id: authContext.participantId }, select: participantSelect })
+      : await prisma.participant.findFirst({
+          where: { conversationId: message.conversationId, userId: authContext.userId, isActive: true },
+          select: participantSelect,
+        });
+
+    if (!participant || participant.conversationId !== message.conversationId) return false;
+
+    // Les octets suivent la vie du message porteur — rappelé, expiré, ou
+    // brûlure de vue unique consommée (cf. `carrierMessageLifecycle.ts`).
+    if (!carrierMessageStillServesBytes(message, new Date())) return false;
+
+    const [historyFloor, personalHiding] = await Promise.all([
+      loadHistoryFloor(prisma, participant),
+      loadPersonalHistoryHiding(prisma, {
+        userId: isAnonymous ? null : authContext.userId,
+        conversationId: message.conversationId,
+      }),
+    ]);
+
+    // Une seule requête referme À LA FOIS le plancher d'historique et le
+    // masquage personnel — le même idiome que la LISTE, appliqué à un message
+    // NOMMÉ plutôt qu'à une page.
+    const visible = await prisma.message.findFirst({
+      where: applyPersonalHistoryHiding(
+        applyHistoryFloor({ id: message.id, conversationId: message.conversationId }, historyFloor),
+        personalHiding
+      ),
+      select: { id: true },
+    });
+    return visible !== null;
+  }
+
+  /**
    * GET /attachments/:attachmentId/metadata
    * Get attachment metadata including transcription, translations, and voice analysis
    */
   fastify.get(
     '/attachments/:attachmentId/metadata',
     {
-      preHandler: authRequired,
+      // #4923 — `authRequired` (JWT seul) excluait tout invité de lien
+      // partagé du chemin nominal AVANT même la question d'appartenance.
+      // `authOptional` + la garde manuelle ci-dessous couvrent les deux
+      // natures d'appelant, comme la LISTE voisine.
+      onRequest: [authOptional],
       schema: {
-        description: 'Get comprehensive attachment metadata including transcription (with voice quality analysis), translated audios, and all metadata fields. Returns the complete attachment object with all relations.',
+        description: 'Get comprehensive attachment metadata including transcription (with voice quality analysis), translated audios, and all metadata fields. Returns the complete attachment object with all relations. Caller must be an active member of the conversation the attachment belongs to.',
         tags: ['attachments'],
         summary: 'Get attachment metadata',
         params: {
@@ -126,8 +203,14 @@ export async function registerMetadataRoutes(
               }
             }
           },
+          401: {
+            description: 'Authentication required',
+            ...errorResponseSchema
+          },
+          // #4923 — sert aussi le cas « existe, mais hors de la portée de
+          // l'appelant » : voir `attachmentDetailIsVisible`.
           404: {
-            description: 'Attachment not found',
+            description: 'Attachment not found (or not visible to this caller)',
             ...errorResponseSchema
           },
           500: {
@@ -139,10 +222,15 @@ export async function registerMetadataRoutes(
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        const authContext = (request as UnifiedAuthRequest).authContext;
+        if (!authContext || !authContext.isAuthenticated) {
+          return sendUnauthorized(reply, 'Authentication required');
+        }
+
         const { attachmentId } = request.params as AttachmentParams;
 
         const attachment = await attachmentService.getAttachmentWithMetadata(attachmentId);
-        if (!attachment) {
+        if (!attachment || !(await attachmentDetailIsVisible(request, attachment))) {
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
@@ -366,6 +454,14 @@ export async function registerMetadataRoutes(
             description: 'Access denied to this conversation',
             ...errorResponseSchema
           },
+          // #4856 — un invité anonyme dont le `participantId` de session ne
+          // résout plus à aucune ligne (retiré entretemps) est un « je ne
+          // trouve pas » sur SA PROPRE identité, pas un refus d'accès à un
+          // tiers : rien à cacher.
+          404: {
+            description: 'The anonymous participant this session was authenticated as no longer exists',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -425,7 +521,17 @@ export async function registerMetadataRoutes(
             });
 
         if (!participant) {
-          return sendForbidden(reply, isAnonymous ? 'Participant not found' : 'Access denied to this conversation');
+          // #4856 — les deux branches n'étaient pas le même refus : la
+          // branche anonyme cherche la ligne `Participant` de SA PROPRE
+          // session (son `participantId` de jeton), jamais celle d'un tiers
+          // — son absence est un « je ne trouve pas ». La branche inscrite,
+          // elle, cherche un membership sous l'identité de l'appelant dans
+          // CETTE conversation : rien ne distingue ici « pas membre » de
+          // « conversation inexistante », donc le 403 anti-énumération reste
+          // le bon statut, inchangé.
+          return isAnonymous
+            ? sendNotFound(reply, 'Participant not found')
+            : sendForbidden(reply, 'Access denied to this conversation');
         }
 
         if (isAnonymous && participant.conversationId !== conversationId) {

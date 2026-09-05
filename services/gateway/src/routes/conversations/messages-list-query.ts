@@ -183,6 +183,44 @@ export function parseLanguageFilterParam(languagesStr?: string): string[] | unde
 }
 
 /**
+ * Les quatre familles de protection d'un message — vue unique, flou,
+ * expiration, et le bitfield qui les résume — plus les deux compteurs de
+ * limite/vues de la vue unique. Source UNIQUE du `select` Prisma ET de la
+ * projection servie : #4885 a mesuré que `GET .../messages/search` les
+ * réécrivait à la main sans elles, laissant un message à vue unique trouvé
+ * par recherche FORWARDABLE (le garde côté client lit `isViewOnce`, absent
+ * de la réponse). Toute route qui sert `Message.content` doit ce bloc, ou
+ * dire pourquoi non (#4885 critère 4).
+ */
+export const MESSAGE_PROTECTION_SELECT = {
+  isViewOnce: true,
+  maxViewOnceCount: true,
+  viewOnceCount: true,
+  isBlurred: true,
+  effectFlags: true,
+  expiresAt: true,
+} as const;
+
+/** Projette les mêmes six champs depuis une ligne Prisma déjà chargée — le pendant servi de `MESSAGE_PROTECTION_SELECT`. */
+export function mapMessageProtectionFields(message: any): {
+  isViewOnce: any;
+  maxViewOnceCount: any;
+  viewOnceCount: any;
+  isBlurred: any;
+  effectFlags: any;
+  expiresAt: any;
+} {
+  return {
+    isViewOnce: message.isViewOnce,
+    maxViewOnceCount: message.maxViewOnceCount,
+    viewOnceCount: message.viewOnceCount,
+    isBlurred: message.isBlurred,
+    effectFlags: message.effectFlags,
+    expiresAt: message.expiresAt,
+  };
+}
+
+/**
  * Construit le `select` Prisma de `GET /conversations/:id/messages` selon les
  * paramètres d'inclusion (traductions, réponses citées).
  */
@@ -221,12 +259,7 @@ export function buildMessageListSelect(options: {
         forwardedFromConversationId: true,
 
         // ===== VIEW-ONCE / BLUR / EXPIRATION =====
-        isViewOnce: true,
-        maxViewOnceCount: true,
-        viewOnceCount: true,
-        isBlurred: true,
-        effectFlags: true,
-        expiresAt: true,
+        ...MESSAGE_PROTECTION_SELECT,
 
         // ===== ÉPINGLAGE =====
         pinnedAt: true,
@@ -583,12 +616,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           forwardedFromConversationId: message.forwardedFromConversationId,
 
           // View-once / Blur / Expiration
-          isViewOnce: message.isViewOnce,
-          maxViewOnceCount: message.maxViewOnceCount,
-          viewOnceCount: message.viewOnceCount,
-          isBlurred: message.isBlurred,
-          effectFlags: message.effectFlags,
-          expiresAt: message.expiresAt,
+          ...mapMessageProtectionFields(message),
 
           // Épinglage
           pinnedAt: message.pinnedAt,

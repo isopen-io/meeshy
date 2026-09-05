@@ -57,7 +57,28 @@ extension MeeshyComposerHost {
             // commandes, et le socle n'aurait personne à presser.
             publishTrigger: publishTrigger,
             publishTargetType: selectedFormat.postType,
-            onPublishAllInBackground: onPublishAllInBackground,
+            // **La remise passe par le meuble, pour y GREFFER les légendes**
+            // (#4890, seconde moitié). Elle était transmise telle quelle, et
+            // `documentMediaCaptions` n'avait alors aucun lecteur : la légende
+            // saisie sur la scène d'un post mourait à la fermeture.
+            //
+            // Le meuble ne PUBLIE toujours pas — il n'appelle ni service, ni
+            // file, ni endpoint. Il complète la charge que l'atelier remet, avec
+            // la seule matière que l'atelier ne voit pas : sa propre carte de
+            // légendes. `accessibilityCarryingComposerCaptions` est le site
+            // UNIQUE de cette greffe.
+            onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs,
+                                        loadedAudioURLs, loadedStickerAnimations, originalLanguage,
+                                        visibility, visibilityUserIds, draftId, references,
+                                        accessibility, targetType in
+                onPublishAllInBackground(
+                    slides, slideImages, loadedImages, loadedVideoURLs,
+                    loadedAudioURLs, loadedStickerAnimations, originalLanguage,
+                    visibility, visibilityUserIds, draftId, references,
+                    accessibilityCarryingComposerCaptions(accessibility, slides: slides),
+                    targetType
+                )
+            },
             onPreview: onPreview,
             onDismiss: onDismiss,
             // **La vignette d'une slide ouvre son FOND** (#5041, directive
@@ -366,6 +387,11 @@ extension MeeshyComposerHost {
                 // sans le recalculer.
                 hashtags: composerHashtags.count,
                 description: sceneDescriptionBinding.wrappedValue,
+                // **Le CORPS du post** (#4890) — `documentText`, jamais la
+                // description : en Post les deux textes sont distincts, et
+                // servir le même aux deux pastilles en allumerait deux pour un
+                // seul texte écrit.
+                content: documentText,
                 mentions: composerReferences.count,
                 hasDocumentLocation: documentLocation != nil))
     }
@@ -573,8 +599,16 @@ extension MeeshyComposerHost {
             // faire descendre jusqu'au canvas est ce qui manquait pour que
             // « un seul objet à la fois » se VOIE.
             selectedItemId: selectedSceneItemId,
-            selectionBadge: ComposerObjectChips.badge(forSelected: selectedSceneItemId,
-                                                      in: viewModel.currentSlide),
+            // **L'état de la pré-montée s'ajoute au badge** (#5086, vue `4c`).
+            // Le registre est indexé par FICHIER ; l'objet sélectionné porte
+            // son URL locale tant qu'il n'est pas adopté, et l'URL distante
+            // ensuite — donc `state(for:)` rend `.idle` dès l'adoption, et le
+            // badge cesse de parler d'une montée finie. C'est le même fait qui
+            // rend le balayage idempotent : une seule valeur, deux usages.
+            selectionBadge: ComposerObjectChips.badge(
+                forSelected: selectedSceneItemId,
+                in: viewModel.currentSlide,
+                preUpload: selectedSceneItemPreUpload),
             // **Les bandes SERVIES par ce meuble** (#4064) — même règle que les
             // deux rails, et pour la même raison : la capacité s'interroge,
             // un littéral ne s'interroge pas. Le POURQUOI de chaque absence
@@ -785,9 +819,87 @@ extension MeeshyComposerHost {
                                 defaultValue: "Ajoutez une description…", bundle: .main),
             plateauTint: tint.color,
             onDone: { editsSceneDescription = false },
-            onHeightChange: { sceneDescriptionEditorHeight = $0 }
+            onHeightChange: { sceneDescriptionEditorHeight = $0 },
+            // **La langue se déclare où le texte se valide** (#5137). La MÊME
+            // capsule que le document — jamais une seconde : deux sélecteurs
+            // pour une seule `documentLanguage` auraient deux mémoires à faire
+            // diverger, et c'est exactement ce que #4621 a déjà payé sur la
+            // clé de son titre.
+            languageAccessory: AnyView(documentLanguageCapsule)
         )
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// **Les DEUX zones d'écriture du bas, et l'exclusion qui les sépare**
+    /// (#4890).
+    ///
+    /// En Post, la description est la LÉGENDE du média courant et le contenu
+    /// est le corps de la publication : deux textes réels, deux zones. Elles
+    /// s'ancrent au MÊME bord bas — ouvertes ensemble, elles se recouvriraient
+    /// et l'auteur taperait dans celle qu'il ne regarde pas.
+    ///
+    /// Le `if / else if` rend la superposition impossible par CONSTRUCTION, et
+    /// c'est une seconde ceinture : `handleRailDoor` ferme déjà l'une en
+    /// ouvrant l'autre. Les deux se répondent — l'état reste d'accord avec ce
+    /// qui est peint, et ce qui est peint ne dépend pas de l'ordre des
+    /// affectations.
+    ///
+    /// **Sortie du `body` au 2026-09-04, budget de fichier** : le meuble passait
+    /// à 1209 lignes contre un plafond DUR de 1200, et la directive du
+    /// 2026-08-28 dit d'extraire AVANT d'ajouter. La coupe suit une question
+    /// entière — « qu'est-ce qui s'écrit en bas, et lequel » — et rejoint les
+    /// deux zones qu'elle arbitre, déjà voisines dans ce fichier.
+    @ViewBuilder
+    var textEditingZones: some View {
+        if editsSceneDescription {
+            sceneDescriptionEditor
+        } else if editsPostContent {
+            postContentEditor
+        }
+    }
+
+    /// **La zone d'écriture du CORPS DU POST** (#4890, directive porteur
+    /// 2026-09-04 : « affiche dans la rangée canonique de quoi modifier LE
+    /// CONTENU du poste »).
+    ///
+    /// ## Le MÊME composant que la description, et c'est le fond du lot
+    ///
+    /// `ComposerSceneDescriptionEditor` n'a jamais rien su de la description :
+    /// il porte un `Binding<String>`, une invite et une teinte. Ce qui en
+    /// faisait « l'éditeur de description » était son unique appelant. Lui en
+    /// donner un second est donc une RÉUTILISATION, pas une généralisation
+    /// hâtive — et c'est ce qui garantit que les deux textes du post se
+    /// composent avec le même geste, la même coche, le même glissement
+    /// contrôlé du clavier, et la même capsule de langue au-dessus de la coche
+    /// (#5137).
+    ///
+    /// > Écrire une seconde zone « qui ressemble » aurait divergé au premier
+    /// > réglage — et le composer paie déjà cette leçon sur les légendes.
+    ///
+    /// ## Ce qui les distingue, et rien d'autre
+    ///
+    /// Le BINDING (`$documentText`, le corps du post — jamais
+    /// `sceneDescriptionBinding`, qui est la légende du média courant) et
+    /// l'INVITE, qui dit quel contenu on attend. C'est exactement la
+    /// distinction que `ComposerDescriptionLayer` documente entre l'amorce du
+    /// calque et l'invite de l'hôte.
+    var postContentEditor: some View {
+        ComposerSceneDescriptionEditor(
+            text: $documentText,
+            placeholder: ComposerDocumentCopy.placeholder,
+            plateauTint: tint.color,
+            onDone: { editsPostContent = false },
+            onHeightChange: { sceneDescriptionEditorHeight = $0 },
+            languageAccessory: AnyView(documentLanguageCapsule),
+            // **La coche ne peut pas s'annoncer « Terminer la description »
+            // ici** (#4890) : elle valide le CORPS du post. `common.done`
+            // (« Terminé ») est déjà traduite dans les sept langues et ne
+            // nomme aucun des deux textes — le contexte vient du champ qu'on
+            // est en train de remplir. Une phrase plus spécifique demanderait
+            // une clé neuve et ses sept traductions ; elle se fera si le
+            // porteur la demande, mais un libellé FAUX ne pouvait pas rester.
+            validationLabel: ComposerDescriptionCopy.doneShort
+        )
     }
 
     /// **La description appartient à la SLIDE** (rappel porteur 2026-08-30,

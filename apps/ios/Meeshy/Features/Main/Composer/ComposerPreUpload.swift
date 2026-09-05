@@ -81,6 +81,43 @@ nonisolated enum ComposerPreUploadState: Equatable, Sendable {
 }
 
 /// Les règles de la pré-montée. Pures — aucune session, aucun fichier.
+///
+/// ## ⚠️ Ce qu'un TAMPON qui survit à sa ligne coûte (mesuré 2026-09-04)
+///
+/// #5086 annonçait le danger de la pré-montée comme « monter des choses qui ne
+/// seront peut-être jamais publiées ». **Cette moitié-là est gratuite** : la
+/// passerelle balaie déjà les `PostMedia` non rattachés
+/// (`MaintenanceService.cleanupOrphanedPostMedia`, prédicat partagé
+/// `unclaimedMediaWhere()`, seuil 24 h), et le prédicat est GÉNÉRIQUE — il ne
+/// regarde ni le contexte ni la provenance. `PostMedia.postId` étant nullable
+/// de longue date, le flux d'avant ce lot créait déjà des médias non rattachés
+/// entre le téléversement et la création du Post : la pré-montée ÉLARGIT une
+/// fenêtre, elle n'en invente pas.
+///
+/// **Le danger réel est l'inverse, et il n'est PAS traité :**
+///
+/// 1. la pré-montée aboutit ⇒ l'objet porte `postMediaId` ET une `mediaURL`
+///    distante ;
+/// 2. la composition n'est pas publiée dans les 24 h (brouillon repris) ;
+/// 3. le balayage détruit la ligne — elle est légitimement « libre » ;
+/// 4. l'auteur publie. La boucle SAUTE l'objet (`where postMediaId.isEmpty`),
+///    `updateMany` matche zéro, `describeClaimShortfall` écrit un `warn`
+///    SERVEUR — et **la publication part sans ce média**, silencieusement pour
+///    l'auteur.
+///
+/// Aggravant : l'adoption a remplacé `mediaURL` par l'URL distante, donc le
+/// fichier local n'est plus référencé — **la composition ne peut pas se
+/// rattraper**. Avant ce lot, le fichier local restait jusqu'à la publication.
+///
+/// > La question que l'issue posait — « que faire des assets montés pour
+/// > rien ? » — a une réponse gratuite. Celle qu'elle ne posait pas — « que
+/// > faire d'un asset qu'on a monté et que le serveur a eu RAISON de
+/// > détruire ? » — n'en a aucune, et c'est celle qui perd du contenu.
+///
+/// Décision en attente sur #5086 (trois directions y sont posées). La plus
+/// juste me paraît de rendre le tampon RÉVOCABLE — l'effacer à la reprise d'un
+/// brouillon plus vieux que le seuil —, ce qui suppose de garder l'URL locale
+/// que l'adoption écrase aujourd'hui.
 nonisolated enum ComposerPreUploadPolicy {
 
     /// **Ce qui vaut la peine de partir tôt.**
@@ -127,5 +164,46 @@ nonisolated enum ComposerPreUploadPolicy {
     /// publication démarre.
     static func publishReuses(_ state: ComposerPreUploadState) -> Bool {
         state.isReady
+    }
+}
+
+
+/// **Quels objets du document attendent leur montée.**
+///
+/// La question se pose sur le DOCUMENT et non sur la porte d'entrée, et c'est
+/// délibéré. Le composer a **cinq** portes vers un média — la rangée du
+/// document, la porte du rail, la photothèque, le presse-papier, et le viseur
+/// en scène, né d'un GESTE et donc absent de tout inventaire de portes (#4879,
+/// #5069). Brancher la pré-montée sur chacune obligerait à les énumérer,
+/// c'est-à-dire à recommencer l'inventaire qui a déjà raté une porte deux fois.
+///
+/// Un balayage de l'état ATTEINT est indifférent au chemin par lequel l'objet
+/// est arrivé. Une sixième porte hérite de la pré-montée sans que personne
+/// n'ait à y penser.
+nonisolated enum ComposerPreUploadSweep {
+
+    /// Le fichier local d'un objet qui attend sa montée, ou `nil`.
+    ///
+    /// Deux refus, deux raisons :
+    /// - un `postMediaId` non vide ⇒ l'asset est DÉJÀ chez le serveur (montée
+    ///   aboutie, ou republication). Le remonter créerait un doublon ;
+    /// - une URL non locale ⇒ il n'y a pas de fichier à envoyer. C'est le cas
+    ///   d'un objet dont la montée vient d'aboutir : l'adoption a remplacé son
+    ///   URL par celle du serveur, et c'est ce qui rend ce balayage IDEMPOTENT
+    ///   sans qu'il ait à tenir une liste.
+    static func pendingFile(postMediaId: String, mediaURL: String?) -> URL? {
+        guard postMediaId.isEmpty, let mediaURL, let url = URL(string: mediaURL),
+              url.isFileURL else { return nil }
+        return url
+    }
+
+    /// La taille du fichier, ou `nil` s'il a disparu — un temporaire purgé, un
+    /// document restauré après un redémarrage. L'absence n'est pas une erreur :
+    /// la publication rencontrera le même vide et le signalera là où l'auteur
+    /// peut agir.
+    static func fileSize(at url: URL) -> Int64? {
+        guard let attributs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let taille = attributs[.size] as? NSNumber else { return nil }
+        return taille.int64Value
     }
 }

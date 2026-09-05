@@ -8,7 +8,7 @@ import { echappe } from '@/app/socle';
 import { THEME_PAR_DEFAUT } from '@/app/theme-script';
 import { AUCUNE_PRESENCE } from '@/lib/api/fil';
 import { RAISONS_DE_FERMETURE, type ApercuDeJonction, type Refus } from '@/lib/api/invite';
-import { droitsHorsDuLien, nomsDesDroitsVariables } from '@/lib/contenu/droits';
+import { droitsRendus, type DroitRendu } from '@/lib/contenu/droits';
 
 import { FEUILLE_DU_CHOIX } from './choix-feuille';
 import { languesOffertes, type ChoixDeLangue } from './langue';
@@ -74,7 +74,6 @@ export const CHOIX = {
   langues: (n: number): string => (n === 1 ? 'Une langue autorisée' : `${n} langues autorisées`),
   languesLibres: 'Toutes les langues sont les bienvenues',
   languesSous: 'Chaque message est traduit dans votre langue.',
-  droitsApres: { titre: 'Vos droits exacts s’affichent à l’entrée', sous: (droits: string): string => `${droits} — selon le lien.` },
   pseudo: 'Votre pseudo',
   pseudoAide: 'Le nom que les autres verront.',
   langue: 'Langue',
@@ -170,6 +169,17 @@ const adresse = (segment: string): string => `/chat/${encodeURIComponent(segment
 const ligneDeDroit = (glyphe: string, contenu: { readonly titre: string; readonly sous: string }): string =>
   `<li>${svgDuSprite(glyphe)}<div><b>${echappe(contenu.titre)}</b><p>${echappe(contenu.sous)}</p></div></li>`;
 
+/**
+ * Une ligne de VERDICT — le même gabarit que `ligneDeDroit` du bandeau du fil
+ * (`app/connecte/fil-vue.ts`), posé ici séparément parce que les autres lignes
+ * de cet accordéon (effectif, exigence, langues) n'en portent aucun : ce
+ * fichier compose deux natures de ligne, la source des droits reste unique.
+ */
+const ligneDeVerdict = (droit: DroitRendu): string =>
+  `<li class="${droit.accorde ? 'accorde' : 'refuse'}" data-droit="${droit.cle}">` +
+  `<span class="verdict">${svgDuSprite('ph-check-circle')}${svgDuSprite('ph-x-circle')}</span>` +
+  `<div><b>${echappe(droit.titre)}</b><p>${echappe(droit.sous)}</p></div></li>`;
+
 const enumeration = (elements: readonly string[]): string =>
   elements.length <= 1 ? (elements[0] ?? '') : `${elements.slice(0, -1).join(', ')} et ${elements[elements.length - 1]}`;
 
@@ -185,16 +195,15 @@ const exigence = (apercu: ApercuDeJonction): { readonly titre: string; readonly 
   return { titre: CHOIX.pourEntrer(enumeration(demandes)), sous: CHOIX.pourEntrerSous };
 };
 
-const majuscule = (texte: string): string => texte.charAt(0).toLocaleUpperCase('fr') + texte.slice(1);
-
 /**
  * L'ACCORDÉON DES DROITS — ce que l'aperçu SERT (`GET /anonymous/link/
- * :identifier` : exigences, langues autorisées, effectif), et rien d'inventé :
- * les huit droits d'un invité ne sont rendus qu'à la jonction (`entry.rights`),
- * et le bandeau du fil les lit de LÀ. Ici on dit ce qu'on sait, et on NOMME le
- * reste depuis la source que le bandeau lit (`lib/contenu/droits.ts`, #4523) :
- * les droits que le lien décide, sans verdict ; celui que rien n'accorde à un
- * invité, avec le sien.
+ * :identifier` : exigences, langues autorisées, effectif et, depuis #4522,
+ * les quatre droits d'un invité), rendu par la MÊME source que le bandeau du
+ * fil (`lib/contenu/droits.ts`, #4523) : `droitsRendus(apercu.droits)` — pas
+ * une seconde liste. Avant #4830, l'aperçu ne servait aucun de ces quatre
+ * champs et l'accordéon ne pouvait que NOMMER les droits variables sans
+ * verdict ; il rend désormais le même verdict que le bandeau, avant la
+ * jonction — ce que le lien ouvre, et rien de plus.
  */
 const accordeon = (apercu: ApercuDeJonction): string => {
   const lignes = [
@@ -206,11 +215,7 @@ const accordeon = (apercu: ApercuDeJonction): string => {
       titre: apercu.languesAutorisees.length === 0 ? CHOIX.languesLibres : CHOIX.langues(apercu.languesAutorisees.length),
       sous: CHOIX.languesSous,
     }),
-    ligneDeDroit('ph-check-circle', {
-      titre: CHOIX.droitsApres.titre,
-      sous: CHOIX.droitsApres.sous(majuscule(enumeration(nomsDesDroitsVariables()))),
-    }),
-    ...droitsHorsDuLien().map((droit) => ligneDeDroit('ph-x-circle', droit)),
+    ...droitsRendus(apercu.droits).map(ligneDeVerdict),
   ];
   return (
     '<details class="droits">' +

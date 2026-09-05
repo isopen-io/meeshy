@@ -2,12 +2,13 @@ import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
 import { adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
 import { annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
-import { FORME_PAR_GENRE, formeDePiece, sEcouteSurPlace } from '@/lib/api/formes';
+import { FORME_PAR_GENRE, sEcouteSurPlace } from '@/lib/api/formes';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
 import { cleDuJour, libelleDuJour } from '@/lib/temps';
 
+import { aFiche, ficheDePiece, gesteDePiece, type GesteDePiece } from './plein-vue';
 import { adresseDuProfil } from './profil-vue';
 import { blocDeTranscription, langAttribut } from './transcrit';
 import { quand } from './vue';
@@ -62,33 +63,38 @@ const avatarNu = (message: Message): string =>
 
 /**
  * L'AUTEUR D'UN MESSAGE OUVRE SON PROFIL (§ 12.10.3) — depuis l'avatar OU le
- * nom, deux `<a href="?profil=…">` distincts vers la MÊME surimpression. Trois
- * cas n'ont personne à ouvrir, et ne sont donc PAS des liens (charte règle 7,
- * « un contrôle sans effet ne se rend pas ») :
+ * nom, deux `<a href="?profil=…">` distincts vers la MÊME surimpression. Ce
+ * qui n'a PERSONNE à ouvrir n'est pas un lien (charte règle 7, « un contrôle
+ * sans effet ne se rend pas ») :
  *
  *   • `message.systeme` — une ligne système ne cite personne ;
  *   • `message.anonyme` — un invité de lien n'a pas de compte, donc pas de
- *     handle que `GET /directory/people/:handle` puisse résoudre ;
- *   • `message.deMoi` — ouvrir SON PROPRE profil mènerait à `sheet:member`,
- *     qui n'existe pas encore dans le dépôt (matrice, lot L5 — #4958, ouvert
- *     et non livré) : le panneau sait bien afficher `relation:'self'`
- *     (§ 12.10.3 point 5), mais rien ne route encore vers « son compte » —
- *     fabriquer ce lien serait un contrôle qui ment sur sa destination. Le
- *     critère de fin « relation=self ⇒ mène à SON compte » de #5030 N'EST
- *     DONC PAS ENCORE ATTEINT — documenté dans #5030 (commentaire), pas
- *     silencieusement contourné : dès que #4958 livre `sheet:member`, cette
- *     branche route vers elle plutôt que de rendre `avatarNu`.
+ *     handle que `GET /directory/people/:handle` puisse résoudre. Cela vaut
+ *     aussi pour l'invité qui se lit LUI-MÊME : `deMoi && anonyme` reste un
+ *     auteur sans compte ;
+ *   • `message.auteurId === null` — un `href="?profil=null"` mentirait sur sa
+ *     destination.
+ *
+ * `message.deMoi` N'EN FAIT PLUS PARTIE (#5030) : un membre a un compte, la
+ * passerelle sert `isSelf:true` sur son propre handle (`routes/directory/
+ * person.ts:78`) et la surimpression sait rendre la branche « c'est vous »
+ * avec SON action — « Mon compte », vers `ADRESSE_DE_MON_COMPTE`. La prémisse
+ * qui excluait ce cas (« rien ne route vers son compte tant que #4958 n'a pas
+ * livré `sheet:member` ») est PÉRIMÉE depuis que `/settings/profile` est une
+ * route servie (#5093) : la destination existait, seul le chemin qui y mène
+ * manquait.
  *
  * `message.auteurId` EST le handle : un `User.id`, que `lib/api/profil.ts`
  * accepte tel quel (« MongoDB ObjectId or username »).
  */
 const handleDeLAuteur = (message: Message): string | null =>
-  message.systeme || message.anonyme || message.deMoi ? null : message.auteurId;
+  message.systeme || message.anonyme ? null : message.auteurId;
 
 const avatar = (message: Message, adresse: string): string => {
   const handle = handleDeLAuteur(message);
   if (handle === null) return avatarNu(message);
-  return `<a class="avatar-lien" href="${echappe(adresseDuProfil(adresse, handle))}" aria-label="${echappe(FIL.voirLeProfil(message.auteur))}">${avatarNu(message)}</a>`;
+  const nomDuGeste = message.deMoi ? FIL.voirVotreProfil : FIL.voirLeProfil(message.auteur);
+  return `<a class="avatar-lien" href="${echappe(adresseDuProfil(adresse, handle))}" aria-label="${echappe(nomDuGeste)}">${avatarNu(message)}</a>`;
 };
 
 const nomDeLAuteur = (message: Message, adresse: string): string => {
@@ -181,14 +187,6 @@ const etiquetteDePiece = (nom: string, meta: string): string =>
   `<span class="poids"${meta === '' ? ' hidden' : ''}>${echappe(meta)}</span>` +
   '</span>';
 
-/** CE QUE LE TAP FAIT — l'adresse, le nom du geste, et s'il quitte le document. */
-type GesteDePiece = { readonly href: string; readonly libelle: string; readonly onglet: boolean };
-
-const gesteDePiece = (piece: PieceJointe, meta: string, adresse: string, messageId: string): GesteDePiece =>
-  formeDePiece(piece.genre).ouvre === 'plein'
-    ? { href: adresseDuPlein(adresse, messageId, piece.id), libelle: FIL.pleinEcran(piece.nom, meta), onglet: false }
-    : { href: piece.url, libelle: FIL.telecharger(piece.nom, meta), onglet: true };
-
 const afficheDePiece = (geste: GesteDePiece, nom: string, meta: string): string =>
   `<a class="media" href="${echappe(geste.href)}"${geste.onglet ? ' target="_blank" rel="noopener"' : ''} aria-label="${echappe(geste.libelle)}">` +
   `<span class="vignette">${glyphes(GLYPHE_PAR_GENRE)}<span class="lire" aria-hidden="true">${svgDuSprite('ph-fill-play')}</span></span>` +
@@ -223,16 +221,11 @@ const lecteurDePiece = ({ source, nom, meta }: { readonly source: string; readon
  * (`audio:transcription-ready` → `fil-peinture.ts`) et la puce apparaît : c'est
  * l'effet juste, au moment juste.
  */
-const aFiche = (piece: PieceJointe): boolean => sEcouteSurPlace(piece.genre) && piece.transcription !== null;
-
-const ficheDePiece = (href: string, nom: string): string =>
-  `<a class="fiche" href="${echappe(href)}" aria-label="${echappe(FIL.fiche(nom))}">${svgDuSprite('ph-file-text')}${echappe(FIL.ficheCourt)}</a>`;
-
 const piece = (piece: PieceJointe, langueDuDocument: string, adresse: string, messageId: string): string => {
   const meta = metaDePiece(piece);
   const bloc = sEcouteSurPlace(piece.genre)
     ? lecteurDePiece({ source: piece.piste, nom: piece.nom, meta })
-    : afficheDePiece(gesteDePiece(piece, meta, adresse, messageId), piece.nom, meta);
+    : afficheDePiece(gesteDePiece({ piece, meta, plein: adresseDuPlein(adresse, messageId, piece.id) }), piece.nom, meta);
   const fiche = aFiche(piece) ? ficheDePiece(adresseDuPlein(adresse, messageId, piece.id), piece.nom) : '';
 
   return `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}${blocDeTranscription(piece, langueDuDocument)}${fiche}</li>`;
@@ -375,6 +368,24 @@ const accuseHtml = (accuse: Message['accuse']): string =>
 const accuse = (message: Message): string => (message.deMoi && !message.systeme ? accuseHtml(message.accuse) : '');
 
 /**
+ * **La DATATION — la seconde colonne du corps** (#5136, directive porteur
+ * 2026-09-04 : « mettre la date et coche au niveau de la bulle et non sur une
+ * ligne […] la seconde colonne alignée en bas contient la date et
+ * l'information de réception si nécessaire »).
+ *
+ * L'heure et l'accusé vivaient dans `.meta`, la ligne posée SOUS le texte.
+ * `<time>` en était le seul contributeur de hauteur — `.reagir-slot` est en
+ * `height:0`, `.langue` et `.modifie` sont conditionnels — donc cette ligne
+ * réservait, sous chaque message, la hauteur d'un texte pour deux informations
+ * qui se lisent aussi bien à côté.
+ *
+ * **« si nécessaire »** est rendu par `accuse` lui-même, qui ne peint rien pour
+ * un message reçu : la colonne d'un message d'autrui ne porte que son heure.
+ */
+const datation = (message: Message, maintenant: number): string =>
+  `<p class="datation">${heure(message, maintenant)}${accuse(message)}</p>`;
+
+/**
  * La pastille de langue (charte règle 22) : `ph-translate` + le code de la
  * langue d'ORIGINE, rendue SEULEMENT quand une traduction est servie. Sur un
  * message déjà dans la langue du lecteur, elle n'apprendrait rien.
@@ -474,7 +485,13 @@ export const ligne = ({
   return (
     `<li class="${classes(message, estUneSuite(message, precedent))}" ${attributs(message)}>` +
     avatar(message, adresse) +
-    '<div class="corps">' +
+    // DEUX COLONNES (#5136) : la bulle, et au bas de sa droite la datation.
+    // `colonnes` est une classe EXPLICITE plutôt qu'un `:has(> .bulle)` — le
+    // message système garde son corps d'une seule colonne, et un sélecteur
+    // conditionnel le rendrait tributaire d'une capacité du navigateur pour
+    // une distinction que le serveur connaît déjà.
+    '<div class="corps colonnes">' +
+    '<div class="bulle">' +
     '<p class="qui">' +
     nomDeLAuteur(message, adresse) +
     (message.anonyme ? `<span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span>` : '') +
@@ -490,13 +507,17 @@ export const ligne = ({
     pastille(message) +
     (message.edite ? `<span class="modifie">${echappe(FIL.modifie)}</span>` : '') +
     // La PLACE du bouton « Réagir », réservée : le module y pose le bouton sans
-    // déplacer l'heure ni l'accusé (sondé : sans elle, ils glissaient de 56 px à
-    // l'arrivée du module). Vide, elle n'est pas un contrôle — rien d'inerte.
+    // déplacer ce qui suit (sondé : sans elle, ça glissait de 56 px à l'arrivée
+    // du module). Vide, elle n'est pas un contrôle — rien d'inerte.
+    //
+    // Ce qu'elle protégeait — l'heure et l'accusé — a quitté cette ligne pour
+    // la datation. Elle reste néanmoins réservée : `.langue` et `.modifie` la
+    // PRÉCÈDENT, et sans elle le bouton, en arrivant, les pousserait.
     '<span class="reagir-slot"></span>' +
-    heure(message, maintenant) +
-    accuse(message) +
     '</p>' +
     reactionsHtml(message, adresse) +
+    '</div>' +
+    datation(message, maintenant) +
     '</div>' +
     '</li>'
   );
@@ -552,10 +573,20 @@ const boutonReagir = (): string =>
 export const gabaritDeLigne = (adresse: string): string =>
   `<template id="${IDENTIFIANT_DU_GABARIT}">` +
   '<li class="ligne" data-id="">' +
-  '<span class="avatar t1" aria-hidden="true"></span>' +
-  `<span class="avatar fantome" aria-hidden="true" hidden>${svgDuSprite('ph-ghost')}</span>` +
-  '<div class="corps">' +
-  `<p class="qui"><span class="nom"></span><span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span></p>` +
+  // Les DEUX cliquables vers le profil de l'auteur sont des FENTES, comme le
+  // reste : le module pose ou RETIRE leur `href` (`fil-peinture.ts`), il n'écrit
+  // aucune balise. Sans eux, une bulle reçue en direct — ou celle qu'on vient
+  // d'envoyer — n'avait aucun chemin vers le profil, quand la MÊME bulle
+  // rechargée en avait deux : la jumelle exacte que ce gabarit existe pour
+  // empêcher (#5030).
+  `<a class="avatar-lien"><span class="avatar t1" aria-hidden="true"></span><span class="avatar fantome" aria-hidden="true" hidden>${svgDuSprite('ph-ghost')}</span></a>` +
+  // La MÊME géographie que la ligne servie (#5136) — c'est l'invariant en tête
+  // de ce fichier : « la bulle reçue en direct et la bulle rechargée » doivent
+  // être indiscernables. Une datation posée ici et pas là (ou l'inverse) ferait
+  // sauter chaque message au premier rechargement.
+  '<div class="corps colonnes">' +
+  '<div class="bulle">' +
+  `<p class="qui"><a class="nom-lien"><span class="nom"></span></a><span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span></p>` +
   gabaritDeCitation() +
   `<ul class="pieces" hidden>${gabaritDePiece()}</ul>` +
   '<p class="texte"></p>' +
@@ -563,14 +594,18 @@ export const gabaritDeLigne = (adresse: string): string =>
   '<p class="meta">' +
   `<span class="langue" title="${echappe(FIL.traduitDepuis)}" hidden>${svgDuSprite('ph-translate')}<span class="code"></span></span>` +
   `<span class="modifie">${echappe(FIL.modifie)}</span>` +
+  // L'attente et l'échec restent DANS la bulle : ils ne datent pas le message,
+  // ils disent que l'envoi n'a pas abouti — et la feuille les rend exclusifs de
+  // l'accusé (`.ligne.envoi-attente .accuse{display:none}`), qui, lui, part
+  // dans la datation.
   `<span class="attente">${svgDuSprite('ph-clock')}<span class="etat-envoi">${echappe(FIL.enAttente)}</span></span>` +
   `<span class="echec">${svgDuSprite('ph-warning-circle')}<span class="raison">${echappe(FIL.echec)}</span>` +
   `<button type="button" class="action discrete reessayer">${echappe(FIL.reessayer)}</button></span>` +
   boutonReagir() +
-  '<time></time>' +
-  accuseHtml('envoye') +
   '</p>' +
   `<ul class="reactions" aria-label="${echappe(FIL.reactions)}" hidden>${pastilleDeReaction({ emoji: '', nombre: 0, messageId: '', adresse })}</ul>` +
+  '</div>' +
+  `<p class="datation"><time></time>${accuseHtml('envoye')}</p>` +
   '</div>' +
   '</li>' +
   '</template>' +

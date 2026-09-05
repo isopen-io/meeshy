@@ -39,6 +39,8 @@ final class ComposerDocumentTrayPublishTests: XCTestCase {
             location: nil,
             discoverabilityPrecision: nil,
             originalLanguage: "fr",
+            storyEffects: nil,
+            mediaCaptions: [:],
             forcePlainPost: false,
             mobileTranscription: nil
         )

@@ -16,7 +16,7 @@
 | 6 | `linkExpired` | P0-role-premier | L1 | `/l/:token` | les-deux | `linkRedirect` |
 | 7 | `moods` *(hors planche)* | P0-role-premier | L3 | `/moods/:id` | anonyme | `story` |
 | 8 | `reelShared` *(hors planche)* | P0-role-premier | L3 | `/reels/:id` | anonyme | `story` |
-| 9 | `storyFail` | P0-role-premier | L3 | `/stories/:id` | anonyme | `story` |
+| 9 | `storyFail` | P0-role-premier | L3 | `/stories/:id` | connecte | `story` |
 | 10 | `rights` | P0-role-premier | L2 | `/chat/:lien` | anonyme | `join` |
 | 11 | `thread` | P0-role-premier | L2 | `/chats/:cle` | les-deux | `join` |
 | 12 | `media` | P0-role-premier | L2 | `/chats/:cle/medias` | les-deux | `thread` |

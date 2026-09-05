@@ -318,15 +318,30 @@ export const documentDeLInvitation = ({ genre, id }: { readonly genre: GenreServ
 
 /**
  * L'INDISPONIBLE — la MÊME réponse pour une story absente, supprimée, échue ou
- * hors audience (§ 5.1) : distinguer serait un oracle d'énumération. La vue
- * `storyFail` de la planche (`cible/storyFail.png`, sa méta et ses deux
- * actions) est l'issue SUIVANTE ; ce document en est le plancher honnête, pas
- * son remplaçant.
+ * hors audience (§ 5.1, issue #4967) : distinguer serait un oracle
+ * d'énumération, et c'est pourquoi la MÉTA de la cible (`cible/storyFail.png`,
+ * `[Auteur, Publiée, Expirée]`) n'est PAS rendue — elle ne peut exister que si
+ * la CAUSE est connue, ce que ce document refuse justement de dire (T5/T6 de
+ * la spécification `storyFail`). Ce qu'il reprend de la cible est sa FORME :
+ * l'état vide de la charte (glyphe, titre, phrase — règle 16) et DEUX sorties
+ * servies, jamais l'accueil : « Retour au fil » (le lecteur est déjà connecté)
+ * et une seconde porte propre au genre.
  */
-export const documentIndisponible = (genre: GenreServi): string =>
-  documentDeMessage({
-    titre: genre.copie.indisponible.titre,
-    paragraphes: [genre.copie.indisponible.corps],
-    actions: [{ libelle: genre.copie.indisponible.action, href: '/' }],
+export const documentIndisponible = (genre: GenreServi): string => {
+  const { indisponible } = genre.copie;
+  return documentDeMessage({
+    titre: indisponible.titre,
+    paragraphes: [indisponible.corps],
+    glyphe: indisponible.glyphe,
+    actions: [
+      { libelle: indisponible.retour.libelle, href: indisponible.retour.href },
+      { libelle: indisponible.secondaire.libelle, href: indisponible.secondaire.href, ton: 'contour' },
+    ],
     feuille: FEUILLE_CONNECTEE,
+    // AUCUNE CARTE SOCIALE, ET SUR CE DOCUMENT SEUL : l'aperçu qui se déplie
+    // dans une messagerie serait un SECOND CANAL pour ce que l'écran refuse
+    // de dire. L'INVITATION, elle, la garde — c'est le seul aperçu qu'une
+    // adresse de partage produise pour un robot sans session.
+    ogEtTwitter: false,
   });
+};

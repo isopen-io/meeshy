@@ -118,6 +118,13 @@ nonisolated struct ComposerRailMatter: Equatable, Sendable {
 
     /// La description de la slide, si elle est écrite.
     var hasDescription: Bool = false
+
+    /// **Le CORPS du post, s'il est écrit** (#4890). Champ SÉPARÉ de
+    /// `hasDescription`, parce que les deux textes existent en même temps sur un
+    /// post : la description est la légende du média courant, le contenu est le
+    /// corps de la publication. Un seul booléen aurait allumé les deux pastilles
+    /// pour un seul texte écrit — un témoin qui affirme une matière absente.
+    var hasContent: Bool = false
 }
 
 nonisolated enum ComposerRailDoorBadge {
@@ -134,6 +141,7 @@ nonisolated enum ComposerRailDoorBadge {
     static func matter(slide: StorySlide,
                        hashtags: Int,
                        description: String,
+                       content: String,
                        mentions: Int,
                        hasDocumentLocation: Bool) -> ComposerRailMatter {
         let effets = slide.effects
@@ -148,7 +156,12 @@ nonisolated enum ComposerRailDoorBadge {
             hashtags: hashtags,
             mentions: mentions,
             strokes: (effets.drawingStrokes ?? []).count,
-            hasDescription: !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            hasDescription: !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            // Le MÊME prédicat que la description, et volontairement : un texte
+            // blanc n'est pas un texte, ici comme là-bas
+            // (`ComposerSlideTextRole.applyCaption`). Deux normalisations pour
+            // une même question auraient divergé au premier réglage.
+            hasContent: !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         )
     }
 
@@ -168,6 +181,11 @@ nonisolated enum ComposerRailDoorBadge {
         let brut: Int
         switch door {
         case .description: brut = matter.hasDescription ? 1 : 0
+        // Une pastille BINAIRE, comme la description : un corps de post est un
+        // texte, pas une collection — « 1 » y dit « il y en a un », et compter
+        // ses caractères ou ses lignes n'apprendrait rien sur ce que la porte
+        // ouvre.
+        case .content:     brut = matter.hasContent ? 1 : 0
         case .media:       brut = matter.media
         case .sound:       brut = matter.sounds
         case .text:        brut = matter.texts

@@ -137,7 +137,12 @@ struct ComposerSceneCameraBar: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
+                // **Un glyphe de contrôle SUIT le Dynamic Type.** `.system(size:)`
+                // le fige : à la plus grande taille système, la rangée du viseur
+                // resterait minuscule pendant que tout le reste grandit — et une
+                // cible de 40 pt avec un glyphe de 15 pt est illisible pour qui
+                // a besoin de la grande taille.
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle())
@@ -231,10 +236,10 @@ struct ComposerSceneCameraBar: View {
     private var lockTrack: some View {
         HStack(spacing: 6) {
             Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .bold))
+                .font(MeeshyFont.relative(11, weight: .bold))
                 .foregroundStyle(.white.opacity(0.35 + 0.65 * lockProgress))
             Image(systemName: "lock.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.4 + 0.6 * lockProgress))
         }
         .padding(.horizontal, 12)

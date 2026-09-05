@@ -11,6 +11,7 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,16 @@ function makePrisma(overrides: any = {}) {
     },
     ...overrides,
   };
+}
+
+/**
+ * Un double `community.findFirst` qui HONORE le `where` imbriqué
+ * `members: { where: { userId }, select: { role: true } }` (#4867) — jamais un
+ * `mockResolvedValue` qui rend un `members` déjà pré-filtré à la main par la
+ * fixture, ce qui ne prouve rien sur le `where` réel.
+ */
+function communityDoubleHonouringWhere(rows: ReadonlyArray<Record<string, unknown>>) {
+  return jest.fn<any>(findFirstHonouringWhere(rows));
 }
 
 // ─── App builder ─────────────────────────────────────────────────────────────
@@ -319,6 +330,43 @@ describe('POST /communities/:id/members — caller is not admin', () => {
   });
 });
 
+describe('POST /communities/:id/members — caller is not admin, proven by mutation on the nested where (#4867)', () => {
+  // Le double ci-dessus rend un `members` déjà pré-filtré À LA MAIN par la
+  // fixture — il ne prouve rien sur le `where: { userId }` imbriqué que la
+  // production applique réellement. Ici le double HONORE ce `where`, et la
+  // fixture porte l'INTRUS que la production doit écarter : un AUTRE membre,
+  // admin, placé en tête du tableau brut. Si le `where` imbriqué disparaissait,
+  // `members[0]` deviendrait cet intrus admin et la route rendrait 200.
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: communityDoubleHonouringWhere([
+          {
+            id: COMMUNITY_ID,
+            createdBy: OTHER_USER_ID,
+            members: [
+              { userId: OTHER_USER_ID, role: 'admin' },
+              { userId: USER_ID, role: 'member' },
+            ],
+          },
+        ]),
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 for the caller whose OWN row is not admin, despite an unrelated admin row existing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/communities/${COMMUNITY_ID}/members`,
+      payload: { userId: OTHER_USER_ID },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+  });
+});
+
 describe('POST /communities/:id/members — user to add not found', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -485,6 +533,41 @@ describe('PATCH /communities/:id/members/:memberId/role — caller is not admin'
   });
 });
 
+describe('PATCH /communities/:id/members/:memberId/role — caller is not admin, proven by mutation on the nested where (#4867)', () => {
+  // Même défaut que le POST : le double « caller is not admin » ci-dessus
+  // pré-filtre `members` à la main. Celui-ci honore le `where` imbriqué et
+  // sème un intrus admin en tête de tableau — s'il disparaissait du `where`,
+  // `members[0]` deviendrait l'intrus et la route rendrait 200.
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: communityDoubleHonouringWhere([
+          {
+            id: COMMUNITY_ID,
+            createdBy: OTHER_USER_ID,
+            members: [
+              { userId: OTHER_USER_ID, role: 'admin' },
+              { userId: USER_ID, role: 'member' },
+            ],
+          },
+        ]),
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 for the caller whose OWN row is not admin, despite an unrelated admin row existing', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/communities/${COMMUNITY_ID}/members/${MEMBER_ID}/role`,
+      payload: { role: 'moderator' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+  });
+});
+
 describe('PATCH /communities/:id/members/:memberId/role — success', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp('USER'); });
@@ -591,6 +674,39 @@ describe('DELETE /communities/:id/members/:memberId — caller is not admin', ()
   afterAll(async () => { await app.close(); });
 
   it('returns 403 when caller is not admin', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/communities/${COMMUNITY_ID}/members/${MEMBER_ID}`,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+  });
+});
+
+describe('DELETE /communities/:id/members/:memberId — caller is not admin, proven by mutation on the nested where (#4867)', () => {
+  // Même défaut que POST/PATCH : le double honore ici le `where` imbriqué et
+  // sème un intrus admin en tête de tableau — s'il disparaissait du `where`,
+  // `members[0]` deviendrait l'intrus et la route rendrait 200.
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: communityDoubleHonouringWhere([
+          {
+            id: COMMUNITY_ID,
+            createdBy: OTHER_USER_ID,
+            members: [
+              { userId: OTHER_USER_ID, role: 'admin' },
+              { userId: USER_ID, role: 'member' },
+            ],
+          },
+        ]),
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 for the caller whose OWN row is not admin, despite an unrelated admin row existing', async () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/communities/${COMMUNITY_ID}/members/${MEMBER_ID}`,

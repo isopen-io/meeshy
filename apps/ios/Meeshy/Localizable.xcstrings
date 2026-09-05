@@ -46984,6 +46984,53 @@
         }
       }
     },
+    "composer.rail.content": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كتابة المنشور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitrag schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write the post"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir la publicación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire le post"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivi il post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever a publicação"
+          }
+        }
+      }
+    },
     "composer.rail.description": {
       "extractionState": "manual",
       "localizations": {
@@ -52359,7 +52406,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post"
+            "value": "Publicação"
           }
         }
       }
@@ -52369,7 +52416,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مقطع"
+            "value": "ريل"
           }
         },
         "de": {
@@ -52415,43 +52462,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حالة"
+            "value": "مزاج"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Status"
+            "value": "Mood"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Status"
+            "value": "Mood"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estado"
+            "value": "Mood"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Statut"
+            "value": "Mood"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stato"
+            "value": "Mood"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Status"
+            "value": "Mood"
           }
         }
       }
@@ -99586,6 +99633,100 @@
             "stringUnit" : {
               "state" : "translated",
               "value" : "Fundo da cena"
+            }
+          }
+      }
+    },
+    "composer.preupload.ready" : {
+      "extractionState" : "manual",
+      "localizations" : {
+          "ar" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "جاهز"
+            }
+          },
+          "de" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "BEREIT"
+            }
+          },
+          "en" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "READY"
+            }
+          },
+          "es" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "LISTO"
+            }
+          },
+          "fr" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "PRÊT"
+            }
+          },
+          "it" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "PRONTO"
+            }
+          },
+          "pt-BR" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "PRONTO"
+            }
+          }
+      }
+    },
+    "composer.preupload.uploading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+          "ar" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "جارٍ الرفع"
+            }
+          },
+          "de" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "WIRD HOCHGELADEN"
+            }
+          },
+          "en" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "UPLOADING"
+            }
+          },
+          "es" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "SUBIENDO"
+            }
+          },
+          "fr" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "MONTÉE EN COURS"
+            }
+          },
+          "it" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "CARICAMENTO"
+            }
+          },
+          "pt-BR" : {
+            "stringUnit" : {
+              "state" : "translated",
+              "value" : "ENVIANDO"
             }
           }
       }

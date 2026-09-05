@@ -360,12 +360,27 @@ export const observeCycleDeVie = (options: OptionsDuCycleDeVie): (() => void) =>
     emetLaBalise();
   };
 
+  /**
+   * LE DÉPART DE ZONE (#5106) — la navigation DOUCE que `pagehide` ne voit
+   * pas : le navigateur de zone émet `meeshy:zone-depart` AVANT d'échanger le
+   * document, et l'écran quittant se détruit ET SE NETTOIE ici même. Les
+   * modules jettent le retour d'`observeCycleDeVie` (c'est leur droit : ils
+   * vivent la vie du document) — sur une navigation douce, le document reste
+   * et c'est donc CE site qui doit retirer ses propres écouteurs, sans quoi
+   * chaque traversée d'écran en empilerait un jeu de plus.
+   */
+  const surDepartDeZone = (): void => {
+    detruit();
+    nettoie();
+  };
+
   document.addEventListener('visibilitychange', surVisibilite);
   window.addEventListener('pageshow', surPageshow);
   window.addEventListener('pagehide', surPagehide);
   window.addEventListener('online', surOnline);
   window.addEventListener('offline', surOffline);
   window.addEventListener('storage', surStockage);
+  window.addEventListener('meeshy:zone-depart', surDepartDeZone);
   if (canal !== null) canal.onmessage = (evenement: MessageEvent<unknown>) => surMessage(evenement.data);
 
   if (!etat.enLigne) options.sur({ type: 'perte-du-reseau' });
@@ -373,13 +388,14 @@ export const observeCycleDeVie = (options: OptionsDuCycleDeVie): (() => void) =>
   if (visible()) revendique();
   ajusteLeBattement();
 
-  return () => {
+  const nettoie = (): void => {
     document.removeEventListener('visibilitychange', surVisibilite);
     window.removeEventListener('pageshow', surPageshow);
     window.removeEventListener('pagehide', surPagehide);
     window.removeEventListener('online', surOnline);
     window.removeEventListener('offline', surOffline);
     window.removeEventListener('storage', surStockage);
+    window.removeEventListener('meeshy:zone-depart', surDepartDeZone);
     arreteLaMinuterie();
     if (canal !== null) {
       if (etat.porteur) canal.postMessage({ type: 'retrait', onglet, lien });
@@ -387,4 +403,6 @@ export const observeCycleDeVie = (options: OptionsDuCycleDeVie): (() => void) =>
       canal.close();
     }
   };
+
+  return nettoie;
 };

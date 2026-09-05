@@ -28,11 +28,41 @@ fun ReelVideoSurface(
     isActive: Boolean,
     modifier: Modifier = Modifier,
     muted: Boolean = true,
+    /**
+     * Fenêtre de lecture DANS la source, en millisecondes (#5129) — `null` quand
+     * la source joue en entier. Les deux ou aucune : l'appelant a déjà tranché
+     * (`StorySourceWindow.clippingMs`), cette surface ne redécide rien.
+     *
+     * Opaques à dessein : elle n'a pas à savoir ce qu'est une borne de source,
+     * ni d'où elle vient. Un réel, qui joue toujours sa vidéo entière, ne passe
+     * rien et rien ne change pour lui.
+     */
+    sourceStartMs: Long? = null,
+    sourceEndMs: Long? = null,
 ) {
     val context = LocalContext.current
-    val player = remember(mediaUrl) {
+    val player = remember(mediaUrl, sourceStartMs, sourceEndMs) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(mediaUrl))
+            // **La fenêtre est portée par le MediaItem, jamais par un `seekTo`
+            // suivi d'une surveillance.** ExoPlayer coupe alors la source
+            // lui-même : la position 0 du player EST le début de la fenêtre, la
+            // boucle reboucle sur elle, et aucun code n'a à observer la tête de
+            // lecture pour arrêter à temps.
+            setMediaItem(
+                MediaItem.Builder()
+                    .setUri(mediaUrl)
+                    .apply {
+                        if (sourceStartMs != null && sourceEndMs != null) {
+                            setClippingConfiguration(
+                                MediaItem.ClippingConfiguration.Builder()
+                                    .setStartPositionMs(sourceStartMs)
+                                    .setEndPositionMs(sourceEndMs)
+                                    .build(),
+                            )
+                        }
+                    }
+                    .build(),
+            )
             repeatMode = Player.REPEAT_MODE_ONE
             volume = if (muted) 0f else 1f
             playWhenReady = false

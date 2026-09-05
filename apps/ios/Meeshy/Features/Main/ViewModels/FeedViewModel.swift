@@ -630,7 +630,7 @@ class FeedViewModel: ObservableObject {
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            await enqueueDurableTextPost(content: text, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, location: location, mentions: mentions, discoverabilityPrecision: discoverabilityPrecision)
+            await enqueueDurableTextPost(content: text, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, location: location, mentions: mentions, discoverabilityPrecision: discoverabilityPrecision, storyEffects: nil, type: PostType.post.rawValue)
             return
         }
 
@@ -722,7 +722,10 @@ class FeedViewModel: ObservableObject {
     /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
     /// optimistic post in place (cmid -> server id). Rolls back if the outbox
     /// refuses the row synchronously, or later exhausts its retry budget.
-    private func enqueueDurableTextPost(content: String, visibility: String, visibilityUserIds: [String]? = nil, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) async {
+    /// **Le canvas passe AUSSI par ici** (#4756) : une scène faite d'un fond de
+    /// couleur et d'objets texte n'a AUCUN fichier local, donc `publish(_:)`
+    /// l'aiguille ici. Voir `PublishIntent.storyEffects`.
+    private func enqueueDurableTextPost(content: String, visibility: String, visibilityUserIds: [String]? = nil, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil, storyEffects: StoryEffects?, type: String) async {
         let cmid = ClientMutationId.generate()
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
@@ -737,6 +740,8 @@ class FeedViewModel: ObservableObject {
             originalLanguage: originalLanguage
         )
         optimistic.location = location
+        // La scène dès la carte optimiste (#4756) — `var`, posée après l'`init`.
+        optimistic.storyEffects = storyEffects
         posts.insert(optimistic, at: 0)
         debouncedCacheSave()
 
@@ -746,6 +751,11 @@ class FeedViewModel: ObservableObject {
             attachmentIds: [],
             visibility: visibility,
             originalLanguage: originalLanguage,
+            // Sans lui, la charge persistée n'a AUCUN type et le gateway
+            // applique son défaut `POST` (#5197). Il précède
+            // `visibilityUserIds` : l'ordre suit la DÉCLARATION de
+            // `CreatePostPayload.init`, que Swift n'autorise pas à réordonner.
+            type: type,
             visibilityUserIds: visibilityUserIds,
             location: location,
             // `nil` et non `[]` quand rien n'est déclaré : le payload persisté
@@ -755,7 +765,8 @@ class FeedViewModel: ObservableObject {
             // raison que `location` : sans lui ici, cocher « trouvable à
             // proximité » sur un post TEXTE — le cas nominal, qui n'emprunte
             // que cette file — n'aurait aucun effet, et rien ne le dirait.
-            discoverabilityPrecision: discoverabilityPrecision
+            discoverabilityPrecision: discoverabilityPrecision,
+            storyEffects: storyEffects
         )
         do {
             try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
@@ -875,7 +886,11 @@ class FeedViewModel: ObservableObject {
         /// — le mécanisme exact par lequel la branche hors ligne de
         /// `StatusViewModel.setStatus` avait perdu la source et la voix d'un
         /// mood pendant que sa jumelle en ligne les passait.
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        /// Le canvas (#4756), sans défaut — même raison qu'au-dessus.
+        storyEffects: StoryEffects?,
+        /// Les légendes par fichier (#4756), alignées par index sur `localMediaURLs`.
+        mediaCaptions: [String?]?
     ) async {
         publishError = nil
         publishSuccess = false
@@ -893,7 +908,12 @@ class FeedViewModel: ObservableObject {
                 originalLanguage: originalLanguage,
                 location: location,
                 mentions: mentions,
-                discoverabilityPrecision: discoverabilityPrecision
+                discoverabilityPrecision: discoverabilityPrecision,
+                // Le repli sans média porte la scène (#4756).
+                storyEffects: storyEffects,
+                // …et son TYPE (#5197) : sans lui, un réel ou une story
+                // composés d'une scène sans fichier local partaient en POST.
+                type: type
             )
             return
         }
@@ -915,7 +935,9 @@ class FeedViewModel: ObservableObject {
             location: location,
             mentions: mentions,
             discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: mobileTranscription
+            mobileTranscription: mobileTranscription,
+            storyEffects: storyEffects,
+            mediaCaptions: mediaCaptions
         )
     }
 
@@ -952,7 +974,9 @@ class FeedViewModel: ObservableObject {
             location: intent.location,
             mentions: intent.mentions,
             discoverabilityPrecision: intent.discoverabilityPrecision,
-            mobileTranscription: intent.mobileTranscription
+            mobileTranscription: intent.mobileTranscription,
+            storyEffects: intent.storyEffects,
+            mediaCaptions: intent.mediaCaptions
         )
     }
 
@@ -973,10 +997,12 @@ class FeedViewModel: ObservableObject {
         location: SharedPlace?,
         mentions: [PostMentionInput]?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        storyEffects: StoryEffects?,
+        mediaCaptions: [String?]?
     ) async {
         let currentUser = AuthManager.shared.currentUser
-        let optimistic = FeedPost(
+        var optimistic = FeedPost(
             id: cmid,
             author: currentUser?.displayName ?? currentUser?.username ?? "",
             authorId: currentUser?.id ?? "",
@@ -995,6 +1021,7 @@ class FeedViewModel: ObservableObject {
             },
             originalLanguage: originalLanguage
         )
+        optimistic.storyEffects = storyEffects   // la scène, #4756
         posts.insert(optimistic, at: 0)
         debouncedCacheSave()
 
@@ -1022,7 +1049,12 @@ class FeedViewModel: ObservableObject {
                 // Ce qui QUALIFIE un enregistrement vocal : sans lui, le
                 // serveur re-transcrit et jette en silence le texte que
                 // l'auteur a relu avant d'envoyer.
-                mobileTranscription: mobileTranscription
+                mobileTranscription: mobileTranscription,
+                storyEffects: storyEffects,
+                // Les légendes voyagent par l'INDEX du fichier (#4756) : l'id
+                // serveur n'existera qu'à l'upload, et le dispatcher fait
+                // seul la traduction.
+                mediaCaptions: mediaCaptions
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in

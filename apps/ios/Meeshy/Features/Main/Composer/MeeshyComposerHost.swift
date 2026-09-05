@@ -396,6 +396,12 @@ struct MeeshyComposerHost: View {
     /// ouvre le menu d'un fond, le remplace, puis valide.
     @State var backgroundMenuObjectId: String?
 
+    /// **Le registre des pré-montées** (#5086, vue `4c`). `@StateObject` parce
+    /// que le meuble le POSSÈDE : sa durée de vie est celle de la composition,
+    /// et un `@ObservedObject` le reconstruirait à chaque rendu — donc
+    /// relancerait les envois.
+    @StateObject var preUploads = ComposerPreUploadRegistry()
+
     /// **L'export du `⋯`** (#4996) — enregistrer dans Photos, ou transférer.
     ///
     /// `@StateObject` et non `.shared` : un bake appartient à CETTE
@@ -647,12 +653,36 @@ struct MeeshyComposerHost: View {
     /// laisse, et le bas ne porte plus de champ permanent.
     @State var editsSceneDescription = false
 
-    /// **Le repli du volet de description** (#4742).
+    /// **La couche d'écriture du CORPS DU POST** (#4890, directive porteur
+    /// 2026-09-04).
+    ///
+    /// Jumelle de `editsSceneDescription`, et distincte d'elle parce que les
+    /// DEUX textes existent en même temps sur un post : la description est la
+    /// légende du média courant (`PostMedia.caption`), le contenu est le corps
+    /// de la publication. Un seul drapeau aurait fait de la porte CONTENU une
+    /// seconde entrée vers le champ de la légende — un contrôle qui existe,
+    /// répond au doigt, et écrit ailleurs qu'annoncé.
+    ///
+    /// Les deux ne s'ouvrent jamais ensemble (voir le `body`) : au même
+    /// ancrage bas, elles se recouvriraient.
+    @State var editsPostContent = false
+
+    /// **Le repli du volet de description** (#4742, défaut RETOURNÉ au #5138).
     ///
     /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
     /// d'histoire ne doit pas rouvrir un volet que l'auteur vient de ranger.
-    /// Déplié par défaut — la description existe pour être relue.
-    @State var sceneDescriptionCollapsed = false
+    ///
+    /// **Replié par défaut** (directive porteur 2026-09-04 : « par défaut
+    /// l'espace de contenu du caption doit être replié »). Il naissait déplié,
+    /// et la raison écrite ici — « la description existe pour être relue » —
+    /// valait tant que le volet était le SEUL endroit où le texte se voyait
+    /// (#4742). Depuis #4993 il se peint PAR-DESSUS la scène : déplié d'entrée,
+    /// il couvre la bande basse du canvas à l'instant précis où l'auteur
+    /// compose — c'est-à-dire avant qu'il y ait la moindre légende à relire.
+    ///
+    /// Replié n'est pas caché : le chevron reste disponible en permanence
+    /// (#4993), et ouvrir la saisie déplie (`sceneDescriptionPanel.onEdit`).
+    @State var sceneDescriptionCollapsed = true
 
     /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
@@ -934,10 +964,9 @@ struct MeeshyComposerHost: View {
         // `storyComposerCanvasBottomReservation`, posée sur `composerSurface` —
         // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
         // seconde.
-        .overlay(alignment: .bottom) {
-            if editsSceneDescription { sceneDescriptionEditor }
-        }
+        .overlay(alignment: .bottom) { textEditingZones }
         .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsSceneDescription)
+        .animation(.spring(response: 0.32, dampingFraction: 0.9), value: editsPostContent)
         // **La feuille de partage est portée par la RACINE, pas par
         // `surfaceWithIntakePortals`** (#4996). Ce dernier porte déjà un
         // `.sheet(item:)` et un `.fullScreenCover(item:)`, et SwiftUI n'honore

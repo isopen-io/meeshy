@@ -715,6 +715,51 @@ describe('useSocketCacheSync', () => {
       expect(updatedMessage?.isEdited).toBe(true);
     });
 
+    // #3644 — the merge `{ ...m, ...message }` only ever applies whatever
+    // `message.translations` carries. The real defect lived one layer down,
+    // in the socket→Message converter hardcoding `translations: []` on
+    // EVERY payload; this witness proves the merge itself does the right
+    // thing when the edit payload legitimately carries translations (as the
+    // call-summary transport does — `MeeshySocketIOManager.broadcastMessageEdited`).
+    it('applies translations carried by an edit payload instead of dropping them', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      const editedTranslations = [
+        {
+          id: 'trans-edit-1',
+          messageId: 'msg-1',
+          sourceLanguage: 'en',
+          targetLanguage: 'fr',
+          translatedContent: 'Bonjour (édité)',
+          translationModel: 'basic',
+          cacheKey: 'cache-edit-1',
+          createdAt: new Date(),
+          cached: false,
+        },
+      ];
+      act(() => {
+        messageEditedCallback?.({
+          ...mockMessages[0],
+          content: 'Hello (edited)',
+          isEdited: true,
+          translations: editedTranslations,
+        } as Message);
+      });
+
+      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      const updatedMessage = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
+      expect(updatedMessage?.translations).toEqual(editedTranslations);
+    });
+
     it('updates a cache entry keyed by the conversation slug', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 

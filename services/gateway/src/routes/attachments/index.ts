@@ -12,6 +12,7 @@ import { registerUploadRoutes } from './upload';
 import { registerDownloadRoutes, registerFileStreamRoute } from './download';
 import { registerMetadataRoutes } from './metadata';
 import { registerTranslationRoutes } from './translation';
+import { registerAttachmentSearchRoutes } from './search';
 
 /**
  * Le préfixe NON VERSIONNÉ sous lequel des `fileUrl` sont persistées en base
@@ -131,6 +132,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
     registerMetadataRoutes(fastify, authRequired, authOptional, prisma),
     registerTranslationRoutes(fastify, authRequired, prisma, translateService),
   ]);
+  registerAttachmentSearchRoutes(fastify, authRequired, prisma);
 }
 
 // Export des types pour utilisation externe

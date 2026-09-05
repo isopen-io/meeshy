@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { carnetDeLiens } from '@/lib/api/compte';
+import { carnetDeLiens, fermeUnLien } from '@/lib/api/compte';
 
 /**
  * CE QUE CES TÉMOINS ÉPROUVENT — la lecture de `GET /links` pour l'écran
@@ -175,5 +175,84 @@ describe('le carnet de liens', () => {
       },
     });
     expect(coupe.genre).toBe('panne');
+  });
+});
+
+describe('fermer un lien', () => {
+  const jsonRefus = (statut: number, corps: unknown = { success: false, error: 'refus' }): Response =>
+    new Response(JSON.stringify(corps), { status: statut });
+
+  it('PATCHe la BONNE adresse, avec le corps STRICT { isActive: false } — rien d’autre', async () => {
+    const { recuperer, vus } = passerelle(() =>
+      json({ success: true, data: { linkId: 'mshy_lagos', isActive: false } }),
+    );
+
+    const issue = await fermeUnLien({ jeton: 'j', identifiant: 'mshy_lagos', base: 'https://gate.test', recuperer });
+
+    expect(issue).toEqual({ genre: 'fait' });
+    expect(vus).toHaveLength(1);
+    expect(vus[0]).toBe('https://gate.test/api/v1/links/mshy_lagos');
+  });
+
+  it('envoie EXACTEMENT { isActive: false } — le corps STRICT que le critère de fin exige', async () => {
+    const boite: { recu: RequestInit | undefined } = { recu: undefined };
+    const recuperer = async (_url: string, init: RequestInit): Promise<Response> => {
+      boite.recu = init;
+      return json({ success: true, data: {} });
+    };
+
+    await fermeUnLien({ jeton: 'j', identifiant: 'mshy_lagos', base: 'https://gate.test', recuperer });
+
+    expect(boite.recu).toBeDefined();
+    expect(boite.recu?.method).toBe('PATCH');
+    expect(JSON.parse(String(boite.recu?.body))).toEqual({ isActive: false });
+    expect((boite.recu?.headers as Record<string, string>).authorization).toBe('Bearer j');
+  });
+
+  it('encode l’identifiant dans l’URL', async () => {
+    const { recuperer, vus } = passerelle(() => json({ success: true, data: {} }));
+
+    await fermeUnLien({ jeton: 'j', identifiant: 'mshy demo/x', base: 'https://gate.test', recuperer });
+
+    expect(vus[0]).toBe('https://gate.test/api/v1/links/mshy%20demo%2Fx');
+  });
+
+  it('sépare la session expirée (401) du refus (403/404) et de la panne (5xx)', async () => {
+    const ferme = (statut: number, corps?: unknown) =>
+      fermeUnLien({
+        jeton: 'j',
+        identifiant: 'mshy_lagos',
+        base: 'https://gate.test',
+        recuperer: async () => jsonRefus(statut, corps),
+      });
+
+    expect(await ferme(401)).toEqual({ genre: 'session-expiree' });
+    expect(await ferme(500)).toEqual({ genre: 'panne' });
+
+    // Le refus est rendu TEL QUEL — `error` est une CHAÎNE (`sendError`),
+    // jamais un objet : les deux formes sont lues, la même règle que
+    // `creeUnLien`.
+    expect(await ferme(403, { success: false, error: 'Permissions insuffisantes pour modifier ce lien' })).toEqual({
+      genre: 'refus',
+      message: 'Permissions insuffisantes pour modifier ce lien',
+      statut: 403,
+    });
+    expect(await ferme(404, { success: false, error: { message: 'Lien de partage non trouvé' } })).toEqual({
+      genre: 'refus',
+      message: 'Lien de partage non trouvé',
+      statut: 404,
+    });
+  });
+
+  it('rend une panne quand le réseau est coupé', async () => {
+    const issue = await fermeUnLien({
+      jeton: 'j',
+      identifiant: 'mshy_lagos',
+      base: 'https://gate.test',
+      recuperer: async () => {
+        throw new Error('réseau coupé');
+      },
+    });
+    expect(issue).toEqual({ genre: 'panne' });
   });
 });

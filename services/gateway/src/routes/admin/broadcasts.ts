@@ -6,6 +6,8 @@ import { BroadcastTranslationService } from '../../services/admin/broadcast-tran
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
+import { resolveSystemLanguageVariants } from '../../jobs/broadcast-recipients';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
@@ -273,7 +275,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       };
 
       if (targeting.languages && Array.isArray(targeting.languages) && targeting.languages.length > 0) {
-        where.systemLanguage = { in: targeting.languages };
+        // #5161 — `systemLanguage` est persisté VERBATIM (`fr`/`fr-FR`/`FR`/`fr_FR`
+        // coexistent) ; un `in` cru sur les codes canoniques saisis dans l'UI admin
+        // rate toute variante région/casse. Même SSOT que le job d'envoi
+        // (`buildBroadcastRecipientFilter` → `resolveSystemLanguageVariants`).
+        where.systemLanguage = { in: await resolveSystemLanguageVariants(fastify.prisma, targeting.languages) };
       }
 
       if (targeting.countries && Array.isArray(targeting.countries) && targeting.countries.length > 0) {
@@ -325,10 +331,20 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         _count: true,
       });
 
-      // Get unique target languages from recipients
-      const targetLanguages = recipientsByLanguage
-        .map((g: any) => g.systemLanguage)
-        .filter(Boolean) as string[];
+      // #5161 — replier chaque bucket VERBATIM sur son code canonique et
+      // ADDITIONNER les comptes qui convergent (même patron que #5155,
+      // `usersLanguageMap`) : sans ça, `targetLanguages` fait traduire le
+      // contenu de la diffusion vers CHAQUE variante au lieu d'une fois par
+      // langue canonique — traductions dupliquées, appels ML gaspillés.
+      const recipientsByCanonicalLanguage = recipientsByLanguage.reduce((acc: Record<string, number>, g: any) => {
+        if (g.systemLanguage) {
+          const canonical = normalizeLanguageForDedup(g.systemLanguage);
+          acc[canonical] = (acc[canonical] ?? 0) + (g._count as number);
+        }
+        return acc;
+      }, {} as Record<string, number>);
+
+      const targetLanguages = Object.keys(recipientsByCanonicalLanguage);
 
       // Translate content
       const translationService = new BroadcastTranslationService();
@@ -353,9 +369,9 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, {
         recipientCount,
-        recipientsByLanguage: recipientsByLanguage.map((g: any) => ({
-          language: g.systemLanguage,
-          count: g._count,
+        recipientsByLanguage: Object.entries(recipientsByCanonicalLanguage).map(([language, count]) => ({
+          language,
+          count,
         })),
         recipientsByCountry: recipientsByCountry.map((g: any) => ({
           country: g.registrationCountry,

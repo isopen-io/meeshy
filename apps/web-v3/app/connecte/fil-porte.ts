@@ -7,7 +7,7 @@ import { FIL } from '@/lib/contenu/fil';
 
 import { CHAMP_DE_LA_REACTION, CHAMP_DU_MESSAGE_CIBLE } from './fil-lignes';
 import { CHAMP_DE_LA_PIECE, CHAMP_DU_MESSAGE, type TempsReel } from './fil-vue';
-import { pieceEnPlein } from './plein-vue';
+import { pieceEnPlein, piecesDuFil } from './plein-vue';
 
 /**
  * CE QUE LES DEUX PORTES DU FIL PARTAGENT — la réponse, sa politique de cache,
@@ -217,6 +217,6 @@ export const accuseCeQuiEstServi = ({
   /** `?media=` — la pièce que l'adresse ouvre. Résolue ICI, comme la vue la résout : une seule règle. */
   readonly plein?: string | null;
 }): void => {
-  if (pieceEnPlein(fil, plein) !== null) return;
+  if (pieceEnPlein(piecesDuFil(fil), plein) !== null) return;
   void accuseLecture({ cle: fil.id, creance, messageIds: aAccuser(fil.messages) });
 };

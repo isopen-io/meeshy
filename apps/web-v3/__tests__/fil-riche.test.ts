@@ -487,3 +487,48 @@ describe('le document servi — six formes, un balisage', () => {
     expect(gabarit).toContain('<ul class="citations"');
   });
 });
+
+/**
+ * SUR LES SIX FORMES, L'AVATAR RESTE UN LIEN — Y COMPRIS SUR LES SIENNES
+ * (#5030, directive du porteur 4 : « l'AVATAR de l'auteur ... vérifie qu'il est
+ * présent PARTOUT »). Une bulle riche de SOI porte un média et une citation ;
+ * rien de tout cela ne doit lui retirer les deux `<a>` qui mènent au profil.
+ */
+describe('une bulle RICHE de soi garde ses deux liens de profil', () => {
+  it('lie l’avatar ET le nom d’un message DE MOI qui porte une pièce et une citation', () => {
+    const mien = rendu(
+      brut({
+        id: 'mine',
+        senderId: 'u1',
+        sender: { id: 'p1', displayName: 'Amina' },
+        attachments: [PIECE()],
+        replyToId: 'm0',
+        replyTo: { id: 'm0', content: 'Le tableau', sender: { id: 'p2', displayName: 'Ibrahim' } },
+      }),
+    );
+    expect(mien.deMoi).toBe(true);
+    const seule = documentDuFil(FIL_RICHE([mien])).replace(/<template[\s\S]*?<\/template>/g, '');
+    expect(seule).toContain('<a class="avatar-lien" href="/chats/c1?profil=u1"');
+    expect(seule).toContain('<a class="nom-lien" href="/chats/c1?profil=u1">');
+    expect(seule).toContain(FIL.voirVotreProfil);
+    expect(seule).toContain('<ul class="pieces">');
+    expect(seule).toContain('<ul class="citations"');
+  });
+
+  it('ne le lie PAS quand le lecteur est l’INVITÉ — son propre message n’a pas de compte', () => {
+    const sien = rendu(
+      brut({ id: 'sien', senderId: 'p9', sender: { id: 'p9', displayName: 'Tolu', type: 'anonymous' }, attachments: [PIECE()] }),
+      ['fr'],
+      'p9',
+    );
+    expect(sien.deMoi).toBe(true);
+    expect(sien.anonyme).toBe(true);
+    const seule = documentDuFil({
+      ...FIL_RICHE([sien]),
+      porte: { genre: 'invite', lien: 'mshy_lagos' as never, segment: 'lagos-q1', pseudo: 'Tolu', droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true }, jonctionFraiche: false },
+      lecteur: { id: 'p9', nom: 'Tolu', langues: ['fr'] },
+    }).replace(/<template[\s\S]*?<\/template>/g, '');
+    expect(seule).not.toContain('class="avatar-lien"');
+    expect(seule).not.toContain('class="nom-lien"');
+  });
+});

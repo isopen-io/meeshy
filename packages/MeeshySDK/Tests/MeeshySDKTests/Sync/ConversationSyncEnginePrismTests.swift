@@ -54,7 +54,8 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
             messageService: messageService,
             messageSocket: MockMessageSocket(),
             socialSocket: MockSocialSocket(),
-            api: MockAPIClient()
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
         )
         return (engine, cache)
     }

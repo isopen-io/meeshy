@@ -1,4 +1,4 @@
-import { adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
+import { adresseDuPlein, adresseDuProfil, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
 import { annonceDeLaPiece, annonceDuPrisme, type Accuse, type Citation, type PieceJointe, type Reaction } from '@/lib/api/fil';
 import { formeDePiece, sEcouteSurPlace } from '@/lib/api/formes';
 import { initiales, TEINTES, teinteDeLAvatar } from '@/lib/avatar';
@@ -128,6 +128,34 @@ const poseApres = <T extends HTMLElement>(ligne: HTMLElement, voisin: string, no
   if (avant === null || noeud === null) return null;
   avant.after(noeud);
   return noeud;
+};
+
+/**
+ * LES DEUX CLIQUABLES VERS LE PROFIL D'UN AUTEUR (§ 12.10.3, #5030) — la MÊME
+ * règle que la ligne servie (`handleDeLAuteur`, `app/connecte/fil-lignes.ts`) :
+ * une ligne système ne cite personne, un auteur anonyme n'a pas de compte —
+ * lui-même compris —, et un auteur sans identifiant n'a pas de handle. Dans ces
+ * trois cas, le `href` est RETIRÉ : un `<a>` sans `href` n'est ni focusable ni
+ * cliquable, exactement comme la ligne servie qui ne rend pas de balise du
+ * tout. Même patron que la fiche d'un vocal (`peinsUnePiece`) : le gabarit
+ * porte la fente, le module décide si elle mène quelque part.
+ *
+ * `p.adresse` est l'adresse de la PORTE (`data-adresse`), donc `?profil=` s'y
+ * pose comme le serveur le pose — par `adresseDuProfil`, jamais par une
+ * concaténation d'ici.
+ */
+const remplisLesLiensDuProfil = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
+  const handle = bulle.systeme || bulle.anonyme ? null : bulle.auteurId;
+  const avatar = ligne.querySelector<HTMLAnchorElement>('a.avatar-lien');
+  const nom = ligne.querySelector<HTMLAnchorElement>('a.nom-lien');
+  if (handle === null || p.adresse === '') {
+    [avatar, nom].forEach((lien) => lien?.removeAttribute('href'));
+    avatar?.removeAttribute('aria-label');
+    return;
+  }
+  const cible = adresseDuProfil(p.adresse, handle);
+  [avatar, nom].forEach((lien) => lien?.setAttribute('href', cible));
+  avatar?.setAttribute('aria-label', bulle.deMoi ? FIL.voirVotreProfil : FIL.voirLeProfil(bulle.auteur));
 };
 
 const remplisLAvatar = (ligne: HTMLElement, bulle: Bulle): void => {
@@ -404,6 +432,7 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre): void => {
   CLASSES_D_ENVOI.forEach((nom) => classe(ligne, nom, classeDEnvoi(bulle) === nom));
 
   remplisLAvatar(ligne, bulle);
+  remplisLesLiensDuProfil(ligne, bulle, p);
   texte(ligne, '.nom', bulle.deMoi ? FIL.vous : bulle.auteur);
   montre(ligne, '.anonyme', bulle.anonyme);
 

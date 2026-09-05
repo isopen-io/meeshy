@@ -282,10 +282,21 @@ part donc en **M posts**. C'est la règle ci-dessus qui a raison ; le code est e
 dette.
 
 **Et cette dette en a une autre sous elle** : pour qu'UN post porte M scènes, il
-faut que la scène voyage avec lui. `PublishIntent` et `CreatePostBody` ne
-portent **aucun** `storyEffects` (#4756) — le chemin document perd la scène
-entière. #4756 n'est donc pas un confort : c'est le préalable de cette règle
-pour les profils P et R.
+faut que la scène voyage avec lui.
+
+> **SOLDÉ le 2026-09-05 par #4756** (commit `4ea147fc80`). Ce paragraphe disait
+> que `PublishIntent` et `CreatePostBody` ne portent aucun `storyEffects` et que
+> le chemin document perd la scène entière. Les cinq maillons la portent
+> désormais — `ComposerDocumentDraft` → `PublishIntent` → `CreatePostPayload` →
+> `OfflineQueue.enqueuePostMedia` → `CreatePostBody`. **Deux limites subsistent
+> et il faut les lire ensemble** : le brouillon n'emporte que
+> `viewModel.currentSlide.effects`, donc **UNE seule slide** (c'est exactement la
+> dette de cardinalité de ce §, #4770) ; et les objets média du canvas ne sont
+> pas reliés aux `PostMedia` créés à l'upload, donc un fond local part sans son
+> image (#5184, deux régimes — voir § 6 bis-2).
+>
+> Reste vrai : **#4756 n'était pas un confort, c'était le préalable de cette
+> règle pour les profils P et R.** Il est levé ; la cardinalité, non.
 
 ### Les trois obligations de la projection
 
@@ -346,16 +357,37 @@ détails d'effet, start, end, transition d'entrée et de sortie ? »*
 La réponse tient en une phrase et vaut d'être écrite ici, parce que le nom du
 champ suggère le contraire de ce qui s'y trouve : **la migration a eu lieu À
 L'INTÉRIEUR du champ.** `storyEffects` est le nom de la colonne et de la clé du
-fil ; son CONTENU est un document **canvas v3**, et la passerelle refuse tout le
-reste.
+fil ; son CONTENU est un document **canvas v3** — parce que les deux écrivains
+l'ÉMETTENT ainsi, et non parce que la passerelle refuserait autre chose.
+
+> **CORRECTION du 2026-09-05.** Cette phrase disait « et la passerelle refuse
+> tout le reste », et le tableau citait la ligne du refus. La ligne existe ; elle
+> est **inatteignable en l'état**. Deux lignes plus haut, `core.ts:98` —
+> `if (process.env.CANVAS_V3_WRITE_STRICT !== '1') return false;` — et ce drapeau
+> n'apparaît dans **aucun** fichier de configuration du dépôt (`infrastructure/`,
+> `.github/`, `*.yml`, `.env*` : zéro résultat). Le seul schéma qui s'applique
+> réellement est `StoryEffectsSchema` (`types.ts:178`), un `.passthrough()` borné
+> à 256 Ko **qui accepte le v1**.
+>
+> La conclusion — *tout ce qui circule est du v3* — reste vraie **en effet**,
+> mais par la PRODUCTION (`StoryModels.swift:1360` et `StoryComposer.tsx:289`
+> émettent l'un et l'autre du v3 natif), jamais par un refus. La nuance n'est pas
+> cosmétique : elle change qui garantit l'invariant. Aujourd'hui, ce sont les
+> clients — donc personne, dès qu'un client se trompe.
+>
+> **Une citation `fichier:ligne` prouve qu'une ligne EXISTE, jamais qu'elle
+> S'EXÉCUTE.** Ici la garde qui la désarme est à deux lignes au-dessus de celle
+> qui a été citée. La même erreur de CAUSE se lit au § 6 quater de ce document et
+> au § 4 ter du modèle du lecteur, corrigés au même titre.
 
 | couche | ce qui porte la scène | mesure |
 |---|---|---|
-| le fil | clé `storyEffects`, contenu **canvas v3** | `routes/posts/core.ts:100` — `if (!isCanvasV3(storyEffects))` refuse, puis `CanvasV3Schema.safeParse` |
+| le fil | clé `storyEffects`, contenu **canvas v3 par production** | `StoryEffectsSchema` (`routes/posts/types.ts:178`) est ce qui s'applique — `.passthrough()`, 7 clés déclarées, ≤ 256 Ko. `CanvasV3Schema.safeParse` (`core.ts:110`) n'est atteint que si `CANVAS_V3_WRITE_STRICT === '1'`, armé nulle part dans le dépôt |
 | le contrat | `ObjectV3Schema` | `packages/shared/types/canvas-v3.ts` |
 | iOS, en mémoire | `StoryEffects` (forme v1) | `StoryModels.swift:962` |
-| iOS, à l'encodage | **toujours v3** | `StoryEffects.encode` → `CanvasV3(migrating: self)` (`StoryModels.swift:1290`) |
+| iOS, à l'encodage | **toujours v3** | `StoryEffects.encode` → `CanvasV3(migrating: self)` (`StoryModels.swift:1360`, corrigé — la ligne citée était `:1290`) |
 | iOS, le vocabulaire d'objet | `MeeshySceneObject`, **somme à cinq cas** — `text` · `media` · `sticker` · `place` · `audio` | `Models/MeeshySceneObject.swift:56` |
+| **validation à la LECTURE** | **aucune, sur les quatre lecteurs** | `CanvasV3Schema` n'a qu'un appel de production dans tout le dépôt, et c'est celui de l'ÉCRITURE ci-dessus. Web ne l'importe que dans ses tests ; `story-transforms.ts:42` ne teste que `v >= 3` |
 
 Le pont est **bidirectionnel et sans mémoire** : l'encodage part TOUJOURS du
 runtime courant, jamais du `canvasV3` reçu — une composition neuve et une story
@@ -516,9 +548,25 @@ PAS le `content` du post — c'est la **légende de cette slide**. Le `content` 
 un champ distinct, au niveau de la publication. En **S** et **R**, les deux se confondent :
 il n'y a qu'un texte, celui de la slide.
 
-> Le champ posé par la Phase 2 (`sceneDescriptionField`) est aujourd'hui lié au
-> `content` du document. **C'est juste en S/R et faux en P** : en P il doit être la
-> légende de la slide courante, et le `content` du post doit avoir son propre logement.
+> **SOLDÉ les 2026-09-04 et 09-05.** Ce paragraphe disait que le champ posé par
+> la Phase 2 (`sceneDescriptionField`) était lié au `content` du document —
+> « juste en S/R et faux en P » — et réclamait deux choses : un rôle explicite
+> pour le texte de slide, et un logement propre au `content` du post.
+>
+> Les deux sont livrées. `ComposerSlideTextRole` (#4890) porte la somme
+> `.content` / `.caption` et cite ce paragraphe comme le défaut qu'il ferme ;
+> `ComposerRailDoor.content` (#5137/#5138, `3c9d966e17`) donne au CORPS du post sa
+> porte propre, au niveau `.publication`, « qui n'existe QU'EN POST ».
+>
+> **Les deux textes sont désormais disjoints jusqu'au fil** : `content` porte le
+> corps (`documentText`), et ce qui est POSÉ sur la toile vit dans
+> `storyEffects.scenes[].objects[kind=text].payload.text`. Deux chemins, deux
+> clés, aucun recouvrement.
+>
+> Ce que le lot laisse ouvert, et qui n'était pas dans ce paragraphe : la légende
+> est par **MÉDIA** (`PostMedia.caption`), pas par slide. L'égalité actuelle est
+> « une coïncidence de la forme, pas une identité » — c'est `ComposerSlideTextRole`
+> qui l'écrit, et #5142 qui la porte (deux stores écrivent `PostMedia.caption`).
 
 ## 4. Poser un média : une seule règle
 
@@ -624,7 +672,8 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 | pertes silencieuses corrigées en deux jours | **8** | commits |
 
 † **Ces deux-là étaient chiffrés 65 / 58, et leur somme faisait l'ancien 123.**
-Les recopier tels quels sous un recensement de 120 aurait produit une
+Les recopier tels quels sous le recensement recompté (121 depuis le 2026-09-04)
+aurait produit une
 arithmétique fausse — et une somme qui ne tombe pas juste est le premier endroit
 où un lecteur cesse de croire un tableau. Ils sont donc rendus à ce qu'ils
 mesurent VRAIMENT : une proportion, qui porte l'argument entière.
@@ -711,7 +760,7 @@ carte de chaînes. Ils sont réécrits APRÈS le `rest`, donc ils gagnent.
 Trois façons de fermer le trou, non exclusives, par coût croissant :
 1. **répandre** au lieu de recomposer — **fait** (#4905) : quatre inventaires
    supprimés ;
-2. **compléter le blob v1 partagé** pour que le golden exerce les 123 champs —
+2. **compléter le blob v1 partagé** pour que le golden exerce les 121 champs —
    utile après (1), pour les clés dérivées que le `rest` ne couvre pas ;
 3. **typer la charge par kind au contrat** — le seul remède qui rendrait la
    structure connue *par déclaration* plutôt que par convention. C'est une
@@ -723,6 +772,112 @@ Tant que (3) n'est pas tranchée, **la charge reste une convention, jamais un
 contrat** — et tout lot qui y ajoute une clé doit la porter à la main sur chaque
 couche qui recompose.
 
+## 6 bis-2. Le CHEMIN d'une publication — les quatre voies et les six maillons (mesure 2026-09-05)
+
+Le § 6 bis mesure **où** la structure d'une publication est connue. Celui-ci
+répond à la question qu'il laissait ouverte, et qu'aucun document ne traitait :
+**par où passe-t-elle, et qui la recopie en chemin ?**
+
+### Il y a QUATRE voies de publication, pas trois
+
+| voie | ce qui la déclenche | corps HTTP | champs | porte `storyEffects` |
+|---|---|---|---|---|
+| **SCÈNE** | l'atelier de story (`StoryViewModel+PublicationUpload`) | `CreateStoryRequest` | 12 | **oui** |
+| **DOCUMENT en ligne** | `PostService.create` | `CreatePostRequest` | 18 | **oui** |
+| **DOCUMENT durable** — celle que prend TOUT post du meuble, en ligne comme hors ligne | `FeedViewModel.publish` → `OutboxDispatcher` | **`CreatePostBody`** | 15 | **oui depuis #4756** (`4ea147fc80`) |
+| **ANCRAGE / repost cité** | `StoryRepublishComposer.ancrer` | `RepostIntent` → `POST /posts/:id/repost` | — | **NON** (#5201) |
+
+> **Le troisième corps n'était compté nulle part** — ni ici, ni dans
+> `docs/product/api-simplification/social.md`, qui parle de « deux types de corps
+> distincts ». Et le quatrième chemin ne nomme `storyEffects` en aucun endroit,
+> ce qui est exactement pourquoi chercher « qui porte la scène ? » le rate :
+> **une énumération de sites porte deux affirmations — « ces sites appliquent la
+> règle » (vérifiable) et « ce sont les sites où elle s'applique » (presque
+> jamais vérifiée).**
+
+Côté serveur, **il n'y a qu'UN schéma** : `CreatePostSchema`
+(`routes/posts/types.ts:233`, 19 champs). `CreateStorySchema` n'existe pas — une
+story est une BRANCHE (`type: 'STORY'` + le blob). Les « deux corps » du § 6 ter
+sont deux types SWIFT reçus par un seul contrat.
+
+Repo entier, en production : **12 sites** construisent un corps de `POST /posts`,
+dont **cinq à la main sans aucun type** (web ×3, web-v3 ×1, outbox iOS ×1).
+
+### La voie durable traverse SIX inventaires recopiés à la main
+
+| # | maillon | champs | ce qui rougirait si un champ manquait |
+|---|---|---|---|
+| 1 | `ComposerDocumentDraft` (`ComposerDocumentRules.swift`) | 15 | **rien** |
+| 2 | `PublishIntent` (`Services/PublishIntent.swift`) | 13 | une garde de SOURCE interdit les défauts dans la liste de paramètres — elle **ne vérifie la présence d'aucun champ** |
+| 3 | `OfflineQueue.enqueuePostMedia` | 13 paramètres → 14 des 18 champs du payload | **rien** |
+| 4 | `CreatePostPayload` (format ON-DISK) | 18, dont **10 avec défaut** | 6 témoins champ par champ, aucun recensement |
+| 5 | `CreatePostBody` (le fil) | 15 | 11 témoins champ par champ, aucun recensement |
+| 6 | `CreatePostSchema` (passerelle) | 19 | — |
+
+**Sept champs ont déjà été perdus à ces maillons.** Cinq sont réparés et portent
+chacun le commentaire disant pourquoi ils manquaient : `location`,
+`discoverabilityPrecision`, `repostOfId`, `mobileTranscription`, `storyEffects`.
+**Deux ne le sont pas encore** : `mediaAlt` et `mediaCaption` — présents dans
+`CreatePostRequest`, absents des maillons 4 et 5, donc **un post publié par la
+file durable perd le texte alternatif d'accessibilité et la légende de chacun de
+ses médias** (#5196, avec `allowSoundExtraction`).
+
+`CreatePostBody` porte son propre diagnostic, et il est juste :
+
+> *« Ce type est un INVENTAIRE recopié à la main : rien n'y signale un champ
+> absent — ni le compilateur, ni le schéma, ni le serveur, qui publie sans lui. »*
+
+**Le remède a la même forme que celui du § 6 bis, un étage plus haut.** Là, la
+réponse à « la charge d'un objet perd des clés » n'a pas été un douzième témoin
+mais un `...rest` — *un inventaire humain se maintient à la main ; un `rest` se
+maintient tout seul*. Ici, la chaîne ne peut pas répandre (les maillons ne
+partagent pas de forme), donc le remède est son jumeau : **un RECENSEMENT par
+réflexion**, sur le modèle de `SceneObjectFieldCensusTests` (`Mirror`, qui rougit
+quand un champ s'ajoute). Son message ne doit pas dire « corrige le nombre »,
+mais : *ce champ neuf traverse-t-il les six maillons ?*
+
+### Ce que chaque profil peut réellement publier
+
+Mesuré le 2026-09-05, `storyEffects` comme sonde — création · **projection de
+lecture** · rendu par lecteur.
+
+| profil | accepté à la création | persisté | rendu par la projection | rendu chez le lecteur |
+|---|---|---|---|---|
+| **POST** | oui — `CreatePostSchema` n'a **aucune garde de type** | oui | oui (`postInclude` est un `include`, pas un `select`) | **carte de fil iOS seulement** — le DÉTAIL ne sait pas rendre une scène (#5192) ; web, web-v3, Android : non |
+| **REEL** | oui, même branche | oui | oui | **carte de fil iOS seulement** — `ReelsPlayerView` ne lit `storyEffects` que pour la piste audio (#5192) |
+| **STORY** | oui, quatre écrivains | oui | oui en corps complet · **NON sous `?projection=tray`** (`trayStorySelect` l'omet par conception) | iOS ✅ · web ✅ · Android ✅ · **web-v3 non** (#5195) |
+| **STATUS** | oui **au schéma**, aucun producteur mesuré | oui | oui | aucun |
+
+Trois choses se lisent dans ce tableau, et ce sont les trois questions à poser à
+tout champ de publication :
+
+1. **Un champ accepté et persisté mais absent de la projection de LECTURE est
+   perdu aussi sûrement que s'il n'était jamais parti.** `?projection=tray` est
+   exactement ce cas, et c'est le chemin que web-v3 emprunte pour lister ses
+   stories.
+2. **Un champ rendu sur UNE surface et pas sur sa destination naturelle inverse
+   le sens du geste** : la carte d'un post composé montre la scène, le tap
+   l'efface (#5192).
+3. **La validation du contrat n'est appliquée nulle part à la LECTURE**, et à
+   l'écriture seulement derrière `CANVAS_V3_WRITE_STRICT`, armé dans aucun
+   fichier de configuration du dépôt (voir l'encadré du § 1 bis-2). Ce qui
+   garantit aujourd'hui que le fil porte du canvas v3, ce sont **les écrivains**
+   — donc personne, dès qu'un écrivain se trompe.
+
+### Les limites que la voie durable porte encore
+
+- **UNE seule slide.** Le brouillon emporte `viewModel.currentSlide.effects` — un
+  document à M scènes n'en publie qu'une (#4770, la dette de cardinalité du § 1 bis).
+- **Le canvas part sans ses images locales.** `sanitizedForServerPublish()` annule
+  les `mediaURL` en `file://` et le journalise ; les objets média ne sont pas
+  reliés aux `PostMedia` créés à l'upload. **Deux régimes, et le second est le
+  plus vicieux** (#5184) : un objet fraîchement posé naît avec `postMediaId: ""`,
+  que `str()` écarte côté passerelle — le cas nominal passe donc, dégradé. Mais
+  un canvas portant un `postMediaId` NON VIDE absent de `body.mediaIds` — reprise
+  de brouillon après upload, édition, repost, média semé depuis une conversation —
+  sera **REFUSÉ** (400 `MEDIA_NOT_CLAIMED`) dès que `CANVAS_V3_WRITE_STRICT`
+  s'armera. Ce sont exactement les chemins qu'on teste le moins.
+
 ## 6 ter. La frontière SDK ↔ app : un vocabulaire de VERBES (mesure 2026-09-03)
 
 Le § 6 bis mesure où la structure d'une publication est connue. Celui-ci mesure
@@ -731,29 +886,115 @@ nulle part alors que le compilateur la fait respecter.
 
 ### La règle, telle qu'elle est réellement appliquée
 
-| | ce qui est exposé | portée |
-|---|---|---|
-| l'ÉTAT (`StoryComposerViewModel.currentEffects`) | la LECTURE seule | `public internal(set)` |
-| le protocole `StoryComposerProviding` | rien, hors du SDK | `internal` |
-| les OPÉRATIONS | ~42 verbes | `public func` |
+> **CORRECTION du 2026-09-05.** Ce paragraphe affirmait « l'app ne peut pas
+> écrire dans les effets » et concluait : « `public internal(set)` la fait
+> respecter à la compilation — la meilleure sorte de règle, celle qu'on ne peut
+> pas enfreindre par distraction ». **C'est faux, et la règle est enfreinte par
+> distraction dans le fichier voisin, par le mécanisme le plus emprunté du
+> composer.** Ce qui suit est l'état mesuré ; l'ancienne rédaction décrivait une
+> INTENTION.
 
-**L'app ne peut pas écrire dans les effets. Elle appelle des verbes** —
-`addText`, `addSticker`, `addLocation`, `deleteElement`, `duplicateElement`,
-`bringForward`, `sendBackward`, `toggleBackground`, `updateTextContent`,
-`moveElement`… — chacun tenant les invariants que la mutation directe
-contournerait (un seul fond par slide, le nettoyage des champs legacy, la
-cohérence du `zIndex`).
+| | ce qui est exposé | portée | mesure |
+|---|---|---|---|
+| `StoryComposerViewModel.currentEffects` | la LECTURE seule | `public internal(set)` | `+Elements.swift:54` ✅ |
+| **`StoryComposerViewModel.currentSlide`** | **la LECTURE ET L'ÉCRITURE** | `public var` avec `set` **public** | **`+Slides.swift:13,25`** ❌ |
+| `StoryComposerViewModel.openingEffect` | lecture et écriture | `@Published public var` | `StoryComposerViewModel.swift:309` ❌ |
+| `StoryComposerViewModel.declaredContentLanguage` | lecture et écriture | `public var` | `StoryComposerViewModel.swift:588` ❌ |
+| le protocole `StoryComposerProviding` | rien, hors du SDK | `internal` | ✅ |
+| les OPÉRATIONS | **47** verbes (voir le recompte ci-dessous) | `public func` | — |
 
-Ce n'est pas une convention documentée puis oubliée : `public internal(set)` la
-fait respecter à la compilation. C'est la meilleure sorte de règle — celle qu'on
-ne peut pas enfreindre par distraction.
+**`currentEffects` est bien en lecture seule, et cela ne protège rien** :
+`StorySlide.effects` est un `public var` sur une `struct` publique
+(`StoryModels.swift:730`), et `currentSlide` a un setter public. Depuis l'app,
+sans un seul verbe :
+
+```swift
+var s = vm.currentSlide      // get public
+s.effects = …                // var public sur une struct de valeur
+vm.currentSlide = s          // set public → écrit currentEffects EN BLOC
+```
+
+Ce n'est pas une faille théorique, **c'est le chemin d'écriture NOMINAL du
+canvas** : `EmbeddedSceneCanvas` expose `@Binding public var slide`
+(`EmbeddedSceneCanvas.swift:33`) et remonte par lui toute mutation directe de
+l'auteur — déplacer un objet, éditer un texte en place. Le `Binding` est fabriqué
+**dans l'app**, à trois sites : `MeeshyComposerHost+Surfaces.swift:420`,
+`ComposerObjectEditorView.swift:333`, `MeeshyComposerHost+DocumentSurface.swift:51`.
+
+> **`public internal(set)` sur une propriété ne dit rien de la propriété d'à
+> côté.** L'annotation a déplacé le trou d'un cran, sur un membre qui n'a pas la
+> même portée — et c'est ce membre-là que le composer emprunte. La leçon
+> générale : *une garde de portée protège le NOM qu'elle décore, jamais le
+> chemin*. Pour savoir si un état est en lecture seule, il faut énumérer TOUS
+> les chemins qui y mènent, pas lire l'annotation du plus visible.
+
+**Ce qui reste vrai, et qui compte** : les verbes existent, ils tiennent des
+invariants réels (un seul fond par slide, le nettoyage des champs legacy, la
+cohérence du `zIndex`, le retrait de la `ComposerReference` d'un badge supprimé),
+et l'app les appelle massivement. La frontière est une DISCIPLINE bien suivie,
+pas une contrainte de compilation. La distinction n'est pas de l'ergotage : une
+discipline se relâche en silence, et l'exemple est déjà dans le dépôt — trois
+opérations ont un jumeau côté canvas qui applique une règle DIFFÉRENTE (§ 6 ter
+bis).
+
+**Recompte des verbes (2026-09-05).** Le « ~42 » venait du glob
+`StoryComposerViewModel+*.swift` — les seuls fichiers d'EXTENSION. Le fichier de
+CLASSE en porte cinq de plus (`adoptDraft`, `detachFromAdoptedDraft`,
+`applyBackground`, `clearBackground`, `applyContentText`). La commande juste, et
+son résultat :
+
+```bash
+grep -h "public func" packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel*.swift | wc -l
+# → 47   (42 avec le glob `+`, qui omet le fichier de classe)
+```
+
+> Le chiffre n'était pas faux par dérive : il était faux par la FORME du glob.
+> C'est exactement le piège que le § 6 bis énonce à propos des recensements —
+> « un nombre que personne ne sait recompter est une décoration » — et il s'y est
+> pris lui-même, deux sections plus loin, faute d'avoir publié sa commande.
 
 > Cette frontière est la forme concrète, pour le composer, de la règle de partage
 > du § « SDK Purity » : des briques aux paramètres opaques dans le SDK, la
 > décision produit chez l'app. Un verbe dit *comment* ; l'app décide *quand* et
 > *où*.
+>
+> **Nuance mesurée le 2026-09-05, et elle est importante :** le VERBE respecte
+> cette règle, son HÔTE non. `StoryComposerViewModel` est un ViewModel de
+> **4 483 lignes sur 18 fichiers, déposé côté SDK** — ce que le tableau de
+> placement de `packages/MeeshySDK/CLAUDE.md` range explicitement du côté APP. Il
+> lit quatre singletons nommés Meeshy (`CacheCoordinator.shared` en deux sites,
+> `WaveformCache.shared`, `StoryMediaLoader.shared`) et encode au moins quatre
+> décisions produit (`canAddMedia { < 10 }`, `canAddSlide { < 10 }`, le bornage
+> [0,1] du placement, la doctrine de ratio). C'est le plus gros manquement du
+> dépôt à la règle qu'il cite. `moveElement` porte un doc-comment invoquant cette
+> même règle : le verbe est juste, le fichier où il vit ne l'est pas.
 
 ### Les DEUX corps de `POST /posts` divergent par CONCEPTION (mesure 2026-09-03)
+
+> **CORRECTION du 2026-09-05 — il n'y a pas deux CORPS, il y a deux types SWIFT
+> et UN schéma.** `services/gateway/src/routes/posts/types.ts` ne déclare ni
+> `CreateStorySchema` ni `StorySchema` : une story est une BRANCHE de
+> `CreatePostSchema` (`type: 'STORY'` + le blob `storyEffects`). Le titre de
+> cette section suggère deux contrats serveur qui n'existent pas.
+>
+> Corollaire, et il pèse : **la story est le seul profil dont le serveur ne
+> valide pas la forme.** `StoryEffectsSchema` (`types.ts:186`) est
+> `.passthrough()` et ne déclare que sept clés (`background`, `thumbHash`,
+> `mediaObjects`, `textObjects`, `stickerObjects`, `audioPlayerObjects`,
+> `slideDuration`) ; les `CodingKeys` Swift en portent une trentaine de plus, qui
+> traversent sans qu'aucun schéma les voie. Le seul garde-fou réel est la taille
+> sérialisée, ≤ 256 Ko.
+>
+> Et **il y a un TROISIÈME type de corps côté iOS**, que ni ce document ni
+> `social.md` ne comptent : `CreatePostBody` (`OutboxDispatcher.swift:965`, 15
+> champs, `encode(to:)` écrit à la main) — le corps de la voie DURABLE, celle que
+> prend tout post du meuble. Repo entier, en production : **12 sites** construisent
+> ce corps, dont cinq à la main sans aucun type (web ×3, web-v3 ×1, outbox iOS ×1).
+>
+> Enfin, la table de justification ci-dessous a **cinq lignes pour six champs** :
+> `discoverabilityPrecision` n'y est pas expliqué, et il n'a aucun logement dans
+> `storyEffects` — ce n'est pas un objet de scène, c'est un consentement de
+> publication, comme le § 1 le dit lui-même. Voir #5193.
 
 `docs/product/api-simplification/social.md` compte **cinq sites** qui construisent
 le corps de `POST /posts`, « pour deux types de corps distincts
@@ -847,9 +1088,11 @@ voit sur un client sur trois.
 **Le `thumbHash` (#5047).** Le contrat le décrit comme « le placeholder que quatre
 surfaces affichent avant l'arrivée du média ». iOS et Android le peignent ; le web
 ne le connaît pas — et n'a **aucun** état de chargement dans `CanvasV3Scene`, dont
-le rendu se garde par `if (media.url && …)`. Média absent, rien n'est peint. Comme
-la passerelle refuse tout ce qui n'est pas v3, c'est le chemin de TOUTES les
-stories du web.
+le rendu se garde par `if (media.url && …)`. Média absent, rien n'est peint. Et
+c'est le chemin de TOUTES les stories du web, parce que **les deux écrivains
+émettent du v3 natif** — non parce que la passerelle refuserait le reste
+(correction de cause du 2026-09-05, voir l'encadré du § 1 bis-2 : le refus est
+derrière `CANVAS_V3_WRITE_STRICT`, armé nulle part).
 
 ### Ce que ces deux cas ont en commun
 
