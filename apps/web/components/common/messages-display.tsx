@@ -23,18 +23,9 @@ import {
 import { DEFAULT_READING_MODE, isFlatReadingMode, type ReadingMode } from '@/lib/conversations/reading-mode';
 import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
 import { buildTranslationRecord } from '@/utils/translation-record';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
-
-/**
- * Égalité de langue conforme au Prisme : `currentDisplayLanguage`, `originalLanguage`
- * et les clés de traduction sont verbatim et peuvent être région-tagués (`en-US`),
- * 3-lettres (`fra`) ou legacy (`iw`). Miroir de `useMessageDisplay.sameLanguage` —
- * SSOT `normalizeLanguageForDedup` (packages/shared/utils/language-normalize.ts).
- */
-const sameLanguage = (a?: string, b?: string): boolean =>
-  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 
 type PrismMessageShape = {
   readonly originalLanguage?: string;
