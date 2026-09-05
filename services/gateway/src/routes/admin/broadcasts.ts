@@ -3,6 +3,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
+import { broadcastTargetLanguages } from '../../jobs/broadcast-recipients';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
@@ -335,7 +336,9 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       // ADDITIONNER les comptes qui convergent (même patron que #5155,
       // `usersLanguageMap`) : sans ça, `targetLanguages` fait traduire le
       // contenu de la diffusion vers CHAQUE variante au lieu d'une fois par
-      // langue canonique — traductions dupliquées, appels ML gaspillés.
+      // langue canonique — traductions dupliquées, appels ML gaspillés. La
+      // carte est CONSERVÉE : le rapport rendu plus bas en a besoin avec ses
+      // comptes (`recipientsByLanguage`, l. ~385).
       const recipientsByCanonicalLanguage = recipientsByLanguage.reduce((acc: Record<string, number>, g: any) => {
         if (g.systemLanguage) {
           const canonical = normalizeLanguageForDedup(g.systemLanguage);
@@ -344,7 +347,17 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         return acc;
       }, {} as Record<string, number>);
 
-      const targetLanguages = Object.keys(recipientsByCanonicalLanguage);
+      // Les CIBLES du translator passent en plus par `broadcastTargetLanguages`
+      // (#5247), qui fait ce que la carte ne fait pas : EXCLURE la langue
+      // SOURCE. Traduire une diffusion vers sa propre langue fait produire à
+      // NLLB une paraphrase du texte de l'admin et la stocke comme une
+      // traduction — un `fr → fr` qui altère le contenu servi. Les clés étant
+      // déjà canoniques, l'appel ne fait plus que l'exclusion et préserve
+      // l'ordre.
+      const targetLanguages = broadcastTargetLanguages(
+        Object.keys(recipientsByCanonicalLanguage),
+        broadcast.sourceLanguage,
+      );
 
       // Translate content
       const translationService = new BroadcastTranslationService();
