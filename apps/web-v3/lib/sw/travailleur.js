@@ -103,11 +103,14 @@ self.addEventListener('install', () => {
 // Le préfixe est celui du canal 3 (`NAMESPACE`) : jamais celui du legacy, ni
 // un cache d'un tiers.
 self.addEventListener('message', (event) => {
+  console.log('[sw] message received', JSON.stringify(event.data), 'waitUntil?', typeof event.waitUntil);
   const donnees = event.data;
   if (typeof donnees !== 'object' || donnees === null || donnees.type !== 'meeshy-v3:deconnexion') return;
   const purge = (async () => {
     const noms = await caches.keys();
+    console.log('[sw] purge start', JSON.stringify(noms));
     await Promise.all(noms.filter((nom) => nom.startsWith(NAMESPACE)).map((nom) => caches.delete(nom)));
+    console.log('[sw] purge done');
   })();
   if (event.waitUntil) event.waitUntil(purge);
 });
