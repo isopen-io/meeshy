@@ -86,15 +86,27 @@ describe('l’espace membre n’ouvre que sur des routes que la v3 SERT', () => 
   );
 
   /**
+   * `/communities` (matrice ordre 45, L7) a fermé la dernière destination
+   * qui n'était pas encore servie — cette rangée entre dans le MÊME commit
+   * que `app/communities/route.ts` (§ 4 étape 6 de la spécification).
+   */
+  it('sert désormais /communities — la dernière frontière refermée', () => {
+    expect(ROUTES_SERVIES).toContain('/communities');
+    expect(DESTINATIONS).toContain('/communities');
+  });
+
+  /**
    * LA SENTINELLE — une route que la v3 ne sert PAS, pour prouver que
    * `ROUTES_SERVIES` distingue vraiment. Sans elle, une liste qui rendrait
    * TOUT passerait les témoins ci-dessus au vert sans rien vérifier.
    *
-   * C'ÉTAIT `/communities`, et l'écran a été servi (`communautes-porte.ts`) :
-   * la sentinelle est alors devenue un rouge permanent qui n'accusait rien.
-   * Une sentinelle se choisit donc parmi les routes que le LEGACY sert et que
-   * la v3 n'a pas reprises — `/groups` en est une, et le jour où la v3 la
-   * servira, ce témoin le dira au lieu de mentir.
+   * C'ÉTAIT `/communities`, et l'écran est désormais SERVI (le témoin
+   * ci-dessus le dit) : la sentinelle serait devenue un rouge permanent.
+   * Elle ne vise pas `/moods` non plus — la v3 sert `/moods/[id]`, donc le
+   * témoin ne passerait que par la chance d'une comparaison EXACTE, et
+   * tomberait le jour d'une page d'index. `/groups` est servi par le LEGACY
+   * et jamais repris par la v3 : le jour où elle le servira, ce témoin le
+   * DIRA au lieu de mentir.
    */
   it('rougirait sur une destination hors zone', () => {
     expect(ROUTES_SERVIES).not.toContain('/groups');

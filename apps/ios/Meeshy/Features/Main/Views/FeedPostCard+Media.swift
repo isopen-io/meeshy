@@ -123,26 +123,13 @@ extension FeedPostCard {
     /// le texte du porteur à défaut de légende propre — et c'est ce repli qui
     /// est ici indésirable, le texte du post étant DÉJÀ rendu au-dessus du
     /// média. On ne lit donc que la légende PROPRE.
-    @ViewBuilder
+    /// **La légende d'un média SEUL** — la MÊME couche que le carrousel et la
+    /// carte de scène (`FeedCaptionOverlay`), donc la même troncature : vingt
+    /// mots et une ellipse. Elle portait son propre chrome jusqu'au
+    /// 2026-09-05, avec un `lineLimit(3)` qui rendait une longueur différente
+    /// selon la largeur et le corps de texte.
     func singleMediaCaption(_ media: FeedMedia) -> some View {
-        if let caption = media.caption?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !caption.isEmpty {
-            Text(caption)
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(.white)
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.bottom, 12)
-                .padding(.top, 28)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    LinearGradient(colors: [.clear, .black.opacity(0.72)],
-                                   startPoint: .top, endPoint: .bottom)
-                )
-                .allowsHitTesting(false)
-        }
+        FeedCaptionOverlay(caption: media.caption)
     }
 
     @ViewBuilder

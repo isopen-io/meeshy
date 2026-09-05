@@ -237,16 +237,36 @@ describe('tout hôte du formulaire de sortie sert le module qui l’arme', () =>
       /feuilleDeLEspace\(\{/.test(readFileSync(chemin, 'utf8')),
   );
 
-  it('les hôtes se trouvent — au moins le tableau de bord et la liste', () => {
-    expect(hotes.length).toBeGreaterThanOrEqual(2);
+  it('les hôtes se trouvent — au moins le tableau de bord, la liste et les communautés', () => {
+    expect(hotes.length).toBeGreaterThanOrEqual(3);
     expect(hotes.some((c) => c.endsWith(join('connecte', 'vue.ts')))).toBe(true);
     expect(hotes.some((c) => c.endsWith(join('connecte', 'liste-vue.ts')))).toBe(true);
+    expect(hotes.some((c) => c.endsWith(join('connecte', 'communautes-vue.ts')))).toBe(true);
   });
 
+  /**
+   * DEUX FAÇONS DE SERVIR LE BLOC, ET LES DEUX COMPTENT (#5109, `/communities`).
+   *
+   * `documentDuSite` (le tableau de bord, `/chats`) NE compose PAS le bloc lui-
+   * même : son appelant le passe EXPLICITEMENT dans `script:`, d'où l'appel
+   * LITTÉRAL `blocDuNavigateur()` que ce témoin cherchait jusqu'ici.
+   *
+   * `documentPleinEcran` (`/calls`, `/links`, `/communities`) le sert D'OFFICE
+   * — la propre doc de `blocDuNavigateur()` (`app/connecte/chargeur.ts`) le dit :
+   * « documents PLEIN ÉCRAN (`documentPleinEcran`, qui le sert D'OFFICE) ».
+   * `/calls` et `/links` ne rendaient jusqu'ici JAMAIS `feuilleDeLEspace` — le
+   * premier hôte à combiner les deux (`/communities`, Q7 de sa spécification)
+   * n'a donc PAS besoin d'un second appel : en ajouter un DOUBLERAIT le bloc
+   * dans le document (l'un explicite, l'un d'office). Un hôte qui composerait
+   * son document via `documentDuSite` SANS l'appel littéral reste attrapé.
+   */
   it.each(hotes.map((chemin) => [relative(join(__dirname, '..'), chemin), chemin]))(
-    '%s sert blocDuNavigateur(), donc le module qui arme la sortie',
+    '%s sert blocDuNavigateur() — littéralement, ou via documentPleinEcran qui le sert d’office',
     (_nom, chemin) => {
-      expect(readFileSync(chemin as string, 'utf8')).toContain('blocDuNavigateur()');
+      const source = readFileSync(chemin as string, 'utf8');
+      const sertLitteralement = source.includes('blocDuNavigateur()');
+      const sertDOffice = /\bdocumentPleinEcran\(/.test(source);
+      expect(sertLitteralement || sertDOffice).toBe(true);
     },
   );
 
