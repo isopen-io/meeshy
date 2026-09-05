@@ -10,7 +10,7 @@ import { FEUILLE_DE_LA_STORY } from '@/app/(public)/partage-feuille';
 import { FEUILLE_DU_CHOIX_DE_LANGUE } from '@/app/choix-de-langue';
 import { tableDeJetons } from '@/app/actifs-inlines';
 import { FEUILLE_CONNECTEE, FEUILLE_DU_TABLEAU } from '@/app/connecte/feuille';
-import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
+import { FEUILLE_DU_FIL, FEUILLE_DU_LIEN_DEPUIS_LE_FIL } from '@/app/connecte/fil-feuille';
 import { FEUILLE_DU_PLEIN } from '@/app/connecte/plein-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
@@ -19,7 +19,7 @@ import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from '@/app/connecte/liste-feuille';
 import { FEUILLE_DE_LA_BANNIERE } from '@/app/connecte/banniere-feuille';
-import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
+import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DES_APPELS } from '@/app/connecte/appels-feuille';
 import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
@@ -84,9 +84,9 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/reglages-feuille.ts', source: FEUILLE_DES_REGLAGES },
   { nom: 'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN', source: FEUILLE_DU_NOUVEAU_LIEN },
   { nom: 'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV', source: FEUILLE_DE_LA_NOUVELLE_CONV },
-  { nom: 'app/connecte/espace-feuille.ts', source: FEUILLE_DES_FLOTTANTES },
   { nom: 'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE', source: FEUILLE_DE_L_ESPACE },
   { nom: 'app/connecte/banniere-feuille.ts', source: FEUILLE_DE_LA_BANNIERE },
+  { nom: 'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL', source: FEUILLE_DU_LIEN_DEPUIS_LE_FIL },
   { nom: 'app/connecte/prefs-feuille.ts', source: FEUILLE_DES_PREFS },
   { nom: 'app/connecte/appels-feuille.ts', source: FEUILLE_DES_APPELS },
 ];
@@ -166,9 +166,9 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/reglages-feuille.ts',
       'app/connecte/liens-feuille.ts › FEUILLE_DU_NOUVEAU_LIEN',
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV',
-      'app/connecte/espace-feuille.ts',
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE',
       'app/connecte/banniere-feuille.ts',
+      'app/connecte/fil-feuille.ts › FEUILLE_DU_LIEN_DEPUIS_LE_FIL',
       'app/connecte/prefs-feuille.ts',
       'app/connecte/appels-feuille.ts',
     ]);
@@ -298,22 +298,21 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
       nom: 'liste avec la feuille de conversation',
       source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DE_LA_NOUVELLE_CONV,
     },
-    // Les DEUX écrans qui portent les ronds flottants (#5093) les servent AU
-    // REPOS ; leur état `?espace` ajoute seul la feuille. Quatre compositions,
-    // parce que ce sont quatre documents réellement servis — et parce que
-    // n'opposer que l'état ouvert laisserait le cas nominal hors du plafond.
-    {
-      nom: 'tableau de bord avec les ronds',
-      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DES_FLOTTANTES,
-    },
+    // NI LE TABLEAU DE BORD NI `/chats` NE SERVENT PLUS LES RONDS FLOTTANTS
+    // (revue de #5164, charte règle 8 b/c — le rail `position:fixed`
+    // recouvrait le pied de l'enveloppe sur `/chats`, puis la carte mise en
+    // avant du tableau dès que la liste sert plus de deux lignes, à N'IMPORTE
+    // QUEL défilement). Les deux raccourcis d'en-tête (`RACCOURCIS_D_ENTETE`)
+    // sont désormais dans `FEUILLE_DU_TABLEAU` et `FEUILLE_DE_LA_LISTE`
+    // elles-mêmes (toujours servies) : leur état `?espace` n'ajoute QUE
+    // `FEUILLE_DE_L_ESPACE`, sur les deux écrans.
     {
       nom: 'tableau de bord avec l’espace membre',
-      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DES_FLOTTANTES + FEUILLE_DE_L_ESPACE,
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_TABLEAU + FEUILLE_DE_L_ESPACE,
     },
-    { nom: 'liste avec les ronds', source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DES_FLOTTANTES },
     {
       nom: 'liste avec l’espace membre',
-      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DES_FLOTTANTES + FEUILLE_DE_L_ESPACE,
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DE_LA_LISTE + FEUILLE_DE_L_ESPACE,
     },
   ];
   const PLAFOND_PAR_ROUTE_KO: number = (JSON.parse(readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8')) as { reseau: { transverses: { css_ko: { valeur: number } } } }).reseau.transverses.css_ko.valeur;
@@ -600,6 +599,7 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // prennent JAMAIS l'accent.
     '.fil-tete .retour', // le cliquable — chevron de retour
     '.fil-tete .medias', // le cliquable — la galerie des médias, à un tap du fil
+    '.fil-tete .partager', // le cliquable — créer un lien de partage pour CETTE conversation (#5034) ; même rond, même emploi 1 que ses deux voisins
     '.puce', // le cliquable — puce du Prisme
     '.ligne .accuse', // l'accusé de mes messages, comme le compte de non-lus
     '.langue', // la pastille de langue
@@ -621,6 +621,16 @@ describe('règle 13 — un accent, cinq emplois', () => {
     '.frappe', // « écrit… », charte règle 27
     '.composeur .envoyer', // le cliquable — action primaire du fil
     '.composeur .joindre', // le cliquable — joindre une pièce
+    // Le micro et la position (#5061) : le MÊME emploi que le trombone
+    // juste au-dessus — un cliquable de plus, à côté de lui.
+    '.composeur .micro',
+    '.composeur .position',
+    // « Envoyer le vocal » — la MÊME action primaire que `.composeur .envoyer`,
+    // dans la barre d'enregistrement qui le remplace pendant la capture.
+    '.composeur .envoyer-vocal',
+    // Un lieu partagé (#5061) — le cliquable, comme `.pieces .media` juste
+    // plus bas : l'affiche entière (glyphe, nom, adresse) prend l'accent.
+    '.lieu-lien',
     '.ligne .reagir:hover', // le cliquable — « Réagir », survolé
     '.reaction[aria-pressed=true]', // la pastille qui est la MIENNE, comme l'accusé
     // La modale de `/chat/:lien` (règle 25) : l'accordéon des droits est un
@@ -679,19 +689,23 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // L'anneau NON VU d'une vignette de story — même emploi que `.compte`/
     // `.notif .pastille` : « ceci vous attend », pas encore lu.
     '.rail .cercle[data-vu="0"]',
-    // L'espace membre (`sheet:member`, #5093) : QUATRE cliquables, emploi 1, et
+    // L'espace membre (`sheet:member`, #5093) : TROIS cliquables, emploi 1, et
     // rien d'autre. Le champ « Rechercher partout » du tableau de bord porte
     // son glyphe à l'accent (le texte de repli, lui, reste sur l'encre
-    // sourde) ; le rond de GAUCHE est une action de contour — même emploi que
-    // `.action.contour`, l'accent en trait et en glyphe — et celui de DROITE
-    // l'action primaire de l'écran, l'accent en FOND, comme `.action.primaire` ;
-    // la tuile d'une rangée est le glyphe d'une destination, comme
+    // sourde) ; la tuile d'une rangée est le glyphe d'une destination, comme
     // `.marque .tuile` est celui de la marque. Le titre de la feuille, le nom
     // du lecteur, le libellé d'une rangée et son chevron restent sur l'encre.
     '.chercher svg',
-    '.flottante.gauche',
-    '.flottante.droite',
     'dialog.espace .rangee .tuile',
+    // LES DEUX RACCOURCIS D'EN-TÊTE (`RACCOURCIS_D_ENTETE`, correction de
+    // revue de #5164, charte règle 8 b/c) — REMPLACENT, sur le tableau de bord
+    // ET sur `/chats`, les deux ronds flottants `.flottante.gauche` /
+    // `.flottante.droite` d'origine (rail `position:fixed`, retiré des deux
+    // écrans : la mesure l'a trouvé recouvrant un contrôle réel à chaque fois
+    // que le contenu dépassait une fenêtre). `.raccourci` est TERTIAIRE
+    // (§ 12.5 règle 7, jamais primaire) : un seul emploi, l'accent en trait et
+    // en glyphe, jamais en fond.
+    '.raccourci',
     // Les préférences de notification (`cible/notifPrefs.png`, #4899) : la
     // piste d'un commutateur ACTIVÉ — un contrôle SÉLECTIONNÉ, l'accent en
     // FOND, même emploi que `.reaction[aria-pressed=true]` et
@@ -766,5 +780,84 @@ describe('règle 28 — les interdits, chacun avec sa sonde', () => {
 
   it('rougit sur une feuille qui déclarerait la sienne', () => {
     expect('.sonde{--x:1}').toMatch(/--[\w-]+\s*:/);
+  });
+});
+
+/**
+ * RÈGLE 18 (#5164) — « l'aperçu d'une ligne prend l'encre pleine ». L'aperçu
+ * du dernier message n'est pas une précision secondaire (une heure, un
+ * compte de participants) : c'est le CONTENU que le lecteur vient consulter,
+ * sur les DEUX écrans qu'`apercuDeLigne` sert — `/chats` (`.liste .apercu`) et
+ * le tableau de bord (`.carte .apercu`), depuis le MÊME atome paramétré.
+ */
+describe('règle 18 — l’aperçu d’une ligne prend l’encre pleine', () => {
+  it('pose --color-text sur .liste .apercu et .carte .apercu, jamais --color-text-muted ni --color-text-subtle', () => {
+    const [liste] = regles(FEUILLE_DE_LA_LISTE).filter(({ selecteur }) => selecteur === '.liste .apercu');
+    const [carte] = regles(FEUILLE_DU_TABLEAU).filter(({ selecteur }) => selecteur === '.carte .apercu');
+
+    expect(liste?.corps).toContain('color:var(--color-text)');
+    expect(carte?.corps).toContain('color:var(--color-text)');
+    expect(`${liste?.corps ?? ''};${carte?.corps ?? ''}`).not.toMatch(/--color-text-(?:muted|subtle)\b/);
+  });
+});
+
+/**
+ * RÈGLE 15 (#5164) — « la conversation mise en avant ». La PREMIÈRE non lue,
+ * dans l'ordre servi, devient une carte (`li.vedette`) : grand rayon, fond
+ * `--color-surface` (règle 14 : « ce qui se POSE, pas ce qui FLOTTE » — elle
+ * n'entre donc pas dans la liste fermée des emplois de `--color-surface-raised`
+ * ci-dessus). L'avatar, lui, garde `--avatar`. Aucune autre feuille de la liste ne
+ * régresse vers `--radius-md`.
+ */
+describe('règle 15 — la carte mise en avant de `/chats`', () => {
+  it('pose le rayon de carte et le fond « posé », jamais « flottant »', () => {
+    const [carte] = regles(FEUILLE_DE_LA_LISTE).filter(({ selecteur }) => selecteur === '.liste>ul>li.vedette');
+
+    expect(carte?.corps).toContain('border-radius:var(--radius-xl)');
+    expect(carte?.corps).toContain('background:var(--color-surface)');
+    expect(carte?.corps).not.toContain('--color-surface-raised');
+  });
+
+  /**
+   * L'AVATAR NE GROSSIT PAS. `cible/chats.png` est capturée à
+   * `deviceScaleFactor: 2` (`compare-rendu.js:194-195`, `capture-cibles.js:110`) :
+   * le disque « ÉL » de la carte y mesure 92 px D'APPAREIL, soit 46 px CSS —
+   * la même taille que les lignes plates (`--avatar`, 48 px). Un jeton
+   * `--avatar-large: 96px` avait été ajouté sur la lecture du chiffre BRUT, et
+   * la carte rendait alors un avatar DEUX FOIS trop grand (mesuré : 192 px
+   * d'appareil sur `rendu/chats.dark.png`), qui écrasait l'aperçu en colonne.
+   */
+  it('ne redimensionne aucun avatar — la mise en avant se fait au fond et au rayon', () => {
+    const feuille = regles(FEUILLE_DE_LA_LISTE)
+      .filter(({ selecteur }) => selecteur.includes('.avatar'))
+      .map(({ corps }) => corps)
+      .join(';');
+
+    expect(feuille).not.toMatch(/\b(?:width|height)\s*:/);
+    expect(FEUILLE_DE_LA_LISTE).not.toContain('--avatar-large');
+  });
+
+  /**
+   * ET LA GOUTTIÈRE DE LA CARTE EST PORTÉE PAR LA GLISSIÈRE, jamais par le
+   * `li` : les deux pistes du balayage sont `inset:0` sur le `li`, donc un
+   * `padding` posé là leur laisse peindre leurs teintes dans les marges de la
+   * carte AU REPOS (mesuré rgb(44,31,43) à x=55 de `rendu/chats.dark.png`).
+   */
+  it('porte la gouttière de la carte sur la glissière, jamais sur le li', () => {
+    const [li] = regles(FEUILLE_DE_LA_LISTE).filter(({ selecteur }) => selecteur === '.liste>ul>li.vedette');
+    const [glissiere] = regles(FEUILLE_DE_LA_LISTE).filter(
+      ({ selecteur }) => selecteur === '.liste>ul>li.vedette .glissiere',
+    );
+
+    expect(li?.corps).not.toContain('padding');
+    expect(glissiere?.corps).toContain('padding:0 var(--space-3)');
+  });
+
+  it('ne fait régresser aucune règle de cette feuille vers --radius-md', () => {
+    const rayons = regles(FEUILLE_DE_LA_LISTE)
+      .map(({ corps }) => corps)
+      .join(';');
+
+    expect(rayons).not.toContain('--radius-md');
   });
 });

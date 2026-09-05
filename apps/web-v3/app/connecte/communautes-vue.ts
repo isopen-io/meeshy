@@ -8,8 +8,8 @@ import { compteDeParticipants, enUneLigne } from '@/lib/contenu/fil';
 import { quand } from '@/lib/temps';
 
 import { FEUILLE_DES_COMMUNAUTES } from './communautes-feuille';
-import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
-import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
+import { feuilleDeLEspace, raccourcisEntete } from './espace-vue';
+import { FEUILLE_DE_L_ESPACE } from './espace-feuille';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { documentPleinEcran } from './fil-vue';
@@ -54,6 +54,7 @@ const enTete = (): string =>
   `<p class="sous">${echappe(COMMUNAUTES.sous)}</p>` +
   '</div>' +
   `<a class="action discrete" href="/communities?nouvelle">${svgDuSprite('ph-plus')}${echappe(COMMUNAUTES.creer)}</a>` +
+  raccourcisEntete('/communities') +
   '</header>';
 
 const ligne = (c: Communaute): string =>
@@ -81,7 +82,6 @@ const corps = (etat: EtatDesCommunautes): string =>
     : `<ul class="communautes" aria-label="${echappe(COMMUNAUTES.liste)}">${etat.communautes
         .map(ligne)
         .join('')}</ul>${plus(etat.suite)}`) +
-  actionsFlottantes('/communities') +
   '</main>';
 
 /**
@@ -238,7 +238,6 @@ export const documentDesCommunautes = (etat: EtatDesCommunautes): string => {
       FEUILLE_CONNECTEE +
       FEUILLE_DU_FIL +
       FEUILLE_DES_COMMUNAUTES +
-      FEUILLE_DES_FLOTTANTES +
       (etat.espace ? FEUILLE_DE_L_ESPACE : ''),
   });
 };

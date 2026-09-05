@@ -1,6 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
+import { avisDEcran, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, PUCE_DU_PRISME, rondDEnTete, TRACE_DE_FRAPPE } from './atomes-feuille';
 
 /**
  * LA FEUILLE DU FIL — le même module pour les deux portes (`/chats/:cle`,
@@ -29,6 +29,14 @@ import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
  *     trou ; `--radius-xs` pour `.langue` ;
  *   • un accent, cinq emplois (règle 13) : le cliquable, la pastille de langue,
  *     l'envoi ; JAMAIS un titre ni un filet ;
+ *   • le MENU d'une ligne (répondre / modifier / retirer, #5163) et celui de
+ *     `/chats` et `/links` sont le MÊME atome (`MENU_DE_LIGNE`) — même rond de
+ *     44 px, mêmes boutons de 44 px, même `.grave`. Il part dans
+ *     `FEUILLE_DU_MENU`, à côté, et NON dans cette feuille : trois écrans la
+ *     partagent sans rendre une seule ligne de fil (`/notifications`,
+ *     `/post/:id`, la galerie), et l'y inliner poussait le document de la
+ *     galerie au-dessus du plafond dur `documents.document_o` — la raison même
+ *     qui tient `FEUILLE_DU_PLEIN` et `FEUILLE_DU_PROFIL` dehors ;
  *   • le mouvement ne déplace rien (règle 24) : une bulle qui ARRIVE ou qui se
  *     CONFIRME change de couleur en 150 ms, elle ne glisse pas ; aucune
  *     `@keyframes` ;
@@ -44,15 +52,24 @@ import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
  * LE COMPOSEUR RESTE DANS LE CADRE, QUEL QUE SOIT LE CADRE. La colonne fait
  * `100dvh` et ses enfants ne rétrécissent pas (`flex:none`) — sauf DEUX : la
  * zone des messages, qui prend ce qui reste (`flex:1 1 0`) mais jamais moins
- * de deux lignes (`min-height`, `--row-height` × 2), et le bandeau des droits
- * ouvert (`.bandeau.bien`, la vue `rights`), qui cède l'excédent et DÉFILE en
- * lui-même, son résumé toujours atteignable (`min-height` = UNE CIBLE, et rien
- * de plus : le pas de confort qu'il portait en plus était un PLANCHER, donc il
+ * de deux lignes (`min-height`, `--row-height` × 2), et LES BANDEAUX — celui
+ * des droits ouvert (`.bandeau.bien`, la vue `rights`) ET celui d'ÉTAT
+ * (`.bandeau.attention` : hors ligne, session expirée) —, qui cèdent
+ * l'excédent et DÉFILENT en eux-mêmes, leur résumé toujours atteignable
+ * (`min-height` = UNE CIBLE, et rien de plus : le pas de confort qu'il portait en plus était un PLANCHER, donc il
  * refusait de céder les 14 derniers pixels le jour où un bandeau d'ÉTAT s'ajoute
  * — mesuré à 360 × 640, hors ligne : en-tête 66, droits 76, puces 56, bandeau
  * hors ligne 155, frappe 32, composeur 85, messages 160, marges 24 ⇒ 654 pour
  * un cadre de 640. Un plancher de confort n'en est pas un ; le seul plancher
  * d'un bandeau qui défile est ce qu'il faut au doigt pour le rouvrir).
+ * LE BANDEAU D'ÉTAT A REJOINT LA MÊME LOI à la revue de #5061 : le composeur
+ * porte désormais QUATRE ronds (trombone, micro, position, envoi) et, sous
+ * 14 rem de champ disponible, il passe à DEUX rangées — mesuré à 360 × 640,
+ * hors ligne : 66 + 44 + 56 + 155 + 32 + 145 + 160 = 658 pour un cadre de 640.
+ * Seul le bandeau d'ÉTAT ne cédait pas ; il tenait 155 px pour un titre et une
+ * phrase pendant que le composeur passait SOUS le pli. Le faire céder est la
+ * loi qui existait déjà à côté, appliquée au voisin qui y avait échappé —
+ * jamais un plancher abaissé.
  * Mesuré à 360 × 640 avant cette règle : bandeau 479 px, messages 28 px,
  * composeur de 673 à 758 — SOUS le pli d'un cadre de 640, le corps devenu
  * défilable. L'invité qui venait d'entrer ne voyait ni la conversation ni où
@@ -109,9 +126,10 @@ import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
  * LE CORPS A DEUX COLONNES (#5136, jumelle iOS #5135) — la bulle, et au bas de
  * sa droite la datation (heure + accusé). Elles vivaient dans `.meta`, la ligne
  * posée SOUS le texte, dont `<time>` était le seul contributeur de hauteur :
- * `.reagir-slot` est en `height:0`, `.langue` et `.modifie` sont conditionnels.
- * Cette ligne réservait donc, sous chaque message, la hauteur d'un texte pour
- * deux informations qui se lisent aussi bien à côté.
+ * `.reagir-slot` réserve `height:var(--target-min)` DÈS le SSR (revue CLS
+ * ci-dessous), `.langue` et `.modifie` sont conditionnels. Cette ligne
+ * réservait donc, sous chaque message, la hauteur d'un texte pour deux
+ * informations qui se lisent aussi bien à côté.
  *
  * `colonnes` est une classe EXPLICITE, pas un `:has(> .bulle)` : le message
  * système garde son corps d'une seule colonne, et le serveur connaît déjà la
@@ -120,12 +138,49 @@ import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
  * largeur est RÉSERVÉE (les dates s'alignent d'une ligne à l'autre, arbitrage
  * porteur du 2026-09-04) sans jamais tronquer l'heure aux grandes tailles.
  *
+ * `5rem`, PAS `3.75rem` (correctif CLS, mesuré) : le SERVEUR rend un relatif
+ * (`quand`, `lib/temps.ts` — « il y a 27 min », jusqu'à 74 px mesurés) que le
+ * module remonte en heure locale ABSOLUE (`heureLocale` — « 13:10 », ~40 px) —
+ * deux formats, DÉLIBÉRÉMENT différents (doc-tête de `lib/temps.ts`). Une
+ * réserve dimensionnée sur le SEUL format absolu laissait `.datation`
+ * RÉTRÉCIR à l'arrivée du module — un défaut de CLS, jamais un choix.
+ *
  * La MÉTA VIDÉE ne réserve plus sa marge. Le sélecteur énumère ce qui ne compte
- * pas — `.reagir-slot` (réservé, `height:0`), `.attente` et `.echec` (masqués
- * par `display:none`, donc invisibles à `:not([hidden])`) — et les états
- * d'envoi la reprennent par la règle suivante, puisqu'ils s'affichent là. Un
- * navigateur sans `:has()` ignore la règle et garde `var(--space-1)` : la
- * dégradation coûte quatre pixels, jamais une ligne.
+ * pas — `.reagir-slot` (réservé, toujours plein — voir REVUE CLS ci-dessous),
+ * `.attente` et `.echec` (masqués par `display:none`, donc invisibles à
+ * `:not([hidden])`) — et les états d'envoi la reprennent par la règle
+ * suivante, puisqu'ils s'affichent là. Un navigateur sans `:has()` ignore la
+ * règle et garde `var(--space-1)` : la dégradation coûte quatre pixels,
+ * jamais une ligne.
+ *
+ * REVUE DE #5061 — le slot VIDE restait à `height:0` (aucune ligne blanche
+ * avant que `poseLeBoutonReagir`, `fil-peinture.ts`, n'y insère le bouton),
+ * et un slot qui PORTAIT le bouton réservait sa hauteur via
+ * `:has(>.reagir)` : sans ça, `overflow:visible` centrait le `button.reagir`
+ * (44 px) SUR la ligne nulle de `.meta`, pour moitié au-dessus d'elle —
+ * recouvrant le dernier mot du `.texte` qui précède (mesuré sur
+ * `rich-capture-{light,dark}.png`). Ce `:has()` corrigeait le recouvrement
+ * mais ROUVRAIT un décalage : le module insère le bouton APRÈS le premier
+ * pixel (chargement différé, § 12.4), donc la bascule `height:0` →
+ * `var(--target-min)` déplaçait tout ce qui suit CHAQUE bulle d'un coup —
+ * mesuré CLS 0,089 sur `/chats/:cle`, au-dessus du budget 0,05
+ * (`test:chaines` › `v3-fil.spec.ts`, gate 8a, cycle correctif 2026-09-05).
+ *
+ * REVUE CLS (2026-09-05) — `.reagir-slot` réserve désormais
+ * `height:var(--target-min)` INCONDITIONNELLEMENT, dès le SSR : la place du
+ * bouton existe avant même que le module ne le pose, donc son insertion ne
+ * déplace plus rien (CLS supprimé À LA SOURCE, pas atténué) — et parce que le
+ * slot a déjà sa hauteur réelle quand le bouton y arrive, le centrage ne
+ * recouvre plus rien non plus : les DEUX défauts partageaient la même cause
+ * (une boîte de hauteur nulle), pas deux correctifs opposés. Le prix assumé
+ * (directive porteur, dimension 4 « une lenteur est un bug ») : sur un
+ * message éligible (ni système, ni supprimé, ni protégé — `poseLeBoutonReagir`
+ * en décide déjà côté script, le SERVEUR le sait tout autant), un carré
+ * `--target-min` (44 px) reste VIDE, jamais un contrôle inerte (rien n'y est
+ * cliquable), tant que le module de participation n'a pas chargé — un espace,
+ * pas une ligne blanche pleine largeur : `width` reste `--target-min`, la
+ * bascule ne portait que sur `height`. Un navigateur sans `:has()` n'entre
+ * plus en jeu ici : la réservation ne dépend plus de `:has()`.
  *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (règle 1). Témoin :
  * `__tests__/charte.test.ts`, où cette feuille entre dans `FEUILLES`.
@@ -136,10 +191,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .fil-ecran[inert]{filter:blur(var(--frame-blur))}
 
 .fil-tete{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--color-bg);border-bottom:var(--stroke-hair) solid var(--color-border-strong)}
-.fil-tete .retour{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}
-.fil-tete .retour svg{width:var(--glyph);height:var(--glyph)}
-.fil-tete .medias{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);border-radius:var(--radius-pill);color:var(--color-primary)}
-.fil-tete .medias svg{width:var(--glyph);height:var(--glyph)}
+${rondDEnTete('retour')}${rondDEnTete('medias')}
 .fil-tete .titre{flex:1;min-width:0}
 .fil-tete h1{margin:0;font-size:var(--text-xl);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fil-tete .sous{margin:0;min-height:calc(var(--text-sm) * var(--leading-normal));font-size:var(--text-sm);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -150,8 +202,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .etat[data-etat=hors-ligne] .point{border-color:var(--color-warning)}
 
 .puces{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--space-2);margin:0;padding:var(--space-3) var(--space-4) 0}
-.puce{display:inline-flex;align-items:center;gap:var(--space-2);margin:0;min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-strong) solid var(--color-border-interactive);border-radius:var(--radius-pill);font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--color-primary)}
-.puce svg{width:var(--glyph-inline);height:var(--glyph-inline)}
+${PUCE_DU_PRISME}
 
 .bandeau{margin:var(--space-3) var(--space-4) 0;padding:var(--space-3) var(--space-4);border-radius:var(--radius-lg);border-left:var(--space-1) solid var(--color-success);background:var(--color-tint-success)}
 .bandeau.attention{border-left-color:var(--color-warning);background:var(--color-tint-warning)}
@@ -176,7 +227,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .bandeau .action{margin-top:var(--space-3)}
 .fil-ecran .alerte{margin:var(--space-3) var(--space-4) 0}
 
-.fil-ecran>.bandeau.bien{flex:0 1 auto;min-height:var(--target-min);overflow:auto}
+.fil-ecran>.bandeau.bien,.fil-ecran>.bandeau.attention{flex:0 1 auto;min-height:var(--target-min);overflow:auto}
 .messages{order:1;flex:1 1 0;min-height:calc(var(--row-height) * 2);overflow-y:auto;overscroll-behavior:contain;overflow-anchor:none;display:flex;flex-direction:column-reverse;padding:var(--space-4) var(--space-4) var(--space-3)}
 .pile{flex:none;display:flex;flex-direction:column;min-height:100%}
 .plus-ancien{margin:0 auto var(--space-4);display:flex}
@@ -196,7 +247,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .ligne .corps{flex:1;min-width:0}
 .ligne .corps.colonnes{display:flex;align-items:flex-end;gap:var(--space-2)}
 .ligne .bulle{flex:1;min-width:0}
-.ligne .datation{flex:none;margin:0;display:flex;align-items:center;justify-content:flex-end;gap:var(--space-1);min-width:3.75rem;font-size:var(--text-xs);color:var(--color-text-subtle);white-space:nowrap}
+.ligne .datation{flex:none;margin:0;display:flex;align-items:center;justify-content:flex-end;gap:var(--space-1);min-width:5rem;font-size:var(--text-xs);color:var(--color-text-subtle);white-space:nowrap}
 .ligne .datation svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .ligne .qui{margin:0;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:baseline;font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
 /* La cible du NOM atteint 44 px SANS agrandir le TEXTE — le même idiome que
@@ -225,7 +276,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .ligne .echec{display:none;align-items:center;gap:var(--space-2);color:var(--color-danger);font-weight:var(--font-weight-medium)}
 .ligne.envoi-echec .echec{display:inline-flex}
 .ligne .echec .action{width:auto;min-height:var(--target-min);padding:0 var(--space-3);font-size:var(--text-sm)}
-.ligne .reagir-slot{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:0;overflow:visible}
+.ligne .reagir-slot{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min)}
 .ligne .reagir{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--target-min);height:var(--target-min);margin:0;padding:0;border:0;border-radius:var(--radius-pill);background:transparent;color:var(--color-text-subtle);cursor:pointer;transition:color 150ms,background-color 150ms}
 .ligne .reagir:hover{color:var(--color-primary);background:var(--color-tint-primary)}
 .ligne .reagir svg{width:var(--glyph);height:var(--glyph)}
@@ -323,6 +374,140 @@ dialog.palette .fermer{margin-top:var(--space-3);width:100%}
 .nouveaux{width:auto;min-width:0}
 }
 `);
+
+/**
+ * LES TROIS GESTES DU FIL (#5163) — le MENU d'une ligne et le BANDEAU du
+ * contexte du composeur —, servis par le SEUL document qui les rend
+ * (`documentDuFil`), comme `FEUILLE_DU_PLEIN` et `FEUILLE_DU_PROFIL` : ce
+ * qu'un écran n'affiche pas, il ne le paie pas (charte règle 7). TROIS écrans
+ * partagent `FEUILLE_DU_FIL` sans rendre une ligne ni un composeur
+ * (`/notifications`, `/post/:id`, la galerie) — l'y inliner poussait le
+ * document de la galerie AU-DESSUS du plafond dur `documents.document_o`.
+ * L'atome du menu vient de `atomes-feuille.ts` — le MÊME que `/chats` et
+ * `/links` — et n'est pas réécrit ici.
+ */
+export const FEUILLE_DES_GESTES = compacte(
+  MENU_DE_LIGNE +
+    // LE MENU OUVERT NE POUSSE PAS LA BULLE. Sur `/chats` et `/links` la carte
+    // du menu s'ouvre DANS le flux — la ligne y est pleine largeur, rien ne la
+    // gêne. Ici elle est la TROISIÈME colonne d'une ligne de message : ouverte
+    // dans le flux, elle rétrécissait le texte à quatre mots par ligne le temps
+    // du geste (mesuré à 390 px, capture `thread-gestes-light.png`). Elle se
+    // pose donc AU-DESSUS, ancrée à `.ligne` — PAS à son `<details>`
+    // (l'atome le met en `position:relative`, ANNULÉ ici) : les deux
+    // s'alignaient au bas de `.corps.colonnes`, la MÊME hauteur que la bulle
+    // elle-même, donc le panneau, en s'ouvrant vers le haut, recouvrait le
+    // texte de SA PROPRE ligne dès qu'elle était plus courte que le panneau —
+    // mesuré (défaut #5163 §4, `menu-m1.png`). Ancré au `.ligne` ENTIER, le
+    // panneau s'ouvre au-dessus de la ligne QUI L'A OUVERT, jamais dessus.
+    // `.ouvre-bas` (posé par `fil-gestes.ts` quand la ligne est trop proche du
+    // haut de la liste pour ouvrir vers le haut) bascule le sens.
+    '.ligne{position:relative}' +
+    '.ligne .actions{position:static}' +
+    '.ligne .actions form{position:absolute;right:0;bottom:100%;margin-bottom:var(--space-2);z-index:2;min-width:12rem;max-width:calc(100vw - 2 * var(--space-4));box-shadow:var(--shadow-sm)}' +
+    '.ligne .actions.ouvre-bas form{bottom:auto;top:100%;margin-bottom:0;margin-top:var(--space-2)}' +
+    // LE BANDEAU DU CONTEXTE — une ligne À ELLE SEULE au-dessus du champ
+    // (`order:-2`, avant l'annonce de pièce) : posé dans le flux du composeur,
+    // il se serait glissé À CÔTÉ du `<textarea>` et l'aurait écrasé.
+    '.composeur .contexte{order:-2;flex-basis:100%;display:flex;align-items:center;gap:var(--space-2);min-width:0}' +
+    '.composeur .contexte .citations{flex:1;min-width:0;margin:0}' +
+    '.composeur .contexte .quoi-modif{flex:1;min-width:0;margin:0;font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-text-muted)}' +
+    '.composeur .contexte .annuler{flex:none}',
+);
+
+/**
+ * LE MICRO, LA POSITION, ET LE LIEU QU'ELLE PARTAGE (#5061) — servis par
+ * `documentDuFil` SEUL, comme `FEUILLE_DES_GESTES` juste au-dessus : ni le
+ * composeur ni un message `.lieu` n'existent sur la GALERIE
+ * (`app/connecte/medias-vue.ts`, qui inline `FEUILLE_DU_FIL` pour son
+ * en-tête et ses pièces, jamais une ligne complète ni un composeur) — les y
+ * inliner poussait `documents_de_la_galerie.galerie_o` de 9187 à 9615 o
+ * gzip, AU-DESSUS du plafond dur `documents.document_o` (9 216), pour des
+ * classes que cet écran ne rend jamais (charte règle 7 : ce qu'un écran
+ * n'affiche pas, il ne le paie pas).
+ *
+ * LE CHAMP GARDE SA LARGEUR (revue de #5061). Deux ronds de 44 px de plus
+ * dans une rangée qui en portait déjà deux ramenaient le `<textarea>` à
+ * 134 px à 390 px de large — MESURÉ, `clientHeight` 48 pour un `scrollHeight`
+ * de 73 : le libellé « Écrire en français… » passait à la ligne et se
+ * COUPAIT, sur le seul champ de saisie de l'écran. `min-width` (jamais une
+ * largeur fixe) rend la décision à `flex-wrap`, déjà posé sur `.composeur` :
+ * sous 14 rem disponibles, le champ et son bouton d'envoi descendent d'une
+ * ligne — les trois ronds au-dessus, le champ PLEINE LARGEUR en dessous
+ * (charte : gros boutons, page aérée) ; au-dessus, la rangée unique de la
+ * cible tient telle quelle. Témoin : `e2e/visual/v3-fil-capture.spec.ts`
+ * § « le champ ne coupe jamais son libellé ».
+ *
+ * `.en-attente` (correctif CLS, revue de #5061/#5034) — le SEUL état que
+ * `capture.ts` bascule pour un lecteur dont `ecrire` est déjà VRAI au SSR
+ * (`fil-vue.ts` › `micro`/`position`) : `visibility:hidden` retire le bouton
+ * du rendu ET de l'arbre d'accessibilité SANS retirer sa BOÎTE — la décision
+ * `flex-wrap` ci-dessus (champ qui descend d'une ligne dès que les quatre
+ * ronds sont comptés) est donc déjà PRISE au premier pixel, identique avant
+ * et après que `capture.ts` confirme la capacité du navigateur. Le contraire
+ * — `hidden` natif retiré par le module — faisait la même bascule PENDANT la
+ * fenêtre de mesure du CLS (`scripts/mesure-reseau.mjs`, 600 ms après
+ * `load`) : `0.116 > 0.05`, gate rouge. `pointer-events:none` l'assortit
+ * (un rond invisible ne s'actionne pas), sans conséquence sur les gestes
+ * `capture.ts` qui gardent leur propre garde de capacité.
+ */
+export const FEUILLE_DE_LA_CAPTURE = compacte(`
+.composeur textarea{min-width:min(100%,14rem)}
+.composeur .micro,.composeur .position{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);margin-bottom:calc((var(--action-height-secondary) - var(--target-min)) / 2);border:0;border-radius:var(--radius-pill);background:transparent;cursor:pointer}
+.composeur .micro{color:var(--color-primary)}
+.composeur .position{color:var(--color-primary)}
+.composeur .micro svg,.composeur .position svg{width:var(--glyph);height:var(--glyph)}
+.composeur .micro.actif{color:var(--color-danger)}
+.composeur .micro.en-attente,.composeur .position.en-attente{visibility:hidden;pointer-events:none}
+.composeur.enregistre textarea,.composeur.enregistre .joindre,.composeur.enregistre .micro,.composeur.enregistre .position,.composeur.enregistre .envoyer{display:none}
+.composeur .enregistrement{display:none}
+.composeur.enregistre .enregistrement{order:0;flex:1;display:flex;align-items:center;gap:var(--space-3)}
+.composeur .annuler-vocal,.composeur .envoyer-vocal{flex:none;display:inline-flex;align-items:center;justify-content:center;width:var(--target-min);height:var(--target-min);border:0;border-radius:var(--radius-pill);cursor:pointer}
+.composeur .annuler-vocal{background:var(--color-tint-danger);color:var(--color-danger)}
+.composeur .envoyer-vocal{background:var(--color-primary);color:var(--color-on-primary)}
+.composeur .annuler-vocal svg,.composeur .envoyer-vocal svg{width:var(--glyph);height:var(--glyph)}
+.composeur .duree-vocale{flex:1;text-align:center;font-variant-numeric:tabular-nums;color:var(--color-text-muted)}
+.lieu{margin:var(--space-2) 0 0;display:flex;flex-direction:column;gap:var(--space-2);align-items:flex-start;width:100%}
+.lieu-lien{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-strong) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);text-decoration:none;color:var(--color-primary);font-weight:var(--font-weight-medium);width:100%}
+.glyphe-lieu{flex:none;display:inline-flex}
+.glyphe-lieu svg{width:var(--glyph);height:var(--glyph)}
+.texte-du-lieu{display:grid;min-width:0}
+.nom-du-lieu{overflow-wrap:anywhere}
+.adresse-du-lieu{font-size:var(--text-sm);font-weight:var(--font-weight-regular);color:var(--color-text-muted);overflow-wrap:anywhere}
+`);
+
+/**
+ * CRÉER UN LIEN DE PARTAGE DEPUIS CE FIL (#5034, § 12.10.5) — servie par
+ * `documentDuFil` SEUL, comme `FEUILLE_DE_LA_CAPTURE` juste au-dessus et pour
+ * la MÊME raison : l'avis « lien créé » n'a aucun sens sur la GALERIE
+ * (`medias-vue.ts`, qui inline `FEUILLE_DU_FIL` pour son en-tête, jamais le
+ * corps du fil) — l'y inliner ferait payer à cet écran des classes qu'il ne
+ * rend jamais, quand sa marge sous le plafond dur `documents.document_o`
+ * (9 216 o) se compte en dizaines d'octets.
+ *
+ * LE ROND DE LA PUCE « PARTAGER » VIENT DE L'ATOME `rondDEnTete`, celui-là
+ * même dont `FEUILLE_DU_FIL` tire « Retour » et « Médias » : le recopier ici
+ * en aurait fait la TROISIÈME copie du même corps de règle — celle qui diverge
+ * (`atomes-feuille.ts`). Il est APPELÉ ici et non groupé là-bas parce que la
+ * galerie inline `FEUILLE_DU_FIL` : un sélecteur groupé lui aurait fait payer
+ * 6 o gzip (9 203 vers 9 209, mesuré, plafond dur 9 216) pour une classe
+ * qu'elle ne rend jamais.
+ *
+ * L'avis « lien créé » prend sa géométrie à l'ATOME `avisDEcran`, comme les
+ * trois écrans qui le rendaient déjà (`contacts`, `notifs`, `composer`) : une
+ * quatrième copie du même corps de règle était le défaut que cet atome existe
+ * pour empêcher. Ne reste ICI que ce qui lui est PROPRE — l'adresse du lien,
+ * qui se COUPE plutôt qu'elle ne déborde (une adresse longue élargirait sinon
+ * la page) et se SÉLECTIONNE D'UN GESTE (`user-select:all`) : sans bouton
+ * « Copier » — un contrôle qui n'existerait qu'avec JavaScript, refusé sur les
+ * deux hôtes —, c'est le seul moyen d'emporter le lien qu'on vient de créer.
+ */
+export const FEUILLE_DU_LIEN_DEPUIS_LE_FIL = compacte(
+  `${rondDEnTete('partager')}
+${avisDEcran('.fil-ecran')}
+.fil-ecran>.avis .adresse{user-select:all;overflow-wrap:anywhere;color:var(--color-text)}
+`,
+);
 
 /** Émise par le document APRÈS `</ol>` : la dernière ligne, désormais complète, se montre. */
 export const REVELE_LA_DERNIERE_LIGNE = compacte(`.lignes>li:not(:has(~li)){visibility:visible}`);

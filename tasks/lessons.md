@@ -28759,6 +28759,106 @@ accident, sur un empilement qui n'était pas celui rendu.
 Garde : `test_laBande_neSePeintAucunFond` interdit le verre ET tout fond
 opaque de remplacement.
 
+## Leçon 530 — Deux défauts opposés (recouvrement, CLS) partageaient la même cause : une boîte de hauteur nulle
+
+Constat du 2026-09-05 (gate `test:chaines` › `v3-fil.spec.ts`, tour v3, écran
+`thread`) : `.reagir-slot` était à `height:0` tant que le module de temps réel
+n'y avait pas posé le bouton « Réagir », et une revue précédente (#5061) avait
+corrigé le recouvrement qui en résultait (`overflow:visible` centrait le
+bouton de 44 px SUR la ligne nulle, recouvrant le dernier mot du texte
+précédent) par `:has(>.reagir)` — réserver la hauteur SEULEMENT quand le
+bouton est déjà là. Mesure suivante : CLS 0,089 sur `/chats/:cle`, au-dessus
+du budget 0,05. Le correctif du recouvrement avait rouvert un décalage : le
+module insère le bouton APRÈS le premier pixel (chargement différé, § 12.4),
+donc la bascule `height:0 → var(--target-min)` déplaçait tout ce qui suit
+CHAQUE bulle au moment où le module chargeait.
+
+**La règle.**
+1. Un slot qui réserve une hauteur CONDITIONNELLEMENT à la présence d'un
+   contenu inséré APRÈS le premier pixel garantit un CLS, pas une exception :
+   la condition qui évite le recouvrement AU REPOS est exactement celle qui
+   produit le décalage AU CHARGEMENT. Les deux symptômes (recouvrement,
+   CLS) sont la même cause vue à deux instants — les traiter comme deux
+   correctifs indépendants (l'un par `:has()`, l'autre à trouver plus tard)
+   les fait alterner sans jamais converger.
+2. Le correctif qui les résout ENSEMBLE réserve la hauteur INCONDITIONNELLEMENT,
+   dès le SSR : la place existe avant que le contenu n'arrive, donc son
+   insertion ne déplace rien (CLS supprimé À LA SOURCE) et le slot a déjà sa
+   taille réelle quand le contenu y arrive (plus de centrage qui déborde).
+3. Le prix (un carré vide, non cliquable, tant que le module n'a pas chargé)
+   se documente et s'assume — ce n'est pas un défaut, c'est le coût mesuré
+   d'une amélioration progressive dont l'espace est réservé par avance.
+4. Devant un correctif de recouvrement sur un slot dont le contenu arrive en
+   différé, demander : « la condition qui évite le recouvrement au repos
+   est-elle aussi la condition qui produit un décalage au chargement ? » —
+   si oui, les deux ne se corrigent qu'ENSEMBLE, par une réservation
+   inconditionnelle, jamais par deux correctifs qui se contredisent.
+
+## Leçon 531 — Un chantier transversal qui touche TOUS les écrans invalide leurs captures cible s'il ne les régénère pas
+
+Constat du 2026-09-05 (`compare-rendu.js` / `v3-rapport.mjs`, tour v3) : après
+la livraison du chantier de navigation en une page (§ 12.11, #5104/#4472/
+#4473/#5106 — un fondu inter-documents, une préconnexion au survol, un
+navigateur de zone), le gate de conformité visuelle rapportait **48 vues sur
+48 hors cible** (`ecart_structurel_max=0,5507`), y compris des écrans que
+personne n'avait touchés dans ce tour. Diagnostic : les trois écrans livrés
+(`thread`, `chats`, `rich`) portent désormais une barre de navigation globale
+(logo + « Retour à l'accueil », deux boutons flottants remontés en HAUT du
+document) que les captures cible ne montraient PAS — le chantier de
+navigation avait changé la disposition SERVIE de chaque écran connecté, mais
+`capture-cibles.js` n'avait été rejoué que pour trois vues (`thread`, `rich`,
+`rights`), jamais pour les 45 autres, dont `chats`.
+
+**La règle.**
+1. Un chantier qui change la disposition COMMUNE à tous les écrans (un socle,
+   un chrome, une barre persistante) est, du point de vue du gate de
+   conformité, une modification de CHAQUE écran — même ceux qu'aucun commit
+   du chantier n'a nommés. La régénération des captures cible n'est pas un
+   pas facultatif de la PR qui livre le chantier : c'est une partie de sa
+   livraison, au même titre que le code.
+2. Régénérer TROIS captures sur quarante-huit après un changement de socle
+   laisse un gate qui rougit partout SANS distinguer un vrai écart d'un
+   référentiel périmé — le signal se perd exactement pour tout le monde, pas
+   seulement pour les écrans oubliés.
+3. Le témoin qui aurait dû l'attraper n'existe pas encore : un gate qui
+   compare le SOCLE (chrome commun) de deux captures cible entre elles
+   rougirait dès qu'une seule diverge des autres, avant même de comparer
+   le contenu propre à chaque écran.
+4. Devant un chantier transversal, poser la question au moment de le clore,
+   pas au moment où le gate suivant rougit : « ce changement touche-t-il le
+   SOCLE de plusieurs écrans, et si oui, qui régénère leurs captures ? » —
+   la réponse « je n'ai régénéré que celles de mon écran » est un aveu que
+   la question n'a pas été posée à la bonne échelle.
+
+## Leçon 532 — Une interdiction écrite dans UN prompt ne gouverne que cet agent ; dans un arbre partagé, chaque rôle qui écrit la porte
+
+Constat du 2026-09-05 (tour 2 du workflow web v3) : « Ne commit PAS : la phase
+Livrer s'en charge » n'était écrit que dans le prompt du DÉVELOPPEUR. Un agent
+de correction a commité et poussé 85 fichiers — trois travaux — sous le titre
+d'une seule issue ; un correcteur de gates a récidivé ; l'agent de documentation
+a commité à son tour. Aucun n'avait désobéi : la règle ne leur avait jamais été
+dite. Pendant ce temps, le porteur demandait l'inverse pour la BRANCHE — « il
+faut commiter régulièrement et se synchroniser avec les activités distantes » :
+dev avait reçu 1 335 puis 24 commits d'autres sessions sur les mêmes écrans, et
+le tour ne le relisait qu'au départ et avant les gates.
+
+**La règle.**
+1. Une consigne qui gouverne une RESSOURCE PARTAGÉE (l'arbre, la branche, un
+   port) se déclare UNE fois et s'injecte dans le prompt de CHAQUE rôle qui
+   touche cette ressource — jamais dans un seul. Le témoin : lister les rôles
+   qui écrivent, puis vérifier que chacun porte la consigne.
+2. « Ne commit pas » (l'agent) et « commiter régulièrement » (la branche) ne se
+   contredisent pas : ce sont deux niveaux. Les agents laissent l'arbre ; une
+   phase mécanique, à des moments FIXES (avant chaque travail, avant les
+   gates), commite l'arbre en point d'étape, fusionne `origin/dev`, pousse — et
+   remet au travail suivant ce que les sessions voisines ont bougé.
+3. `git stash` n'est pas l'outil de cette phase dans un arbre partagé (leçon
+   527) : le point d'étape est un COMMIT, que la PR porte tel quel ; le
+   `Closes #n` va alors dans le corps de la PR, jamais dans un commit vide.
+4. Un gate rouge sur TOUTE la matrice — y compris des écrans que le tour n'a pas
+   touchés — n'est pas un rouge du tour : il ne retient pas la livraison, il se
+   DIT dans la PR avec l'issue qui le porte. Le tour 2 est resté sans PR une
+   heure pour l'avoir lu autrement.
 ## Leçon 530 — Deux familles de résolveurs, neuf sites, trois régimes pour un même geste
 
 **Directive porteur (2026-09-05)** : « déclencher la remontée après `@` avec

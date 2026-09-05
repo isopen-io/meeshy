@@ -43,6 +43,7 @@ const sers = (droits: Droits, tempsReel: EtatDuFil['tempsReel'] = TEMPS_REEL): H
     maintenant: 0,
     composeur: { genre: 'ouvert' },
     tempsReel,
+    contexte: null,
     plein: null,
     profil: null,
   } satisfies EtatDuFil);

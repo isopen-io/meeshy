@@ -29,6 +29,16 @@ export const prendsLePleinEcran = (racine: ParentNode = document): void => {
   if (dialogue === null || typeof dialogue.showModal !== 'function') return;
 
   const retour = dialogue.dataset.retour ?? '';
+  // LE FOCUS DU LECTEUR SURVIT À L'ÉLÉVATION. `showModal()` pose le focus sur le
+  // PREMIER focalisable du dialogue — la poignée « Fermer » —, et ce module
+  // arrive APRÈS le premier pixel : un lecteur au clavier qui tenait déjà
+  // « Se déconnecter » se retrouvait sur la poignée, et Entrée FERMAIT au lieu
+  // de sortir (mesuré, `v3-deconnexion.spec.ts:51` : `/chats` au lieu de `/`).
+  // On note ce qu'il tenait AVANT de toucher au dialogue et on le lui rend
+  // après — seulement si c'était DANS le dialogue : hors de lui, le choix du
+  // navigateur (le premier focalisable) est le bon.
+  const tenu = dialogue.ownerDocument.activeElement;
+  const tenuDansLeDialogue = tenu instanceof HTMLElement && dialogue.contains(tenu) ? tenu : null;
   // `showModal()` REFUSE un dialogue qui porte déjà `open` (`InvalidStateError`) :
   // on RETIRE l'attribut avant de le rouvrir en modale — jamais `close()`, qui
   // ÉMET l'événement `close` dans une tâche différée. Mesuré : cette tâche
@@ -44,6 +54,7 @@ export const prendsLePleinEcran = (racine: ParentNode = document): void => {
     dialogue.setAttribute('open', '');
     return;
   }
+  tenuDansLeDialogue?.focus();
 
   dialogue.addEventListener('close', () => {
     // REMPLACE, jamais n'empile : fermer n'est pas naviguer. `assign` ajoutait
