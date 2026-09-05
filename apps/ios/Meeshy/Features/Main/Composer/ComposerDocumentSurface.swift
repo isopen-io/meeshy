@@ -241,6 +241,27 @@ struct ComposerDocumentSurface: View {
     /// `VStack` parent.
     var toolRowTrailingAccessory: AnyView? = nil
 
+    /// **Le sélecteur de langue du CONTENU, au pied de son champ** (#5137,
+    /// directive porteur 2026-09-04 : « indiquer le sélecteur pour choisir la
+    /// langue du contenu ! Du coup enlever cela de la ligne canonique ! »).
+    ///
+    /// Il voyageait par `toolRowTrailingAccessory` — en queue de la **rangée
+    /// canonique**, où il était arrivé au #3904 pour une raison de DISPOSITION
+    /// (il chevauchait la bande de mentions en `.overlay`), jamais parce que sa
+    /// place sémantique y était. La rangée porte ce qu'on ATTACHE à un texte ;
+    /// la langue le QUALIFIE.
+    ///
+    /// Sur la scène, le calque de description le pose au-dessus de sa **coche
+    /// de validation** (`ComposerDescriptionLayer.languageAccessory`). Cette
+    /// surface-ci n'a pas de coche — son champ de contenu se valide par la
+    /// flèche du socle — donc le sélecteur prend la place ÉQUIVALENTE : le pied
+    /// du texte qu'il qualifie, aligné en queue, à l'intérieur du flux.
+    ///
+    /// `nil` ⇒ rien n'est peint. Le slot `toolRowTrailingAccessory` reste, vide,
+    /// pour la même raison que son jumeau de tête : il tient l'invariant
+    /// anti-chevauchement de #3903/#3904 pour tout futur accessoire de rangée.
+    var contentLanguageAccessory: AnyView? = nil
+
     @FocusState private var isContentFocused: Bool
 
     /// Le dernier outil tapé — pilote le rebond SF (`.symbolEffect(.bounce)`)
@@ -292,6 +313,16 @@ struct ComposerDocumentSurface: View {
                     onSelect: { updated in text = updated }
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            // **La langue, au PIED du texte qu'elle qualifie** (#5137). Après la
+            // bande de mentions, jamais avant : la bande est « la plus proche
+            // approximation du curseur » (retour porteur 2026-08-27), et
+            // s'insérer entre elle et le champ l'aurait décollée de la frappe.
+            if let contentLanguageAccessory {
+                contentLanguageAccessory
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
             }
             Spacer(minLength: 0)
             backgroundStrip

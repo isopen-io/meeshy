@@ -156,17 +156,29 @@ extension MeeshyComposerHost {
             // de #3903 — tout futur chip de tête devra passer par là plutôt que
             // par un `.overlay`.
             toolRowLeadingAccessory: nil,
-            // **La capsule de langue, corrigée revue Opus 2026-08-27** : elle
-            // voyageait en `.overlay(alignment: .bottomTrailing)` sur TOUTE la
-            // surface, sur la promesse que `toolRow` restait « la seule ligne
-            // peinte au bas de la surface ». #3904 a rendu cette promesse
-            // fausse — la bande de mentions peut désormais s'afficher SOUS
-            // `toolRow` — et l'overlay recouvrait alors la moitié de la bande
-            // (chevauchement mesuré : bande ≈82pt, capsule posée en bas-droite
-            // sur ≈43pt). Même correctif que la tuile de lieu, à l'autre bout
-            // du `HStack` : `toolRowTrailingAccessory`, un enfant du flux, ne
-            // chevauche jamais ce qui se peint plus bas dans le `VStack`.
-            toolRowTrailingAccessory: AnyView(documentLanguageCapsule)
+            // **La capsule de langue a QUITTÉ la rangée le 2026-09-04**
+            // (#5137, directive porteur : « Du coup enlever cela de la ligne
+            // canonique ! »).
+            //
+            // Elle y était arrivée par la revue Opus du 2026-08-27, pour une
+            // raison de DISPOSITION : posée en `.overlay(alignment:
+            // .bottomTrailing)` sur TOUTE la surface, elle recouvrait la moitié
+            // de la bande de mentions (#3904). Le correctif était juste, et le
+            // slot l'a accueillie faute d'un meilleur endroit — pas parce que
+            // sa place sémantique y était. La rangée canonique porte ce qu'on
+            // ATTACHE à un texte ; la langue le QUALIFIE.
+            //
+            // > Une place choisie pour éviter un défaut n'est pas la place
+            // > JUSTE — et rien ne rougit quand on la garde.
+            //
+            // Le slot reste, vide, avec son jumeau de tête : c'est LUI qui tient
+            // l'invariant anti-chevauchement pour tout futur accessoire.
+            toolRowTrailingAccessory: nil,
+            // …et la capsule descend au PIED du champ de contenu, la place
+            // qu'elle occupe déjà sur la scène (au-dessus de la coche du calque
+            // de description). Même capsule, même portail, une seule
+            // `documentLanguage`.
+            contentLanguageAccessory: AnyView(documentLanguageCapsule)
         )
     }
 

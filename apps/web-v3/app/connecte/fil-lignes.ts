@@ -368,6 +368,24 @@ const accuseHtml = (accuse: Message['accuse']): string =>
 const accuse = (message: Message): string => (message.deMoi && !message.systeme ? accuseHtml(message.accuse) : '');
 
 /**
+ * **La DATATION — la seconde colonne du corps** (#5136, directive porteur
+ * 2026-09-04 : « mettre la date et coche au niveau de la bulle et non sur une
+ * ligne […] la seconde colonne alignée en bas contient la date et
+ * l'information de réception si nécessaire »).
+ *
+ * L'heure et l'accusé vivaient dans `.meta`, la ligne posée SOUS le texte.
+ * `<time>` en était le seul contributeur de hauteur — `.reagir-slot` est en
+ * `height:0`, `.langue` et `.modifie` sont conditionnels — donc cette ligne
+ * réservait, sous chaque message, la hauteur d'un texte pour deux informations
+ * qui se lisent aussi bien à côté.
+ *
+ * **« si nécessaire »** est rendu par `accuse` lui-même, qui ne peint rien pour
+ * un message reçu : la colonne d'un message d'autrui ne porte que son heure.
+ */
+const datation = (message: Message, maintenant: number): string =>
+  `<p class="datation">${heure(message, maintenant)}${accuse(message)}</p>`;
+
+/**
  * La pastille de langue (charte règle 22) : `ph-translate` + le code de la
  * langue d'ORIGINE, rendue SEULEMENT quand une traduction est servie. Sur un
  * message déjà dans la langue du lecteur, elle n'apprendrait rien.
@@ -467,7 +485,13 @@ export const ligne = ({
   return (
     `<li class="${classes(message, estUneSuite(message, precedent))}" ${attributs(message)}>` +
     avatar(message, adresse) +
-    '<div class="corps">' +
+    // DEUX COLONNES (#5136) : la bulle, et au bas de sa droite la datation.
+    // `colonnes` est une classe EXPLICITE plutôt qu'un `:has(> .bulle)` — le
+    // message système garde son corps d'une seule colonne, et un sélecteur
+    // conditionnel le rendrait tributaire d'une capacité du navigateur pour
+    // une distinction que le serveur connaît déjà.
+    '<div class="corps colonnes">' +
+    '<div class="bulle">' +
     '<p class="qui">' +
     nomDeLAuteur(message, adresse) +
     (message.anonyme ? `<span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span>` : '') +
@@ -483,13 +507,17 @@ export const ligne = ({
     pastille(message) +
     (message.edite ? `<span class="modifie">${echappe(FIL.modifie)}</span>` : '') +
     // La PLACE du bouton « Réagir », réservée : le module y pose le bouton sans
-    // déplacer l'heure ni l'accusé (sondé : sans elle, ils glissaient de 56 px à
-    // l'arrivée du module). Vide, elle n'est pas un contrôle — rien d'inerte.
+    // déplacer ce qui suit (sondé : sans elle, ça glissait de 56 px à l'arrivée
+    // du module). Vide, elle n'est pas un contrôle — rien d'inerte.
+    //
+    // Ce qu'elle protégeait — l'heure et l'accusé — a quitté cette ligne pour
+    // la datation. Elle reste néanmoins réservée : `.langue` et `.modifie` la
+    // PRÉCÈDENT, et sans elle le bouton, en arrivant, les pousserait.
     '<span class="reagir-slot"></span>' +
-    heure(message, maintenant) +
-    accuse(message) +
     '</p>' +
     reactionsHtml(message, adresse) +
+    '</div>' +
+    datation(message, maintenant) +
     '</div>' +
     '</li>'
   );
@@ -552,7 +580,12 @@ export const gabaritDeLigne = (adresse: string): string =>
   // rechargée en avait deux : la jumelle exacte que ce gabarit existe pour
   // empêcher (#5030).
   `<a class="avatar-lien"><span class="avatar t1" aria-hidden="true"></span><span class="avatar fantome" aria-hidden="true" hidden>${svgDuSprite('ph-ghost')}</span></a>` +
-  '<div class="corps">' +
+  // La MÊME géographie que la ligne servie (#5136) — c'est l'invariant en tête
+  // de ce fichier : « la bulle reçue en direct et la bulle rechargée » doivent
+  // être indiscernables. Une datation posée ici et pas là (ou l'inverse) ferait
+  // sauter chaque message au premier rechargement.
+  '<div class="corps colonnes">' +
+  '<div class="bulle">' +
   `<p class="qui"><a class="nom-lien"><span class="nom"></span></a><span class="anonyme">${svgDuSprite('ph-ghost')}${echappe(FIL.anonyme)}</span></p>` +
   gabaritDeCitation() +
   `<ul class="pieces" hidden>${gabaritDePiece()}</ul>` +
@@ -561,14 +594,18 @@ export const gabaritDeLigne = (adresse: string): string =>
   '<p class="meta">' +
   `<span class="langue" title="${echappe(FIL.traduitDepuis)}" hidden>${svgDuSprite('ph-translate')}<span class="code"></span></span>` +
   `<span class="modifie">${echappe(FIL.modifie)}</span>` +
+  // L'attente et l'échec restent DANS la bulle : ils ne datent pas le message,
+  // ils disent que l'envoi n'a pas abouti — et la feuille les rend exclusifs de
+  // l'accusé (`.ligne.envoi-attente .accuse{display:none}`), qui, lui, part
+  // dans la datation.
   `<span class="attente">${svgDuSprite('ph-clock')}<span class="etat-envoi">${echappe(FIL.enAttente)}</span></span>` +
   `<span class="echec">${svgDuSprite('ph-warning-circle')}<span class="raison">${echappe(FIL.echec)}</span>` +
   `<button type="button" class="action discrete reessayer">${echappe(FIL.reessayer)}</button></span>` +
   boutonReagir() +
-  '<time></time>' +
-  accuseHtml('envoye') +
   '</p>' +
   `<ul class="reactions" aria-label="${echappe(FIL.reactions)}" hidden>${pastilleDeReaction({ emoji: '', nombre: 0, messageId: '', adresse })}</ul>` +
+  '</div>' +
+  `<p class="datation"><time></time>${accuseHtml('envoye')}</p>` +
   '</div>' +
   '</li>' +
   '</template>' +

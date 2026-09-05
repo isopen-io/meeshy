@@ -480,8 +480,23 @@ nonisolated enum ComposerSceneCapabilities {
     /// complet — le texte de la publication est à lui (`documentText`), et
     /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
     /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
+    ///
+    /// **`.content` y entre le 2026-09-04** (#4890, directive porteur : « affiche
+    /// dans la rangée canonique de quoi modifier LE CONTENU du poste »). Servie
+    /// pour la même raison que `.hashtag` : le meuble possède le chemin
+    /// COMPLET — `documentText` est à lui, `postContentEditor` l'écrit, et
+    /// `ComposerDocumentDraft.document(text:)` le poste. Une porte servie sans
+    /// son chemin ouvrirait un champ dont le texte n'irait nulle part, ce qui
+    /// est exactement le défaut que ce lot referme sur les légendes.
+    ///
+    /// > **La déclarer ici est le pas qu'on oublie**, et il ne rougit nulle
+    /// > part : `offered` filtre sur `served.contains`, si bien qu'une porte
+    /// > entièrement écrite — case, niveau, glyphe, libellé, geste, pastille —
+    /// > reste INVISIBLE tant que ce jeu ne la nomme pas. Mesuré au simulateur
+    /// > le 2026-09-04 : la rangée montrait toujours ses cinq entrées.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .text, .background, .drawing, .sticker, .mention, .hashtag, .place
+        .description, .content, .media, .sound, .text, .background, .drawing,
+        .sticker, .mention, .hashtag, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à

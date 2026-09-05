@@ -32,9 +32,18 @@ let passerelle: PasserelleDeBouchon;
 let v3: ServeurV3;
 
 /** Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais par une minuterie seule. */
+/**
+ * Attendu par l'EFFET, jamais par une minuterie : `data-participation` est
+ * SERVI (il annonce un module, il ne prouve pas son arrivée), et le 1 200 ms
+ * qui vivait ici rougissait en CI dès que FCP + oisiveté + import le
+ * dépassaient — le `fill` partait AVANT l'écouteur `input`, et le brouillon
+ * relu après rechargement était vide. `data-brouillon="arme"` est posé par le
+ * module APRÈS ses écouteurs : taper ensuite, c'est être entendu.
+ */
 const attendsLeModule = async (page: import('@playwright/test').Page): Promise<void> => {
-  await page.waitForFunction(() => document.querySelector('main[data-participation="composer"]') !== null);
-  await page.waitForTimeout(1_200);
+  await page.waitForFunction(
+    () => document.querySelector('main[data-brouillon="arme"]') !== null,
+  );
 };
 
 test.beforeAll(async () => {

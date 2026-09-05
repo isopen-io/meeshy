@@ -390,7 +390,10 @@ final class NotificationListViewModel: ObservableObject {
         }
     }
 
-    init() {
+    private let service: NotificationServiceProviding
+
+    init(service: NotificationServiceProviding = NotificationService.shared) {
+        self.service = service
         subscribeToRealTimeEvents()
     }
 
@@ -512,7 +515,7 @@ final class NotificationListViewModel: ObservableObject {
         do {
             // Sans rang ni curseur : la première page KEYSET (#4901) — plus de
             // `count()` payé pour un total que cet écran n'affiche pas.
-            let response = try await NotificationService.shared.list(limit: limit, unreadOnly: false)
+            let response = try await service.list(offset: nil, cursor: nil, limit: limit, unreadOnly: false)
             notifications = response.data
             hasMore = response.pagination?.hasMore ?? false
             nextCursor = response.pagination?.nextCursor
@@ -533,7 +536,7 @@ final class NotificationListViewModel: ObservableObject {
             // notification arrivée en tête entre deux pages ne fait ni doublon
             // ni ligne sautée. Le RANG reste le repli d'un gateway antérieur
             // qui ne servirait pas d'ancre (dimension 9), jamais le défaut.
-            let response = try await NotificationService.shared.list(
+            let response = try await service.list(
                 offset: nextCursor == nil ? offset : nil,
                 cursor: nextCursor,
                 limit: limit,

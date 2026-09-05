@@ -384,7 +384,22 @@ extension MeeshyComposerHost {
             // depuis le 2026-08-30 : le champ permanent qui l'affichait dès
             // qu'un texte existait a été retiré sur directive porteur.
             HapticFeedback.light()
+            // **Ouvrir l'une FERME l'autre** (#4890). Les deux zones s'ancrent
+            // en bas : ouvertes ensemble, elles se recouvriraient, et l'auteur
+            // taperait dans celle qu'il ne regarde pas. Le `body` le rend déjà
+            // impossible à l'affichage ; le fermer ICI garde l'ÉTAT d'accord
+            // avec ce qui est peint, sans quoi refermer la description
+            // rouvrirait le contenu par surprise.
+            editsPostContent = false
             editsSceneDescription = true
+        case .content:
+            // **Le CORPS du post** (#4890) — jamais la légende, que
+            // `.description` ouvre juste au-dessus. Deux portes voisines, deux
+            // textes réellement distincts : c'est la table de
+            // `ComposerSlideTextRole`, rendue atteignable.
+            HapticFeedback.light()
+            editsSceneDescription = false
+            editsPostContent = true
         case .drawing:
             // **Une porte à BASCULE, la seule du rail.** Les six autres font
             // entrer quelque chose et se referment ; celle-ci ouvre un MODE qui

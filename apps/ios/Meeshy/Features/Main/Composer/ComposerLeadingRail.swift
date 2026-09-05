@@ -320,6 +320,12 @@ nonisolated enum ComposerRailCopy {
         case .description:
             return String(localized: "composer.rail.description",
                           defaultValue: "Décrire", bundle: .main)
+        // Le VERBE, comme les autres — et un verbe qui ne se confond pas avec
+        // « Décrire », sa voisine immédiate dans la rangée. VoiceOver n'a pas le
+        // glyphe pour les distinguer : c'est la phrase qui doit le faire.
+        case .content:
+            return String(localized: "composer.rail.content",
+                          defaultValue: "Écrire le post", bundle: .main)
         case .media:
             return String(localized: "composer.rail.media",
                           defaultValue: "Ajouter un média", bundle: .main)

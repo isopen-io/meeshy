@@ -46,7 +46,7 @@ class NotificationRepositoryTest {
         (this as? CacheResult.Fresh)?.value ?: (this as CacheResult.Stale).value
 
     private suspend fun seed(vararg items: ApiNotification, unread: Int = items.count { !it.state.isRead }): NotificationRepository {
-        coEvery { api.list(any(), any(), any()) } returns ApiResponse(success = true, data = items.toList())
+        coEvery { api.list(any(), any(), any(), any()) } returns ApiResponse(success = true, data = items.toList())
         coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = unread)
         val repo = NotificationRepository(api)
         repo.refresh()
@@ -55,7 +55,7 @@ class NotificationRepositoryTest {
 
     @Test
     fun notificationsStream_emitsEmptyThenFreshOnFirstCollection() = runTest {
-        coEvery { api.list(any(), any(), any()) } returns ApiResponse(success = true, data = listOf(notification("n1")))
+        coEvery { api.list(any(), any(), any(), any()) } returns ApiResponse(success = true, data = listOf(notification("n1")))
         coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 1)
         val repo = NotificationRepository(api)
 
@@ -311,23 +311,6 @@ class NotificationRepositoryTest {
         coVerify(exactly = 1) { api.list(1, any(), any()) }
     }
 
-    @Test
-    fun loadMore_dedupesAlreadyKnownNotifications() = runTest {
-        coEvery { api.list(0, any(), any()) } returns
-            ApiResponse(success = true, data = listOf(notification("n1")), pagination = Pagination(hasMore = true))
-        coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 1)
-        val repo = NotificationRepository(api)
-        repo.refresh()
-        coEvery { api.list(1, any(), any()) } returns
-            ApiResponse(success = true, data = listOf(notification("n1")), pagination = Pagination(hasMore = false))
-
-        repo.loadMore()
-
-        repo.notificationsStream().test {
-            assertThat(awaitItem().notifications()).hasSize(1)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
 
     @Test
     fun loadMore_setsHasMoreFalseWhenTheServerSaysSo() = runTest {
@@ -523,4 +506,76 @@ class NotificationRepositoryTest {
 
         assertThat(repo.unreadCountStream.value).isEqualTo(7)
     }
+
+    /**
+     * LA PAIRE DU SERVEUR, portée côté client (#4901) — la jumelle de
+     * `NotificationCursorPaginationTests` (iOS) : la même collection VIVANTE
+     * mutée entre deux pages. Au CURSEUR, l'union est propre — l'ancre servie
+     * est empruntée VERBATIM, aucune ligne sautée ni dupliquée. Au RANG
+     * (gateway antérieur, aucun `nextCursor` servi), l'insertion en tête fait
+     * resservir n3 — et ce doublon est CONSERVÉ : c'est le SIGNAL que le
+     * `filterNot` supprimait en le supprimant.
+     */
+    @Test
+    fun loadMore_empruntesLeCurseurServiVerbatim_etLUnionEstPropre() = runTest {
+        val premierePage = listOf(notification("n1"), notification("n2"), notification("n3"))
+        coEvery { api.list(any(), any(), any(), any()) } returns ApiResponse(
+            success = true,
+            data = premierePage,
+            pagination = Pagination(limit = 3, hasMore = true, nextCursor = "ancre-n3"),
+        )
+        coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 3)
+        val repo = NotificationRepository(api)
+        repo.refresh()
+
+        // La collection VIT : n0 s'insère en tête entre les deux pages.
+        coEvery { api.list(any(), any(), any(), "ancre-n3") } returns ApiResponse(
+            success = true,
+            data = listOf(notification("n4"), notification("n5")),
+            pagination = Pagination(limit = 3, hasMore = false, nextCursor = "ancre-n5"),
+        )
+        repo.prependLive(notification("n0"))
+        repo.loadMore()
+
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id })
+                .containsExactly("n0", "n1", "n2", "n3", "n4", "n5")
+            cancelAndIgnoreRemainingEvents()
+        }
+        // L'ancre est passée VERBATIM à l'API — le mock qui ignorerait le
+        // `where` ne testerait pas la requête.
+        coVerify(exactly = 1) { api.list(null, any(), any(), "ancre-n3") }
+    }
+
+    @Test
+    fun loadMore_sansCurseurServi_repliAuRang_etLeDoublonResteVisible() = runTest {
+        val premierePage = listOf(notification("n1"), notification("n2"), notification("n3"))
+        coEvery { api.list(any(), any(), any(), any()) } returns ApiResponse(
+            success = true,
+            data = premierePage,
+            pagination = Pagination(limit = 3, hasMore = true, nextCursor = null),
+        )
+        coEvery { api.unreadCount() } returns UnreadCountResponse(success = true, count = 3)
+        val repo = NotificationRepository(api)
+        repo.refresh()
+
+        // n0 s'insère en tête ; la tranche par RANG (offset = 4) resservira n3.
+        repo.prependLive(notification("n0"))
+        coEvery { api.list(4, any(), any(), null) } returns ApiResponse(
+            success = true,
+            data = listOf(notification("n3"), notification("n4")),
+            pagination = Pagination(limit = 3, hasMore = false, nextCursor = null),
+        )
+        repo.loadMore()
+
+        // Le doublon n3 est LÀ, visible — le signal d'une tranche par rang sur
+        // une collection vivante. Le masquer (filterNot) cachait la ligne
+        // PERDUE du cas symétrique (une suppression entre deux pages).
+        repo.notificationsStream().test {
+            assertThat(awaitItem().notifications().map { it.id })
+                .containsExactly("n0", "n1", "n2", "n3", "n3", "n4")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
 }

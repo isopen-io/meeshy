@@ -458,16 +458,22 @@ class CanvasV3ProjectionTest {
     }
 
     /**
-     * **Une borne seule ne devient pas une fenêtre fabriquée.** Même règle que
-     * le recadrage (#5085) : un début sans fin n'a pas de repli sensé — le
-     * compléter par la durée du fichier inventerait une coupe que personne n'a
-     * posée, et jouer de 3 s à l'infini n'est pas ce que l'auteur a demandé.
+     * **Une borne SEULE est une fenêtre à demi ouverte, pas une fenêtre nulle**
+     * — correction du 2026-09-04.
      *
-     * Le document déjà stocké sous une forme amputée ne repasse par aucune
-     * validation : le modèle doit donc refuser ce que le contrat refuse.
+     * La première rédaction refusait la paire incomplète, par analogie avec le
+     * recadrage (#5085). L'analogie était fausse : quatre fractions de cadre
+     * amputées n'ont aucun repli sensé, mais **une fin de lecture manquante en a
+     * un, évident — la fin du fichier.**
+     *
+     * iOS le fait déjà (`StoryMediaLayer.startLoadingTrimWindow` charge
+     * `asset.duration` et complète), et l'écrivain émet les deux bornes
+     * INDÉPENDAMMENT (deux `if let` séparés). Refuser ici faisait jouer à 0 sur
+     * Android un clip qui démarrait à 3 s sur iOS — une divergence introduite
+     * par le correctif lui-même.
      */
     @Test
-    fun `une borne de lecture amputée ne produit aucune fenêtre`() {
+    fun `une borne de lecture seule ouvre la fenêtre jusqu à la fin`() {
         val projected = effectsFromRaw(
             """
             { "v": 3, "scenes": [ { "id": "sc1", "objects": [
@@ -480,8 +486,33 @@ class CanvasV3ProjectionTest {
         )
         val media = projected.mediaObjects?.firstOrNull()
         assertThat(media).isNotNull()
-        assertThat(media!!.sourceStart).isNull()
+        assertThat(media!!.sourceStart).isEqualTo(3.0)
         assertThat(media.sourceEnd).isNull()
+        // Et la fenêtre servie au lecteur est ouverte à droite : ExoPlayer
+        // l'exprime nativement en omettant `setEndPositionMs`.
+        assertThat(StorySourceWindow.clippingMs(media.sourceStart, media.sourceEnd))
+            .isEqualTo(StorySourceWindowMs(3000L, null))
+    }
+
+    /**
+     * **Une FIN seule se lit « du début jusqu'à `end` ».** Le début implicite est
+     * zéro, et il n'a rien d'inventé — c'est là que toute source commence.
+     */
+    @Test
+    fun `une fin de lecture seule borne depuis le début`() {
+        assertThat(StorySourceWindow.clippingMs(null, 8.0))
+            .isEqualTo(StorySourceWindowMs(0L, 8000L))
+    }
+
+    /**
+     * **Un début NUL avec une fin absente n'est pas une fenêtre** — c'est la
+     * source entière. La servir comme fenêtre ferait porter au lecteur un
+     * découpage qui ne découpe rien.
+     */
+    @Test
+    fun `un début nul sans fin ne produit aucune fenêtre`() {
+        assertThat(StorySourceWindow.clippingMs(0.0, null)).isNull()
+        assertThat(StorySourceWindow.clippingMs(null, null)).isNull()
     }
 
     /**
@@ -491,10 +522,13 @@ class CanvasV3ProjectionTest {
      */
     @Test
     fun `la fenêtre de lecture se convertit en millisecondes`() {
-        assertThat(StorySourceWindow.clippingMs(3.0, 8.0)).isEqualTo(3000L to 8000L)
-        assertThat(StorySourceWindow.clippingMs(1.5, 4.25)).isEqualTo(1500L to 4250L)
-        assertThat(StorySourceWindow.clippingMs(null, 8.0)).isNull()
-        assertThat(StorySourceWindow.clippingMs(3.0, null)).isNull()
+        assertThat(StorySourceWindow.clippingMs(3.0, 8.0)).isEqualTo(StorySourceWindowMs(3000L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(1.5, 4.25)).isEqualTo(StorySourceWindowMs(1500L, 4250L))
+        // Ces deux-là ne sont PLUS nulles depuis la correction du 2026-09-04 :
+        // une borne seule ouvre la fenêtre du côté manquant. Leurs cas propres
+        // sont épinglés par les deux témoins dédiés ci-dessous.
+        assertThat(StorySourceWindow.clippingMs(null, 8.0)).isEqualTo(StorySourceWindowMs(0L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(3.0, null)).isEqualTo(StorySourceWindowMs(3000L, null))
     }
 
     /**
@@ -506,6 +540,6 @@ class CanvasV3ProjectionTest {
     @Test
     fun `une fenêtre qui s aplatit à la milliseconde est refusée`() {
         assertThat(StorySourceWindow.clippingMs(3.0000, 3.0004)).isNull()
-        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(3000L to 3001L)
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(StorySourceWindowMs(3000L, 3001L))
     }
 }

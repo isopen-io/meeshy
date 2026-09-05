@@ -171,8 +171,23 @@ describe('une bulle qui arrive', () => {
     // `a.avatar-lien` / `a.nom-lien` sont entrées dans cette liste avec #5030 : elles
     // manquaient au GABARIT depuis #4958, donc une bulle PEINTE n'avait aucun chemin
     // vers le profil quand la MÊME bulle rechargée en avait deux — et cette
-    // énumération, écrite avant elles, ne pouvait pas le dire.
-    ['a.avatar-lien', '.avatar', 'a.nom-lien', '.qui .nom', '.texte', 'details.original', '.meta .langue', '.meta time', 'ul.reactions'].forEach((fente) => {
+    // énumération, écrite avant elles, ne pouvait pas le dire. `.corps.colonnes >
+    // .bulle` et `.corps.colonnes > .datation time` remplacent `.meta time` depuis
+    // #5136 : l'heure et l'accusé ont quitté la ligne méta pour la SECONDE COLONNE
+    // du corps — servie et directe doivent porter la MÊME géographie, pas
+    // seulement les mêmes classes.
+    [
+      'a.avatar-lien',
+      '.avatar',
+      'a.nom-lien',
+      '.qui .nom',
+      '.texte',
+      'details.original',
+      '.meta .langue',
+      '.corps.colonnes > .bulle',
+      '.corps.colonnes > .datation time',
+      'ul.reactions',
+    ].forEach((fente) => {
       expect(ligne.querySelector(fente)).not.toBeNull();
       expect(servie.querySelector(fente)).not.toBeNull();
     });

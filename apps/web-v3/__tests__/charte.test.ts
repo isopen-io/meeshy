@@ -423,6 +423,13 @@ describe('règle 18 — l’encre de la phrase de l’état vide est --color-tex
     expect(carteVideP?.corps).toContain('color:var(--color-text)');
     expect(carteVideP?.corps ?? '').not.toMatch(/--color-text-(?:muted|subtle)\b/);
   });
+
+  it('pose --color-text sur .bandeau p (fil), jamais --color-text-muted ni --color-text-subtle', () => {
+    const [bandeauP] = regles(FEUILLE_DU_FIL).filter(({ selecteur }) => selecteur === '.bandeau p');
+
+    expect(bandeauP?.corps).toContain('color:var(--color-text)');
+    expect(bandeauP?.corps ?? '').not.toMatch(/--color-text-(?:muted|subtle)\b/);
+  });
 });
 
 /**
