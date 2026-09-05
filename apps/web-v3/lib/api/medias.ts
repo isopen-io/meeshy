@@ -18,13 +18,30 @@ import { GENRES_DE_PIECE, type GenreDePiece } from './formes';
  * manque donc les TROIS choses sans lesquelles cet écran ne tient pas ses
  * promesses :
  *
- *   1. **La PROTECTION.** Aucun des trois drapeaux (`isViewOnce`, `isBlurred`,
- *      `expiresAt`) n'est servi par cette route. Une grille bâtie sur elle
+ *   1. **La PROTECTION — au niveau MESSAGE, et SEULEMENT à ce niveau.**
+ *      Aucun des trois drapeaux (`isViewOnce`, `isBlurred`, `expiresAt`)
+ *      n'est servi par cette route dédiée. Une grille bâtie sur elle
  *      rendrait l'URL entière d'une photo à VUE UNIQUE — le défaut du cycle
  *      125 du `CLAUDE.md`, rejoué sur un écran neuf. Ici, la garde est
  *      HÉRITÉE et ne se contourne pas par oubli : `message()` rend
  *      `pieces: []` sur un message protégé ou supprimé, donc la galerie n'a
  *      rien à projeter.
+ *      **Mais cette garantie ne couvre que le niveau MESSAGE.** Le
+ *      CLAUDE.md (§ Prisme, cycle 125) pose que la protection se lit aussi
+ *      au niveau PIÈCE JOINTE (`MessageAttachment.isViewOnce` /
+ *      `isBlurred` / `effectFlags`) — et LA ROUTE QUE CETTE GALERIE LIT
+ *      RÉELLEMENT, `GET /conversations/:id/messages`
+ *      (`services/gateway/src/routes/conversations/messages-list-query.ts:250`),
+ *      sélectionne ses pièces avec `attachmentMediaSelect`
+ *      (`services/gateway/src/services/attachments/attachmentIncludes.ts:69-103`),
+ *      qui NE PORTE AUCUN des trois drapeaux au niveau pièce — ils ne
+ *      vivent que dans `attachmentFullSelect`, réservé au message CITÉ
+ *      (`replyTo`, même fichier `:330`). Aucune fuite n'est prouvée (rien
+ *      n'établit que le produit pose ces drapeaux sur une pièce d'un
+ *      message NON protégé), mais rien ne le GARANTIT non plus : cette
+ *      galerie est structurellement aveugle au drapeau PIÈCE. Issue
+ *      compagnon gateway : #5125 — aucun diff serveur ici, ce n'est pas un
+ *      bogue prouvé du contrat existant.
  *   2. **La TRANSCRIPTION**, que le critère de fin de l'écran exige au Prisme,
  *      avec sa langue déclarée.
  *   3. Le Prisme lui-même — la PISTE élue par la langue du texte servi

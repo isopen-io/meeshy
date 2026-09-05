@@ -78,9 +78,18 @@ export const ancreDuMessage = (id: string): string => `#${encodeURIComponent(ide
 /** L'adresse de la porte, cadrée sur un message — la cible du Post/Redirect/Get. */
 export const adresseDuMessage = (adresse: string, id: string): string => `${adresse}${ancreDuMessage(id)}`;
 
-/** L'adresse de la porte, servie AUTOUR d'un message — la tranche qui le contient, à coup sûr. */
+/**
+ * L'adresse de la porte, servie AUTOUR d'un message — la tranche qui le
+ * contient, à coup sûr. `adresse` est en général NUE (`adresseDeLaPorte`,
+ * sans `?`), mais la galerie des médias (`app/connecte/medias-vue.ts`) y
+ * passe sa propre adresse déjà FILTRÉE (`?genre=…`, `lib/api/medias.ts`) : le
+ * séparateur s'adapte, sous peine du bogue mesuré une fois — un second `?`
+ * dans la chaîne, que `URL().searchParams` ne coupe QUE sur `&`, si bien que
+ * `autour=` finissait comme une queue collée à la valeur de `genre=` et
+ * n'était jamais lu.
+ */
 export const adresseAutourDuMessage = (adresse: string, messageId: string): string =>
-  `${adresse}?${PARAM_DE_L_ANCRE}=${encodeURIComponent(messageId)}`;
+  `${adresse}${adresse.includes('?') ? '&' : '?'}${PARAM_DE_L_ANCRE}=${encodeURIComponent(messageId)}`;
 
 /** L'ouverture : la tranche qui porte la pièce, et la pièce. */
 export const adresseDuPlein = (adresse: string, messageId: string, pieceId: string): string =>
