@@ -407,6 +407,25 @@ describe('POST /posts/impressions/batch — le LOT réduit ses ids par audience 
     expect(increments).toEqual([2]);
     await app.close();
   });
+
+  it('enregistre TOUS les ids admis au-delà de 50 — le plafond du schéma (100) est le seul, plus de troncature silencieuse', async () => {
+    const bulkIds = Array.from({ length: 60 }, (_, i) => `507f1f77bcf86cd79944${i.toString(16).padStart(4, '0')}`);
+    const universe = Object.fromEntries(bulkIds.map((id) => [id, acl(id, 'PUBLIC')]));
+    const prisma = makePrisma({ universe });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: bulkIds, source: 'feed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(60);
+    expect(prisma.postImpression.createMany).toHaveBeenCalledWith({
+      data: bulkIds.map((postId) => ({ postId, userId: VIEWER_ID, source: 'feed' })),
+    });
+    await app.close();
+  });
 });
 
 // ─── POST /posts/:postId/share ────────────────────────────────────────────────

@@ -13,8 +13,18 @@ import {
   type SocialEventsDeps,
 } from '../social/events';
 
-/** Plafond d'ids par appel du lot — la borne de la passe de lecture d'audience. */
-const IMPRESSION_BATCH_CAP = 50;
+/**
+ * Plafond d'ids par appel du lot. UNE source de vérité, référencée par le
+ * schéma (`maxItems`) ET par la garde de troncature interne : les deux avaient
+ * divergé. Le schéma déclarait 100 — précédent `user-deletions.ts`, et la borne
+ * dont dépend le cliquet `unbounded-findmany-guard` (« /posts/impressions/batch
+ * plafonne a 100 ») — pendant que cette garde tronquait SILENCIEUSEMENT à 50.
+ * Un lot de 51 à 100 ids VALIDES rendait donc 200 en n'enregistrant que les 50
+ * premiers ; `recorded` ne signalait jamais les disparus. Une seule constante
+ * rend la divergence impossible : le schéma REFUSE au-delà, la garde borne la
+ * même valeur, et aucune impression admise n'est plus perdue en silence.
+ */
+const IMPRESSION_BATCH_CAP = 100;
 
 /**
  * L'impression — ses deux adresses passent en sursis vers `POST /social/events` (#4150).
@@ -106,12 +116,16 @@ export function registerImpressionRoutes(
           // un appelant authentifié choisit seul le travail que la passerelle
           // exécute — un lot de cent mille ids devient une lecture de cent mille
           // lignes et autant de verdicts.
+          // Le plafond suit le précédent de `user-deletions.ts` ; un écran de
+          // fil n'observe jamais plus de quelques dizaines de posts par salve.
+          // La borne est `IMPRESSION_BATCH_CAP` — la MÊME que la garde de
+          // troncature interne, jamais un littéral qui puisse en diverger.
           //
           // PAS de `minItems` : un lot VIDE est un succès à zéro enregistrement,
           // et deux témoins l'exigent. Un client qui n'a rien observé ne doit
           // pas avoir à le vérifier avant d'appeler — c'est le serveur qui sait
-          // répondre « rien à faire ».
-          postIds: { type: 'array', items: { type: 'string' }, maxItems: 100 },
+          // répondre « rien à faire », pas l'appelant qui doit le deviner.
+          postIds: { type: 'array', items: { type: 'string' }, maxItems: IMPRESSION_BATCH_CAP },
           source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
         }
       }
