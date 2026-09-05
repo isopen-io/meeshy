@@ -40,6 +40,7 @@ const APERCU: ApercuDeJonction = {
   requireBirthday: false,
   languesAutorisees: [],
   participants: 12,
+  droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true },
 };
 
 const refus = (statut: number, code: string, message: string | null = null, suggestion: string | null = null): Refus => ({

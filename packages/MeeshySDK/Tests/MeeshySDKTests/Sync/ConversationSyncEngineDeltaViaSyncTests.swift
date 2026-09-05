@@ -179,10 +179,15 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         let succes = await engine.syncSinceLastCheckpoint()
 
         XCTAssertTrue(succes)
-        // `fullSync` passe par le SERVICE de conversations, jamais par l'API
-        // brute — c'est LUI le témoin de l'escalade.
-        XCTAssertGreaterThanOrEqual(mockService.listCallCount, 1,
-            "hasGap dit que l'absence dépasse ce que /sync sait rejouer : la vérité serveur reprend la main")
+        // L'escalade passe désormais par la VOIE DOUCE du plein (#4172,
+        // seconde moitié du critère 1) : une demande `/sync` depuis l'ÉPOQUE.
+        // Le mock scripté sert son delta unique (nextCursor absent ⇒ une
+        // page), donc le plein ABOUTIT sans jamais toucher le chemin
+        // historique — c'est la nouvelle vérité que ce témoin fige.
+        XCTAssertTrue(mockSync.demandes.contains { $0.since.hasPrefix("1970-01-01") },
+            "hasGap escalade vers le PLEIN — servi par /sync depuis l'époque, plus par ≈100 requêtes de rang")
+        XCTAssertEqual(mockService.listCallCount, 0,
+            "le chemin historique ne sert qu'en repli nommé — jamais quand /sync répond")
     }
 
     // MARK: - Le trou de séquence déclenche la resynchronisation (#4172 critère 3)

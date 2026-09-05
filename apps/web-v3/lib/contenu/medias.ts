@@ -44,4 +44,6 @@ export const MEDIAS = {
   videFiltre: (libelle: string): string => `Aucun média dans « ${libelle} »`,
   videFiltrePrecision: 'Essayez un autre type, ou revenez à « Tous ».',
   plusAnciens: 'Médias plus anciens',
+  /** Le plein écran de la galerie (§ 9 Q3) — le geste du legacy (« Voir dans le message »), repris ici. */
+  voirDansLaConversation: 'Voir dans la conversation',
 } as const;

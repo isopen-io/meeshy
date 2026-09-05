@@ -43,6 +43,7 @@ const TEMPS_REEL = {
     recherche: { nom: 'recherche.f.js', url: '/__v3/rt/recherche.f.js', corps: '' },
     liens: { nom: 'liens.f.js', url: '/__v3/rt/liens.f.js', corps: '' },
     commentaires: { nom: 'commentaires.f.js', url: '/__v3/rt/commentaires.f.js', corps: '' },
+    plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
     navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
     composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
     socket: { nom: 'socket.io.b.js', url: '/__v3/rt/socket.io.b.js', corps: '' },
@@ -126,6 +127,32 @@ describe('le fil face à axe', () => {
     expect(await graves()).toEqual([]);
   });
 
+  /**
+   * LA BRANCHE SOI DE LA SURIMPRESSION (#5030) — le fil INERTE derrière, un
+   * `<dialog open aria-modal>` devant, et UNE action `<a class="action
+   * primaire">` : c'est l'état que `?profil=<moi>` sert au membre, et il n'a
+   * jamais été balayé.
+   */
+  it('ne porte aucune violation grave — ?profil= sur SOI, action « Mon compte »', async () => {
+    ecris(
+      documentDuFil(
+        etat({
+          profil: {
+            handle: 'u1',
+            servi: {
+              genre: 'profil',
+              profil: { id: 'u1', nom: 'Amina Diallo', pseudonyme: 'amina', bio: 'Chef de projet · Lagos.', membreDepuis: '2024-03-01T00:00:00.000Z', anonyme: false },
+              relation: 'self',
+              estSoi: true,
+            },
+            confirmerBlocage: false,
+          },
+        }),
+      ),
+    );
+    expect(await graves()).toEqual([]);
+  });
+
   it('ne porte aucune violation grave — composeur fermé, fil vide', async () => {
     ecris(etatFerme());
     expect(await graves()).toEqual([]);
@@ -160,7 +187,7 @@ describe('le fil face à axe', () => {
     ecris(
       documentDuChoix({
         segment: 'lagos-q1',
-        apercu: { lien: 'mshy_lagos' as CleDeLien, nom: 'Équipe Lagos', description: 'Le canal.', conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: [], participants: 12 },
+        apercu: { lien: 'mshy_lagos' as CleDeLien, nom: 'Équipe Lagos', description: 'Le canal.', conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: [], participants: 12, droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true } },
         langueProposee: 'fr',
         saisie: { pseudo: '', courriel: '', naissance: '' },
         refus: null,

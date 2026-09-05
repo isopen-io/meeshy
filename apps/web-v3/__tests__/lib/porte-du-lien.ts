@@ -65,6 +65,13 @@ export const apercu = (exigences: Partial<{ requireAccount: boolean; requireNick
       requireEmail: false,
       requireBirthday: false,
       allowedLanguages: [],
+      // Les quatre droits que ce lien ouvre (`routes/anonymous.ts:691-694`, #4522) —
+      // les mêmes valeurs que le battement post-jonction sert plus bas (:95-96),
+      // pour que l'aperçu et la confirmation racontent le même lien.
+      allowAnonymousMessages: true,
+      allowAnonymousFiles: false,
+      allowAnonymousImages: false,
+      allowViewHistory: true,
       ...exigences,
       creator: { id: 'u1', username: 'ibrahim-le-createur', email: 'i@example.com' },
       conversation: { id: CONVERSATION, title: 'Équipe Lagos', type: 'group' },
@@ -139,6 +146,7 @@ export const APERCU_DE_TEST: ApercuDeJonction = {
   requireBirthday: false,
   languesAutorisees: [],
   participants: 12,
+  droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true },
 };
 
 export const document = (attributs: Partial<Omit<EtatDuChoix, 'apercu' | 'clos'>> & { readonly apercu?: ApercuDeJonction } = {}): string =>

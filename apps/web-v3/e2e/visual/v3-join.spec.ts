@@ -109,7 +109,8 @@ test.describe('la modale, sans JavaScript', () => {
     await page.locator('dialog details.droits summary').focus();
     await page.keyboard.press('Space');
     await expect(details).toHaveAttribute('open', '');
-    await expect(details.locator('li')).toHaveCount(5);
+    // Effectif + exigence + langues, puis les quatre VERDICTS que l'aperçu sert désormais (#4830).
+    await expect(details.locator('li')).toHaveCount(7);
 
     await page.keyboard.press('Enter');
     await expect(details).not.toHaveAttribute('open', '');

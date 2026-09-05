@@ -56,7 +56,7 @@ test.describe('la création de lien, sans navigation', () => {
 
     await page.locator('input[name="conversation"]').fill('Le potager du quartier');
     await page.locator('input[name="nom"]').fill('Voisins du 4e');
-    await page.locator('button[type="submit"]').click();
+    await page.locator('dialog.nouveau-lien button[type="submit"]').click();
 
     // Le carnet frais porte le lien neuf, l'avis le dit, la feuille est partie.
     await expect(page.locator('#carnet .avis[role="status"]')).toBeVisible();
@@ -76,7 +76,7 @@ test.describe('la création de lien, sans navigation', () => {
 
     await page.locator('input[name="nom"]').fill('Voisins');
     await page.locator('input[name="conversation"]').fill(' ');
-    await page.locator('button[type="submit"]').click();
+    await page.locator('dialog.nouveau-lien button[type="submit"]').click();
 
     await expect(page.locator('dialog.nouveau-lien [role="alert"]')).toBeVisible();
     await expect(page.locator('input[name="nom"]')).toHaveValue('Voisins');
@@ -98,10 +98,10 @@ test.describe('la création de lien, sans navigation', () => {
       (url) => url.pathname === '/links',
       (route) => (route.request().method() === 'POST' ? route.abort() : route.continue()),
     );
-    await page.locator('button[type="submit"]').click();
+    await page.locator('dialog.nouveau-lien button[type="submit"]').click();
 
     await expect(page.locator('dialog.nouveau-lien .avis-feuille')).toBeVisible();
     await expect(page.locator('input[name="nom"]')).toHaveValue('Voisins');
-    await expect(page.locator('button[type="submit"]')).toBeEnabled();
+    await expect(page.locator('dialog.nouveau-lien button[type="submit"]')).toBeEnabled();
   });
 });
