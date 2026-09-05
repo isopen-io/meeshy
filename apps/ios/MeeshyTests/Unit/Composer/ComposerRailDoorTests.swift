@@ -25,7 +25,7 @@ import XCTest
 ///
 /// | porte | niveau |
 /// |---|---|
-/// | média · son · sticker · lieu | crée un `MeeshyObject` |
+/// | média · son · sticker · lieu | crée un `MeeshySceneObject` |
 /// | description | vise la `MeeshySlide` |
 /// | **mention** | vise la **`MeeshyPublication`** |
 ///
@@ -87,7 +87,7 @@ final class ComposerRailDoorTests: XCTestCase {
     }
 
     /// **Le point que ce lot a mesuré plutôt que supposé.** L'issue annonçait
-    /// une porte qui poserait un `MeeshyObject` de kind `mention` — ce qui
+    /// une porte qui poserait un `MeeshySceneObject` de kind `mention` — ce qui
     /// aurait été un contrôle SANS EFFET, ce kind n'ayant aucun producteur et
     /// étant jeté à la relecture. La porte livrée vise la publication.
     func test_laMention_viseLaPublication_pasUnObjetDeScene() {

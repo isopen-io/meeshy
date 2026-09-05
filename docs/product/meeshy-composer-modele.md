@@ -9,7 +9,7 @@
 
 | Nom | Ce que c'est | Ce que ce n'est PAS |
 |---|---|---|
-| **`MeeshyObject`** | l'unité posée sur une scène : `kind` + `anchor` + `plane` + `z` + `transform` + `timing?` + `locale?` + `payload` | pas un fichier ; pas une pièce jointe |
+| **`MeeshySceneObject`** | l'unité posée sur une scène : `kind` + `anchor` + `plane` + `z` + `transform` + `timing?` + `locale?` + `payload` | pas un fichier ; pas une pièce jointe |
 | **`MeeshyScene`** | la surface qui restitue des objets, à un ratio donné, sur trois plans | pas un écran ; pas un éditeur |
 | **`MeeshySlide`** | **UNE scène + UNE description** | pas un conteneur de plusieurs scènes |
 | **`MeeshyPublication`** | un **profil** (S · R · P · M) + ses slides | pas un brouillon ; pas un post serveur |
@@ -19,10 +19,10 @@ MeeshyPublication  (profil S | R | P | M)
 └── slides: [MeeshySlide]                     1..10
      └── MeeshySlide = MeeshyScene + description
           └── MeeshyScene (ratio)
-               └── objects: [MeeshyObject]    plans: background · content · foreground
+               └── objects: [MeeshySceneObject]    plans: background · content · foreground
 ```
 
-**Réponse à la question posée** : on manipule des `MeeshyObject` posés sur une
+**Réponse à la question posée** : on manipule des `MeeshySceneObject` posés sur une
 `MeeshyScene` ; une `MeeshySlide` **EST** une scène plus sa description — elle ne
 la *contient* pas à côté d'autre chose. Une publication est un profil et ses slides.
 
@@ -125,7 +125,7 @@ lecteur, et #4911 pour la décision web / Android.
 
 ### Ce qui appartient à la PUBLICATION et non à une scène
 
-Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
+Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshySceneObject` : son
 **lieu** (d'où l'on publie), son **audience**, sa **langue déclarée**. Elles gouvernent ce qui PART,
 pas ce qui se voit sur une scène.
 
@@ -134,7 +134,7 @@ La confusion la plus facile est le lieu, parce que le mot est le même des deux 
 | | ce que c'est | où ça vit |
 |---|---|---|
 | le **lieu** de la publication | d'où l'on publie ; gouverne `location` et la découvrabilité | `MeeshyPublication` |
-| un `MeeshyObject` de kind `place` | une pastille POSÉE sur une scène, qui décore une image | `MeeshyScene`, plan `foreground` |
+| un `MeeshySceneObject` de kind `place` | une pastille POSÉE sur une scène, qui décore une image | `MeeshyScene`, plan `foreground` |
 
 Les deux peuvent coexister sur une même publication sans se contredire — l'un décrit l'origine,
 l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais être décrit comme
@@ -352,8 +352,13 @@ pas #4733, et ne doit pas être lu comme le faisant.
 ## 1 bis-2. `storyEffects` est un NOM DE CHAMP, pas un format (mesure 2026-09-03)
 
 Question posée par le porteur : *« storyEffects est encore d'actualité dans cette
-nouvelle version ? On a plus migré vers les MeeshySceneObject avec tous les
+nouvelle version ? On a plus migré vers les MeeshyObject avec tous les
 détails d'effet, start, end, transition d'entrée et de sortie ? »*
+
+> *Le nom `MeeshyObject` est laissé tel quel dans cette citation : c'est ce que le
+> porteur a écrit le 2026-09-03, avant que l'arbitrage du 2026-08-31 ne soit
+> appliqué au corpus le 2026-09-05. **Une citation ne se renomme pas** — la
+> corriger fabriquerait un compte rendu de ce que personne n'a dit.*
 
 La réponse tient en une phrase et vaut d'être écrite ici, parce que le nom du
 champ suggère le contraire de ce qui s'y trouve : **la migration a eu lieu À
@@ -461,7 +466,7 @@ Swift. Le tableau est mesuré le 2026-09-01, avec la commande qui le reproduit.
 
 | nom du modèle | contrat partagé (`packages/shared/types/canvas-v3.ts`) | type Swift livré |
 |---|---|---|
-| **`MeeshyObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
+| **`MeeshySceneObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
 | **`MeeshyScene`** | `SceneV3` — `scenes: []`, 1 à 10, ≤ 60 objets | `StorySlide` |
 | **`MeeshySlide`** (= scène + description) | **rien.** `SceneV3` ne porte **aucune description**, et le mot « slide » a **zéro occurrence** dans le contrat | **aucun type de ce nom** |
 | **`MeeshyPublication`** | **rien.** Elle se PROJETTE, et la cardinalité dépend du PROFIL — N posts en S, UN seul en P/R (§ 1 bis) | **aucun type de ce nom** |
@@ -579,7 +584,7 @@ Aucune question n'est posée à l'utilisateur. Le placement se déduit de l'éta
 
 ## 5. Un objet de la scène se manipule par appui long
 
-Appui long sur un `MeeshyObject` de la scène ⇒ ses actions, **et elles seules** (loi 4 —
+Appui long sur un `MeeshySceneObject` de la scène ⇒ ses actions, **et elles seules** (loi 4 —
 un contrôle existe ssi l'objet l'accepte, le profil l'autorise, et l'action a un effet) :
 
 | Action | Quand elle est servie |
@@ -589,7 +594,7 @@ un contrôle existe ssi l'objet l'accepte, le profil l'autorise, et l'action a u
 | **Sortir de la scène** | profil **≠ Story** — le média quitte la scène et redevient un média du post |
 
 **« Dans la scène » vs « hors de la scène » est la distinction structurante** : un média
-dans la scène est un `MeeshyObject` (il a une position, un plan, un z, un temps) ; un
+dans la scène est un `MeeshySceneObject` (il a une position, un plan, un z, un temps) ; un
 média hors de la scène est une slide à lui seul. Sortir un média de la scène, c'est le
 promouvoir en slide ; l'y poser, c'est l'inverse.
 
@@ -1229,7 +1234,7 @@ Le vocabulaire est neuf ; les représentations ne le sont pas. Rien à migrer au
 
 | Vocabulaire | Au fil (partagé) | En mémoire iOS (v1, derrière le pont) |
 |---|---|---|
-| `MeeshyObject` | `ObjectV3` (`packages/shared/types/canvas-v3.ts:37`) | `StoryTextObject` · `StoryMediaObject` · `StoryStickerObject` · `StoryAudioPlayerObject` · `StoryLocationObject` |
+| `MeeshySceneObject` | `ObjectV3` (`packages/shared/types/canvas-v3.ts:37`) | `StoryTextObject` · `StoryMediaObject` · `StoryStickerObject` · `StoryAudioPlayerObject` · `StoryLocationObject` |
 | `MeeshyScene` | `CanvasV3.scenes[i]` | `StorySlide.effects` (`StoryEffects`) |
 | `MeeshySlide` | une scène + son texte | `StorySlide` |
 | `MeeshyPublication` | le document `CanvasV3` + le profil | `StoryComposerViewModel.slides` + le profil |
@@ -1245,7 +1250,7 @@ agit — est dans `planche-meeshy-composer.md` § « Ce que les quatre noms NE c
 fichier-ci reste l'autorité sur les noms du CONTENU ; la planche l'est sur ceux du CHROME.
 
 **Règle de nommage** : tout code NEUF, toute issue, toute chaîne d'UI parlent
-`MeeshyObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
+`MeeshySceneObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
 restent en place comme représentation v1 derrière le pont — les renommer est un chantier
 à part, jamais un effet de bord d'un lot de feature.
 
