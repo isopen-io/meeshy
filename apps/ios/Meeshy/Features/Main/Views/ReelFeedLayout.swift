@@ -1,10 +1,19 @@
 import CoreGraphics
 
-/// Le média d'un réel détermine son rendu de fond dans le feed.
+/// Le média d'une surface de feed détermine son rendu de fond.
+///
+/// **`.scene` a rejoint l'énumération le 2026-09-05** (directive porteur :
+/// « repartage ou non, les scènes sont comme les vidéos »). Une scène — le
+/// canvas v3 d'un post composé, ou une story repartagée — concourt à
+/// l'élection du viewport au même titre qu'un réel vidéo. `mostCenteredReel`
+/// n'a jamais lu `kind` : ce cas ne change donc AUCUNE règle d'élection, il
+/// nomme ce que la surface porte, pour que le fil n'ait qu'une seule loi de
+/// lecture au lieu de trois politiques divergentes.
 enum ReelMediaKind: Equatable {
     case video
     case audio
     case imageOnly
+    case scene
 }
 
 /// Frame d'une carte réel rapportée au coordinateur d'autoplay (espace global).

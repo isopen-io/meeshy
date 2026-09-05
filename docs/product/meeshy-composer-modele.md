@@ -9,7 +9,7 @@
 
 | Nom | Ce que c'est | Ce que ce n'est PAS |
 |---|---|---|
-| **`MeeshyObject`** | l'unité posée sur une scène : `kind` + `anchor` + `plane` + `z` + `transform` + `timing?` + `locale?` + `payload` | pas un fichier ; pas une pièce jointe |
+| **`MeeshySceneObject`** | l'unité posée sur une scène : `kind` + `anchor` + `plane` + `z` + `transform` + `timing?` + `locale?` + `payload` | pas un fichier ; pas une pièce jointe |
 | **`MeeshyScene`** | la surface qui restitue des objets, à un ratio donné, sur trois plans | pas un écran ; pas un éditeur |
 | **`MeeshySlide`** | **UNE scène + UNE description** | pas un conteneur de plusieurs scènes |
 | **`MeeshyPublication`** | un **profil** (S · R · P · M) + ses slides | pas un brouillon ; pas un post serveur |
@@ -19,10 +19,10 @@ MeeshyPublication  (profil S | R | P | M)
 └── slides: [MeeshySlide]                     1..10
      └── MeeshySlide = MeeshyScene + description
           └── MeeshyScene (ratio)
-               └── objects: [MeeshyObject]    plans: background · content · foreground
+               └── objects: [MeeshySceneObject]    plans: background · content · foreground
 ```
 
-**Réponse à la question posée** : on manipule des `MeeshyObject` posés sur une
+**Réponse à la question posée** : on manipule des `MeeshySceneObject` posés sur une
 `MeeshyScene` ; une `MeeshySlide` **EST** une scène plus sa description — elle ne
 la *contient* pas à côté d'autre chose. Une publication est un profil et ses slides.
 
@@ -125,7 +125,7 @@ lecteur, et #4911 pour la décision web / Android.
 
 ### Ce qui appartient à la PUBLICATION et non à une scène
 
-Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
+Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshySceneObject` : son
 **lieu** (d'où l'on publie), son **audience**, sa **langue déclarée**. Elles gouvernent ce qui PART,
 pas ce qui se voit sur une scène.
 
@@ -134,7 +134,7 @@ La confusion la plus facile est le lieu, parce que le mot est le même des deux 
 | | ce que c'est | où ça vit |
 |---|---|---|
 | le **lieu** de la publication | d'où l'on publie ; gouverne `location` et la découvrabilité | `MeeshyPublication` |
-| un `MeeshyObject` de kind `place` | une pastille POSÉE sur une scène, qui décore une image | `MeeshyScene`, plan `foreground` |
+| un `MeeshySceneObject` de kind `place` | une pastille POSÉE sur une scène, qui décore une image | `MeeshyScene`, plan `foreground` |
 
 Les deux peuvent coexister sur une même publication sans se contredire — l'un décrit l'origine,
 l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais être décrit comme
@@ -352,8 +352,13 @@ pas #4733, et ne doit pas être lu comme le faisant.
 ## 1 bis-2. `storyEffects` est un NOM DE CHAMP, pas un format (mesure 2026-09-03)
 
 Question posée par le porteur : *« storyEffects est encore d'actualité dans cette
-nouvelle version ? On a plus migré vers les MeeshySceneObject avec tous les
+nouvelle version ? On a plus migré vers les MeeshyObject avec tous les
 détails d'effet, start, end, transition d'entrée et de sortie ? »*
+
+> *Le nom `MeeshyObject` est laissé tel quel dans cette citation : c'est ce que le
+> porteur a écrit le 2026-09-03, avant que l'arbitrage du 2026-08-31 ne soit
+> appliqué au corpus le 2026-09-05. **Une citation ne se renomme pas** — la
+> corriger fabriquerait un compte rendu de ce que personne n'a dit.*
 
 La réponse tient en une phrase et vaut d'être écrite ici, parce que le nom du
 champ suggère le contraire de ce qui s'y trouve : **la migration a eu lieu À
@@ -461,7 +466,7 @@ Swift. Le tableau est mesuré le 2026-09-01, avec la commande qui le reproduit.
 
 | nom du modèle | contrat partagé (`packages/shared/types/canvas-v3.ts`) | type Swift livré |
 |---|---|---|
-| **`MeeshyObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
+| **`MeeshySceneObject`** | `ObjectV3` — mais son `payload` est `Record<string, unknown>` : **aucun type d'objet n'est nommé au contrat** | `MeeshySceneObject` (somme à 5 cas) |
 | **`MeeshyScene`** | `SceneV3` — `scenes: []`, 1 à 10, ≤ 60 objets | `StorySlide` |
 | **`MeeshySlide`** (= scène + description) | **rien.** `SceneV3` ne porte **aucune description**, et le mot « slide » a **zéro occurrence** dans le contrat | **aucun type de ce nom** |
 | **`MeeshyPublication`** | **rien.** Elle se PROJETTE, et la cardinalité dépend du PROFIL — N posts en S, UN seul en P/R (§ 1 bis) | **aucun type de ce nom** |
@@ -579,7 +584,7 @@ Aucune question n'est posée à l'utilisateur. Le placement se déduit de l'éta
 
 ## 5. Un objet de la scène se manipule par appui long
 
-Appui long sur un `MeeshyObject` de la scène ⇒ ses actions, **et elles seules** (loi 4 —
+Appui long sur un `MeeshySceneObject` de la scène ⇒ ses actions, **et elles seules** (loi 4 —
 un contrôle existe ssi l'objet l'accepte, le profil l'autorise, et l'action a un effet) :
 
 | Action | Quand elle est servie |
@@ -589,31 +594,148 @@ un contrôle existe ssi l'objet l'accepte, le profil l'autorise, et l'action a u
 | **Sortir de la scène** | profil **≠ Story** — le média quitte la scène et redevient un média du post |
 
 **« Dans la scène » vs « hors de la scène » est la distinction structurante** : un média
-dans la scène est un `MeeshyObject` (il a une position, un plan, un z, un temps) ; un
+dans la scène est un `MeeshySceneObject` (il a une position, un plan, un z, un temps) ; un
 média hors de la scène est une slide à lui seul. Sortir un média de la scène, c'est le
 promouvoir en slide ; l'y poser, c'est l'inverse.
 
 ## 6. Le chrome de base
 
+> **Ce schéma était périmé sur TROIS points, corrigés le 2026-09-05.** Il ne
+> montrait ni la bande haute ni la bande basse que le § 1 décrit depuis #5001 et
+> #5002 — deux sections du même document, l'une ajoutée sans relire l'autre. Il
+> portait l'ŒIL au socle, alors que `.preview` n'a **aucun site de production**
+> (retiré le 2026-08-24, `meeshy-reader-modele.md` § 3). Et il ne montrait aucun
+> rail latéral, alors que la directive porteur du 2026-08-31 y a posé les
+> dimensions, l'historique et la création de slide.
+>
+> Un schéma est le passage d'un document qu'on lit en premier et qu'on met à jour
+> en dernier. Celui-ci a survécu à trois lots qui le contredisaient.
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  ✕      [ Post ▾ ]      ▭ ▭ ▭ ＋              ⋯          │   barre haute
 ├──────────────────────────────────────────────────────────┤
-│                                                          │
-│                    la scène courante                     │
-│                                                          │
+│  ♪ note · spectre · crédit · durée      (son de la SCÈNE)│   bande haute #5001
+│ ┌───┐ ┌──────────────────────────────────────┐ ┌───┐     │
+│ │ o │ │                                      │ │ ⤺ │     │
+│ │ b │ │         la scène courante            │ │ ⤻ │     │   couloirs
+│ │ j │ │      (carte 9:16, centrée)           │ │ ⇅ │     │   du plateau
+│ │ e │ │                                      │ │ ＋ │     │
+│ └───┘ └──────────────────────────────────────┘ └───┘     │
+│  #hashtags · @mentions référencées   (la PUBLICATION)    │   bande basse #5002
 ├──────────────────────────────────────────────────────────┤
 │  description de la slide (P) / le contenu (S·R)          │
 │  [ zone contextuelle — Amorce ou Inspecteur ]            │
-│  [ rangée d'outils ]                                     │
-│  🌐 Audience            👁            ⬆ Publier          │   socle
+│  [ ligne canonique — ce qui vise la publication/slide ]  │
+│  🌐 Audience                          ⬆ Publier          │   socle
 └──────────────────────────────────────────────────────────┘
 ```
 
 La barre haute porte, dans cet ordre : **✕** (fermer) · le **type de publication**
 (sélecteur) · le **rail des slides** (vignettes + ajouter) · **⋯** (le reste).
-Le rail des slides monte dans la barre haute : c'est là qu'on navigue entre les slides,
-pas au milieu du document.
+
+**Les deux bandes ENCADRENT la carte et ne qualifient pas la même chose** — la
+haute parle de la SCÈNE, la basse de la PUBLICATION ; c'est le § 1 qui en porte
+la règle et la décision-produit restée ouverte.
+
+**Les deux couloirs latéraux ne sont pas sur la carte, ils sont à côté d'elle**
+(directive porteur 2026-08-31) : à GAUCHE ce qui pose un objet SUR la scène, à
+DROITE ce qui agit sur les DIMENSIONS des objets — plus l'historique
+(undo/redo, #4586) et la création d'une autre slide. Aucun contrôle ne se pose
+sur le canvas : un rail flottant volerait les touches de la bande qu'il couvre,
+et l'auteur découvrirait la zone morte en essayant d'y traîner quelque chose.
+
+**Le socle porte DEUX membres, pas trois.** La loi 5 en annonce trois — audience ·
+aperçu · publier — mais l'œil n'a aucun site : `ScenePlayerMode.preview` est une
+absence DÉCLARÉE depuis le 2026-08-24. Le troisième membre est une place vacante,
+pas une pièce manquante ; le jour où l'aperçu revient, c'est ici qu'il se pose.
+
+## 6 bis-0. Les trois inventaires du chrome — et pourquoi leur COMPTE se mérite (mesure 2026-09-05)
+
+Le § 6 dessine le chrome ; ce paragraphe le NOMME. Trois inventaires gouvernent
+l'entrée dans le composer et la place de chaque contrôle, **et aucun des deux
+documents d'autorité ne les mentionnait** — ils vivaient dans des doc-comments et
+une garde. Or le NIVEAU d'une porte est une RÈGLE : c'est lui qui décide de quel
+côté elle se pose (§ « Le composer met ses portes SUR LE PLATEAU », `apps/ios/CLAUDE.md`).
+
+| inventaire | ce qu'il énumère | contenu mesuré |
+|---|---|---|
+| **`ComposerRailDoor`** (11) | les portes qui posent ou règlent quelque chose | `description` · `content` · `media` · `sound` · `sticker` · `mention` · `place` · `drawing` · `text` · `hashtag` · `background` |
+| **`ComposerRailLevel`** (4) | ce que la porte VISE — et donc où elle se pose | `publication` · `slide` · `object` · `scene` |
+| **`ComposerOrigin`** (8) | par où l'on ENTRE dans le composer | `storyTray` · `feedComposer` · `moodChip` · `repost` · `edit` · `draft` · `share` · `conversationMedia` |
+| `ComposerDocumentTool.canonicalRow` (7) | les outils d'attache du document | `photo` · `camera` · `emoji` · `document` · `place` · `microphone` · `mention` |
+
+**`rangée canonique` désigne DEUX choses**, et il faut le savoir avant de lire une
+directive : `ComposerDocumentTool.canonicalRow` (les sept outils d'attache du
+document, en colonne sous l'avatar depuis #5082) et la rangée contextuelle du bas
+de scène que sert `ComposerRailDoor`. Le même document emploie aussi
+« ligne canonique » pour la seconde. Un mot, deux inventaires, deux niveaux — c'est
+le meilleur candidat au vocabulaire à trancher.
+
+### Le compte de ces enums n'est PAS reproductible par `grep`, et il faut le dire
+
+Quatre méthodes ont été essayées sur `ComposerOrigin` le même jour, et elles ont
+rendu **5, 5, 15, puis 8** :
+
+| méthode | rendu | ce qu'elle rate |
+|---|---|---|
+| `awk` borné à 60 lignes | 5 | l'enum est plus long que la fenêtre |
+| équilibrage d'accolades + `^\s*case\s+(\w+)` | 5 | **un `case a, b, c` ne rend que `a`** |
+| idem + tous les identifiants de la ligne | 15 | les **valeurs associées** (`ofPostId`, `documentFormat`, `messageId`…) ne sont pas des cas |
+| équilibrage + découpage par virgules **hors parenthèses** | **8** | — |
+
+> **Un enum Swift à valeurs associées n'a pas d'équivalent de `Mirror`.** Le § 6
+> bis a résolu le recensement des CHAMPS en adoptant une définition qui n'était
+> pas la sienne — celle de Swift lui-même. Pour les CAS, `CaseIterable` jouerait
+> ce rôle, mais un enum à valeurs associées ne peut pas s'y conformer. Il n'y a
+> donc pas de définition empruntable : le compte se mérite, et **c'est la
+> commande qu'on publie, jamais le nombre seul**.
+
+La commande qui rend les lignes du tableau ci-dessus, et qu'on rejoue plutôt que
+de croire le nombre :
+
+```bash
+python3 - <<'EOF'
+import re, pathlib
+def cas(fichier, enum):
+    s = pathlib.Path(fichier).read_text()
+    j = s.index("{", s.index(enum)); d, k = 0, j
+    while True:
+        d += (s[k] == "{") - (s[k] == "}")
+        if d == 0: break
+        k += 1
+    out = []
+    for ligne in re.findall(r'^\s*case\s+(.+)$', s[j:k], re.M):
+        prof, seg, segs = 0, "", []
+        for c in ligne.split("//")[0]:
+            prof += (c == "(") - (c == ")")
+            if c == "," and prof == 0: segs.append(seg); seg = ""
+            else: seg += c
+        segs.append(seg)
+        out += [m.group(1) for sg in segs if (m := re.match(r'\s*([a-z][a-zA-Z]*)', sg))]
+    return list(dict.fromkeys(out))
+for f, e in [("apps/ios/Meeshy/Features/Main/Composer/ComposerRailDoor.swift", "enum ComposerRailDoor"),
+             ("apps/ios/Meeshy/Features/Main/Composer/ComposerIntent.swift", "enum ComposerOrigin")]:
+    c = cas(f, e); print(f"{e.split()[-1]} : {len(c)} — {' · '.join(c)}")
+EOF
+```
+
+La vérité reste le fichier source. Un chiffre recopié ici sans sa commande serait
+une décoration — et ce document en a déjà porté trois qui ne tombaient pas juste.
+
+### Les mots du chrome qui n'ont aucune autorité sémantique
+
+Mesuré : `plateau`, `couloir`, `meuble`, `étagère` et `timeline` sont employés
+massivement dans le code (des centaines de fichiers pour les trois premiers, 161
+fichiers SDK pour `timeline`) et **n'apparaissent dans aucun des deux
+`*-modele.md`** autrement qu'en passant. `couloir` — le mot qui a tranché la
+géographie des rails (#4561, #4633) — n'est écrit que dans `apps/ios/CLAUDE.md`.
+
+Ce n'est pas un oubli à combler d'un trait : un mot n'entre dans un document
+d'autorité que lorsqu'on peut dire ce qu'il DÉSIGNE et ce qu'il ne désigne pas.
+`étagère` en est l'exemple — il sert déjà pour deux choses (les quatre onglets
+File · Brouillons · Publiées · Archive, et la bibliothèque de sons), et l'inscrire
+sans trancher figerait la confusion au lieu de la lever.
 
 ## 6 bis. Où la structure d'une publication est VRAIMENT connue (mesure 2026-09-02)
 
@@ -1229,7 +1351,7 @@ Le vocabulaire est neuf ; les représentations ne le sont pas. Rien à migrer au
 
 | Vocabulaire | Au fil (partagé) | En mémoire iOS (v1, derrière le pont) |
 |---|---|---|
-| `MeeshyObject` | `ObjectV3` (`packages/shared/types/canvas-v3.ts:37`) | `StoryTextObject` · `StoryMediaObject` · `StoryStickerObject` · `StoryAudioPlayerObject` · `StoryLocationObject` |
+| `MeeshySceneObject` | `ObjectV3` (`packages/shared/types/canvas-v3.ts:37`) | `StoryTextObject` · `StoryMediaObject` · `StoryStickerObject` · `StoryAudioPlayerObject` · `StoryLocationObject` |
 | `MeeshyScene` | `CanvasV3.scenes[i]` | `StorySlide.effects` (`StoryEffects`) |
 | `MeeshySlide` | une scène + son texte | `StorySlide` |
 | `MeeshyPublication` | le document `CanvasV3` + le profil | `StoryComposerViewModel.slides` + le profil |
@@ -1245,7 +1367,7 @@ agit — est dans `planche-meeshy-composer.md` § « Ce que les quatre noms NE c
 fichier-ci reste l'autorité sur les noms du CONTENU ; la planche l'est sur ceux du CHROME.
 
 **Règle de nommage** : tout code NEUF, toute issue, toute chaîne d'UI parlent
-`MeeshyObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
+`MeeshySceneObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
 restent en place comme représentation v1 derrière le pont — les renommer est un chantier
 à part, jamais un effet de bord d'un lot de feature.
 

@@ -10,26 +10,31 @@ import { apercuDeLigne, CHAMP_D_APPEL, PASTILLE_DE_LANGUE } from './atomes-feuil
  *
  * CE QUE LA CHARTE Y A CHANGÉ (conception § 12.5, directive du 2026-09-01) —
  * « les pages EXISTANTES de la v3 sont TERNES : il faut les STYLISER, sans les
- * alourdir » :
+ * alourdir ». TOUTES LES CITATIONS DE RÈGLE CI-DESSOUS SONT EN NUMÉROTATION
+ * TOUR 3 : les bullets 1 à 4 citaient encore la numérotation tour 2 jusqu'à
+ * #5115, portées dans le même commit qui a ajouté les bullets 6 à 8, pour
+ * qu'un même numéro ne désigne plus deux règles différentes dans ce bloc
+ * (§ 12.8) :
  *
- * 1. **Les espacements viennent des neuf pas de la table** (règles 1 et 8). Ils
+ * 1. **Les espacements viennent des neuf pas de la table** (règles 1 et 10). Ils
  *    étaient en pixels littéraux — `48px 0 8px` de salutation, `14px` de
  *    gouttière, `20px` de carte, `32px`, `40px`, `10px`, `6px`, `2px` — c'est-à-
  *    dire une échelle inventée par écran, la seconde table du corollaire 2 sous
  *    un autre nom. Une carte de tableau de bord et une carte de vitrine se
  *    lisent sur le même écran d'un lecteur qui vient de se connecter.
  * 2. **`--color-neutral-900` a cédé la place à `--color-border-strong`**
- *    (règle 10). Un filet se déclare par son RÔLE : prendre un cran de la rampe
+ *    (règle 16). Un filet se déclare par son RÔLE : prendre un cran de la rampe
  *    neutre marche dans le schéma où on l'a regardé et se retourne dans l'autre.
  *    Et la distinction filet ≠ contour est désormais PORTÉE : une carte
  *    d'information prend le filet fin, une carte CLIQUABLE prend le contour de
  *    `--color-border-interactive`. C'est l'élément qui décide, pas une classe de
  *    plus — `li.carte` informe, `a.carte` se clique.
- * 3. **L'avatar dit QUI, sur les quatre teintes de la table** (règle 11). La
- *    pastille était peinte à l'accent, dilué en `color-mix` : toutes les
- *    conversations avaient la même couleur, donc la couleur ne disait rien, et
- *    elle prenait l'accent que la règle 13 réserve à cinq emplois.
- * 4. **L'état vide est DESSINÉ** (règle 18) : contour pointillé, glyphe de
+ * 3. **L'avatar dit QUI, sur les quatre teintes de la table** (règle 20 : les
+ *    quatre `--color-avatar-*` restent, « elles disent QUI »). La pastille
+ *    était peinte à l'accent, dilué en `color-mix` : toutes les conversations
+ *    avaient la même couleur, donc la couleur ne disait rien, et elle prenait
+ *    l'accent que la règle 20 réserve à six emplois.
+ * 4. **L'état vide est DESSINÉ** (règle 24) : contour pointillé, glyphe de
  *    40 px, titre, phrase — et une action primaire seulement là où elle a un
  *    EFFET. C'était un bloc de texte centré dans une carte pleine, qui se lisait
  *    comme du contenu.

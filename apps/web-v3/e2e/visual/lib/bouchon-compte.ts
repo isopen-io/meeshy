@@ -12,11 +12,15 @@ import {
 } from './bouchon-monde';
 
 /**
- * LES NEUF ROUTES DE LA ZONE CONNECTÉE (et quatre de plus depuis § 12.10.3,
+ * LES SEPT ROUTES DE LA ZONE CONNECTÉE (et quatre de plus depuis § 12.10.3,
  * le panneau de profil : `GET /directory/people/:handle?expand=relation`,
  * `POST /conversations`, `POST /directory/friend-requests`,
  * `PUT /directory/blocks/:userId` — chacune ci-dessous, à son tour), copiées
- * sur la passerelle RÉELLE :
+ * sur la passerelle RÉELLE. `GET /api/v1/conversations/search`,
+ * `GET /api/v1/directory/people` et `GET /api/v1/attachments/search` — les
+ * trois routes de `/search` gardées côté client — vivent désormais dans
+ * `bouchon-recherche.ts` (#4170, bande 1000-1200) ; la quatrième
+ * (`GET /links?q=`) reste ci-dessous, dans `bouchon-carnet.ts`.
  *
  *   • `GET /api/v1/auth/me` — `services/gateway/src/routes/auth/magic-link.ts:79`,
  *     `createUnifiedAuthMiddleware({ requireAuth: true, allowAnonymous: true })` ;
@@ -29,13 +33,6 @@ import {
  *   • `GET /api/v1/directory/contacts` — `routes/directory/contacts.ts:128`,
  *     dont les lignes sortent par `directoryEntrySchema`
  *     (`routes/users/contacts-schemas.ts:24`) ;
- *   • `GET /api/v1/conversations/search` — `routes/conversations/search.ts:67`,
- *     qui rend un tableau NU de `conversationMinimalSchema` : ni `pagination`,
- *     ni total. Le bouchon ne lui en invente pas ;
- *   • `GET /api/v1/directory/people` — `routes/directory/people.ts:105`, qui
- *     pagine par CURSEUR (`hasMore`, `nextCursor`, `limit`) et déclare
- *     `isOnline` NULLABLE — l'autre forme du masquage, à côté du `false` de
- *     `/directory/contacts` ;
  *   • `GET /api/v1/posts/:postId` — `routes/posts/core.ts:460`,
  *     `preValidation: [requiredAuth]` ;
  *   • `GET /api/v1/posts/:postId/comments` — `routes/posts/comments.ts:61`,
@@ -519,37 +516,6 @@ const RAIL_DU_BOUCHON = [
   { id: 'story-luc', authorId: 'u-luc', author: { id: 'u-luc', displayName: 'Luc Martin' }, isViewedByMe: true },
 ];
 
-/**
- * Ce que la RECHERCHE trouve — un fil et une personne, de quoi peindre les deux
- * groupes que l'écran sert. Le fil est celui du lecteur : sa ligne mène quelque
- * part, ce que l'audit vérifie.
- */
-const RECHERCHE_FILS = [
-  {
-    id: CONVERSATION_DU_LECTEUR.id,
-    identifier: 'lagos',
-    title: CONVERSATION_DU_LECTEUR.titre,
-    type: 'group',
-    isActive: true,
-    memberCount: CONVERSATION_DU_LECTEUR.membres,
-    lastMessageAt: new Date(Date.now() - 30 * 60_000).toISOString(),
-    createdAt: new Date(Date.now() - 30 * 24 * 3_600_000).toISOString(),
-    participants: [],
-  },
-];
-
-/** `isOnline` y est NULLABLE — c'est la forme que `/directory/people` déclare. */
-const RECHERCHE_GENS = [
-  {
-    id: 'u-sara',
-    username: 'sarakim',
-    displayName: 'Sara Kim',
-    avatar: null,
-    isOnline: null,
-    lastActiveAt: null,
-  },
-];
-
 /** Les HUIT champs de `updateUserProfileSchema` — recopiés du schéma, pas devinés. */
 const CHAMPS_ACCEPTES: readonly string[] = [
   'firstName',
@@ -577,6 +543,7 @@ export const routesDuCompte =
     if (
       !(
         chemin.startsWith('/api/v1/auth/me') ||
+        chemin.startsWith('/api/v1/auth/logout') ||
         chemin.startsWith('/api/v1/conversations') ||
         chemin.startsWith('/api/v1/directory/') ||
         // LA CRÉATION EST `/api/v1/posts` NU — sans barre finale, donc invisible
@@ -614,6 +581,19 @@ export const routesDuCompte =
     }
     if (etat.creanceDe(requete)?.genre !== 'membre') {
       json({ error: 'Invalid JWT token', code: 'AUTH_FAILED' }, 401);
+      return true;
+    }
+    /**
+     * `POST /api/v1/auth/logout` (`services/gateway/src/routes/auth/login.ts:350`,
+     * `preValidation: [fastify.authenticate]`) — la déconnexion (#5095). La
+     * garde d'authentification ci-dessus copie déjà `fastify.authenticate` ;
+     * ce bloc copie la réponse, `{ success: true, data: { message } }`
+     * (`login.ts:427`) — le corps exact que `app/deconnexion/route.ts`
+     * n'inspecte jamais (l'appel est BEST-EFFORT), mais que le bouchon doit
+     * MIMER, pas inventer.
+     */
+    if (chemin === '/api/v1/auth/logout' && requete.method === 'POST') {
+      json({ success: true, data: { message: 'Déconnexion réussie' } });
       return true;
     }
     /**
@@ -805,11 +785,6 @@ export const routesDuCompte =
       return true;
     }
 
-    // La RECHERCHE, avant `/api/v1/conversations` nue : Fastify distingue ces
-    // deux routes par leur chemin complet, et un bouchon qui teste des préfixes
-    // doit ordonner du plus PRÉCIS au plus général — sinon `/conversations`
-    // avale `/conversations/search` et l'écran de recherche reçoit la liste du
-    // tableau de bord.
     // Le FIL d'une publication, avant la publication elle-même : Fastify
     // distingue ces deux routes par leur chemin complet, et un bouchon qui
     // teste des préfixes ordonne du plus PRÉCIS au plus général.
@@ -837,20 +812,6 @@ export const routesDuCompte =
 
     if (/^\/api\/v1\/posts\/[^/]+$/.test(chemin)) {
       json({ success: true, data: PUBLICATION_DU_BOUCHON });
-      return true;
-    }
-
-    if (chemin.startsWith('/api/v1/conversations/search')) {
-      json({ success: true, data: url.searchParams.get('q') ? RECHERCHE_FILS : [] });
-      return true;
-    }
-
-    if (chemin.startsWith('/api/v1/directory/people')) {
-      json({
-        success: true,
-        data: url.searchParams.get('q') ? RECHERCHE_GENS : [],
-        pagination: { hasMore: false, nextCursor: null, limit: 20 },
-      });
       return true;
     }
 

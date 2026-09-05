@@ -337,6 +337,70 @@ export const jetonsDesCookies = (enteteCookie: string | null): readonly string[]
 ];
 
 /**
+ * TOUS LES NOMS de cookies invités présentés — la JUMELLE de `jetonsDesCookies`
+ * ci-dessus, qui en rend les VALEURS. La déconnexion (#5095) a besoin des NOMS :
+ * elle expire chaque place que le lecteur détient, quel que soit le lien, et un
+ * `Set-Cookie` d'effacement se rédige avec un NOM, jamais avec une valeur.
+ *
+ * Même filtre, même préfixe exact — `startsWith(RACINE_DU_COOKIE)`, jamais un
+ * autre : un cookie `meeshy_guestbook` ne commence pas par `meeshy_guest_`, il
+ * n'entre donc pas dans le balayage.
+ */
+export const nomsDesCookiesInvites = (enteteCookie: string | null): readonly string[] => [
+  ...new Set(
+    (enteteCookie ?? '')
+      .split(';')
+      .map((morceau) => morceau.trim())
+      .filter(
+        (morceau) =>
+          morceau.startsWith(RACINE_DU_COOKIE) &&
+          morceau.includes('=') &&
+          morceau.slice(morceau.indexOf('=') + 1) !== '',
+      )
+      .map((morceau) => morceau.slice(0, morceau.indexOf('='))),
+  ),
+];
+
+/**
+ * LES `Set-Cookie` QUI FERMENT TOUTES LES PLACES — un par nom présenté, avec
+ * les MÊMES attributs que la pose (`attributsDuCookie`) : un `Set-Cookie`
+ * d'effacement ne matche que si nom, `Path` et `Domain` concordent.
+ */
+export const cookiesDEffacementDesPlaces = (
+  enteteCookie: string | null,
+  secure: boolean,
+): readonly string[] =>
+  nomsDesCookiesInvites(enteteCookie).map((nom) => `${nom}=; Max-Age=0; ${attributsDuCookie(secure)}`);
+
+/**
+ * L'EFFACEMENT, CÔTÉ NAVIGATEUR, DE TOUTES LES PLACES — la projection de
+ * `effaceLaPlace` sur TOUT lien à la fois, pour la déconnexion (#5095) : sortir
+ * de la v3 ferme chaque place invitée que ce navigateur détenait, pas
+ * seulement celle du lien courant. Best-effort, comme `surLeStockage` : une
+ * entrée illisible ou un stockage refusé n'interrompt jamais la sortie.
+ */
+export const effaceToutesLesPlaces = (): void => {
+  surLeStockage(undefined, (stockage) => {
+    const cles: string[] = [];
+    for (let i = 0; i < stockage.length; i += 1) {
+      const cle = stockage.key(i);
+      if (cle !== null && cle.startsWith(RACINE)) cles.push(cle);
+    }
+    cles.forEach((cle) => stockage.removeItem(cle));
+  });
+
+  if (typeof document === 'undefined') return;
+  try {
+    for (const nom of nomsDesCookiesInvites(document.cookie)) {
+      document.cookie = `${nom}=; Max-Age=0; ${attributsDuCookie(document.location.protocol === 'https:')}`;
+    }
+  } catch {
+    // Un accès refusé à `document.cookie` (navigation privée, quota) ne doit
+    // pas interrompre la sortie — les autres étapes de la déconnexion suivent.
+  }
+};
+
+/**
  * L'effacement, côté NAVIGATEUR — la projection de `effaceSession` sur le
  * cookie, quand l'état F est constaté par le module de participation (401 de
  * contrôle sur le battement). Même acte, même nom, même seul déclencheur.

@@ -28340,6 +28340,60 @@ qui affirmait le contraire.
 Sites : `apps/web-v3/__tests__/banniere-servie.test.ts` (l'actif manquant),
 `apps/web-v3/budgets-mesures.json` (la mesure des modules, réécrite par
 `--mesure` après le même `git add`). Fusion `1becc7e4d7`.
+
+## Leçon 522 — Un module qui AFFIRME garder une pièce protégée sans lire ses propres drapeaux ment par omission
+
+**Le fait (revue de `media`, #4525, 2026-09-04).** La galerie des médias d'une conversation
+(`apps/web-v3/lib/api/medias.ts`) se déclare elle-même « une PROJECTION PURE du fil », et son test
+dédié prouve qu'un message à vue unique / flouté / éphémère / supprimé n'y projette AUCUNE pièce
+(`e2e/visual/v3-medias.spec.ts:200-206`). C'est vrai — au niveau du MESSAGE. Mais la route lue
+(`GET /conversations/:id/attachments`, sept clés minimales : `id`, `fileName`, `mimeType`,
+`fileSize`, `fileUrl`, `thumbnailUrl`, `duration`) ne sert PAS les trois drapeaux posés au niveau de
+la PIÈCE JOINTE elle-même — `MessageAttachment.isViewOnce` / `isBlurred` / `effectFlags` (cycle 125
+du Prisme, CLAUDE.md). La v3 en est aveugle, et rien dans le module ne le dit : le doc-comment lit
+comme si la protection était complète.
+
+> **La forme générale — jumelle du cycle 124 du Prisme** (« un champ de service qui DÉCLARE une
+> restriction ne la fait pas respecter »), transposée d'un côté qui SUR-sert vers un côté qui
+> SOUS-lit : ici ce n'est pas un champ qui ment sur ce qu'il transporte, c'est un MODULE qui
+> ment sur ce qu'il GARDE, en confondant la protection qu'il applique (au niveau du message, la
+> couche qu'il touche) avec la protection qui existe (au niveau de la pièce, une couche qu'il ne
+> lit jamais parce que sa route ne la sert pas). Un témoin vert sur « aucune pièce d'un message
+> protégé ne fuit » ne prouve RIEN sur « aucune pièce PROTÉGÉE ne fuit » tant qu'une protection
+> peut exister à un niveau que le module ne consulte pas.
+
+**La question à poser avant d'écrire « ce module protège X »** : la protection de X a-t-elle
+PLUSIEURS niveaux de déclaration (message ET pièce, ici) ? Si oui, laquelle mon module LIT-il, et
+laquelle existe mais qu'il n'a pas les moyens de voir parce que sa source ne la sert pas ? La
+réponse à la seconde question n'est pas une nuance à ajouter en bas de doc-comment : c'est une
+ligne de rapport « restante », et une issue gateway compagnon (ouvrir la route au minimal élargi),
+jamais un contournement côté client.
+
+Site : `apps/web-v3/lib/api/medias.ts`. Détail : rapport de revue `media` (#4525), tour 2026-09-04.
+
+## Leçon 523 — Un gate de conformité qui dépend d'un état non déclaré rend un écran invisible aux instruments, en silence
+
+**Le fait (revue de `vitrine`/`home`, #5115, 2026-09-04).** Le portage de la charte du tour 3
+(contour, encre, dégradé) sur `app/vitrine/feuille.ts` et `app/connecte/feuille.ts` a été validé par
+`type-check`, `lint`, `test` (76/76 sur `charte.test.ts`) — trois gates VERTS, tous exécutés. Aucun
+d'eux n'est le gate de CONFORMITÉ VISUELLE (`compare-rendu.js`), qui rend `RC_NON_COMPARABLE` (rc=3)
+sur `vitrine` et `home` depuis que les deux visent la même route `/` sans qu'aucune des deux ne
+déclare d'état de session (§ 12.8 de la conception le documente déjà comme un défaut de
+l'INSTRUMENT, pas de l'écran). Résultat : deux écrans en tête du focus explicite du porteur reçoivent
+un changement de profil de luminance (le dégradé du héros) sans qu'AUCUN gate structurel ne le
+regarde — et les trois gates verts donnent, à qui ne vérifie pas lesquels ont tourné, l'impression
+d'une conformité complète.
+
+> **Un jeu de gates verts ne dit rien sur le gate qui manque.** La question à poser avant de clore
+> une revue n'est pas « tous les gates lancés sont-ils verts ? » mais **« quels gates EXISTENT pour
+> ce changement, et lesquels de ceux-là n'ont pas tourné — et pourquoi ? »**. Un gate absent pour une
+> raison connue et documentée (ici : une collision de route non résolue par l'instrument) reste un
+> gate absent : le rapport doit le nommer à côté des gates verts, jamais le laisser se fondre dans
+> leur nombre.
+
+Site : `apps/web-v3/e2e/visual/lib` (`compare-rendu.js`, `selectionComparable`) ; conception
+`docs/product/MeeshyWebV3Design/conception-web-v3.md` § 12.8. Détail : rapport de revue `vitrine`
+(#5115), tour 2026-09-04.
 ## Leçon 518 — Un module compilé en ACTIF ne peut pas importer un module de VUE : mesuré, +54 % sur ce que le lecteur télécharge
 
 Revue de #5030 (v3 web). Le fil peint ses bulles en direct (`lib/realtime/fil-peinture.ts`, compilé
@@ -28476,7 +28530,89 @@ navigateur atteint — deux questions, un seul garde.
 4. « Le dépôt dit X » n'est pas « le conteneur qui tourne a X ». Quand le symptôme contredit le
    compose, soupçonner l'environnement DÉPLOYÉ — et rendre le CODE incapable de cacher l'écart.
 
-## Leçon 522 — Une recommandation qui ajoute de la friction à l'utilisateur est une décision-produit, jamais un défaut adopté « avec le reste »
+## Leçon 524 — Un agent lancé sans relever ce que le DISTANT a déjà livré refait le travail d'une autre session
+
+Constat du 2026-09-05 (correction porteur) : l'agent de comptage de #4392 a
+refait un inventaire que le commit `c2b6d22eb4` — livré par une autre session,
+déjà sur `dev` — avait accompli ; seule la décision produit restait ouverte.
+Dans un dépôt où plusieurs sessions livrent EN PARALLÈLE sur `dev`, l'état
+d'une tâche n'est ni dans ma conversation ni dans le titre de l'issue : il est
+dans `git log` récent des fichiers visés et dans les COMMENTAIRES de l'issue.
+
+1. Avant de lancer un agent sur une issue : `gh issue view N --comments | tail`
+   et `git log --oneline -5 -- <fichiers visés>` — un commit récent d'une autre
+   session sur ces fichiers signifie que le travail est peut-être déjà fait,
+   ou en cours ailleurs.
+2. Le brief de l'agent inclut ce relevé (« le commit X a déjà fait Y — vérifie
+   et complète, ne refais pas »).
+3. Et symétriquement : committer et pousser RÉGULIÈREMENT (pas seulement au
+   gate final) pour que les autres sessions voient NOTRE travail — un WIP
+   long dans l'arbre partagé bloque les merges de `dev`, s'expose à
+   l'écrasement (leçon du matin), et invite les sessions distantes à refaire
+   ce qu'on tient. Un point d'étape committé avec un message honnête vaut
+   mieux qu'un arbre divergent.
+
+## Leçon 525 — Trois décisions justes prises séparément forment une incohérence qui n'a aucun site où rougir
+
+Constat du 2026-09-05 (signalement porteur : « Je ne comprends pas les scènes
+muettes en pause dans le feed ! », puis « repartage ou non, les scènes sont
+comme les vidéos »).
+
+Le fil social rendait le MÊME objet — un canvas 9:16 — sous **trois politiques
+de lecture opposées** :
+
+| surface | comportement | décidé par |
+|---|---|---|
+| réel natif, repost de réel | autoplay muet, élu par le viewport, coupé pendant un appel | la feature RF2 |
+| scène composée d'un post | **figée**, avec une étiquette « scène · muette, en pause » | revue Fable n°25, « zéro AVPlayer/décodage actif ici » |
+| story repartagée | **jouait en permanence**, sans élection ni call-awareness | l'embed hérité, `isPaused` laissé à son défaut |
+
+**Chacune est défendable prise seule.** Le gel visait un objectif de
+performance réel ; l'élection aussi ; l'embed hérité était antérieur aux deux.
+Aucun fichier n'était faux, aucune revue n'avait tort, aucun test ne pouvait
+tomber — **un test interroge un site, et le défaut n'était dans aucun site.**
+
+Ce qui l'a rendu visible n'est pas une garde mais un ŒIL : celui du porteur,
+qui voit les trois surfaces dans le même écran là où chaque commit n'en voyait
+qu'une.
+
+1. **Un défaut de COHÉRENCE se mesure entre les sites, jamais dans un site.**
+   La garde qui l'attrape énumère les surfaces d'une même famille et affirme la
+   propriété commune — ici `FeedSceneCoherenceGuardTests` : « toute surface qui
+   monte une scène rapporte sa frame », « aucune ne joue inconditionnellement ».
+   Une garde par fichier n'aurait jamais pu la dire.
+
+2. **Un correctif de performance qui ne s'applique qu'à la surface qu'il
+   corrige peut DÉGRADER le total.** Le gel évitait un décodage sur la carte de
+   post pendant que la story repartagée d'à côté en lançait autant qu'il y avait
+   de cellules visibles. L'élection unique — celle qu'on croyait plus coûteuse —
+   plafonne à UN. Avant de défendre une optimisation locale, compter ce que font
+   les VOISINS de la même famille.
+
+3. **Une étiquette qui explique un état est un aveu.** « scène · muette, en
+   pause » avait été posée sur un raisonnement juste (« un état gardé mais muet
+   se lit comme une panne ») — mais elle décrivait l'état de la MACHINE, pas
+   l'option du lecteur, et c'est précisément ce qu'a signalé le porteur. Quand
+   une surface a besoin d'un mot pour ne pas passer pour cassée, c'est la
+   surface qu'il faut changer, pas le mot.
+
+4. **Le témoin d'un renversement se réécrit dans le même commit, et son jumeau
+   survit souvent intact.** `test_isPlaying_isConstantFalse_neverToggled` est
+   devenu `..._isDrivenByTheViewportElection_neverFrozen` ; mais son voisin
+   « aucun `@State` de lecture local » n'a pas bougé — et il est devenu PLUS
+   juste, parce que la carte ne fabrique toujours pas cet état, elle le reçoit.
+   Distinguer, dans une garde qu'on renverse, ce qui portait la DÉCISION de ce
+   qui portait la STRUCTURE.
+
+5. **Corollaire mesuré le même jour : une élection tenue et servie à personne
+   ne se voit nulle part.** `RootViewComponents` agrégeait les frames, élisait
+   une surface, et ne remettait le coordinateur à AUCUNE carte standard — donc
+   un repost de réel y restait sur son poster figé pendant que le fil voisin le
+   jouait. Le mécanisme était complet, câblé, testé ; il manquait un argument
+   dans un appel. Après avoir branché une valeur, compter les HÔTES qui la
+   servent, pas les sites qui la produisent.
+
+## Leçon 526 — Une recommandation qui ajoute de la friction à l'utilisateur est une décision-produit, jamais un défaut adopté « avec le reste »
 
 **Cycle #3684 (2026-09-05).** Le brouillon « Inscription en un écran » rangeait six décisions dans une
 même liste, dont « passer le mot de passe à 12 caractères avec zxcvbn ». Le porteur a adopté les cinq

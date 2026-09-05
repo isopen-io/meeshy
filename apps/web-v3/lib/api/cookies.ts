@@ -72,3 +72,16 @@ export const valeurDuCookie = (entete: string | null, nom: string): string | nul
     return valeur;
   }
 };
+
+/**
+ * LE `Set-Cookie` QUI EXPIRE UN COOKIE DU MEMBRE — le site unique de cette
+ * forme côté déconnexion (#5095). L'IDENTITÉ d'un cookie est son nom, son
+ * `Domain` et son `Path`, et rien d'autre : c'est sur ces trois-là qu'un
+ * `Set-Cookie` d'effacement doit concorder avec la pose
+ * (`app/authentification/remise.ts:292`, `path=/`, aucun `Domain`). `Secure`
+ * n'entre PAS dans cette identité — la pose le met inconditionnellement, on ne
+ * le met qu'en canal sûr parce qu'un navigateur REFUSE un `Set-Cookie; Secure`
+ * arrivé en clair : l'effacement marche dans les deux sens.
+ */
+export const expireLeCookie = (nom: string, { secure }: { readonly secure: boolean }): string =>
+  `${nom}=; Max-Age=0; Path=/; SameSite=Lax${secure ? '; Secure' : ''}`;
