@@ -111,10 +111,29 @@ extension MeeshyComposerHost {
     /// qui peint la publication, le gate pour savoir ce qui fait matière. Trois
     /// lectures de la même expression auraient été trois occasions de diverger.
     var mountedSurface: ComposerSurfaceKind {
-        // B3 (#3926) — STORY et RÉEL montent la scène par le ROUTAGE
-        // (`ComposerSurfaceRouting` envoie `.story`/`.reel` sur `.scene`), une
-        // destination du socle que l'éventail écrit (`selectedFormat`) — c'est
-        // ce qui fait de l'éventail le seul sélecteur.
+        // **CE COMMENTAIRE AFFIRMAIT LE CONTRAIRE DU CODE** (corrigé le
+        // 2026-09-05, signalé par la session voisine).
+        //
+        // Il disait : « STORY et RÉEL montent la scène par le ROUTAGE
+        // (`ComposerSurfaceRouting` envoie `.story`/`.reel` sur `.scene`) ».
+        // C'était vrai au #3926 et **faux depuis le 2026-09-01** : sur les
+        // ouvertures courantes — `.cameraReady` (la tuile « Créer une story »),
+        // `.keyboardOnContent`, `.moodGrid` — la règle envoie `.story` ET
+        // `.reel` sur `.document`, délibérément, pour qu'ils se composent dans
+        // le MEUBLE et non dans l'ancien atelier (#4751).
+        //
+        // Seules trois ouvertures gardent `.scene`, et elles portent déjà de la
+        // matière : `.videoCameraReady`, `.resume`, `.mediaSeeded`.
+        //
+        // > **Un commentaire périmé est pire qu'un commentaire absent.** Il ne
+        // > se compile pas, aucun témoin ne le lit, et il se relit avec
+        // > l'autorité de ce qui a été écrit exprès. Celui-ci envoyait chercher
+        // > un `.scene` que le code ne produit plus pour ces trois ouvertures —
+        // > et j'ai perdu trois tours aujourd'hui à croire un autre commentaire
+        // > du même genre sur la publication.
+        //
+        // La règle est à `ComposerSurfaceRouting.surface(opening:format:)`, et
+        // c'est ELLE qu'il faut lire : ce site n'en est que l'unique lecture.
         //
         // **Choisir une couleur de fond ne bascule PLUS ici (#3939, retour
         // porteur 2026-08-27).** L'ancienne règle F2 (`ComposerSceneActivation`,

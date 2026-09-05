@@ -716,34 +716,20 @@ struct FeedPostCard: View {
                 senderName: post.author
             )
         }
-        .fullScreenCover(isPresented: $showFullscreenGallery) {
-            let attachments = post.media
-                .filter { $0.type == .image || $0.type == .video }
-                .map { $0.toMessageAttachment() }
-            let senderInfo = ConversationViewModel.MediaSenderInfo(
-                senderName: post.author,
-                senderAvatarURL: post.authorAvatarURL,
-                senderColor: post.authorColor,
-                sentAt: post.timestamp
-            )
-            let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
-            ConversationMediaGalleryView(
-                allAttachments: attachments,
-                startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                accentColor: accentColor,
-                // #4934 — le plein écran garde la bascule de langue que la
-                // carte offre : `captionServings` porte le texte ET ses
-                // alternatives, `captionMap` reste servi pour les appelants qui
-                // n'ont rien à basculer.
-                captionServings: SocialMediaCaption.serving(
-                    for: post.media, carrier: .from(post: post)
-                ),
-                captionMap: SocialMediaCaption.map(
-                    for: post.media, carrierText: post.displayContent
-                ),
-                senderInfoMap: senderMap
-            )
-        }
+        // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
+        //
+        // Cette vingtaine de lignes était l'un des trois exemplaires que
+        // `socialMediaGallery` a été écrit pour remplacer — et le dernier à
+        // n'avoir pas été raccordé. Le brancher n'est pas qu'un nettoyage :
+        // c'est ce qui apporte à la carte du fil la branche SCÈNE, qui rejoue
+        // le canvas au lieu d'ouvrir son fond.
+        .socialMediaGallery(
+            post: post,
+            isPresented: $showFullscreenGallery,
+            startMediaId: fullscreenMediaId,
+            accentColor: accentColor,
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
     }
