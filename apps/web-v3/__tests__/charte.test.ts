@@ -18,6 +18,7 @@ import { FEUILLE_DES_LIENS, FEUILLE_DU_NOUVEAU_LIEN } from '@/app/connecte/liens
 import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from '@/app/connecte/liste-feuille';
+import { FEUILLE_DE_LA_BANNIERE } from '@/app/connecte/banniere-feuille';
 import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
@@ -83,6 +84,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV', source: FEUILLE_DE_LA_NOUVELLE_CONV },
   { nom: 'app/connecte/espace-feuille.ts', source: FEUILLE_DES_FLOTTANTES },
   { nom: 'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE', source: FEUILLE_DE_L_ESPACE },
+  { nom: 'app/connecte/banniere-feuille.ts', source: FEUILLE_DE_LA_BANNIERE },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -162,6 +164,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV',
       'app/connecte/espace-feuille.ts',
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE',
+      'app/connecte/banniere-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -513,6 +516,12 @@ describe('règles 14 et 16 — plans, filets, et ce qui ne se peint jamais', () 
    * exactement celui sous lequel le formulaire défile, sans quoi le bouton
    * « Créer » se lirait sur une bande d'une autre couleur. Un second jeton
    * l'aurait fait diverger au premier changement de surface.
+   *
+   * LA BANNIÈRE (#4454) EST LE PREMIER EMPLOI QUI NE SOIT PAS UNE MODALE, et
+   * c'est ce qui rend la règle 9 plus large qu'on ne la lisait : elle réserve
+   * le jeton à ce qui FLOTTE, jamais à ce qui prend le focus. Un toast ne rend
+   * rien `inert` et ne piège aucun clavier — il est bien, pour les sept
+   * secondes qu'il dure, au-dessus du contenu.
    */
   it('ne réserve --color-surface-raised qu’à ce qui flotte', () => {
     const peints = FEUILLES.flatMap(({ nom, source }) =>
@@ -528,6 +537,7 @@ describe('règles 14 et 16 — plans, filets, et ce qui ne se peint jamais', () 
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV › dialog.nouvelle-conv',
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV › dialog.nouvelle-conv .pied',
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE › dialog.espace',
+      'app/connecte/banniere-feuille.ts › .banniere',
     ]);
   });
 });

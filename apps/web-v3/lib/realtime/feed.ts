@@ -2,7 +2,8 @@ import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { aime, reposte } from '@/lib/api/publication';
 import { FIL_SOCIAL } from '@/lib/contenu/social';
 
-import { aposteRepost, basculeAime, type EtatDAime } from './feed-etat';
+import { aposteRepost, basculeAime, doitRafraichirLeFil, type EtatDAime } from './feed-etat';
+import { observeCycleDeVie } from './lifecycle';
 
 /**
  * LE MODULE DE PARTICIPATION DE `/feed` (§ 12.4, #5031) — le plus léger des
@@ -11,17 +12,27 @@ import { aposteRepost, basculeAime, type EtatDAime } from './feed-etat';
  * APRÈS le premier pixel, par `await import()` sur `main[data-module]`
  * (`app/connecte/chargeur.ts`), sur `main[data-participation="feed"]`.
  *
- * ASYMÉTRIE ASSUMÉE, ET ÉCRITE (conception § 11, question 13) : ce module
- * n'écoute RIEN d'ENTRANT — un like d'un tiers, une publication neuve d'un
- * ami, un second onglet du même lecteur ne rafraîchissent rien ici. La
- * passerelle diffuse pourtant `post:liked`/`post:created`/`post:updated` sur
- * la feed room que TOUT socket authentifié rejoint déjà à l'auth
- * (`AuthHandler`, `SocialEventsHandler`) — mais importer `socket.io-client`
- * coûterait ici 26 549 o gzip (`budgets-mesures.json` › `participate`) pour
- * un module qui en pèse 7 584 aujourd'hui, sur l'écran que la directive du
- * porteur destine à la 3G rurale (§ 12.6). Ce n'est PAS un oubli : c'est une
- * décision de poids, non tranchée par une issue — voir § 11 question 13
- * avant d'y toucher.
+ * PAS DE SOCKET, ET LA QUESTION 13 DU § 11 EST TRANCHÉE AUTREMENT. Ce module
+ * n'écoute rien d'entrant EN CONTINU : un like d'un tiers, une publication
+ * neuve d'un ami, un second onglet du même lecteur ne le rafraîchissent pas au
+ * fil de l'eau. La passerelle diffuse pourtant `post:liked` / `post:created` /
+ * `post:updated` sur la feed room que TOUT socket authentifié rejoint à l'auth
+ * (`AuthHandler`, `SocialEventsHandler`) — mais `socket.io-client` coûte
+ * 12 849 o gzip (`budgets-mesures.json`), plus que ce module entier, pour une
+ * connexion PERMANENTE sur l'écran que la directive du porteur destine à la
+ * 3G rurale (§ 12.6).
+ *
+ * **IL SE RAFRAÎCHIT AU RETOUR**, ce qui couvre le cas dominant sans une seule
+ * dépendance de plus : on quitte l'onglet, on revient dix minutes après, et le
+ * fil n'est pas celui de tout à l'heure. La RÈGLE — deux conditions, dont
+ * « le lecteur n'a pas défilé », qui est la plus importante — vit dans
+ * `feed-etat.ts` avec ses raisons ; ce module l'APPLIQUE.
+ *
+ * La troisième voie, `GET /sync`, n'en était pas une : ses collections sont
+ * `conversations`, `messages`, `reactions`, `participants`
+ * (`services/gateway/src/routes/sync/budget.ts`), jamais les publications. Le
+ * document `/feed` lui-même EST la réponse fraîche — le serveur reste
+ * l'unique compositeur, Prisme compris, comme pour `/post/:id` (#5091).
  *
  * TOUT CE QU'IL FAIT, LE DOCUMENT LE FAIT DÉJÀ SANS LUI, plus lentement : les
  * deux gestes sont des `<form method="post">` que `app/connecte/social-
@@ -40,6 +51,82 @@ type Contexte = {
   readonly main: HTMLElement;
   readonly passerelle: string;
   readonly jeton: string;
+};
+
+/**
+ * LE RAFRAÎCHISSEMENT — le document `/feed` REDEMANDÉ, et ses publications
+ * échangées d'un bloc.
+ *
+ * ON N'ÉCHANGE QUE `#publications` ET LE LIEN « plus », jamais le `<main>`
+ * entier, et pour une raison de plateforme : le corps porte
+ * `#journal-des-gestes`, une région `aria-live`. Une région `aria-live`
+ * REMPLACÉE n'est plus surveillée par le lecteur d'écran — le navigateur ne
+ * suit que celles qui existaient quand il a construit l'arbre. La remplacer
+ * rendrait muettes toutes les confirmations de geste suivantes.
+ *
+ * Le RAIL DE STORIES n'est pas échangé non plus : il vit AVANT la liste, et le
+ * remplacer déplacerait la tête du fil sous le regard au moment précis où on
+ * revient. Une story qui manque une minute de plus se voit moins qu'un saut.
+ *
+ * L'ADRESSE REDEMANDÉE EST CELLE QU'ON LIT (`location.href`) — sur une page de
+ * curseur, on rafraîchit CETTE page, pas la tête d'un fil qu'on ne regarde pas.
+ */
+const rafraichis = async (ctx: Contexte): Promise<void> => {
+  const reponse = await fetch(window.location.href, {
+    headers: { accept: 'text/html' },
+    redirect: 'follow',
+  }).catch(() => null);
+  if (reponse === null || !reponse.ok) return;
+
+  const corps = await reponse.text().catch(() => null);
+  if (corps === null) return;
+
+  const frais = new DOMParser().parseFromString(corps, 'text/html');
+  const listeFraiche = frais.querySelector<HTMLElement>('#publications');
+  const listeCourante = ctx.main.querySelector<HTMLElement>('#publications');
+  if (listeFraiche === null || listeCourante === null) return;
+
+  listeCourante.replaceChildren(...Array.from(listeFraiche.children));
+
+  // Le lien « plus » porte le curseur de la page SUIVANTE : périmé, il
+  // mènerait à une tranche qui ne suit plus rien.
+  const plusCourant = ctx.main.querySelector<HTMLAnchorElement>('a.plus');
+  const plusFrais = frais.querySelector<HTMLAnchorElement>('a.plus');
+  if (plusCourant !== null && plusFrais === null) plusCourant.remove();
+  if (plusCourant !== null && plusFrais !== null) plusCourant.href = plusFrais.getAttribute('href') ?? plusCourant.href;
+};
+
+/**
+ * L'ABSENCE, MESURÉE ICI ET NULLE PART AILLEURS. Le cycle de vie DIT les
+ * transitions (`lib/realtime/lifecycle.ts`, site unique) ; c'est à l'appelant
+ * de dater la sienne — la même couture que `deconnecteDepuis` chez les deux
+ * modules à socket.
+ */
+const suisLAbsence = (ctx: Contexte): void => {
+  let absentDepuis: number | null = null;
+
+  // `cleDuJeton` NE DÉSIGNE AUCUN JETON ICI : `/feed` est un écran de membre,
+  // il n'y a pas de lien invité, donc rien à filtrer. Le champ sert au module
+  // de cycle de vie à dériver le canal entre onglets ; une valeur PROPRE à cet
+  // écran est ce qui empêche `/feed` d'entendre le canal d'un autre — même
+  // convention que `/notifications` (`meeshy-notifs`).
+  observeCycleDeVie({
+    cleDuJeton: 'meeshy-feed',
+    sur: (transition) => {
+      if (transition.type === 'masquage' || transition.type === 'perte-du-reseau') {
+        if (absentDepuis === null) absentDepuis = Date.now();
+        return;
+      }
+      if (transition.type !== 'reprise') return;
+      const rafraichir = doitRafraichirLeFil({
+        absentDepuis,
+        maintenant: Date.now(),
+        defilement: window.scrollY,
+      });
+      absentDepuis = null;
+      if (rafraichir) void rafraichis(ctx);
+    },
+  });
 };
 
 const configuration = (main: HTMLElement): { readonly passerelle: string } | null => {
@@ -149,7 +236,18 @@ const demarre = (): void => {
   const jeton = valeurDuCookie(document.cookie, COOKIE_DE_JETON);
   if (jeton === null) return;
 
-  prendsLesGestes({ main, passerelle: config.passerelle, jeton });
+  const ctx = { main, passerelle: config.passerelle, jeton };
+  prendsLesGestes(ctx);
+  suisLAbsence(ctx);
 };
 
 demarre();
+
+/**
+ * REMONTAGE PAR LE NAVIGATEUR DE ZONE (#5106) : un ES module réimporté ne se
+ * ré-exécute pas — après une navigation douce, c'est cet export que le
+ * navigateur appelle pour monter l'écran neuf. L'auto-démarrage ci-dessus
+ * reste : sans navigateur (amélioration progressive), l'import du chargeur
+ * suffit, comme avant.
+ */
+export const monte = demarre;

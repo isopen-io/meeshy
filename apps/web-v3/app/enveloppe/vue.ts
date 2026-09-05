@@ -82,6 +82,18 @@ export type ParametresDuDocument = {
    */
   readonly script?: string;
   /**
+   * LA RÉGION DE LA BANNIÈRE (#4454) — servie VIDE, hors de `.enveloppe`.
+   *
+   * Elle est HORS de l'enveloppe pour une raison mécanique : une surimpression
+   * ouverte rend `.enveloppe` `inert`, et une bannière posée dedans aurait une
+   * croix que personne ne peut toucher — un contrôle sans effet, ce que la
+   * charte règle 7 interdit.
+   *
+   * Un écran qui n'expédie AUCUN module ne la sert pas : personne n'y peindrait
+   * jamais rien, et une région vide servie pour rien est du poids sans usage.
+   */
+  readonly banniere?: string;
+  /**
    * `index, follow` par défaut — les pages du SITE s'indexent. Un écran qui vit
    * à l'adresse d'un CONTENU (l'invitation et l'indisponible de `/stories/:id`)
    * pose `noindex, nofollow` : le § 5.4 le demande pour toute la famille des
@@ -172,11 +184,13 @@ export const documentDuSite = ({
   script = '',
   surimpression = '',
   ogEtTwitter,
+  banniere = '',
 }: ParametresDuDocument): string =>
   '<!doctype html>' +
   `<html lang="${DOCUMENT_LANGUAGE}" class="${THEME_PAR_DEFAUT}">` +
   teteDuDocument({ titre, description, feuille, robots, ogEtTwitter }) +
   '<body>' +
+  banniere +
   // LA SURIMPRESSION AVANT L'ENVELOPPE, INERTE DERRIÈRE ELLE — l'ordre et
   // l'accès que `documentDuFil` applique à son `<main>` (même raison : CLS,
   // Échap sans JavaScript, un lecteur d'écran qui n'annonce plus ce qu'il ne

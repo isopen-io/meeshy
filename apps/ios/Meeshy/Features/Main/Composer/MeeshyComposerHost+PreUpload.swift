@@ -49,6 +49,25 @@ extension MeeshyComposerHost {
         }
     }
 
+    /// **L'état de pré-montée de l'objet SÉLECTIONNÉ**, `.idle` quand il n'y en
+    /// a pas — ce qui est le cas de la très grande majorité des objets, et de
+    /// toutes les familles qui n'ont pas d'asset.
+    ///
+    /// Le pont entre un registre indexé par FICHIER et une sélection indexée
+    /// par OBJET se fait ici, en une ligne, et dans ce sens : l'objet connaît
+    /// son fichier (`mediaURL`), le registre ne connaît pas les objets. Faire
+    /// tenir des identifiants d'objet au registre l'obligerait à suivre les
+    /// créations, suppressions et déplacements du document.
+    var selectedSceneItemPreUpload: ComposerPreUploadState {
+        guard let id = selectedSceneItemId,
+              let media = viewModel.currentSlide.effects.mediaObjects?
+                  .first(where: { $0.id == id }),
+              let fichier = ComposerPreUploadSweep.pendingFile(
+                  postMediaId: media.postMediaId, mediaURL: media.mediaURL)
+        else { return .idle }
+        return preUploads.state(for: fichier)
+    }
+
     /// **La publication démarre : plus rien ne part tôt.**
     ///
     /// Ce qui est PRÊT reste prêt et sera référencé ; ce qui est en vol est
