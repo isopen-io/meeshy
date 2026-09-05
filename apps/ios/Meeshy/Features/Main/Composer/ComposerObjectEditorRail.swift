@@ -83,6 +83,25 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     /// sert pour toute sélection `.media`. Un filtre PAR média serait un ajout
     /// de contrat, de la même nature que recadrer et couper (#5085).
     case filter
+    /// **⌾ DÉCRIRE — le texte alternatif du média** (#4756).
+    ///
+    /// Servi, et c'est la loi 4 qui l'exige autant qu'elle l'autorise : le
+    /// contrat existe de bout en bout (`PostMedia.mediaAlt` sur le fil,
+    /// `PostService.create(mediaAlt:)`, `ComposerMediaAccessibility`), et
+    /// l'atome de saisie aussi (`MediaAltTextField(kind: .alt)`, SDK). Ce qui
+    /// manquait était la SOURCE — le nouveau composer publiait
+    /// `ComposerMediaAccessibility.empty`, et son doc-comment l'admettait.
+    ///
+    /// > L'UI existait, mais dans l'ANCIENNE peau : `MediaAccessibilityPanel`
+    /// > est monté par `ComposerToolPanelHost` → `ComposerBottomBand`, la bande
+    /// > de l'atelier plein écran. Le contrôle n'avait pas été supprimé, il
+    /// > était resté là où l'on ne va plus.
+    ///
+    /// **Sa portée est l'OBJET**, contrairement au filtre : un texte alternatif
+    /// décrit CE média, pas la slide. C'est aussi ce qui le sépare de
+    /// `allowSoundExtraction`, drapeau UNIQUE de la publication — les réunir
+    /// serait l'erreur que `MediaAccessibilityPanel` avait déjà écartée.
+    case altText
 
     /// **Ce que le rail sert pour un média.** `crop` et `split` restent hors du
     /// jeu tant que le contrat ne les porte pas (#5085) ; les monter inertes
@@ -90,7 +109,11 @@ nonisolated enum MediaEditTool: String, CaseIterable, Hashable, Sendable {
     ///
     /// Le filtre ouvre la liste parce qu'il agit sur ce qu'on VOIT en premier —
     /// la teinte de la scène — avant les bornes de lecture et les actions.
-    static let served: [MediaEditTool] = [.filter, .trim, .actions]
+    ///
+    /// `altText` ferme la liste : on décrit un média une fois qu'on a fini de
+    /// le régler, et c'est le seul des quatre qui s'adresse à quelqu'un d'autre
+    /// que soi.
+    static let served: [MediaEditTool] = [.filter, .trim, .actions, .altText]
 }
 
 nonisolated enum ComposerObjectEditorSection: Hashable, Sendable {
@@ -343,6 +366,10 @@ nonisolated enum ComposerObjectEditorRail {
             case .crop:    return "crop"
             case .split:   return "square.split.2x1"
             case .filter:  return "camera.filters"
+            // Le glyphe d'accessibilité d'Apple, celui que le système emploie
+            // partout pour VoiceOver — un `text.bubble` aurait dit « commenter »,
+            // un `eye` aurait dit « aperçu ».
+            case .altText: return "accessibility"
             }
         case .tool(let outil):
             switch outil {

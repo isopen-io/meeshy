@@ -170,7 +170,13 @@ extension MeeshyComposerHost {
                 // Le plan 2D peut désigner un autre objet : c'est le MEUBLE qui
                 // possède « quel objet est ouvert », et deux sources pour ce
                 // fait divergeraient au premier tap sur une barre voisine.
-                onSelectObject: { id in editedObject = ComposerEditedObject(id: id) }
+                onSelectObject: { id in editedObject = ComposerEditedObject(id: id) },
+                // **La carte vit au MEUBLE** (#4756) : c'est lui qui greffe la
+                // charge d'accessibilité sur ce que l'atelier remet au publieur
+                // (`accessibilityCarryingComposerCaptions`). Un magasin tenu par
+                // l'éditeur mourrait à sa fermeture — le défaut que la légende a
+                // payé avant #4890.
+                mediaAltText: mediaAltBinding(for: objet.id)
             )
         }
         .photosPicker(
