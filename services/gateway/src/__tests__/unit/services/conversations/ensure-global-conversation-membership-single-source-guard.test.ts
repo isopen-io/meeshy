@@ -3,7 +3,8 @@
  * implémentation (#3876).
  *
  * Avant ce lot, trois portes divergeaient : l'inscription publique
- * (`AuthService.register`) ajoutait l'utilisateur inline ; le seed
+ * (alors `AuthService.register`, désormais
+ * `services/auth/registration.service`) ajoutait l'utilisateur inline ; le seed
  * (`InitService`) portait sa PROPRE copie sous le nom
  * `addUserToMeeshyConversation` (et un troisième site direct dans
  * `createBigbossUser`) ; la création d'un compte par un administrateur
@@ -45,8 +46,13 @@ function sourceFiles(dir: string): readonly string[] {
 
 const scannedFiles = (): readonly string[] => sourceFiles(GATEWAY_SRC);
 
+/**
+ * L'inscription publique a quitté `AuthService.ts` au #5216 — le fichier était
+ * hors budget et la règle n'y utilisait aucun `this`. Ce qu'on garde n'a pas
+ * changé : c'est la PORTE, pas le fichier qui l'hébergeait.
+ */
 const EXPECTED_CALLERS = [
-  'services/AuthService.ts',
+  'services/auth/registration.service.ts',
   'services/admin/user-management.service.ts',
   'services/InitService.ts',
 ] as const;
@@ -56,10 +62,12 @@ const EXPECTED_CALLERS = [
  *
  * `InitService` n'y figure pas : il ne crée aucun compte lui-même, il appelle
  * `AuthService.register()` — donc il hérite de l'ajout par ce chemin, en plus
- * de son propre appel pour imposer le rang du salon global.
+ * de son propre appel pour imposer le rang du salon global. `AuthService.ts`
+ * n'y figure plus non plus, pour la même raison depuis #5216 : il DÉLÈGUE à
+ * `services/auth/registration.service`, qui est le site d'écriture.
  */
 const EXPECTED_USER_CREATORS = [
-  'services/AuthService.ts',
+  'services/auth/registration.service.ts',
   'services/admin/user-management.service.ts',
 ] as const;
 

@@ -6,7 +6,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import bcrypt from 'bcryptjs';
+import { hashPassword, verifyPassword } from '../../utils/password-hash';
 import {
   updatePasswordSchema,
   updateUsernameSchema
@@ -82,14 +82,13 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      const isPasswordValid = await bcrypt.compare(body.currentPassword, user.password);
+      const isPasswordValid = await verifyPassword(body.currentPassword, user.password);
 
       if (!isPasswordValid) {
         return sendBadRequest(reply, 'Current password is incorrect');
       }
 
-      const BCRYPT_COST = 12;
-      const hashedPassword = await bcrypt.hash(body.newPassword, BCRYPT_COST);
+      const hashedPassword = await hashPassword(body.newPassword);
 
       await fastify.prisma.user.update({
         where: { id: userId },
@@ -210,7 +209,7 @@ export async function updateUsername(fastify: FastifyInstance) {
       }
 
       // Verify password
-      const isPasswordValid = await bcrypt.compare(body.currentPassword, user.password);
+      const isPasswordValid = await verifyPassword(body.currentPassword, user.password);
       if (!isPasswordValid) {
         return sendBadRequest(reply, 'Current password is incorrect');
       }
