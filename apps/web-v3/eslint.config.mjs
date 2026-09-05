@@ -1,14 +1,13 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { FlatCompat } from '@eslint/eslintrc';
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
+import nextTypescript from 'eslint-config-next/typescript';
 
 import { frontiereDeZone } from './eslint/frontiere-de-zone.mjs';
 import { litLePerimetreSiPresent } from './scripts/lib/perimetre-de-zone.mjs';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
-
-const compat = new FlatCompat({ baseDirectory: ICI });
 
 // Le périmètre de NAVIGATION servi par la v3, lu au seul endroit qui le décide : la règle Traefik
 // du routeur `frontend-v3`. Il grandit à chaque étape du § 4.9 — la config n'en tient aucune
@@ -213,7 +212,16 @@ const zoneDuCycleDeVie = ['app/**/*.{ts,tsx}', 'components/**/*.{ts,tsx}', 'lib/
 const config = [
   // `.rt/` est la SORTIE de `scripts/build-participate.mjs` (le module compilé), pas une source.
   { ignores: ['.next/**', '.rt/**', 'node_modules/**', 'coverage/**', 'next-env.d.ts'] },
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  // LES DEUX PRÉRÉGLAGES, IMPORTÉS DIRECTEMENT — jamais par `FlatCompat`.
+  // `apps/web` a fait ce même port et en porte la raison : `FlatCompat.extends()`
+  // fait valider un objet PLAT par le validateur eslintrc, qui `JSON.stringify`
+  // la config pour formater ses erreurs. Sous ESLint 10 la config plate contient
+  // un cycle, et le validateur rend `TypeError: Converting circular structure to
+  // JSON` — un lint qui ne LINTE RIEN et sort en RC=2. `eslint-config-next@16`
+  // exporte les deux préréglages en flat (`./core-web-vitals`, `./typescript`) :
+  // plus de validateur eslintrc dans le chemin.
+  ...nextCoreWebVitals,
+  ...nextTypescript,
   // `no-restricted-syntax` porte UN nom : le dernier bloc qui s'applique à un
   // fichier remplace les précédents, il ne s'y ajoute pas. Les adieux sont donc
   // répétés dans les trois blocs — c'est ce qui les rend inévitables, y compris
