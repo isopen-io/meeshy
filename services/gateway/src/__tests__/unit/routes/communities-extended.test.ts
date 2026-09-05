@@ -890,6 +890,10 @@ describe('POST /communities/:id/invite — inviter not a member (line 1995)', ()
   });
 });
 
+// La preuve par mutation sur le `where: { userId }` imbriqué de cette branche
+// (« inviter not a member ») vit dans `communities-invite-nested-where.test.ts`
+// (#4867, extrait pour rester sous le budget de taille — #4531).
+
 // ─── POST /communities/:id/invite — private, non-admin (lines 1999-2001) ─────
 
 describe('POST /communities/:id/invite — private community, non-admin inviter (lines 1999-2001)', () => {
@@ -912,6 +916,10 @@ describe('POST /communities/:id/invite — private community, non-admin inviter 
     expect(res.statusCode).toBe(403);
   });
 });
+
+// La preuve par mutation sur le `where: { userId }` imbriqué de cette branche
+// (« private community, non-admin inviter ») vit aussi dans
+// `communities-invite-nested-where.test.ts` (#4867).
 
 // ─── POST /communities/:id/invite — invitee not found (line 2011) ────────────
 

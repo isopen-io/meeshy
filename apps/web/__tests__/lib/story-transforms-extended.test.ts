@@ -912,7 +912,7 @@ describe('timeRemaining - extended', () => {
 // l'émission — deviner depuis la locale d'interface rouvrait la règle 3 du
 // Prisme (arbitrage 4 vs 8, F7d 94bdb8ae2). Sans repli, l'origine ne
 // concourt alors JAMAIS à son rang (`CanvasV3Scene.resolveText`,
-// `sameLanguage(language, o.locale)`) : un texte anglais SANS `locale`,
+// `isSameLanguage(language, o.locale)`) : un texte anglais SANS `locale`,
 // prisme `['en','fr']`, traduction `fr` disponible, sert « Bonjour » à un
 // lecteur anglais-primaire — l'inversion que la règle 3 interdit.
 //

@@ -49,11 +49,14 @@ import { canalDuLien } from '../lib/realtime/lifecycle';
 import {
   cleDeLien,
   cleDuLien,
+  cookiesDEffacementDesPlaces,
   effaceSession,
+  effaceToutesLesPlaces,
   estLaCleDu,
   jetonsDesCookies,
   lienDeLaCle,
   lireSession,
+  nomsDesCookiesInvites,
   poseSession,
   sessionDepuisLaValeur,
   type CleDeLien,
@@ -288,6 +291,93 @@ describe('les jetons invités portés par un en-tête Cookie', () => {
 
   it('ne compte que le préfixe EXACT de la place — meeshy_guest, jamais meeshy_guestbook', () => {
     expect(jetonsDesCookies('meeshy_guestbook=x; meeshy_guest_mshy_a=S1')).toEqual(['S1']);
+  });
+});
+
+/**
+ * LES NOMS des cookies invités — la JUMELLE de `jetonsDesCookies` (qui rend
+ * les VALEURS). La déconnexion (#5095) en a besoin pour expirer chaque place
+ * détenue, sans connaître le lien : un `Set-Cookie` d'effacement se rédige
+ * avec un NOM.
+ */
+describe('les NOMS des cookies invités portés par un en-tête Cookie', () => {
+  it('rend chaque nom, dédupliqué, préfixe EXACT', () => {
+    expect(
+      nomsDesCookiesInvites('meeshy_guest_mshy_a=x; autre=y; meeshy_guest_mshy_a=x2; meeshy_guest_mshy_b=z'),
+    ).toEqual(['meeshy_guest_mshy_a', 'meeshy_guest_mshy_b']);
+  });
+
+  it('ignore un en-tête absent, une place sans valeur, et meeshy_guestbook', () => {
+    expect(nomsDesCookiesInvites(null)).toEqual([]);
+    expect(nomsDesCookiesInvites('meeshy_guest_mshy_a=')).toEqual([]);
+    expect(nomsDesCookiesInvites('meeshy_guestbook=x')).toEqual([]);
+  });
+});
+
+describe('les Set-Cookie qui ferment toutes les places — mêmes attributs que la pose', () => {
+  it('un Set-Cookie par nom présenté, Path=/chat, SameSite=Lax', () => {
+    expect(
+      cookiesDEffacementDesPlaces('meeshy_guest_mshy_a=t1; meeshy_guest_mshy_b=t2', false),
+    ).toEqual([
+      'meeshy_guest_mshy_a=; Max-Age=0; Path=/chat; SameSite=Lax',
+      'meeshy_guest_mshy_b=; Max-Age=0; Path=/chat; SameSite=Lax',
+    ]);
+  });
+
+  it('ajoute Secure quand le canal l’est', () => {
+    expect(cookiesDEffacementDesPlaces('meeshy_guest_mshy_a=t1', true)).toEqual([
+      'meeshy_guest_mshy_a=; Max-Age=0; Path=/chat; SameSite=Lax; Secure',
+    ]);
+  });
+
+  it('aucun jeton présenté ⇒ aucun Set-Cookie', () => {
+    expect(cookiesDEffacementDesPlaces(null, false)).toEqual([]);
+  });
+});
+
+describe('effaceToutesLesPlaces — la sortie NAVIGATEUR de toutes les places à la fois', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    document.cookie.split(';').forEach((morceau) => {
+      const nom = morceau.split('=')[0]?.trim();
+      if (nom) document.cookie = `${nom}=; Max-Age=0; Path=/`;
+    });
+  });
+
+  it('efface CHAQUE entrée meeshy.guest.* du stockage, et rien d’autre', () => {
+    localStorage.setItem(cleDuLien(LIEN_A), JSON.stringify(sessionDe('a')));
+    localStorage.setItem(cleDuLien(lienDe('mshy_BBB222')), JSON.stringify(sessionDe('b')));
+    localStorage.setItem('autre-clef', 'intacte');
+
+    effaceToutesLesPlaces();
+
+    expect(localStorage.getItem(cleDuLien(LIEN_A))).toBeNull();
+    expect(localStorage.getItem(cleDuLien(lienDe('mshy_BBB222')))).toBeNull();
+    expect(localStorage.getItem('autre-clef')).toBe('intacte');
+  });
+
+  it('expire chaque cookie meeshy_guest_* de document.cookie', () => {
+    document.cookie = 'meeshy_guest_mshy_a=t1; Path=/chat';
+    document.cookie = 'meeshy_guest_mshy_b=t2; Path=/chat';
+
+    effaceToutesLesPlaces();
+
+    expect(document.cookie).not.toContain('meeshy_guest_mshy_a');
+    expect(document.cookie).not.toContain('meeshy_guest_mshy_b');
+  });
+
+  it('ne jette jamais — un stockage indisponible n’interrompt pas la sortie', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new Error('bloqué');
+      },
+    });
+
+    expect(() => effaceToutesLesPlaces()).not.toThrow();
+
+    if (original) Object.defineProperty(window, 'localStorage', original);
   });
 });
 

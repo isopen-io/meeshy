@@ -20,6 +20,14 @@
   "de sélection (rc=3, « je n'ai pas su mesurer »). Les confondre ferait d'un outil muet",
   "un outil accusateur.",
   "",
+  "UN JETON QUI NE DÉSIGNE AUCUN CONTENU (issue #4967). `storyFail` vise `/stories/:id` comme",
+  "`story`, et c'est un REFUS : son jeton `echue` est un identifiant que la passerelle de bouchon",
+  "(`e2e/visual/lib/bouchon-story.ts`) sert avec une échéance PASSÉE, ce que la v3 filtre elle-même",
+  "(`partageLu`) pour rendre son 404. La session `membre` est indispensable : sans elle la porte sert",
+  "l'INVITATION — un écran juste, mais pas celui qu'on mesure. Les trois autres causes (`absente`,",
+  "`supprimee`, `restreinte`) rendent le MÊME document : c'est le fond de l'issue, et c'est pourquoi",
+  "une seule d'entre elles suffit à la comparaison.",
+  "",
   "AJOUTER UNE VUE : une entrée `\"<id de vue>\": { \"<nom du jeton>\": \"<valeur>\" }`. Les",
   "jetons non déclarés restent REFUSÉS et NOMMÉS — c'est le comportement voulu, pas une",
   "lacune à combler en masse.",
@@ -38,6 +46,14 @@
   "les deux vues viseraient `/chats/equipe-lagos` et le refus « route partagée » tomberait à",
   "bon droit. Un jeton de la chaîne de requête se déclare comme un jeton de chemin :",
   "`motifJeton` de vues-comparables.mjs lit la route ENTIÈRE (c'est déjà le cas de `login`).",
+  "",
+  "UNE FANION DE CHAÎNE DE REQUÊTE SANS VALEUR (directive 2026-09-04, § 12.10.5). `lienDepuisLeFil`",
+  "vise `/chats/:cle?lien` : `?lien` est un FANION (pas de `:jeton`, `motifJeton` ne le voit pas),",
+  "donc un seul jeton — `cle`, la même conversation que `thread` — suffit à désigner l'écran. Ce",
+  "n'est PAS une collision de route avec `thread` (`/chats/:cle`) : les DEUX chemins substitués",
+  "diffèrent littéralement (`/chats/equipe-lagos` contre `/chats/equipe-lagos?lien`), à l'inverse",
+  "de `join`/`rights` qui partagent le MÊME texte de route et ont besoin d'un jeton pour se",
+  "séparer.",
   "",
   "UN ÉTAT DE SESSION, DÉCLARÉ PAR VUE (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,",
   "`/chats/:id` — ne rend rien à un visiteur sans créance : elle redirige vers `/login`. Ce n'est",
@@ -62,6 +78,9 @@
   }
  },
  "jetons": {
+  "home": {
+   "@session": "membre"
+  },
   "linkRedirect": {
    "token": "lien-vivant"
   },
@@ -87,8 +106,34 @@
    "membre": "u3",
    "@session": "membre"
   },
+  "lienDepuisLeFil": {
+   "cle": "equipe-lagos",
+   "@session": "membre"
+  },
   "media": {
    "cle": "equipe-lagos",
+   "@session": "membre"
+  },
+  "storyFail": {
+   "id": "echue",
+   "@session": "membre"
+  },
+  "links": {
+   "@session": "membre"
+  },
+  "search": {
+   "@session": "membre"
+  },
+  "calls": {
+   "@session": "membre"
+  },
+  "communities": {
+   "@session": "membre"
+  },
+  "notifPrefs": {
+   "@session": "membre"
+  },
+  "chats": {
    "@session": "membre"
   },
   "login": {

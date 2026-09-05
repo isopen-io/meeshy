@@ -40,6 +40,7 @@ const APERCU: ApercuDeJonction = {
   requireBirthday: false,
   languesAutorisees: [],
   participants: 12,
+  droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true },
 };
 
 const refus = (statut: number, code: string, message: string | null = null, suggestion: string | null = null): Refus => ({
@@ -127,5 +128,29 @@ describe('l’état CHOIX face à axe', () => {
     const pseudo = document.getElementById('pseudo');
     expect(pseudo?.getAttribute('aria-invalid')).toBe('true');
     expect(document.getElementById(pseudo?.getAttribute('aria-describedby') ?? '')?.getAttribute('role')).toBe('alert');
+  });
+});
+
+/**
+ * LE CADRE DERRIÈRE LA MODALE NE PROPOSE AUCUNE DESTINATION DE MEMBRE
+ * (correction de revue de #5034). Il est composé par `corpsDuFil` avec une
+ * `Porte` de MEMBRE FACTICE (`choix-vue.ts` › `cadre()`) : les gardes de rôle
+ * de la vue du fil y sont donc AVEUGLES, et les deux ronds de destination de
+ * l'en-tête — « Médias » (#4525) et « Partager » (#5034) — s'y rendaient pour
+ * un visiteur SANS session, vers des adresses de membre qui ne répondent que
+ * par `/login`. `corpsDuFil(…, { cadre: true })` les tait désormais à la
+ * source.
+ */
+describe('l’état CHOIX ne rend aucun contrôle de membre dans son cadre', () => {
+  it('ne propose ni « Médias » ni « Partager » à un visiteur sans session', () => {
+    const html = choix();
+    expect(html).not.toContain('class="medias"');
+    expect(html).not.toContain('class="partager"');
+    expect(html).not.toContain('?lien"');
+    expect(html).not.toContain('/medias"');
+  });
+
+  it('garde le cadre lui-même — le titre du lien, derrière la modale', () => {
+    expect(choix()).toContain('Équipe Lagos');
   });
 });

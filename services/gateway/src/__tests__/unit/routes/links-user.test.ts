@@ -514,7 +514,14 @@ describe('GET /links — pagination', () => {
     prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ createdAt: new Date('2025-06-01') });
     const res = await app.inject({ method: 'GET', url: `/links?cursor=${mockLink.id}` });
     const body = res.json();
-    expect(body.cursorPagination).toEqual(expect.objectContaining({ nextCursor: mockLink.id }));
+    // Ce témoin garde la SÉLECTION DE FORME (`cursorPagination` seul, `pagination`
+    // absent). Le mock ne rend qu'UN lien (< limit) : c'est une page finale, donc
+    // `hasMore` est faux et `nextCursor` est `null` — un curseur rendu sur une
+    // dernière page forcerait un aller-retour vide (cf. `buildCursorPaginationMeta`,
+    // aligné sur `sliceByIdCursor` et le `cursorPage` canonique).
+    expect(body.cursorPagination).toEqual(
+      expect.objectContaining({ limit: 50, hasMore: false, nextCursor: null })
+    );
     expect(body.pagination).toBeUndefined();
   });
 
@@ -545,6 +552,131 @@ describe('GET /links — pagination', () => {
     const call = prisma.conversationShareLink.findMany.mock.calls.at(-1)[0];
     expect(call.where.createdAt).toEqual({ lt: new Date('2025-06-01') });
     expect(call.skip).toBeUndefined();
+  });
+});
+
+// ─── GET /links?q= — #4962 : filtre name/identifier, compose avec le scope ──
+
+describe('GET /links?q= — filtre name/identifier', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma();
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma);
+    await registerUserRoutes(app);
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sans conversationId : `q` compose avec le scope `createdBy` (jamais un contournement)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/links?q=test' });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          createdBy: USER_ID,
+          OR: [
+            { name: { contains: 'test', mode: 'insensitive' } },
+            { identifier: { contains: 'test', mode: 'insensitive' } },
+          ],
+        },
+      })
+    );
+  });
+
+  it('filtre aussi le comptage de pagination (`total` reflète le `q`, jamais toute la collection)', async () => {
+    await app.inject({ method: 'GET', url: '/links?q=test' });
+    expect(prisma.conversationShareLink.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { name: { contains: 'test', mode: 'insensitive' } },
+            { identifier: { contains: 'test', mode: 'insensitive' } },
+          ],
+        }),
+      })
+    );
+  });
+
+  it('un `q` vide ou fait de blancs n\'ajoute aucun filtre (traité comme absent)', async () => {
+    await app.inject({ method: 'GET', url: '/links?q=%20%20' });
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { createdBy: USER_ID } })
+    );
+  });
+
+  it('sans `q`, aucune clause `OR` — non-régression du chemin nominal', async () => {
+    await app.inject({ method: 'GET', url: '/links' });
+    const call = prisma.conversationShareLink.findMany.mock.calls.at(-1)[0];
+    expect(call.where.OR).toBeUndefined();
+  });
+});
+
+describe('GET /links?q=&conversationId= — compose avec le scope conversation', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+
+  it('membre non-modérateur : `q` s\'ajoute à `{conversationId, createdBy}`, ne l\'élargit jamais', async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma({
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'member' }) },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma);
+    await registerUserRoutes(app);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}&q=abc` });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId: CONV_ID,
+          createdBy: USER_ID,
+          OR: [
+            { name: { contains: 'abc', mode: 'insensitive' } },
+            { identifier: { contains: 'abc', mode: 'insensitive' } },
+          ],
+        },
+      })
+    );
+    await app.close();
+  });
+
+  it('modérateur : `q` s\'ajoute à `{conversationId}` seul (portée déjà élargie par le rôle, pas par `q`)', async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma({
+      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'moderator' }) },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma);
+    await registerUserRoutes(app);
+    await app.ready();
+
+    await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}&q=abc` });
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId: CONV_ID,
+          OR: [
+            { name: { contains: 'abc', mode: 'insensitive' } },
+            { identifier: { contains: 'abc', mode: 'insensitive' } },
+          ],
+        },
+      })
+    );
+    await app.close();
   });
 });
 

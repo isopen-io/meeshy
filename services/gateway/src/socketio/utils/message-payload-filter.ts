@@ -1,4 +1,4 @@
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageCode, makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
 
 /**
  * Per-recipient language filtering for the `message:new` socket payload
@@ -17,15 +17,17 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
  * original content (`content`, `attachments[].transcription`) is always
  * preserved — only the alternate-language translations are trimmed.
  *
- * Matching is case-insensitive. An empty `languages` list returns the payload
- * unchanged (defensive: never strip everything by accident).
+ * Matching canonicalises BOTH sides via the shared `makeLanguageFilter` SSOT: a
+ * legacy region-tagged stored key (`'pt-BR'`) matches a canonical requested code
+ * (`'pt'`) instead of being pruned (#5234). An empty `languages` list returns the
+ * payload unchanged (defensive: never strip everything by accident).
  */
 export function filterMessagePayloadForLanguages<T extends object>(
   payload: T,
   languages: readonly string[]
 ): T {
-  const langSet = new Set(languages.map((l) => l.toLowerCase()).filter(Boolean));
-  if (langSet.size === 0) return payload;
+  const matchesLanguage = makeLanguageFilter(languages);
+  if (!matchesLanguage) return payload;
 
   const source = payload as { translations?: unknown; attachments?: unknown };
   const next = { ...payload } as T & { translations?: unknown; attachments?: unknown };
@@ -33,7 +35,7 @@ export function filterMessagePayloadForLanguages<T extends object>(
   if (Array.isArray(source.translations)) {
     next.translations = source.translations.filter(
       (t) => typeof (t as { targetLanguage?: unknown })?.targetLanguage === 'string'
-        && langSet.has(((t as { targetLanguage: string }).targetLanguage).toLowerCase())
+        && matchesLanguage((t as { targetLanguage: string }).targetLanguage)
     );
   }
 
@@ -45,7 +47,7 @@ export function filterMessagePayloadForLanguages<T extends object>(
       }
       const filtered: Record<string, unknown> = {};
       for (const [lang, value] of Object.entries(translations as Record<string, unknown>)) {
-        if (langSet.has(lang.toLowerCase())) filtered[lang] = value;
+        if (matchesLanguage(lang)) filtered[lang] = value;
       }
       return { ...(att as Record<string, unknown>), translations: filtered };
     });

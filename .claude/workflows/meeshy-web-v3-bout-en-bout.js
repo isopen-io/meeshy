@@ -1,20 +1,22 @@
 export const meta = {
   name: 'meeshy-web-v3-bout-en-bout',
   description:
-    'Developper la v3 web de bout en bout : charte visuelle jugee, vues neuves inscrites dans la planche et la conception, issues, TDD ecran par ecran, temps reel, revue croisee, gates, livraison — chaque agent sur le modele qui convient a sa tache',
+    'Developper la v3 web de bout en bout : dev resynchronise a chaque tour, etat des lieux ecran par ecran, travaux que personne d autre ne tient, vues neuves inscrites dans la planche et la conception, issues, une SPECIFICATION par travail, TDD ecran par ecran, temps reel, revue-correction systematique, gates, livraison — le bon modele au bon moment : fable DECRIT, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
   whenToUse:
-    "Lancer un tour de developpement de la v3 web (apps/web-v3) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat, fil temps reel), puis l'ordre calcule de ordre.md. Args : { branche, focus, plafond, tours, sans_issues, refaire_charte }.",
+    "Lancer un tour de developpement de la v3 web (apps/web-v3) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat et le fil COMPLET, puis medias, story, comments, search, notifs, puis feeds/reels/creation/liens), puis l'ordre calcule de ordre.md. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, refaire_charte, pr, base, date, attribution, modeles }.",
   phases: [
-    { title: 'Cadrer', detail: "mesurer ce qui existe, lire l'ordre calcule et les issues, choisir les travaux du tour", model: 'sonnet' },
+    { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
+    { title: 'Cadrer', detail: "etat des lieux par surface (chat, chats, medias, story, comments, search, notifs…) contre dev, lecture de l'ordre et des issues, choix des travaux — fable DECRIT", model: 'fable' },
     { title: 'Charte', detail: 'sautee par defaut (deja arretee, § 12.5) ; trois directions en concurrence + un juge seulement si refaire_charte=true', model: 'opus' },
     { title: 'Concevoir', detail: 'les vues neuves entrent dans la planche, la matrice, la conception ; captures regenerees', model: 'sonnet' },
-    { title: 'Ouvrir', detail: 'une issue GitHub par travail, avant la premiere ligne de code', model: 'sonnet' },
-    { title: 'Implementer', detail: 'un ecran a la fois, en TDD, sur la charte — opus reserve aux ecrans PHARES', model: 'sonnet' },
-    { title: 'Revue', detail: 'sonnet prend en defaut la surface, opus attaque la conception (le contradicteur, pas le redacteur)', model: 'opus' },
+    { title: 'Ouvrir', detail: 'une issue GitHub par travail, avant la premiere ligne de code — mecanique', model: 'haiku' },
+    { title: 'Specifier', detail: "une SPECIFICATION par travail (fichiers, temoins d'abord, routes et charges reelles citees, etats, mesures, decoupage) — fable DECRIT, et choisit le modele qui developpera", model: 'fable' },
+    { title: 'Implementer', detail: 'un ecran a la fois, en TDD, depuis sa specification — sonnet ; haiku quand la specification le juge suffisant', model: 'sonnet' },
+    { title: 'Revue', detail: 'SYSTEMATIQUE : opus relit surface ET conception, CORRIGE lui-meme ce qui se corrige, met en conformite (charte, passerelle, Prisme, a11y) ; recette au navigateur sur les ecrans phares', model: 'opus' },
     { title: 'Gates', detail: 'ordre, tsc, lint, tests, build + budget, conformite visuelle, axe — corriger, jamais contourner', model: 'sonnet' },
     { title: 'Documenter', detail: 'la planche et la conception disent ce qui a ete construit', model: 'sonnet' },
-    { title: 'Livrer', detail: 'commit, push, fermeture des issues avec preuve', model: 'sonnet' },
-    { title: 'Completude', detail: "ce qui manque encore par rapport au legacy — le prochain tour", model: 'sonnet' },
+    { title: 'Livrer', detail: 'commit, push, PR et auto-merge, fermeture des issues avec preuve', model: 'sonnet' },
+    { title: 'Completude', detail: "ce qui manque encore par rapport au legacy — le prochain tour, decrit", model: 'fable' },
   ],
 }
 
@@ -29,15 +31,58 @@ const V3 = `${REPO}/apps/web-v3`
 const SCRATCH = `${REPO}/.cache/web-v3-workflow`
 
 const A = args && typeof args === 'object' ? args : {}
-const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : 'dev'
+// La branche de travail est, par defaut, la branche COURANTE : chaque session lance ce script depuis
+// sa propre branche `claude/…`, et un nom ecrit en dur ici (celui de la session qui a ecrit la
+// ligne) enverrait la session suivante travailler sur une branche qui n'est pas la sienne.
+// `branche` explicite dans les args reste possible.
+const BRANCHE = typeof A.branche === 'string' && A.branche ? A.branche : '(courante)'
+const NOM_DE_BRANCHE = BRANCHE === '(courante)' ? 'la branche COURANTE — `git branch --show-current` la nomme' : `\`${BRANCHE}\``
+const REF_PUSH = BRANCHE === '(courante)' ? 'HEAD' : BRANCHE
+const NOM_SHELL = BRANCHE === '(courante)' ? '$(git branch --show-current)' : BRANCHE
+// Ce que le commit signe (directive de la session qui lance le script — jamais un nom de modele
+// ailleurs que dans cette ligne, et jamais dans un fichier du depot).
+const ATTRIBUTION = typeof A.attribution === 'string' && A.attribution ? A.attribution : 'Co-Authored-By: Claude <noreply@anthropic.com>'
+// LE BON MODELE AU BON MOMENT (directive du porteur, 2026-09-04 — « ne pas utiliser systematiquement
+// Opus ou Fable, pas economique par rapport a ce qu'on souhaite realiser ») :
+//   - fable   DECRIT : le cadrage (etat des lieux, choix des travaux), la SPECIFICATION de chaque
+//             travail, la critique de completude — la ou la valeur est dans la precision de ce qui
+//             est demande, pas dans le volume produit ;
+//   - sonnet  DEVELOPPE : l'implementation, les corrections, les gates, la documentation, la livraison ;
+//   - haiku   fait le MECANIQUE : la synchronisation git, l'ouverture des issues, et l'implementation
+//             des travaux que la specification juge PETITS (une feuille, un contenu, un relais) ;
+//   - opus    RELIT ET CORRIGE, SYSTEMATIQUEMENT, chaque travail : il prend en defaut la surface et la
+//             conception, corrige lui-meme ce qui se corrige, met en conformite (charte, passerelle,
+//             Prisme, accessibilite), et joue au navigateur les ecrans PHARES.
+// `modeles` dans les args permet de deplacer un role (ex. { relire: 'sonnet' }) sans toucher au script.
+const M0 = A.modeles && typeof A.modeles === 'object' ? A.modeles : {}
+const MODELE = {
+  decrire: typeof M0.decrire === 'string' ? M0.decrire : 'fable',
+  developper: typeof M0.developper === 'string' ? M0.developper : 'sonnet',
+  petit: typeof M0.petit === 'string' ? M0.petit : 'haiku',
+  mecanique: typeof M0.mecanique === 'string' ? M0.mecanique : 'haiku',
+  relire: typeof M0.relire === 'string' ? M0.relire : 'opus',
+  juger: typeof M0.juger === 'string' ? M0.juger : 'opus',
+}
+// `depuis` : la branche que CHAQUE tour reintegre avant de travailler (directive du porteur
+// 2026-09-04 : « pull dev regulierement »). Sur un depot ou `dev` avance de ~20 commits par jour,
+// un tour qui part d'une base vieille d'un tour livre des conflits, pas des ecrans.
+const DEPUIS = typeof A.depuis === 'string' && A.depuis ? A.depuis : 'dev'
 // Ordre du focus (directive du porteur 2026-09-01, etendue 2026-09-03 § 12.10) : la vitrine et le
 // tableau de bord d'abord, puis le fil COMPLET (thread, rich, media — citation, plein ecran,
 // transcription, profil en modale), la liste (chats, avec son balayage), puis les feeds et leur
 // creation, puis les liens de partage. Une reprise de run ne relit pas toujours ses args, donc cet
 // ordre vit dans le script, pas seulement dans l'appel.
+// Directive du porteur 2026-09-04 (« un effort total et assure sur la page avant connexion, le
+// tableau de bord, /chats et /chat ; verifier l'etat de /chat, /chats, puis de la gestion de media,
+// puis story, comments, search, notifs ») : les surfaces de CONVERSATION d'abord, dans l'ordre de
+// verification demande, puis les feeds et leur creation, puis les liens, puis les trois etages de la
+// navigation en une page (#5104, #4472/#4473, #5106) et les travaux nommes de l'espace membre.
 const FOCUS = Array.isArray(A.focus) && A.focus.length
   ? A.focus
-  : ['vitrine', 'home', 'chats', 'join', 'rights', 'thread', 'rich', 'media', 'feed', 'reels', 'comments', 'composer', 'storyCreate', 'links', 'search', 'notifs']
+  : ['vitrine', 'home', 'chats', 'thread', 'join', 'rights', 'rich', 'media', 'profilMembre',
+     'story', 'comments', 'search', 'notifs',
+     'feed', 'reels', 'composer', 'storyCreate', 'links',
+     'transitions', 'cache-de-zone', 'navigateur-de-zone', 'deconnexion', 'notifPrefs', 'reglages-details']
 const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
 const SANS_ISSUES = A.sans_issues === true
@@ -55,8 +100,11 @@ const SANS_CHARTE = A.refaire_charte !== true
 // toujours ses args, donc la priorite vit dans le script, pas seulement dans l'appel.
 const DABORD = Array.isArray(A.dabord) && A.dabord.length
   ? A.dabord.filter((c) => typeof c === 'string')
-  : ['thread', 'join', 'rights']
-const PHARES = new Set(Array.isArray(A.phares) ? A.phares : DABORD)
+  : ['thread', 'chats', 'join', 'rights']
+// Les PHARES recoivent, en plus de la revue-correction, une RECETTE au navigateur (opus) : deux cles,
+// pas quatre — `join` et `rights` sont des ETATS de la meme adresse que le fil de l'invite, et la
+// recette du fil les joue.
+const PHARES = new Set(Array.isArray(A.phares) ? A.phares : ['thread', 'chats'])
 const DATE = typeof A.date === 'string' ? A.date : '(date non fournie — la lire avec `date -I`)'
 // Livraison SANS INTERVENTION (directive du porteur, 2026-09-02) : apres le push, une PR vers `base`
 // est ouverte (ou reprise) et son auto-merge est arme — GitHub fusionne des que la CI est verte.
@@ -68,7 +116,7 @@ const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
 // ---------------------------------------------------------------------------
 
 const SOCLE = `
-TU TRAVAILLES SUR LA V3 WEB DE MEESHY, monorepo ${REPO}, branche \`${BRANCHE}\` (verifie avec
+TU TRAVAILLES SUR LA V3 WEB DE MEESHY, monorepo ${REPO}, sur ${NOM_DE_BRANCHE} (verifie avec
 \`git branch --show-current\` ; NE CHANGE JAMAIS DE BRANCHE, ne cree pas de worktree). Date : ${DATE}.
 
 SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
@@ -114,6 +162,40 @@ DIRECTIVE DU PORTEUR (2026-09-01) — elle PRIME sur tout ce qui la contredit da
   premier pixel, cf. budgets.json « plancher-next-au-dessus-du-gate-de-requetes »), servi DANS LA
   ZONE v3 (jamais depuis public/ a la racine, § 4.4 ; un chemin d'actif nouveau entre nommement dans
   la regle Traefik du routeur frontend-v3 ET dans V3_ZONE_PREFIXES, dans cet ordre, § 4.4 bis).
+- NAVIGATION MODERNE EN **UNE PAGE**, sans un framework ni un octet de trop (directive du porteur
+  2026-09-04, « il est temps d'avoir une navigation moderne sur tout cela TOUT en maintenant des
+  pages legeres ») — TROIS ETAGES, deja specifies par le porteur, dans cet ordre de dependance :
+  1. ETAGE 1 — issue #5104, cle de travail \`transitions\`. ZERO octet de JavaScript :
+     \`@view-transition { navigation: auto }\` dans la feuille commune (fondu inter-documents,
+     no-op sur un navigateur qui ne le supporte pas, duree <= 150 ms, COUPE ENTIER par
+     \`prefers-reduced-motion\`), et \`<script type="speculationrules">\` en \`eagerness: moderate\`
+     (prechargement AU SURVOL, l'economie 3G d'abord) sur une liste FERMEE de hubs SANS EFFET DE
+     BORD. INTERDITS, et un temoin jest doit rougir si l'un y entre : \`prerender\` (il executerait
+     les modules et leurs sockets), \`/chat/:lien\`, \`/chats/:cle\`, et toute route que la garde de
+     provenance 503 (\`app/provenance.ts\`) protege deja.
+  2. ETAGE 2 — issues #4472/#4473, cle \`cache-de-zone\`. Le Service Worker PROPRE a la zone v3 :
+     son cache porte SON namespace (jamais \`meeshy-cache-\`, le prefixe du legacy — le Cache Storage
+     est a l'echelle de l'ORIGINE, et un \`activate\` sans namespace detruit les caches de l'autre),
+     sa portee reste ETROITE tant que l'etape 7 du § 4.9 n'est pas franchie, App Shell en
+     stale-while-revalidate et donnees d'API en RESEAU D'ABORD avec repli cache HORS LIGNE
+     SEULEMENT. Le trou du legacy ne s'herite PAS : les entrees d'API se segmentent par jeton
+     (\`Vary\`), sans quoi deux comptes — ou deux invites a jetons differents — partagent une entree.
+  3. ETAGE 3 — issue #5106, cle \`navigateur-de-zone\`. Le 9e module de participation (~2 Ko gzip,
+     patron Turbo SANS framework, servi comme les huit autres par \`lib/actifs-rt.ts\` et
+     \`app/rt/[nom]/route.ts\`) : il intercepte les \`<a>\` INTERNES a la zone, \`fetch\` le document
+     cible, echange \`<main>\` et les feuilles, \`pushState\`, et enveloppe l'echange d'une View
+     Transition same-document. LE SERVEUR RESTE L'UNIQUE COMPOSITEUR — aucun etat de vue ne migre
+     dans le client. Ce que ce module DOIT tenir, chacun avec son temoin : la frontiere de zone
+     jamais interceptee (le jumeau RUNTIME du lint \`zone/lien-sortant-en-navigation-client\`) ; le
+     cycle de vie passe par \`lib/realtime/lifecycle.ts\`, POINT D'ECOUTE UNIQUE — une navigation
+     douce ne declenche pas \`pagehide\`, donc l'ecran quitte recoit \`destruction\` par ce site et
+     par aucun autre, et le chargeur est RE-ARME pour l'ecran neuf ; aucune fuite de listener ni
+     de socket (mesure memoire sur 20 navigations) ; scroll restaure au retour arriere, focus pose
+     sur le \`<main>\` neuf, navigation ANNONCEE au lecteur d'ecran ; et le GAIN vise : UN socket
+     survit a /chats -> fil -> /chats.
+  LE REPLI EST LA REGLE, sur les trois etages : sans le module, sans le worker, sans le support des
+  View Transitions, chaque lien navigue comme aujourd'hui. C'est une AMELIORATION PROGRESSIVE,
+  jamais une condition — et jamais une raison d'hydrater quoi que ce soit (§ 12.10.6 tient).
 - Toutes les features de la webapp legacy (apps/web) ont vocation a exister dans la v3, ecran par
   ecran, dans l'ordre calcule — ce tour livre ses travaux, la critique de completude nomme le reste.
 
@@ -320,6 +402,51 @@ et sur le cadrage qui les a soulevees. Ne les rediscute pas : applique-les.
      diff serveur, la v3 relaie ce que le contrat expose ;
    - les deux sont des AMELIORATIONS PROGRESSIVES (comme le reste du § 12.4) : le chemin sans JS
      (texte, piece jointe classique) reste vert sans elles.
+
+4. LE FIL ET LA LISTE SONT UN CHAT VIVANT, JAMAIS UN FORMULAIRE — REAFFIRME PAR LE PORTEUR LE
+   2026-09-04 (« actuellement on dirait un formulaire »), avec la liste de ce que « chat complet »
+   veut dire ; elle PRIME sur toute lecture plus etroite du § 12.10 :
+   - « approche lentille et focale / script » : la SURFACE EST PILOTEE PAR LE SCRIPT des que le
+     premier pixel est passe — le module de participation (§ 12.4) prend la main, et TOUTE action
+     (envoyer, reagir, repondre, citer, archiver, muter, supprimer, ouvrir un media, ouvrir un
+     profil, creer un lien) a un effet IMMEDIAT et OPTIMISTE, sans rechargement ni navigation ; le
+     formulaire POST reste le chemin SANS JavaScript, jamais l'experience AVEC. La « lentille » est
+     une lecture qui se FOCALISE sur ce qui compte par des mecanismes a TEMOIN (§ 12.10.1 :
+     auto-defilement au message recu, mise en evidence du message cite, zoom plein ecran, pastille
+     « N nouveaux messages ») — le mode « focal » a opacite permanente reste RETIRE (§ 12.9) : ne le
+     reintroduis pas, meme sous un autre nom ;
+   - ce que le fil AFFICHE, sur chacune des six variantes de \`rich\` : l'AVATAR de l'auteur
+     (initiales + teinte, deja acquis — verifie qu'il est present PARTOUT, y compris sur les bulles
+     repeintes en direct et dans la liste), la CITATION (reply-to avec saut et mise en evidence),
+     l'APERCU image / video / audio avec la TRANSCRIPTION au Prisme, et le PLEIN ECRAN pour TOUS les
+     medias — image, video, ET la fiche d'un audio — a l'adresse \`?autour=<message>&media=<piece>\`
+     (§ 12.10.1) ;
+   - le PROFIL d'un participant en MODALE (\`profilMembre\`, § 12.10.3), depuis l'avatar ou le nom,
+     dans le fil ET dans la liste ;
+   - AUCUN compte de participants dans une conversation a deux (§ 12.10.2, \`compteDeParticipants\`) ;
+   - \`/chats\` se BALAYE (§ 12.10.4 ; \`lib/realtime/balayage.ts\` existe — verifie qu'il est BRANCHE
+     sur chaque ligne, que les trois gestes — archiver, muter, supprimer — ont chacun un EFFET
+     optimiste et reversible contre la route REELLE de la passerelle, et que le menu de la ligne les
+     porte aussi au clavier et au lecteur d'ecran) ;
+   - la CREATION D'UN LIEN DE PARTAGE depuis une conversation OUVERTE (\`sheet:link\`, #5034), pas
+     seulement depuis /links ;
+   - les FEEDS : /feed (les posts), /feed/reels (le fil des reels) et la lecture d'un reel, puis la
+     CREATION — story (\`storyCreate\`), post et reel (\`composer\`) — dans l'ordre du focus ;
+   - de GROS BOUTONS (charte : principal >= 52 px, toute cible >= 44 px), une page LEGERE (aucun
+     octet hors § 12.4, aucune police web, aucun actif externe — zone rurale, 3G lente) et du FULL
+     TEMPS REEL sur les surfaces de participation.
+   ORDRE DE VERIFICATION demande par le porteur, a chaque tour : /chat, /chats, puis la gestion des
+   medias, puis story, comments, search, notifs — pour chacune : ce qui EXISTE sur la branche, ce qui
+   est deja sur \`dev\` (\`git log origin/dev -- <chemins>\`, \`git diff origin/dev -- apps/web-v3\`) et
+   ce qui MANQUE par rapport a la liste ci-dessus et au legacy (apps/web).
+
+5. LE BON MODELE AU BON MOMENT (directive du porteur, 2026-09-04) — le script l'applique par sa
+   constante MODELE : fable DECRIT (cadrage, specification de chaque travail, completude), sonnet et
+   haiku DEVELOPPENT, opus RELIT ET CORRIGE — systematiquement, chaque travail. Un agent ne choisit
+   pas son modele : il fait le travail de son role. Le SPECIFICATEUR dit, pour chaque travail, si
+   l'implementation est PETITE (haiku : une feuille, un contenu, un relais d'une trentaine de lignes)
+   ou non (sonnet), et pourquoi ; le RELECTEUR corrige lui-meme ce qui se corrige en moins d'une
+   heure de travail et rend au developpeur ce qui demande une re-implementation.
 `
 
 
@@ -424,6 +551,25 @@ const TRAVAIL = {
   },
 }
 
+const SYNCHRO = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['reintegre', 'etat'],
+  properties: {
+    reintegre: { type: 'boolean', description: 'true si la branche porte maintenant origin/DEPUIS' },
+    etat: { type: 'string', description: 'FACTUEL : commandes et sorties (compte de commits repris, conflits, gates apres merge)' },
+    commits_repris: { type: 'integer' },
+    fichiers_touches_par_dev: { type: 'array', items: { type: 'string' }, description: 'les chemins que dev vient de bouger — ce que le tour ne doit pas reecrire a l aveugle' },
+    conflit_non_resolu: { type: 'string', description: 'vide si tout est resolu ; sinon ce qui demande un arbitrage' },
+    gates_apres_merge: { type: 'string', description: 'type-check / lint / test apres la reintegration — ce qui est rouge AVANT le tour' },
+    tenus_ailleurs: {
+      type: 'array',
+      description: 'ce que d AUTRES sessions tiennent en ce moment : PR ouvertes, branches claude/* poussees recemment, issues assignees',
+      items: { type: 'object', additionalProperties: false, required: ['quoi', 'preuve'], properties: { quoi: { type: 'string' }, preuve: { type: 'string' }, cles_a_eviter: { type: 'array', items: { type: 'string' } } } },
+    },
+  },
+}
+
 const CADRAGE = {
   type: 'object',
   additionalProperties: false,
@@ -434,6 +580,27 @@ const CADRAGE = {
     blocage: { type: 'string' },
     lot_courant: { type: 'string' },
     travaux: { type: 'array', items: TRAVAIL },
+    inventaire: {
+      type: 'array',
+      description: "l'ETAT DES LIEUX par SURFACE, dans l'ordre demande par le porteur (chat, chats, medias, story, comments, search, notifs, puis vitrine, home, feed, reels, composer, storyCreate, links) — mesure, jamais impressionniste",
+      items: {
+        type: 'object', additionalProperties: false, required: ['surface', 'existe', 'a_jour_dans_dev', 'manque', 'verdict'],
+        properties: {
+          surface: { type: 'string' },
+          routes: { type: 'array', items: { type: 'string' } },
+          existe: { type: 'string', description: 'fichiers (vue, feuille, porte, module temps reel, temoins) avec leur taille wc -l, et ce qu ils font deja' },
+          a_jour_dans_dev: { type: 'boolean', description: 'true si origin/dev porte le meme etat que la branche pour ces fichiers (git diff origin/dev -- <chemins> vide apres la reintegration)' },
+          dernier_commit_dev: { type: 'string', description: 'git log -1 --format="%h %ci %s" origin/dev -- <chemins>' },
+          manque: { type: 'string', description: 'ce qui manque par rapport a la DIRECTIVE 4, au § 12.10, a la capture cible et au legacy (apps/web) — avec les fichiers du legacy qui le font' },
+          verdict: { type: 'string', enum: ['livre', 'a-completer', 'a-styliser', 'absent'] },
+        },
+      },
+    },
+    ecarte_car_tenu_ailleurs: {
+      type: 'array',
+      description: 'les cles ECARTEES de ce tour parce qu une autre session les tient — avec la preuve',
+      items: { type: 'object', additionalProperties: false, required: ['cle', 'preuve'], properties: { cle: { type: 'string' }, preuve: { type: 'string' } } },
+    },
     vues_a_ajouter_a_la_planche: {
       type: 'array',
       description: 'les vues du tour qui ne sont PAS dans la planche (aucun cible/<id>.png) et que la phase Concevoir doit y faire entrer',
@@ -493,20 +660,46 @@ const ISSUES = {
   },
 }
 
+const DEFAUT = {
+  type: 'object', additionalProperties: false, required: ['gravite', 'constat', 'preuve', 'correctif'],
+  properties: {
+    gravite: { type: 'string', enum: ['bloquant', 'majeur', 'mineur'] },
+    constat: { type: 'string' }, preuve: { type: 'string', description: 'fichier:ligne, commande et sortie' }, correctif: { type: 'string' },
+  },
+}
+
 const REVUE = {
   type: 'object', additionalProperties: false, required: ['verdict', 'defauts'],
   properties: {
     verdict: { type: 'string', enum: ['conforme', 'a-corriger', 'a-refaire'] },
-    defauts: {
-      type: 'array',
-      items: {
-        type: 'object', additionalProperties: false, required: ['gravite', 'constat', 'preuve', 'correctif'],
-        properties: {
-          gravite: { type: 'string', enum: ['bloquant', 'majeur', 'mineur'] },
-          constat: { type: 'string' }, preuve: { type: 'string', description: 'fichier:ligne, commande et sortie' }, correctif: { type: 'string' },
-        },
-      },
-    },
+    defauts: { type: 'array', items: DEFAUT },
+    dimensions_mures: { type: 'array', items: { type: 'string' } },
+    dimensions_restantes: { type: 'array', items: { type: 'string' } },
+  },
+}
+
+const SPEC = {
+  type: 'object', additionalProperties: false, required: ['specification', 'modele', 'pourquoi_ce_modele', 'fichier'],
+  properties: {
+    specification: { type: 'string', description: "la specification COMPLETE, en Markdown : etat des lieux mesure, routes et evenements reels (fichier:ligne), temoins a ecrire d'abord, decoupage en etapes, etats et gestes, mesures, interdits, questions tranchees" },
+    modele: { type: 'string', enum: ['petit', 'developper'], description: "petit = haiku suffit (une feuille, un contenu, un relais delimite, sans temps reel ni route nouvelle) ; developper = sonnet" },
+    pourquoi_ce_modele: { type: 'string' },
+    fichier: { type: 'string', description: 'le chemin ou la specification a ete ecrite' },
+    endpoints: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['route', 'site', 'existe'], properties: { route: { type: 'string' }, site: { type: 'string', description: 'fichier:ligne dans services/gateway/src, ou packages/shared/types/socketio-events.ts pour un evenement' }, existe: { type: 'boolean' } } } },
+    temoins: { type: 'array', items: { type: 'string' }, description: 'un par ligne du critere de fin : fichier, describe, ce qui est prouve' },
+    questions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['question', 'reponse_retenue'], properties: { question: { type: 'string' }, reponse_retenue: { type: 'string' } } } },
+  },
+}
+
+const REVUE_CORRIGEE = {
+  type: 'object', additionalProperties: false, required: ['verdict', 'defauts_trouves', 'corriges', 'restants', 'rapport'],
+  properties: {
+    verdict: { type: 'string', enum: ['conforme', 'a-corriger', 'a-refaire'], description: "l'etat APRES les corrections du relecteur" },
+    defauts_trouves: { type: 'array', items: DEFAUT, description: 'TOUS les defauts constates, corriges ou non' },
+    corriges: { type: 'number', description: 'combien le relecteur a corriges lui-meme' },
+    restants: { type: 'array', items: DEFAUT, description: 'ce qui reste au developpeur : bloquant et majeur seulement, avec le correctif propose' },
+    rapport: { type: 'string', description: 'ce qui a ete corrige, fichier par fichier, et les commandes rejouees avec leurs sorties' },
+    gates_rejoues: { type: 'string', description: 'type-check / lint / test / build apres correction — sorties tronquees, jamais un resume' },
     dimensions_mures: { type: 'array', items: { type: 'string' } },
     dimensions_restantes: { type: 'array', items: { type: 'string' } },
   },
@@ -586,17 +779,100 @@ for (let tour = 1; tour <= TOURS; tour += 1) {
   log(`=== TOUR ${tour}/${TOURS} — focus : ${focusDuTour.join(', ')} ===`)
 
   // -------------------------------------------------------------------------
+  phase('Synchroniser')
+  // -------------------------------------------------------------------------
+  // Directive du porteur 2026-09-04 : « pull dev regulierement, travailler sur ce que les autres
+  // sessions ne travaillent pas ». AVANT le cadrage, a CHAQUE tour — un tour qui part d'une base
+  // vieille d'un tour livre des conflits, pas des ecrans. Modele mecanique : c'est du git.
+  const synchro = await agent(`${SOCLE}
+
+TA MISSION — REINTEGRER \`${DEPUIS}\` DANS ${NOM_DE_BRANCHE}, PUIS RELEVER CE QUE LES AUTRES SESSIONS TIENNENT.
+Tu ne modifies AUCUN fichier de production autrement que par la fusion elle-meme.
+
+A. LA REINTEGRATION
+1. \`git branch --show-current\` — tu DOIS etre sur ${NOM_DE_BRANCHE}.${BRANCHE === '(courante)' ? " Si la commande ne rend rien (HEAD detache), arrete-toi et dis-le : reintegre=false." : ` Si la branche n'existe pas encore
+   localement, cree-la depuis \`origin/${DEPUIS}\` (\`git fetch origin ${DEPUIS} && git checkout -B ${BRANCHE} origin/${DEPUIS}\`).`}
+   NE CHANGE JAMAIS pour une autre branche de travail, ne cree pas de worktree.
+   Si \`${V3}/node_modules\` est vide ou absent, \`cd ${REPO} && bun install --ignore-scripts\` d'abord (le
+   postinstall de grpc-tools echoue derriere le proxy : --ignore-scripts est la regle, pas un contournement) ;
+   si \`${REPO}/packages/shared/dist\` est absent, \`cd ${REPO}/packages/shared && npx prisma generate --generator client && bun run build\`
+   — sans quoi les temoins de la v3 echouent sur « Cannot find module '@meeshy/shared/…' ».
+2. \`git status --short\` : si l'arbre est sale, \`git stash\` d'abord, et \`git stash pop\` apres la fusion.
+3. \`git fetch origin ${DEPUIS}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
+4. \`git log --oneline HEAD..origin/${DEPUIS}\` : compte les commits repris et lis leurs titres.
+   \`git diff --stat HEAD...origin/${DEPUIS}\` : note les chemins que dev vient de bouger, en
+   particulier sous apps/web-v3, packages/shared, packages/design-tokens et docs/product.
+5. \`git merge origin/${DEPUIS}\` — **JAMAIS** \`git pull --rebase\` ni \`git rebase\` (lecon 324 du
+   depot : le rebase aplatit un commit de fusion et pousse un etat partiel). Un conflit se resout en
+   gardant les DEUX apports quand les fichiers le permettent (design, lecons, matrice) ou en
+   reconciliant le CODE par sa logique — jamais en prenant un cote au hasard. Si un conflit demande
+   un arbitrage produit, laisse-le, rends conflit_non_resolu et reintegre=false.
+6. Apres la fusion : \`cd ${V3} && bun run type-check\` puis \`bun run test 2>&1 | tail -5\`. Ce qui est
+   rouge ICI est rouge AVANT le tour — c'est un FAIT a rapporter (gates_apres_merge), pas un blocage.
+
+B. LE RELEVE — CE QUE LES AUTRES SESSIONS TIENNENT
+Le depot est travaille par plusieurs sessions en parallele. Deux sessions sur le meme fichier, c'est
+un conflit garanti et un travail jete. Charge
+ToolSearch({query: "select:mcp__github__list_pull_requests,mcp__github__list_branches,mcp__github__list_issues,mcp__github__search_issues", max_results: 5})
+puis releve, pour \`isopen-io/meeshy\` :
+1. Les PR OUVERTES (list_pull_requests, state open, sort updated) : pour chacune, son titre, sa
+   branche head et les fichiers qu'elle touche si le titre ne suffit pas. Une PR ouverte qui parle
+   de la v3 web ou de la passerelle TIENT son sujet.
+2. Les branches poussees RECEMMENT (\`git branch -r --sort=-committerdate | head -30\`, et
+   \`git log --oneline -1 --format='%ci %s' <branche>\` sur celles nommees claude/* ou feat/web-v3-*)
+   dont le dernier commit a moins de 48 h. Une branche vivante qui n'est pas la tienne TIENT son sujet.
+3. Les issues ASSIGNEES ou visiblement en cours (list_issues label web, state OPEN) : une issue avec
+   un assignee, ou dont un commit tres recent de \`${DEPUIS}\` cite le numero, est prise.
+Rends \`tenus_ailleurs\` : une entree par sujet tenu, avec la PREUVE (numero de PR, nom de branche +
+date, numero d'issue) et les CLES de travail a eviter (les cles de ${D}/matrice.json, ou les cles
+d'axe \`transitions\`, \`cache-de-zone\`, \`navigateur-de-zone\`, \`deconnexion\`, \`notifPrefs\`,
+\`reglages-details\`). Si les outils GitHub ne repondent pas, dis-le et rends au moins le releve des
+branches — l'absence de releve n'arrete pas le tour, elle se DIT.
+
+Sois FACTUEL : 'etat' cite les commandes et leurs sorties, jamais une impression.`,
+    { label: `synchroniser:tour-${tour}`, phase: 'Synchroniser', schema: SYNCHRO, model: MODELE.mecanique, effort: 'medium' })
+
+  if (synchro && synchro.conflit_non_resolu) {
+    log(`ARRET — la reintegration de ${DEPUIS} demande un arbitrage : ${synchro.conflit_non_resolu}`)
+    resultatsDesTours.push({ tour, arret: 'conflit de reintegration', blocage: synchro.conflit_non_resolu, etat: synchro.etat })
+    break
+  }
+  if (synchro) {
+    log(`${DEPUIS} reintegre : ${synchro.commits_repris || 0} commits repris` +
+      (synchro.tenus_ailleurs && synchro.tenus_ailleurs.length ? ` — ${synchro.tenus_ailleurs.length} sujets tenus ailleurs` : ' — rien de tenu ailleurs'))
+  }
+
+  // Ce que le tour NE DOIT PAS prendre : les cles que d'autres sessions tiennent.
+  const TENUS = (synchro && Array.isArray(synchro.tenus_ailleurs) ? synchro.tenus_ailleurs : [])
+  const CLES_TENUES = new Set(TENUS.flatMap((t) => Array.isArray(t.cles_a_eviter) ? t.cles_a_eviter : []))
+  const RELEVE = TENUS.length
+    ? `\nCE QUE D'AUTRES SESSIONS TIENNENT EN CE MOMENT — n'y touche pas, et ne prends aucune de leurs cles :\n${TENUS.map((t) => `- ${t.quoi} (preuve : ${t.preuve})${(t.cles_a_eviter || []).length ? ` — cles a eviter : ${t.cles_a_eviter.join(', ')}` : ''}`).join('\n')}\n${synchro && synchro.fichiers_touches_par_dev && synchro.fichiers_touches_par_dev.length ? `FICHIERS QUE \`${DEPUIS}\` VIENT DE BOUGER (relis-les avant de les reecrire) :\n${synchro.fichiers_touches_par_dev.slice(0, 40).join(', ')}\n` : ''}`
+    : `\nAucun sujet releve comme tenu par une autre session a l'ouverture de ce tour.\n`
+
+  // -------------------------------------------------------------------------
   phase('Cadrer')
   // -------------------------------------------------------------------------
-  const cadrage = await agent(`${SOCLE}
-
+  const cadrage = await agent(`${SOCLE}${RELEVE}
 TA MISSION — CADRER ce tour. Tu ne modifies AUCUN fichier de production.
+\`${DEPUIS}\` VIENT D'ETRE REINTEGRE : la base est fraiche, ne la re-verifie pas, prends-la pour acquise.
 
 1. MESURE ce qui existe : \`git branch --show-current\`, \`git status --short\`, \`git log --oneline -15\`,
    \`find ${V3}/app -name 'route.ts' -o -name 'page.tsx' | sort\`, \`ls ${V3}/lib/*\`,
    \`ls ${D}/cible\`, \`node ${D}/ordre-des-ecrans.js >/dev/null; echo rc=$?\`.
    Lance les gates rapides pour connaitre le point de depart : \`cd ${V3} && bun run type-check\`,
    \`bun run lint\`, \`bun run test 2>&1 | tail -5\`. Note ce qui est deja rouge AVANT ce tour.
+1 bis. L'ETAT DES LIEUX PAR SURFACE (DIRECTIVE 4, l'ordre de verification du porteur) : pour /chat
+   (join, rights, thread cote invite), /chats (chats), le fil (thread, rich, profilMembre), la gestion
+   des medias (media, plein ecran, transcription), story, comments, search, notifs — puis vitrine,
+   home, feed, reels, composer, storyCreate, links — rends une entree d'\`inventaire\` : les fichiers
+   qui la portent (vue / feuille / porte / module temps reel / temoins, \`wc -l\`), ce qu'ils font
+   DEJA (lis-les, cite fichier:ligne), si \`origin/dev\` porte le meme etat que la branche
+   (\`git diff origin/${DEPUIS} --stat -- <chemins>\` vide ? \`git log -1 --format='%h %ci %s' origin/${DEPUIS} -- <chemins>\`),
+   et ce qui MANQUE par rapport a la liste de la directive 4, au § 12.10, a la capture cible et au
+   legacy (apps/web/components/conversations/*, components/chat/*, app/(connected)/*, hooks/*) — avec
+   un verdict : livre / a-completer / a-styliser / absent. C'est cet inventaire qui fonde le choix des
+   travaux : une surface « a-completer » ou « a-styliser » du focus est un travail AVANT tout ecran
+   absent hors focus.
 2. Lis ${D}/ordre.md, ${D}/matrice.json et le § 12 de la conception s'il existe.
 3. Charge ToolSearch({query: "select:mcp__github__list_issues,mcp__github__search_issues,mcp__github__issue_read", max_results: 3})
    et lis les issues ouvertes label "web" (epopee #4371, milestone 74) pour savoir ce qui est deja
@@ -607,6 +883,22 @@ TA MISSION — CADRER ce tour. Tu ne modifies AUCUN fichier de production.
       ou "ecran" selon ce qui manque : dis-le dans existe_deja et detail) ;
    b) puis, s'il reste de la place, les ecrans suivants de ${D}/ordre.md dont les dependances
       sont livrees.
+   ECARTE, AVANT TOUT AUTRE CRITERE, toute cle que le releve ci-dessus dit tenue par une autre
+   session, et toute cle dont le travail toucherait les memes fichiers qu'une PR ouverte : rends-la
+   dans \`ecarte_car_tenu_ailleurs\` avec sa preuve, et prends la suivante. Deux sessions sur le meme
+   fichier, c'est un conflit garanti et un travail jete — ecarter n'est pas perdre le sujet, c'est
+   le laisser a qui le tient.
+   LES TROIS ETAGES DE LA NAVIGATION EN UNE PAGE (cles \`transitions\` #5104, \`cache-de-zone\`
+   #4472/#4473, \`navigateur-de-zone\` #5106) sont des travaux de PREMIERE CLASSE au meme titre qu'un
+   ecran : leurs issues sont DEJA OUVERTES par le porteur (milestone « La v3 web sert le role
+   premier », epopee #4371), donc la phase Ouvrir n'a pas a les recreer — elle les RETROUVE et pose
+   \`Status = In Progress\`. Leur ordre de dependance est 1 puis 2 puis 3 ; ne prends l'etage 3 que si
+   l'etage 1 est livre (le fondu same-document du module s'appuie sur l'opt-in de l'etage 1).
+   \`deconnexion\` (#5095, on entre dans la v3 et on n'en sort pas), \`notifPrefs\`
+   (/notifications/preferences) et \`reglages-details\` (#5066 — les quatre cles de matrice.json \`detail-privacy\`,
+   \`detail-media\`, \`detail-message\`, \`detail-notification\` : ni route web ni route de PASSERELLE,
+   ce qui en fait un travail a DEUX cotes ; ne le prends que si tu peux livrer les deux, sinon
+   dis-le et prends la suivante) sont les autres travaux nommes du focus.
    Pour chaque travail : titre SEMANTIQUE, route, audience, critere de fin OBSERVABLE (repris de
    matrice.json quand la ligne existe, ecrit sinon), corps d'issue (Contexte · Preuve attendue ·
    Critere de fin · Source).
@@ -619,7 +911,7 @@ TA MISSION — CADRER ce tour. Tu ne modifies AUCUN fichier de production.
    un blocage, c'est un fait a rapporter dans etat (la phase Gates le traitera).
 
 Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`,
-    { label: `cadrer:tour-${tour}`, phase: 'Cadrer', schema: CADRAGE, model: 'sonnet', effort: 'high' })
+    { label: `cadrer:tour-${tour}`, phase: 'Cadrer', schema: CADRAGE, model: MODELE.decrire, effort: 'high' })
 
   if (!cadrage) { resultatsDesTours.push({ tour, arret: 'le cadrage n a rien rendu' }); break }
   if (!cadrage.pret) {
@@ -629,7 +921,12 @@ Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`
   }
   // `sauter` : les cles a REPORTER au tour suivant (le porteur veut livrer plus tot ce qui est pret).
   const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter.filter((c) => typeof c === 'string') : [])
-  const choisis = (cadrage.travaux || []).slice(0, PLAFOND).filter((t) => !SAUTER.has(t.cle))
+  const choisis = (cadrage.travaux || [])
+    .filter((t) => !CLES_TENUES.has(t.cle))
+    .slice(0, PLAFOND)
+    .filter((t) => !SAUTER.has(t.cle))
+  const ecartes = (cadrage.travaux || []).filter((t) => CLES_TENUES.has(t.cle)).map((t) => t.cle)
+  if (ecartes.length) log(`Ecartes — tenus par une autre session : ${ecartes.join(', ')}`)
   if (SAUTER.size) log(`Reportes au tour suivant : ${[...SAUTER].join(', ')}`)
   const rang = (cle) => { const i = DABORD.indexOf(cle); return i === -1 ? DABORD.length : i }
   const travaux = [...choisis].sort((a, b) => rang(a.cle) - rang(b.cle))
@@ -722,7 +1019,7 @@ Ecris-la dans ${dossierDeTravail}/charte/CHARTE.md et rends-la aussi dans le cha
 
 LES PROPOSITIONS :
 ${court(propositions, 12000)}`,
-      { label: 'charte:juge', phase: 'Charte', schema: JUGEMENT, model: 'opus', effort: 'max' })
+      { label: 'charte:juge', phase: 'Charte', schema: JUGEMENT, model: MODELE.juger, effort: 'high' })
 
     charteRetenue = jugement
     log(`Charte retenue : ${jugement ? jugement.retenue : '(aucune — le juge n a rien rendu)'}`)
@@ -795,7 +1092,7 @@ mecanismes, jamais l'etat des taches (l'etat vit dans les issues).
 
 Ne commit PAS. Rends le rapport, les fichiers touches, les vues ajoutees (id, route, png), le rc de
 l'ordre, et les contradictions tranchees.`,
-    { label: `concevoir:tour-${tour}`, phase: 'Concevoir', schema: CONCEPTION, model: 'sonnet', effort: 'high' })
+    { label: `concevoir:tour-${tour}`, phase: 'Concevoir', schema: CONCEPTION, model: MODELE.developper, effort: 'high' })
 
   if (conception && conception.ordre_rc !== 0) {
     log(`ATTENTION : ordre-des-ecrans.js rend rc=${conception.ordre_rc} — la phase Gates devra le remettre a 0`)
@@ -835,7 +1132,7 @@ Pour CHAQUE travail :
 
 LES TRAVAUX :
 ${travaux.map(ligneDeTravail).join('\n')}`,
-      { label: `ouvrir:tour-${tour}`, phase: 'Ouvrir', schema: ISSUES, model: 'sonnet', effort: 'medium' })
+      { label: `ouvrir:tour-${tour}`, phase: 'Ouvrir', schema: ISSUES, model: MODELE.mecanique, effort: 'medium' })
 
     numero = new Map(((ouverture && ouverture.issues) || []).filter((i) => i.numero > 0).map((i) => [i.cle, i.numero]))
     log(`${numero.size}/${travaux.length} issues connues`)
@@ -843,33 +1140,156 @@ ${travaux.map(ligneDeTravail).join('\n')}`,
 
   // -------------------------------------------------------------------------
   // Un a un : les travaux partagent le socle (chrome, jetons, sprite, lib/realtime), et deux
-  // agents qui l'editent en parallele fabriqueraient une jumelle.
-  phase('Implementer')
+  // agents qui l'editent en parallele fabriqueraient une jumelle. Pour CHAQUE travail, dans cet
+  // ordre : fable SPECIFIE, sonnet (ou haiku quand la specification juge le travail petit)
+  // DEVELOPPE, opus RELIT ET CORRIGE — systematiquement — puis joue au navigateur les ecrans
+  // phares ; ce que le relecteur rend au developpeur repart en correction, contre-relue.
+  phase('Specifier')
   // -------------------------------------------------------------------------
   const resultats = []
+  // -------------------------------------------------------------------------
+  // UN ARBRE PARTAGE, DEUX NIVEAUX (tour 2, 2026-09-05). Les AGENTS ne commitent pas : « ne commit
+  // pas » n'etait ecrit que dans le prompt du developpeur, et un correcteur a pousse 85 fichiers de
+  // trois travaux sous le titre d'une seule issue, un correcteur de gates et le documentaliste ont
+  // suivi — aucun n'avait desobei, la regle ne leur avait jamais ete dite (lecon 532). La BRANCHE,
+  // elle, doit avancer et rester alignee (directive du porteur, 2026-09-05 : « il faut commiter
+  // regulierement et se synchroniser avec les activites distantes ») : c'est une phase MECANIQUE, a
+  // des moments fixes — avant CHAQUE travail et avant les gates —, qui commite l'arbre en point
+  // d'etape, fusionne dev, pousse, et remet au travail suivant ce que les sessions voisines ont bouge.
+  // -------------------------------------------------------------------------
+  const SANS_COMMIT = `
+GIT — ne commit PAS, ne pousse PAS, ne cree ni stash, ni branche, ni worktree : l'arbre est PARTAGE
+avec les autres agents du tour, et ce sont les phases Synchroniser (points d'etape) et Livrer (commits,
+push, PR) qui commitent pour tous. Un commit ou un push de ta part est un DEFAUT du tour.`
+
+  const resynchroniser = async (moment) => {
+    phase('Synchroniser')
+    const synchro = await agent(`${SOCLE}
+${PASSERELLE}
+TA MISSION — RESYNCHRONISER l'arbre ${moment}. Un tour dure des heures : \`${DEPUIS}\` et la branche
+distante avancent pendant ce temps, d'autres sessions y livrent sur les MEMES ecrans, et ce qui se
+specifie, se code, se juge ou se livre ici doit l'etre sur l'arbre FUSIONNE (directive du porteur,
+2026-09-05 : « il faut commiter regulierement et se synchroniser avec les activites distantes »).
+
+1. \`git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE}. \`git status --short\` : si l'arbre
+   porte du travail non commite, c'est un POINT D'ETAPE — commite-le D'ABORD, tel quel (\`git add -A\`
+   apres avoir retire les artefacts generes : rendu/, rapport-conformite.json, .next/, .cache/,
+   captures hors ${D}/cible/), message \`wip(web-v3): point d'etape — <ce que l'arbre porte> (Refs #n)\`,
+   termine par les lignes :
+${ATTRIBUTION}
+   JAMAIS \`git stash\` : dans un arbre partage, un pop rejoue le stash d'un AUTRE lot (lecon 527).
+2. \`git fetch origin ${DEPUIS} ${NOM_SHELL}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
+   \`git log --oneline HEAD..origin/${NOM_SHELL}\` et \`git log --oneline HEAD..origin/${DEPUIS}\` : s'il n'y a
+   RIEN a reprendre d'aucun cote, pousse le point d'etape s'il y en a un (etape 5) et arrete-toi la
+   (reintegre=true, commits_repris=0).
+3. \`git merge origin/${NOM_SHELL}\` (si la branche distante a avance), puis \`git merge origin/${DEPUIS}\` —
+   **JAMAIS** \`git rebase\` ni \`git pull --rebase\` (lecon 324). Un conflit se resout en gardant les DEUX
+   apports (design, matrice ; lecons : celles de dev gardent leurs numeros, les notres se renumerotent
+   a la suite ; budgets-mesures.json : les valeurs se REMESURENT avec la commande que la ligne nomme,
+   jamais choisies) ou en reconciliant le CODE par sa logique ; \`git checkout --ours\` / \`--theirs\` a
+   l'aveugle est interdit. Verifie qu'aucun marqueur ne reste (\`git grep -n '^<<<<<<<'\` vide). Commite
+   chaque fusion (message : ce qui a ete concilie et pourquoi, termine par les lignes d'attribution).
+4. \`cd ${V3} && bun run type-check && bun run lint && bun run test 2>&1 | tail -5\` : ce qui est rouge se
+   corrige ICI si la cause est la fusion (dependance ajoutee par dev → \`bun install --ignore-scripts\`
+   puis \`git checkout -- bun.lock\` ; fixture qui ne connait pas un module ajoute par dev ; ratchet a
+   remesurer…) ; sinon il est rapporte dans gates_apres_merge.
+5. \`git push -u origin ${REF_PUSH}\` (4 essais sur echec RESEAU) : le point d'etape et la fusion partent
+   tout de suite — les sessions voisines les voient.
+6. Rends fichiers_touches_par_dev (ce que dev a bouge dans les fichiers du tour — ce que le prochain
+   travail doit LIRE avant d'ecrire), conflit_non_resolu VIDE si tout est resolu (sinon ce qui demande
+   un arbitrage, l'arbre laisse SANS marqueur), et un etat FACTUEL : commandes et sorties.`,
+      { label: `resynchroniser:tour-${tour}:${moment.replace(/[^a-z0-9:-]+/gi, '-')}`, phase: 'Synchroniser', schema: SYNCHRO, model: MODELE.developper, effort: 'high' })
+    if (synchro && synchro.conflit_non_resolu) log(`ATTENTION — resynchronisation incomplete ${moment} : ${synchro.conflit_non_resolu}`)
+    else if (synchro) log(`Resynchronise ${moment} : ${synchro.commits_repris || 0} commits repris`)
+    return synchro
+  }
+
   for (const t of travaux) {
     const num = numero.get(t.cle)
+    const synchroAvant = await resynchroniser(`avant ${t.cle}`)
     const cible = t.genre !== 'infra'
       ? `\nLa capture CIBLE de cet ecran est ${D}/cible/${t.cle}.png — REGARDE-LA (outil Read) avant d'ecrire. Elle fait foi sur la disposition, la hierarchie, les etats et les gestes ; la CHARTE fait foi sur le style.`
       : ''
-
     const phare = PHARES.has(t.cle)
+
+    // ---------------------------------------------------------------- Specifier (decrire)
+    phase('Specifier')
+    const spec = await agent(`${SOCLE}
+${PASSERELLE}${DIRECTIVES}${CHARTE}${phare ? PHARE : ''}
+TA MISSION — SPECIFIER ce travail, AVANT qu'une ligne de code ne soit ecrite. Tu ne modifies AUCUN
+fichier de production : tu ecris la specification dans ${dossierDeTravail}/specs/${t.cle}.md (cree
+le dossier) et tu la rends aussi, in extenso, dans le champ \`specification\`. Un developpeur qui ne
+connait pas le depot doit pouvoir livrer JUSTE en la suivant ; un relecteur doit pouvoir la lui
+OPPOSER ligne a ligne.
+
+TRAVAIL : ${t.titre_issue}
+${ligneDeTravail(t)}${cible}
+${num ? `ISSUE : #${num}.` : ''}
+${synchroAvant && synchroAvant.fichiers_touches_par_dev ? `\nCE QUE LES SESSIONS VOISINES ONT BOUGE dans \`${DEPUIS}\` depuis le debut du tour — lis-le AVANT de specifier, pour ne pas refaire ce qui est fait :\n${court(synchroAvant.fichiers_touches_par_dev, 3000)}` : ''}
+
+CE QUE LA SPECIFICATION CONTIENT, dans cet ordre :
+1. L'ETAT DES LIEUX, mesure : les fichiers qui portent DEJA cet ecran (vue / feuille / contenu /
+   porte / module temps reel / temoins, avec \`wc -l\`), ce qu'ils font deja (cite fichier:ligne),
+   ce qui MANQUE par rapport au critere de fin, a la capture cible, au § 12.10 et a la DIRECTIVE 4,
+   et ce que le LEGACY (apps/web) fait sur la meme surface (fichiers, comportements a reprendre).
+   Lis le code : une specification qui decrit un fichier sans l'avoir ouvert est fausse.
+2. LES ROUTES ET EVENEMENTS REELS de la passerelle que le travail consomme : pour chacun,
+   fichier:ligne dans services/gateway/src, methode, chemin /api/v1, prevalidation d'auth, forme de
+   la charge et de la reponse, codes d'erreur nommes ; pour un evenement, l'emetteur et la charge
+   exacte. Un endpoint qui n'existe pas : dis-le — la capacite ne s'expose pas (regime 3) et une
+   issue gateway compagnon est nommee, jamais un contournement.
+3. LES TEMOINS A ECRIRE D'ABORD (TDD) : chaque ligne du critere de fin a son temoin — jest
+   (fichier, describe, ce qu'il prouve, par quelle API publique) et Playwright (spec, bouchon a
+   completer dans e2e/visual/lib/, evenement socket rejoue). Un temoin de RANG du Prisme s'ecrit
+   sur un rang autre que le premier ; un controle a un temoin d'EFFET ; un seuil a ses DEUX moities.
+4. LE DECOUPAGE en etapes ordonnees (rouge → vert → refactor) : pour chaque etape, les fichiers
+   touches, ce qui s'EXTRAIT d'abord quand un fichier approche le budget (mesure : \`wc -l\`,
+   plafond DUR 1200, decoupage des 1000), la regle de placement § 3 appliquee, le site UNIQUE
+   existant a reutiliser (jamais une jumelle).
+5. LES ETATS a dessiner (vide / chargement / erreur / hors-ligne / session expiree / refus /
+   droits) et les GESTES (clavier, doigt, lecteur d'ecran, sans JavaScript) — chacun avec son temoin.
+6. LES MESURES a rendre (poids gzip du document et des modules, requetes avant le premier pixel,
+   temps entre message:new et la bulle) et les plafonds de ${V3}/budgets.json opposes.
+7. CE QUI EST INTERDIT sur CE travail, precisement : les jumelles a ne pas recreer (nomme les sites
+   uniques : resolvePrismTranslation, compteDeParticipants, adresses-du-fil, lifecycle, balayage,
+   defilement…), le mode focal, du JS avant le premier pixel, une police web, un diff serveur.
+8. LE MODELE qui developpera : \`petit\` si le travail tient en une feuille, un contenu ou un relais
+   bien delimite, SANS temps reel ni route nouvelle ; \`developper\` sinon — avec la raison.
+9. LES QUESTIONS que tu ne peux pas trancher seul, chacune avec la reponse que tu RETIENS par
+   defaut : le developpeur ne s'arrete pas, le relecteur verifie.
+
+Sois PRECIS et VERIFIABLE : chaque affirmation sur le code cite fichier:ligne ; chaque affirmation
+sur la passerelle cite la route. Une specification qui devine est pire qu'aucune.`,
+      { label: `specifier:${t.cle}`, phase: 'Specifier', schema: SPEC, model: MODELE.decrire, effort: 'high' })
+
+    const SPEC_TEXTE = spec && spec.specification
+      ? spec.specification.slice(0, 24000)
+      : "(aucune specification rendue — relis le critere de fin, la conception § 12.10 et la DIRECTIVE 4, ecris toi-meme la specification en tete de ton rapport, puis livre)"
+    const modeleDev = spec && spec.modele === 'petit' ? MODELE.petit : MODELE.developper
+    log(`${t.cle} : specifie — developpement par ${modeleDev}${spec && spec.modele === 'petit' ? ' (travail petit)' : ''}${phare ? ' — ecran PHARE' : ''}`)
+
+    // ---------------------------------------------------------------- Implementer (developper)
+    phase('Implementer')
     const fait = await agent(`${SOCLE}
 ${PASSERELLE}${DIRECTIVES}${CHARTE}${phare ? PHARE : ''}
-TA MISSION — LIVRER ce travail, en TDD, en ENTIER.
+TA MISSION — LIVRER ce travail, en TDD, en ENTIER, en suivant SA SPECIFICATION.
 
 TRAVAIL : ${t.titre_issue}
 ${ligneDeTravail(t)}${cible}
 ${num ? `\nISSUE : #${num}. Le commit final la fermera (Closes #${num}) — la phase Livrer s'en charge.` : ''}
 
+LA SPECIFICATION (ecrite par le specificateur ; elle est aussi dans ${dossierDeTravail}/specs/${t.cle}.md) :
+${SPEC_TEXTE}
+
 METHODE, dans cet ordre :
-1. RELIS la section de la conception qui couvre ce travail (et le § 12). Suis-la plutot que
-   d'improviser ; si elle te semble fausse, DIS-LE dans ton rapport, ne diverge pas en silence.
-   Lis le code existant de l'ecran s'il existe (existe_deja) : on le FAIT EVOLUER, on ne le
-   reecrit pas a cote.
-2. TDD : le test qui echoue AVANT le code (${V3}/__tests__/*.test.ts, jsdom + jest-axe pour tout
-   document rendu ; e2e/visual/*.spec.ts avec la passerelle de bouchon pour ce qui se mesure au
-   navigateur). Teste le COMPORTEMENT par l'API publique.
+1. Lis la specification en entier, puis CHAQUE fichier qu'elle cite, puis la section de la conception
+   qui couvre ce travail (et le § 12). Si la specification te semble FAUSSE sur un point (une route
+   qui n'existe pas, une ligne qui ne dit pas ce qu'elle dit), verifie dans le code, DIS-LE dans ton
+   rapport et suis le code REEL — ne diverge jamais en silence. On FAIT EVOLUER le code existant, on
+   ne le reecrit pas a cote.
+2. TDD : les temoins de la specification, qui echouent AVANT le code (${V3}/__tests__/*.test.ts,
+   jsdom + jest-axe pour tout document rendu ; e2e/visual/*.spec.ts avec la passerelle de bouchon et
+   le bouchon socket pour ce qui se mesure au navigateur). Teste le COMPORTEMENT par l'API publique.
 3. Le minimum qui fait passer. TypeScript strict, aucun 'any', donnees immuables, un fichier par
    responsabilite (vue / feuille / contenu / porte, comme les ecrans existants), aucun commentaire
    qui paraphrase le code (les doc-comments qui expliquent un POURQUOI sont la norme du depot).
@@ -881,157 +1301,192 @@ METHODE, dans cet ordre :
 5. TEMPS REEL (si le travail est une surface de participation : fil, liste des chats) : le module
    ES et lib/realtime/participate.ts selon le § 12 ; le chemin sans JS reste vert ; la reprise sur
    \`visible\` / \`online\` passe par lib/realtime/lifecycle.ts (site unique) ; une requete pendant
-   \`hidden\` est un defaut (gate lifecycle).
+   \`hidden\` est un defaut (gate lifecycle). Toute action a un effet IMMEDIAT et optimiste (directive 4).
 6. Fais tourner localement : \`cd ${V3} && bun run type-check && bun run lint && bun run test\`, puis
    \`bun run build\` (qui lance check-bundle-budget) ; corrige AVANT de rendre.
-7. Ne commit PAS : la phase Livrer s'en charge apres la revue.
+7.${SANS_COMMIT}
 
-Rends un rapport texte : ce que tu as fait, les fichiers touches, les commandes lancees et leurs
-sorties, les CAPTURES produites, ce que tu n'as PAS fait et pourquoi, toute contradiction trouvee.`,
-      { label: `livrer:${t.cle}`, phase: 'Implementer', model: phare ? 'opus' : 'sonnet', effort: phare ? 'max' : 'high' })
+Rends un rapport texte : chaque ETAPE de la specification (faite / non faite, et pourquoi), les
+fichiers touches, les commandes lancees et leurs sorties, les CAPTURES produites, ce que tu n'as PAS
+fait et pourquoi, toute contradiction trouvee entre la specification et le code reel.`,
+      { label: `livrer:${t.cle}`, phase: 'Implementer', model: modeleDev, effort: 'high' })
 
-    // ------------------------------------------------------------------ Revue
+    // ---------------------------------------------------------------- Revue-correction (relire), SYSTEMATIQUE
     phase('Revue')
-    const revues = await parallel([
-      () => agent(`${SOCLE}
-${PASSERELLE}${DIRECTIVES}
-Tu RELIS le travail qui vient d'etre fait et ta consigne est de LE PRENDRE EN DEFAUT, sur la
-SURFACE : tu ne le reecris pas, tu constates (git diff, git status, fichiers), tu prouves, tu
-proposes le correctif.
+    const revue = await agent(`${SOCLE}
+${PASSERELLE}${DIRECTIVES}${CHARTE}${phare ? PHARE : ''}
+TU ES LE RELECTEUR-CORRECTEUR de ce travail. La revue est SYSTEMATIQUE et c'est toi qui la fais en
+entier : tu prends le travail EN DEFAUT sur la SURFACE et sur la CONCEPTION, puis tu CORRIGES
+toi-meme ce qui se corrige et tu METS EN CONFORMITE (charte, passerelle, Prisme, accessibilite,
+budget, forme du code). Tu n'es pas complaisant : le porteur verra ce que tu laisses passer. Tu ne
+reecris pas ce qui marche, et tu ne changes pas la conception sans le dire.
 
-Cherche, dans cet ordre :
-- le critere de fin est-il REELLEMENT atteint ? Rejoue la commande qu'il nomme ;
-- du 'any', un type assertion non justifie, une donnee mutee, un fichier hors budget qu'on a grossi ;
+TRAVAIL : ${t.titre_issue}
+CRITERE DE FIN : ${t.critere_de_fin}
+
+LA SPECIFICATION (oppose-la au diff, ligne a ligne) :
+${SPEC_TEXTE.slice(0, 14000)}
+
+RAPPORT DU DEVELOPPEUR :
+${fait || '(aucun rapport rendu)'}
+
+A. PRENDRE EN DEFAUT — LA SURFACE (git diff, git status, fichiers), dans cet ordre :
+- le critere de fin est-il REELLEMENT atteint ? Rejoue la commande qu'il nomme. Chaque etape de la
+  specification est-elle faite, ou dite non faite avec sa raison ?
+- du 'any', une assertion de type non justifiee, une donnee mutee, un fichier hors budget qu'on a grossi ;
 - une JUMELLE : couleur en dur au lieu d'un jeton, resolution de langue reecrite au lieu de
-  resolvePrismTranslation(), second client socket, second socle de document, seconde table ;
+  resolvePrismTranslation(), second client socket, second socle de document, seconde table, seconde
+  regle la ou un site unique existe ;
 - des <div onClick> la ou un <button>/<a>/<form>/<dialog>/<details> etait le bon element ;
-- un test qui teste l'implementation, ou qui ne peut pas echouer ;
+- un test qui teste l'implementation, ou qui ne peut pas echouer — FALSIFIE-LE (casse le code, le
+  temoin doit rougir, puis restaure) ;
 - une icone servie autrement que par le sprite ; un import de lucide-react ou @phosphor-icons/web ;
 - une cible < 44 px, un bouton principal < 52 px, un texte < 4,5:1 dans l'un des deux schemas
   (regarde les captures du rapport, ou refais-les) ;
 - un \`lang=\` manquant sur un texte resolu par le Prisme ; un <Link> qui traverse la zone ;
 - une requete emise pendant que l'onglet est cache ; du JS charge avant le premier pixel ;
-- un etat manquant (vide, hors-ligne, erreur, session expiree, refus) : ecran blanc = defaut.
+- un etat manquant (vide, hors-ligne, erreur, session expiree, refus) : ecran blanc = defaut ;
+- un CONTROLE INERTE (le defaut le plus frequent de ce depot) : cherche-le activement — cliquer
+  change-t-il quelque chose ? un formulaire qui POSTE et recharge la ou le module devait agir en
+  place est un defaut de la DIRECTIVE 4.
 
-TRAVAIL : ${t.titre_issue}
-CRITERE DE FIN : ${t.critere_de_fin}
-
-RAPPORT DE L'IMPLEMENTEUR :
-${fait || '(aucun rapport rendu)'}`,
-        { label: `revue-surface:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'sonnet', effort: 'high' }),
-
-      () => agent(`${SOCLE}
-${PASSERELLE}${DIRECTIVES}
-Tu es un ingenieur staff HOSTILE a ce travail. Tu attaques la CONCEPTION et ce qui a ete OUBLIE —
-pas la surface (un autre relecteur s'en charge en parallele).
-
-Les questions, sans complaisance :
-- Le lecteur en zone RURALE : combien d'octets et de requetes avant le premier pixel utile, en 3G
+B. PRENDRE EN DEFAUT — LA CONCEPTION, en ingenieur staff hostile :
+- le lecteur en zone RURALE : combien d'octets et de requetes avant le premier pixel utile, en 3G
   lente ? Mesure-le (build + \`node ${V3}/scripts/mesure-reseau.mjs\` ou check-bundle-budget). Un
   chiffre non mesure ne compte pas.
-- Le TEMPS REEL : qui affiche ce que le socket recoit ? Que se passe-t-il quand il tombe 2 min, quand
-  l'onglet revient de l'arriere-plan, quand deux onglets sont ouverts, sans JS du tout ? Le chemin
-  POST/rechargement marche-t-il encore ?
-- Le PRISME : bon rang elu ? qui AFFICHE ce qu'il elit ? que transporte-t-on A COTE ? le texte
-  servi a-t-il le DROIT d'etre la (protege, ephemere, vue unique) ? (cycles 121-124 du CLAUDE.md)
-- La SECURITE : trois jetons (aucun, le sien, celui d'un autre) — que voit le troisieme ? un 403 se
+- le TEMPS REEL : qui affiche ce que le socket recoit ? socket tombe 2 min, onglet de retour, deux
+  onglets ouverts, sans JS du tout ? le chemin POST/rechargement marche-t-il encore ?
+- le PRISME : bon rang elu ? qui AFFICHE ce qu'il elit ? que transporte-t-on A COTE ? le texte servi
+  a-t-il le DROIT d'etre la (protege, ephemere, vue unique) ? (cycles 121-124 du CLAUDE.md)
+- la SECURITE : trois jetons (aucun, le sien, celui d'un autre) — que voit le troisieme ? un 403 se
   dit « introuvable » ? un cookie forge obtient-il des donnees ?
-- L'ACCESSIBILITE : clavier, lecteur d'ecran, contraste AA dans les DEUX schemas, cibles, RTL,
+- l'ACCESSIBILITE : clavier, lecteur d'ecran, contraste AA dans les DEUX schemas, cibles, RTL,
   reduced-motion. Le mode CLAIR a-t-il ete regarde, ou seulement le sombre ?
-- Un CONTROLE INERTE (le defaut le plus frequent de ce depot) : cherche-le activement.
-- La regle de placement § 3 : ce fichier est-il au bon endroit ? un second lecteur trancherait pareil ?
-- Ce que le travail a laisse DERRIERE : un champ ajoute et non relaye, un appelant non migre, une
-  jumelle non supprimee, un doc de design non mis a jour, un budget non declare (budgets.json).
-- La CHARTE : quelle regle est violee, avec sa preuve ?
-- La PASSERELLE : un diff sous services/gateway/ ou packages/shared/ (hors types client) sans les
-  CINQ elements de la preuve de bogue (test qui echouait avant, correctif minimal, suite rejouee,
-  issue, commit distinct) ⇒ BLOQUANT ; chaque endpoint et chaque evenement attaques existent-ils,
-  avec cette forme de charge, dans le code du gateway (fichier:ligne) ? le bouchon copie-t-il la
-  route reelle ?
+- la regle de placement § 3 ; ce que le travail a laisse DERRIERE (champ ajoute et non relaye,
+  appelant non migre, jumelle non supprimee, doc de design non mis a jour, budget non declare) ;
+- la CHARTE : quelle regle est violee, avec sa preuve ?
+- la PASSERELLE : un diff sous services/gateway/ ou packages/shared/ (hors types client) sans les
+  CINQ elements de la preuve de bogue ⇒ BLOQUANT ; chaque endpoint et chaque evenement attaques
+  existent-ils, avec cette forme de charge, dans le code du gateway (fichier:ligne) ? le bouchon
+  copie-t-il la route reelle ?
 
-TRAVAIL : ${t.titre_issue}
-CRITERE DE FIN : ${t.critere_de_fin}
+C. CORRIGER ET METTRE EN CONFORMITE — toi-meme, maintenant :
+- corrige CHAQUE defaut bloquant ou majeur que tu peux corriger dans ta passe, avec son temoin (un
+  correctif sans temoin n'est pas un correctif), et les mineurs de forme au passage (nommage,
+  placement, jeton, doc-comment qui paraphrase, ligne de plus dans un fichier hors budget) ;
+- rejoue \`cd ${V3} && bun run type-check && bun run lint && bun run test\` puis \`bun run build\` ;
+  refais les captures si tu as touche une feuille, et REGARDE-LES ;
+- ce que tu ne PEUX pas corriger dans ta passe (une re-implementation, une decision produit, un
+  endpoint absent) : rends-le dans \`restants\` avec gravite, constat, preuve et correctif propose —
+  c'est ce que le developpeur reprendra.
 
-RAPPORT DE L'IMPLEMENTEUR :
-${fait || '(aucun rapport rendu)'}`,
-        { label: `revue-conception:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'opus', effort: 'high' }),
-    ])
+${SANS_COMMIT}
 
-    const [revueS, revueO] = revues
+Rends : verdict (l'etat APRES tes corrections), defauts_trouves (tous, corriges ou non, avec preuve),
+corriges (nombre), restants (bloquant / majeur seulement), rapport (ce que tu as corrige, fichier par
+fichier), gates_rejoues (sorties tronquees), dimensions_mures, dimensions_restantes.`,
+      { label: `revue-correction:${t.cle}`, phase: 'Revue', schema: REVUE_CORRIGEE, model: MODELE.relire, effort: 'high' })
 
+    log(`${t.cle} : revue-correction — verdict ${revue ? revue.verdict : '(aucun)'}, ${revue ? revue.corriges : 0} corriges, ${revue && revue.restants ? revue.restants.length : 0} rendus au developpeur`)
+
+    // ---------------------------------------------------------------- Recette au navigateur (phares)
     const recette = phare
       ? await agent(`${SOCLE}
 ${PASSERELLE}${DIRECTIVES}${PHARE}
-TU ES LE RECETTEUR de l'ecran phare « ${t.titre_issue} ». Tu ne lis pas seulement le code : tu
-FAIS TOURNER l'ecran au navigateur (\`cd ${V3} && bun run build && bun run start\` en arriere-plan,
-la passerelle de bouchon et le bouchon socket de e2e/visual/lib/, Chromium de /opt/pw-browsers,
-deux pages dans un meme contexte pour jouer deux lecteurs) et tu joues chacune des huit familles
-ci-dessus comme un utilisateur exigeant sur un telephone : un message envoye par A apparait-il
-chez B sans rechargement ? la traduction arrive-t-elle en direct ? la frappe se voit-elle ?
-l'envoi hors-ligne repart-il dans l'ordre ? la position de lecture tient-elle ? le composeur
-grandit-il, envoie-t-il a Entree, garde-t-il le focus ? l'invite voit-il ses droits, puis un
-401 devient-il un bouton ? le mode clair est-il aussi soigne que le sombre ? les cibles font-elles
-44 px ? Rends CHAQUE defaut avec sa preuve (capture, assertion, sortie), classe bloquant tout ce
-qui rend l'ecran non fonctionnel ou inerte, majeur ce qui degrade l'usage, mineur le reste.
-Pose tes captures dans ${dossierDeTravail}/recette/${t.cle}/ et cite-les.
+TU ES LE RECETTEUR de l'ecran phare « ${t.titre_issue} », APRES la revue-correction. Tu ne lis pas
+seulement le code : tu FAIS TOURNER l'ecran au navigateur (\`cd ${V3} && bun run build && bun run
+start\` en arriere-plan, la passerelle de bouchon et le bouchon socket de e2e/visual/lib/, Chromium
+de /opt/pw-browsers, deux pages dans un meme contexte pour jouer deux lecteurs) et tu joues chacune
+des huit familles du texte PHARE comme un utilisateur exigeant sur un telephone : un message envoye
+par A apparait-il chez B sans rechargement ? la traduction arrive-t-elle en direct ? la frappe se
+voit-elle ? l'envoi hors-ligne repart-il dans l'ordre ? la position de lecture tient-elle ? le
+composeur grandit-il, envoie-t-il a Entree, garde-t-il le focus ? la citation saute-t-elle au message
+cite ? le plein ecran s'ouvre-t-il sur chaque media, et la fiche d'un vocal avec sa transcription ?
+le profil s'ouvre-t-il en modale ? le balayage archive / mute / supprime-t-il, avec retour ? l'invite
+voit-il ses droits, puis un 401 devient-il un bouton ? le mode clair est-il aussi soigne que le
+sombre ? les cibles font-elles 44 px ? Est-ce un CHAT, ou encore un formulaire (directive 4) ?
+Rends CHAQUE defaut avec sa preuve (capture, assertion, sortie) ; classe bloquant tout ce qui rend
+l'ecran non fonctionnel ou inerte, majeur ce qui degrade l'usage, mineur le reste. Pose tes captures
+dans ${dossierDeTravail}/recette/${t.cle}/ et cite-les. Tu ne corriges RIEN toi-meme.${SANS_COMMIT}
 
-RAPPORT DE L'IMPLEMENTEUR :
-${fait || '(aucun rapport rendu)'}`,
-        { label: `recette:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'opus', effort: 'max' })
+RAPPORT DU DEVELOPPEUR :
+${fait || '(aucun rapport rendu)'}
+
+RAPPORT DU RELECTEUR-CORRECTEUR :
+${court(revue, 6000)}`,
+        { label: `recette:${t.cle}`, phase: 'Revue', schema: REVUE, model: MODELE.relire, effort: 'high' })
       : null
 
+    // ---------------------------------------------------------------- Ce qui repart au developpeur
     let aCorriger = [
-      ...((revueS && revueS.defauts) || []),
-      ...((revueO && revueO.defauts) || []),
+      ...((revue && revue.restants) || []),
       ...((recette && recette.defauts) || []),
     ].filter((d) => d.gravite !== 'mineur')
 
     const corrections = []
     for (let passe = 1; passe <= 2 && aCorriger.length; passe += 1) {
       phase('Implementer')
-      log(`${t.cle} : ${aCorriger.length} defauts non mineurs a corriger (passe ${passe})`)
+      log(`${t.cle} : ${aCorriger.length} defauts non mineurs rendus au developpeur (passe ${passe})`)
       const correction = await agent(`${SOCLE}
 ${PASSERELLE}${DIRECTIVES}${CHARTE}${phare ? PHARE : ''}
-TA MISSION — CORRIGER les defauts que la revue croisee a trouves sur « ${t.titre_issue} ».
+TA MISSION — CORRIGER les defauts que la revue a rendus au developpeur sur « ${t.titre_issue} ».
 
-Tu corriges CHACUN, ou tu dis explicitement pourquoi un constat est FAUX — avec ta preuve
-(commande, sortie, fichier:ligne). Un relecteur peut se tromper : ne corrige pas un defaut qui
-n'existe pas, refute-le. Chaque correction garde son test. Rejoue type-check, lint, test, build.
+LA SPECIFICATION :
+${SPEC_TEXTE.slice(0, 10000)}
+
+Tu corriges CHACUN, ou tu dis explicitement pourquoi un constat est FAUX — avec ta preuve (commande,
+sortie, fichier:ligne). Un relecteur peut se tromper : ne corrige pas un defaut qui n'existe pas,
+refute-le. Chaque correction garde son test. Rejoue type-check, lint, test, build.
 
 LES DEFAUTS :
 ${aCorriger.map((d, i) => `${i + 1}. [${d.gravite}] ${d.constat}\n   preuve: ${d.preuve}\n   correctif propose: ${d.correctif}`).join('\n\n')}
 
+${SANS_COMMIT}
+
 Rends : corriges (nombre), refutes (nombre), rapport (ce qui a ete corrige, ce qui a ete refute et
 pourquoi, les commandes rejouees et leurs sorties).`,
-        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: phare ? 'opus' : 'sonnet', effort: phare ? 'max' : 'high' })
+        { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: MODELE.developper, effort: 'high' })
       corrections.push(correction)
 
-      if (passe === 1 && correction && correction.corriges > 0) {
+      if (passe === 1 && correction && (correction.corriges > 0 || correction.refutes > 0)) {
         phase('Revue')
         const contre = await agent(`${SOCLE}
 ${PASSERELLE}${DIRECTIVES}
-CONTRE-REVUE. Des defauts ont ete corriges sur « ${t.titre_issue} ». Verifie que CHAQUE correction
-est reelle (git diff) et n'a rien casse, et que chaque refutation est fondee. Ne rends que ce qui
-reste BLOQUANT ou MAJEUR — un defaut resolu ne se recopie pas.
+CONTRE-REVUE. Des defauts ont ete corriges ou refutes sur « ${t.titre_issue} ». Verifie que CHAQUE
+correction est reelle (git diff) et n'a rien casse (rejoue type-check, lint, test sur le perimetre),
+et que chaque refutation est FONDEE — une refutation infondee redevient un defaut. Ne rends que ce
+qui reste BLOQUANT ou MAJEUR ; un defaut resolu ne se recopie pas.
 
-DEFAUTS INITIAUX :
+${SANS_COMMIT}
+
+DEFAUTS RENDUS AU DEVELOPPEUR :
 ${court(aCorriger, 6000)}
 
 RAPPORT DE CORRECTION :
 ${court(correction, 6000)}`,
-          { label: `contre-revue:${t.cle}`, phase: 'Revue', schema: REVUE, model: 'sonnet', effort: 'medium' })
+          { label: `contre-revue:${t.cle}`, phase: 'Revue', schema: REVUE, model: MODELE.relire, effort: 'medium' })
         aCorriger = ((contre && contre.defauts) || []).filter((d) => d.gravite !== 'mineur')
       } else {
         aCorriger = []
       }
     }
+    if (aCorriger.length) log(`${t.cle} : ${aCorriger.length} defauts non mineurs restent apres deux passes — la phase Gates et le rapport les portent`)
 
     resultats.push({
-      cle: t.cle, titre: t.titre_issue, issue: num, fait, revueS, revueO, recette, corrections,
-      dimensions_mures: (revueO && revueO.dimensions_mures) || (revueS && revueS.dimensions_mures) || [],
-      dimensions_restantes: (revueO && revueO.dimensions_restantes) || (revueS && revueS.dimensions_restantes) || [],
+      cle: t.cle, titre: t.titre_issue, issue: num,
+      spec: spec ? { modele: spec.modele, pourquoi: spec.pourquoi_ce_modele, fichier: spec.fichier, questions: spec.questions } : null,
+      fait, revue, recette, corrections, restants_apres_corrections: aCorriger,
+      dimensions_mures: (revue && revue.dimensions_mures) || (recette && recette.dimensions_mures) || [],
+      dimensions_restantes: (revue && revue.dimensions_restantes) || (recette && recette.dimensions_restantes) || [],
     })
   }
+
+  // -------------------------------------------------------------------------
+  // Resynchroniser AVANT les gates (lecon du tour 1, 2026-09-04) : les gates et la livraison se jouent
+  // sur l'arbre FUSIONNE — sinon la fusion tombe sur la phase Livrer, HORS gates. Meme phase mecanique
+  // que celle qui precede chaque travail (point d'etape, fusion, push).
+  // -------------------------------------------------------------------------
+  const resynchro = await resynchroniser('avant les gates')
 
   // -------------------------------------------------------------------------
   phase('Gates')
@@ -1051,7 +1506,13 @@ Dans cet ordre, en t'arretant pour corriger des qu'un gate est rouge :
 6. \`cd ${V3} && bun run build\`                               (next build + check-app-router-built + check-bundle-budget)
 7. \`cd ${V3} && bun run test:a11y\` et \`bun run test:lifecycle\` (Playwright, serveur \`bun run start\`
    lance par la config ; Chromium dans /opt/pw-browsers)
-8. les suites e2e du role premier et celles ajoutees ce tour : \`cd ${V3} && bun run e2e\`
+8. les suites e2e, PAR PROJET et jamais nues (lecon 520 : \`bun run e2e\` sans \`--project\` melange les
+   deux projets Playwright et casse la resolution ESM/CJS de mesure-reseau.mjs — neuf faux rouges au
+   tour 1) : \`cd ${V3} && bun run test:chaines\` puis \`bun run test:pages\`. Ces deux suites durent
+   15-20 min a un seul worker : LANCE-LES EN ARRIERE-PLAN DES LE DEBUT de ta passe (sortie dans un
+   fichier de ${dossierDeTravail}), joue les gates 1 a 7 pendant qu'elles tournent, puis lis leur
+   resultat en entier. Tue tout serveur \`next start\` orphelin (\`pgrep -af 'next start'\`) AVANT de
+   lancer les gates 9 et 10 sur le port 3300 (lecon 514).
 9. conformite visuelle : serveur v3 en arriere-plan (\`bun run start\`, port 3300) puis
    \`node ${D}/compare-rendu.js --base http://127.0.0.1:3300 --vues ${travaux.filter((t) => t.genre !== 'infra').map((t) => t.cle).join(',')}\`
    — rends les SCORES rendus tels quels ; rc=3 (non comparable) se dit, ne se maquille pas.
@@ -1067,11 +1528,13 @@ REGLES :
 - Rends la SORTIE reelle de chaque commande, tronquee, jamais un resume ; et les MESURES chiffrees
   (budget par groupe en trois lignes, requetes avant premier pixel, scores de conformite).
 
+${SANS_COMMIT}
+
 ETAT AVANT CE TOUR (cadrage) :
 ${(cadrage.etat || '').slice(0, 3000)}
 
 TRAVAUX DE CE TOUR : ${travaux.map((t) => t.cle).join(', ')}`,
-      { label: `gates:tour-${tour}:${passe}`, phase: 'Gates', schema: GATES, model: 'sonnet', effort: 'high' })
+      { label: `gates:tour-${tour}:${passe}`, phase: 'Gates', schema: GATES, model: MODELE.developper, effort: 'high' })
 
     if (!gates || gates.tous_verts) break
     const rouges = (gates.gates || []).filter((g) => g.resultat === 'rouge')
@@ -1090,8 +1553,10 @@ ${court(rouges, 8000)}
 
 CE QUI BLOQUE, selon la passe : ${gates.ce_qui_bloque || '(non dit)'}
 
+${SANS_COMMIT}
+
 Rends ce que tu as corrige, avec les commandes rejouees et leurs sorties.`,
-      { label: `corriger-gates:tour-${tour}:${passe}`, phase: 'Implementer', model: 'sonnet', effort: 'high' })
+      { label: `corriger-gates:tour-${tour}:${passe}`, phase: 'Implementer', model: MODELE.developper, effort: 'high' })
   }
 
   // -------------------------------------------------------------------------
@@ -1117,6 +1582,8 @@ comme documents de DESIGN — jamais comme tableau de bord (aucune case cochee, 
    format des lecons existantes (constat, cause, regle). Rien si aucune correction de fond.
 5. Rejoue \`cd ${V3} && bun run test -- index-des-vues vues-comparables\` et le gate d'ordre.
 
+${SANS_COMMIT}
+
 RESULTATS DU TOUR :
 ${resultats.map((r) => `- ${r.cle} : ${r.titre}\n  mures: ${(r.dimensions_mures || []).join(', ')}\n  restantes: ${(r.dimensions_restantes || []).join(', ')}`).join('\n')}
 
@@ -1124,22 +1591,31 @@ GATES (sorties) :
 ${court(gates, 10000)}
 
 Rends un rapport texte des fichiers touches et de ce qui a change dans chaque document.`,
-    { label: `documenter:tour-${tour}`, phase: 'Documenter', model: 'sonnet', effort: 'medium' })
+    { label: `documenter:tour-${tour}`, phase: 'Documenter', model: MODELE.developper, effort: 'medium' })
 
   // -------------------------------------------------------------------------
   phase('Livrer')
   // -------------------------------------------------------------------------
   const livraison = await agent(`${SOCLE}
 
-TA MISSION — LIVRER le tour ${tour} sur la branche \`${BRANCHE}\`.
+TA MISSION — LIVRER le tour ${tour} sur ${NOM_DE_BRANCHE}.
 
 ETAT DES GATES :
 ${court(gates, 8000)}
 
-SI UN GATE EST ROUGE (resultat "rouge") : ne pousse RIEN, ne commit RIEN. Rends pousse=false et un
-rapport qui dit ce qui est rouge et ce qu'il faut. C'est tout.
+SI UN GATE EST ROUGE (resultat "rouge"), DISTINGUE — lecon du tour 2 (2026-09-05), ou une livraison
+entiere est restee sans PR parce qu'un gate TRANSVERSAL, rouge sur toute la matrice et sur \`${BASE}\`
+lui-meme, a ete lu comme un rouge du tour :
+(a) le rouge est CAUSE par le tour (il touche ce que le tour a livre, et l'etat du cadrage le donnait
+    vert) : ne pousse RIEN de plus, rends pousse=false et un rapport qui dit ce qui est rouge et ce
+    qu'il faut. C'est tout.
+(b) le rouge est PREEXISTANT ou TRANSVERSAL (deja rouge au cadrage ; ou rouge sur des ecrans que le
+    tour n'a pas touches ; ou cause par un chantier de \`${BASE}\` — la conformite visuelle de toute la
+    matrice apres un changement de socle, par exemple) : il n'arrete PAS la livraison. Livre (etapes
+    1 a 4) et DIS-LE, dans le corps de la PR et dans le rapport : le gate, sa cause, l'issue qui le
+    porte (ouvre-la si elle n'existe pas).
 
-SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
+SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES, et dans le cas (b) :
 1. \`git status --short\`, \`git diff --stat\` : regarde ce que tu t'appretes a commiter. Retire tout
    artefact genere (rendu/, rapport-conformite.json, .next/, node_modules/, .cache/, captures de
    travail hors ${D}/cible/). Les captures cibles regenerees (${D}/cible/*.png), vues.json, vues.md,
@@ -1148,19 +1624,21 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES :
    commit par lot coherent : design, ecran, temps reel, docs). Message dans la forme du depot : un
    titre en francais qui dit le RESULTAT (\`feat(web-v3): …\`, \`docs(design): …\`), un corps qui dit
    CE QUI ETAIT CASSE ou absent et POURQUOI la forme retenue, \`Closes #<n>\` par issue livree
-   (JAMAIS \`Closes #0\`), et en fin de message :
-   Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-   N'ecris aucun nom de modele ailleurs dans le message.
-3. \`git push -u origin ${BRANCHE}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
-   Sur rejet non-reseau (non fast-forward) : \`git fetch origin ${BRANCHE} && git merge origin/${BRANCHE}\`
+   (JAMAIS \`Closes #0\`), et en fin de message, EXACTEMENT ces lignes :
+${ATTRIBUTION}
+   N'ecris aucun nom de modele ailleurs dans le message, ni nulle part dans un fichier du depot.
+   Un travail deja porte par des POINTS D'ETAPE (phase Synchroniser) n'a plus de commit a lui : son
+   \`Closes #n\` va dans le corps de la PR (section Issues) — jamais un commit vide.
+3. \`git push -u origin ${REF_PUSH}\`. Sur echec RESEAU seulement, reessaie 4 fois (2s, 4s, 8s, 16s).
+   Sur rejet non-reseau (non fast-forward) : \`git fetch origin ${NOM_SHELL} && git merge origin/${NOM_SHELL}\`
    — JAMAIS \`git pull --rebase\` ni \`git rebase\` (lecon 324 du depot : le rebase aplatit un commit
    de fusion et pousse un etat partiel). Un conflit se resout en gardant les DEUX apports quand les
    fichiers le permettent (design, lecons) ou en reconciliant le CODE par sa logique (jamais en
    prenant un cote au hasard) ; rejoue type-check + lint + test, puis pousse a nouveau. Si le
    conflit demande un arbitrage produit, arrete-toi et dis-le.
-3 bis. ${PR ? `LA PR, SANS INTERVENTION (directive du porteur) : la branche \`${BRANCHE}\` doit avoir une PR
+3 bis. ${PR ? `LA PR, SANS INTERVENTION (directive du porteur) : ${NOM_DE_BRANCHE} doit avoir une PR
    OUVERTE vers \`${BASE}\`. ToolSearch({query: "select:mcp__github__list_pull_requests,mcp__github__create_pull_request,mcp__github__enable_pr_auto_merge,mcp__github__pull_request_read,mcp__github__update_pull_request", max_results: 5}).
-   (a) Cherche une PR ouverte dont head = \`${BRANCHE}\` (list_pull_requests, state open). Si elle existe,
+   (a) Cherche une PR ouverte dont head = ${NOM_DE_BRANCHE} (list_pull_requests, state open, head \`isopen-io:<nom>\`). Si elle existe,
        mets a jour son titre et son corps avec ce que ce tour ajoute (update_pull_request).
    (b) Sinon cree-la (create_pull_request, base \`${BASE}\`) : lis d'abord .github/pull_request_template.md
        (ou PULL_REQUEST_TEMPLATE.md) et reprends ses sections comme MISE EN PAGE a remplir depuis
@@ -1190,7 +1668,7 @@ ${resultats.map((r) => `- ${r.cle} (#${r.issue || '?'}) : ${r.titre}\n  mures: $
 
 DOCUMENTATION DU TOUR :
 ${(documentation || '').slice(0, 3000)}`,
-    { label: `livrer:tour-${tour}`, phase: 'Livrer', schema: LIVRAISON, model: 'sonnet', effort: 'high' })
+    { label: `livrer:tour-${tour}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.developper, effort: 'high' })
 
   // -------------------------------------------------------------------------
   phase('Completude')
@@ -1215,7 +1693,7 @@ Ta question : QU'EST-CE QUI MANQUE ENCORE, et dans quel ordre le prochain tour d
 
 RAPPORTS DE LIVRAISON :
 ${court(livraison, 4000)}`,
-    { label: `completude:tour-${tour}`, phase: 'Completude', schema: COMPLETUDE, model: 'sonnet', effort: 'high' })
+    { label: `completude:tour-${tour}`, phase: 'Completude', schema: COMPLETUDE, model: MODELE.decrire, effort: 'medium' })
 
   resultatsDesTours.push({
     tour,

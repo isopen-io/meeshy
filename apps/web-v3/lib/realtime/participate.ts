@@ -1,41 +1,43 @@
-import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import {
-  aAccuser,
-  accuseLecture,
   entetesDeCreance,
   LONGUEUR_MAX_DU_MESSAGE,
   messages as messagesServis,
-  reagis,
   televerse,
-  type Creance,
-  type PieceJointe,
 } from '@/lib/api/fil';
-import { cleDeLien, cleDuLien, effaceLaPlace, jetonDuCookie, poseSession, type CleDeLien } from '@/lib/api/guest-session';
+import { aAccuser, accuseLecture } from '@/lib/api/fil-mutations';
+import { cleDuLien, effaceLaPlace, poseSession } from '@/lib/api/guest-session';
 import { rafraichis, raisonDeFermeture, type Droits } from '@/lib/api/invite';
 import { BANDEAUX, ETATS_DU_TEMPS_REEL, FIL } from '@/lib/contenu/fil';
 
-import { prendsLeComposeur, type ControleurDuComposeur } from './composeur';
-import { defilement, type Defilement } from './defilement';
+import { brancheLaBanniere } from './banniere';
+import { montreLeBandeau } from './bandeau';
+import { prendsLaCapture } from './capture';
+import { prendsLeComposeur } from './composeur';
+import { defilement } from './defilement';
 import { droitsDuChangement, oublieLaJonctionFraiche, peinsLesDroits, peinsLeTrombone } from './droits-peinture';
 import * as F from './fil-etat';
+import { configuration, creanceDe, identifiantClient, type Contexte, type ModuleSocket, type Socket } from './fil-contexte';
+import { envoieLaModification, prendsLesGestes } from './fil-gestes';
 import {
   bullesDuDocument,
-  choisisUneReaction,
   peins,
   peintre,
   recale,
   recaleLesHeures,
   retireLesControlesDeReaction,
-  type Peintre,
+  retireLesMenus,
+  type ContexteMenu,
 } from './fil-peinture';
+import { memoriseHorsLigne, oublieHorsLigne, piecesLocales, relisLaFile } from './fil-reserve';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
+import { armeLaFeuilleDeLien } from './feuille-de-lien';
 import { prendsLePleinEcran } from './plein-ecran';
 import {
   doitRattraper,
   PERIODE_DU_BATTEMENT_MS,
   POLITIQUE_DE_RECONNEXION,
 } from './reconnect-policy';
-import { clesDeLaReserve, purgeLesAutres, reserve, type Reserve } from './reserve';
+import { clesDeLaReserve, purgeLesAutres, reserve } from './reserve';
 import { demandeLeDelta } from './sync/delta-client';
 
 /**
@@ -106,38 +108,13 @@ import { demandeLeDelta } from './sync/delta-client';
  * déjà accusé la page servie au montage.
  */
 
-type Porte = 'membre' | 'invite';
-
-type Configuration = {
-  readonly socket: string;
-  readonly passerelle: string;
-  readonly conversation: string;
-  readonly porte: Porte;
-  readonly lien: CleDeLien | null;
-  readonly moi: string | null;
-  readonly nom: string;
-  readonly langues: readonly string[];
-  /** Les droits SERVIS par le document — l'état de départ, avant tout `participant:rights-updated`. Un membre a tout. */
-  readonly droits: Droits;
-  /** Les participants NOMMÉS par le document — les seuls dont `user:status` peut faire bouger « N en ligne ». */
-  readonly participants: readonly string[];
-  /** Ceux que le document a SERVIS en ligne — l'état de départ du compte. */
-  readonly presents: readonly string[];
-};
-
-type Ecouteur = (...arguments_: unknown[]) => void;
-
-type Socket = {
-  readonly connected: boolean;
-  connect(): unknown;
-  disconnect(): unknown;
-  emit(evenement: string, ...arguments_: unknown[]): unknown;
-  on(evenement: string, ecouteur: Ecouteur): unknown;
-  timeout(ms: number): { emit(evenement: string, ...arguments_: unknown[]): unknown };
-  readonly io: { on(evenement: string, ecouteur: Ecouteur): unknown };
-};
-
-type ModuleSocket = { readonly io: (url: string, options: Readonly<Record<string, unknown>>) => Socket };
+/**
+ * `Porte`, `Configuration`, `Socket`, `ModuleSocket`, `Contexte`, ainsi que
+ * les lecteurs `configuration()` et `creanceDe()` du `<main>`, vivent dans
+ * `lib/realtime/fil-contexte.ts` depuis l'extraction de l'issue #5163 (§ 4
+ * étape 0 de la spécification — ce module était hors budget, 1 056 lignes).
+ * `identifiantClient` les accompagne. Aucun comportement ne change.
+ */
 
 const DELAI_D_ACCUSE_MS = 10_000;
 const DELAI_D_ACCUSE_DE_LECTURE_MS = 1_000;
@@ -149,84 +126,6 @@ const objet = (valeur: unknown): Readonly<Record<string, unknown>> | null =>
 
 const chaine = (valeur: unknown): string | null =>
   typeof valeur === 'string' && valeur !== '' ? valeur : null;
-
-const liste = (valeur: string | undefined): readonly string[] => (valeur ?? '').split(',').filter((entree) => entree !== '');
-
-const configuration = (main: HTMLElement): Configuration | null => {
-  const { socket, passerelle, conversation, porte, lien, moi, nom, langues, ecrire, fichiers, images, historique, participants, presents } = main.dataset;
-  if (socket === undefined || passerelle === undefined || conversation === undefined) return null;
-  if (porte !== 'membre' && porte !== 'invite') return null;
-  const cle = lien === undefined ? null : cleDeLien({ linkId: lien });
-  if (porte === 'invite' && cle === null) return null;
-  return {
-    socket,
-    passerelle,
-    conversation,
-    porte,
-    lien: cle,
-    moi: moi ?? null,
-    nom: nom ?? FIL.vous,
-    langues: liste(langues),
-    droits: {
-      canSendMessages: ecrire === '1',
-      canSendFiles: fichiers === '1',
-      canSendImages: images === '1',
-      canViewHistory: porte === 'membre' || historique === '1',
-    },
-    participants: liste(participants),
-    presents: liste(presents),
-  };
-};
-
-const creanceDe = (config: Configuration): Creance | null => {
-  if (config.porte === 'membre') {
-    const jeton = valeurDuCookie(document.cookie, COOKIE_DE_JETON);
-    return jeton === null ? null : { genre: 'membre', jeton };
-  }
-  const jeton = config.lien === null ? null : jetonDuCookie(document.cookie, config.lien);
-  return jeton === null ? null : { genre: 'invite', jeton };
-};
-
-const identifiantClient = (): string => `cid_${crypto.randomUUID()}`;
-
-type Contexte = {
-  readonly main: HTMLElement;
-  readonly config: Configuration;
-  readonly creance: Creance;
-  readonly p: Peintre;
-  readonly r: Reserve;
-  readonly defile: Defilement;
-  /** Les clés de la réserve pour CE lecteur — `null` quand le document n'a servi aucune identité. */
-  readonly cles: { readonly file: string; readonly brouillon: string } | null;
-  /** Les fichiers d'une bulle qui attend son envoi, par `clientMessageId` — un `File` ne vit pas dans l'état. */
-  readonly fichiers: Map<string, readonly File[]>;
-  /** Ce qui a été affiché et n'a pas encore été DIT à la passerelle. */
-  readonly lus: Set<string>;
-  etat: F.EtatDuFil;
-  /** Les droits tels que le lecteur les TIENT — servis par le document, puis changés par `participant:rights-updated`. */
-  droits: Droits;
-  socket: Socket | null;
-  /**
-   * Le socket est AUTHENTIFIÉ — `authenticated` reçu, pas seulement le transport
-   * ouvert : la passerelle refuse tout `message:send`, `reaction:add` ou
-   * `typing:start` qui la devance (`User not authenticated`), exactement comme
-   * elle refuse un `conversation:join` prématuré. Tombe à `disconnect`.
-   */
-  pret: boolean;
-  /** Un vidage de la file est en cours : un second, déclenché par `conversation:joined`, attend son tour — FIFO, jamais deux envois croisés. */
-  vidageEnCours: boolean;
-  composeur: ControleurDuComposeur | null;
-  enLigne: boolean;
-  cache: boolean;
-  deconnecteDepuis: number | null;
-  checkpoint: string | null;
-  /** Le dernier curseur GLOBAL connu — `checkpointSeq` de `/sync`, ou un `_seq` reçu — renvoyé en `seq` (`routes/sync/index.ts:279`). */
-  seq: number | null;
-  plusAncien: string | null;
-  ferme: boolean;
-  dernierBattementA: number;
-  accuseProgramme: ReturnType<typeof setTimeout> | null;
-};
 
 /**
  * LE POINT D'ÉTAT — l'attribut ET son nom, jamais l'un sans l'autre.
@@ -245,10 +144,8 @@ const point = (ctx: Contexte, etat: 'connecte' | 'creux' | 'hors-ligne'): void =
   if (nom !== null) nom.textContent = ETATS_DU_TEMPS_REEL[etat];
 };
 
-const bandeau = (ctx: Contexte, identifiant: string, visible: boolean): void => {
-  const noeud = ctx.main.querySelector<HTMLElement>(`#${identifiant}`);
-  if (noeud !== null) noeud.hidden = !visible;
-};
+const bandeau = (ctx: Contexte, identifiant: string, visible: boolean): void =>
+  montreLeBandeau(ctx.main, identifiant, visible);
 
 /**
  * DIRE ce qui vient d'être affiché — d'autrui seulement (`aAccuser`), groupé
@@ -282,6 +179,19 @@ const suspendsLAccuse = (ctx: Contexte): void => {
 };
 
 /**
+ * CE QUE LE MENU D'UNE LIGNE GOUVERNE, LU SUR LE CONTEXTE COURANT (§ 12.10.1,
+ * issue #5163) — le composeur est ouvert pour un membre, et selon `canSend
+ * Messages` pour un invité ; l'invité, lui, ne modifie ni ne retire JAMAIS
+ * (régime 3). Recalculé à chaque peinture : un droit rendu par l'hôte
+ * (`participant:rights-updated`) doit faire réapparaître « Répondre » au
+ * prochain message reçu, pas seulement au rechargement.
+ */
+const menuDe = (ctx: Contexte): ContexteMenu => ({
+  composeurOuvert: ctx.config.porte === 'membre' || ctx.droits.canSendMessages,
+  estInvite: ctx.config.porte === 'invite',
+});
+
+/**
  * Repeindre, puis décider du défilement. Le conteneur est ancré en BAS
  * (`column-reverse`) : en bas, un message reçu glisse de lui-même ; plus haut,
  * ce qu'on lit ne bouge pas (`conserveLeHaut`) et une pastille compte les
@@ -292,7 +202,7 @@ const applique = (ctx: Contexte, suivant: F.EtatDuFil): void => {
   ctx.etat = suivant;
   let neuves: readonly HTMLElement[] = [];
   const peindre = (): void => {
-    neuves = peins(ctx.p, suivant, Date.now());
+    neuves = peins(ctx.p, suivant, Date.now(), menuDe(ctx));
   };
   if (enBas) peindre();
   else ctx.defile.conserveLeHaut(peindre);
@@ -342,14 +252,32 @@ const expedie = async (ctx: Contexte, bulle: F.Bulle): Promise<Issue> => {
   if (televersement?.genre === 'refus') return { ok: false, raison: televersement.message, statut: televersement.statut };
   const attachmentIds = televersement === null ? [] : televersement.identifiants;
 
+  // `replyToId` VOYAGE AVEC LA CITATION (issue #5163) — jamais un champ de
+  // plus sur `Bulle` : `bulleOptimiste({ reponseA })` a DÉJÀ posé la
+  // citation (`fil-etat.ts`), et c'est la MÊME donnée qui arme le bandeau du
+  // composeur ET nomme la cible sur le fil.
+  const replyToId = bulle.citations.find((citation) => citation.genre === 'reponse')?.cible;
+  // UN LIEU PARTAGÉ (#5061, § 2.1) — posté au premier niveau, jamais dans
+  // `metadata` : `parseSharedPlace` (`services/location/sharedPlace.ts`) ne
+  // lit QUE `latitude`/`longitude`/`name`/`address` ; le nom et l'adresse ne
+  // sont jamais posés ici (§ 2.5 — aucun géocodage inverse côté v3, zéro
+  // requête externe de plus).
+  const lieu = bulle.lieu ?? null;
+  const aUnLieu = lieu !== null;
   const charge = {
     conversationId: ctx.config.conversation,
     content: bulle.texte,
     originalLanguage: bulle.langueOriginale ?? undefined,
     clientMessageId,
+    ...(replyToId === undefined ? {} : { replyToId }),
+    ...(lieu === null ? {} : { location: { latitude: lieu.latitude, longitude: lieu.longitude } }),
   };
 
-  if (attachmentIds.length === 0 && ctx.socket !== null && ctx.pret) {
+  // LA POSITION EST FORCÉE PAR LA ROUTE (§ 2.1 de la spécification #5061,
+  // « poste … au premier niveau de POST /conversations/:id/messages ») —
+  // jamais le socket, même quand il est prêt : c'est ce que le critère de
+  // fin observe.
+  if (attachmentIds.length === 0 && !aUnLieu && ctx.socket !== null && ctx.pret) {
     const socket = ctx.socket;
     return new Promise((resoud) => {
       socket.timeout(DELAI_D_ACCUSE_MS).emit('message:send', charge, (erreur: unknown, reponse: unknown) => {
@@ -376,24 +304,6 @@ const expedie = async (ctx: Contexte, bulle: F.Bulle): Promise<Issue> => {
   const enveloppe = objet(await reponse.json().catch(() => null));
   if (enveloppe?.success === true) return { ok: true, id: chaine(objet(enveloppe.data)?.id) };
   return { ok: false, raison: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? FIL.refuse, statut: reponse.status };
-};
-
-const memoriseHorsLigne = async (ctx: Contexte, bulle: F.Bulle): Promise<void> => {
-  if (bulle.clientMessageId === null || ctx.cles === null) return;
-  await ctx.r.ecris(`${ctx.cles.file}${bulle.ecritA ?? ''}:${bulle.clientMessageId}`, {
-    clientMessageId: bulle.clientMessageId,
-    texte: bulle.texte,
-    langue: bulle.langueOriginale,
-    ecritA: bulle.ecritA,
-    pieces: ctx.fichiers.get(bulle.clientMessageId) ?? [],
-  }).catch(() => undefined);
-};
-
-const oublieHorsLigne = async (ctx: Contexte, clientMessageId: string): Promise<void> => {
-  ctx.fichiers.delete(clientMessageId);
-  if (ctx.cles === null) return;
-  const cles = await ctx.r.cles(ctx.cles.file).catch(() => []);
-  await Promise.all(cles.filter((cle) => cle.endsWith(`:${clientMessageId}`)).map((cle) => ctx.r.efface(cle)));
 };
 
 const envoieLaBulle = async (ctx: Contexte, bulle: F.Bulle): Promise<void> => {
@@ -445,61 +355,6 @@ const videLaFile = async (ctx: Contexte): Promise<void> => {
     }
   } finally {
     ctx.vidageEnCours = false;
-  }
-};
-
-const GENRE_PAR_TYPE: readonly (readonly [string, PieceJointe['genre']])[] = [
-  ['image/', 'image'],
-  ['audio/', 'audio'],
-  ['video/', 'video'],
-];
-
-/** Les pièces d'une bulle qui n'est pas encore partie : nommées et pesées, sans adresse — rien ne se télécharge. */
-const piecesLocales = (clientMessageId: string, fichiers: readonly File[]): readonly PieceJointe[] =>
-  fichiers.map((fichier, rang) => ({
-    id: `${clientMessageId}:${rang}`,
-    genre: GENRE_PAR_TYPE.find(([prefixe]) => fichier.type.startsWith(prefixe))?.[1] ?? 'fichier',
-    nom: fichier.name,
-    url: '',
-    // Rien à jouer tant que rien n'est parti : la piste d'une pièce locale est
-    // son adresse — vide, comme elle.
-    piste: '',
-    octets: fichier.size,
-    dureeMs: null,
-    largeur: null,
-    hauteur: null,
-    transcription: null,
-    transcriptionOriginale: null,
-    langueDeTranscription: null,
-    langueServie: null,
-  }));
-
-const fichiersDe = (valeur: unknown): readonly File[] =>
-  (Array.isArray(valeur) ? valeur : []).filter((entree): entree is File => entree instanceof Blob);
-
-/** Ce qui attendait dans la réserve à l'ouverture (une page rechargée hors ligne) reprend sa place. */
-const relisLaFile = async (ctx: Contexte): Promise<void> => {
-  if (ctx.cles === null) return;
-  const cles = await ctx.r.cles(ctx.cles.file).catch(() => []);
-  for (const cle of cles) {
-    const entree = objet(await ctx.r.lis(cle).catch(() => null));
-    const clientMessageId = chaine(entree?.clientMessageId);
-    const texte = chaine(entree?.texte) ?? '';
-    const fichiers = fichiersDe(entree?.pieces);
-    if (clientMessageId === null || (texte === '' && fichiers.length === 0)) continue;
-    if (fichiers.length > 0) ctx.fichiers.set(clientMessageId, fichiers);
-    ctx.etat = F.insere(ctx.etat, {
-      ...F.bulleOptimiste({
-        clientMessageId,
-        texte,
-        auteur: ctx.config.nom,
-        auteurId: ctx.config.moi,
-        langue: chaine(entree?.langue) ?? ctx.config.langues[0] ?? 'fr',
-        horsLigne: true,
-        maintenant: Date.parse(chaine(entree?.ecritA) ?? '') || Date.now(),
-      }),
-      pieces: piecesLocales(clientMessageId, fichiers),
-    });
   }
 };
 
@@ -593,7 +448,7 @@ const chargeLePlusAncien = async (ctx: Contexte): Promise<void> => {
     etat = F.insere(etat, F.bulleServie(m));
   });
   ctx.etat = etat;
-  peins(ctx.p, etat, Date.now());
+  peins(ctx.p, etat, Date.now(), menuDe(ctx));
   recale(ctx.p, Date.now());
   noteLus(ctx, anciens.map(F.bulleServie));
   ctx.plusAncien = pagination?.hasMore === true ? chaine(pagination.nextCursor) : null;
@@ -642,6 +497,10 @@ const appliqueLesDroits = (ctx: Contexte, droits: Droits): void => {
   ctx.droits = droits;
   peinsLesDroits(ctx.main, droits);
   peinsLeTrombone(ctx.main, droits);
+  // Le micro et la position (#5061) suivent le MÊME droit que le trombone
+  // repeint juste au-dessus — jamais un canSendFiles/canSendLocations que la
+  // passerelle n'applique pas à l'envoi (§ 2.3).
+  ctx.capture?.actualise();
   if (ctx.ferme || ctx.composeur === null) return;
   if (droits.canSendMessages) ctx.composeur.ouvre();
   else ctx.composeur.ferme(raisonDeFermeture('DROIT_RETIRE'));
@@ -651,6 +510,9 @@ const ferme = (ctx: Contexte, raison: string, bandeauAMontrer: string | null): v
   ctx.ferme = true;
   ctx.composeur?.ferme(raison);
   retireLesControlesDeReaction(ctx.p);
+  // Les menus suivent les réactions au même moment (§ 12.10.1, issue #5163) :
+  // rien ne se répond, ne se modifie ni ne se retire sur un fil FERMÉ.
+  retireLesMenus(ctx.p);
   if (bandeauAMontrer !== null) bandeau(ctx, bandeauAMontrer, true);
   const enFile = F.aEnvoyer(ctx.etat);
   let etat = ctx.etat;
@@ -661,58 +523,13 @@ const ferme = (ctx: Contexte, raison: string, bandeauAMontrer: string | null): v
   ctx.socket?.disconnect();
 };
 
-/** Un accusé de socket — `{ success }` (`ReactionHandler.ts`, `AckResponseOf`) —, ou `false` sans transport ni réponse. */
-const emetsAvecAccuse = (socket: Socket, evenement: string, charge: unknown): Promise<boolean> =>
-  new Promise((resoud) => {
-    socket.timeout(DELAI_D_ACCUSE_MS).emit(evenement, charge, (erreur: unknown, reponse: unknown) => {
-      resoud((erreur === null || erreur === undefined) && objet(reponse)?.success === true);
-    });
-  });
-
 /**
- * MON geste sur une pastille : peint d'abord (`reagisMoiMeme`), dit ensuite —
- * `reaction:add` / `reaction:remove` `{ messageId, emoji }` sur le socket
- * (`ReactionHandler.ts`), ou `POST` / `DELETE /reactions` par la route quand
- * le socket manque (`lib/api/fil.ts` › `reagis`). Un refus rejoue le geste à
- * l'envers ; l'agrégat exact arrive par `reaction:added` / `reaction:removed`.
+ * RÉAGIR, RÉPONDRE, MODIFIER, RETIRER — `lib/realtime/fil-gestes.ts` (§ 4
+ * étape 0 de la spécification #5163, extraction ; § 12.10.1, les trois
+ * gestes nouveaux). `applique` et `envoieLaBulle` sont INJECTÉS : ce module
+ * possède le socket et la boucle de peinture, `fil-gestes.ts` ne les importe
+ * pas (jamais d'import circulaire).
  */
-const basculeLaReaction = async (ctx: Contexte, messageId: string, emoji: string, ajoute: boolean): Promise<void> => {
-  if (ctx.ferme || emoji === '' || messageId === '') return;
-  applique(ctx, F.reagisMoiMeme(ctx.etat, messageId, emoji, ajoute));
-  const fait =
-    ctx.socket !== null && ctx.pret
-      ? await emetsAvecAccuse(ctx.socket, ajoute ? 'reaction:add' : 'reaction:remove', { messageId, emoji })
-      : (await reagis({ creance: ctx.creance, messageId, emoji, retirer: !ajoute, base: ctx.config.passerelle })).genre === 'fait';
-  if (!fait) applique(ctx, F.reagisMoiMeme(ctx.etat, messageId, emoji, !ajoute));
-};
-
-const prendsLesReactions = (ctx: Contexte): void => {
-  ctx.p.liste.addEventListener('submit', (evenement) => {
-    const formulaire = (evenement.target as HTMLElement | null)?.closest<HTMLFormElement>('form.reagir-par');
-    if (formulaire === null || formulaire === undefined) return;
-    evenement.preventDefault();
-    const emoji = formulaire.querySelector<HTMLInputElement>('input[name="reaction"]')?.value ?? '';
-    const messageId = formulaire.querySelector<HTMLInputElement>('input[name="message"]')?.value ?? '';
-    const bulle = ctx.etat.bulles.find((b) => b.id === messageId);
-    const mienne = bulle?.reactions.find((r) => r.emoji === emoji)?.mienne ?? false;
-    void basculeLaReaction(ctx, messageId, emoji, !mienne);
-  });
-
-  ctx.p.liste.addEventListener('click', (evenement) => {
-    const cible = evenement.target as HTMLElement | null;
-    const reagir = cible?.closest<HTMLElement>('button.reagir');
-    if (reagir !== null && reagir !== undefined) {
-      const messageId = reagir.closest<HTMLElement>('li.ligne')?.dataset.id ?? '';
-      void choisisUneReaction(ctx.p).then((emoji) => basculeLaReaction(ctx, messageId, emoji, true));
-      return;
-    }
-    const reessayer = cible?.closest<HTMLElement>('button.reessayer');
-    if (reessayer === null || reessayer === undefined) return;
-    const ligne = reessayer.closest<HTMLElement>('li.ligne');
-    const bulle = ctx.etat.bulles.find((b) => b.clientMessageId !== null && b.clientMessageId === ligne?.dataset.cid);
-    if (bulle !== undefined) void envoieLaBulle(ctx, { ...bulle, envoi: 'en-attente' });
-  });
-};
 
 const branche = (ctx: Contexte, socket: Socket): void => {
   const conversationId = ctx.config.conversation;
@@ -853,6 +670,11 @@ const connecte = async (ctx: Contexte): Promise<void> => {
   });
   ctx.socket = socket;
   branche(ctx, socket);
+  // LA BANNIÈRE (#4454) — branchée ICI, sur le socket qui vient d'être ouvert,
+  // et jamais ailleurs : cet écran en tient DÉJÀ un, donc le toast ne coûte
+  // aucune connexion. La région est cherchée une fois ; absente (un document
+  // servi sans temps réel), la porte ne fait rien.
+  brancheLaBanniere({ socket, region: document.querySelector<HTMLElement>('.banniere') });
   if (!ctx.cache && ctx.enLigne) socket.connect();
 };
 
@@ -910,12 +732,26 @@ const surTransition = (ctx: Contexte) => (transition: TransitionDeCycle): void =
   if (transition.type === 'destruction') {
     ctx.socket?.emit('conversation:leave', { conversationId: ctx.config.conversation });
     ctx.socket?.disconnect();
+    ctx.composeur?.detruit();
+    ctx.gestes?.detruit();
+    ctx.capture?.detruit();
+    ctx.feuilleDeLien?.();
     return;
   }
   if (transition.type === 'jeton-externe' && ctx.creance.genre === 'invite' && transition.valeur === null) {
     ferme(ctx, BANDEAUX.placeFermee.titre, 'bandeau-place-fermee');
   }
 };
+
+/**
+ * LA CIBLE DE LA FEUILLE « NOUVEAU LIEN » DEPUIS CE FIL (#5034, § 12.10.5) —
+ * la région propre à cet hôte (`#lien-cree`, l'avis SEUL — jamais tout
+ * `#main-content`, dont le remplacement perdrait l'état vivant du fil : les
+ * bulles déjà peintes, le socket, les écouteurs) et le contrôle qui reprend
+ * le focus. `/links` paramètre le MÊME site (`lib/realtime/liens.ts`) avec SA
+ * région (`#carnet`, la liste ENTIÈRE — elle n'a pas d'état vivant à perdre).
+ */
+const CIBLE_DU_LIEN = { region: '#lien-cree', ouvreur: 'a.partager' } as const;
 
 const demarre = async (): Promise<void> => {
   const main = document.querySelector<HTMLElement>('main[data-participation="fil"]');
@@ -954,6 +790,12 @@ const demarre = async (): Promise<void> => {
     pret: false,
     vidageEnCours: false,
     composeur: null,
+    gestes: null,
+    capture: null,
+    // L'ÉCOUTE DE LA FEUILLE « NOUVEAU LIEN » — armée ici, RENDUE à
+    // `destruction` : l'écoute se pose au document, qui survit à une
+    // navigation douce, et le site partagé n'en tolère qu'UNE à la fois.
+    feuilleDeLien: armeLaFeuilleDeLien(CIBLE_DU_LIEN),
     enLigne: true,
     cache: false,
     deconnecteDepuis: null,
@@ -981,11 +823,12 @@ const demarre = async (): Promise<void> => {
   // servi inerte) — la peinture est idempotente, une ligne déjà juste n'est pas
   // touchée. Mesuré sans ce tour : aucun contrôle de réaction avant le premier
   // événement reçu.
-  peins(p, ctx.etat, Date.now());
+  peins(p, ctx.etat, Date.now(), menuDe(ctx));
 
   const brouillon = cles === null ? null : chaine(await r.lis(cles.brouillon).catch(() => null));
   ctx.composeur = prendsLeComposeur({
     main,
+    gabarit: p.gabarit,
     brouillon,
     surBrouillon: (texte) => {
       if (cles === null) return;
@@ -995,9 +838,21 @@ const demarre = async (): Promise<void> => {
       commence: () => ctx.socket !== null && ctx.pret && ctx.socket.emit('typing:start', { conversationId: config.conversation }),
       cesse: () => ctx.socket !== null && ctx.pret && ctx.socket.emit('typing:stop', { conversationId: config.conversation }),
     },
-    surEnvoi: (texte, fichiers) => {
+    // LES TROIS GENRES D'UN ENVOI (§ 12.10.1, issue #5163) : un message NU et
+    // une RÉPONSE partagent le MÊME transport (`envoieLaBulle` → `expedie`,
+    // qui lit `replyToId` sur la citation que `bulleOptimiste({ reponseA })`
+    // vient de poser) ; une MODIFICATION est un transport ENTIÈREMENT
+    // DIFFÉRENT (`message:edit` / `PUT`, jamais `message:send`), servi par
+    // `envoieLaModification` (`fil-gestes.ts`) — aucune bulle nouvelle n'est
+    // insérée, la bulle EXISTANTE est modifiée sur place.
+    surEnvoi: (texte, fichiers, contexte) => {
+      if (contexte?.genre === 'modification') {
+        void envoieLaModification(ctx, applique, contexte.cible, texte);
+        return;
+      }
       const clientMessageId = identifiantClient();
       if (fichiers.length > 0) ctx.fichiers.set(clientMessageId, fichiers);
+      const cibleDeLaReponse = contexte?.genre === 'reponse' ? ctx.etat.bulles.find((b) => b.id === contexte.cible) : undefined;
       const bulle: F.Bulle = {
         ...F.bulleOptimiste({
           clientMessageId,
@@ -1007,6 +862,9 @@ const demarre = async (): Promise<void> => {
           langue: config.langues[0] ?? 'fr',
           horsLigne: !ctx.enLigne,
           maintenant: Date.now(),
+          ...(contexte?.genre === 'reponse'
+            ? { reponseA: { cible: contexte.cible, source: cibleDeLaReponse?.deMoi ? config.nom : (cibleDeLaReponse?.auteur ?? '') } }
+            : {}),
         }),
         pieces: piecesLocales(clientMessageId, fichiers),
       };
@@ -1015,7 +873,8 @@ const demarre = async (): Promise<void> => {
     },
   });
 
-  prendsLesReactions(ctx);
+  ctx.gestes = prendsLesGestes({ ctx, applique, envoieLaBulle });
+  ctx.capture = prendsLaCapture({ ctx, applique, envoieLaBulle });
   oublieLaJonctionFraiche();
 
   const lienPlusAncien = main.querySelector<HTMLElement>('a.plus-ancien');
@@ -1039,3 +898,12 @@ const demarre = async (): Promise<void> => {
 };
 
 void demarre();
+
+/**
+ * REMONTAGE PAR LE NAVIGATEUR DE ZONE (#5106) : un ES module réimporté ne se
+ * ré-exécute pas — après une navigation douce, c'est cet export que le
+ * navigateur appelle pour monter l'écran neuf. L'auto-démarrage ci-dessus
+ * reste : sans navigateur (amélioration progressive), l'import du chargeur
+ * suffit, comme avant.
+ */
+export const monte = demarre;

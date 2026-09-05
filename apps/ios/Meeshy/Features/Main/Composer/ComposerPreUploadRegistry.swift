@@ -98,6 +98,14 @@ final class ComposerPreUploadRegistry: ObservableObject {
         guard ComposerPreUploadPolicy.mayBegin(fileSize: fileSize, alreadyRemote: alreadyRemote) else {
             return
         }
+        // **Une pré-montée qui part sans le dire est indistinguable d'une
+        // pré-montée qui ne part pas.** Tout le lot est INVISIBLE par
+        // construction — c'est sa qualité : l'auteur ne doit rien remarquer.
+        // Le seul témoin qu'un appareil réel puisse rendre est ce journal, et
+        // c'est lui qui sépare « ça marche » de « rien ne rougit ».
+        logger.info(
+            "pré-montée démarrée: \(url.lastPathComponent, privacy: .public) type=\(mimeType, privacy: .public) octets=\(fileSize, privacy: .public)"
+        )
         states[url] = .uploading(sent: 0, total: fileSize)
         waiting.append((url, mimeType))
         drain()
@@ -164,6 +172,9 @@ final class ComposerPreUploadRegistry: ObservableObject {
             // registre l'oublie, et la vue cesse de peindre une progression pour
             // un média qui n'est plus là.
             let adopte = adopt?(url, result.postMediaId, result.remoteURL) ?? false
+            logger.info(
+                "pré-montée aboutie: \(url.lastPathComponent, privacy: .public) id=\(result.postMediaId, privacy: .public) adoptée=\(adopte, privacy: .public)"
+            )
             states[url] = adopte
                 ? .ready(postMediaId: result.postMediaId, remoteURL: result.remoteURL)
                 : nil

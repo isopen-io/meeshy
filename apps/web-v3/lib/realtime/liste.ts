@@ -9,7 +9,9 @@ import {
   type GesteDeLigne,
 } from '@/lib/contenu/liste';
 
+import { brancheLaBanniere } from './banniere';
 import { prendsLeBalayage } from './balayage';
+import { armeLaDeconnexion } from './deconnexion';
 import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
 import { prendsLePleinEcran } from './plein-ecran';
 import * as L from './liste-etat';
@@ -461,6 +463,11 @@ const connecte = async (ctx: Contexte): Promise<void> => {
   });
   ctx.socket = socket;
   branche(ctx, socket);
+  // LA BANNIÈRE (#4454) — branchée ICI, sur le socket qui vient d'être ouvert,
+  // et jamais ailleurs : cet écran en tient DÉJÀ un, donc le toast ne coûte
+  // aucune connexion. La région est cherchée une fois ; absente (un document
+  // servi sans temps réel), la porte ne fait rien.
+  brancheLaBanniere({ socket, region: document.querySelector<HTMLElement>('.banniere') });
   if (!ctx.cache && ctx.enLigne) socket.connect();
 };
 
@@ -512,6 +519,13 @@ const demarre = async (): Promise<void> => {
   // protègent, c'est le temps réel — jamais le clavier.
   prendsLePleinEcran();
 
+  // LE CONTRÔLE DE SORTIE (#5095) — servi par l'espace membre, dans l'état
+  // `?espace` du document. Même raison que `prendsLePleinEcran` ci-dessus :
+  // il doit s'armer même si les quatre replis qui suivent renvoient bredouille
+  // (config absente, jeton disparu…), et RIEN de ce qu'il fait n'a besoin
+  // d'une créance de participation.
+  armeLaDeconnexion();
+
   const main = document.querySelector<HTMLElement>('main[data-participation="liste"]');
   if (main === null) return;
   const config = configuration(main);
@@ -548,3 +562,12 @@ const demarre = async (): Promise<void> => {
 };
 
 void demarre();
+
+/**
+ * REMONTAGE PAR LE NAVIGATEUR DE ZONE (#5106) : un ES module réimporté ne se
+ * ré-exécute pas — après une navigation douce, c'est cet export que le
+ * navigateur appelle pour monter l'écran neuf. L'auto-démarrage ci-dessus
+ * reste : sans navigateur (amélioration progressive), l'import du chargeur
+ * suffit, comme avant.
+ */
+export const monte = demarre;

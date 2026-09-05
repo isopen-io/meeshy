@@ -25,7 +25,8 @@
  * `JSON.stringify`), ce qui est l'asymétrie de #4689.
  *
  * Aucune assertion ne porte sur la VALEUR d'un mot de passe : le double de
- * `bcrypt.compare` rend un verdict, il ne reçoit aucun secret à comparer.
+ * `verifyPassword` (`utils/password-hash`) rend un verdict, il ne reçoit aucun
+ * secret à comparer.
  *
  * @jest-environment node
  */
@@ -34,9 +35,12 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
 const mockCompare = jest.fn() as jest.Mock<any>;
-jest.mock('bcryptjs', () => ({
-  __esModule: true,
-  default: { compare: (...a: any[]) => mockCompare(...a) },
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216. Doubler
+// `bcryptjs` ne suffirait plus : le module charge d'abord le binaire NATIF, et
+// le repli JavaScript n'est atteint que s'il manque.
+jest.mock('../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (...a: any[]) => mockCompare(...a),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({

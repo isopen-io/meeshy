@@ -14,6 +14,7 @@ import {
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { canAccessConversation } from './utils/access-control';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { accorder, refuser, type VerdictDeGeste } from './utils/participant-geste-verdict';
 import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket';
 
@@ -295,6 +296,11 @@ async function annoncerDroits(options: {
   // (`emitWithSeq`). Même ordre que `_emitPresenceSnapshot`, qui place le
   // durable HORS de son `try`.
   manager?.invalidateParticipantCache?.(target.id, conversationId);
+  // JUMELLE (#4855) — `MessagingService.handleMessage` tient son propre
+  // cache de lookup (`utils/participant-lookup-cache.ts`), distinct de celui
+  // du middleware d'auth ci-dessus : sans cette invalidation, un droit
+  // retiré ici ne prendrait effet sur l'ENVOI qu'au bout de son TTL (30 s).
+  invalidateParticipantLookup(target.id, conversationId);
 
   try {
     if (io) {

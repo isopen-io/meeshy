@@ -415,6 +415,13 @@ struct ConversationMediaGalleryView: View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
                             horizontalInset: 16,
+                            // **« JUSTE afficher le texte déplié avec effet
+                            // ombre »** — donc pas de voile en plus. Le
+                            // dégradé noir du composant sert les hôtes qui
+                            // n'ont rien d'autre pour détacher le texte ; ici
+                            // l'ombre suffit, et le voile masquait le média
+                            // que l'utilisateur est venu regarder.
+                            dimsBackgroundWhenExpanded: false,
                             onToggle: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     captionExpanded.toggle()
@@ -516,18 +523,20 @@ struct ConversationMediaGalleryView: View {
                 // (`StoryViewerView+Canvas`). Deux surfaces, deux réponses à la
                 // même question — « où trouver la place ? » — parce qu'elles
                 // n'ont pas le même voisinage.
-                if CaptionExpansionSpace.showsAuthorDetails(captionExpanded: captionExpanded) {
-                    bottomMetadataOverlay(att)
-                        // **Un FONDU, jamais un glissement** (directive porteur
-                        // 2026-09-02) : « il ne faut pas faire remonter l'auteur
-                        // de l'image mais le faire disparaître fade out puis
-                        // fade-in ». Un `.move` ferait monter la carte d'auteur
-                        // à travers la légende qui grandit — deux mouvements en
-                        // sens contraire sur la même bande, que l'œil lit comme
-                        // une bousculade. Le fondu ne déplace rien : l'auteur
-                        // s'efface sur place et revient sur place.
-                        .transition(.opacity)
-                }
+                // **L'auteur ne s'efface plus : il est POUSSÉ vers le haut**
+                // (directive porteur 2026-09-05).
+                //
+                // > « le "voir plus" de la légende doit juste afficher le texte
+                // > déplié avec effet ombre, en repoussant le détail de
+                // > l'auteur vers le haut »
+                //
+                // Le fondu et son gate viennent de la directive du 2026-09-02,
+                // qui demandait l'inverse. Ils sont retirés, pas commentés :
+                // c'est la pile ancrée en bas qui fait le travail — la légende
+                // grandit, ses voisins montent — et la lisibilité est portée
+                // par l'ombre de `MediaCaptionOverlay`, jamais par la place
+                // qu'on prendrait à quelqu'un d'autre.
+                bottomMetadataOverlay(att)
                 if let caption = servedCaption(att.id) {
                     captionLanguageRow(att.id)
                     captionOverlay(caption)

@@ -322,10 +322,43 @@ describe('ZmqRequestSender', () => {
       expect(taskId).toBe('test-uuid-fixed');
     });
 
-    it('deduplicates and lowercases targetLanguages', async () => {
+    it('deduplicates and canonicalizes targetLanguages', async () => {
       await sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: ['FR', 'fr', 'EN'] }));
       const arg = firstSendArg(connectionManager);
       expect(arg.targetLanguages).toEqual(['fr', 'en']);
+    });
+
+    it('collapses region-tagged variants onto their canonical language before sending', async () => {
+      await sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: ['en-US', 'en'] }));
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['en']);
+    });
+
+    it('canonicalizes mixed-case region-tagged targets to a single NLLB-mappable code', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['EN-US', 'En', 'en', 'pt-BR'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['en', 'pt']);
+    });
+
+    it('reduces deprecated ISO 639-1 aliases to their canonical code before sending', async () => {
+      await sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: ['iw'] }));
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['he']);
+    });
+
+    it('settles the request with the canonical form of a region-tagged target', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['en-US'] }),
+        'settle-canon-task'
+      );
+      expect(sender.getPendingRequestsCount()).toBe(1);
+      // The translator echoes a canonical language; the sent list must agree with
+      // the pending set so the single expected target is soldered on completion.
+      const result = sender.settleTranslationLanguage('settle-canon-task', 'en');
+      expect(result).toEqual({ remaining: [] });
+      expect(sender.getPendingRequestsCount()).toBe(0);
     });
 
     it('throws when deduped targetLanguages is empty', async () => {

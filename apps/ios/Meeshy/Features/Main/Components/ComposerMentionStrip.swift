@@ -21,6 +21,28 @@ struct ComposerMentionStrip: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 14) {
+                // **Une bande vide DIT « personne », elle ne disparaît pas.**
+                //
+                // Le montage était gaté sur `!suggestions.isEmpty` — donc un
+                // `@` sans correspondance ne peignait RIEN, et l'auteur ne
+                // pouvait pas distinguer « cette personne n'existe pas » de
+                // « la fonction ne marche pas ». Mesuré au simulateur le
+                // 2026-09-05 : la route des amis rendait 404 en production, la
+                // liste tombait à vide par un `catch { return [] }`, et le
+                // symptôme visible était l'ABSENCE de la bande — exactement ce
+                // qu'un utilisateur a rapporté comme « les mentions inline ne
+                // fonctionnent pas ».
+                //
+                // Une erreur avalée en liste vide ressemble à un vide
+                // légitime ; c'est la vue qui doit rendre le vide LISIBLE, et
+                // `MentionSuggestionList` (SDK) le faisait déjà pour la
+                // surface mood du même composer.
+                if controller.suggestions.isEmpty {
+                    Text(ComposerDocumentCopy.mentionEmpty)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                        .frame(minHeight: 44, alignment: .leading)
+                }
                 ForEach(controller.suggestions) { candidate in
                     Button {
                         let updated = controller.insertMention(candidate, into: currentText)
@@ -79,9 +101,24 @@ struct ComposerMentionStrip: View {
             .padding(.vertical, 10)
         }
         .frame(maxWidth: .infinity)
-        // Même chrome neutre que `MentionSuggestionPanel` : une bande
-        // d'assistance à la saisie, pas du contenu de conversation.
-        .adaptiveGlass(in: Rectangle())
+        // **Fond TRANSPARENT** (directive porteur 2026-09-05).
+        //
+        // La bande portait `.adaptiveGlass(in: Rectangle())` — « même chrome
+        // neutre que `MentionSuggestionPanel` ». Ce chrome vient d'un écran
+        // CLAIR (le composer de commentaires) ; posé sur le plateau, dont les
+        // trois teintes sont sombres par doctrine, il peint une barre pâle en
+        // travers de la scène au moment précis où l'auteur regarde ce qu'il
+        // écrit.
+        //
+        // Les capsules des entrées portent déjà leur propre fond (6 % de
+        // `textPrimary`) : c'est LUI que `ComposerMentionStripContrastTests`
+        // mesure, et il mesurait déjà sur la teinte du plateau — jamais sur le
+        // verre. Le retirer ne change donc aucun ratio ; il rend vraie la base
+        // que le témoin énonçait déjà.
+        //
+        // > Un chrome hérité d'un écran voisin arrive avec les hypothèses de
+        // > CET écran-là. « Même chrome que X » n'est une raison que si X a le
+        // > même fond.
         // Même patron que `mediaStrip`/`toolRow` (revue Opus 2026-08-27) :
         // sans le groupe, le rotor VoiceOver ne trouve la bande qu'élément
         // par élément, jamais comme un groupe nommé.

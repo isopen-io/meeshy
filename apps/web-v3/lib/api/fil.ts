@@ -9,10 +9,12 @@ import {
 import { citations, citationsDeLaPage, type Citation, type MentionsRetenues } from './citations';
 import { genreDeMime, pisteSuitLaLangue, type GenreDePiece } from './formes';
 import { chaine, estProtege, instant, nombre, objet } from './lecture';
+import { lieuDeMessage, type Lieu } from './lieu';
 import { baseDeLaPasserelle, baseDeLaPasserellePublique } from './links';
 
 export type { Citation, GenreDeCitation, SorteDePublication } from './citations';
 export type { GenreDePiece } from './formes';
+export type { Lieu } from './lieu';
 
 /**
  * LE FIL D'UNE CONVERSATION — et la seule surface de la v3 où le PRISME
@@ -137,6 +139,14 @@ export type Message = {
   readonly edite: boolean;
   readonly supprime: boolean;
   readonly pieces: readonly PieceJointe[];
+  /**
+   * UN LIEU PARTAGÉ (#5061) — `null` sur la quasi-totalité des messages. Il se
+   * lit comme une PLACE (`lib/api/lieu.ts`), jamais comme deux nombres bruts :
+   * la même règle que `pieces`, et pour la même raison — un contenu que la
+   * protection retient ne sert AUCUN champ de position (cycles 124/125 du
+   * § Prisme).
+   */
+  readonly lieu: Lieu | null;
   /** Ce que le message CITE — provenance, réponse, publication (`lib/api/citations.ts`). */
   readonly citations: readonly Citation[];
   readonly reactions: readonly Reaction[];
@@ -168,6 +178,30 @@ export type Fil = {
   readonly messages: readonly Message[];
   /** Le curseur `before` de la page plus ancienne, `null` quand le fil est lu en entier. */
   readonly plusAncien: string | null;
+  /**
+   * `conversation.type` (`direct` | `public` | `group` | `global`…) — SERVI
+   * SANS COÛT SUPPLÉMENTAIRE : `GET /conversations/:id` sans `?fields=` rend
+   * le PROFIL DOCUMENTÉ par défaut, qui porte `type` (`core-detail.ts:167`,
+   * `CONVERSATION_DETAIL_SERVED_FIELDS`) — cette lecture n'ajoute AUCUNE
+   * requête, elle nomme un champ déjà dans la réponse.
+   *
+   * Gouverne `peutCreerUnLien` (`fil-vue.ts`, correction de revue #5034) :
+   * la passerelle refuse la création d'un lien de partage sur un `direct`
+   * (`share-link-mint.ts:196-199`), quel que soit le rang. Optionnel — seules
+   * les fixtures qui exercent CETTE garde le posent ; la passerelle, elle, le
+   * sert toujours.
+   */
+  readonly type?: string;
+  /**
+   * `conversation.currentUserRole` — le rang du LECTEUR dans CETTE
+   * conversation (`creator`/`admin`/`moderator`/`member`), lui aussi déjà
+   * SERVI sans `?fields=` (même paragraphe que `type` ci-dessus). `null`
+   * quand la passerelle n'a résolu aucun rang (lecteur hors participation
+   * connue). Gouverne `peutCreerUnLien` : la passerelle exige au moins
+   * MODÉRATEUR hors des conversations `public` (`share-link-mint.ts:206-209`,
+   * `mayMintShareLink`).
+   */
+  readonly rang?: string | null;
 };
 
 export type Issue =
@@ -197,6 +231,20 @@ export const LONGUEUR_MAX_DU_MESSAGE = 4000;
 const REPLI_DE_LANGUE = 'fr';
 
 /**
+ * LA FENÊTRE D'ÉDITION D'UN MESSAGE — `MESSAGE_EDIT_WINDOW_MS`
+ * (`services/gateway/src/services/messaging/messageEditAdmission.ts:62`), la
+ * loi UNIQUE que `PUT /messages/:messageId` et `message:edit` appliquent
+ * (borne INCLUSIVE — vrai à 24 h pile). Le même patron que
+ * `LONGUEUR_MAX_DU_MESSAGE` ci-dessus : la v3 ne l'importe pas — la
+ * frontière de paquet ne se traverse pas —, mais `__tests__/
+ * limite-du-message.test.ts` relit le fichier de la passerelle et rougit si
+ * la valeur y change. « Modifier » n'est RENDU que si `peutModifier` répond
+ * vrai (charte règle 7) ; un 403 qui arriverait quand même (horloge du
+ * client en retard) est SERVI tel quel, jamais avalé.
+ */
+export const FENETRE_D_EDITION_MS = 24 * 60 * 60 * 1000;
+
+/**
  * Un message que la protection retient. Le texte n'est PAS servi — c'est la
  * leçon des cycles 124 et 125 du § Prisme : une garde qui DÉCLARE une
  * restriction sans la faire respecter laisse partir ce qu'elle prétend retenir.
@@ -215,7 +263,8 @@ export const MENTION_SUPPRIMEE = 'Ce message a été supprimé';
 
 export const MENTIONS_RETENUES: MentionsRetenues = { protege: MENTION_PROTEGEE, supprime: MENTION_SUPPRIMEE };
 
-const demande = (
+/** Exportée pour `lib/api/fil-mutations.ts` (§ 4 étape 0 de la spécification #5061) — le site unique de la requête authentifiée. */
+export const demande = (
   url: string,
   creance: Creance,
   recuperer: Recuperateur | undefined,
@@ -390,6 +439,7 @@ export const message = (
     edite: brut.isEdited === true,
     supprime,
     pieces: protege || supprime ? [] : pieces(brut.attachments, langues, origine),
+    lieu: protege || supprime ? null : lieuDeMessage(brut),
     citations: supprime ? [] : citations({ brut, moi, protege, mentions: MENTIONS_RETENUES }),
     reactions: reactions(brut.reactionSummary),
     accuse: accuse(brut),
@@ -575,6 +625,8 @@ export const fil = async ({
       // l'autre sens.
       messages: [...messages(enveloppeListe.data, moi, langues, originePublique)].reverse(),
       plusAncien: pagination?.hasMore === true ? chaine(pagination.nextCursor) : null,
+      type: chaine(conversation.type) ?? undefined,
+      rang: chaine(conversation.currentUserRole),
     },
   };
 };
@@ -592,6 +644,7 @@ export const envoie = async ({
   clientMessageId,
   langue,
   pieces: identifiantsDePieces,
+  replyToId,
   base,
   recuperer,
 }: {
@@ -603,6 +656,8 @@ export const envoie = async ({
   readonly langue?: string;
   /** Les `attachmentIds` d'un téléversement préalable (`messages-send.ts:155`). */
   readonly pieces?: readonly string[];
+  /** Le message auquel on répond — `replyToId` (`messages-send.ts:60`), un identifiant PRÉSENT dans la page (§ 2). */
+  readonly replyToId?: string;
   readonly base?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Envoi> => {
@@ -618,6 +673,7 @@ export const envoie = async ({
         ...(clientMessageId === undefined ? {} : { clientMessageId }),
         ...(langue === undefined ? {} : { originalLanguage: langue }),
         ...(identifiantsDePieces === undefined || identifiantsDePieces.length === 0 ? {} : { attachmentIds: identifiantsDePieces }),
+        ...(replyToId === undefined ? {} : { replyToId }),
       }),
     },
   );
@@ -681,97 +737,3 @@ export const televerse = async ({
   };
 };
 
-export type ReactionPosee =
-  | {
-      readonly genre: 'fait';
-      /** `POST /reactions` a rendu 200 — la pastille était DÉJÀ la mienne (`unchanged`) — plutôt que 201. */
-      readonly dejaLa: boolean;
-    }
-  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
-
-const REFUS_REACTION = 'La réaction n’a pas pu être enregistrée.';
-
-/**
- * `POST /api/v1/reactions` `{ messageId, emoji }` (`routes/reactions.ts:78`,
- * `requiredAuth` avec `allowAnonymous: true` — « les anonymes peuvent aussi
- * réagir ») et `DELETE /api/v1/reactions/:messageId/:emoji` (`:290`) — les deux
- * portes REST par lesquelles le formulaire d'une pastille bascule un emoji
- * sans JavaScript ; le module de participation, lui, émet `reaction:add` /
- * `reaction:remove` sur le socket (`ReactionHandler.ts`).
- */
-export const reagis = async ({
-  creance,
-  messageId,
-  emoji,
-  retirer,
-  base,
-  recuperer,
-}: {
-  readonly creance: Creance;
-  readonly messageId: string;
-  readonly emoji: string;
-  readonly retirer: boolean;
-  readonly base?: string;
-  readonly recuperer?: Recuperateur;
-}): Promise<ReactionPosee> => {
-  const racine = `${base ?? baseDeLaPasserelle()}/api/v1/reactions`;
-  const reponse = retirer
-    ? await demande(`${racine}/${encodeURIComponent(messageId)}/${encodeURIComponent(emoji)}`, creance, recuperer, { method: 'DELETE' })
-    : await demande(racine, creance, recuperer, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messageId, emoji }),
-      });
-  if (reponse === null) return { genre: 'refus', message: REFUS_REACTION, statut: null };
-  // Retirer une réaction déjà absente est un 200 IDEMPOTENT pour la passerelle
-  // (`routes/reactions.ts:379-386`, « the caller's desired end-state is
-  // achieved ») — un état atteint pour le lecteur : la pastille n'est plus la
-  // sienne. Une passerelle plus ancienne rendait 404 ; il dit la même chose.
-  if (reponse.ok || (retirer && reponse.status === 404)) return { genre: 'fait', dejaLa: !retirer && reponse.status === 200 };
-  const enveloppe = objet(await reponse.json().catch(() => null));
-  return {
-    genre: 'refus',
-    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? REFUS_REACTION,
-    statut: reponse.status,
-  };
-};
-
-/**
- * `POST /api/v1/conversations/:id/receipts` `{ type: 'read', messageIds }`
- * (`routes/conversations/receipts.ts:946`, `requireAuth` + `allowAnonymous` :
- * « un invité de lien est un participant de plein droit […] le serveur COMPTE
- * ses non-lus ») — la porte par laquelle le fil DIT ce qui a été affiché. Les
- * messages du lecteur lui-même sont écartés par la passerelle (« un accusé de
- * soi à soi n'apprend rien ») ; on ne les rapporte pas. Un lot vide n'est pas
- * envoyé : `messageIds: []` signifierait « rien n'a été affiché ».
- */
-export const accuseLecture = async ({
-  cle,
-  creance,
-  messageIds,
-  base,
-  recuperer,
-}: {
-  readonly cle: string;
-  readonly creance: Creance;
-  readonly messageIds: readonly string[];
-  readonly base?: string;
-  readonly recuperer?: Recuperateur;
-}): Promise<boolean> => {
-  if (messageIds.length === 0) return false;
-  const reponse = await demande(
-    `${base ?? baseDeLaPasserelle()}/api/v1/conversations/${encodeURIComponent(cle)}/receipts`,
-    creance,
-    recuperer,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'read', messageIds }),
-    },
-  );
-  return reponse !== null && reponse.ok;
-};
-
-/** Les identifiants à ACCUSER : ce qui est affiché et n'est pas de moi. */
-export const aAccuser = (lus: readonly Message[]): readonly string[] =>
-  lus.filter((m) => !m.deMoi && !m.systeme).map((m) => m.id);

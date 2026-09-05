@@ -101,7 +101,6 @@ import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.bubble.BubbleContent
-import me.meeshy.ui.component.bubble.BubbleContentBuilder
 import me.meeshy.ui.component.bubble.MessageDetailExplorer
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import javax.inject.Inject
@@ -393,6 +392,14 @@ class ChatViewModel @Inject constructor(
     private var fileDownloadJob: Job? = null
 
     /**
+     * #5189 — per-message memoization for [BubbleContentBuilder.build], owned
+     * by this ViewModel instance (one cache per conversation screen). See its
+     * own doc-comment for why the combine chain feeding [toBubbles] must not
+     * re-run Prisme resolution for a message none of the changed inputs concern.
+     */
+    private val bubbleMemo = BubbleMemoCache()
+
+    /**
      * Attachments already downloaded this session, by [ApiMessageAttachment.id] — a completed
      * transfer's terminal [FileAttachmentDownloadState.Completed] (the reusable `localUri`).
      * [startFileDownload] serves straight from here on a repeat tap instead of re-enqueueing a
@@ -578,7 +585,7 @@ class ChatViewModel @Inject constructor(
                     _state.update { current ->
                         val next = current.applyResult(
                             result, user, own, originals, config.apiBaseUrl, recipients, hidden, starredIds,
-                            overrides, showReadReceipts, isOffline,
+                            overrides, showReadReceipts, isOffline, bubbleMemo,
                         )
                         next.copy(
                             search = next.search.reconciled(next.messages.toSearchable()),
@@ -2105,23 +2112,24 @@ private fun ChatUiState.applyResult(
     activeLanguageOverride: Map<String, String>,
     showReadReceipts: Boolean,
     isOffline: Boolean,
+    bubbleMemo: BubbleMemoCache,
 ): ChatUiState {
     val updated = when (result) {
         is CacheResult.Fresh -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline, bubbleMemo),
             ownReactions = ownReactions,
             isSyncing = false,
             showSkeleton = false,
             errorMessage = null,
         )
         is CacheResult.Stale -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline, bubbleMemo),
             ownReactions = ownReactions,
             isSyncing = true,
             showSkeleton = false,
         )
         is CacheResult.Syncing -> copy(
-            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline)
+            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline, bubbleMemo)
                 ?: messages,
             ownReactions = ownReactions,
             isSyncing = true,
@@ -2167,6 +2175,7 @@ private fun List<LocalMessage>.toBubbles(
     activeLanguageOverride: Map<String, String>,
     showReadReceipts: Boolean,
     isOffline: Boolean,
+    bubbleMemo: BubbleMemoCache,
 ): List<BubbleContent> {
     val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
         MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
@@ -2182,15 +2191,15 @@ private fun List<LocalMessage>.toBubbles(
             )
         },
     )
+    // #5189 — drop cache entries for messages no longer in the visible window
+    // (hidden, or paged out) before they'd otherwise sit unused forever.
+    bubbleMemo.retain(visible.mapTo(mutableSetOf()) { it.message.id })
     return visible.map { local ->
         val position = groupPositions[local.message.id] ?: STANDALONE_GROUP_POSITION
-        BubbleContentBuilder.build(
-            message = local.message,
-            currentUserId = currentUser?.id,
-            preferences = currentUser ?: EmptyContentPreferences,
+        bubbleMemo.build(
+            local = local,
+            currentUser = currentUser,
             showSenderName = position.isFirstInGroup,
-            isPending = local.sendState == LocalSendState.SENDING,
-            isFailed = local.sendState == LocalSendState.FAILED,
             ownReactions = ownReactions[local.message.id] ?: emptySet(),
             recipientCount = recipientCount,
             showOriginal = local.message.id in showingOriginal,
@@ -2222,7 +2231,7 @@ private fun List<BubbleContent>.toSearchable(): List<SearchableMessage> =
         if (texts.isEmpty()) null else SearchableMessage(bubble.messageId, texts)
     }
 
-private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
+internal object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
     override val systemLanguage: String? = null
     override val regionalLanguage: String? = null
     override val customDestinationLanguage: String? = null

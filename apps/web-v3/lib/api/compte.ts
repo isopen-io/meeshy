@@ -647,6 +647,68 @@ export const carnetDeLiens = async ({
   };
 };
 
+export type LiensDeLaRecherche =
+  | { readonly genre: 'liens'; readonly liens: readonly LienDePartage[]; readonly encore: boolean }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+/**
+ * LES LIENS TROUVÉS PAR LE GROUPE « Liens » DE `/search` (#5171) — la MÊME
+ * route que `liensDuLecteur`/`carnetDeLiens`, une QUATRIÈME question.
+ *
+ * `?q=` COMPOSE APRÈS le scope `{ createdBy: userId }` que la passerelle pose
+ * SANS `conversationId` (`routes/links/user.ts:480-521`) : aucun autre
+ * utilisateur ne peut apparaître dans ce groupe, quel que soit le terme tapé.
+ * `?expand=conversation` reste requis pour la même raison qu'ailleurs — sans
+ * lui, une rangée ne mène nulle part (règle 7).
+ *
+ * `?include=summary` N'EST PAS DEMANDÉ : aucun agrégat n'est affiché sur cet
+ * écran, et le payer à chaque frappe serait un calcul serveur pour rien.
+ *
+ * `lienDePartage` EST RÉUTILISÉ, jamais réimplémenté : c'est la même carte que
+ * `liensDuLecteur` et `carnetDeLiens` projettent, et une seconde projection en
+ * deviendrait la jumelle qui diverge au premier champ ajouté.
+ */
+export const liensTrouves = async ({
+  jeton,
+  requete,
+  limite = 20,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly requete: string;
+  readonly limite?: number;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LiensDeLaRecherche> => {
+  const terme = requete.trim();
+  if (terme === '') return { genre: 'liens', liens: [], encore: false };
+
+  const url = `${base ?? baseDeLaPasserelle()}/api/v1/links?q=${encodeURIComponent(terme)}&expand=conversation&limit=${limite}`;
+  const reponse = await demande(url, jeton, recuperer);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success !== true || !Array.isArray(enveloppe.data)) return { genre: 'panne' };
+
+  return {
+    genre: 'liens',
+    liens: enveloppe.data
+      .map((brut) => objet(brut))
+      .filter((brut): brut is Readonly<Record<string, unknown>> => brut !== null)
+      .map(lienDePartage)
+      .filter((lien): lien is LienDePartage => lien !== null),
+    // Pagination OFFSET — la forme que `/links?q=` sert SANS `?cursor=`
+    // (`createPaginationMeta`, `services/gateway/src/utils/response.ts:254`) :
+    // `{ total, offset, limit, hasMore }`. Seul `hasMore` est relayé, même
+    // règle que `liensDuLecteur`/`carnetDeLiens` sur leur propre pagination.
+    encore: objet(enveloppe.pagination)?.hasMore === true,
+  };
+};
+
 /**
  * CRÉER UN LIEN DE PARTAGE — `POST /links`
  * (`services/gateway/src/routes/links/creation.ts:29`, `requireAuth: true,
@@ -668,15 +730,26 @@ export const carnetDeLiens = async ({
  * ferait cocher une restriction qui ne restreint rien — le champ décoratif que
  * le critère de fin de `sheet:link` interdit nommément.
  *
- * LA CONVERSATION NAÎT AVEC LE LIEN. Depuis `/links` il n'y a aucune
+ * LA CONVERSATION NAÎT AVEC LE LIEN, DEPUIS `/links` — il n'y a aucune
  * conversation à désigner ; `newConversation.title` en crée une, et c'est la
  * branche que la passerelle prévoit pour ce cas (« If conversationId is not
  * provided, a new public conversation will be created »).
+ *
+ * DEPUIS LE FIL (`?lien`, #5034), LA CONVERSATION EST DÉJÀ OUVERTE — c'est
+ * l'AUTRE branche de la même route (`mintConversationShareLink`,
+ * `routes/links/utils/share-link-mint.ts:150-212`) : `conversationId` porte
+ * la clé de la conversation servie, jamais `newConversation`. Les deux champs
+ * sont donc optionnels ICI, et c'est à l'appelant de n'en poser qu'un — la
+ * passerelle refuserait de toute façon `conversationId` ET `newConversation`
+ * à la fois pour un lecteur qui n'a droit qu'à l'un des deux (§ 5 de la
+ * spécification #5034).
  */
 
 /** Les champs de `createLinkSchema` que la feuille sert — aucun autre ne part. */
 export type LienACreer = {
-  readonly newConversation: { readonly title: string };
+  readonly newConversation?: { readonly title: string };
+  /** La conversation OUVERTE dont ce lien hérite (`?lien`, #5034) — jamais posé avec `newConversation`. */
+  readonly conversationId?: string;
   readonly name?: string;
   readonly description?: string;
   readonly expiresAt?: string;
@@ -746,6 +819,77 @@ export const creeUnLien = async ({
   if (identifiant === null) return { genre: 'panne' };
 
   return { genre: 'fait', identifiant };
+};
+
+/**
+ * FERMER UN LIEN DE PARTAGE — `PATCH /links/:linkId`
+ * (`services/gateway/src/routes/links/management.ts:183`, `onRequest:
+ * [authRequired]` = `requireAuth: true, allowAnonymous: false` : un porteur,
+ * jamais une session invitée).
+ *
+ * LE CORPS EST STRICT : `{ isActive: false }`, et rien d'autre. La route
+ * accepte dix-huit champs optionnels (`updateLinkSchema`) ; en poser un autre
+ * ferait cette écriture faire deux choses à la fois, dont une qu'aucun geste
+ * de l'écran ne demande. Fermer un lien RÉVOQUE les invités déjà entrés
+ * (`applyShareLinkUpdate`, `management.ts:118-146`, `revokeShareLinkGuests`
+ * AVANT l'écriture) — c'est l'effet que `FERMETURE.aide` annonce.
+ *
+ * LA POLICE EST CRÉATEUR OU MODÉRATEUR, jamais le seul créateur
+ * (`loadShareLinkForManagement`, `management.ts:56-96`) : un 403 sur ce
+ * chemin dit « ni l'un ni l'autre », pas « pas le créateur ».
+ *
+ * `/toggle` (`admin.ts:226`) N'EST PAS APPELÉE : c'est une route ADMIN
+ * (#3734), et `PATCH /links/:linkId` porte la MÊME révocation
+ * (`applyShareLinkUpdate`, site unique depuis #4351) sans exiger ce rang.
+ *
+ * LE REFUS EST RENDU TEL QUEL, la même lecture que `creeUnLien` : `error` est
+ * une CHAÎNE (`sendError`, `utils/response.ts:66-88`), jamais un objet — les
+ * deux formes sont lues pour ne pas dépendre d'un détail d'implémentation.
+ */
+export type LienFerme =
+  | { readonly genre: 'fait' }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'panne' };
+
+export const fermeUnLien = async ({
+  jeton,
+  identifiant,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly identifiant: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<LienFerme> => {
+  const reponse = await (recuperer ?? ((u, o) => fetch(u, o)))(
+    `${base ?? baseDeLaPasserelle()}/api/v1/links/${encodeURIComponent(identifiant)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${jeton}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ isActive: false }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    },
+  ).catch(() => null);
+
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (reponse.status >= 500) return { genre: 'panne' };
+
+  if (!reponse.ok) {
+    const enveloppe = objet(await reponse.json().catch(() => null));
+    const message =
+      chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.error) ?? chaine(enveloppe?.message);
+    return { genre: 'refus', message: message ?? '', statut: reponse.status };
+  }
+
+  return { genre: 'fait' };
 };
 
 /**

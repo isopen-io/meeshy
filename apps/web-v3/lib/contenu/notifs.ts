@@ -17,6 +17,8 @@
 export const NOTIFS = {
   titre: 'Notifications',
   retour: 'Retour à l’accueil',
+  /** L'action d'en-tête vers `/notifications/preferences` (#4899). */
+  reglages: 'Réglages de notification',
   /** L'en-tête de la liste, lu par les lecteurs d'écran avant les lignes. */
   liste: 'Vos notifications, de la plus récente à la plus ancienne',
   toutLire: 'Tout marquer comme lu',

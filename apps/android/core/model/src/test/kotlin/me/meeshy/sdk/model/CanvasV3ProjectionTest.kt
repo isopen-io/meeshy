@@ -391,4 +391,155 @@ class CanvasV3ProjectionTest {
         assertThat(projected.mediaObjects).isNull()
         assertThat(projected.background).isEqualTo("https://cdn/x.jpg")
     }
+
+    /**
+     * #5129 — **les bornes de LECTURE d'un média arrivent au modèle.**
+     *
+     * Elles voyagent à plat dans la charge (`sourceStart`/`sourceEnd`), écrites
+     * par iOS pour les médias comme pour les audios. Android n'en avait
+     * AUCUNE notion — ni sous ce nom, ni sous un autre : un clip dont l'auteur
+     * avait gardé les secondes 3 → 8 d'une vidéo de trente secondes jouait les
+     * trente.
+     *
+     * **À ne pas confondre avec `startTime`/`duration`**, qui gouvernent QUAND
+     * l'objet est à l'écran sur la timeline de la slide. Ces deux-ci disent
+     * QUELLE PARTIE de la source joue une fois qu'il y est. Les deux axes
+     * coexistent : un clip visible de 0 à 5 s peut jouer les secondes 3 → 8 de
+     * son fichier.
+     */
+    @Test
+    fun `les bornes de lecture d un media arrivent au modele`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "timing": { "start": 0.0 },
+                "payload": { "mediaURL": "https://cdn/x.mp4", "duration": 5.0,
+                             "sourceStart": 3.0, "sourceEnd": 8.0 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val media = projected.mediaObjects?.firstOrNull()
+        assertThat(media).isNotNull()
+        assertThat(media!!.sourceStart).isEqualTo(3.0)
+        assertThat(media.sourceEnd).isEqualTo(8.0)
+        // **Les deux axes ne vivent même pas au même endroit du fil**, et c'est
+        // ce que ce témoin fixe : `start` est porté par `timing`, FRÈRE de la
+        // charge, tandis que les bornes de lecture sont DANS la charge. Ma
+        // première rédaction posait `startTime` dans le payload — il n'y a
+        // jamais été lu, et le témoin est tombé en me l'apprenant.
+        assertThat(media.startTime).isEqualTo(0.0)
+        assertThat(media.duration).isEqualTo(5.0)
+    }
+
+    /**
+     * #5129 — **un audio rogné l'est aussi.** iOS écrit les deux bornes sur les
+     * deux familles (`CanvasV3Migration.swift:457` et `:542`) ; les lire pour le
+     * seul média laisserait un vocal rogné jouer en entier.
+     */
+    @Test
+    fun `les bornes de lecture d un audio arrivent au modele`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "a1", "kind": "audio", "anchor": { "t": "free", "x": 0.5, "y": 0.8 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "postMediaId": "pm1", "sourceStart": 1.5, "sourceEnd": 4.25 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val audio = projected.audioPlayerObjects?.firstOrNull()
+        assertThat(audio).isNotNull()
+        assertThat(audio!!.sourceStart).isEqualTo(1.5f)
+        assertThat(audio.sourceEnd).isEqualTo(4.25f)
+    }
+
+    /**
+     * **Une borne SEULE est une fenêtre à demi ouverte, pas une fenêtre nulle**
+     * — correction du 2026-09-04.
+     *
+     * La première rédaction refusait la paire incomplète, par analogie avec le
+     * recadrage (#5085). L'analogie était fausse : quatre fractions de cadre
+     * amputées n'ont aucun repli sensé, mais **une fin de lecture manquante en a
+     * un, évident — la fin du fichier.**
+     *
+     * iOS le fait déjà (`StoryMediaLayer.startLoadingTrimWindow` charge
+     * `asset.duration` et complète), et l'écrivain émet les deux bornes
+     * INDÉPENDAMMENT (deux `if let` séparés). Refuser ici faisait jouer à 0 sur
+     * Android un clip qui démarrait à 3 s sur iOS — une divergence introduite
+     * par le correctif lui-même.
+     */
+    @Test
+    fun `une borne de lecture seule ouvre la fenêtre jusqu à la fin`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+              { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                "plane": "content", "z": 0,
+                "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                "payload": { "mediaURL": "https://cdn/x.mp4", "sourceStart": 3.0 } }
+            ] } ] }
+            """.trimIndent(),
+        )
+        val media = projected.mediaObjects?.firstOrNull()
+        assertThat(media).isNotNull()
+        assertThat(media!!.sourceStart).isEqualTo(3.0)
+        assertThat(media.sourceEnd).isNull()
+        // Et la fenêtre servie au lecteur est ouverte à droite : ExoPlayer
+        // l'exprime nativement en omettant `setEndPositionMs`.
+        assertThat(StorySourceWindow.clippingMs(media.sourceStart, media.sourceEnd))
+            .isEqualTo(StorySourceWindowMs(3000L, null))
+    }
+
+    /**
+     * **Une FIN seule se lit « du début jusqu'à `end` ».** Le début implicite est
+     * zéro, et il n'a rien d'inventé — c'est là que toute source commence.
+     */
+    @Test
+    fun `une fin de lecture seule borne depuis le début`() {
+        assertThat(StorySourceWindow.clippingMs(null, 8.0))
+            .isEqualTo(StorySourceWindowMs(0L, 8000L))
+    }
+
+    /**
+     * **Un début NUL avec une fin absente n'est pas une fenêtre** — c'est la
+     * source entière. La servir comme fenêtre ferait porter au lecteur un
+     * découpage qui ne découpe rien.
+     */
+    @Test
+    fun `un début nul sans fin ne produit aucune fenêtre`() {
+        assertThat(StorySourceWindow.clippingMs(0.0, null)).isNull()
+        assertThat(StorySourceWindow.clippingMs(null, null)).isNull()
+    }
+
+    /**
+     * #5129 — **la conversion en millisecondes est une DÉCISION, donc elle se
+     * teste.** Elle vit dans la règle et non dans la surface de lecture, qui
+     * reste opaque : celle-ci reçoit deux nombres ou rien.
+     */
+    @Test
+    fun `la fenêtre de lecture se convertit en millisecondes`() {
+        assertThat(StorySourceWindow.clippingMs(3.0, 8.0)).isEqualTo(StorySourceWindowMs(3000L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(1.5, 4.25)).isEqualTo(StorySourceWindowMs(1500L, 4250L))
+        // Ces deux-là ne sont PLUS nulles depuis la correction du 2026-09-04 :
+        // une borne seule ouvre la fenêtre du côté manquant. Leurs cas propres
+        // sont épinglés par les deux témoins dédiés ci-dessous.
+        assertThat(StorySourceWindow.clippingMs(null, 8.0)).isEqualTo(StorySourceWindowMs(0L, 8000L))
+        assertThat(StorySourceWindow.clippingMs(3.0, null)).isEqualTo(StorySourceWindowMs(3000L, null))
+    }
+
+    /**
+     * **Deux bornes distinctes en secondes peuvent se confondre en millisecondes**
+     * (3,0000 et 3,0004). La fenêtre serait VIDE, et le clip se tairait — un
+     * silence qu'aucun message n'expliquerait. La règle refuse, comme elle refuse
+     * `end <= start`.
+     */
+    @Test
+    fun `une fenêtre qui s aplatit à la milliseconde est refusée`() {
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0004)).isNull()
+        assertThat(StorySourceWindow.clippingMs(3.0000, 3.0011)).isEqualTo(StorySourceWindowMs(3000L, 3001L))
+    }
 }

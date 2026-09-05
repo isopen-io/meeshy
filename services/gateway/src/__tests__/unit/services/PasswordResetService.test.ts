@@ -18,13 +18,16 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
-// Mock bcryptjs - using any for mock function types to avoid TypeScript issues
+// Site UNIQUE du hachage depuis #5216 (`utils/password-hash`) : doubler
+// `bcryptjs` ne suffit plus, le module charge d'abord le binaire NATIF. Le coût
+// ayant quitté le site d'appel, il s'assert sur la constante partagée.
 const mockBcryptHash = jest.fn() as jest.Mock<any>;
 const mockBcryptCompare = jest.fn() as jest.Mock<any>;
 
-jest.mock('bcryptjs', () => ({
-  hash: (password: string, rounds: number) => mockBcryptHash(password, rounds),
-  compare: (password: string, hash: string) => mockBcryptCompare(password, hash)
+jest.mock('../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
+  hashPassword: (password: string) => mockBcryptHash(password),
+  verifyPassword: (password: string, hash: string) => mockBcryptCompare(password, hash)
 }));
 
 // Mock speakeasy for 2FA
@@ -55,6 +58,7 @@ import {
 } from '../../../services/PasswordResetService';
 import { matchesMongoWhere } from '../../helpers/mongo-where';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
+import { BCRYPT_COST } from '../../../utils/password-hash';
 
 // Mock Prisma Client
 const mockPrisma = {
@@ -1091,10 +1095,7 @@ describe('PasswordResetService', () => {
         const result = await service.completePasswordReset(validResetCompletion);
 
         expect(result.success).toBe(true);
-        expect(mockBcryptHash).toHaveBeenCalledWith(
-          validResetCompletion.newPassword,
-          12
-        );
+        expect(mockBcryptHash).toHaveBeenCalledWith(validResetCompletion.newPassword);
       });
 
       it('should mark token as used', async () => {
@@ -1538,10 +1539,9 @@ describe('PasswordResetService - Security Tests', () => {
 
     await service.completePasswordReset(validResetCompletion);
 
-    expect(mockBcryptHash).toHaveBeenCalledWith(
-      validResetCompletion.newPassword,
-      12
-    );
+    // Les DEUX moitiés : que le site hache, et que la constante vaut 12.
+    expect(mockBcryptHash).toHaveBeenCalledWith(validResetCompletion.newPassword);
+    expect(BCRYPT_COST).toBe(12);
   });
 
   it('should log all security-relevant events', async () => {

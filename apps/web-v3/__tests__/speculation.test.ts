@@ -27,6 +27,19 @@ describe('les règles de spéculation', () => {
     expect(regles.prefetch?.[0]?.eagerness).toBe('moderate');
   });
 
+  /**
+   * `/calls` est un hub de l'espace membre SANS effet de bord — il a donc
+   * exactement le profil des sept ci-dessus, et c'est précisément pour cela
+   * qu'il faut dire pourquoi il n'y est pas : sa seule route est limitée à dix
+   * appels par minute et par lecteur (`RATE_LIMITS.CALL_OPERATIONS`,
+   * `services/gateway/src/middleware/rate-limit.ts:56`). Un préchargement au
+   * survol y épuiserait le quota du lecteur. Sans ce témoin, la prochaine main
+   * « répare l'incohérence ».
+   */
+  it('laisse /calls DEHORS — son endpoint est limité à dix appels par minute', () => {
+    expect(HUBS_PRECHARGEABLES).not.toContain('/calls');
+  });
+
   it('ne précharge JAMAIS une adresse à effet de bord — la ceinture sous la garde de provenance', () => {
     for (const adresse of HUBS_PRECHARGEABLES) {
       expect(adresse.startsWith('/chat/')).toBe(false);
@@ -48,7 +61,13 @@ describe('les règles de spéculation', () => {
 
 describe('les View Transitions du socle', () => {
   it('optent la navigation, à la durée de la charte, et se coupent ENTIÈRES sur reduced-motion', () => {
-    expect(SOCLE_DU_DOCUMENT).toContain('@view-transition{navigation:auto}');
+    expect(SOCLE_DU_DOCUMENT).toContain('@media (scripting: enabled){@view-transition{navigation:auto}}');
+    // Le gate de scripting est une borne MESURÉE : sans frames (document non
+    // scripté d'un navigateur headless), une transition entrante ne finit
+    // jamais et la page reste non hit-testable — l'opt-in nu gelait sept
+    // chaînes sans JavaScript. Un lecteur no-JS garde la navigation nue.
+    expect(SOCLE_DU_DOCUMENT).not.toMatch(/(?<![({])@view-transition\{navigation:auto\}/u);
+    expect(SOCLE_DU_DOCUMENT).toContain('::view-transition{pointer-events:none}');
     expect(SOCLE_DU_DOCUMENT).toContain('animation-duration:150ms');
     // La coupure EXPLICITE : le sélecteur universel du socle ne matche pas les
     // pseudo-éléments ::view-transition-*.

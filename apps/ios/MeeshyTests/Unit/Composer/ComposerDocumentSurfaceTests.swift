@@ -542,7 +542,18 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         let source = try sourceDuMeuble()
         guard let plateau = corpsDeDeclaration(commencantPar: "var plateauTools", dans: source),
-              let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var body: some View", dans: source),
+              // **`composerStack`, pas `body`** — le sujet de cette garde a
+              // DÉMÉNAGÉ sans qu'elle le suive (constaté le 2026-09-05, sur un
+              // état antérieur à ce lot). La pile a été extraite du `body` dans
+              // sa propre propriété ; la garde continuait de lire `body`, n'y
+              // trouvait plus le montage, et rougissait en accusant un retrait
+              // qui n'avait pas eu lieu.
+              //
+              // > Une garde qui nomme une DÉCLARATION garde deux choses : son
+              // > invariant, et la place où il vit. La seconde n'est pas
+              // > l'invariant — et c'est pourtant elle qui la fait tomber lors
+              // > d'une extraction que rien n'interdit.
+              let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var composerStack: some View", dans: source),
               let mood = corpsDeDeclaration(commencantPar: "var moodSurface", dans: source),
               let document = corpsDeDeclaration(commencantPar: "var documentSurface", dans: source) else {
             return XCTFail("Les quatre blocs du meuble sont introuvables — la garde ne mesurerait RIEN.")
@@ -813,8 +824,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// réécrire.
     func test_host_monteLEventail_dansLeBody_sousLaRegleDePlacement() throws {
         let source = try sourceDuMeuble()
-        guard let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var body: some View", dans: source) else {
-            return XCTFail("Le `body` du meuble est introuvable — la garde ne mesurerait RIEN.")
+        guard let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var composerStack: some View", dans: source) else {
+            return XCTFail("La pile du meuble est introuvable — la garde ne mesurerait RIEN.")
         }
         let compacte = corpsDuMeuble.components(separatedBy: .whitespacesAndNewlines).joined()
 
@@ -1342,7 +1353,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// document ne portait pas le champ du tout.
     func test_leBrouillonDuDocument_porteSaListeNominative_quandLAudienceLExige() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertEqual(
             brouillon.visibilityUserIds, ["u1", "u2"],
@@ -1355,7 +1366,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// n'en veut pas la ferait persister pour rien.
     func test_leBrouillonDuDocument_ecarteLaListe_quandLAudienceNeLExigePas() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertNil(
             brouillon.visibilityUserIds,
@@ -1375,7 +1386,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// dur, et aucun appelant ne pouvait donc le remplir.
     func test_leBrouillonDuDocument_porteSaSource_sansQuoiLAncragePerdSonOrigine() {
         let ancrage = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source", localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source", localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertEqual(
             ancrage.repostOfId, "mood-source",
@@ -1438,7 +1449,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         let lieu = SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel")
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
-            localMedia: [media], location: lieu, discoverabilityPrecision: nil, originalLanguage: "es", mobileTranscription: nil, references: []
+            localMedia: [media], location: lieu, discoverabilityPrecision: nil, originalLanguage: "es", mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
 
         XCTAssertEqual(brouillon.localMedia, [media])
@@ -1467,7 +1478,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         let arme = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: true, text: "légende", visibility: .public,
-            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertTrue(arme.forcePlainPost, "Le brouillon doit porter le drapeau tel que la fabrique l'a reçu.")
 
@@ -1482,7 +1493,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             mentions: arme.mentions,
             location: arme.location,
             discoverabilityPrecision: nil,
-            transcription: arme.mobileTranscription
+            transcription: arme.mobileTranscription,
+            storyEffects: arme.storyEffects,
+            mediaCaptions: arme.mediaCaptions, mediaAlts: arme.mediaAlts, mediaObjectIds: arme.mediaObjectIds
         )
         XCTAssertEqual(
             intentArme.type, "POST",
@@ -1491,7 +1504,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         let nonArme = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "légende", visibility: .public,
-            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         let intentNonArme = PublishIntent.document(
             localMedia: nonArme.localMedia,
@@ -1504,7 +1517,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             mentions: nonArme.mentions,
             location: nonArme.location,
             discoverabilityPrecision: nil,
-            transcription: nonArme.mobileTranscription
+            transcription: nonArme.mobileTranscription,
+            storyEffects: nonArme.storyEffects,
+            mediaCaptions: nonArme.mediaCaptions, mediaAlts: nonArme.mediaAlts, mediaObjectIds: nonArme.mediaObjectIds
         )
         XCTAssertEqual(
             intentNonArme.type, "REEL",
@@ -1563,7 +1578,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
-            localMedia: [media], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            localMedia: [media], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         for horsLigne in [true, false] {
             XCTAssertEqual(
@@ -1587,7 +1602,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public, visibilityUserIds: [], repostOfId: nil,
-            localMedia: [media], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            localMedia: [media], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         XCTAssertNotEqual(
             ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -2237,7 +2252,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonQuiNestPasUnPost() {
         for format in [ComposerFormat.status, .story, .reel] {
             let brouillon = ComposerDocumentDraft.document(
-                format: format, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+                format: format, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -2259,7 +2274,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonSansMatiere() {
         for texte in ["", "   ", "\n"] {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, forcePlainPost: false, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+                format: .post, forcePlainPost: false, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -2285,7 +2300,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUneAudienceNominativeSansPersonne() {
         for nominative in PostVisibility.composerSelectableCases where nominative.requiresUserSelection {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -2295,7 +2310,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             )
 
             let complet = ComposerDocumentDraft.document(
-                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: complet, isOffline: false),
@@ -2316,7 +2331,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// `isOffline()` répond oui.
     func test_lePlan_dUnPostTexte_prendLeCheminDejaDurable_desDeuxCotesDuReseau() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
         )
         for horsLigne in [true, false] {
             XCTAssertEqual(
@@ -2365,7 +2380,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             visibilityUserIds: nil,
             mentions: nil,
             repostOfId: "post-source",
-            audioUrl: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil,
+            audioUrl: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:],
             forcePlainPost: false,
             mobileTranscription: nil
         )

@@ -102,22 +102,12 @@ struct FeedPostCardCarousel: View {
             // La légende de CE média, et d'aucun autre. Le dégradé n'existe que
             // sous elle : sans légende, rien ne s'assombrit — un voile permanent
             // ferait payer à toutes les slides le coût de celles qui parlent.
-            if let caption = captions[item.id], !caption.isEmpty {
-                Text(caption)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(.white)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 12)
-                    .padding(.top, 28)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        LinearGradient(colors: [.clear, .black.opacity(0.72)],
-                                       startPoint: .top, endPoint: .bottom)
-                    )
-            }
+            // La légende de CE média, et d'aucun autre — même couche, même
+            // troncature (vingt mots) que la tuile d'un média seul et que la
+            // carte de scène. Elle coupait à trois LIGNES, une longueur qui
+            // dépend de la largeur et du corps de texte ; le nombre de MOTS
+            // n'en dépend d'aucun.
+            FeedCaptionOverlay(caption: captions[item.id])
 
             arrows(at: offset)
         }

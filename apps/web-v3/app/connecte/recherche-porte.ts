@@ -29,7 +29,11 @@ import { documentDePanne } from './vue';
  * est un nom qu'il connaît déjà.
  *
  * LES TROIS QUESTIONS SONT LES MÊMES : un jeton ? la passerelle l'accepte-t-elle ?
- * a-t-elle répondu ? Un 401 renvoie se connecter, un silence dessine la panne.
+ * a-t-elle répondu ? Un 401 sur n'importe laquelle des quatre routes renvoie se
+ * connecter ; un silence sur les QUATRE À LA FOIS dessine la panne (503) — un
+ * silence sur MOINS de quatre ne le fait plus (correctif 2026-09-05, voir
+ * `lib/api/recherche.ts`) : le ou les groupes touchés se dessinent
+ * `Indisponible`, dans le document 200 que les autres groupes servent.
  */
 
 /**
@@ -83,8 +87,16 @@ export const RECHERCHE_SERVIE = async (
     documentDeLaRecherche({
       requete: terme,
       conversations: trouvailles.conversations,
+      conversationsIndisponibles: trouvailles.conversationsIndisponibles,
       personnes: trouvailles.personnes,
       encoreDesPersonnes: trouvailles.encoreDesPersonnes,
+      personnesIndisponibles: trouvailles.personnesIndisponibles,
+      medias: trouvailles.medias,
+      encoreDesMedias: trouvailles.encoreDesMedias,
+      mediasIndisponibles: trouvailles.mediasIndisponibles,
+      liens: trouvailles.liens,
+      encoreDesLiens: trouvailles.encoreDesLiens,
+      liensIndisponibles: trouvailles.liensIndisponibles,
       tempsReel: moduleDeParticipation(),
     }),
   );

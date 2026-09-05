@@ -1,4 +1,4 @@
-import type { Prisma } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
@@ -57,22 +57,52 @@ export function broadcastTargetLanguages(
   return result;
 }
 
+
+/**
+ * Les valeurs VERBATIM de `User.systemLanguage` qui replient sur l'un des
+ * codes CANONIQUES demandés (#5161). `systemLanguage` est persisté tel quel —
+ * `fr`, `fr-FR`, `FR`, `fr_FR` coexistent — donc un `{ in: ['fr'] }` cru sur le
+ * code saisi dans l'UI admin rate toute variante région/casse. Une lecture
+ * bornée par le nombre de valeurs DISTINCTES en base, jamais par le nombre
+ * d'utilisateurs. Même SSOT que le rapport (`normalizeLanguageForDedup`,
+ * #5146/#5155) : la liste rendue ici est ce qu'un ciblage doit réellement
+ * atteindre.
+ */
+export async function resolveSystemLanguageVariants(
+  prisma: Pick<PrismaClient, 'user'>,
+  canonicalCodes: readonly string[],
+): Promise<string[]> {
+  const wanted = new Set(canonicalCodes.map(normalizeLanguageForDedup));
+  const distinct = await prisma.user.findMany({
+    distinct: ['systemLanguage'],
+    where: { systemLanguage: { not: null } },
+    select: { systemLanguage: true },
+  });
+  return distinct
+    .map(d => d.systemLanguage)
+    .filter((value): value is string => Boolean(value) && wanted.has(normalizeLanguageForDedup(value)));
+}
+
 /**
  * Le ciblage d'une diffusion admin, traduit en filtre Prisma — commun aux
- * canaux e-mail et in-app. Règle PURE : seul le ciblage entre, aucune
- * contrainte de canal (l'e-mail y ajoute l'adresse vérifiée, l'in-app n'exige
- * rien de plus qu'un compte actif).
+ * canaux e-mail et in-app. Règle PURE sur tout SAUF la langue : seul le
+ * ciblage entre, aucune contrainte de canal (l'e-mail y ajoute l'adresse
+ * vérifiée, l'in-app n'exige rien de plus qu'un compte actif). La langue,
+ * elle, a besoin d'une lecture (#5161, `resolveSystemLanguageVariants`
+ * ci-dessus) — d'où l'`async`.
  */
-export function buildBroadcastRecipientFilter(
+export async function buildBroadcastRecipientFilter(
+  prisma: Pick<PrismaClient, 'user'>,
   targeting: BroadcastTargeting,
   now: Date = new Date(),
-): Prisma.UserWhereInput {
+): Promise<Prisma.UserWhereInput> {
+  const languageVariants = targeting.languages && targeting.languages.length > 0
+    ? await resolveSystemLanguageVariants(prisma, targeting.languages)
+    : null;
   return {
     isActive: true,
     deletedAt: null,
-    ...(targeting.languages && targeting.languages.length > 0
-      ? { systemLanguage: { in: [...targeting.languages] } }
-      : {}),
+    ...(languageVariants ? { systemLanguage: { in: languageVariants } } : {}),
     ...(targeting.countries && targeting.countries.length > 0
       ? { registrationCountry: { in: [...targeting.countries] } }
       : {}),

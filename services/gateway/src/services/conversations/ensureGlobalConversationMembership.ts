@@ -5,6 +5,7 @@ import { MEMBER_COUNT_DISPLAY_CAP } from '@meeshy/shared/utils/member-visibility
 import { postJoinSystemMessage, type JoinSystemMessageDeps } from './joinSystemMessage';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
+import type { AfterResponse } from '../../utils/after-response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'EnsureGlobalConversationMembership' });
@@ -29,6 +30,19 @@ export type GlobalMembershipDeps = {
   readonly prisma: Pick<PrismaClient, 'conversation' | 'participant' | 'message'>;
   /** Résolu à l'appel — jamais capturé à la construction. Absent = pas de socket. */
   readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
+  /**
+   * Où partent les DEUX travaux d'annonce — l'avis d'arrivée et l'effectif
+   * (#5216). Absent ⇒ ils s'exécutent EN LIGNE, comportement historique que
+   * gardent la création par un administrateur et le seed : aucun des deux n'a
+   * de requête HTTP à rendre, donc rien à différer.
+   *
+   * L'inscription publique, elle, fournit l'exécuteur post-réponse : la
+   * CRÉATION du participant reste synchrone — le nouveau compte doit voir le
+   * salon dès sa première liste — mais l'avis d'arrivée et le décompte n'ont
+   * aucune raison de retenir l'écran de chargement de quelqu'un qui vient de
+   * s'inscrire.
+   */
+  readonly afterResponse?: AfterResponse;
 };
 
 export type GlobalMembershipInput = {
@@ -148,23 +162,38 @@ export async function ensureGlobalConversationMembership(
     ? (message, conversationId) => socketManager.broadcastMessage(message, conversationId)
     : undefined;
 
-  await postJoinSystemMessage(
-    { prisma: deps.prisma, broadcast },
-    {
-      conversationId: globalConversation.id,
-      participantId: created.id,
-      displayName: input.displayName,
-      isAnonymous: false,
-      viaShareLink: false,
-    },
-  );
+  /**
+   * L'ANNONCE de l'arrivée — l'avis dans le fil, puis l'effectif. Les deux sont
+   * des accessoires de l'ajout (§ doc-comment ci-dessus) : ils ne conditionnent
+   * rien, et ils coûtent une écriture `Message` plus un éventail Socket.IO.
+   * Les tenir ENSEMBLE dit ce qui se diffère, et interdit qu'un lot ne diffère
+   * que la moitié.
+   */
+  const annoncerLArrivee = async (): Promise<void> => {
+    await postJoinSystemMessage(
+      { prisma: deps.prisma, broadcast },
+      {
+        conversationId: globalConversation.id,
+        participantId: created.id,
+        displayName: input.displayName,
+        isAnonymous: false,
+        viaShareLink: false,
+      },
+    );
 
-  await emitMemberCountBestEffort(deps, socketManager, {
-    conversationId: globalConversation.id,
-    userId: input.userId,
-    displayName: input.displayName,
-    joinedAt,
-  });
+    await emitMemberCountBestEffort(deps, socketManager, {
+      conversationId: globalConversation.id,
+      userId: input.userId,
+      displayName: input.displayName,
+      joinedAt,
+    });
+  };
+
+  if (deps.afterResponse) {
+    deps.afterResponse(annoncerLArrivee, 'global-conversation-join-notice');
+  } else {
+    await annoncerLArrivee();
+  }
 
   return { outcome: 'joined', participantId: created.id };
 }

@@ -1,6 +1,24 @@
 import Foundation
 
-public final class NotificationService: @unchecked Sendable {
+/// LE SEAM DU SERVICE DE NOTIFICATIONS (#4901) — créé pour l'injection dans
+/// `NotificationListViewModel` (le témoin de boucle du curseur se joue au
+/// niveau VM, contre un mock qui CAPTURE les arguments). Antérieur à la règle
+/// « protocole avant implémentation », rattrapé ici. Les défauts d'arguments
+/// vivent sur le TYPE CONCRET (un protocole Swift n'en porte pas) : un
+/// appelant par protocole passe tout, et c'est ce qui rend ses appels
+/// vérifiables.
+public protocol NotificationServiceProviding: Sendable {
+    func list(
+        offset: Int?,
+        cursor: String?,
+        limit: Int,
+        unreadOnly: Bool
+    ) async throws -> NotificationListResponse
+    func unreadCount() async throws -> Int
+    func markAsRead(notificationId: String) async throws
+}
+
+public final class NotificationService: NotificationServiceProviding, @unchecked Sendable {
     public static let shared = NotificationService()
     private let api: APIClientProviding
 

@@ -24,7 +24,10 @@ describe('l’aperçu d’un lien', () => {
     });
     expect(issue).toEqual({
       genre: 'apercu',
-      apercu: { lien: 'mshy_lagos', nom: 'Lagos', description: null, conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: ['fr', 'en'], participants: 3 },
+      apercu: {
+        lien: 'mshy_lagos', nom: 'Lagos', description: null, conversationId: 'c1', requireNickname: true, requireAccount: false, requireEmail: false, requireBirthday: false, languesAutorisees: ['fr', 'en'], participants: 3,
+        droits: { canSendMessages: false, canSendFiles: false, canSendImages: false, canViewHistory: false },
+      },
     });
     expect(JSON.stringify(issue)).not.toContain('x@y');
   });
@@ -32,6 +35,15 @@ describe('l’aperçu d’un lien', () => {
   it('lit les quatre exigences du lien — courriel et date de naissance comprises (`routes/anonymous.ts:672-675`)', () => {
     const servi = apercuServi({ linkId: 'mshy_x', name: 'X', requireAccount: true, requireNickname: false, requireEmail: true, requireBirthday: true });
     expect(servi).toMatchObject({ requireAccount: true, requireNickname: false, requireEmail: true, requireBirthday: true });
+  });
+
+  /** #4830 — l'aperçu sert désormais les quatre droits que le lien OUVRE, à côté de ses exigences. */
+  it('projette les quatre droits que le lien ouvre — `allowViewHistory` et `allowAnonymous*` (`routes/anonymous.ts:691-694`)', () => {
+    const servi = apercuServi({
+      linkId: 'mshy_x', name: 'X',
+      allowAnonymousMessages: true, allowAnonymousFiles: true, allowAnonymousImages: false, allowViewHistory: true,
+    });
+    expect(servi?.droits).toEqual({ canSendMessages: true, canSendFiles: true, canSendImages: false, canViewHistory: true });
   });
 
   /** Une seule lecture de la charge : la carte d'aperçu de `/l/:token` est une PROJECTION de la porte de l'invité. */

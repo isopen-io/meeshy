@@ -154,9 +154,9 @@ class NotificationBannerViewModel @Inject constructor(
 
         val conversationId = shown.context?.conversationId
         val conversation = conversationId?.let { id ->
-            runCatching { conversationRepository.cachedConversations().first() }
-                .getOrNull()
-                ?.firstOrNull { it.id == id }
+            // #5190 — a single bounded `WHERE id = :id` lookup instead of decoding
+            // the ENTIRE cached conversation table just to find one row by id.
+            runCatching { conversationRepository.conversationStream(id).first() }.getOrNull()
         }
 
         dismissJob?.cancel()

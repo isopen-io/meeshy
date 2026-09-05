@@ -343,32 +343,60 @@ nonisolated enum ComposerSocleCopy {
 
     /// Ce qui MANQUE pour publier.
     ///
-    /// `nil` hors du mood, et c'est une lacune ASSUMÉE, pas un oubli : la seule
-    /// phrase déjà traduite dit « choisissez un emoji », ce qui est faux d'un
-    /// document, dont le gate porte sur le texte. Le lot 4 n'ajoute AUCUNE clé
-    /// au catalogue (sept locales, cliquet français à zéro tolérance).
+    /// **Chaque surface dit ce qui lui manque, depuis le 2026-09-05.**
     ///
-    /// **Une porte de production ATTEINT le document depuis le lot 4.7** — la
-    /// republication d'un mood, dont l'éventail offre le chip « Post ». La
-    /// lacune n'y mord pourtant pas, et c'est ce qui a rendu la descente de
-    /// l'éventail possible sans clé neuve : sous un ancrage, le gate arme sur la
-    /// SOURCE (`repostOfId`), jamais sur le texte, si bien que la flèche n'y est
-    /// jamais grise faute d'une phrase. Le seul refus qui reste atteignable sous
-    /// cette surface est l'audience nominative vide, et `publishBlockedHint`
-    /// rend déjà `""` dans ce cas — un indice FAUX coûtant plus qu'un indice
-    /// absent.
+    /// Cette règle a rendu `nil` hors du mood pendant tout le lot 4, et c'était
+    /// une lacune ASSUMÉE, pas un oubli : la seule phrase alors traduite disait
+    /// « choisissez un emoji », ce qui est faux d'un document. Écrire une phrase
+    /// coûtait une clé en sept langues, et **un indice FAUX coûte plus qu'un
+    /// indice absent** — l'arbitrage était juste.
     ///
-    /// Une phrase pour le document s'écrira le jour où une porte l'atteindra
-    /// avec un gate qui porte sur le TEXTE — c'est-à-dire `.feedComposer`, dans
-    /// le lot qui possède le catalogue.
+    /// Il a expiré le jour où le porteur a rencontré le refus : « corrige le
+    /// refus muet ». Le prix de la clé n'a pas changé ; ce qui a changé est ce
+    /// qu'on achète avec. Les trois phrases sont désormais au catalogue dans les
+    /// sept langues, et chacune est VRAIE de son gate :
+    ///
+    /// | surface | ce que le gate exige | ce que la phrase dit |
+    /// |---|---|---|
+    /// | `.mood` | un emoji | « choisissez un emoji » |
+    /// | `.document` | du texte, un média, un lieu ou un ancrage | « ajoutez du texte, une photo ou un lieu » |
+    /// | `.scene` | de la matière posée sur la scène | « posez au moins un élément » |
+    ///
+    /// > La phrase du document ÉNUMÈRE les trois voies parce que le gate est une
+    /// > DISJONCTION : nommer le seul texte ferait croire qu'une photo ne suffit
+    /// > pas. L'ancrage (`repostOfId`) n'y figure pas — sous un ancrage la flèche
+    /// > n'est jamais grise, donc la phrase ne se lit jamais dans ce cas.
     static func publishBlockedHint(surface: ComposerSurfaceKind) -> String? {
         switch surface {
         case .mood:
             return String(localized: "a11y.status.publish.disabled.hint",
                           defaultValue: "Choisissez un emoji pour publier votre status", bundle: .main)
-        case .document, .scene:
-            return nil
+        case .document:
+            return String(localized: "composer.socle.blocked.document",
+                          defaultValue: "Ajoutez du texte, une photo ou un lieu pour publier",
+                          bundle: .main)
+        case .scene:
+            return String(localized: "composer.socle.blocked.scene",
+                          defaultValue: "Posez au moins un élément sur la scène pour publier",
+                          bundle: .main)
         }
+    }
+
+    /// **L'audience nominative VIDE — le refus le plus opaque des trois, et le
+    /// seul qui ne dépende pas de la surface.**
+    ///
+    /// « Certaines personnes » choisi, personne coché : la flèche grise, et rien
+    /// dans l'écran ne rattache ce gris au sélecteur d'audience, qui vit à
+    /// l'autre bout du socle et affiche un libellé parfaitement normal.
+    ///
+    /// C'est ce cas que `publishBlockedHint(surface:)` ne pouvait pas servir :
+    /// il aurait rendu la phrase de la SURFACE — « ajoutez du texte » — devant
+    /// un composer déjà plein de texte. D'où le `guard` de l'hôte, qui rendait
+    /// `""` plutôt que de mentir. Il rend cette phrase-ci.
+    static var publishBlockedAudienceHint: String {
+        String(localized: "composer.socle.blocked.audience",
+               defaultValue: "Choisissez au moins une personne pour publier",
+               bundle: .main)
     }
 }
 
@@ -480,8 +508,23 @@ nonisolated enum ComposerSceneCapabilities {
     /// complet — le texte de la publication est à lui (`documentText`), et
     /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
     /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
+    ///
+    /// **`.content` y entre le 2026-09-04** (#4890, directive porteur : « affiche
+    /// dans la rangée canonique de quoi modifier LE CONTENU du poste »). Servie
+    /// pour la même raison que `.hashtag` : le meuble possède le chemin
+    /// COMPLET — `documentText` est à lui, `postContentEditor` l'écrit, et
+    /// `ComposerDocumentDraft.document(text:)` le poste. Une porte servie sans
+    /// son chemin ouvrirait un champ dont le texte n'irait nulle part, ce qui
+    /// est exactement le défaut que ce lot referme sur les légendes.
+    ///
+    /// > **La déclarer ici est le pas qu'on oublie**, et il ne rougit nulle
+    /// > part : `offered` filtre sur `served.contains`, si bien qu'une porte
+    /// > entièrement écrite — case, niveau, glyphe, libellé, geste, pastille —
+    /// > reste INVISIBLE tant que ce jeu ne la nomme pas. Mesuré au simulateur
+    /// > le 2026-09-04 : la rangée montrait toujours ses cinq entrées.
     static let doors: Set<ComposerRailDoor> = [
-        .description, .media, .sound, .text, .background, .drawing, .sticker, .mention, .hashtag, .place
+        .description, .content, .media, .sound, .text, .background, .drawing,
+        .sticker, .mention, .hashtag, .place
     ]
 
     /// Les contrôleurs du rail *trailing*. Passés à
@@ -500,42 +543,19 @@ nonisolated enum ComposerSceneCapabilities {
     /// non servie — sans quoi un contexte déclaré avant d'avoir son contenu
     /// occuperait les ≈ 170 pt que l'encastrement des rails vient de libérer.
     ///
-    /// `timeline` et `textStyles` appartiennent au critère de
-    /// `ComposerSceneBand` — un axe horizontal, une comparaison latérale — mais
-    /// n'ont pas d'hôte ici : la timeline vit dans l'atelier (#4075), et les 18
-    /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
-    /// surface ne pose encore (#4083).
+    /// **Une seule, et le jeu ne dépend plus d'un état** (directive porteur
+    /// 2026-09-05). `bands(canTrimSelection:canStyleSelection:)` ajoutait
+    /// `timeline` quand l'objet sélectionné avait une source à rogner, et
+    /// `textStyles` quand c'était un texte. Les deux bandes ÉDITAIENT un objet
+    /// déjà posé ; la première vue n'édite plus, et elles ont quitté le type
+    /// `ComposerSceneBand` avec leurs contenus.
+    ///
+    /// Ce qui disparaît avec la fonction est une question devenue sans objet —
+    /// « cette bande a-t-elle de quoi se remplir ? » — et non la loi qu'elle
+    /// tenait : `opened(_:served:)` refuse toujours une bande hors de ce jeu.
+    /// La ligne de partage entre ce que la première vue sert et ce qui part à
+    /// l'éditeur vit dans `ComposerFirstView`.
     static let bands: Set<ComposerSceneBand> = [.palette]
-
-    /// **`timeline` est servie SEULEMENT quand elle a de quoi se remplir**
-    /// (#4082) — c'est-à-dire quand l'objet sélectionné a une source à rogner.
-    ///
-    /// Sans cette condition, la bande deviendrait un membre permanent du jeu
-    /// servi, et `ComposerSceneBand.opened` l'ouvrirait sur une sélection qui
-    /// n'a rien à rogner : une bande VIDE occupant les ≈ 170 pt que
-    /// l'encastrement des rails vient de libérer, c'est-à-dire précisément le
-    /// résultat que la règle `opened(_:served:)` existe pour interdire.
-    ///
-    /// Le jeu de base reste `bands` : il dit ce qui est servi quel que soit
-    /// l'état, et c'est lui que les gardes interrogent pour vérifier
-    /// qu'aucune bande sans hôte n'y est entrée par distraction.
-    /// **Deux capacités, deux questions distinctes** — et c'est pour cela
-    /// qu'elles sont deux paramètres et non un `Set` reçu tout fait : le jour
-    /// où l'appelant les confond, le compilateur ne dit rien, alors qu'un
-    /// paramètre nommé se relit.
-    ///
-    /// `canStyleSelection` est vrai quand l'objet sélectionné est un TEXTE
-    /// (#4083). Sans lui, la bande `textStyles` n'était jamais servie et le
-    /// jeton « STYLE » de l'inspecteur pointait sur du vide — mesuré au
-    /// simulateur le 2026-08-31 : il s'annonçait en `StaticText`, faute de
-    /// destination ouvrable.
-    static func bands(canTrimSelection: Bool,
-                      canStyleSelection: Bool = false) -> Set<ComposerSceneBand> {
-        var servies = bands
-        if canTrimSelection { servies.insert(.timeline) }
-        if canStyleSelection { servies.insert(.textStyles) }
-        return servies
-    }
 }
 
 

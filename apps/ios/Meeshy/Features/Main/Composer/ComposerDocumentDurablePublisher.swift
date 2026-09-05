@@ -70,7 +70,14 @@ enum ComposerDocumentDurablePublisher {
             mentions: draft.mentions,
             location: draft.location,
             discoverabilityPrecision: draft.discoverabilityPrecision,
-            transcription: draft.mobileTranscription
+            transcription: draft.mobileTranscription,
+            // **Le canvas suit la voie durable** (#4756) — c'est la SEULE que
+            // prenne un post du meuble, en ligne comme hors ligne. Un blob
+            // qui s'arrêterait au brouillon serait perdu au premier flush.
+            storyEffects: draft.storyEffects,
+            mediaCaptions: draft.mediaCaptions,
+            mediaAlts: draft.mediaAlts,
+            mediaObjectIds: draft.mediaObjectIds
         )
 
         do {
@@ -86,7 +93,16 @@ enum ComposerDocumentDurablePublisher {
                 location: intent.location,
                 mentions: (intent.mentions?.isEmpty ?? true) ? nil : intent.mentions,
                 discoverabilityPrecision: intent.discoverabilityPrecision,
-                mobileTranscription: intent.mobileTranscription
+                mobileTranscription: intent.mobileTranscription,
+                // Le canvas (#4756) — cette porte enfile DIRECTEMENT, sans
+                // passer par `FeedViewModel.publish` : le champ doit donc être
+                // remis ici AUSSI, ou la moitié des posts du meuble perdrait
+                // encore sa scène. C'est le mode de panne que la règle « aucune
+                // valeur par défaut » existe pour rendre impossible.
+                storyEffects: intent.storyEffects,
+                mediaCaptions: intent.mediaCaptions,
+                mediaAlts: intent.mediaAlts,
+                mediaObjectIds: intent.mediaObjectIds
             )
         } catch {
             return refuse()

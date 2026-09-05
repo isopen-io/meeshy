@@ -41,7 +41,7 @@ export const FEUILLE_DES_REGLAGES = compacte(`
 
 .champ{display:flex;flex-direction:column;gap:var(--space-2)}
 .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
-.champ input,.champ textarea,.champ select{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text);font:inherit}
+.champ input,.champ textarea,.champ select{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}
 .champ textarea{min-height:var(--row-height);resize:vertical}
 .champ .aide{font-size:var(--text-sm);color:var(--color-text-muted)}
 

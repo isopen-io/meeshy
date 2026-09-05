@@ -119,11 +119,20 @@ lui-même ». Les trois modes ne diffèrent que par quatre témoins :
 | mode | `isMuted` | `locksMute` | `loops` | `showsChrome` | monté par |
 |---|---|---|---|---|---|
 | `.reader` | non | non | non | **oui** | `StoryViewerView+Canvas` (2 sites) |
-| `.card` | **oui** | **oui** | **oui** | non | `FeedPostCard` |
+| `.card` | **oui** | **oui** | **oui** | non | `FeedSceneAutoplay` — `PostSceneCard` |
 | `.preview` | non | non | non | non | **aucun site — retiré le 2026-08-24** |
 
 `startsPaused` ne dépend PAS du mode : **les trois naissent en pause**, y compris
 le plein écran, dont la lecture démarre par la commande du viewer.
+
+> **La colonne « monté par » a changé le 2026-09-05 sans qu'aucune règle bouge.**
+> Elle disait `FeedPostCard` ; l'extraction de `FeedSceneAutoplay.swift`
+> (`0110db94f4`, #5227) y a déplacé le montage, `FeedPostCard` n'en gardant que
+> l'hôte (`PostSceneSurface`). C'est le mode de péremption propre à ce document :
+> **un numéro de ligne meurt à la première extraction, un nom de symbole
+> survit.** Les ancrages en `fichier:ligne` ont donc été retirés des deux
+> tableaux de ce paragraphe au profit de commandes rejouables — même parade que
+> pour les sept sites de `StoryReaderRepresentable` ci-dessous.
 
 `isMuted` et `locksMute` se lisent ENSEMBLE : le premier dit ce que le mode
 PROPOSE quand l'hôte ne demande rien, le second si l'hôte a seulement le droit de
@@ -134,16 +143,27 @@ persistant, piloté au rail.
 
 Le tableau ci-dessus énumère les hôtes de **`MeeshyScenePlayer`**. Il en existe
 un **quatrième chemin**, qui ne passe par aucun `ScenePlayerConfig` :
-`StoryReaderRepresentable`, monté à quatre sites —
-`PostDetailView+Canvas.swift:69`, `PostDetailView+RepostEmbed.swift:178`, et
-`StoryViewerView+Canvas.swift:1045` et `:1107`.
+`StoryReaderRepresentable`, monté à **sept** fichiers (recompté le 2026-09-05) :
 
-Le viewer story monte donc **les deux** : le player à `:1034`/`:1090`, le
-représentable à `:1045`/`:1107`.
+```bash
+git grep -l "StoryReaderRepresentable(" -- '*.swift'
+```
+
+`FeedPostCard` · `PostDetailView+Canvas` · `PostDetailView+RepostEmbed` ·
+`StoryRepostEmbedCell` · `StoryViewerView+Canvas` · `MeeshyScenePlayer` ·
+`UnifiedPostComposer`.
+
+Le viewer story monte donc **les deux** : le player et le représentable.
 
 > **« Trois chromes, un moteur » décrit les hôtes du PLAYER, pas les surfaces qui
 > rendent une scène.** La loi 6 reste vraie de ce qu'elle nomme ; elle ne couvre
 > pas tout ce qui peint. Ne pas lire son énumération comme un inventaire.
+
+> **Et ce paragraphe s'était lui-même pris au piège qu'il énonce** : il disait
+> « quatre sites », trois lignes au-dessus d'un avertissement contre les
+> énumérations lues comme des inventaires. Trois manquaient. La parade n'est pas
+> d'énumérer mieux — c'est de publier la COMMANDE, ce que fait la version
+> ci-dessus : une liste se périme en silence, une commande se rejoue.
 
 ### La scène 0 est figée PARTOUT, et c'est une décision que personne n'a écrite
 
@@ -153,10 +173,15 @@ dans le dépôt : **aucun hôte ne pilote l'index.**
 
 | site | forme |
 |---|---|
-| `StoryViewerView+Canvas:1035` et `:1091` | `sceneIndex: .constant(0)` |
-| `FeedPostCard:365` | `sceneIndex: .constant(0)` |
-| **`StoryModels:1171`** — `StoryEffects.init(from decoder:)` | littéral `0`, **en dur** |
-| `StoryDraftStore:810` | littéral `0`, en dur |
+| `StoryViewerView+Canvas` (2 sites) | `sceneIndex: .constant(0)` |
+| `FeedSceneAutoplay` — `PostSceneCard` | `sceneIndex: .constant(0)` |
+| **`StoryModels`** — `StoryEffects.init(from decoder:)` | littéral `0`, **en dur** |
+| `StoryDraftStore` | littéral `0`, en dur |
+
+```bash
+git grep -n "sceneIndex: .constant(0)" -- 'apps/ios/Meeshy/**/*.swift'
+git grep -n "sceneIndex: 0" -- 'packages/MeeshySDK/Sources/**/*.swift'
+```
 
 Les deux derniers ne passent par aucun `Binding` : un balayage qui cherche
 `.constant(0)` les rate, et l'un d'eux est sur le chemin d'ÉCRITURE (le store de
@@ -204,6 +229,155 @@ dans le MÊME commit que l'œil.
 > d'une absence : elle se lit, elle se défend, et elle rougirait si quelqu'un la
 > rebranchait à moitié. Ne pas la lire comme un oubli à réparer.
 
+## 3 bis. Qui JOUE, quand le fil en montre plusieurs (2026-09-05)
+
+Le § 3 dit ce qu'un chrome PROPOSE ; il ne dit pas **qui joue quand plusieurs
+scènes sont à l'écran en même temps**. C'est une loi distincte, et elle manquait
+à ce document — au point que le fil a porté **trois politiques pour le même
+objet**, un canvas 9:16, jusqu'au 2026-09-05.
+
+> « Repartage ou non, les scènes sont comme les vidéos : lorsqu'on est face à
+> elles dans le viewport, il faut maintenir une cohérence générale. Normalement
+> les Posts, Reels et Story ne manipulent que des scènes. »
+> — directive porteur, 2026-09-05
+
+| surface | ce qu'elle faisait AVANT |
+|---|---|
+| réel natif / repost de réel | autoplay muet, élu par le viewport, coupé pendant un appel |
+| scène COMPOSÉE d'un post | **figée** (`isPlaying: .constant(false)`), sous une étiquette « scène · muette, en pause » |
+| story REPARTAGÉE | **jouait en permanence** (`isPaused` laissé à son défaut), sans élection ni call-awareness |
+
+Le même canvas bougeait ou non selon la façon dont il était **arrivé** dans le
+fil, et seul le figé portait un mot d'excuse. La loi, livrée par `0110db94f4`
+(#5227), tient en quatre points :
+
+1. **Une seule surface décode dans tout le fil** — celle qui est la plus proche
+   du centre du viewport, réels et scènes CONFONDUS. Il n'y a pas une élection
+   des vidéos et une élection des scènes : c'est le même coordinateur.
+2. **Un appel les tait toutes.**
+3. **L'identité d'élection est celle du POST CONTENANT**, jamais de la story ou
+   du réel cité — sans quoi un même contenu affiché deux fois dans le fil
+   binderait deux surfaces au moteur partagé.
+4. **L'élection se reçoit en VALEUR** : la feuille est `Equatable` et ne
+   l'observe pas ; seul un container observe. Une élection ne doit pas
+   ré-évaluer le `ForEach` entier du fil (Zero Unnecessary Re-render).
+
+Le mécanisme n'est pas neuf : c'est celui des réels
+(`ReelFeedAutoplayCoordinator` + `reportReelFrame(id:kind:)`), auquel les deux
+surfaces de scène se raccordent. **En écrire un second aurait fabriqué la
+quatrième politique.**
+
+> **Un gel n'est pas une économie s'il ne gèle qu'une surface sur trois.** Le
+> figé venait d'une décision documentée et JUSTE (revue Fable n°25, « zéro
+> AVPlayer/décodage actif ici ») — mais qui ne tenait que sur la surface qu'elle
+> gelait, pendant que la story repartagée d'à côté décodait autant de fois
+> qu'il y avait de cellules visibles. L'élection unique tient l'objectif de
+> cette revue MIEUX que le gel qu'elle avait posé : au plus **un** décodage
+> actif dans tout le fil. Une optimisation locale se mesure sur la SOMME des
+> surfaces, jamais sur celle qu'elle corrige.
+
+**Ce qu'aucun fichier ne pouvait dire.** Chacune des trois politiques était
+défendable prise seule ; c'est leur somme qui était fausse, et **une somme n'a
+aucun site où rougir**. D'où des témoins qui interrogent les surfaces ENSEMBLE —
+`FeedSceneCoherenceGuardTests` — plutôt qu'une de plus par surface.
+
+### Le corpus de la garde se BALAIE (SOLDÉ le 2026-09-05)
+
+`FeedSceneCoherenceGuardTests` a d'abord énuméré deux chemins à la main pour une
+doctrine **universelle** — « toute surface qui monte une scène 9:16 dans le fil
+rapporte sa frame ». Quantifiée en prose, vérifiée existentiellement sur deux
+fichiers : une troisième surface née dans un fichier NEUF n'aurait été lue par
+personne, et aurait pu réinventer la quatrième politique que le § 3 bis vient de
+supprimer. C'était le piège du § 3 (« la parade n'est pas d'énumérer mieux —
+c'est de publier la COMMANDE ») reproduit dans le témoin qui garde la cohérence.
+
+`b579357011` (#5230) l'a soldé : le corpus est **balayé**, commentaires
+dépouillés, et la seule frontière qu'un balayage ne sait pas trancher —
+« **est-ce une LISTE ?** » — se déclare par une table d'exclusions NOMMÉES
+portant chacune sa raison. Ajouter un fichier au territoire oblige à passer là.
+
+La commande qui rend les candidats :
+
+```bash
+git grep -l "MeeshyScenePlayer(\|StoryReaderRepresentable(" \
+    -- 'apps/ios/Meeshy/**/*.swift' | xargs grep -L "reportReelFrame"
+```
+
+Mesurée le 2026-09-05, elle rend cinq fichiers et **aucun n'est un défaut** :
+`FeedPostCard` et `MeeshyComposerHost+Socle` sont des faux positifs (le nom n'y
+apparaît qu'en **commentaire** — pour le second, un doc-comment qui raconte qu'il
+montait un player *jadis*) ; `PostDetailView+Canvas`,
+`PostDetailView+RepostEmbed` et `StoryViewerView+Canvas` ne sont pas des LISTES,
+et une surface seule à l'écran n'a personne à qui disputer l'élection.
+
+> **La version de cette commande publiée le matin même était bornée à
+> `Views/*.swift` et rendait quatre fichiers.** Le cinquième vivait sous
+> `Composer/`. Une commande publiée à la place d'une liste ne vaut que par son
+> TERRITOIRE : la borne, elle, reste une énumération — plus courte, plus discrète,
+> et exactement aussi périssable. Borner au plus large, puis classer.
+
+Deux leçons que la correction a mesurées, et qui valent au-delà d'elle :
+
+- **La table d'exclusions a d'abord reproduit le faux positif que le balayage
+  existe pour retirer.** Elle avait été composée depuis un `git grep` NU — donc
+  sans dépouiller les commentaires — et inscrivait `MeeshyComposerHost+Socle`
+  comme « monteur de scène exclu ». Une table qui déclare la FRONTIÈRE d'un
+  balayage doit être construite par le balayage LUI-MÊME ; composée à la main à
+  côté, elle hérite précisément des défauts qu'il corrige. C'est le témoin
+  `test_everyExclusionStillDescribesARealSceneMounter` qui l'a rendu, dès sa
+  première exécution.
+- **Et ce témoin-là est né INVISIBLE** : écrit
+  `func test_…(file: StaticString = #filePath) throws`, il n'était pas découvert
+  par XCTest — **un paramètre, même à valeur par défaut, suffit**. Aucun échec,
+  aucun avertissement, aucune ligne rouge : six cas rapportés au lieu de sept,
+  et seul le COMPTE le disait. La signature d'un `func test_` reste NUE ; le
+  paramètre `#filePath` va sur le helper.
+
+### Le mécanisme a débordé son nom
+
+`ReelFeedAutoplayCoordinator`, `reportReelFrame`, `mostCenteredReel`,
+`activeReelId`, `ReelMediaKind` gouvernent désormais **toute surface qui décode
+dans le fil** — les trois Meeshes, pas les seuls réels. Or « réel » est un TYPE
+de publication (§ 1 du modèle du composer), pas un mécanisme : le vocabulaire dit
+maintenant moins que ce que le code fait. `ReelMediaKind.scene` est le symptôme
+lisible — un « genre de média de RÉEL » dont un cas s'appelle `scene`.
+
+Réutiliser le mécanisme était juste ; le renommer est une dette à part, à solder
+quand les deux sessions qui travaillent ces fichiers auront convergé. Suivi :
+#5231.
+
+**Ce que ce renommage coûtera, et qui ne rougira pas.** Le compilateur suit un
+membre renommé jusqu'à tous ses consommateurs — mais **pas les gardes de source**,
+qui cherchent des chaînes LITTÉRALES. Une garde négative qui a perdu son terrain
+ne trouve rien *par métier* : elle ne signale jamais qu'elle ne garde plus rien.
+Les suites concernées doivent donc bouger dans le MÊME commit, et elles se
+listent par commande plutôt qu'à la main :
+
+```bash
+git grep -l 'reportReelFrame\|ReelFrame(\|activeReelId\|mostCenteredReel\|ReelMediaKind\|ReelFeedAutoplayCoordinator' \
+    -- 'apps/ios/MeeshyTests/**/*.swift'
+```
+
+Quatre suites au 2026-09-05 : `FeedPostCardScenePlayerGuardTests`,
+`FeedSceneCoherenceGuardTests`, `ReelFeedAutoplayCoordinatorTests`,
+`ReelFeedLayoutTests`.
+
+> **Les deux sessions qui ont vu cette dette en ont dressé la liste à la main, et
+> les deux se sont trompées** — une entrée en trop (`ReelFeedSoundButtonWiring‑
+> GuardTests`, qui ne cite aucun de ces six symboles : il garde le BOUTON, que ce
+> renommage ne touche pas) et une manquante (`ReelFeedLayoutTests`). Sur une
+> dette dont le sujet EST « une énumération ne survit pas à ce qu'elle décrit »,
+> c'est la démonstration la moins coûteuse qu'on pouvait en obtenir.
+>
+> Et la faute s'est présentée **trois fois dans le même échange** : la borne
+> `Views/*.swift` de la commande publiée plus haut, la table d'exclusions du
+> correctif bâtie depuis un `git grep` NU, et ces deux listes de gardes écrites
+> de mémoire. D'où la forme générale, qui vaut bien au-delà de ce paragraphe :
+> **le geste qui remplace une énumération en contient toujours une plus petite —
+> le territoire, l'extension, la table d'exclusions —, et c'est celle-là qu'on ne
+> relit pas.** Après avoir publié une commande, poser une question de plus :
+> *quelle énumération reste-t-il dedans ?*, l'élargir d'un cran, et re-mesurer.
+
 ## 4. Ce que le lecteur reçoit de la PROJECTION
 
 Le § 1 bis du modèle du composer arbitre l'écriture, et **la cardinalité dépend
@@ -244,6 +418,34 @@ binding existe pour lui.
 > lecture serait une heuristique, donc un endroit où deux clients divergeront.
 
 ## 4 bis. Les TROIS lecteurs, mesurés (2026-09-02)
+
+> **Addendum du 2026-09-04 — la méthode de ce comptage a une faille que le
+> recadrage vient de révéler, et les chiffres ci-dessous ne sont PAS corrigés.**
+>
+> Ils restent ceux du 2026-09-02, à leur date, parce qu'ils ont été obtenus en
+> comptant les clés *effectivement lues* par chaque projection. Les recompter
+> aujourd'hui avec une méthode plus grossière — toute chaîne entre guillemets —
+> rendrait 57 pour Android et 11 pour le web : **remplacer une mesure soignée
+> par une mesure large est une régression, pas une mise à jour.**
+>
+> Ce que la mesure du jour révèle est ailleurs, et c'est méthodologique. Le
+> recadrage (#5085) est désormais lu par les deux lecteurs, mais **pas de la
+> même façon** :
+>
+> | lecteur | où vivent les noms de clés `cropX/Y/W/H` |
+> |---|---|
+> | Android | dans `CanvasV3Projection.kt` — la projection les NOMME |
+> | web | dans `packages/shared/utils/media-crop.ts` — `readMediaCrop(payload)`, la règle partagée les nomme à sa place |
+>
+> **Un audit « quelles clés chaque lecteur lit-il ? » conduit sur les fichiers du
+> LECTEUR manquerait donc entièrement le recadrage côté web** — non parce qu'il
+> ne le lit pas, mais parce qu'il le lit par délégation. Toute reprise de ce
+> comptage doit suivre les modules partagés, sinon elle sous-compte le lecteur
+> le mieux factorisé et récompense celui qui recopie.
+>
+> C'est la forme lecteur du défaut de #4833 : un inventaire qui interroge un
+> site rate ce qui a été délégué à un autre.
+
 
 Le § 5 disait, à la première écriture de ce document, que les lecteurs web et
 Android n'étaient pas mesurés et qu'il ne fallait pas lire ce silence comme une
@@ -374,8 +576,11 @@ périmée s'est passé sur une AUTRE plateforme.
 
 Détail et critères : #5043 (les transitions), #5047 (le `thumbHash`, dont
 l'absence laisse une story web s'ouvrir sur du vide — `CanvasV3Scene` n'a aucun
-état de chargement, et c'est le chemin de TOUTES ses stories depuis que la
-passerelle refuse le non-v3).
+état de chargement, et c'est le chemin de TOUTES ses stories parce que les deux
+écrivains émettent du v3 natif ; **correction de cause du 2026-09-05** : la
+passerelle ne refuse PAS le non-v3, son refus est derrière
+`CANVAS_V3_WRITE_STRICT`, armé dans aucun fichier de configuration du dépôt —
+détail à l'encadré du § 1 bis-2 de `meeshy-composer-modele.md`).
 
 ## 5. Ce que ce document ne couvre pas
 

@@ -20,6 +20,7 @@ import {
   normalizeVoiceProsody
 } from './voice-analysis-normalize';
 import { logger } from '../utils/logger';
+import { diffTranslationTargets } from '../utils/translation-targets';
 import type {
   VoiceTranslateRequest,
   VoiceTranslateAsyncRequest,
@@ -474,8 +475,15 @@ export class AudioTranslateService extends EventEmitter {
         voiceQuality: t.quality || undefined
       })) : [];
 
-      const existingLanguages = new Set(existingTranslations.map(t => t.targetLanguage));
-      const languagesToTranslate = options.targetLanguages.filter(lang => !existingLanguages.has(lang));
+      // Canonicaliser cibles demandées et clés stockées via la SSOT partagée
+      // (jumelle d'`AttachmentTranslateService`) : une cible région-taguée ou en
+      // casse mixte matche la clé canonique du store, et les variantes d'une même
+      // langue ne comptent que pour une cible NLLB.
+      const targetDiff = diffTranslationTargets(
+        options.targetLanguages,
+        existingTranslations.map(t => t.targetLanguage)
+      );
+      const languagesToTranslate = targetDiff.missing;
 
       // Si toutes les langues sont déjà traduites, retourner le cache
       if (languagesToTranslate.length === 0) {
@@ -529,7 +537,7 @@ export class AudioTranslateService extends EventEmitter {
       // Merger avec les traductions existantes
       if (existingTranslations.length > 0) {
         const cachedTranslations = existingTranslations
-          .filter(t => options.targetLanguages.includes(t.targetLanguage))
+          .filter(t => targetDiff.wasRequested(t.targetLanguage))
           .map(t => ({
             targetLanguage: t.targetLanguage,
             translatedText: t.translatedText,

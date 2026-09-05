@@ -206,3 +206,79 @@ describe('BroadcastTranslationService.translateContent', () => {
     expect(result.bodies['de']).toBe('Body content');
   });
 });
+
+// ─── canonicalisation des langues cibles (SSOT normalizeLanguageForDedup) ──────
+//
+// `targetLanguages` provient des `systemLanguage` VERBATIM des destinataires
+// (`groupBy` sur des codes persistés sans normalisation : 'pt-BR', 'FR', 'fr_FR',
+// 'en-US'). NLLB ne connaît que les codes canoniques 2-lettres ; les variantes
+// région-taguées échouent, les variantes de casse comptent comme des langues
+// distinctes, et une cible région-taguée égale à la langue source échappe au
+// filtre d'auto-exclusion. Même classe de défaut que l'itération 286
+// (`PostService.audienceLanguages`) : le service canonicalise et déduplique par
+// LANGUE réelle avant d'émettre la moindre requête au translator.
+describe('BroadcastTranslationService.translateContent — canonicalisation des cibles', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('canonicalise une cible région-taguée avant de la pousser au translator', async () => {
+    const svc = makeService();
+    mockAxiosPost.mockResolvedValue({
+      data: [{ translated_text: 'Assunto' }, { translated_text: 'Corpo' }],
+    });
+
+    const result = await svc.translateContent('Hello', 'World', 'en', ['pt-BR']);
+
+    expect(mockAxiosPost).toHaveBeenCalledWith(
+      expect.stringContaining('/translate/batch'),
+      expect.arrayContaining([
+        expect.objectContaining({ target_language: 'pt', model_type: 'medium' }),
+        expect.objectContaining({ target_language: 'pt', model_type: 'premium' }),
+      ]),
+      expect.any(Object)
+    );
+    const sentTargets = (mockAxiosPost.mock.calls[0][1] as Array<{ target_language: string }>).map(
+      (r) => r.target_language
+    );
+    expect(sentTargets).not.toContain('pt-BR');
+    expect(result.subjects['pt']).toBe('Assunto');
+    expect(result.bodies['pt']).toBe('Corpo');
+    expect(result.subjects['pt-BR']).toBeUndefined();
+  });
+
+  it('déduplique les variantes de casse et de région en UNE seule langue', async () => {
+    const svc = makeService();
+    mockAxiosPost.mockResolvedValue({
+      data: [{ translated_text: 'Bonjour' }, { translated_text: 'Monde' }],
+    });
+
+    const result = await svc.translateContent('Hello', 'World', 'en', ['fr', 'fr-FR', 'FR', 'fr_FR']);
+
+    expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+    const requests = mockAxiosPost.mock.calls[0][1] as Array<{ target_language: string }>;
+    expect(requests).toHaveLength(2); // sujet + corps pour la seule langue 'fr'
+    expect(requests.every((r) => r.target_language === 'fr')).toBe(true);
+    expect(result.subjects['fr']).toBe('Bonjour');
+    expect(result.bodies['fr']).toBe('Monde');
+  });
+
+  it("exclut la langue source quelle que soit la forme de la cible ('en-US' ⇒ source 'en')", async () => {
+    const svc = makeService();
+
+    const result = await svc.translateContent('Hello', 'World', 'en', ['en-US', 'EN']);
+
+    expect(mockAxiosPost).not.toHaveBeenCalled();
+    expect(result.subjects['en']).toBe('Hello');
+    expect(result.bodies['en']).toBe('World');
+  });
+
+  it('exclut une source région-taguée face à une cible canonique équivalente', async () => {
+    const svc = makeService();
+
+    const result = await svc.translateContent('Olá', 'Corpo', 'pt-BR', ['pt']);
+
+    expect(mockAxiosPost).not.toHaveBeenCalled();
+    expect(result.subjects['pt-BR']).toBe('Olá');
+  });
+});

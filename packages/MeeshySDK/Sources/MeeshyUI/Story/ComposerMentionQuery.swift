@@ -17,6 +17,57 @@ import MeeshySDK
 /// `nonisolated` : `MeeshyUI` compile sous `defaultIsolation(MainActor)`, et une
 /// règle de chaîne de caractères n'a rien à faire sur l'acteur principal — ses
 /// tests non plus.
+/// **QUAND une frappe `@` interroge le RÉSEAU — la loi, écrite une fois**
+/// (directive porteur 2026-09-05).
+///
+/// > « Il faut déclencher la remontée après `@` avec les amis/contacts
+/// > (normalement existant en local et en cache) ; ensuite lorsqu'on tape la
+/// > première lettre ça filtre parmi ses amis et contacts LOCALEMENT ; c'est
+/// > au bout de la DEUXIÈME lettre qu'on recherche via API. Ce système doit
+/// > être général pour tous les emplacements où on doit mentionner un
+/// > utilisateur. »
+///
+/// ## Les trois régimes, et ce que chacun coûte
+///
+/// | frappe | ce qui répond | coût réseau |
+/// |---|---|---|
+/// | `@` | les amis / contacts, en entier | **zéro** — cache |
+/// | `@a` | les mêmes, filtrés | **zéro** — filtre local |
+/// | `@al` et au-delà | les mêmes + l'annuaire | un appel, débattu |
+///
+/// La raison du seuil n'est pas l'économie d'octets : **une lettre ne
+/// discrimine pas.** `@a` rend des dizaines de comptes sans rapport avec ce
+/// que l'auteur tape, et les pousse DEVANT ses propres amis dans une bande qui
+/// n'en montre que trois ou quatre. Le premier caractère utile est le second.
+///
+/// ## Pourquoi une règle et pas une constante par site
+///
+/// Le dépôt a DEUX familles de résolveurs de mention — `MentionComposerController`
+/// (conversation, commentaires de post, brouillon du composer) et
+/// `MentionSuggestionsModel` (mood, éditeur de texte de story, sélecteur de
+/// mention) — montées sur NEUF sites. Chacune portait son propre seuil : `0`
+/// pour la première (elle appelait donc dès le `@` nu), « non vide » pour la
+/// seconde (dès la première lettre). Trois régimes différents pour un même
+/// geste, selon l'écran où le doigt se trouvait.
+///
+/// > Une constante recopiée dans deux familles n'est pas une règle partagée :
+/// > c'est deux règles qui se ressemblent aujourd'hui.
+public nonisolated enum MentionLookupRule {
+
+    /// Le nombre de caractères, APRÈS le `@`, à partir duquel une recherche
+    /// distante est justifiée.
+    public static let minimumRemoteQueryLength = 2
+
+    /// `true` ⇔ cette requête mérite un aller-retour.
+    ///
+    /// Les blancs sont retirés d'abord : un `@ ` n'ouvre pas un handle, et
+    /// compter l'espace ferait partir un appel sur une requête vide.
+    public static func queriesRemote(_ query: String) -> Bool {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).count
+            >= minimumRemoteQueryLength
+    }
+}
+
 public nonisolated enum ComposerMentionQuery {
 
     /// Caractères qu'un pseudo Meeshy peut porter. Le point et le tiret y sont

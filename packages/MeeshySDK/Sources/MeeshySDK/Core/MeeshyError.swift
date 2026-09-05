@@ -95,6 +95,16 @@ public enum MeeshyError: LocalizedError {
     /// structured 403 payloads (e.g. consent-required errors with
     /// `requiredConsents`) can decode them without a second round-trip.
     case forbidden(reason: String?, body: Data?)
+    /// Refus TYPÉ d'un formulaire (400 / 409), levé uniquement par les adresses
+    /// qui déclarent `rejectionPolicy == .structured`. Il porte le `code`
+    /// machine, le `field` visé et les appoints (`suggestions`, `violations`)
+    /// que `.server(statusCode:message:)` jetait — sans quoi un écran ne peut
+    /// que rendre une phrase en bandeau, jamais la poser sous la bonne saisie.
+    ///
+    /// Additif par construction : aucune route ne bascule ici sans l'avoir
+    /// DÉCLARÉ, donc tout site qui filtre `.server(400, _)` continue de voir ce
+    /// qu'il voyait.
+    case rejected(APIRejection)
     case server(statusCode: Int, message: String)
     case unknown(Error)
 
@@ -105,6 +115,7 @@ public enum MeeshyError: LocalizedError {
         case .message(let error): return error.errorDescription
         case .media(let error): return error.errorDescription
         case .forbidden(let reason, _): return reason ?? "Acces refuse a cette ressource"
+        case .rejected(let rejection): return rejection.message
         case .server(_, let message): return message
         case .unknown(let error): return error.localizedDescription
         }
@@ -117,6 +128,7 @@ public enum MeeshyError: LocalizedError {
         case .message: return "bubble.left.and.exclamationmark.bubble.right"
         case .media: return "photo.badge.exclamationmark"
         case .forbidden: return "lock.slash.fill"
+        case .rejected: return "exclamationmark.bubble"
         case .server: return "server.rack"
         case .unknown: return "exclamationmark.triangle.fill"
         }

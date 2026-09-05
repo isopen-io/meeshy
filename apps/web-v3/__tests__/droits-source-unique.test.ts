@@ -19,12 +19,13 @@ import { APERCU_DE_TEST } from './lib/porte-du-lien';
  * CHOIX, la vue `join`). Une liste recopiée ne se voit pas à l'exécution tant
  * qu'elle n'a pas divergé : ces témoins lisent les SOURCES et le RENDU.
  *
- * Ce que l'accordéon a le droit de dire AVANT la jonction est borné par ce que
+ * Ce que l'accordéon rend AVANT la jonction est désormais le VERDICT que
  * l'aperçu SERT (`GET /anonymous/link/:identifier`, `routes/anonymous.ts:
- * 663-692` : exigences, langues, effectif — jamais `allowViewHistory` ni
- * `allowAnonymous*`) : il NOMME les droits qui varient, sans en donner le
- * verdict, et ne rend un verdict que pour ce qu'aucun lien n'accorde à un
- * invité. Le bandeau, lui, rend les verdicts RELUS de la passerelle.
+ * 663-692` : exigences, langues, effectif et, depuis #4522, les quatre droits
+ * que le lien ouvre) — la MÊME projection `Droits` que le bandeau du fil rend
+ * après la jonction (#4830). Avant #4830, l'aperçu ne servait aucun de ces
+ * quatre champs et l'accordéon ne pouvait que NOMMER les droits variables sans
+ * verdict ; les témoins ci-dessous en gardent la trace dans leur intitulé.
  */
 
 const RACINE = join(__dirname, '..');
@@ -55,12 +56,13 @@ const fil = (droits: Droits): string =>
     maintenant: 0,
     composeur: { genre: 'ouvert' },
     tempsReel: null,
+    contexte: null,
     plein: null,
     profil: null,
   } satisfies EtatDuFil);
 
-const choix = (): string =>
-  documentDuChoix({ segment: 'lagos-q1', apercu: APERCU_DE_TEST, langueProposee: 'fr', saisie: SAISIE_VIDE, refus: null, clos: null, maintenant: 0 });
+const choix = (droits: Droits = APERCU_DE_TEST.droits): string =>
+  documentDuChoix({ segment: 'lagos-q1', apercu: { ...APERCU_DE_TEST, droits }, langueProposee: 'fr', saisie: SAISIE_VIDE, refus: null, clos: null, maintenant: 0 });
 
 /** Les lignes du bandeau, dans l'ordre du document : `[verdict, clé]`. */
 const lignesDuBandeau = (html: string): readonly (readonly [string, string])[] =>
@@ -84,13 +86,8 @@ describe('une source pour les quatre droits', () => {
     expect(source('lib/contenu/fil.ts')).not.toMatch(/export const DROITS\b/);
   });
 
-  it('nomme quatre droits, dans l’ordre de la planche — trois qui varient par le lien, un que rien n’accorde à un invité', () => {
-    expect(DROITS_DE_L_INVITE.map((droit) => [droit.cle, droit.variable])).toEqual([
-      ['historique', true],
-      ['ecrire', true],
-      ['fichiers', true],
-      ['appels', false],
-    ]);
+  it('nomme quatre droits, dans l’ordre de la planche — trois que le lien décide, un qu’aucun lien n’accorde à un invité', () => {
+    expect(DROITS_DE_L_INVITE.map((droit) => droit.cle)).toEqual(['historique', 'ecrire', 'fichiers', 'appels']);
     expect(droitsRendus(TOUS_LES_DROITS).map((droit) => droit.accorde)).toEqual([true, true, true, false]);
     expect(droitsRendus(SANS_DROITS).map((droit) => droit.accorde)).toEqual([false, false, false, false]);
   });
@@ -129,29 +126,31 @@ describe('le bandeau du fil — la vue rights', () => {
   });
 });
 
+/**
+ * #4830 — l'aperçu sert désormais les quatre droits que le lien ouvre
+ * (`allowViewHistory`, `allowAnonymous*`) : l'accordéon en rend le VERDICT,
+ * comme le bandeau du fil après la jonction — la même source, avant et après.
+ */
 describe('l’accordéon de la modale — la vue join', () => {
-  it('nomme les mêmes droits : ceux qui varient par leur NOM, sans verdict ; celui que rien n’accorde, par son verdict', () => {
-    const html = choix();
-    // L'énumération ouvre la phrase : son premier nom prend la majuscule.
-    DROITS_DE_L_INVITE.filter((droit) => droit.variable).forEach((droit) => {
-      expect(html.toLocaleLowerCase('fr')).toContain(droit.nom.toLocaleLowerCase('fr'));
+  it('rend les quatre droits du module, dans son ordre, avec le verdict SERVI par l’aperçu', () => {
+    const html = choix(DROITS_DU_LIEN);
+    const rendus = droitsRendus(DROITS_DU_LIEN);
+    expect(lignesDuBandeau(html)).toEqual(rendus.map((droit) => [droit.accorde ? 'accorde' : 'refuse', droit.cle]));
+    rendus.forEach((droit) => {
+      expect(html).toContain(`<b>${droit.titre}</b><p>${droit.sous}</p>`);
     });
-    droitsRendus(SANS_DROITS)
-      .filter((droit) => !DROITS_DE_L_INVITE.find((annonce) => annonce.cle === droit.cle)?.variable)
-      .forEach((droit) => {
-        expect(html).toContain(`<b>${droit.titre}</b><p>${droit.sous}</p>`);
-      });
   });
 
-  /** RIEN D'INVENTÉ (§ 5.1) : l'aperçu ne sert aucun des trois verdicts ; la modale ne les affirme donc pas. */
-  it('n’affirme aucun verdict que l’aperçu n’a pas servi', () => {
-    const html = choix();
-    expect(html).not.toContain('data-droit=');
-    droitsRendus(TOUS_LES_DROITS)
-      .filter((droit) => droit.cle !== 'appels')
-      .forEach((droit) => {
-        expect(html).not.toContain(`<b>${droit.titre}</b>`);
-      });
+  it('suit chaque verdict : les mêmes lignes disent autre chose quand le lien ouvre autre chose', () => {
+    const tout = choix(TOUS_LES_DROITS);
+    const rien = choix(SANS_DROITS);
+    expect(lignesDuBandeau(tout).map(([verdict]) => verdict)).toEqual(['accorde', 'accorde', 'accorde', 'refuse']);
+    expect(lignesDuBandeau(rien).map(([verdict]) => verdict)).toEqual(['refuse', 'refuse', 'refuse', 'refuse']);
+  });
+
+  /** Le verdict d'« appeler » ne varie jamais : aucun lien n'ouvre d'appel à un invité (§ 5.1). */
+  it('n’accorde jamais le droit d’appeler, quel que soit ce que le lien ouvre par ailleurs', () => {
+    expect(lignesDuBandeau(choix(TOUS_LES_DROITS)).find(([, cle]) => cle === 'appels')).toEqual(['refuse', 'appels']);
   });
 });
 

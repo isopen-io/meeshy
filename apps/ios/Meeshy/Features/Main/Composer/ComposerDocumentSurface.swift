@@ -241,6 +241,27 @@ struct ComposerDocumentSurface: View {
     /// `VStack` parent.
     var toolRowTrailingAccessory: AnyView? = nil
 
+    /// **Le sélecteur de langue du CONTENU, au pied de son champ** (#5137,
+    /// directive porteur 2026-09-04 : « indiquer le sélecteur pour choisir la
+    /// langue du contenu ! Du coup enlever cela de la ligne canonique ! »).
+    ///
+    /// Il voyageait par `toolRowTrailingAccessory` — en queue de la **rangée
+    /// canonique**, où il était arrivé au #3904 pour une raison de DISPOSITION
+    /// (il chevauchait la bande de mentions en `.overlay`), jamais parce que sa
+    /// place sémantique y était. La rangée porte ce qu'on ATTACHE à un texte ;
+    /// la langue le QUALIFIE.
+    ///
+    /// Sur la scène, le calque de description le pose au-dessus de sa **coche
+    /// de validation** (`ComposerDescriptionLayer.languageAccessory`). Cette
+    /// surface-ci n'a pas de coche — son champ de contenu se valide par la
+    /// flèche du socle — donc le sélecteur prend la place ÉQUIVALENTE : le pied
+    /// du texte qu'il qualifie, aligné en queue, à l'intérieur du flux.
+    ///
+    /// `nil` ⇒ rien n'est peint. Le slot `toolRowTrailingAccessory` reste, vide,
+    /// pour la même raison que son jumeau de tête : il tient l'invariant
+    /// anti-chevauchement de #3903/#3904 pour tout futur accessoire de rangée.
+    var contentLanguageAccessory: AnyView? = nil
+
     @FocusState private var isContentFocused: Bool
 
     /// Le dernier outil tapé — pilote le rebond SF (`.symbolEffect(.bounce)`)
@@ -279,19 +300,31 @@ struct ComposerDocumentSurface: View {
             // curseur sans faire passer `TextEditor` par un pont UIKit
             // (`UITextView` + `caretRect`, qu'aucun composant du dépôt ne
             // fait aujourd'hui) — décision confirmée avec le porteur.
-            // `!suggestions.isEmpty`, pas seulement `activeQuery != nil` (revue
-            // Opus 2026-08-27) : en `.composerDraft`, il n'y a AUCUN appel
-            // réseau en attente qui remplirait la liste plus tard — pas d'ami
-            // accepté, une requête sans correspondance, ou le temps du `.task`
-            // de chargement sont tous des états NOMINAUX. Gater sur la seule
-            // requête active peindrait une bande de verre vide dans chacun.
-            if mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty {
+            // **La condition de montage a quitté ce site** (2026-09-05).
+            //
+            // Elle disait « en `.composerDraft`, il n'y a AUCUN appel réseau
+            // en attente qui remplirait la liste plus tard ». C'était vrai
+            // d'une liste d'amis chargée une fois ; un brouillon interroge
+            // désormais l'annuaire, donc « vide » a cessé d'être un seul
+            // état. `showsSuggestions` porte la distinction, à un seul
+            // endroit — cette phrase-ci vivait en trois copies.
+            if mentionBox.controller.showsSuggestions {
                 ComposerMentionStrip(
                     controller: mentionBox.controller,
                     currentText: text,
                     onSelect: { updated in text = updated }
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            // **La langue, au PIED du texte qu'elle qualifie** (#5137). Après la
+            // bande de mentions, jamais avant : la bande est « la plus proche
+            // approximation du curseur » (retour porteur 2026-08-27), et
+            // s'insérer entre elle et le champ l'aurait décollée de la frappe.
+            if let contentLanguageAccessory {
+                contentLanguageAccessory
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
             }
             Spacer(minLength: 0)
             backgroundStrip
@@ -315,10 +348,10 @@ struct ComposerDocumentSurface: View {
         }
         .animation(
             .spring(response: 0.3, dampingFraction: 0.8),
-            value: mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty
+            value: mentionBox.controller.showsSuggestions
         )
         .onAppear { raiseKeyboardIfPromised() }
-        .task { mentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
+        .task { await mentionBox.loadCandidates() }
         .adaptiveOnChange(of: text) { _, newText in mentionBox.controller.handleQuery(in: newText) }
     }
 

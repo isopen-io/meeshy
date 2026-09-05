@@ -12,18 +12,22 @@ import {
   GESTES,
   NOUVELLE_CONVERSATION,
   libelleDuGeste,
+  vedetteDe,
   type ConfirmationDeGeste,
   type GesteDeLigne,
 } from '@/lib/contenu/liste';
 import type { Contact } from '@/lib/api/contacts';
 
-import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, blocDuNavigateur, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
-import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from './espace-feuille';
-import { actionsFlottantes, feuilleDeLEspace } from './espace-vue';
+import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
+import { REGION_DE_LA_BANNIERE } from './banniere-vue';
+import { FEUILLE_DE_L_ESPACE } from './espace-feuille';
+import { feuilleDeLEspace, raccourcisEntete } from './espace-vue';
 import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from './liste-feuille';
 import { FEUILLE_DU_PROFIL } from './profil-feuille';
 import { adresseDuProfil, surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
+import { regionDuPrisme } from './prisme-vue';
 import { apercuAuPrisme, avatar, carteVide, quand, versLeFil } from './vue';
 
 /**
@@ -163,7 +167,14 @@ const avatarDeLaLigne = ({
   const cible = homologueDe(conversation, moi);
   if (cible === null) return { horsDeLaLigne: '', dansLaLigne: avatar(conversation.titre) };
   return {
-    horsDeLaLigne: `<a class="avatar-lien" href="${echappe(adresseDuProfil(adresse, cible.id))}" aria-label="${echappe(CHATS.voirLeProfil(cible.nom))}">${avatar(conversation.titre)}</a>`,
+    // `draggable="false"` : MÊME raison que sur `a.ligne` ci-dessous — un
+    // `<a href>` est glissable par défaut, et l'avatar occupe tout le bord
+    // gauche de la ligne, l'endroit le plus naturel où un pouce amorce un
+    // balayage. Sans cet attribut, le balayage né sur l'avatar d'un
+    // tête-à-tête n'avait AUCUN effet (mesuré : `dragstart` puis
+    // `pointercancel`), alors que le même geste depuis le reste de la ligne
+    // archivait déjà — un quart de ligne sans mesure ni geste.
+    horsDeLaLigne: `<a class="avatar-lien" draggable="false" href="${echappe(adresseDuProfil(adresse, cible.id))}" aria-label="${echappe(CHATS.voirLeProfil(cible.nom))}">${avatar(conversation.titre)}</a>`,
     dansLaLigne: '',
   };
 };
@@ -174,6 +185,7 @@ export const ligne = ({
   maintenant,
   adresse,
   moi,
+  vedette,
 }: {
   readonly conversation: Conversation;
   readonly langues: readonly string[];
@@ -181,10 +193,18 @@ export const ligne = ({
   readonly adresse: string;
   /** Pour élire l'AUTRE personne d'un tête-à-tête (`homologueDe`) — `null` sans identité connue. */
   readonly moi: string | null;
+  /**
+   * LA CONVERSATION MISE EN AVANT (#5164, `vedetteDe`) — une SEULE ligne de
+   * la liste, jamais un second gabarit : les mêmes fentes (`data-*`, pistes,
+   * menu, compte) portent une classe de plus, et c'est la FEUILLE qui la
+   * peint en carte.
+   */
+  readonly vedette: boolean;
 }): string => {
   const { horsDeLaLigne, dansLaLigne } = avatarDeLaLigne({ conversation, moi, adresse });
   return (
-    `<li data-conversation="${echappe(conversation.id)}"` +
+    `<li${vedette ? ' class="vedette"' : ''}` +
+    ` data-conversation="${echappe(conversation.id)}"` +
     ` data-titre="${echappe(conversation.titre)}"` +
     ` data-quand="${echappe(conversation.dernierMessageA ?? '')}"` +
     ` data-nonlus="${conversation.nonLus}"` +
@@ -328,27 +348,72 @@ const journal = (etat: EtatDesChats): string =>
   '</p>' +
   (etat.echoue === true ? `<p class="alerte" role="alert">${echappe(ACTIONS.echec)}</p>` : '');
 
-const corps = (etat: EtatDesChats): string =>
-  '<div class="bonjour">' +
-  `<h1>${echappe(CHATS.titre)}</h1>` +
-  `<p>${echappe(CHATS.accroche)}</p>` +
-  `<a class="action primaire" href="${ADRESSE_DE_LA_LISTE}?nouvelle">${echappe(NOUVELLE_CONVERSATION.ouvrir)}</a>` +
-  '</div>' +
-  journal(etat) +
-  `<section class="liste" aria-label="${echappe(CHATS.titre)}">` +
-  (etat.conversations.length === 0
-    ? carteVide({ glyphe: 'ph-chats-circle', titre: CHATS.vide, phrase: CHATS.videPrecision })
-    : `<ul>${etat.conversations
-        .map((conversation) =>
-          ligne({ conversation, langues: etat.langues, maintenant: etat.maintenant, adresse: ADRESSE_DE_LA_LISTE, moi: etat.moi }),
-        )
-        .join('')}</ul>`) +
-  '</section>' +
-  // LES DEUX RONDS, aux mêmes coins qu'au tableau de bord (planche `:868`).
-  // Dans le FLUX : leur conteneur réserve la bande, sinon ils couvriraient la
-  // dernière ligne de la liste au repos (charte règle 7 b/c).
-  actionsFlottantes(ADRESSE_DE_LA_LISTE);
+/**
+ * LES DEUX PUCES D'ACTION (cible `chats.png`, #5164) — même rang
+ * (`.action.contour`), côte à côte, chacune vers l'adresse qui la sert
+ * réellement : « Créer un lien » vers `/links?nouveau` (l'état d'adresse que
+ * `liens-porte.ts` ouvre déjà), « Conversation » vers `?nouvelle` (la feuille
+ * de CETTE liste). Elles REMPLACENT l'action primaire unique d'avant ce lot —
+ * deux effets distincts, jamais un contrôle qui en ferait deux (règle 11).
+ */
+const actionsRapides = (): string =>
+  `<nav class="actions-rapides" aria-label="${echappe(CHATS.actionsRapides)}">` +
+  `<a class="action contour" href="/links?nouveau">${svgDuSprite('ph-link-simple')}${echappe(CHATS.actionLien)}</a>` +
+  // `aria-label` PORTE LE PLEIN MOT (« Nouvelle conversation », celui du titre
+  // de la feuille qu'elle ouvre) — le texte VISIBLE est raccourci pour tenir à
+  // deux puces sur 360 px (`cible/chats.png`) : un nom accessible ne se
+  // raccourcit pas pour la même raison qu'un libellé visible se raccourcit.
+  `<a class="action contour" href="${ADRESSE_DE_LA_LISTE}?nouvelle" aria-label="${echappe(NOUVELLE_CONVERSATION.ouvrir)}">${svgDuSprite('ph-chat-circle-dots')}${echappe(CHATS.actionConversation)}</a>` +
+  '</nav>';
 
+/**
+ * LES DEUX RACCOURCIS D'EN-TÊTE (charte règle 8, revue de #5164) —
+ * REMPLACENT les deux ronds flottants : la mesure a trouvé les liens du pied
+ * de l'enveloppe couverts par le rail, au repos et à mi-défilement (« À
+ * propos », « Conditions d'utilisation ») — et la règle 8 nomme mot pour mot
+ * la sortie pour ce cas : « le rail cède la place à deux raccourcis de 44 px
+ * dans l'en-tête ». Une SECONDE mesure, à la revue suivante, a trouvé le même
+ * rail — resté `position:fixed` sur le TABLEAU DE BORD — couvrant sa carte de
+ * conversation mise en avant : `raccourcisEntete` (`espace-vue.ts`) est donc
+ * PARTAGÉ par les deux écrans depuis cette revue, jamais recopié ici.
+ */
+const corps = (etat: EtatDesChats): string => {
+  // LA CONVERSATION MISE EN AVANT — la PREMIÈRE non lue dans l'ORDRE SERVI
+  // (`vedetteDe`, `lib/contenu/liste.ts`), partagée avec le module de
+  // participation qui la réélit à chaque repeinture (`liste-peinture.ts`).
+  const idVedette = vedetteDe(etat.conversations);
+
+  return (
+    '<div class="bonjour">' +
+    '<div class="entete-chats">' +
+    '<div>' +
+    `<h1>${echappe(CHATS.titre)}</h1>` +
+    `<p>${echappe(CHATS.accroche)}</p>` +
+    '</div>' +
+    raccourcisEntete(ADRESSE_DE_LA_LISTE) +
+    '</div>' +
+    '</div>' +
+    actionsRapides() +
+    regionDuPrisme(etat.langues[0] ?? DOCUMENT_LANGUAGE) +
+    journal(etat) +
+    `<section class="liste" aria-label="${echappe(CHATS.titre)}">` +
+    (etat.conversations.length === 0
+      ? carteVide({ glyphe: 'ph-chats-circle', titre: CHATS.vide, phrase: CHATS.videPrecision })
+      : `<ul>${etat.conversations
+          .map((conversation) =>
+            ligne({
+              conversation,
+              langues: etat.langues,
+              maintenant: etat.maintenant,
+              adresse: ADRESSE_DE_LA_LISTE,
+              moi: etat.moi,
+              vedette: conversation.id === idVedette,
+            }),
+          )
+          .join('')}</ul>`) +
+    '</section>'
+  );
+};
 
 /**
  * LA FEUILLE « NOUVELLE CONVERSATION » — servie par le SERVEUR dans l'état
@@ -461,14 +526,16 @@ export const documentDesChats = (etat: EtatDesChats): string => {
     feuille:
       FEUILLE_CONNECTEE +
       FEUILLE_DE_LA_LISTE +
-      FEUILLE_DES_FLOTTANTES +
+      (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
       (surimpose === dessus && dessus !== '' ? FEUILLE_DU_PROFIL : '') +
       (surimpose === creation && creation !== '' ? FEUILLE_DE_LA_NOUVELLE_CONV : '') +
       (espace === '' ? '' : FEUILLE_DE_L_ESPACE),
     corps: corps(etat),
     retour: true,
     surimpression: surimpose,
+    // Voir `documentDuFil` : la région suit le module, jamais l'écran.
+    banniere: etat.tempsReel === null ? '' : REGION_DE_LA_BANNIERE,
     attributsDuMain: attributsDeParticipation(etat),
-    script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
+    script: (etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION) + blocDuNavigateur(),
   });
 };
