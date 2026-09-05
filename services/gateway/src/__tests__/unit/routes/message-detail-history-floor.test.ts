@@ -17,6 +17,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
@@ -129,6 +130,89 @@ async function fetchDetail(row: unknown, shareLink: { allowViewHistory: boolean 
   await app.close();
   return { status: res.statusCode, body: JSON.parse(res.body), linkLookup };
 }
+
+/**
+ * `fetchDetail` ci-dessus double `message.findFirst` de façon
+ * INCONDITIONNELLE (`mockResolvedValue`) : le `row` fourni EST déjà le
+ * résultat, comme si le `where` imbriqué `participants: { where: { userId,
+ * isActive: true }, … }` avait toujours filtré juste. Ici le double HONORE ce
+ * `where` (#4867, `findFirstHonouringWhere`) — la ligne brute est projetée par
+ * l'arbre `select` réel de la route, participants inclus.
+ */
+async function fetchDetailHonouringWhere(rawDocument: Record<string, unknown>) {
+  mockAuthMiddleware.mockImplementation(async (req: any) => {
+    req.authContext = {
+      type: 'user',
+      isAuthenticated: true,
+      isAnonymous: false,
+      userId: READER_USER_ID,
+      registeredUser: { id: READER_USER_ID, role: 'USER' },
+    };
+  });
+
+  const app: FastifyInstance = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('prisma', {
+    message: {
+      findFirst: jest.fn<any>(findFirstHonouringWhere([rawDocument])),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    conversationReadCursor: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+  } as any);
+
+  await app.register(messageRoutes);
+  await app.ready();
+  const res = await app.inject({ method: 'GET', url: `/messages/${MESSAGE_ID}` });
+  await app.close();
+  return { status: res.statusCode, body: JSON.parse(res.body) };
+}
+
+describe('GET /messages/:messageId — le where imbriqué des participants est HONORÉ, pas seulement déclaré (#4867)', () => {
+  it("garde le 403 pour un participant SORTI (isActive:false) même si sa propre ligne existe encore — preuve par mutation sur le `where` imbriqué", async () => {
+    // La ligne du lecteur EXISTE (bon userId) mais porte isActive:false — un
+    // membre qui a quitté la conversation. Le `where` imbriqué de production
+    // exige `isActive: true` : cette ligne doit donc être ÉCARTÉE, laissant le
+    // tableau projeté vide, et la route doit répondre 403 comme pour un
+    // non-participant. Retirer `isActive: true` du `where` de production (en
+    // ne gardant que `userId`) fait passer cette ligne et rend 200 — la
+    // mutation qui prouve ce témoin.
+    const doc = {
+      ...messageRow(AFTER_JOIN, {
+        userId: READER_USER_ID,
+        isActive: false,
+        role: 'member',
+        joinedAt: JOINED_AT,
+        shareLinkId: null,
+        historyVisibleFrom: null,
+        permissions: { canViewHistory: false },
+        anonymousSession: null,
+      }),
+      deletedAt: null,
+    };
+    const { status } = await fetchDetailHonouringWhere(doc);
+    expect(status).toBe(403);
+  });
+
+  it('sert le message à un participant ACTIF, sous le même double honorant', async () => {
+    const doc = {
+      ...messageRow(AFTER_JOIN, {
+        userId: READER_USER_ID,
+        isActive: true,
+        role: 'member',
+        joinedAt: JOINED_AT,
+        shareLinkId: null,
+        historyVisibleFrom: null,
+        permissions: { canViewHistory: false },
+        anonymousSession: null,
+      }),
+      deletedAt: null,
+    };
+    const { status, body } = await fetchDetailHonouringWhere(doc);
+    expect(status).toBe(200);
+    expect(body.data.id).toBe(MESSAGE_ID);
+  });
+});
 
 describe('GET /messages/:messageId — plancher d’historique du lecteur', () => {
   it('rend 404 pour un message d’AVANT l’arrivée d’un membre au droit figé fermé', async () => {
