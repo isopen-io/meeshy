@@ -131,6 +131,10 @@ const V3_ZONE_PREFIXES = [
   '/feed',
   '/composer',
   '/deconnexion',
+  // `/calls` entre le 2026-09-05 — l'historique des appels (#5108, consultation
+  // seule, aucune pile WebRTC embarquee) : meme marche que les huit ci-dessus,
+  // declaree ICI avant que le routeur ne la reclame (§ 4.4 bis).
+  '/calls',
 ];
 
 function belongsToV3Zone(pathname) {

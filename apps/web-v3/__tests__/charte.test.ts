@@ -21,6 +21,7 @@ import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from '@/app/connecte
 import { FEUILLE_DE_LA_BANNIERE } from '@/app/connecte/banniere-feuille';
 import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
+import { FEUILLE_DES_APPELS } from '@/app/connecte/appels-feuille';
 import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
@@ -87,6 +88,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE', source: FEUILLE_DE_L_ESPACE },
   { nom: 'app/connecte/banniere-feuille.ts', source: FEUILLE_DE_LA_BANNIERE },
   { nom: 'app/connecte/prefs-feuille.ts', source: FEUILLE_DES_PREFS },
+  { nom: 'app/connecte/appels-feuille.ts', source: FEUILLE_DES_APPELS },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -168,6 +170,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE',
       'app/connecte/banniere-feuille.ts',
       'app/connecte/prefs-feuille.ts',
+      'app/connecte/appels-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -696,6 +699,13 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // pouce lui-même restent sur l'encre — l'état se DIT par le texte
     // (« Activé »/« Désactivé »), la couleur ne fait que le CONFIRMER.
     '.commutateur[aria-checked="true"] .piste',
+    // L'historique des appels (`cible/calls.png`, #5108) : la tuile d'une ligne
+    // VIDÉO — même emploi que `dialog.espace .rangee .tuile` et `.marque
+    // .tuile` : le glyphe d'une NATURE, ici celle de l'appel plutôt que celle
+    // d'une destination ou de la marque. Les deux AUTRES teintes de tuile
+    // (manqué, répondu) restent sur `--color-danger`/`--color-success`, hors
+    // de cette liste — règle 13 ne gouverne que l'ACCENT.
+    '.appel .tuile.video',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

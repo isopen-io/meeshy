@@ -60,6 +60,20 @@ import { PASTILLE_DE_LANGUE, TRACE_DE_FRAPPE } from './atomes-feuille';
  * paysage, clavier ouvert) laisse le corps défiler plutôt que de rogner le
  * composeur : c'est la seule dégradation que la colonne s'autorise.
  *
+ * LE LIEN « PLUS ANCIENS » N'A PLUS D'`order`, ET N'EN AVAIT JAMAIS BESOIN.
+ * `.plus-ancien{order:-1}` était écrit SANS PORTÉE alors que `.plus-ancien` est
+ * un vocabulaire PARTAGÉ (le fil, la boîte des notifications, la galerie,
+ * l'historique des appels). Dans son unique home légitime il ne décidait rien —
+ * `.pile` est une colonne NORMALE (c'est `.lignes` qui s'inverse) et le lien y
+ * est déjà le premier nœud du DOM. Ailleurs il décidait beaucoup : chez tout
+ * écran dont le `<main>` est une colonne flex et qui emprunte cette feuille, il
+ * hissait le lien AU-DESSUS DE L'EN-TÊTE — mesuré au navigateur, `top` 0 px pour
+ * le lien contre 60 px pour `.fil-tete`, sur `/notifications` comme sur
+ * `/calls`. Une déclaration qui ne fait rien là où on la lit et tout là où on ne
+ * la lit pas est le pire des deux mondes ; les témoins de position vivent
+ * désormais des DEUX côtés (`v3-fil.spec.ts` la veut au-dessus du pli,
+ * `v3-notifs.spec.ts` et `v3-appels-a11y.spec.ts` la veulent sous l'en-tête).
+ *
  * `.pile`, unique enfant, garde un flux normal et REMPLIT le conteneur dès le
  * premier morceau (`min-height:100%`, la liste étirée dedans) : sondé en Fast
  * 3G, une pile ancrée en bas mais courte GRANDISSAIT vers le haut à chaque ligne
@@ -165,7 +179,7 @@ export const FEUILLE_DU_FIL = compacte(`
 .fil-ecran>.bandeau.bien{flex:0 1 auto;min-height:var(--target-min);overflow:auto}
 .messages{order:1;flex:1 1 0;min-height:calc(var(--row-height) * 2);overflow-y:auto;overscroll-behavior:contain;overflow-anchor:none;display:flex;flex-direction:column-reverse;padding:var(--space-4) var(--space-4) var(--space-3)}
 .pile{flex:none;display:flex;flex-direction:column;min-height:100%}
-.plus-ancien{order:-1;margin:0 auto var(--space-4);display:flex}
+.plus-ancien{margin:0 auto var(--space-4);display:flex}
 .lignes{flex:1 0 auto;margin:0;padding:0;list-style:none;display:flex;flex-direction:column-reverse;gap:var(--space-4)}
 .lignes>li:not(:has(~li)){visibility:hidden}
 .ligne{display:flex;gap:var(--space-3);align-items:flex-start;border-radius:var(--radius-lg);transition:background-color 150ms}

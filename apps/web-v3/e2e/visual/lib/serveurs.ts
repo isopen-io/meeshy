@@ -20,6 +20,8 @@ import {
   type FilSocialDeBouchon,
 } from './bouchon-compte';
 import { carnetDeBouchon, routesDuCarnet, type CarnetDeBouchon } from './bouchon-carnet';
+import { routesDesAppels } from './bouchon-appels';
+import { routesDesCommunautes, type CommunauteDeBouchon } from './bouchon-communautes';
 import { routesDeLaRecherche } from './bouchon-recherche';
 import {
   placeDeLInvite,
@@ -267,6 +269,10 @@ export const passerelleDeBouchon = async (options?: {
    * garni ne fait jamais visiter.
    */
   readonly lecteurSansRien?: boolean;
+  /** `/calls` sans aucun appel — l'état VIDE de l'historique, distinct du lecteur sans rien. */
+  readonly appelsVides?: boolean;
+  /** `/communities` sans aucune communauté — l'état VIDE du carnet, distinct du lecteur sans rien. */
+  readonly communautesVides?: boolean;
 }): Promise<PasserelleDeBouchon> => {
   const journal: AppelRecu[] = [];
   const conversationId = CONVERSATION_DU_LECTEUR.id;
@@ -375,6 +381,11 @@ export const passerelleDeBouchon = async (options?: {
     lien,
     carnet,
   );
+  const desAppels = routesDesAppels(creanceDe, { vide: () => options?.appelsVides ?? false });
+  const communautesCreees: CommunauteDeBouchon[] = [];
+  const desCommunautes = routesDesCommunautes(creanceDe, communautesCreees, {
+    vide: () => options?.communautesVides ?? false,
+  });
 
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';
@@ -454,6 +465,13 @@ export const passerelleDeBouchon = async (options?: {
     // absorbe `/api/v1/links/:key/members` (la jonction), `duCarnet` le
     // reste de `/api/v1/links` (`GET`, `POST`, `PATCH /:linkId`).
     if (await duCarnet({ requete, url, corps: octets, json })) return;
+    // L'HISTORIQUE DES APPELS (#5108) — `/api/v1/calls/history`, un chemin
+    // qu'aucune autre famille ne réclame : sa place dans l'ordre n'a pas
+    // d'incidence, elle vit à côté de `duCarnet` par voisinage de sujet.
+    if (desAppels({ requete, url, json })) return;
+    // LES COMMUNAUTÉS (#5109) — `/api/v1/communities`, un préfixe qu'aucune
+    // autre famille ne réclame : même voisinage de sujet que `desAppels`.
+    if (desCommunautes({ requete, url, corps: octets, json })) return;
     // La RECHERCHE, avant `/api/v1/conversations` et `/api/v1/directory/`
     // nues : Fastify distingue ces routes par leur chemin complet, et un
     // bouchon qui teste des préfixes ordonne du plus PRÉCIS au plus général.

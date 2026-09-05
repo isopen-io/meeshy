@@ -191,6 +191,15 @@ test.describe('la boîte de notifications, en direct', () => {
     const lien = page.locator('a.plus-ancien');
     await expect(lien).toHaveCount(1);
     await expect(lien).toHaveAttribute('href', `/notifications?cursor=${CURSEUR_DE_LA_BOITE_SUIVANTE}`);
+    // ET IL EST SOUS L'EN-TÊTE. `.plus-ancien{order:-1}` était écrit sans portée
+    // dans la feuille du FIL, que cet écran emprunte : le lien se peignait à
+    // `top:0`, au-dessus du caret de retour et du titre. Un témoin qui ne juge
+    // que la chaîne et le clic ne voit jamais où un contrôle atterrit.
+    const tete = await page.locator('header.fil-tete').boundingBox();
+    const suite = await lien.boundingBox();
+    expect(tete).not.toBeNull();
+    expect(suite).not.toBeNull();
+    expect(suite!.y).toBeGreaterThanOrEqual(tete!.y + tete!.height);
     // La même pastille que le reste de l'écran : 1 non lue, la page 2 n'y change rien.
     await expect(page.locator('.fil-tete .sous')).toHaveText('1 non lue');
 
