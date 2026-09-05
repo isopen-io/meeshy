@@ -96,8 +96,42 @@ describe('la clé de session et les jetons de route ne se confondent pas', () =>
 
     expect(refusDeSelection(selection)).toBeNull();
     expect(selection.comparables).toEqual([
-      { id: 'thread', route: '/chats/:cle', chemin: `/chats/${annexe().jetons.thread?.cle}` },
-      { id: 'rich', route: '/chats/:id', chemin: `/chats/${CONVERSATION_RICHE.id}` },
+      {
+        id: 'thread',
+        route: '/chats/:cle',
+        chemin: `/chats/${annexe().jetons.thread?.cle}`,
+        session: 'membre',
+      },
+      {
+        id: 'rich',
+        route: '/chats/:id',
+        chemin: `/chats/${CONVERSATION_RICHE.id}`,
+        session: 'membre',
+      },
     ]);
+  });
+});
+
+/**
+ * « / » sert deux écrans (conception § ROUTES) : la vitrine SANS créance, le
+ * tableau de bord AVEC — ce que `home` déclare désormais dans
+ * `jetons-de-vues.json`, exactement comme `rich`/`thread` déclarent la LEUR.
+ * Sans cette ligne, `vues-comparables.mjs` refusait `vitrine` ET `home` dès
+ * qu'aucun `--vues` ne les filtrait — c'est ce que `v3-rapport.mjs` mesurait
+ * (« conformité du rendu » restait NON EXÉCUTÉE, aucun rapport produit).
+ */
+describe('« / » sépare la vitrine du tableau de bord PAR LA SESSION, pas par la route', () => {
+  it('vitrine et home partagent la route, jamais la session — aucun refus', async () => {
+    const { selectionComparable, refusDeSelection } = await import('@/scripts/lib/vues-comparables.mjs');
+    const index = litLesVues(DESIGN);
+    const home = index.vues.find((vue) => vue.id === 'home');
+
+    expect(index.refus).toEqual([]);
+    expect(sessionDeVue(home)).toBe('membre');
+
+    const selection = selectionComparable({ vues: index.vues, demandees: ['vitrine', 'home'] });
+
+    expect(refusDeSelection(selection)).toBeNull();
+    expect(selection.comparables.map((c) => c.id)).toEqual(['vitrine', 'home']);
   });
 });

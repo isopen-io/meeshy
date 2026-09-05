@@ -59,10 +59,21 @@ export const cheminDeVue = (vue) => {
   return { ok: true, chemin: vue.route.replace(motifJeton(), (_, nom) => declares[nom]) };
 };
 
+// LA CLÉ D'UNE COLLISION EST LE CHEMIN *ET* LA SESSION — jamais le chemin seul.
+// « / » sert deux écrans (conception § ROUTES) : la vitrine sans creance, le
+// tableau de bord AVEC — separes par un ETAT DE SESSION plutot que par un jeton
+// de route, exactement comme `linkRedirect`/`linkExpired` se separent par un
+// jeton. Le meme literal `@session` que `compare-rendu.js` et
+// `index-des-vues.mjs` (`CLE_DE_SESSION`) lisent deja sur `vue.jetons` — ce
+// module reste volontairement sans import d'eux (aucun disque, aucun
+// `import.meta`, § en-tete), donc le nom se repete plutot que se centralise.
 const collisions = (retenues) => {
-  const parChemin = new Map();
-  retenues.forEach((r) => parChemin.set(r.chemin, [...(parChemin.get(r.chemin) ?? []), r]));
-  return [...parChemin.entries()].filter(([, groupe]) => groupe.length > 1);
+  const parClef = new Map();
+  retenues.forEach((r) => {
+    const clef = JSON.stringify([r.chemin, r.session]);
+    parClef.set(clef, [...(parClef.get(clef) ?? []), r]);
+  });
+  return [...parClef.values()].filter((groupe) => groupe.length > 1);
 };
 
 export const selectionComparable = ({ vues, demandees }) => {
@@ -77,10 +88,15 @@ export const selectionComparable = ({ vues, demandees }) => {
   const resolues = choisies.map((v) => ({ vue: v, resolution: cheminDeVue(v) }));
   const retenues = resolues
     .filter((r) => r.resolution.ok)
-    .map((r) => ({ id: r.vue.id, route: r.vue.route, chemin: r.resolution.chemin }));
+    .map((r) => ({
+      id: r.vue.id,
+      route: r.vue.route,
+      chemin: r.resolution.chemin,
+      session: r.vue.jetons?.['@session'] ?? null,
+    }));
 
   const partagees = collisions(retenues);
-  const enCollision = new Set(partagees.flatMap(([, groupe]) => groupe.map((r) => r.id)));
+  const enCollision = new Set(partagees.flatMap((groupe) => groupe.map((r) => r.id)));
 
   return {
     comparables: retenues.filter((r) => !enCollision.has(r.id)),
@@ -93,13 +109,13 @@ export const selectionComparable = ({ vues, demandees }) => {
       ...resolues
         .filter((r) => !r.resolution.ok)
         .map((r) => ({ id: r.vue.id, raison: r.resolution.raison })),
-      ...partagees.flatMap(([chemin, groupe]) =>
+      ...partagees.flatMap((groupe) =>
         groupe.map((r) => ({
           id: r.id,
           raison:
             `route partagée : ${groupe.map((g) => `« ${g.id} »`).join(' et ')} visent le même ` +
-            `écran servi (${chemin}) — une seule navigation ne peut pas rendre deux écrans ` +
-            `différents, déclarer un jeton distinct par vue`,
+            `écran servi (${groupe[0].chemin}) — une seule navigation ne peut pas rendre deux ` +
+            `écrans différents, déclarer un jeton distinct par vue`,
         })),
       ),
     ],
