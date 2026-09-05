@@ -141,18 +141,33 @@ final class ComposerRailDoorTests: XCTestCase {
     /// doigt « ici on écrit », et laisse la distinction au glyphe et au libellé,
     /// que `test_lesDeuxPortesDeTexte_…` tient distincts.
     func test_lOrdreDuRail_estCeluiDeLaPlanche() {
+        // **`.description` a quitté la rangée le 2026-09-05** (directive
+        // porteur) : le volet sous la scène est déjà son moyen, et il montre le
+        // texte par-dessus le média qu'il décrit. L'ordre des DIX restantes ne
+        // bouge pas — une position que les doigts ont apprise ne se recompose
+        // pas parce qu'une voisine part.
         XCTAssertEqual(ComposerRailDoor.canonicalRail,
-                       [.description, .content, .media, .sound, .text, .background, .drawing,
+                       [.content, .media, .sound, .text, .background, .drawing,
                         .sticker, .mention, .hashtag, .place],
                        "`.hashtag` se range JUSTE APRÈS `.mention` (#4636) : les deux "
                        + "désignent une entité que le serveur dérive du texte, et la "
                        + "position que les doigts apprennent suit cette parenté.")
     }
 
-    func test_leRailCanonique_neManqueAucunePorte() {
-        XCTAssertEqual(Set(ComposerRailDoor.canonicalRail),
-                       Set(ComposerRailDoor.allCases),
-                       "Une porte déclarée hors du rail canonique ne serait jamais peinte.")
+    /// **Une seule porte est hors du rail, et elle est NOMMÉE.**
+    ///
+    /// Le témoin exigeait l'égalité avec `allCases` — juste tant qu'aucune porte
+    /// n'avait de raison d'en sortir. `.description` en a une (elle a déjà son
+    /// volet), et l'égalité l'aurait interdite. La forme qui reste utile est
+    /// l'écart EXPLICITE : une onzième porte qui disparaîtrait du rail sans
+    /// passer par cette liste rougit, et c'est ce que le témeur gardait.
+    func test_leRailCanonique_neManqueAucunePorte_saufCellesQuiOntDejaLeurMoyen() {
+        let horsRail = Set(ComposerRailDoor.allCases).subtracting(ComposerRailDoor.canonicalRail)
+        XCTAssertEqual(horsRail, [.description],
+                       "Une porte déclarée hors du rail canonique ne serait jamais peinte — "
+                       + "sauf celles dont un AUTRE moyen tient le rôle, qui doivent être "
+                       + "nommées ici avec leur raison. `.description` : le volet sous la "
+                       + "scène (#4993), qui la montre par-dessus le média décrit.")
     }
 
     // MARK: - Loi 4 : une porte non servie est ABSENTE
@@ -162,15 +177,18 @@ final class ComposerRailDoorTests: XCTestCase {
         // pas de la géographie. Le poser sur `.story` y mêlerait le retrait du
         // paragraphe (#4893), qui est une autre règle — et un témoin qui teste
         // deux règles à la fois ne dit plus laquelle est tombée.
+        // `.media` et `.sound` : deux portes SERVIES et toutes deux au rail. La
+        // fixture n'emploie plus `.description`, que le rail n'offre plus — elle
+        // aurait fait tomber ce témoin pour une raison étrangère à la loi 4.
         let offertes = ComposerRailDoor.offered(
-            served: [.description, .media], format: .post, allowsCapture: true)
-        XCTAssertEqual(offertes, [.description, .media])
+            served: [.sound, .media], format: .post, allowsCapture: true)
+        XCTAssertEqual(offertes, [.media, .sound])
     }
 
     func test_lOrdreSurvit_auxPortesRetirees() {
         let offertes = ComposerRailDoor.offered(
-            served: [.place, .description, .sound], format: .post, allowsCapture: true)
-        XCTAssertEqual(offertes, [.description, .sound, .place],
+            served: [.place, .content, .sound], format: .post, allowsCapture: true)
+        XCTAssertEqual(offertes, [.content, .sound, .place],
                        "L'ordre du rail ne se recompose pas au gré de ce qui reste.")
     }
 
@@ -184,10 +202,13 @@ final class ComposerRailDoorTests: XCTestCase {
             served: Set(ComposerRailDoor.allCases), format: .status, allowsCapture: true)
         XCTAssertFalse(offertes.contains { $0.level(for: .status) == .object },
                        "Un mood n'a pas de scène : rien à y poser.")
-        XCTAssertEqual(offertes, [.description, .mention, .hashtag],
-                       "…et les TROIS portes qui ne visent pas la scène restent. "
+        XCTAssertEqual(offertes, [.mention, .hashtag],
+                       "…et les DEUX portes qui ne visent pas la scène restent. "
                        + "`.hashtag` y est entrée le 2026-09-01 (#4636) : comme la mention, "
-                       + "elle vise la publication, donc l'absence de toile ne la retire pas.")
+                       + "elle vise la publication, donc l'absence de toile ne la retire pas. "
+                       + "`.description` en est sortie le 2026-09-05 — pas parce qu'un mood "
+                       + "n'aurait rien à décrire, mais parce que le rail ne l'offre plus "
+                       + "nulle part.")
     }
 
     /// **Le LIEU disparaît du Mood pour une raison qui n'est PAS l'absence de
@@ -338,23 +359,69 @@ final class ComposerRailDoorTests: XCTestCase {
                        "Il ne se voit pas sur la scène — donc la rangée canonique, jamais le rail gauche.")
     }
 
-    /// **Voisine de la description, et distincte d'elle À L'ŒIL.** Les deux
-    /// portes se suivent dans la rangée ; deux glyphes qui se ressemblent y
-    /// seraient deux boutons qu'on tape au hasard.
-    func test_lesDeuxPortesDeTexte_seSuivent_etNePartagentNiGlypheNiLibelle() {
-        let rail = ComposerRailDoor.canonicalRail
-        guard let iDescription = rail.firstIndex(of: .description),
-              let iContenu = rail.firstIndex(of: .content) else {
-            return XCTFail("Les deux portes de texte doivent être dans la rangée canonique.")
-        }
-        XCTAssertEqual(iContenu, iDescription + 1,
-                       "Le corps suit immédiatement la légende : deux textes, deux portes voisines.")
+    /// **Les deux textes restent distincts À L'ŒIL — et la question a changé de
+    /// forme le 2026-09-05.**
+    ///
+    /// Le témoin gardait deux choses : l'ADJACENCE des deux portes dans la
+    /// rangée, et leur DISTINCTION. La première est caduque — `.description` a
+    /// quitté le rail, il n'y a plus de voisinage à tenir.
+    ///
+    /// **La seconde survit, et compte davantage.** Les deux champs existent
+    /// toujours en Post, à deux mètres l'un de l'autre : la porte CONTENU dans
+    /// la rangée basse, le volet de légende sous la scène. Un auteur qui les
+    /// confond écrit son corps de post dans la légende d'un média — et rien ne
+    /// le lui dira. C'est précisément parce que l'adjacence a disparu que le
+    /// glyphe et la phrase doivent porter seuls la différence.
+    ///
+    /// > Retirer la moitié caduque d'un témoin et garder l'autre est le geste
+    /// > qui manque le plus souvent : on supprime le témoin entier, et la
+    /// > garantie qui tenait encore part avec lui.
+    func test_lesDeuxTextesDUnPost_nePartagentNiGlypheNiLibelle() {
         XCTAssertNotEqual(ComposerRailDoor.content.symbolName,
-                          ComposerRailDoor.description.symbolName)
+                          ComposerRailDoor.description.symbolName,
+                          "Deux glyphes qui se ressemblent seraient deux boutons qu'on tape au hasard.")
         XCTAssertNotEqual(ComposerRailCopy.label(.content),
                           ComposerRailCopy.label(.description),
                           "VoiceOver n'a pas le glyphe : c'est la phrase qui doit les distinguer.")
     }
+
+    // MARK: - Ce qui a DÉJÀ un moyen ne prend pas une porte (2026-09-05)
+
+    /// **La description a quitté la rangée canonique.**
+    ///
+    /// > « Il existe déjà un moyen de mettre à jour la description de la scène,
+    /// > il faut enlever cela de la rangée canonique. » — directive porteur
+    /// > 2026-09-05.
+    ///
+    /// Ce moyen est le volet sous la scène, dont le chevron reste disponible en
+    /// permanence (#4993) — et il est MEILLEUR que la porte : il se peint
+    /// par-dessus le média qu'il décrit, donc l'auteur voit ce qu'il légende.
+    /// Une porte qui ouvre le même volet est un second bouton pour un seul
+    /// chemin, exactement ce que le § 3 d'`apps/ios/CLAUDE.md` interdit.
+    func test_laDescription_nEstPlusOfferteParLeRail() {
+        XCTAssertFalse(ComposerRailDoor.canonicalRail.contains(.description),
+                       "Le volet sous la scène est déjà le moyen ; la porte en était la jumelle.")
+
+        for format in [ComposerFormat.post, .story, .reel, .status] {
+            XCTAssertFalse(
+                ComposerRailDoor.offered(served: Set(ComposerRailDoor.allCases),
+                                         format: format,
+                                         allowsCapture: true).contains(.description),
+                "aucun format ne doit la servir — y compris en \(format), où un `served` " +
+                "généreux la proposerait si `canonicalRail` la portait encore"
+            )
+        }
+    }
+
+    /// **Elle reste un CAS de l'énuméré, et c'est délibéré.** La retirer de
+    /// l'enum ferait tomber `level`, le glyphe et le badge, qui la classent sans
+    /// l'offrir — et un `switch` exhaustif qui perd un cas ne rougit nulle part,
+    /// il change simplement de sens.
+    func test_laDescription_resteClassee_memeSansPorte() {
+        XCTAssertEqual(ComposerRailDoor.description.level(for: .post), .slide)
+        XCTAssertFalse(ComposerRailDoor.description.symbolName.isEmpty)
+    }
+
 }
 
 /// La VUE du rail — trois faits qu'un rendu ne prouverait pas plus vite, et que
