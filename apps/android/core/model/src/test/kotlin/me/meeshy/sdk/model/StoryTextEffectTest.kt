@@ -41,7 +41,7 @@ class StoryTextEffectTest {
         assertThat(glow.offsetXEm).isEqualTo(0.0)
         assertThat(glow.offsetYEm).isEqualTo(0.0)
         assertThat(glow.blurEm).isGreaterThan(0.0)
-        assertThat(glow.ink).isEqualTo(StoryTextEffectInk.TEXT)
+        assertThat(glow.ink).isEqualTo(StoryTextEffectInk.Text)
     }
 
     @Test
@@ -52,16 +52,16 @@ class StoryTextEffectTest {
         assertThat(relief.offsetYEm).isGreaterThan(0.0)
         assertThat(shadow.blurEm).isGreaterThan(0.0)
         assertThat(relief.blurEm).isEqualTo(0.0)
-        assertThat(shadow.ink).isEqualTo(StoryTextEffectInk.DARK)
-        assertThat(relief.ink).isEqualTo(StoryTextEffectInk.DARK)
+        assertThat(shadow.ink).isEqualTo(StoryTextEffectInk.Dark)
+        assertThat(relief.ink).isEqualTo(StoryTextEffectInk.Dark)
     }
 
     /** The table is the iOS/web one, verbatim — a drift here is a drift the reader sees. */
     @Test
     fun `the table mirrors the iOS and web values`() {
-        assertThat(StoryTextEffect.GLOW.shadow).isEqualTo(StoryTextEffectShadow(0.0, 0.0, 0.36, StoryTextEffectInk.TEXT, 1.0))
-        assertThat(StoryTextEffect.SHADOW.shadow).isEqualTo(StoryTextEffectShadow(0.03, 0.06, 0.16, StoryTextEffectInk.DARK, 0.6))
-        assertThat(StoryTextEffect.RELIEF.shadow).isEqualTo(StoryTextEffectShadow(0.05, 0.05, 0.0, StoryTextEffectInk.DARK, 0.85))
+        assertThat(StoryTextEffect.GLOW.shadow).isEqualTo(StoryTextEffectShadow(0.0, 0.0, 0.36, StoryTextEffectInk.Text, 1.0))
+        assertThat(StoryTextEffect.SHADOW.shadow).isEqualTo(StoryTextEffectShadow(0.03, 0.06, 0.16, StoryTextEffectInk.Dark, 0.6))
+        assertThat(StoryTextEffect.RELIEF.shadow).isEqualTo(StoryTextEffectShadow(0.05, 0.05, 0.0, StoryTextEffectInk.Dark, 0.85))
     }
 
     /**
@@ -101,9 +101,9 @@ class StoryTextEffectTest {
     /** The three new mirror values, verbatim from the iOS table. */
     @Test
     fun `the widened table mirrors the iOS values`() {
-        assertThat(StoryTextEffect.NEON.shadow).isEqualTo(StoryTextEffectShadow(0.0, 0.0, 0.60, StoryTextEffectInk.TEXT, 1.0))
-        assertThat(StoryTextEffect.LONG_SHADOW.shadow).isEqualTo(StoryTextEffectShadow(0.14, 0.14, 0.0, StoryTextEffectInk.DARK, 0.35))
-        assertThat(StoryTextEffect.EMBOSS.shadow).isEqualTo(StoryTextEffectShadow(-0.03, -0.03, 0.02, StoryTextEffectInk.LIGHT, 0.7))
-        assertThat(StoryTextEffect.LETTERPRESS.shadow).isEqualTo(StoryTextEffectShadow(0.0, 0.025, 0.01, StoryTextEffectInk.LIGHT, 0.6))
+        assertThat(StoryTextEffect.NEON.shadow).isEqualTo(StoryTextEffectShadow(0.0, 0.0, 0.60, StoryTextEffectInk.Text, 1.0))
+        assertThat(StoryTextEffect.LONG_SHADOW.shadow).isEqualTo(StoryTextEffectShadow(0.14, 0.14, 0.0, StoryTextEffectInk.Dark, 0.35))
+        assertThat(StoryTextEffect.EMBOSS.shadow).isEqualTo(StoryTextEffectShadow(-0.03, -0.03, 0.02, StoryTextEffectInk.Light, 0.7))
+        assertThat(StoryTextEffect.LETTERPRESS.shadow).isEqualTo(StoryTextEffectShadow(0.0, 0.025, 0.01, StoryTextEffectInk.Light, 0.6))
     }
 }
