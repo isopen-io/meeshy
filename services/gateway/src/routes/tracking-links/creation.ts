@@ -315,7 +315,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
          * mais la distinction de statut est la même — absence de session ⇒
          * 401, identité connue et non-créatrice ⇒ 403.
          */
-        if (!request.authContext.isAuthenticated) {
+        if (!request.authContext?.isAuthenticated) {
           return sendUnauthorized(reply, 'Authentification requise pour consulter ce lien', {
             code: 'UNAUTHORIZED'
           });
