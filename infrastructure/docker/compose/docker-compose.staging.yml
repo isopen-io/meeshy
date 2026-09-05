@@ -325,19 +325,6 @@ services:
       - NEXT_PUBLIC_TRANSLATION_URL=https://ml.staging.${DOMAIN:-meeshy.me}/translate
       - NEXT_PUBLIC_BACKEND_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
-      # LES PORTÉES DU TRAVAILLEUR DE ZONE (#4472) — l'AUTRE face de la règle
-      # Traefik ci-dessous, dans le MÊME fichier pour ne pas diverger (témoin :
-      # apps/web-v3/__tests__/sw-registration.test.ts). Chaque portée doit être
-      # CAPTURÉE par la règle du routeur ET couverte par V3_ZONE_PREFIXES du
-      # worker legacy. Jamais '/' avant l'étape 7 du § 4.9. Retirer la variable
-      # désarme toute registration — le retour arrière du worker de zone.
-      - V3_SW_PORTEES=/l/,/chats,/chat/
-      # Le périmètre NAVIGABLE du navigateur de zone (#5106) — les chemins
-      # entre lesquels la navigation douce échange les documents. Même loi que
-      # V3_SW_PORTEES : chaque entrée capturée par la règle du routeur
-      # ci-dessous (témoin : sw-registration.test.ts), jamais '/'. Retirer la
-      # variable rend chaque lien à la navigation native.
-      - V3_NAVIGABLE=/chats,/chat/,/feed,/links,/notifications,/contacts,/search
       - NEXT_PUBLIC_STATIC_URL=https://static.staging.${DOMAIN:-meeshy.me}
       - NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION=${NEXT_PUBLIC_DISABLE_CLIENT_TRANSLATION:-true}
       - NEXT_PUBLIC_USE_API_TRANSLATION_ONLY=${NEXT_PUBLIC_USE_API_TRANSLATION_ONLY:-true}
@@ -413,6 +400,23 @@ services:
       # Absente, elle retomberait sur l'en-tête Host — l'hôte INTERNE derrière
       # Traefik — et la carte d'aperçu serait cachée sous deux origines.
       - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
+      # LES PORTÉES DU TRAVAILLEUR DE ZONE (#4472) — l'AUTRE face de la règle
+      # Traefik ci-dessous, dans le MÊME fichier pour ne pas diverger (témoin :
+      # apps/web-v3/__tests__/sw-registration.test.ts). Déclarées ICI, sur le
+      # service qui SERT `apps/web-v3` et LIT `process.env['V3_SW_PORTEES']`
+      # (`app/connecte/chargeur.ts`) — jamais sur `frontend-staging`, le
+      # LEGACY, dont le `sw.js` connaît sa zone par une constante compilée
+      # (`V3_ZONE_PREFIXES`), pas par l'environnement. Chaque portée doit être
+      # CAPTURÉE par la règle du routeur ET couverte par V3_ZONE_PREFIXES du
+      # worker legacy. Jamais '/' avant l'étape 7 du § 4.9. Retirer la variable
+      # désarme toute registration — le retour arrière du worker de zone.
+      - V3_SW_PORTEES=/l/,/chats,/chat/
+      # Le périmètre NAVIGABLE du navigateur de zone (#5106) — les chemins
+      # entre lesquels la navigation douce échange les documents. Même loi que
+      # V3_SW_PORTEES : chaque entrée capturée par la règle du routeur
+      # ci-dessous (témoin : sw-registration.test.ts), jamais '/'. Retirer la
+      # variable rend chaque lien à la navigation native.
+      - V3_NAVIGABLE=/chats,/chat/,/feed,/links,/notifications,/contacts,/search
     depends_on:
       gateway-staging:
         condition: service_healthy

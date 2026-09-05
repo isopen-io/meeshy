@@ -123,6 +123,13 @@ import { avisDEcran, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, PUCE_DU_PRISME, rondDEnT
  * largeur est RÉSERVÉE (les dates s'alignent d'une ligne à l'autre, arbitrage
  * porteur du 2026-09-04) sans jamais tronquer l'heure aux grandes tailles.
  *
+ * `5rem`, PAS `3.75rem` (correctif CLS, mesuré) : le SERVEUR rend un relatif
+ * (`quand`, `lib/temps.ts` — « il y a 27 min », jusqu'à 74 px mesurés) que le
+ * module remonte en heure locale ABSOLUE (`heureLocale` — « 13:10 », ~40 px) —
+ * deux formats, DÉLIBÉRÉMENT différents (doc-tête de `lib/temps.ts`). Une
+ * réserve dimensionnée sur le SEUL format absolu laissait `.datation`
+ * RÉTRÉCIR à l'arrivée du module — un défaut de CLS, jamais un choix.
+ *
  * La MÉTA VIDÉE ne réserve plus sa marge. Le sélecteur énumère ce qui ne compte
  * pas — `.reagir-slot` (réservé, `height:0`), `.attente` et `.echec` (masqués
  * par `display:none`, donc invisibles à `:not([hidden])`) — et les états
@@ -207,7 +214,7 @@ ${PUCE_DU_PRISME}
 .ligne .corps{flex:1;min-width:0}
 .ligne .corps.colonnes{display:flex;align-items:flex-end;gap:var(--space-2)}
 .ligne .bulle{flex:1;min-width:0}
-.ligne .datation{flex:none;margin:0;display:flex;align-items:center;justify-content:flex-end;gap:var(--space-1);min-width:3.75rem;font-size:var(--text-xs);color:var(--color-text-subtle);white-space:nowrap}
+.ligne .datation{flex:none;margin:0;display:flex;align-items:center;justify-content:flex-end;gap:var(--space-1);min-width:5rem;font-size:var(--text-xs);color:var(--color-text-subtle);white-space:nowrap}
 .ligne .datation svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .ligne .qui{margin:0;display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:baseline;font-weight:var(--font-weight-semibold);line-height:var(--leading-tight)}
 /* La cible du NOM atteint 44 px SANS agrandir le TEXTE — le même idiome que
