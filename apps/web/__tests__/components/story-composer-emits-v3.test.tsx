@@ -165,7 +165,7 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
     expect(Object.keys(text ?? {}).sort()).toEqual(referenceKeys);
   });
 
-  it('never guesses a locale on the root text object - DoD rejection of F7d (constat 4 BLOQUANT) : a client-guessed `locale` becomes `sourceLanguage` server-side and is PREFERRED over text detection, and short-circuits the reader Prisme (`CanvasV3Scene.tsx` `sameLanguage(language, o.locale)`) - a wrong guess mistranslates AND mis-ranks. The web composer has no explicit language picker (unlike iOS), so it can never emit an HONEST `locale` here - closing the Prisme rule 3 gap is done at READ time instead (`postToStoryData`, `withOriginLocale`, `lib/story-transforms.ts`), backfilling from the server-DETECTED `post.originalLanguage`, never guessed client-side', () => {
+  it('never guesses a locale on the root text object - DoD rejection of F7d (constat 4 BLOQUANT) : a client-guessed `locale` becomes `sourceLanguage` server-side and is PREFERRED over text detection, and short-circuits the reader Prisme (`CanvasV3Scene.tsx` `isSameLanguage(language, o.locale)`) - a wrong guess mistranslates AND mis-ranks. The web composer has no explicit language picker (unlike iOS), so it can never emit an HONEST `locale` here - closing the Prisme rule 3 gap is done at READ time instead (`postToStoryData`, `withOriginLocale`, `lib/story-transforms.ts`), backfilling from the server-DETECTED `post.originalLanguage`, never guessed client-side', () => {
     const { published } = renderComposer();
     typeContent('Hello there');
     clickPublish();
