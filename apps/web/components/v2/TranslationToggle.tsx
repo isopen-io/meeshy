@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
 import { getFlag } from './flags';
-import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 
 export interface TranslationItem {
   languageCode: string;
@@ -100,8 +100,8 @@ function TranslationToggle({
         ? [userLanguage]
         : [];
     for (const lang of order) {
-      if (sameLanguage(originalLanguage, lang)) return originalVersion;
-      const match = translations.find((t) => sameLanguage(t.languageCode, lang));
+      if (isSameLanguage(originalLanguage, lang)) return originalVersion;
+      const match = translations.find((t) => isSameLanguage(t.languageCode, lang));
       if (match) return { ...match, isOriginal: false as const };
     }
     return originalVersion;
@@ -186,7 +186,7 @@ function TranslationToggle({
     const allVersions: Array<TranslationItem & { isOriginal: boolean }> = [
       originalVersion,
       ...translations
-        .filter((t) => !sameLanguage(t.languageCode, originalLanguage))
+        .filter((t) => !isSameLanguage(t.languageCode, originalLanguage))
         .map((t) => ({ ...t, isOriginal: false })),
     ];
     const hasChoice = allVersions.length > 1;
@@ -205,7 +205,7 @@ function TranslationToggle({
         {hasChoice && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {allVersions.map((version) => {
-              const isSelected = sameLanguage(version.languageCode, displayedVersion.languageCode);
+              const isSelected = isSameLanguage(version.languageCode, displayedVersion.languageCode);
               return (
                 <button
                   key={version.languageCode}

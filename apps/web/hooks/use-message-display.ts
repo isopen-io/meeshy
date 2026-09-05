@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import type { BubbleTranslation } from '@meeshy/shared/types';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { mentionsToLinks } from '@meeshy/shared/types/mention';
-import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { buildTranslationRecord } from '@/utils/translation-record';
 
@@ -42,12 +42,12 @@ export function useMessageDisplay({
 }: UseMessageDisplayProps) {
   // Contenu traduit du message principal
   const displayContent = useMemo(() => {
-    if (sameLanguage(currentDisplayLanguage, message.originalLanguage || 'fr')) {
+    if (isSameLanguage(currentDisplayLanguage, message.originalLanguage || 'fr')) {
       return message.originalContent || message.content;
     }
 
     const translation = message.translations?.find((t: any) =>
-      sameLanguage(t.language || t.targetLanguage, currentDisplayLanguage)
+      isSameLanguage(t.language || t.targetLanguage, currentDisplayLanguage)
     );
 
     if (translation) {

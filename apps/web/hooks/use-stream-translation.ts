@@ -13,7 +13,7 @@ import { useState, useCallback } from 'react';
 import { useMessageTranslation } from '@/hooks/useMessageTranslation';
 import { getLanguageInfo } from '@meeshy/shared/types';
 import type { User } from '@meeshy/shared/types';
-import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 
 interface UseStreamTranslationOptions {
@@ -105,7 +105,7 @@ export function useStreamTranslation({
 
         // Chercher si une traduction existe déjà
         const existingIndex = updatedTranslations.findIndex(
-          t => sameLanguage(t.targetLanguage, targetLang)
+          t => isSameLanguage(t.targetLanguage, targetLang)
         );
 
         const translationObject = {
@@ -143,7 +143,7 @@ export function useStreamTranslation({
     const userLanguages = getUserLanguagePreferences(user);
 
     const relevantTranslation = translations.find(t =>
-      userLanguages.some(lang => sameLanguage(lang, t.targetLanguage))
+      userLanguages.some(lang => isSameLanguage(lang, t.targetLanguage))
     );
 
     if (relevantTranslation) {

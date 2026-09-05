@@ -318,7 +318,7 @@ export interface BackgroundSoundCredit {
 // `StoryComposerViewModel+Elements.swift:674`) : il ne peut donc jamais
 // poser une `locale` HONNÊTE sur le texte racine à l'ÉMISSION — deviner
 // depuis la locale d'interface rouvre la règle 3 du Prisme (arbitrage 4 vs
-// 8). Sans repli, `CanvasV3Scene.resolveText` (`sameLanguage(language,
+// 8). Sans repli, `CanvasV3Scene.resolveText` (`isSameLanguage(language,
 // o.locale)`) ne peut jamais faire concourir l'origine à son rang : un
 // texte anglais sans `locale`, prisme `['en','fr']`, traduction `fr`
 // disponible, sert « Bonjour » à un lecteur anglais-primaire.

@@ -2,7 +2,7 @@
 
 import { Component, useEffect, useRef, type ReactNode } from 'react';
 import type { CanvasV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
-import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 import {
   effectiveMediaRatio,
   mediaCropStyle,
@@ -332,7 +332,7 @@ function bandClass(anchor: ObjectV3['anchor']): string | undefined {
 export function translationFor(translations: Record<string, unknown>, language: string): string | undefined {
   const exact = str(translations[language]);
   if (exact) return exact;
-  const match = Object.entries(translations).find(([lang]) => sameLanguage(lang, language));
+  const match = Object.entries(translations).find(([lang]) => isSameLanguage(lang, language));
   return match ? str(match[1]) : undefined;
 }
 
@@ -348,7 +348,7 @@ export function resolveText(o: ObjectV3, preferredLanguages: readonly string[]):
   for (const language of preferredLanguages) {
     const translated = translationFor(table, language);
     if (translated) return translated;
-    if (o.locale && sameLanguage(language, o.locale)) return original;
+    if (o.locale && isSameLanguage(language, o.locale)) return original;
   }
   return original;
 }

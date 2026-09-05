@@ -23,7 +23,7 @@ import {
 import { DEFAULT_READING_MODE, isFlatReadingMode, type ReadingMode } from '@/lib/conversations/reading-mode';
 import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
-import { isSameLanguage as sameLanguage } from '@meeshy/shared/utils/language-normalize';
+import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
 import { buildTranslationRecord } from '@/utils/translation-record';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
 
@@ -343,8 +343,8 @@ export const MessagesDisplay = memo(function MessagesDisplay({
         // `useMessageDisplay` : un état `en` et un préféré `en-US` sont la même
         // langue et ne doivent pas provoquer de bascule.
         if (
-          !sameLanguage(preferred, original) &&
-          !sameLanguage(preferred, currentState.currentDisplayLanguage)
+          !isSameLanguage(preferred, original) &&
+          !isSameLanguage(preferred, currentState.currentDisplayLanguage)
         ) {
           messagesToUpdate[message.id] = preferred;
         }

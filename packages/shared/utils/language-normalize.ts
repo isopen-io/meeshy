@@ -180,21 +180,27 @@ export function normalizeLanguageForDedup(code: string): string {
 }
 
 /**
- * Égalité de langue conforme au Prisme Linguistique : deux codes verbatim
- * peuvent être région-tagués (`en-US`, `fr_FR`), 3-lettres (`fra`) ou legacy
- * (`iw`) et désigner la même langue. Un `===` brut les traite comme des
- * langues distinctes — cf. § « Le drapeau original/traduit … ignorent la
- * canonicalisation du Prisme » (CLAUDE.md racine).
+ * Égalité de langue conforme au Prisme Linguistique : deux codes désignent la
+ * MÊME langue s'ils canonicalisent vers la même clé de déduplication.
  *
- * SSOT unique de cette comparaison : avant cette fonction, cinq copies
- * locales identiques coexistaient dans `apps/web` (`use-message-display.ts`,
- * `messages-display.tsx`, `TranslationToggle.tsx`, `use-stream-translation.ts`,
- * `CanvasV3Scene.tsx`), et un sixième site (`MessageActionsBar.tsx`) n'en avait
- * aucune et comparait en `===` brut.
+ * SSOT unique de cette comparaison côté clients TypeScript. Les codes comparés
+ * (`currentDisplayLanguage`, `originalLanguage`, clés de traduction
+ * `language`/`targetLanguage`) sont verbatim et peuvent être région-tagués
+ * (`'en-US'`, `'fr_FR'`), casse-mixte (`'FR'`), 3-lettres (`'fra'`) ou legacy
+ * (`'iw'`). Une comparaison brute `===` traiterait `'en'` et `'en-US'` comme deux
+ * langues distinctes — un message réputé « hors langue affichée » alors qu'il y
+ * est, une traduction keyée `'en-US'` jamais retrouvée pour la langue affichée
+ * `'en'`, un contrôle de traduction qui ment sur son état.
  *
- * Retourne `false` si l'un des deux codes est absent/vide — un code manquant
- * ne "matche" jamais, y compris lui-même.
+ * Renvoie `false` dès qu'un code est vide, `null` ou `undefined` (aucune langue
+ * à comparer). S'appuie sur {@link normalizeLanguageForDedup}.
+ *
+ * Remplace les copies locales de `sameLanguage` d'apps/web (use-message-display,
+ * messages-display, TranslationToggle, use-stream-translation, CanvasV3Scene).
  */
-export function isSameLanguage(a?: string | null, b?: string | null): boolean {
+export function isSameLanguage(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
   return !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 }
