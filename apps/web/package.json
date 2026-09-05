@@ -50,7 +50,7 @@
     "@tanstack/react-query-persist-client": "^5.102.8",
     "@tanstack/react-virtual": "^3.14.9",
     "@types/markdown-it": "^14.1.2",
-    "@vercel/og": "^0.11.1",
+    "@vercel/og": "^1.0.2",
     "axios": "^1.18.1",
     "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
