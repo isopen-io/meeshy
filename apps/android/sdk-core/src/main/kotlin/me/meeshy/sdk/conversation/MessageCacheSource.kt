@@ -12,10 +12,10 @@ import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.MeeshyApi
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.MessageApi
-import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.api.listConditionalResult
 import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a message-list revalidation fails; carries the API error message. */
@@ -54,14 +54,41 @@ internal class MessageCacheSource(
 
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(resourceKey)
 
+    /**
+     * #5188 — the recent-message window is a single, unvarying request shape
+     * per [conversationId] (no offset/limit/before — see [MessageApi.
+     * listConditional]'s doc-comment), so unlike [ConversationCacheSource]'s
+     * multi-page, multi-scope sweep, ONE stored [me.meeshy.core.database.
+     * entity.SyncMetaEntity.etag] is always the exact validator for the next
+     * call — no request-key scoping needed. A 304 means "confirmed
+     * unchanged": zero body decoded, zero Room writes, `lastSyncedAt`
+     * refreshed as any successful revalidation. A 304 arriving when no `ETag`
+     * was held is a server anomaly (RFC 7232 defines 304 only as an answer to
+     * a conditional request) and throws, rather than being silently read as
+     * "unchanged" or as an empty success.
+     */
     override suspend fun revalidate() {
-        when (val result = apiCall { messageApi.list(conversationId) }) {
-            is NetworkResult.Success -> persist(result.data)
-            is NetworkResult.Failure -> throw MessageSyncException(result.error.message)
+        val currentEtag = syncMetaDao.etag(resourceKey)
+        when (
+            val result = messageApi.listConditionalResult(
+                conversationId = conversationId,
+                ifNoneMatch = currentEtag,
+            )
+        ) {
+            is ConditionalResult.NotModified -> {
+                if (currentEtag == null) {
+                    throw MessageSyncException(
+                        "Unexpected 304 for messages:$conversationId without If-None-Match sent",
+                    )
+                }
+                syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), null, currentEtag, null))
+            }
+            is ConditionalResult.Fresh -> persist(result.data, newEtag = result.etag)
+            is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
     }
 
-    private suspend fun persist(messages: List<ApiMessage>) {
+    private suspend fun persist(messages: List<ApiMessage>, newEtag: String?) {
         val now = clock.nowMillis()
         val rows = messages.map { message ->
             MessageEntity(
@@ -86,7 +113,7 @@ internal class MessageCacheSource(
                     rows.map { it.id },
                 )
             }
-            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now))
+            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, newEtag, null))
         }
     }
 }
