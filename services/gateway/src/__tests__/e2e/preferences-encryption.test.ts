@@ -196,11 +196,27 @@ describe('E2E: Preferences Encryption & Security', () => {
   });
 
   describe('Application Security Settings', () => {
+    // `telemetryAnonymized` a été RETIRÉ de ces deux corps : la clé n'est
+    // déclarée NULLE PART dans `ApplicationPreferenceSchema`, et ne l'a jamais
+    // été. Sous le mode strip elle était retirée en silence à chaque écriture ;
+    // depuis `.strict()` (#4589) elle vaut un 400, ce qui a fait tomber ces
+    // deux témoins.
+    //
+    // Ils passaient pour la MAUVAISE RAISON : le double rend l'entrée telle
+    // quelle (`upsert.mockResolvedValue({ userId, application: preferences })`),
+    // donc `body.data` reflétait ce que le témoin venait de fournir et non ce
+    // que le schéma avait produit. L'assertion sur `telemetryAnonymized` ne
+    // pouvait pas tomber, et l'anonymisation de télémétrie n'a jamais
+    // fonctionné pour personne.
+    //
+    // Retirer la clé ne SUPPRIME donc aucune fonctionnalité — il n'y en avait
+    // pas. Si elle doit exister, elle se DÉCLARE au schéma et ces témoins la
+    // reprennent : question ouverte au porteur sur #4589, délibérément non
+    // tranchée ici.
     it('should handle telemetry encryption settings', async () => {
       const preferences = {
         ...APPLICATION_PREFERENCE_DEFAULTS,
-        telemetryEnabled: true,
-        telemetryAnonymized: true
+        telemetryEnabled: true
       };
 
       mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
@@ -219,14 +235,16 @@ describe('E2E: Preferences Encryption & Security', () => {
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
       expect(body.data.telemetryEnabled).toBe(true);
-      expect(body.data.telemetryAnonymized).toBe(true);
     });
 
-    it('should enforce telemetry anonymization when enabled', async () => {
+    // Renommé : ce témoin n'a jamais vérifié d'anonymisation. Il postait
+    // `telemetryAnonymized: false`, clé inexistante, et n'assertait ensuite que
+    // le 200 — garder l'ancien titre laisserait un témoin qui ANNONCE une
+    // garantie qu'il ne mesure pas, ce qui se lit comme une spécification.
+    it('accepte une écriture de télémétrie dont toutes les clés sont déclarées', async () => {
       const preferences = {
         ...APPLICATION_PREFERENCE_DEFAULTS,
-        telemetryEnabled: true,
-        telemetryAnonymized: false
+        telemetryEnabled: true
       };
 
       mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
@@ -244,7 +262,6 @@ describe('E2E: Preferences Encryption & Security', () => {
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       expect(body.success).toBe(true);
-      // Note: Server should allow this but log a warning in production
     });
   });
 

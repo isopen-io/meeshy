@@ -418,16 +418,41 @@ describe('GET /anonymous/link/:identifier', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  /**
+   * #5077 — les `identifier` GÉNÉRÉS commencent EUX AUSSI par `mshy_`
+   * (`mshy_beta-staging`). Prendre tout `mshy_*` pour un `linkId` rendait 404
+   * sur chaque adresse que `/links` compose depuis le slug — mesuré sur
+   * staging le 2026-09-04. Même piège que `findShareLinkByIdentifier`
+   * (`prisma-queries.ts`), fix `ab22f62ac`, jamais reporté ici. Le témoin lit
+   * le WHERE : un mock qui l'ignore ne teste pas la requête.
+   */
+  it('résout un identifier custom mshy_* — le where accepte linkId ET identifier', async () => {
+    const findFirst = (app as any).prisma.conversationShareLink.findFirst;
+    findFirst.mockClear();
+    findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      linkId: 'mshy_JLKGTETp', identifier: 'mshy_beta-staging',
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/anonymous/link/mshy_beta-staging' });
+
+    expect(res.statusCode).toBe(200);
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { OR: [{ linkId: 'mshy_beta-staging' }, { identifier: 'mshy_beta-staging' }] },
+      }),
+    );
+  });
+
   it('returns 404 when link by ObjectID not found', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
     (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'GET', url: '/anonymous/link/507f1f77bcf86cd799439011' });
     expect(res.statusCode).toBe(404);
   });
 
   it('returns 410 when link is inactive', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
       ...mockShareLink, isActive: false,
       conversation: { id: CONV_ID, title: 'T', description: null, type: 'group', createdAt: new Date() },
     });
@@ -436,8 +461,7 @@ describe('GET /anonymous/link/:identifier', () => {
   });
 
   it('returns 200 with link info on success', async () => {
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
       ...mockShareLink,
       conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
     });
@@ -456,8 +480,7 @@ describe('GET /anonymous/link/:identifier', () => {
       { type: 'user', language: null, user: { systemLanguage: 'EN', regionalLanguage: null, customDestinationLanguage: null } },
       { type: 'anonymous', language: 'fr', user: null },
     ]);
-    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
       ...mockShareLink,
       conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
     });
@@ -466,6 +489,61 @@ describe('GET /anonymous/link/:identifier', () => {
     const stats = res.json().data.stats;
     expect(stats.spokenLanguages).toEqual(['en', 'fr']);
     expect(stats.languageCount).toBe(2);
+  });
+
+  /**
+   * #4522 — L'APERÇU DIT CE QUE LE LIEN OUVRE, pas seulement ce qu'il EXIGE.
+   *
+   * L'écran de jonction affiche, AVANT d'entrer, les quatre droits que le lien
+   * accorde à un invité — c'est le bloc « Ce que ce lien vous ouvre » de la
+   * planche. Ces quatre colonnes existent sur `ConversationShareLink` et
+   * gouvernent déjà les `permissions` du participant créé
+   * (`routes/conversations/link-admission.ts`, `joinAsGuest`) ; l'aperçu, lui,
+   * ne servait QUE les exigences (`requireAccount`, `requireNickname`…).
+   *
+   * Un écran qui affirme « ✓ Écrire et répondre » sans lire la colonne qui le
+   * décide MENT à un lecteur qui découvrira le refus au premier message. Servir
+   * la valeur est ici le « strict nécessaire » : ces quatre booléens décrivent
+   * ce que le porteur du lien s'apprête à accepter — ils ne révèlent ni membre,
+   * ni message, ni identité.
+   */
+  it('sert les quatre droits que le lien accorde à un invité', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      allowAnonymousMessages: true,
+      allowAnonymousFiles: true,
+      allowAnonymousImages: false,
+      allowViewHistory: true,
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({
+      allowAnonymousMessages: true,
+      allowAnonymousFiles: true,
+      allowAnonymousImages: false,
+      allowViewHistory: true,
+    });
+  });
+
+  it('demande les quatre droits au select racine — jamais une colonne devinée', async () => {
+    const findFirst = (app as any).prisma.conversationShareLink.findFirst;
+    findFirst.mockClear();
+    findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+
+    await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+
+    expect(findFirst.mock.calls[0][0].select).toMatchObject({
+      allowAnonymousMessages: true,
+      allowAnonymousFiles: true,
+      allowAnonymousImages: true,
+      allowViewHistory: true,
+    });
   });
 });
 
@@ -481,15 +559,16 @@ describe('GET /anonymous/link/:identifier — select racine explicite', () => {
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
-  it('branche mshy_* : findUnique porte select (jamais include), avec conversation et creator imbriqués', async () => {
-    const findUnique = (app as any).prisma.conversationShareLink.findUnique;
-    findUnique.mockClear();
-    findUnique.mockResolvedValueOnce({ ...mockShareLink });
+  it('branche mshy_* : findFirst porte select (jamais include), avec conversation et creator imbriqués — et le where accepte les deux clés (#5077)', async () => {
+    const findFirst = (app as any).prisma.conversationShareLink.findFirst;
+    findFirst.mockClear();
+    findFirst.mockResolvedValueOnce({ ...mockShareLink });
 
     await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
 
-    expect(findUnique).toHaveBeenCalledTimes(1);
-    const call = findUnique.mock.calls[0][0];
+    expect(findFirst).toHaveBeenCalledTimes(1);
+    const call = findFirst.mock.calls[0][0];
+    expect(call.where).toEqual({ OR: [{ linkId: LINK_ID }, { identifier: LINK_ID }] });
     expect(call).not.toHaveProperty('include');
     expect(call.select).toMatchObject({
       id: true,

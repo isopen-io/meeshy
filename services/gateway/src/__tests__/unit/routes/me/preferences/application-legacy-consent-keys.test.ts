@@ -31,17 +31,6 @@ jest.mock('../../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn<any>(({ op }: { op: () => Promise<any> }) => op()),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Import après les mocks — le ROUTEUR et le SCHÉMA réels du dépôt ─────────
 
 import { createPreferenceRouter } from '../../../../../routes/me/preferences/preference-router-factory';

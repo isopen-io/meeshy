@@ -1749,12 +1749,16 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?)
+    /// `sticker` (#4823) fait partie de l'exigence, comme `location` sur
+    /// `sendViaSocketFallback` : une valeur par défaut sur l'implémentation
+    /// concrète ne satisfait pas une exigence de protocole. Le shim sans
+    /// `sticker` vit dans l'extension « Protocol Default-Arg Convenience ».
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?, sticker: MessageSticker?)
     /// `location` fait partie de l'exigence : une valeur par défaut sur
     /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
     /// Swift. Le shim de compatibilité source (sans `location`) vit dans
     /// l'extension « Protocol Default-Arg Convenience » ci-dessous.
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck?
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?, sticker: MessageSticker?) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
@@ -1843,7 +1847,34 @@ public extension MessageSocketProviding {
             storyReplyToId: storyReplyToId,
             originalLanguage: originalLanguage,
             isEncrypted: isEncrypted,
-            clientMessageId: nil
+            clientMessageId: nil,
+            sticker: nil
+        )
+    }
+
+    /// Shim de compatibilité source pour les appelants antérieurs au sticker
+    /// (#4823) : même signature qu'avant l'ajout de `sticker` à l'exigence de
+    /// protocole, délègue avec `sticker: nil`.
+    func sendWithAttachments(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        storyReplyToId: String?,
+        originalLanguage: String?,
+        isEncrypted: Bool,
+        clientMessageId: String?
+    ) {
+        sendWithAttachments(
+            conversationId: conversationId,
+            content: content,
+            attachmentIds: attachmentIds,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted,
+            clientMessageId: clientMessageId,
+            sticker: nil
         )
     }
 
@@ -1870,6 +1901,34 @@ public extension MessageSocketProviding {
             isEncrypted: isEncrypted,
             clientMessageId: clientMessageId,
             location: nil
+        )
+    }
+
+    /// Shim de compatibilité source pour les appelants antérieurs au sticker
+    /// (#4823) : même signature qu'avant l'ajout de `sticker` à l'exigence de
+    /// protocole, délègue avec `sticker: nil`.
+    func sendViaSocketFallback(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        storyReplyToId: String?,
+        originalLanguage: String?,
+        isEncrypted: Bool,
+        clientMessageId: String,
+        location: SharedPlace?
+    ) async -> MessageSocketManager.SendMessageAck? {
+        await sendViaSocketFallback(
+            conversationId: conversationId,
+            content: content,
+            attachmentIds: attachmentIds,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted,
+            clientMessageId: clientMessageId,
+            location: location,
+            sticker: nil
         )
     }
 }
@@ -2019,7 +2078,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public var activeConversationId: String?
 
     private var manager: SocketManager?
-    private var socket: SocketIOClient?
+    /// Interne (plus `private`) : l'émission des messages vit dans
+    /// `MessageSocketManager+Send.swift`, extension d'un autre fichier, qui
+    /// doit joindre le socket. Aucune isolation ne change — même classe,
+    /// même module, mêmes appelants.
+    var socket: SocketIOClient?
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
     private var backoff = SocketReconnectBackoff()
@@ -2030,12 +2093,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Cached formatters — ISO8601DateFormatter is expensive to allocate.
     // Safe to share: options are set once during init and never mutated after.
-    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
+    // Internes (plus `private`) : lus par `MessageSocketManager+Send.swift`.
+    nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
-    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
@@ -2588,259 +2652,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitLiveLocationStop(conversationId: String) {
         socket?.emit("location:live-stop", ["conversationId": conversationId])
-    }
-
-    // MARK: - Send With Attachments
-
-    /// ACK returned by the gateway after `message:send` / `message:send-with-attachments`.
-    /// Phase 4 (spec §6.2) requires `_sendResponse()` to echo back the same
-    /// `clientMessageId` the client supplied in the request so the local
-    /// outbox/optimistic layer can match the row without scraping the
-    /// `message:new` broadcast. `clientMessageId` is optional on the wire
-    /// during the rollout window — older gateway builds drop the field.
-    /// `createdAt` carries the authoritative server timestamp so the WS-first
-    /// send path can stamp the optimistic row without waiting for the
-    /// `message:new` broadcast; it is `nil` against older gateway builds.
-    public struct SendMessageAck: Sendable {
-        public let messageId: String
-        public let clientMessageId: String?
-        public let createdAt: Date?
-
-        public init(messageId: String, clientMessageId: String?, createdAt: Date? = nil) {
-            self.messageId = messageId
-            self.clientMessageId = clientMessageId
-            self.createdAt = createdAt
-        }
-    }
-
-    /// Parses the ISO-8601 `createdAt` echoed in a send ACK, tolerating both
-    /// the fractional-seconds and basic forms. Returns `nil` on any mismatch
-    /// so the caller can fall back to the local send time.
-    private static func parseAckDate(_ value: Any?) -> Date? {
-        guard let string = value as? String, !string.isEmpty else { return nil }
-        return isoFormatterWithFractional.date(from: string)
-            ?? isoFormatterBasic.date(from: string)
-    }
-
-    private func buildAttachmentPayload(
-        conversationId: String, content: String?, attachmentIds: [String],
-        replyToId: String?, storyReplyToId: String? = nil, originalLanguage: String?, isEncrypted: Bool,
-        clientMessageId: String, location: SharedPlace? = nil
-    ) -> [String: Any] {
-        var payload: [String: Any] = [
-            "conversationId": conversationId,
-            "content": content ?? "",
-            "attachmentIds": attachmentIds,
-            "isEncrypted": isEncrypted,
-            "clientMessageId": clientMessageId
-        ]
-        if let replyToId { payload["replyToId"] = replyToId }
-        if let storyReplyToId { payload["storyReplyToId"] = storyReplyToId }
-        if let originalLanguage { payload["originalLanguage"] = originalLanguage }
-        if let location { payload["location"] = MessageSocketManager.locationSocketPayload(location) }
-        return payload
-    }
-
-    /// Sérialise un `SharedPlace` dans la forme dictionnaire que le gateway
-    /// valide (`parseSharedPlace` — coordonnées obligatoires, textes
-    /// optionnels). Les champs nil sont omis plutôt qu'envoyés en `NSNull`.
-    static func locationSocketPayload(_ place: SharedPlace) -> [String: Any] {
-        var dict: [String: Any] = [
-            "latitude": place.latitude,
-            "longitude": place.longitude
-        ]
-        if let name = place.name { dict["name"] = name }
-        if let address = place.address { dict["address"] = address }
-        if let category = place.category { dict["category"] = category }
-        return dict
-    }
-
-    public func sendWithAttachments(
-        conversationId: String,
-        content: String?,
-        attachmentIds: [String],
-        replyToId: String?,
-        storyReplyToId: String? = nil,
-        originalLanguage: String? = nil,
-        isEncrypted: Bool = false,
-        clientMessageId: String? = nil
-    ) {
-        let cid = clientMessageId ?? ClientMessageId.generate()
-        let payload = buildAttachmentPayload(
-            conversationId: conversationId, content: content, attachmentIds: attachmentIds,
-            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
-            clientMessageId: cid
-        )
-        socket?.emit("message:send-with-attachments", payload)
-    }
-
-    /// Emits `message:send-with-attachments` and awaits the gateway ACK.
-    /// Returns the full `SendMessageAck` (server `messageId` + the echoed
-    /// `clientMessageId` from the request) so callers can reconcile the
-    /// optimistic row by `clientMessageId` rather than waiting for the
-    /// targeted `message:new` broadcast. Returns `nil` on timeout / no socket
-    /// / server error.
-    public func sendWithAttachmentsAsync(
-        conversationId: String,
-        content: String?,
-        attachmentIds: [String],
-        replyToId: String?,
-        storyReplyToId: String? = nil,
-        originalLanguage: String? = nil,
-        isEncrypted: Bool = false,
-        clientMessageId: String? = nil,
-        location: SharedPlace? = nil
-    ) async -> SendMessageAck? {
-        guard let socket else { return nil }
-        let cid = clientMessageId ?? ClientMessageId.generate()
-        let payload = buildAttachmentPayload(
-            conversationId: conversationId, content: content, attachmentIds: attachmentIds,
-            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
-            clientMessageId: cid, location: location
-        )
-        return await withCheckedContinuation { continuation in
-            // 10s (was 30s): the gateway acks as soon as the message row is
-            // created — attachments were already uploaded separately, so a
-            // healthy ack lands in well under 2s. Holding the optimistic
-            // bubble in `.sending` for 30s only prolonged the clock icon; on
-            // timeout the caller falls through to the outbox retry loop,
-            // which remains the durable safety net. Matches `sendAsync`'s
-            // 10s default on the text path.
-            socket.emitWithAck("message:send-with-attachments", payload).timingOut(after: 10) { items in
-                if let response = items.first as? [String: Any],
-                   let success = response["success"] as? Bool, success,
-                   let data = response["data"] as? [String: Any],
-                   let messageId = data["messageId"] as? String {
-                    let ackCid = data["clientMessageId"] as? String ?? cid
-                    continuation.resume(returning: SendMessageAck(
-                        messageId: messageId,
-                        clientMessageId: ackCid,
-                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
-                    ))
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
-        }
-    }
-
-    // MARK: - Send Text (WebSocket-first)
-
-    /// Emits a plain-text `message:send` over the open Socket.IO connection and
-    /// awaits the gateway ACK. This is the WebSocket-first send path used for
-    /// regular text messages — parity with reactions / comments / status, which
-    /// already travel over the socket. Carries the full message effect set
-    /// (`isBlurred`, `expiresAt` for ephemeral, `effectFlags` bitfield,
-    /// `isViewOnce` / `maxViewOnceCount`) at parity with the REST route.
-    ///
-    /// Returns the `SendMessageAck` (server `messageId`, echoed
-    /// `clientMessageId`, server `createdAt`) on success, or `nil` on timeout /
-    /// no socket / server error so the caller can fall back to the REST send.
-    ///
-    /// NOT for E2EE payloads or attachments — the `message:send` event does not
-    /// transport those; the caller routes them through REST or
-    /// `sendWithAttachments`.
-    public func sendAsync(
-        conversationId: String,
-        content: String?,
-        originalLanguage: String? = nil,
-        replyToId: String? = nil,
-        storyReplyToId: String? = nil,
-        forwardedFromId: String? = nil,
-        forwardedFromConversationId: String? = nil,
-        messageType: String? = nil,
-        isBlurred: Bool? = nil,
-        expiresAt: Date? = nil,
-        effectFlags: UInt32? = nil,
-        isViewOnce: Bool? = nil,
-        maxViewOnceCount: Int? = nil,
-        clientMessageId: String? = nil,
-        location: SharedPlace? = nil,
-        timeoutSeconds: Double = 10
-    ) async -> SendMessageAck? {
-        guard let socket else { return nil }
-        let cid = clientMessageId ?? ClientMessageId.generate()
-        var payload: [String: Any] = [
-            "conversationId": conversationId,
-            "content": content ?? "",
-            "clientMessageId": cid
-        ]
-        if let originalLanguage { payload["originalLanguage"] = originalLanguage }
-        if let messageType { payload["messageType"] = messageType }
-        if let replyToId { payload["replyToId"] = replyToId }
-        if let storyReplyToId { payload["storyReplyToId"] = storyReplyToId }
-        if let forwardedFromId { payload["forwardedFromId"] = forwardedFromId }
-        if let forwardedFromConversationId { payload["forwardedFromConversationId"] = forwardedFromConversationId }
-        if let isBlurred { payload["isBlurred"] = isBlurred }
-        if let expiresAt { payload["expiresAt"] = MessageSocketManager.isoFormatterWithFractional.string(from: expiresAt) }
-        if let effectFlags { payload["effectFlags"] = Int(effectFlags) }
-        if let isViewOnce { payload["isViewOnce"] = isViewOnce }
-        if let maxViewOnceCount { payload["maxViewOnceCount"] = maxViewOnceCount }
-        // Lieu partagé — même clé `location` que le corps REST ; le handler
-        // socket la valide via `parseSharedPlace` (MessageHandler.ts).
-        if let location { payload["location"] = MessageSocketManager.locationSocketPayload(location) }
-        return await withCheckedContinuation { continuation in
-            socket.emitWithAck("message:send", payload).timingOut(after: timeoutSeconds) { items in
-                if let response = items.first as? [String: Any],
-                   let success = response["success"] as? Bool, success,
-                   let data = response["data"] as? [String: Any],
-                   let messageId = data["messageId"] as? String {
-                    let ackCid = data["clientMessageId"] as? String ?? cid
-                    continuation.resume(returning: SendMessageAck(
-                        messageId: messageId,
-                        clientMessageId: ackCid,
-                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
-                    ))
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
-        }
-    }
-
-    /// Chemin de repli socket pour `ConversationViewModel.sendMessage`, appelé
-    /// quand le POST REST a échoué. Réémet le message sur le socket avec le
-    /// MÊME `clientMessageId` : le dedup gateway `(conversationId, clientMessageId)`
-    /// garantit l'absence de doublon si l'outbox rejoue le REST plus tard.
-    ///
-    /// Route vers `message:send-with-attachments` (média) ou `message:send`
-    /// (texte). Un texte chiffré E2EE renvoie `nil` — l'event `message:send` ne
-    /// transporte pas le chiffrement, on ne réémet pas un payload en clair ;
-    /// ces messages restent sur le retry REST de l'outbox.
-    public func sendViaSocketFallback(
-        conversationId: String,
-        content: String?,
-        attachmentIds: [String],
-        replyToId: String?,
-        storyReplyToId: String?,
-        originalLanguage: String?,
-        isEncrypted: Bool,
-        clientMessageId: String,
-        location: SharedPlace? = nil
-    ) async -> SendMessageAck? {
-        if attachmentIds.isEmpty {
-            if isEncrypted { return nil }
-            return await sendAsync(
-                conversationId: conversationId,
-                content: content,
-                originalLanguage: originalLanguage,
-                replyToId: replyToId,
-                storyReplyToId: storyReplyToId,
-                clientMessageId: clientMessageId,
-                location: location
-            )
-        }
-        return await sendWithAttachmentsAsync(
-            conversationId: conversationId,
-            content: content,
-            attachmentIds: attachmentIds,
-            replyToId: replyToId,
-            storyReplyToId: storyReplyToId,
-            originalLanguage: originalLanguage,
-            isEncrypted: isEncrypted,
-            clientMessageId: clientMessageId,
-            location: location
-        )
     }
 
     // MARK: - Call Signaling Emission

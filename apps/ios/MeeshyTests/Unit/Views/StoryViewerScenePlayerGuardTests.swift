@@ -319,7 +319,15 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
     /// contenu partagé (`slide.content`) s'affiche par-dessus le canvas, résolu
     /// par le Prisme, et ne chevauche jamais la transcription vocale.
     func test_laDescription_saffichePardessusLeCanvas_resolueParLePrisme() throws {
-        let canvas = try source()
+        // **La couche a DÉMÉNAGÉ, la règle n'a pas bougé** (#4831). Tout ce qui
+        // concerne la légende — sa condition de montage, sa colonne, ses
+        // retraits — vit désormais dans `StoryViewerView+CanvasCaption.swift` :
+        // `StoryViewerView+Canvas.swift` était largement hors budget, et la loi 4
+        // interdit d'ajouter à un fichier qui l'est. Ce témoin suit le CODE, pas
+        // le chemin ; seule la dernière assertion regarde encore le canvas, parce
+        // que c'est lui qui doit continuer d'APPELER la couche.
+        let canvas = try MyStoriesSourceCorpus.text(
+            of: "Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift")
         XCTAssertTrue(
             canvas.contains("currentVoiceCaption == nil, let description = currentStoryDescription"),
             "L'overlay de description se peint sous le canvas gaté sur l'absence de transcription " +
@@ -338,12 +346,17 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
             "désormais par `MediaCaptionOverlay`, qui reçoit la description RÉSOLUE (#4474)."
         )
         XCTAssertTrue(
-            canvas.contains("var currentStoryDescription"),
+            try source().contains("var currentStoryDescription"),
             "La description résolue vit dans une propriété de `StoryCardView` (l'hôte du canvas), " +
             "testable et unique."
         )
         XCTAssertTrue(
-            canvas.contains("resolvedContent(preferredLanguages: resolvedViewerLanguageChain)"),
+            try source().contains("captionLayer(geometry: geometry)"),
+            "Et le canvas doit continuer de MONTER la couche extraite — sans cet appel, le " +
+            "fichier de la légende reste parfait et l'écran n'a plus de légende (#4831)."
+        )
+        XCTAssertTrue(
+            try source().contains("resolvedContent(preferredLanguages: resolvedViewerLanguageChain)"),
             "La description descend le Prisme (chaîne complète, repli original) — jamais " +
             "`translations.first`."
         )

@@ -15,7 +15,6 @@
  */
 
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import speakeasy from 'speakeasy';
 import zxcvbn from 'zxcvbn';
 import axios from 'axios';
@@ -24,6 +23,7 @@ import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { hashPassword, verifyPassword } from '../utils/password-hash';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
@@ -32,7 +32,6 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-lan
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
 
 
-const BCRYPT_COST = 12;
 const TOKEN_EXPIRY_MINUTES = 15;
 const MAX_RESET_ATTEMPTS_24H = 10;
 const PASSWORD_HISTORY_COUNT = 10;
@@ -386,8 +385,8 @@ export class PasswordResetService {
         });
       }
 
-      // 12. Hash new password (bcrypt cost=12)
-      const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_COST);
+      // 12. Hash new password — coût UNIQUE du dépôt (`utils/password-hash`)
+      const hashedPassword = await hashPassword(newPassword);
 
       // 13. Transaction: Update password, invalidate sessions, mark token used
       await this.prisma.$transaction(async (tx) => {
@@ -688,7 +687,7 @@ export class PasswordResetService {
     });
 
     for (const entry of history) {
-      const isMatch = await bcrypt.compare(newPassword, entry.passwordHash);
+      const isMatch = await verifyPassword(newPassword, entry.passwordHash);
       if (isMatch) {
         return false; // Password was used before
       }

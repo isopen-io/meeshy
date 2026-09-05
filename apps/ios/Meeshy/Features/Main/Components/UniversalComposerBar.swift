@@ -93,7 +93,6 @@ struct UniversalComposerBar: View {
     // MARK: - Callbacks (rich — full MessageComposer parity)
 
     var onSendMessage: ((String, [ComposerAttachment], String) -> Void)? = nil
-    var onVoiceRecord: ((URL, TimeInterval) -> Void)? = nil
     var onLocationRequest: (() -> Void)? = nil
 
     // MARK: - External text binding (edit mode)
@@ -112,18 +111,49 @@ struct UniversalComposerBar: View {
     var onCustomSend: (() -> Void)? = nil
     var onTextChange: ((String) -> Void)? = nil
 
-    // MARK: - Recording delegation (parent manages real AVAudioRecorder)
+    // MARK: - L'enregistrement est DÉLÉGUÉ — en bloc, jamais relais par relais
 
-    var onStartRecording: (() -> Void)? = nil
+    /// **Les quatre relais sont obligatoires, et c'est le correctif** (#4560).
+    ///
+    /// La barre portait un chemin d'enregistrement « interne » qui n'enregistrait
+    /// RIEN : aucun `AVAudioRecorder`, aucune session audio, aucun fichier — un
+    /// `Timer` qui incrémentait un compteur, puis une pièce jointe `voice` et une
+    /// URL **fabriquée** depuis l'horloge, rendue comme si elle désignait un
+    /// enregistrement.
+    ///
+    /// Les quatre hôtes passaient déjà les quatre relais, donc rien ne se payait
+    /// en production. Ce qui se payait était le PROCHAIN hôte : un `?` ne produit
+    /// ni erreur, ni avertissement, ni écran cassé — juste une barre qui affiche
+    /// une prise, compte les secondes, et pose un vocal muet. Le défaut se serait
+    /// lu à l'écoute, chez quelqu'un d'autre, plus tard.
+    ///
+    /// > Le `?` code « ce relais peut légitimement manquer ». Il ne le peut pas :
+    /// > un composer sans bouton d'enregistrement n'est pas un état du produit,
+    /// > c'est un hôte mal câblé. Le garde-fou devient donc le COMPILATEUR — un
+    /// > témoin ne rougit que si quelqu'un pense à l'écrire pour le nouveau site.
+    ///
+    /// Ils sont obligatoires **ensemble** : passer `onStartRecording` sans
+    /// `onStopRecordingToAttachment` aurait fait démarrer une vraie prise que le
+    /// chemin interne aurait arrêtée — une URL inventée pour un fichier que le
+    /// parent avait réellement écrit ailleurs. Pire que le cas d'origine, parce
+    /// que la moitié du contrat était honorée.
+    let onStartRecording: () -> Void
     /// Stop the recording and place the audio in the attachment tray (editable
     /// before sending) — the `[stop]` control of the recording bar.
-    var onStopRecordingToAttachment: (() -> Void)? = nil
+    let onStopRecordingToAttachment: () -> Void
     /// Stop the recording and send the voice message immediately (raw) — the
     /// `[↑]` control of the recording bar.
-    var onSendRecording: (() -> Void)? = nil
-    var onCancelRecording: (() -> Void)? = nil
-    var externalIsRecording: Bool? = nil
-    var externalRecordingDuration: TimeInterval? = nil
+    let onSendRecording: () -> Void
+    let onCancelRecording: () -> Void
+    /// **L'état de la prise a UNE source : le parent.**
+    ///
+    /// Le miroir local (`isRecording`, `recordingDuration`) n'était alimenté que
+    /// par le chemin interne. Une fois celui-ci retiré,
+    /// `externalRecordingDuration ?? recordingDuration` aurait servi « 0:00 »
+    /// comme s'il s'agissait d'une durée — le repli fabriqué une seconde fois,
+    /// deux lignes plus bas. Le repli disparaît avec ce qu'il repliait.
+    let externalIsRecording: Bool
+    let externalRecordingDuration: TimeInterval
     var externalAudioLevels: [CGFloat]? = nil
 
     // MARK: - External content flag
@@ -156,6 +186,12 @@ struct UniversalComposerBar: View {
 
     /// Called when user taps emoji icon in ladder — parent should show EmojiFullPickerSheet
     var onRequestTextEmoji: (() -> Void)? = nil
+
+    /// Tuile « Sticker » du carrousel (#4823) : l'hôte présente la palette de
+    /// constructions (`StickerPickerView`) et ENVOIE ce qu'elle rend comme un
+    /// message à part entière. Câblée par la conversation seule ; `nil` = pas
+    /// de tuile (loi 4 : une porte sans effet n'est pas rendue).
+    var onRequestStickerPicker: (() -> Void)? = nil
 
     /// Called when the user taps a thumbnail in the inline recent-media strip
     /// (shown beneath the attachment carousel). When non-nil, the strip is
@@ -262,10 +298,6 @@ struct UniversalComposerBar: View {
     @State var isExpandingToLibrary = false
     @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
-    // Voice recording
-    @State var isRecording = false
-    @State var recordingDuration: TimeInterval = 0
-    @State var recordingTimer: Timer?
 
     // Attachments
     @State var attachments: [ComposerAttachment] = []
@@ -364,13 +396,9 @@ struct UniversalComposerBar: View {
         style == .dark ? .white.opacity(0.4) : theme.textMuted
     }
 
-    var effectiveIsRecording: Bool {
-        externalIsRecording ?? isRecording
-    }
+    var effectiveIsRecording: Bool { externalIsRecording }
 
-    var effectiveDuration: TimeInterval {
-        externalRecordingDuration ?? recordingDuration
-    }
+    var effectiveDuration: TimeInterval { externalRecordingDuration }
 
     var currentLangOption: LanguageOption {
         availableLanguages.first(where: { $0.code == currentLanguage }) ?? availableLanguages[0]

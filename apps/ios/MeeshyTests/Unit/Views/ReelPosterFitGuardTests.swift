@@ -25,12 +25,28 @@ import XCTest
 /// explicite, le fond redevient invisible sans qu'aucun test ne rougisse.
 final class ReelPosterFitGuardTests: XCTestCase {
 
+    /// **L'UNITÉ du type, jamais son fichier.**
+    ///
+    /// La propriété gardée — « le poster du chemin VIDÉO est cadré » — porte
+    /// sur `ReelVideoView`, pas sur un chemin d'accès. La découpe #4628 a sorti
+    /// le cluster vidéo vers `ReelsPlayerView+Video.swift` : la garde a rougi
+    /// en annonçant la disparition d'un code qui n'avait pas bougé d'une ligne.
+    ///
+    /// Un fichier ajouté à cette liste est le geste attendu d'une prochaine
+    /// découpe ; l'oublier fait rougir la garde — le bon sens de panne.
+    private static let unitFiles = [
+        "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+        "Meeshy/Features/Main/Views/ReelsPlayerView+Video.swift",
+        "Meeshy/Features/Main/Views/ReelsPlayerView+Carousel.swift",
+    ]
+
     private func source() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try Self.unitFiles
+            .map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     func test_lecteurPleinEcran_cadreSonPosterSurLaBoiteDuMedia() throws {
@@ -62,14 +78,40 @@ final class ReelPosterFitGuardTests: XCTestCase {
 
     func test_leFondNeChargeJamaisLeThumbnail() throws {
         let src = try source()
-        guard let debut = src.range(of: "private struct ReelImageBackdrop"),
-              let fin = src.range(of: "private struct", range: debut.upperBound..<src.endIndex)
-        else { return XCTFail("ReelImageBackdrop introuvable") }
-        let corps = String(src[debut.lowerBound..<fin.lowerBound])
+        // Ni le MODIFICATEUR ni le voisin ne délimitent le type. L'ancienne
+        // forme cherchait `private struct ReelImageBackdrop` et s'arrêtait au
+        // `private struct` SUIVANT : la découpe #4628 a fait passer la vue en
+        // `internal` (`ReelVideoView`, désormais dans un autre fichier, la
+        // monte) et l'a séparée de son voisin — deux façons pour la garde de
+        // ne plus rien trouver alors que le code gardé n'avait pas bougé.
+        guard let corps = Self.corpsDuType("ReelImageBackdrop", dans: src) else {
+            return XCTFail("ReelImageBackdrop introuvable")
+        }
 
         XCTAssertTrue(corps.contains("UIImage.fromThumbHash"),
                       "le fond se décode depuis le thumbHash")
         XCTAssertFalse(corps.contains("thumbnailUrl"),
                        "le fond ne doit JAMAIS charger le thumbnail — un thumbnail net qui apparaît dans un fond flou se lit comme un bogue")
+    }
+
+    /// Le corps d'un type, délimité par ÉQUILIBRAGE d'accolades — insensible
+    /// au niveau d'accès et à ce qui le suit dans le fichier.
+    private static func corpsDuType(_ nom: String, dans source: String) -> String? {
+        guard let debut = source.range(of: "struct \(nom)") else { return nil }
+        var profondeur = 0
+        var index = debut.upperBound
+        var ouverte = false
+        while index < source.endIndex {
+            let caractere = source[index]
+            if caractere == "{" { profondeur += 1; ouverte = true }
+            if caractere == "}" {
+                profondeur -= 1
+                if ouverte && profondeur == 0 {
+                    return String(source[debut.lowerBound...index])
+                }
+            }
+            index = source.index(after: index)
+        }
+        return nil
     }
 }

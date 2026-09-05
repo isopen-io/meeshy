@@ -340,11 +340,25 @@ export function scanFileForMismatches(source: string, file: string): readonly Pa
     const responseOpen = code.indexOf('{', match.index);
     const responseEnd = matchBrace(code, responseOpen);
 
-    // Le handler s'étend jusqu'au bloc `response:` de la route suivante.
-    const next = /response\s*:\s*\{/g;
-    next.lastIndex = responseEnd;
-    const following = next.exec(code);
-    const handlerEnd = following ? following.index : code.length;
+    // Le handler s'étend jusqu'à la route SUIVANTE — et « suivante » se lit sur
+    // la DÉCLARATION de route, pas sur le prochain bloc `response:`.
+    //
+    // L'appariement d'origine s'arrêtait au `response:` suivant, ce qui suppose
+    // que TOUTE route du fichier en déclare un. Dans un fichier où une seule le
+    // fait — l'état nominal d'un fichier qu'on est en train de mettre en
+    // conformité —, la sonde attribuait à ce schéma unique les `sendSuccess` de
+    // toutes les routes d'après, et rapportait un désaccord `total` par charge
+    // utile étrangère. Le premier schéma posé dans un fichier rendait donc la
+    // garde rouge, ce qui décourage exactement le geste qu'elle réclame.
+    //
+    // Borner sur `fastify.<methode>(` referme la fenêtre à la route réelle.
+    const suivants = [/response\s*:\s*\{/g, /fastify\s*\.\s*(?:get|post|put|patch|delete|options|head)\s*\(/g]
+      .map((re) => {
+        re.lastIndex = responseEnd;
+        const m = re.exec(code);
+        return m ? m.index : code.length;
+      });
+    const handlerEnd = Math.min(...suivants);
 
     const sends = /sendSuccess\s*\(\s*reply\s*,\s*/g;
     sends.lastIndex = responseEnd;

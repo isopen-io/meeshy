@@ -520,6 +520,15 @@ actor MediaCompressor {
 
     // MARK: - MIME detection
 
+    /// **Le type d'une image, lu dans ses OCTETS et non dans son nom.**
+    ///
+    /// La table de signatures ci-dessous existait déjà, en `private`, au service
+    /// de `compressImageData`. Elle est désormais consultable par les chemins
+    /// d'INGESTION, qui doivent nommer un fichier avant de le compresser : un
+    /// GIF écrit sous le nom `.jpg` a déjà perdu son animation quand le
+    /// compresseur le reçoit — le mimeType, en aval, se dérive de l'extension.
+    func imageMimeType(of data: Data) -> String { detectMimeType(data) }
+
     private func detectMimeType(_ data: Data) -> String {
         guard data.count >= 12 else { return "image/jpeg" }
         let bytes = [UInt8](data.prefix(12))

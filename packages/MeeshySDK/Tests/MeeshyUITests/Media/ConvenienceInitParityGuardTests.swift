@@ -7,7 +7,7 @@ import XCTest
 /// pas s'en servir.
 ///
 /// Deux fois le 2026-08-30, dans le même dépôt : `StoryTextEditToolbar` a perdu
-/// `onTopBarBottomYChange`, et `UnifiedAudioRecorderSheet` a failli perdre
+/// `onTopBarBottomYChange`, et `AudioRecorderSheet` a failli perdre
 /// `accessory` — la fente même que #4483 ajoutait, invisible depuis l'app parce
 /// que l'app passe TOUJOURS par la convenance.
 ///
@@ -19,7 +19,7 @@ final class ConvenienceInitParityGuardTests: XCTestCase {
     /// Les paramètres que l'init PRINCIPAL déclare doivent tous se retrouver
     /// dans l'init de convenance, et y être TRANSMIS.
     func test_lInitDeConvenanceDeLEnregistreur_neLaisseTomberAucunParametre() throws {
-        let source = try Self.source("Sources/MeeshyUI/Media/UnifiedAudioRecorderSheet.swift")
+        let source = try Self.source("Sources/MeeshyUI/Media/AudioRecorderSheet.swift")
 
         let principal = try Self.parameters(afterAnchor: "public init(recorder:", in: source)
         let convenance = try Self.parameters(afterAnchor: "public init(preferredLanguage:", in: source)
@@ -41,7 +41,7 @@ final class ConvenienceInitParityGuardTests: XCTestCase {
     /// vide, et le témoin ci-dessus passerait sans rien garder. C'est le mode
     /// d'échec silencieux de toute garde de source qui compare deux extractions.
     func test_lExtractionVoitBienLesParametres() throws {
-        let source = try Self.source("Sources/MeeshyUI/Media/UnifiedAudioRecorderSheet.swift")
+        let source = try Self.source("Sources/MeeshyUI/Media/AudioRecorderSheet.swift")
         let principal = try Self.parameters(afterAnchor: "public init(recorder:", in: source)
 
         XCTAssertTrue(principal.contains("onRecordComplete"), "extraction cassée : \(principal.sorted())")

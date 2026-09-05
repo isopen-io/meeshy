@@ -48,11 +48,30 @@ final class AccessibilityValueAttributionGuardTests: XCTestCase {
     /// Les écrans qui rendaient la portée à la main et doivent désormais nommer
     /// le composant. Sans ce versant, la garde resterait verte si quelqu'un
     /// supprimait les compteurs au lieu de les corriger.
-    private static let reachHosts = [
-        "FeedPostCard.swift",
-        "ReelFeedCard.swift",
-        "ReelsPlayerView.swift",
-        "PostDetailView.swift",
+    /// Les SURFACES qui affichent une portée, et les fichiers qui composent
+    /// chacune.
+    ///
+    /// C'était une simple liste de noms de fichiers, et deux découpages l'ont
+    /// rendue aveugle sans qu'elle rougisse pour la bonne raison : la rangée
+    /// auteur de la carte de fil est partie dans `FeedPostCard+Header.swift`
+    /// (#4078), la rangée d'info du réel dans `ReelPageView+Info.swift`
+    /// (#4484) — et elle a continué de chercher `ReachMetricLabel` dans les
+    /// fichiers qu'ils venaient de quitter.
+    ///
+    /// **Une garde qui nomme un FICHIER mesure un chemin ; ce qu'elle veut
+    /// mesurer est une SURFACE.** D'où cette table : une surface est satisfaite
+    /// dès qu'UN de ses fichiers porte le composant, et la découpe suivante
+    /// s'inscrit ici plutôt que de faire rougir un site innocent.
+    ///
+    /// Un glob `Base+*` ne suffirait pas : `ReelPageView+Info.swift` a pour
+    /// base `ReelPageView`, pas `ReelsPlayerView` — l'extraction a changé le
+    /// TYPE porteur, pas seulement le fichier. Les listes explicites disent
+    /// cette réalité, un motif ne la dirait pas.
+    private static let reachHosts: [(surface: String, files: [String])] = [
+        ("carte de fil", ["FeedPostCard.swift", "FeedPostCard+Header.swift"]),
+        ("carte de réel", ["ReelFeedCard.swift"]),
+        ("plein écran réel", ["ReelsPlayerView.swift", "ReelPageView+Info.swift", "ReelsPlayerView+Carousel.swift"]),
+        ("détail de post", ["PostDetailView.swift"]),
     ]
 
     private func repoRoot() -> URL {
@@ -153,13 +172,19 @@ final class AccessibilityValueAttributionGuardTests: XCTestCase {
             uniquingKeysWith: { first, _ in first }
         )
         for host in Self.reachHosts {
-            guard let url = byName[host], let code = code(of: url) else {
-                XCTFail("\(host) est introuvable — la garde ne peut plus vérifier sa consolidation.")
+            let readable = host.files.compactMap { byName[$0] }.compactMap { code(of: $0) }
+            guard !readable.isEmpty else {
+                XCTFail("Aucun fichier de la surface « \(host.surface) » n'est lisible " +
+                        "(\(host.files.joined(separator: ", "))) — la garde ne peut plus " +
+                        "vérifier sa consolidation.")
                 continue
             }
             XCTAssertTrue(
-                code.contains("ReachMetricLabel("),
-                "\(host) rendait un compteur de portée à la main et doit désormais utiliser ReachMetricLabel."
+                readable.contains { $0.contains("ReachMetricLabel(") },
+                "La surface « \(host.surface) » rend un compteur de portée à la main et doit " +
+                "utiliser ReachMetricLabel. Si elle vient d'être découpée, inscrire le " +
+                "nouveau fichier dans `reachHosts` — le composant a suivi le code, la garde " +
+                "doit suivre aussi : \(host.files.joined(separator: ", "))"
             )
         }
     }

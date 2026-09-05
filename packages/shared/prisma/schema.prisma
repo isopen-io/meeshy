@@ -183,6 +183,23 @@ model User {
   twoFactorPendingSecret String? // Temporary secret during 2FA setup (before confirmation)
   twoFactorEnabledAt     DateTime? // Date when 2FA was enabled
 
+  /// Défi d'étape 2 d'une connexion en cours (#4542).
+  ///
+  /// Il vivait dans `phoneVerificationCode` / `phoneVerificationExpiry` — le
+  /// code le disait lui-même (« Reusing this field temporarily »). Deux
+  /// secrets sur une paire de colonnes s'écrasaient l'un l'autre, et comme
+  /// `hashToken()` et le mint emploient le MÊME SHA-256, ils étaient de plus
+  /// INTERCHANGEABLES : un code SMS à six chiffres était accepté comme jeton
+  /// d'étape 2, et un jeton d'étape 2 vérifiait un téléphone sans SMS.
+  ///
+  /// `Challenge` — et non `Pending` — parce que `twoFactorPendingSecret`, son
+  /// voisin, désigne l'ENRÔLEMENT ; celui-ci désigne la CONNEXION en cours.
+  /// `Hash` dit que la colonne ne porte que l'empreinte, jamais le jeton.
+  /// Aucun booléen ne l'accompagne : `twoFactorChallengeExpiresAt` à `null`
+  /// (ou absent du document, cas des comptes antérieurs) EST l'absence de défi.
+  twoFactorChallengeHash      String?
+  twoFactorChallengeExpiresAt DateTime?
+
   // Account Lockout
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
@@ -243,6 +260,16 @@ model User {
 
   /// Consentement pour le traitement général des données
   dataProcessingConsentAt DateTime?
+
+  /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
+  /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
+  /// est posée au `create` — jamais un booléen à côté, la date suffit.
+  termsAcceptedAt DateTime?
+
+  /// La version des CGU acceptée, telle que publiée (`YYYY-MM-DD`). Source
+  /// unique : `CURRENT_TERMS_VERSION` (@meeshy/shared/types/terms). Sans elle,
+  /// `termsAcceptedAt` dit QUAND sans dire À QUOI.
+  termsVersion String?
 
   /// Clonage vocal activé (DateTime non-null = activé)
   voiceCloningEnabledAt DateTime?

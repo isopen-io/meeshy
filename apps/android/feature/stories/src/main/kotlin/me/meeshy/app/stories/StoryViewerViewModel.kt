@@ -12,11 +12,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.StorySourceWindow
+import me.meeshy.sdk.model.StorySourceWindowMs
+import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.FeedMediaType
+import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryClipTransition
+import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryKeyframe
@@ -26,6 +33,8 @@ import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
@@ -61,6 +70,13 @@ data class StoryForegroundMediaView(
     val fadeOut: Double = 0.0,
     val keyframes: List<StoryKeyframe> = emptyList(),
     val clipTransitions: List<StoryClipTransition> = emptyList(),
+    /**
+     * Fenêtre de LECTURE dans la source (#5129) — `null` quand la source joue en
+     * entier. À ne pas confondre avec [startTime]/[duration], qui disent quand
+     * l'objet est à l'écran : ceci dit quelle partie du fichier joue une fois
+     * qu'il y est.
+     */
+    val sourceWindow: StorySourceWindowMs? = null,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -162,6 +178,10 @@ data class StorySlideView(
     val textObjects: List<StoryTextObjectView> = emptyList(),
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
+    /** Fenêtres de LECTURE des trois pistes de la slide (#5129) — `null` = entière. */
+    val backgroundVideoWindow: StorySourceWindowMs? = null,
+    val backgroundAudioWindow: StorySourceWindowMs? = null,
+    val foregroundAudioWindow: StorySourceWindowMs? = null,
     val languageCode: String? = null,
     /**
      * How long this slide stays on screen before auto-advancing, in milliseconds.
@@ -205,6 +225,14 @@ data class StorySlideView(
      * story that is not a repost — the header then shows only the author's name.
      */
     val repostAttribution: StoryRepostAttribution? = null,
+    /**
+     * The author's freehand drawing (`storyEffects.drawingStrokes`), rendered read-only
+     * on top of [foregroundMedia]/[textObjects] by [StoryDrawingLayer] — a drawing-only
+     * slide (no other publishable content) would otherwise reach the reader as a bare
+     * background: the composer already lets it publish ([StorySlideDeck.publishableSlides]),
+     * so the viewer must be able to show what was drawn.
+     */
+    val strokes: List<StoryDrawingStroke> = emptyList(),
 )
 
 /**
@@ -255,10 +283,13 @@ data class StoryViewerUiState(
 @HiltViewModel
 class StoryViewerViewModel @Inject constructor(
     private val storyRepository: StoryRepository,
+    private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     private val reportRepository: ReportRepository,
+    private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -295,6 +326,25 @@ class StoryViewerViewModel @Inject constructor(
      * iOS `StoryViewerView.transitionPostRoom` / Android `ReelsViewModel.setCurrentReel`.
      */
     private var currentRoomStoryId: String? = null
+
+    /**
+     * Dwell bookkeeping for the story-viewer surface — the 4th single-focus surface, joining
+     * reels/detail/status. Held outside [_state] since it is an analytics cursor, not something
+     * the UI renders (the same placement as [currentRoomStoryId], and as the feed ViewModels'
+     * dwell sessions). The pure [EngagementSessions] machine owns the *how* (monotonic dwell,
+     * qualification); this ViewModel owns the *when* — the session moves WITH the slide on screen
+     * (begun on the one landed on, ended on the one left) via [transitionDwell] in [emit], mirroring
+     * iOS `StoryViewerView` re-arming `EngagementTracker` on each slide. [currentDwellStoryId]
+     * guards the transition so a same-slide re-emit (a reaction, a translation merge) neither ends
+     * nor restarts the running session.
+     *
+     * A qualified dwell records `viewPost(id, dwellMs)` — a story slide id IS a post id, so the
+     * measured watch-time rides the very `posts/{id}/view` endpoint the impression already uses,
+     * carrying its optional `duration`. The gateway dedups: the impression increments `viewCount`
+     * once, the dwell only raises the stored `duration` to its max — purely additive, no double-count.
+     */
+    private var sessions = EngagementSessions()
+    private var currentDwellStoryId: String? = null
 
     init {
         load()
@@ -434,6 +484,7 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Leaves the post room the viewer was sitting in, so a closed viewer stops receiving its events. */
     override fun onCleared() {
+        endCurrentDwell()
         currentRoomStoryId?.let { socialSocket.leavePostRoom(it) }
         currentRoomStoryId = null
         super.onCleared()
@@ -494,6 +545,60 @@ class StoryViewerViewModel @Inject constructor(
     }
 
     /**
+     * Closes the story-viewer dwell session and, when it qualified, records the measured watch-time.
+     * Public so the composition can end the last slide's dwell when the viewer leaves (the analogue
+     * of iOS `StoryViewerView.onDisappear` → `EngagementTracker.end(.storyViewer)`); also called on
+     * teardown ([onCleared]) as the reliable net. Idempotent — a second call, with no session open,
+     * records nothing.
+     */
+    fun endCurrentDwell() {
+        transitionDwell(null)
+    }
+
+    /**
+     * Moves the dwell session with the slide on screen: ends the one left (recording it when it
+     * passed the dwell floor) and begins the one landed on. Idempotent — re-passing the current id
+     * (including `null`) is a no-op, so a same-slide re-emit neither closes nor restarts the running
+     * session. A `null` [nextId] ends without re-arming (viewer dismissed/torn down). The port of
+     * iOS `StoryViewerView` re-arming `EngagementTracker` per slide, and the dwell twin of
+     * [transitionPostRoom].
+     */
+    private fun transitionDwell(nextId: String?) {
+        if (nextId == currentDwellStoryId) return
+        val (afterEnd, view) = sessions.end(EngagementSurface.STORY_VIEWER, clock.nowMillis())
+        sessions = afterEnd
+        view?.let { recordDwellView(it) }
+        currentDwellStoryId = nextId
+        nextId?.let {
+            sessions = sessions.begin(
+                EngagementSurface.STORY_VIEWER,
+                it,
+                clock.nowMillis(),
+                consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+            )
+        }
+    }
+
+    /**
+     * Best-effort dwell enrichment for a slide's existing view: `posts/{id}/view` with the measured
+     * [QualifiedView.dwellMs]. The gateway's view credit is a `(postId, userId)` singleton, so this
+     * never re-increments the view count already booked by the impression ([markCurrentViewed]) — it
+     * only raises the stored dwell `duration` (the reco/monetisation watch-time signal) to its max.
+     * Fire-and-forget, matching the impression: a failure is analytics the viewer should never see fail.
+     */
+    private fun recordDwellView(view: QualifiedView) {
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(view.postId, view.dwellMs.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // best-effort — matches the impression view record
+            }
+        }
+    }
+
+    /**
      * Quick-strip reaction on the current slide. The count moves optimistically;
      * a repeat of the same emoji is inert (no network); a network failure rolls
      * back to the snapshot so the UI never shows a phantom reaction.
@@ -543,6 +648,9 @@ class StoryViewerViewModel @Inject constructor(
     private fun emit() {
         val currentId = playback.currentSlide?.id
         transitionPostRoom(currentId)
+        // Dwell follows the slide on screen; a dismissed viewer is treated as no slide, so the
+        // running session ends the moment the viewer is swiped away rather than lingering to teardown.
+        transitionDwell(if (playback.isDismissed) null else currentId)
         if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
         val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
@@ -699,6 +807,9 @@ class StoryViewerViewModel @Inject constructor(
         val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
         val textObjects = storyEffects?.textObjects.orEmpty()
             .map { StoryTextObjectProjection.project(it, preferredLanguages) }
+        // UNE lecture par piste, deux faits chacune (#5129).
+        val backgroundTrack = resolveAudioTrack(preferBackground = true)
+        val foregroundTrack = resolveAudioTrack(preferBackground = false)
         return StorySlideView(
             id = id,
             text = resolved.content,
@@ -708,18 +819,22 @@ class StoryViewerViewModel @Inject constructor(
             reactionCount = reactionCount,
             languageCode = resolved.languageCode,
             backgroundVideoUrl = background.videoUrl,
+            backgroundVideoWindow = background.window,
             backgroundLoop = background.loop,
             backgroundTransform = background.transform,
             backgroundThumbHash = StorySlidePlaceholder.resolve(this),
             foregroundMedia = foreground,
             textObjects = textObjects,
-            backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
-            foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
+            backgroundAudioUrl = backgroundTrack?.url,
+            backgroundAudioWindow = backgroundTrack?.window,
+            foregroundAudioUrl = foregroundTrack?.url,
+            foregroundAudioWindow = foregroundTrack?.window,
             autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
             background = storyEffects?.background
                 ?.takeIf { it.isNotBlank() }
                 ?.let { StoryBackgroundValue.parse(it) },
             repostAttribution = StoryRepostAttribution.resolve(this),
+            strokes = storyEffects?.drawingStrokes.orEmpty(),
         )
     }
 
@@ -728,6 +843,8 @@ class StoryViewerViewModel @Inject constructor(
         val videoUrl: String?,
         val loop: Boolean,
         val transform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
+        /** Fenêtre de lecture d'un fond VIDÉO (#5129) ; une image n'en a pas. */
+        val window: StorySourceWindowMs? = null,
     )
 
     /**
@@ -766,6 +883,12 @@ class StoryViewerViewModel @Inject constructor(
                 videoUrl = resolvedUrl,
                 loop = backgroundObject?.loop ?: true,
                 transform = videoTransform,
+                // La fenêtre ne vient QUE d'un objet moderne : un fond hérité
+                // (plat, sans objet) n'a jamais porté de bornes, et lui en
+                // fabriquer une serait inventer une coupe.
+                window = StorySourceWindow.clippingMs(
+                    backgroundObject?.sourceStart, backgroundObject?.sourceEnd,
+                ),
             )
         }
         val imageUrl = resolvedUrl
@@ -797,6 +920,7 @@ class StoryViewerViewModel @Inject constructor(
             fadeOut = fadeOut ?: 0.0,
             keyframes = keyframes.orEmpty(),
             clipTransitions = clipTransitions,
+            sourceWindow = StorySourceWindow.clippingMs(sourceStart, sourceEnd),
         )
     }
 
@@ -809,17 +933,37 @@ class StoryViewerViewModel @Inject constructor(
      * the story's direct `audioUrl` (voice attachment) then its library
      * `backgroundAudio` entry — both already resolved URLs, no lookup needed.
      */
-    private fun StoryItem.resolveAudioUrl(preferBackground: Boolean): String? {
+    /**
+     * L'URL d'une piste ET sa fenêtre de lecture, résolues d'UNE SEULE lecture
+     * (#5129).
+     *
+     * **Deux fonctions auraient dû s'accorder sur l'objet élu**, et rien ne
+     * l'aurait garanti : `firstOrNull` sur une liste dont l'ordre n'est pas
+     * contractuel peut rendre deux objets différents à deux appels si la liste
+     * change entre-temps. Un seul parcours, deux faits.
+     *
+     * La fenêtre ne vient QUE de l'objet moderne : les replis hérités
+     * (`audioUrl`, `backgroundAudio.fileUrl`) n'ont jamais porté de bornes.
+     */
+    private fun StoryItem.resolveAudioTrack(preferBackground: Boolean): AudioTrack? {
         val match = storyEffects?.audioPlayerObjects.orEmpty()
             .firstOrNull { (it.isBackground == true) == preferBackground }
         val fromObject = match?.postMediaId
             ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
             ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
-        if (fromObject != null) return fromObject
+        if (fromObject != null) {
+            return AudioTrack(
+                url = fromObject,
+                window = StorySourceWindow.clippingMs(match.sourceStart, match.sourceEnd),
+            )
+        }
         if (!preferBackground) return null
-        return audioUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+        val legacy = audioUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
             ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+        return legacy?.let { AudioTrack(url = it, window = null) }
     }
+
+    private data class AudioTrack(val url: String, val window: StorySourceWindowMs?)
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
         override val systemLanguage: String? = null

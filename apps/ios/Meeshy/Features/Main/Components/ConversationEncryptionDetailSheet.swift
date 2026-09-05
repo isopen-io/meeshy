@@ -261,7 +261,7 @@ struct ConversationEncryptionDetailSheet: View {
         } catch {
             Self.logger.error("loadStatus failed: \(error.localizedDescription)")
             errorMessage = String(localized: "conversation.encryption.detail.readStatusError",
-                                  defaultValue: "Unable to read status: \(error.localizedDescription)",
+                                  defaultValue: "Impossible de lire l'état : \(error.localizedDescription)",
                                   bundle: .main)
         }
     }

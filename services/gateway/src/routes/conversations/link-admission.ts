@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
-import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { toAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
 import { generateNickname } from '../../utils/anonymous-nickname';
@@ -112,15 +111,45 @@ export function resolveClientIp(request: FastifyRequest): string {
   return request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 }
 
-/** `key` = `linkId` (`mshy_…`) OU `identifier` lisible OU `id` Mongo — les trois portes acceptaient déjà un sous-ensemble de ce triplet. */
+/**
+ * Les colonnes qui OUVRENT la porte de jointure — la loi, sous forme de donnée
+ * (#4692).
+ *
+ * Toute valeur d'une de ces colonnes vaut une invitation : les trois portes
+ * (`POST /links/:key/members` en `optionalAuth`, `POST /anonymous/join/:linkId`
+ * purement anonyme, `POST /conversations/join/:linkId`) les acceptent
+ * indifféremment, et `admitLinkEntry` ne demande jamais par laquelle le lien a
+ * été trouvé. Une porte d'administration qui sert l'une d'elles distribue une
+ * invitation, quel que soit le nom de la colonne.
+ *
+ * La liste est EXPORTÉE parce que le témoin qui garde cette règle en dérive son
+ * fixture : une énumération tenue à la main dans un test reste verte le jour où
+ * une quatrième colonne rejoint le `OR` (c'est exactement ce qui a laissé
+ * `identifier` sortir pendant que `linkId` était retiré).
+ */
+export const SHARE_LINK_JOIN_KEY_COLUMNS = ['linkId', 'identifier'] as const;
+
+/**
+ * `key` = `linkId` (`mshy_…`) OU `identifier` lisible — **jamais l'ObjectId**.
+ *
+ * L'arme `{ id: key }` a été retirée (#4692) : la console d'administration sert
+ * `ConversationShareLink.id` à BIGBOSS, ADMIN, MODERATOR et AUDIT, et l'appelait
+ * déjà « la référence OPAQUE ». Elle ne l'était pas — cette ligne en faisait une
+ * clé de jointure de plus. Retirer l'ObjectId de la LOI est ce qui rend cette
+ * phrase vraie, plutôt que de retirer à la console le seul identifiant sur
+ * lequel elle agit.
+ *
+ * Coût MESURÉ du retrait, un seul appelant : Android
+ * `GuestJoinViewModel:109` — `info.linkId.ifBlank { info.id }.ifBlank { identifier }`
+ * — un repli défensif dont la branche primaire est peuplée par la passerelle
+ * elle-même (`GET /anonymous/link/:identifier` sert `linkId`). `identifier` et
+ * `linkId` RESTENT acceptées : une URL partagée sous un slug lisible
+ * (`mshy_meeshy-public`) arrive verbatim dans `:key` depuis les trois clients.
+ */
 async function findShareLinkByKey(prisma: PrismaClient, key: string): Promise<ShareLinkWithConversation | null> {
   const shareLink = await prisma.conversationShareLink.findFirst({
     where: {
-      OR: [
-        { linkId: key },
-        { identifier: key },
-        ...(isValidMongoId(key) ? [{ id: key }] : []),
-      ],
+      OR: SHARE_LINK_JOIN_KEY_COLUMNS.map((colonne) => ({ [colonne]: key })),
     },
     include: {
       conversation: {
@@ -521,8 +550,27 @@ export async function endGuestSession(params: GuestSessionParams): Promise<EndGu
  * /anonymous/join|refresh` — exportée pour que l'adaptateur
  * (`routes/anonymous.ts`) la partage plutôt que de la retaper une troisième
  * fois (le canonique a la sienne, propre au contrat cible).
+ *
+ * ELLE SERT L'ENSEMBLE RÉSOLU, JAMAIS L'INSTANTANÉ. Cette forme lisait
+ * `participant.permissions.*` BRUT — c'est-à-dire l'instantané figé au join —
+ * pendant que la loi unique du dépôt (`services/participantRights.ts`, dont le
+ * doc-comment dit « trois lecteurs de la même règle divergeraient ») classe
+ * `anonymousSession.rights` AU-DESSUS de lui, et que `middleware/auth.ts:571`
+ * la fait respecter à chaque envoi. Elle était donc un QUATRIÈME lecteur, et le
+ * seul à ignorer le levier que `PATCH …/participants/:id/rights` rend à l'hôte :
+ * un lien ouvert en écriture, un droit retiré ensuite, et la charge continuait
+ * d'annoncer « vous pouvez écrire » à quelqu'un que la passerelle refuse.
+ *
+ * `canViewHistory` EST UN DROIT DU PARTICIPANT ; `conversation.allowViewHistory`
+ * reste la COLONNE DU LIEN. Les deux divergent dès qu'une surcharge existe, et
+ * dès qu'une RE-jonction sert la valeur courante du lien à qui lit sa valeur
+ * figée. Le champ du lien ne bouge pas — trois clients le lisent — mais ce qui
+ * décide de la lecture d'un participant est celui du participant, et c'est le
+ * même que `historyFloorFor` (`services/historyFloor.ts`) applique.
  */
 export function participantConversationPayload(participant: ParticipantRow, shareLink: ShareLinkWithConversation) {
+  const rights = resolveEntryRights(participant, undefined, shareLink.allowViewHistory);
+
   return {
     participant: {
       id: participant.id,
@@ -534,9 +582,10 @@ export function participantConversationPayload(participant: ParticipantRow, shar
       banner: null,
       language: participant.language,
       isMeeshyer: false,
-      canSendMessages: participant.permissions?.canSendMessages ?? false,
-      canSendFiles: participant.permissions?.canSendFiles ?? false,
-      canSendImages: participant.permissions?.canSendImages ?? false,
+      canSendMessages: rights.canSendMessages,
+      canSendFiles: rights.canSendFiles,
+      canSendImages: rights.canSendImages,
+      canViewHistory: rights.canViewHistory,
     },
     conversation: {
       id: shareLink.conversation.id,
@@ -667,7 +716,7 @@ export function registerLinkAdmissionRoutes(
         params: {
           type: 'object',
           required: ['key'],
-          properties: { key: { type: 'string', description: 'linkId (mshy_…), identifier, or database id' } },
+          properties: { key: { type: 'string', description: 'linkId (mshy_…) or identifier — never the database id (#4692)' } },
         },
         body: {
           type: 'object',
@@ -685,7 +734,23 @@ export function registerLinkAdmissionRoutes(
           400: { description: 'Validation error', ...validationErrorResponseSchema },
           403: errorResponseSchema,
           404: errorResponseSchema,
-          409: errorResponseSchema,
+          // #4487 — `fast-json-stringify` RETIRE en silence toute propriété que
+          // le schéma ne déclare pas. Le 409 de cette porte compose un
+          // `suggestedNickname` (le pseudo libre proposé quand celui demandé est
+          // pris) que l'enveloppe nue supprimait avant l'envoi : l'invité lisait
+          // « ce pseudo est pris » sans jamais recevoir l'alternative calculée
+          // pour lui. On ÉTEND l'enveloppe, on ne la recopie pas — l'idiome déjà
+          // posé sur `POST /anonymous/join/:linkId`.
+          409: {
+            ...errorResponseSchema,
+            properties: {
+              ...errorResponseSchema.properties,
+              suggestedNickname: {
+                type: 'string',
+                description: 'Pseudo libre proposé quand celui demandé est déjà pris'
+              },
+            },
+          },
           410: errorResponseSchema,
           500: errorResponseSchema,
         },
@@ -755,6 +820,11 @@ export function registerLinkAdmissionRoutes(
                       banner: { type: 'string', nullable: true }, language: { type: 'string' },
                       isMeeshyer: { type: 'boolean' }, canSendMessages: { type: 'boolean' },
                       canSendFiles: { type: 'boolean' }, canSendImages: { type: 'boolean' },
+                      // Le droit RÉSOLU de CE participant — distinct de
+                      // `conversation.allowViewHistory`, qui est la colonne du
+                      // LIEN. Non déclaré, il serait supprimé par
+                      // fast-json-stringify sans qu'aucun témoin ne tombe.
+                      canViewHistory: { type: 'boolean' },
                     },
                   },
                   conversation: {

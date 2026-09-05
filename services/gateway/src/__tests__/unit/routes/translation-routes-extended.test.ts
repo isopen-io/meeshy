@@ -25,18 +25,6 @@ jest.mock('../../../services/message-translation/MessageTranslationService', () 
   MessageTranslationService: jest.fn().mockImplementation(() => ({})),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { translationRoutes } from '../../../routes/translation';

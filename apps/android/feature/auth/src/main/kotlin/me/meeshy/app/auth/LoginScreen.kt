@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -61,6 +62,12 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Cet ecran n'a pas de Scaffold : depuis que le Scaffold racine ne
+                // reserve plus les barres systeme (MeeshyApp.kt, contentWindowInsets
+                // a zero), il pose lui-meme son inset. Le fond reste PLEIN ECRAN,
+                // seul le CONTENU est retreci — c'est exactement la geometrie
+                // d'avant, le degrade en plus.
+                .systemBarsPadding()
                 .imePadding()
                 .padding(horizontal = MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,

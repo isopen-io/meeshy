@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { apiService } from '@/services/api.service';
-import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
+import type { CurrentUserAttachmentConsumption } from '@meeshy/shared/types/attachment';
 import MediaManager from '@/utils/media-manager';
+import { useMediaConsumptionReporter } from '@/hooks/use-media-consumption-reporter';
 
 class VideoManager {
   private static instance: VideoManager;
@@ -31,6 +31,10 @@ interface UseVideoPlaybackOptions {
   mimeType?: string;
   attachmentId: string;
   isOwnMessage?: boolean;
+  /** La langue de la piste jouée, quand le lecteur en propose plusieurs (#3913). */
+  consumedLanguage?: string | null;
+  /** Ce que le serveur sait déjà de ce visionnage (#3909). */
+  consumption?: CurrentUserAttachmentConsumption | null;
 }
 
 export function useVideoPlayback({
@@ -39,6 +43,8 @@ export function useVideoPlayback({
   mimeType,
   attachmentId,
   isOwnMessage = false,
+  consumedLanguage,
+  consumption,
 }: UseVideoPlaybackOptions) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -49,29 +55,30 @@ export function useVideoPlayback({
   const [errorMessage, setErrorMessage] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const playStartTimeRef = useRef<number | null>(null);
   const hasTrackedCompletionRef = useRef(false);
 
-  const trackConsumption = useCallback((complete: boolean) => {
-    // La consommation de l'AUTEUR compte aussi (user 2026-08-18, parité
-    // audio/iOS) — `isOwnMessage` reste une prop de style, plus un filtre.
-    const video = videoRef.current;
-    /* istanbul ignore next -- defensive null guard; videoRef.current is always non-null when trackConsumption runs post-mount */
-    const playPositionMs = video ? Math.round(video.currentTime * 1000) : 0;
-    /* istanbul ignore next -- defensive null guard */
-    const durationMs = video ? Math.round(video.duration * 1000) : 0;
-    apiService.post(API_ENDPOINTS.attachments.byAttachmentIdStatus(attachmentId), {
-      action: 'watched',
-      playPositionMs,
-      durationMs: isFinite(durationMs) ? durationMs : 0,
-      complete,
-    }).catch(() => {});
-  }, [attachmentId]);
+  // DÉCLARÉ EN PREMIER : React exécute les nettoyages d'effets dans l'ordre de
+  // déclaration, et celui du lecteur finit par `removeAttribute('src')` +
+  // `load()`, ce qui remet `currentTime` à 0. Un rapport de clôture posé après
+  // lui rapporterait 0 à chaque démontage.
+  //
+  // La consommation de l'AUTEUR compte aussi (user 2026-08-18, parité
+  // audio/iOS) — `isOwnMessage` reste une prop de style, plus un filtre.
+  const { noteStarted, noteSeek, report, resumeSeconds } = useMediaConsumptionReporter({
+    attachmentId,
+    kind: 'video',
+    mediaRef: videoRef,
+    trackKey: fileUrl,
+    consumedLanguage,
+    consumption,
+  });
+
+  const resumeSecondsRef = useRef(resumeSeconds);
+  resumeSecondsRef.current = resumeSeconds;
 
   // Reset tracking refs when attachment changes
   useEffect(() => {
     hasTrackedCompletionRef.current = false;
-    playStartTimeRef.current = null;
   }, [attachmentId]);
 
   const updateProgress = useCallback(() => {
@@ -127,10 +134,11 @@ export function useVideoPlayback({
 
     try {
       if (isPlaying) {
-        const watchedMs = playStartTimeRef.current ? Date.now() - playStartTimeRef.current : 0;
-        playStartTimeRef.current = null;
-        if (watchedMs >= 3000 && !hasTrackedCompletionRef.current) {
-          trackConsumption(false);
+        // Le seuil « ≥ 3 s » a disparu avec le passage au tracker (#3913) :
+        // c'est la perte structurelle que son doc-comment décrit. `report` se
+        // tait de lui-même quand il n'a rien à dire.
+        if (!hasTrackedCompletionRef.current) {
+          report({ complete: false, endedBy: 'pause' });
         }
         videoRef.current.pause();
         setIsPlaying(false);
@@ -158,7 +166,7 @@ export function useVideoPlayback({
         }
 
         await videoRef.current.play();
-        playStartTimeRef.current = Date.now();
+        noteStarted();
         setIsPlaying(true);
         setIsLoading(false);
       }
@@ -175,15 +183,16 @@ export function useVideoPlayback({
         setErrorMessage('Erreur de lecture vidéo');
       }
     }
-  }, [fileUrl, isPlaying, trackConsumption]);
+  }, [fileUrl, isPlaying, report, noteStarted]);
 
   const handleSeek = useCallback((time: number) => {
     setCurrentTime(time);
     /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
+      noteSeek(videoRef.current.currentTime, time);
       videoRef.current.currentTime = time;
     }
-  }, []);
+  }, [noteSeek]);
 
   const handleLoadedMetadata = useCallback(() => {
     tryToGetDuration();
@@ -193,14 +202,14 @@ export function useVideoPlayback({
     setIsPlaying(false);
     if (!hasTrackedCompletionRef.current) {
       hasTrackedCompletionRef.current = true;
-      trackConsumption(true);
+      report({ complete: true, endedBy: 'completed' });
     }
     /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
       setCurrentTime(0);
     }
-  }, [trackConsumption]);
+  }, [report]);
 
   const handleVideoError = useCallback(
     (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
@@ -325,12 +334,17 @@ export function useVideoPlayback({
     }
   }, [attachmentId, attachmentDuration]);
 
-  // Reset currentTime when video changes
+  // #3909 — la position servie par le serveur reprend la main sur le zéro.
+  // `currentUserConsumption` était servi depuis toujours et `apps/web` n'en
+  // avait AUCUNE occurrence : rouvrir une vidéo repartait du début, même sur le
+  // même onglet après un simple rechargement. Le navigateur borne lui-même à la
+  // durée réelle.
   useEffect(() => {
-    setCurrentTime(0);
+    const reprise = resumeSecondsRef.current ?? 0;
+    setCurrentTime(reprise);
     /* istanbul ignore else -- defensive null guard; videoRef.current is always non-null post-mount */
     if (videoRef.current) {
-      videoRef.current.currentTime = 0;
+      videoRef.current.currentTime = reprise;
     }
   }, [attachmentId]);
 

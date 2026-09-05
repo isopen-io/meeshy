@@ -256,17 +256,25 @@ npm test services/gateway/src/__tests__/routes/preferences.e2e.test.ts
 npm test services/gateway/src/__tests__/routes/preferences-consent.e2e.test.ts
 ```
 
-### Helper de Tests
+### Poser un consentement dans un test
+
+Dans un DOUBLE, jamais en base — aucune suite du gateway n'ouvre de client
+Prisma réel (`jest.config.json` redirige `@meeshy/shared/prisma/client` vers un
+stub pour tous les runs). Les CONSENTEMENTS sont les quatre colonnes `User` ;
+les features audio sont des clés du blob `UserPreferences.audio` :
 
 ```typescript
-import { CONSENT_LEVELS, createTestUserWithConsents } from '@/__tests__/helpers/consent-test-helper';
-
-// Créer un utilisateur avec transcription activée
-const user = await createTestUserWithConsents(prisma, CONSENT_LEVELS.TRANSCRIPTION);
-
-// Créer un utilisateur avec tous les consentements
-const userFull = await createTestUserWithConsents(prisma, CONSENT_LEVELS.FULL);
+const prisma = makePrisma(
+  { dataProcessingConsentAt: NOW, voiceDataConsentAt: NOW },
+  { audio: { audioTranscriptionEnabledAt: NOW } }
+);
+const status = await new ConsentValidationService(prisma).getConsentStatus('u1');
 ```
+
+`makePrisma` se copie depuis
+`src/__tests__/unit/services/ConsentValidationService.test.ts` ; le patron
+complet et la raison pour laquelle il n'a pas de helper partagé sont dans
+`CONSENT_VALIDATION.md` § Tests.
 
 ## Schémas Zod
 

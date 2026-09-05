@@ -3154,6 +3154,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       it survives a fetch failure); `ConversationStatsSheet` renders the three emoji/percent columns
       + a segmented success/warning/error bar. Strings en/fr/es/pt. Box now `[x]`. (The `AI
       participant persona` box below, same `/analysis` endpoint, shipped separately 2026-08-22.)
+      **Client-side fallback landed 2026-08-31** (slice `conversation-stats-client-fallback`) — the
+      dashboard was SERVER-ONLY: a failed/lagging `/stats` fetch showed an error screen even though the
+      loaded page already holds the messages to compute the same figures (iOS's `clientComputed*`
+      fallback). New pure `ConversationStatsProjection.clientComputed(...)` (+ `ClientStatMessage` /
+      `ClientAttachmentKind`) reduces the on-screen messages into the SAME `ConversationMessageStatsResponse`
+      the server returns — messages, words, characters, content-type counts, per-participant shares
+      (grouped by **id**, SOTA over iOS's group-by-display-name), and per-day activity — so a single
+      projection path renders either source. The ViewModel now seeds the sheet from that snapshot
+      INSTANTLY (cache-first, no spinner) and, on a fetch failure, KEEPS it instead of erroring
+      (offline graceful degradation). `BubbleContent → ClientStatMessage` mapping extracted to its own
+      file (a video thumbnail folds into the IMAGE tally — the bubble layer carries no video/author-id;
+      the server split stays authoritative). Matures dimensions 2/8/13 (performance, UX offline, complétude).
 - [x] AI participant persona profiles + trait bars — **shipped 2026-08-22** (slice
       `conversation-analysis-personas`). The `ParticipantProfile`/`ParticipantTraits` model tree shipped
       orphaned (grep-confirmed zero consumers); this slice turns it real. Pure
@@ -3204,9 +3216,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation (RED proof): dropping the reduction-target re-validation (`… && reduced in supportedCodeSet` →
       `… reduced`) fails **exactly** `normalize_rejectsReductionWhoseTargetIsNotSupported` (14 run, 1 failed,
       no collateral). `:core:model` + `:sdk-ui` + all feature-module `testDebugUnitTest` green; full
-      `:app:assembleDebug` → BUILD SUCCESSFUL. **Follow-up:** app-side device-locale sourcing — inject
-      `Locale.getDefault()` into the resolution context + send the `X-Device-Locale` header (iOS parity) so
-      the gateway persists it; the pure resolution + API-decoded field are complete.
+      `:app:assembleDebug` → BUILD SUCCESSFUL. **Header sourcing shipped 2026-09-01** (slice
+      `device-locale-header`): the client now SENDS `X-Device-Locale` on every request, closing the loop so
+      the 4th-priority arm — dead until now on Android (nothing ever fed `User.deviceLocale`) — actually
+      fires. New pure `:core:model` `DeviceLocaleTag.of(locale) → String?`: the RAW BCP-47 tag
+      (`Locale.getDefault().toLanguageTag()`, so `"fr-FR"`/`"zh-Hant-HK"` travel intact for the gateway to
+      reduce, exactly as iOS's `Locale.current.identifier`), or `null` when there is no usable language subtag
+      (`Locale.ROOT`/region-only → `"und"`/`"und-FR"`, or an ill-formed subtag → `"und"`) so the header is
+      omitted rather than sending `"und"` on every call. New `:core:network` `DeviceLocaleInterceptor` (twin
+      of `ClientCapabilitiesInterceptor`): reads the locale per request through an injectable provider, adds
+      the header, never clobbers a caller-set one, sends nothing for an unusable locale; registered in
+      `MeeshyApi`'s OkHttp chain. +12 tests (8 `DeviceLocaleTagTest` — region tag / bare language / script+
+      region verbatim / regional variant / root omitted / region-only omitted / ill-formed omitted / legacy→
+      modern; 4 `DeviceLocaleInterceptorTest` — announced / unusable→no-header / caller-header-wins / read-
+      per-request). Mutation (RED proof): dropping the `und` guard fails **exactly** the ill-formed-subtag
+      test (14 run, 1 failed, no collateral). **Remaining follow-up:** injecting the LIVE `Locale.getDefault()`
+      straight into the client-side resolution context (an optimisation over iOS, which resolves off the
+      persisted `User.deviceLocale`) is deliberately deferred to avoid diverging from the server-persisted
+      value — tracked as a separate note, not a gap.
 - [~] Original exploration: long-press → « Voir l'original / la traduction »
       (toggle par message, builder Prisme-aware) ; flag strip read-only shipped
       (slice `chat-translation-language-strip`, 2026-07-10) ; **tap-to-switch active language shipped**
@@ -5142,11 +5169,110 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       an explicit `flushNow`/`flushNowAsync` are ported; iOS's OTHER two nets —
       app-backgrounding flush (`willResignActive`/`didEnterBackground`) and kill-survival
       persistence (UserDefaults, replayed on relaunch) — are NOT, Android has no equivalent
-      wiring point yet for either. **Still fully open: dwell-time tracking** — iOS's own
-      `EngagementTracker`/`TrackEngagementModifier` is a materially bigger, separate system
-      (durable SQLite outbox, session begin/pause/resume with a "topmost owns the clock" rule for
-      overlays, `minDwellMs`/`minWatchMs` qualification thresholds, its own
-      `POST /posts/engagement/batch` endpoint) — not attempted here, left as its own future slice.
+      wiring point yet for either. **Dwell-time tracking — pure core + reels surface shipped 2026-08-31** (slice
+      `reels-engagement-dwell`). New pure `:core:model` `EngagementSessions` — a faithful port of
+      iOS `EngagementTracker`'s bookkeeping: an immutable per-surface state machine (surfaces
+      `DETAIL`/`REELS`/`STORY_VIEWER`/`STATUS_BUBBLE`, the four single-focus regions iOS tracks — the
+      scrolling feed is deliberately NOT one), monotonic dwell with the **topmost-owns-the-clock**
+      rule (`begin` pauses the covered surface, `end` resumes it — the overlay's window is excluded
+      from the surface underneath), and the `MIN_DWELL_MS = 1000` / `MIN_WATCH_MS = 2000`
+      qualification (`end` yields a `QualifiedView(postId, dwellMs)` when dwell OR watch OR completed
+      crosses the floor, else `null` — a sub-threshold bounce, matching iOS `guard qualifies`). The
+      clock is injected as `nowMs`, so the type carries no time/I-O/framework. Wired on the **reels**
+      surface via the existing `ReelsViewModel.setCurrentReel` hook: the reel scrolled away from is
+      ended (a qualified view records its measured duration through `PostRepository.viewPost(id,
+      duration)` — the `posts/{id}/view` endpoint already documents an optional dwell duration, and
+      reels had NO view metric before, so this is purely additive, no double-count), the reel landed
+      on begins a fresh session, and `ReelsScreen`'s `onDispose` ends the last one. Chose Android's
+      `viewPost(duration)` sink over iOS's separate `POST /posts/engagement/batch` — the duration
+      endpoint is the platform-appropriate dwell sink. +17 tests (13 `EngagementSessionsTest`: floor
+      qualify / sub-threshold drop / inclusive boundary / unknown-surface inert / other-surface inert
+      / watch-time qualify / watch-below-floor / completed-qualifies / backwards-clock-never-negative /
+      overlay pauses the surface underneath / paused surface excludes the covered span / re-begin
+      restarts dwell / thresholds; +4 `ReelsViewModelTest`: dwell past floor records duration on
+      page-move, bounce records nothing, leaving records the final reel, re-settle keeps one session).
+      Mutation-proven: neutralising `pauseTop` fails exactly the two nesting tests; flipping the dwell
+      floor `>=`→`>` fails exactly the boundary tests. **Detail surface shipped 2026-08-31** (slice
+      `post-detail-dwell`): `PostDetailViewModel` now opens a `DETAIL` session on init (right after its
+      immediate `viewPost` impression) and closes it from `PostDetailScreen`'s `onDispose` via a public
+      `endDwellSession()` — a qualified dwell records `viewPost(id, dwellMs)`. This is the port of iOS
+      `PostDetailView`'s `.trackEngagement(surface: .detail)` sitting BESIDE its `.task` impression,
+      **not** replacing it: verified against the gateway that `creditPostView` is a `(postId, userId)`
+      singleton, so the second (duration-carrying) call never re-increments `viewCount` — it only raises
+      the stored dwell `duration` to its max. So the impression counts the open and the dwell enriches
+      it, no double-count, one endpoint. +6 tests (`PostDetailViewModelTest`): dwell past floor records
+      the measured watch-time; the record enriches the same view (impression still fires exactly once +
+      one duration-carrying call); a sub-floor glance records no watch-time; a blank postId opens no
+      session; ending twice records once (idempotent); a failed dwell record does not throw. RED-proven:
+      neutralising `beginDwell` fails exactly the 4 tests that expect a recorded dwell while the two
+      assert-no-record tests stay green. **Status-bubble surface shipped 2026-08-31** (slice
+      `status-bubble-dwell`): `StatusesViewModel.markStatusViewed` now opens a `STATUS_BUBBLE` session
+      beside the impression it already fired, and a new `endStatusDwell()` — driven by `StatusBarView`'s
+      popover `DisposableEffect(entry.id) { onDispose { … } }` (every dismiss path: tap-outside, react,
+      republish) — records `viewPost(id, dwellMs)` when the popover stayed up past the dwell floor.
+      This is the port of iOS `StatusBubbleController`, whose `present(_:)` fires `viewPost` +
+      `EngagementTracker.begin(.statusBubble)` together and whose every dismiss calls `end(.statusBubble)`;
+      the viewer's OWN status opens the popover but records no view, so it opens no session (iOS's early
+      `guard`). Same gateway dedup as detail — `creditPostView` `(postId, userId)` singleton, so the
+      dwell call never re-increments `viewCount`, only raises the stored `duration` to its max. +7 tests
+      (`StatusesViewModelTest`): dwell past floor records the measured watch-time; the dwell enriches the
+      same view (impression fires exactly once + one duration call); a sub-floor glance records no
+      watch-time; a blank statusId opens no session; ending twice records once (idempotent); ending a
+      dwell that never opened records nothing (the own-status path); a failed dwell record does not
+      disturb the bar. RED-proven: neutralising the `begin` fails exactly the 4 dwell-recording tests
+      while the 3 assert-no-record tests stay green. **Story-viewer surface shipped 2026-08-31** (slice
+      `story-viewer-dwell`): the 4th and LAST single-focus surface, bringing dwell tracking to full iOS
+      parity (reels + detail + status + story). `StoryViewerViewModel` now moves a `STORY_VIEWER`
+      `EngagementSessions` session WITH the slide on screen — begun on the slide landed on, ended on the
+      one left — via `transitionDwell` in `emit()` (the dwell twin of `transitionPostRoom`, guarded by
+      `currentDwellStoryId` so a same-slide re-emit neither closes nor restarts the running session).
+      The session also ends on dismiss (`emit` maps `isDismissed`→`null`) and on teardown
+      (`onCleared`→`endCurrentDwell`), and a qualified dwell records `postRepository.viewPost(slideId,
+      dwellMs)`. The SDK-look the prior note asked for resolved cleanly: **a story slide id IS a post
+      id** — `StoryApi.markViewed` already POSTs to `posts/{id}/view`, the identical route that carries
+      the optional `duration`, and the gateway (`routes/posts/interactions.ts`) already binds/persists
+      it (bounded [0,300000]ms) for the story case — so the measured watch-time rides the very endpoint
+      the impression uses, apps/android-only, no gateway/shared change. Same `(postId, userId)`-singleton
+      dedup as detail/status: the impression (`storyRepository.markViewed`) increments `viewCount` once,
+      the dwell only raises the stored `duration` to its max. +8 tests (`StoryViewerViewModelTest`, 96
+      total green): advancing past the floor records the left slide's measured watch-time; a sub-floor
+      glance records nothing; each advance records the slide it leaves re-arming the clock on the next;
+      stepping back records the slide left; `endCurrentDwell` records once then a second end is inert;
+      a same-slide re-emit does not restart the dwell clock; dismissing ends the current dwell; a failed
+      dwell record does not crash or disturb the viewer. RED-proven by mutation: neutralising the `begin`
+      fails EXACTLY the 6 dwell-recording tests while the 2 assert-no-record tests stay green.
+      **Analytics-consent gate shipped 2026-09-01** (slice `engagement-consent-gate-detail`): the four
+      dwell surfaces reported watch-time regardless of the reader's `allowAnalytics` privacy toggle,
+      while iOS gates ALL engagement at `EngagementTracker.begin`'s `guard consentProvider()` — a
+      dimension-1 (Sécurité/privacy) parity gap and a dead privacy control. The gate now lives on the
+      one machine every surface shares: `EngagementSessions.begin` gained a `consentGranted: Boolean`
+      (default `true`, the domain default) whose `false` arm returns inert BEFORE the topmost-owns-the-clock
+      pause — no session opens, so `end` reports nothing, and a non-consented overlay never pauses the
+      consented session underneath (the guard-first placement mirrors iOS returning before `pauseTop`).
+      The deduplicated `viewPost` impression stays **un-gated** — it is a view-count credit, not analytics
+      telemetry, exactly as iOS fires `viewPost` regardless of consent. **PostDetail wired this slice**
+      (`PrivacyPreferencesStore` injected; `beginDwell` passes `preferences.value.allowAnalytics`). +3
+      pure `EngagementSessionsTest` (non-consented begin opens no session / reports nothing; non-consented
+      begin does not pause the running session underneath — 1200 ms vs the consented 1000; explicit
+      `consentGranted=true` parity) + 3 `PostDetailViewModelTest` (consent withheld → no dwell record but
+      impression still credited; consent granted → dwell records). RED-proven by mutation: neutralising the
+      guard fails EXACTLY the 2 consent pure tests. **All four dwell surfaces now obey the toggle
+      (slice `engagement-consent-gate-surfaces`, 2026-09-01):** `ReelsViewModel`, `StatusesViewModel`
+      and `StoryViewerViewModel` each inject the existing Hilt-provided `PrivacyPreferencesStore` and
+      pass `consentGranted = preferences.value.allowAnalytics` into their `begin` call, closing the
+      dimension-1 gap the detail slice opened — the privacy toggle is now live across reels / post
+      detail / status bubble / story viewer. Each surface's un-gated impression stays un-gated (status
+      still fires `viewPost(id)` on open; story still fires `storyRepository.markViewed`). +4 behavioural
+      tests (reels: withheld consent → no dwell record; status: withheld → no dwell but impression still
+      credits + a second test the impression fires; story: withheld → no dwell record), RED-proven by
+      mutation: stripping the reels wiring fails EXACTLY that surface's consent test (1 of 18), the other
+      17 green.
+      **Still open (deferred, deliberately narrower than iOS):**
+      watch-time samples + completion from the reels player (the `end` params exist, fed dwell-only for
+      now — Android reels loop `REPEAT_MODE_ONE`, so completion is not meaningful there), micro-action
+      recording, and the durable outbox / crash-recovery net (iOS's SQLite `EngagementOutbox` +
+      `/posts/engagement/batch` — the Android dwell surfaces all ride the legacy `posts/{id}/view?duration`
+      sink, a faithfully narrower boundary; the batch subsystem is a much larger, multi-slice effort).
       **Post view recording + author-only reach stats shipped 2026-08-17** (slice
       `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
       fully implemented, tested, and unwired, same gap pattern as impression batching but a
@@ -6479,6 +6605,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS's `notifToggle` helper carries no such dependency for any of its rows, and email is a
       genuinely independent delivery channel. +1 test (`setEmailEnabled_persists`). 1 new string
       across EN/FR/ES/PT.
+      **Foreground-push presentation gate landed 2026-08-31** (slice `push-foreground-presentation-gate`)
+      — those preferences (push master · quiet hours · per-type toggles) were HONOURED by the in-app toast
+      (`NotificationToastPolicy`) but IGNORED by the FCM banner: `MeeshyFcmService.handleMessagePush` raised
+      a system banner for EVERY foreground push with no gate — push disabled, inside quiet hours, a muted
+      type, or the very conversation on screen still buzzed (the iOS pre-`NotificationPresentationResolver`
+      bug). New pure `:core:model` `PushPresentationPolicy.decide(...)` → `PushPresentationDecision`
+      (`Suppress` | `Alert(playSound)`): on-screen thread → suppress; socket alive → suppress (the toast
+      already surfaces it, no double banner); socket down → gate exactly as a background push
+      (`pushEnabled` → `DndWindow.isActive` → `NotificationTypeToggle.isEnabled`, all REUSED, no
+      re-implementation); a raised banner follows `soundEnabled` via `setSilent`. New `:sdk-core`
+      `@Singleton ActiveConversationStore` carries the one on-screen-thread nav truth across the process
+      boundary (written at the root banner host's active-context effect, read by the service). +15 pure
+      tests, RED-proven. Matures dimensions 1/5/8/13 (right people/attention, accessibility of quiet hours,
+      offline-first delivery doctrine, completeness). iOS `.badge` presentation option has no Android analog
+      (the app-icon badge is a side effect of a posted notification) — deliberately not modelled.
 - [x] Privacy settings (visibility, contacts, media/data, encryption preference) — **shipped**
       (slice `settings-privacy-preferences`, 2026-07-11). Port of iOS `PrivacySettingsView` +
       the visibility/contacts/media legs of `PrivacyPreferences`. **Reuses the existing**
@@ -6751,6 +6892,68 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       active-screen hook), RED-proven (dedup boundary `<`→`<=`; VM `isDuplicate`→`false`; auto-dismiss guard).
       **Still open (§M):** placing `NotificationToastHost` at the app scaffold + calling the
       `onConversationOpened/Closed` hooks from the chat/feed screens (cross-cutting app wiring).
+- [x] In-app banner dedup — one SSOT window, not a re-coded twin — **shipped 2026-08-31** (slice
+      `notification-banner-dedup-ssot`): the LIVE orchestrator wired at the app scaffold is
+      `NotificationBannerHost`/`NotificationBannerViewModel` (#4457, richer framing than the toast:
+      group-name resolution, media/reaction summary, tap-to-navigate). It carried its OWN dedup
+      window — a private `LinkedHashMap<String, Long>` + hand-rolled `isDuplicate`/`pruneDedupWindow`
+      + local `DEDUP_WINDOW_MS`/`MAX_REMEMBERED`, plus a direct `System.currentTimeMillis()`/
+      `LocalDateTime.now()` — a re-implementation of the pure `ToastDedupWindow` the toast twin
+      already used (dimension 11 divergent twin; the buried window was also entirely UNTESTED, no
+      `NotificationBannerViewModelTest` existed). This slice converges it: the banner VM now uses the
+      shared `ToastDedupWindow.admit(id, now)` (same 2 s window, admit-first ordering identical to
+      `NotificationToastViewModel`) and the injected `NotificationToastClock` seam, and its
+      auto-dismiss became a cancellable `dismissJob` (a banner arriving during another's window no
+      longer waits out the first's 4 s inside the collector, and a newer banner cancels the older
+      timer) — structurally the same shape as the toast VM. +12 tests (new `NotificationBannerViewModelTest`,
+      mirroring the toast harness: fresh→banner, 2 s dedup suppression, same-id-after-window re-shows,
+      active-conversation/post suppression, different-conversation still shows, push-disabled blocked,
+      conversation/post navigation payload, 4 s auto-dismiss, older-timer-doesn't-clobber-newer,
+      dismiss-clears). RED-proven (`isDuplicateDelivery = admit.isDuplicate`→`false` fails exactly the
+      dedup-suppression test). No new `:core:model` type — the SSOT already existed; the fix was to
+      DELETE the duplicate, not add one.
+      **Still open (§M) — the deeper twin:** two orchestrators (`NotificationBannerViewModel` LIVE
+      vs `NotificationToastViewModel` orphan) still wrap the SAME `MeeshyNotificationToast` atom off
+      the SAME socket seam. Dedup + clock are now shared, but the two VMs+Hosts should collapse into
+      ONE (the banner's framing+navigation is the superset). A product-level merge (retire the toast
+      host, fold its remaining hooks into the banner, then wire it) is a separate slice.
+- [x] In-app banner pulls down when the reader opens its thread — **shipped 2026-08-31** (slice
+      `banner-active-context-dismiss`): the LIVE `NotificationBannerViewModel.setActiveContext` set the
+      on-screen context (and published it process-wide for the FCM gate) but did NOT dismiss a banner
+      already on screen for the very conversation/post the reader just opened — iOS
+      `NotificationToastManager.onConversationOpened`/`onPostOpened` do exactly that (`if currentToast.
+      conversationId == conversationId { dismissToast() }`), and the orphan toast VM did too, so the
+      live surface was the poorer one (dimension 8 UX + dimension 13 complétude: a banner about thread X
+      kept counting down over the reader's face while they read thread X). This slice closes it AND makes
+      the "belongs to the open thread?" test a single SSOT: new pure `:core:model` `ActiveContextMatch.
+      matches(contentConversationId, contentPostId, activeConversationId, activePostId)` (a null active id
+      never matches — an empty screen silences nothing), which `NotificationToastPolicy` now calls for the
+      FRESH-notification active-screen suppression (behaviour identical — its inline null-guarded pair was
+      the same predicate) and `setActiveContext` calls for the ALREADY-SHOWN banner. +17 tests (11
+      `ActiveContextMatch` covering both arms true/false, both null guards, the OR, all-null; 6
+      `NotificationBannerViewModel`: opening the shown banner's conversation/post dismisses it, a different
+      conversation leaves it, leaving all screens leaves it, no-banner is inert). RED-proven (stripping the
+      predicate's null guards fails 6 predicate + 9 `NotificationToastPolicy` tests — proving the policy
+      genuinely consults it; removing the dismiss wiring fails exactly the two open-the-thread tests).
+      **Local-first group name shipped 2026-09-01** (slice `banner-group-name-favorite-emoji`): the banner's
+      "X dans <groupe>" framing named the group by `customName ?: title` and DROPPED the favorite-classification
+      emoji — the VM doc-comment promised "renommage + emoji favori" but the code only carried the rename, so a
+      thread the reader had starred (⭐️) or classified (🔥) showed a bare name where iOS
+      `NotificationToastManager.ConversationPresentation.composedSubtitle` leads with the favorite (dimension 6
+      Cohérence + dimension 13 Complétude gap; the emoji + local rename live ONLY on the device, the one piece the
+      gateway cannot compose). New pure `:core:model` `ConversationBannerName.composed(customName, title,
+      favoriteEmoji) → String?` (port of iOS `composedSubtitle` + its `name = customName ?? title` resolution):
+      `<favorite> <name>` favorite-first, `<name>` alone with no favorite, blank/whitespace favorite treated as
+      absent (iOS `trimmingCharacters` guard), the rename winning over the server title, and `null` when the device
+      knows no local name at all so `NotificationBannerFraming.present` falls back to the server title (the Android
+      addition over iOS's pure surface). Wired into `NotificationBannerViewModel` (the sole local-name resolver).
+      +11 tests (10 `ConversationBannerNameTest` — favorite-first / no-favorite / blank-favorite / whitespace-favorite
+      trimmed / rename-wins / blank-rename→title still favorite-first / title-only / both-blank→null / both-absent→null
+      / whitespace-name trimmed; +1 `NotificationBannerViewModelTest` — a group banner leads its headline with the
+      local rename + favorite emoji). RED-proven by mutation (dropping the favorite prepend fails exactly the 4
+      favorite-prepend tests, the 6 no-favorite/null tests stay green). **Still open (§M):** the in-app TOAST surface
+      (`NotificationToastHost.notificationToastSubtitle`) still reads the RAW server `conversationTitle` with no
+      local-first name at all (its VM holds no conversation snapshot) — a larger, separate local-first gap.
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
@@ -6982,8 +7185,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +20 `SearchQueryCacheTest` (RED-proven: `>=`→`>` on the TTL boundary flips the boundary miss to a hit)
       +5 `GlobalSearchViewModelTest` (cache-hit skips network, TTL-expiry re-fetches, `invalidateSearchCache`
       re-fetches, both socket events invalidate). Full `assembleDebug` + all-module `testDebugUnitTest` green.
-      **Remaining:** query highlighting rendered in the RESULT rows (iOS `highlightedText`, currently only the
-      chat bubble renders `highlightRanges`), and the local FTS leg below.
+      **Message-row highlighting done** (slice `global-search-result-highlight`, 2026-08-31): the message
+      result row now washes the query match in the content preview, iOS `highlightedText` parity. New pure
+      `:core:model` `MessageTextParser.highlightedSegments(text, term)` splits the plain content into
+      alternating highlighted/plain `HighlightSegment` runs (reusing the existing `highlightRanges` SSOT —
+      not a twin), and `GlobalSearchScreen.MessageHitRow` maps those runs onto a washed `AnnotatedString`
+      (same `MeeshyPalette.Warning.copy(alpha=0.45f)` wash as the chat bubble, so a term reads identically
+      in the row and in the opened conversation). Plain content, no markdown/link parsing in the row (iOS
+      does the same — a tappable link inside a result row would dead-end the tap). +12 `MessageTextParserHighlightSegmentsTest`
+      (empty text→no runs; empty/folds-away/unmatched term→single plain run; match at start/middle/end;
+      whole-string match; several matches with plain fillers; adjacent matches→back-to-back highlighted, no
+      empty filler; case-insensitive keeps original casing; accent-folded `cafe`→`café` highlighted whole;
+      the reassembly invariant on every non-trivial case). RED-proven (highlighted-run flag `true`→`false`
+      fails exactly the 8 match-bearing tests, the 4 no-match cases stay green).
+      **Highlight now washes the query that PRODUCED the results, not the live input** (slice
+      `global-search-results-query`, 2026-08-31): iOS keeps a `resultsQuery` distinct from the live
+      `searchText` and highlights each row against it (`highlightedText(result.content, query:
+      viewModel.resultsQuery)`); Android highlighted against the live `state.query`, so while a new
+      query was being typed (during the 300 ms debounce + network window) the OLD results re-washed
+      against the NEW partial term — a stale, mismatched highlight (dimension 4 Fluidité / 13
+      Complétude). New `GlobalSearchUiState.resultsQuery` snapshot, set on BOTH the network path and
+      the cache-hit path to the term that produced the shown results, and reset to `""` when the query
+      shrinks below the floor (parity iOS `clearResults`); `MessageHitRow` now washes against
+      `resultsQuery`. +4 `GlobalSearchViewModelTest` (a successful search anchors `resultsQuery`; a
+      cache hit reports the cached term; shrinking below the floor resets it; the anchor stays on the
+      shown results while a newer query is being typed). RED-proven (blanking the anchor on both paths
+      fails exactly the 4 new tests).
+      **Remaining:** highlighting the Conversations/Users result rows (their preview is the title/username,
+      a lighter follow-up — iOS does not do this, so it would be an Android surpass), and the local FTS leg below.
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
 - [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
       itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,
@@ -7103,8 +7332,45 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive
       player (seek bar, ±10s, speed 1.0–2.0×, swipe-to-dismiss); Picture-in-Picture
 - [ ] Single-active-player coordination across audio + video; save video to gallery
-- [ ] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
-- [ ] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
+- [~] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
+      — **karaoke sync pure core shipped** (slice `transcription-active-segment-resolver`,
+      2026-08-30): pure `:core:model` `TranscriptionKaraokeResolver.activeSegmentIndex`
+      (segments + currentTime + progress + isPlaying → lit segment index | `null`), a faithful
+      port of iOS `AudioPlayerView.activeSegmentIndex` — the single source of truth iOS shares
+      between the bubble player and `MediaTranscriptionView`. Three layers: idle/empty → `null`
+      (iOS "BUG D" guard against false-highlighting segment 0 at rest); real timing → first
+      half-open `[start,end)` window containing the position (start inclusive, end exclusive),
+      `null` before-first / in-gap / past-last; no usable timing (all `start==end`) →
+      proportional `floor(progress·count)` clamped to range. Android's nullable segment bounds
+      read as `0.0` (iOS's non-optional default). +19 branch tests, RED-proven. Remaining
+      app-side glue (pending): the Compose flow-layout that paints the coloured spans +
+      tap-to-seek + auto-scroll, and video watch-progress reporting.
+      **Watch-report double-fire guard shipped** (slice `video-dismiss-watch-report`,
+      2026-08-31): pure `:core:model` `VideoDismissWatchReport.shouldReport(complete,
+      watchedSeconds, playerStillHoldsAttachment)`, a faithful port of iOS
+      `VideoDismissWatchReport.shouldReport` (the fix for issue #3908). A watch is
+      reported by TWO owners — the shared player's `cleanup()` (persists resume position,
+      then zeroes its counters) and the fullscreen `.onDisappear` (runs after). Closing a
+      PAUSED video routed the second reporter through a DETACHED player that read zero and
+      ERASED the resume position the first owner just wrote. The guard asks one question
+      before reading the player — does it still hold this attachment? — and stays silent
+      once detached; a partial watch reports only past a 3 s minimum (inclusive), a
+      completed watch escapes that threshold. +9 branch tests, RED-proven (detachment gate
+      mutation fails exactly the 3 detached-silence tests). Remaining app-side glue
+      (pending): the Compose fullscreen player `.onDisappear` that calls this guard before
+      emitting the watch-progress telemetry.
+- [~] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
+      — **render-posture pure core shipped** (slice `audio-player-chrome-plan`, 2026-08-30):
+      pure `:core:model` `AudioPlayerChrome` (Card / FlatMinimal / FlatFocused) +
+      `AudioPlayerChromePlan.plan(chrome)`, a faithful port of iOS
+      `AudioPlayerChromePlan.plan(for:)` — the value type deciding WHO appears in the player
+      (card background, right chips, language strip, re-transcribe, transcribe-CTA, flat
+      transcription + its line/word limits + whether it follows playback). `.card` = historic
+      rich card (bubble default); `.flatMinimal` = bare strip, static 2-line quote; `.flatFocused`
+      = enriched bare strip, full karaoke-following transcription word-capped at 30 → fullscreen.
+      Chrome is an OPAQUE posture — WHICH row gets WHICH posture stays app-side (SDK purity).
+      +13 branch tests, RED-proven. Remaining app-side glue (pending): the Compose player chrome
+      that paints these decisions, speed control, seek, disk-cache-first instant replay.
 - [ ] Voice-message autoplay-next chaining; full-screen swipeable audio viewer (reels-style)
 - [~] Universal audio recorder (live waveform, duration/min-duration limits, presets)
       — **live-waveform pure core shipped** (slice `media-waveform-interpolation`, 2026-07-12):

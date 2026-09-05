@@ -32,6 +32,7 @@ import {
   type MessageProtectionContext
 } from './media-protection';
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
+import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -42,46 +43,19 @@ import { conversationActiveMemberCountSelect } from '../conversations/utils/acti
 const createUserSchema = createUserValidationSchema;
 const resetPasswordSchema = resetPasswordValidationSchema;
 
-// #4165 — plafonds de l'énumération, en amont de `GET
-// /admin/users/:userId/reported-messages`, des conversations puis des
-// messages d'un utilisateur (`Report.reportedEntityId` étant polymorphe, voir
-// le commentaire au site d'appel). Larges par rapport à un usage normal :
-// couvrent un compte qui aurait rejoint 2 000 conversations ou envoyé 20 000
-// messages, tout en éliminant le scan réellement illimité que l'audit signale.
-const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
-const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
-
-/**
- * Le seuil de CHAQUE porte de ce fichier qui lit `Report` (#4157, étendu par
- * #4494 : deux seuils sur une même donnée, c'est le plus bas qui décide, sur
- * TOUTES ses portes). Un écart avec `REPORT_PERMISSION_LA_PLUS_HAUTE` se
- * déclare ICI, en donnée, avec sa raison — jamais en commentaire, que rien ne
- * confronte au code. Balayage : `__tests__/unit/routes/admin/reported-messages-audit-content-guard.test.ts`.
- */
-export type PermissionReport = 'canViewUsers' | 'canModerateContent';
-
-export type SeuilReport = {
-  readonly porte: string;
-  readonly permission: PermissionReport;
-  /** Requise dès que `permission` n'est pas `REPORT_PERMISSION_LA_PLUS_HAUTE`. */
-  readonly raisonEcart?: string;
-};
-
-export const REPORT_PERMISSION_LA_PLUS_HAUTE: PermissionReport = 'canModerateContent';
-
-export const SEUILS_REPORT: readonly SeuilReport[] = [
-  {
-    porte: 'GET /admin/users/:userId/reports',
-    permission: REPORT_PERMISSION_LA_PLUS_HAUTE
-  },
-  {
-    porte: 'GET /admin/users/:userId/reported-messages',
-    permission: 'canViewUsers',
-    raisonEcart:
-      "AUDIT garde les métadonnées (son métier : auditer la modération), " +
-      "jamais `content` — retiré par le handler, même motif qu'attachmentProtectionSelect (l. 683)."
-  }
-];
+// #4494 / #4284 — la surface `Report` (les seuils déclarés + les deux
+// portes qui la lisent) vit désormais dans `user-reports.ts` : ce fichier
+// avait franchi le budget de taille des fichiers de routes (#4284, < 1000
+// lignes). Réexportée ici parce que
+// `reported-messages-audit-content-guard.test.ts` importe ces symboles
+// depuis `routes/admin/users` — une dépendance publique que ce
+// déplacement ne doit pas casser.
+export {
+  SEUILS_REPORT,
+  REPORT_PERMISSION_LA_PLUS_HAUTE,
+  type PermissionReport,
+  type SeuilReport
+} from './user-reports';
 
 // Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
 // ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
@@ -449,16 +423,19 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.conversationShareLink.findMany({
           where: { createdBy: userId },
           select: {
+            // #4157 c.3 / #4692 — AUCUNE colonne de `SHARE_LINK_JOIN_KEY_COLUMNS`
+            // (`linkId`, `identifier`) : les deux OUVRENT la porte de jointure,
+            // indifféremment (`findShareLinkByKey`), et les lecteurs de cette
+            // route sont BIGBOSS, ADMIN, MODERATOR et AUDIT — les deux derniers
+            // sans `canViewSensitiveData`. Le premier lot n'avait retiré que
+            // `linkId` en écrivant qu'« `id` suffit à désigner le lien » ; c'était
+            // faux deux fois — `identifier` sortait à sa place, et `id` était
+            // lui-même une clé de jointure. #4692 a retiré l'ObjectId de la LOI
+            // (link-admission.ts), ce qui rend enfin `id` opaque et le laisse
+            // servir de référence à la console. Le secret ne se lit qu'au geste
+            // souverain `POST /admin/share-links/:id/reveal`, qui rend désormais
+            // les DEUX clés.
             id: true,
-            // #4157 c.3 — `linkId` EST le secret qui permet de REJOINDRE la
-            // conversation. Le même lot l'a retiré de `GET /admin/share-links`
-            // et lui a dédié un geste souverain tracé (`POST …/reveal`) ; il
-            // continuait de sortir ICI, dans un autre fichier, à des rôles pour
-            // qui `canViewSensitiveData` est `false`. Une protection posée sur
-            // une porte et pas sur sa voisine ne protège rien : `id` suffit à
-            // désigner le lien, et le geste dédié reste la seule façon de le
-            // révéler.
-            identifier: true,
             name: true,
             description: true,
             maxUses: true,
@@ -480,8 +457,30 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            // #4157 c.3 — jeton d'accès retiré, même raison que `linkId`
-            // ci-dessus : `shortUrl` suffit à désigner le lien pour une revue.
+            // #4694 — `token` REVIENT, et le commentaire qui prétendait le
+            // protéger est retiré : il ne protégeait rien.
+            //
+            // Le lot #4157 c.3 l'avait sorti du `select` « comme `linkId` », en
+            // gardant `shortUrl` — que `TrackingLinkService` compose
+            // exactement `/l/${token}` (l. 148, et l. 926 au changement de
+            // jeton ; `schema.prisma` le dit aussi : « URL courte générée
+            // (meeshy.me/l/<token>) »). **Le champ retiré était contenu dans le
+            // champ conservé.** Le témoin ne tombait pas parce que sa fixture
+            // valait `'https://s'` au lieu de la forme de production.
+            //
+            // MESURE des routes clefées par `:token`, qui décide de la sortie
+            // retenue : `GET /l/:token` est une redirection PUBLIQUE,
+            // `GET /tracking-links/:token/resolve` est publique PAR DESIGN (son
+            // doc-comment l'écrit), `POST …/:token/click` est en `authOptional`
+            // et `POST …/:token/redirect-status` n'a aucun hook. Tout ce qui
+            // MUTE (`PATCH`, `DELETE`, `…/deactivate`) est `authRequired` +
+            // contrôle de propriétaire, et `GET /tracking-links/:token`
+            // (les stats) l'est aussi. Ce jeton est donc une clé de ROUTAGE
+            // publique, pas un secret : le masquer coûterait à la console le
+            // libellé d'un lien sans nom (`link.name || link.token`) sans rien
+            // fermer. `AffiliateToken.token` reste retiré — lui consomme une
+            // place de `maxUses` sur `POST /affiliate/register`.
+            token: true,
             name: true,
             campaign: true,
             source: true,
@@ -773,195 +772,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  /**
-   * GET /admin/users/:userId/reports - Reports filed BY a user (reporterId).
-   * Requires canViewUsers permission.
-   */
-  fastify.get<{
-    Params: { userId: string };
-    Querystring: { offset?: string; limit?: string; status?: string };
-  }>('/admin/users/:userId/reports', {
-    // #4157 — DEUX seuils gouvernaient la même table : `GET /admin/reports`
-    // exige `canModerateContent` (MODERATOR, ADMIN, BIGBOSS) quand celle-ci se
-    // contentait de `canViewUsers`, qui admet AUDIT en plus. Deux seuils sur
-    // une même donnée, c'est le plus bas qui décide — et le filtre par
-    // `reporterId` ne change pas la nature de ce qui est lu.
-    //
-    // #4494 — cette règle vaut pour LES DEUX portes de ce fichier qui lisent
-    // `Report`, pas seulement celle-ci : `reported-messages`, plus bas, reste
-    // à `canViewUsers` — SEUILS_REPORT dit pourquoi ce n'est pas l'oubli que
-    // #4157 a laissé passer ici (AUDIT y garde les métadonnées du signalement,
-    // jamais `content`).
-    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission(REPORT_PERMISSION_LA_PLUS_HAUTE)]
-  }, async (request, reply) => {
-    try {
-      const { userId } = request.params;
-      const { offset = '0', limit, status } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
-
-      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-      if (!userExists) {
-        return sendNotFound(reply, 'Utilisateur non trouvé');
-      }
-
-      const where: Record<string, unknown> = { reporterId: userId };
-      if (status) {
-        where.status = status;
-      }
-
-      const [reports, total] = await Promise.all([
-        fastify.prisma.report.findMany({
-          where,
-          select: {
-            id: true,
-            reportedType: true,
-            reportedEntityId: true,
-            reportType: true,
-            reason: true,
-            status: true,
-            actionTaken: true,
-            createdAt: true,
-            resolvedAt: true
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.report.count({ where })
-      ]);
-
-      return sendPaginatedSuccess(reply, reports, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + reports.length < total
-      });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user reports');
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user reports' });
-    }
-  });
-
-  /**
-   * GET /admin/users/:userId/reported-messages - Messages authored by the user
-   * that have been reported. Each item is a report joined with its message.
-   * Requires canViewUsers permission ; `message.content` requires
-   * canModerateContent in addition (#4494 — see SEUILS_REPORT).
-   */
-  fastify.get<{
-    Params: { userId: string };
-    Querystring: { offset?: string; limit?: string };
-  }>('/admin/users/:userId/reported-messages', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
-      // #4494 — AUDIT franchit `requireUserViewAccess` sans `canModerateContent` :
-      // il garde son métier (auditer), pas le corps du message. Voir SEUILS_REPORT.
-      const canSeeReportedContent = permissionsService.hasPermission(viewerRole, REPORT_PERMISSION_LA_PLUS_HAUTE);
-
-      const { userId } = request.params;
-      const { offset = '0', limit } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
-
-      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-      if (!userExists) {
-        return sendNotFound(reply, 'Utilisateur non trouvé');
-      }
-
-      const emptyPage = () => sendPaginatedSuccess(reply, [], { total: 0, offset: offsetNum, limit: limitNum, hasMore: false });
-
-      // BORNÉ (#4165), et c'est un compromis À DOCUMENTER, pas un simple
-      // `take` ajouté : `Report.reportedEntityId` est POLYMORPHE (message,
-      // user, conversation, community, post, story — `schema.prisma`, aucune
-      // relation Prisma déclarée), donc aucune requête ne peut pousser
-      // "expéditeur du message = userId" DANS `report.findMany` lui-même. Il
-      // faut D'ABORD énumérer les messages de l'utilisateur pour construire le
-      // filtre `reportedEntityId IN […]` — c'est cette énumération qui était
-      // SANS `take` : sur un compte très actif (des dizaines de milliers de
-      // messages), CHAQUE page de signalements repayait la totalité de son
-      // historique. Ordonnées par récence, les deux requêtes plafonnent large
-      // (bien au-delà d'un usage normal) : au-delà, ce sont les conversations/
-      // messages les plus ANCIENS qui sortent du périmètre — les plus probables
-      // d'être déjà résolus, les moins probables d'être encore sous
-      // modération active. Une borne exacte demanderait une relation dédiée
-      // sur `Report` (hors territoire de ce lot, `schema.prisma` étant un
-      // fichier-carrefour).
-      const participants = await fastify.prisma.participant.findMany({
-        where: { userId, type: 'user' },
-        select: { id: true },
-        orderBy: { joinedAt: 'desc' },
-        take: REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP
-      });
-      const participantIds = participants.map((p) => p.id);
-      if (participantIds.length === 0) return emptyPage();
-
-      // Message ids authored by the user (bounded by the user's own messages).
-      const userMessages = await fastify.prisma.message.findMany({
-        where: { senderId: { in: participantIds } },
-        select: { id: true },
-        orderBy: { createdAt: 'desc' },
-        take: REPORTED_MESSAGES_MESSAGE_SCAN_CAP
-      });
-      const messageIds = userMessages.map((m) => m.id);
-      if (messageIds.length === 0) return emptyPage();
-
-      const reportWhere = { reportedType: 'message', reportedEntityId: { in: messageIds } };
-
-      const [reports, total] = await Promise.all([
-        fastify.prisma.report.findMany({
-          where: reportWhere,
-          select: {
-            id: true,
-            reportedEntityId: true,
-            reportType: true,
-            reason: true,
-            status: true,
-            reporterId: true,
-            reporterName: true,
-            createdAt: true,
-            resolvedAt: true
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.report.count({ where: reportWhere })
-      ]);
-
-      const reportedMessageIds = [...new Set(reports.map((r) => r.reportedEntityId))];
-      // Déjà borné IMPLICITEMENT : `reportedMessageIds` dérive de `reports`,
-      // la page ≤ `limitNum` posée ci-dessus par `report.findMany`. `take`
-      // explicite quand même (#4165) — la borne ne doit pas dépendre d'un
-      // raisonnement à distance sur la taille d'un tableau amont.
-      const messages = reportedMessageIds.length > 0
-        ? await fastify.prisma.message.findMany({
-            where: { id: { in: reportedMessageIds } },
-            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true },
-            take: reportedMessageIds.length
-          })
-        : [];
-      // La ligne reste : un AUDIT doit pouvoir constater qu'un message a été
-      // signalé, par qui, pourquoi. Seul `content` — le texte écrit par
-      // l'utilisateur — tombe à `null` pour qui n'a pas canModerateContent.
-      const messageMap = new Map(
-        messages.map((m) => [m.id, canSeeReportedContent ? m : { ...m, content: null }])
-      );
-
-      const data = reports.map((r) => ({ ...r, message: messageMap.get(r.reportedEntityId) ?? null }));
-
-      return sendPaginatedSuccess(reply, data, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + reports.length < total
-      });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user reported messages');
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user reported messages' });
-    }
-  });
+  // GET /admin/users/:userId/reports et GET /admin/users/:userId/reported-messages
+  // — la surface `Report` : deux portes qui lisent la MÊME table sous des
+  // seuils déclarés (SEUILS_REPORT, #4157 étendu par #4494). Vivent
+  // désormais dans `user-reports.ts`, une unité nommable à part entière
+  // (#4284), plutôt qu'une tranche de plus dans ce fichier déjà au plafond
+  // de taille.
+  registerUserReportsRoutes(fastify);
 
   /**
    * GET /admin/conversations/:conversationId/participants - Paginated members of

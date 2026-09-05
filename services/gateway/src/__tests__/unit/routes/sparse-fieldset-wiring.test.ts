@@ -237,7 +237,7 @@ describe('GET /directory/people/:handle — `fields` réduit la REQUÊTE', () =>
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
-/** Le socle, relevé sur `mapBaseLinkItem` — dix clés, inchangées depuis #4170. */
+/** Le socle, relevé sur `mapBaseLinkItem` — onze clés depuis #3740 (`inactiveReason`). */
 const CLES_LIEN_NU = [
   'conversationTitle',
   'createdAt',
@@ -245,6 +245,7 @@ const CLES_LIEN_NU = [
   'expiresAt',
   'id',
   'identifier',
+  'inactiveReason',
   'isActive',
   'linkId',
   'maxUses',
@@ -351,6 +352,7 @@ describe('GET /links — sans paramètre, rien ne bouge', () => {
       expiresAt: null,
       createdAt: '2025-01-01T00:00:00.000Z',
       conversationTitle: 'Test Chat',
+      inactiveReason: null,
     });
     await app.close();
   });
@@ -475,7 +477,11 @@ const COMPTE = {
   systemLanguage: 'fr',
   regionalLanguage: 'en',
   customDestinationLanguage: null,
-  autoTranslateEnabled: true,
+  // PAS de `autoTranslateEnabled` : `User` n'a aucune colonne de ce nom, et le
+  // `select` du cache d'auth ne peut donc pas la poser sur `registeredUser`.
+  // La poser ici FABRIQUAIT une colonne inexistante, et rendait vert un
+  // service qui ne lisait rien (#3736). Son unique magasin est le document
+  // `UserPreferences.application`, servi par le double ci-dessous.
   isOnline: true,
   lastActiveAt: new Date('2026-08-01T10:00:00Z'),
   emailVerifiedAt: new Date('2025-01-01T00:00:00Z'),
@@ -491,10 +497,22 @@ const COMPTE = {
 };
 
 /**
- * Trente clés — les trente-deux que `formatUserResponse` compose, moins
- * `pendingEmail` et `pendingPhone` que `userSchema` ne déclare pas (supprimées
- * par fast-json-stringify). `phoneCountryCode` et `timezone` sont déclarés mais
- * jamais produits : absents.
+ * Trente clés — exactement ce que `formatUserResponse` compose depuis que
+ * `pendingEmail` et `pendingPhone` en ont été retirés (#4653) : aucun client ne
+ * les lisait sur une réponse de connexion, mesuré sur les trois plateformes.
+ *
+ * `phoneCountryCode` est déclaré et jamais produit : `SocketIOUser` ne le porte
+ * pas, donc le projecteur ne peut pas le servir sans élargir le type partagé.
+ *
+ * `timezone` A un producteur depuis #4641 — la phrase « jamais produit » qui
+ * valait pour lui est devenue fausse ce jour-là. Il reste absent ICI pour une
+ * raison DIFFÉRENTE, et c'est elle qu'il faut retenir : le `select` du cache
+ * d'auth ne charge pas la colonne, donc `user.timezone` vaut `undefined` et le
+ * projecteur ne pose pas la clé. `formatUserResponse` sert délibérément
+ * `user.timezone` SANS `?? null` : `undefined` (colonne non chargée) laisse la
+ * clé absente, `null` (colonne chargée et vide) sert `null`. Une route ne peut
+ * donc pas DÉCLARER un fuseau qu'elle n'a pas lu — et ce gel de trente clés
+ * tient toujours.
  */
 const CLES_ME_NU = [
   'autoTranslateEnabled',
@@ -532,6 +550,9 @@ const CLES_ME_NU = [
 async function monterMoi(): Promise<{ app: FastifyInstance; prisma: any }> {
   const prisma = {
     user: { findUnique: jest.fn<any>(async () => COMPTE), findFirst: jest.fn<any>(async () => COMPTE) },
+    // Le magasin RÉEL de `autoTranslateEnabled` (#3736) : `GET /me` le relit,
+    // et seulement quand `?fields=` laisse passer la clé.
+    userPreferences: { findUnique: jest.fn<any>(async () => ({ application: { autoTranslateEnabled: true } })) },
     signalPreKeyBundle: {
       findUnique: jest.fn<any>(async () => ({
         registrationId: 42,

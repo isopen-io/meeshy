@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -143,6 +144,14 @@ fun StatusBarView(
 
     selected?.let { entry ->
         val isOwn = entry.id == state.myStatus?.id
+        // Leaving the popover closes the dwell session opened by `markStatusViewed`, recording the
+        // measured watch-time against the status this popover already viewed (only past the dwell
+        // floor). Keyed on the popover's lifetime so it fires on EVERY dismiss path — tap-outside,
+        // react, republish — mirroring iOS `StatusBubbleController.dismiss()`. A no-op for the
+        // viewer's own status (no view was recorded, so no session was opened).
+        DisposableEffect(entry.id) {
+            onDispose { viewModel.endStatusDwell() }
+        }
         StatusPopover(
             entry = entry,
             isOwn = isOwn,

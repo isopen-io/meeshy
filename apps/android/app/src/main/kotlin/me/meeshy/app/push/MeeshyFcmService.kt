@@ -15,12 +15,18 @@ import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
+import me.meeshy.sdk.model.PushPresentationDecision
+import me.meeshy.sdk.model.PushPresentationPolicy
 import me.meeshy.sdk.model.call.CallStopPush
 import me.meeshy.sdk.model.call.IncomingCallPush
 import me.meeshy.sdk.model.call.IncomingCallPushRoute
+import me.meeshy.sdk.notification.ActiveConversationStore
+import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocketManager
 import timber.log.Timber
+import java.time.LocalDateTime
 import javax.inject.Inject
 
 /**
@@ -49,6 +55,15 @@ class MeeshyFcmService : FirebaseMessagingService() {
 
     @Inject
     lateinit var session: SessionRepository
+
+    @Inject
+    lateinit var socketManager: SocketManager
+
+    @Inject
+    lateinit var notificationPreferencesStore: NotificationPreferencesStore
+
+    @Inject
+    lateinit var activeConversationStore: ActiveConversationStore
 
     override fun onNewToken(token: String) {
         Timber.d("FCM token refreshed")
@@ -97,6 +112,22 @@ class MeeshyFcmService : FirebaseMessagingService() {
             .enqueue(OutboxFlushWorker.buildRequest())
 
         val notification = message.notification ?: return
+
+        // Un push message reçu au PREMIER PLAN (le seul cas où `onMessageReceived` porte un
+        // bloc `notification`) ne lève une bannière système que si la présentation l'autorise :
+        // le socket vivant sert déjà le toast in-app, la conversation ouverte est sous les yeux,
+        // et les préférences (push maître / heures calmes / bascule par type) gardent le reste.
+        // Cf. [PushPresentationPolicy] — pendant du résolveur `willPresent` d'iOS.
+        val decision = PushPresentationPolicy.decide(
+            socketConnected = socketManager.isConnected,
+            preferences = notificationPreferencesStore.preferences.value,
+            rawType = message.data["type"],
+            conversationId = message.data["conversationId"],
+            activeConversationId = activeConversationStore.conversationId.value,
+            now = LocalDateTime.now(),
+        )
+        if (decision !is PushPresentationDecision.Alert) return
+
         showNotification(
             title = notification.title ?: "Meeshy",
             body = notification.body ?: "",
@@ -107,6 +138,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
             type = message.data["type"],
             conversationId = message.data["conversationId"],
             notificationId = message.data["notificationId"],
+            playSound = decision.playSound,
         )
     }
 
@@ -212,6 +244,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
         type: String?,
         conversationId: String?,
         notificationId: String?,
+        playSound: Boolean,
     ) {
         // The channel is created eagerly at process start
         // (NotificationChannelInstaller, MeeshyApplication.onCreate) — this
@@ -250,6 +283,9 @@ class MeeshyFcmService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            // « Sons » coupé ⇒ bannière silencieuse (ni son ni vibration) — la
+            // décision vient de [PushPresentationPolicy], pas d'un canal figé.
+            .setSilent(!playSound)
             .build()
 
         manager.notify(notificationManagerId, notification)

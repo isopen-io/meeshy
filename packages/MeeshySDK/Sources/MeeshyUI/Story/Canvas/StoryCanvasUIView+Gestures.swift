@@ -30,16 +30,81 @@ extension StoryCanvasUIView {
         // qu'un double-tap déclenche deux fois le format panel (open puis
         // open-via-double). Pattern UIKit standard.
         singleTapRecognizer.require(toFail: doubleTapRecognizer)
+        backgroundLongPressRecognizer = UILongPressGestureRecognizer(
+            target: self, action: #selector(handleBackgroundLongPress(_:)))
         canvasZoomPinchRecognizer = ThreeFingerPinchGestureRecognizer(
             target: self,
             action: #selector(handleCanvasZoomPinch(_:))
         )
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, canvasZoomPinchRecognizer] {
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, backgroundLongPressRecognizer, canvasZoomPinchRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
         addInteraction(UIPointerInteraction(delegate: self))
         addInteraction(UIContextMenuInteraction(delegate: self))
+    }
+
+    /// **L'appui long sur le FOND, et rien d'autre.**
+    ///
+    /// Trois conditions, chacune pour une raison distincte :
+    ///
+    /// - `mode == .edit` — en lecture, la scène se regarde ;
+    /// - `.began` — l'appui long émet `.began` puis `.changed`/`.ended` ; sans
+    ///   ce filtre l'hôte serait appelé plusieurs fois pour un seul geste, et
+    ///   ouvrirait plusieurs viseurs ;
+    /// - `hitTestItem(at:) == nil` — sur un objet, `UIContextMenuInteraction`
+    ///   possède déjà ce geste. Le lui disputer ferait clignoter le menu.
+    @objc func handleBackgroundLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        // **La LEVÉE d'abord** (#5041) : un appui long ARMÉ doit rendre sa durée
+        // et sa fin, sinon le viseur n'a de quoi ouvrir un objectif, jamais de
+        // quoi tenir une prise.
+        //
+        // `backgroundLongPressOrigin` porte la condition à lui seul : sa présence
+        // EST la preuve que `.began` a passé les trois gardes ci-dessous. Sans
+        // elle, relâcher un appui long REFUSÉ — en lecture, sur un objet, pendant
+        // une saisie — terminerait une prise que rien n'avait armée.
+        switch recognizer.state {
+        case .changed:
+            guard let origine = backgroundLongPressOrigin else { return }
+            let ici = recognizer.location(in: self)
+            onBackgroundLongPressChanged?(CGPoint(x: ici.x - origine.x,
+                                                  y: ici.y - origine.y))
+            return
+        case .ended, .cancelled, .failed:
+            guard backgroundLongPressOrigin != nil else { return }
+            backgroundLongPressOrigin = nil
+            onBackgroundLongPressEnded?()
+            return
+        default:
+            break
+        }
+        guard mode == .edit, recognizer.state == .began else { return }
+        guard hitTestItem(at: recognizer.location(in: self)) == nil else { return }
+        guard inlineEditingTextId == nil else { return }
+        // **« Aucun objet devant » n'est pas « scène vide »** (#5041). La garde
+        // ci-dessus interroge `itemsContainer`, qui ne contient que le PREMIER
+        // PLAN ; un média de fond n'y figure pas et laissait donc le geste filer
+        // au viseur — proposant de reprendre une photo par-dessus celle qu'on
+        // voulait retoucher. La règle porte le raisonnement et ses témoins ; ici
+        // on ne fait que router.
+        switch StoryCanvasBackgroundLongPress.outcome(
+            backgroundMediaObjectId: backgroundMediaObjectId,
+            hostServesBackgroundMenu: onBackgroundMediaLongPressed != nil) {
+        case .presentBackgroundMenu(let id):
+            // **Un menu, pas l'éditeur.** Sur un objet de premier plan, l'appui
+            // long ouvre déjà `UIContextMenuInteraction` — supprimer, dupliquer,
+            // modifier. Router le fond droit vers l'éditeur aurait donné au même
+            // geste deux effets selon que le média est devant ou derrière, et
+            // laissé « ramener en avant » — la seule action qui fait SORTIR un
+            // média du plan de fond — sans aucun chemin.
+            //
+            // Aucune prise n'est armée : ce geste-ci ouvre un menu, il ne tient
+            // pas un déclencheur.
+            onBackgroundMediaLongPressed?(id)
+        case .openViewfinder:
+            backgroundLongPressOrigin = recognizer.location(in: self)
+            onBackgroundLongPressed?()
+        }
     }
 
     @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
@@ -112,11 +177,26 @@ extension StoryCanvasUIView {
         onItemDoubleTapped?(id, kind)
     }
 
+    /// **De quelle famille est l'objet touché** — site UNIQUE (#4671).
+    ///
+    /// `audio` y est entré le 2026-09-01, et son absence coûtait plus qu'un
+    /// éditeur manquant : `handleSingleTap` fait
+    /// `guard let id = hitTestItem(…), let kind = itemKind(forId: id) else { … onBackgroundTapped?() }`.
+    /// Le hit-test TROUVAIT bien la pastille audio — sa couche est nommée — mais
+    /// le kind manquait, donc toucher une pastille audio se comportait
+    /// exactement comme toucher le vide : ça DÉSÉLECTIONNAIT. Pas un contrôle
+    /// inerte : un contrôle qui fait le contraire.
+    ///
+    /// **Le menu contextuel POSAIT la même question et répondait autrement** :
+    /// son classifieur retombait sur `.media` pour un audio, là où celui-ci
+    /// rendait `nil`. Deux écritures d'une seule règle, déjà divergentes ; il
+    /// appelle désormais cette fonction.
     func itemKind(forId id: String) -> CanvasItemKind? {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
-        if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
+        if slide.locationObjects.contains(where: { $0.id == id }) { return .place }
+        if (slide.effects.audioPlayerObjects ?? []).contains(where: { $0.id == id }) { return .audio }
         return nil
     }
 
@@ -155,7 +235,15 @@ extension StoryCanvasUIView {
             }
         case .changed:
             guard let id = manipulatedItemId else { return }
-            let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
+            // **La borne a un nom depuis le #4722.** Elle était écrite en
+            // littéral ici, et la puce audio en ajoute un SECOND geste de
+            // taille — en SwiftUI, sur un objet que ce recognizer ne saisit
+            // même pas (`manipulable` exclut `.audio`). Deux littéraux
+            // identiques divergent au premier ajustement de l'un, et aucun
+            // témoin ne peut l'attraper : chacun reste juste vis-à-vis de
+            // lui-même.
+            let newScale = SceneObjectScalePolicy.settled(
+                base: baseScale, gestureScale: Double(recognizer.scale))
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
@@ -475,21 +563,43 @@ extension StoryCanvasUIView {
                                                             bakedScale: bakedScale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
-            // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
-            // dans bounds (baseSide × scale), transform = rotation only.
-            // Mêmes raisons que la branche media — éviter le double-scale au
-            // 2e geste sur le même sticker.
-            let designSide = CGFloat(sticker.baseSize * sticker.scale)
-            let renderedSide = geo.render(designSide)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
-            if layer.bounds.size != newBounds.size {
-                layer.bounds = newBounds
+            if sticker.kind == .template {
+                // **Un gabarit n'est PAS carré** (#4744). La branche ci-dessous
+                // reconstruit des bounds de côté `baseSize × scale` — vrai d'un
+                // GLYPHE, qui est carré par nature ; faux d'une décoration, dont
+                // la boîte est MESURÉE par `StickerTemplateRenderer` (une carte
+                // postale est large et basse, un ruban plus large encore).
+                // L'imposer écrasait la décoration dans un carré faux pendant
+                // tout le geste, puis la laissait sauter au rebuild de fin.
+                //
+                // Même remède que le texte et la pastille de lieu, dont la
+                // boîte est mesurée pour les mêmes raisons : un RATIO
+                // transitoire par-dessus la rotation, la re-rasterisation nette
+                // venant à `.ended`. On ne touche pas aux bounds : les
+                // remesurer à chaque image coûterait un dessin Core Graphics
+                // par frame.
+                let bakedScale = (layer as? StoryStickerLayer)?.sticker?.scale ?? sticker.scale
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                layer.transform = Self.liveTextGestureTransform(rotationDegrees: sticker.rotation,
+                                                               modelScale: sticker.scale,
+                                                               bakedScale: bakedScale)
+            } else {
+                // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
+                // dans bounds (baseSide × scale), transform = rotation only.
+                // Mêmes raisons que la branche media — éviter le double-scale au
+                // 2e geste sur le même sticker.
+                let designSide = CGFloat(sticker.baseSize * sticker.scale)
+                let renderedSide = geo.render(designSide)
+                let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
+                if layer.bounds.size != newBounds.size {
+                    layer.bounds = newBounds
+                }
+                layer.position = renderPosition(x: sticker.x, y: sticker.y)
+                let rotation = CGFloat(sticker.rotation * .pi / 180)
+                layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             }
-            layer.position = renderPosition(x: sticker.x, y: sticker.y)
-            let rotation = CGFloat(sticker.rotation * .pi / 180)
-            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         } else if let location = slide.locationObjects.first(where: { $0.id == id }) {
             // La pastille position rasterise son scale dans `bounds` au

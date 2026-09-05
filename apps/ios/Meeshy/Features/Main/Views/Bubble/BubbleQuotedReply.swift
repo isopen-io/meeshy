@@ -87,6 +87,12 @@ struct BubbleQuotedReply: View, Equatable {
     /// `MessageListViewController.openQuotedMedia`). Meme regle de nullite.
     var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
 
+    /// **La taille de texte du lecteur décide du budget de la citation** (#5103).
+    /// Sans elle, le nombre de signes qu'on garde avant de couper serait le même
+    /// à `large` et à `accessibility3` — et la coupure par mot ne servirait à
+    /// rien, `lineLimit` reprenant la main au milieu d'un mot.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     /// Cote de l'avatar de la ZONE 1 — la MEME que celle de la rangee plate
     /// (`FocalMetrics.Avatar.size`), sans emprunter le jeton d'une autre peau :
     /// une citation montre le meme visage a la meme taille, quelle que soit la
@@ -119,6 +125,13 @@ struct BubbleQuotedReply: View, Equatable {
             attachmentType: reply.attachmentType,
             attachmentThumbnailUrl: reply.attachmentThumbnailUrl,
             attachmentIsProtected: reply.attachmentIsProtected,
+            attachmentThumbHash: reply.attachmentThumbHash,
+            attachmentWidth: reply.attachmentWidth,
+            attachmentHeight: reply.attachmentHeight,
+            attachmentDurationMs: reply.attachmentDurationMs,
+            attachmentFileSize: reply.attachmentFileSize,
+            attachmentPageCount: reply.attachmentPageCount,
+            attachmentMimeType: reply.attachmentMimeType,
             isStoryReply: reply.isStoryReply,
             storyPublishedAt: reply.storyPublishedAt,
             storyReactionCount: reply.storyReactionCount,
@@ -145,6 +158,20 @@ struct BubbleQuotedReply: View, Equatable {
         /// rendu de la premiere resolution : un media revele — ou une
         /// protection qui arrive enfin sur le fil — ne redessinerait jamais.
         let attachmentIsProtected: Bool?
+        /// Les SEPT faits du media cite (#4945) — le flou ThumbHash de la
+        /// miniature et la ligne « 1024×768 · 0:42 · 1,2 Mo ». Ils arrivent
+        /// APRES coup sur le chemin nominal : la bulle optimiste ne connait
+        /// que ce que l'appareil tient, l'echo serveur apporte le reste.
+        /// Absents de cette projection, la citation resterait figee sur sa
+        /// PREMIERE resolution — c'est exactement le defaut que
+        /// `authorAvatarUrl` et `attachmentIsProtected` ont deja eu.
+        let attachmentThumbHash: String?
+        let attachmentWidth: Int?
+        let attachmentHeight: Int?
+        let attachmentDurationMs: Int?
+        let attachmentFileSize: Int?
+        let attachmentPageCount: Int?
+        let attachmentMimeType: String?
         let isStoryReply: Bool
         let storyPublishedAt: Date?
         let storyReactionCount: Int?
@@ -164,13 +191,49 @@ struct BubbleQuotedReply: View, Equatable {
         MeeshyColors.hashtagColor(isDark: isDark)
     }
 
-    /// Titre de la citation. Pour un mood échoé par le serveur, `authorName`
+    /// NOM de l'auteur cité. Pour un mood échoé par le serveur, `authorName`
     /// peut être vide → on retombe sur le libellé localisé "Humeur".
-    private var quotedTitle: String {
+    ///
+    /// C'est ce nom-là que l'avatar reçoit : ses INITIALES en dérivent, et
+    /// « Alice : » y produirait un « A: » — la ponctuation du titre n'a rien
+    /// à faire dans un monogramme.
+    private var quotedAuthorName: String {
         if reply.isMe { return String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) }
         if !reply.authorName.isEmpty { return reply.authorName }
         if reply.moodEmoji != nil { return String(localized: "bubble.reply.mood", defaultValue: "Humeur", bundle: .main) }
         return reply.authorName
+    }
+
+    /// Le titre RENDU — « Alice : », composé par la règle partagée des trois
+    /// peaux (`QuotedReplyPresentation`), espace insécable comprise.
+    private var quotedTitle: String {
+        QuotedReplyPresentation.title(author: quotedAuthorName)
+    }
+
+    /// La ligne de détails du média cité — « 1024×768 · 0:42 · 1,2 Mo » —, ou
+    /// `nil` quand aucun fait n'est connu et pour tout média PROTÉGÉ : la
+    /// règle partagée refuse d'un seul endroit ce qui décrirait le secret par
+    /// la bande.
+    private var quotedDetails: String? {
+        QuotedReplyPresentation.detailsLabel(for: reply)
+    }
+
+    /// « 1024×768 · 0:42 · 1,2 Mo » — les faits du média cité, jamais son
+    /// contenu : la ligne disparaît entièrement pour un média protégé, la règle
+    /// partagée rendant `nil`.
+    ///
+    /// Sous-vue NOMMÉE plutôt qu'écrite dans le corps : `body` compose déjà un
+    /// `MessageTextRenderer.render` à sept arguments dans une pile de quatre
+    /// niveaux, et chaque expression ajoutée là se paie en temps d'inférence.
+    /// Même motif que `moodDateLabel(previewColor:)` juste en dessous.
+    @ViewBuilder
+    private func quotedDetailsLine(previewColor: Color) -> some View {
+        if let details = quotedDetails {
+            Text(details)
+                .font(.caption2)
+                .foregroundColor(previewColor.opacity(0.8))
+                .lineLimit(QuotedReplyPresentation.titleLineLimit)
+        }
     }
 
     /// Date de publication du mood cité, rendue sur la ligne de titre.
@@ -182,7 +245,7 @@ struct BubbleQuotedReply: View, Equatable {
             Text(date, style: .relative)
                 .font(.caption2)
                 .foregroundColor(previewColor.opacity(0.8))
-                .lineLimit(1)
+                .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 .layoutPriority(-1)
         }
     }
@@ -270,7 +333,7 @@ struct BubbleQuotedReply: View, Equatable {
     private var authorGate: some View {
         if showsAuthorGate {
             MeeshyAvatar(
-                name: quotedTitle,
+                name: quotedAuthorName,
                 context: .custom(Self.authorAvatarSize),
                 accentColor: reply.isMe ? accentHex : reply.authorColor,
                 avatarURL: reply.authorAvatarUrl,
@@ -319,7 +382,11 @@ struct BubbleQuotedReply: View, Equatable {
         if let thumbUrl = thumbnailUrlString {
             let thumbnail = CachedAsyncImage(
                 url: thumbUrl,
-                targetSize: CGSize(width: Self.thumbnailSize, height: Self.thumbnailSize)
+                targetSize: CGSize(width: Self.thumbnailSize, height: Self.thumbnailSize),
+                // Le flou instantané plutôt qu'un carré de couleur unie le
+                // temps du réseau. `nil` pour un média protégé — un flou EST
+                // une image (règle partagée, site unique).
+                thumbHash: QuotedReplyPresentation.thumbHash(for: reply)
             ) {
                 Color(hex: reply.authorColor).opacity(0.3)
             }
@@ -337,6 +404,45 @@ struct BubbleQuotedReply: View, Equatable {
                 thumbnail
             }
         }
+    }
+
+    /// **Le nom, son deux-points, puis le texte — UN seul paragraphe** (#5103).
+    ///
+    /// > « Il faut mettre le début du message juste après les `:` de l'auteur
+    /// > et poursuivre sur 2 autres lignes si nécessaire avant de couper par
+    /// > mot » — directive porteur du 2026-09-04.
+    ///
+    /// Rend un `Text`, pas une `View`, et c'est ce qui rend la promesse
+    /// tenable : deux `Text` concaténés COULENT dans le même paragraphe, là où
+    /// deux vues voisines occupent deux blocs. `MessageTextRenderer.render`
+    /// rendant déjà un `Text`, mentions et hashtags gardent leur teinte au
+    /// passage — le flot ne coûte pas le rendu riche.
+    ///
+    /// **La coupure est faite AVANT le rendu, pas par `lineLimit`.** Celui-ci
+    /// reste posé par l'appelant comme borne de hauteur, mais il coupe au
+    /// caractère qui déborde ; c'est `wordTruncated` qui tient la promesse de
+    /// couper entre deux mots.
+    private func quotedFlow(previewColor: Color, nameColor: Color) -> Text {
+        // Aperçu VIDE + pièce jointe → le libellé court du genre (« Photo »,
+        // « Vidéo »), jamais le « Media » en dur d'avant le câblage d'AttachmentKind.
+        let fallback = attachmentKind?.shortLabel
+            ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
+        let brut = reply.previewText.isEmpty ? fallback : reply.previewText
+        let coupe = QuotedReplyPresentation.wordTruncated(
+            brut,
+            maxCharacters: QuotedReplyPresentation.previewCharacterBudget(
+                for: .bubble, dynamicTypeSize: dynamicTypeSize))
+
+        return Text(quotedTitle)
+            .font(.caption.weight(.bold))
+            .foregroundColor(nameColor)
+            + Text(" ")
+            + MessageTextRenderer.render(
+                coupe,
+                fontSize: 12, color: previewColor,
+                mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: previewColor,
+                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+            )
     }
 
     /// Glyphe de la ligne d'apercu. ZONE 2 quand il est la SEULE affordance du
@@ -385,20 +491,34 @@ struct BubbleQuotedReply: View, Equatable {
                 .frame(width: 4)
 
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    // Titre + date du mood sur la MÊME ligne : dans l'aperçu, la
-                    // date vivait avec le contenu et lui mangeait sa largeur, ce
-                    // qui le coupait à mi-phrase.
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // **Le texte part du deux-points de l'auteur** (#5103,
+                    // directive porteur du 2026-09-04). Le nom occupait sa
+                    // propre rangée et le texte commençait à la suivante :
+                    // une citation de trois mots coûtait deux lignes, dont
+                    // une ne portait qu'un nom.
+                    //
+                    // `MessageTextRenderer.render` rend un `Text` — c'est ce
+                    // qui permet de CONCATÉNER, donc de faire couler le texte
+                    // dans le même paragraphe que le nom plutôt que de le
+                    // poser dans une vue voisine. Mentions et hashtags gardent
+                    // leur teinte au passage.
+                    HStack(alignment: .top, spacing: 6) {
                         // ZONE 1. Le NOM qui la suit est INERTE : sous la LOI
                         // DES ZONES il retombe en zone 3 (retour au message
                         // cite), et il n'a jamais porte de geste ici.
                         authorGate
 
-                        Text(quotedTitle)
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(nameColor)
-                            .lineLimit(1)
+                        if reply.moodEmoji != nil || reply.isStoryReply {
+                            Text(quotedTitle)
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(nameColor)
+                                .lineLimit(QuotedReplyPresentation.titleLineLimit)
+                        } else {
+                            quotedFlow(previewColor: previewColor, nameColor: nameColor)
+                                .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .bubble))
+                                .tint(previewColor)
+                        }
 
                         moodDateLabel(previewColor: previewColor)
 
@@ -410,31 +530,27 @@ struct BubbleQuotedReply: View, Equatable {
                     } else if reply.isStoryReply {
                         BubbleStoryReplyPreview(reply: reply, previewColor: previewColor)
                     } else {
-                        HStack(spacing: 5) {
-                            previewGlyph(previewColor: previewColor)
+                        // ZONE 2 — **la miniature se pose SOUS l'auteur**
+                        // (#5103). Elle vivait à GAUCHE du bloc, au titre de
+                        // l'invariance de géographie entre les trois peaux
+                        // (#4946) ; la directive déplace cette géographie, elle
+                        // ne l'abandonne pas — les trois peaux la suivent.
+                        quotedThumbnail
 
-                            // Empty preview text + attachment → use the kind's
-                            // localized short label ("Photo", "Vidéo", ...)
-                            // instead of the hardcoded "Media" fallback that
-                            // surfaced before the AttachmentKind plumbing fix.
-                            let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
-                            MessageTextRenderer.render(
-                                reply.previewText.isEmpty ? fallback : reply.previewText,
-                                fontSize: 12, color: previewColor,
-                                mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: previewColor,
-                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                            )
-                            .lineLimit(2)
-                            .tint(previewColor)
+                        HStack(spacing: 5) {
+                            // Le glyphe reste la SEULE affordance du média quand
+                            // aucune miniature ne voyage : le retirer ici
+                            // fermerait la zone 2 pour un audio ou un document.
+                            if thumbnailUrlString == nil {
+                                previewGlyph(previewColor: previewColor)
+                            }
+
+                            quotedDetailsLine(previewColor: previewColor)
                         }
                     }
                 }
 
                 Spacer(minLength: 0)
-
-                // ZONE 2 — miniature du media cite, bouton play par-dessus
-                // une piste temporelle. Tap : le media EN PLEIN ECRAN.
-                quotedThumbnail
             }
             .padding(.leading, 8)
             .padding(.trailing, 10)
@@ -444,7 +560,8 @@ struct BubbleQuotedReply: View, Equatable {
         // hauteur : sans fixedSize, un hôte qui sur-propose de la hauteur
         // (VStack du conteneur média+citation quand la vidéo letterboxe)
         // fait gonfler la citation qui absorbe tout l'excédent. On la fige
-        // à sa hauteur idéale (titre + 2 lignes max de preview).
+        // à sa hauteur idéale (titre + le budget de lignes de la peau, plus
+        // la ligne de détails d'un média cité).
         .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
 
@@ -477,7 +594,13 @@ struct BubbleQuotedReply: View, Equatable {
     /// Returns `nil` only when the input is `nil`. Unknown values still
     /// resolve to `.other` (paperclip + "Fichier") so the UI never shows
     /// an unlabeled glyph.
-    static func resolveAttachmentKind(_ type: String?) -> AttachmentKind? {
+    ///
+    /// `nonisolated` : la règle partagée `QuotedReplyPresentation` — pure et
+    /// détachable — la consulte pour savoir si un média cité a des pixels à
+    /// annoncer. Sans ce marqueur, elle hériterait de l'isolation MainActor
+    /// par défaut de la cible (SE-0466, `project.yml`) et le seul décodeur des
+    /// deux formes d'`attachmentType` serait hors de portée de la règle.
+    nonisolated static func resolveAttachmentKind(_ type: String?) -> AttachmentKind? {
         guard let type, !type.isEmpty else { return nil }
         if let exact = AttachmentKind(rawValue: type) { return exact }
         return AttachmentKind(mimeType: type)
@@ -513,7 +636,7 @@ struct BubbleMoodReplyPreview: View, Equatable {
                 Text(reply.previewText)
                     .font(.caption)
                     .foregroundColor(previewColor)
-                    .lineLimit(3)
+                    .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .bubble))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

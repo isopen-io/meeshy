@@ -15,6 +15,7 @@ import {
   SCENARIO_QUI_NE_SUSPEND_PAS,
   SCENARIOS_DEFECTUEUX,
   casAPorter,
+  casPortes,
   emisePendant,
   estBattement,
   estMutante,
@@ -32,6 +33,8 @@ import {
 
 const ROOT = join(__dirname, '..');
 const SPEC = join(ROOT, 'e2e', 'visual', 'v3-lifecycle.spec.ts');
+/** Les GESTES de navigateur — horloge, occultation, journal — partagés par le scénario fabriqué et l'écran réel. */
+const GESTES = join(ROOT, 'e2e', 'visual', 'lib', 'navigateur-cycle.ts');
 const CONCEPTION = join(
   ROOT,
   '..',
@@ -44,7 +47,7 @@ const CONCEPTION = join(
 
 const entree = (attributs: Partial<EntreeDeJournal> = {}): EntreeDeJournal => ({
   methode: 'POST',
-  url: 'http://127.0.0.1:3300/api/v1/anonymous/refresh',
+  url: 'http://127.0.0.1:3300/api/v1/guest-sessions/me',
   emiseA: 1_000,
   ...attributs,
 });
@@ -109,7 +112,7 @@ describe('les deux barres du gate : 0 requête (§ 8.5) et 0 mutation (§ 6.5)',
   const journal: readonly EntreeDeJournal[] = [
     entree({ methode: 'GET', url: 'https://x/sync', emiseA: 1_200 }),
     entree({ methode: 'POST', url: 'https://x/anonymous/leave', emiseA: 1_400 }),
-    entree({ methode: 'POST', url: 'https://x/anonymous/refresh', emiseA: 2_500 }),
+    entree({ methode: 'POST', url: 'https://x/guest-sessions/me', emiseA: 2_500 }),
   ];
 
   it('compte toute requête émise pendant que l’onglet est caché', () => {
@@ -163,7 +166,7 @@ describe('le battement — un seul porteur, quel que soit le nombre d’onglets'
   });
 
   it('reconnaît un battement à son chemin, jamais à son rang dans le journal', () => {
-    expect(estBattement(entree({ url: 'https://gate/api/v1/anonymous/refresh' }))).toBe(true);
+    expect(estBattement(entree({ url: 'https://gate/api/v1/guest-sessions/me' }))).toBe(true);
     expect(estBattement(entree({ url: 'https://gate/api/v1/anonymous/join/abc' }))).toBe(false);
   });
 
@@ -254,7 +257,7 @@ describe('le scénario fabriqué — l’instrument ne peut pas se prouver sans 
   it('ne fait RIEN à hidden quand il ne suspend pas, et laisse donc battre', () => {
     expect(instructionsSurHidden(SCENARIO_QUI_NE_SUSPEND_PAS)).toEqual(['return;']);
     expect(pageFabriquee(SCENARIO_QUI_NE_SUSPEND_PAS)).not.toContain('anonymous/leave');
-    expect(pageFabriquee(SCENARIO_QUI_NE_SUSPEND_PAS)).toContain('anonymous/refresh');
+    expect(pageFabriquee(SCENARIO_QUI_NE_SUSPEND_PAS)).toContain('guest-sessions/me');
   });
 
   it('mute AVANT d’arrêter quand il est défectueux — l’ordre que lira le rapport rouge', () => {
@@ -306,7 +309,7 @@ describe('le scénario fabriqué — l’instrument ne peut pas se prouver sans 
   // contrôle du § 6.2 est la REPRISE : sur `visible`, le battement repart.
   it('reprend sur `visible`, dans les deux variantes — sinon le vert ne prouve que l’inertie', () => {
     [SCENARIO_CONFORME, SCENARIO_QUI_MUTE_CACHE].forEach((scenario) => {
-      expect(pageFabriquee(scenario)).toContain('anonymous/refresh');
+      expect(pageFabriquee(scenario)).toContain('guest-sessions/me');
     });
   });
 
@@ -329,11 +332,11 @@ describe('le scénario fabriqué — l’instrument ne peut pas se prouver sans 
   });
 });
 
-// Les six cas C→H du § 6.5 ont besoin d'un ÉCRAN pour avoir un sujet : ils arrivent avec `thread`
-// (L2). Ce qui est posé aujourd'hui, c'est l'instrument et la ligne anti-régression, sur scénario
-// fabriqué. La table le DIT — un instrument qui laisserait croire qu'il porte les six rendrait un
-// vert sur cinq cas que personne n'a joués.
-describe('la recette du § 6.5 — ce que cet instrument porte, et ce qu’il ne porte pas encore', () => {
+// Les six cas C→H du § 6.5 ont eu besoin d'un ÉCRAN pour avoir un sujet : il est arrivé — `thread`,
+// à sa porte d'invité — et `v3-lifecycle.spec.ts` les joue sur lui. La table le DIT, cas par cas, en
+// nommant le témoin qui le porte : un instrument qui laisserait croire qu'il porte les six sans
+// dire OÙ rendrait un vert que personne ne pourrait relire.
+describe('la recette du § 6.5 — ce que cet instrument porte, et où', () => {
   it('énumère les six cas C→H et la ligne anti-régression', () => {
     expect(CAS_DE_RECETTE.map((cas) => cas.id)).toEqual([
       'C',
@@ -346,19 +349,19 @@ describe('la recette du § 6.5 — ce que cet instrument porte, et ce qu’il ne
     ]);
   });
 
-  it('ne déclare porté que ce qui a un sujet aujourd’hui : un scénario fabriqué', () => {
+  it('ne garde en scénario fabriqué que la ligne anti-régression', () => {
     expect(CAS_DE_RECETTE.filter((cas) => cas.statut === 'fabriqué').map((cas) => cas.id)).toEqual([
-      'E',
       'anti-régression',
     ]);
   });
 
-  it('renvoie chaque cas restant à l’écran qui lui donnera un sujet', () => {
-    casAPorter().forEach((cas) => {
-      expect(cas.statut).toBe('à porter');
-      expect(cas.porteurAttendu).toContain('thread');
+  it('porte les six cas sur l’écran thread, chacun renvoyé à son témoin', () => {
+    expect(casAPorter()).toEqual([]);
+    expect(casPortes().map((cas) => cas.id)).toEqual(['C', 'D', 'E', 'F', 'G', 'H']);
+    casPortes().forEach((cas) => {
+      expect(cas.porteurAttendu).toContain('v3-lifecycle.spec.ts');
+      expect(cas.porteurAttendu).toContain(`(cas ${cas.id})`);
     });
-    expect(casAPorter().map((cas) => cas.id)).toEqual(['C', 'D', 'F', 'G', 'H']);
   });
 
   it('porte l’énoncé de chaque cas, pour qu’un cas ne se perde pas en changeant de lettre', () => {
@@ -404,6 +407,28 @@ describe("le gate est BRANCHÉ — un instrument qu'aucune commande ne lance n'e
 
 describe('le spec APPLIQUE la loi, il ne la réécrit pas', () => {
   const source = (): string => readFileSync(SPEC, 'utf8');
+  const gestes = (): string => readFileSync(GESTES, 'utf8');
+
+  // Les gestes vivent dans UN module, que le scénario fabriqué et l'écran réel
+  // (le fil du membre, `v3-fil.spec.ts`) partagent : deux specs qui les
+  // recopieraient divergeraient à la première borne déplacée.
+  it('prend ses gestes de navigateur au module partagé, sans les recopier', () => {
+    expect(source()).toContain("from './lib/navigateur-cycle'");
+    ['installeLHorloge', 'figeLHorloge', 'bascule', 'enregistre'].forEach((geste) => {
+      expect(source()).toContain(geste);
+      expect(source()).not.toContain(`const ${geste} =`);
+    });
+    expect(readFileSync(join(ROOT, 'e2e', 'visual', 'v3-fil.spec.ts'), 'utf8')).toContain("from './lib/navigateur-cycle'");
+  });
+
+  // Les six cas C→H se jouent sur l'ÉCRAN, pas sur le scénario fabriqué : le spec
+  // ouvre la porte de l'invité par le harnais partagé et monte sa propre chaîne.
+  it('joue les six cas C→H sur la porte de l’invité, avec sa propre chaîne', () => {
+    expect(source()).toContain("from './lib/porte-invitee'");
+    expect(source()).toContain('passerelleDeBouchon()');
+    expect(source()).toContain('serveurDeLaV3(');
+    ['cas C', 'cas D', 'cas E', 'cas F', 'cas G', 'cas H'].forEach((cas) => expect(source()).toContain(cas));
+  });
 
   it('lit son verdict dans le module, jamais dans une boucle recopiée', () => {
     expect(source()).toContain("from './lib/lifecycle'");
@@ -431,15 +456,21 @@ describe('le spec APPLIQUE la loi, il ne la réécrit pas', () => {
   // — « une horloge accélérée rendrait le compte dépendant de la machine » — est FAUX pour une
   // horloge VIRTUELLE : c'est l'horloge machine qui n'est pas déterministe, pas celle-ci.
   it('installe une horloge virtuelle AVANT de naviguer, et avance la fenêtre de recette', () => {
-    expect(source()).toContain('clock.install({ time: INSTANT_DE_DEPART })');
-    expect(source()).toContain('clock.runFor(BATTEMENT.fenetreDeRecetteMs)');
+    expect(gestes()).toContain('clock.install({ time: INSTANT_DE_DEPART })');
+    expect(gestes()).toContain('avance(contexte, BATTEMENT.fenetreDeRecetteMs)');
+    // L'avance passe par l'horloge VIRTUELLE et couvre la fenêtre ENTIÈRE. Elle ne se joue plus
+    // d'un seul `runFor(dureeMs)` : une requête émise par une minuterie AU MILIEU du saut n'aurait
+    // pas le temps réel de revenir, et le compte de battements deviendrait faux. Le témoin dit
+    // donc la LOI — horloge virtuelle, fenêtre entièrement consommée — et laisse le pas libre.
+    expect(gestes()).toContain('contexte.clock.runFor(');
+    expect(gestes()).toMatch(/for \(let restant = dureeMs; restant > 0;/);
   });
 
   // `install()` seul laisse le temps COULER — c'est ce qui permet aux pages de se charger, et c'est
   // aussi ce qui rendrait le compte de battements dépendant de la machine (mesuré : 2, 3 puis 7
   // tours pour la même fenêtre). Le temps ne se fige qu'à `pauseAt`.
   it('FIGE l’horloge après le chargement, au lieu de se contenter de l’installer', () => {
-    expect(source()).toContain(
+    expect(gestes()).toContain(
       'clock.pauseAt(INSTANT_DE_DEPART + MARGE_DE_CHARGEMENT_MS)',
     );
   });
@@ -448,7 +479,8 @@ describe('le spec APPLIQUE la loi, il ne la réécrit pas', () => {
   // piloter par PAGE la réinitialise pour tout le monde et l'avance autant de fois qu'il y a
   // d'onglets — un gate ROUGE sur un scénario conforme, la pire des deux erreurs.
   it('pilote l’horloge du CONTEXTE, jamais celle d’une page', () => {
-    expect(source()).toContain('contexte.clock.');
+    expect(gestes()).toContain('contexte.clock.');
+    expect(gestes()).not.toContain('page.clock.');
     expect(source()).not.toContain('page.clock.');
   });
 

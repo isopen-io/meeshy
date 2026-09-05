@@ -6,6 +6,24 @@ import {
   getAttachmentType,
   formatFileSize,
 } from '@meeshy/shared/types/attachment';
+import type { ApiResponse } from '@meeshy/shared/types/api-responses';
+
+/**
+ * L'enveloppe que la ROUTE compose réellement — pas une forme reconstruite à
+ * la main (#4887, critère 1).
+ *
+ * `sendSuccess()` (services/gateway/src/utils/response.ts) est le SEUL
+ * producteur des réponses du gateway, et il compose exactement
+ * `ApiResponse<T>` : `{ success, data, message?, pagination?, meta? }`. La
+ * charge utile vit donc sous `data`, jamais à la racine.
+ *
+ * Les témoins de ce fichier posaient `{ success: true, attachments: [...] }`
+ * — une forme qu'AUCUNE route ne rend. C'est pourquoi ils restaient verts sur
+ * un service qui lisait `result.attachments` : ils inventaient la charge que
+ * le service savait lire. Typer la fixture par `ApiResponse<T>` interdit
+ * l'invention : le compilateur refuse toute clé hors enveloppe.
+ */
+const routePayload = <T,>(data: T): ApiResponse<T> => ({ success: true, data });
 
 jest.mock('@/lib/config', () => ({
   buildApiUrl: jest.fn((path: string) => `https://api.test${path}`),
@@ -694,12 +712,29 @@ describe('AttachmentService', () => {
   });
 
   describe('uploadText', () => {
-    it('resolves with JSON body when response is ok', async () => {
-      const body = { success: true, attachment: { id: 'att-text-1' } };
-      global.fetch = makeMockFetch(true, body);
+    it("hisse l'attachment depuis l'enveloppe `data` de POST /attachments/upload-text", async () => {
+      // La JUMELLE du défaut #4887 : `POST /attachments/upload-text` répond
+      // `sendSuccess(reply, { attachment })`, donc `{ success, data: {
+      // attachment } }`. Le service était typé `{ success, attachment }` et
+      // rendait `response.json()` tel quel — `result.attachment` valait
+      // `undefined` sur CHAQUE succès, et `attachmentTransport.createText-
+      // Attachment` rendait donc toujours `undefined`.
+      const attachment = { id: 'att-text-1' };
+      global.fetch = makeMockFetch(true, routePayload({ attachment }));
 
       const result = await AttachmentService.uploadText('Hello world');
-      expect(result).toEqual(body);
+
+      expect(result.success).toBe(true);
+      expect(result.attachment).toEqual(attachment);
+    });
+
+    it("rend `attachment` indéfini quand la route n'en sert aucun", async () => {
+      global.fetch = makeMockFetch(true, { success: true });
+
+      const result = await AttachmentService.uploadText('Hello world');
+
+      expect(result.success).toBe(true);
+      expect(result.attachment).toBeUndefined();
     });
 
     it('throws when response is not ok and body has error field', async () => {
@@ -728,8 +763,7 @@ describe('AttachmentService', () => {
     });
 
     it('sends content as JSON body to the upload-text endpoint', async () => {
-      const body = { success: true, attachment: { id: 'txt-1' } };
-      global.fetch = makeMockFetch(true, body);
+      global.fetch = makeMockFetch(true, routePayload({ attachment: { id: 'txt-1' } }));
 
       await AttachmentService.uploadText('my text', 'custom-token');
 
@@ -743,8 +777,7 @@ describe('AttachmentService', () => {
     });
 
     it('includes Content-Type application/json header', async () => {
-      const body = { success: true, attachment: { id: 'txt-1' } };
-      global.fetch = makeMockFetch(true, body);
+      global.fetch = makeMockFetch(true, routePayload({ attachment: { id: 'txt-1' } }));
 
       await AttachmentService.uploadText('text');
 
@@ -758,12 +791,32 @@ describe('AttachmentService', () => {
   });
 
   describe('getConversationAttachments', () => {
-    it('resolves with attachments list on success', async () => {
-      const body = { success: true, attachments: [{ id: 'att1' }] };
-      global.fetch = makeMockFetch(true, body);
+    it("hisse les pièces jointes depuis l'enveloppe `data` de la route", async () => {
+      // Le défaut #4887 nº 1 : la route répond `sendSuccess(reply, {
+      // attachments })`, donc `{ success, data: { attachments } }`. Le service
+      // rendait `response.json()` tel quel sous un type `{ success,
+      // attachments }` — `result.attachments` valait `undefined`, et la garde
+      // de `AttachmentGallery` (`response.success && response.attachments`)
+      // n'appelait JAMAIS `setAttachments`. Le chargement propre de la galerie
+      // était inerte depuis toujours.
+      const attachments = [{ id: 'att1' }, { id: 'att2' }] as never;
+      global.fetch = makeMockFetch(true, routePayload({ attachments }));
 
       const result = await AttachmentService.getConversationAttachments('conv-1', {});
-      expect(result).toEqual(body);
+
+      expect(result.success).toBe(true);
+      expect(result.attachments).toEqual(attachments);
+    });
+
+    it("rend une liste VIDE quand la route ne sert aucune enveloppe `data`", async () => {
+      // Pas d'invention : l'absence de charge est une liste vide, jamais
+      // `undefined` — c'est ce qui distingue « rien à montrer » de « la garde
+      // de l'appelant ne se déclenche pas ».
+      global.fetch = makeMockFetch(true, { success: true });
+
+      const result = await AttachmentService.getConversationAttachments('conv-1', {});
+
+      expect(result.attachments).toEqual([]);
     });
 
     it('throws when response is not ok', async () => {
@@ -794,7 +847,7 @@ describe('AttachmentService', () => {
     });
 
     it('appends type param when options.type is set', async () => {
-      global.fetch = makeMockFetch(true, { success: true, attachments: [] });
+      global.fetch = makeMockFetch(true, routePayload({ attachments: [] }));
 
       await AttachmentService.getConversationAttachments('conv-1', { type: 'image' });
 
@@ -803,7 +856,7 @@ describe('AttachmentService', () => {
     });
 
     it('appends limit param when options.limit is set', async () => {
-      global.fetch = makeMockFetch(true, { success: true, attachments: [] });
+      global.fetch = makeMockFetch(true, routePayload({ attachments: [] }));
 
       await AttachmentService.getConversationAttachments('conv-1', { limit: 10 });
 
@@ -812,7 +865,7 @@ describe('AttachmentService', () => {
     });
 
     it('appends offset param when options.offset is set', async () => {
-      global.fetch = makeMockFetch(true, { success: true, attachments: [] });
+      global.fetch = makeMockFetch(true, routePayload({ attachments: [] }));
 
       await AttachmentService.getConversationAttachments('conv-1', { offset: 20 });
 
@@ -821,7 +874,7 @@ describe('AttachmentService', () => {
     });
 
     it('omits query params when options are empty', async () => {
-      global.fetch = makeMockFetch(true, { success: true, attachments: [] });
+      global.fetch = makeMockFetch(true, routePayload({ attachments: [] }));
 
       await AttachmentService.getConversationAttachments('conv-1', {});
 
@@ -832,7 +885,7 @@ describe('AttachmentService', () => {
     });
 
     it('includes conversationId in the request URL', async () => {
-      global.fetch = makeMockFetch(true, { success: true, attachments: [] });
+      global.fetch = makeMockFetch(true, routePayload({ attachments: [] }));
 
       await AttachmentService.getConversationAttachments('conv-xyz', {});
 

@@ -357,6 +357,11 @@ final class ConversationViewModelTests: XCTestCase {
         }
 
         let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        // #4943 : `start()` n'effectue plus la première lecture — `loadMessages()`
+        // est l'unique chemin qui peint la fenêtre depuis GRDB. Les lignes semées
+        // par `pool.write` ne notifient personne : sans cet appel, la précondition
+        // attendait une fenêtre que rien ne lisait.
+        await sut.loadMessages()
         let windowed = await MessageStoreObservationHelper.awaitMessagesCount(equals: 200, in: sut)
         XCTAssertTrue(windowed, "precondition: the initial window caps at the newest 200 cached messages")
 
@@ -413,10 +418,12 @@ final class ConversationViewModelTests: XCTestCase {
         }
 
         let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
-        _ = await MessageStoreObservationHelper.awaitMessagesCount(equals: 5, in: sut)
         mockMessageService.listAfterResult = .success(makeMessagesResponse())
 
         await sut.loadMessages()
+        // #4943 : la fenêtre n'est peinte que par `loadMessages()` — l'attente se
+        // pose APRÈS, sinon elle épuise son délai pour rien.
+        _ = await MessageStoreObservationHelper.awaitMessagesCount(equals: 5, in: sut)
 
         // Le rattrapage part dans une tâche de fond détachée du chargement :
         // on attend qu'il se manifeste plutôt que de supposer son instant.
@@ -1869,6 +1876,34 @@ final class ConversationViewModelTests: XCTestCase {
         sut.markAsRead(messageIds: [Self.idOldest])
 
         wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// **#3902 — le message le plus récent est À L'ÉCRAN, il n'a simplement pas
+    /// fini son délai de présence.**
+    ///
+    /// Même lot que le test ci-dessus, à UNE différence près : la surface dit
+    /// ce qu'elle montre. Sur une conversation à fort débit c'est le cas
+    /// nominal — le lot est drainé toutes les ~300 ms, un message plus récent
+    /// est arrivé entre-temps, et la coïncidence `seen.contains(newest)`
+    /// n'arrive quasiment jamais. Le badge doit tomber quand même.
+    ///
+    /// Le contraste avec `…seenBatchWithoutNewestMessage_leavesBadgeAlone` est
+    /// le cœur du lot : vues du seul `seen`, les deux situations sont
+    /// INDISCERNABLES. C'est `visibleIds` qui les sépare.
+    func test_markAsRead_newestIsOnScreenButNotYetDwelt_clearsBadge() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markAsRead(messageIds: [Self.idOldest], visibleIds: [Self.idOldest, Self.idNewest])
+
+        wait(for: [cleared], timeout: 1.0)
     }
 
     /// Après un saut vers un message cité, le bas de l'écran n'est PAS le bas de

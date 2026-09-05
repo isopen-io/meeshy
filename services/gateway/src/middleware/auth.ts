@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
-import { PermissionDeniedError } from '../errors/custom-errors';
+import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
@@ -523,10 +523,14 @@ export class AuthMiddleware {
       const tokenHash = hashSessionToken(sessionToken);
 
       const participant = await this.prisma.participant.findFirst({
+        // `isActive` ne filtre PLUS ici (#4410) : il se lit et se décide en
+        // aval. Tant qu'il était dans le `where`, un invité RÉVOQUÉ et un
+        // jeton INVENTÉ rendaient tous deux « aucune ligne », et la
+        // distinction n'était pas perdue à la remontée — elle n'était jamais
+        // faite. Le message d'erreur nommait pourtant les deux cas.
         where: {
           sessionTokenHash: tokenHash,
           type: 'anonymous',
-          isActive: true,
         },
         select: {
           id: true,
@@ -546,7 +550,16 @@ export class AuthMiddleware {
       });
 
       if (!participant) {
-        throw new Error('Anonymous participant not found or inactive');
+        throw new Error('Anonymous participant not found');
+      }
+
+      // L'invité dont le lien a été révoqué (`revokeShareLinkGuests`) porte un
+      // jeton VALIDE sur un participant DÉSACTIVÉ. Lui rendre le même 401 nu
+      // qu'à un jeton inventé l'envoie retenter indéfiniment un geste qui ne
+      // peut pas aboutir — et prive l'opérateur qui reçoit son signalement du
+      // seul fait qui explique la panne.
+      if (participant.isActive === false) {
+        throw new GuestAccessRevokedError();
       }
 
       if (this.statusService) {
@@ -593,6 +606,11 @@ export class AuthMiddleware {
       };
 
     } catch (error) {
+      // La cause TYPÉE traverse (#4410). Ce `catch` uniformisait TOUT en
+      // « Invalid session token » — c'est lui qui effaçait la distinction, et
+      // pas seulement le `catch` extérieur : une erreur qu'on vient de
+      // qualifier ne survit pas à un gestionnaire qui réécrit sans regarder.
+      if (error instanceof GuestAccessRevokedError) throw error;
       authLogger.warn('Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
@@ -633,6 +651,35 @@ export class AuthMiddleware {
  * symbole de module — pour que la clé survive à deux instanciations du module.
  * Non énumérable : rien de ce qui sérialise un hook ne doit changer de forme.
  */
+/**
+ * L'accès d'un invité a été RETIRÉ — son jeton est valide, son participant est
+ * désactivé (#4410).
+ *
+ * Un type, pas une chaîne : c'est ce qui permet au `catch` du middleware de
+ * traduire la cause en code stable sans reconnaître un message. Un message se
+ * reformule, et le jour où il l'est, le refus redevient muet sans que rien ne
+ * rougisse.
+ *
+ * ## L'arbitrage de confidentialité, tranché
+ *
+ * Dire « ton accès a été retiré » confirme au porteur du jeton que le lien a
+ * EXISTÉ et qu'il y était admis. C'est acceptable, et pour une raison qui se
+ * mesure : seul un jeton qui CORRESPOND à un participant réel obtient cette
+ * réponse. Un jeton inventé ne trouve aucune ligne et reçoit le 401 générique.
+ * L'information n'est donc rendue qu'à quelqu'un qui détenait déjà la preuve
+ * de son admission.
+ *
+ * Ce qui reste tu, et qui n'est pas négociable : PAR QUI, QUAND, et quelle
+ * conversation. Le refus dit qu'il n'y a rien à retenter, pas ce qui s'est
+ * passé.
+ */
+export class GuestAccessRevokedError extends Error {
+  constructor() {
+    super('Guest access revoked');
+    this.name = 'GuestAccessRevokedError';
+  }
+}
+
 export const AUTH_REGIME = Symbol.for('meeshy.gateway.auth-regime');
 
 /** Ce que déclare un middleware d'authentification sur lui-même. */
@@ -707,6 +754,20 @@ export function createUnifiedAuthMiddleware(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
       authLogger.warn('Auth failure', { errorMessage });
+
+      // 410 GONE, pas 401 : l'accès n'est pas à re-tenter, il n'existe plus.
+      // Même code de statut et même famille de motifs que
+      // `POST /anonymous/session/refresh`, qui rendait déjà `LINK_DEACTIVATED`
+      // pour ce cas exact — sur la seule porte qui RAFRAÎCHIT une session, pas
+      // sur celles qui la consomment. Un client distingue ainsi « réessaie »
+      // de « c'est fini », ce qu'aucun 401 ne lui permettait.
+      if (error instanceof GuestAccessRevokedError) {
+        return reply.status(410).send({
+          success: false,
+          error: 'GUEST_ACCESS_REVOKED',
+          message: "L'acces de cet invite a ete retire"
+        });
+      }
 
       if (options.requireAuth) {
         return reply.status(401).send({
@@ -789,7 +850,42 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
 
 // ===== LEGACY COMPATIBILITY =====
 
-/** @deprecated Use getUserPermissions */
+/**
+ * DEUX REFUS STRUCTURELLEMENT DIFFÉRENTS, DEUX STATUTS (#4760).
+ *
+ * Cette garde rendait `403 PERMISSION_DENIED` pour l'ABSENCE de session comme
+ * pour un rôle trop bas. Le seul signal qui séparait les deux était la prose
+ * anglaise du `message` — « Authentication required » contre « Insufficient
+ * role ».
+ *
+ * CE QUE ÇA COÛTAIT, MESURÉ. `APIClient.mapUnauthorized`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift`) est le
+ * site UNIQUE qui décide qu'une réponse veut dire « ta session est morte », et
+ * il ne regarde QUE le 401 : `APIClient.swift:785` traduit tout 403 en
+ * `MeeshyError.forbidden`, « NOT an auth/session problem ». Un membre dont le
+ * JWT expirait en appelant une route gardée ici recevait donc 403, le SDK ne
+ * rafraîchissait rien, et le lecteur lisait « droits insuffisants » là où il
+ * fallait le reconnecter.
+ *
+ * ET LA PROSE N'ARRIVAIT MÊME PAS. `{ error: { code, message } }` est une
+ * forme IMBRIQUÉE que les 84 modules passant par `utils/response.ts`
+ * n'emploient pas : `sendError` pose `{ success, error, message, code }` À
+ * PLAT, et c'est cette forme-là que déclare `errorResponseSchema`
+ * (`error: { type: 'string' }`). Les cinq routes de `routes/maintenance.ts`
+ * déclarant `403: errorResponseSchema`, `fast-json-stringify` servait, MESURÉ :
+ *
+ *     {"success":false,"error":"[object Object]"}
+ *
+ * — le `code` supprimé, la phrase détruite. Brancher sur la prose était
+ * impossible parce qu'il n'y avait plus de prose. Les deux branches passent
+ * désormais par les aides partagées, seul producteur d'erreurs du gateway.
+ *
+ * `UNAUTHORIZED` n'est pas inventé : `ErrorCode.UNAUTHORIZED`
+ * (`packages/shared/types/errors.ts`) le déclare, `ErrorStatusMap` le mappe
+ * sur 401, et 49 des appels à `sendUnauthorized` du gateway le servent déjà.
+ *
+ * @deprecated Use getUserPermissions
+ */
 export function requireRole(allowedRoles: string | string[]) {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
@@ -798,18 +894,20 @@ export function requireRole(allowedRoles: string | string[]) {
       const authContext = (request as UnifiedAuthRequest).authContext;
 
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        throw new PermissionDeniedError('Authentication required');
+        sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+        return;
       }
 
       if (!roles.includes(authContext.registeredUser.role)) {
-        throw new PermissionDeniedError('Insufficient role');
-      }
-    } catch (error) {
-      if (error instanceof PermissionDeniedError) {
-        reply.code(403).send({ success: false, error: { code: error.code, message: error.message } });
+        sendForbidden(reply, 'Insufficient role', { code: 'PERMISSION_DENIED' });
         return;
       }
-      reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Insufficient permissions' } });
+    } catch {
+      // Les deux refus sortent par retour anticipé : ce `catch` ne rattrape
+      // plus un `throw` à nous, mais la LECTURE d'`authContext`, qu'un
+      // accesseur défaillant peut faire échouer. Fail-closed — un refus, jamais
+      // un laissez-passer — et le rôle reste le sujet, donc 403.
+      sendForbidden(reply, 'Insufficient permissions', { code: 'PERMISSION_DENIED' });
     }
   };
 }
@@ -818,16 +916,26 @@ export const requireAdmin = requireRole(['BIGBOSS', 'ADMIN']);
 export const requireModerator = requireRole(['BIGBOSS', 'ADMIN', 'MODERATOR']);
 export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 
+/**
+ * LA MÊME DISTINCTION QUE `requireRole` ci-dessus (#4760). Pas de session ⇒
+ * 401 `UNAUTHORIZED` ; session valide mais e-mail non vérifié ⇒ 403
+ * `EMAIL_NOT_VERIFIED`. Le premier cas rendait ici `403 PERMISSION_DENIED`,
+ * c'est-à-dire le code d'un refus de DROIT pour une absence d'IDENTITÉ.
+ *
+ * Zéro appelant de production, mesuré : la garde n'est montée par aucune route
+ * du gateway. Elle est corrigée quand même — la laisser diverger ferait de la
+ * prochaine route qui la monte une régression prête à l'emploi.
+ */
 export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {
   const authContext = (request as UnifiedAuthRequest).authContext;
 
   if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-    reply.code(403).send({ success: false, error: { code: 'PERMISSION_DENIED', message: 'Authentication required' } });
+    sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
     return;
   }
 
   if (!authContext.registeredUser.emailVerifiedAt) {
-    reply.code(403).send({ success: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email verification required' } });
+    sendForbidden(reply, 'Email verification required', { code: 'EMAIL_NOT_VERIFIED' });
     return;
   }
 }

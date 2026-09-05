@@ -27,6 +27,206 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(sticker?.payload.emoji).toBe('🖼️');
   });
 
+  // MÊME piège, deuxième morsure. Le lot iOS #4741 a introduit les stickers à
+  // GABARIT — pastille de lieu, cadre de cœurs, ruban d'heure — dont le dessin
+  // vit dans `templateId` et dont le texte vit dans `slots`. Le convertisseur
+  // ne les recopiait pas : une décoration qui traverse le serveur redevenait
+  // son emoji de repli, exactement comme un sticker image redevenait un glyphe
+  // avant le cas ci-dessus.
+  //
+  // Le repli, lui, DOIT continuer de voyager : il sert le lecteur dont le build
+  // ne connaît pas ce gabarit.
+  it('transporte templateId et slots d\'une décoration', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [
+        {
+          id: 's2', emoji: '📍', x: 0.5, y: 0.5,
+          templateId: 'locationStamp',
+          slots: { title: 'Tessalit', subtitle: 'Mali' },
+        },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload.templateId).toBe('locationStamp');
+    expect(sticker?.payload.slots).toEqual({ title: 'Tessalit', subtitle: 'Mali' });
+    expect(sticker?.payload.emoji).toBe('📍');
+  });
+
+  it('transporte le gabarit et les valeurs figées d\'une décoration (#4819)', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [
+        { id: 's1', emoji: '🕐', x: 0.5, y: 0.5, templateId: 'time.analog',
+          slots: { time: '14:32', hour: '14', minute: '32' }, duration: 3.5, animation: 'pulse' },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload.templateId).toBe('time.analog');
+    expect(sticker?.payload.slots).toEqual({ time: '14:32', hour: '14', minute: '32' });
+    expect(sticker?.payload.duration).toBe(3.5);
+    expect(sticker?.payload.animation).toBe('pulse');
+  });
+
+  it('ignore des emplacements qui ne sont pas des chaînes', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [
+        { id: 's1', emoji: '🕐', x: 0.5, y: 0.5, templateId: 'time.analog', slots: { hour: 14 } },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload.templateId).toBe('time.analog');
+    expect(sticker?.payload.slots).toBeUndefined();
+  });
+
+  // MÊME piège, TROISIÈME morsure — sur le frère du champ ci-dessus. Le lot
+  // #4717 a donné un gabarit à la pastille de LIEU (`styleId`) ; la branche
+  // `locationObjects`, trente lignes plus haut, ne recopiait que `place`. Une
+  // pastille décorée qui traverse le serveur redevenait la pastille de base.
+  //
+  // Le témoin s'écrit sur un gabarit AUTRE que `location.pill` : ce dernier est
+  // le repli d'un `styleId` absent, donc sur lui la règle juste et le champ
+  // perdu rendent le même verdict.
+  it('transporte le styleId d\'une pastille de lieu décorée', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        {
+          id: 'l1', x: 0.5, y: 0.8,
+          place: { latitude: 20.2, longitude: 1.01, name: 'Tessalit' },
+          styleId: 'location.stamp',
+        },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.payload.styleId).toBe('location.stamp');
+    expect(lieu?.payload.place).toEqual({ latitude: 20.2, longitude: 1.01, name: 'Tessalit' });
+  });
+
+  it('n\'invente aucune clé de style pour une pastille nue', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        { id: 'l1', place: { latitude: 20.2, longitude: 1.01 } },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.payload).not.toHaveProperty('styleId');
+  });
+
+  // MÊME piège, QUATRIÈME morsure (#4840) — la FENÊTRE, sur la branche que
+  // #4832 venait de réparer. `baseObject` portait déjà `timing.start` ; les
+  // trois clés de charge manquaient, et cette branche était la seule des
+  // quatre familles à n'en émettre aucune.
+  it('transporte la fenêtre temporelle d\'une pastille de lieu', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        {
+          id: 'l1', x: 0.5, y: 0.8,
+          place: { latitude: 20.2, longitude: 1.01, name: 'Tessalit' },
+          startTime: 2, duration: 4, fadeIn: 0.25, fadeOut: 0.5,
+        },
+      ],
+    }) as {
+      scenes: {
+        objects: {
+          kind: string;
+          timing?: { start?: number };
+          payload: Record<string, unknown>;
+        }[];
+      }[];
+    };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.timing?.start).toBe(2);
+    expect(lieu?.payload.duration).toBe(4);
+    expect(lieu?.payload.fadeIn).toBe(0.25);
+    expect(lieu?.payload.fadeOut).toBe(0.5);
+  });
+
+  // Une pastille SANS fenêtre se réencode octet pour octet : le convertisseur
+  // n'invente pas un début à zéro, sinon toute story déjà publiée verrait ses
+  // lieux acquérir une fenêtre qu'aucun auteur n'a posée.
+  it('n\'invente aucune clé de fenêtre pour une pastille sans temps', () => {
+    const doc = convertV1ToV3({
+      locationObjects: [
+        { id: 'l1', place: { latitude: 20.2, longitude: 1.01 } },
+      ],
+    }) as {
+      scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[];
+    };
+
+    const lieu = doc.scenes[0].objects.find((o) => o.kind === 'place');
+    expect(lieu?.payload).not.toHaveProperty('duration');
+    expect(lieu?.payload).not.toHaveProperty('fadeIn');
+    expect(lieu?.payload).not.toHaveProperty('fadeOut');
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // #4905 — les quatre branches RÉPANDENT. Ces témoins n'interrogent pas des
+  // CLÉS, ils interrogent le MÉCANISME : c'est le point de l'issue. Un témoin
+  // par clé serait le troisième inventaire à tenir à jour, et c'est
+  // précisément l'inventaire qu'on vient de supprimer.
+  // ─────────────────────────────────────────────────────────────────────
+
+  const FAMILLES = [
+    ['mediaObjects', 'media', { id: 'm1', postMediaId: 'pm1', aspectRatio: 1.5 }],
+    ['stickerObjects', 'sticker', { id: 's1', emoji: '🔥' }],
+    ['locationObjects', 'place', { id: 'l1', place: { latitude: 1, longitude: 2 } }],
+    ['audioPlayerObjects', 'audio', { id: 'a1', postMediaId: 'pm2' }],
+    ['textObjects', 'text', { id: 't1', text: 'salut' }],
+  ] as const;
+
+  type Doc = { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+  const charge = (famille: string, objet: Record<string, unknown>, kind: string) => {
+    const doc = convertV1ToV3({ [famille]: [objet] }) as Doc;
+    return doc.scenes[0].objects.find((o) => o.kind === kind)?.payload;
+  };
+
+  it.each(FAMILLES)(
+    'transporte une clé INCONNUE de la famille %s — la clé qu\'un lot ajoutera demain',
+    (famille, kind, base) => {
+      const payload = charge(famille, { ...base, champInventeDemain: 'valeur' }, kind);
+      expect(payload?.champInventeDemain).toBe('valeur');
+    }
+  );
+
+  // Le risque que le `rest` introduit, et le seul : un champ d'ENVELOPPE qui
+  // passerait dans la charge s'y trouverait EN DOUBLE — une fois logé par
+  // `baseObject`, une fois recopié. Ce témoin est la contrepartie du précédent.
+  it.each(FAMILLES)(
+    'ne recopie AUCUN champ d\'enveloppe dans la charge de %s',
+    (famille, kind, base) => {
+      const payload = charge(famille, {
+        ...base, x: 0.3, y: 0.7, scale: 1.4, rotation: 12, zIndex: 9,
+        startTime: 2, endTime: 6, sourceLanguage: 'fr',
+        keyframes: [{ time: 1, opacity: 0.5 }],
+      }, kind);
+      for (const enveloppe of ['id', 'x', 'y', 'scale', 'rotation', 'zIndex',
+                               'startTime', 'endTime', 'keyframes', 'sourceLanguage']) {
+        expect(payload).not.toHaveProperty(enveloppe);
+      }
+    }
+  );
+
+  // Les champs à RÈGLE gagnent APRÈS le `rest` — sans quoi le refactor
+  // reviendrait en silence sur trois arbitrages déjà rendus.
+  it('le `rest` ne relève pas le filtre STRICT de slots', () => {
+    const payload = charge('stickerObjects', { id: 's1', emoji: '🕐', slots: { hour: 14 } }, 'sticker');
+    expect(payload).not.toHaveProperty('slots');
+  });
+
+  it('le `rest` ne fait pas réapparaître un volume audio à 1', () => {
+    const payload = charge('audioPlayerObjects', { id: 'a1', volume: 1 }, 'audio');
+    expect(payload).not.toHaveProperty('volume');
+  });
+
+  it('une pastille sans lieu garde sa clé `place` à null, jamais absente', () => {
+    const payload = charge('locationObjects', { id: 'l1' }, 'place');
+    expect(payload).toHaveProperty('place', null);
+  });
+
   it('n\'invente aucune clé sur un sticker emoji seul', () => {
     const doc = convertV1ToV3({
       stickerObjects: [{ id: 's1', emoji: '🔥', x: 0.5, y: 0.5 }],
@@ -108,6 +308,18 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
   it('audio chip keeps its PostMedia reference', () => {
     const a = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'audio');
     expect(a?.payload.postMediaId).toBe('64b0000000000000000000aa');
+  });
+
+  /// L'axe EFFET (#4870) traverse la conversion par le `...rest` du texte —
+  /// ce témoin épingle qu'aucune énumération de clés ne vienne un jour le
+  /// retenir, comme `postMediaId` l'a été pour le sticker.
+  it('text effect travels into the v3 payload', () => {
+    const doc = convertV1ToV3({
+      background: '#000000',
+      textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5, textEffect: 'shadow' }],
+    });
+    const t = doc.scenes[0].objects.find(o => o.kind === 'text');
+    expect(t?.payload.textEffect).toBe('shadow');
   });
 
   it('text translations survive into the payload (Prisme par objet, C6)', () => {

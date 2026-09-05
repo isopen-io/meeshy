@@ -12,7 +12,7 @@
  * DÉCISION (réservation #4494, option b) : la porte reste ouverte à AUDIT —
  * il garde les métadonnées du signalement, c'est son métier d'auditer la
  * modération — mais `content` tombe à `null` pour lui. Même motif que
- * `attachmentProtectionSelect` (`routes/admin/users.ts` l. 683) pour les
+ * `attachmentProtectionSelect` (`routes/admin/users.ts`) pour les
  * médias protégés : la ligne reste, seul le CONTENU ne voyage pas.
  *
  * POURQUOI LE TÉMOIN EST ÉCRIT SUR AUDIT, ET NULLE PART AILLEURS : USER et
@@ -178,7 +178,12 @@ describe("#4494 — le CONTENU d'un message signalé ne voyage plus vers AUDIT",
 });
 
 describe('#4494 — balayage : les deux portes qui lisent Report portent un seuil cohérent, ou leur écart est déclaré', () => {
-  const SOURCE = readFileSync(join(__dirname, '../../../../routes/admin/users.ts'), 'utf8');
+  // #4284 — les deux portes qui lisent `Report` (et SEUILS_REPORT lui-même)
+  // ont été extraites de `routes/admin/users.ts` (alors à 1043 lignes) vers
+  // `routes/admin/user-reports.ts`, une unité nommable à part entière : c'est
+  // désormais CE fichier-là qui porte l'intégralité de la surface `Report`,
+  // donc celui que ce balayage doit lire pour rester une mesure du réel.
+  const SOURCE = readFileSync(join(__dirname, '../../../../routes/admin/user-reports.ts'), 'utf8');
 
   // Chaque enregistrement de route de ce fichier commence par
   // `fastify.<verbe><` en tête de ligne à deux espaces (vérifié par relecture

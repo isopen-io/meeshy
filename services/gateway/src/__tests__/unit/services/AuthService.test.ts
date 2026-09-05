@@ -45,13 +45,16 @@ jest.mock('@meeshy/shared/types', () => ({
   SocketIOUser: {},
 }));
 
-// Mock bcryptjs - using any for mock function types to avoid TypeScript issues
+// Le hachage vit dans `utils/password-hash` — SITE UNIQUE du dépôt depuis
+// #5216, et le seul endroit qui connaisse encore le facteur de coût. Doubler
+// `bcryptjs` ne suffirait plus : le module charge d'abord le binaire NATIF.
 const mockBcryptCompare = jest.fn() as jest.Mock<any>;
 const mockBcryptHash = jest.fn() as jest.Mock<any>;
 
-jest.mock('bcryptjs', () => ({
-  compare: (password: string, hash: string) => mockBcryptCompare(password, hash),
-  hash: (password: string, rounds: number) => mockBcryptHash(password, rounds)
+jest.mock('../../../utils/password-hash', () => ({
+  ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
+  verifyPassword: (password: string, hash: string) => mockBcryptCompare(password, hash),
+  hashPassword: (password: string) => mockBcryptHash(password)
 }));
 
 // Mock jsonwebtoken
@@ -104,6 +107,8 @@ jest.mock('../../../services/PhonePasswordResetService', () => ({
   maskDisplayName: jest.fn((name: string) => `${name[0]}***`)
 }));
 
+import { BCRYPT_COST } from '../../../utils/password-hash';
+import { executeurImmediat } from '../../helpers/after-response';
 import { AuthService, LoginCredentials, RegisterData, TokenPayload } from '../../../services/AuthService';
 
 // Get references to mocked SessionService functions
@@ -152,23 +157,41 @@ jest.mock('../../../utils/normalize', () => ({
   })
 }));
 
-// Mock emailSchema from shared types
-jest.mock('@meeshy/shared/types/validation', () => ({
-  emailSchema: {
-    parse: jest.fn((email: string) => {
-      if (!email.includes('@') || !email.includes('.')) {
-        throw { issues: [{ message: 'Format d\'email invalide' }] };
-      }
-      return email;
-    })
-  }
-}));
+// Double d'`emailSchema` — délibérément PLUS PERMISSIF que le vrai schéma, qui
+// borne aussi la LONGUEUR : ce fichier exerce l'inscription, pas les bornes
+// d'une adresse (« should handle very long email addresses » en dépend).
+//
+// `parse` ET `safeParse` sont posés depuis la MÊME règle. Un double partiel qui
+// n'aurait porté que `parse` aurait fait lever « safeParse is not a function »
+// au premier appelant qui change de méthode — la forme exacte du piège du
+// cycle 91 (§ « un double PARTIEL perd en silence ce que le module gagne »).
+jest.mock('@meeshy/shared/types/validation', () => {
+  const estValide = (email: string) => email.includes('@') && email.includes('.');
+  return {
+    emailSchema: {
+      parse: jest.fn((email: string) => {
+        if (!estValide(email)) {
+          throw { issues: [{ message: 'Format d\'email invalide' }] };
+        }
+        return email;
+      }),
+      safeParse: jest.fn((email: string) =>
+        estValide(email)
+          ? { success: true, data: email }
+          : { success: false, error: { issues: [{ message: 'Format d\'email invalide' }] } }
+      )
+    }
+  };
+});
 
 // Mock Prisma Client
 const mockPrisma = {
   user: {
     findFirst: jest.fn(),
     findUnique: jest.fn(),
+    // La GÉNÉRATION de pseudo et les SUGGESTIONS d'un refus testent leurs
+    // candidats en UNE requête (#5216) — sept candidats, un `findMany … { in }`.
+    findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn()
   },
@@ -473,57 +496,83 @@ describe('AuthService', () => {
 
       expect(result).not.toBeNull();
       expect(mockPrisma.user.create).toHaveBeenCalled();
-      expect(mockBcryptHash).toHaveBeenCalledWith('SecurePass123!', 12);
+      expect(mockBcryptHash).toHaveBeenCalledWith('SecurePass123!');
+      expect(BCRYPT_COST).toBe(12);
     });
 
-    it('should return null for existing username', async () => {
+    // #5216 — CHANGEMENT DE COMPORTEMENT ASSUMÉ. Ces quatre témoins exigeaient
+    // `null`, et `null` était le problème : le service le rendait sur TOUT —
+    // pseudo pris, adresse prise, numéro illisible, panne Mongo — si bien que la
+    // route ne pouvait pas les distinguer et servait à chacun le même 400
+    // « Erreur lors de la création du compte », sans code ni champ. Ses branches
+    // qui prétendaient les distinguer par le TEXTE de l'erreur étaient
+    // inatteignables. Un refus de FORMULAIRE est désormais une valeur typée que
+    // la route traduit en 409/400 avec son `code` et son `field`.
+    it("refuse un pseudo déjà pris, en le NOMMANT — et n'écrit rien", async () => {
       mockPrisma.user.findFirst.mockResolvedValue({
         ...mockUser,
         username: 'newuser'
       });
+      mockPrisma.user.findMany.mockResolvedValue([]);
 
-      const result = await authService.register(validRegisterData);
-
-      expect(result).toBeNull();
+      await expect(authService.register(validRegisterData)).rejects.toMatchObject({
+        code: 'USERNAME_TAKEN',
+        field: 'username',
+        status: 409
+      });
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
     });
 
-    it('should return null for existing email', async () => {
+    it("accompagne le refus de pseudo de suggestions LIBRES — un refus sans remède n'aide personne", async () => {
+      mockPrisma.user.findFirst.mockResolvedValue({ ...mockUser, username: 'newuser' });
+      mockPrisma.user.findMany.mockResolvedValue([{ username: 'newuser1' }]);
+
+      await expect(authService.register(validRegisterData)).rejects.toMatchObject({
+        code: 'USERNAME_TAKEN',
+        suggestions: expect.arrayContaining(['newuser7'])
+      });
+      const refus = await authService.register(validRegisterData).catch((e: any) => e);
+      expect(refus.suggestions).not.toContain('newuser1');
+    });
+
+    it("refuse une adresse déjà prise, en la NOMMANT — et n'écrit rien", async () => {
       mockPrisma.user.findFirst.mockResolvedValue({
         ...mockUser,
         email: 'newuser@example.com',
         username: 'differentuser'
       });
 
-      const result = await authService.register(validRegisterData);
-
-      expect(result).toBeNull();
-      expect(mockPrisma.user.create).not.toHaveBeenCalled();
-    });
-
-    it('should return null for existing phone number', async () => {
-      mockPrisma.user.findFirst.mockResolvedValue({
-        ...mockUser,
-        phoneNumber: '+33698765432',
-        username: 'differentuser',
-        email: 'different@example.com'
+      await expect(authService.register(validRegisterData)).rejects.toMatchObject({
+        code: 'EMAIL_TAKEN',
+        field: 'email',
+        status: 409
       });
-
-      const result = await authService.register(validRegisterData);
-
-      expect(result).toBeNull();
       expect(mockPrisma.user.create).not.toHaveBeenCalled();
     });
 
-    it('should return null for invalid email format', async () => {
+    it('un numéro déjà détenu reste un CHOIX, jamais un refus', async () => {
+      mockPrisma.user.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...mockUser,
+          phoneNumber: '+33698765432',
+          username: 'differentuser',
+          email: 'different@example.com'
+        });
+
+      const result = await authService.register(validRegisterData);
+
+      expect(result?.phoneOwnershipConflict).toBe(true);
+      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it("une adresse illisible n'est PAS un refus de formulaire — Ajv et Zod l'ont déjà gardée", async () => {
       const invalidEmailData: RegisterData = {
         ...validRegisterData,
         email: 'invalidemail'
       };
 
-      const result = await authService.register(invalidEmailData);
-
-      expect(result).toBeNull();
+      await expect(authService.register(invalidEmailData)).rejects.toThrow(/Email invalide/);
       expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
     });
 
@@ -607,7 +656,26 @@ describe('AuthService', () => {
     // salon global, même loi que les quatre autres (`postJoinSystemMessage`).
     describe('avis d’arrivée dans le salon global', () => {
       const globalConversation = { id: 'global-conv-id', identifier: 'meeshy' };
+
+      // #5216 — l'AVIS et l'EFFECTIF partent désormais APRÈS la réponse : ils
+      // ne conditionnent rien, et ils retenaient l'écran de chargement de
+      // quelqu'un qui vient de s'inscrire. La CRÉATION du participant, elle,
+      // reste synchrone (le compte doit voir le salon dès sa première liste) —
+      // c'est ce que mesure encore « n’annonce RIEN quand … déjà membre ».
+      //
+      // Le témoin injecte donc l'exécuteur immédiat : un `setImmediate`
+      // laisserait l'assertion mesurer le vide.
+      let differe: ReturnType<typeof executeurImmediat>;
+      const inscrire = async (service: AuthService = authService) => {
+        const resultat = await service.register(validRegisterData, undefined, {
+          afterResponse: differe.afterResponse,
+        });
+        await differe.settle();
+        return resultat;
+      };
+
       const arrange = () => {
+        differe = executeurImmediat();
         const createdUser = { ...mockUser, ...validRegisterData, id: 'new-user-id', displayName: 'New User' };
         mockPrisma.user.findFirst.mockResolvedValue(null);
         mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
@@ -621,7 +689,7 @@ describe('AuthService', () => {
       it('poste « X a rejoint la conversation », signé du Participant.id de l’arrivant', async () => {
         arrange();
 
-        await authService.register(validRegisterData);
+        await inscrire();
 
         expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
         const data = mockPrisma.message.create.mock.calls[0][0].data;
@@ -646,7 +714,7 @@ describe('AuthService', () => {
         const manager = { broadcastMessage };
         const service = new AuthService(mockPrisma, jwtSecret, { resolveSocketManager: () => manager });
 
-        await service.register(validRegisterData);
+        await inscrire(service);
 
         expect(broadcastMessage).toHaveBeenCalledWith(
           expect.objectContaining({ id: 'sys-msg' }),
@@ -658,7 +726,7 @@ describe('AuthService', () => {
         arrange();
         const service = new AuthService(mockPrisma, jwtSecret, { resolveSocketManager: () => null });
 
-        const result = await service.register(validRegisterData);
+        const result = await inscrire(service);
 
         expect(result).not.toBeNull();
         expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
@@ -668,7 +736,7 @@ describe('AuthService', () => {
         arrange();
         mockPrisma.participant.findFirst.mockResolvedValue({ id: 'already-there' });
 
-        await authService.register(validRegisterData);
+        await inscrire();
 
         expect(mockPrisma.participant.create).not.toHaveBeenCalled();
         expect(mockPrisma.message.create).not.toHaveBeenCalled();
@@ -678,7 +746,7 @@ describe('AuthService', () => {
         arrange();
         mockPrisma.message.create.mockRejectedValue(new Error('mongo down'));
 
-        const result = await authService.register(validRegisterData);
+        const result = await inscrire();
 
         expect(result).not.toBeNull();
         expect(result?.user?.id).toBe('new-user-id');
@@ -690,7 +758,7 @@ describe('AuthService', () => {
           resolveSocketManager: () => ({ broadcastMessage: jest.fn<any>().mockRejectedValue(new Error('socket down')) })
         });
 
-        const result = await service.register(validRegisterData);
+        const result = await inscrire(service);
 
         expect(result).not.toBeNull();
       });
@@ -713,38 +781,22 @@ describe('AuthService', () => {
       expect(mockPrisma.participant.create).not.toHaveBeenCalled();
     });
 
-    it('should use default languages if not provided', async () => {
-      const noLanguageData: RegisterData = {
-        username: 'nolang',
-        password: 'SecurePass123!',
-        firstName: 'No',
-        lastName: 'Lang',
-        email: 'nolang@example.com'
-      };
+    // `should use default languages if not provided` vivait ici et gelait un
+    // DÉFAUT (`regionalLanguage: 'fr'` sur une inscription qui ne l'avait jamais
+    // demandé), sous un nom qui ne pouvait rien mesurer : sans aucune préférence,
+    // le repli et la règle juste écrivent le même rang 1 (leçon 261). Les langues
+    // écrites par l'inscription sont désormais mesurées, cas séparants compris,
+    // par `auth-registration-prism-ranks.test.ts` (#4682).
 
-      const createdUser = { ...mockUser, ...noLanguageData, id: 'no-lang-id' };
-
-      mockPrisma.user.findFirst.mockResolvedValue(null);
-      mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
-      mockPrisma.user.create.mockResolvedValue(createdUser);
-      mockPrisma.conversation.findFirst.mockResolvedValue(null);
-
-      await authService.register(noLanguageData);
-
-      expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          systemLanguage: 'fr',
-          regionalLanguage: 'fr'
-        })
-      });
-    });
-
-    it('should handle database error gracefully', async () => {
+    // #5216 — une PANNE n'est pas un refus. Le service ne l'avale plus en
+    // `null` : elle se propage, et la route la rend en 500 REGISTRATION_ERROR.
+    // Avaler la panne rendait un pseudo pris indiscernable d'une base tombée,
+    // ce qui est le pire des deux mondes — le client réessayait le mauvais
+    // remède, et rien dans les journaux ne le contredisait.
+    it('laisse remonter une panne de base — elle vaut 500, pas 400', async () => {
       mockPrisma.user.findFirst.mockRejectedValue(new Error('Database error'));
 
-      const result = await authService.register(validRegisterData);
-
-      expect(result).toBeNull();
+      await expect(authService.register(validRegisterData)).rejects.toThrow('Database error');
     });
 
     it('should handle conversation member creation error gracefully', async () => {
@@ -1339,7 +1391,8 @@ describe('AuthService - Security Tests', () => {
 
     await authService.register(registerData);
 
-    expect(mockBcryptHash).toHaveBeenCalledWith('SecurePass123!', 12);
+    expect(mockBcryptHash).toHaveBeenCalledWith('SecurePass123!');
+    expect(BCRYPT_COST).toBe(12);
   });
 
   it('should not leak user information on failed authentication', async () => {
@@ -1441,7 +1494,7 @@ describe('AuthService - 2FA during authenticate', () => {
     expect(result?.sessionToken).toBe('');
   });
 
-  it('should store hashed 2FA token and expiry when 2FA required', async () => {
+  it('should store hashed 2FA challenge in its OWN columns when 2FA required', async () => {
     const userWith2FA = {
       ...mockUser,
       twoFactorEnabledAt: new Date(),
@@ -1458,8 +1511,8 @@ describe('AuthService - 2FA during authenticate', () => {
     expect(mockPrisma.user.update).toHaveBeenCalledWith({
       where: { id: userWith2FA.id },
       data: {
-        phoneVerificationCode: expect.any(String),
-        phoneVerificationExpiry: expect.any(Date)
+        twoFactorChallengeHash: expect.any(String),
+        twoFactorChallengeExpiresAt: expect.any(Date)
       }
     });
   });
@@ -2324,80 +2377,14 @@ describe('AuthService - verifyToken TokenExpiredError branch', () => {
   });
 });
 
-describe('AuthService - register phone conflict and skipPhoneConflictCheck', () => {
-  let authService: AuthService;
-  const jwtSecret = 'test-jwt-secret';
+// Le NUMÉRO et l'E-MAIL de vérification de l'inscription vivent désormais dans
+// `auth-registration-phone-and-email.test.ts` (#5216). Deux raisons, et les deux
+// comptent : ce fichier est hors budget (le dépôt y interdit tout ajout tant
+// qu'on n'en a pas extrait), et ces témoins étaient les seuls du fichier à
+// dépendre du double de `utils/normalize` — c'est-à-dire de la fonction dont
+// leur verdict dépend. Le nouveau harnais normalise POUR DE VRAI.
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockGenerateSessionToken.mockReturnValue('mock-session-token');
-    mockCreateSession.mockResolvedValue(mockSessionData);
-    mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
-    authService = new AuthService(mockPrisma, jwtSecret);
-  });
-
-  const baseRegisterData: RegisterData = {
-    username: 'newuser',
-    password: 'SecurePass123!',
-    firstName: 'New',
-    lastName: 'User',
-    email: 'newuser@example.com',
-    phoneNumber: '+33698765432'
-  };
-
-  it('should return phoneOwnershipConflict when phone belongs to another verified user', async () => {
-    const phoneOwner = {
-      id: 'owner-id',
-      displayName: 'Phone Owner',
-      username: 'phoneowner',
-      email: 'owner@example.com',
-      avatar: null
-    };
-
-    mockPrisma.user.findFirst
-      .mockResolvedValueOnce(null) // no existing user by username/email
-      .mockResolvedValueOnce(phoneOwner); // phone conflict
-
-    const result = await authService.register(baseRegisterData);
-
-    expect(result).not.toBeNull();
-    expect(result?.phoneOwnershipConflict).toBe(true);
-    expect(result?.phoneOwnerInfo).toBeDefined();
-    expect(result?.phoneOwnerInfo?.phoneNumber).toBeDefined();
-    expect(result?.user).toBeUndefined();
-    expect(mockPrisma.user.create).not.toHaveBeenCalled();
-  });
-
-  it('should skip phone conflict check when skipPhoneConflictCheck is true', async () => {
-    const createdUser = { ...mockUser, id: 'transfer-user-id' };
-
-    mockPrisma.user.findFirst.mockResolvedValue(null); // no username/email conflict
-    mockPrisma.user.create.mockResolvedValue(createdUser);
-    mockPrisma.conversation.findFirst.mockResolvedValue(null);
-
-    const result = await authService.register({
-      ...baseRegisterData,
-      skipPhoneConflictCheck: true
-    });
-
-    expect(result).not.toBeNull();
-    expect(result?.user).toBeDefined();
-    expect(mockPrisma.user.create).toHaveBeenCalled();
-  });
-
-  it('should return null when phone number is invalid', async () => {
-    const { normalizePhoneWithCountry } = require('../../../utils/normalize');
-    (normalizePhoneWithCountry as jest.Mock<any>).mockReturnValueOnce({ isValid: false, phoneNumber: null, countryCode: null });
-
-    mockPrisma.user.findFirst.mockResolvedValue(null);
-
-    const result = await authService.register(baseRegisterData);
-
-    expect(result).toBeNull();
-  });
-});
-
-describe('AuthService - register email verification success log path', () => {
+describe('AuthService - renvoi de vérification pendant la CONNEXION', () => {
   let authService: AuthService;
   const jwtSecret = 'test-jwt-secret';
   // Get reference to the mocked EmailService constructor
@@ -2408,40 +2395,6 @@ describe('AuthService - register email verification success log path', () => {
     jest.clearAllMocks();
     mockGenerateSessionToken.mockReturnValue('mock-session-token');
     mockCreateSession.mockResolvedValue(mockSessionData);
-  });
-
-  it('should log success when email verification is sent successfully during registration', async () => {
-    // Make sendEmailVerification return a success result (covers lines 613-617)
-    const mockSendEmailVerification = jest.fn() as jest.Mock<any>;
-    mockSendEmailVerification.mockResolvedValue({
-      success: true,
-      provider: 'resend',
-      messageId: 'msg-abc123'
-    });
-    MockEmailService.mockImplementation(() => ({
-      sendEmailVerification: mockSendEmailVerification
-    }));
-
-    // Re-create authService so it uses the updated EmailService mock
-    const authServiceWithSuccessEmail = new AuthService(mockPrisma, jwtSecret);
-
-    const createdUser = { ...mockUser, id: 'email-success-user-id', emailVerifiedAt: null };
-
-    mockPrisma.user.findFirst.mockResolvedValue(null);
-    mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
-    mockPrisma.user.create.mockResolvedValue(createdUser);
-    mockPrisma.conversation.findFirst.mockResolvedValue(null);
-
-    const result = await authServiceWithSuccessEmail.register({
-      username: 'emailsuccessuser',
-      password: 'SecurePass123!',
-      firstName: 'Email',
-      lastName: 'Success',
-      email: 'emailsuccess@example.com'
-    });
-
-    expect(result).not.toBeNull();
-    expect(mockSendEmailVerification).toHaveBeenCalled();
   });
 
   it('should handle resendVerificationEmail when user has emailVerifiedAt=null during login (line 251)', async () => {

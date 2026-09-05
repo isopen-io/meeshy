@@ -75,6 +75,20 @@ export interface ManifestRouteInput {
 export interface BuiltApiEndpointsCatalog {
   /** Le fichier `.ts` complet, tel qu'écrit par le générateur dans `api/endpoints.ts`. */
   readonly source: string;
+  /**
+   * Les entrées DÉRIVÉES — une par adresse unique, triées par chemin brut.
+   *
+   * Exposées pour que les projections d'AUTRES langages (#4281 Android,
+   * #4282 iOS) portent les MÊMES noms que la projection TypeScript. Sans
+   * elles, chaque surface re-dériverait le nommage depuis le manifeste :
+   * une seconde règle, juste le jour où on l'écrit, divergente au premier
+   * changement de segment — exactement ce que le milestone « un chemin d'API
+   * s'écrit à un seul endroit » existe pour empêcher.
+   *
+   * Ce qui est exposé est la STRUCTURE, jamais le rendu : chaque langage
+   * décide de sa syntaxe, aucun ne décide des noms.
+   */
+  readonly entries: readonly CatalogEntry[];
   /** Les chemins UNIQUES (dédupliqués par verbe), triés — ce que `API_PATH_TEMPLATES` porte. */
   readonly pathTemplates: readonly string[];
   /** Les verbes observés par chemin, triés dans l'ordre GET/POST/PUT/PATCH/DELETE. */
@@ -196,7 +210,7 @@ function deriveKeyAndParams(restSegments: readonly string[]): KeySplit {
   return { key: `${lowerFirst(firstPiece)}${restPieces.join('')}`, paramNames };
 }
 
-interface CatalogEntry {
+export interface CatalogEntry {
   readonly namespace: string;
   readonly key: string;
   readonly rawPath: string;
@@ -368,5 +382,5 @@ export function buildApiEndpointsCatalog(routes: readonly ManifestRouteInput[]):
     seenSlots.set(slot, entry.rawPath);
   }
 
-  return { source: renderSource(entries, pathTemplates, pathMethods), pathTemplates, pathMethods };
+  return { source: renderSource(entries, pathTemplates, pathMethods), entries, pathTemplates, pathMethods };
 }

@@ -13,7 +13,7 @@ import ImageIO
 /// un volume ne change rien au tracé). L'échelle d'affichage est portée par
 /// `displayHeight(rms:)`, la résolution par `bucketCount(forWidth:scale:)`.
 /// Cache à deux niveaux, mémoire puis disque, keyé URL+count.
-enum AudioWaveform {
+public enum AudioWaveform {
 
     private nonisolated(unsafe) static let cache = NSCache<NSString, NSArray>()
 
@@ -36,7 +36,7 @@ enum AudioWaveform {
     /// entre 0,05 et 0,3, et la bande paraîtrait vide alors que la mesure est
     /// juste. L'échelle dB restitue la dynamique sans mentir sur les niveaux ;
     /// plancher à -60 dB, sous lequel on considère le silence.
-    nonisolated static func displayHeight(rms: Float) -> Float {
+    public nonisolated static func displayHeight(rms: Float) -> Float {
         guard rms > 0.0001 else { return 0 }
         let floorDb: Float = -60
         let db = 20 * log10f(min(1, rms))

@@ -17,6 +17,27 @@ import MeeshySDK
 /// witnesses (e.g. `DiskCacheStore.image(for:)`) match cleanly.
 public protocol StoryMediaImageLoading: Sendable {
     nonisolated func image(for urlString: String) async -> UIImage?
+
+    /// **Les OCTETS, et pas seulement l'image** (#4925).
+    ///
+    /// `image(for:)` rend une `UIImage`, c'est-à-dire UNE image : pour un GIF ou
+    /// un APNG, l'animation est déjà perdue à ce niveau, avant qu'aucune vue ne
+    /// puisse la demander. C'est ce maillon — et lui seul — qui faisait qu'un
+    /// sticker animé arrivait figé jusqu'au canvas, quel que soit le soin mis
+    /// en aval.
+    ///
+    /// Le repli par défaut rend `nil`, et il est une DÉCLARATION, pas une
+    /// commodité : **un chargeur qui ne sert pas d'octets ne peut pas animer**,
+    /// et le dire explicitement vaut mieux qu'obliger chaque bouchon de test à
+    /// implémenter une méthode dont il n'a que faire. Le conformeur de
+    /// PRODUCTION, lui, doit la servir — `StoryStickerAnimatedBytesGuardTests`
+    /// le vérifie, sans quoi le repli s'appliquerait partout en silence et la
+    /// feature n'existerait nulle part.
+    nonisolated func data(for urlString: String) async -> Data?
+}
+
+public extension StoryMediaImageLoading {
+    nonisolated func data(for urlString: String) async -> Data? { nil }
 }
 
 /// Production conformer — thin shim around `CacheCoordinator.shared.images`.
@@ -28,6 +49,13 @@ public struct DiskCacheImageLoader: StoryMediaImageLoading {
     public nonisolated init() {}
     public nonisolated func image(for urlString: String) async -> UIImage? {
         await CacheCoordinator.shared.images.image(for: urlString)
+    }
+
+    /// Les octets bruts, servis par la MÊME pile que `image(for:)` — L1 NSCache,
+    /// L2 disque, réseau. Aucun second chemin de téléchargement : ce serait une
+    /// jumelle du cache, avec sa propre politique et ses propres ratés.
+    public nonisolated func data(for urlString: String) async -> Data? {
+        try? await CacheCoordinator.shared.images.data(for: urlString)
     }
 }
 
@@ -283,8 +311,21 @@ public final class StoryMediaLayer: CALayer {
         // pas héritée d'un état masqué d'une précédente configuration.
         isHidden = false
 
+        // **Le recadrage change les PROPORTIONS de l'objet** (#5085) : un média
+        // recadré n'a plus celles de son fichier. S'en tenir à `aspectRatio`
+        // peindrait la source entière dans un cadre recadré — l'aperçu
+        // mentirait sur le rendu, ce que la loi 6 interdit.
+        //
+        // Et le recadrage lui-même passe par `contentsRect`, plus bas : un
+        // sous-rectangle NORMALISÉ appliqué par le compositeur. C'est la
+        // promesse de la planche `4c` au niveau du rendu — « aucun ne
+        // ré-encode » — et la seule écriture qui la tienne sans toucher au
+        // fichier.
+        let effectiveRatio = MediaCropRule.effectiveRatio(
+            sourceRatio: media.aspectRatio, crop: media.crop)
         // Design-space frame (1080-référentiel) → render-space via geometry.
-        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: effectiveRatio)
+        applyCrop(media.crop)
         let scaledDesignSize = CGSize(
             width: baseDesignSize.width * CGFloat(media.scale),
             height: baseDesignSize.height * CGFloat(media.scale)
@@ -358,6 +399,26 @@ public final class StoryMediaLayer: CALayer {
     /// update double-scale en posant `transform = scale × rotation` sur des
     /// bounds déjà × scale (bug "media grossit après rotation puis pan",
     /// 2026-05-27). Aligne avec le pattern déjà appliqué au text scale.
+    /// **Le recadrage, posé sur le COMPOSITEUR** (#5085).
+    ///
+    /// `contentsRect` prend un sous-rectangle normalisé des contenus : c'est
+    /// exactement la forme de `MediaCropRect`, et rien n'est ré-encodé — le
+    /// fichier reste celui qui est déjà en train de partir.
+    ///
+    /// Le remettre au cadre ENTIER quand il n'y a pas de recadrage n'est pas
+    /// une redite : un calque réutilisé garderait sinon le `contentsRect` de
+    /// l'objet qu'il peignait avant, et l'auteur verrait un média recadré
+    /// qu'il n'a jamais recadré.
+    private func applyCrop(_ crop: MediaCropRect?) {
+        guard let crop, !crop.isFull else {
+            contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+            return
+        }
+        let borné = MediaCropRule.clamped(crop)
+        contentsRect = CGRect(x: borné.x, y: borné.y,
+                              width: borné.width, height: borné.height)
+    }
+
     internal static func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
         let target: CGFloat = CanvasGeometry.designWidth * 0.65   // 702
         let ratio = max(0.1, min(10.0, CGFloat(aspectRatio)))
@@ -479,7 +540,7 @@ public final class StoryMediaLayer: CALayer {
         // le fichier tmp et le file:// servirait l'original obsolète.
         if let imageCache,
            let synchronousReader = imageCache as? ComposerImageCacheReader,
-           let cached = synchronousReader.images[cacheKey]?.cgImage {
+           let cached = CanvasImageOrientation.displayCGImage(synchronousReader.images[cacheKey]) {
             contents = cached
             return
         }
@@ -491,7 +552,7 @@ public final class StoryMediaLayer: CALayer {
         // through the async cache.
         if let url = resolvedURL, url.isFileURL {
             if let data = try? Data(contentsOf: url),
-               let cgImage = UIImage(data: data)?.cgImage {
+               let cgImage = CanvasImageOrientation.displayCGImage(UIImage(data: data)) {
                 contents = cgImage
             }
             return
@@ -515,7 +576,7 @@ public final class StoryMediaLayer: CALayer {
             guard !Task.isCancelled else { return }
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
-               let cached = await imageCache.cachedImage(for: cacheKey)?.cgImage {
+               let cached = CanvasImageOrientation.displayCGImage(await imageCache.cachedImage(for: cacheKey)) {
                 guard !Task.isCancelled else { return }
                 self.contents = cached
                 return
@@ -524,7 +585,7 @@ public final class StoryMediaLayer: CALayer {
             guard let url = resolvedURL else { return }
             let loaded = await loader.image(for: url.absoluteString)
             guard !Task.isCancelled,
-                  let cgImage = loaded?.cgImage else { return }
+                  let cgImage = CanvasImageOrientation.displayCGImage(loaded) else { return }
             self.contents = cgImage
         }
     }
@@ -937,7 +998,7 @@ public final class StoryMediaLayer: CALayer {
         guard let hash, let img = ThumbHashDecoder.decodeIfAvailable(hash) else { return }
         let placeholder = CALayer()
         placeholder.frame = bounds
-        placeholder.contents = img.cgImage
+        placeholder.contents = CanvasImageOrientation.displayCGImage(img)
         placeholder.contentsGravity = .resizeAspectFill
         placeholder.masksToBounds = true
         // Insert sous l'AVPlayerLayer (placeholderLayer = z minimum). Si

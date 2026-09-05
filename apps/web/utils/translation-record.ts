@@ -1,28 +1,15 @@
 /**
- * Dépouille la carte des traductions d'un message
- * (`{ language|targetLanguage, content|translatedContent }[]`) en
- * `Record<langue → texte>` keyé par la langue STOCKÉE — la forme qu'attend
- * {@link resolvePrismTranslation} (`packages/shared/utils/conversation-helpers`).
+ * Dépouille la carte des traductions d'un message en `Record<langue → texte>`,
+ * la forme qu'attend `resolvePrismTranslation`.
  *
- * SSOT UNIQUE de cet adaptateur côté web : `messages-display.tsx` (corps du
- * message) ET `use-message-display.ts` (corps + aperçu de réponse) le consomment.
- * La clé rendue est comparée plus tard par une normalisation (sameLanguage /
- * normalizeLanguageForDedup), donc la langue verbatim suffit ici.
+ * L'IMPLÉMENTATION A DÉMÉNAGÉ dans `@meeshy/shared/utils/conversation-helpers`,
+ * à côté du résolveur qu'elle sert. Ce fichier n'est plus qu'une ADRESSE : ses
+ * deux consommateurs (`messages-display.tsx`, `use-message-display.ts`) gardent
+ * la leur, et `apps/web-v3` — la seconde application qui lit des messages —
+ * appelle la même fonction plutôt que d'en recopier une.
+ *
+ * La mention d'origine disait « SSOT UNIQUE de cet adaptateur CÔTÉ WEB ». Elle
+ * était juste tant qu'une seule application lisait des messages ; elle a cessé
+ * de l'être le jour où la v3 a servi un fil.
  */
-export const buildTranslationRecord = (translations: unknown): Record<string, string> => {
-  const record: Record<string, string> = {};
-  if (!Array.isArray(translations)) return record;
-  for (const entry of translations as ReadonlyArray<{
-    language?: string;
-    targetLanguage?: string;
-    content?: string;
-    translatedContent?: string;
-  }>) {
-    const key = entry?.language || entry?.targetLanguage;
-    const text = entry?.content ?? entry?.translatedContent;
-    if (typeof key === 'string' && key.trim() !== '' && typeof text === 'string' && text.trim() !== '') {
-      record[key] = text;
-    }
-  }
-  return record;
-};
+export { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';

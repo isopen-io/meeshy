@@ -32,19 +32,20 @@ final class ShareLinkServiceTests: XCTestCase {
 
     func test_listMyLinks_callsCorrectEndpoint() async throws {
         let response = APIResponse<[MyShareLink]>(success: true, data: [], error: nil)
-        mock.stub("/links?offset=0&limit=50", result: response)
+        mock.stub("/links", result: response)
 
         _ = try await service.listMyLinks()
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/links?offset=0&limit=50")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "offset", value: "0"), URLQueryItem(name: "limit", value: "50")])
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
     func test_listMyLinks_returnsLinks() async throws {
         let links = [makeMyShareLink(id: "l1"), makeMyShareLink(id: "l2")]
         let response = APIResponse<[MyShareLink]>(success: true, data: links, error: nil)
-        mock.stub("/links?offset=0&limit=50", result: response)
+        mock.stub("/links", result: response)
 
         let result = try await service.listMyLinks()
 

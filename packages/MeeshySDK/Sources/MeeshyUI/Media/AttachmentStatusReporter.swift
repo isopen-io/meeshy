@@ -88,7 +88,7 @@ public nonisolated enum AttachmentStatusReporter {
     private static func postDirectly(attachmentId: String, body: AttachmentStatusBody) async {
         do {
             let _: APIResponse<[String: String]>? = try await APIClient.shared.post(
-                endpoint: "/attachments/\(attachmentId)/status",
+                AttachmentsEndpoint.byAttachmentIdStatus(attachmentId: attachmentId),
                 body: body
             )
         } catch {

@@ -13,7 +13,10 @@ final class AudioBubbleRouterTests: XCTestCase {
 
     private func makeRouter(
         attachmentId: String,
-        coordinator: ConversationAudioCoordinator
+        coordinator: ConversationAudioCoordinator,
+        fileUrl: String? = nil,
+        createdAt: Date = Date(),
+        transcription: MessageTranscription? = nil
     ) -> AudioBubbleRouter {
         let attachment = MeeshyMessageAttachment(
             id: attachmentId,
@@ -23,14 +26,16 @@ final class AudioBubbleRouterTests: XCTestCase {
             mimeType: "audio/mp4",
             fileSize: 1234,
             filePath: "",
-            fileUrl: "https://cdn/\(attachmentId).m4a",
+            fileUrl: fileUrl ?? "https://cdn/\(attachmentId).m4a",
             duration: 5_000,
-            uploadedBy: "sender"
+            uploadedBy: "sender",
+            createdAt: createdAt
         )
         return AudioBubbleRouter(
             attachmentId: attachmentId,
             attachment: attachment,
             accentColorHex: "FF6B6B",
+            transcription: transcription,
             onPlayRequest: {},
             coordinatorForTesting: coordinator
         )
@@ -115,5 +120,62 @@ final class AudioBubbleRouterTests: XCTestCase {
         await Task.yield()
         XCTAssertTrue(router.isActiveForTesting,
                       "engine tick while active must NOT flip back to inactive")
+    }
+
+    // MARK: - D-AUDIO-03 (#4950) — reserveTranscriptionHeight primitive
+
+    /// `reserveTranscriptionHeight` is computed once, at `init`, from
+    /// `AudioTranscriptionPending.shouldReserveHeight` — these tests prove the
+    /// PRIMITIVE the router hands to `AudioPlayerView`, not the shimmer
+    /// rendering itself (that lives in `AudioTranscriptionPendingTests`,
+    /// MeeshySDK, alongside the pure rule).
+    func test_reserveTranscriptionHeight_recentAudioWithoutTranscription_isTrue() {
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let router = makeRouter(
+            attachmentId: "a1",
+            coordinator: coord,
+            createdAt: Date(),
+            transcription: nil
+        )
+        XCTAssertTrue(router.reserveTranscriptionHeight)
+    }
+
+    func test_reserveTranscriptionHeight_transcriptionAlreadyPresent_isFalse() {
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let router = makeRouter(
+            attachmentId: "a1",
+            coordinator: coord,
+            createdAt: Date(),
+            transcription: MessageTranscription(attachmentId: "a1", text: "bonjour", language: "fr")
+        )
+        XCTAssertFalse(router.reserveTranscriptionHeight)
+    }
+
+    func test_reserveTranscriptionHeight_olderThanNominalTimeout_isFalse() {
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let staleDate = Date().addingTimeInterval(-(AudioTranscriptionPending.nominalTimeout + 30))
+        let router = makeRouter(
+            attachmentId: "a1",
+            coordinator: coord,
+            createdAt: staleDate,
+            transcription: nil
+        )
+        XCTAssertFalse(router.reserveTranscriptionHeight)
+    }
+
+    func test_reserveTranscriptionHeight_localOptimisticDraft_isFalse() {
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let router = makeRouter(
+            attachmentId: "a1",
+            coordinator: coord,
+            fileUrl: "file:///tmp/a1.m4a",
+            createdAt: Date(),
+            transcription: nil
+        )
+        XCTAssertFalse(router.reserveTranscriptionHeight)
     }
 }

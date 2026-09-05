@@ -33,6 +33,17 @@ enum MoreItem: String, Equatable {
     /// Actions sorties du menu compact (`primaryActions`) et routées vers
     /// « Plus… » : épingler/favori (toggles) + suppression du message.
     case pin, unpin, star, unstar, delete
+    /// **Épingler la DÉCORATION d'un message-sticker aux favoris de la
+    /// palette** (directive porteur 2026-09-05 : « permettre de pouvoir
+    /// ajouter dans favoris par long-press sur les stickers dans les composers
+    /// ET messages »).
+    ///
+    /// Elle voisine `star`/`unstar` sans s'y confondre, et la distinction vaut
+    /// d'être dite : `star` met le MESSAGE en favori — il reste dans cette
+    /// conversation, avec son auteur et son horodatage. Celle-ci épingle la
+    /// DÉCORATION dans la palette, où elle devient réutilisable partout
+    /// ailleurs. Deux objets, deux magasins, deux verbes que le libellé sépare.
+    case pinSticker, unpinSticker
     /// Actions « faire » ajoutées au menu « Plus… » (exécutent + ferment) :
     /// éditer, copier, partager. `language`/`transcription` = explorables.
     case edit, copy, share
@@ -78,6 +89,15 @@ struct MessageMenuContext: Equatable {
     /// chaque lecteur à recomposer la conjonction lui-même, et la feuille l'avait
     /// déjà réécrite dans une `private var` de `View` qu'aucun test ne peut voir.
     var canComposeMedia: Bool = false
+    /// **La décoration de ce message est-elle déjà épinglée ?** `nil` ⇒ le
+    /// message n'EST PAS un sticker, et l'action n'existe pas (2026-09-05).
+    ///
+    /// Un tri-état plutôt qu'une paire de booléens : « ce n'est pas un
+    /// sticker » et « c'est un sticker non épinglé » gouvernent des issues
+    /// différentes — l'absence de l'entrée, et sa présence en position
+    /// « épingler ». Deux booléens auraient laissé représentable un quatrième
+    /// état qui n'existe pas (« pas un sticker, mais épinglé »).
+    var stickerFavorite: Bool? = nil
     /// Réciprocité : qui ne partage pas ses accusés de lecture ne voit pas ceux
     /// des autres. L'entrée « vues » disparaît plutôt que d'ouvrir une feuille
     /// vide — le serveur ne renverrait rien de toute façon.
@@ -270,6 +290,12 @@ enum MessageActionResolver {
         actions.append(.share)
         actions.append(ctx.isPinned ? .unpin : .pin)
         actions.append(ctx.isStarred ? .unstar : .star)
+        // **La décoration, juste après le favori du MESSAGE** — c'est le
+        // voisin qu'on cherche quand on vient d'y penser, et le libellé fait
+        // la différence entre les deux objets.
+        if let epinglee = ctx.stickerFavorite {
+            actions.append(epinglee ? .unpinSticker : .pinSticker)
+        }
         if ctx.canDelete && ctx.hasMedia { actions.append(.media) }
         if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))

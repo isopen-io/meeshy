@@ -75,7 +75,7 @@ final class ReplyCell: UICollectionViewCell {
     static func accessibilityLabel(name: String, content: String, time: String) -> String {
         String(
             localized: "comments.reply.a11yLabel",
-            defaultValue: "\(name), reply. \(content). \(time)",
+            defaultValue: "\(name), réponse. \(content). \(time)",
             bundle: .main
         )
     }

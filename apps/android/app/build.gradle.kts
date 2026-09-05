@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.timber)
     implementation(libs.androidx.glance.appwidget)
+    implementation(libs.coil.compose)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

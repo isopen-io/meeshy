@@ -287,15 +287,29 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
     expect(categoriesEntry.module).toBe(meCategoriesRoutes);
   });
 
-  it('ROUTE_TABLE compte désormais 61 entrées (60 + `me-consents`, #4348)', () => {
+  it('ROUTE_TABLE compte désormais 63 entrées (62 + `social-events`, #4150)', () => {
     // Ce compte est SIGNALÉ à l'intégrateur, jamais régénéré ici :
     // `route-manifest.json` / `packages/shared/api/endpoints.ts` sont des
     // artefacts DÉRIVÉS, hors territoire de #4359 comme de #4349 — et
     // les DEUX ont été régénérés par CE lot (#4348), qui n'est donc pas dans
     // ce cas d'exemption. Voir `route-registration-table.test.ts` pour le
-    // détail complet des paliers successifs (57→…→61) — ce fichier-ci n'en
+    // détail complet des paliers successifs (57→…→62) — ce fichier-ci n'en
     // garde qu'une COPIE ponctuelle, propre à son propre récit d'adjacence
     // `me-permissions`/`me-categories`.
-    expect(ROUTE_TABLE.length).toBe(61);
+    //
+    // 62 depuis #3734 (`admin-share-links`). Et cette COPIE a un coût qui
+    // vient d'être payé : le lot de #3734 a mis à jour le canary de
+    // `route-registration-table.test.ts` — le fichier que le commentaire
+    // ci-dessus désigne comme la référence — sans savoir que celui-ci en
+    // tenait un second. Les gates du lot, cadrés sur son territoire et ses
+    // voisins, ne pouvaient pas le voir ; seule la suite COMPLÈTE l'a
+    // rattrapé, et après la poussée.
+    //
+    // Deux témoins qui comptent la MÊME grandeur dans deux fichiers sont une
+    // jumelle : celui qu'on n'édite pas devient rouge, et il n'y a aucun
+    // moyen de le déduire de la ligne qu'on édite. Suivi à ouvrir — soit ce
+    // compte se lit depuis un site unique, soit cette assertion disparaît
+    // d'ici, son récit d'adjacence n'ayant pas besoin d'un TOTAL.
+    expect(ROUTE_TABLE.length).toBe(63);
   });
 });

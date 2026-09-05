@@ -26,7 +26,7 @@ struct SecurityVerificationView: View {
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
 
-                    Text(String(localized: "security.verify.description", defaultValue: "Messages with \(conversationName) are end-to-end encrypted.", bundle: .main))
+                    Text(String(localized: "security.verify.description", defaultValue: "Les messages avec \(conversationName) sont chiffrés de bout en bout.", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -98,7 +98,7 @@ struct SecurityVerificationView: View {
                 + ", " + spelledSafetyNumber(safetyNumber)
         )
 
-        Text(String(localized: "security.verify.howto", defaultValue: "To verify, compare this number with the one shown on \(conversationName)'s device, or scan their QR code.", bundle: .main))
+        Text(String(localized: "security.verify.howto", defaultValue: "Pour vérifier, comparez ce nombre avec celui affiché sur l'appareil de \(conversationName), ou scannez son code QR.", bundle: .main))
             .font(MeeshyFont.relative(MeeshyFont.captionSize))
             .foregroundColor(theme.textMuted)
             .multilineTextAlignment(.center)

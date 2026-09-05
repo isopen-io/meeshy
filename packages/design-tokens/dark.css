@@ -49,10 +49,37 @@
   --color-accent-300: #a5aeff;
   --color-accent-400: #818cf8;
   --color-primary: var(--color-accent-400);
-  --color-primary-strong: #6366f1;
-  --color-primary-soft: var(--color-accent-300);
-  --color-primary-softer: var(--color-accent-200);
+  /* STRONG S'ÉLOIGNE DU PLAN, SOFT S'EN RAPPROCHE — et en sombre le plan est
+     sombre, donc `strong` est le cran le plus CLAIR. Les trois rôles étaient
+     ici l'exact contraire de leurs jumeaux de `light.css`, où `strong` prend
+     `--color-accent-300` (le cran le plus éloigné du blanc) et `soft` le cran
+     qui s'en rapproche. Ce qui l'a rendu visible est une MESURE : la charte
+     (règle 4) peint le survol de l'action principale avec `strong`, sous encre
+     `--color-on-primary` — #6366f1 y rendait 4,37:1, sous les 4,5:1 dus à du
+     texte de 17 px, sur la plus grosse cible de l'écran. Le cran juste : 9,38:1.
+     Témoin : la paire `--color-on-primary` / `--color-primary-strong` de
+     scripts/check-jetons.mjs, qui mesure désormais le SURVOL comme le repos. */
+  --color-primary-strong: var(--color-accent-300);
+  --color-primary-soft: #6366f1;
+  --color-primary-softer: #4f46e5;
   --color-on-primary: #0b0c14;
+
+  /* L'ANNEAU DE FOCUS ET SON CONTRE-ANNEAU (règle 15).
+     POURQUOI DEUX JETONS, ET POURQUOI CES DEUX-LÀ. Un anneau d'UNE couleur
+     disparaît dès qu'il touche une surface de sa luminance — et il en touche
+     une, la plus importante : `--color-text` sur `--color-primary` rend 2,58:1
+     en sombre et 2,94:1 en clair, sous les 3:1 de WCAG 1.4.11, c'est-à-dire
+     qu'un anneau SEUL serait invisible sur le BOUTON PRINCIPAL, la cible que la
+     charte rend la plus grosse (peint à l'accent, il tomberait à 1,43:1). Le
+     COUPLE, lui, tient partout : sur le bouton c'est le contre-anneau qui porte
+     (6,66 en sombre, 6,29 en clair), sur les plans de page c'est l'anneau
+     (16,63 / 16,65). Ce qui se mesure n'est donc pas « chacun tient 3:1 » —
+     aucun couple ne le tiendrait — mais « pour chaque fond, AU MOINS UN des
+     deux » : c'est la DISJONCTION de scripts/check-jetons.mjs
+     (`focusInvisiblesDans`), en plus des 3:1 que les deux anneaux se doivent
+     l'un à l'autre. */
+  --color-focus: var(--color-text);
+  --color-focus-contra: var(--color-bg-sunken);
 
   --color-success: #10b981;
   --color-success-soft: #34d399;
@@ -68,6 +95,19 @@
   --color-presence-away: #fbbf24;
   --color-presence-idle: #9ca3af;
   --color-presence-offline: #9ca3af;
+
+
+  /* LES QUATRE VOILES (charte § 12.5 règles 11 et 17) — un fond d'état, jamais
+     une couleur d'état à pleine force sous du texte. Ils vivent dans les DEUX
+     schémas et non dans tokens.css parce qu'ils se calculent SUR
+     `--color-surface`, dont la luminance change avec le schéma : un voile posé
+     hors schéma serait clair sur fond sombre. La teinte primaire pèse 12 % (elle
+     habille le héros de la vitrine et les tuiles de la charte), les trois états
+     10 % (ils portent un bandeau, pas une surface). */
+  --color-tint-primary: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  --color-tint-success: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  --color-tint-warning: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  --color-tint-danger: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
 
   --color-overlay: rgb(8 9 15 / 0.72);
 

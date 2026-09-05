@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
@@ -81,6 +83,7 @@ class FeedViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val feedMediaUploader: FeedMediaUploader,
     private val reportRepository: ReportRepository,
+    private val workManager: WorkManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(FeedUiState())
@@ -388,10 +391,19 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Toggles the post's like state through the durable outbox
+     * ([PostRepository.toggleLike]'s KDoc), then schedules [OutboxFlushWorker] —
+     * the offline-tap replay trigger every other outbox producer already sets
+     * (`ChatViewModel`, `SettingsViewModel`, ...). Without this, a like made
+     * while offline sits `PENDING` forever: nothing else in the app schedules a
+     * flush on its behalf.
+     */
     fun toggleLike(postId: String) {
         viewModelScope.launch {
             try {
                 postRepository.toggleLike(postId)
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -515,10 +527,12 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    /** Bookmark analogue of [toggleLike] — same durable-outbox toggle, same flush schedule. */
     fun toggleBookmark(postId: String) {
         viewModelScope.launch {
             try {
                 postRepository.toggleBookmark(postId)
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

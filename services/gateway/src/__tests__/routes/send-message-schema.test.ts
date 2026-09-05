@@ -179,3 +179,37 @@ describe('SendMessageBodySchema — le chiffrement', () => {
     expect(result.success).toBe(true);
   });
 });
+
+// Sticker (#4823) — même famille d'exemption que `location` : la décoration
+// EST le contenu du message. Et un `metadata` brut envoyé à côté reste hors
+// contrat : `z.object` le strippe, le seul chemin vers `metadata.sticker` est
+// le champ dédié.
+describe('SendMessageBodySchema — sticker', () => {
+  const sticker = { templateId: 'love.heart', slots: { caption: 'Toi' }, animation: 'heartbeat', emoji: '❤️' };
+
+  it('accepte et TRANSMET `sticker` à côté de la pièce jointe image (le cas nominal)', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: '',
+      clientMessageId: cid,
+      attachmentIds: [attachmentId],
+      sticker,
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.sticker).toEqual(sticker);
+  });
+
+  it('accepte un sticker SEUL — ni texte, ni pièce jointe, ni lieu', () => {
+    const result = SendMessageBodySchema.safeParse({ clientMessageId: cid, sticker });
+    expect(result.success).toBe(true);
+  });
+
+  it('ignore un `metadata` brut envoyé à côté — jamais un passthrough', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: 'x',
+      clientMessageId: cid,
+      metadata: { sticker, postReplyTo: { id: 'volé' } },
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && 'metadata' in result.data).toBe(false);
+  });
+});

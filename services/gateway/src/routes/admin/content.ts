@@ -1,20 +1,19 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendPaginatedSuccess, sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   type UserRole,
   type MessageListQuery,
   type CommunityListQuery,
-  type TranslationListQuery,
-  type ShareLinkListQuery
+  type TranslationListQuery
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
-import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
-import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
+import { requirePermission } from '../../middleware/authorize';
+import { registerContentShareLinkRoutes } from './content-share-links';
 // #4333 bonus, #4384 — `attachmentMediaSelect` est délibérément SANS drapeau
 // de sécurité (voir son doc-comment : « No consumption-tracking, no security
 // flags »), et cette route est une liste PLATEFORME-ENTIÈRE, pas un contexte
@@ -48,6 +47,18 @@ import {
  * l'audit nomme — « TOUS les messages traduits », sans borne d'aucune sorte.
  */
 const TRANSLATIONS_MESSAGE_SCAN_CAP = 5_000;
+
+/**
+ * Fenêtre lue par le chemin `?search=` de `GET /admin/messages` avant que le
+ * prédicat de protection ne s'applique (#4387).
+ *
+ * Le même ordre de grandeur que le plafond des traductions, et pour la même
+ * raison : le prédicat n'est pas exprimable en `where`, donc il faut charger
+ * pour trancher. Au-delà de cette fenêtre, une ligne ancienne qui matche le
+ * terme n'est pas servie — c'est une TRONCATURE, pas une fuite, et elle va
+ * dans le sens prudent.
+ */
+const SEARCH_SCAN_CAP = 5_000;
 
 /**
  * Lignes des deux listes d'administration de ce fichier.
@@ -255,9 +266,61 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         where.createdAt = { gte: startDate };
       }
 
+      // #4387 — ARBITRAGE (a) : la recherche ne matche plus le contenu d'un
+      // message PROTÉGÉ.
+      //
+      // #4384 a fermé la LECTURE du texte protégé ; le filtre `?search=`
+      // interrogeait toujours la colonne brute. Un modérateur ne pouvait plus
+      // lire un message à vue unique, mais pouvait le deviner terme à terme en
+      // observant si la ligne apparaît — quelques dizaines de requêtes sur un
+      // code ou un montant. Ce n'est pas la charge qui fuyait, c'est
+      // l'APPARTENANCE de la ligne à la page : la forme exacte que le dépôt
+      // connaît sous « une SÉLECTION qui dépend du champ révèle autant que le
+      // champ » (§ visibilité de la présence), jamais portée au contenu.
+      //
+      // Le prédicat de protection n'est pas exprimable en `where` — il porte
+      // un ET binaire (`effectFlags & 6`) et un `expiresAt` relatif à
+      // l'instant. Sur le chemin AVEC recherche on charge donc une fenêtre
+      // bornée, on retire les protégées, et on pagine sur ce qui RESTE :
+      // `total` compte les lignes servies, jamais les lignes trouvées. Le
+      // chemin SANS recherche garde sa pagination en base — inchangé.
+      //
+      // Pourquoi (a) et pas (b) « assumer et tracer » : un oracle tracé reste
+      // un oracle. La trace le rend attribuable APRÈS coup, elle ne rend pas
+      // le secret à son auteur. Et (c) — réserver la recherche au rang
+      // souverain — casse un usage de modération légitime pour fermer un trou
+      // que (a) ferme sans rien retirer à personne.
+      //
+      // Ce que (a) COÛTE, et qui est assumé : une ligne protégée dont le texte
+      // contient le terme cherché ne remonte plus. Elle reste atteignable sans
+      // `?search=`, ce qui est exactement la promesse du masquage sans
+      // effacement — la ligne se CONSTATE, son texte ne se lit pas.
+      let wherePage: any = where;
+      if (search) {
+        const trouves = await fastify.prisma.message.findMany({
+          where,
+          select: {
+            id: true,
+            ...messageProtectionSelect,
+            ...messageContentProtectionSelect,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: SEARCH_SCAN_CAP,
+        });
+        const servables = trouves.filter((m) => !messageContentIsProtected(m)).map((m) => m.id);
+        // Restreindre par ID plutôt que par contenu, dans un objet NEUF :
+        // muter `where` après l'avoir passé à la première requête le
+        // changerait rétroactivement pour quiconque en garde la référence —
+        // un double de test capture la RÉFÉRENCE, pas un instantané, et un
+        // témoin voisin l'a vu tout de suite. La pagination en base porte
+        // ainsi sur l'ensemble déjà filtré.
+        const { content: _termeRecherche, ...sansContenu } = where;
+        wherePage = { ...sansContenu, id: { in: servables } };
+      }
+
       const [messages, totalCount] = await Promise.all([
         fastify.prisma.message.findMany({
-          where,
+          where: wherePage,
           select: {
             id: true,
             content: true,
@@ -315,7 +378,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           skip: offsetNum,
           take: limitNum
         }),
-        fastify.prisma.message.count({ where })
+        fastify.prisma.message.count({ where: wherePage })
       ]);
 
       // #4333 bonus — un média à vue unique / flouté / éphémère-expiré ne
@@ -740,223 +803,11 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Gestion des liens de partage - Liste avec pagination
-  fastify.get('/share-links', {
-    onRequest: [fastify.authenticate, requireAdmin],
-    schema: {
-      description: 'Get paginated list of conversation share links with filtering options. Requires canManageConversations permission.',
-      tags: ['admin'],
-      summary: 'List share links with pagination',
-      security: [{ bearerAuth: [] }],
-      querystring: {
-        type: 'object',
-        properties: {
-          offset: { type: 'string', description: 'Pagination offset', default: '0' },
-          limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
-          search: { type: 'string', description: 'Search by linkId, identifier, name' },
-          isActive: { type: 'string', enum: ['true', 'false'], description: 'Filter by active status' }
-        }
-      },
-      response: {
-        200: {
-          description: 'Share links list successfully retrieved',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            // additionalProperties obligatoire : sans lui, fast-json-stringify
-            // sérialise chaque lien en `{}` (tous les champs sont éjectés).
-            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            pagination: {
-              type: 'object',
-              properties: {
-                total: { type: 'number' },
-                limit: { type: 'number' },
-                offset: { type: 'number' },
-                hasMore: { type: 'boolean' }
-              }
-            }
-          }
-        },
-        401: errorResponseSchema,
-        403: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      const user = authContext.registeredUser;
-      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
-
-      if (!permissions.canManageConversations) {
-        return sendForbidden(reply, 'Permission insuffisante pour gerer les liens de partage');
-      }
-
-      /* istanbul ignore next -- Fastify schema applies defaults; destructuring defaults never reached */
-      const { offset = '0', limit = '20', search, isActive } = request.query as ShareLinkListQuery;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
-
-      // Construire les filtres
-      const where: any = {};
-
-      if (search) {
-        where.OR = [
-          { linkId: { contains: search, mode: 'insensitive' } },
-          { identifier: { contains: search, mode: 'insensitive' } },
-          { name: { contains: search, mode: 'insensitive' } }
-        ];
-      }
-
-      if (isActive !== undefined) {
-        where.isActive = isActive === 'true';
-      }
-
-      const [shareLinks, totalCount] = await Promise.all([
-        fastify.prisma.conversationShareLink.findMany({
-          where,
-          // #4157 — `linkId` EST le secret qui permet de REJOINDRE la
-          // conversation (`middleware`/résolution de lien, cf. `content.ts`
-          // ligne ~ci-dessous pour son homologue de recherche) : le servir en
-          // LISTE à tout rôle `canManageConversations` (MODERATOR compris)
-          // revient à distribuer autant d'invitations que de lignes de cette
-          // page. `id` (l'ObjectId, déjà servi) reste la référence OPAQUE sur
-          // laquelle la liste agit ; le secret lui-même ne se lit plus qu'au
-          // travers du geste dédié `POST /share-links/:id/reveal` (S6, motif
-          // écrit, tracé — voir plus bas).
-          select: {
-            id: true,
-            identifier: true,
-            name: true,
-            description: true,
-            maxUses: true,
-            currentUses: true,
-            maxConcurrentUsers: true,
-            currentConcurrentUsers: true,
-            expiresAt: true,
-            isActive: true,
-            allowAnonymousMessages: true,
-            allowAnonymousFiles: true,
-            allowAnonymousImages: true,
-            createdAt: true,
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            conversation: {
-              select: {
-                id: true,
-                identifier: true,
-                title: true,
-                type: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.conversationShareLink.count({ where })
-      ]);
-
-      return sendPaginatedSuccess(
-        reply,
-        await withAnonymousParticipantCounts(fastify.prisma, shareLinks),
-        {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + shareLinks.length < totalCount
-        }
-      );
-
-    } catch (error) {
-      logError(fastify.log, 'Get admin share links error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
-    }
-  });
-
-  /**
-   * POST /api/admin/share-links/:id/reveal
-   *
-   * Le GESTE dédié qui révèle le `linkId` retiré de la liste ci-dessus (#4157,
-   * critère 3). Rang SOUVERAIN (BIGBOSS seul — `requireSovereign`, pas
-   * `canManageConversations` : une permission de domaine ne doit pas pouvoir
-   * délivrer, en série, le secret de jointure de CHAQUE conversation de la
-   * plateforme) ; motif écrit obligatoire, imposé par le schéma de requête
-   * (`minLength: 10`, Fastify/AJV rejette AVANT que le handler ne s'exécute —
-   * la garde du corps n'est donc pas redondante à réécrire ici) ; trace
-   * d'audit écrite APRÈS la lecture réussie, jamais avant (`withAudit` est
-   * best-effort et ne doit pas conditionner un geste qui a déjà eu lieu).
-   */
-  fastify.post('/share-links/:id/reveal', {
-    onRequest: [fastify.authenticate, requireSovereign()],
-    schema: {
-      description: 'Révèle le linkId (secret de jointure) d\'un lien de partage. Rang souverain, motif écrit obligatoire, geste tracé — #4157.',
-      tags: ['admin'],
-      summary: 'Reveal a share link secret',
-      security: [{ bearerAuth: [] }],
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: { id: { type: 'string' } }
-      },
-      body: {
-        type: 'object',
-        required: ['reason'],
-        properties: {
-          reason: { type: 'string', minLength: 10, description: 'Motif écrit de la révélation (10 caractères minimum), consigné dans AdminAuditLog' }
-        }
-      },
-      response: {
-        200: {
-          description: 'Secret révélé',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: { id: { type: 'string' }, linkId: { type: 'string' } }
-            }
-          }
-        },
-        400: errorResponseSchema,
-        401: errorResponseSchema,
-        403: errorResponseSchema,
-        404: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { id } = request.params as { id: string };
-      const { reason } = request.body as { reason: string };
-
-      const shareLink = await fastify.prisma.conversationShareLink.findUnique({
-        where: { id },
-        select: { id: true, linkId: true }
-      });
-
-      if (!shareLink) {
-        return sendNotFound(reply, 'Lien de partage non trouvé');
-      }
-
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      await withAudit(request, {
-        action: 'ADMIN_SHARE_LINK_REVEALED',
-        entity: 'ConversationShareLink',
-        entityId: shareLink.id,
-        userId: authContext.registeredUser.id,
-        reason,
-      });
-
-      return sendSuccess(reply, { id: shareLink.id, linkId: shareLink.linkId });
-    } catch (error) {
-      logError(fastify.log, 'Reveal admin share link error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
-    }
-  });
+  // Les deux portes des LIENS DE PARTAGE — la liste, et le geste souverain
+  // qui en révèle le secret — vivent désormais dans
+  // `content-share-links.ts`, une unité nommable à part entière (#4284,
+  // budget de taille des fichiers de routes). Elles ont été choisies parce
+  // qu'elles ne lisent AUCUN `Message` : leur départ laisse intact le
+  // décompte de `personal-history-hiding-surface-guard` pour ce fichier.
+  registerContentShareLinkRoutes(fastify);
 }

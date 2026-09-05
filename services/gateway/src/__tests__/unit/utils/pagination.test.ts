@@ -1,4 +1,4 @@
-import { validatePagination, sliceByIdCursor, MAX_PAGINATION_OFFSET } from '../../../utils/pagination';
+import { validatePagination, sliceByIdCursor, buildCursorPaginationMeta, MAX_PAGINATION_OFFSET } from '../../../utils/pagination';
 
 /**
  * Iter 33 — single source of truth for offset/limit pagination parsing.
@@ -120,6 +120,49 @@ describe('sliceByIdCursor', () => {
     });
     expect(sliceByIdCursor([], 'a', 2)).toEqual({
       page: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+});
+
+/**
+ * Keyset cursor meta for a DB-paginated list (`?cursor=<lastId>&limit=<n>`),
+ * served as `cursorPagination` by `GET /conversations` (core-list) and
+ * `GET /links` (links/user).
+ *
+ * Invariant under test: `nextCursor` follows `hasMore`. A cursor MUST NOT be
+ * handed back on a page that already declares itself the last one — a client
+ * that drives pagination off `nextCursor` would otherwise issue an extra
+ * `?cursor=<lastId>` request that keyset-resolves to an empty page. This is the
+ * same rule the two sibling cursor helpers already enforce: `sliceByIdCursor`
+ * (`nextCursor: hasMore ? … : null`) and the canonical `cursorPage`
+ * (`utils/cursor-pagination.ts`: "un curseur rendu sur une page finale invite
+ * le client à un aller-retour qui ne peut rien rapporter").
+ */
+describe('buildCursorPaginationMeta', () => {
+  it('serves a cursor on a FULL page (more may follow)', () => {
+    expect(buildCursorPaginationMeta(20, 20, 'abc')).toEqual({
+      limit: 20,
+      hasMore: true,
+      nextCursor: 'abc',
+    });
+  });
+
+  it('nulls the cursor on a PARTIAL final page (hasMore false ⇒ nextCursor null)', () => {
+    // A page shorter than `limit` is the last page: hasMore is false, so the
+    // cursor must be null. Emitting `lastItemId` here contradicts `hasMore` and
+    // forces a wasted follow-up request that keyset-resolves to nothing.
+    expect(buildCursorPaginationMeta(20, 5, 'abc')).toEqual({
+      limit: 20,
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+
+  it('nulls the cursor on an EMPTY page', () => {
+    expect(buildCursorPaginationMeta(20, 0, null)).toEqual({
+      limit: 20,
       hasMore: false,
       nextCursor: null,
     });

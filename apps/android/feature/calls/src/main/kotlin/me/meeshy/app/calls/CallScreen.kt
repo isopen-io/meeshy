@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -172,6 +175,12 @@ fun CallScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // Cet ecran n'a pas de Scaffold : depuis que le Scaffold racine ne
+                // reserve plus les barres systeme (MeeshyApp.kt, contentWindowInsets
+                // a zero), il pose lui-meme son inset. Le fond reste PLEIN ECRAN,
+                // seul le CONTENU est retreci — c'est exactement la geometrie
+                // d'avant, le degrade en plus.
+                .systemBarsPadding()
                 .padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
@@ -273,6 +282,7 @@ fun CallScreen(
                 onHangUp = viewModel::hangUp,
                 onToggleMute = viewModel::toggleMute,
                 onToggleCamera = viewModel::toggleCamera,
+                onToggleSpeaker = viewModel::toggleSpeaker,
                 onClose = {
                     viewModel.dismiss()
                     onClose()
@@ -437,6 +447,7 @@ private fun CallControls(
     onHangUp: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleCamera: () -> Unit,
+    onToggleSpeaker: () -> Unit,
     onClose: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -452,6 +463,13 @@ private fun CallControls(
                 offIcon = Icons.Filled.MicOff,
                 contentDescription = stringResource(R.string.call_action_mute),
                 onClick = onToggleMute,
+            )
+            CallToggleButton(
+                on = state.isSpeakerOn,
+                onIcon = Icons.Filled.VolumeUp,
+                offIcon = Icons.Filled.VolumeOff,
+                contentDescription = stringResource(R.string.call_action_speaker),
+                onClick = onToggleSpeaker,
             )
             if (state.isVideoCall) {
                 CallToggleButton(

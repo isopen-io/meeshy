@@ -251,7 +251,12 @@ struct ReelFeedCard: View, Equatable {
             } else {
                 ReelAudioBackdrop(accentHex: accentHex, isActive: isActive)
             }
-        case .imageOnly:
+        // `.scene` tombe ici sans jamais y arriver : `kind` est dérivé de
+        // `media?.type`, qui ne produit que vidéo / audio / image. Le cas est
+        // nommé pour que l'exhaustivité du `switch` reste une VÉRIFICATION —
+        // un `default:` accueillerait en silence la prochaine famille de
+        // surface, exactement ce qu'un `switch` exhaustif existe pour refuser.
+        case .imageOnly, .scene:
             if let media, media.thumbnailUrl != nil || media.url != nil || media.thumbHash != nil {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,

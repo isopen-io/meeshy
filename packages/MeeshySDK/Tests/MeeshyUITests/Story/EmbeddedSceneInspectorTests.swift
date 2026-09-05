@@ -40,7 +40,7 @@ final class EmbeddedSceneInspectorTests: XCTestCase {
     /// « les contrôles de l'objet courant, EUX SEULS » (planche P4 §3).
     /// Elle rougit dès qu'on relâche le `guard kind == .media` de l'`init?`.
     func test_init_refusesEverySelectionItServesNoControlFor() {
-        let unserved: [StoryCanvasUIView.CanvasItemKind?] = [nil, .text, .sticker, .location]
+        let unserved: [StoryCanvasUIView.CanvasItemKind?] = [nil, .text, .sticker, .place]
         for kind in unserved {
             XCTAssertNil(EmbeddedSceneInspector(viewModel: StoryComposerViewModel(), kind: kind),
                 "`EmbeddedSceneInspector` s'est construit pour la sélection \(String(describing: kind)), "

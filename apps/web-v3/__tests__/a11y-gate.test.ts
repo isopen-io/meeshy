@@ -5,16 +5,13 @@ import {
   BUDGETS_V3,
   COLONNES_DE_THEME,
   IMPACTS_BLOQUANTS,
-  MANIFESTE_V3,
   exigeUnManifesteLu,
   lisGroupes,
-  pagesEmises,
   rapporteViolations,
   routesPubliques,
   violationsBloquantes,
   type ViolationAxe,
 } from '../e2e/visual/lib/a11y';
-import { lireEntrees } from '../scripts/check-bundle-budget.mjs';
 import type { EntreeDeManifeste, PorteurDeGroupe } from '../scripts/check-bundle-budget.mjs';
 
 const ROOT = join(__dirname, '..');
@@ -287,29 +284,28 @@ describe('la zone (public) se lit dans budgets.json, pas dans un second inventai
   });
 });
 
-describe("le manifeste RÉEL de la v3 — l'instrument prouve qu'il voit", () => {
-  const entrees = (): readonly EntreeDeManifeste[] =>
-    lireEntrees(readFileSync(MANIFESTE_V3, 'utf8'));
-
-  it('porte au moins le gestionnaire /healthz, livré en L-0.5', () => {
-    expect(entrees().map((e) => e.route)).toContain('/healthz/route');
-  });
-
-  it("se compose exactement des PAGES émises, jamais des gestionnaires de route", () => {
-    const pages = pagesEmises(entrees()).map((e) => e.route);
-
-    expect(pages).not.toContain('/healthz/route');
-  });
-
-  it('traverse la chaîne entière — manifeste réel, groupes réels — sans échouer', () => {
-    expect(() =>
-      routesPubliques({
-        entrees: exigeUnManifesteLu(entrees()),
-        groupes: lisGroupes(readFileSync(BUDGETS_V3, 'utf8')),
-      }),
-    ).not.toThrow();
-  });
-});
+// CE QUI LIT UN ARTEFACT DE BUILD NE PEUT PAS VIVRE DANS LE JOB QUI NE CONSTRUIT PAS.
+//
+// Un bloc `describe` lisait ici le manifeste RÉEL — `.next/app-build-manifest.json` — pour
+// prouver que l'instrument voit autre chose que des entrées fabriquées. La propriété est
+// juste ; sa PLACE ne l'était pas. Le job `Test web-v3` de la CI enchaîne install, `prisma
+// generate`, build de `packages/shared`, puis `test:coverage` : il ne lance JAMAIS `next
+// build` sur cette application. Le manifeste ne pouvait donc pas exister, et les trois
+// témoins rendaient `ENOENT` à chaque run — un rouge permanent, sur une machine qui n'avait
+// aucun moyen de devenir verte.
+//
+// Le vert d'origine venait d'un `.next/` présent dans l'arbre de travail de l'auteur. Un
+// témoin dont le résultat dépend d'un répertoire gitignoré ne mesure pas le dépôt : il
+// mesure la machine qui le lance.
+//
+// Les deux assertions non redondantes ont été portées dans `e2e/visual/v3-a11y.spec.ts`,
+// exécuté par le job `a11y-v3` — celui qui, lui, porte l'étape « Build apps/web-v3 (le
+// manifeste que le balayage lit) », posée précisément pour cette raison. Rien n'est perdu :
+// elles passent d'un job où elles ne pouvaient que rougir à un job où elles peuvent conclure.
+//
+// Ce n'est PAS un test sauté. Un `describe.skip` conditionné à la présence du manifeste
+// aurait été définitivement sauté en CI — le vert par vacuité que ce fichier dénonce trente
+// lignes plus bas, retourné contre lui-même.
 
 // UN INSTRUMENT DÉCLARÉ N'EST PAS UN INSTRUMENT LANCÉ.
 //

@@ -73,6 +73,9 @@ extension StoryViewModel {
             visibility: item.visibility,
             visibilityUserIds: item.visibilityUserIds ?? [],
             declaredMentions: item.mentionsPayload ?? [],
+            // Row d'avant #4068 : la carte est absente, l'envoi retombe sur la
+            // liste plate — l'ancien comportement pour ces rows-là seulement.
+            mentionsBySlide: item.mentionsBySlidePayload ?? [:],
             composerMediaTexts: ComposerMediaTexts(alt: item.mediaAltPayload ?? [:],
                                                    caption: item.mediaCaptionPayload ?? [:]),
             allowSoundExtraction: item.allowSoundExtractionPayload,
@@ -191,6 +194,13 @@ extension StoryViewModel {
         let loadedImages: [String: UIImage]
         let loadedVideoURLs: [String: URL]
         let loadedAudioURLs: [String: URL]
+        /// **Les octets ANIMÉS des stickers collés, keyés par id d'élément**
+        /// (#3956) — vide pour toute publication sans GIF.
+        ///
+        /// `loadedImages` n'en porte que la PREMIÈRE image ; téléverser
+        /// celle-ci publierait un sticker figé après l'avoir composé animé —
+        /// l'aperçu aurait dit vrai et la publication, non.
+        var loadedStickerAnimations: [String: Data] = [:]
         let originalLanguage: String?
         let visibility: String
         let visibilityUserIds: [String]
@@ -199,6 +209,17 @@ extension StoryViewModel {
         /// texte. Vide = aucune référence hors texte ; le serveur relit le
         /// texte lui-même.
         var declaredMentions: [PostMentionInput] = []
+        /// **Les mentions PAR SLIDE** (#4068, porteur 2026-09-03).
+        ///
+        /// > Une mention est attachée à la publication. En Story, une
+        /// > publication est une slide ; en Post et en Réel, il n'y en a qu'une.
+        ///
+        /// `declaredMentions` ci-dessus est composer-wide, et la boucle
+        /// d'envoi le semait sur CHAQUE slide : une NOTE posée en pensant à la
+        /// première notifiait trois fois. Vide ⇒ repli sur la liste plate,
+        /// c'est-à-dire sur l'ancien comportement — le cas nominal des formats
+        /// à publication unique.
+        var mentionsBySlide: [String: [PostMentionInput]] = [:]
         /// Les DEUX textes saisis par l'auteur — texte alternatif et LÉGENDE
         /// (#4055) —, keyés par ID D'ÉLÉMENT DU COMPOSER. La traduction vers
         /// les ids `PostMedia` n'est possible qu'après l'upload, qui les
@@ -250,6 +271,9 @@ extension StoryViewModel {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
+        /// Les octets animés des stickers collés (#3956) — `[:]` quand la
+        /// publication n'en porte aucun, ce qui est le cas nominal.
+        loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
@@ -275,6 +299,13 @@ extension StoryViewModel {
         allowSoundExtraction: Bool? = nil
     ) {
         let declaredMentions = ComposerReferences.payload(references)
+        // **Ce que CHAQUE publication emporte** (#4068). En profil Story une
+        // slide EST une publication, donc la carte est indexée par son id ; la
+        // liste plate ci-dessus reste servie aux formats à publication unique
+        // (Post, Réel) et aux rows de file écrites avant ce lot.
+        let mentionsBySlide = Dictionary(uniqueKeysWithValues: slides.map { slide in
+            (slide.id, ComposerReferences.payload(references, for: slide.id))
+        })
 
         // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
         // depuis `updateStoryInBackground` : changer l'audience d'une story
@@ -300,6 +331,7 @@ extension StoryViewModel {
                     visibilityUserIds: visibilityUserIds,
                     draftId: draftId,
                     declaredMentions: declaredMentions,
+                    mentionsBySlide: mentionsBySlide,
                     composerMediaTexts: composerMediaTexts,
                     allowSoundExtraction: allowSoundExtraction
                 )
@@ -327,10 +359,12 @@ extension StoryViewModel {
             loadedImages: loadedImages,
             loadedVideoURLs: loadedVideoURLs,
             loadedAudioURLs: loadedAudioURLs,
+            loadedStickerAnimations: loadedStickerAnimations,
             originalLanguage: originalLanguage,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
             declaredMentions: declaredMentions,
+            mentionsBySlide: mentionsBySlide,
             composerMediaTexts: composerMediaTexts,
             allowSoundExtraction: allowSoundExtraction,
             targetType: targetType
@@ -474,6 +508,8 @@ extension StoryViewModel {
         visibilityUserIds: [String] = [],
         draftId: String? = nil,
         declaredMentions: [PostMentionInput] = [],
+        /// Les mentions PAR SLIDE (#4068) — vide ⇒ repli sur `declaredMentions`.
+        mentionsBySlide: [String: [PostMentionInput]] = [:],
         composerMediaTexts: ComposerMediaTexts = .none,
         allowSoundExtraction: Bool? = nil
     ) async {
@@ -489,6 +525,7 @@ extension StoryViewModel {
             visibilityUserIds: visibilityUserIds,
             draftId: draftId,
             declaredMentions: declaredMentions,
+            mentionsBySlide: mentionsBySlide,
             composerMediaTexts: composerMediaTexts,
             allowSoundExtraction: allowSoundExtraction
         ) else { return }
@@ -554,6 +591,10 @@ extension StoryViewModel {
         /// aucun texte), donc un rejeu qui ne les porterait pas publierait une
         /// story qui ne prévient personne.
         declaredMentions: [PostMentionInput] = [],
+        /// Les mentions PAR SLIDE (#4068), persistées pour la même raison :
+        /// sans elles le rejeu retomberait sur la liste plate et re-sèmerait
+        /// une NOTE sur toutes les slides. Vide ⇒ repli assumé.
+        mentionsBySlide: [String: [PostMentionInput]] = [:],
         /// Accessibilité : ces deux champs ne vivent NULLE PART ailleurs (le
         /// brouillon ne les porte pas), donc un rejeu qui ne les emporterait
         /// pas publierait une story muette pour les lecteurs d'écran.
@@ -639,6 +680,7 @@ extension StoryViewModel {
             originalLanguage: originalLanguage,
             draftId: draftId,
             mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions,
+            mentionsBySlidePayload: mentionsBySlide.isEmpty ? nil : mentionsBySlide,
             mediaAltPayload: composerMediaTexts.payload(.alt),
             mediaCaptionPayload: composerMediaTexts.payload(.caption),
             allowSoundExtractionPayload: allowSoundExtraction,

@@ -30,7 +30,12 @@ final class MediaSaveLabelGuardTests: XCTestCase {
     }
 
     func test_feedPostCard_saveMenuItem_usesDynamicLabelByMediaPresence() throws {
+        // #4078 — le menu « … » a suivi la rangée auteur dans l'extension ; le
+        // bouton bookmark dédié de `actionsBar` est resté chez l'hôte. Les deux
+        // moitiés sont donc lues ENSEMBLE : sur un seul fichier, la garde
+        // n'aurait plus vu qu'une des deux étiquettes qu'elle oppose.
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostCard.swift")
+            + sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
         XCTAssertTrue(source.contains(#"post.primaryReelDisplayMedia != nil"#),
             "La branche média du menu « … » de FeedPostCard doit rester conditionnée sur primaryReelDisplayMedia")
         XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),

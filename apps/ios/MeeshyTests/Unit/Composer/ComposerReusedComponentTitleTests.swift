@@ -31,13 +31,16 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    // 1 — le meuble NOMME sa langue : « Langue du post », jamais « Langue de l'audio ».
+    // 1 — le meuble NOMME sa langue : `feed.post.language` (« Langue du post »),
+    //     jamais « Langue de l'audio ». La clé est un IDENTIFIANT depuis #4621 —
+    //     la clé-PHRASE échappait au cliquet français, dette que le doc-comment
+    //     de `ComposerDocumentRules.language` nommait déjà.
     func test_leMeubleNommeSaLangueDePost() throws {
         let host = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(host.contains("structMeeshyComposerHost"), "MeeshyComposerHost introuvable ou vide")
         XCTAssertTrue(
-            host.contains("title:\"Languedupost\""),
-            "Le meuble doit passer `title: \"Langue du post\"` à `AudioLanguagePickerView`. Sans cet argument, "
+            host.contains("title:\"feed.post.language\""),
+            "Le meuble doit passer `title: \"feed.post.language\"` à `AudioLanguagePickerView`. Sans cet argument, "
                 + "la feuille de langue du POST hérite du défaut « Langue de l'audio » — le mensonge de contexte "
                 + "que #3881 corrige."
         )
@@ -86,7 +89,7 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
         let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
         let strings = json?["strings"] as? [String: Any]
         let locales = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
-        for key in ["Langue du post", "composer.attach.emoji"] {
+        for key in ["feed.post.language", "composer.attach.emoji"] {
             guard let entry = strings?[key] as? [String: Any],
                   let locs = entry["localizations"] as? [String: Any] else {
                 XCTFail("Clé « \(key) » absente du catalogue")

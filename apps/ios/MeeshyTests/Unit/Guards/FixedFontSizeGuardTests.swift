@@ -113,9 +113,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// `ProfileUserPostsList.swift` n'y est PAS : ses deux sites sont partis
     /// avec le correctif du 264i, et un nom qui sort ne revient jamais.
     private static let bearingFiles: Set<String> = [
-        "Features/Auth/Onboarding/OnboardingAnimations.swift",
-        "Features/Auth/Onboarding/OnboardingFlowView.swift",
-        "Features/Auth/Onboarding/OnboardingStepViews.swift",
+        // #5218 — les trois fichiers du wizard d'inscription ont QUITTÉ la
+        // liste avec leur code : dix-neuf sites figés (dix-huit glyphes de
+        // décor, un drapeau) sont partis d'un coup, et la règle 4 exige que
+        // leurs noms sortent dans le même commit — une liste qui garde un nom
+        // sans site cesse de dire la vérité (#4302). `SignupView`, qui les
+        // remplace, n'en introduit AUCUN : il n'emploie que
+        // `MeeshyFont.relative(…)` et les styles relatifs.
         "Features/Contacts/KeypadTab.swift",
         "Features/Main/Components/AddParticipantSheet.swift",
         "Features/Main/Components/AttachmentLoadingTile.swift",
@@ -157,16 +161,18 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
-        // **Le socle depuis le 2026-08-30** : la capsule annuler/rétablir a
-        // suivi les deux boutons descendus de la barre haute, et garde leur
-        // police figée — même cadre fixe, même raison (voir `totalCeiling`).
-        "Features/Main/Composer/MeeshyComposerHost+Socle.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
         // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
         // Le fichier principal n'en porte plus aucun : il sort de la liste et
         // n'y revient jamais.
-        "Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        // **Le `⋯` a quitté `+Intake` le 2026-09-03** (#4996) : le fichier
+        // franchissait le plafond de 1 200 lignes, et la responsabilité du
+        // menu est partie dans `MeeshyComposerHost+Overflow.swift`. La seule
+        // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
+        // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
+        // aucune et sort de la liste, comme la règle 4 l'exige.
+        "Features/Main/Composer/MeeshyComposerHost+Overflow.swift",
         "Features/Main/Views/AchievementBadgeView.swift",
         "Features/Main/Views/ActiveSessionsView.swift",
         "Features/Main/Views/AffiliateView.swift",
@@ -207,6 +213,21 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/DeleteAccountView.swift",
         "Features/Main/Views/FeedCommentsSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
+        // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
+        // porte DEUX sites figés dont les origines sont opposées, et les
+        // confondre avalerait en silence le second :
+        //
+        //   · le glyphe de lecture d'une vidéo (12 pt) est une RELOCALISATION —
+        //     il vient de `galleryImageView`, dont le visuel est devenu
+        //     `FeedMediaTile` pour que le carrousel et l'aperçu d'une
+        //     republication rendent la même vignette. La population ne bouge
+        //     pas, seul le nom s'ajoute ;
+        //   · la chevronnette d'une flèche de pagination (14 pt) est un VRAI
+        //     ajout, et `totalCeiling` monte d'un cran pour lui, avec sa raison :
+        //     elle vit dans un cercle de 34 pt qu'elle déborderait si elle
+        //     scalait, exactement la doctrine 86i. La cible tactile reste à 44,
+        //     posée par-dessus.
+        "Features/Main/Views/FeedPostCardCarousel.swift",
         "Features/Main/Views/FeedView+Attachments.swift",
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
@@ -216,9 +237,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/MyStoriesView.swift",
         "Features/Main/Views/MyStoryActionBar.swift",
         "Features/Main/Views/MyStoryCard.swift",
-        "Features/Main/Views/OnboardingView.swift",
+        // #5218 — le carrousel de cinq pages est parti avec son unique site
+        // figé (le glyphe de 80 pt de chaque page). `WelcomeView` n'en a pas.
         "Features/Main/Views/ParticipantProfileSheet.swift",
-        "Features/Main/Views/PostDetailView.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         "Features/Main/Views/ReelRepostEmbedCell.swift",
         "Features/Main/Views/ReelsPlayerView.swift",
@@ -231,9 +252,22 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/StoryReactionFlightView.swift",
         "Features/Main/Views/StoryTrayView.swift",
         "Features/Main/Views/StoryViewerContainer.swift",
-        "Features/Main/Views/StoryViewerView+Canvas.swift",
+        // 2026-09-02 — RELOCALISATION pure, même forme qu'au #4084 : le SEUL site
+        // figé de `StoryViewerView+Canvas.swift` (la croix 22×22 de la bannière
+        // « Réponse à ») vit dans `StoryComposerBarView`, qui a quitté le canvas
+        // pour son propre fichier (dette de taille). La population ne bouge pas
+        // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
+        // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
+        "Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
         "Features/Main/Views/StoryViewerView+Content.swift",
-        "Features/Main/Views/StoryViewerView+Sidebar.swift",
+        // #4084 — RELOCALISATION pure, même forme qu'au #4102 et au #4014 :
+        // l'en-tête du viewer story quitte `+Sidebar` (qui portait DEUX vues
+        // pour 1 369 lignes) et emporte AVEC LUI les quatre sites figés — des
+        // glyphes dans un cadre fixe, dont la raison d'exemption voyage avec
+        // eux. La POPULATION ne bouge pas : ni `totalCeiling` ni `textCeiling`
+        // ne changent, seul le NOM change. Le rail n'en porte plus aucun : il
+        // sort de la liste et n'y revient jamais.
+        "Features/Main/Views/StoryViewerView+Header.swift",
         "Features/Main/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
@@ -250,7 +284,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// valait 37 juste avant, ce qui rend ce cliquet rouge sur l'état d'où il
     /// vient. Pinner sur l'avant aurait scellé le défaut dans la garde, la
     /// faute même reprochée au cliquet i18n par #4292.
-    private static let textCeiling = 36
+    /// **35 depuis #5218** : le seul site figé porté par un TEXTE dans le
+    /// wizard d'inscription — la rangée de drapeaux de son décor de langue
+    /// (`Text(flags[i])`, 20 pt) — est parti avec le fichier. Un cliquet qui ne
+    /// descend pas quand la population descend cesse d'être un cliquet.
+    private static let textCeiling = 35
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -294,7 +332,31 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// à un fichier neuf par la découpe), puis ce véritable AJOUT. Les deux se
     /// traitent différemment — l'un déplace un nom, l'autre monte le plafond —
     /// et les confondre aurait masqué l'un des deux.
-    private static let totalCeiling = 247
+    /// **248 depuis #4096.** Un cran, pour la chevronnette des flèches de
+    /// pagination du carrousel (14 pt dans un cercle fixe de 34). Le second
+    /// site figé du même fichier — le glyphe de lecture d'une vidéo — n'y
+    /// participe pas : il a été DÉPLACÉ depuis `FeedPostCard+Media.swift`.
+    /// **247 depuis #4586.** Un cran de MOINS : la capsule annuler/rétablir a
+    /// quitté le socle pour le rail des objets, et sa police figée n'a pas
+    /// suivi — le rail emploie `.title3`, comme ses deux contrôleurs voisins.
+    /// `MeeshyComposerHost+Socle.swift` sort donc de `bearingFiles` : il ne
+    /// porte plus aucun site.
+    ///
+    /// > Un plafond qui ne baisse pas quand la population baisse cesse d'être un
+    /// > cliquet et devient un plafond : il ne rougirait plus que sur une
+    /// > régression plus grosse que l'écart accumulé.
+    /// 246 et non 247 : `PostDetailView` a quitté la liste. Ses deux tailles
+    /// figées sont parties dans `PostDetailView+AbsenceStates` à l'extraction,
+    /// puis ont été converties en `MeeshyFont.relative(40)` — une icône d'état
+    /// vide n'a pas de cadre fixe, donc rien ne justifiait qu'elle ignore
+    /// Dynamic Type. Le cliquet DESCEND avec la dette : c'est ce qu'il exige,
+    /// et c'est ce qui l'empêche de devenir un plancher.
+    /// **226 depuis #5218** : vingt crans de MOINS d'un coup. Le wizard
+    /// d'inscription en portait dix-neuf (quinze dans son décor animé, un dans
+    /// sa barre haute, trois dans ses étapes) et le carrousel d'accueil un — et
+    /// les vingt sont partis avec leurs fichiers. `SignupView` et `WelcomeView`
+    /// n'en introduisent aucun.
+    private static let totalCeiling = 226
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

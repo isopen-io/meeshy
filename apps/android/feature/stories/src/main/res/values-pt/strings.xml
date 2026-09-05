@@ -65,6 +65,9 @@
     <string name="stories_composer_timing_duration">Duração visível do texto</string>
     <string name="stories_composer_bg_glass">Vidro</string>
     <string name="stories_composer_add_sticker">Sticker</string>
+    <string name="stories_composer_draw">Draw</string>
+    <string name="stories_composer_draw_undo">Undo stroke</string>
+    <string name="stories_composer_draw_done">Done drawing</string>
     <string name="stories_composer_remove_sticker">Remover sticker</string>
     <string name="stories_composer_sticker_search">Pesquisar emoji…</string>
     <string name="stories_composer_sticker_no_results">Nenhum sticker encontrado</string>
@@ -119,6 +122,7 @@
 
     <!-- Story options -->
     <string name="stories_options">Opções da história</string>
+    <string name="stories_action_send_to">Enviar para…</string>
     <string name="stories_action_report">Denunciar</string>
     <string name="stories_action_repost">Republicar</string>
     <string name="stories_action_delete">Excluir</string>
@@ -133,4 +137,13 @@
     <string name="stories_report_reason_hate_speech">Discurso de ódio</string>
     <string name="stories_report_reason_impersonation">Falsidade ideológica</string>
     <string name="stories_report_reason_other">Outro</string>
+
+    <string name="story_send_title">Enviar para…</string>
+    <string name="story_send_caption_hint">Adicionar uma mensagem</string>
+    <string name="story_send_search_hint">Buscar uma conversa</string>
+    <string name="story_send_loading">Carregando conversas…</string>
+    <string name="story_send_empty">Nenhuma conversa</string>
+    <string name="story_send_members">%d membros</string>
+    <string name="story_send_sent">Enviado</string>
+    <string name="story_send_send_a11y">Enviar para %1$s</string>
 </resources>

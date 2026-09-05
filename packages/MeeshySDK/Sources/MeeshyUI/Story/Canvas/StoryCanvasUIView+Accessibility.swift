@@ -34,7 +34,7 @@ extension StoryCanvasUIView {
         var elements: [UIAccessibilityElement] = []
         for txt in slide.effects.textObjects {
             elements.append(makeAccessibilityElement(
-                label: "\(textAccessibilityPrefix) : \(txt.text)",
+                label: textAccessibilityLabel(txt.text),
                 traits: .staticText,
                 id: txt.id,
                 editableKind: .text
@@ -65,7 +65,7 @@ extension StoryCanvasUIView {
                 label: locationAccessibilityLabel(for: location),
                 traits: .staticText,
                 id: location.id,
-                editableKind: .location
+                editableKind: .place
             ))
         }
         // Un container UIKit qui expose des enfants via `accessibilityElements`
@@ -277,6 +277,35 @@ extension StoryCanvasUIView {
         String(localized: "story.canvas.a11y.textPrefix", defaultValue: "Texte", bundle: .module)
     }
 
+    /// **Un séparateur n'a de sens que s'il sépare deux choses.**
+    ///
+    /// Le libellé se composait en `"\(prefixe) : \(txt.text)"` sans condition.
+    /// Sur la coquille qu'une porte TEXTE vient de poser — et qui reste vide
+    /// jusqu'à la première frappe —, VoiceOver annonçait « Texte : » puis se
+    /// taisait : un deux-points en suspens, que l'oreille lit comme une
+    /// lecture INTERROMPUE plutôt que comme un contenu absent.
+    ///
+    /// **La parade vivait déjà cinq lignes plus bas**, sur le lieu :
+    /// `locationAccessibilityLabel` rend le mot NU quand le nom manque, au
+    /// lieu de le suffixer d'un séparateur orphelin. Le texte ne la suivait
+    /// pas — deux compositions voisines, une seule des deux gardée.
+    ///
+    /// Le vide se DIT plutôt qu'il ne se tait : « Texte » seul laisserait
+    /// l'auditeur se demander si la lecture a échoué. La chaîne est celle que
+    /// `ComposerToolPanelHost` sert déjà à l'œil pour le même état — un mot,
+    /// une clé, une traduction.
+    ///
+    /// Le blanc compte comme du vide, comme partout ailleurs dans le composer
+    /// (l'aperçu de la feuille des textes, la pastille de description).
+    func textAccessibilityLabel(_ text: String) -> String {
+        let net = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !net.isEmpty else {
+            return String(localized: "story.composer.text.empty",
+                          defaultValue: "Texte vide", bundle: .module)
+        }
+        return "\(textAccessibilityPrefix) : \(net)"
+    }
+
     func mediaAccessibilityLabel(kind: StoryMediaKind?) -> String {
         kind == .video
             ? String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module)
@@ -310,10 +339,15 @@ extension StoryCanvasUIView {
             isLocked: isLockedItem(id: id),
             isBackground: isBackgroundItem(id: id),
             sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
-            hasEditor: onItemDoubleTapped != nil
+            hasEditor: hasEditor(for: kind)
         )
         var actions: [UIAccessibilityCustomAction] = []
-        if offered.contains(.edit), kind == .text || kind == .media {
+        // **La restriction par kind a quitté ce site** (#4074). Elle y vivait en
+        // local — `kind == .text || kind == .media` — pendant que le menu visuel
+        // ne l'appliquait PAS : VoiceOver taisait « Modifier » sur un sticker,
+        // l'œil le voyait, et le toucher ne faisait rien. Les deux lisent
+        // désormais `hasEditor(for:)`, le site unique.
+        if offered.contains(.edit) {
             actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.editSlide", defaultValue: "Modifier", bundle: .module)
             ) { [weak self] _ in

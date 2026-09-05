@@ -74,7 +74,7 @@ final class SettingsActionQueueTests: XCTestCase {
 
     func test_flushIfPossible_dropsExhaustedHead_thenDrainsRestInSamePass() async {
         let stale = makeAction(endpoint: "/dead-endpoint")
-        let fresh = makeAction(endpoint: "/users/me")
+        let fresh = makeAction(endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me))
         await queue.enqueue(stale)
         await queue.enqueue(fresh)
         await queue.setFlushHandler { $0.endpoint == "/dead-endpoint" ? false : true }
@@ -100,7 +100,7 @@ final class SettingsActionQueueTests: XCTestCase {
     // MARK: - enqueue() replacement resets the failure budget
 
     func test_enqueue_replacingSameEndpoint_resetsFailureBudget() async {
-        await queue.enqueue(makeAction(endpoint: "/users/me"))
+        await queue.enqueue(makeAction(endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me)))
         await queue.setFlushHandler { _ in false }
 
         for _ in 0..<4 {
@@ -111,7 +111,7 @@ final class SettingsActionQueueTests: XCTestCase {
 
         // A fresh edit for the SAME endpoint replaces the pending row with a
         // brand-new id (existing last-write-wins behavior).
-        await queue.enqueue(makeAction(endpoint: "/users/me"))
+        await queue.enqueue(makeAction(endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me)))
         let countAfterReplace = await queue.count
         XCTAssertEqual(countAfterReplace, 1)
 
@@ -134,12 +134,12 @@ final class SettingsActionQueueTests: XCTestCase {
     // it would never reach the server, with no error surfaced anywhere.
 
     func test_enqueue_replacingSameEndpoint_preservesFieldsOmittedByTheNewerAction() async {
-        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"bio":""}"#))
+        await queue.enqueue(makeAction(endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me), payload: #"{"bio":""}"#))
 
         // A second, still-offline save only touches displayName — the
         // payload never mentions `bio` at all (the omit-unchanged-fields
         // optimization).
-        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Bob"}"#))
+        await queue.enqueue(makeAction(endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me), payload: #"{"displayName":"Bob"}"#))
 
         let mergedCount = await queue.count
         XCTAssertEqual(mergedCount, 1, "The two saves for the same endpoint still collapse into one pending action")
@@ -155,8 +155,8 @@ final class SettingsActionQueueTests: XCTestCase {
     }
 
     func test_enqueue_replacingSameEndpoint_newerActionWinsOnConflictingField() async {
-        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Alice"}"#))
-        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Bob"}"#))
+        await queue.enqueue(makeAction(endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me), payload: #"{"displayName":"Alice"}"#))
+        await queue.enqueue(makeAction(endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me), payload: #"{"displayName":"Bob"}"#))
 
         let pendingItems = await queue.pendingItems
         guard let merged = pendingItems.first,

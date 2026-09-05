@@ -182,12 +182,25 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
     /// sortie (#4046) : `canLeaveScene` est le sixième cas, et son défaut
     /// FERME. Sans ce paramètre, ce témoin n'affirmerait plus « toutes » mais
     /// « toutes sauf une », en le disant avec le même mot.
+    ///
+    /// **Ce que ce doc-comment annonçait est arrivé, et il a nommé le
+    /// coupable à l'avance.** `hasTrimmableSource` (#4082) est le SEPTIÈME cas,
+    /// de la même famille : un défaut qui FERME. Le témoin est tombé au premier
+    /// run complet qui a suivi — non parce que la règle est fausse, mais parce
+    /// que sa fixture avait cessé d'être un objet CAPABLE de tout.
+    ///
+    /// > Un témoin qui affirme « toutes » doit se remettre en question à chaque
+    /// > ajout d'une capacité, sans quoi il finit par affirmer « toutes celles
+    /// > que je connaissais quand on m'a écrit ».
+    ///
+    /// Ce que ce témoin garde, c'est que **le VERROU est la seule chose qui
+    /// retire** : un objet déverrouillé, capable de tout, obtient tout.
     func test_offered_unlockedItem_keepsEveryAction() {
         XCTAssertEqual(
             StoryCanvasContextAction.offered(
                 isLocked: false, isBackground: false,
                 sharesPlaneWithAnother: true, hasEditor: true,
-                canLeaveScene: true),
+                canLeaveScene: true, hasTrimmableSource: true),
             StoryCanvasContextAction.allCases
         )
     }
@@ -256,7 +269,24 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
                        "Le menu propose encore une action qui retire ou dénature l'attribution.")
     }
 
-    func test_contextMenu_ordinaryText_offersEveryAction() {
+    /// **Un TEXTE n'a pas de source à rogner, et ce menu n'a pas de place pour
+    /// une bande** — deux raisons distinctes, qui tombent du même côté.
+    ///
+    /// Ce témoin affirmait `allCases`. Il est tombé quand `.trim` (#4082) a
+    /// rejoint l'énumération, et la question qu'il posait alors valait le
+    /// détour : la fixture devait-elle devenir un média, ou l'attente
+    /// devait-elle perdre le rognage ? **Les deux lectures ne sont pas
+    /// symétriques.** `contextMenu(for:kind:)` n'appelle pas
+    /// `offered(hasTrimmableSource:)` du tout — le rognage ouvre une bande SOUS
+    /// la scène, une place que le menu d'appui long n'a pas et ne peut pas
+    /// emprunter. Une fixture-média n'aurait donc pas rendu le témoin vert :
+    /// elle aurait rendu son échec plus difficile à lire.
+    ///
+    /// L'attente est donc « toutes celles qui ont un EFFET ICI », et elle se
+    /// DÉRIVE d'`allCases` plutôt que de s'écrire à la main : une huitième
+    /// action ajoutée demain fera rougir ce témoin, ce qui est exactement le
+    /// service qu'on lui demande.
+    func test_contextMenu_ordinaryText_offersEveryActionThatHasAnEffectHere() {
         let view = makeCanvas()
         // Comme pour l'éditeur ci-dessus : la fixture CÂBLE le relais de sortie,
         // sans quoi elle affirmerait « toutes les actions » sur un menu à qui
@@ -265,7 +295,22 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
 
         let titles = view.contextMenu(for: Self.freeId, kind: .text).children.map(\.title)
 
-        XCTAssertEqual(titles, StoryCanvasContextAction.allCases.map(\.title))
+        XCTAssertEqual(
+            titles,
+            StoryCanvasContextAction.allCases.filter { $0 != .trim }.map(\.title))
+    }
+
+    /// **Le fusible du témoin ci-dessus.** Retirer `.trim` d'une attente est un
+    /// geste dangereux : il rend vert aussi bien « le menu ne l'offre pas »
+    /// que « l'entrée n'existe plus nulle part ». Celui-ci tient l'autre bout —
+    /// la règle SAIT l'offrir, à qui a une source à rogner.
+    func test_leRognageExisteAilleurs_ilNEstPasSeulementAbsentDIci() {
+        XCTAssertTrue(
+            StoryCanvasContextAction.offered(
+                isLocked: false, isBackground: false,
+                sharesPlaneWithAnother: false, hasEditor: false,
+                hasTrimmableSource: true).contains(.trim),
+            "sans ce témoin, supprimer `.trim` du modèle rendrait le voisin vert")
     }
 
     /// Même si une entrée de menu était fabriquée ailleurs, le point de

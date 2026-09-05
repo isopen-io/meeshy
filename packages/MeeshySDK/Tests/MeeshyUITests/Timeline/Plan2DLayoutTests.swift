@@ -243,8 +243,12 @@ struct Plan2DLayoutTests {
         #expect(fond?.bar == .ghost)
     }
 
-    @Test("Une pastille de lieu est hors timeline : toujours fantôme, au premier plan")
-    func place_isAlwaysAGhost() {
+    /// **Une pastille de lieu SANS fenêtre est fantôme — comme un texte sans
+    /// fenêtre.** Ce n'était pas la règle écrite : `placeTracks` posait
+    /// `bar: .ghost` EN DUR, ce qui rendait le même verdict sur ce cas-ci et un
+    /// verdict FAUX sur le suivant.
+    @Test("Une pastille de lieu sans fenêtre posée est fantôme, au premier plan")
+    func place_withoutAWindow_isAGhost() {
         let effects = StoryEffects(
             locationObjects: [StoryLocationObject(id: "lieu",
                                                   place: SharedPlace(latitude: 48.8, longitude: 2.3,
@@ -255,6 +259,20 @@ struct Plan2DLayoutTests {
         #expect(lieu?.plane == .fg)
         #expect(lieu?.bar == .ghost)
         #expect(lieu?.label == "◎ Paris")
+    }
+
+    /// **Et elle porte une VRAIE barre dès qu'une fenêtre est posée** —
+    /// directive porteur 2026-08-31 : « tout `MeeshySceneObject` peut apparaître
+    /// et disparaître quand il souhaite, y compris la pastille de lieu ».
+    @Test("Une pastille de lieu avec une fenêtre porte une barre, comme un texte")
+    func place_withAWindow_carriesATimedBar() {
+        var lieu = StoryLocationObject(id: "lieu",
+                                       place: SharedPlace(latitude: 48.8, longitude: 2.3,
+                                                          name: "Paris"))
+        lieu.startTime = 2
+        lieu.duration = 3
+        let effects = StoryEffects(locationObjects: [lieu], timelineDuration: Self.slideDuration)
+        #expect(tracks(effects).first?.bar == .timed(start: 2, end: 5))
     }
 
     @Test("Le dessin est UNE piste fantôme de premier plan, quel que soit le nombre de traits")

@@ -28,7 +28,17 @@ import XCTest
 final class FileSizeBudgetGuardTests: XCTestCase {
 
     /// Le budget de la directive. Un fichier neuf n'a aucune raison de le dépasser.
-    private static let budget = 1100
+    /// Relevé à 1200 le 2026-09-02 (directive porteur : « relâcher un peu la
+    /// consigne de 1100 ; 1000-1200 est acceptable »). Le plafond DUR est 1200 ;
+    /// 1000 reste le seuil au-delà duquel un découpage se justifie sans se
+    /// discuter, mais il ne se mesure pas ici — un cliquet n'a qu'un seuil.
+    ///
+    /// **Ce relèvement n'a rien effacé.** Trois fichiers sont repassés sous le
+    /// budget par ce seul fait (`MyStoriesView` 1158, `ConversationMediaViews`
+    /// 1120, `ComposerMoodSurface` 1109) : ils sortent de la liste ci-dessous, et
+    /// `legacyLineCeiling` baisse EXACTEMENT de ce qu'ils pesaient — jamais du
+    /// cumul du jour, qui scellerait les lignes que la règle 3 vient de refuser.
+    private static let budget = 1200
 
     /// **Dette héritée, mesurée au 261i.** Cette liste ne s'ALLONGE jamais : un
     /// fichier qui la quitte (découpé, ou redescendu sous le budget) en sort pour
@@ -39,16 +49,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "BubbleStandardLayout.swift",
         "CallManager.swift",
         "CallView.swift",
-        "ComposerMoodSurface.swift",
         "ConversationDashboardView.swift",
         "ConversationInfoSheet.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
-        "ConversationMediaViews.swift",
         "ConversationSocketHandler.swift",
         "ConversationView.swift",
-        "ConversationViewModel.swift",
         "FeedCommentsSheet.swift",
         "FeedPostCard.swift",
         "FeedView+Attachments.swift",
@@ -57,9 +64,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MeeshyApp.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
-        "MyStoriesView.swift",
-        "OnboardingStepViews.swift",
-        "OutboxDispatcher.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
         "PostDetailViewModel.swift",
@@ -68,7 +72,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "RootView.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
-        "StoryViewerView+Sidebar.swift",
         "StoryViewerView.swift",
         "WebRTCTypes.swift",
     ]
@@ -133,7 +136,140 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// AUTRE découpage, il aurait laissé 229 lignes de mou — de quoi accueillir
     /// en silence l'ajout que ce cliquet existe pour refuser. Un cliquet dont
     /// le cran est trop haut ne rougit pas : il attend.
-    private static let legacyLineCeiling = 74_759
+    /// **73 390 depuis #4084.** `StoryViewerView+Sidebar.swift` a quitté la
+    /// dette : il portait DEUX vues entières — le rail d'actions et l'en-tête —
+    /// pour 1 369 lignes, et l'en-tête est parti chez lui
+    /// (`StoryViewerView+Header.swift`, 598). Les deux moitiés sont sous le
+    /// budget, donc le nom sort de la liste ENTIER, plafond compris. C'est le
+    /// cliquet qui l'a exigé : la vue `2f` ajoutait à un fichier hors budget, ce
+    /// que la directive 2026-08-28 interdit — extraire d'abord, ajouter ensuite.
+    /// **73 333 depuis #4086.** La section canvas quitte `PostDetailView.swift`
+    /// pour `PostDetailView+Canvas.swift` — la vue `2h` devait y AJOUTER une
+    /// garde de contenu au chemin republication, ce que la directive interdit
+    /// sur un fichier hors budget. Le cliquet a fait son travail : il a refusé
+    /// l'ajout, et l'extraction qui s'en est suivie nomme la responsabilité au
+    /// lieu de la diluer dans un `body` de 2 572 lignes. Le fichier reste en
+    /// dette (2 513) ; seul le plafond baisse — laisser 57 lignes de mou
+    /// accueillerait en silence le prochain ajout.
+    /// **73 205 depuis #4098.** `BubbleBodyFooterLayout` + son cache de hauteur
+    /// (214 lignes) quittent `BubbleStandardLayout.swift` — la vue `3h` devait y
+    /// monter la carte de citation, ce que la directive interdit sur un fichier
+    /// hors budget. Le découpage suit la responsabilité : ce qui part n'est pas
+    /// une vue mais un `Layout` et sa mesure, qui se relisent sans rien savoir
+    /// de ce que la bulle contient. L'hôte reste en dette (1 610) ; le plafond
+    /// descend au cumul RÉEL — le mou laissé en route est exactement ce qui
+    /// accueille en silence l'ajout suivant.
+    /// **73 203 depuis #3902.** Le fait « ce que la liste MONTRE » a été câblé
+    /// à travers trois hôtes hors budget, et la LOI qu'il alimente est partie
+    /// dans son propre fichier (`ConversationCatchUpLaw`) plutôt que d'épaissir
+    /// le modèle. Net : −2. Le plafond suit le cumul RÉEL — laisser le mou
+    /// accueillerait en silence l'ajout suivant.
+    // 271i — 73 203 → 71 698 (−1 505). `OutboxDispatcher.swift` portait 1 519
+    // lignes, 40 % au-dessus du budget, et la migration des chemins d'API
+    // (#4282) voulait y ajouter onze lignes. Le cliquet a refusé, en faisant
+    // exactement son travail : rendre le coût d'un fichier trop gros payable
+    // par le PROCHAIN qui y touche, quel que soit son sujet.
+    //
+    // La famille « messages » (envoi, édition, suppression, réaction — la plus
+    // longue et la plus autonome) est partie dans
+    // `OutboxDispatcher+Messages.swift` ; le fichier retombe à 1 029 lignes,
+    // SORT de la liste, et le plafond suit le cumul réel. Nombre LU du témoin avec le plafond posé à 0, jamais
+    // soustrait — un plafond calculé dérive dans le sens confortable.
+    //
+    // 232i — 71 698 → 71 266 (−432). #3914 devait changer la règle d'amorçage
+    // de la position de reprise dans `ConversationViewModel.swift` (5 055
+    // lignes) : le cliquet a refusé, en faisant exactement son travail. L'amorçage
+    // média est parti chez lui — `ConversationViewModel+MediaConsumptionSeed.swift`,
+    // 113 lignes — et l'hôte retombe à 4 992. Il RESTE en dette ; seul le
+    // plafond baisse.
+    //
+    // Le nombre est REMESURÉ sur les 34 noms, pas soustrait : mes 63 lignes
+    // n'expliquent que 63 des 432, le reste venant de découpes voisines livrées
+    // entre-temps. Soustraire aurait laissé 369 lignes de mou — de quoi
+    // accueillir en silence l'ajout que ce cliquet existe pour refuser.
+    /// Baissé de 3 387 le 2026-09-02 — la somme EXACTE des trois fichiers sortis
+    /// de la liste au relèvement du budget, mesurée à leur taille du jour.
+    ///
+    /// **Il reste 165 lignes de dette IMPAYÉE, et c'est voulu.** Elles ont été
+    /// attribuées, fichier par fichier, en comparant au commit qui a posé le
+    /// plafond précédent (`0912db893d`) : `PostDetailView` +93,
+    /// `StoryViewerView+Canvas` +45, `MessageListViewController` +17,
+    /// `StoryViewerView` +10. Les quatre RESTENT dans la dette, donc le
+    /// relèvement du budget ne les absout pas : la règle 3 demeure rouge tant que
+    /// ces 165 lignes ne sont pas extraites (#4841). Un plafond qui se lève pour
+    /// couvrir une croissance qu'il vient de refuser cesse d'être un cliquet.
+    ///
+    /// 2026-09-02 (fusion de la branche stickers, #4823) — 67 879 → 67 385 (−494).
+    /// Les 165 lignes impayées ci-dessus le sont : `StoryComposerBarView` a
+    /// quitté `StoryViewerView+Canvas.swift` (298 lignes), le saut vers un
+    /// message hors fenêtre a quitté `ConversationViewModel.swift` (152) et
+    /// l'état du composer `ConversationView.swift` (70) — trois découpes par
+    /// responsabilité faites AVANT d'ajouter aux hôtes, qui restent en dette.
+    /// Le nombre est REMESURÉ sur les 31 noms avec la méthode de
+    /// `lineCount(of:)` sur l'arbre fusionné, jamais soustrait.
+    ///
+    /// 2026-09-02 (seconde fusion de dev, `3853f03c`) — 67 385 → 67 091 (−294) :
+    /// le post cité a quitté `PostDetailView` sur dev (`598ba11f`). REMESURÉ sur
+    /// les 31 noms de l'arbre fusionné, jamais soustrait.
+    ///
+    /// 2026-09-03 (fusion de dev, `436d0f01`) — 62 304 → 62 306 (+2). Le cumul
+    /// avait baissé de 21 lignes sur cette branche (`ConversationViewModel.swift`
+    /// découpé en famille, sorti de la liste) pendant que dev en posait 23 dans
+    /// trois hôtes que cette branche ne touche pas (`FeedCommentsSheet` +5,
+    /// `PostDetailView` +9, `ReelsPlayerView` +9). REMESURÉ sur les 30 noms de
+    /// l'arbre fusionné, jamais soustrait — et le nombre est dit tel quel : un
+    /// plafond qui monte de deux se lit comme une dette de dev, pas de ce lot.
+    /// **67 083 — le cumul RÉEL du 2026-09-03, mesuré sur les 31 noms avec
+    /// `lineCount(of:)`, jamais soustrait.** Le cliquet DESCEND (67 091 → 67 083) :
+    /// la découpe #4927 rend plus que ce que la période a coûté.
+    ///
+    /// Ce nombre a d'abord été posé à **67 046**, et la garde a rougi — le
+    /// détail vaut d'être écrit, parce que l'erreur est exactement celle que ce
+    /// doc-comment répète d'éviter :
+    ///
+    /// | | lignes |
+    /// |---|---|
+    /// | base ANNONCÉE à `9818dcaa03` | 67 155 |
+    /// | base RÉELLE à `9818dcaa03` (remesurée) | **67 181** |
+    /// | `FeedCommentsSheet` grossi sur dev entre `9818dcaa03` et `d6b33cb9` | +5 |
+    /// | le commentaire de #3947 posé dans `MessageListViewController` | +6 |
+    /// | la découpe #4927 (`ReelsPlayerView` 1 738 → 1 629) | −109 |
+    /// | **cumul du jour** | **67 083** |
+    ///
+    /// Les 26 lignes d'écart sur la base venaient d'un cumul SOUSTRAIT plutôt
+    /// que remesuré — la méthode que ce fichier prescrit depuis le 232i, et qui
+    /// se venge dans le sens confortable dès qu'on l'abandonne une fois.
+    ///
+    /// Les 11 lignes ajoutées à deux fichiers EN DETTE (+5, +6) ne sont pas
+    /// absoutes par ce chiffre : elles sont couvertes par ce que la découpe rend,
+    /// et le cliquet reste sous sa valeur d'avant. C'est la seule forme
+    /// acceptable — un plafond qui se lève pour couvrir une croissance qu'il
+    /// vient de refuser cesse d'être un cliquet.
+    ///
+    /// 2026-09-03 (troisième fusion de dev, `5d5838d0`) — 62 306 → 62 203 :
+    /// dev a découpé `ReelsPlayerView` (#4927, 1 738 → 1 629) et posé six lignes
+    /// dans `MessageListViewController` (#3947). Le paragraphe de dev ci-dessus
+    /// parle des 31 noms d'AVANT #4942 (67 083) ; cette branche en compte
+    /// 30, `ConversationViewModel.swift` étant sorti de la dette — les deux
+    /// nombres décrivent le même arbre avec deux listes. REMESURÉ sur les
+    /// 30 noms de l'arbre fusionné, jamais soustrait.
+    /// **60 862 depuis #5218** (−1 341). `OnboardingStepViews.swift` a quitté la
+    /// dette non par découpage mais par SUPPRESSION : le wizard d'inscription en
+    /// huit étapes est remplacé par un écran unique, `SignupView` (536 lignes,
+    /// dans le budget). Le nom sort de la liste ENTIER et le plafond baisse de
+    /// tout ce que le fichier pesait — laisser son mou accueillerait en silence
+    /// l'ajout suivant, ce que ce cliquet existe pour refuser.
+    ///
+    /// Les vingt lignes de plus que le seul retrait ne dit pas viennent de
+    /// `MeeshyApp.swift`, qui est DANS la dette : le lot devait y brancher le
+    /// report de la permission de notification, et la directive 2026-08-28
+    /// interdit d'AJOUTER à un fichier hors budget. La règle est donc partie
+    /// vivre chez `PushPermissionPrompt` — le `body` ne fait plus que lui
+    /// passer l'origine de la session — et la séquence de demande, recopiée
+    /// dans le `body`, a suivi. Net : le fichier est plus COURT qu'avant le lot.
+    ///
+    /// REMESURÉ sur les 29 noms restants, jamais soustrait de tête.
+    private static let legacyLineCeiling = 60_862
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

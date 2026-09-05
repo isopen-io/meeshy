@@ -17,14 +17,26 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
+
+/// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
+/// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
+/// transcription. Le prédicat ET la composition de ce qui est SERVI vivent au
+/// site unique `servedQuotedMessage`, partagé avec les deux producteurs de
+/// `message:new` : la garde ne retenait ici que les traductions pendant que
+/// `...message.replyTo` répandait le texte et qu'`attachmentFullSelect`
+/// servait le média (leçon 275 — une garde se mesure sur tout ce que la charge
+/// TRANSPORTE).
 
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
@@ -33,7 +45,8 @@ import { logger } from './messages-shared';
 function cleanAttachmentsForApi(
   attachments: any[],
   languageFilter?: readonly string[],
-  currentParticipantId?: string
+  currentParticipantId?: string,
+  consumptionMap?: Map<string, CurrentUserConsumption>
 ): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
@@ -59,11 +72,12 @@ function cleanAttachmentsForApi(
     cleaned.currentUserReactions = __reactions.currentUserReactions;
     delete cleaned.reactions;
 
-    // #4177 — `currentUserConsumption` (progression PERSONNELLE de lecture,
-    // par pièce jointe) retiré : ni déclaré dans `messageAttachmentSchema`
-    // ni lu par aucun client — fast-json-stringify le retirait depuis
-    // toujours. Réintroduire cette projection exige de la déclarer d'abord
-    // au schéma partagé (hors territoire de ce correctif).
+    // #3909 — la progression PERSONNELLE de lecture, REVENUE, et cette fois
+    // déclarée au `messageAttachmentSchema` avant d'être calculée. #4177
+    // l'avait retirée parce qu'elle mourait à la sérialisation ; l'ordre
+    // corrigé est déclaration → projection → lecteur. `null` = jamais consommé
+    // par ce participant, ce qu'un lecteur doit distinguer de « position 0 ».
+    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -143,6 +157,70 @@ export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Da
 }
 
 /**
+ * Bandwidth opt-in `?languages=` — restreint les traductions servies (texte
+ * `transformTranslationsToArray`, message cité `servedQuotedMessage`, pistes
+ * audio du Prisme `cleanAttachmentsForApi`) aux seules langues demandées.
+ * Canonicalise via {@link normalizeLanguageForDedup} (SSOT) : les codes
+ * arrivent VERBATIM du client — locale appareil (`en_US`/`pt_BR`, rang 4 du
+ * Prisme) sur iOS, `Accept-Language` (`en-US`/`pt-BR`) sur le web — quand les
+ * traductions sont stockées sous des clés canoniques 2 lettres (`'pt'`).
+ * Symétrique du chemin socket (`normalizeGroupLanguage` →
+ * `normalizeLanguageCode`, `socketio/utils/message-payload-filter.ts`).
+ *
+ * Absent/vide → `undefined` (comportement historique : toutes les langues).
+ * Dédupliqué (un même code sous deux graphies ne compte qu'une fois) et borné
+ * à 20 entrées.
+ */
+export function parseLanguageFilterParam(languagesStr?: string): string[] | undefined {
+  if (!languagesStr) return undefined;
+  const parsed = Array.from(new Set(
+    languagesStr.split(',')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map(normalizeLanguageForDedup)
+  )).slice(0, 20);
+  return parsed.length > 0 ? parsed : undefined;
+}
+
+/**
+ * Les quatre familles de protection d'un message — vue unique, flou,
+ * expiration, et le bitfield qui les résume — plus les deux compteurs de
+ * limite/vues de la vue unique. Source UNIQUE du `select` Prisma ET de la
+ * projection servie : #4885 a mesuré que `GET .../messages/search` les
+ * réécrivait à la main sans elles, laissant un message à vue unique trouvé
+ * par recherche FORWARDABLE (le garde côté client lit `isViewOnce`, absent
+ * de la réponse). Toute route qui sert `Message.content` doit ce bloc, ou
+ * dire pourquoi non (#4885 critère 4).
+ */
+export const MESSAGE_PROTECTION_SELECT = {
+  isViewOnce: true,
+  maxViewOnceCount: true,
+  viewOnceCount: true,
+  isBlurred: true,
+  effectFlags: true,
+  expiresAt: true,
+} as const;
+
+/** Projette les mêmes six champs depuis une ligne Prisma déjà chargée — le pendant servi de `MESSAGE_PROTECTION_SELECT`. */
+export function mapMessageProtectionFields(message: any): {
+  isViewOnce: any;
+  maxViewOnceCount: any;
+  viewOnceCount: any;
+  isBlurred: any;
+  effectFlags: any;
+  expiresAt: any;
+} {
+  return {
+    isViewOnce: message.isViewOnce,
+    maxViewOnceCount: message.maxViewOnceCount,
+    viewOnceCount: message.viewOnceCount,
+    isBlurred: message.isBlurred,
+    effectFlags: message.effectFlags,
+    expiresAt: message.expiresAt,
+  };
+}
+
+/**
  * Construit le `select` Prisma de `GET /conversations/:id/messages` selon les
  * paramètres d'inclusion (traductions, réponses citées).
  */
@@ -181,12 +259,7 @@ export function buildMessageListSelect(options: {
         forwardedFromConversationId: true,
 
         // ===== VIEW-ONCE / BLUR / EXPIRATION =====
-        isViewOnce: true,
-        maxViewOnceCount: true,
-        viewOnceCount: true,
-        isBlurred: true,
-        effectFlags: true,
-        expiresAt: true,
+        ...MESSAGE_PROTECTION_SELECT,
 
         // ===== ÉPINGLAGE =====
         pinnedAt: true,
@@ -264,10 +337,36 @@ export function buildMessageListSelect(options: {
             createdAt: true,
             senderId: true,
             validatedMentions: true,
+            // La protection du message CITÉ — le niveau que ce select ne
+            // demandait pas du tout, alors que `attachmentFullSelect` la sert
+            // déjà sur ses PIÈCES JOINTES (`reply-attachment-protection-contract`).
+            // Sans ces champs, un client ne peut pas savoir qu'il rend le texte
+            // d'un message à vue unique : répondre à un message protégé en
+            // publiait le contenu entier dans chaque bulle-citation du fil.
+            // Même famille, une couche plus haut : ce que la route CONSTRUIT et
+            // ce que le schéma DÉCLARE sont deux vérités séparées — les deux
+            // ont dû bouger.
+            isViewOnce: true,
+            isBlurred: true,
+            expiresAt: true,
+            effectFlags: true,
+            isEncrypted: true,
+            encryptionMode: true,
+            // Le TYPE porte l'icône du placeholder servi à un message protégé
+            // (`protectedPreview` : « 👁️ 🖼️ ») ; sans lui toute citation
+            // masquée se lit « 👁️ 💬 », quel que soit son média.
+            messageType: true,
             // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
             // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
             // le message qui cite.
             metadata: true,
+            // #4945 — la citation descend le Prisme au CHARGEMENT comme à
+            // l'arrivée en direct : le fil socket `include` la ligne entière
+            // (`translations` compris) quand ce select nommé ne le demandait
+            // pas, et un lecteur francophone lisait la même citation en anglais
+            // après un rechargement et en français en temps réel. Même garde
+            // que la racine : le client qui n'en veut pas ne les paie pas.
+            ...(includeTranslations ? { translations: true } : {}),
             sender: {
               select: {
                 id: true,
@@ -370,6 +469,82 @@ export async function loadMessageReadStatusMap(
 }
 
 /**
+ * La progression PERSONNELLE de lecture d'un participant sur une pièce jointe.
+ *
+ * Sert la reprise cross-device : rouvrir un vocal ou une vidéo repart là où on
+ * s'était arrêté, sur n'importe quel appareil (#3909).
+ */
+export type CurrentUserConsumption = {
+  lastPlayPositionMs: number | null;
+  listenedComplete: boolean;
+  lastWatchPositionMs: number | null;
+  watchedComplete: boolean;
+};
+
+/**
+ * Charge la progression du participant courant sur les pièces jointes de la
+ * PAGE — une seule requête, bornée aux identifiants rendus, scopée au
+ * participant. Miroir exact de `userReactionsMap`.
+ *
+ * ## Ce champ a déjà vécu, et il est mort d'être indéclaré
+ *
+ * La projection existait depuis juin 2026 et `fast-json-stringify` la retirait
+ * de CHAQUE réponse, faute d'être déclarée au `messageAttachmentSchema` : deux
+ * requêtes Prisma par page payées pour un champ qu'aucun client ne recevait.
+ * #4177 a retiré ce travail mort, à raison.
+ *
+ * Ce qui la ramène n'est pas l'inverse de ce retrait : c'est la DÉCLARATION,
+ * posée d'abord (`packages/shared/types/api-schemas.ts`). Sans elle, ce
+ * chargeur remourrait en silence — et le lecteur web qui l'attend
+ * (`useMediaConsumptionReporter`) serait un contrôle non alimenté, ce qui se
+ * voit encore moins qu'un champ absent.
+ */
+export async function loadCurrentUserConsumptionMap(
+  prisma: PrismaClient,
+  messages: readonly any[],
+  currentParticipantId: string | undefined
+): Promise<Map<string, CurrentUserConsumption>> {
+  const map = new Map<string, CurrentUserConsumption>();
+  if (!currentParticipantId || messages.length === 0) return map;
+
+  const attachmentIds: string[] = messages.flatMap((m: any) =>
+    Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
+  );
+  if (attachmentIds.length === 0) return map;
+
+  try {
+    const rows = await prisma.attachmentStatusEntry.findMany({
+      where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
+      // Borne EXACTE, pas arbitraire : `@@unique([attachmentId, participantId])`
+      // garantit au plus une ligne par pièce jointe pour ce participant, donc
+      // `take` ne peut rien tronquer — il DIT seulement la borne que le couple
+      // impose déjà, ce que le cliquet des `findMany` non bornés demande.
+      take: attachmentIds.length,
+      select: {
+        attachmentId: true,
+        lastPlayPositionMs: true,
+        listenedComplete: true,
+        lastWatchPositionMs: true,
+        watchedComplete: true,
+      },
+    });
+    for (const row of rows) {
+      map.set(row.attachmentId, {
+        lastPlayPositionMs: row.lastPlayPositionMs ?? null,
+        listenedComplete: row.listenedComplete ?? false,
+        lastWatchPositionMs: row.lastWatchPositionMs ?? null,
+        watchedComplete: row.watchedComplete ?? false,
+      });
+    }
+  } catch (err) {
+    // Une reprise absente coûte un redémarrage au début ; faire échouer la
+    // liste entière coûte la conversation. La carte vide est le bon repli.
+    logger.warn('[CONVERSATIONS] Failed to load media consumption:', err);
+  }
+  return map;
+}
+
+/**
  * Sérialise une ligne `Message` de `GET /conversations/:id/messages` au
  * format `GatewayMessage` (@meeshy/shared/types) : présence de l'expéditeur,
  * pièces jointes nettoyées, traductions filtrées par le Prisme, accusés de
@@ -390,6 +565,8 @@ export type MessageRowMappingContext = {
   }>;
   senderPresenceVis: any;
   listMissingEntry: any;
+  /** #3909 — la progression de lecture du participant, par pièce jointe. */
+  consumptionMap: Map<string, CurrentUserConsumption>;
 };
 
 export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext): any {
@@ -439,12 +616,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           forwardedFromConversationId: message.forwardedFromConversationId,
 
           // View-once / Blur / Expiration
-          isViewOnce: message.isViewOnce,
-          maxViewOnceCount: message.maxViewOnceCount,
-          viewOnceCount: message.viewOnceCount,
-          isBlurred: message.isBlurred,
-          effectFlags: message.effectFlags,
-          expiresAt: message.expiresAt,
+          ...mapMessageProtectionFields(message),
 
           // Épinglage
           pinnedAt: message.pinnedAt,
@@ -520,7 +692,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
           _count: message._count
         };
 
@@ -538,16 +710,26 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
           // — sans lui, une citation d'un message géolocalisé n'affiche
           // jamais sa position, même si la liste principale la restitue.
-          mappedMessage.replyTo = hoistLocationOnto({
+          mappedMessage.replyTo = hoistStickerOnto(hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
+            // #4945 — même projection JSON → tableau que la racine, même filtre
+            // de langues ; sans elle le blob Prisma brut voyagerait sous un
+            // nom que les clients lisent comme un tableau. Et le TEXTE et le
+            // MÉDIA de la citation passent par la même garde que ses
+            // traductions : ils sont étalés APRÈS `...message.replyTo`, donc
+            // ils la remplacent.
+            ...servedQuotedMessage(message.replyTo, {
+              includeTranslations,
+              languages: hasLanguageFilter ? languageFilter : undefined,
+            }),
             sender: replySender ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,
               displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
-          });
+          }));
         }
 
         return mappedMessage;
@@ -650,6 +832,7 @@ export async function enrichForwardedMessagesForList(
               // pas celle de `msg` lui-même — sans elle, un message transféré
               // géolocalisé n'affiche jamais sa position dans l'aperçu.
               const forwardedPlace = sharedPlaceFromMetadata((original as { metadata?: unknown }).metadata);
+              const forwardedSticker = stickerFromMetadata((original as { metadata?: unknown }).metadata);
               msg.forwardedFrom = {
                 id: original.id,
                 content: original.content,
@@ -663,6 +846,7 @@ export async function enrichForwardedMessagesForList(
                 } : null,
                 attachments: original.attachments,
                 ...(forwardedPlace ? { location: forwardedPlace } : {}),
+                ...(forwardedSticker ? { sticker: forwardedSticker } : {}),
               };
             }
           }

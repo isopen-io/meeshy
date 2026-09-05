@@ -81,8 +81,14 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Dédupliquer les langues cibles — canonicalisation, pas un `.toLowerCase()`
+    // brut (#5143) : sans elle, un code région-tagué ('en-US') ou legacy ('iw')
+    // survivait au dédoublonnage à côté de sa forme canonique ('en', 'he'),
+    // dupliquant le travail ML et envoyant au translator une cible qu'aucun
+    // mapping NLLB ne reconnaît. Même fonction que le suivi (`pendingLanguages`
+    // ci-dessous) et le solde (`settleTranslationLanguage`) : la liste envoyée
+    // ne doit plus diverger de son propre suivi.
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(canonicalLanguage))];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -114,11 +120,12 @@ export class ZmqRequestSender {
 
     // Stocker la requête en cours pour traçabilité, avec le jeu des langues
     // qu'elle attend encore (un renvoi avec `existingTaskId` REMPLACE ce jeu :
-    // il ne porte plus que les langues encore manquantes).
+    // il ne porte plus que les langues encore manquantes). `uniqueTargetLanguages`
+    // est déjà canonique (ci-dessus) — plus besoin de re-canonicaliser ici.
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;

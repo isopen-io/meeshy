@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { logError } from '../../utils/logger';
 import {
   sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendInternalError,
@@ -28,8 +29,8 @@ const LIMITE_DEFAUT_BLOCAGES = 50;
  * gabarit `:userId` que le client ne peut pas suivre tel quel.
  */
 export const BLOCKS_SUCCESSOR_PATH = {
-  item: (userId: string): string => `/api/v1/directory/blocks/${userId}`,
-  list: '/api/v1/directory/blocks',
+  item: (userId: string): string => `${apiPath('/directory/blocks')}/${userId}`,
+  list: apiPath('/directory/blocks'),
 } as const;
 
 /**

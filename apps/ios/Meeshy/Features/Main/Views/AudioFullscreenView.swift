@@ -277,11 +277,17 @@ private struct AudioFullscreenPage: View {
             wrappedValue: ConversationAudioCoordinator.sharedForTesting.engineForBubble
                 ?? AudioPlaybackManager(registerWithCoordinator: false)
         )
+        // Prisme AUDIO (#4926) — la raison de chaque terme est portée par
+        // `SocialAudioTrack.fullscreenSelection`, qui est la règle ; ici, le
+        // site d'appel n'en garde que l'appel.
+        self._selectedLanguage = State(initialValue: SocialAudioTrack.openingSelection(for: item))
     }
 
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
-    @State private var selectedLanguage: String = "orig"
+    /// La langue de piste servie. Initialisée par le Prisme dans `init` (#4926)
+    /// — la valeur littérale qui vivait ici ne consultait rien.
+    @State private var selectedLanguage: String
     @State private var showTranslationSheet = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var isRequestingTranscription = false

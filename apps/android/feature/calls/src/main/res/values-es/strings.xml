@@ -15,6 +15,7 @@
     <string name="call_action_hang_up">Colgar</string>
     <string name="call_action_mute">Silenciar</string>
     <string name="call_action_camera">Cámara</string>
+    <string name="call_action_speaker">Altavoz</string>
     <string name="call_action_close">Cerrar</string>
     <string name="call_action_retry">Reintentar</string>
     <string name="call_action_minimize">Minimizar llamada</string>

@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.RegisterResponse
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
@@ -32,11 +33,12 @@ class AuthRepositoryTest {
 
     private class FakeAuthApi(
         var response: ApiResponse<AuthSession>,
+        var registerResponse: ApiResponse<RegisterResponse> = ApiResponse(success = false),
         var availabilityResponse: ApiResponse<AvailabilityResult> = ApiResponse(success = false),
         val availabilityCalls: MutableList<Triple<String?, String?, String?>> = mutableListOf(),
     ) : AuthApi {
         override suspend fun login(body: LoginRequest) = response
-        override suspend fun register(body: RegisterRequest) = response
+        override suspend fun register(body: RegisterRequest) = registerResponse
         override suspend fun refresh(body: RefreshTokenRequest) = response
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
         override suspend fun forgotPassword(body: me.meeshy.sdk.net.api.ForgotPasswordRequest) =
@@ -189,5 +191,81 @@ class AuthRepositoryTest {
         repo.logout()
 
         assertThat(teardown.wipeCallCount).isEqualTo(1)
+    }
+
+    // ---- register(): the two payloads served under one 200 --------------------
+
+    @Test
+    fun register_created_adoptsTheSessionAndPersistsTokens() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(
+                    user = MeeshyUser(id = "u1", username = "atabeth"),
+                    token = "jwt-123",
+                    sessionToken = "sess-456",
+                ),
+            ),
+        )
+        val (repo, session) = repository(api, store)
+
+        val result = repo.register(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        assertThat(result.isSuccess).isTrue()
+        assertThat(result.getOrNull()).isInstanceOf(RegisterOutcome.Created::class.java)
+        assertThat(store.jwt).isEqualTo("jwt-123")
+        assertThat(store.sessionToken).isEqualTo("sess-456")
+        assertThat(session.currentUser.value?.id).isEqualTo("u1")
+    }
+
+    @Test
+    fun register_phoneOwnershipConflict_isSuccessButAdoptsNothing() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(
+                success = true,
+                data = RegisterResponse(phoneOwnershipConflict = true),
+            ),
+        )
+        val (repo, session) = repository(api, store)
+
+        val result = repo.register(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        assertThat(result.getOrNull()).isEqualTo(RegisterOutcome.PhoneOwnershipConflict)
+        assertThat(store.isAuthenticated).isFalse()
+        assertThat(session.currentUser.value).isNull()
+    }
+
+    @Test
+    fun register_successWithNeitherSessionNorConflict_isAFailure() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(success = true, data = RegisterResponse()),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.register(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(store.isAuthenticated).isFalse()
+    }
+
+    @Test
+    fun register_failure_doesNotPersistTokens() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            response = ApiResponse(success = false),
+            registerResponse = ApiResponse(success = false, error = "Email already in use", code = "EMAIL_TAKEN"),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.register(RegisterRequest(email = "a@b.co", password = "secret"))
+
+        assertThat((result as? NetworkResult.Failure)?.error?.code).isEqualTo("EMAIL_TAKEN")
+        assertThat(store.isAuthenticated).isFalse()
     }
 }

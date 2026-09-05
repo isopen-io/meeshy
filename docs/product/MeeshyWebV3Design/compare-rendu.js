@@ -20,11 +20,48 @@
  * C'est ce que « conformite = disposition, hierarchie, etats et gestes »
  * (CLAUDE.md) veut dire, et c'est ce qui bouge quand un ecran devie.
  * L'ecart pixel est rendu a titre INDICATIF, jamais comme gate.
+ *
+ * CODES DE SORTIE. 0 conforme · 1 hors cible ou hors budget · 2 echec du
+ * harnais · 3 selection NON COMPARABLE. « Je n'ai pas su mesurer » n'est pas
+ * « j'ai mesure et c'est hors cible » : les confondre fait d'un outil muet un
+ * outil accusateur. C'est exactement ce qui a laisse
+ * `--vues linkRedirect,linkExpired` rendre structure=0.42 et 0.34 sur un code
+ * conforme — les deux vues partagent la route `/l/:token`, que le validateur
+ * de jeton du § 5.1 refuse a bon droit, donc les deux etaient comparees a
+ * l'ecran clos, qui n'est la cible d'aucune des deux.
+ *
+ * La loi de selection vit dans `apps/web-v3/scripts/lib/vues-comparables.mjs`,
+ * avec ses temoins : une route parametree se sert par un jeton DECLARE, et deux
+ * vues qui partagent une route ont besoin d'un ETAT — un jeton vivant, un jeton
+ * expire — pas d'une route.
+ *
+ * OU CE JETON EST DECLARE, ET POURQUOI PAS DANS vues.json. `vues.json` est
+ * REGENERE par `capture-cibles.js` depuis une planche qui ne connait aucun
+ * jeton : un `jetons` pose la disparaitrait a la prochaine passe, en rendant
+ * exactement le refus qu'un jeton reellement absent produit — mode degrade
+ * indiscernable du mode nominal. Il vit donc dans `jetons-de-vues.json`, que la
+ * capture n'ouvre jamais, et que `litLesVues` joint a l'index par identifiant de
+ * vue (`apps/web-v3/scripts/lib/index-des-vues.mjs`).
+ *
+ * UN ETAT DE SESSION (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,
+ * `/chats/:id` — ne rend rien a un visiteur sans creance : elle redirige vers
+ * `/login`. Ce n'est pas un jeton de route qui la separe d'une vue publique,
+ * c'est une SESSION. La vue la declare par `"@session"` dans
+ * `jetons-de-vues.json`, ou le bloc `sessions` dit quels COOKIES la portent —
+ * ceux que la passerelle de bouchon reconnait —, et ce script les pose sur le
+ * contexte du navigateur avant de naviguer. Sans cela, `thread`, `rich`, `join`
+ * et `rights` etaient injouables : leur critere de fin nommait une mesure que
+ * l'outil ne savait pas produire.
+ *
+ * COMMENT LE JOUER SUR LA CHAINE. `--base` doit pointer un serveur v3 qui a une
+ * passerelle derriere lui ; `apps/web-v3/scripts/conformite-des-vues.ts` monte
+ * les deux (passerelle de bouchon + `next start`) et appelle ce script.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, '../../..');
@@ -103,14 +140,49 @@ function ecartStructurel(a, b) {
 }
 
 (async () => {
+  // La selection se tranche AVANT le navigateur : un refus ne coute alors aucun
+  // lancement de Chromium, et il sort par la meme porte que le verdict.
+  const { RC_NON_COMPARABLE, selectionComparable, refusDeSelection } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/vues-comparables.mjs')).href);
+  const { litLesVues } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/index-des-vues.mjs')).href);
+
+  // Un index qu'on ne sait pas LIRE se dit avant tout le reste, et par le meme
+  // code de sortie : une annexe absente ou un jeton declare au mauvais endroit
+  // ne sont pas « hors cible », ce sont des raisons de n'avoir rien mesure.
+  const index = litLesVues(HERE);
+  if (index.refus.length) {
+    index.refus.forEach(r => process.stderr.write(`[compare] NON COMPARABLE — ${r.id} — ${r.raison}\n`));
+    process.exit(RC_NON_COMPARABLE);
+  }
+  const sessionsDeclarees = index.sessions ?? {};
+  const creanceDeVue = id => {
+    const vue = index.vues.find(v => v.id === id);
+    const nom = vue?.jetons?.['@session'] ?? null;
+    const declaree = nom === null ? null : sessionsDeclarees[nom];
+    if (declaree == null) return { nom: null, cookies: [] };
+    return {
+      nom,
+      cookies: Object.entries(declaree.cookies ?? {}).map(([name, value]) => ({ name, value, url: BASE })),
+    };
+  };
+
+  const selection = selectionComparable({ vues: index.vues, demandees: ONLY });
+  const refus = refusDeSelection(selection);
+  if (refus) {
+    refus.messages.forEach(m => process.stderr.write(`[compare] NON COMPARABLE — ${m}\n`));
+    process.exit(refus.rc);
+  }
+  if (selection.ignorees.length) {
+    process.stderr.write(
+      `[compare] ${selection.ignorees.length} route(s) parametree(s) ecartee(s) faute de --vues : ` +
+      `${selection.ignorees.join(', ')}\n`);
+  }
+  const vues = selection.comparables;
+
   const { chromium } = vendorRequire('playwright-core');
   const { PNG } = vendorRequire('pngjs');
   const pixelmatch = vendorRequire('pixelmatch');
-
-  const index = JSON.parse(fs.readFileSync(path.join(HERE, 'vues.json'), 'utf8'));
-  let vues = index.vues.filter(v => !/:/.test(v.route));
-  if (ONLY.length) vues = index.vues.filter(v => ONLY.includes(v.id));
-  if (!vues.length) throw new Error('Aucune vue a comparer (les routes parametrees sont ignorees sans --vues).');
 
   fs.mkdirSync(RENDU, { recursive: true });
   const browser = await chromium.launch({ executablePath: chromiumPath(), args: ['--no-sandbox'] });
@@ -124,6 +196,8 @@ function ecartStructurel(a, b) {
         colorScheme: theme,
         userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       });
+      const creance = creanceDeVue(v.id);
+      if (creance.cookies.length) await ctx.addCookies(creance.cookies);
       const page = await ctx.newPage();
       let octets = 0, requetes = 0;
       const erreurs = [];
@@ -135,10 +209,10 @@ function ecartStructurel(a, b) {
       });
       page.on('pageerror', e => erreurs.push(String(e.message)));
 
-      const entree = { vue: v.id, route: v.route, theme };
+      const entree = { vue: v.id, route: v.route, chemin: v.chemin, theme, session: creance.nom };
       try {
         const t0 = Date.now();
-        const resp = await page.goto(BASE + v.route, { waitUntil: 'networkidle', timeout: 45000 });
+        const resp = await page.goto(BASE + v.chemin, { waitUntil: 'networkidle', timeout: 45000 });
         entree.statut = resp ? resp.status() : 0;
         entree.ms = Date.now() - t0;
         entree.lcp = await page.evaluate(() => new Promise(res => {

@@ -2,6 +2,36 @@ import { z } from 'zod';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { messageAttachmentSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 
+/**
+ * `allowedCountries` — ACCEPTÉ VIDE, REFUSÉ NON VIDE (#4354, suite de #4167).
+ *
+ * #4167 a retiré ce champ de la loi d'admission : le filtrer exigerait une base
+ * GeoIP que la passerelle n'embarque pas, et **un contrôle décoratif est pire
+ * qu'une absence, parce qu'on compte dessus**. La décision était prise côté
+ * admission et n'avait pas atteint la porte de création : l'API l'acceptait
+ * encore et l'interface l'affichait comme appliqué. Quelqu'un pouvait cocher
+ * « limiter aux pays suivants », le voir confirmé, et partager le lien en
+ * croyant qu'il était géo-restreint.
+ *
+ * ## Pourquoi refuser le NON VIDE plutôt que le champ
+ *
+ * Mesuré sur l'intégration le 2026-08-31 : **dix liens sur dix portent le
+ * champ, aucun ne porte de valeur.** Les clients publiés l'envoient donc, à
+ * vide, à chaque création. Un 400 sur la simple PRÉSENCE casserait toute
+ * création de lien jusqu'à leur mise à jour.
+ *
+ * Le refus se déclenche exactement là où l'utilisateur serait trompé — quand il
+ * DEMANDE une restriction. Un tableau vide ne demande rien : il est accepté, et
+ * ignoré comme il l'a toujours été.
+ *
+ * Le retrait muet a été écarté : il laisserait croire que l'écriture a réussi,
+ * ce qui est précisément le défaut qu'on ferme.
+ */
+const CHAMP_PAYS_INERTE = z
+  .array(z.string())
+  .max(0, "allowedCountries n'est plus appliqué (#4167) : un filtre par pays exigerait une base GeoIP que la passerelle n'embarque pas. Retirez le champ, ou laissez-le vide.")
+  .optional();
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ZOD VALIDATION SCHEMAS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -22,7 +52,7 @@ export const createLinkSchema = z.object({
   requireNickname: z.boolean().optional(),
   requireEmail: z.boolean().optional(),
   requireBirthday: z.boolean().optional(),
-  allowedCountries: z.array(z.string()).optional(),
+  allowedCountries: CHAMP_PAYS_INERTE,
   allowedLanguages: z.array(z.string()).optional(),
   allowedIpRanges: z.array(z.string()).optional(),
   newConversation: z.object({
@@ -48,12 +78,16 @@ export const updateLinkSchema = z.object({
   requireNickname: z.boolean().optional(),
   requireEmail: z.boolean().optional(),
   requireBirthday: z.boolean().optional(),
-  allowedCountries: z.array(z.string()).optional(),
+  allowedCountries: CHAMP_PAYS_INERTE,
   allowedLanguages: z.array(z.string()).optional(),
   allowedIpRanges: z.array(z.string()).optional()
 });
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+
+
+
+
 
 export const sendMessageSchema = z.object({
   content: z.string().max(1000, 'Message is too long').optional(),
@@ -353,6 +387,17 @@ export const messageSchema = {
     isEdited: { type: 'boolean', description: 'Whether the message was edited' },
     editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edition timestamp' },
     replyToId: { type: 'string', nullable: true, description: 'Quoted message identifier' },
+    // #4885 — non déclarés, ces quatre champs (+ le compteur/plafond de vue
+    // unique) étaient chargés par `getConversationMessagesWithDetails` et
+    // retirés ici par `fast-json-stringify` : un visiteur SANS COMPTE lisant
+    // un lien de partage recevait un message à vue unique / flouté /
+    // éphémère sans aucun moyen de le savoir.
+    isViewOnce: { type: 'boolean', description: 'View-once message (disappears after view)' },
+    maxViewOnceCount: { type: 'number', nullable: true, description: 'Maximum unique viewers allowed for view-once messages' },
+    viewOnceCount: { type: 'number', description: 'Number of unique viewers' },
+    isBlurred: { type: 'boolean', description: 'Content blurred until tap to reveal' },
+    effectFlags: { type: 'number', description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Self-destruct timestamp' },
     // Le SENS des messages système (avis d'arrivée, résumé d'appel) vit dans
     // `metadata` + `messageSource` — sans eux, le visiteur anonyme ne peut pas
     // les rendre dans SA langue et retombe sur le repli français stocké.

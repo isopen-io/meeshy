@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -172,7 +173,7 @@ export function registerHashtagRoutes(
     onRequest: depreciee({
       depuis: HASHTAG_SCOPE_DEPUIS,
       successeur: (request) =>
-        `/api/v1/social/posts?scope=hashtag&tag=${encodeURIComponent((request.params as { tag: string }).tag)}`,
+        `${apiPath('/social/posts')}?scope=hashtag&tag=${encodeURIComponent((request.params as { tag: string }).tag)}`,
     }),
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest, reply: FastifyReply) => {

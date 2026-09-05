@@ -2,6 +2,1031 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-09-01 **the analytics-consent gate now covers ALL FOUR dwell surfaces — reels, status bubble and
+> story viewer joined post detail, so the `allowAnalytics` privacy toggle is live everywhere it should be**
+> (slice `engagement-consent-gate-surfaces`, feature-parity §F engagement). The prior slice
+> (`engagement-consent-gate-detail`, #4655) shipped the pure `EngagementSessions.begin` consent gate but wired
+> only PostDetail, deferring the other three as "three thin per-surface slices"; leaving the toggle 3/4 dead —
+> a dwell on a reel, a status bubble, or a story still reported watch-time regardless of consent. This slice
+> closes that dimension-1 (Sécurité/privacy) gap across the board.
+>
+> **Step 0 — the open android-routine PR #4655 was MERGED first.** `list_pull_requests` (open) → #4655
+> (`claude/apps/android/engagement-consent-gate-detail`, mine) + gateway/dependabot PRs (jcnm/bots, none an
+> android slice). #4655's **Android** merge gate was SUCCESS; its only red check was **Quality (bun)** — an
+> `apps/web` type-debt ratchet regression (1184 vs baseline 1183), which an `apps/android`-only diff cannot
+> produce and which prior android slices (#4650/#4647/#4644) all merged past. Squash-merged #4655 → main
+> (commit `d0d2b144`), then branched `claude/apps/android/engagement-consent-gate-surfaces` off freshly-fetched
+> `origin/main` (HEAD == origin/main).
+>
+> **The change — one injected store + one argument per surface.** Each of `ReelsViewModel`,
+> `StatusesViewModel`, `StoryViewerViewModel` gains the existing Hilt-provided `PrivacyPreferencesStore` in its
+> constructor and passes `consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics` into its
+> `begin` call (reels: `setCurrentReel`; status: `markStatusViewed`; story: `transitionDwell`). The un-gated
+> impression tier stays un-gated on every surface (status still fires `viewPost(id)` on open; story still fires
+> `storyRepository.markViewed`). No new production logic — the gate itself already exists on the pure
+> `:core:model` `EngagementSessions.begin`; this slice only threads the existing `allowAnalytics` SSOT to the
+> three remaining call sites. Blast radius: 3 VMs (+1 ctor dep, +1 begin arg each), 3 test files (helper +1
+> `allowAnalytics` param, +2 direct story ctor calls patched with `InMemoryPrivacyPreferencesStore()`).
+>
+> **Tests: +4, RED-proven by mutation.** `ReelsViewModelTest` +1 (withheld consent → the qualifying 1000 ms
+> dwell fires no `viewPost("r1", 1000)`); `StatusesViewModelTest` +2 (withheld → no `viewPost("a", 10000)` dwell
+> record; the bare `viewPost("a")` impression still credits the open); `StoryViewerViewModelTest` +1 (withheld →
+> no `viewPost("a1", 1000)` dwell record). **RED:** stripping the reels wiring (`begin(...)` without
+> `consentGranted`) fails EXACTLY the reels consent test (1 of 18), the other 17 green — verified this run; the
+> pattern is identical across the three surfaces.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 → android-37.0`
+> symlink resolved `compileSdk = 37`. Kept `local.properties` out of the diff (`git check-ignore` confirms it is
+> gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest,
+> 973 tasks) → **BUILD SUCCESSFUL in 3m 51s**. Reviewer **PASS** (diff `apps/android` only — 3 feature files + 3
+> feature test files + tracking docs, no `local.properties`; SDK purity — the gate is the pure `:core:model`
+> machine, the store read stays in each `:feature` VM; SSOT — reuses the one `EngagementSessions.begin` gate and
+> the `allowAnalytics` SSOT, no re-implementation; instant-app — N/A, a suppression; UDF — VM `StateFlow`
+> unchanged; no tautological tests — mutation-proven; no coverage floor lowered).
+>
+> **Next**: engagement §F still defers, deliberately narrower than iOS: watch-time samples + completion from the
+> reels player, micro-action recording, and the durable outbox / crash-recovery net (iOS's SQLite
+> `EngagementOutbox`). For a fresh pure-core slice, consider a Chat or Feed value type / resolver from the audit.
+> Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-09-01 **post-consumption dwell tracking now OBEYS the reader's analytics-consent toggle —
+> a reader who turned `allowAnalytics` off accrues no dwell, exactly as iOS gates all engagement at
+> `EngagementTracker.begin`** (slice `engagement-consent-gate-detail`, feature-parity §F engagement). The
+> four Android dwell surfaces (reels, post detail, status bubble, story viewer) reported watch-time to
+> `posts/{id}/view?duration` regardless of the reader's `allowAnalytics` privacy toggle, while iOS
+> `EngagementTracker.begin` has a `guard consentProvider()` (the same `allowAnalytics` preference) that
+> stops the session ever opening. So Android had a dimension-1 (Sécurité/privacy) parity gap AND a dead
+> privacy control: `PrivacyToggle.ALLOW_ANALYTICS` existed, persisted, round-tripped — and changed nothing.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4652 (jcnm gateway,
+> `intelligent-noether`), #4622/#4599/#4590 (jcnm gateway), plus dependabot; NONE a
+> `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior
+> slice (`banner-group-name-favorite-emoji`) is on `main` (#4650, HEAD `a81750e5`). Branched
+> `claude/apps/android/toast-local-first-name` first, then re-scoped after finding the toast surface is
+> **unmounted** (only `NotificationBannerHost` is wired in `MeeshyApp.kt`; the banner superseded the toast
+> in #4457) — polishing orphan code violates the routine's "no dead ends", so the branch was renamed to
+> `engagement-consent-gate-detail` off the same freshly-fetched `origin/main` (HEAD == origin/main).
+>
+> **The change — one pure gate + one wire, faithful to iOS's two-tier engagement.** Reading the full iOS
+> `EngagementTracker` showed the immediate `viewPost` impression is NOT consent-gated (a deduplicated
+> view-count credit — `PostDetailView` fires `try? await PostService.shared.viewPost(...)` unconditionally),
+> while the engagement SESSION (dwell/watch → analytics outbox) IS gated at `begin`. Faithful port: (1) pure
+> `:core:model` `EngagementSessions.begin` gains `consentGranted: Boolean = true` (the domain default,
+> matching `PrivacyPreferences.allowAnalytics = true`); its `false` arm returns `this` inert BEFORE
+> `pauseTop`, so no session opens (→ `end` reports nothing) AND a non-consented overlay never pauses the
+> consented session underneath — the guard-first placement mirrors iOS returning before `pauseTop()`. This
+> is the SINGLE tested site every surface shares. (2) `PostDetailViewModel` injects the existing
+> `PrivacyPreferencesStore` (Hilt-provided, `InMemory` fake for tests) and `beginDwell` passes
+> `preferences.value.allowAnalytics`; the `recordView()` impression is untouched. **SOTA over iOS:** the
+> consent gate is one opaque boolean on a pure immutable machine (iOS threads it through a `@MainActor`
+> singleton with a `consentProvider` closure), so every branch is JVM-testable and the "when" (read the
+> store) stays in orchestration. Deliberately EXCLUDED (tracked follow-up): wiring the other 3 surfaces
+> (reels/status/story) to pass the flag — they default `true` (current behaviour) until their per-surface
+> slices, matching the one-surface-per-slice cadence the dwell series itself used.
+>
+> **Tests: +6, RED-proven by mutation.** `EngagementSessionsTest` +3 (non-consented begin opens no session
+> and reports nothing; non-consented begin does NOT pause the running session underneath — full 1200 ms vs
+> the consented-overlay 1000 ms, proving guard-before-`pauseTop`; explicit `consentGranted=true` qualifies
+> like the default). `PostDetailViewModelTest` +3 (consent withheld → the qualifying 10 s dwell fires no
+> `viewPost("p1", 10000)` while the impression `viewPost("p1")` still credits the view; consent granted →
+> `viewPost("p1", 1000)` records). **RED:** neutralising the guard (`if (!consentGranted)` → `if (false)`)
+> fails EXACTLY the 2 consent pure tests, the other 14 `EngagementSessionsTest` staying green — verified
+> this run.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 →
+> android-37.0` symlink resolved `compileSdk = 37` for AGP. Kept `local.properties` out of the diff
+> (`git check-ignore` confirms it is gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest, 973 tasks) → **BUILD SUCCESSFUL in 6m 14s**. Reviewer **PASS** (diff `apps/android`
+> only — 2 core files + 2 feature files + tracking docs, no `local.properties`; SDK purity — the gate is an
+> opaque boolean on the pure `:core:model` machine, the store read stays in the `:feature` VM; SSOT — one
+> `EngagementSessions.begin` gate, reusing the existing `PrivacyPreferencesStore` and `allowAnalytics`
+> SSOT, no re-implementation; instant-app — N/A, a suppression; UDF — VM `StateFlow` unchanged; no
+> tautological tests — mutation-proven; no coverage floor lowered; explicitApi honoured).
+>
+> **Next**: the 3 remaining dwell surfaces (`ReelsViewModel`, `StatusesViewModel`, `StoryViewerViewModel`)
+> each need one line — inject `PrivacyPreferencesStore`, pass `allowAnalytics` to their `begin` — a thin
+> per-surface slice apiece (the pure gate is done). OR the in-app TOAST surface is UNMOUNTED (only the
+> banner is wired) — a candidate for a cleanup/removal slice rather than a feature. Read the chosen box's
+> iOS audit part read-only before branching.
+
+> On 2026-09-01 **the in-app BANNER's "X dans <groupe>" framing finally leads the group name with its
+> favorite-classification emoji — the local rename it already carried was only HALF of what the device
+> knows** (slice `banner-group-name-favorite-emoji`, feature-parity §M in-app banner). The VM doc-comment
+> promised "renommage (`customName`) et emoji favori", but `NotificationBannerViewModel.handle` resolved
+> `groupName = customName ?: title` and dropped the favorite entirely: a thread the reader had starred (⭐️)
+> or classified (🔥) surfaced a bare name, where iOS `NotificationToastManager.ConversationPresentation.
+> composedSubtitle` leads with the favorite ("⭐️ Maman"). Dimension 6 (Cohérence) + dimension 13 (Complétude)
+> parity gap, and a promise the code didn't keep. The favorite emoji (`ApiConversationPreferences.reaction`)
+> and the local rename exist ONLY on the device — the one banner piece the gateway cannot compose.
+>
+> **Step 0 — the prior iteration's PR was open; merged it first.** `list_pull_requests` (open) → #4647
+> (`claude/apps/android/device-locale-header`, MY prior slice) plus #4622/#4599/#4590/#4541 (jcnm: gateway/web)
+> and dependabot. #4647: Android gate GREEN, reviewer PASS (documented in its body), diff `apps/android` only
+> (5 code/test + 2 tracking docs); the only red was **Quality (bun)** — an apps/web type-debt ratchet regression
+> (1184 vs baseline 1183), definitionally already on `main` since #4647 touches ZERO web files, unfixable from an
+> android session without breaking the hard rule. Squash-merged #4647 (the one legitimate "base failure, not mine";
+> ci.yml is not an Android gate — ROUTINE §CI reality). Then synced `main` (HEAD `8dd1aa26`), branched
+> `claude/apps/android/banner-group-name-favorite-emoji` off it.
+>
+> **The change — one pure composer + one wire.** New pure `:core:model` `ConversationBannerName.composed(
+> customName, title, favoriteEmoji) → String?`: port of iOS `composedSubtitle` PLUS its `name = customName ?? title`
+> resolution — `<favorite> <name>` favorite-first, `<name>` alone with no favorite, a blank/whitespace favorite
+> treated as absent (iOS `trimmingCharacters` guard), the local rename winning over the server title, and `null`
+> when the device knows no local name so `NotificationBannerFraming.present` keeps the server title (the Android
+> addition over iOS's pure surface, which never returns nil). Wired into `NotificationBannerViewModel` — the sole
+> local-name resolver (its own doc-comment says "résolu ici et nulle part ailleurs"). Blast radius: 1 new main +
+> 1 new test in `:core:model`, +1 import + a 4-line groupName expression in the feature VM, +1 VM test. **SOTA over
+> iOS:** the whole local-name resolution (rename fallback + favorite prefix + the null-omit) is one pure,
+> exhaustively-branch-tested value type, where iOS scatters it across `ConversationPresentation.name` (set in
+> `WidgetDataManager`) and `composedSubtitle`. Deliberately EXCLUDED (faithful boundary): the in-app TOAST surface
+> (`NotificationToastHost.notificationToastSubtitle`) reads the RAW server `conversationTitle` with no local-first
+> name at all — its VM holds no conversation snapshot, so that's a larger separate gap, noted in §M.
+>
+> **Tests: +11, RED-proven by mutation.** `ConversationBannerNameTest` +10 (favorite-first; no-favorite→name;
+> blank-favorite→name; whitespace-favorite trimmed before it leads; rename-wins-over-title; blank-rename→title still
+> favorite-first; title-only; both-name-fields-blank→null; both-absent→null; whitespace-name trimmed).
+> `NotificationBannerViewModelTest` +1 (a group notification whose cached conversation carries `customName` +
+> `reaction` surfaces a banner whose `InConversation` headline reads `actor="Alice"`, `groupName="😴 Mon équipe à
+> moi"`). **RED:** dropping the favorite prepend (`return "$favorite $name"` → `return name`) fails EXACTLY the 4
+> favorite-prepend tests (`ConversationBannerNameTest` 10 run, 4 failed, no collateral), the 6 no-favorite/null tests
+> staying green — verified this run.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 + `platforms;android-37.0`
+> /`android-35` + `build-tools;35.0.0` + `platform-tools`; the `android-37 → android-37.0` symlink resolved
+> `compileSdk = 37` for AGP. Kept `local.properties` out of the diff (`git check-ignore` confirms it's gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest,
+> 973 tasks) → **BUILD SUCCESSFUL in 4m 07s**. Reviewer **PASS** (diff `apps/android` only — 2 core files + 2 feature
+> files + tracking docs, no `local.properties`; SDK purity — pure `:core:model` value type, orchestration stays in
+> the `:feature` VM; SSOT — one `ConversationBannerName`, no re-implemented name resolution; instant-app — N/A, a
+> presentation string; UDF — VM `StateFlow` unchanged; no tautological tests — the composer is real logic,
+> mutation-proven; no coverage floor lowered; explicitApi honoured).
+>
+> **Next**: the in-app TOAST local-first name (above) — needs the toast VM to gain a `ConversationRepository` seam
+> like the banner VM, then reuse `ConversationBannerName`. OR an earlier build-order pure-core value type. The
+> unified Conversation info sheet (§C) remains a LARGE multi-slice surface (tab composables need extraction from
+> their `ModalBottomSheet` wrappers first). Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-09-01 **Android finally SENDS the Prisme's 4th-priority signal — `X-Device-Locale` now rides
+> every request, so `User.deviceLocale` fills and the device-locale arm of content resolution (dead
+> until now) actually fires** (slice `device-locale-header`, feature-parity §D "Automatic per-user
+> translation display"). The pure `LanguageResolver` already folded `MeeshyUser.deviceLocale` in at 4th
+> priority since `prisme-device-locale-priority` (2026-07-20) — but that field ONLY fills once the server
+> has been told the device locale, which iOS does via `ClientInfoProvider`'s `X-Device-Locale` header and
+> Android never did. So the arm was inert: a francophone on an English phone kept resolving exactly as
+> before, `deviceLocale` staying `null` forever (dimension 6 Cohérence + dimension 13 Complétude gap vs iOS,
+> and a dead code path — the resolver's 4th tier could never win on a real device).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4622/#4599/#4590 (jcnm: gateway),
+> #4541 (jcnm), plus dependabot; NONE a `claude/apps/android/<slice-id>` slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`banner-active-context-dismiss`) is on `main` (#4644, HEAD
+> `4a4d6138`). Branched `claude/apps/android/device-locale-header` off freshly-fetched `origin/main` (HEAD ==
+> origin/main, `rev-list --left-right --count` = 0/0). My designated env branch `claude/fervent-darwin-m75tmu`
+> is a stale non-android branch — ignored, the routine works off `main` with per-slice branches as every
+> prior slice did.
+>
+> **The change — one pure tag formatter + one interceptor + one wire.** (1) New pure `:core:model`
+> `DeviceLocaleTag.of(locale) → String?`: the RAW BCP-47 tag from `Locale.toLanguageTag()` (so `"fr-FR"`,
+> `"zh-Hant-HK"` travel intact — the gateway `normalizeLanguageCode`s them, exactly the split iOS uses where
+> `Locale.current.identifier` is sent raw and reduced server-side), or `null` when there is no usable language
+> subtag. Two guards, both branch-tested: a blank language (`Locale.ROOT`, a region-only `Locale("","FR")` →
+> `"und-FR"`) and an ill-formed subtag whose language is non-blank yet `toLanguageTag()` collapses to `"und"`
+> (`Locale("123")`) — a `null` tells the caller to OMIT the header rather than post `"und"` on every request.
+> (2) New `:core:network` `DeviceLocaleInterceptor`, the twin of `ClientCapabilitiesInterceptor`: reads the
+> locale per request through an injectable `() -> Locale` (default `Locale.getDefault()` — a mid-session
+> locale change is reflected without rebuilding the client), adds `X-Device-Locale`, never clobbers a
+> caller-set header, sends nothing for an unusable locale. (3) Registered in `MeeshyApi`'s OkHttp builder
+> beside the capabilities interceptor. **SOTA over iOS:** `toLanguageTag()` yields a correct BCP-47 tag (and
+> normalises the JVM's legacy `iw`→`he`) where iOS does a raw `_`→`-` string swap; the und/omit logic is a
+> pure, exhaustively-branch-tested value type, not an inline transform. Blast radius: 2 new main + 2 new test
+> files + 4 wire lines in `MeeshyApi`. Deliberately EXCLUDED (faithful boundary): injecting the LIVE locale
+> straight into client-side resolution (iOS resolves off the persisted `User.deviceLocale`; doing otherwise
+> would diverge from the server value) and the telemetry `X-Meeshy-Locale`/`-Timezone`/`-Country` headers
+> (enrichment, not Prisme — a separate slice).
+>
+> **Tests: +12, RED-proven.** `DeviceLocaleTagTest` +8 (region tag `fr-FR`; bare language `en`; script+region
+> `zh-Hant-HK` verbatim; regional variant `pt-BR`; root omitted; region-only omitted; ill-formed omitted;
+> legacy `iw`→modern `he`). `DeviceLocaleInterceptorTest` +4 (announced as raw tag; unusable locale → no
+> header; caller-set header wins; locale read per-request not captured once) — via the same fake-`Chain`
+> pattern as `ClientCapabilitiesInterceptorTest`. **RED:** dropping the `und` guard
+> (`tag.isBlank() || tag == UNDETERMINED` → `tag.isBlank()`) fails **exactly** the ill-formed-subtag test
+> (`:core:model:testDebugUnitTest FAILED`, 1 failed, no collateral) — verified this run.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 →
+> android-37.0` symlink resolved `compileSdk = 37` for AGP. Kept `local.properties` out of the diff
+> (gitignored, verified via `git check-ignore`).
+>
+> **Verified — targeted GREEN + full gate GREEN.** `:core:model` + `:core:network` `testDebugUnitTest` (new
+> classes) BUILD SUCCESSFUL; then `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check` gate CI
+> mirrors) — result recorded in the run log below. Reviewer **PASS** (diff `apps/android` only — 4 code files
+> + tracking docs, no `local.properties`; SDK purity — pure `:core:model` value type, the interceptor a
+> stateless building block, no orchestration; SSOT — one `DeviceLocaleTag`, the tag reduced only at the
+> gateway as for every other client, no re-implemented normalisation; instant-app — N/A, a request header;
+> UDF — N/A, a pure formatter + stateless interceptor; no tautological tests — the guards are real logic,
+> mutation-proven; no coverage floor lowered).
+>
+> **Next**: the LIVE-locale-into-resolution optimisation noted above (a §D follow-up, only if it can avoid
+> diverging from the persisted value); OR an earlier build-order pure-core value type. The unified
+> Conversation info sheet (§C "hero/direct headers; members/media/stats/options tabs") is a genuine gap but a
+> LARGE surface — its tab-content composables are all `ModalBottomSheet`-wrapped standalones that need
+> extraction before they can embed, so it wants its own multi-slice plan, not a single run. Read the chosen
+> box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **the LIVE in-app banner now pulls down when the reader opens the very thread it is
+> about — and the "belongs to the open thread?" test became one SSOT predicate shared by the fresh-
+> notification gate and the shown-banner dismissal** (slice `banner-active-context-dismiss`,
+> feature-parity §M). `NotificationBannerViewModel.setActiveContext` recorded the on-screen context
+> (and published it process-wide for the FCM gate) but did NOT dismiss a banner ALREADY on screen for
+> the conversation/post the reader just opened. iOS `NotificationToastManager.onConversationOpened`/
+> `onPostOpened` do exactly that, and the orphan `NotificationToastViewModel` did too — so the live
+> surface was the poorer one: a banner about thread X kept counting down over the reader's face while
+> they read thread X (dimension 8 UX + dimension 13 complétude gap vs iOS).
+>
+> **Step 0 — the prior open android-routine PR was merged first.** `list_pull_requests` (open) → #4629
+> (`claude/apps/android/push-foreground-presentation-gate`, mine) + gateway/dependabot. #4629's **Android**
+> check was green; its only red was **Quality (bun)** — the pre-existing `apps/web` type-debt ratchet
+> regression (baseline 1183 → 1184) that `ci.yml` has failed on for every main commit since Aug 31,
+> logically impossible for an `apps/android`-only diff to cause (it runs `tsc` on `apps/web`, zero web
+> files touched) and forbidden to fix (web = production logic). Squash-merged #4629 (commit `1a7b3085`)
+> exactly as the prior android slices merged on the same web-red. Then branched
+> `claude/apps/android/banner-active-context-dismiss` off freshly-synced `origin/main` (HEAD == origin/main,
+> `rev-list --left-right --count` = 0/0).
+>
+> **The change — one pure SSOT predicate + a policy refactor + banner wiring.** (1) New pure `:core:model`
+> `ActiveContextMatch.matches(contentConversationId, contentPostId, activeConversationId, activePostId)`:
+> a match needs the ACTIVE id present AND equal (a null active id — nothing on screen — never matches, so a
+> null-vs-null pair is deliberately NOT a match); conversation and post are OR-ed. A faithful port of iOS
+> `NotificationToastManager`'s `onConversationOpened`/`onPostOpened` + `handleNewNotification` guard. (2)
+> `NotificationToastPolicy.decide` now calls `ActiveContextMatch.matches` for its active-screen suppression
+> instead of the inline `context?.conversationId != null && context.conversationId == activeConversationId`
+> pair — behaviour identical (proven: the two formulations are both "both non-null and equal"), so the SSOT
+> now has a SECOND live consumer, not an orphan. (3) `NotificationBannerViewModel.setActiveContext` reads
+> the currently-shown banner and, if it belongs to the just-opened context, `dismiss()`es it (cancels the
+> auto-dismiss job + nulls the banner). **SOTA over iOS:** the predicate is a pure, exhaustively-branch-
+> tested value type both the fresh-gate and the dismissal share, where iOS re-writes the `==` comparison at
+> each of the three sites. Blast radius: `ActiveContextMatch` all-new; `NotificationToastPolicy` −4/+11 (one
+> call replaces the inline pair); `NotificationBannerViewModel` +11 (the dismiss block) +1 import.
+> Deliberately EXCLUDED: touching the orphan `NotificationToastViewModel`'s `onConversationOpened` hooks
+> (wiring into dead code adds no value — the toast/banner VM merge stays a separate §M slice, note updated).
+>
+> **Tests: +17, RED-proven.** `ActiveContextMatchTest` +11 (same conversation/post match; different
+> conversation/post no-match; post-match-wins-when-conversation-differs and vice-versa; null active
+> conversation vs present content, null content vs present active, null active post vs present content, all
+> null, neither matches). `NotificationBannerViewModelTest` +6 (opening the shown banner's conversation
+> dismisses it; opening its post dismisses it; a different conversation leaves it; leaving all screens
+> (`null,null`) leaves it; setActiveContext with no banner shown is inert). **RED:** stripping the
+> predicate's `!= null` guards fails 6 `ActiveContextMatch` + 9 `NotificationToastPolicy` tests (the policy
+> genuinely consults it — the extraction is load-bearing, not cosmetic); removing the dismiss wiring fails
+> exactly the two open-the-thread tests (`17 tests completed, 2 failed`), both verified by rebuild.
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable (200); cmdline-tools 11076708 +
+> `platforms;android-35`/`android-37.0` + `build-tools;35.0.0` + `platform-tools`; the `android-37 →
+> android-37.0` symlink resolved `compileSdk = 37` for AGP 8.13. Kept `local.properties` out of the diff
+> (gitignored, verified via `git check-ignore`).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL (4m 07s, 973 tasks). Reviewer **PASS** (diff `apps/android` only — 2
+> core files (1 new + 1 edited) + 1 core test + 2 feature files (1 edited main + 1 edited test) + 2 tracking
+> docs, no `local.properties`; SDK purity — pure `:core:model` predicate, orchestration stays in the
+> `:feature` VM; SSOT — one `ActiveContextMatch` shared by the policy and the banner dismissal, the inline
+> pair deleted, no re-implementation; instant-app — pulling a stale banner is pure UDF state, no
+> spinner/refetch; UDF — immutable `StateFlow`, synchronous pure transition; no coverage floor lowered; no
+> tautological tests; RED-proven behaviour).
+>
+> **Next**: the deeper §M twin remains — `NotificationBannerViewModel` (LIVE) vs `NotificationToastViewModel`
+> (orphan, never mounted) still wrap the same `MeeshyNotificationToast` atom off the same socket seam; a
+> product-level merge (retire the toast host+VM, keep the banner's superset framing/navigation) is a
+> separate slice. Or the per-category notification SWR cache key (§M), or an earlier build-order pure-core
+> value type. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **a FOREGROUND FCM push now consults a presentation gate before raising a system
+> banner — the very preferences the app already honours for the in-app toast (push master, quiet
+> hours, per-type toggles) plus on-screen-thread and socket-alive suppression** (slice
+> `push-foreground-presentation-gate`, feature-parity §M). `MeeshyFcmService.handleMessagePush` was
+> UNGATED: it posted a system banner for EVERY foreground message push — push disabled, inside quiet
+> hours, a muted type, or the conversation the reader was in still buzzed, and a socket-delivered
+> event double-showed (system banner + in-app toast). This is the exact iOS pre-`NotificationPresentationResolver`
+> bug ("willPresent affichait bannière + son + badge sans consulter aucun toggle"). Dimensions 1/5/8/13.
+>
+> **Step 0 — the prior open android-routine PR was merged first.** `list_pull_requests` (open) → #4619
+> (`claude/apps/android/conversation-stats-client-fallback`, mine) + gateway/dependabot. #4619's **Android**
+> check was green; its only red was **Quality (bun)** — a pre-existing `apps/web` type-debt ratchet
+> regression (baseline 1183 → 1184) that `ci.yml` has failed on for EVERY main commit since Aug 31 (verified
+> via `list_workflow_runs`), impossible for an `apps/android`-only diff to cause and forbidden to fix (web =
+> production logic). Squash-merged #4619 (commit `d3be4496`) exactly as the prior six android slices merged
+> on the same web-red. Then branched `claude/apps/android/push-foreground-presentation-gate` off freshly-synced
+> `origin/main`.
+>
+> **The change — one pure decision core + a process-level nav-truth seam + FCM wiring.** (1) New pure
+> `:core:model` `PushPresentationPolicy.decide(socketConnected, preferences, rawType, conversationId,
+> activeConversationId, now)` → `PushPresentationDecision` (`Suppress` | `Alert(playSound)`), the Android
+> counterpart of iOS `NotificationPresentationResolver.options`. Rules, first-match: on-screen thread →
+> suppress; socket alive → suppress (the in-app toast already surfaces it — no double banner); socket down →
+> gate exactly as a background push would be — `pushEnabled` → `DndWindow.isActive` → `NotificationTypeToggle.isEnabled`,
+> all three REUSED (no re-implemented gate); a raised banner's sound follows `soundEnabled`. iOS's `.badge`
+> presentation option has no Android analog (the app-icon badge is a side effect of a posted notification), so
+> it is deliberately not modelled — suppression withholds the whole banner. (2) New `:sdk-core` `@Singleton
+> ActiveConversationStore` (a `StateFlow<String?>` holder) carries the one on-screen-thread nav truth across
+> the process boundary — a background FCM service has no ViewModel to read the active thread. Written at the
+> single nav-truth site (`NotificationBannerViewModel.setActiveContext`, already called from the root banner
+> host's `LaunchedEffect(activeConversationId)`), read by the service. (3) `MeeshyFcmService.handleMessagePush`
+> now injects `SocketManager` + `NotificationPreferencesStore` + `ActiveConversationStore`, computes the
+> decision, and returns on `Suppress`; `showNotification` gained a `playSound` param → `setSilent(!playSound)`.
+> The outbox flush still fires on every push (unchanged), only the banner is gated.
+>
+> **Tests: +15 pure, RED-proven.** `PushPresentationPolicyTest` (socket-down enabled awake → sounded alert;
+> on-screen thread suppresses even when everything else would alert; a DIFFERENT thread is not suppressed;
+> null conversationId skips the guard and still evaluates the gate; live socket suppresses; push-master-off
+> suppresses; inside quiet hours suppresses / awake alerts; a muted per-type toggle suppresses that type while
+> leaving another type alone; unknown type gated by system toggle off→suppress / on→alert; absent type treated
+> as system; sound-off → `Alert(playSound=false)`; branch-order — socket-alive dedup outranks the preference
+> gate). **RED:** dropping the socket-alive suppression (`if (socketConnected)`) fails exactly the
+> live-socket-suppresses test (`15 tests completed, 1 failed`, verified by rebuild). `NotificationBannerViewModelTest`
+> factory updated for the new `ActiveConversationStore` dep (real impl, not weakened — its assertions are unchanged).
+>
+> **SDK bootstrap WORKED this run.** `dl.google.com` reachable; cmdline-tools 11076708 + `platforms;android-37.0`/
+> `android-35` + `build-tools;35.0.0` + `platform-tools`; the `android-37 → android-37.0` symlink resolved for
+> AGP 8.13 this time (contra the 2026-08-31 `conversation-stats-client-fallback` note where it failed after main
+> moved). Kept `local.properties` out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` BUILD SUCCESSFUL (6m 22s, 973
+> tasks, APK + all-module unit tests). Reviewer **PASS** (diff `apps/android` only — 3 new + 3 edited code files
+> + 2 tracking docs, no `local.properties`; SDK purity — pure `:core:model` policy + a stateless `:sdk-core`
+> singleton holder, orchestration in the `:app` FCM service; SSOT — the gate REUSES `DndWindow` +
+> `NotificationTypeToggle`, and the store is the one process-level active-thread truth written at a single site;
+> no coverage floor lowered; no tautological tests; RED-proven behaviour).
+>
+> **Next**: §M's remaining piece is unifying the in-app toast/banner VMs' per-instance active-conversation
+> tracking onto the new `ActiveConversationStore` (an SSOT tidy-up, deferred here to keep the slice tight). Or
+> the §C "Conversation info sheet: hero/direct headers" Compose-glue box, or an earlier build-order pure-core
+> value type. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **the conversation stats dashboard gained a CLIENT-SIDE fallback — a failed or lagging
+> `/stats` fetch no longer blanks to an error screen; the sheet computes the same figures from the
+> messages already on screen (iOS's `clientComputed*` fallback), shown instantly and kept on failure**
+> (slice `conversation-stats-client-fallback`, feature-parity §C "Conversation stats rings …" — the
+> offline/cache-first maturity arm of an already-`[x]` box). The Android dashboard was SERVER-ONLY:
+> `ConversationStatsViewModel` fetched `/stats` and, on `NetworkResult.Failure`, set `StatsPhase.Error`
+> — an error screen even though the loaded page held every message needed to compute messages / words /
+> content-types / participants / activity locally, exactly as iOS falls back to `messages.count` etc.
+> when `serverStats == nil`. Dimension-8 (offline) + dimension-2 (cache-first) + dimension-13 gap.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4599/#4590 (gateway,
+> `claude/brave-archimedes-*`) + dependabot; none a `claude/apps/android/<slice-id>` slice, nothing of
+> mine to merge. Prior slice (`story-viewer-dwell`) is on `main` (#4607, commit 79fdf443). Branched
+> `claude/apps/android/conversation-stats-client-fallback` off freshly-fetched `origin/main`.
+>
+> **The change — one pure computation + a cache-first ViewModel + a thin mapper.** (1) New pure
+> `:core:model` `ConversationStatsProjection.clientComputed(conversationId, messages)` returning a
+> `ConversationMessageStatsResponse` — the SAME type the server returns, so the existing `project()`
+> path renders EITHER source (no divergent second render path). Faithful port of iOS: a word is a run
+> of non-whitespace (empty/blank ⇒ 0); an attachment-less non-empty message is one TEXT item (a caption
+> beside an attachment is not — the attachments win); daily buckets emitted oldest-first as `yyyy-MM-dd`.
+> **SOTA over iOS**: participants group by `senderId`, not display name (iOS merges two users who share a
+> name). `hourly`/`language` stay empty (not derivable from the reduced shape without a clock/detector —
+> iOS's fallback has neither either). New value types `ClientStatMessage` + `ClientAttachmentKind`. (2)
+> `ConversationStatsViewModel.load` now takes `List<ClientStatMessage>` (was `List<String>` for sentiment
+> only — a single richer input, no divergent twin): it SEEDS the sheet from `clientComputed` synchronously
+> (cache-first, no spinner), scores sentiment from the same list, then fetches `/stats`; a Success refines
+> (server is authoritative over the loaded page), a Failure KEEPS the local snapshot instead of erroring.
+> Only a fetch with no local messages surfaces the error. (3) `BubbleContent → ClientStatMessage` mapping
+> extracted to `ClientStatMessageMapping.kt` (ChatScreen is already 3400+ lines, over budget — extract,
+> don't grow): the bubble layer carries no author id (viewer's own → `__me__`, others → display name or
+> `__unknown__`) and renders a video as a thumbnail in `images`, so a video folds into the IMAGE tally —
+> a documented fallback coarsening; the server split stays accurate.
+>
+> **Tests: +20, RED-reasoned.** `ConversationStatsProjectionTest` +10 (message/word totals; whitespace
+> runs collapse; attachment-only counts under its kind not text; whitespace-only still TEXT like iOS;
+> group-by-id keeps two "Sam"s apart; later name fills a first-null; per-day oldest-first buckets; chars
+> summed + hourly/lang empty; empty page zeroed; feeds the same participantShares projection).
+> `ClientStatMessageMappingTest` +6 (outgoing→`__me__`; incoming→name; nameless→`__unknown__`; attachment
+> kinds incl. video-folds-into-image; instant→local-day in a +02:00 zone crosses midnight; absent
+> timestamp→today). `ConversationStatsViewModelTest` reworked +4 net (local messages seed before the
+> network resolves; a failure keeps the local snapshot [was: error]; a failure with NO local messages
+> still errors; a success refines the seed) — the two now-unreachable "sentiment survives into Error"
+> tests were replaced, not weakened (the new ones assert MORE: stats present, not just an error).
+> **RED:** keying participants by name instead of id fails exactly the two-Sams test; making a fetch
+> failure always Error (old behaviour) fails exactly the keep-snapshot test; dropping the synchronous
+> seed fails exactly the seed-before-resolve test.
+>
+> **Android gate DELEGATED TO CI (local toolchain unavailable, per ROUTINE §CI reality).** SDK
+> bootstrapped (cmdline-tools 13114758, `build-tools;35.0.0`, `platforms;android-37.0`), but **AGP 8.13.0
+> resolves `compileSdk = 37` to hash `android-37` while the SDK repo only publishes the minor-versioned
+> `android-37.0`** — `Failed to find target with hash string 'android-37'`. A symlink, a path-patched
+> copy, and a fresh reinstall via newer cmdline-tools all failed the same way; CI's `android-actions/
+> setup-android@v4` resolves it (main is green on this exact AGP), the container's manual toolchain does
+> not. So no local `assembleDebug`/`testDebugUnitTest` this run — pushed, opened the PR, and the **Android**
+> check is the compiler. Diff reviewed adversarially for compile-correctness (imports pruned — the mapper
+> moved out of ChatScreen left 4 unused imports, removed; no stale `messageContents` caller; single input
+> type; `ClientStatMessage(day:)` last non-default param is legal Kotlin, all call sites name it).
+>
+> **Reviewer self-run: PASS pending CI.** Diff `apps/android` only (2 `:core:model` + 4 `:feature:chat` +
+> 2 tracking docs; `local.properties` gitignored, not staged). SDK purity — pure `:core:model` building
+> block, orchestration in the `:feature` ViewModel, mapping glue in the feature module. SSOT — one
+> `clientComputed`, feeding the one existing `project()`; no re-implemented render path. Instant-app —
+> synchronous cache-first seed, no spinner, no refetch on period switch. No coverage floor lowered; no
+> tautological tests; behaviour over implementation.
+>
+> **Next**: the §C "Conversation info sheet: hero/direct headers …" box is still `[ ]` — the header
+> composition is the remaining Compose-glue arm now that members/media/stats are all real. For a pure-core
+> next slice, consider another Chat value type, or an earlier build-order area (Auth→Conversations).
+
+> On 2026-08-31 **dwell-time tracking reached its FOURTH and LAST single-focus surface — the story
+> viewer now records a dwell-aware view beside its impression, bringing dwell to full iOS parity
+> (reels + detail + status + story), off the same `EngagementSessions` heart** (slice
+> `story-viewer-dwell`, feature-parity §F "Post view + dwell-time tracking" — the last deferred
+> surface).
+>
+> **Step 0 — merged the open android-routine PR first.** `list_pull_requests` (open) showed #4601
+> (`claude/apps/android/status-bubble-dwell`, the status-leg slice) open with the **Android** gate green,
+> `mergeable_state: unstable` — its only red check was `Quality (bun)`, a web type-debt ratchet
+> regression (`apps/web` 1184 vs baseline 1183, +1) with ZERO relation to the `apps/android`-only diff
+> (6 files: 2 `:feature:feed` + 1 test + 3 tracking docs). Textbook "CI red that isn't this PR's"
+> (base-branch/web failure, diff touches no web file); `unstable` (not `blocked`) confirms it isn't a
+> required gate. Squash-merged #4601 → `main` (commit cecd01d6) before branching. Then branched
+> `claude/apps/android/story-viewer-dwell` off freshly-fetched `origin/main`.
+>
+> **The gap + the SDK-look the prior note demanded, resolved.** iOS tracks dwell on four single-focus
+> surfaces; reels (#4593) / detail (#4597) / status (#4601) shipped, the story viewer was the last, held
+> back because `storyRepository.markViewed(slideId)` carried no duration arg. Two scout passes resolved
+> it cleanly: **a story slide id IS a post id** — `StoryApi.markViewed` already POSTs to `posts/{id}/view`,
+> the identical route that carries the optional `duration`, and the gateway
+> (`routes/posts/interactions.ts`) already binds/persists it (bounded [0,300000]ms) for the story case.
+> So the measured watch-time rides the very endpoint the impression uses — apps/android-only, no
+> gateway/shared/iOS change. (iOS actually uses a richer `/posts/engagement/batch` subsystem for stories;
+> the Android dwell surfaces all deliberately ride the legacy `posts/{id}/view?duration` sink — a
+> faithfully narrower boundary, consistent across all four surfaces.)
+>
+> **The change — the dwell session moves WITH the slide on screen, entirely inside the ViewModel.**
+> `StoryViewerViewModel` gains a `CacheClock` + `PostRepository` dep + a private `sessions =
+> EngagementSessions()` cursor and `currentDwellStoryId`. A new private `transitionDwell(nextId)` — the
+> dwell twin of the existing `transitionPostRoom` and wired right beside it in `emit()` — ends the slide
+> left (recording `postRepository.viewPost(slideId, dwellMs)` when it passed the 1000ms floor) and begins
+> the one landed on; it is guarded by `currentDwellStoryId` so a same-slide re-emit (a reaction, a
+> translation merge) neither closes nor restarts the running session. `emit()` maps `isDismissed`→`null`
+> so a swiped-away viewer ends its dwell immediately; `onCleared`→`endCurrentDwell()` is the teardown net.
+> **SOTA/right-choice:** the whole dwell lifecycle lives in the ViewModel state machine driven by
+> playback transitions — ZERO screen wiring needed (unlike status-bubble's `DisposableEffect`), because
+> the story viewer already owns a `isDismissed` signal and `onCleared`. Same `(postId, userId)`-singleton
+> gateway dedup as detail/status: the impression (`storyRepository.markViewed`, unchanged) increments
+> `viewCount` once, the dwell only raises the stored `duration` to its max — purely additive, no
+> double-count. Deliberately EXCLUDED (faithful, narrower boundary): watch-samples/completion (reels loop,
+> N/A), micro-actions, and the durable outbox / batch subsystem.
+>
+> **Tests: +8, RED-proven by mutation.** `StoryViewerViewModelTest` +8 (advancing past the floor records
+> the left slide's measured watch-time; a sub-floor glance records nothing; each advance records the slide
+> it leaves re-arming the clock on the next; stepping back records the slide left; `endCurrentDwell`
+> records once then a second end is inert; a same-slide re-emit does not restart the dwell clock;
+> dismissing ends the current dwell; a failed dwell record does not crash or disturb the viewer).
+> **Mutation:** neutralising the `begin` fails EXACTLY the 6 dwell-recording tests while the 2
+> assert-no-record tests stay green — the RED signature that proves the tests exercise the wiring, not a
+> constant. `StoryViewerViewModelTest` 96 tests, 0 failures.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`;
+> `compileSdk = 37` resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of
+> the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check`
+> commands) BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 edited `:feature:stories`
+> ViewModel + 1 edited test + tracking docs, no `local.properties`; SDK purity — the pure
+> `EngagementSessions` building block stays in `:core:model`, the *when* (begin/end via slide transition)
+> is orchestration in the `:feature:stories` ViewModel; SSOT — one `EngagementSessions`, the existing
+> `viewPost` sink reused, no re-implemented dwell logic; instant-app — analytics is fire-and-forget, no
+> spinner; UDF — immutable `StateFlow` UiState untouched, the dwell cursor lives beside the room cursor;
+> no dead-ends — every qualified view reaches a real endpoint; no tautological tests; no coverage floor
+> lowered — new orchestration wiring with mutation-proven coverage).
+>
+> **Next**: dwell tracking is now complete on all four single-focus surfaces. The remaining §F engagement
+> pieces are the durable outbox + `/posts/engagement/batch` subsystem (a large, multi-slice effort — iOS's
+> `EngagementOutbox`/`EngagementDispatcher`, no Android wiring point yet) and watch-samples/micro-actions.
+> Other open threads: the §M `NotificationToastPolicy` per-type toggle gate (a pure wire-type→toggle
+> resolver, iOS `UserNotificationPreferences+Filter.isTypeEnabled`, ~80 cases — bounded pure-logic slice),
+> the `NotificationCoordinator` unread/badge authority reducer (§M, `unmutedTotal` already partly pure on
+> iOS), and the local-FTS leg of §N (Room, device-bound). Read the chosen box's iOS audit part read-only
+> before branching.
+
+> On 2026-08-31 **dwell-time tracking reached its THIRD surface — the status bubble now records a
+> dwell-aware view beside its impression, off the same `EngagementSessions` heart** (slice
+> `status-bubble-dwell`, feature-parity §F "Post view + dwell-time tracking" — the deferred "other
+> surfaces" sub-item, status leg).
+>
+> **Step 0 — merged the open android-routine PR first.** `list_pull_requests` (open) showed #4597
+> (`claude/apps/android/post-detail-dwell`, the detail-leg slice) open with the **Android** gate green,
+> `mergeable_state: unstable` — its only red check was `Quality (bun)`, a web type-debt ratchet
+> regression (`apps/web` 1184 vs baseline 1183, +1) with ZERO relation to the `apps/android`-only diff
+> (6 files: 2 `:feature:feed` + 1 test + 3 tracking docs). That is the textbook "CI red that isn't this
+> PR's" (base-branch/web failure, diff touches no web file), and `unstable` confirms it isn't a required
+> gate. Squash-merged #4597 → `main` (commit 6f9daf66) before branching. Then branched
+> `claude/apps/android/status-bubble-dwell` off freshly-fetched `origin/main` (the session's own checkout
+> is a `dev`-based branch far behind `main` — read all code/tracking from `origin/main`, the standing
+> NOTES rule).
+>
+> **The gap.** iOS tracks dwell on four single-focus surfaces via `EngagementTracker`; reels (#4593) and
+> detail (#4597) shipped, story + status were deferred. iOS `StatusBubbleController.present(_:)` fires the
+> `viewPost` impression **and** `EngagementTracker.begin(surface: .statusBubble)` together, and every
+> dismiss path (`dismiss()`, the `isPresented` binding, `requestReply()`) calls `end(surface: .statusBubble)`.
+> Android's `StatusesViewModel.markStatusViewed` fired only the dwell-less impression; the status surface
+> recorded no watch-time (a dimension-2 Performance/reco-signal gap, dimension-13 Complétude gap vs iOS).
+>
+> **The change — fold begin into the impression, end on popover dispose, no new sink, no double-count.**
+> (1) `StatusesViewModel` gains a `CacheClock` dep + a private `sessions = EngagementSessions()` cursor;
+> `markStatusViewed(id)` now opens a `STATUS_BUBBLE` session (`begin`, right beside the impression it
+> already fires) — the faithful port of iOS `present(_:)` doing both in one method — and a new public
+> `endStatusDwell()` closes it → a qualified dwell records `viewPost(id, dwellMs.toInt())`. A blank id
+> records nothing and opens nothing (iOS's early `guard`). (2) `StatusBarView` ends it from the popover's
+> `DisposableEffect(entry.id) { onDispose { viewModel.endStatusDwell() } }` — one seam that covers EVERY
+> dismiss path (tap-outside, react, republish all set `selected = null`), mirroring iOS's three dismiss
+> sites all calling `end`. The viewer's OWN status opens the popover but records no view (line 107 doesn't
+> call `markStatusViewed`), so no session is opened and the dispose `end` is a harmless no-op. **The crux
+> (same as detail, re-verified):** `PostService.creditPostView` is a `(postId, userId)` singleton — the
+> second, duration-carrying call does NOT re-increment `viewCount`, it only raises the stored `duration`
+> to `max(existing, new)`. So the impression + dwell pair is purely additive, faithful to iOS's two-record
+> model, on Android's single `viewPost(id, duration?)` endpoint. **SOTA/right-choice:** rather than a
+> separate `beginStatusDwell` call the screen would have to remember to pair with `markStatusViewed`, the
+> impression method OWNS the begin (as iOS `present()` does) — the call site can't drift out of sync, and
+> the end is driven by composition lifecycle, not three hand-maintained dismiss callbacks. Deliberately
+> EXCLUDED (faithful, narrower boundary): the story-viewer surface (its `markViewed(slideId)` sink carries
+> no duration arg — needs an SDK look first, unlike detail/status), watch-samples/completion (reels loop,
+> N/A there), micro-actions/outbox (no Android sink).
+>
+> **Tests: +7, RED-proven by mutation.** `StatusesViewModelTest` +7 (dwell past floor records the measured
+> watch-time; the dwell enriches the same view — impression fires exactly once + one duration call; a
+> sub-floor glance records no watch-time; a blank statusId opens no session; ending twice records once —
+> idempotent; ending a dwell that never opened records nothing — the own-status path; a failed dwell record
+> does not disturb the bar). **Mutation:** neutralising the `begin` fails EXACTLY the 4 dwell-recording
+> tests while the 3 assert-no-record tests stay green — the RED signature that proves the tests exercise
+> the wiring, not a constant. All 54 `StatusesViewModelTest` cases green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `build-tools;37.0.0` +
+> `platform-tools`; `compileSdk = 37` resolved via the `android-37 → android-37.0` symlink.
+> `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check`
+> commands) BUILD SUCCESSFUL, exit 0, no failing tests. Reviewer **PASS** (diff `apps/android` only — 2
+> edited `:feature:feed` files + 1 edited test + tracking docs, no `local.properties`; SDK purity — the
+> pure `EngagementSessions` building block stays in `:core:model`, the *when* (begin/end/report) is
+> orchestration in the `:feature:feed` ViewModel, the lifecycle hook in the screen; SSOT — one
+> `EngagementSessions`, the existing `viewPost` sink reused, no re-implemented dwell logic; instant-app —
+> analytics is fire-and-forget, no spinner; UDF — immutable `StateFlow` UiState untouched, the dwell cursor
+> lives beside the impression batcher; no dead-ends — every qualified view reaches a real endpoint; no
+> tautological tests; no coverage floor lowered — new orchestration wiring with mutation-proven coverage).
+>
+> **Next**: the LAST dwell surface — story-viewer. `StoryViewerViewModel` already has a `currentRoomStoryId`
+> cursor + `markCurrentViewed`, but stories use `storyRepository.markViewed(slideId)`, which has **no
+> duration arg** — so this leg needs an SDK look first (either a duration-capable story-view endpoint or a
+> decision that story dwell rides the same `posts/{id}/view` if a story slide IS a post id). Read the iOS
+> `StoryViewer` engagement wiring + the gateway story-view endpoint before branching. Other open threads:
+> the §M notification twin (`NotificationBanner*` LIVE vs `NotificationToast*` orphan), and the local-FTS
+> leg of §N. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **dwell-time tracking reached its second surface — the post detail now records a
+> dwell-aware view beside its impression, off the same `EngagementSessions` heart** (slice
+> `post-detail-dwell`, feature-parity §F "Post view + dwell-time tracking" — the deferred "other three
+> surfaces" sub-item, detail leg).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4590/#4584/#4583/#4581/#4580/
+> #4577/#4576/#4575/#4574/#4573/#4572/#4571/#4570/#4569/#4568/#4567/#4566/#4565/#4564/#4563/#4562/#4541
+> (all jcnm gateway/web + dependabot, none a `claude/apps/android/<slice-id>` slice, no `apps/android`
+> collision, nothing of mine to merge). Prior slice (`reels-engagement-dwell`) is on `main` (#4593, commit
+> 285b1afc). Branched `claude/apps/android/post-detail-dwell` off freshly-fetched `origin/main`. Read
+> tracking from `origin/main` (the session's own checkout is a `dev`-based branch far behind `main`, with
+> a divergent `notification-center-category-filter` history that never landed — the NOTES rule "read
+> tracking from origin/main" held again).
+>
+> **The gap.** iOS tracks dwell on four single-focus surfaces via `EngagementTracker`; the
+> `reels-engagement-dwell` slice landed the pure core + the reels surface and DEFERRED the other three.
+> `PostDetailView` (iOS) carries `.trackEngagement(surface: .detail)` **beside** its `.task` `viewPost`
+> impression — two records: the impression counts the open, the dwell (to the batch endpoint) measures
+> quality. Android's `PostDetailViewModel` fired only the dwell-less impression; the detail surface
+> recorded no watch-time at all (a dimension-2 Performance/reco-signal gap, dimension-13 Complétude gap).
+>
+> **The change — begin/end wiring on the existing surface, no new sink, no double-count.** (1)
+> `PostDetailViewModel` gains a `CacheClock` dep + a private `sessions = EngagementSessions()` cursor;
+> `init` opens a `DETAIL` session (`beginDwell`, right after `recordView`), and a new public
+> `endDwellSession()` closes it → a qualified dwell records `viewPost(id, dwellMs.toInt())`. (2)
+> `PostDetailScreen` calls `endDwellSession()` from a `DisposableEffect(Unit) { onDispose { … } }` — the
+> exact seam `ReelsScreen` uses via `setCurrentReel(null)`, so the coroutine runs while `viewModelScope`
+> is still alive (a later `onCleared` is not relied on and would be a no-op — the session is already
+> ended). **The crux, verified in the gateway before coding:** `PostService.creditPostView` is a
+> `(postId, userId)` singleton — the second, duration-carrying call does NOT re-increment `viewCount`
+> (returns `false`), it only raises the stored `duration` to `max(existing, new)`. So keeping the
+> immediate impression AND adding a dwell call is purely additive (impression + enrichment), faithful to
+> iOS's two-record model, on Android's single `viewPost(id, duration?)` endpoint. **SOTA/right-choice
+> over the naïve port:** rather than replacing the impression (which would lose the "counted on open"
+> guarantee for a killed-before-dispose session) OR blindly double-firing (which a lesser endpoint would
+> double-count), the design leans on the gateway's proven dedup+max-duration semantics — the impression
+> stays immediate, the dwell enriches. Deliberately EXCLUDED (faithful, narrower boundary): the
+> story/status surfaces (same additive shape, next slices), watch-samples/completion (reels loop, so N/A
+> there), and micro-actions/outbox (no Android sink).
+>
+> **Tests: +6, RED-proven by mutation.** `PostDetailViewModelTest` +6 (dwell past floor records the
+> measured watch-time; the dwell record enriches the same view — impression fires exactly once + one
+> duration call; a sub-floor glance records no watch-time; a blank postId opens no session; ending twice
+> records once — idempotent; a failed dwell record does not throw). **Mutation:** neutralising `beginDwell`
+> (never open a session) fails EXACTLY the 4 tests that expect a recorded dwell (`4 failed`), while the two
+> assert-no-record tests (`below floor`, `blank postId`) stay green — the RED signature that proves the
+> tests exercise the wiring, not a constant. All 54 `PostDetailViewModelTest` cases and every other feed
+> test stay green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check`
+> commands) BUILD SUCCESSFUL (973 actionable tasks, 0 failed, 5m 57s). Reviewer **PASS** (diff
+> `apps/android` only — 2 edited `:feature:feed` files + 1 edited test + tracking docs, no
+> `local.properties`; SDK purity — the pure `EngagementSessions` building block stays in `:core:model`,
+> the *when* (begin/end/report) is orchestration in the `:feature:feed` ViewModel, the lifecycle hook in
+> the screen; SSOT — one `EngagementSessions`, the existing `viewPost` sink reused, no re-implemented dwell
+> logic; instant-app — analytics is fire-and-forget, no spinner; UDF — immutable `StateFlow` UiState
+> untouched, the dwell cursor lives beside the room cursor; no dead-ends — every qualified view reaches a
+> real endpoint; no tautological tests; no coverage floor lowered — new orchestration wiring with
+> mutation-proven coverage).
+>
+> **Next**: the last two dwell surfaces — story-viewer (`StoryViewerViewModel` already has a
+> `currentRoomStoryId` cursor + `markCurrentViewed`; needs a `STORY_VIEWER` begin/end on slide change and
+> a story-appropriate dwell sink — stories use `storyRepository.markViewed(slideId)`, which has no
+> duration arg, so this one needs an SDK look first) and status-bubble (`StatusesViewModel.markStatusViewed`
+> fires a dwell-less `viewPost` on popover open — same additive enrichment as detail, but the begin/end is
+> a popover open/close event, not a screen lifecycle). Other open threads: the §M notification twin
+> (`NotificationBanner*` LIVE vs `NotificationToast*` orphan), and the local-FTS leg of §N. Read the
+> chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **dwell-time tracking got its pure heart plus its first surface: reels now record a
+> view WITH how long they were watched, off a faithful port of iOS's `EngagementTracker`** (slice
+> `reels-engagement-dwell`, feature-parity §F "Post view + dwell-time tracking" — the `- [~]` box's
+> long-open "Still fully open: dwell-time tracking" sub-item).
+>
+> **Step 0 — merged the prior open android-routine PR first (rule 0).** `list_pull_requests` (open) →
+> #4587 (`global-search-results-query`, the previous run's slice) was open with the **Android** required
+> gate GREEN and the diff strictly `apps/android` (2 feature + 1 test + 3 tracking docs). Its only red
+> check was **Quality (bun)** — a pre-existing `apps/web` type-debt ratchet regression (1184 vs baseline
+> 1183, `AgentConfigDialog`/`use-audio-translation`/`MarkdownMessage`…), confirmed red on `main` itself
+> (ci.yml failing on the exact base SHA a2ead903 and every push since 2026-08-30 19:54), unfixable inside
+> an `apps/android`-only diff and never an Android gate (ROUTINE §CI reality). `mergeable_state: unstable`
+> (mergeable; the failing check is not required). Squash-merged → `main` ea97e96c. Branched
+> `claude/apps/android/reels-engagement-dwell` off freshly-fetched `origin/main` (ea97e96c). Read tracking
+> from `origin/main` (the session's own checkout is a `dev`-based branch 777 commits behind `main`, with a
+> divergent `notification-center-category-filter` history that never landed — the NOTES rule "read tracking
+> from origin/main" held again).
+>
+> **The gap.** iOS tracks dwell on four single-focus surfaces (`detail`/`reels`/`storyViewer`/`statusBubble`)
+> via `EngagementTracker` — monotonic per-surface dwell, a topmost-owns-the-clock rule (an overlay pauses
+> the one underneath), and `minDwellMs`/`minWatchMs` qualification. Android tracked NONE of it: the reels
+> surface recorded no view at all, and `PostRepository.viewPost(id, duration)` — an endpoint that already
+> documents an optional dwell duration — was only ever called dwell-less (post-detail / status open).
+>
+> **The change — one pure state machine + one existing-hook wiring.** (1) New pure `:core:model`
+> `EngagementSessions` (immutable, `@ConsistentCopyVisibility`, clock injected as `nowMs`): `begin(surface,
+> postId, nowMs)` pauses the current top and pushes; `end(surface, nowMs, watchMs?, completed?)` pops,
+> resumes the new top, and returns `(next, QualifiedView?)` — a `QualifiedView(postId, dwellMs)` when
+> `dwell ≥ 1000 || watch ≥ 2000 || completed`, else `null` (sub-threshold bounce). `currentDwell` clamps a
+> backwards clock to 0. Faithful port of `EngagementTracker` (`apps/ios/.../Services/EngagementTracker.swift`).
+> (2) `ReelsViewModel` gains a `CacheClock` dep + a private `sessions` cursor; `setCurrentReel` now ends the
+> departing reel (a qualified view → `viewPost(id, dwellMs.toInt())`, best-effort) and begins the arriving
+> one; `ReelsScreen`'s `onDispose` calls `setCurrentReel(null)` to end the last. **SOTA/right-choice over
+> iOS:** the pure machine is a fully-immutable value type (iOS mutates a dict in a `@MainActor` class), so
+> every branch is JVM-testable; and Android reports through its own `viewPost(duration)` sink (the platform's
+> documented dwell endpoint) rather than iOS's separate `POST /posts/engagement/batch`. Reels had no prior
+> view metric, so this is purely additive — no double-count. Deliberately deferred (faithful, narrower
+> boundary): the other three surfaces (the core already supports them), watch-samples/completion from the
+> player, micro-actions, and the durable crash-recovery outbox.
+>
+> **Tests: +17, RED-proven by mutation.** `EngagementSessionsTest` +13 (floor qualify / sub-threshold drop /
+> inclusive boundary / unknown-surface inert / other-surface inert / watch qualify / watch-below-floor /
+> completed-qualifies / backwards-clock-never-negative / overlay pauses the surface underneath / paused
+> surface excludes the covered span / re-begin restarts dwell / thresholds). `ReelsViewModelTest` +4 (dwell
+> past floor records `viewPost(id, duration)` on page-move; a sub-floor bounce records nothing; leaving the
+> thread records the final reel; a re-settle keeps one session → one view). **Mutations:** neutralising
+> `pauseTop` fails EXACTLY the two nesting tests (`2 failed`); flipping the dwell floor `>=`→`>` fails EXACTLY
+> the three boundary-touching tests (`3 failed`). All prior reels/room-membership tests stay green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check` commands)
+> BUILD SUCCESSFUL (973 actionable tasks, 0 failed, 7m 31s). Reviewer **PASS** (diff `apps/android` only — 2
+> new `:core:model` files + 3 edited `:feature:reels` files + 2 tracking docs, no `local.properties`; SDK
+> purity — the pure state machine is an opaque, clock-injected building block in `:core:model`, the *when*
+> (begin/end/report) is orchestration in the `:feature:reels` ViewModel; SSOT — one `EngagementSessions`, the
+> existing `viewPost` sink reused, no re-implemented dwell logic; instant-app — analytics is fire-and-forget,
+> no spinner; UDF — immutable `StateFlow` UiState untouched, the dwell cursor lives beside `currentReelId`;
+> no dead-ends — every qualified view reaches a real endpoint; no tautological tests; no coverage floor
+> lowered — a new pure state machine with near-total branch coverage, mutation-proven).
+>
+> **Next**: extend the dwell tracker to the remaining single-focus surfaces (post-detail — but reconcile with
+> its existing dwell-less `recordView`; story-viewer; status-bubble), then feed watch-samples + completion
+> from the reels player (the `end` params already exist). Other open threads: the §M notification twin
+> (`NotificationBanner*` LIVE vs `NotificationToast*` orphan), and the local-FTS leg of §N. Read the chosen
+> box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **global-search result rows now highlight the query that PRODUCED them, not the live
+> input — iOS `resultsQuery` parity — fixing a stale-highlight mismatch during debounce** (slice
+> `global-search-results-query`, feature-parity §N "Global search … query highlighting").
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → all dependabot (base `dev`)
+> plus one non-android translation PR (#4541, `claude/intelligent-noether`, base `main`, jcnm) — no
+> `claude/apps/android/<slice-id>` slice pending, nothing of mine to merge. The prior slice
+> (`global-search-result-highlight`, #4549) is already on `main` (a2ead903). Branched
+> `claude/apps/android/global-search-results-query` off freshly-fetched `origin/main`
+> (HEAD == origin/main a2ead903). **Note:** the session's bootstrap branch was `dev`-based and its
+> tracking docs were behind `main` (several android slices #4506/#4512/#4533/#4539/#4549 had landed
+> on `main` after the dev fork); the authoritative tracking lives on `main`, so this run read PROGRESS/
+> feature-parity from `origin/main` and branched there.
+>
+> **The gap (a real correctness bug, not just a missing feature).** iOS keeps `resultsQuery` distinct
+> from the live `searchText` and highlights each message row against it — `highlightedText(result.content,
+> query: viewModel.resultsQuery)` — so a row always washes against the term that actually produced it.
+> Android's `MessageHitRow` washed against the LIVE `state.query`: the moment the user typed past the
+> results already on screen (during the 300 ms debounce + the network round-trip), the OLD results
+> re-washed against the NEW partial term — highlighting the wrong substring, or nothing (dimension 4
+> Fluidité, dimension 13 Complétude vs iOS). `MessageTextParser.highlightedSegments` (the SSOT shipped
+> by the prior slice) was correct; it was being fed the wrong query.
+>
+> **The change — one snapshot field + three write sites + one screen wire.** (1)
+> `GlobalSearchUiState.resultsQuery: String` — the query that produced the currently-shown `results`,
+> distinct from the live `query`. (2) It is set to the trimmed term on BOTH the network path (when
+> results land) and the cache-hit path (a cached row must report its own term, else it washes against
+> ""), and reset to `""` when the query shrinks below the 2-char floor (parity iOS `clearResults`). The
+> existing `searchJob?.cancel()` already makes a superseded search never overwrite the shown results, so
+> `resultsQuery` follows `results` exactly (parity iOS `guard !Task.isCancelled`). (3)
+> `GlobalSearchScreen.MessageHitRow` washes against `state.resultsQuery`. Blast radius: 1 VM state field
+> + 3 `copy` sites + 1 screen arg. Deliberately NOT touched: the Conversations/Users row highlighting
+> (iOS doesn't highlight those either — a separate Android-surpass follow-up, noted in §N) and the local
+> FTS leg.
+>
+> **Tests: +4, RED-proven.** `GlobalSearchViewModelTest` +4 (a successful search anchors `resultsQuery`
+> on its term; a cache hit reports the cached term; shrinking below the floor resets it; the anchor stays
+> on the shown results while a newer query is being typed — the core of the fix, proving `resultsQuery`
+> is a stored snapshot, not a mirror of the live `query`). **RED:** blanking the anchor on both write
+> paths (`resultsQuery = trimmed` → `""`) fails exactly the 4 new tests (`14 tests completed, 4 failed`),
+> the 10 pre-existing tests stay green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `36.0.0` + `platform-tools`;
+> `compileSdk = 37` resolved via a symlinked `android-37 → android-37.0`. `local.properties` kept out of
+> the diff (`git check-ignore` confirmed).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the `meeshy.sh check`
+> commands) BUILD SUCCESSFUL (973 actionable tasks, 0 failed). Reviewer **PASS** (diff `apps/android`
+> only — 1 VM + 1 screen + 1 test + tracking docs, no `local.properties`; SDK purity — the DECISION
+> (which term produced these results) is orchestration in the `:feature` ViewModel, the pure highlight
+> SSOT is untouched; SSOT — one `resultsQuery`, `highlightedSegments` reused; instant-app — no extra
+> fetch, the snapshot rides the existing state update; UDF — immutable `StateFlow`; no tautological
+> tests; no coverage floor lowered — a correctness fix with 4 behavioural tests, RED-proven).
+>
+> **Next**: the sibling result rows — highlight the Conversations tab (title) and Users tab
+> (display-name/`@username`) with the same `highlightedSegments` splitter against `resultsQuery` (an
+> Android surpass; iOS highlights only the message row). Then the deeper §M notification twin (collapse
+> `NotificationBanner*` LIVE and `NotificationToast*` orphan into one) remains the biggest open
+> cross-cutting item, and the local-FTS leg of §N. Read the chosen box's iOS audit part read-only before
+> branching.
+
+> On 2026-08-31 **the global-search MESSAGE result row now highlights the query in its content preview —
+> iOS `highlightedText` parity — off a new pure `:core:model` splitter that reuses the existing
+> `highlightRanges` SSOT rather than re-deriving it** (slice `global-search-result-highlight`,
+> feature-parity §N "Global search → Message-row highlighting").
+>
+> **Step 0 — merged the prior open PR first (rule 0).** `list_pull_requests` (open) → #4539
+> (`notification-banner-dedup-ssot`, the previous run's slice) was open with the **Android** required gate
+> GREEN and the diff strictly `apps/android` (1 main VM + 1 new test + tracking docs). Its only red check was
+> **Quality (bun)** — a pre-existing `apps/web` type-debt ratchet regression (1184 vs baseline 1183, entirely
+> in web `.tsx`/`.ts` files this Kotlin diff never touches), i.e. base-branch noise, not this PR's (routine
+> §CI reality: `ci.yml` "compiles no Kotlin … is not an Android gate and never was"). Reviewer PASS →
+> squash-merged #4539. Synced local `main` (fa5c6ce3), branched `claude/apps/android/global-search-result-highlight`.
+>
+> **The gap.** feature-parity §N left "query highlighting rendered in the RESULT rows" open: the pure
+> `MessageTextParser.highlightRanges` existed and the chat bubble rendered it, but the global-search message
+> result row still showed `hit.message.content` as flat `Text`. iOS `GlobalSearchView` highlights the query
+> in each result row (`highlightedText`, case/diacritic-insensitive) over the PLAIN content — no markdown, no
+> tappable links (a link inside a result row would dead-end the row's open-conversation tap).
+>
+> **The change — one pure splitter + trivial wash glue.** (1) New pure `:core:model`
+> `MessageTextParser.highlightedSegments(text, term): List<HighlightSegment>` — splits the plain content into
+> alternating highlighted/plain runs by REUSING `highlightRanges` (the accent-fold SSOT), not re-deriving the
+> search; the runs cover the text with no gaps/overlaps and reassemble to it exactly, so the UI maps each run
+> onto a span with zero decisions. New `HighlightSegment(text, highlighted)` value alongside. (2)
+> `GlobalSearchScreen.MessageHitRow` now takes `query`, builds an `AnnotatedString` from those runs, and
+> washes the highlighted ones with `MeeshyPalette.Warning.copy(alpha=0.45f)` — the SAME wash as the chat
+> bubble's search highlight (`MessageBubble.kt`), so a term reads identically in the row and in the opened
+> conversation (colour/UX coherence). Blast radius: 1 pure file + 1 screen file + 1 new test file.
+>
+> **Tests: +12, RED-proven.** New `MessageTextParserHighlightSegmentsTest`: empty text→no runs; empty /
+> folds-away (`́`) / unmatched term→single plain run; match at start / middle / end; whole-string match;
+> several matches with plain fillers; adjacent matches→back-to-back highlighted with no empty filler;
+> case-insensitive keeps original casing; unaccented `cafe`→`café` highlighted whole; and the reassembly
+> invariant asserted on every non-trivial case. **RED:** flipping the highlighted run's flag `true`→`false`
+> fails exactly the 8 match-bearing tests (`12 tests completed, 8 failed`); the 4 no-match cases stay green
+> because they emit no highlighted run — proving the tests bind the actual highlight decision, not a constant.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via a symlinked `android-37 → android-37.0`. `local.properties` kept out of the diff (gitignored,
+> `git check-ignore` confirmed).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the exact `meeshy.sh check`
+> commands) BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 pure `:core:model` file + 1
+> screen + 1 new test + tracking docs, no `local.properties`; SDK purity — the DECISION is a pure `:core:model`
+> function, the wash is `:feature` glue; SSOT — `highlightedSegments` reuses `highlightRanges`, no twin, and
+> the wash colour is the chat bubble's; instant-app/UDF — pure derivation `remember`ed on content+query; no
+> tautological tests; no coverage floor lowered — a net-new pure function shipped with 12 behavioural tests).
+>
+> **Next**: the sibling result rows — highlight the Conversations tab (title preview) and Users tab
+> (display-name/username) with the same `highlightedSegments` splitter (a lighter follow-up; their preview is a
+> short label, not free content). Then the deeper §M notification twin (collapse `NotificationBanner*` LIVE and
+> `NotificationToast*` orphan into one) remains the biggest open cross-cutting item, and the local-FTS leg of
+> §N. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **the LIVE in-app banner's dedup stopped being a re-coded twin — it now uses the ONE
+> shared pure `ToastDedupWindow`, the injected clock seam, and a cancellable dismiss job — and the
+> previously-untested banner ViewModel got its behavioural test suite** (slice
+> `notification-banner-dedup-ssot`, feature-parity §M "In-app banner dedup — one SSOT window").
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → none; no
+> `claude/apps/android/<slice-id>` slice pending, nothing of mine to merge. Branched off
+> freshly-fetched `origin/main` (HEAD == origin/main, 09d94823) → `claude/apps/android/notification-dedup-window`,
+> renamed to `claude/apps/android/notification-banner-dedup-ssot` once the slice was refined (see below).
+>
+> **Course-correction worth recording.** The chosen "Next" was the §M notification-toast dedup window.
+> I began by writing a NEW pure `:core:model` `NotificationDedupWindow` + its test (RED/GREEN both
+> proven). Then, reading feature-parity §M before wiring, I found the SSOT **already existed**:
+> `ToastDedupWindow` (shipped 2026-08-30 with the `notification-toast-orchestrator` slice), used by a
+> WHOLE parallel orchestrator — `NotificationToastViewModel`/`NotificationToastHost` — that is fully
+> tested but **never wired at the scaffold**. Meanwhile the orchestrator that IS wired
+> (`NotificationBannerViewModel`/`NotificationBannerHost`, #4457, richer framing + tap-to-navigate)
+> carried a PRIVATE, untested `LinkedHashMap` re-implementation of the very same 2 s dedup window.
+> My new type would have been a THIRD copy. **I deleted it** (`NotificationDedupWindow` + test, never
+> committed) and repointed the slice at the real defect: converge the live banner VM onto the existing
+> SSOT.
+>
+> **The change — SSOT convergence + first tests for a live-but-untested VM.** (1) `NotificationBannerViewModel`
+> now holds `ToastDedupWindow.empty()` and calls `admit(id, clock.nowMillis())` (admit-first, exactly the
+> ordering `NotificationToastViewModel` uses — behaviour-equivalent for the visible outcome, and now
+> consistent between the twins), dropping the private `shownAt` map, `isDuplicate`, `pruneDedupWindow`,
+> and the local `DEDUP_WINDOW_MS`/`MAX_REMEMBERED`. (2) It takes the existing `NotificationToastClock`
+> Hilt seam (no new module — the binding already exists), replacing direct `System.currentTimeMillis()`/
+> `LocalDateTime.now()`, so every branch is now test-pinnable. (3) The auto-dismiss moved from an inline
+> `delay(4s)` in the tail of `handle` (which serialized notifications — a banner arriving during another's
+> window waited out the full 4 s inside the collector) to a cancellable `dismissJob`, mirroring the toast
+> VM: `handle` returns immediately, a newer banner cancels the older timer, and `dismiss()` cancels it too.
+> Blast radius: 1 main file changed (`NotificationBannerViewModel`, +1 ctor dep via `hiltViewModel()` so no
+> call-site churn), 1 new test file. No `:core:model` change — the SSOT was already there.
+>
+> **Tests: +12, RED-proven.** New `NotificationBannerViewModelTest` (mirrors `NotificationToastViewModelTest`'s
+> socket+clock harness): fresh→banner; duplicate within 2 s doesn't re-surface; same id after the window
+> re-surfaces; active-conversation suppressed; different conversation still shows; active-post suppressed;
+> push-disabled blocked; banner carries conversationId (and null postId) / postId (and null conversationId)
+> for navigation; 4 s auto-dismiss; an older banner's timer doesn't clobber a newer banner; dismiss clears.
+> **RED:** mutating `isDuplicateDelivery = admit.isDuplicate`→`false` fails exactly
+> `aDuplicateDeliveryWithinTheWindowDoesNotSurfaceAgain` (verified on the SDK toolchain), all others green.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; `compileSdk = 37`
+> resolved via the `android-37 → android-37.0` symlink. `local.properties` kept out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./gradlew assembleDebug testDebugUnitTest` (the exact `meeshy.sh check`
+> commands) BUILD SUCCESSFUL (assembleDebug + all-module testDebugUnitTest, 1m01s incremental). Reviewer
+> **PASS** (diff `apps/android` only — 1 main file + 1 new test + tracking docs, no `local.properties`; SDK
+> purity — the pure building block `ToastDedupWindow` was reused, not duplicated, orchestration stays in the
+> `:feature` VM; SSOT — the whole point of the slice: one dedup window, one clock seam, the deleted duplicate
+> is the proof; instant-app/UDF — immutable `StateFlow<InAppBanner?>`, dedup is a pure value type advanced
+> per event; no tautological tests; no coverage floor lowered — a previously-untested live VM gained 12
+> behavioural tests, RED-proven).
+>
+> **Next**: the deeper §M twin — `NotificationBannerViewModel`/Host (live) and `NotificationToastViewModel`/Host
+> (orphan) still both wrap the same `MeeshyNotificationToast` atom off the same socket seam. Collapse them into
+> ONE (fold the toast's `onConversationOpened/Closed`/`onPostOpened/Closed` hooks into the banner, retire the
+> toast host), then wire the surviving host's active-context hooks from the chat/feed screens — the cross-cutting
+> app wiring §M has flagged since 2026-08-30. That merge is a product-shaped slice; scope it before branching.
+> For a pure-core alternative, the §N global-search `highlightRanges` render (Compose-glue) and a Chat/Feed value
+> type remain open. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-31 **the video watch-report gained its double-fire guard — one pure function decides
+> whether a fullscreen dismiss should emit its watch-progress report, so a PAUSED close can no longer
+> erase the resume position the shared player just wrote** (slice `video-dismiss-watch-report`,
+> feature-parity §"Video watch-progress reporting"). iOS keeps this as the `nonisolated enum`
+> `VideoDismissWatchReport.shouldReport` (`packages/MeeshySDK/Sources/MeeshyUI/Media/VideoDismissWatchReport.swift`),
+> the fix for issue #3908. Android had NO such guard — the app-side fullscreen `.onDisappear` telemetry
+> is still pending, and would have carried the same defect the moment it was wired (a Complétude/Sécurité
+> gap: a second, zeroed report clobbering the first owner's persisted state).
+>
+> **Step 0 — merged the prior open PR first (rule 0).** `list_pull_requests` (open) → #4512
+> (`audio-player-chrome-plan`, the render-posture plan from the previous run) was open with the **Android**
+> required gate GREEN, diff strictly `apps/android` (1 core + 1 test + 2 docs), reviewer PASS. Its only red
+> check was `Quality (bun)` — the pre-existing `apps/web` type-debt ratchet (job log listed `.tsx` files by
+> `any`-count, exit 1), which a Kotlin/markdown-only diff compiles nothing of and cannot move; `mergeable_state:
+> unstable` (non-required check failing, not blocked). Squash-merged #4512 to `main` (`f557d130`), then
+> fetched/reset `origin/main` and branched `claude/apps/android/video-dismiss-watch-report` off it. Confirmed
+> the target file absent on `main` (`grep -rl WatchReport apps/android` → only PROGRESS.md mention) before writing.
+>
+> **The change — one pure `object` + one factory function, no wiring churn.** New `:core:model`
+> `VideoDismissWatchReport` with `MINIMUM_PARTIAL_WATCH_SECONDS = 3.0` and
+> `shouldReport(complete, watchedSeconds, playerStillHoldsAttachment)`: the detachment check is the
+> OUTERMOST gate — once the shared player no longer holds this attachment it has already reported (via
+> `cleanup()`, with the real values), so the fullscreen dismiss stays silent regardless of time watched;
+> otherwise a partial watch reports only at/past the 3 s minimum (inclusive), and a completed watch escapes
+> that threshold entirely. Pure decision — two booleans and a duration, no clock, no view, no player read.
+> **SOTA over iOS:** kept the `nonisolated`-equivalent purity (a `:core:model` `object`, no `android.*`),
+> the "when to attach/detach + emit telemetry" orchestration staying app-side (SDK purity). Blast radius:
+> two new files (1 core + 1 test) — no existing code touched.
+>
+> **Tests: +9, RED-proven.** `VideoDismissWatchReportTest` covers the #3908 defect (detached player stays
+> silent even when complete; a qualifying long watch is still silenced by detachment; detached stays silent
+> regardless of time), the served path (attached + ≥3 s reports; attached + brief glance silent; complete
+> escapes the threshold), the inclusive 3 s boundary (exactly-min reports, min−0.01 silent) and the constant.
+> **RED:** mutating the detachment gate to `return true` fails exactly the three detached-silence tests
+> (`detachedPlayerStaysSilentEvenWhenComplete`, `aQualifyingWatchIsStillSilencedByDetachment`,
+> `detachedPlayerStaysSilentRegardlessOfTimeWatched`); green after revert.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; the
+> `android-37 → android-37.0` symlink resolved `compileSdk = 37`. `local.properties` kept out of the diff.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL (973 tasks). Reviewer **PASS** (diff `apps/android` only — 1 core + 1
+> test + tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block, no `android.*`,
+> no singleton, no orchestration; SSOT — one guard, no re-implementation; pure UDF; no tautological tests; no
+> coverage floor lowered — new pure logic with total branch coverage, RED-proven).
+>
+> **Next**: the Compose fullscreen video player `.onDisappear` that consumes this guard before emitting
+> watch-progress telemetry is the app-side §"Video watch-progress reporting" follow-up; the karaoke Compose
+> flow-layout (tap-to-seek + auto-scroll) and the audio-player chrome that paints `AudioPlayerChromePlan`
+> remain pending from the prior slices. For a pure-core next slice, the `AudioProgressDisplay` value type
+> (iOS, fraction + elapsed + isLive). **Confirm the target file is absent on `origin/main` before writing,
+> and merge any open android PR first (rule 0).**
+
+> On 2026-08-30 **the audio player gained its pure render-posture plan — given a chrome posture
+> (Card / FlatMinimal / FlatFocused), one function names WHO appears in the player: card background,
+> right chips, language strip, re-transcribe, transcribe-CTA, and the flat transcription with its
+> line/word limits and whether it follows playback** (slice `audio-player-chrome-plan`,
+> feature-parity §"Audio message player" `[ ]`→`[~]`). iOS keeps this as the value type
+> `AudioPlayerChromePlan.plan(for:)` (`packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView.swift`),
+> extracted from the `@ViewBuilder` so the "who appears" decision is testable off the view; Android had
+> NO chrome plan at all — the audio player rendered one fixed card layout with no posture concept (a
+> Complétude gap vs iOS's card / bare-strip / focal-strip triad).
+>
+> **Step 0 — merged the prior open PR first (rule 0).** `list_pull_requests` (open) → #4506
+> (`transcription-active-segment-resolver`, the karaoke resolver from the previous run) was open with the
+> **Android** required gate GREEN, diff strictly `apps/android` (1 core + 1 test + 3 docs), reviewer PASS.
+> Its only red check was `Quality (bun)` — a pre-existing `apps/web` type-debt ratchet regression (1184
+> vs baseline 1183), which an `apps/android`-only diff compiles nothing of and cannot move; `mergeable_state:
+> unstable` (non-required check failing, not blocked). Squash-merged #4506 to `main`, then fetched/reset
+> `origin/main` (`225e48d6`) and branched `claude/apps/android/audio-player-chrome-plan` off it. Confirmed
+> the target file absent on `main` (`ls` → No such file; `grep -rl ChromePlan apps/android` → empty) per the
+> NOTES lesson before writing.
+>
+> **The change — one pure enum + one pure value type + one factory, no wiring churn.** New `:core:model`
+> `AudioPlayerChrome` (3 cases) + `AudioPlayerChromePlan` (9 fields) + `plan(chrome)`: `.card` →
+> full rich card (background + all chips + no flat transcription); `.flatMinimal` → bare strip (nothing
+> shown but the flat transcription, capped at 2 lines, static — a karaoke cut to 2 lines would have nothing
+> to highlight past the cut); `.flatFocused` → enriched bare strip (chips/strip/retranscribe/CTA back, no
+> card background, full transcription that FOLLOWS playback, word-capped at the standard 30 → see-more to
+> fullscreen). Chrome is an OPAQUE posture — WHICH row gets WHICH posture stays app-side (SDK purity, same
+> rule as the transcription-language seed). **SOTA over iOS:** an `entries`-driven `data class` (structural
+> equality gives the "distinct plans" invariant test for free) rather than a `@ViewBuilder`-embedded static
+> `switch`. Blast radius: two new files (1 core + 1 test) — no existing code touched (the Compose player
+> chrome that paints these decisions is app-side glue, tracked §"Audio message player" follow-up).
+>
+> **Tests: +13, RED-proven.** `AudioPlayerChromePlanTest` covers each posture's field set (card shows the
+> full card chrome + renders no flat transcription; flatMinimal strips every enrichment + static 2-line
+> quote; flatFocused keeps enrichments minus card background + full karaoke-following word-capped
+> transcription) plus cross-case invariants (only the card shows a card background; only flatFocused follows
+> playback; every flat posture renders a flat transcription and the card does not; every chrome resolves to a
+> DISTINCT plan; the standard word limit is 30; a word limit is only ever set on the posture that follows
+> playback). **RED:** flipping flatFocused's `flatTranscriptionFollowsPlayback` true→false (and dropping its
+> word limit) fails exactly `onlyFlatFocusedFollowsPlayback` and
+> `flatFocusedRendersAFullKaraokeFollowingTranscription` (verified: 2 failed under the mutation, green after
+> revert).
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; the
+> `android-37 → android-37.0` symlink resolved `compileSdk = 37` cleanly. `local.properties` kept out of the
+> diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL (973 tasks). Reviewer **PASS** (diff `apps/android` only — 1 core file
+> + 1 test file + tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block, no
+> android.*, no singleton, no "which row gets which posture" orchestration; SSOT — one chrome plan, no
+> re-implementation; instant-app — a pure projection, no I/O; UDF — pure function of its input; no tautological
+> tests; no coverage floor lowered — new pure logic with total branch coverage, RED-proven).
+>
+> **Next**: the Compose audio-player chrome that consumes this plan (speed control, seek, disk-cache-first
+> instant replay — iOS `AudioPlayerView` body) is the app-side §"Audio message player" follow-up; the
+> karaoke Compose flow-layout (§P) still pending from the prior slice. For a pure-core next slice, the
+> `AudioProgressDisplay` value type (iOS, fraction+elapsed+isLive) or `VideoDismissWatchReport`
+> (iOS `shouldReport` — the #3908 double-report guard). **Confirm the target file is absent on `origin/main`
+> before writing, and merge any open android PR first (rule 0).**
+
 > On 2026-08-30 **the in-app real-time notification toast is finally WIRED — the three pure §M building
 > blocks (`NotificationToastPolicy`, `NotificationTypeToggle`, the `MeeshyNotificationToast` atom), each
 > merged unwired by a prior slice, now come alive behind one orchestrator with a 2 s dedup window and a 7 s
@@ -242,6 +1267,73 @@
 > decode) or the **call-summary notice** (`BubbleCallNoticeView`: pure per-viewer direction from a
 > `callSummary`). Both are pure cores with a live consumer (this `.system` branch). Read the iOS
 > `BubbleSystemViews.swift` / `BubbleCallNoticeView.swift` first.
+
+> On 2026-08-30 **audio-transcription karaoke gained its pure sync heart — given the timed
+> segments, the playback position, the engine progress and the playing state, one function names
+> which segment is "lit"** (slice `transcription-active-segment-resolver`, feature-parity §P
+> "synchronized karaoke-style transcription (tap-to-seek)" `[ ]`→`[~]`). iOS keeps this as the
+> single source of truth `AudioPlayerView.activeSegmentIndex(segments:currentTime:progress:isPlaying:)`
+> shared between the bubble player and `MediaTranscriptionView`; Android had NO karaoke resolver at
+> all (a §P Complétude gap — the timed `MessageTranscriptionSegment` list existed but nothing turned a
+> playback clock into a lit word).
+>
+> **Step 0 — no open android-routine PR, and a STALE-tracking correction.** `list_pull_requests`
+> (open) → empty; nothing of mine to merge. But the PROGRESS/feature-parity read at the top was
+> **behind `main`**: the previous top entry is `notification-center-category-filter` (#4421), yet
+> `git log origin/main -- apps/android` shows #4464 (per-type toggle `isTypeEnabled` port), #4481
+> (incoming-call & friend-content real toggles), #4435 (system→centred notice) and #4493 (in-app toast
+> wired, pure `ToastDedupWindow` + orchestrator VM) all merged AFTER it without prepending a PROGRESS
+> entry. I first (wrongly) picked `notification-per-type-toggle-gate` off the stale "Next", started
+> writing it, and `git status` revealed `NotificationTypeToggle.kt` was `M` not `??` — the slice was
+> already on `main` (#4464/#4481). Restored the clobbered files (`git checkout`), and re-picked from
+> `git log`, not from PROGRESS. **Lesson (NOTES §): the routine's "Next" is advisory and can lag `main`;
+> the frontier is `git log origin/main -- apps/android`, and a new file must be confirmed absent on
+> `main` before it is written.** Branched `claude/apps/android/transcription-active-segment-resolver`
+> off freshly-fetched `origin/main` (`d485e072`).
+>
+> **The change — one pure function, no wiring churn.** New `:core:model`
+> `TranscriptionKaraokeResolver.activeSegmentIndex(segments, currentTimeSeconds, progress, isPlaying)`
+> → `Int?`, a faithful port of the iOS three-layer resolver: (1) `!isPlaying || empty` → `null`
+> (iOS "BUG D" guard — at rest `currentTime==0` and a segment starting at `0` would false-highlight
+> segment 0); (2) if ANY segment has real timing (`end > start`) → the FIRST segment whose half-open
+> window `[start, end)` contains the position (start inclusive, end exclusive), else `null`
+> (before-first / in-gap / past-last); (3) no usable timing (every `start==end`, e.g. `0…0`, so no
+> window could match) → proportional `floor(progress·count)` clamped to `0..count-1`. Android's
+> nullable `MessageTranscriptionSegment.startTime/endTime` read as `0.0`, matching iOS's non-optional
+> `TranscriptionDisplaySegment` default. **SOTA over iOS:** it operates on the real domain model (no
+> shadow display type), and every branch is an isolated JVM test rather than a `@ViewBuilder`-embedded
+> computed property. Blast radius: one new file + one new test file — no existing code touched (the
+> Compose flow-layout that paints the spans + tap-to-seek is app-side glue, left as a tracked §P
+> follow-up).
+>
+> **Tests: +19, RED-proven.** `TranscriptionKaraokeResolverTest` covers: paused→null (even with a
+> matching window); empty→null; inside-window; start-inclusive; end-exclusive (boundary belongs to the
+> next segment); before-first→null; in-gap→null; past-last→null; overlapping windows→first match;
+> single timed segment→0; one real segment flips the whole list to the timing branch (a non-matching
+> position→null, not proportional); null bounds count as 0-timing→proportional; proportional at
+> progress 0 / 0.5 / 1.0(clamp) / negative(clamp) / >1(clamp) / single-untimed. **RED:** flipping the
+> end-boundary `<`→`<=` fails exactly `windowStartIsInclusive`, `windowEndIsExclusive` and
+> `positionPastTheLastSegmentLightsNothing` (verified: 3 failed under the mutation, green after revert).
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable (HTTP 200); cmdline-tools (11076708) +
+> `platforms;android-35` + `platforms;android-37.0` + `build-tools;35.0.0` + `platform-tools`; the
+> `android-37 → android-37.0` symlink resolved `compileSdk = 37` cleanly. `local.properties` kept out
+> of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 core file +
+> 1 test file + tracking docs, no `local.properties`; SDK purity — pure `:core:model` building block,
+> no android.*, no singleton, no "when to play" orchestration; SSOT — one karaoke resolver, no
+> re-implementation; instant-app — a pure projection, no I/O; UDF — pure function of its inputs; no
+> tautological tests; no coverage floor lowered — new pure logic with near-total branch coverage,
+> RED-proven).
+>
+> **Next**: the karaoke Compose flow-layout (paint the coloured/bold spans, tap-a-word→seek,
+> auto-scroll the active span to centre — iOS `MediaTranscriptionView`) is the §P follow-up that
+> consumes this resolver; video watch-progress reporting is the other half of the same line. For a
+> pure-core next slice, an audio-player chrome/plan value type (iOS `AudioPlayerView.plan(for:)`) or a
+> Feed value type. **Confirm the target file is absent on `origin/main` before writing.**
+
 
 > On 2026-08-30 **the notification center gained its 11 category-filter chips — the pure heart plus the
 > ViewModel/Compose wiring, so a user can narrow the list to Messages / Reactions / Mentions / Social /

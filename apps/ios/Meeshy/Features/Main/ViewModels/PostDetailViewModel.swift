@@ -15,7 +15,7 @@ class PostDetailViewModel: ObservableObject {
     }
     @Published var isLoading = false
     @Published var isLoadingComments = false
-    @Published var hasMoreComments = true
+    @Published var hasMoreComments: Bool?  // nil = pas encore chargé ≠ « il y en a plus » (#4868)
     @Published var error: String?
     @Published var replyingTo: FeedComment? = nil
 
@@ -160,7 +160,9 @@ class PostDetailViewModel: ObservableObject {
                 }
             }
         } catch {
-            self.error = error.localizedDescription
+            // 404 ⇒ absence, pas échec : `post == nil` le dit déjà, et
+            // signaler un échec inviterait à réessayer pour rien (#4903).
+            self.error = PostDetailAbsenceReason.isNotFound(error) ? nil : error.localizedDescription
         }
     }
 
@@ -204,7 +206,7 @@ class PostDetailViewModel: ObservableObject {
             isPresent: { [weak self] in
                 self?.topLevelComments.contains(where: { $0.id == commentId }) ?? true
             },
-            hasMore: { [weak self] in self?.hasMoreComments ?? false },
+            hasMore: { [weak self] in self.map { $0.hasMoreComments != false } ?? false },
             loadNextPage: { [weak self] in await self?.loadMoreComments(postId) }
         )
     }
@@ -218,7 +220,7 @@ class PostDetailViewModel: ObservableObject {
         // alone is a safe gate — it's always set together with `commentCursor`
         // by `fetchCommentsFromNetwork`, and `cursor: nil` there already means
         // "fetch page 1", exactly what's needed to recover a real cursor.
-        guard !isLoadingComments, hasMoreComments else { return }
+        guard !isLoadingComments, hasMoreComments != false else { return }
         await fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
     }
 
@@ -676,10 +678,10 @@ class PostDetailViewModel: ObservableObject {
                 location: location
             ))
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
-            FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+            FeedbackToastManager.shared.showSuccess(String(localized: "post.detail.edit.success", defaultValue: "Post modifié"))
         } catch {
             self.post = snapshot
-            FeedbackToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+            FeedbackToastManager.shared.showError(String(localized: "post.detail.edit.error", defaultValue: "Erreur lors de la modification"))
         }
     }
 
@@ -690,7 +692,7 @@ class PostDetailViewModel: ObservableObject {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
             FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "Erreur lors du signalement", defaultValue: "Erreur lors du signalement"))
+            FeedbackToastManager.shared.showError(String(localized: "post.detail.report.error", defaultValue: "Erreur lors du signalement"))
         }
     }
 

@@ -32,7 +32,11 @@ final class LocalizationConsistencyTests: XCTestCase {
     // `apps/ios/MeeshyIntents` root was recabled into `apps/ios/Meeshy/Features/Intents/`
     // on 2026-06-24 (cf. apps/ios/CLAUDE.md § App Extensions) — already
     // covered by the `apps/ios/Meeshy` root below, so it was dropped here.
-    private static let sourceRoots = [
+    // Les trois déclarations ci-dessous sont lues par le FRÈRE
+    // `LocalizationConsistencyTests+Scanning.swift`, où vit le lecteur de
+    // catalogues. `private` est de portée FICHIER en Swift : elles s'élargissent
+    // en `internal` par la découpe de 232i, pas par un choix de visibilité.
+    static let sourceRoots = [
         "apps/ios/Meeshy",
         "apps/ios/MeeshyNotificationExtension",
         "apps/ios/MeeshyWidgets",
@@ -41,8 +45,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "packages/MeeshySDK/Sources",
     ]
 
-    private static let appCatalogPath = "apps/ios/Meeshy/Localizable.xcstrings"
-    private static let sdkCatalogPath = "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings"
+    static let appCatalogPath = "apps/ios/Meeshy/Localizable.xcstrings"
+    static let sdkCatalogPath = "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings"
 
     /// Documented exceptions. Keep empty; add a key only with a justifying comment.
     private static let orphanAllowlist: Set<String> = []
@@ -109,9 +113,15 @@ final class LocalizationConsistencyTests: XCTestCase {
         // fichier, et pas une ligne avant : la remplaçante était déjà là, si
         // bien qu'aucun écran n'est sorti du cliquet entre les deux lots.
         "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
-        // 225i — the registration step flow: the first screens a new account ever
-        // sees, and the largest single-file gap in the catalog when it was pinned.
-        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",
+        // 225i — the registration flow: the first screen a new account ever sees,
+        // and the largest single-file gap in the catalog when it was pinned.
+        //
+        // #5218 — le wizard en huit étapes est remplacé par UN écran. Le cliquet
+        // suit le CODE, pas le chemin (#4084) : sans ces deux lignes, les clés
+        // de l'inscription sortiraient de la garde au moment même où elles sont
+        // réécrites — et rien ne rougirait.
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupView.swift",
+        "apps/ios/Meeshy/Features/Auth/Signup/SignupViewModel.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
         "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
         // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles
@@ -133,19 +143,33 @@ final class LocalizationConsistencyTests: XCTestCase {
         // divergent est du texte mort qui ment au lecteur (#4308).
         "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",  // 87
         "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift",  // 47
         "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",  // 32
+        // #4084 — l'en-tête du viewer story a QUITTÉ le fichier ci-dessus pour
+        // le sien. Le cliquet suit le CODE, pas le chemin : sans cette ligne,
+        // les deux tiers des clés épinglées ici seraient sorties de la garde
+        // sans qu'une seule assertion rougisse — une extraction fait franchir
+        // au code une frontière que les listes de fichiers ne voient pas.
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Header.swift",
         "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
         "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
+        "apps/ios/Meeshy/Features/Main/Views/AboutView.swift",  // 28
+        "apps/ios/Meeshy/Features/Main/Views/TrackingLinkDetailView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerObjectChipsCopy.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/Views/OnboardingView.swift",  // 16
+        // #5218 — `OnboardingView` (le carrousel de cinq pages, 16 clés) est
+        // remplacé par `WelcomeView`. Épinglé dès la bascule, pour la même
+        // raison qu'au #4084 : un écran qui remplace un écran épinglé n'a
+        // aucune raison de sortir du cliquet.
+        "apps/ios/Meeshy/Features/Main/Views/WelcomeView.swift",
         "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
@@ -155,6 +179,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",  // 10
         "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
@@ -166,10 +191,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
-        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
         // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
         // règles, soit 280 clés. #4309 en avait épinglé 40 sur 132 en disant
@@ -189,6 +216,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/LicensesView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 6
@@ -266,6 +294,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/AudioCarouselView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
@@ -310,6 +339,29 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21
         "apps/ios/Meeshy/Features/Contacts/DiscoverTab.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",  // 19
+        // #4328 — la surface RÉPERTOIRE, en entier. Onze clés absentes du
+        // catalogue y servaient du français aux six autres langues, et du
+        // français SANS ACCENTS au francophone : le `defaultValue` n'avait
+        // jamais été relu comme du texte affiché, puisque personne ne le
+        // croyait affiché.
+        "apps/ios/Meeshy/Features/Contacts/ContactsShared.swift",  // 11
+        "apps/ios/Meeshy/Features/Contacts/PhonebookListView.swift",  // 14
+        "apps/ios/Meeshy/Features/Contacts/PhonebookViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Contacts/AffiliatesListView.swift",  // 4
+        // #4430 — les onze chaînes dont le `defaultValue` était écrit en ANGLAIS
+        // dans un catalogue de langue source française. Entrées au catalogue,
+        // traduites en sept locales, littéraux réalignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Components/SecurityVerificationView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/Cells/TopLevelCommentCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Cells/ReplyCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Cells/LoadMoreRepliesCell.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/ConversationEncryptionDetailSheet.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",  // 1
+        "apps/ios/Meeshy/Features/Intents/MeeshyAppIntents.swift",  // 1
+        // Vue `3h` (#4098) — la carte de citation de story naît certifiée :
+        // trois clés, sept locales, `defaultValue` alignés sur le catalogue `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStoryCitationCard.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 18
         "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17
@@ -363,8 +415,13 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/DataStorageView.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift",  // 7
-        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",  // 7
-        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingFlowView.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",  // 5
+        // 2026-09-02 — deux de ses appels (`story.viewer.replyTo`,
+        // `story.viewer.reply.cancel`) ont MIGRÉ avec `StoryComposerBarView`
+        // vers son propre fichier (dette de taille). Épinglé dès la découpe,
+        // sinon les deux cliquets ci-dessous cesseraient de les voir — la
+        // dérive silencieuse que #4425 décrit pour `StoryViewModel`.
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift",  // 6
@@ -406,17 +463,43 @@ final class LocalizationConsistencyTests: XCTestCase {
         // measured against the app catalog and looked untranslated.
         "apps/ios/MeeshyWidgets/MeeshyWidgets.swift",  // 25
         "apps/ios/MeeshyWidgets/LiveActivities.swift",  // 11
+        // 232i (#4328) — les deux surfaces dont le remplissage a vide le cliquet.
+        //
+        // `MediaDownloadPreferences.swift` est la PREMIÈRE source du SDK épinglée
+        // ici : ses quatre appels n'ont pas de `bundle:`, donc ils résolvent contre
+        // le catalogue de l'APP, exactement comme une vue du target principal — la
+        // règle qui s'y applique est celle de l'app, et sa place est cette liste.
+        //
+        // `StorySentinelView.swift` est l'écran qu'un client trop ancien voit à la
+        // place d'une story d'un format plus récent. C'est la surface où un repli
+        // en langue source est le plus coûteux : elle ne s'affiche QUE devant
+        // quelqu'un qu'on est en train de perdre, et on lui parlait français.
+        "packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StorySentinelView.swift",  // 4
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
     /// simply a missing translation. Keep this list as short as the truth allows.
-    private static let untranslatableKeys: Set<String> = [
-        // 225i — the in-app terms of use. Product/legal copy: it is not a UI label
-        // an iteration may translate on its own authority, and a machine rendering
-        // of terms a user is asked to ACCEPT is worse than an honest source-language
-        // one. Needs a reviewed translation, tracked outside the UI/UX track.
-        "onboarding.step.recap.terms.body",
-    ]
+    // MARK: - `untranslatableKeys` — SUPPRIMÉE au #5218
+    //
+    // Elle ne portait qu'une clé : `onboarding.step.recap.terms.body`, le pavé de
+    // conditions d'utilisation du récapitulatif du wizard d'inscription — exempté
+    // parce qu'une traduction machine de conditions qu'on demande d'ACCEPTER est
+    // pire qu'un texte honnêtement en langue source. Le wizard est supprimé, la
+    // clé avec lui : l'exemption n'avait plus rien à exempter.
+    //
+    // **Elle n'a pas été vidée, elle a été RETIRÉE**, avec sa plomberie
+    // (`honouringExemptions`) et son témoin
+    // (`test_lExemptionDesClesIntraduisiblesAUnEffetSurLeCliquet`). Ce témoin le
+    // demandait lui-même, en toutes lettres : « l'exemption vide rendrait ce
+    // témoin trivialement vrai — le supprimer serait alors plus honnête que le
+    // garder ». Un ensemble vide traversé par trois règles est une porte que
+    // personne ne garde plus : le prochain qui a besoin d'une exemption la
+    // rouvrirait sans que rien n'exige qu'elle ait un EFFET (leçon 380).
+    //
+    // `SignupView` ne rouvre pas le besoin : elle n'affiche AUCUN pavé légal,
+    // seulement une phrase courte et deux liens vers `TermsOfServiceView` /
+    // `PrivacyPolicyView`, qui servent leur texte depuis leurs propres sources.
 
     /// La source d'un écran épinglé, résolue pour l'UNITÉ quand `path` désigne
     /// `StoryViewModel.swift` (#4425).
@@ -450,8 +533,7 @@ final class LocalizationConsistencyTests: XCTestCase {
             let catalog = env.catalog(resolvedFor: url)
             let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key), !call.isModuleBundle,
-                      !Self.untranslatableKeys.contains(call.key) else { continue }
+                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
                 let missing = catalog.requiredLocales.subtracting(catalog.translations[call.key] ?? [])
                 guard !missing.isEmpty else { continue }
                 violations.append("\(call.key)  (\(url.lastPathComponent) → missing \(missing.sorted().joined(separator: ", ")))")
@@ -483,7 +565,6 @@ final class LocalizationConsistencyTests: XCTestCase {
             let text = try pinnedScreenSource(at: url, path: path)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
-                      !Self.untranslatableKeys.contains(call.key),
                       let inline = call.defaultValue,
                       // Xcode rewrites `"… \(x)"` to `"… %@"` on extraction, so an
                       // interpolated default legitimately differs from its catalog
@@ -672,17 +753,7 @@ final class LocalizationConsistencyTests: XCTestCase {
     func test_untranslatedKeyBacklogDoesNotGrow() throws {
         let env = try makeEnvironment()
 
-        var untranslated: Set<String> = []
-        for file in env.sourceFiles {
-            let catalog = env.catalog(resolvedFor: file)
-            let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-            for call in localizedCalls(in: text) {
-                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
-                if !catalog.requiredLocales.isSubset(of: catalog.translations[call.key] ?? []) {
-                    untranslated.insert(call.key)
-                }
-            }
-        }
+        let untranslated = untranslatedKeys(env)
 
         // History: 1669 at 220i, −63 for the onboarding step flow (225i), then −54 for
         // share-link creation and −7 once pluralized keys stopped being miscounted
@@ -711,13 +782,64 @@ final class LocalizationConsistencyTests: XCTestCase {
         // with a `defaultValue` alone, which ships the source language to every other
         // locale. Add the catalog entry — with its translations, to the catalog of
         // the target that OWNS the key — instead of raising the ceiling.
-        let backlogCeiling = 81
+        //
+        // 231i — 81 → 31. Eight interpolated keys entered the catalog this iteration
+        // (#4328), which accounts for eight of the fifty. The other forty-two were
+        // SLACK: earlier iterations lowered the backlog without re-measuring the
+        // ceiling, so the ratchet had stopped ratcheting — it would have accepted
+        // forty-two new untranslated keys without a word. The number below was READ
+        // from this witness with the ceiling set to 0, never computed from the
+        // previous one; a ceiling that is subtracted rather than measured drifts in
+        // the comfortable direction, and nothing ever says so.
+        //
+        // 232i — 31 → 0, et le zéro est ATTEIGNABLE pour la première fois (#4328).
+        // Sept clés sont entrées au catalogue dans les sept locales (les trois
+        // `media.policy.*.short` restantes, les quatre `story.sentinel.*`), ce qui
+        // ramenait la mesure de 8 à 1. La huitième — `onboarding.step.recap.terms.body`,
+        // les CGU — n'est pas une traduction manquante : la suite la déclare
+        // `untranslatableKeys` depuis 225i, et deux règles honoraient déjà cette
+        // déclaration. CE cliquet, non. Le plancher du plafond valait donc 1 pour une
+        // raison qu'aucun lecteur du nombre ne pouvait voir, et un `0` aurait été
+        // inatteignable sans jamais dire pourquoi.
+        //
+        // > Une exemption porte sur la NATURE d'une clé, pas sur la règle qui la lit.
+        // > Déclarée pour deux lectures sur trois, elle laisse la troisième compter ce
+        // > que le dépôt a explicitement décidé de ne pas traduire.
+        //
+        // #5218 — l'exemption ET son témoin sont partis avec la clé qu'ils
+        // gardaient (le pavé de CGU du wizard d'inscription supprimé) ; voir la
+        // note « `untranslatableKeys` — SUPPRIMÉE » plus haut dans ce fichier.
+        // Le plafond, lui, ne bouge pas : il valait déjà 0, et la clé exemptée
+        // n'était comptée par AUCUNE des lectures qui l'alimentent aujourd'hui.
+        let backlogCeiling = 0
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
             + "locale (ceiling \(backlogCeiling)). Add the missing entries to the catalog of the "
             + "target that owns them."
         )
+    }
+
+    /// Les clés identifiantes non traduites dans au moins une locale expédiée.
+    ///
+    /// Elle prenait un `honouringExemptions` qui séparait la MESURE de la RÈGLE,
+    /// pour qu'un témoin puisse prouver que `untranslatableKeys` changeait le
+    /// compte. L'ensemble d'exemptions a été retiré au #5218 (voir la note plus
+    /// haut) : le paramètre n'avait plus qu'une valeur, et un paramètre à une
+    /// seule valeur ment sur ce qu'il gouverne.
+    private func untranslatedKeys(_ env: Environment) -> Set<String> {
+        var untranslated: Set<String> = []
+        for file in env.sourceFiles {
+            let catalog = env.catalog(resolvedFor: file)
+            let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+            for call in localizedCalls(in: text) {
+                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
+                if !catalog.requiredLocales.isSubset(of: catalog.translations[call.key] ?? []) {
+                    untranslated.insert(call.key)
+                }
+            }
+        }
+        return untranslated
     }
 
     // MARK: - Langue déclarée du document (T2.2)
@@ -851,353 +973,5 @@ final class LocalizationConsistencyTests: XCTestCase {
             }
         }
         return found
-    }
-
-    // MARK: - Environment
-
-    /// One catalog, indexed. Added 224i, when the single-catalog model started
-    /// reporting correctly-localized extension strings as untranslated.
-    private struct CatalogIndex {
-        /// Key → locales whose string unit is in the `translated` state.
-        let translations: [String: Set<String>]
-        /// Shipped locales minus THIS catalog's source language.
-        let requiredLocales: Set<String>
-        /// This catalog's source language — `fr` for the app, `en` for the share extension.
-        let sourceLanguage: String
-        /// Key → its value in the source language, when it has a flat one.
-        let sourceValues: [String: String]
-    }
-
-    private struct Environment {
-        /// An app extension is a SEPARATE BUNDLE: a `String(localized:)` in its sources
-        /// resolves against ITS `Localizable.xcstrings`, never the host app's. Checking
-        /// those sources against the app catalog reports keys as untranslated while they
-        /// are in fact fully translated in the catalog shipping beside them.
-        /// Path fragment → the catalog that target actually resolves against.
-        ///
-        /// Declared HERE rather than on the enclosing suite on purpose: the suite is
-        /// `@MainActor`, so a static of its own would be actor-isolated and unreadable
-        /// from `catalog(resolvedFor:)`, which is nonisolated — a nested type does not
-        /// inherit the enclosing type's global actor.
-        ///
-        /// **`MeeshyWidgets` joined at 270i (#4364).** It has shipped its own catalog —
-        /// 39 keys, all seven locales — since the target existed, and this map named two
-        /// of the three. Every guard in this suite therefore measured the home-screen
-        /// widgets and the Live Activities against the APP catalog, where their keys do
-        /// not exist: 22 keys counted as untranslated while fully translated in the
-        /// catalog that actually serves them, and the two widget sources unpinnable
-        /// though both already pass both rules. `test_everyPerTargetCatalogIsMapped` is the
-        /// witness that keeps the next extension from repeating it.
-        static let catalogByTargetFragment: [String: String] = [
-            "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
-            "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
-            "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
-        ]
-
-        let repoRoot: URL
-        let sourceFiles: [URL]
-        let combinedSource: String
-        let appIdentifierKeys: [String]
-        let appKeysWithEn: Set<String>
-        let sdkKeysWithEn: Set<String>
-        /// Catalog repo-path → its index. Always contains the app catalog.
-        let catalogs: [String: CatalogIndex]
-        let appCatalogPath: String
-
-        /// The catalog the given source file's bundle resolves against.
-        func catalog(resolvedFor file: URL) -> CatalogIndex {
-            for (fragment, catalogPath) in Self.catalogByTargetFragment
-            where file.path.contains(fragment) {
-                if let index = catalogs[catalogPath] { return index }
-            }
-            return appCatalog
-        }
-
-        /// Force-unwrap-free accessor: the app catalog is always loaded.
-        var appCatalog: CatalogIndex {
-            catalogs[appCatalogPath]
-                ?? CatalogIndex(translations: [:], requiredLocales: [], sourceLanguage: "fr", sourceValues: [:])
-        }
-    }
-
-    private func makeEnvironment() throws -> Environment {
-        let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // apps/ios
-            .deletingLastPathComponent()   // apps
-            .deletingLastPathComponent()   // repo root
-
-        let appCatalog = repoRoot.appendingPathComponent(Self.appCatalogPath)
-        let sdkCatalog = repoRoot.appendingPathComponent(Self.sdkCatalogPath)
-        guard FileManager.default.fileExists(atPath: appCatalog.path),
-              FileManager.default.fileExists(atPath: sdkCatalog.path) else {
-            throw XCTSkip("Localization catalogs not reachable from \(repoRoot.path) — source tree unavailable")
-        }
-
-        let appKeys = try loadCatalog(appCatalog)
-        let sdkKeys = try loadCatalog(sdkCatalog)
-
-        var files: [URL] = []
-        for root in Self.sourceRoots {
-            files.append(contentsOf: swiftFiles(under: repoRoot.appendingPathComponent(root)))
-        }
-        guard !files.isEmpty else {
-            throw XCTSkip("No Swift sources found — source tree unavailable")
-        }
-
-        let combined = files
-            .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
-            .joined(separator: "\n")
-
-        // Index the app catalog plus every per-target catalog. Each is measured
-        // against the shipped locales minus ITS OWN source language, which differs:
-        // the app catalog is authored in `fr`, the share extension's in `en`.
-        let shipped = try shippedLocales(repoRoot: repoRoot)
-        var catalogs: [String: CatalogIndex] = [:]
-        for path in [Self.appCatalogPath] + Environment.catalogByTargetFragment.values {
-            let url = repoRoot.appendingPathComponent(path)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            let language = try sourceLanguage(url)
-            catalogs[path] = CatalogIndex(
-                translations: try loadTranslations(url),
-                requiredLocales: shipped.subtracting([language]),
-                sourceLanguage: language,
-                sourceValues: try values(url, locale: language)
-            )
-        }
-
-        return Environment(
-            repoRoot: repoRoot,
-            sourceFiles: files,
-            combinedSource: combined,
-            appIdentifierKeys: appKeys.keys.filter(isIdentifier),
-            appKeysWithEn: Set(appKeys.filter { $0.value }.keys),
-            sdkKeysWithEn: Set(sdkKeys.filter { $0.value }.keys),
-            catalogs: catalogs,
-            appCatalogPath: Self.appCatalogPath
-        )
-    }
-
-    /// Key → its flat string-unit value in `locale`. Plural variations have no single
-    /// value and are absent, which keeps them out of the source-parity check.
-    private func values(_ url: URL, locale: String) throws -> [String: String] {
-        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
-        let strings = json?["strings"] as? [String: Any] ?? [:]
-        var result: [String: String] = [:]
-        for (key, value) in strings {
-            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any]
-            let unit = (localizations?[locale] as? [String: Any])?["stringUnit"] as? [String: Any]
-            if let text = unit?["value"] as? String { result[key] = text }
-        }
-        return result
-    }
-
-    /// Locales the app actually ships — read from `Info.plist`, not hard-coded.
-    private func shippedLocales(repoRoot: URL) throws -> Set<String> {
-        let url = repoRoot.appendingPathComponent("apps/ios/Meeshy/Info.plist")
-        let plist = try PropertyListSerialization.propertyList(from: try Data(contentsOf: url), format: nil)
-        let locales = (plist as? [String: Any])?["CFBundleLocalizations"] as? [String]
-        return Set(locales ?? [])
-    }
-
-    private func sourceLanguage(_ url: URL) throws -> String {
-        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
-        return json?["sourceLanguage"] as? String ?? "fr"
-    }
-
-    /// Key → locales whose string unit is explicitly `translated` (a stale or
-    /// needs-review unit is not a shipped translation).
-    ///
-    /// A pluralized key carries no flat `stringUnit`: its text lives under
-    /// `variations.plural.<CLDR category>`. Reading only the flat unit reported every
-    /// such key as untranslated in EVERY locale even when fully translated — the nine
-    /// plural entries the catalog already had were all counted as gaps (fixed 226i).
-    private func loadTranslations(_ url: URL) throws -> [String: Set<String>] {
-        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
-        let strings = json?["strings"] as? [String: Any] ?? [:]
-        var result: [String: Set<String>] = [:]
-        for (key, value) in strings {
-            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
-            var translated: Set<String> = []
-            for (locale, payload) in localizations {
-                if isTranslated(payload) { translated.insert(locale) }
-            }
-            result[key] = translated
-        }
-        return result
-    }
-
-    /// Whether one locale's payload is a shipped translation: either a flat string
-    /// unit marked `translated`, or a set of plural variations whose EVERY category is
-    /// marked `translated` — one stale category leaves the key partly untranslated for
-    /// the counts that select it, so `allSatisfy` is deliberate rather than `contains`.
-    private func isTranslated(_ payload: Any?) -> Bool {
-        guard let payload = payload as? [String: Any] else { return false }
-        if let unit = payload["stringUnit"] as? [String: Any] {
-            return unit["state"] as? String == "translated"
-        }
-        guard let plural = (payload["variations"] as? [String: Any])?["plural"] as? [String: Any],
-              !plural.isEmpty else { return false }
-        return plural.values.allSatisfy { category in
-            ((category as? [String: Any])?["stringUnit"] as? [String: Any])?["state"] as? String == "translated"
-        }
-    }
-
-    /// Returns every key in a `.xcstrings` catalog mapped to whether it has an
-    /// `en` localization (flat string unit or plural variations).
-    private func loadCatalog(_ url: URL) throws -> [String: Bool] {
-        let data = try Data(contentsOf: url)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let strings = json?["strings"] as? [String: Any] ?? [:]
-        var result: [String: Bool] = [:]
-        for (key, value) in strings {
-            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any]
-            result[key] = localizations?["en"] != nil
-        }
-        return result
-    }
-
-    private func swiftFiles(under directory: URL) -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
-        var files: [URL] = []
-        for case let url as URL in enumerator {
-            let path = url.path
-            if path.contains("/Build/") || path.contains("/.build/") { continue }
-            if url.pathExtension == "swift" { files.append(url) }
-        }
-        return files
-    }
-
-    // MARK: - Source scanning
-
-    private func isIdentifier(_ key: String) -> Bool {
-        guard !key.contains(" "), key.contains(".") || key.contains("_") else { return false }
-        return key.allSatisfy { $0.isLetter || $0.isNumber || $0 == "." || $0 == "_" || $0 == "-" }
-    }
-
-    private struct LocalizedCall {
-        let key: String
-        let hasDefaultValue: Bool
-        let isModuleBundle: Bool
-        /// The inline `defaultValue:` when it is a single-line literal. `nil` for a
-        /// multi-line `"""` block, which this scanner deliberately does not read.
-        let defaultValue: String?
-    }
-
-    /// Finds each `String(localized: "…" …)` call and reports its key plus
-    /// whether the call carries a `defaultValue:` and/or `bundle: .module`.
-    /// The call segment is delimited by a string-aware balanced-paren scan so
-    /// parentheses inside string literals don't end it prematurely.
-    ///
-    /// **The marker is a pattern, not a literal (258i, #4292).** It used to be the
-    /// exact string `"String(localized:"`, which a call broken over several lines —
-    /// `String(\n    localized: "…"` — does not contain. 226i measured that blind
-    /// spot at 92 calls over 46 files and deliberately left it, for a reason that was
-    /// sound at the time: widening the marker reveals keys and so RAISES the backlog,
-    /// which the ratchet forbids. It was sound against a ceiling believed tight. The
-    /// ceiling was 1545 against a real backlog of 102, so the answer was to widen AND
-    /// re-pin — the blind spot had meanwhile grown to 185 calls over 61 files, because
-    /// nothing stopped new ones being written.
-    ///
-    /// `\s*` after the paren matches both shapes at once. The `openParen` arithmetic
-    /// below is unaffected: `(` still immediately follows `String` in every call,
-    /// single-line or not.
-    private func localizedCalls(in source: String) -> [LocalizedCall] {
-        guard let marker = try? NSRegularExpression(pattern: #"String\(\s*localized:"#) else { return [] }
-        let ns = source as NSString
-        let stringPrefixLength = ("String" as NSString).length
-        var calls: [LocalizedCall] = []
-        var searchStart = 0
-        while searchStart < ns.length {
-            let found = marker.rangeOfFirstMatch(
-                in: source,
-                range: NSRange(location: searchStart, length: ns.length - searchStart)
-            )
-            if found.location == NSNotFound { break }
-
-            let openParen = found.location + stringPrefixLength
-            var i = openParen
-            var depth = 0
-            var inString = false
-            var escaped = false
-            var end = ns.length - 1
-            while i < ns.length {
-                // Skip UTF-16 surrogate halves (emoji/flags) — they are never
-                // one of the control characters we track, and UnicodeScalar
-                // rejects them.
-                guard let scalar = UnicodeScalar(ns.character(at: i)) else { i += 1; continue }
-                let c = Character(scalar)
-                if inString {
-                    if escaped { escaped = false }
-                    else if c == "\\" { escaped = true }
-                    else if c == "\"" { inString = false }
-                } else {
-                    if c == "\"" { inString = true }
-                    else if c == "(" { depth += 1 }
-                    else if c == ")" { depth -= 1; if depth == 0 { end = i; break } }
-                }
-                i += 1
-            }
-
-            let segment = ns.substring(with: NSRange(location: found.location, length: end - found.location + 1))
-            if let key = firstKey(in: segment) {
-                calls.append(LocalizedCall(
-                    key: key,
-                    hasDefaultValue: segment.contains("defaultValue:"),
-                    isModuleBundle: segment.contains(".module"),
-                    defaultValue: inlineDefaultValue(in: segment)
-                ))
-            }
-            searchStart = end + 1
-        }
-        return calls
-    }
-
-    /// The inline `defaultValue:` literal of a call segment, when it is written on
-    /// one line. A multi-line `"""` block yields `nil` rather than the empty string
-    /// the naive single-quote regex would report for its opening delimiter.
-    private func inlineDefaultValue(in segment: String) -> String? {
-        guard segment.range(of: #"defaultValue:\s*""""#, options: .regularExpression) == nil,
-              let range = segment.range(
-                  of: #"defaultValue:\s*"((?:[^"\\]|\\.)*)""#,
-                  options: .regularExpression
-              )
-        else { return nil }
-        let match = segment[range]
-        guard let open = match.firstIndex(of: "\""), let close = match.lastIndex(of: "\""), open != close else {
-            return nil
-        }
-        return String(match[match.index(after: open)..<close])
-    }
-
-    /// The first quoted string literal after `localized:` in a call segment.
-    private func firstKey(in segment: String) -> String? {
-        guard let keyRange = segment.range(
-            of: #"localized:\s*"([^"]*)""#,
-            options: .regularExpression
-        ) else { return nil }
-        let match = segment[keyRange]
-        guard let open = match.firstIndex(of: "\""), let close = match.lastIndex(of: "\""), open != close else {
-            return nil
-        }
-        return String(match[match.index(after: open)..<close])
-    }
-
-    /// All clean quoted identifier tokens (`"a11y.foo.bar"`) in the source.
-    private func quotedIdentifierTokens(in source: String) -> Set<String> {
-        let ns = source as NSString
-        guard let regex = try? NSRegularExpression(pattern: #""([A-Za-z0-9_.\-]+)""#) else { return [] }
-        var tokens: Set<String> = []
-        regex.enumerateMatches(in: source, range: NSRange(location: 0, length: ns.length)) { match, _, _ in
-            if let match, match.numberOfRanges > 1 {
-                tokens.insert(ns.substring(with: match.range(at: 1)))
-            }
-        }
-        return tokens
     }
 }

@@ -27,6 +27,12 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendInternalError, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { servedUserPermissions } from '../../services/admin/served-permissions';
+import {
+  AUTO_TRANSLATE_PREFERENCE_SELECT,
+  resolveAutoTranslateEnabled,
+  writeAutoTranslateEnabled,
+} from '../../utils/auto-translate-preference';
+import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 
 /**
  * Update authenticated user profile
@@ -111,16 +117,59 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         kind: 'updateProfile',
         // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
         replayCost: 'converges',
+        // `include` — la relation qui porte `autoTranslateEnabled`, dont
+        // `User` n'a aucune colonne (#3736). Elle voyage avec la ligne que
+        // cette route lit DÉJÀ plutôt que dans une seconde requête, ce que le
+        // `select` de la SSOT existe précisément pour permettre.
+        //
+        // `onDuplicate` la demande AUSSI, et ce n'est pas de la symétrie
+        // décorative : une relecture de rejeu qui l'omettrait servirait le
+        // DÉFAUT à la place de la valeur stockée — sur le seul chemin dont
+        // personne ne regarde la sortie. Le COMPILATEUR le tient, mesuré :
+        // `withMutationLog` intersecte les deux formes de retour, si bien que
+        // retirer l'`include` d'un SEUL des deux sites fait perdre la relation
+        // au type et `resolveAutoTranslateEnabled` refuse l'argument
+        // (TS2559) — le témoin de projection en nomme l'intention.
         op: () => fastify.prisma.user.update({
           where: { id: userId },
           data: updateData,
+          include: AUTO_TRANSLATE_PREFERENCE_SELECT,
         }),
         onDuplicate: (resultId) => fastify.prisma.user.findUnique({
           where: { id: resultId },
+          include: AUTO_TRANSLATE_PREFERENCE_SELECT,
         }),
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      // `autoTranslateEnabled` — ACCEPTÉE par les deux schémas du corps (AJV
+      // `updateUserRequestSchema`, Zod `updateUserProfileSchema`) et JETÉE
+      // jusqu'à #3736 : `updateData` ci-dessus ne compose que des colonnes de
+      // `User`, où celle-ci n'existe pas. Son unique magasin est le document
+      // `UserPreferences.application` — la SSOT le sait, ce site l'appelle
+      // (`utils/auto-translate-preference.ts`) plutôt que de réécrire la
+      // fusion, qui est la moitié du problème.
+      //
+      // Elle est SERVIE dans les deux cas, écrite ou non : le contrat de cette
+      // route est un objet `user` COMPLET, et un client qui remplace son cache
+      // par cette réponse ne doit pas y perdre une préférence qu'il n'a pas
+      // touchée. Le chemin nominal — un corps qui ne la nomme pas — n'ouvre
+      // pour cela AUCUNE requête : il lit la relation jointe ci-dessus.
+      const autoTranslateEnabled =
+        body.autoTranslateEnabled === undefined
+          ? resolveAutoTranslateEnabled(updatedUser)
+          : await writeAutoTranslateEnabled(fastify.prisma, userId!, body.autoTranslateEnabled);
+
+      // Persister ne suffit pas : une ligne de préférences est par UTILISATEUR,
+      // pas par appareil (`services/gateway/CLAUDE.md`). `applyCategoryWriteEffects`
+      // est le site UNIQUE de ce qui suit une écriture de catégorie — les
+      // crochets de stockage PUIS la diffusion `user:preferences-updated` — et
+      // c'est lui, jamais une diffusion recopiée ici, qui garde ce site aligné
+      // sur les quatre verbes de `/me/preferences/application`.
+      if (body.autoTranslateEnabled !== undefined) {
+        await applyCategoryWriteEffects(fastify, userId!, ['application']);
+      }
 
       // Toggle de la visibilité publique du profil vocal. `updateMany` est
       // volontairement utilisé pour ne PAS lever P2025 quand l'utilisateur n'a
@@ -191,7 +240,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
 
       return sendSuccess(reply, {
-        user: formatUserResponse(updatedUser, permissions),
+        user: formatUserResponse({ ...updatedUser, autoTranslateEnabled }, permissions),
         message: 'Profile updated successfully'
       });
 

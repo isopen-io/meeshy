@@ -7,7 +7,7 @@ import XCTest
 ///
 /// Avant, chaque objet naissait en « fr » codé en dur (`defaultSourceLanguage`).
 /// La capsule du composer sème désormais `declaredContentLanguage`, et c'est
-/// elle que tout `MeeshyObject` créé prend par défaut — l'auteur pouvant la
+/// elle que tout `MeeshySceneObject` créé prend par défaut — l'auteur pouvant la
 /// surcharger par objet (E3). Le contenu du réel/story part dans cette même
 /// langue.
 @MainActor

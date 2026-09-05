@@ -45,6 +45,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,6 +53,25 @@ import { fileURLToPath } from 'node:url';
 import { CIBLES_PRODUCTION, verdictDeLigneDeBase } from '../apps/web-v3/scripts/baseline.mjs';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * OÙ EST CHROMIUM — la MÊME question, posée par le MÊME site
+ * (`scripts/lib/navigateur.cjs`, § 9.2), jamais une seconde résolution : sans
+ * `CHROMIUM_PATH`, `npx playwright test` retombe sur la révision que
+ * `@playwright/test` réclame, qui peut différer de celle qu'un poste a déjà
+ * installée sous `PLAYWRIGHT_BROWSERS_PATH` — l'écart se lit alors comme
+ * « navigateur absent » (`NAVIGATEUR_ABSENT`) alors que le navigateur EST là,
+ * une révision plus bas. `navigateur.cjs` sait déjà lire ce cas ; `mesureSpec`
+ * le lui demande avant de lancer chaque spec, exactement comme `e2e:run` et
+ * `test:a11y`/`test:lifecycle` (`apps/web-v3/package.json`) le font déjà.
+ */
+const cheminDeChromium = () => {
+  try {
+    return createRequire(import.meta.url)(join(RACINE, 'scripts/lib/navigateur.cjs')).chromiumPath();
+  } catch {
+    return null;
+  }
+};
 
 const VERT = 'vert';
 const ROUGE = 'rouge';
@@ -341,9 +361,11 @@ const mesureSpec = ({ nom, fichier }) => {
     );
   }
 
+  const chromium = cheminDeChromium();
   const resultat = lance('npx', ['playwright', 'test', fichier, '--reporter=json'], {
     cwd: app,
     timeoutMs: 900000,
+    env: chromium === null ? {} : { CHROMIUM_PATH: chromium },
   });
   const lu = lectureDeSortie({ nom, commande, resultat });
   if (lu.echec) {

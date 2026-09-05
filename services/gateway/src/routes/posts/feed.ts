@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import type { CursorPaginationMeta, ResponseMeta } from '@meeshy/shared/types';
@@ -247,7 +248,7 @@ const ReelsAliasQuerySchema = FeedQuerySchema.extend({ seed: SeedSchema });
 const SOCIAL_POSTS_DEPUIS = '2026-08-29';
 
 function successeurSocialPosts(scope: string, extra?: string): string {
-  return `/api/v1/social/posts?scope=${scope}${extra ? `&${extra}` : ''}`;
+  return `${apiPath('/social/posts')}?scope=${scope}${extra ? `&${extra}` : ''}`;
 }
 
 /**

@@ -10,7 +10,7 @@ import MeeshySDK
 /// loi 4 (`StoryCanvasContextAction.offered`, gardée par
 /// `StoryCanvasLockedItemGuardTests`). Celle-ci ne l'était pas, et elle est
 /// d'une autre NATURE : les deux premières écrivent le `z` d'un
-/// `MeeshyObject` (son ordre DANS son plan), celle-ci écrit son `plane` — le
+/// `MeeshySceneObject` (son ordre DANS son plan), celle-ci écrit son `plane` — le
 /// média quitte la scène et redevient une slide du post.
 ///
 /// Les confondre ferait passer un objet devant un fond au lieu de le sortir.
@@ -23,8 +23,13 @@ import MeeshySDK
 @MainActor
 final class StoryCanvasLeaveSceneTests: XCTestCase {
 
-    /// Même fabrique que `StoryCanvasLockedItemGuardTests` : une scène à deux
-    /// textes, montée SANS éditeur — c'est le cas de la scène incrustée.
+    /// Même fabrique que `StoryCanvasLockedItemGuardTests` : une scène à un
+    /// texte, montée sans rappel d'édition.
+    ///
+    /// > Ce commentaire disait « c'est le cas de la scène incrustée ». Il ne
+    /// > l'est plus depuis #4074 : la scène incrustée câble « Modifier » pour
+    /// > le texte. Un exemple qui cite un site RÉEL se périme quand ce site
+    /// > change — le garder faux fait plus de mal que de ne rien citer.
     private func makeCanvas() -> StoryCanvasUIView {
         let slide = StorySlide(
             id: "s",

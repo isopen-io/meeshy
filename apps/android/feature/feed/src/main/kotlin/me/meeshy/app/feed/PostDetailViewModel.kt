@@ -11,12 +11,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.EngagementSessions
+import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
@@ -64,10 +69,29 @@ class PostDetailViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
+    private val clock: CacheClock,
+    private val privacyPreferencesStore: PrivacyPreferencesStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val postId: String = savedStateHandle[POST_ID_ARG] ?: ""
+
+    /**
+     * Dwell bookkeeping for the post-detail surface. Held outside [_state] because it is an
+     * analytics cursor, not something the UI renders (the same placement as
+     * [me.meeshy.app.reels.ReelsViewModel.sessions]). The pure [EngagementSessions] machine owns
+     * the *how* (monotonic dwell, qualification); this ViewModel owns the *when* — begin the moment
+     * the detail opens, end when the screen leaves ([endDwellSession], driven by the screen's
+     * `onDispose`) — and where the qualified view is reported.
+     *
+     * This is the port of iOS `PostDetailView`'s `.trackEngagement(surface: .detail)` modifier,
+     * which runs *alongside* the immediate `viewPost` impression ([recordView]) rather than
+     * replacing it: the impression counts the open, the dwell enriches it. Both land on the same
+     * `posts/{id}/view` endpoint, and the gateway keeps them from double-counting — `creditPostView`
+     * is a `(postId, userId)` singleton that increments `viewCount` once (the impression) and only
+     * ever raises the stored dwell `duration` to the max it has seen (the enrichment).
+     */
+    private var sessions = EngagementSessions()
 
     private val rawPost = MutableStateFlow<ApiPost?>(null)
     private val activeCode = MutableStateFlow<String?>(null)
@@ -99,6 +123,64 @@ class PostDetailViewModel @Inject constructor(
         observeRealtime()
         loadInitial()
         recordView()
+        beginDwell()
+    }
+
+    /**
+     * Opens the dwell session for this detail-view the moment the screen appears — the clock starts
+     * now, and [endDwellSession] closes it when the reader leaves. A blank route [postId] opens
+     * nothing (there is no post to attribute the dwell to). Runs right after the immediate
+     * [recordView] impression, mirroring iOS `PostDetailView`'s `.trackEngagement(.detail)` sitting
+     * beside its `.task` view record.
+     *
+     * Gated on the reader's `allowAnalytics` privacy toggle: with analytics consent
+     * withheld no dwell session opens, so [endDwellSession] later enriches nothing —
+     * the faithful port of iOS `EngagementTracker.begin`'s `guard consentProvider()`.
+     * The [recordView] impression above stays un-gated: it is a deduplicated
+     * view-count credit, not analytics telemetry (iOS fires `viewPost` regardless).
+     */
+    private fun beginDwell() {
+        if (postId.isBlank()) return
+        sessions = sessions.begin(
+            EngagementSurface.DETAIL,
+            postId,
+            clock.nowMillis(),
+            consentGranted = privacyPreferencesStore.preferences.value.allowAnalytics,
+        )
+    }
+
+    /**
+     * Closes the dwell session and, when it qualified (on-surface time ≥
+     * [EngagementSessions.MIN_DWELL_MS]), records the measured dwell against this post. Driven by
+     * the screen's `onDispose` so it runs while [viewModelScope] is still alive — the same seam
+     * [me.meeshy.app.reels.ReelsScreen] uses via `setCurrentReel(null)`. Idempotent: a second call
+     * (e.g. a later `onCleared`) finds no open session and records nothing. A sub-threshold glance
+     * is dropped, so a reader who taps a post and immediately backs out never enriches its dwell.
+     */
+    fun endDwellSession() {
+        val (next, view) = sessions.end(EngagementSurface.DETAIL, clock.nowMillis())
+        sessions = next
+        view?.let { recordDwellView(it) }
+    }
+
+    /**
+     * Best-effort dwell enrichment for this post's existing view: `posts/{id}/view` with the
+     * measured [QualifiedView.dwellMs]. The gateway's `creditPostView` is a `(postId, userId)`
+     * singleton, so this never re-increments the view count already booked by [recordView] — it
+     * only raises the stored dwell `duration` (the reco/monetisation watch-time signal) to its max.
+     * Fire-and-forget, matching the [recordView] impression: a failure is analytics the reader
+     * should never see fail.
+     */
+    private fun recordDwellView(view: QualifiedView) {
+        viewModelScope.launch {
+            try {
+                postRepository.viewPost(view.postId, view.dwellMs.toInt())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // best-effort — matches the impression view record
+            }
+        }
     }
 
     /**

@@ -23,7 +23,7 @@ final class ComposerFormatAvailabilityTests: XCTestCase {
 
     func test_lesFormatsOfferts_sontChoisissables() {
         let verdicts = ComposerFormatAvailability.verdicts(
-            candidates: quatre, offered: [.post, .story])
+            candidates: quatre, offered: [.post, .story], carriesMoreThanText: false)
 
         XCTAssertEqual(verdicts.first(where: { $0.format == .post })?.isChoosable, true)
         XCTAssertEqual(verdicts.first(where: { $0.format == .story })?.isChoosable, true)
@@ -33,7 +33,7 @@ final class ComposerFormatAvailabilityTests: XCTestCase {
     /// Réel et Mood ne figuraient simplement pas dans le menu.
     func test_lesFormatsNonOfferts_restentPresentsMaisEteints() {
         let verdicts = ComposerFormatAvailability.verdicts(
-            candidates: quatre, offered: [.post, .story])
+            candidates: quatre, offered: [.post, .story], carriesMoreThanText: false)
 
         XCTAssertEqual(verdicts.count, 4, "les quatre formats restent au menu")
         for format in [ComposerFormat.reel, .status] {
@@ -48,19 +48,28 @@ final class ComposerFormatAvailabilityTests: XCTestCase {
 
     /// Une raison n'est utile que si elle est PROPRE au format : deux formats
     /// qui refusent pour la même phrase n'apprennent rien.
+    ///
+    /// **Étendu au #4858** : la propriété doit tenir dans les DEUX états de
+    /// composition. Ne l'éprouver que sur un seul laisserait une phrase de
+    /// mood entrer en collision avec celle d'un autre format dans l'état non
+    /// testé — et c'est justement l'état vide, le plus courant, qui ne l'était
+    /// pas.
     func test_chaqueRefus_aSaPropreRaison() {
-        let verdicts = ComposerFormatAvailability.verdicts(
-            candidates: quatre, offered: [.post])
-        let raisons = verdicts.compactMap { $0.reason }
-        XCTAssertEqual(Set(raisons).count, raisons.count,
-                       "deux formats refusés pour la même phrase n'enseignent rien")
+        for porteMoi in [true, false] {
+            let verdicts = ComposerFormatAvailability.verdicts(
+                candidates: quatre, offered: [.post], carriesMoreThanText: porteMoi)
+            let raisons = verdicts.compactMap { $0.reason }
+            XCTAssertEqual(Set(raisons).count, raisons.count,
+                           "deux formats refusés pour la même phrase n'enseignent rien "
+                           + "(composition portant plus que du texte : \(porteMoi))")
+        }
     }
 
     /// L'ordre du menu ne dépend pas de ce qui est disponible : un format qui
     /// devient choisissable ne doit pas SAUTER de place sous le doigt.
     func test_lOrdreDuMenu_neDependPasDeLaDisponibilite() {
-        let a = ComposerFormatAvailability.verdicts(candidates: quatre, offered: [.post]).map(\.format)
-        let b = ComposerFormatAvailability.verdicts(candidates: quatre, offered: quatre).map(\.format)
+        let a = ComposerFormatAvailability.verdicts(candidates: quatre, offered: [.post], carriesMoreThanText: false).map(\.format)
+        let b = ComposerFormatAvailability.verdicts(candidates: quatre, offered: quatre, carriesMoreThanText: false).map(\.format)
         XCTAssertEqual(a, b)
         XCTAssertEqual(a, quatre)
     }
@@ -68,7 +77,7 @@ final class ComposerFormatAvailabilityTests: XCTestCase {
     /// Le fusible : si la règle rendait tout choisissable sans regarder, le
     /// témoin ci-dessus passerait. On lui donne un cas où elle DOIT refuser.
     func test_unCandidatHorsDeLOffre_nEstJamaisChoisissable() {
-        let verdicts = ComposerFormatAvailability.verdicts(candidates: quatre, offered: [])
+        let verdicts = ComposerFormatAvailability.verdicts(candidates: quatre, offered: [], carriesMoreThanText: false)
         XCTAssertTrue(verdicts.allSatisfy { !$0.isChoosable })
     }
 }

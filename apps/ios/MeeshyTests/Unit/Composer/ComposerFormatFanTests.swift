@@ -121,13 +121,13 @@ final class ComposerFormatFanTests: XCTestCase {
         )
     }
 
-    /// L'invariant qui rend le repli sûr, éprouvé sur les NEUF portes plutôt
+    /// L'invariant qui rend le repli sûr, éprouvé sur les HUIT portes plutôt
     /// que supposé : le premier format offert est toujours celui de la porte.
     /// Si une porte le violait un jour, le repli renverrait l'auteur sur un
     /// format que sa porte n'ouvre pas — et rien d'autre ne le dirait.
     func test_theFallbackTarget_isAlwaysTheDoorOwnFormat() {
         let doors: [ComposerOrigin] = [
-            .storyTray, .feedComposer, .reelTab, .moodChip,
+            .storyTray, .feedComposer, .moodChip,
             .repost(ofPostId: "p1", sourceFormat: .story),
             .edit(postId: "p2", documentFormat: .reel),
             .draft(id: "d1"), .share,
@@ -225,15 +225,35 @@ final class ComposerFormatFanTests: XCTestCase {
         XCTAssertTrue(code.contains("struct ComposerFormatFan"), "Le fichier lu n'est pas celui de l'éventail")
     }
 
-    /// Garde NÉGATIVE — loi 4. Griser est la pente naturelle : c'est une ligne
-    /// de moins que retirer, et ça « montre à l'utilisateur ce qu'il pourrait
-    /// avoir ». C'est précisément ce que la doctrine refuse — une affordance
-    /// montée puis désactivée est une promesse non tenue.
-    func test_fan_neverGreysAFormat_itRemovesIt() throws {
+    /// **RETOURNÉE au #4071 — un FORMAT impossible est GRISÉ AVEC SA RAISON.**
+    ///
+    /// Elle interdisait le grisage au nom de la loi 4, et c'était la bonne
+    /// lecture pour un CONTRÔLE. L'arbitrage produit #4030 nomme l'exception, et
+    /// il nomme aussi les vues qu'elle gouverne — `1a` `2a` `2k` `3a` `4f` : un
+    /// profil impossible est montré désactivé avec sa raison, jamais masqué.
+    ///
+    /// La frontière tient en une phrase : **un contrôle sans effet est absent ;
+    /// un format qu'on ne peut pas encore prendre est une règle du produit qu'il
+    /// faut apprendre à l'auteur.** Le premier n'a rien à dire, le second a tout
+    /// à dire — la doctrine de `2a` l'écrit ainsi : « l'utilisateur apprend la
+    /// règle au lieu de la deviner ».
+    ///
+    /// Mesuré avant le retournement : depuis l'entrée Post, l'éventail n'offrait
+    /// que Post et Story. « Réel » et « Mood » n'y figuraient pas du tout, et
+    /// rien ne disait pourquoi — la bascule semblait ne pas exister.
+    ///
+    /// **Ce que la garde protège désormais** : qu'un refus ne soit jamais MUET.
+    /// Un item éteint sans raison ne vaut pas mieux qu'un item absent — il dit
+    /// « non » sans dire quoi faire.
+    func test_fan_greysAnImpossibleFormat_andAlwaysSaysWhy() throws {
         let code = try fanSource()
-        XCTAssertFalse(code.contains(".disabled("), "L'éventail ne grise aucun format (loi 4) — il ne le monte pas")
-        XCTAssertFalse(code.contains(".grayscale("), "Idem : pas de format éteint visuellement")
-        XCTAssertFalse(code.contains("allowsHitTesting(false)"), "Idem : pas de chip mort au toucher")
+        XCTAssertTrue(code.contains(".disabled(!verdict.isChoosable)"),
+                      "un format non offert reste au menu, éteint (#4030)")
+        XCTAssertTrue(code.contains("verdict.reason"),
+                      "et son extinction porte SA raison — sinon elle n'enseigne rien")
+        XCTAssertFalse(code.contains(".grayscale("),
+                       "l'extinction passe par `.disabled`, pas par un filtre visuel : "
+                       + "un item grisé au pixel reste tapable")
     }
 
     /// Garde NÉGATIVE — l'éventail LIT la table, il ne la double pas. Une liste
@@ -241,8 +261,13 @@ final class ComposerFormatFanTests: XCTestCase {
     /// muette le jour où une porte changerait son offre.
     func test_fan_iteratesTheOfferedFormats_ratherThanEnumeratingThemItself() throws {
         let code = try fanSource()
-        XCTAssertTrue(code.contains("ForEach(Array(offeredFormats.enumerated())"),
-                      "L'éventail itère `offeredFormats` — la table reste la seule source")
+        // L'itération porte désormais sur les VERDICTS, qui se calculent à
+        // partir de `offeredFormats` — la table reste donc la seule source, mais
+        // elle passe par la règle qui décide ce que chaque format VAUT (#4030).
+        XCTAssertTrue(code.contains("ComposerFormatAvailability.verdicts("),
+                      "L'éventail lit les verdicts, calculés depuis `offeredFormats`")
+        XCTAssertTrue(code.contains("offered: offeredFormats"),
+                      "et `offeredFormats` en est bien l'entrée — la table reste la seule source")
         XCTAssertFalse(code.contains("[.story, .post, .reel, .status]"),
                        "Une liste de formats écrite dans la vue double la table de C1")
     }

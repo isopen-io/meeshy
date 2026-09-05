@@ -21,6 +21,13 @@ import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.notification.NotificationCountsSocketEvent
+import me.meeshy.sdk.notification.NotificationDeletedBulkScope
+import me.meeshy.sdk.notification.NotificationDeletedBulkSocketEvent
+import me.meeshy.sdk.notification.NotificationDeletedSocketEvent
+import me.meeshy.sdk.notification.NotificationReadBulkScope
+import me.meeshy.sdk.notification.NotificationReadBulkSocketEvent
+import me.meeshy.sdk.notification.NotificationReadSocketEvent
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.sync.SyncSeqTracker
@@ -71,9 +78,21 @@ class NotificationsViewModelTest {
         return repository
     }
 
-    private fun socketManager(events: MutableSharedFlow<ApiNotification> = MutableSharedFlow()): MessageSocketManager {
+    private fun socketManager(
+        events: MutableSharedFlow<ApiNotification> = MutableSharedFlow(),
+        read: MutableSharedFlow<NotificationReadSocketEvent> = MutableSharedFlow(),
+        readBulk: MutableSharedFlow<NotificationReadBulkSocketEvent> = MutableSharedFlow(),
+        deleted: MutableSharedFlow<NotificationDeletedSocketEvent> = MutableSharedFlow(),
+        deletedBulk: MutableSharedFlow<NotificationDeletedBulkSocketEvent> = MutableSharedFlow(),
+        counts: MutableSharedFlow<NotificationCountsSocketEvent> = MutableSharedFlow(),
+    ): MessageSocketManager {
         val manager: MessageSocketManager = mockk(relaxed = true)
         every { manager.notificationReceived } returns events
+        every { manager.notificationRead } returns read
+        every { manager.notificationReadBulk } returns readBulk
+        every { manager.notificationDeleted } returns deleted
+        every { manager.notificationDeletedBulk } returns deletedBulk
+        every { manager.notificationCounts } returns counts
         return manager
     }
 
@@ -187,6 +206,65 @@ class NotificationsViewModelTest {
         events.emit(incoming)
 
         verify(exactly = 1) { repo.prependLive(incoming) }
+    }
+
+    // --- Notification sync family (issue notif-sync) — the other four lifecycle events ---
+
+    @Test
+    fun `a socket notification read is forwarded to the repository`() = runTest {
+        val read = MutableSharedFlow<NotificationReadSocketEvent>()
+        val repo = repository()
+        NotificationsViewModel(repo, socketManager(read = read), SyncSeqTracker())
+
+        read.emit(NotificationReadSocketEvent(notificationId = "n1"))
+
+        verify(exactly = 1) { repo.applyRead("n1") }
+    }
+
+    @Test
+    fun `a socket notification read-bulk is forwarded to the repository`() = runTest {
+        val readBulk = MutableSharedFlow<NotificationReadBulkSocketEvent>()
+        val repo = repository()
+        NotificationsViewModel(repo, socketManager(readBulk = readBulk), SyncSeqTracker())
+        val scope = NotificationReadBulkScope(kind = "all")
+
+        readBulk.emit(NotificationReadBulkSocketEvent(scope))
+
+        verify(exactly = 1) { repo.applyReadBulk(scope) }
+    }
+
+    @Test
+    fun `a socket notification deleted is forwarded to the repository`() = runTest {
+        val deleted = MutableSharedFlow<NotificationDeletedSocketEvent>()
+        val repo = repository()
+        NotificationsViewModel(repo, socketManager(deleted = deleted), SyncSeqTracker())
+
+        deleted.emit(NotificationDeletedSocketEvent(notificationId = "n1"))
+
+        verify(exactly = 1) { repo.applyDeleted("n1") }
+    }
+
+    @Test
+    fun `a socket notification deleted-bulk is forwarded to the repository`() = runTest {
+        val deletedBulk = MutableSharedFlow<NotificationDeletedBulkSocketEvent>()
+        val repo = repository()
+        NotificationsViewModel(repo, socketManager(deletedBulk = deletedBulk), SyncSeqTracker())
+        val scope = NotificationDeletedBulkScope(kind = "read")
+
+        deletedBulk.emit(NotificationDeletedBulkSocketEvent(scope))
+
+        verify(exactly = 1) { repo.applyDeletedBulk(scope) }
+    }
+
+    @Test
+    fun `a socket notification counts is forwarded to the repository`() = runTest {
+        val counts = MutableSharedFlow<NotificationCountsSocketEvent>()
+        val repo = repository()
+        NotificationsViewModel(repo, socketManager(counts = counts), SyncSeqTracker())
+
+        counts.emit(NotificationCountsSocketEvent(unread = 5, total = 20))
+
+        verify(exactly = 1) { repo.applyCounts(5) }
     }
 
     /**

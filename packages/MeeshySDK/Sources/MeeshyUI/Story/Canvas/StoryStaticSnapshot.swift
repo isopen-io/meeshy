@@ -13,6 +13,8 @@ public enum StoryStaticSnapshot {
     /// - Parameters:
     ///   - loadedImages: already-decoded bitmaps keyed by media object id (background
     ///     AND foreground) — the same dictionary shape as `StoryComposerViewModel.loadedImages`.
+    ///     Un sticker IMAGE y range son bitmap sous son propre id (ou sous son
+    ///     `postMediaId` une fois publié) — voir `StoryStickerLayer.bitmapCacheKeys`.
     ///   - bgImage: legacy flat background (no `mediaObjects` entry yet), the same value
     ///     `StorySlideRenderer.renderComposite`'s `bgImage:` parameter accepted.
     ///
@@ -30,10 +32,17 @@ public enum StoryStaticSnapshot {
                               bgImage: UIImage? = nil,
                               size: CGSize) -> UIImage? {
         let geometry = CanvasGeometry(renderSize: size)
+        // Le rendu est UN COUP : un bitmap qu'une tâche poserait une frame plus
+        // tard n'atteindrait jamais l'image. `ComposerImageCacheReader` est le
+        // seul lecteur que les couches lisent de façon SYNCHRONE — c'est par lui
+        // que le bitmap d'un sticker collé (`loadedImages[sticker.id]`, #4852)
+        // et celui d'un média de premier plan entrent dans la cover.
+        let imageCache = ComposerImageCacheReader(images: loadedImages, version: 0)
         let layer = StoryRenderer.render(slide: slide,
                                          into: geometry,
                                          at: .zero,
                                          mode: .edit,
+                                         imageCache: imageCache,
                                          contentsScale: 1.0)
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in

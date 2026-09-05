@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="feed_title">Feed</string>
+    <string name="feed_title">Meeshy Feed</string>
     <string name="feed_empty">No posts yet</string>
     <string name="feed_like">Like</string>
     <string name="feed_unknown_author">Unknown</string>
@@ -147,4 +147,20 @@
     <string name="feed_report_reason_hate_speech">Hate speech</string>
     <string name="feed_report_reason_impersonation">Impersonation</string>
     <string name="feed_report_reason_other">Other</string>
+
+    <!-- Collapsible header actions -->
+    <string name="feed_header_reels">Launch Reels</string>
+    <string name="feed_header_nearby">Nearby posts</string>
+
+    <!-- Nearby (À proximité) -->
+    <string name="nearby_title">Nearby</string>
+    <string name="nearby_back">Back</string>
+    <string name="nearby_empty">No posts near you right now</string>
+    <string name="nearby_permission_title">Location access needed</string>
+    <string name="nearby_permission_message">Allow location access to see posts shared near you.</string>
+    <string name="nearby_permission_action">Grant access</string>
+    <string name="nearby_location_unavailable">Location unavailable — check your location settings and try again</string>
+    <string name="nearby_retry">Try again</string>
+    <string name="nearby_distance_meters">%1$d m away</string>
+    <string name="nearby_distance_km">%1$.1f km away</string>
 </resources>

@@ -317,94 +317,48 @@ struct FeedPostCard: View {
     /// d'un post SANS storyEffects (post média simple, sans canvas).
     private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
 
-    /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un
-    /// iPad en colonne large n'étire pas la scène en mur vertical géant).
-    /// La hauteur n'est PAS dupliquée en constante : `.aspectRatio(9:16)`
-    /// la dérive de la largeur RÉELLEMENT proposée par le parent (voir
-    /// `cardScenePlayer(document:)`) — un plafond en points calculé sur la
-    /// largeur MAXIMALE (420 × 16/9 = 747pt) déforme la scène dès que la
-    /// carte est plus étroite que ce plafond (≈329pt sur iPhone 16 Pro,
-    /// après le double padding horizontal de 16pt de la carte).
-    private static let cardSceneMaxWidth: CGFloat = 420
-
-    /// Scène du post en carte (Task E3) — `MeeshyScenePlayer(.card)`. Née en
-    /// PAUSE et le RESTE : `sceneIndex`/`isPlaying` sont des `.constant`
-    /// figés, jamais un `@State` qu'un futur commit pourrait faire basculer.
-    /// « La carte de POST naît en pause, le mouvement est au tap » (revue
-    /// Fable n°25) — la lecture vit dans LA DESTINATION du tap (`onTapPost`,
-    /// le plein écran EXISTANT, `PostDetailView`), jamais dans la carte :
-    /// zéro AVPlayer/décodage actif ici. `ScenePlayerConfig(mode: .card)`
-    /// verrouille déjà `isMuted`/`loops`/`startsPaused` côté SDK (B4 gelé) ;
-    /// `isPlaying: .constant(false)` garantit qu'aucune commande locale ne
-    /// lève jamais la pause.
+    /// La scène du post se rend chez elle — `PostSceneCard` +
+    /// `PostSceneCardContainer` (`FeedSceneAutoplay.swift`), qui portent aussi
+    /// celle d'une story repartagée. Les deux surfaces obéissent depuis le
+    /// 2026-09-05 à la MÊME loi que les réels : le viewport élit celle qui joue,
+    /// une seule à la fois, muette, et un appel les tait toutes.
     ///
-    /// `.preferredContentLanguages(...)` câble le Prisme Linguistique — même
-    /// source que le voisin `StoryRepostEmbedCell` (branche `isStoryRepost`
-    /// juste en dessous) : sans cet appel `MeeshyScenePlayer` garde
-    /// `languages: []` et `StoryTextObject.resolvedText` rend
-    /// inconditionnellement le texte ORIGINAL de l'auteur (correctif rejet
-    /// DoD, constat 1 — « le prisme s'applique à TOUT le contenu »).
-    ///
-    /// `.aspectRatio(9.0/16.0, contentMode: .fit)` — même patron que
-    /// `StoryRepostEmbedCell`, qui rend le MÊME hôte (`StoryReaderRepresentable`
-    /// via `MeeshyScenePlayer`) dans le MÊME fil sans jamais avoir récursé.
-    /// C'est un modificateur TOP-DOWN : le parent propose une taille à
-    /// l'enfant, l'enfant ne mesure jamais sa propre taille pour la
-    /// reboucler sur le layout — distinct du piège self-sizing BOTTOM-UP
-    /// (un hôte hosted qui DÉRIVE sa propre hauteur et la reboucle,
-    /// famille du crash SIGTRAP `_updateVisibleCellsNow` ×7 documenté par
-    /// l'incident `MessageListLayout.swift` 2026-08-18 — SwiftUI DANS une
-    /// cellule UIKit, l'inverse du cas présent, UIKit DANS SwiftUI) : un
-    /// `GeometryReader` local resterait interdit, `.aspectRatio` ne l'est
-    /// pas (correctif rejet DoD, constat 2).
-    @ViewBuilder
-    private func cardScenePlayer(document: CanvasV3) -> some View {
-        MeeshyScenePlayer(
-            document: document,
-            mode: .card,
-            sceneIndex: .constant(0),
-            isPlaying: .constant(false),
-            accentColorHex: accentColor
-        )
-        .preferredContentLanguages(AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
-        .aspectRatio(9.0 / 16.0, contentMode: .fit)
-        .frame(maxWidth: Self.cardSceneMaxWidth)
-        .frame(maxWidth: .infinity, alignment: .center)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        // Vue `1h` — **l'état est VRAI, il devient DIT.**
-        //
-        // La carte naît muette et en pause depuis la revue Fable n°25, et le
-        // verrou est solide (`ScenePlayerConfig(mode: .card)` côté SDK,
-        // `isPlaying: .constant(false)` ici). Mais rien ne le DISAIT : le
-        // lecteur voyait une scène immobile sans savoir si elle est figée par
-        // choix ou en train de ne pas charger, et sans savoir qu'un son
-        // l'attend ailleurs. Un état gardé mais muet se lit comme une panne.
-        //
-        // Le badge répond aux deux d'un coup — « muette » annonce le son qui
-        // existe et ne joue pas ici, « en pause » annonce le mouvement qui
-        // vit dans la destination du tap. Il est décoratif pour VoiceOver :
-        // `cardSceneAccessibilityLabel` porte déjà l'attribution, et le
-        // dupliquer ferait lire deux fois la même carte.
-        .overlay(alignment: .bottomLeading) {
-            Text(String(localized: "feed.post.scene.muted_paused",
-                        defaultValue: "scène · muette, en pause",
-                        bundle: .main))
-                .font(.caption2)
-                .foregroundColor(.white.opacity(0.9))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.black.opacity(0.45), in: Capsule())
-                .padding(10)
-                .accessibilityHidden(true)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onTapPost?(post) }
-    }
+    /// L'extraction n'était pas un choix de style : ce fichier est en dette de
+    /// taille (liste `legacyOverBudget`), et la directive interdit d'ajouter à
+    /// un fichier hors budget avant d'en avoir extrait. La découpe suit la
+    /// responsabilité — ce qui LIT une scène quitte ce qui compose une carte.
 
     /// VoiceOver label pour la scène de carte — même convention que
     /// `mediaAccessibilityLabel` (attribution à l'auteur).
     private var cardSceneAccessibilityLabel: String {
         String(format: String(localized: "a11y.feed.post.scene", defaultValue: "Scène partagée par %@", bundle: .main), post.author)
+    }
+
+    /// **Le média que le plein écran doit ouvrir sur une carte de SCÈNE.**
+    ///
+    /// Le premier visuel du post — celui que la scène montre. `nil` quand la
+    /// scène n'a aucun média (un canvas de texte, de dessin ou de stickers) :
+    /// il n'y a alors rien à agrandir, et le geste retombe sur l'ouverture de
+    /// la publication plutôt que de ne rien faire.
+    private var cardSceneFullscreenMedia: FeedMedia? {
+        post.media.first { $0.type == .image || $0.type == .video }
+    }
+
+    /// **La légende que la carte de scène affiche** — celle du média que la
+    /// scène montre, résolue par le MÊME juge que les deux autres surfaces du
+    /// fil (`SocialMediaCaption`), et jamais le texte du post : celui-ci est
+    /// déjà rendu au-dessus de la carte.
+    private var cardSceneCaption: String? {
+        cardSceneFullscreenMedia?.caption
+    }
+
+    /// L'indice VoiceOver DIT ce que le doigt fait — et il change avec lui.
+    private var cardSceneOpenHint: String {
+        cardSceneFullscreenMedia != nil
+            ? String(localized: "a11y.feed.scene.fullscreen.hint",
+                     defaultValue: "Touche deux fois pour voir en plein écran", bundle: .main)
+            : String(localized: "a11y.feed.post.open.hint",
+                     defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main)
     }
 
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
@@ -554,19 +508,54 @@ struct FeedPostCard: View {
                 // repost ci-dessous : un post scène n'est ni un repost de story
                 // ni un repost de réel.
                 if let cardSceneDocument {
-                    cardScenePlayer(document: cardSceneDocument)
+                    PostSceneSurface(
+                        coordinator: reelAutoplay,
+                        post: post,
+                        document: cardSceneDocument,
+                        accentColor: accentColor,
+                        onTapPost: onTapPost,
+                        // **Le doigt sur la scène ouvre le PLEIN ÉCRAN**
+                        // (directive porteur 2026-09-05), jamais le détail du
+                        // post. La scène EST le contenu : la toucher demande à
+                        // la voir en grand, pas à lire ses commentaires.
+                        onTapScene: cardSceneFullscreenMedia.map { media in
+                            { openFullscreen(media) }
+                        }
+                    )
+                        // **La légende PAR-DESSUS la scène** (directive porteur
+                        // 2026-09-05). La carte de scène n'en affichait aucune :
+                        // l'auteur composait sa légende, la retrouvait en plein
+                        // écran, et le fil n'en montrait rien — alors que c'est
+                        // là qu'on décide d'ouvrir ou de passer.
+                        //
+                        // Posée en `overlay` plutôt que dans la scène : elle
+                        // décrit le contenu, elle n'en fait pas partie. L'y
+                        // peindre la ferait entrer dans l'aperçu ET dans
+                        // l'export (loi 6).
+                        .overlay(alignment: .bottom) {
+                            FeedCaptionOverlay(caption: cardSceneCaption)
+                        }
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(cardSceneAccessibilityLabel)
-                        .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
+                        // **L'annonce SUIT le geste** — sinon le contrôle ment.
+                        // VoiceOver disait « ouvrir la publication » pendant
+                        // que le doigt ouvre désormais le plein écran ; laisser
+                        // les deux diverger donnerait à qui n'y voit pas une
+                        // description de ce que l'écran NE fait plus.
+                        .accessibilityHint(cardSceneOpenHint)
                         .accessibilityAddTraits(.isButton)
-                        .accessibilityAction { onTapPost?(post) }
+                        .accessibilityAction {
+                            if let media = cardSceneFullscreenMedia { openFullscreen(media) }
+                            else { onTapPost?(post) }
+                        }
                 } else if isStoryRepost {
                     // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
                     // For this branch the gateway has snapshotted the original story media
                     // into the outer POST, but the canonical source is `post.repost` —
                     // we reuse `StoryReaderRepresentable(repost:)` so the rendering matches
                     // the in-viewer experience pixel-for-pixel.
-                    StoryRepostEmbedCell(
+                    StoryRepostSurface(
+                        coordinator: reelAutoplay,
                         post: post,
                         preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
                     )
@@ -718,6 +707,13 @@ struct FeedPostCard: View {
                 allAttachments: attachments,
                 startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
                 accentColor: accentColor,
+                // #4934 — le plein écran garde la bascule de langue que la
+                // carte offre : `captionServings` porte le texte ET ses
+                // alternatives, `captionMap` reste servi pour les appelants qui
+                // n'ont rien à basculer.
+                captionServings: SocialMediaCaption.serving(
+                    for: post.media, carrier: .from(post: post)
+                ),
                 captionMap: SocialMediaCaption.map(
                     for: post.media, carrierText: post.displayContent
                 ),
@@ -1212,6 +1208,7 @@ struct FeedPostCard: View {
                             accentColor: accentColor,
                             commentId: comment.id,
                             carrierText: comment.displayContent,
+                            carrierOriginalLanguage: comment.originalLanguage,
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,

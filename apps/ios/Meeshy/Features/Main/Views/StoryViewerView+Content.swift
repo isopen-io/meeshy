@@ -2719,6 +2719,7 @@ struct StoryCommentRowView: View, Equatable {
                         accentColor: comment.authorColor,
                         commentId: comment.id,
                         carrierText: comment.displayContent,
+                        carrierOriginalLanguage: comment.originalLanguage,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,

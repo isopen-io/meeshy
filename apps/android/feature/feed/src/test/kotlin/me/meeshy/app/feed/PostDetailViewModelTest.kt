@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
@@ -23,6 +24,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
@@ -31,6 +33,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
@@ -60,6 +63,10 @@ class PostDetailViewModelTest {
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
+    private var clockNow: Long = 0L
+    private val clock = object : CacheClock {
+        override fun nowMillis(): Long = clockNow
+    }
 
     private fun post(
         id: String = "p1",
@@ -102,6 +109,7 @@ class PostDetailViewModelTest {
     private fun viewModel(
         postId: String? = "p1",
         currentUser: MeeshyUser? = null,
+        allowAnalytics: Boolean = true,
     ): PostDetailViewModel {
         every { session.currentUser } returns MutableStateFlow(currentUser)
         every { socialSocket.commentAdded } returns commentAdded
@@ -109,7 +117,10 @@ class PostDetailViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostDetailViewModel(repository, session, socialSocket, config, handle)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(allowAnalytics = allowAnalytics),
+        )
+        return PostDetailViewModel(repository, session, socialSocket, config, clock, privacyStore, handle)
     }
 
     @Test
@@ -568,6 +579,122 @@ class PostDetailViewModelTest {
         vm.state.test {
             assertThat(awaitItem().post?.content).isEqualTo("Hi")
         }
+    }
+
+    // --- Dwell enrichment (mirror of iOS `.trackEngagement(surface: .detail)` beside the impression) ---
+
+    @Test
+    fun `leaving after dwelling past the floor records the measured watch-time`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 1000
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 1000) }
+    }
+
+    @Test
+    fun `the dwell record enriches the same view rather than replacing the impression`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 1500
+
+        vm.endDwellSession()
+
+        // The impression (no duration) still fires exactly once on open, and the dwell adds a
+        // second, duration-carrying call — the gateway dedups them onto one view.
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+        coVerify(exactly = 1) { repository.viewPost("p1", 1500) }
+    }
+
+    @Test
+    fun `a glance below the dwell floor records no watch-time`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 999
+
+        vm.endDwellSession()
+
+        // The impression (null duration) still fired on open; the sub-floor glance must NOT add
+        // the dwell record it would carry (999ms — the only duration this scenario could produce).
+        coVerify(exactly = 0) { repository.viewPost("p1", 999) }
+    }
+
+    @Test
+    fun `a blank postId opens no dwell session`() = runTest {
+        clockNow = 0
+        val vm = viewModel(postId = null)
+        clockNow = 10_000
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 0) { repository.viewPost(any(), any()) }
+    }
+
+    @Test
+    fun `ending the dwell twice records the watch-time only once`() = runTest {
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 2000
+
+        vm.endDwellSession()
+        clockNow = 5000
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 2000) }
+        coVerify(exactly = 0) { repository.viewPost("p1", 5000) }
+    }
+
+    @Test
+    fun `a failed dwell record does not throw`() = runTest {
+        coEvery { repository.viewPost("p1", any()) } returns NetworkResult.Failure(ApiError(message = "offline"))
+        clockNow = 0
+        val vm = viewModel()
+        clockNow = 1200
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 1200) }
+    }
+
+    // --- Analytics-consent gate (mirror of iOS `EngagementTracker.begin` `guard consentProvider()`) ---
+
+    @Test
+    fun `with analytics consent withheld a qualifying dwell records no watch-time`() = runTest {
+        clockNow = 0
+        val vm = viewModel(allowAnalytics = false)
+        clockNow = 10_000
+
+        vm.endDwellSession()
+
+        // A 10s dwell would qualify and fire `viewPost("p1", 10000)` — but consent was
+        // withheld so no session opened; that dwell record (the only duration this scenario
+        // could produce) must be absent, while the impression itself still credited the view.
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+        coVerify(exactly = 0) { repository.viewPost("p1", 10_000) }
+    }
+
+    @Test
+    fun `the impression still fires when analytics consent is withheld`() = runTest {
+        clockNow = 0
+
+        viewModel(allowAnalytics = false)
+
+        // The deduplicated view-count credit is not analytics telemetry (iOS fires
+        // `viewPost` regardless of consent); only the dwell enrichment is gated.
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+    }
+
+    @Test
+    fun `with analytics consent granted a qualifying dwell still records`() = runTest {
+        clockNow = 0
+        val vm = viewModel(allowAnalytics = true)
+        clockNow = 1000
+
+        vm.endDwellSession()
+
+        coVerify(exactly = 1) { repository.viewPost("p1", 1000) }
     }
 
     // --- Author-only reach stats projection (isAuthor) ---

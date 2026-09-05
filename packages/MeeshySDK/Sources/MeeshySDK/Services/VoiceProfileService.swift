@@ -23,7 +23,7 @@ public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked
     // MARK: - Consent
 
     public func getConsentStatus() async throws -> VoiceConsentStatus {
-        let response: APIResponse<VoiceConsentStatus> = try await api.request(endpoint: "/voice/profile/consent")
+        let response: APIResponse<VoiceConsentStatus> = try await api.request(VoiceEndpoint.profileConsent)
         return response.data
     }
 
@@ -36,13 +36,13 @@ public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked
             voiceCloningConsent: voiceCloningConsent ? true : nil,
             birthDate: birthDate
         )
-        let response: APIResponse<VoiceConsentResponse> = try await api.post(endpoint: "/voice/profile/consent", body: body)
+        let response: APIResponse<VoiceConsentResponse> = try await api.post(VoiceEndpoint.profileConsent, body: body)
         return response.data
     }
 
     public func revokeConsent() async throws {
         let body = VoiceConsentRequest(voiceRecordingConsent: false)
-        let _: APIResponse<VoiceConsentResponse> = try await api.post(endpoint: "/voice/profile/consent", body: body)
+        let _: APIResponse<VoiceConsentResponse> = try await api.post(VoiceEndpoint.profileConsent, body: body)
     }
 
     // MARK: - Voice Profile
@@ -55,7 +55,7 @@ public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked
     // individuels ni de toggle-cloning dédié — d'où les mappings ci-dessous.
 
     public func getProfile() async throws -> VoiceProfile? {
-        let response: APIResponse<VoiceProfileDetails> = try await api.request(endpoint: "/voice/profile")
+        let response: APIResponse<VoiceProfileDetails> = try await api.request(VoiceEndpoint.profile)
         return response.data.toDomain()
     }
 
@@ -81,7 +81,7 @@ public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked
         let existing = try? await getProfile()
         if let profileId = existing?.id, !profileId.isEmpty {
             let response: APIResponse<VoiceProfileRegisterResponse> = try await api.put(
-                endpoint: "/voice/profile/\(profileId)", body: body
+                VoiceEndpoint.profileByProfileId(profileId: profileId), body: body
             )
             return VoiceSampleUploadResponse(
                 sampleId: response.data.profileId,
@@ -91,7 +91,7 @@ public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked
             )
         } else {
             let response: APIResponse<VoiceProfileRegisterResponse> = try await api.post(
-                endpoint: "/voice/profile/register", body: body
+                VoiceEndpoint.profileRegister, body: body
             )
             return VoiceSampleUploadResponse(
                 sampleId: response.data.profileId,
@@ -111,13 +111,13 @@ public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked
     /// champ quand il est faux, ce qui ne désactiverait rien).
     public func toggleVoiceCloning(enabled: Bool) async throws {
         let body = VoiceConsentRequest(voiceRecordingConsent: true, voiceCloningConsent: enabled)
-        let _: APIResponse<VoiceConsentResponse> = try await api.post(endpoint: "/voice/profile/consent", body: body)
+        let _: APIResponse<VoiceConsentResponse> = try await api.post(VoiceEndpoint.profileConsent, body: body)
     }
 
     // MARK: - GDPR Delete
 
     public func deleteProfile() async throws {
-        _ = try await api.delete(endpoint: "/voice/profile")
+        _ = try await api.delete(VoiceEndpoint.profile)
     }
 
     /// Pas de route gateway pour supprimer un échantillon individuel (le

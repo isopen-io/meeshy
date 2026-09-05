@@ -1007,14 +1007,16 @@ export function checkConsentRequirements(
       shareUsageData: ['dataProcessingConsentAt'],
     },
     video: {
-      virtualBackgroundEnabled: ['dataProcessingConsentAt', 'thirdPartyServicesConsentAt'],
+      // #4343 — `thirdPartyServicesConsentAt` retiré : personne ne pouvait
+      // l'accorder (ni route, ni clé de schéma, ni colonne `User`).
+      virtualBackgroundEnabled: ['dataProcessingConsentAt'],
     },
     document: {
-      scanFilesForMalware: ['thirdPartyServicesConsentAt'],
+      // #4343 — `scanFilesForMalware` n'exige plus rien.
     },
     application: {
       telemetryEnabled: ['dataProcessingConsentAt'],
-      betaFeaturesEnabled: ['thirdPartyServicesConsentAt'],
+      // #4343 — `betaFeaturesEnabled` n'exige plus rien.
     },
   };
 

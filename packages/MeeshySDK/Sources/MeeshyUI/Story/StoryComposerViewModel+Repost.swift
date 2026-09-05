@@ -11,7 +11,8 @@ extension StoryComposerViewModel {
     ///
     /// Clones the active `StoryItem` (the slide currently displayed in the viewer) into a
     /// fresh `StorySlide` (the composer's internal type — different from `StoryItem`),
-    /// appends a non-editable "locked" badge sticker at the bottom-center of the canvas,
+    /// appends the repost credit chip when — and only when — the source story was
+/// PUBLIC (`StoryRepostCredit`), at the bottom-center of the canvas,
     /// and triggers an asynchronous media preload via the shared `CacheCoordinator`
     /// (3-tier cache) so the canvas paints instantly once mounted.
     ///
@@ -53,36 +54,29 @@ extension StoryComposerViewModel {
             order: 0
         )
 
-        // Locked badge sticker — non-editable text rendered at bottom-center.
-        // The composer (StoryTextObject `isLocked == true`, see Patch B.3) skips
-        // drag/edit/delete for this object so reposters cannot strip the attribution.
-        // Direct interpolation : the Localizable.xcstrings catalog does not yet have
-        // a `story.repost.badge` key with a `%@` placeholder, and `String(localized:)`
-        // requires a StaticString literal (not a runtime-interpolated key). When the
-        // catalog grows a proper entry, switch to `String(format: NSLocalizedString(...))`.
-        let badgeText = "Reposté de @\(authorHandle)"
-        let badge = StoryTextObject(
-            id: UUID().uuidString,
-            text: badgeText,
-            x: 0.5, y: 0.92,
-            scale: 1.0, rotation: 0,
-            fontSize: 14,
-            textStyle: "bold",
-            textColor: "FFFFFF",
-            textAlign: "center",
-            textBg: "6366F1",
-            isLocked: true
-        )
+        // **Le crédit n'est DÛ que si l'original était public** (directive
+        // porteur 2026-09-01). La règle, la forme de la pastille et son
+        // libellé localisé vivent dans `StoryRepostCredit` — pures, donc
+        // éprouvables sans monter un canvas.
+        //
+        // Le RETRAIT des crédits hérités, lui, est INCONDITIONNEL : republier
+        // une republication publique vers une audience restreinte garderait
+        // sinon la signature qu'on vient de juger indue. C'est le cas que
+        // l'ancien code ne pouvait pas produire — il ajoutait toujours — et
+        // celui qui apparaît dès que l'ajout devient conditionnel.
+        //
+        // Une note de l'ancien commentaire disparaît avec lui parce qu'elle
+        // était FAUSSE : elle promettait que le composer « skips drag » pour un
+        // objet verrouillé. Aucun geste ne consulte le verrou — ni `handlePan`,
+        // ni la manipulation — et c'est très bien : la directive demande
+        // justement que la pastille se déplace. Le verrou interdit ce qui la
+        // RETIRE ou la DÉNATURE (édition, duplication, suppression, sortie de
+        // scène), jamais ce qui la déplace.
         var effects = cloned.effects
-        // Strip toute attribution verrouillée héritée de la source avant d'ajouter
-        // la nôtre : reposter un repost empilerait sinon deux badges locked qui se
-        // chevauchent au même point (x:0.5, y:0.92). Les text objects locked sont
-        // EXCLUSIVEMENT des badges d'attribution (ce site est l'unique producteur de
-        // `isLocked: true`), donc ce filtre ne touche jamais le texte éditable de
-        // l'auteur. Le nouveau badge attribue à la source immédiate (`authorHandle`) ;
-        // la racine reste tracée via `originalRepostOfId`.
-        var texts = effects.textObjects.filter { $0.isLocked != true }
-        texts.append(badge)
+        var texts = StoryRepostCredit.stripped(from: effects.textObjects)
+        if let badge = StoryRepostCredit.badge(for: story, authorHandle: authorHandle) {
+            texts.append(badge)
+        }
         effects.textObjects = texts
         cloned.effects = effects
 

@@ -198,6 +198,12 @@ class TokenRefreshPolicyTest {
             .isEqualTo(TokenRefreshPolicy.UnauthorizedMapping.SessionExpired)
     }
 
+    @Test
+    fun map_accountDeletionWrongPassword_isInvalidCredentials() {
+        assertThat(TokenRefreshPolicy.mapUnauthorized("/me/account/deletion", "Mot de passe incorrect"))
+            .isEqualTo(TokenRefreshPolicy.UnauthorizedMapping.InvalidCredentials("Mot de passe incorrect"))
+    }
+
     // --- decideOn401: the reactive branch ---
 
     @Test
@@ -255,6 +261,21 @@ class TokenRefreshPolicyTest {
                 hasRefreshedOn401 = true,
             ),
         ).isEqualTo(TokenRefreshPolicy.Unauthorized401Decision.InvalidCredentials("nope"))
+    }
+
+    @Test
+    fun on401_accountDeletionWrongPassword_surfacesInvalidCredentialsWithoutTeardownOrRetry() {
+        assertThat(
+            TokenRefreshPolicy.decideOn401(
+                endpoint = "/me/account/deletion",
+                serverMessage = null,
+                hasRefreshedOn401 = false,
+            ),
+        ).isEqualTo(
+            TokenRefreshPolicy.Unauthorized401Decision.InvalidCredentials(
+                TokenRefreshPolicy.DEFAULT_INVALID_CREDENTIALS_MESSAGE,
+            ),
+        )
     }
 
     // --- classifyRetryStatus: outcome of the single replay ---

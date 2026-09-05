@@ -1,5 +1,60 @@
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
+
+const CONTRACT_ROOT = join(__dirname, '../../../../../packages/shared/types');
+const CONTRACT_DIR = join(CONTRACT_ROOT, 'socketio-events');
+const DECLARATION = 'export interface ConversationUpdatedEventData {';
+
+/**
+ * Le corps de `ConversationUpdatedEventData`, CHERCHÉ dans tout le contrat.
+ *
+ * Le contrat était un fichier ; il est un RÉPERTOIRE depuis #4645
+ * (`types/socketio-events/`, un module par domaine, plus une façade de
+ * ré-export à l'adresse historique). **Un balayage qui cherche dans UN fichier
+ * mesure ce fichier** — le laisser pointer `socketio-events.ts` l'aurait fait
+ * lever sur une façade qui ne déclare plus rien, et le jour où quelqu'un aurait
+ * « réparé » le chemin en le repointant vers `socketio-events/conversation.ts`,
+ * la déclaration aurait pu déménager à nouveau sans que rien ne rougisse.
+ *
+ * Il exige donc EXACTEMENT une source : zéro ⇒ le balayage ne peut pas se
+ * déclarer vide (la déclaration a disparu ou changé de forme) ; deux ⇒ le
+ * contrat porte une jumelle, et « ce que le contrat déclare » cesse de vouloir
+ * dire quelque chose.
+ */
+function contractSource(): string {
+  const candidates = readdirSync(CONTRACT_DIR)
+    .filter((entry) => entry.endsWith('.ts'))
+    .map((entry) => readFileSync(join(CONTRACT_DIR, entry), 'utf8'))
+    .filter((source) => source.includes(DECLARATION));
+
+  if (candidates.length === 0) {
+    throw new Error(
+      'ConversationUpdatedEventData introuvable dans types/socketio-events/ — ' +
+        'le balayage ne peut pas se déclarer vide'
+    );
+  }
+  if (candidates.length > 1) {
+    throw new Error(
+      `ConversationUpdatedEventData déclarée ${candidates.length} fois — le contrat a une jumelle`
+    );
+  }
+  return candidates[0];
+}
+
+function conversationUpdatedBody(): string {
+  const source = contractSource();
+  const start = source.indexOf(DECLARATION);
+  const end = source.indexOf('\n}', start);
+  if (end < 0) throw new Error('ConversationUpdatedEventData non terminée');
+  // Les commentaires CITENT la forme fautive pour expliquer pourquoi elle n'est
+  // pas là — c'est leur rôle, et c'est aussi le piège : sans dépouillement, un
+  // détecteur lit sa propre explication et se déclare rouge pour toujours.
+  // Même précaution que `stripComments` dans `server-emit-door-sweep.ts`.
+  return source
+    .slice(start, end)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+}
 
 /**
  * Les champs que `ConversationUpdatedEventData` DÉCLARE, lus à la source.
@@ -54,24 +109,7 @@ import { join } from 'path';
  * émises à celles que le contrat déclare.
  */
 export function declaredConversationUpdatedFields(): ReadonlySet<string> {
-  const source = readFileSync(
-    join(__dirname, '../../../../../packages/shared/types/socketio-events.ts'),
-    'utf8'
-  );
-
-  const start = source.indexOf('export interface ConversationUpdatedEventData {');
-  if (start < 0) {
-    throw new Error(
-      'ConversationUpdatedEventData introuvable — le balayage ne peut pas se déclarer vide'
-    );
-  }
-  const end = source.indexOf('\n}', start);
-  if (end < 0) throw new Error('ConversationUpdatedEventData non terminée');
-
-  const body = source
-    .slice(start, end)
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '');
+  const body = conversationUpdatedBody();
 
   const fields = new Set<string>();
   for (const line of body.split('\n')) {
@@ -95,19 +133,5 @@ export function declaredConversationUpdatedFields(): ReadonlySet<string> {
  * si tout l'était d'avance.
  */
 export function contractKeepsIndexSignature(): boolean {
-  const source = readFileSync(
-    join(__dirname, '../../../../../packages/shared/types/socketio-events.ts'),
-    'utf8'
-  );
-  const start = source.indexOf('export interface ConversationUpdatedEventData {');
-  const end = source.indexOf('\n}', start);
-  // Les commentaires CITENT la forme fautive pour expliquer pourquoi elle n'est
-  // pas là — c'est leur rôle, et c'est aussi le piège : sans dépouillement, ce
-  // détecteur lit sa propre explication et se déclare rouge pour toujours.
-  // Même précaution que `stripComments` dans `server-emit-door-sweep.ts`.
-  const body = source
-    .slice(start, end)
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*$/gm, '');
-  return /\[\s*key\s*:\s*string\s*\]\s*:/.test(body);
+  return /\[\s*key\s*:\s*string\s*\]\s*:/.test(conversationUpdatedBody());
 }
