@@ -506,7 +506,7 @@ export class MessageTranslationService extends EventEmitter {
 
   /**
    * Canonicalise ET déduplique une liste de langues cibles EXPLICITES avant le
-   * dispatch audio, avec la même parité SSOT (`normalizeLanguageCode`) que le
+   * dispatch audio, avec la même parité SSOT (`normalizeLanguageForDedup`) que le
    * chemin texte ({@link _resolveTargetLanguages}).
    *
    * Le chemin AUDIO ({@link processAudioAttachment}) prend les cibles explicites
@@ -528,7 +528,12 @@ export class MessageTranslationService extends EventEmitter {
     const seen = new Set<string>();
     const result: string[] = [];
     for (const raw of targetLanguages) {
-      const code = normalizeLanguageCode(raw) ?? raw.toLowerCase();
+      // `normalizeLanguageForDedup`, comme les six autres sites du fichier
+      // depuis #5253 : identique sur un code catalogué, et il DÉPOUILLE en plus
+      // la région d'un code hors catalogue (`'xy-ZZ'` → `'xy'`), que
+      // `normalizeLanguageCode(raw) ?? raw.toLowerCase()` laissait passer en
+      // deux cibles distinctes.
+      const code = normalizeLanguageForDedup(raw);
       if (seen.has(code)) continue;
       seen.add(code);
       result.push(code);
@@ -2536,7 +2541,7 @@ export class MessageTranslationService extends EventEmitter {
 
       // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation.
       //    Les cibles explicites sont canonicalisées + dédupliquées (SSOT
-      //    `normalizeLanguageCode`) — le dispatch audio ne le fait nulle part en aval,
+      //    `normalizeLanguageForDedup`) — le dispatch audio ne le fait nulle part en aval,
       //    contrairement au chemin texte. La branche dérivée est déjà canonique.
       let targetLanguages = params.targetLanguages && params.targetLanguages.length > 0
         ? this._canonicalizeExplicitAudioTargets(params.targetLanguages)
