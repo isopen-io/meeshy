@@ -87,3 +87,26 @@ describe('MessagesService.getMessages — concurrent reads', () => {
     await expect(firstRead).resolves.toBeInstanceOf(Error);
   });
 });
+
+describe('MessagesService.getMessages — network failure', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('propagates a network/server error instead of resolving to an empty page', async () => {
+    const networkError = Object.assign(new Error('Erreur de connexion au serveur'), {
+      name: 'ApiServiceError',
+      status: 0,
+      code: 'NETWORK_ERROR',
+    });
+    mockGet.mockRejectedValueOnce(networkError);
+
+    await expect(messagesService.getMessages('conv-1', 1, 20)).rejects.toBe(networkError);
+  });
+
+  it('still turns an AbortError into REQUEST_CANCELLED, not a network failure', async () => {
+    mockGet.mockRejectedValueOnce(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+
+    await expect(messagesService.getMessages('conv-1', 1, 20)).rejects.toThrow('REQUEST_CANCELLED');
+  });
+});
