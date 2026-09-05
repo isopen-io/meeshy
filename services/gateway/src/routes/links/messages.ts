@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -208,7 +209,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const sessionToken = request.headers['x-session-token'] as string;
 
       if (!sessionToken) {
-        return sendUnauthorized(reply, 'Session token requis pour envoyer un message');
+        return sendUnauthorized(reply, 'Session token requis pour envoyer un message', { code: AUTH_ERROR_CODES.LINK_SESSION_REQUIRED });
       }
 
       const isLinkId = identifier.startsWith('mshy_');
@@ -266,7 +267,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         : null;
 
       if (!anonymousParticipant || !participantShareLink) {
-        return sendUnauthorized(reply, 'Session invalide ou non autorisée pour ce lien');
+        return sendUnauthorized(reply, 'Session invalide ou non autorisée pour ce lien', { code: AUTH_ERROR_CODES.SESSION_INVALID });
       }
 
       if (!participantShareLink.isActive) {
