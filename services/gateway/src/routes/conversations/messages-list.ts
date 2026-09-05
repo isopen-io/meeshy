@@ -21,7 +21,6 @@ import {
   historyFloorFor
 } from '../../services/historyFloor';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
   loadPersonalHistoryHiding,
@@ -61,7 +60,8 @@ import {
   loadMessageReadStatusMap,
   mapMessageRowForList,
   enrichForwardedMessagesForList,
-  enrichPostReplyMessagesForList
+  enrichPostReplyMessagesForList,
+  parseLanguageFilterParam
 } from './messages-list-query';
 
 /**
@@ -207,21 +207,9 @@ export function registerMessagesListRoute(
       const includeReplies = includeRepliesStr === 'true';
 
       // Bandwidth opt-in : filtrage des traductions (texte + audio) aux seules
-      // langues du Prisme demandées par le client. Absent/vide = toutes les
-      // langues (comportement historique). Normalisé, dédupliqué, borné.
-      //
-      // Les codes arrivent VERBATIM du client (SDK iOS : `Locale.current.identifier`
-      // → `en_US`/`pt_BR`, rang 4 du Prisme ; web : `Accept-Language` → `en-US`/`pt-BR`),
-      // pendant que les traductions sont stockées sous des clés canoniques 2-lettres.
-      // `normalizeLanguageForDedup` (SSOT) réduit chaque code à sa forme canonique —
-      // jamais un `.toLowerCase()` brut, qui laissait passer `'pt-br'` sans jamais
-      // matcher la clé stockée `'pt'` (#5108). Symétrique du chemin socket
-      // (`normalizeGroupLanguage` → `normalizeLanguageCode`, `message-payload-filter.ts`).
-      const languageFilter = languagesStr
-        ? Array.from(new Set(
-            languagesStr.split(',').map((l) => l.trim()).filter(Boolean).map(normalizeLanguageForDedup)
-          )).slice(0, 20)
-        : undefined;
+      // langues du Prisme demandées par le client. Voir `parseLanguageFilterParam`
+      // (canonicalisation SSOT, symétrique du chemin socket).
+      const languageFilter = parseLanguageFilterParam(languagesStr);
       const hasLanguageFilter = !!languageFilter && languageFilter.length > 0;
 
       // Forward watermark mode (local-first incremental gap backfill): fetch
