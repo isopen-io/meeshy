@@ -99,6 +99,17 @@ extension FeedPostCard {
         FeedMediaTile(media: media)
     }
 
+    /// **Ouvrir le plein écran d'une SCÈNE** — sans média d'entrée, parce
+    /// qu'un canvas n'en a pas forcément un : un texte, un dessin, des stickers
+    /// ou un simple fond de couleur se rejouent aussi bien. Le site unique
+    /// (`socialMediaGallery`) lit la nature du post et choisit le player ;
+    /// `fullscreenMediaId` reste nul, la galerie n'ayant rien à feuilleter.
+    func openSceneFullscreen() {
+        fullscreenMediaId = nil
+        showFullscreenGallery = true
+        HapticFeedback.light()
+    }
+
     func openFullscreen(_ media: FeedMedia) {
         guard media.type == .image || media.type == .video else { return }
         fullscreenMediaId = media.id

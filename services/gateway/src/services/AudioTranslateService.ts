@@ -21,6 +21,7 @@ import {
 } from './voice-analysis-normalize';
 import { logger } from '../utils/logger';
 import { diffTranslationTargets } from '../utils/translation-targets';
+import { getVoiceProfile as getVoiceProfileCore, saveVoiceProfile as saveVoiceProfileCore } from './audio-voice-profile-core';
 import type {
   VoiceTranslateRequest,
   VoiceTranslateAsyncRequest,
@@ -58,6 +59,7 @@ import type {
   VoiceProfileData
 } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
+import { attachmentTranscriptionView, type AttachmentTranscriptionView } from './audio/attachmentTranscriptionView';
 
 // Response timeout in milliseconds
 const DEFAULT_TIMEOUT = 60000; // 60 seconds for fast voice ops (status, profile, …)
@@ -79,14 +81,6 @@ interface PendingRequest {
   requestType: string;
   timestamp: number;
 }
-
-// Types re-exportés depuis shared pour compatibilité
-export type {
-  TranscriptionResult,
-  TranslatedAudioResult,
-  AudioTranslationOptions,
-  ServiceResult
-} from '@meeshy/shared/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SERVICE
@@ -475,14 +469,9 @@ export class AudioTranslateService extends EventEmitter {
         voiceQuality: t.quality || undefined
       })) : [];
 
-      // Canonicaliser cibles demandées et clés stockées via la SSOT partagée
-      // (jumelle d'`AttachmentTranslateService`) : une cible région-taguée ou en
-      // casse mixte matche la clé canonique du store, et les variantes d'une même
-      // langue ne comptent que pour une cible NLLB.
-      const targetDiff = diffTranslationTargets(
-        options.targetLanguages,
-        existingTranslations.map(t => t.targetLanguage)
-      );
+      // SSOT des jumeaux (`AttachmentTranslateService`) : cibles et clés stockées
+      // comparées sous forme canonique — voir le doc de `diffTranslationTargets`.
+      const targetDiff = diffTranslationTargets(options.targetLanguages, existingTranslations.map(t => t.targetLanguage));
       const languagesToTranslate = targetDiff.missing;
 
       // Si toutes les langues sont déjà traduites, retourner le cache
@@ -655,9 +644,7 @@ export class AudioTranslateService extends EventEmitter {
    * Get voice profile for a user
    */
   async getVoiceProfile(userId: string): Promise<any | null> {
-    return this.prisma.userVoiceModel.findUnique({
-      where: { userId }
-    });
+    return getVoiceProfileCore(this.prisma, userId);
   }
 
   /**
@@ -677,35 +664,7 @@ export class AudioTranslateService extends EventEmitter {
       referenceAudioUrl?: string;
     }
   ): Promise<any> {
-    return this.prisma.userVoiceModel.upsert({
-      where: { userId },
-      create: {
-        userId,
-        profileId: `vfp_${userId}`,
-        embedding: profileData.embedding ? Uint8Array.from(profileData.embedding) as Uint8Array<ArrayBuffer> : undefined,
-        qualityScore: profileData.qualityScore || 0,
-        audioCount: profileData.audioCount || 1,
-        totalDurationMs: profileData.totalDurationMs || 0,
-        fingerprint: profileData.fingerprint || null,
-        voiceCharacteristics: profileData.voiceCharacteristics || null,
-        chatterboxConditionals: profileData.chatterboxConditionals ? Uint8Array.from(profileData.chatterboxConditionals) as Uint8Array<ArrayBuffer> : null,
-        referenceAudioId: profileData.referenceAudioId || null,
-        referenceAudioUrl: profileData.referenceAudioUrl || null,
-        version: 1
-      },
-      update: {
-        embedding: profileData.embedding ? Uint8Array.from(profileData.embedding) as Uint8Array<ArrayBuffer> : undefined,
-        qualityScore: profileData.qualityScore,
-        audioCount: profileData.audioCount,
-        totalDurationMs: profileData.totalDurationMs,
-        fingerprint: profileData.fingerprint,
-        voiceCharacteristics: profileData.voiceCharacteristics,
-        chatterboxConditionals: profileData.chatterboxConditionals ? Uint8Array.from(profileData.chatterboxConditionals) as Uint8Array<ArrayBuffer> : undefined,
-        referenceAudioId: profileData.referenceAudioId,
-        referenceAudioUrl: profileData.referenceAudioUrl,
-        updatedAt: new Date()
-      }
-    });
+    return saveVoiceProfileCore(this.prisma, userId, profileData);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -917,61 +876,15 @@ export class AudioTranslateService extends EventEmitter {
   }
 
   /**
-   * Récupérer un attachement avec sa transcription et ses traductions
+   * Récupérer un attachement avec sa transcription et ses traductions.
+   *
+   * Le corps vit dans `audio/attachmentTranscriptionView.ts` — une LECTURE
+   * et une conversion de forme, sans état ni événement, donc rien d'un
+   * service. La méthode reste ici parce que les témoins des routes la
+   * doublent par son nom.
    */
-  async getAttachmentWithTranscription(attachmentId: string): Promise<{
-    attachment: any;
-    transcription: any | null;
-    translatedAudios: any[];
-  } | null> {
-    const attachment = await this.prisma.messageAttachment.findUnique({
-      where: { id: attachmentId },
-      select: {
-        id: true,
-        messageId: true,
-        fileName: true,
-        fileUrl: true,
-        mimeType: true,
-        fileSize: true,
-        duration: true,
-        transcription: true,
-        translations: true,
-        createdAt: true
-      }
-    });
-
-    if (!attachment) return null;
-
-    // Convertir transcription JSON → ancien format
-    const transcriptionData = attachment.transcription as unknown as AttachmentTranscription | null;
-    const transcription = transcriptionData ? {
-      id: attachmentId,
-      attachmentId,
-      text: transcriptionData.text,
-      language: transcriptionData.language,
-      confidence: transcriptionData.confidence,
-      source: transcriptionData.source,
-      segments: transcriptionData.segments,
-      durationMs: transcriptionData.durationMs,
-      createdAt: new Date()
-    } : null;
-
-    // Convertir translations JSON → ancien format
-    const translationsData = attachment.translations as unknown as AttachmentTranslations | undefined;
-    const translatedAudios = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
-      id: `${attachmentId}_${lang}`,
-      attachmentId,
-      targetLanguage: lang,
-      translatedText: t.transcription,
-      audioUrl: t.url || '',
-      audioPath: t.path || '',
-      durationMs: t.durationMs || 0,
-      voiceCloned: t.cloned || false,
-      voiceQuality: t.quality || 0,
-      createdAt: new Date()
-    })) : [];
-
-    return { attachment, transcription, translatedAudios };
+  async getAttachmentWithTranscription(attachmentId: string): Promise<AttachmentTranscriptionView | null> {
+    return attachmentTranscriptionView(this.prisma, attachmentId);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

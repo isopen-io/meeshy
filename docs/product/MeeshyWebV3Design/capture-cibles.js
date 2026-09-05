@@ -194,6 +194,26 @@ function serve() {
       .forEach((n, i) => n.setAttribute('data-capture-node', String(i)));
   });
 
+  // LA BARRE DE STATUT DECORATIVE (« 9:41 », icones reseau/batterie) EST DU
+  // CHROME D'APPAREIL, PAS DE L'APPLICATION : c'est le premier enfant, FIXE,
+  // du cadre telephone (52px CSS, hauteur codee en dur, present sur TOUS les
+  // ecrans avant meme tout `sc-if`) — aucun navigateur reel ne la dessine
+  // (`compare-rendu.js` capture une vraie page web en 390x844, jamais un
+  // habillage d'ecran verrouille). La baker dans chaque `cible/<id>.png`
+  // faisait comparer un mockup-avec-chrome-iOS a un rendu-sans-chrome sur LES
+  // 48 VUES : `ecartStructurel` mesure une bande de ~104px (2x) qui n'existe
+  // d'aucun cote du rendu reel, ce qui a decale identiquement la totalite du
+  // contenu qui la suit. On la masque UNE SEULE FOIS : c'est un noeud STATIQUE
+  // du cadre (jamais recree par un changement d'ecran), donc un `display:none`
+  // pose avant la boucle vaut pour les 48 captures — la colonne flex remonte
+  // le contenu de 52px, exactement ce qu'une vraie page fait en partant de
+  // y=0 sans reserver de bande pour une horloge qu'elle n'affiche jamais.
+  await page.evaluate(() => {
+    const frame = document.querySelector('[data-capture="frame"]');
+    const barre = frame && frame.firstElementChild;
+    if (barre && barre.textContent.includes('9:41')) barre.style.display = 'none';
+  });
+
   for (const n of nodes) {
     await remark();
     await page.click(`[data-capture-node="${n.index}"]`);

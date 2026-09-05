@@ -187,27 +187,52 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - 4. Tap → plein écran EXISTANT, pas de nouveau viewer
+    // MARK: - 4. Tap → PLEIN ÉCRAN, et le repli mène quand même quelque part
 
-    func test_tap_routesThroughExistingOnTapPost() throws {
+    /// **La destination du tap a CHANGÉ le 2026-09-05**, sur directive porteur :
+    ///
+    /// > « dans la restitution des cards, le touché de l'image doit afficher en
+    /// > plein écran et non ouvrir les détails du post »
+    ///
+    /// Ces trois témoins gardaient l'ANCIENNE destination — `onTapPost`, donc
+    /// le détail. Ils ne sont pas affaiblis : chacun garde exactement la même
+    /// exigence contre la NOUVELLE. Ce qui reste interdit reste interdit — un
+    /// tap sans effet, et une activation VoiceOver qui n'atteint pas ce que le
+    /// doigt atteint.
+    ///
+    /// > **Une garde qui épingle une décision renversée est PIRE qu'une absence
+    /// > de garde** : elle rougit sur le correctif et laisse croire à une
+    /// > régression. La corriger n'est pas « faire passer le test » — c'est
+    /// > déplacer la cible sur ce que le produit exige aujourd'hui.
+    func test_tap_routesThroughFullscreen_withFallbackThatLeadsSomewhere() throws {
         let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
-            block.contains(".onTapGesture { onTapPost?(post) }"),
-            "Le tap doit router vers onTapPost?(post) — le MÊME callback que le reste de la " +
-            "carte (texte, auteur), donc le plein écran EXISTANT (PostDetailView), jamais un " +
-            "nouveau viewer dédié."
+            block.contains(".onTapGesture { (onTapScene ?? { onTapPost?(post) })() }"),
+            "Le tap doit ouvrir le PLEIN ÉCRAN (`onTapScene`), et retomber sur `onTapPost` chez " +
+            "les hôtes qui ne savent pas en présenter un (aperçu de repost, liste de profil). " +
+            "Un tap SANS effet serait pire que la mauvaise destination — c'est la loi 4."
         )
     }
 
-    func test_noNewFullscreenCoverIntroducedForScene() throws {
+    /// **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
+    ///
+    /// Le compte de `.fullScreenCover(` dans l'hôte est tombé de 2 à 1 quand la
+    /// carte a cessé de recopier vingt lignes de galerie pour appeler
+    /// `socialMediaGallery`. Compter des présentations épinglait donc un
+    /// NOMBRE là où la règle porte sur un CHEMIN : la garde interroge désormais
+    /// le chemin, et le nombre peut bouger sans mentir.
+    func test_fullscreenGoesThroughTheSingleSite() throws {
         let text = try hostSource()
-        let fullscreenCoverCount = text.components(separatedBy: ".fullScreenCover(").count - 1
-        XCTAssertEqual(
-            fullscreenCoverCount, 2,
-            "E3 ne doit introduire AUCUN nouveau `.fullScreenCover` — seuls les deux déjà " +
-            "existants (position, galerie média) doivent rester : la scène route par " +
-            "onTapPost?(post), pas par une présentation neuve."
+        XCTAssertTrue(
+            text.contains(".socialMediaGallery("),
+            "La carte doit ouvrir son plein écran par le site unique — c'est lui qui sait " +
+            "qu'une SCÈNE se rejoue et qu'un jeu de médias se feuillette."
+        )
+        XCTAssertFalse(
+            text.contains("ConversationMediaGalleryView("),
+            "…et ne doit pas remonter sa propre copie de la galerie : c'est l'exemplaire " +
+            "recopié que le site unique a été écrit pour supprimer."
         )
     }
 
@@ -338,15 +363,43 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
         )
     }
 
-    func test_callSite_hasAccessibilityAction_matchingOnTapPost() throws {
+    /// **L'oreille atteint ce que le doigt atteint.** L'exigence est inchangée
+    /// depuis l'écriture de cette garde ; seule sa DESTINATION a suivi la
+    /// directive du 2026-09-05. Une activation VoiceOver qui ouvrirait le
+    /// détail pendant que le doigt ouvre le plein écran décrirait à qui n'y
+    /// voit pas un écran que l'app ne montre plus.
+    func test_callSite_hasAccessibilityAction_matchingTheFinger() throws {
         let text = try hostSource()
         let block = try cardSceneCallSiteBlock(in: text)
         XCTAssertTrue(
-            block.contains(".accessibilityAction { onTapPost?(post) }"),
-            "L'activation VoiceOver doit atteindre onTapPost?(post) — le MÊME patron déjà " +
-            "utilisé ailleurs dans ce fichier (.accessibilityHint + .accessibilityAction, lignes " +
-            "385-386 et 402-403) pour exactement ce besoin, jamais un .onTapGesture seul que " +
-            "VoiceOver ne peut pas déclencher."
+            block.contains("if cardSceneOpensFullscreen { openSceneFullscreen() }"),
+            "L'activation VoiceOver doit ouvrir le PLEIN ÉCRAN, comme le doigt."
+        )
+        XCTAssertTrue(
+            block.contains("else { onTapPost?(post) }"),
+            "…avec le MÊME repli que le doigt quand la scène n'a aucun média à agrandir : " +
+            "une activation sans effet est le défaut que cette garde interdit depuis toujours."
+        )
+    }
+
+
+    /// **Ce qui ouvre le plein écran est la SCÈNE, pas la présence d'un média.**
+    ///
+    /// Le porteur demande d'éprouver les canvas SANS image — texte, sticker,
+    /// dessin, fond de couleur seul. Le player les peint tous ; la porte, elle,
+    /// demandait encore « y a-t-il une image à agrandir ? » et retombait sur le
+    /// détail du post. L'écart ne rougissait nulle part : ouvrir le détail est
+    /// un comportement licite, juste pas celui qu'on a demandé.
+    func test_fullscreenIsGatedOnTheScene_notOnAMedia() throws {
+        let text = try hostSource()
+        XCTAssertTrue(
+            text.contains("SocialFullscreenRoute.scene(of: post) != nil"),
+            "La porte du plein écran doit interroger la SCÈNE — sans quoi un canvas de texte, " +
+            "de dessin ou de stickers reste enfermé dans le détail du post."
+        )
+        XCTAssertFalse(
+            text.contains("onTapScene: cardSceneFullscreenMedia.map"),
+            "…et ne doit plus se monter sur la présence d'un média, qui était l'ancienne question."
         )
     }
 

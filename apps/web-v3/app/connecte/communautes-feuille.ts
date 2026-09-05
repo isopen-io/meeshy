@@ -1,6 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { feuilleQuiMonte } from './atomes-feuille';
+import { feuilleQuiMonte, RACCOURCIS_D_ENTETE } from './atomes-feuille';
 
 /**
  * LA FEUILLE DE `/communities` — ce que `cible/communities.png` dessine, et
@@ -8,7 +8,14 @@ import { feuilleQuiMonte } from './atomes-feuille';
  *
  * Elle s'ajoute au chrome, à la feuille connectée et à celle du FIL : l'écran
  * emprunte son en-tête (`.fil-tete`) — le même vocabulaire que `/calls` et
- * `/links` (dimension 6, cohérence de positionnement).
+ * `/links` (dimension 6, cohérence de positionnement), à UNE différence
+ * documentée près : `enTete()` (`communautes-vue.ts`) y ajoute
+ * `raccourcisEntete('/communities')`, comme `/search` (Q7 de la
+ * spécification). Cette feuille ne chargeait pas `RACCOURCIS_D_ENTETE` —
+ * `.raccourci` retombait sur le `display:inline` par défaut du navigateur,
+ * largeur ZÉRO mesurée : les deux liens existaient dans le DOM, annoncés à un
+ * lecteur d'écran, jamais VUS. Même défaut, même cause, que `/search`
+ * (`recherche-feuille.ts`).
  *
  * CE QUI LUI EST PROPRE, ET POURQUOI :
  *
@@ -39,6 +46,7 @@ import { feuilleQuiMonte } from './atomes-feuille';
 export const FEUILLE_DES_COMMUNAUTES = compacte(`
 .communautes-ecran{display:flex;flex-direction:column;min-height:100dvh;max-width:var(--shell-width);margin:0 auto}
 .communautes-ecran>.fil-tete{flex:none}
+${RACCOURCIS_D_ENTETE}
 
 .communautes{flex:1 1 0;min-height:0;overflow-y:auto;display:grid;align-content:start;gap:var(--space-2);margin:0;padding:0 var(--space-4) var(--space-9);list-style:none}
 

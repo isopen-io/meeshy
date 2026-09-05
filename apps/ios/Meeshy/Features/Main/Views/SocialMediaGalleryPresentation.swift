@@ -31,17 +31,41 @@ extension View {
     ///     l'hôte n'a pas à garder son binding, ce qui évite le cas où l'on
     ///     ouvre un plein écran vide pendant un rechargement.
     ///   - startMediaId: le média par lequel on ENTRE. `nil` ⇒ le premier.
+    ///   - preferredContentLanguages: le Prisme du LECTEUR, servi au player
+    ///     quand le post porte une scène. Vide ⇒ le player retombe sur les
+    ///     textes originaux, ce qui est licite mais jamais souhaitable.
     func socialMediaGallery(
         post: FeedPost?,
         isPresented: Binding<Bool>,
         startMediaId: String?,
-        accentColor: String
+        accentColor: String,
+        preferredContentLanguages: [String] = []
     ) -> some View {
         fullScreenCover(isPresented: isPresented) {
             if let post {
-                SocialMediaGalleryContent(
-                    post: post, startMediaId: startMediaId, accentColor: accentColor
-                )
+                // **Une SCÈNE se rejoue, elle ne se feuillette pas** (directive
+                // porteur 2026-09-05). Le site unique d'ouverture est le seul
+                // endroit qui connaisse la NATURE du post ; c'est donc ici que
+                // la question se pose, une fois pour les quatre surfaces qui
+                // ouvrent un plein écran.
+                //
+                // Sans cette branche, un canvas s'ouvrait sur son fond — la
+                // photo source, en paysage, sans le texte ni les stickers que
+                // l'auteur avait posés. La carte du fil montrait la scène et le
+                // plein écran montrait autre chose : le seul des deux formats
+                // qu'on ouvre POUR mieux voir était celui qui montrait le moins.
+                if let document = SocialFullscreenRoute.scene(of: post) {
+                    SocialSceneFullscreenView(
+                        post: post,
+                        document: document,
+                        accentColor: accentColor,
+                        preferredContentLanguages: preferredContentLanguages
+                    )
+                } else {
+                    SocialMediaGalleryContent(
+                        post: post, startMediaId: startMediaId, accentColor: accentColor
+                    )
+                }
             }
         }
     }
@@ -95,5 +119,32 @@ struct SocialMediaGalleryContent: View {
             ),
             senderInfoMap: senderInfoMap
         )
+    }
+}
+
+/// **Ce qu'un post OUVRE en plein écran** — une décision, donc une règle pure
+/// et non une condition enfouie dans un `@ViewBuilder`.
+///
+/// La question n'a qu'une forme : *ce post porte-t-il une scène ?* Un canvas se
+/// rejoue par le player ; tout le reste se feuillette par la galerie. Séparée
+/// du rendu, elle s'éprouve — et c'est ce qui empêche un futur lot de rerouter
+/// silencieusement une scène vers ses ingrédients.
+/// `nonisolated` : la règle ne touche rien de l'interface. Sans l'annotation
+/// elle hérite de l'isolation `@MainActor` du module et devient inappelable
+/// depuis un témoin synchrone — une décision qu'aucun test ne peut interroger
+/// n'est pas une décision gardée.
+nonisolated enum SocialFullscreenRoute {
+
+    /// Le canvas à rejouer, ou `nil` quand le post n'en porte pas — auquel cas
+    /// l'hôte feuillette ses médias.
+    ///
+    /// **Un canvas VIDE n'est pas une scène.** Le composer stampe une enveloppe
+    /// dès qu'il touche une publication ; sans slide, elle ne décrit rien et le
+    /// player n'aurait rien à peindre. La galerie, elle, a toujours les médias.
+    static func scene(of post: FeedPost) -> CanvasV3? {
+        guard let document = post.storyEffects?.canvasV3,
+              !document.scenes.isEmpty
+        else { return nil }
+        return document
     }
 }

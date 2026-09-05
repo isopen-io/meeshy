@@ -376,9 +376,28 @@ struct FeedPostCard: View {
         cardSceneFullscreenMedia?.caption
     }
 
+    /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (corrigé
+    /// le 2026-09-05, dans le lot qui a introduit le plein écran de scène).
+    ///
+    /// La première écriture demandait « ce post a-t-il une image à agrandir ? »
+    /// — hérité du temps où le plein écran feuilletait des médias. Depuis que
+    /// le player rejoue le canvas, la question est « ce post a-t-il une scène à
+    /// rejouer ? », et les deux divergent sur exactement les cas que le porteur
+    /// demande d'éprouver : un canvas de TEXTE, de DESSIN, de STICKERS, ou à
+    /// fond de COULEUR n'a aucun média — et se peint pourtant parfaitement.
+    ///
+    /// > **Un correctif qui change la NATURE d'une destination doit relire la
+    /// > condition qui y mène.** La route neuve savait rendre une scène sans
+    /// > média ; la porte, restée sur l'ancienne question, n'y menait pas. Rien
+    /// > ne rougissait : le repli sur le détail est un comportement licite, et
+    /// > c'est ce qui rend l'écart invisible.
+    private var cardSceneOpensFullscreen: Bool {
+        SocialFullscreenRoute.scene(of: post) != nil || cardSceneFullscreenMedia != nil
+    }
+
     /// L'indice VoiceOver DIT ce que le doigt fait — et il change avec lui.
     private var cardSceneOpenHint: String {
-        cardSceneFullscreenMedia != nil
+        cardSceneOpensFullscreen
             ? String(localized: "a11y.feed.scene.fullscreen.hint",
                      defaultValue: "Touche deux fois pour voir en plein écran", bundle: .main)
             : String(localized: "a11y.feed.post.open.hint",
@@ -542,9 +561,7 @@ struct FeedPostCard: View {
                         // (directive porteur 2026-09-05), jamais le détail du
                         // post. La scène EST le contenu : la toucher demande à
                         // la voir en grand, pas à lire ses commentaires.
-                        onTapScene: cardSceneFullscreenMedia.map { media in
-                            { openFullscreen(media) }
-                        }
+                        onTapScene: cardSceneOpensFullscreen ? { openSceneFullscreen() } : nil
                     )
                         // **La légende PAR-DESSUS la scène** (directive porteur
                         // 2026-09-05). La carte de scène n'en affichait aucune :
@@ -569,7 +586,7 @@ struct FeedPostCard: View {
                         .accessibilityHint(cardSceneOpenHint)
                         .accessibilityAddTraits(.isButton)
                         .accessibilityAction {
-                            if let media = cardSceneFullscreenMedia { openFullscreen(media) }
+                            if cardSceneOpensFullscreen { openSceneFullscreen() }
                             else { onTapPost?(post) }
                         }
                 } else if isStoryRepost {
@@ -716,34 +733,20 @@ struct FeedPostCard: View {
                 senderName: post.author
             )
         }
-        .fullScreenCover(isPresented: $showFullscreenGallery) {
-            let attachments = post.media
-                .filter { $0.type == .image || $0.type == .video }
-                .map { $0.toMessageAttachment() }
-            let senderInfo = ConversationViewModel.MediaSenderInfo(
-                senderName: post.author,
-                senderAvatarURL: post.authorAvatarURL,
-                senderColor: post.authorColor,
-                sentAt: post.timestamp
-            )
-            let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
-            ConversationMediaGalleryView(
-                allAttachments: attachments,
-                startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                accentColor: accentColor,
-                // #4934 — le plein écran garde la bascule de langue que la
-                // carte offre : `captionServings` porte le texte ET ses
-                // alternatives, `captionMap` reste servi pour les appelants qui
-                // n'ont rien à basculer.
-                captionServings: SocialMediaCaption.serving(
-                    for: post.media, carrier: .from(post: post)
-                ),
-                captionMap: SocialMediaCaption.map(
-                    for: post.media, carrierText: post.displayContent
-                ),
-                senderInfoMap: senderMap
-            )
-        }
+        // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
+        //
+        // Cette vingtaine de lignes était l'un des trois exemplaires que
+        // `socialMediaGallery` a été écrit pour remplacer — et le dernier à
+        // n'avoir pas été raccordé. Le brancher n'est pas qu'un nettoyage :
+        // c'est ce qui apporte à la carte du fil la branche SCÈNE, qui rejoue
+        // le canvas au lieu d'ouvrir son fond.
+        .socialMediaGallery(
+            post: post,
+            isPresented: $showFullscreenGallery,
+            startMediaId: fullscreenMediaId,
+            accentColor: accentColor,
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
     }

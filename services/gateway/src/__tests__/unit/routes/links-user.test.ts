@@ -36,6 +36,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerUserRoutes } from '../../../routes/links/user';
+import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,10 @@ const USER_ID = '507f1f77bcf86cd799439011';
 
 const CONV_ID = '507f1f77bcf86cd799439088';
 const OTHER_USER_ID = '507f1f77bcf86cd799439077';
+// Un AUTRE membre, ACTIF dans la MÊME conversation — ni `USER_ID`. Placé en
+// tête du double, il fait échouer tout `where` qui perdrait `userId` : la
+// garde plate (#5191) le trouverait, jamais `null`.
+const INTRUDER_USER_ID = '507f1f77bcf86cd799439066';
 
 const mockLink = {
   id: '507f1f77bcf86cd799439099',
@@ -105,6 +110,22 @@ function makePrisma(overrides: any = {}) {
       ...participant,
     },
     ...rest,
+  };
+}
+
+/**
+ * Le double d'appartenance pour `?conversationId=`, honorant son `where` — un
+ * intrus actif dans la MÊME conversation, sous un AUTRE `userId`, fait
+ * échouer tout `where` qui perdrait `userId` (#5191).
+ */
+function membershipParticipant(role: string) {
+  return {
+    findFirst: jest.fn<any>(
+      findFirstHonouringWhere([
+        { conversationId: CONV_ID, userId: INTRUDER_USER_ID, isActive: true, role: 'moderator' },
+        { conversationId: CONV_ID, userId: USER_ID, isActive: true, role },
+      ])
+    ),
   };
 }
 
@@ -279,7 +300,21 @@ describe('GET /links?conversationId= — non-member', () => {
     mockAuthMiddleware.mockImplementation(async (req: any) => {
       (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
     });
-    app = await buildApp({ registeredUser: { id: USER_ID, role: 'USER' } });
+    // Un AUTRE membre existe, actif dans la MÊME conversation — jamais `USER_ID`.
+    // Un `where` qui perdrait `userId` le trouverait et admettrait à tort.
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>(
+          findFirstHonouringWhere([
+            { conversationId: CONV_ID, userId: INTRUDER_USER_ID, isActive: true, role: 'member' },
+          ])
+        ),
+      },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as any);
+    await registerUserRoutes(app);
+    await app.ready();
   });
   afterAll(async () => { await app.close(); });
 
@@ -298,7 +333,7 @@ describe('GET /links?conversationId= — membre NON modérateur', () => {
       (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
     });
     prisma = makePrisma({
-      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'member' }) },
+      participant: membershipParticipant('member'),
     });
     app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     app.decorate('prisma', prisma);
@@ -341,7 +376,7 @@ describe('GET /links?conversationId= — modérateur de la conversation', () => 
       (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
     });
     prisma = makePrisma({
-      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'moderator' }) },
+      participant: membershipParticipant('moderator'),
     });
     app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     app.decorate('prisma', prisma);
@@ -627,7 +662,7 @@ describe('GET /links?q=&conversationId= — compose avec le scope conversation',
       (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
     });
     prisma = makePrisma({
-      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'member' }) },
+      participant: membershipParticipant('member'),
     });
     app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     app.decorate('prisma', prisma);
@@ -657,7 +692,7 @@ describe('GET /links?q=&conversationId= — compose avec le scope conversation',
       (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
     });
     prisma = makePrisma({
-      participant: { findFirst: jest.fn<any>().mockResolvedValue({ role: 'moderator' }) },
+      participant: membershipParticipant('moderator'),
     });
     app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     app.decorate('prisma', prisma);

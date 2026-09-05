@@ -15,6 +15,7 @@ import { createUnifiedAuthMiddleware, findTrustedSession, UnifiedAuthRequest} fr
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
 import {
@@ -143,14 +144,14 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       if (!decoded?.userId) {
-        return sendUnauthorized(reply, 'Token invalide ou expiré');
+        return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
       }
 
       if (!signatureVerified) {
         logger.warn('Refus de refresh : signature invalide — aucun rattrapage par session (round 6)', {
           claimedUserId: decoded.userId
         });
-        return sendUnauthorized(reply, 'Token invalide ou expiré');
+        return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
       }
 
       // À partir d'ici, la signature est AUTHENTIQUE — éventuellement
@@ -213,7 +214,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             userId: decoded.userId,
             sid,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
+          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
         }
       } else {
         // Régime de TRANSITION — un jeton émis avant #4264 ne nomme rien.
@@ -235,7 +236,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             userId: decoded.userId,
             motif: refus,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
+          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
         }
 
         // Dans la fenêtre, la règle de #4213 s'applique telle quelle.
@@ -247,7 +248,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           logger.warn('Refus de refresh : aucune session valide — toutes révoquées', {
             userId: decoded.userId,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
+          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
         }
       }
 

@@ -112,8 +112,8 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/MentionService.ts': 1235,
   'services/messaging/MessageProcessor.ts': 1110,
   'services/PushNotificationService.ts': 1053,
-  'services/AudioTranslateService.ts': 1038,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
+  'services/AudioTranslateService.ts': 1017,
 };
 
 const NOMBRE_HERITE = Object.keys(DETTE_HERITEE).length;
