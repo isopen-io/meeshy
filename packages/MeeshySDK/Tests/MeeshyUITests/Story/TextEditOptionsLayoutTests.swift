@@ -35,22 +35,23 @@ final class TextEditOptionsLayoutTests: XCTestCase {
         }
     }
 
-    // MARK: - La grille gouverne DEUX outils, et c'est une décision
+    // MARK: - La grille gouverne TROIS outils, et c'est une décision
 
-    /// La directive en nomme deux. Les six autres restent en rangée — non par
-    /// oubli mais parce qu'ils n'ont pas de nom à poser sous une boîte (une
-    /// pastille de couleur EST son nom), ou qu'ils portent déjà curseurs et
-    /// sous-grilles.
-    func test_laGrille_neGouverneQueLeFondEtLEffet() {
+    /// La première directive en nommait deux ; celle du 2026-09-05 (#5244) y
+    /// ajoute la POLICE — « aligne les polices rangée par rangée comme les
+    /// effets ». Les cinq autres restent en rangée, non par oubli mais parce
+    /// qu'ils n'ont pas de nom à poser sous une boîte (une pastille de couleur
+    /// EST son nom), ou qu'ils portent déjà curseurs et sous-grilles.
+    func test_laGrille_gouverneLeFondLEffetEtLaPolice() {
         let enroulés = TextEditTool.allCases.filter { TextEditOptionsLayout.grid.wraps($0) }
-        XCTAssertEqual(Set(enroulés), Set([TextEditTool.background, .effect]))
+        XCTAssertEqual(Set(enroulés), Set([TextEditTool.background, .effect, .style]))
     }
 
     /// **Le témoin qui parle au PROCHAIN outil.** `wraps` est un `switch`
     /// exhaustif : un neuvième cas ajouté à `TextEditTool` ne compile pas tant
     /// que quelqu'un n'a pas décidé de sa disposition. Ce témoin épingle le
     /// nombre pour que l'ajout se remarque aussi ici, où la décision se lit.
-    func test_huitOutils_dontDeuxEnGrille() {
+    func test_huitOutils_dontTroisEnGrille() {
         XCTAssertEqual(TextEditTool.allCases.count, 8)
     }
 

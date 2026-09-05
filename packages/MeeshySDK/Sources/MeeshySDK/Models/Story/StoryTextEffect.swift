@@ -18,12 +18,46 @@ import Foundation
 public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
     /// Aucun effet — l'absence du champ sur le fil.
     case none
+
+    // MARK: Lueurs — l'encre du TEXTE, sans décalage
+
     /// Halo de la couleur du texte, sans décalage.
     case glow
-    /// Ombre portée douce, noire, décalée vers le bas.
+    /// La même lueur, à mi-voix — pour un texte clair sur fond clair.
+    case glowSoft
+    /// Lueur large et pleine : l'enseigne au néon.
+    case neon
+
+    // MARK: Contours — l'encre SOMBRE, sans décalage
+
+    /// Halo sombre diffus tout autour : le texte tient sur un fond clair
+    /// chargé sans qu'aucune ombre ne le déporte.
+    case halo
+    /// Halo sombre SERRÉ — l'œil y lit un contour, ce qu'une ombre unique ne
+    /// sait pas tracer autrement (une seule ombre par effet, § du haut).
+    case outline
+
+    // MARK: Ombres — l'encre SOMBRE, décalée
+
+    /// Ombre portée douce, décalée vers le bas.
     case shadow
+    /// Ombre portée franche et dense.
+    case drop
+    /// Ombre centrée sous le texte : il ne se décale pas, il s'ÉLÈVE.
+    case lift
+    /// Ombre longue en diagonale, sans flou — la profondeur d'affiche.
+    case longShadow
+
+    // MARK: Reliefs — le texte paraît gravé
+
     /// Ombre franche, sans flou — le texte se détache comme découpé.
     case relief
+    /// Lumière en haut à gauche : le texte SORT de la surface.
+    case emboss
+    /// Lumière juste en dessous : le texte ENTRE dans la surface (imprimé).
+    case letterpress
+    /// Double du texte décalé, dans SA couleur — l'écho sérigraphié.
+    case echo
 
     /// La géométrie de l'ombre que cet effet pose, ou `nil` pour `.none`.
     ///
@@ -38,17 +72,75 @@ public enum StoryTextEffect: String, Codable, CaseIterable, Sendable {
         switch self {
         case .none:
             return nil
+
         case .glow:
             return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.36,
-                                         usesTextColor: true, opacity: 1)
+                                         ink: .text, opacity: 1)
+        case .glowSoft:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.24,
+                                         ink: .text, opacity: 0.55)
+        case .neon:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.60,
+                                         ink: .text, opacity: 1)
+
+        case .halo:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.30,
+                                         ink: .dark, opacity: 0.75)
+        case .outline:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0, blur: 0.09,
+                                         ink: .dark, opacity: 1)
+
         case .shadow:
             return StoryTextEffectShadow(offsetX: 0.03, offsetY: 0.06, blur: 0.16,
-                                         usesTextColor: false, opacity: 0.6)
+                                         ink: .dark, opacity: 0.6)
+        case .drop:
+            return StoryTextEffectShadow(offsetX: 0.06, offsetY: 0.10, blur: 0.08,
+                                         ink: .dark, opacity: 0.75)
+        case .lift:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0.10, blur: 0.22,
+                                         ink: .dark, opacity: 0.45)
+        case .longShadow:
+            return StoryTextEffectShadow(offsetX: 0.14, offsetY: 0.14, blur: 0,
+                                         ink: .dark, opacity: 0.35)
+
         case .relief:
             return StoryTextEffectShadow(offsetX: 0.05, offsetY: 0.05, blur: 0,
-                                         usesTextColor: false, opacity: 0.85)
+                                         ink: .dark, opacity: 0.85)
+        case .emboss:
+            return StoryTextEffectShadow(offsetX: -0.03, offsetY: -0.03, blur: 0.02,
+                                         ink: .light, opacity: 0.7)
+        case .letterpress:
+            return StoryTextEffectShadow(offsetX: 0, offsetY: 0.025, blur: 0.01,
+                                         ink: .light, opacity: 0.6)
+        case .echo:
+            return StoryTextEffectShadow(offsetX: 0.09, offsetY: 0.09, blur: 0,
+                                         ink: .text, opacity: 0.35)
         }
     }
+}
+
+// MARK: - Story Text Effect Ink
+
+/// **L'encre d'une ombre d'effet** — trois valeurs, pas un booléen.
+///
+/// Le champ était `usesTextColor: Bool`, et ce booléen a bloqué un tiers des
+/// effets classiques : `emboss` et `letterpress` ne se lisent qu'avec une
+/// lumière CLAIRE posée d'un côté du glyphe, que « couleur du texte OU noir »
+/// ne sait pas dire. Une somme le dit, et elle laisse la place au jour où une
+/// quatrième encre aurait un sens — un booléen aurait demandé un second
+/// booléen, donc quatre états dont un absurde.
+///
+/// **Ce n'est pas sur le fil** : le payload v3 ne porte que le NOM de l'effet
+/// (`StoryTextObject.textEffect`), jamais sa table. Élargir l'encre ne touche
+/// donc ni schéma, ni version, ni migration — seulement les trois miroirs de
+/// rendu, qui doivent rester identiques.
+public enum StoryTextEffectInk: String, Equatable, Sendable, CaseIterable {
+    /// La couleur du TEXTE lui-même — les lueurs.
+    case text
+    /// Noir — ombres, contours, reliefs sombres.
+    case dark
+    /// Blanc — la lumière d'un relief gravé (`emboss`, `letterpress`).
+    case light
 }
 
 // MARK: - Story Text Effect Shadow
@@ -64,16 +156,16 @@ public struct StoryTextEffectShadow: Equatable, Sendable {
     public let offsetX: Double
     public let offsetY: Double
     public let blur: Double
-    /// `true` ⇒ la couleur du TEXTE (lueur) ; `false` ⇒ noir.
-    public let usesTextColor: Bool
+    /// L'encre de l'ombre. Voir `StoryTextEffectInk`.
+    public let ink: StoryTextEffectInk
     public let opacity: Double
 
     public init(offsetX: Double, offsetY: Double, blur: Double,
-                usesTextColor: Bool, opacity: Double) {
+                ink: StoryTextEffectInk, opacity: Double) {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.blur = blur
-        self.usesTextColor = usesTextColor
+        self.ink = ink
         self.opacity = opacity
     }
 

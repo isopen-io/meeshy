@@ -53,6 +53,57 @@ struct StoryTextEffectTests {
         #expect(!json.contains("textEffect"))
     }
 
+    // MARK: - Les quatorze effets (#5244)
+
+    /// **Le compte, et il INTERROMPT.** Un effet ajouté sans passer par les
+    /// trois miroirs rend ce témoin rouge — c'est le seul endroit du dépôt qui
+    /// puisse le dire, la table n'étant pas sur le fil.
+    @Test func theEffects_areFourteen() {
+        #expect(StoryTextEffect.allCases.count == 14)
+    }
+
+    /// **Tout effet SAUF `none` porte une ombre.** Un cas ajouté à l'énuméré
+    /// sans entrée dans la table se rendrait sans rien, exactement comme
+    /// « aucun » — un effet INERTE, que rien d'autre ne signalerait.
+    @Test func everyEffectButNone_carriesAShadow() {
+        for effet in StoryTextEffect.allCases where effet != .none {
+            #expect(effet.shadow != nil, "\(effet) n'a aucune ombre")
+        }
+    }
+
+    /// **Aucune ombre n'est INVISIBLE.** Une entrée à opacité nulle, ou sans
+    /// décalage NI flou, se rendrait comme « aucun » : le contrôle existerait
+    /// sans effet (loi 4).
+    @Test func noEffectIsInvisible() throws {
+        for effet in StoryTextEffect.allCases where effet != .none {
+            let ombre = try #require(effet.shadow)
+            #expect(ombre.opacity > 0, "\(effet) est transparent")
+            let porte = ombre.offsetX != 0 || ombre.offsetY != 0 || ombre.blur > 0
+            #expect(porte, "\(effet) ne décale ni ne floute : invisible")
+        }
+    }
+
+    /// **Deux effets ne peuvent pas avoir la MÊME ombre.** Deux vignettes
+    /// identiques dans la grille sont un choix qui n'en est pas un — et le
+    /// doublon ne se voit ni au compilateur ni à la lecture d'un `switch` de
+    /// quatorze branches.
+    @Test func noTwoEffects_shareTheSameShadow() {
+        let ombres = StoryTextEffect.allCases.compactMap(\.shadow)
+        for (i, a) in ombres.enumerated() {
+            for b in ombres[(i + 1)...] {
+                #expect(a != b, "deux effets rendent exactement la même ombre")
+            }
+        }
+    }
+
+    /// Les trois encres SERVENT : une encre déclarée qu'aucun effet n'emploie
+    /// est du modèle mort, et c'est `light` — ajoutée pour `emboss` et
+    /// `letterpress` — qui aurait pu le rester si l'un des deux avait glissé.
+    @Test func everyInk_isUsedByAtLeastOneEffect() {
+        let encres = Set(StoryTextEffect.allCases.compactMap { $0.shadow?.ink })
+        #expect(encres == Set(StoryTextEffectInk.allCases))
+    }
+
     // MARK: - La table
 
     @Test func none_carriesNoShadow() {
@@ -65,7 +116,7 @@ struct StoryTextEffectTests {
         #expect(shadow.offsetX == 0)
         #expect(shadow.offsetY == 0)
         #expect(shadow.blur > 0)
-        #expect(shadow.usesTextColor)
+        #expect(shadow.ink == .text)
     }
 
     /// L'ombre portée est DÉCALÉE vers le bas et floue ; le relief est décalé
@@ -77,8 +128,8 @@ struct StoryTextEffectTests {
         #expect(relief.offsetY > 0)
         #expect(shadow.blur > 0)
         #expect(relief.blur == 0)
-        #expect(!shadow.usesTextColor)
-        #expect(!relief.usesTextColor)
+        #expect(shadow.ink == .dark)
+        #expect(relief.ink == .dark)
     }
 
     /// La table est en em : doubler la police double l'ombre. C'est ce qui

@@ -35,21 +35,28 @@ public enum TextEditOptionsLayout: String, Sendable, CaseIterable {
 
     /// **Quels outils la grille gouverne — et pourquoi les autres non.**
     ///
-    /// La directive en nomme deux, et les six restants ne s'y prêtent pas de
-    /// la même façon : POLICE porte un curseur et sa propre grille de dix-huit
-    /// spécimens, ALIGNEMENT tient en trois pictogrammes qu'aucune ligne ne
-    /// déborde, CADRE et LISERÉ empilent déjà curseurs et palettes, LANGUE et
-    /// COULEUR n'ont pas de nom à poser sous une boîte — une pastille de
-    /// couleur EST son propre nom.
+    /// **POLICE a rejoint la grille le 2026-09-05** (directive porteur : « aligne
+    /// les polices rangée par rangée comme les effets », #5244). Elle en était
+    /// exclue pour une raison écrite — « POLICE porte un curseur et sa propre
+    /// grille de dix-huit spécimens » — que la directive supplante : le curseur
+    /// de taille vit au-dessus et n'a jamais empêché un enroulement, et la
+    /// « grille de spécimens » est une bande HORIZONTALE à deux rangs
+    /// (`TextStyleSpecimenBand`), montée ailleurs, qui ne dispensait donc pas
+    /// ce panneau-ci d'avoir la même anatomie que ses voisins.
+    ///
+    /// Les cinq restants ne s'y prêtent toujours pas : ALIGNEMENT tient en
+    /// trois pictogrammes qu'aucune ligne ne déborde, CADRE et LISERÉ empilent
+    /// déjà curseurs et palettes, LANGUE et COULEUR n'ont pas de nom à poser
+    /// sous une boîte — une pastille de couleur EST son propre nom.
     ///
     /// Règle EXHAUSTIVE plutôt qu'un `default` : un neuvième outil ajouté à
     /// `TextEditTool` doit forcer une décision ici, pas hériter d'un silence.
     public nonisolated func wraps(_ tool: TextEditTool) -> Bool {
         guard self == .grid else { return false }
         switch tool {
-        case .background, .effect:
+        case .background, .effect, .style:
             return true
-        case .style, .color, .align, .frame, .border, .language:
+        case .color, .align, .frame, .border, .language:
             return false
         }
     }
@@ -119,6 +126,25 @@ extension TextEditToolOptions {
         LazyVGrid(columns: gridColumns, spacing: TextEditOptionsGridMetrics.rowSpacing) {
             ForEach(StoryTextEffect.allCases, id: \.self) { effect in
                 effectGridCell(effect)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// **La grille des POLICES** (#5244) — même gabarit que les fonds et les
+    /// effets, par le MÊME `gridCell` : le spécimen dans la boîte, le nom
+    /// dessous. Écrire une seconde cellule « comme celle-ci mais pour les
+    /// polices » aurait fait diverger les trois anatomies à la première
+    /// retouche de l'une.
+    ///
+    /// Le spécimen est rendu AVEC l'effet courant du texte : on choisit une
+    /// police pour ce qu'elle donnera, et l'effet en change la lecture — c'est
+    /// la réciproque exacte de la vignette d'effet, qui rend « Aa » dans la
+    /// police courante.
+    var styleGrid: some View {
+        LazyVGrid(columns: gridColumns, spacing: TextEditOptionsGridMetrics.rowSpacing) {
+            ForEach(StoryTextStyle.allCases, id: \.self) { style in
+                styleGridCell(style)
             }
         }
         .padding(.vertical, 4)
@@ -197,6 +223,30 @@ extension TextEditToolOptions {
         // VoiceOver lirait deux fois le libellé pour une seule cible.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(TextEditLabels.title(for: effect))
+        .accessibilityAddTraits(isSel ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func styleGridCell(_ style: StoryTextStyle) -> some View {
+        let isSel = textObject.parsedTextStyle == style
+        let ink = specimenInk
+        return Button {
+            textObject.textStyle = style.rawValue
+            HapticFeedback.light()
+        } label: {
+            gridCell(name: TextEditLabels.title(for: style), selected: isSel) {
+                specimenCanvas
+                Text(verbatim: "Aa")
+                    .font(storyFont(for: style, size: 22))
+                    .foregroundStyle(ink)
+                    .storyTextEffect(textObject.parsedTextEffect, fontSize: 22, textColor: ink)
+            }
+        }
+        .buttonStyle(.plain)
+        // La boîte et le nom disent la MÊME chose — sans cette fusion,
+        // VoiceOver lirait deux fois le libellé pour une seule cible. Et
+        // c'est ici que dix-huit boutons cessent d'être annoncés « Aa ».
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(TextEditLabels.title(for: style))
         .accessibilityAddTraits(isSel ? [.isButton, .isSelected] : .isButton)
     }
 
