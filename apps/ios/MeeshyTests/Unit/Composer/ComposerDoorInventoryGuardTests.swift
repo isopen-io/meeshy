@@ -62,10 +62,23 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     /// `///` ou des `//`. Un fragment à cheval sur deux lignes ne matche jamais
     /// — et la garde rougirait en accusant une raison absente qui, elle, est
     /// bien là.
+    /// **L'amnistie a RÉTRÉCI le 2026-09-06, et c'est la garde qui l'a exigé.**
+    ///
+    /// `edit` et `share` en sortent : elles ont gagné leur site de production
+    /// — `StoryEditComposer.swift` (`990ed3dcbf`) et `ShareComposeDoor.swift`
+    /// (`41cf3b08e3`). Aucune des deux n'est plus morte, et les laisser ici
+    /// aurait transformé une amnistie datée en amnistie permanente : c'est
+    /// exactement ce que la seconde moitié de cette garde existe pour empêcher.
+    ///
+    /// > La liste ne peut que RÉTRÉCIR. Une porte n'y rentre que le jour où
+    /// > elle est déclarée sans pouvoir être ouverte, et elle en sort dès
+    /// > qu'un doigt l'atteint.
+    ///
+    /// `draft` reste : c'est la porte de la reprise de brouillon, et le
+    /// meuble la construit par `draftId:` sans qu'aucun site ne compose son
+    /// origine.
     private static let declareesSansAppelant: [String: String] = [
-        "edit": "zéro occurrence, mesurée",
         "draft": "c'est elle qui n'a pas d'appelant",
-        "share": "ne fait aujourd'hui que",
     ]
 
     // MARK: - Lecture des sources
