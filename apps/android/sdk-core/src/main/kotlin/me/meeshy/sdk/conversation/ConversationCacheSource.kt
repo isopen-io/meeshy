@@ -16,9 +16,11 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.listConditionalResult
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.util.isoToEpochMillis
 
@@ -55,15 +57,20 @@ internal class ConversationCacheSource(
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(RESOURCE_KEY)
 
     /**
-     * The outcome of one paginated sweep — the rows collected, and whether the
-     * sweep is PROVEN exhaustive (walked every page to `hasMore = false`), never
-     * merely "the page budget ran out" or "we stopped because the shape was
-     * untrustworthy". Shared by the full sweep and the delta sweep (#5187):
-     * both page through [MAX_PAGES] × [CONVERSATIONS_PAGE_SIZE] the same way,
-     * differing only in whether `updatedSince` is set — [ConversationApi.list]'s
-     * contract (`services/gateway/src/routes/conversations/core-list.ts:251-264`).
+     * The outcome of one paginated sweep. [isComplete] — walked every page to
+     * `hasMore = false` — gates pruning (#5186) and the watermark advance
+     * (#5187). [notModified] and [capturedEtag] are #5188: a 304 on page 1
+     * short-circuits the WHOLE sweep ([notModified] `true`, everything else at
+     * its default/empty); [capturedEtag] is the page-1 response's `ETag`
+     * header, captured ONLY when page 1 ALONE proved the sweep complete (see
+     * [sweepPages] for why a page-1 ETag is unsafe to store otherwise).
      */
-    private class SweepOutcome(val conversations: List<ApiConversation>, val isComplete: Boolean)
+    private class SweepOutcome(
+        val conversations: List<ApiConversation> = emptyList(),
+        val isComplete: Boolean = false,
+        val notModified: Boolean = false,
+        val capturedEtag: String? = null,
+    )
 
     /**
      * Pages through `GET /conversations` up to [MAX_PAGES] (`× [CONVERSATIONS_
@@ -85,45 +92,98 @@ internal class ConversationCacheSource(
      * still returned (never discarded), but the sweep stops right there
      * (never proven complete, and pointless to keep paging blind).
      *
-     * A transport failure (`NetworkResult.Failure`) throws — for a full sweep
-     * this is the pre-existing #5186 contract; for a delta sweep it is the
-     * SAME contract, deliberately: [SwrCacheSource]'s caller leaves the cached
-     * data untouched on a thrown revalidation and retries at the next natural
-     * tick (5-minute cycle or socket-triggered refresh), which re-evaluates
-     * delta-vs-full from the UNCHANGED, still-recorded watermark — so a
-     * transient failure never needs a same-call fallback to recover.
+     * A transport failure (`NetworkResult.Failure`/[ConditionalResult.Failure])
+     * throws — for a full sweep this is the pre-existing #5186 contract; for a
+     * delta sweep it is the SAME contract, deliberately: [SwrCacheSource]'s
+     * caller leaves the cached data untouched on a thrown revalidation and
+     * retries at the next natural tick (5-minute cycle or socket-triggered
+     * refresh), which re-evaluates delta-vs-full from the UNCHANGED,
+     * still-recorded watermark — so a transient failure never needs a
+     * same-call fallback to recover.
+     *
+     * #5188 — ONLY page 1 is conditional (`If-None-Match: [ifNoneMatch]`,
+     * `null` sends none). Pages 2+ always use the plain, unconditional [list],
+     * unchanged from #5187. This is deliberate, not an oversight: an `ETag`
+     * hashes ONE exact response body (`sendWithETag`, `core-list.ts:892-906`),
+     * so a page-1 304 can only be trusted to mean "the ENTIRE sweep is
+     * unchanged" when page 1 ALONE was already proven sufficient (`hasMore =
+     * false`) the time [ifNoneMatch] was captured — otherwise a byte-identical
+     * page 1 says nothing about whether page 2+ picked up new changes since
+     * (full sweep: newest-first order, so page 1 changing is actually the
+     * LIKELY case when anything changes; delta: oldest-first, so brand-new
+     * changes land on LATER pages precisely when page 1 stays identical). The
+     * caller ([revalidate]) enforces this: it only ever passes an
+     * [ifNoneMatch] captured from a page-1-sufficient response, via
+     * [SyncMetaEntity.etagRequestKey] matching. A 304 arriving when
+     * [ifNoneMatch] was `null` is a server anomaly — RFC 7232 defines 304 only
+     * as an answer to a conditional request — and throws rather than being
+     * silently read as either "unchanged" (could hide data loss) or "empty
+     * success" (no body was ever decoded).
      */
-    private suspend fun sweepPages(updatedSince: String?): SweepOutcome {
+    private suspend fun sweepPages(updatedSince: String?, ifNoneMatch: String?): SweepOutcome {
         val collected = mutableListOf<ApiConversation>()
         var offset = 0
         var isComplete = false
+        var capturedEtag: String? = null
 
         for (page in 0 until MAX_PAGES) {
-            when (
-                val result = pagedApiCall {
-                    conversationApi.list(
+            if (page == 0) {
+                when (
+                    val result = conversationApi.listConditionalResult(
                         offset = offset,
                         limit = CONVERSATIONS_PAGE_SIZE,
                         updatedSince = updatedSince,
+                        ifNoneMatch = ifNoneMatch,
                     )
-                }
-            ) {
-                is NetworkResult.Success -> {
-                    val rows = result.data.data
-                    collected += rows
-                    val pagination = result.data.pagination
-                        ?: break // Unknown completeness — never infer "done" from a missing block.
-                    if (!pagination.hasMore) {
-                        isComplete = true
-                        break
+                ) {
+                    is ConditionalResult.NotModified -> {
+                        if (ifNoneMatch == null) {
+                            throw ConversationSyncException(
+                                "Unexpected 304 for conversations without If-None-Match sent",
+                            )
+                        }
+                        return SweepOutcome(notModified = true)
                     }
-                    offset += rows.size
+                    is ConditionalResult.Fresh -> {
+                        val rows = result.data
+                        collected += rows
+                        val pagination = result.pagination
+                            ?: break // Unknown completeness — never infer "done" from a missing block.
+                        if (!pagination.hasMore) {
+                            isComplete = true
+                            capturedEtag = result.etag
+                            break
+                        }
+                        offset += rows.size
+                    }
+                    is ConditionalResult.Failure -> throw ConversationSyncException(result.error.message)
                 }
-                is NetworkResult.Failure -> throw ConversationSyncException(result.error.message)
+            } else {
+                when (
+                    val result = pagedApiCall {
+                        conversationApi.list(
+                            offset = offset,
+                            limit = CONVERSATIONS_PAGE_SIZE,
+                            updatedSince = updatedSince,
+                        )
+                    }
+                ) {
+                    is NetworkResult.Success -> {
+                        val rows = result.data.data
+                        collected += rows
+                        val pagination = result.data.pagination ?: break
+                        if (!pagination.hasMore) {
+                            isComplete = true
+                            break
+                        }
+                        offset += rows.size
+                    }
+                    is NetworkResult.Failure -> throw ConversationSyncException(result.error.message)
+                }
             }
         }
 
-        return SweepOutcome(collected, isComplete)
+        return SweepOutcome(collected, isComplete, capturedEtag = capturedEtag)
     }
 
     /**
@@ -144,10 +204,8 @@ internal class ConversationCacheSource(
      * elsewhere) simply never appears in ANY delta page, which is
      * indistinguishable from "unchanged". Only the full sweep — which sees
      * literally everything — is trusted to delete. A delta sweep that returns
-     * nothing (no changes since the watermark) makes ZERO Room writes at all,
-     * including to `sync_meta`: there is nothing to upsert, nothing to prune,
-     * and no new `updatedAt` to advance the watermark to, so touching the row
-     * would only cost a write without changing what it means.
+     * nothing new (no changes since the watermark, AND no fresh `ETag` to
+     * remember) makes ZERO Room writes at all, including to `sync_meta`.
      *
      * The watermark itself only advances when a sweep is PROVEN exhaustive —
      * [SweepOutcome.isComplete] — and is computed from the conversations'
@@ -161,23 +219,43 @@ internal class ConversationCacheSource(
      * guarantee that every conversation below the max `updatedAt` seen was
      * also seen — advancing past them would make the next delta skip them
      * forever (`updatedAt gt watermark` is a STRICT bound).
+     *
+     * #5188 — a 304 ([SweepOutcome.notModified]) NEVER advances the content
+     * watermark either, even though it IS treated as a successful revalidation
+     * for freshness (`lastSyncedAt`): it proves "nothing new since I last
+     * asked", not "I have now seen everything up to this instant" — the
+     * distinction matters the moment the watermark's age crosses the 24h
+     * full-sweep threshold, where "nothing new" must not be conflated with
+     * "exhaustively confirmed current".
      */
     override suspend fun revalidate() {
         val watermark = syncMetaDao.watermark(RESOURCE_KEY)
+        val currentEtag = syncMetaDao.etag(RESOURCE_KEY)
+        val currentEtagScope = syncMetaDao.etagRequestKey(RESOURCE_KEY)
         val now = clock.nowMillis()
         val useDelta = watermark != null && (now - watermark) <= CachePolicy.Conversations.keepForMillis
+        val updatedSince = if (useDelta) Instant.ofEpochMilli(watermark!!).toString() else null
+        val requestScope = updatedSince ?: FULL_SWEEP_ETAG_SCOPE
+        val ifNoneMatch = currentEtag?.takeIf { currentEtagScope == requestScope }
 
-        val outcome = sweepPages(
-            updatedSince = if (useDelta) Instant.ofEpochMilli(watermark!!).toString() else null,
-        )
+        val outcome = sweepPages(updatedSince, ifNoneMatch)
 
-        if (useDelta && outcome.conversations.isEmpty()) return
+        if (outcome.notModified) {
+            // Confirmed unchanged: zero body decoded, zero Room writes beyond
+            // freshness — watermark, etag and its scope all carry over as-is.
+            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermark, currentEtag, currentEtagScope))
+            return
+        }
+
+        if (useDelta && outcome.conversations.isEmpty() && outcome.capturedEtag == null) return
 
         persist(
             conversations = outcome.conversations,
             prune = !useDelta && outcome.isComplete,
             currentWatermark = watermark,
             advanceWatermark = outcome.isComplete,
+            etag = outcome.capturedEtag ?: currentEtag,
+            etagScope = if (outcome.capturedEtag != null) requestScope else currentEtagScope,
         )
     }
 
@@ -220,6 +298,8 @@ internal class ConversationCacheSource(
         prune: Boolean,
         currentWatermark: Long?,
         advanceWatermark: Boolean,
+        etag: String?,
+        etagScope: String?,
     ) {
         val now = clock.nowMillis()
         val rows = conversations.map { conversation ->
@@ -245,7 +325,7 @@ internal class ConversationCacheSource(
         database.withTransaction {
             conversationDao.upsertAll(rows)
             if (prune) pruneMissing(rows.map { it.id })
-            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore))
+            syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore, etag, etagScope))
         }
     }
 
@@ -259,5 +339,12 @@ internal class ConversationCacheSource(
          * the 999-per-statement floor `minSdk = 26` (API 26-29) enforces.
          */
         private const val DELETE_CHUNK_SIZE = 900
+
+        /**
+         * [SyncMetaEntity.etagRequestKey] sentinel for a FULL sweep
+         * (`updatedSince` absent) — #5188. Never equal to a real `updatedSince`
+         * value, which is always a well-formed ISO-8601 instant.
+         */
+        private const val FULL_SWEEP_ETAG_SCOPE = "full-sweep"
     }
 }

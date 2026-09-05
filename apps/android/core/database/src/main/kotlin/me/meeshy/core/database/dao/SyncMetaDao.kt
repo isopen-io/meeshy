@@ -21,6 +21,14 @@ public interface SyncMetaDao {
     @Query("SELECT contentWatermarkMillis FROM sync_meta WHERE resourceKey = :key")
     public suspend fun watermark(key: String): Long?
 
+    /** One-shot read of [SyncMetaEntity.etag] (#5188) — see its doc-comment. */
+    @Query("SELECT etag FROM sync_meta WHERE resourceKey = :key")
+    public suspend fun etag(key: String): String?
+
+    /** One-shot read of [SyncMetaEntity.etagRequestKey] (#5188) — see its doc-comment. */
+    @Query("SELECT etagRequestKey FROM sync_meta WHERE resourceKey = :key")
+    public suspend fun etagRequestKey(key: String): String?
+
     @Upsert
     public suspend fun upsert(meta: SyncMetaEntity)
 
