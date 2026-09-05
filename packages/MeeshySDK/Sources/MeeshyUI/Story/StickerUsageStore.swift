@@ -18,7 +18,12 @@ import MeeshySDK
 /// source du dessin.
 ///
 /// > Un favori n'est pas une copie de ce qu'on aime : c'est un renvoi vers lui.
-public struct StickerUsageEntry: Codable, Hashable, Identifiable, Sendable {
+/// `nonisolated` : le module compile sous isolation `MainActor` par défaut, et
+/// ce type est une VALEUR — un identifiant composé, sans état ni horloge. Le
+/// laisser isolé le rendait inconstructible depuis une règle pure de l'app
+/// (`MessageStickerFavorite`, qui traduit un `MessageSticker` en entrée de
+/// palette hors de tout acteur).
+public nonisolated struct StickerUsageEntry: Codable, Hashable, Identifiable, Sendable {
 
     public enum Kind: String, Codable, Sendable {
         /// Un glyphe du système — `value` EST l'emoji.
