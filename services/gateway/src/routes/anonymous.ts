@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../utils/response';
+import { AUTH_ERROR_CODES } from '../utils/auth-error-codes';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { linkJoinProfileSchema } from '@meeshy/shared/types/link-join';
@@ -354,7 +355,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       switch (result.kind) {
         case 'invalid':
-          return sendUnauthorized(reply, 'Session invalide ou expiree');
+          return sendUnauthorized(reply, 'Session invalide ou expiree', { code: AUTH_ERROR_CODES.SESSION_INVALID });
         case 'link-gone':
           return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
         case 'link-expired':

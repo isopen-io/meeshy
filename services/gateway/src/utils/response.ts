@@ -12,6 +12,7 @@ import type {
   CursorPaginationMeta,
   ResponseMeta
 } from '@meeshy/shared/types';
+import { AUTH_ERROR_CODES } from './auth-error-codes';
 
 /**
  * Send a success response with data
@@ -125,13 +126,22 @@ export function sendBadRequest(
 
 /**
  * Send a 401 Unauthorized error
+ *
+ * #4857 — `code` était en OPTION, et l'omission (127 des 180 appels de
+ * production) servait `undefined`, qui disparaît à la sérialisation JSON :
+ * la seule façon de distinguer deux 401 était le filage de chaîne sur une
+ * prose française. Le défaut est désormais EXPLICITE —
+ * `AUTH_ERROR_CODES.UNAUTHORIZED`, jamais l'absence — et un appelant qui
+ * refuse pour un sens distinct (session invalide, lien magique, identifiants,
+ * second facteur…) le dit en passant `options.code`. Voir
+ * `utils/auth-error-codes.ts` pour la liste des sens nommés.
  */
 export function sendUnauthorized(
   reply: FastifyReply,
   error: string = 'Authentication required',
   options?: { message?: string; code?: string }
 ): void {
-  sendError(reply, 401, error, options);
+  sendError(reply, 401, error, { code: AUTH_ERROR_CODES.UNAUTHORIZED, ...options });
 }
 
 /**

@@ -30,7 +30,9 @@ import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/attachmentAudioRichView';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
+import { diffTranslationTargets } from '../../utils/translation-targets';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -886,8 +888,7 @@ export class MessageTranslationService extends EventEmitter {
           //   systemLanguage > regionalLanguage > customDestinationLanguage > deviceLocale
           // The helper deduplicates lowercase codes so two participants
           // sharing the same locale only contribute once. deviceLocale is
-          // normalised (`fr-FR` → `fr`) with the region stripped, the same
-          // SSOT canonical form the anonymous branch below applies.
+          // normalised (`fr-FR` → `fr`, region stripped) — same SSOT canonical form.
           const codes = resolveUserLanguagesOrdered(u, {
             deviceLocale: u.deviceLocale ?? undefined,
           });
@@ -902,12 +903,10 @@ export class MessageTranslationService extends EventEmitter {
           );
 
           // Normalise like the registered branch: an anonymous/bot participant
-          // stores `language` unvalidated (bare `z.string()`), so it may hold
-          // `'EN'`, `'en-US'` or an out-of-catalog `'fil-PH'` (`Locale.current`
-          // on a Filipino device). The SSOT `normalizeLanguageForDedup` folds
-          // casing AND strips the region even for codes it cannot reduce
-          // (`'fil-PH'` → `'fil'`), so `'fil-PH'` and `'fil'` count as one target,
-          // not two never-matching duplicates (Prisme rule #1).
+          // stores `language` unvalidated (bare `z.string()`): `'EN'`, `'en-US'`,
+          // or out-of-catalog `'fil-PH'`. `normalizeLanguageForDedup` folds casing
+          // AND strips the region even for codes it cannot reduce, so `'fil-PH'`
+          // and `'fil'` count as ONE target, not two duplicates (Prisme rule #1).
           if (participant.language) {
             languages.add(normalizeLanguageForDedup(participant.language));
           }
@@ -2502,9 +2501,12 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`   ℹ️ Clonage vocal désactivé (pas de consentement)`);
       }
 
-      // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation
+      // 1. Récupérer les langues cibles: explicites (appelant) ou dérivées de la conversation.
+      //    Les cibles explicites arrivent VERBATIM ('fr-FR', 'EN') et rien ne les
+      //    canonicalise en aval du dispatch audio — `diffTranslationTargets` (SSOT
+      //    des jumeaux) les canonicalise + déduplique ici ; la branche dérivée l'est déjà.
       let targetLanguages = params.targetLanguages && params.targetLanguages.length > 0
-        ? params.targetLanguages
+        ? diffTranslationTargets(params.targetLanguages, []).missing
         : await this._extractConversationLanguages(params.conversationId);
 
       if (targetLanguages.length === 0) {
@@ -2750,89 +2752,15 @@ export class MessageTranslationService extends EventEmitter {
    * @param attachmentId ID de l'attachement
    * @returns Attachement enrichi avec transcription et traductions
    */
-  async getAttachmentWithTranscription(attachmentId: string): Promise<{
-    attachment: any;
-    transcription: any | null;
-    translatedAudios: any[];
-  } | null> {
-    try {
-      const attachment = await this.prisma.messageAttachment.findUnique({
-        where: { id: attachmentId },
-        select: {
-          id: true,
-          messageId: true,
-          fileName: true,
-          originalName: true,
-          fileUrl: true,
-          mimeType: true,
-          fileSize: true,
-          duration: true,
-          bitrate: true,
-          sampleRate: true,
-          codec: true,
-          channels: true,
-          createdAt: true,
-          transcription: true,
-          translations: true
-        }
-      });
-
-      if (!attachment) {
-        return null;
-      }
-
-      // Convertir transcription JSON → ancien format
-      const transcriptionData = attachment.transcription as unknown as AttachmentTranscription | null;
-      const transcription = transcriptionData ? {
-        id: attachmentId,
-        text: transcriptionData.text,
-        language: transcriptionData.language,
-        confidence: transcriptionData.confidence,
-        source: transcriptionData.source,
-        segments: transcriptionData.segments,
-        durationMs: transcriptionData.durationMs,
-        createdAt: attachment.createdAt
-      } : null;
-
-      // Convertir translations JSON → ancien format
-      const translationsData = attachment.translations as unknown as AttachmentTranslations | undefined;
-      const translatedAudios = translationsData ? Object.entries(translationsData).map(([lang, t]) => ({
-        id: `${attachmentId}_${lang}`,
-        targetLanguage: lang,
-        translatedText: t.transcription,
-        audioUrl: t.url || '',
-        audioPath: t.path || '',
-        durationMs: t.durationMs || 0,
-        format: t.format || 'mp3',
-        voiceCloned: t.cloned || false,
-        voiceQuality: t.quality || 0,
-        createdAt: typeof t.createdAt === 'string' ? new Date(t.createdAt) : t.createdAt
-      })) : [];
-
-      return {
-        attachment: {
-          id: attachment.id,
-          messageId: attachment.messageId,
-          fileName: attachment.fileName,
-          originalName: attachment.originalName,
-          fileUrl: attachment.fileUrl,
-          mimeType: attachment.mimeType,
-          fileSize: attachment.fileSize,
-          duration: attachment.duration,
-          bitrate: attachment.bitrate,
-          sampleRate: attachment.sampleRate,
-          codec: attachment.codec,
-          channels: attachment.channels,
-          createdAt: attachment.createdAt
-        },
-        transcription,
-        translatedAudios
-      };
-
-    } catch (error) {
-      logger.error(`❌ [TranslationService] Erreur get attachment: ${error}`);
-      return null;
-    }
+  /**
+   * Le corps vit dans `../audio/attachmentAudioRichView.ts`, à côté de sa
+   * JUMELLE (`attachmentTranscriptionView`, celle d'`AudioTranslateService`)
+   * — les deux ont divergé sur cinq points observables, que le doc-comment de
+   * la vue riche met enfin en tableau. Rien n'est unifié ici : les unifier
+   * changerait ce que des routes servent.
+   */
+  async getAttachmentWithTranscription(attachmentId: string): Promise<AttachmentAudioRichView | null> {
+    return attachmentAudioRichView(this.prisma, attachmentId);
   }
 
   /**
@@ -3152,8 +3080,7 @@ export class MessageTranslationService extends EventEmitter {
         // `normalizeLanguageForDedup` ('pt-BR' → 'pt', 'fil-PH' → 'fil'). La
         // lecture DOIT canoniser avec la MÊME SSOT que l'envoi, sinon un target
         // neuf `'fil'` stocké ne se relit pas depuis un `'fil-PH'` demandé.
-        // Verbatim d'abord : un document legacy portant réellement une clé
-        // régionale reste servi tel quel.
+        // Verbatim d'abord : une clé régionale legacy reste servie telle quelle.
         const normalizedTarget = normalizeLanguageForDedup(targetLanguage);
         const translation = translations[targetLanguage] ?? translations[normalizedTarget];
 

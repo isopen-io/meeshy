@@ -24,6 +24,7 @@ import { expect, test, type Browser, type BrowserContext } from '@playwright/tes
 
 import { THEME_STORAGE_KEY } from '../../app/theme-script';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
+import { ESPACE } from '../../lib/contenu/espace';
 import { COLONNES_DE_THEME, rapporteViolations, violationsBloquantes } from './lib/a11y';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { CONVERSATION_DU_LECTEUR } from './lib/bouchon-monde';
@@ -99,18 +100,19 @@ test('n’embarque aucun module client', async ({ browser }) => {
 });
 
 /**
- * T-GESTES (Q1) — « depuis l'accueil, DEUX clics ouvrent l'écran » : le rond
- * de droite (`?espace`), puis la rangée « Communautés » de la feuille.
+ * T-GESTES (Q1) — « depuis l'accueil, DEUX clics ouvrent l'écran » : le
+ * raccourci d'en-tête vers l'espace membre (`?espace`), puis la rangée
+ * « Communautés » de la feuille.
  */
 test('deux gestes depuis l’accueil ouvrent /communities', async ({ browser }) => {
   const contexte = await contexteDuMembre(browser, COLONNES_DE_THEME[0]!, v3.base, { avecSession: true });
   const page = await contexte.newPage();
 
   await page.goto(`${v3.base}/`);
-  await expect(page.locator('a.flottante.droite')).toBeVisible();
+  await expect(page.getByRole('link', { name: ESPACE.ouvrir })).toBeVisible();
 
-  // Clic 1 — le rond de droite ouvre l'espace membre.
-  await page.locator('a.flottante.droite').click();
+  // Clic 1 — le raccourci d'en-tête ouvre l'espace membre.
+  await page.getByRole('link', { name: ESPACE.ouvrir }).click();
   await expect(page.locator('dialog.espace')).toBeVisible();
 
   // Clic 2 — la rangée « Communautés » de la feuille.
