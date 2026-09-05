@@ -509,20 +509,30 @@ extension MeeshyComposerHost {
     /// `.opacity` marque le refus du gate : un remplissage plein aurait l'air
     /// armé même quand rien ne peut partir.
     func publishCapsule<Contenu: View>(_ contenu: Contenu) -> some View {
-        contenu
-            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
-            .opacity(canPublishDocument ? 1 : 0.45)
-            .disabled(!canPublishDocument)
-            // **L'indice de blocage se VOIT, il ne s'entend plus seulement**
-            // (2026-09-05). Voir `publishBlockedNotice`.
-            .overlay(alignment: .topTrailing) { publishBlockedNotice }
-            // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
-            // flèche perdrait son nom à l'instant même où elle devient compacte
-            // — le défaut que `StatusComposerView` a dû corriger, dans l'autre
-            // sens.
-            .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
-            .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
-            .accessibilityHint(publishBlockedHint)
+        // **L'indice de blocage se VOIT, il ne s'entend plus seulement**
+        // (2026-09-05). Voir `publishBlockedNotice`.
+        //
+        // Un EMPILEMENT, et non un `.overlay` : mesuré au simulateur, un overlay
+        // — même avec `.alignmentGuide(.top)` calé sur le bas du texte — reste
+        // CENTRÉ sur la capsule et rend l'indice illisible PAR-DESSUS le mot
+        // « Publier ». `alignmentGuide` gouverne l'alignement dans une PILE ;
+        // `.overlay` ne le consulte pas. La pile, elle, n'a rien à supposer :
+        // elle place l'un au-dessus de l'autre quelle que soit la hauteur du
+        // texte — deux lignes en français, trois en allemand.
+        VStack(alignment: .trailing, spacing: 6) {
+            publishBlockedNotice
+            contenu
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+                .opacity(canPublishDocument ? 1 : 0.45)
+                .disabled(!canPublishDocument)
+                // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
+                // flèche perdrait son nom à l'instant même où elle devient
+                // compacte — le défaut que `StatusComposerView` a dû corriger,
+                // dans l'autre sens.
+                .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
+                .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
+                .accessibilityHint(publishBlockedHint)
+        }
     }
 
     /// **Pourquoi la flèche est grise — DIT à l'œil** (directive porteur
@@ -564,21 +574,14 @@ extension MeeshyComposerHost {
             Text(publishBlockedHint)
                 .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
-                .lineLimit(2)
+                // TROIS lignes, pas deux : à 190 pt la phrase française se
+                // coupait sur « une photo ou u… », mesuré au simulateur. Le
+                // nombre de lignes se règle sur la langue la PLUS longue —
+                // l'allemand — jamais sur celle qu'on a sous les yeux.
+                .lineLimit(3)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 190, alignment: .trailing)
-                // AU-DESSUS de la capsule, et calé sur son bord DROIT : le socle
-                // est la dernière rangée de l'écran (dessous, l'indice passerait
-                // sous le bord) et la capsule en occupe le bout — un bloc de
-                // 190 pt centré sur elle déborderait à droite.
-                //
-                // Le guide d'alignement, et non un `offset` : il fait coïncider
-                // le BAS du texte avec le HAUT de la capsule, quelle que soit sa
-                // hauteur. Un décalage fixe supposerait un nombre de lignes, et
-                // se tromperait sur l'autre — donc sur une langue plus longue ou
-                // un plus grand corps de texte.
-                .alignmentGuide(.top) { d in d[.bottom] + 6 }
+                .frame(maxWidth: 240, alignment: .trailing)
                 .allowsHitTesting(false)
                 // VoiceOver l'entend déjà par `accessibilityHint` sur la
                 // capsule ; le lire une seconde fois ici ferait entendre la
