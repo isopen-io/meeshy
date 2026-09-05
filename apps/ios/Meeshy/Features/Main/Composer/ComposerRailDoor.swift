@@ -264,11 +264,29 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         // à poser, donc rien qui puisse devenir un objet.
         case .content:
             return .publication
-        // Les quatre outils que la directive DÉPLACE. Le prédicat porte sur le
-        // format et non sur une liste de formats « autres » : ajouter un
-        // cinquième format le rangera du bon côté sans qu'on y pense, et c'est
-        // le sens de la règle — seule la Story pose.
-        case .mention, .place, .hashtag, .text:
+        // **Le corpus de texte POSE, dans TOUS les formats** (directive porteur
+        // 2026-09-05 : « mettre sur la rangée colonne gauche toutes les
+        // modifications spécifiques à la scène et non à la publication de type
+        // Post »).
+        //
+        // Il basculait par format depuis #4893, et la mesure a tranché contre
+        // cette bascule : `handleRailDoor(.text)` appelle `viewModel.addText()`
+        // puis ouvre l'éditeur d'objet — **quel que soit le format**. Un objet
+        // texte se pose, se déplace, se pince et se tourne sur la scène d'un
+        // POST exactement comme sur celle d'une Story.
+        //
+        // > La porte était donc rangée en bas d'après ce que le format LAISSAIT
+        // > croire, jamais d'après ce qu'elle FAIT. Le corps du post a sa propre
+        // > porte (`.content`) depuis #4890 ; c'est elle qui qualifie la
+        // > publication, et son existence est ce qui rend le classement de
+        // > `.text` en `.publication` non seulement faux mais inutile.
+        case .text:
+            return .object
+        // La mention, le lieu et le hashtag, eux, gardent leur bascule : hors
+        // Story ils ouvrent un sélecteur de la PUBLICATION
+        // (`handleDocumentTool`) et ne posent rien sur la scène — mesuré, pas
+        // supposé.
+        case .mention, .place, .hashtag:
             return format == .story ? .object : .publication
         // La MATIÈRE se pose toujours, quel que soit le format : une image de
         // premier plan, une piste et un sticker sont des objets par nature.
@@ -286,8 +304,22 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// L'ordre du rail, de haut en bas. Écrit en toutes lettres plutôt que
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
+    /// **`.description` n'y figure plus** (directive porteur 2026-09-05 : « il
+    /// existe déjà un moyen de mettre à jour la description de la scène, il
+    /// faut enlever cela de la rangée canonique »).
+    ///
+    /// Le volet sous la scène (`sceneDescriptionPanel`, son chevron toujours
+    /// disponible depuis #4993) EST ce moyen, et il est meilleur que la porte :
+    /// il se peint PAR-DESSUS le média que la description décrit, donc l'auteur
+    /// voit ce qu'il légende. Une porte qui ouvre le même volet est un second
+    /// bouton pour un seul chemin — le motif que le § 3 d'`apps/ios/CLAUDE.md`
+    /// nomme « une porte n'a pas de JUMELLE ».
+    ///
+    /// La porte reste un CAS de l'énuméré : `level`, le badge et le glyphe la
+    /// décrivent toujours, et la retirer de l'énuméré ferait tomber des sites
+    /// qui la classent sans l'offrir. Ce qui disparaît est son entrée de rail.
     static let canonicalRail: [ComposerRailDoor] = [
-        .description, .content, .media, .sound, .text, .background, .drawing,
+        .content, .media, .sound, .text, .background, .drawing,
         .sticker, .mention, .hashtag, .place
     ]
 

@@ -59,6 +59,7 @@ const etatServi = (): EtatDuFil => ({
       plein: { nom: 'plein.f.js', url: '/__v3/rt/plein.f.js', corps: '' },
       navigateur: { nom: 'n.js', url: '/__v3/rt/n.js', corps: '' },
       composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
+      prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
       socket: { nom: 's.js', url: '/__v3/rt/s.js', corps: '' },
     },
   },

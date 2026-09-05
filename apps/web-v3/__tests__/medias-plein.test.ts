@@ -125,6 +125,7 @@ const TEMPS_REEL_DES_MEDIAS = {
     plein: { nom: 'plein.abc.js', url: '/__v3/rt/plein.abc.js', corps: '' },
     navigateur: { nom: 'navigateur.abc.js', url: '/__v3/rt/navigateur.abc.js', corps: '' },
     composer: { nom: 'composer.abc.js', url: '/__v3/rt/composer.abc.js', corps: '' },
+    prefs: { nom: 'prefs.abc.js', url: '/__v3/rt/prefs.abc.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };

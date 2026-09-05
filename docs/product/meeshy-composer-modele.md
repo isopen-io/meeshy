@@ -660,7 +660,8 @@ côté elle se pose (§ « Le composer met ses portes SUR LE PLATEAU », `apps/i
 
 | inventaire | ce qu'il énumère | contenu mesuré |
 |---|---|---|
-| **`ComposerRailDoor`** (11) | les portes qui posent ou règlent quelque chose | `description` · `content` · `media` · `sound` · `sticker` · `mention` · `place` · `drawing` · `text` · `hashtag` · `background` |
+| **`ComposerRailDoor`** — les CAS déclarés (11) | les portes qui posent ou règlent quelque chose | `description` · `content` · `media` · `sound` · `sticker` · `mention` · `place` · `drawing` · `text` · `hashtag` · `background` |
+| **`ComposerRailDoor.canonicalRail`** — les entrées SERVIES | ce que la rangée du bas de scène propose vraiment | **10** — `description` est un cas SANS entrée de rail ; voir l'encadré ci-dessous |
 | **`ComposerRailLevel`** (4) | ce que la porte VISE — et donc où elle se pose | `publication` · `slide` · `object` · `scene` |
 | **`ComposerOrigin`** (8) | par où l'on ENTRE dans le composer | `storyTray` · `feedComposer` · `moodChip` · `repost` · `edit` · `draft` · `share` · `conversationMedia` |
 | `ComposerDocumentTool.canonicalRow` (7) | les outils d'attache du document | `photo` · `camera` · `emoji` · `document` · `place` · `microphone` · `mention` |
@@ -722,6 +723,56 @@ EOF
 
 La vérité reste le fichier source. Un chiffre recopié ici sans sa commande serait
 une décoration — et ce document en a déjà porté trois qui ne tombaient pas juste.
+
+#### Ce type a DEUX inventaires, et la commande ci-dessus n'en compte qu'un
+
+`ComposerRailDoor` déclare ses cas ; `ComposerRailDoor.canonicalRail` déclare
+**lesquels la rangée SERT**. Les deux listes ont coïncidé jusqu'au 2026-09-05 —
+11 et 11 — et c'est précisément ce qui rendait le défaut invisible : **deux
+inventaires qui coïncident ont l'air d'un seul.** La commande publiée plus haut
+compte les CAS ; elle affiche toujours 11, pendant que la rangée n'en sert plus
+que **10**.
+
+La commande de l'inventaire SERVI, à rejouer avec l'autre et jamais à sa place :
+
+```bash
+sed -n '/static let canonicalRail/,/^    \]/p' \
+    apps/ios/Meeshy/Features/Main/Composer/ComposerRailDoor.swift
+```
+
+> **Un cas retiré de la RANGÉE n'est pas un cas retiré de l'ENUM**, et c'est
+> voulu : une porte peut rester classée — garder son niveau, son glyphe, son
+> libellé, et les `switch` exhaustifs qui la décrivent — sans être offerte. La
+> retirer de l'énuméré ferait tomber `level(for:)`, le badge et les `switch`
+> ; la retirer de la rangée ne retire qu'une entrée. **Publier un seul nombre
+> pour les deux, c'est promettre que la porte offerte est la porte déclarée.**
+
+*Écart ouvert le 2026-09-05* par `87a7e3c049` (directive porteur) :
+`.description` a quitté la rangée — le volet sous la scène (#4993) est déjà son
+moyen, et il se peint par-dessus le média décrit — tout en restant un cas classé
+`.slide`. **10 entrées pour 11 cas**, le premier écart entre les deux
+inventaires.
+
+> Ce paragraphe a été écrit AVANT ce commit, et il a quand même dû être corrigé :
+> la DISTINCTION et les deux commandes ont survécu, les deux NOMBRES non. C'est
+> la démonstration la plus courte de sa propre thèse — un nombre recopié se
+> périme, une commande se rejoue.
+
+**Un cas hors rangée n'est pas un silence, et c'est gardé.**
+`ComposerRailDoorTests` exige que `Set(allCases).subtracting(canonicalRail)` soit
+exactement `[.description]`, **avec sa raison inscrite dans le message d'échec** —
+la même forme que la table d'exclusions nommées de `FeedSceneCoherenceGuardTests`
+(#5230), et posée du premier coup ici.
+
+**Deux formes légitimes, à ne pas uniformiser.** L'inventaire frère,
+`ComposerDocumentTool`, résout la même question par PROJECTION : `servedRow` vaut
+`canonicalRow.filter { $0.effect != nil }` — jamais une seconde liste, « l'ordre
+vient de `canonicalRow` et de nulle part ailleurs ». `canonicalRail`, lui, est un
+littéral écrit à la main, et il doit le rester : **son ORDRE est une décision de
+design** (la position que les doigts connaissent), que rien dans l'énuméré ne
+dérive. Ce qui doit être garanti n'est donc pas que la liste soit dérivée, mais
+que **tout cas qui n'y figure pas soit NOMMÉ avec sa raison** — ce que le témoin
+ci-dessus fait.
 
 ### Les mots du chrome qui n'ont aucune autorité sémantique
 
@@ -907,7 +958,7 @@ répond à la question qu'il laissait ouverte, et qu'aucun document ne traitait 
 |---|---|---|---|---|
 | **SCÈNE** | l'atelier de story (`StoryViewModel+PublicationUpload`) | `CreateStoryRequest` | 12 | **oui** |
 | **DOCUMENT en ligne** | `PostService.create` | `CreatePostRequest` | 18 | **oui** |
-| **DOCUMENT durable** — celle que prend TOUT post du meuble, en ligne comme hors ligne | `FeedViewModel.publish` → `OutboxDispatcher` | **`CreatePostBody`** | 15 | **oui depuis #4756** (`4ea147fc80`) |
+| **DOCUMENT durable** — celle que prend TOUT post du meuble, en ligne comme hors ligne | `FeedViewModel.publish` → `OutboxDispatcher` | **`CreatePostBody`** | 16 | **oui depuis #4756** (`4ea147fc80`) |
 | **ANCRAGE / repost cité** | `StoryRepublishComposer.ancrer` | `RepostIntent` → `POST /posts/:id/repost` | — | **NON** (#5201) |
 
 > **Le troisième corps n'était compté nulle part** — ni ici, ni dans
@@ -926,6 +977,38 @@ sont deux types SWIFT reçus par un seul contrat.
 Repo entier, en production : **12 sites** construisent un corps de `POST /posts`,
 dont **cinq à la main sans aucun type** (web ×3, web-v3 ×1, outbox iOS ×1).
 
+#### Le 19e champ du contrat n'est dans AUCUN des deux corps (2026-09-05)
+
+Les trois comptes — 19 au contrat, 18 sur la voie en ligne, 16 sur la voie
+durable — figuraient déjà côte à côte dans ce document. Personne n'avait demandé
+**lequel** manquait. Mesuré :
+
+| inventaire | champs | ce qui lui manque du contrat |
+|---|---|---|
+| `CreatePostSchema` (contrat) | 19 | — |
+| `CreatePostRequest` (EN LIGNE) | 18 | `communityId` |
+| `CreatePostBody` (DURABLE) | 16 | `communityId`, `mediaAlt`, `allowSoundExtraction` |
+
+`communityId` n'apparaît **nulle part** dans le code de publication iOS — les
+seules occurrences Swift sont en LECTURE (`ConversationListView`, `RootView`,
+navigation). **Un iPhone ne peut publier dans aucune communauté, par aucune des
+deux voies.**
+
+> **Un recensement compare ce qu'on lui donne à comparer.** `PublishChainCensusTests`
+> immunise contre la divergence des deux voies ; un champ absent des DEUX est,
+> pour lui, un non-événement — les inventaires concordent parfaitement. Deux
+> clients qui se recensent mutuellement prouvent qu'ils sont d'accord, **pas
+> qu'ils ont raison** : le tiers qui tranche est le CONTRAT, et il n'était dans
+> aucune des deux colonnes.
+
+C'est la forme du défaut que #5196 a corrigé un cran plus bas, rejouée un cran
+plus haut — et, comme toujours, invisible depuis le correctif. Suivi : #5239, qui
+pose le témoin AVANT de trancher `communityId` : le champ est peut-être mort côté
+contrat (mesuré : `apps/web/services/posts.service.ts` ne l'envoie pas non plus
+dans le corps de `POST /posts`, il ne sert qu'en lecture via
+`GET /posts/community/:communityId`). Une exemption est une DÉCISION, jamais un
+constat.
+
 ### La voie durable traverse SIX inventaires recopiés à la main
 
 | # | maillon | champs | ce qui rougirait si un champ manquait |
@@ -934,7 +1017,7 @@ dont **cinq à la main sans aucun type** (web ×3, web-v3 ×1, outbox iOS ×1).
 | 2 | `PublishIntent` (`Services/PublishIntent.swift`) | 13 | une garde de SOURCE interdit les défauts dans la liste de paramètres — elle **ne vérifie la présence d'aucun champ** |
 | 3 | `OfflineQueue.enqueuePostMedia` | 13 paramètres → 14 des 18 champs du payload | **rien** |
 | 4 | `CreatePostPayload` (format ON-DISK) | 18, dont **10 avec défaut** | 6 témoins champ par champ, aucun recensement |
-| 5 | `CreatePostBody` (le fil) | 15 | 11 témoins champ par champ, aucun recensement |
+| 5 | `CreatePostBody` (le fil) | 16 | 11 témoins champ par champ **+ `PublishChainCensusTests`** (#5196) — mais il compare les deux voies iOS ENTRE ELLES, jamais au contrat (voir ci-dessous) |
 | 6 | `CreatePostSchema` (passerelle) | 19 | — |
 
 **Sept champs ont déjà été perdus à ces maillons.** SIX sont réparés et portent
@@ -1160,7 +1243,7 @@ grep -h "public func" packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerVie
 > sérialisée, ≤ 256 Ko.
 >
 > Et **il y a un TROISIÈME type de corps côté iOS**, que ni ce document ni
-> `social.md` ne comptent : `CreatePostBody` (`OutboxDispatcher.swift:965`, 15
+> `social.md` ne comptent : `CreatePostBody` (`OutboxDispatcher.swift:965`, 16
 > champs, `encode(to:)` écrit à la main) — le corps de la voie DURABLE, celle que
 > prend tout post du meuble. Repo entier, en production : **12 sites** construisent
 > ce corps, dont cinq à la main sans aucun type (web ×3, web-v3 ×1, outbox iOS ×1).

@@ -130,6 +130,7 @@ const V3_ZONE_PREFIXES = [
   '/settings',
   '/feed',
   '/composer',
+  '/deconnexion',
 ];
 
 function belongsToV3Zone(pathname) {
