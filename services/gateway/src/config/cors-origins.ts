@@ -55,11 +55,13 @@
  *
  * L'inventaire de #4480 était complet pour les LECTEURS de `CORS_ORIGINS` — et
  * il a laissé deux portes dehors, parce qu'elles ne lisent aucune de ces
- * variables et n'apparaissent dans aucun balayage qui les cherche. Elles sont
- * désormais DÉCLARÉES, en donnée, en bas de ce fichier (`PORTES_HORS_REGLE`),
- * et confrontées au code par `__tests__/cors-origin-emitter-sweep.test.ts` :
- * ce cliquet balaie ce qui SORT (les en-têtes posés) et non ce qui est lu,
- * seul angle qui voit une porte n'employant aucun des noms qu'on cherche.
+ * variables et n'apparaissent dans aucun balayage qui les cherche
+ * (`routes/attachments/download.ts`, `routes/uploads/tus-handler.ts`). La
+ * seconde a rejoint la règle depuis (#5298) ; ce qui reste hors règle est
+ * DÉCLARÉ, en donnée, en bas de ce fichier (`PORTES_HORS_REGLE`), et confronté
+ * au code par `__tests__/cors-origin-emitter-sweep.test.ts` : ce cliquet
+ * balaie ce qui SORT (les en-têtes posés) et non ce qui est lu, seul angle qui
+ * voit une porte n'employant aucun des noms qu'on cherche.
  */
 
 /** La source d'environnement, injectable — c'est ce qui rend la règle testable. */
@@ -221,15 +223,18 @@ export type PorteHorsRegle = PorteLitterale | PorteDeleguee;
  * Une divergence DÉCLARÉE, sur le modèle de `SEUILS_REPORT` : en donnée, avec sa
  * raison, confrontée au code par `__tests__/cors-origin-emitter-sweep.test.ts`.
  * Un commentaire ne suffisait pas — rien ne l'aurait confronté au jour où
- * quelqu'un resserre les origines sans savoir que ces deux portes ne suivent pas.
+ * quelqu'un resserre les origines sans savoir que cette porte ne suit pas.
  *
- * Les deux entrées partagent la même inertie, et c'est ce qui rend l'arbitrage
- * tenable : `'*'` et `Access-Control-Allow-Credentials: true` s'excluent PAR
- * SPÉCIFICATION. Aucune de ces portes ne pose le second, donc aucun cookie ni
- * en-tête d'autorisation ne voyage sur elles — l'autorisation y est portée par
- * le handler, jamais par l'origine. Ce ne sont pas des fuites ; ce sont des
- * surfaces de décision qui n'obéissent pas à la règle unique, et c'est
- * exactement ce qu'il fallait rendre visible.
+ * `routes/uploads/tus-handler.ts` en faisait partie jusqu'à #5298, qui l'a fait
+ * rejoindre la règle (`allowedOrigins: (origin) => originIsAllowed(origin)`) —
+ * seule `routes/attachments/download.ts` reste hors règle. L'inertie qui rend
+ * l'arbitrage tenable ici : `'*'` et `Access-Control-Allow-Credentials: true`
+ * s'excluent PAR SPÉCIFICATION, et cette porte ne pose pas le second — aucun
+ * cookie ni en-tête d'autorisation ne voyage dessus, l'autorisation y est
+ * portée par le handler (`resolveAttachmentReadVerdict`), jamais par
+ * l'origine. Ce n'est pas une fuite ; c'est une surface de décision qui
+ * n'obéit pas à la règle unique, et c'est exactement ce qu'il fallait rendre
+ * visible.
  */
 export const PORTES_HORS_REGLE: readonly PorteHorsRegle[] = Object.freeze([
   {
@@ -245,19 +250,11 @@ export const PORTES_HORS_REGLE: readonly PorteHorsRegle[] = Object.freeze([
       "est jugé par `resolveAttachmentReadVerdict` (participation à la conversation + cycle de vie du " +
       "message porteur), jamais par l'origine.",
   },
-  {
-    fichier: 'routes/uploads/tus-handler.ts',
-    forme: 'deleguee',
-    composant: '@tus/server',
-    entete: 'Access-Control-Allow-Origin',
-    valeur: '*',
-    pourquoi:
-      "TROUVÉE en instruisant #4538, qui n'en connaissait que trois. `new Server({…})` ne reçoit AUCUN " +
-      "`allowedOrigins` ; le `getCorsOrigin` de @tus/server 2.4.4 rend alors `'*'` sur chaque réponse. " +
-      "La porte HTTP ne la couvre pas : `tusServer.handle(req.raw, reply.raw)` écrit sur la réponse BRUTE, " +
-      "donc les en-têtes que @fastify/cors met en attente sur `reply` ne sont jamais écrits — c'est la " +
-      "SEULE décision d'origine des routes d'upload. Inerte de la même façon : `allowedCredentials` n'est " +
-      "pas posé. Fermer l'option demande de vérifier le téléversement depuis meeshy.me ET hors navigateur " +
-      "(l'issue de suivi porte cette mesure) ; elle est déclarée ici en attendant, pas oubliée.",
-  },
+  // `routes/uploads/tus-handler.ts` a rejoint la règle (#5298) : `new Server({…})`
+  // passe désormais `allowedOrigins: (origin) => originIsAllowed(origin)`. Les
+  // appelants réels mesurés — le web (navigateur, sert un `Origin`) et les
+  // clients natifs iOS/Android (aucun `Origin`, donc inertes à cette option) —
+  // ne dépendaient d'aucun `'*'` pour continuer de fonctionner. Aucune trace
+  // ne doit rester ici : la règle 1 ter de `cors-origin-emitter-sweep.test.ts`
+  // rougirait sur une déclaration devenue fausse.
 ]);
