@@ -1075,6 +1075,208 @@ describe('AuthHandler', () => {
     });
   });
 
+  // #3625 — un socket authentifié une fois n'était jamais revérifié : un
+  // compte banni/désactivé APRÈS l'émission de son JWT gardait un accès temps
+  // réel complet jusqu'à l'expiration naturelle du jeton (24h, voire 365
+  // jours avec `rememberDevice`). `disconnectRevokedSessions` coupe déjà les
+  // sockets VIVANTS au moment de la désactivation — cette porte couvre le cas
+  // qu'il ne peut pas voir : une RECONNEXION ultérieure avec le même JWT,
+  // encore valide.
+  describe('handleTokenAuthentication — compte désactivé (#3625)', () => {
+    it('refuses a disabled account and disconnects without registering it', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null,
+        isActive: false,
+      } as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: expect.stringContaining('disabled')
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+      expect(socketToUser.size).toBe(0);
+    });
+
+    it('refuses a disabled account on manual authentication too (same _authenticateJWTUser path)', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null,
+        isActive: false,
+      } as any);
+
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
+
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('still authenticates an active account (isActive: true)', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null,
+        isActive: true,
+      } as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(connectedUsers.size).toBe(1);
+      expect(mockSocket.disconnect).not.toHaveBeenCalled();
+    });
+  });
+
+  // #3625 — aucun minuteur ne surveillait `exp` : un JWT qui expire PENDANT
+  // qu'un socket reste ouvert (le client ne referme jamais spontanément une
+  // connexion Socket.IO vivante) ne coupait jamais l'accès avant la prochaine
+  // reconnexion. Miroir, pour un jeton qui expire APRÈS le connect, de
+  // `jwt.TokenExpiredError` qui gouverne déjà le cas où il est expiré AU
+  // connect.
+  describe('handleTokenAuthentication — expiration du JWT pendant la connexion (#3625)', () => {
+    it('emits auth:token-expired and disconnects once the JWT exp elapses', async () => {
+      jest.useFakeTimers();
+      try {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', exp: nowSeconds + 5 } as any);
+
+        const mockSocket = createMockSocket({
+          handshake: { auth: { token: 'valid-jwt-token' } }
+        });
+        jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+          id: 'user-123', systemLanguage: 'en',
+          regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+        } as any);
+
+        await authHandler.handleTokenAuthentication(mockSocket);
+        (mockSocket.emit as jest.Mock).mockClear();
+        (mockSocket.disconnect as jest.Mock).mockClear();
+
+        jest.advanceTimersByTime(5_000);
+
+        expect(mockSocket.emit).toHaveBeenCalledWith('auth:token-expired', expect.objectContaining({
+          code: 'token_expired'
+        }));
+        expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+      }
+    });
+
+    it('never disconnects a socket whose JWT carries no exp', async () => {
+      jest.useFakeTimers();
+      try {
+        jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+
+        const mockSocket = createMockSocket({
+          handshake: { auth: { token: 'valid-jwt-token' } }
+        });
+        jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+          id: 'user-123', systemLanguage: 'en',
+          regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+        } as any);
+
+        await authHandler.handleTokenAuthentication(mockSocket);
+        (mockSocket.disconnect as jest.Mock).mockClear();
+
+        jest.advanceTimersByTime(365 * 24 * 60 * 60 * 1000);
+
+        expect(mockSocket.disconnect).not.toHaveBeenCalled();
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+      }
+    });
+
+    it('disarms the expiry timer on socket disconnect — a departed socket is never force-disconnected later', async () => {
+      jest.useFakeTimers();
+      try {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', exp: nowSeconds + 5 } as any);
+
+        const mockSocket = createMockSocket({
+          handshake: { auth: { token: 'valid-jwt-token' } }
+        });
+        jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+          id: 'user-123', systemLanguage: 'en',
+          regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+        } as any);
+
+        await authHandler.handleTokenAuthentication(mockSocket);
+
+        const disconnectCallback = (mockSocket.on as jest.Mock).mock.calls
+          .find(([event]) => event === 'disconnect')?.[1];
+        expect(disconnectCallback).toBeDefined();
+        disconnectCallback();
+
+        (mockSocket.emit as jest.Mock).mockClear();
+        (mockSocket.disconnect as jest.Mock).mockClear();
+
+        jest.advanceTimersByTime(5_000);
+
+        expect(mockSocket.emit).not.toHaveBeenCalledWith('auth:token-expired', expect.anything());
+        expect(mockSocket.disconnect).not.toHaveBeenCalled();
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+      }
+    });
+
+    it('re-arms across the 32-bit setTimeout ceiling for a long-lived rememberDevice token', async () => {
+      // `session-jwt.ts` mints a 365-day token when rememberDevice is set —
+      // far past Node's ~24.8-day setTimeout ceiling. The timer must survive
+      // by re-arming against the real `exp`, not by disconnecting early.
+      jest.useFakeTimers();
+      try {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const THIRTY_DAYS_S = 30 * 24 * 60 * 60;
+        jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', exp: nowSeconds + THIRTY_DAYS_S } as any);
+
+        const mockSocket = createMockSocket({
+          handshake: { auth: { token: 'valid-jwt-token' } }
+        });
+        jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+          id: 'user-123', systemLanguage: 'en',
+          regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+        } as any);
+
+        await authHandler.handleTokenAuthentication(mockSocket);
+
+        // First arm is capped well under the 32-bit ceiling — 20 days in must
+        // not disconnect yet (10 of the 30 days remain).
+        jest.advanceTimersByTime(20 * 24 * 60 * 60 * 1000);
+        expect(mockSocket.disconnect).not.toHaveBeenCalled();
+
+        // The remaining ~10 days elapse on the re-armed timer.
+        jest.advanceTimersByTime(10 * 24 * 60 * 60 * 1000 + 1_000);
+        expect(mockSocket.emit).toHaveBeenCalledWith('auth:token-expired', expect.objectContaining({
+          code: 'token_expired'
+        }));
+        expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      } finally {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+      }
+    });
+  });
+
   describe('handleManualAuthentication', () => {
     it('should authenticate registered user with valid JWT token', async () => {
       const mockSocket = createMockSocket();
