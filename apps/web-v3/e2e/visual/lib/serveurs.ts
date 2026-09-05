@@ -5,18 +5,22 @@ import { AddressInfo, createServer as createSocketServer } from 'node:net';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+
 import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-reseau.d.mts';
 import {
   APPAREILS_DU_BOUCHON,
   boiteDeNotifsDeBouchon,
   filDeCommentairesDeBouchon,
   filSocialDeBouchon,
+  notificationPrefsDeBouchon,
   routesDuCompte,
   type BoiteDeNotifsDeBouchon,
   type FilDeCommentairesDeBouchon,
   type FilSocialDeBouchon,
 } from './bouchon-compte';
 import { carnetDeBouchon, routesDuCarnet, type CarnetDeBouchon } from './bouchon-carnet';
+import { routesDeLaRecherche } from './bouchon-recherche';
 import {
   placeDeLInvite,
   porteDeLHote,
@@ -152,6 +156,15 @@ export type PasserelleDeBouchon = {
   readonly filDeCommentaires: FilDeCommentairesDeBouchon;
   /** Le fil social (#5031) — `publie()` pose une ligne EN TÊTE, `remets()` entre témoins. */
   readonly filSocial: FilSocialDeBouchon;
+  /**
+   * LES TREIZE PRÉFÉRENCES DE NOTIFICATION DU COMPTE (#4899) — l'état MUTABLE
+   * que `PATCH /api/v1/me/preferences` écrit et que le `GET` relit
+   * (`bouchon-compte.ts` › `notificationPrefsDeBouchon`) ; exposé pour la même
+   * raison que `boite` : un spec qui vient de poser un rollack ou une panne
+   * doit pouvoir vérifier ce que le bouchon a RÉELLEMENT stocké, pas seulement
+   * ce que le document a rendu.
+   */
+  readonly notificationPrefs: NotificationPreference;
   /**
    * LES CORPS DE `POST /api/v1/posts` REÇUS (#4966) — ce que le composer a
    * réellement ENVOYÉ. Le critère de fin porte sur la charge (audience, emoji,
@@ -340,6 +353,8 @@ export const passerelleDeBouchon = async (options?: {
   const filDeCommentaires = filDeCommentairesDeBouchon();
   const deLaStory = routesDeLaStory({ creanceDe });
   const filSocial = filSocialDeBouchon();
+  const notificationPrefs = await notificationPrefsDeBouchon();
+  const deLaRecherche = routesDeLaRecherche(creanceDe);
   const duCompte = routesDuCompte({
     creanceDe,
     lecteurSansRien: options?.lecteurSansRien ?? false,
@@ -352,6 +367,7 @@ export const passerelleDeBouchon = async (options?: {
     boite,
     filDeCommentaires,
     filSocial,
+    notificationPrefs,
   });
   const carnet = carnetDeBouchon(lien);
   const duCarnet = routesDuCarnet(
@@ -438,6 +454,10 @@ export const passerelleDeBouchon = async (options?: {
     // absorbe `/api/v1/links/:key/members` (la jonction), `duCarnet` le
     // reste de `/api/v1/links` (`GET`, `POST`, `PATCH /:linkId`).
     if (await duCarnet({ requete, url, corps: octets, json })) return;
+    // La RECHERCHE, avant `/api/v1/conversations` et `/api/v1/directory/`
+    // nues : Fastify distingue ces routes par leur chemin complet, et un
+    // bouchon qui teste des préfixes ordonne du plus PRÉCIS au plus général.
+    if (deLaRecherche({ requete, url, json })) return;
     if (duCompte({ requete, url, corps: octets, json })) return;
 
     json({ success: true, data: { clickId: 'clic-1' } });
@@ -473,6 +493,7 @@ export const passerelleDeBouchon = async (options?: {
     boite,
     filDeCommentaires,
     filSocial,
+    notificationPrefs,
     publicationsRecues,
     placesActives,
     sessionsRevoquees,

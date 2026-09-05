@@ -28529,3 +28529,85 @@ navigateur atteint — deux questions, un seul garde.
    serait alors ignorée sans qu'aucun témoin ne rougisse.
 4. « Le dépôt dit X » n'est pas « le conteneur qui tourne a X ». Quand le symptôme contredit le
    compose, soupçonner l'environnement DÉPLOYÉ — et rendre le CODE incapable de cacher l'écart.
+
+## Leçon 524 — Un agent lancé sans relever ce que le DISTANT a déjà livré refait le travail d'une autre session
+
+Constat du 2026-09-05 (correction porteur) : l'agent de comptage de #4392 a
+refait un inventaire que le commit `c2b6d22eb4` — livré par une autre session,
+déjà sur `dev` — avait accompli ; seule la décision produit restait ouverte.
+Dans un dépôt où plusieurs sessions livrent EN PARALLÈLE sur `dev`, l'état
+d'une tâche n'est ni dans ma conversation ni dans le titre de l'issue : il est
+dans `git log` récent des fichiers visés et dans les COMMENTAIRES de l'issue.
+
+1. Avant de lancer un agent sur une issue : `gh issue view N --comments | tail`
+   et `git log --oneline -5 -- <fichiers visés>` — un commit récent d'une autre
+   session sur ces fichiers signifie que le travail est peut-être déjà fait,
+   ou en cours ailleurs.
+2. Le brief de l'agent inclut ce relevé (« le commit X a déjà fait Y — vérifie
+   et complète, ne refais pas »).
+3. Et symétriquement : committer et pousser RÉGULIÈREMENT (pas seulement au
+   gate final) pour que les autres sessions voient NOTRE travail — un WIP
+   long dans l'arbre partagé bloque les merges de `dev`, s'expose à
+   l'écrasement (leçon du matin), et invite les sessions distantes à refaire
+   ce qu'on tient. Un point d'étape committé avec un message honnête vaut
+   mieux qu'un arbre divergent.
+
+## Leçon 525 — Trois décisions justes prises séparément forment une incohérence qui n'a aucun site où rougir
+
+Constat du 2026-09-05 (signalement porteur : « Je ne comprends pas les scènes
+muettes en pause dans le feed ! », puis « repartage ou non, les scènes sont
+comme les vidéos »).
+
+Le fil social rendait le MÊME objet — un canvas 9:16 — sous **trois politiques
+de lecture opposées** :
+
+| surface | comportement | décidé par |
+|---|---|---|
+| réel natif, repost de réel | autoplay muet, élu par le viewport, coupé pendant un appel | la feature RF2 |
+| scène composée d'un post | **figée**, avec une étiquette « scène · muette, en pause » | revue Fable n°25, « zéro AVPlayer/décodage actif ici » |
+| story repartagée | **jouait en permanence**, sans élection ni call-awareness | l'embed hérité, `isPaused` laissé à son défaut |
+
+**Chacune est défendable prise seule.** Le gel visait un objectif de
+performance réel ; l'élection aussi ; l'embed hérité était antérieur aux deux.
+Aucun fichier n'était faux, aucune revue n'avait tort, aucun test ne pouvait
+tomber — **un test interroge un site, et le défaut n'était dans aucun site.**
+
+Ce qui l'a rendu visible n'est pas une garde mais un ŒIL : celui du porteur,
+qui voit les trois surfaces dans le même écran là où chaque commit n'en voyait
+qu'une.
+
+1. **Un défaut de COHÉRENCE se mesure entre les sites, jamais dans un site.**
+   La garde qui l'attrape énumère les surfaces d'une même famille et affirme la
+   propriété commune — ici `FeedSceneCoherenceGuardTests` : « toute surface qui
+   monte une scène rapporte sa frame », « aucune ne joue inconditionnellement ».
+   Une garde par fichier n'aurait jamais pu la dire.
+
+2. **Un correctif de performance qui ne s'applique qu'à la surface qu'il
+   corrige peut DÉGRADER le total.** Le gel évitait un décodage sur la carte de
+   post pendant que la story repartagée d'à côté en lançait autant qu'il y avait
+   de cellules visibles. L'élection unique — celle qu'on croyait plus coûteuse —
+   plafonne à UN. Avant de défendre une optimisation locale, compter ce que font
+   les VOISINS de la même famille.
+
+3. **Une étiquette qui explique un état est un aveu.** « scène · muette, en
+   pause » avait été posée sur un raisonnement juste (« un état gardé mais muet
+   se lit comme une panne ») — mais elle décrivait l'état de la MACHINE, pas
+   l'option du lecteur, et c'est précisément ce qu'a signalé le porteur. Quand
+   une surface a besoin d'un mot pour ne pas passer pour cassée, c'est la
+   surface qu'il faut changer, pas le mot.
+
+4. **Le témoin d'un renversement se réécrit dans le même commit, et son jumeau
+   survit souvent intact.** `test_isPlaying_isConstantFalse_neverToggled` est
+   devenu `..._isDrivenByTheViewportElection_neverFrozen` ; mais son voisin
+   « aucun `@State` de lecture local » n'a pas bougé — et il est devenu PLUS
+   juste, parce que la carte ne fabrique toujours pas cet état, elle le reçoit.
+   Distinguer, dans une garde qu'on renverse, ce qui portait la DÉCISION de ce
+   qui portait la STRUCTURE.
+
+5. **Corollaire mesuré le même jour : une élection tenue et servie à personne
+   ne se voit nulle part.** `RootViewComponents` agrégeait les frames, élisait
+   une surface, et ne remettait le coordinateur à AUCUNE carte standard — donc
+   un repost de réel y restait sur son poster figé pendant que le fil voisin le
+   jouait. Le mécanisme était complet, câblé, testé ; il manquait un argument
+   dans un appel. Après avoir branché une valeur, compter les HÔTES qui la
+   servent, pas les sites qui la produisent.

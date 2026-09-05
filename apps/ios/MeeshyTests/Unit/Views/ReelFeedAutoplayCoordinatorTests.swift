@@ -9,6 +9,13 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         ReelFrame(id: id, midY: midY, height: 400, kind: .video)
     }
 
+    /// Une surface de SCÈNE (canvas v3 d'un post, story repartagée) rapportée
+    /// au coordinateur. Même forme qu'un réel : c'est le point de la directive
+    /// porteur du 2026-09-05 — le fil n'a qu'UNE règle de lecture.
+    private func scene(_ id: String, midY: CGFloat) -> ReelFrame {
+        ReelFrame(id: id, midY: midY, height: 400, kind: .scene)
+    }
+
     /// SUT without the default `CallManager` publisher (deterministic tests must
     /// not touch the singleton). Pass an explicit publisher where needed.
     private func makeSUT(
@@ -140,6 +147,71 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         XCTAssertFalse(nativeActive)
         XCTAssertFalse(nativeActive && repostActive,
                        "Two surfaces must never both bind the single shared player")
+    }
+
+    // MARK: - Les SCÈNES entrent dans l'élection (directive porteur 2026-09-05)
+
+    /// **« Repartage ou non, les scènes sont comme les vidéos. »** Une scène
+    /// (canvas v3 d'un post, ou story repartagée) concourt à l'élection du
+    /// viewport au MÊME titre qu'un réel vidéo : `mostCenteredReel` n'a jamais
+    /// regardé `kind`, mais aucune surface de scène ne RAPPORTAIT sa frame —
+    /// la carte de post restait figée par `isPlaying: .constant(false)` et
+    /// l'embed de story jouait en permanence, sans élection ni call-awareness.
+    /// Deux politiques opposées pour le MÊME objet dans le MÊME fil.
+    func test_election_admitsScenes_likeVideos() async {
+        let sut = makeSUT()
+        sut.update(frames: [scene("story-repost", midY: 100),
+                            frame("reel", midY: 700)],
+                   viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "story-repost")
+        XCTAssertEqual(sut.activeReelId, "story-repost",
+                       "Une scène plus centrée qu'un réel doit gagner l'élection — le kind " +
+                       "ne hiérarchise rien, seule la distance au centre du viewport décide.")
+    }
+
+    /// **Une seule surface joue, scènes et réels confondus.** C'est la raison
+    /// d'être de l'élection unique : le moteur partagé (`SharedAVPlayerManager`)
+    /// n'a qu'un porteur, et deux scènes qui jouent ensemble se disputeraient la
+    /// session audio exactement comme deux réels.
+    func test_election_scenesAndReels_exactlyOneSurfaceActive() async {
+        let sut = makeSUT()
+        sut.update(frames: [scene("scene-a", midY: 300),
+                            scene("scene-b", midY: 420),
+                            frame("reel-c", midY: 900)],
+                   viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "scene-b")
+        XCTAssertEqual(sut.activeReelId, "scene-b",
+                       "Le centre du viewport est 400 : `scene-b` (420) est la plus proche.")
+    }
+
+    /// **Une scène quittée par le viewport se PAUSE.** Le pendant de l'élection :
+    /// sans cette libération, une scène élue resterait active en mémoire après
+    /// être sortie de l'écran — la rétention que la dimension 3 interdit.
+    func test_election_sceneScrolledOut_releasesTheSurface() async {
+        let sut = makeSUT()
+        sut.update(frames: [scene("s", midY: 400)], viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "s")
+        XCTAssertEqual(sut.activeReelId, "s")
+
+        sut.update(frames: [scene("s", midY: 3_000)], viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: nil)
+        XCTAssertNil(sut.activeReelId,
+                     "Hors du viewport, la scène n'est plus élue — donc plus jouée.")
+    }
+
+    /// **Une scène se tait pendant un appel, comme un réel.** La session audio
+    /// appartient à l'appel ; une scène qui continuerait de jouer serait
+    /// exactement le défaut que la call-awareness (C1) corrige côté réels.
+    func test_election_sceneDuringCall_isSuspended() async {
+        var callActive = false
+        let sut = makeSUT(isCallActive: { callActive })
+        sut.update(frames: [scene("s", midY: 400)], viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: "s")
+
+        callActive = true
+        sut.update(frames: [scene("s", midY: 400)], viewportMinY: 0, viewportMaxY: 800)
+        XCTAssertNil(sut.activeReelId,
+                     "Un appel actif vide l'élection sans débounce — une scène n'y échappe pas.")
     }
 }
 

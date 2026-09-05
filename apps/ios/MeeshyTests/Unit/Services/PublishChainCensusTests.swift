@@ -15,10 +15,11 @@ import MeeshySDK
 ///
 /// Les deux frappent le MÊME schéma serveur (`CreatePostSchema` — il n'y a
 /// qu'un contrat, pas deux). Un champ présent dans l'un et absent de l'autre
-/// n'est donc jamais une différence de contrat : c'est **une perte**, et elle
-/// est silencieuse dans les deux sens que le dépôt a déjà payés — ni le
-/// compilateur, ni le schéma, ni le serveur ne la signalent, puisque le serveur
-/// publie sans le champ.
+/// n'est donc jamais une différence de contrat. C'est **soit une PERTE** —
+/// silencieuse, le dépôt l'a payée sept fois : ni le compilateur, ni le schéma,
+/// ni le serveur ne la signalent, puisque le serveur publie sans le champ —
+/// **soit une CAPACITÉ qu'aucune porte du meuble n'offre**. Les deux se
+/// corrigent différemment, et `absentsDeLaVoieDurable` porte la distinction.
 ///
 /// `CreatePostBody` porte lui-même le diagnostic :
 ///
@@ -90,28 +91,41 @@ final class PublishChainCensusTests: XCTestCase {
     /// client, documenté sur `OutboxDispatcher`. Il n'entre donc pas ici.
     private static let alias: [String: String] = [:]
 
-    /// **Les champs qui TOMBENT aujourd'hui — et c'est un DÉFAUT, pas une
-    /// exemption.**
+    /// **Les champs du contrat que la voie DURABLE n'atteint pas** — et ils n'y
+    /// manquent pas pour la même raison, ce qui change le correctif de chacun.
     ///
-    /// La distinction est tout ce qui sépare cette table d'un trou documenté.
-    /// Une EXEMPTION dit « ce champ n'a pas à traverser, voici pourquoi » ; ces
-    /// deux-là n'ont aucune raison de ne pas traverser — le composer les PRODUIT
-    /// (`MediaAccessibilityStore` pour l'un, le volet son pour l'autre) et la
-    /// voie EN LIGNE les envoie.
+    /// **Réécrit le 2026-09-05, après `a372e2484e`.** Cette table s'appelait
+    /// `sansTransportNiProducteur`, et le nom est devenu FAUX pour la moitié de
+    /// son contenu le jour où le meuble a gagné une porte de texte alternatif.
+    /// Le verdict n'a pas changé ; sa RAISON, si.
     ///
-    /// **Ce que leur chute coûte, pour `mediaAlt` :** un post publié par la file
-    /// durable perd le TEXTE ALTERNATIF d'accessibilité de chacun de ses médias.
-    /// L'auteur l'a écrit, l'écran le lui a montré, la publication a réussi — et
-    /// pour une personne qui navigue au lecteur d'écran, le post est muet. C'est
-    /// la dimension 5 perdue par un maillon de TRANSPORT, ce qui est le pire
-    /// endroit : rien dans l'interface ne dit que le travail a été jeté.
+    /// | champ | producteur atteignable depuis le meuble | pourquoi il n'atteint pas la file |
+    /// |---|---|---|
+    /// | `mediaAlt` | **oui désormais** — `MediaEditTool.altText` (`ComposerObjectEditorRail`), monté par `MeeshyComposerHost+Portals` | il alimente `publishStoryInBackground` → **`PostService.createCanvasPost(mediaAlt:)`**, le publieur DIRECT ; et `ComposerDocumentDraft` (16 champs) n'a aucun champ d'alternative, donc la voie durable n'a rien à transporter |
+    /// | `allowSoundExtraction` | non — `SoundExtractionToggle`, monté par `ComposerToolPanelHost` → `ComposerBottomBand`, **l'ATELIER seul** | aucune porte ne l'écrit sur cette voie |
     ///
-    /// La liste est ÉPINGLÉE plutôt qu'exemptée : aucun champ NEUF ne peut la
-    /// rejoindre en silence, et en retirer un exige de passer ici — c'est
-    /// l'interruption qui fait le travail, pas le nombre.
+    /// > **Une justification de garde se périme comme un compte.** L'ancienne
+    /// > disait « rien ne peut écrire ces deux champs » ; c'est resté vrai pour
+    /// > `allowSoundExtraction` et c'est devenu faux pour `mediaAlt` sans que ce
+    /// > fichier bouge — le verdict identique masquait le changement. Ce qui a
+    /// > sauvé la table n'est pas un témoin : c'est d'avoir relu le commit
+    /// > voisin qui ouvrait la porte.
     ///
-    /// Suivi : #5196.
-    private static let tombentSurLaVoieDurable: Set<String> = [
+    /// **`mediaAlt` est donc à UN pas d'être une PERTE.** Il a maintenant un
+    /// producteur et un transport — sur l'autre voie. Le jour où un post du
+    /// meuble portant des médias part par la file en portant une description,
+    /// le champ tombera, et ce sera silencieux comme les sept précédents.
+    ///
+    /// **Ce n'est pas une exemption pour autant.** Une exemption dirait « ce
+    /// champ n'a pas à traverser » ; celui-ci l'aura à traverser dès que la
+    /// voie durable saura porter une alternative — et `mediaAlt` porte alors le
+    /// TEXTE ALTERNATIF d'accessibilité de chaque média, la dimension 5. La
+    /// liste est ÉPINGLÉE : aucun champ NEUF ne peut la rejoindre en silence, et
+    /// en retirer un exige de passer ici. C'est l'interruption qui fait le
+    /// travail, pas le nombre.
+    ///
+    /// Suivi : #5196 · le recensement face au CONTRAT : #5239.
+    private static let absentsDeLaVoieDurable: Set<String> = [
         "mediaAlt",
         "allowSoundExtraction",
     ]
@@ -125,46 +139,53 @@ final class PublishChainCensusTests: XCTestCase {
 
     // MARK: - Le témoin qui compte
 
-    /// **Aucun champ NEUF ne tombe entre les deux voies.**
+    /// **Aucun champ NEUF ne manque à la voie durable.**
     ///
     /// C'est le témoin qui aurait attrapé les sept pertes, et le seul qui puisse
     /// attraper la huitième : il ne connaît aucun champ en particulier.
-    func test_aucunChampNeuf_neTombeEntreLesDeuxVoies() {
+    func test_aucunChampNeuf_neManqueALaVoieDurable() {
         let nouveaux = manquantsSurLaVoieDurable()
-            .subtracting(Self.tombentSurLaVoieDurable)
+            .subtracting(Self.absentsDeLaVoieDurable)
 
         XCTAssertTrue(
             nouveaux.isEmpty,
             """
             \(nouveaux.sorted().joined(separator: ", ")) : ce champ existe sur la voie EN LIGNE \
             (`CreatePostRequest`) et pas sur la voie DURABLE (`CreatePostBody`) — celle que prend \
-            TOUT post du meuble.
+            TOUT post du meuble. Les deux frappent le MÊME schéma serveur : ce n'est donc pas une \
+            différence de contrat.
 
-            Les deux frappent le MÊME schéma serveur : ce n'est donc pas une différence de \
-            contrat, c'est une PERTE, et elle est silencieuse. Le compilateur ne la réclame pas, \
-            le schéma la tolère, le serveur publie sans elle.
+            DEUX questions, dans cet ordre, et elles n'ont pas le même correctif :
 
-            Porter le champ sur les quatre maillons de la voie durable — `PublishIntent` → \
-            `OfflineQueue.enqueuePostMedia` → `CreatePostPayload` → `CreatePostBody` — ou, si le \
-            champ n'a réellement pas à traverser, l'inscrire dans `tombentSurLaVoieDurable` AVEC \
-            sa raison. Une exemption est une DÉCISION, jamais un constat.
+            1. Un site atteignable depuis le meuble peut-il ÉCRIRE ce champ ? Si non, le porter \
+               seul fabriquerait un champ INERTE — il faut d'abord une PORTE. Inscris-le alors \
+               dans `absentsDeLaVoieDurable` avec son producteur et l'endroit où il est monté.
+            2. Si oui, c'est une PERTE, et elle est silencieuse : ni le compilateur, ni le schéma, \
+               ni le serveur ne la signalent. Porte le champ sur les quatre maillons — \
+               `PublishIntent` → `OfflineQueue.enqueuePostMedia` → `CreatePostPayload` → \
+               `CreatePostBody`.
+
+            Une exemption est une DÉCISION, jamais un constat.
             """
         )
     }
 
-    /// **La liste des champs tombés est EXACTE.**
+    /// **La liste des champs ABSENTS de la voie durable est EXACTE.**
     ///
     /// Le pendant du témoin ci-dessus, et il tombe dans l'autre sens : réparer
-    /// un champ rend ce témoin rouge, ce qui oblige à venir retirer son nom.
+    /// un champ rend ce témoin rouge, ce qui oblige à venir retirer son nom —
+    /// et donc à relire la RAISON inscrite en face, qui est ce qui se périme
+    /// le plus vite dans cette table.
     /// C'est voulu — une liste de défauts qu'on peut vider sans la relire
     /// redevient un inventaire à tenir à la main, exactement ce que ce fichier
     /// existe pour supprimer.
-    func test_laListeDesChampsTombes_estExacte() {
+    func test_laListeDesAbsentsDeLaVoieDurable_estExacte() {
         XCTAssertEqual(
-            manquantsSurLaVoieDurable(), Self.tombentSurLaVoieDurable,
+            manquantsSurLaVoieDurable(), Self.absentsDeLaVoieDurable,
             """
-            La liste épinglée ne décrit plus la réalité. Si un champ a été RÉPARÉ, retirer son nom \
-            de `tombentSurLaVoieDurable` (et fermer sa part de #5196). S'il a été AJOUTÉ, lire le \
+            La liste épinglée ne décrit plus la réalité. Si un champ a été RÉPARÉ — porte OUVERTE \
+            et transport posé —, retirer son nom de `absentsDeLaVoieDurable` (et fermer sa part \
+            de #5196). S'il a été AJOUTÉ, lire le \
             message du témoin voisin avant d'y toucher.
             """
         )

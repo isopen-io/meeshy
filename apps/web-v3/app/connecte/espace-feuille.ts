@@ -87,4 +87,6 @@ dialog.espace .rangee .dit{flex:1;min-width:0}
 dialog.espace .rangee .quoi{display:block;font-weight:var(--font-weight-medium)}
 dialog.espace .rangee .sous{display:block;margin-top:var(--space-1);font-size:var(--text-sm);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 dialog.espace .rangee > svg{flex:none;width:var(--glyph);height:var(--glyph);color:var(--color-text-subtle)}
+dialog.espace .sortie{margin-top:var(--space-4)}
+dialog.espace .sortie button{width:100%;min-height:var(--action-height-secondary);border-radius:var(--radius-pill);border:var(--stroke-strong) solid var(--color-danger);background:var(--color-tint-danger);color:var(--color-danger);font:inherit;font-weight:var(--font-weight-medium);cursor:pointer}
 `);

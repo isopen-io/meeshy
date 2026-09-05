@@ -85,6 +85,22 @@ extension ComposerObjectEditorView {
                 section(ComposerObjectEditorCopy.mediaActions, .media(.actions)) {
                     mediaActionRow(media)
                 }
+                // **⌾ DÉCRIRE** (#4756) — l'atome du SDK, tel quel. Il porte
+                // déjà son étiquette, son invite et son indice VoiceOver dans
+                // les sept langues du catalogue `.module` ; en réécrire un ici
+                // aurait fait diverger deux champs au premier réglage, ce que
+                // le composer a déjà payé sur les légendes.
+                //
+                // La section ne se peint que si le meuble a remis son binding :
+                // sans lui, le champ n'écrirait nulle part — un contrôle sans
+                // effet, que la loi 4 bannit.
+                if let alt = mediaAltText {
+                    section(ComposerObjectEditorCopy.media(.altText), .media(.altText)) {
+                        MediaAltTextField(kind: .alt, text: alt.wrappedValue) { saisi in
+                            alt.wrappedValue = saisi
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 28)

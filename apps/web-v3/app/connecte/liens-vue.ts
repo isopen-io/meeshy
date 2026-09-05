@@ -1,5 +1,6 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
+import { adresseDuFil } from '@/lib/api/adresses-du-fil';
 import type { LienDePartage } from '@/lib/api/compte';
 import { FERMETURE, GLYPHE_LIEN, LIENS, NOUVEAU_LIEN, type Echeance } from '@/lib/contenu/liens';
 
@@ -201,7 +202,7 @@ const ligne = (lien: LienDePartage): string => {
   const interieur =
     lien.conversation === null
       ? `<span class="${classe}">${dedans(lien)}</span>`
-      : `<a class="${classe}" href="/chats/${echappe(encodeURIComponent(lien.conversation))}">${dedans(lien)}</a>`;
+      : `<a class="${classe}" href="${echappe(adresseDuFil(lien.conversation))}">${dedans(lien)}</a>`;
 
   return (
     `<li class="ligne-lien${lien.actif ? '' : ' ferme'}" data-lien="${echappe(lien.identifiant)}">` +

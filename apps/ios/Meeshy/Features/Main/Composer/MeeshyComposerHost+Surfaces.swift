@@ -154,8 +154,22 @@ extension MeeshyComposerHost {
         // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de
         // cadrage), exactement comme il le fait déjà devant une band. `0` quand
         // la saisie est fermée : la scène retrouve sa géométrie de repos.
+        // **La réserve vaut pour les DEUX zones d'écriture** (directive porteur
+        // 2026-09-05). Elle ne testait que `editsSceneDescription` : en mode
+        // CONTENU la scène ne se rétractait donc pas du tout, et la zone lui
+        // passait par-dessus — alors que la directive demande l'inverse, un
+        // retrait PLUS grand pour le contenu que pour la description.
+        //
+        // > Les deux zones écrivaient déjà la même hauteur mesurée
+        // > (`sceneDescriptionEditorHeight`, posée par leurs deux
+        // > `onHeightChange`). Seule la CONDITION qui la sert en avait oublié
+        // > une — le défaut ne se voyait donc ni dans la mesure, ni dans la
+        // > zone, mais dans le prédicat entre les deux.
+        //
+        // `textEditingZones` garantit qu'elles sont exclusives : la hauteur
+        // servie est toujours celle de la zone montée.
         .storyComposerCanvasBottomReservation(
-            editsSceneDescription ? sceneDescriptionEditorHeight : 0
+            (editsSceneDescription || editsPostContent) ? sceneDescriptionEditorHeight : 0
         )
     }
 
@@ -898,7 +912,14 @@ extension MeeshyComposerHost {
             // est en train de remplir. Une phrase plus spécifique demanderait
             // une clé neuve et ses sept traductions ; elle se fera si le
             // porteur la demande, mais un libellé FAUX ne pouvait pas rester.
-            validationLabel: ComposerDescriptionCopy.doneShort
+            validationLabel: ComposerDescriptionCopy.doneShort,
+            // **Le corps du post rétrécit PLUS la scène que la légende**
+            // (directive porteur 2026-09-05). Dix lignes contre six : un corps
+            // de publication se relit en entier pendant qu'on l'écrit, une
+            // légende de média tient en deux phrases. La différence passe par
+            // ce qu'occupe RÉELLEMENT la zone — jamais par un supplément en
+            // points chez l'hôte, qui décollerait la scène de la zone.
+            collapsedLineLimit: 10
         )
     }
 

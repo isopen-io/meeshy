@@ -4,10 +4,13 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import java.time.Instant
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.entity.ConversationEntity
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
@@ -22,6 +25,7 @@ import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
+import me.meeshy.sdk.model.totalUnreadCount
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
@@ -411,6 +415,48 @@ private class RecordingParticipantsApi(
     }
 }
 
+/**
+ * Delegates every call to a real Room-backed [ConversationDao], counting method
+ * invocations — the BEHAVIORAL proof (#5190) that
+ * [ConversationRepository.totalUnreadCount] and
+ * [ConversationRepository.recentCachedConversations] never fall back to
+ * [observeAll] (which decodes EVERY cached row) even though [observeAll],
+ * [totalUnreadCount] and [recentByUpdatedAt] all read the SAME table — a grep
+ * for "observeAll" proves nothing about which method a given CALL actually
+ * reaches, only that the symbol exists somewhere in the file.
+ */
+private class CountingConversationDao(private val delegate: ConversationDao) : ConversationDao {
+    var observeAllCalls: Int = 0
+        private set
+    var totalUnreadCountCalls: Int = 0
+        private set
+    var recentByUpdatedAtCalls: Int = 0
+        private set
+
+    override fun observeAll(): Flow<List<ConversationEntity>> {
+        observeAllCalls++
+        return delegate.observeAll()
+    }
+
+    override suspend fun recentByUpdatedAt(limit: Int): List<ConversationEntity> {
+        recentByUpdatedAtCalls++
+        return delegate.recentByUpdatedAt(limit)
+    }
+
+    override fun observeById(id: String): Flow<ConversationEntity?> = delegate.observeById(id)
+    override suspend fun find(id: String): ConversationEntity? = delegate.find(id)
+    override suspend fun upsertAll(rows: List<ConversationEntity>) = delegate.upsertAll(rows)
+    override suspend fun deleteNotIn(ids: List<String>) = delegate.deleteNotIn(ids)
+    override suspend fun allIds(): List<String> = delegate.allIds()
+    override suspend fun deleteByIds(ids: List<String>) = delegate.deleteByIds(ids)
+    override suspend fun clear() = delegate.clear()
+
+    override fun totalUnreadCount(): Flow<Int> {
+        totalUnreadCountCalls++
+        return delegate.totalUnreadCount()
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
 class ConversationRepositoryTest {
 
@@ -437,6 +483,55 @@ class ConversationRepositoryTest {
             db.syncMetaDao(),
             OutboxRepository(db, db.outboxDao()),
         )
+
+    /**
+     * #5190 — behavioral proof, not a grep: [ConversationRepository.
+     * totalUnreadCount] (the SQL-`SUM` total every widget/dashboard now
+     * converges on) and [ConversationRepository.recentCachedConversations]
+     * (the bounded read the recent/quick-reply/favorites/shortcuts widgets now
+     * use) never reach [ConversationDao.observeAll] — the full-table decode —
+     * even though all three read the same `conversations` table. The counter
+     * is exercised on the OLD path too ([ConversationRepository.
+     * cachedConversations]) so the assertion of "never called" is backed by a
+     * counter proven able to increment, not one that would read zero no
+     * matter what ran.
+     */
+    @Test
+    fun `totalUnreadCount and recentCachedConversations never decode the whole table`() = runTest {
+        val countingDao = CountingConversationDao(db.conversationDao())
+        val repo = ConversationRepository(
+            FakeConversationApi(ApiResponse(success = false, error = "should never be called")),
+            db,
+            countingDao,
+            db.syncMetaDao(),
+            OutboxRepository(db, db.outboxDao()),
+        )
+        db.conversationDao().upsertAll(
+            (0 until 10).map { i ->
+                ConversationEntity(
+                    id = "c$i",
+                    payload = me.meeshy.sdk.net.MeeshyApi.json.encodeToString(
+                        ApiConversation(id = "c$i", unreadCount = i),
+                    ),
+                    updatedAt = i.toLong(),
+                    cachedAt = i.toLong(),
+                    unreadCount = i,
+                )
+            },
+        )
+
+        repo.totalUnreadCount().first()
+        repo.recentCachedConversations(limit = 5)
+
+        assertThat(countingDao.observeAllCalls).isEqualTo(0)
+        assertThat(countingDao.totalUnreadCountCalls).isEqualTo(1)
+        assertThat(countingDao.recentByUpdatedAtCalls).isEqualTo(1)
+
+        // The old, full-decode path DOES reach observeAll — proving the counter
+        // above would have caught a regression rather than being permanently zero.
+        repo.cachedConversations().first()
+        assertThat(countingDao.observeAllCalls).isEqualTo(1)
+    }
 
     @Test
     fun `markReadOptimistic zeroes the cached unread count and queues a READ_RECEIPT`() = runTest {
@@ -985,6 +1080,35 @@ class ConversationRepositoryTest {
         repo.refresh()
 
         assertThat(repo.cachedConversations().first().single().unreadCount).isEqualTo(9)
+    }
+
+    /**
+     * #5190 — equivalence witness. [ConversationRepository.totalUnreadCount] is
+     * a SQL `SUM` over the denormalized `unreadCount` column
+     * ([me.meeshy.core.database.dao.ConversationDao.totalUnreadCount]); the OLD
+     * shape every widget/dashboard used before this fix — decode every cached
+     * row and reduce with [me.meeshy.sdk.model.totalUnreadCount] — must render
+     * the EXACT same value on a mixed set (some read, some unread, one at
+     * zero). The total must also follow a LOCAL, optimistic change
+     * ([ConversationRepository.markReadOptimistic]) without a fresh full sync,
+     * proving the column — not just the payload — is kept in lockstep.
+     */
+    @Test
+    fun `totalUnreadCount matches the decoded sum on a mixed set and updates when unreadCount changes`() = runTest {
+        val seeded = listOf(
+            ApiConversation(id = "c1", title = "Team", unreadCount = 3),
+            ApiConversation(id = "c2", title = "Family", unreadCount = 0),
+            ApiConversation(id = "c3", title = "Friends", unreadCount = 5),
+        )
+        val repo = repository(FakeConversationApi(ApiResponse(success = true, data = seeded)))
+        repo.refresh()
+
+        assertThat(repo.totalUnreadCount().first()).isEqualTo(seeded.totalUnreadCount())
+        assertThat(repo.totalUnreadCount().first()).isEqualTo(8)
+
+        repo.markReadOptimistic("c1")
+
+        assertThat(repo.totalUnreadCount().first()).isEqualTo(5)
     }
 
     @Test

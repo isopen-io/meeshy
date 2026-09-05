@@ -2,8 +2,12 @@ import XCTest
 
 /// **#4048 — la planche parle le modèle, ou elle ne décrit rien de nommable.**
 ///
-/// Le vocabulaire est arrêté depuis le 2026-08-27 :
-/// `MeeshyPublication` → `MeeshySlide` → `MeeshyScene` → `MeeshyObject`. Il
+/// Le vocabulaire est arrêté depuis le 2026-08-27, et son dernier nom a été
+/// ARBITRÉ le 2026-08-31 :
+/// `MeeshyPublication` → `MeeshySlide` → `MeeshyScene` → **`MeeshySceneObject`**
+/// (« le nom dit OÙ l'objet vit » — `apps/ios/CLAUDE.md` § 2 ter ; un « objet
+/// Meeshy » sans qualificatif aurait aussi bien désigné une publication ou une
+/// slide). Il
 /// était DÉCLARÉ dans l'en-tête de la planche et employé dans **aucune** de ses
 /// vingt-huit règles — mesuré le 2026-08-28, y compris sur les huit paragraphes
 /// écrits ce jour-là.
@@ -18,11 +22,23 @@ import XCTest
 final class PlancheVocabularyGuardTests: XCTestCase {
 
     /// Les quatre noms du CONTENU (modèle § 1).
-    private let modele = try! NSRegularExpression(pattern: "Meeshy(Object|Scene|Slide|Publication)")
+    ///
+    /// `Scene` couvre `MeeshySceneObject` — c'est un préfixe, et l'alternance n'a
+    /// pas à le répéter. `Object` en a été RETIRÉ : le laisser ferait passer pour
+    /// conforme une règle écrite au nom d'avant l'arbitrage, que
+    /// `test_laPlanche_nEmploiePlusLeNomAbandonne` interdit désormais.
+    private let modele = try! NSRegularExpression(pattern: "Meeshy(Scene|Slide|Publication)")
 
     /// Les pièces du CHROME (planche, « Ce que les quatre noms NE couvrent pas »).
+    ///
+    /// **Élargi le 2026-09-05.** Le motif ignorait `couloir`, `porte`,
+    /// `rangée canonique` et `zone` — tout le vocabulaire ajouté par les
+    /// directives porteur du 2026-08-31 au 09-03 (la géographie des rails, les
+    /// trois zones du plateau, la quatrième zone de constat). Une règle écrite
+    /// avec ces mots-là était donc comptée MUETTE, ce qui aurait fini par faire
+    /// retirer le mot plutôt que corriger le motif.
     private let chrome = try! NSRegularExpression(
-        pattern: "\\b(socle|rail|éventail|plateau|barre haute|rangée d.outils|inspecteur|amorces?|scène incrustée|surface)\\b",
+        pattern: "\\b(socle|rail|éventail|plateau|barre haute|rangée d.outils|rangée canonique|ligne canonique|couloir|porte|zone|inspecteur|amorces?|scène incrustée|surface)\\b",
         options: [.caseInsensitive]
     )
 
@@ -63,12 +79,44 @@ final class PlancheVocabularyGuardTests: XCTestCase {
     /// la garde ci-dessus verte : zéro règle, zéro muette.
     func test_laPlanche_nommeLesQuatreNomsDuModele() throws {
         let texte = try plancheSource()
-        for nom in ["MeeshyPublication", "MeeshySlide", "MeeshyScene", "MeeshyObject"] {
+        for nom in ["MeeshyPublication", "MeeshySlide", "MeeshyScene", "MeeshySceneObject"] {
             XCTAssertGreaterThanOrEqual(
                 occurrences(nom, dans: texte), 2,
                 "`\(nom)` doit être employé dans les RÈGLES, pas seulement déclaré une fois en en-tête — "
                     + "c'est exactement l'état que ce lot corrige."
             )
+        }
+    }
+
+    /// **La moitié NÉGATIVE — le nom abandonné ne revient pas.**
+    ///
+    /// Sans elle, le renommage du 2026-09-05 serait réversible en silence : la
+    /// moitié positive ci-dessus resterait verte tant que `MeeshySceneObject`
+    /// apparaît deux fois, même si trente règles reprenaient l'ancien nom.
+    ///
+    /// **La garde qui manquait interdisait le nom ARBITRÉ, pas l'abandonné.**
+    /// `test_laPlanche_nommeLesQuatreNomsDuModele` exigeait `MeeshyObject` — donc
+    /// porter la planche au nom que le porteur avait tranché le 2026-08-31
+    /// l'aurait rendue ROUGE. Une garde de vocabulaire peut empêcher l'adoption
+    /// du vocabulaire ; c'est ce qui a tenu 123 occurrences en place pendant
+    /// cinq jours.
+    ///
+    /// Le motif exclut `MeeshyObjectID` — un type RÉEL et sans rapport
+    /// (validation d'ObjectId MongoDB, `Utils/ObjectID.swift`). Un renommage
+    /// naïf l'aurait emporté et cassé la compilation.
+    func test_laPlanche_nEmploiePlusLeNomAbandonne() throws {
+        // Les DEUX fichiers. Le reste de cette garde lit le `.md`, dont la
+        // logique de paragraphes est markdown — mais `planche.md:271` déclare que
+        // **le HTML fait foi** et que le `.md` en est la transcription. Un nom qui
+        // revient revient d'abord dans la source.
+        let abandonne = try NSRegularExpression(pattern: "MeeshyObject(?!ID)")
+
+        for (fichier, texte) in [("planche-meeshy-composer.md", try plancheSource()),
+                                 ("planche-meeshy-composer.html", try plancheHTML())] {
+            let n = abandonne.numberOfMatches(
+                in: texte, range: NSRange(texte.startIndex..., in: texte))
+
+            XCTAssertEqual(n, 0, "`MeeshyObject` est réapparu \(n) fois dans \(fichier). Le porteur a arrêté `MeeshySceneObject` le 2026-08-31 — « le nom dit OÙ l'objet vit » —, et un « objet Meeshy » sans qualificatif désignerait aussi bien une publication ou une slide. Employer le nom arbitré ; si l'arbitrage a CHANGÉ, c'est ce témoin qu'on corrige en premier, pas la planche.")
         }
     }
 
@@ -86,6 +134,15 @@ final class PlancheVocabularyGuardTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("docs/product/planche-meeshy-composer.md")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func plancheHTML() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("docs/product/planche-meeshy-composer.html")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

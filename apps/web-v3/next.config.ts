@@ -150,6 +150,7 @@ const nextConfig: NextConfig = {
       './.rt/plein.js',
       './.rt/navigateur.js',
       './.rt/composer.js',
+      './.rt/prefs.js',
       './node_modules/socket.io-client/dist/socket.io.esm.min.js',
     ],
   },

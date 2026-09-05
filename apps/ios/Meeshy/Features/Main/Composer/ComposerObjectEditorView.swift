@@ -55,6 +55,15 @@ struct ComposerObjectEditorView: View {
     /// qui possède `editedObject`, et deux sources pour « quel objet est ouvert »
     /// divergeraient au premier tap.
     let onSelectObject: (String) -> Void
+    /// **Le texte alternatif du média ouvert** (#4756) — porté par le MEUBLE,
+    /// jamais par cet écran : c'est lui qui remet la charge d'accessibilité au
+    /// publieur, et un magasin local ici mourrait à la fermeture de l'éditeur,
+    /// exactement comme la légende avant #4890.
+    ///
+    /// Optionnel parce que l'écran s'ouvre aussi sur un TEXTE, un sticker ou une
+    /// pastille de lieu — familles qui n'ont pas d'alternative textuelle. `nil`
+    /// n'affiche pas la section : un champ inerte serait un contrôle sans effet.
+    var mediaAltText: Binding<String>? = nil
 
     /// **Ce qui est DÉPLIÉ, une section à la fois** (#4842). L'état est LOCAL
     /// à l'écran, et jamais celui que le ViewModel porte pour la rangée
@@ -987,6 +996,14 @@ nonisolated enum ComposerObjectEditorCopy {
         switch tool {
         case .trim:    return trim
         case .actions: return mediaActions
+        case .altText:
+            // « Décrire » plutôt que « Texte alternatif » : la rangée nomme le
+            // VERBE (loi 7), et c'est le champ lui-même qui porte l'étiquette
+            // technique — `MediaAltTextField` la rend déjà, dans le catalogue
+            // du SDK. Deux libellés pour un champ se liraient comme deux
+            // réglages.
+            return String(localized: "composer.object.editor.altText",
+                          defaultValue: "Décrire", bundle: .main)
         case .crop:
             return String(localized: "composer.object.editor.crop",
                           defaultValue: "Recadrer", bundle: .main)

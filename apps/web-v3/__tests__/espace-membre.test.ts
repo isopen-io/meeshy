@@ -29,8 +29,9 @@
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-import { RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
+import { ESPACE, RANGEES_DE_L_ESPACE } from '@/lib/contenu/espace';
 import { actionsFlottantes, feuilleDeLEspace, versLEspace } from '@/app/connecte/espace-vue';
+import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 
 const RACINE = join(__dirname, '..', 'app');
 
@@ -119,5 +120,37 @@ describe('la feuille se ferme sans un octet de JavaScript', () => {
     expect(versLEspace('/')).toBe('/?espace');
     expect(versLEspace('/chats')).toBe('/chats?espace');
     expect(actionsFlottantes('/chats')).toContain('href="/chats?espace"');
+  });
+});
+
+/**
+ * LE CONTRÔLE DE SORTIE (#5095) — un `<form method=post>` RÉEL, atteignable
+ * au clavier PAR CONSTRUCTION (un `<button>` natif, jamais un `<a>` ni un
+ * `div`), sur une cible de la charte, dans les deux thèmes.
+ */
+describe('la feuille sert le formulaire de sortie', () => {
+  const feuille = feuilleDeLEspace({ lecteur: null, hote: '/chats' });
+
+  it('un <form> POST vers /deconnexion, un <button> natif, un champ session vide', () => {
+    expect(feuille).toContain('<form class="sortie" method="post" action="/deconnexion">');
+    expect(feuille).toContain('<input type="hidden" name="session" value="" />');
+    expect(feuille).toContain(`<button type="submit">${ESPACE.deconnecter}</button>`);
+  });
+
+  it('le formulaire vient APRÈS les rangées, DANS le dialogue', () => {
+    const finDesRangees = feuille.indexOf('</ul>');
+    const debutDuFormulaire = feuille.indexOf('<form class="sortie"');
+    const finDuDialogue = feuille.indexOf('</dialog>');
+    expect(finDesRangees).toBeGreaterThan(-1);
+    expect(debutDuFormulaire).toBeGreaterThan(finDesRangees);
+    expect(debutDuFormulaire).toBeLessThan(finDuDialogue);
+  });
+
+  it('le bouton est une cible de la charte, sans couleur en dur', () => {
+    expect(FEUILLE_DE_L_ESPACE).toContain('.sortie button{');
+    expect(FEUILLE_DE_L_ESPACE).toContain('min-height:var(--action-height-secondary)');
+    expect(FEUILLE_DE_L_ESPACE).toContain('width:100%');
+    expect(FEUILLE_DE_L_ESPACE).not.toMatch(/\.sortie[^}]*#[0-9a-fA-F]{3,8}/);
+    expect(FEUILLE_DE_L_ESPACE).toContain('var(--color-danger)');
   });
 });

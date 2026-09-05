@@ -628,14 +628,14 @@
    "depend_de": [
     "notifs"
    ],
-   "critere_de_fin": "Test : les onze bascules envoient chacune sa mutation et sont relues du serveur après rechargement (onze allers-retours vérifiés — elles sont purement visuelles aujourd'hui) ; échec réseau ⇒ rollback VISIBLE, jamais un état affiché divergent du serveur ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "critere_de_fin": "Test : les treize bascules (la planche en dessine treize, DETAILS.notification lignes 750-776 — le compte de onze était un plancher daté avant la section APPELS ET SYSTÈME) envoient chacune sa mutation et sont relues du serveur après rechargement (treize allers-retours vérifiés par les témoins contre le bouchon, en boucle sur la table importée) ; échec réseau ⇒ rollback VISIBLE, jamais un état affiché divergent du serveur ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
    "dimensions_visees": [
     "Complétude",
     "Utilité",
     "Expérience utilisateur",
     "Maintenabilité"
    ],
-   "corps_issue": "**Contexte** — Onze bascules rendues sans effet : la loi « un contrôle existe s'il a un effet » est enfreinte onze fois sur un seul écran.\n\n**Preuve attendue** — Une mutation par bascule, un rollback visible, une relecture serveur qui prouve la persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; `cible/notifPrefs.png` ; `vues.json#notifPrefs`."
+   "corps_issue": "**Contexte** — Treize bascules rendues sans effet : la loi « un contrôle existe s'il a un effet » est enfreinte treize fois sur un seul écran.\n\n**Preuve attendue** — Une mutation par bascule, un rollback visible, une relecture serveur qui prouve la persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; `cible/notifPrefs.png` ; `vues.json#notifPrefs`."
   },
   {
    "ordre": 25,

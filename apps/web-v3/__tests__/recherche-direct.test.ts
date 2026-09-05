@@ -1,3 +1,4 @@
+import { conversation } from '@/lib/api/compte';
 import { documentDeLaRecherche, type EtatDeLaRecherche } from '@/app/connecte/recherche-vue';
 
 /**
@@ -11,11 +12,28 @@ import { documentDeLaRecherche, type EtatDeLaRecherche } from '@/app/connecte/re
 const ETAT = (attributs: Partial<EtatDeLaRecherche> = {}): EtatDeLaRecherche => ({
   requete: 'mar',
   conversations: [],
+  conversationsIndisponibles: false,
   personnes: [],
   encoreDesPersonnes: false,
+  personnesIndisponibles: false,
+  medias: [],
+  encoreDesMedias: false,
+  mediasIndisponibles: false,
+  liens: [],
+  encoreDesLiens: false,
+  liensIndisponibles: false,
   tempsReel: { module: '/__v3/rt/recherche.abcd.js' },
   ...attributs,
 });
+
+/** Un état GARNI des quatre groupes — pour prouver qu'ils vivent tous dans `#resultats`. */
+const ETAT_GARNI = (): EtatDeLaRecherche =>
+  ETAT({
+    conversations: [conversation({ id: 'c1', title: 'Équipe Lagos', type: 'group', memberCount: 12 })!],
+    personnes: [{ id: 'u-sara', nom: 'Sara Kim', pseudonyme: 'sarakim' }],
+    medias: [{ id: 'am1', messageId: 'r1', conversationId: 'fil-riche', nom: 'tableau.jpg', genre: 'image' }],
+    liens: [{ identifiant: 'mshy_demo', nom: 'Démo septembre', utilisations: 4, conversation: null, actif: true, capacite: null, expireA: null }],
+  });
 
 const peint = (etat: EtatDeLaRecherche): void => {
   document.open();
@@ -44,5 +62,14 @@ describe('le document de la recherche porte ses fentes de direct', () => {
     const formulaire = document.querySelector<HTMLFormElement>('form.chercher')!;
 
     expect(formulaire.method).toBe('get');
+  });
+
+  it('les QUATRE groupes vivent DANS #resultats — le module les échange sans les connaître', () => {
+    peint(ETAT_GARNI());
+
+    const region = document.querySelector('#resultats')!;
+    const titres = Array.from(region.querySelectorAll('.groupe h2')).map((n) => n.textContent);
+
+    expect(titres).toEqual(['Conversations', 'Personnes', 'Médias', 'Liens']);
   });
 });

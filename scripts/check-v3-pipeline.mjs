@@ -868,6 +868,7 @@ const CHECKS = [
     [`${dep.fichier} : le routeur legacy garde son plancher attrape-tout`, routage.theLegacyRouterKeepsItsFloor(dep)],
     [`${dep.fichier} : le conteneur de la v3 est disjoint du legacy`, routage.theV3ContainerIsDisjointFromTheLegacy(dep)],
     [`${dep.fichier} : le service de la v3 déclare ce que son code lit`, routage.theV3ServiceDeclaresWhatItsCodeReads(dep)],
+    [`${dep.fichier} : au-delà des actifs de zone, le service déclare la navigation de zone`, routage.theV3ServiceDeclaresZoneNavigationWhenItRoutesBeyondAssets(dep)],
     [`${dep.fichier} : l'origine publique de la passerelle est joignable par un navigateur`, routage.lOriginePubliqueEstJoignableParUnNavigateur(dep)],
     [`${dep.fichier} : aucun actif servi à la racine n'échappe à la zone`, routage.noRootServedAssetEscapesTheZone(dep)],
     [`${dep.fichier} : la règle ne réclame que des chemins servis`, routage.theRouterClaimsNothingTheZoneDoesNotServe(dep)],

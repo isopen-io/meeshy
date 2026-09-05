@@ -1,5 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 
+import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+
 import { serviParLAnnuaire } from './bouchon-annuaire';
 import type { Identite } from './bouchon-socket';
 import {
@@ -12,11 +14,15 @@ import {
 } from './bouchon-monde';
 
 /**
- * LES NEUF ROUTES DE LA ZONE CONNECTÉE (et quatre de plus depuis § 12.10.3,
+ * LES SEPT ROUTES DE LA ZONE CONNECTÉE (et quatre de plus depuis § 12.10.3,
  * le panneau de profil : `GET /directory/people/:handle?expand=relation`,
  * `POST /conversations`, `POST /directory/friend-requests`,
  * `PUT /directory/blocks/:userId` — chacune ci-dessous, à son tour), copiées
- * sur la passerelle RÉELLE :
+ * sur la passerelle RÉELLE. `GET /api/v1/conversations/search`,
+ * `GET /api/v1/directory/people` et `GET /api/v1/attachments/search` — les
+ * trois routes de `/search` gardées côté client — vivent désormais dans
+ * `bouchon-recherche.ts` (#4170, bande 1000-1200) ; la quatrième
+ * (`GET /links?q=`) reste ci-dessous, dans `bouchon-carnet.ts`.
  *
  *   • `GET /api/v1/auth/me` — `services/gateway/src/routes/auth/magic-link.ts:79`,
  *     `createUnifiedAuthMiddleware({ requireAuth: true, allowAnonymous: true })` ;
@@ -29,13 +35,6 @@ import {
  *   • `GET /api/v1/directory/contacts` — `routes/directory/contacts.ts:128`,
  *     dont les lignes sortent par `directoryEntrySchema`
  *     (`routes/users/contacts-schemas.ts:24`) ;
- *   • `GET /api/v1/conversations/search` — `routes/conversations/search.ts:67`,
- *     qui rend un tableau NU de `conversationMinimalSchema` : ni `pagination`,
- *     ni total. Le bouchon ne lui en invente pas ;
- *   • `GET /api/v1/directory/people` — `routes/directory/people.ts:105`, qui
- *     pagine par CURSEUR (`hasMore`, `nextCursor`, `limit`) et déclare
- *     `isOnline` NULLABLE — l'autre forme du masquage, à côté du `false` de
- *     `/directory/contacts` ;
  *   • `GET /api/v1/posts/:postId` — `routes/posts/core.ts:460`,
  *     `preValidation: [requiredAuth]` ;
  *   • `GET /api/v1/posts/:postId/comments` — `routes/posts/comments.ts:61`,
@@ -113,6 +112,16 @@ export type EtatDuCompteDeBouchon = {
   readonly filDeCommentaires: FilDeCommentairesDeBouchon;
   /** Le fil social — MUTABLE, pour prouver le rafraîchissement au retour (#5031). */
   readonly filSocial: FilSocialDeBouchon;
+  /**
+   * LES TREIZE PRÉFÉRENCES DE NOTIFICATION DU COMPTE (#4899) — MUTABLE, écrite
+   * par `PATCH /api/v1/me/preferences` et RELUE par le `GET` : un bouchon qui
+   * répond 200 sans écrire ferait passer un client qui n'a rien changé (même
+   * loi que `boite.litTout()`). `reactionEnabled` naît FAUX — la planche
+   * (`cible/notifPrefs.png`) dessine cette bascule éteinte, et un document
+   * amorcé à TOUT vrai ne pourrait jamais prouver qu'un état SERVI, pas un
+   * défaut local, gouverne le rendu.
+   */
+  readonly notificationPrefs: NotificationPreference;
 };
 
 /**
@@ -519,37 +528,6 @@ const RAIL_DU_BOUCHON = [
   { id: 'story-luc', authorId: 'u-luc', author: { id: 'u-luc', displayName: 'Luc Martin' }, isViewedByMe: true },
 ];
 
-/**
- * Ce que la RECHERCHE trouve — un fil et une personne, de quoi peindre les deux
- * groupes que l'écran sert. Le fil est celui du lecteur : sa ligne mène quelque
- * part, ce que l'audit vérifie.
- */
-const RECHERCHE_FILS = [
-  {
-    id: CONVERSATION_DU_LECTEUR.id,
-    identifier: 'lagos',
-    title: CONVERSATION_DU_LECTEUR.titre,
-    type: 'group',
-    isActive: true,
-    memberCount: CONVERSATION_DU_LECTEUR.membres,
-    lastMessageAt: new Date(Date.now() - 30 * 60_000).toISOString(),
-    createdAt: new Date(Date.now() - 30 * 24 * 3_600_000).toISOString(),
-    participants: [],
-  },
-];
-
-/** `isOnline` y est NULLABLE — c'est la forme que `/directory/people` déclare. */
-const RECHERCHE_GENS = [
-  {
-    id: 'u-sara',
-    username: 'sarakim',
-    displayName: 'Sara Kim',
-    avatar: null,
-    isOnline: null,
-    lastActiveAt: null,
-  },
-];
-
 /** Les HUIT champs de `updateUserProfileSchema` — recopiés du schéma, pas devinés. */
 const CHAMPS_ACCEPTES: readonly string[] = [
   'firstName',
@@ -569,6 +547,28 @@ export const APPAREILS_DU_BOUCHON = [
   { id: 'd2', deviceName: 'Chrome — Dakar', platform: 'web', lastUsedAt: null },
 ];
 
+/**
+ * L'ÉTAT INITIAL DES PRÉFÉRENCES DE NOTIFICATION (#4899) — amorcé aux défauts
+ * IMPORTÉS de `@meeshy/shared/types/preferences` (jamais recopiés, § « la
+ * passerelle de bouchon MIME la passerelle réelle »), `reactionEnabled`
+ * éteint pour que le document GET s'oppose, dès la première ouverture, à un
+ * client qui afficherait « Activé » partout par défaut local.
+ *
+ * UN `import()` DYNAMIQUE, PAS UN `import` STATIQUE — `@meeshy/shared` est
+ * publié en ESM PUR (`"type": "module"`, `dist/**\/*.js`), et le harnais de
+ * Playwright transpile chaque spec `.ts` en CommonJS avant de l'exécuter : un
+ * `require()` transitif sur un module qui n'écrit que des `export` ÉCHOUE
+ * (« require() of ES Module … not supported », mesuré au premier lancement de
+ * `v3-notif-prefs.spec.ts`). `import()` reste un VRAI import dynamique même
+ * depuis un module transpilé en CommonJS — Node le résout nativement — et
+ * Jest, qui EXCLUT `/e2e/` de son périmètre (`jest.config.mjs`), n'est de
+ * toute façon jamais témoin de ce fichier.
+ */
+export const notificationPrefsDeBouchon = async (): Promise<NotificationPreference> => {
+  const { NOTIFICATION_PREFERENCE_DEFAULTS } = await import('@meeshy/shared/types/preferences');
+  return { ...NOTIFICATION_PREFERENCE_DEFAULTS, reactionEnabled: false };
+};
+
 export const routesDuCompte =
   (etat: EtatDuCompteDeBouchon) =>
   ({ requete, url, corps, json }: { readonly requete: IncomingMessage; readonly url: URL; readonly corps: Buffer; readonly json: Reponse }): boolean => {
@@ -577,6 +577,7 @@ export const routesDuCompte =
     if (
       !(
         chemin.startsWith('/api/v1/auth/me') ||
+        chemin.startsWith('/api/v1/auth/logout') ||
         chemin.startsWith('/api/v1/conversations') ||
         chemin.startsWith('/api/v1/directory/') ||
         // LA CRÉATION EST `/api/v1/posts` NU — sans barre finale, donc invisible
@@ -589,6 +590,11 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/social/') ||
         chemin.startsWith('/api/v1/users/me') ||
         chemin.startsWith('/api/v1/notifications') ||
+        // Les TREIZE préférences de notification du compte (#4899) —
+        // `GET`/`PATCH /api/v1/me/preferences`, DISTINCT de
+        // `/api/v1/user-preferences/conversations/:id` (par CONVERSATION,
+        // ci-dessus) : « me/preferences » est le COMPTE entier.
+        chemin.startsWith('/api/v1/me/preferences') ||
         estUnePreference
       )
     ) {
@@ -614,6 +620,19 @@ export const routesDuCompte =
     }
     if (etat.creanceDe(requete)?.genre !== 'membre') {
       json({ error: 'Invalid JWT token', code: 'AUTH_FAILED' }, 401);
+      return true;
+    }
+    /**
+     * `POST /api/v1/auth/logout` (`services/gateway/src/routes/auth/login.ts:350`,
+     * `preValidation: [fastify.authenticate]`) — la déconnexion (#5095). La
+     * garde d'authentification ci-dessus copie déjà `fastify.authenticate` ;
+     * ce bloc copie la réponse, `{ success: true, data: { message } }`
+     * (`login.ts:427`) — le corps exact que `app/deconnexion/route.ts`
+     * n'inspecte jamais (l'appel est BEST-EFFORT), mais que le bouchon doit
+     * MIMER, pas inventer.
+     */
+    if (chemin === '/api/v1/auth/logout' && requete.method === 'POST') {
+      json({ success: true, data: { message: 'Déconnexion réussie' } });
       return true;
     }
     /**
@@ -652,6 +671,72 @@ export const routesDuCompte =
         },
         unreadCount: etat.boite.nonLues,
       });
+      return true;
+    }
+
+    /**
+     * `GET`/`PATCH /api/v1/me/preferences` (#4899) — les TREIZE (et plus)
+     * préférences de notification du COMPTE, copiées sur
+     * `services/gateway/src/routes/me/preferences/unified-routes.ts:150,229` :
+     * `GET` sert `{ success, data: { notification: {…complet…} } }`, filtré
+     * par `categories=notification` comme la v3 le demande ; `PATCH` FUSIONNE
+     * (`mode=merge`, le seul que la v3 envoie — jamais `replace`) les clés
+     * soumises sur le document que le bouchon TIENT — un 200 qui n'écrirait
+     * rien ferait passer un client qui n'a rien changé (même loi que
+     * `boite.litTout()`). Une catégorie autre que `notification` est 400
+     * `UNKNOWN_CATEGORY` ; une clé absente du schéma, ou d'un type qui ne
+     * concorde pas avec son défaut, est 400 `VALIDATION_ERROR` — la MÊME
+     * distinction que la passerelle réelle (`unified-routes.ts:308,441`).
+     */
+    if (chemin === '/api/v1/me/preferences' && (requete.method ?? 'GET') === 'GET') {
+      // `?categories=` SÉLECTIONNE : la passerelle ne sert que les catégories
+      // nommées, et sert TOUT quand rien n'est nommé (`unified-routes.ts:206`,
+      // `parsed.selection.categories`, dont l'ETag hache le RÉSULTAT — « il
+      // varie avec `categories` », `:210`). Le bouchon ne connaît que
+      // `notification` — il l'omet donc quand la sélection ne la nomme pas,
+      // plutôt que de la servir quoi qu'on demande : sans cela, un client qui
+      // aurait perdu son `?categories=notification` resterait vert ici et
+      // vide en production.
+      const demandees = url.searchParams.get('categories');
+      const servie = demandees === null || demandees.split(',').includes('notification');
+      json({ success: true, data: servie ? { notification: etat.notificationPrefs } : {} });
+      return true;
+    }
+    if (chemin === '/api/v1/me/preferences' && requete.method === 'PATCH') {
+      const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
+      const categories = Object.keys(soumis);
+      const categorieInconnue = categories.find((categorie) => categorie !== 'notification');
+      if (categorieInconnue !== undefined) {
+        json({ success: false, error: 'UNKNOWN_CATEGORY', message: `Unknown preference category '${categorieInconnue}'` }, 400);
+        return true;
+      }
+
+      const bloc = soumis.notification;
+      if (typeof bloc !== 'object' || bloc === null || Array.isArray(bloc)) {
+        json({ success: false, error: 'VALIDATION_ERROR', message: 'Body must be an object keyed by preference category' }, 400);
+        return true;
+      }
+
+      const document = etat.notificationPrefs as unknown as Record<string, unknown>;
+      const soumises = bloc as Record<string, unknown>;
+      const cleInvalide = Object.keys(soumises).find(
+        (cle) => !(cle in document) || typeof soumises[cle] !== typeof document[cle],
+      );
+      if (cleInvalide !== undefined) {
+        json(
+          {
+            success: false,
+            error: 'VALIDATION_ERROR',
+            message: `Unknown field '${cleInvalide}'`,
+            details: { issues: [{ path: [cleInvalide], message: 'Unrecognized field' }] },
+          },
+          400,
+        );
+        return true;
+      }
+
+      Object.assign(etat.notificationPrefs, soumises);
+      json({ success: true, data: { notification: etat.notificationPrefs } });
       return true;
     }
 
@@ -805,11 +890,6 @@ export const routesDuCompte =
       return true;
     }
 
-    // La RECHERCHE, avant `/api/v1/conversations` nue : Fastify distingue ces
-    // deux routes par leur chemin complet, et un bouchon qui teste des préfixes
-    // doit ordonner du plus PRÉCIS au plus général — sinon `/conversations`
-    // avale `/conversations/search` et l'écran de recherche reçoit la liste du
-    // tableau de bord.
     // Le FIL d'une publication, avant la publication elle-même : Fastify
     // distingue ces deux routes par leur chemin complet, et un bouchon qui
     // teste des préfixes ordonne du plus PRÉCIS au plus général.
@@ -837,20 +917,6 @@ export const routesDuCompte =
 
     if (/^\/api\/v1\/posts\/[^/]+$/.test(chemin)) {
       json({ success: true, data: PUBLICATION_DU_BOUCHON });
-      return true;
-    }
-
-    if (chemin.startsWith('/api/v1/conversations/search')) {
-      json({ success: true, data: url.searchParams.get('q') ? RECHERCHE_FILS : [] });
-      return true;
-    }
-
-    if (chemin.startsWith('/api/v1/directory/people')) {
-      json({
-        success: true,
-        data: url.searchParams.get('q') ? RECHERCHE_GENS : [],
-        pagination: { hasMore: false, nextCursor: null, limit: 20 },
-      });
       return true;
     }
 
