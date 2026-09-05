@@ -52,8 +52,8 @@ extension StickerPickerView {
                         motion: gabarit.animation))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            // Plus de marge horizontale ici : la feuille est plate depuis le
+            // 2026-09-05, et son défilement pose déjà les 20 points.
         }
     }
 
@@ -81,7 +81,6 @@ extension StickerPickerView {
                 .frame(minHeight: 40)
                 .background(Capsule().fill(Color.primary.opacity(0.06)))
                 .overlay(Capsule().stroke(Color.primary.opacity(0.10), lineWidth: 1))
-                .padding(.horizontal, 12)
                 .accessibilityLabel(String(localized: "sticker.text.field.a11y",
                                            defaultValue: "Texte de la décoration", bundle: .module))
             templateGrid(family: .text, enabled: !typedStickerTextTrimmed.isEmpty)
@@ -204,7 +203,6 @@ extension StickerPickerView {
                     .accessibilityAddTraits(choisi ? [.isSelected] : [])
                 }
             }
-            .padding(.horizontal, 12)
         }
     }
 

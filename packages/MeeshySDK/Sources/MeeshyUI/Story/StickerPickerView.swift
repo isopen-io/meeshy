@@ -104,21 +104,58 @@ public struct StickerPickerView: View {
                                   hasNearbyPlaces: nearbyPlaces != nil)
     }
 
+    /// **La feuille est PLATE, et elle a l'anatomie de la fiche de création
+    /// audio** (directive porteur 2026-09-05).
+    ///
+    /// > « Il faut refonder la fiche des stickers pour ressembler à la fiche de
+    /// > création d'audio, tout aplatir sur la feuille, des sections sans
+    /// > cadre ! En somme une vue moderne. »
+    ///
+    /// ## Ce que la refonte retire, et pourquoi ça se voyait
+    ///
+    /// Le contenu vivait dans une CARTE — `.padding(16)` + `.ultraThinMaterial`
+    /// + un rayon de 16 — posée à l'intérieur d'une feuille qui a déjà son
+    /// propre fond et son propre arrondi. Deux boîtes concentriques, dont
+    /// l'intérieure rognait seize points de chaque côté d'un écran qui n'en a
+    /// que 402, et dont les coins arrondis répétaient ceux de la feuille à
+    /// quelques points près. Le contenu paraissait FLOTTER dans une fenêtre
+    /// plutôt que d'occuper l'écran.
+    ///
+    /// > Une carte à l'intérieur d'une feuille n'ajoute aucune information : la
+    /// > feuille dit déjà « ceci est un calque au-dessus ». Elle ne fait que
+    /// > répéter la frontière, et facturer la répétition en largeur.
+    ///
+    /// Les en-têtes de section perdent leur `.ultraThinMaterial` et leur
+    /// épinglage : un titre encadré au-dessus d'une grille encadrée dans une
+    /// carte encadrée fait trois cadres pour une seule chose à lire. Ce qui
+    /// sépare deux sections est désormais l'ESPACE — `MeeshySpacing.xxl` — et
+    /// la graisse du titre.
+    ///
+    /// ## Ce qu'elle reprend de la fiche audio
+    ///
+    /// Le dégradé pleine feuille (`background`), le défilement unique, la
+    /// respiration de 24 points entre blocs, la marge de 20. C'est
+    /// littéralement l'anatomie d'`AudioPostComposerView` : deux feuilles du
+    /// même composer qui ne se ressemblaient pas obligeaient l'auteur à
+    /// réapprendre où regarder à chaque ouverture (dimension 6).
+    ///
+    /// **Le plafond de 420 pt est parti avec la carte.** Il bornait la liste à
+    /// l'intérieur de son cadre ; sans cadre, c'est la feuille qui borne, et
+    /// elle le fait à la taille de l'écran plutôt qu'à un nombre écrit à la
+    /// main.
     public var body: some View {
-        VStack(spacing: 0) {
-            panelHeader
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 10)
-            StickerSheetTabBar(selection: $selectedTab)
-                .padding(.bottom, 8)
-            Divider().opacity(0.15)
-            tabbedContent
+        ZStack {
+            background
+            VStack(spacing: 0) {
+                panelHeader
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.md)
+                StickerSheetTabBar(selection: $selectedTab)
+                    .padding(.bottom, MeeshySpacing.sm)
+                tabbedContent
+            }
         }
-        .padding(16)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
         .task {
             // Une seule lecture de l'horloge, à l'ouverture (cf. doc de type).
             if openedAt == .distantPast { openedAt = clock() }
@@ -126,6 +163,26 @@ public struct StickerPickerView: View {
                 libraryItems = await stickerLibrary.recents()
             }
         }
+    }
+
+    // MARK: - Le fond
+
+    /// **Le même dégradé que la fiche de création audio**, aux mêmes jetons de
+    /// marque. Deux feuilles du même composer qui n'auraient pas le même fond
+    /// se liraient comme deux applications.
+    ///
+    /// `.ignoresSafeArea()` : le dégradé descend sous l'indicateur d'accueil et
+    /// remonte sous la poignée de la feuille, sans quoi une bande du fond
+    /// SYSTÈME apparaîtrait aux deux bouts — précisément le liseré que la
+    /// directive appelle « cadre ».
+    private var background: some View {
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [MeeshyColors.indigo950, Color.black.opacity(0.92), MeeshyColors.indigo950.opacity(0.85)]
+                : [MeeshyColors.indigo50, MeeshyColors.indigo100, MeeshyColors.indigo200.opacity(0.55)],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
     }
 
     // MARK: - En-tête

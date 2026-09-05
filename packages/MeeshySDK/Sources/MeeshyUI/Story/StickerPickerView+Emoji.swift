@@ -44,8 +44,10 @@ extension StickerPickerView {
                                                bundle: .module))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            // **Plus de marge horizontale ICI** (2026-09-05) : la feuille est
+            // plate, et c'est son défilement qui pose les 20 points. Une marge
+            // de grille s'y ajoutait pour en faire 32, et la rangée d'emoji y
+            // perdait une colonne entière.
         }
     }
 
@@ -140,8 +142,7 @@ extension StickerPickerView {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 }
 

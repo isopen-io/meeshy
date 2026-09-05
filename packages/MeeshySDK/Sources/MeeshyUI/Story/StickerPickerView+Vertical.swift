@@ -27,8 +27,21 @@ extension StickerPickerView {
     /// dans un périmètre qu'on a choisi.
     @ViewBuilder
     var tabbedContent: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+        ScrollView(.vertical, showsIndicators: false) {
+            // **`spacing: MeeshySpacing.xxl`, et plus aucun `pinnedViews`**
+            // (directive porteur 2026-09-05, « des sections sans cadre »).
+            //
+            // Un en-tête ÉPINGLÉ doit être opaque — sinon le contenu défile
+            // sous lui et le traverse — donc il portait un `.ultraThinMaterial`,
+            // donc un cadre. L'épinglage ÉTAIT la cause du cadre, pas une
+            // décoration qu'on lui aurait ajoutée. Le retirer laisse le titre
+            // défiler avec sa grille, ce qui est aussi plus juste : un titre
+            // qui reste pendant qu'on parcourt une AUTRE famille désigne la
+            // mauvaise.
+            //
+            // Ce qui sépare deux sections est désormais l'ESPACE et la graisse
+            // du titre — la même grammaire que la fiche de création audio.
+            LazyVStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
                 switch selectedTab {
                 case .search:    searchTabContent
                 case .favorites: usageSections(usage.favorites, vide: .favorites)
@@ -37,7 +50,9 @@ extension StickerPickerView {
                 case .smileys:   smileySections
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.xxxl)
         }
         // **Changer d'onglet REPART du début** — mesuré au simulateur avant
         // les onglets, sur l'interrupteur de nature : sans cela, basculer
@@ -49,7 +64,6 @@ extension StickerPickerView {
         // paresseuse, sa reconstruction ne coûte que les sections visibles, et
         // un lecteur aurait demandé une ancre par section pour un seul usage.
         .id(selectedTab)
-        .frame(maxHeight: 420)
     }
 
     // MARK: - Recherche
@@ -84,8 +98,6 @@ extension StickerPickerView {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .background(Color.primary.opacity(0.06), in: Capsule())
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
 
         let familles = StickerSheetTab.sections(of: .search, offered: offeredTabs)
             .filter { StickerPickerView.section($0, matches: searchQuery) }
@@ -218,8 +230,6 @@ extension StickerPickerView {
                     motion: gabarit.animation))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
     }
 
     @ViewBuilder
@@ -240,8 +250,6 @@ extension StickerPickerView {
                                            defaultValue: "Autocollant \(emoji)", bundle: .module))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
     }
 
     // MARK: - Les sections d'un onglet de palette
@@ -332,20 +340,23 @@ extension StickerPickerView {
                                titre: String) -> some View {
         HStack(spacing: 6) {
             if let icone {
-                Text(icone).font(.system(size: 14))
+                Text(icone).font(.system(size: 13))
             } else if let symbole {
                 Image(systemName: symbole)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
             }
-            Text(titre)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+            // **Capitales et interlettrage**, comme les titres de section de la
+            // fiche audio : sans fond ni filet, c'est la FORME du texte qui
+            // doit dire « ceci est un titre ». Un `.secondary` en corps 12
+            // ordinaire se serait lu comme une légende de la grille du dessus.
+            Text(titre.uppercased())
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .tracking(0.6)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
+        .padding(.bottom, MeeshySpacing.xs)
         .accessibilityAddTraits(.isHeader)
     }
 }
