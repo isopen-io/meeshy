@@ -135,6 +135,11 @@ const V3_ZONE_PREFIXES = [
   // seule, aucune pile WebRTC embarquee) : meme marche que les huit ci-dessus,
   // declaree ICI avant que le routeur ne la reclame (§ 4.4 bis).
   '/calls',
+  // `/communities` entre le 2026-09-05 — les communautes du lecteur (matrice
+  // ordre 45, L7 : liste, ouverture sur ses conversations, creation). Meme
+  // marche que `/calls` juste au-dessus : declaree ICI avant que le routeur
+  // ne la reclame (§ 4.4 bis).
+  '/communities',
 ];
 
 function belongsToV3Zone(pathname) {

@@ -252,8 +252,12 @@ describe('la lecture de GET /communities/:id/conversations', () => {
     const ouverture = await conversationsDeLaCommunaute({ jeton: 'j', id: 'comm-1', recuperer });
     if (ouverture.genre !== 'ouverte') throw new Error(ouverture.genre);
 
+    // `participants` (le COMPTE, notre propre champ) est légitime — ce qui ne
+    // doit PAS traverser, c'est la LISTE `participants[]` elle-même et ses
+    // profils : `userId`, `displayName`, `role`, `isOnline`, `lastActiveAt`.
     const projection = JSON.stringify(ouverture.conversations);
-    expect(projection).not.toContain('participants');
+    expect(projection).not.toContain('userId');
+    expect(projection).not.toContain('displayName');
     expect(projection).not.toContain('isOnline');
     expect(projection).not.toContain('lastActiveAt');
     expect(ouverture.conversations).toEqual([{ id: 'conv-1', titre: 'Annonces', participants: 12, dernierMessageA: '2026-09-04T18:00:00.000Z' }]);

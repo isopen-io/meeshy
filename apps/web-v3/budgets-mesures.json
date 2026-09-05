@@ -211,5 +211,17 @@
     "nominal_30_lignes_o": 8797,
     "plafond_o": 9216,
     "note": "SOUS le plafond dur de la charte (documents.document_o, 9 216 o), mais à 95 % de lui sur la page nominale : l'écran n'a pas de marge pour une colonne de plus par ligne. RATCHET : ce champ n'empêche que la croissance SILENCIEUSE."
+  },
+  "documents_des_communautes": {
+    "quoi": "Ce que /communities REMET EN UNE FOIS — le HTML, la table de jetons, la feuille et les symboles qu'il inline. Même trio de points que `documents_des_appels` (l'écran patron, livré au même lot) : la mesure NOMINALE est prise sur la page que la porte demande (`LIMITE = 20`, `app/connecte/communautes-porte.ts`), et non sur les deux lignes de la cible — c'est le compte de lignes que le lecteur REÇOIT qui décide du poids, et le mesurer sur deux aurait sous-déclaré l'écran de 437 o. Les trois points donnent la pente par ligne (≈ 24 o gzip par communauté, la même que /calls).",
+    "commande": "cd apps/web-v3 && jest, témoin jetable : COMMUNAUTES_DU_LECTEUR(requête, bouchon rendant N communautés) → gzip -9 sur le document servi — sur 0, 2 et 20 lignes",
+    "date": "2026-09-05",
+    "vide_o": 8370,
+    "deux_lignes_cible_o": 8516,
+    "nominal_20_lignes_o": 8953,
+    "plafond_o": 9216,
+    "css_inline_sans_table_o": 5523,
+    "css_plafond_o": 6144,
+    "note": "SOUS le plafond dur de la charte (documents.document_o, 9 216 o) sur les trois points, mais à 97 % de lui sur la page nominale — moins de marge encore que /calls (95 %). Le CSS inliné, mesuré sur le SUJET du plafond (chrome + feuilles de l'écran, table de jetons EXCLUE puisqu'elle a son propre plafond `table_inlinee_o`), tient à 5 523 o pour 6 144 — mais c'est le plus lourd des trois écrans-listes (/calls 4 943, /links 5 147). La cause est nommée : l'écran compose `FEUILLE_DU_FIL` EN ENTIER pour n'en rendre que `.fil-tete` et `.plus-ancien`, comme /calls et /links avant lui. Découper cette feuille est un lot À SOI (elle sert le fil, la galerie, /calls, /links et cet écran) — à porter en issue, pas un réglage. RATCHET : ces champs n'empêchent que la croissance SILENCIEUSE."
   }
 }

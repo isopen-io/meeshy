@@ -15,7 +15,6 @@ import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
 import {
   CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE,
   documentDesCommunautes,
-  SAISIE_NEUVE_COMMUNAUTE,
   type Ouverte,
   type SaisieDeCommunaute,
 } from './communautes-vue';
@@ -111,7 +110,8 @@ const sert = async ({
   readonly motif?: string | null;
   readonly statut?: number;
 }): Promise<Response> => {
-  const liste = await communautesDuLecteur({ jeton, offset: offsetDeLURL(requete), limite: LIMITE, recuperer });
+  const offset = offsetDeLURL(requete);
+  const liste = await communautesDuLecteur({ jeton, offset, limite: LIMITE, recuperer });
   if (liste.genre === 'session-expiree') return versLaConnexion();
   if (liste.genre === 'panne') return rendu(documentDePanne(), 503);
 
@@ -126,6 +126,7 @@ const sert = async ({
   return rendu(
     documentDesCommunautes({
       communautes: liste.communautes,
+      offset,
       suite: liste.suite,
       ouverte: ouverte ?? null,
       nouvelle: nouvelle ?? nouvelleDemandee(requete),

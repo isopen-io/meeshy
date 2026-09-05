@@ -29,8 +29,12 @@ export const versLEspace = (hote: string): string => `${hote}?${PARAMETRE_DE_L_E
  * membre (`MeeshyWebV3.dc.html:550-556`, table de navigation `:867-868`).
  *
  * **CHACUNE EST UN `<a href>` VERS UNE ROUTE SERVIE**, et c'est le mot de la
- * planche. Un rond qui ouvrirait `/communities` sortirait de la zone v3 en
- * silence : le lecteur atterrirait sur le legacy sans que rien ne le dise.
+ * planche : un rond qui ouvrirait une route hors zone sortirait de la v3 en
+ * silence, et le lecteur atterrirait sur le legacy sans que rien ne le dise.
+ * `/communities` (matrice ordre 45) a fermé la dernière destination qui
+ * n'était pas encore servie — `espace-membre.test.ts` compare `href` aux
+ * `app/**\/route.ts` réellement émis, pour que cet invariant ne se rouvre pas
+ * en silence.
  *
  * LE `<nav>` EST NOMMÉ. Deux liens sans texte visible, posés hors du flux du
  * document, ne se rattachent à rien : sans son nom, un lecteur d'écran annonce

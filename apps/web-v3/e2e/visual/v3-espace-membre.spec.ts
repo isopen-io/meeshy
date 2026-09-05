@@ -106,7 +106,7 @@ HOTES.forEach(({ nom, chemin, eleve }) => {
     await ctx.close();
   });
 
-  test(`les six destinations sont rendues — ${nom}`, async ({ browser }) => {
+  test(`les sept destinations sont rendues — ${nom}`, async ({ browser }) => {
     const ctx = await contexte(browser);
     const page = await ctx.newPage();
 

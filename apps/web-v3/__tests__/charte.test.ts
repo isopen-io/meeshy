@@ -22,6 +22,7 @@ import { FEUILLE_DE_LA_BANNIERE } from '@/app/connecte/banniere-feuille';
 import { FEUILLE_DES_FLOTTANTES, FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DES_APPELS } from '@/app/connecte/appels-feuille';
+import { FEUILLE_DES_COMMUNAUTES } from '@/app/connecte/communautes-feuille';
 import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
@@ -89,6 +90,7 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/banniere-feuille.ts', source: FEUILLE_DE_LA_BANNIERE },
   { nom: 'app/connecte/prefs-feuille.ts', source: FEUILLE_DES_PREFS },
   { nom: 'app/connecte/appels-feuille.ts', source: FEUILLE_DES_APPELS },
+  { nom: 'app/connecte/communautes-feuille.ts', source: FEUILLE_DES_COMMUNAUTES },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -171,6 +173,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/banniere-feuille.ts',
       'app/connecte/prefs-feuille.ts',
       'app/connecte/appels-feuille.ts',
+      'app/connecte/communautes-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -568,6 +571,9 @@ describe('règles 14 et 16 — plans, filets, et ce qui ne se peint jamais', () 
       'app/connecte/liste-feuille.ts › FEUILLE_DE_LA_NOUVELLE_CONV › dialog.nouvelle-conv .pied',
       'app/connecte/espace-feuille.ts › FEUILLE_DE_L_ESPACE › dialog.espace',
       'app/connecte/banniere-feuille.ts › .banniere',
+      'app/connecte/communautes-feuille.ts › dialog.communaute-ouverte',
+      'app/connecte/communautes-feuille.ts › dialog.nouvelle-communaute',
+      'app/connecte/communautes-feuille.ts › dialog.nouvelle-communaute .pied',
     ]);
   });
 });

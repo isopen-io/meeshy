@@ -46,19 +46,42 @@ import { carteVide } from './vue';
  * `liste-vue.ts` l'emploie de la même façon en repli).
  */
 
-const enTete = (): string =>
+/**
+ * L'ADRESSE DE L'ÉCRAN, AVEC LA PAGE OÙ LE LECTEUR SE TROUVE.
+ *
+ * `?offset=` n'est pas un ornement : c'est lui qui décide quelle page la porte
+ * demande à la passerelle, donc quelles communautés `ouvertureDe`
+ * (`communautes-porte.ts`) a en main pour NOMMER une surimpression —
+ * `GET /communities/:id/conversations` (§ 2.2) ne sert aucun `name`. Un lien
+ * qui le perd renvoie le lecteur de la page 2 vers la page 1, où sa communauté
+ * n'est pas : la surimpression s'ouvrait alors sur le repli « Communauté ».
+ * Le repli est fait pour une adresse composée à la main, pas pour le geste
+ * nominal d'un lecteur qui a plus de vingt communautés.
+ *
+ * L'OFFSET VIENT TOUJOURS EN PREMIER, et la page 1 n'en porte AUCUN : une
+ * seule forme d'adresse par état, jamais `?offset=0` qui dirait la même chose
+ * autrement.
+ */
+const CHEMIN = '/communities';
+
+const adresse = (offset: number, ...parametres: readonly string[]): string => {
+  const morceaux = [...(offset > 0 ? [`offset=${offset}`] : []), ...parametres];
+  return morceaux.length === 0 ? CHEMIN : `${CHEMIN}?${morceaux.join('&')}`;
+};
+
+const enTete = (offset: number): string =>
   '<header class="fil-tete">' +
   `<a class="retour" href="/" aria-label="${echappe(COMMUNAUTES.retour)}">${svgDuSprite('ph-caret-left')}</a>` +
   '<div class="titre">' +
   `<h1>${echappe(COMMUNAUTES.titre)}</h1>` +
   `<p class="sous">${echappe(COMMUNAUTES.sous)}</p>` +
   '</div>' +
-  `<a class="action discrete" href="/communities?nouvelle">${svgDuSprite('ph-plus')}${echappe(COMMUNAUTES.creer)}</a>` +
+  `<a class="action discrete" href="${echappe(adresse(offset, 'nouvelle'))}">${svgDuSprite('ph-plus')}${echappe(COMMUNAUTES.creer)}</a>` +
   '</header>';
 
-const ligne = (c: Communaute): string =>
+const ligne = (c: Communaute, offset: number): string =>
   '<li class="communaute">' +
-  `<a href="/communities?ouverte=${echappe(encodeURIComponent(c.id))}">` +
+  `<a href="${echappe(adresse(offset, `ouverte=${encodeURIComponent(c.id)}`))}">` +
   `<span class="tuile ${teinteDeLAvatar(c.nom)}" aria-hidden="true">${svgDuSprite('ph-users-three')}</span>` +
   '<span class="dit">' +
   `<strong class="nom">${echappe(c.nom)}</strong>` +
@@ -68,20 +91,40 @@ const ligne = (c: Communaute): string =>
   '</a>' +
   '</li>';
 
+/**
+ * LE LIEN DE PAGE SUIVANTE — `<a class="plus-ancien action discrete">`, le
+ * MÊME que le fil, la galerie, `/notifications` et `/calls`. Il portait une
+ * classe `.plus` à lui, et sa feuille en redéclarait la géométrie : une
+ * SECONDE règle globale sous un nom que `social-feuille.ts` déclarait déjà
+ * autrement (56 px, contour, accent), donc deux « plus » divergents dans la
+ * zone. `.plus-ancien` est déjà servi ici — `FEUILLE_DU_FIL` entre dans la
+ * composition du document — et `.action.discrete` donne la cible de 44 px :
+ * zéro octet de feuille pour le même rendu, et un seul vocabulaire.
+ */
 const plus = (suite: number | null): string =>
   suite === null
     ? ''
-    : `<a class="plus action discrete" href="/communities?offset=${suite}">${echappe(COMMUNAUTES.plus)}</a>`;
+    : `<a class="plus-ancien action discrete" href="${echappe(adresse(suite))}">${echappe(COMMUNAUTES.plus)}</a>`;
 
-const corps = (etat: EtatDesCommunautes): string =>
-  '<main id="main-content" class="communautes-ecran">' +
-  enTete() +
+/**
+ * LE CORPS, ET SON `inert` — passé en PARAMÈTRE, jamais recollé après coup.
+ *
+ * Il l'était : `corps(etat).replace('<main ', '<main inert ')`. Le rendu était
+ * juste, la construction non — une chirurgie de chaîne sur du balisage déjà
+ * composé, qui se dénoue en silence le jour où la balise s'écrit autrement, et
+ * qui n'a aucun équivalent dans la zone. `corpsDuFil(etat, { inerte })`
+ * (`fil-vue.ts:549`) est la forme de la maison : l'état décide, la fonction
+ * rend.
+ */
+const corps = (etat: EtatDesCommunautes, inerte: boolean): string =>
+  `<main id="main-content" class="communautes-ecran"${inerte ? ' inert' : ''}>` +
+  enTete(etat.offset) +
   (etat.communautes.length === 0
     ? carteVide({ glyphe: 'ph-users-three', titre: COMMUNAUTES.vide, phrase: COMMUNAUTES.videPrecision })
     : `<ul class="communautes" aria-label="${echappe(COMMUNAUTES.liste)}">${etat.communautes
-        .map(ligne)
+        .map((c) => ligne(c, etat.offset))
         .join('')}</ul>${plus(etat.suite)}`) +
-  actionsFlottantes('/communities') +
+  actionsFlottantes(CHEMIN) +
   '</main>';
 
 /**
@@ -111,7 +154,16 @@ const conversationLigne = (conv: ConversationDeCommunaute, maintenant: number): 
   '</a>' +
   '</li>';
 
-const communauteOuverte = ({ ouverte, maintenant }: { readonly ouverte: Ouverte; readonly maintenant: number }): string => {
+const communauteOuverte = ({
+  ouverte,
+  maintenant,
+  retour,
+}: {
+  readonly ouverte: Ouverte;
+  readonly maintenant: number;
+  /** L'adresse de la page D'OÙ la surimpression a été ouverte — voile, poignée et croix y ramènent. */
+  readonly retour: string;
+}): string => {
   const titre = ouverte.genre === 'ouverte' ? ouverte.nom : COMMUNAUTES.titre;
 
   const dedans =
@@ -128,18 +180,36 @@ const communauteOuverte = ({ ouverte, maintenant }: { readonly ouverte: Ouverte;
           : `<ul>${ouverte.conversations.map((c) => conversationLigne(c, maintenant)).join('')}</ul>`;
 
   return (
-    `<a class="voile" href="/communities" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
+    `<a class="voile" href="${echappe(retour)}" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
     '<dialog class="communaute-ouverte" open aria-modal="true" aria-labelledby="titre-de-la-communaute" ' +
-    'data-retour="/communities">' +
-    `<a class="poignee" href="/communities" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
+    `data-retour="${echappe(retour)}">` +
+    `<a class="poignee" href="${echappe(retour)}" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
     '<div class="tete">' +
     `<div class="dit"><h2 id="titre-de-la-communaute">${echappe(titre)}</h2></div>` +
-    `<a class="fermer" href="/communities" aria-label="${echappe(COMMUNAUTES.fermer)}">${svgDuSprite('ph-x')}</a>` +
+    `<a class="fermer" href="${echappe(retour)}" aria-label="${echappe(COMMUNAUTES.fermer)}">${svgDuSprite('ph-x')}</a>` +
     '</div>' +
     dedans +
     '</dialog>'
   );
 };
+
+/**
+ * LES BORNES DE SAISIE VIENNENT DU CONTRAT, ET SE DÉCLARENT SUR LE CHAMP.
+ *
+ * `createCommunityRequestSchema` (`packages/shared/types/api-schemas/
+ * community.ts:85-110`) borne `name` à 100 et `description` à 500, et Fastify
+ * les fait respecter AVANT le handler (`core.ts:394`, `body:`) : un dépassement
+ * revient en 400. La porte ne connaît que 401, 409 et « le reste » — un 400 de
+ * longueur tombait donc dans `echecCreation`, « La création a échoué.
+ * Réessayez dans un instant. » : une phrase qui promet qu'attendre suffira,
+ * alors que rien ne changera jamais tant que le texte fait 600 signes.
+ *
+ * La borne est donc posée LÀ OÙ ON TAPE, où le navigateur l'applique sans un
+ * octet de script et où le champ la montre : le refus n'a plus lieu d'être
+ * plutôt que d'être mieux formulé — la complexité se paie dans le code, jamais
+ * chez l'utilisateur (dimension 12).
+ */
+export const BORNES_DE_LA_COMMUNAUTE = { nom: 100, description: 500 } as const;
 
 /** `POST /communities` (Q4) — trois champs, `identifier` absent (auto-généré serveur). */
 export const CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE = {
@@ -171,27 +241,29 @@ export const SAISIE_NEUVE_COMMUNAUTE: SaisieDeCommunaute = { nom: '', descriptio
 const nouvelleCommunaute = ({
   saisie,
   motif,
+  retour,
 }: {
   readonly saisie: SaisieDeCommunaute;
   readonly motif: string | null;
+  readonly retour: string;
 }): string =>
-  `<a class="voile" href="/communities" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
+  `<a class="voile" href="${echappe(retour)}" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
   '<dialog class="nouvelle-communaute" open aria-modal="true" aria-labelledby="titre-de-la-nouvelle-communaute" ' +
-  'data-retour="/communities">' +
-  `<a class="poignee" href="/communities" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
+  `data-retour="${echappe(retour)}">` +
+  `<a class="poignee" href="${echappe(retour)}" aria-label="${echappe(COMMUNAUTES.fermer)}"></a>` +
   '<div class="tete">' +
   `<div class="dit"><h2 id="titre-de-la-nouvelle-communaute">${echappe(COMMUNAUTES.creerTitre)}</h2></div>` +
-  `<a class="fermer" href="/communities" aria-label="${echappe(COMMUNAUTES.fermer)}">${svgDuSprite('ph-x')}</a>` +
+  `<a class="fermer" href="${echappe(retour)}" aria-label="${echappe(COMMUNAUTES.fermer)}">${svgDuSprite('ph-x')}</a>` +
   '</div>' +
   (motif === null ? '' : `<p class="alerte" role="alert">${echappe(motif)}</p>`) +
   '<form method="post">' +
   '<p class="champ">' +
   `<label for="c-nom">${echappe(COMMUNAUTES.nomChamp)}</label>` +
-  `<input id="c-nom" name="${CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE.nom}" type="text" required value="${echappe(saisie.nom)}" autocomplete="off">` +
+  `<input id="c-nom" name="${CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE.nom}" type="text" required maxlength="${BORNES_DE_LA_COMMUNAUTE.nom}" value="${echappe(saisie.nom)}" autocomplete="off">` +
   '</p>' +
   '<p class="champ">' +
   `<label for="c-description">${echappe(COMMUNAUTES.descriptionChamp)}</label>` +
-  `<textarea id="c-description" name="${CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE.description}">${echappe(saisie.description)}</textarea>` +
+  `<textarea id="c-description" name="${CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE.description}" maxlength="${BORNES_DE_LA_COMMUNAUTE.description}">${echappe(saisie.description)}</textarea>` +
   '</p>' +
   `<label class="coche"><input type="checkbox" name="${CHAMPS_DE_LA_NOUVELLE_COMMUNAUTE.prive}" value="1"${saisie.prive ? ' checked' : ''}>${echappe(COMMUNAUTES.priveeChamp)}</label>` +
   `<p class="pied"><button type="submit" class="action primaire">${echappe(COMMUNAUTES.creer)}</button></p>` +
@@ -200,6 +272,8 @@ const nouvelleCommunaute = ({
 
 export type EtatDesCommunautes = {
   readonly communautes: readonly Communaute[];
+  /** LA PAGE SERVIE (§ 2.1, `offset`) — reportée dans chaque lien pour qu'aucun geste n'y perde sa place. */
+  readonly offset: number;
   readonly suite: number | null;
   /** L'état `?ouverte=<id>` — `null` quand aucune surimpression n'est demandée. */
   readonly ouverte: Ouverte | null;
@@ -221,19 +295,25 @@ export type EtatDesCommunautes = {
  * seule adresse composée à la main : création, puis ouverture, puis espace.
  */
 export const documentDesCommunautes = (etat: EtatDesCommunautes): string => {
+  const retour = adresse(etat.offset);
+
   const dessus =
     etat.nouvelle
-      ? nouvelleCommunaute({ saisie: etat.saisie ?? SAISIE_NEUVE_COMMUNAUTE, motif: etat.motif })
+      ? nouvelleCommunaute({ saisie: etat.saisie ?? SAISIE_NEUVE_COMMUNAUTE, motif: etat.motif, retour })
       : etat.ouverte !== null
-        ? communauteOuverte({ ouverte: etat.ouverte, maintenant: etat.maintenant })
+        ? communauteOuverte({ ouverte: etat.ouverte, maintenant: etat.maintenant, retour })
         : etat.espace
-          ? feuilleDeLEspace({ lecteur: null, hote: '/communities' })
+          ? // L'ESPACE MEMBRE GARDE L'ADRESSE NUE : `versLEspace` concatène `?espace`
+            // sans regarder ce que l'hôte porte déjà — lui passer `?offset=2`
+            // composerait `?offset=2?espace`. La feuille de l'espace n'est pas une
+            // page de la liste, elle n'a rien à reprendre de sa pagination.
+            feuilleDeLEspace({ lecteur: null, hote: CHEMIN })
           : '';
 
   return documentPleinEcran({
     titre: `${COMMUNAUTES.titre} — Meeshy`,
     description: COMMUNAUTES.sous,
-    corps: dessus + (dessus === '' ? corps(etat) : corps(etat).replace('<main ', '<main inert ')),
+    corps: dessus + corps(etat, dessus !== ''),
     feuille:
       FEUILLE_CONNECTEE +
       FEUILLE_DU_FIL +

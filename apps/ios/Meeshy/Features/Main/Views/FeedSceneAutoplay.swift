@@ -67,6 +67,11 @@ struct PostSceneCard: View {
     let preferredContentLanguages: [String]
     var onTapPost: ((FeedPost) -> Void)?
 
+    /// **Ce que le doigt fait sur l'IMAGE** — le plein écran, quand l'hôte sait
+    /// le présenter. `nil` ⇒ repli sur `onTapPost`, pour les hôtes qui n'ont pas
+    /// de galerie à ouvrir.
+    var onTapScene: (() -> Void)?
+
     /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un iPad
     /// en colonne large n'étire pas la scène en mur vertical géant). La hauteur
     /// n'est PAS dupliquée en constante : `.aspectRatio` la dérive de la largeur
@@ -136,7 +141,16 @@ struct PostSceneCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .reportReelFrame(id: post.id, kind: .scene)
         .contentShape(Rectangle())
-        .onTapGesture { onTapPost?(post) }
+        // **Le doigt sur l'IMAGE ouvre l'image** (directive porteur
+        // 2026-09-05) : « dans la restitution des cards, le touché de l'image
+        // doit afficher en plein écran et non ouvrir les détails du post ».
+        //
+        // Le repli sur `onTapPost` reste, et il n'est pas un vestige : les
+        // hôtes qui montent cette carte SANS pouvoir présenter un plein écran
+        // (l'aperçu d'un repost, une liste de profil) doivent garder un geste
+        // qui mène quelque part. Un tap sans effet serait pire que le mauvais
+        // effet — c'est la loi 4.
+        .onTapGesture { (onTapScene ?? { onTapPost?(post) })() }
     }
 }
 
@@ -163,6 +177,11 @@ struct PostSceneCardContainer: View {
     let accentColor: String
     var onTapPost: ((FeedPost) -> Void)?
 
+    /// **Ce que le doigt fait sur l'IMAGE** — le plein écran, quand l'hôte sait
+    /// le présenter. `nil` ⇒ repli sur `onTapPost`, pour les hôtes qui n'ont pas
+    /// de galerie à ouvrir.
+    var onTapScene: (() -> Void)?
+
     var body: some View {
         PostSceneCard(
             post: post,
@@ -170,7 +189,8 @@ struct PostSceneCardContainer: View {
             isActive: coordinator.activeReelId == post.id,
             accentColor: accentColor,
             preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-            onTapPost: onTapPost
+            onTapPost: onTapPost,
+            onTapScene: onTapScene
         )
         .equatable()
     }
@@ -190,6 +210,11 @@ struct PostSceneSurface: View {
     let accentColor: String
     var onTapPost: ((FeedPost) -> Void)?
 
+    /// **Ce que le doigt fait sur l'IMAGE** — le plein écran, quand l'hôte sait
+    /// le présenter. `nil` ⇒ repli sur `onTapPost`, pour les hôtes qui n'ont pas
+    /// de galerie à ouvrir.
+    var onTapScene: (() -> Void)?
+
     var body: some View {
         if let coordinator {
             PostSceneCardContainer(
@@ -197,7 +222,8 @@ struct PostSceneSurface: View {
                 post: post,
                 document: document,
                 accentColor: accentColor,
-                onTapPost: onTapPost
+                onTapPost: onTapPost,
+                onTapScene: onTapScene
             )
         } else {
             // Sans coordinateur, la scène ne fabrique pas une élection que
@@ -208,7 +234,8 @@ struct PostSceneSurface: View {
                 isActive: false,
                 accentColor: accentColor,
                 preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                onTapPost: onTapPost
+                onTapPost: onTapPost,
+                onTapScene: onTapScene
             )
             .equatable()
         }

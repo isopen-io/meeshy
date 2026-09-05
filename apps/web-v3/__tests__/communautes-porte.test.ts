@@ -3,6 +3,8 @@
  */
 
 import { COMMUNAUTES_DU_LECTEUR, CREE_UNE_COMMUNAUTE } from '@/app/connecte/communautes-porte';
+import { BORNES_DE_LA_COMMUNAUTE } from '@/app/connecte/communautes-vue';
+import { teinteDeLAvatar } from '@/lib/avatar';
 import { COMMUNAUTES } from '@/lib/contenu/communautes';
 
 /**
@@ -210,6 +212,12 @@ describe('la porte de /communities', () => {
     const html = await (await COMMUNAUTES_DU_LECTEUR(requete('https://meeshy.test/communities'), recuperer)).text();
 
     expect(html).toContain('href="/communities?offset=2"');
+    // LE VOCABULAIRE DE LA ZONE, PAS UN NOM À SOI : `plus-ancien action
+    // discrete` est ce que le fil, la galerie, `/notifications` et `/calls`
+    // rendent. La feuille en déclarait une copie sous `.plus` — nom que
+    // `social-feuille.ts` portait déjà, autrement.
+    expect(html).toContain('class="plus-ancien action discrete"');
+    expect(html).not.toContain('class="plus action');
   });
 
   it('vide : carteVide, ni lignes ni lien « plus »', async () => {
@@ -360,7 +368,7 @@ describe('la porte de /communities', () => {
 
   it('POST sans nom ⇒ refus CÔTÉ CLIENT, jamais de POST vers la passerelle', async () => {
     const methodes: string[] = [];
-    const recuperer = async (url: string, init: RequestInit): Promise<Response> => {
+    const recuperer = async (_url: string, init: RequestInit): Promise<Response> => {
       methodes.push(String(init.method ?? 'GET'));
       return json({ success: true, data: DEUX_COMMUNAUTES, pagination: { total: 2, limit: 20, offset: 0, hasMore: false } });
     };
@@ -380,5 +388,171 @@ describe('la porte de /communities', () => {
 
     expect(reponse.status).not.toBe(303);
     expect(await reponse.text()).toContain('Meeshy');
+  });
+});
+
+/**
+ * LA PAGE 2 EST UNE PAGE, PAS UN CUL-DE-SAC (#5109, trouvé en revue).
+ *
+ * `?offset=` gouverne QUELLE page la porte demande à la passerelle — donc,
+ * mécaniquement, quelles communautés `ouvertureDe` a en main pour nommer une
+ * surimpression (`GET /communities/:id/conversations` ne sert AUCUN `name`,
+ * § 2.2). Une ligne de la page 2 dont le `href` ne reporte pas l'offset fait
+ * relire la page 1 : la communauté demandée n'y est pas, et sa surimpression
+ * s'ouvre sur le repli « Communauté » au lieu de son nom. Le repli existe pour
+ * une adresse composée à la main, pas pour le geste NOMINAL du lecteur qui
+ * possède plus de vingt communautés.
+ *
+ * Les trois retours de la surimpression (voile, poignée, croix) et le lien
+ * « plus » suivent la même loi : ce qui repart de la page 2 y revient.
+ */
+describe('la pagination reporte l’offset — la page 2 n’est pas un cul-de-sac', () => {
+  const PAGE_DEUX = [
+    communauteServie({ id: 'comm-3', identifier: 'mshy_cercle', name: 'Cercle des lecteurs', memberCount: 7, conversationCount: 2 }),
+  ];
+
+  /**
+   * LE BOUCHON PAGINE POUR DE VRAI — `data` dépend de `offset`, comme
+   * `communities/core.ts:99-239`. Un bouchon qui rend la même page quel que
+   * soit l'offset rendrait ces témoins INCAPABLES d'échouer : la porte
+   * retrouverait `comm-3` même après avoir perdu l'offset en chemin.
+   */
+  const pageDeux = () => {
+    const vus: string[] = [];
+    const recuperer = async (url: string): Promise<Response> => {
+      vus.push(url);
+      if (url.includes('/conversations')) {
+        return json({ success: true, data: [conversationServie({ communityId: 'comm-3' })], pagination: { total: 1, limit: 20, offset: 0, hasMore: false } });
+      }
+      const offset = Number(new URL(url).searchParams.get('offset') ?? '0');
+      const page = offset >= 2 ? PAGE_DEUX : DEUX_COMMUNAUTES;
+      return json({ success: true, data: page, pagination: { total: 3, limit: 2, offset, hasMore: offset < 2 } });
+    };
+    return { recuperer, vus };
+  };
+
+  const sert = async (adresse: string): Promise<string> =>
+    (await COMMUNAUTES_DU_LECTEUR(requete(`https://meeshy.test${adresse}`), pageDeux().recuperer)).text();
+
+  it('chaque ligne de la page 2 reporte l’offset dans son href', async () => {
+    expect(await sert('/communities?offset=2')).toContain('href="/communities?offset=2&amp;ouverte=comm-3"');
+  });
+
+  it('« Créer » depuis la page 2 y revient après coup', async () => {
+    expect(await sert('/communities?offset=2')).toContain('href="/communities?offset=2&amp;nouvelle"');
+  });
+
+  /**
+   * LE TÉMOIN SUIT LE LIEN, il ne le suppose pas : c'est le `href` RENDU sur
+   * la page 2 qu'on redemande, exactement comme le pouce du lecteur. Épingler
+   * `?ouverte=&offset=` à la main aurait passé au vert sur le code défaillant,
+   * qui savait déjà nommer une communauté quand l'offset lui arrivait — ce
+   * qu'il perdait, c'est le report de l'offset DANS le lien.
+   */
+  it('suivre la ligne de la page 2 ouvre une surimpression qui porte son NOM', async () => {
+    const liste = await sert('/communities?offset=2');
+    const lien = /href="(\/communities\?[^"]*ouverte=comm-3[^"]*)"/.exec(liste)?.[1];
+    if (lien === undefined) throw new Error('aucun lien vers comm-3');
+
+    const ouverte = await sert(lien.replace(/&amp;/g, '&'));
+
+    expect(ouverte).toContain('Cercle des lecteurs</h2>');
+    expect(ouverte).not.toContain(`${COMMUNAUTES.communauteSansNom}</h2>`);
+  });
+
+  it('les trois retours de la surimpression ramènent à la page 2', async () => {
+    const html = await sert('/communities?offset=2&ouverte=comm-3');
+
+    expect(html).not.toContain('href="/communities" aria-label');
+    expect(html.match(/href="\/communities\?offset=2" aria-label/g) ?? []).toHaveLength(3);
+    expect(html).toContain('data-retour="/communities?offset=2"');
+  });
+
+  it('la page 1 ne porte AUCUN offset — l’adresse nue reste nue', async () => {
+    const { recuperer } = NOMINALE();
+
+    const html = await (await COMMUNAUTES_DU_LECTEUR(requete('https://meeshy.test/communities'), recuperer)).text();
+
+    expect(html).toContain('href="/communities?ouverte=comm-1"');
+    expect(html).not.toContain('offset=0');
+  });
+});
+
+/**
+ * `inert` EST TOUTE LA MODALITÉ D'UNE SURIMPRESSION SANS JAVASCRIPT (#5109,
+ * trouvé en revue : la garde existait, aucun témoin ne la tenait).
+ *
+ * Sans un octet de script il n'y a ni Échap ni piège à focus : `inert` sur le
+ * `<main>` est ce que le navigateur donne gratuitement — la première
+ * tabulation atteint la croix, et le lecteur d'écran cesse d'annoncer une
+ * liste que la feuille recouvre. C'est la raison écrite dans `fil-vue.ts` pour
+ * la modale de l'état CHOIX ; elle vaut ici pour les TROIS surimpressions.
+ */
+describe('le <main> est inert sous une surimpression, et lui seul', () => {
+  const sertNominale = async (adresse: string): Promise<string> =>
+    (await COMMUNAUTES_DU_LECTEUR(requete(`https://meeshy.test${adresse}`), NOMINALE().recuperer)).text();
+
+  it('l’écran nominal n’est PAS inert', async () => {
+    expect(await sertNominale('/communities')).toContain('<main id="main-content" class="communautes-ecran">');
+  });
+
+  it.each([['?nouvelle'], ['?ouverte=comm-1'], ['?espace']])(
+    'la surimpression %s rend le <main> inert',
+    async (etat) => {
+      expect(await sertNominale(`/communities${etat}`)).toContain(
+        '<main id="main-content" class="communautes-ecran" inert>',
+      );
+    },
+  );
+});
+
+/**
+ * LA TUILE PORTE LA TEINTE DU NOM — `teinteDeLAvatar` (`lib/avatar.ts`), le
+ * site UNIQUE de la dispersion, et pas une classe posée à la main (#5109,
+ * trouvé en revue : rien ne le tenait).
+ *
+ * Sans ce témoin, une tuile figée sur `t1` rendrait le même document pour
+ * toutes les communautés sans qu'aucun gate ne rougisse : la couleur cesserait
+ * de DÉSAMBIGUÏSER deux lignes voisines — la seule chose que quatre teintes
+ * peuvent promettre — et redeviendrait du bruit décoratif. Le CONTRASTE des
+ * quatre teintes est gardé ailleurs, à sa place : `scripts/check-jetons.mjs`
+ * apparie `--color-on-avatar` aux quatre `--color-avatar-*`, dans les deux
+ * schémas.
+ */
+describe('la teinte de la tuile vient du nom, jamais d’une classe en dur', () => {
+  it('chaque ligne porte la classe que teinteDeLAvatar rend pour son nom', async () => {
+    const { recuperer } = NOMINALE([
+      communauteServie({ id: 'comm-a', name: 'Cercle fermé' }),
+      communauteServie({ id: 'comm-b', name: 'Cercle des lecteurs' }),
+    ]);
+
+    const html = await (await COMMUNAUTES_DU_LECTEUR(requete('https://meeshy.test/communities'), recuperer)).text();
+
+    expect(html).toContain(`class="tuile ${teinteDeLAvatar('Cercle fermé')}"`);
+    expect(html).toContain(`class="tuile ${teinteDeLAvatar('Cercle des lecteurs')}"`);
+    // Les deux noms tombent sur des teintes DIFFÉRENTES : le témoin rougirait
+    // sur une classe figée, ce qu'une paire de même teinte laisserait passer.
+    expect(teinteDeLAvatar('Cercle fermé')).not.toEqual(teinteDeLAvatar('Cercle des lecteurs'));
+  });
+});
+
+/**
+ * LES BORNES DU CONTRAT SONT SUR LE CHAMP (#5109, trouvé en revue).
+ *
+ * `createCommunityRequestSchema` borne `name` à 100 et `description` à 500, et
+ * Fastify refuse en 400 avant le handler. La porte ne distingue que 401, 409 et
+ * « le reste » : un dépassement tombait dans `echecCreation` — « Réessayez dans
+ * un instant », une consigne qui ne peut pas aboutir. Les bornes se déclarent
+ * donc où l'on tape, et le refus n'a plus lieu d'être.
+ */
+describe('la feuille de création borne ce que la passerelle borne', () => {
+  it('nom maxlength=100, description maxlength=500 — les valeurs du contrat', async () => {
+    const { recuperer } = NOMINALE();
+
+    const html = await (await COMMUNAUTES_DU_LECTEUR(requete('https://meeshy.test/communities?nouvelle'), recuperer)).text();
+
+    expect(BORNES_DE_LA_COMMUNAUTE).toEqual({ nom: 100, description: 500 });
+    expect(html).toContain(`maxlength="${BORNES_DE_LA_COMMUNAUTE.nom}"`);
+    expect(html).toContain(`maxlength="${BORNES_DE_LA_COMMUNAUTE.description}"`);
   });
 });

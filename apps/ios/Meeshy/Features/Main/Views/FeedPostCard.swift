@@ -334,6 +334,25 @@ struct FeedPostCard: View {
         String(format: String(localized: "a11y.feed.post.scene", defaultValue: "Scène partagée par %@", bundle: .main), post.author)
     }
 
+    /// **Le média que le plein écran doit ouvrir sur une carte de SCÈNE.**
+    ///
+    /// Le premier visuel du post — celui que la scène montre. `nil` quand la
+    /// scène n'a aucun média (un canvas de texte, de dessin ou de stickers) :
+    /// il n'y a alors rien à agrandir, et le geste retombe sur l'ouverture de
+    /// la publication plutôt que de ne rien faire.
+    private var cardSceneFullscreenMedia: FeedMedia? {
+        post.media.first { $0.type == .image || $0.type == .video }
+    }
+
+    /// L'indice VoiceOver DIT ce que le doigt fait — et il change avec lui.
+    private var cardSceneOpenHint: String {
+        cardSceneFullscreenMedia != nil
+            ? String(localized: "a11y.feed.scene.fullscreen.hint",
+                     defaultValue: "Touche deux fois pour voir en plein écran", bundle: .main)
+            : String(localized: "a11y.feed.post.open.hint",
+                     defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main)
+    }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -486,13 +505,28 @@ struct FeedPostCard: View {
                         post: post,
                         document: cardSceneDocument,
                         accentColor: accentColor,
-                        onTapPost: onTapPost
+                        onTapPost: onTapPost,
+                        // **Le doigt sur la scène ouvre le PLEIN ÉCRAN**
+                        // (directive porteur 2026-09-05), jamais le détail du
+                        // post. La scène EST le contenu : la toucher demande à
+                        // la voir en grand, pas à lire ses commentaires.
+                        onTapScene: cardSceneFullscreenMedia.map { media in
+                            { openFullscreen(media) }
+                        }
                     )
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(cardSceneAccessibilityLabel)
-                        .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
+                        // **L'annonce SUIT le geste** — sinon le contrôle ment.
+                        // VoiceOver disait « ouvrir la publication » pendant
+                        // que le doigt ouvre désormais le plein écran ; laisser
+                        // les deux diverger donnerait à qui n'y voit pas une
+                        // description de ce que l'écran NE fait plus.
+                        .accessibilityHint(cardSceneOpenHint)
                         .accessibilityAddTraits(.isButton)
-                        .accessibilityAction { onTapPost?(post) }
+                        .accessibilityAction {
+                            if let media = cardSceneFullscreenMedia { openFullscreen(media) }
+                            else { onTapPost?(post) }
+                        }
                 } else if isStoryRepost {
                     // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
                     // For this branch the gateway has snapshotted the original story media

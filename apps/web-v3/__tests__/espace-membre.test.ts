@@ -85,9 +85,19 @@ describe('l’espace membre n’ouvre que sur des routes que la v3 SERT', () => 
     },
   );
 
+  /**
+   * `/communities` (matrice ordre 45, L7) a fermé la dernière destination
+   * qui n'était pas encore servie — cette rangée entre dans le MÊME commit
+   * que `app/communities/route.ts` (§ 4 étape 6 de la spécification).
+   */
+  it('sert désormais /communities — la dernière frontière refermée', () => {
+    expect(ROUTES_SERVIES).toContain('/communities');
+    expect(DESTINATIONS).toContain('/communities');
+  });
+
   it('rougirait sur une destination hors zone', () => {
-    expect(ROUTES_SERVIES).not.toContain('/communities');
-    expect(DESTINATIONS).not.toContain('/communities');
+    expect(ROUTES_SERVIES).not.toContain('/moods');
+    expect(DESTINATIONS).not.toContain('/moods');
   });
 });
 

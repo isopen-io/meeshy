@@ -815,7 +815,33 @@ extension MeeshyComposerHost {
     /// levée nommée** : que `setStatus` rende un résultat, comme `createPost` le
     /// fait déjà par `publishSuccess` / `publishError`.
     func publishDocument() {
-        guard canPublishDocument, let draft = documentDraft else { return }
+        // **Un refus qui SE DIT** (#5285, 2026-09-05).
+        //
+        // Ce `guard` rendait la main SANS un mot. Mesuré par la session
+        // voisine : photo posée, texte tapé par la porte CONTENU, flèche
+        // pressée — **aucun post créé, et le composer reste ouvert**. L'auteur
+        // ne voit rien qui distingue « ça part » de « ça n'est pas parti » ;
+        // il presse encore, et compose peut-être une seconde fois ce qu'il
+        // vient d'écrire.
+        //
+        // > **Un refus muet est PIRE qu'une donnée perdue.** Une publication
+        // > incomplète laisse quelque chose à réparer ; une publication qui
+        // > n'a pas eu lieu et ne le dit pas laisse l'auteur croire qu'elle a
+        // > eu lieu. C'est la règle que ce lot applique déjà DEUX fois à
+        // > l'étage du dessous — `ComposerDocumentDurablePublisher.refuse()`
+        // > et `DocumentComposerDoor.refuse()` peignent tous deux un toast —
+        // > et qui manquait à l'étage qui les APPELLE.
+        //
+        // Les deux branches sont distinctes et le restent : `canPublishDocument`
+        // faux est un état NORMAL (rien à publier — pas de texte, pas de
+        // média), que la flèche grisée dit déjà. Un brouillon NUL, lui, est une
+        // anomalie : la flèche était armée et rien n'est parti.
+        guard canPublishDocument else { return }
+        guard let draft = documentDraft else {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
+            return
+        }
         // Le palier RETENU pour la PROCHAINE publication est écrit ICI, au
         // moment où il SERT — même geste que
         // `FeedView+Attachments.publishPostWithAttachments`
