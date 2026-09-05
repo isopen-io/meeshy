@@ -75,10 +75,14 @@ final class ComposerSocleSilentRefusalGuardTests: XCTestCase {
             + "et `DocumentComposerDoor.refuse()`, un étage plus bas.")
     }
 
-    /// **L'état normal reste MUET, et c'est voulu.** Un toast à chaque pression
-    /// sur une flèche grisée transformerait une évidence visuelle en
+    /// **L'état normal reste MUET AU TOAST, et c'est voulu.** Un toast à chaque
+    /// pression sur une flèche grisée transformerait une évidence visuelle en
     /// interruption ; le témoin garde donc la DISTINCTION, pas le bruit.
-    func test_lEtatNormal_resteMuet() throws {
+    ///
+    /// « Muet » n'y qualifie que le TOAST. La raison du grisé, elle, s'affiche
+    /// en permanence au-dessus de la flèche — voir la section suivante, dont
+    /// c'est tout l'objet.
+    func test_lEtatNormal_neLeveAucunToast() throws {
         let source = try socle()
         guard let corps = corps(de: "func publishDocument()", dans: source) else {
             return XCTFail("`publishDocument` introuvable.")
@@ -88,5 +92,85 @@ final class ComposerSocleSilentRefusalGuardTests: XCTestCase {
         XCTAssertTrue(
             compact.contains("guardcanPublishDocumentelse{return}"),
             "« Rien à publier » se voit sur la flèche : le dire en plus serait du bruit.")
+    }
+
+    // MARK: - …et il ne le dit pas QU'À VOIX BASSE
+
+    /// **LE témoin du lot du 2026-09-05.** Le refus muet avait une seconde
+    /// moitié, et elle était plus insidieuse que la première : la raison du
+    /// grisé EXISTAIT — calculée, localisée en sept langues, capable de
+    /// distinguer les surfaces — et n'était servie qu'à `.accessibilityHint`.
+    ///
+    /// Un utilisateur de VoiceOver s'entendait donc expliquer pourquoi la
+    /// flèche ne part pas ; **un utilisateur voyant voyait une flèche grise et
+    /// rien d'autre.**
+    ///
+    /// > **Une explication réservée à VoiceOver n'est pas une explication,
+    /// > c'est une asymétrie.** Le travail était fait — la règle, la phrase,
+    /// > les traductions — et il manquait le pixel. Le défaut est invisible
+    /// > depuis le site qui l'a introduit : `publishBlockedHint` a l'air
+    /// > CONSOMMÉE, elle l'est même correctement, et le modificateur qui la
+    /// > consomme ne peint rien.
+    ///
+    /// La garde interroge donc l'AUTRE côté : la valeur atteint-elle au moins
+    /// un consommateur qui rende des pixels ? Elle ne compte pas les appels —
+    /// elle exige qu'il en existe un hors accessibilité.
+    func test_laRaisonDuGrise_atteintUnPixelEtPasSeulementVoiceOver() throws {
+        let source = try socle()
+
+        let sites = source.components(separatedBy: "publishBlockedHint").count - 1
+        XCTAssertGreaterThan(sites, 1, "`publishBlockedHint` a disparu — la garde ne mesurerait rien.")
+
+        XCTAssertTrue(
+            source.contains("Text(publishBlockedHint)"),
+            """
+            La raison du grisé doit être RENDUE. Servie au seul \
+            `.accessibilityHint`, elle n'explique qu'à VoiceOver : l'utilisateur \
+            voyant garde une flèche grise sans motif, et pressera une seconde \
+            fois. Le travail — la règle, la phrase, les sept traductions — \
+            existait déjà tout entier ; il ne manquait que le pixel.
+            """)
+    }
+
+    /// **Et elle est rendue là où on la cherche : sur la capsule elle-même.**
+    ///
+    /// Un `Text` posé ailleurs dans le fichier satisferait le témoin précédent
+    /// sans rien résoudre — c'est la forme « une vue construite puis jetée ».
+    /// La capsule est le seul ancrage juste : elle porte déjà le grisé et le
+    /// `.disabled`, donc l'explication voisine ce qu'elle explique.
+    func test_laRaison_estMonteeSurLaCapsuleQuElleExplique() throws {
+        let source = try socle()
+        guard let corps = corps(de: "func publishCapsule", dans: source) else {
+            return XCTFail("`publishCapsule` introuvable — la garde ne mesurerait rien.")
+        }
+        let compact = corps.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertTrue(
+            compact.contains("publishBlockedNotice"),
+            "L'explication se monte SUR la capsule grisée, pas ailleurs dans l'écran.")
+        XCTAssertTrue(
+            compact.contains(".disabled(!canPublishDocument)"),
+            "…et la capsule reste `.disabled` : aucun tap ne l'atteint, donc la raison "
+            + "doit être là AVANT l'essai. C'est pourquoi elle ne peut pas être un toast.")
+    }
+
+    /// **Rien à dire ⇒ rien de peint.** `publishBlockedHint` rend `""` dès que
+    /// la flèche est armée, et aussi quand l'indice serait FAUX (audience
+    /// nominative incomplète). La vue ne re-décide pas cette règle : elle la
+    /// LIT, et se retire.
+    ///
+    /// Sans ce `if`, une bulle vide flotterait au-dessus d'une flèche armée —
+    /// un contrôle qui affirme un blocage inexistant, exactement ce que la
+    /// loi 4 interdit.
+    func test_sansRienADire_laVueSeRetire() throws {
+        let source = try socle()
+        guard let corps = corps(de: "var publishBlockedNotice", dans: source) else {
+            return XCTFail("`publishBlockedNotice` introuvable.")
+        }
+        let compact = corps.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertTrue(
+            compact.contains("if!publishBlockedHint.isEmpty"),
+            "La vue se retire quand l'indice est vide — elle ne redécide pas la règle.")
     }
 }

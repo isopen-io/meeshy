@@ -515,7 +515,7 @@ extension MeeshyComposerHost {
             .disabled(!canPublishDocument)
             // **L'indice de blocage se VOIT, il ne s'entend plus seulement**
             // (2026-09-05). Voir `publishBlockedNotice`.
-            .overlay(alignment: .top) { publishBlockedNotice }
+            .overlay(alignment: .topTrailing) { publishBlockedNotice }
             // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, la
             // flèche perdrait son nom à l'instant même où elle devient compacte
             // — le défaut que `StatusComposerView` a dû corriger, dans l'autre
@@ -568,9 +568,17 @@ extension MeeshyComposerHost {
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 190, alignment: .trailing)
-                // AU-DESSUS de la capsule : le socle est la dernière rangée de
-                // l'écran, et poser l'indice dessous le mettrait sous le bord.
-                .offset(y: -26)
+                // AU-DESSUS de la capsule, et calé sur son bord DROIT : le socle
+                // est la dernière rangée de l'écran (dessous, l'indice passerait
+                // sous le bord) et la capsule en occupe le bout — un bloc de
+                // 190 pt centré sur elle déborderait à droite.
+                //
+                // Le guide d'alignement, et non un `offset` : il fait coïncider
+                // le BAS du texte avec le HAUT de la capsule, quelle que soit sa
+                // hauteur. Un décalage fixe supposerait un nombre de lignes, et
+                // se tromperait sur l'autre — donc sur une langue plus longue ou
+                // un plus grand corps de texte.
+                .alignmentGuide(.top) { d in d[.bottom] + 6 }
                 .allowsHitTesting(false)
                 // VoiceOver l'entend déjà par `accessibilityHint` sur la
                 // capsule ; le lire une seconde fois ici ferait entendre la
@@ -684,10 +692,14 @@ extension MeeshyComposerHost {
     /// s'écrira dans le lot qui possède le catalogue.
     var publishBlockedHint: String {
         guard !canPublishDocument, !isPublishingDocument else { return "" }
+        // L'audience passe AVANT la surface, et l'ordre porte la règle : les
+        // deux causes peuvent être vraies ensemble (composer vide ET personne
+        // choisie), et c'est l'audience qu'il faut dire — elle seule n'est
+        // signalée par rien d'autre à l'écran. Un composer vide, lui, se voit.
         guard ComposerDocumentPublishGate.audienceIsComplete(
             composerVisibility,
             userIds: composerVisibilityUserIds
-        ) else { return "" }
+        ) else { return ComposerSocleCopy.publishBlockedAudienceHint }
         return ComposerSocleCopy.publishBlockedHint(surface: mountedSurface) ?? ""
     }
 
