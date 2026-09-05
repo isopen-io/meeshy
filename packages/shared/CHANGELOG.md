@@ -1,5 +1,191 @@
 # @meeshy/shared
 
+## 1.16.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - deleteNotIn sur page non exhaustive + décodage table entière sortent du client
+  - 518 et 519 designaient QUATRE lecons — les deux miennes passent a 522 et 523
+  - le fil ne recalcule plus tout l'historique sur un signal étranger à son contenu
+  - le rattrapage des messages passe par le forward watermark after
+  - le document refuse de remettre au navigateur l'adresse INTERNE de la passerelle — et /healthz le dit
+  - une revalidation sans changement ne repaie plus le corps complet
+  - les conversations consomment le delta-sync du gateway au lieu de tout retélécharger
+  - la LÉGENDE d'un média atteint enfin le lecteur — et le type déclaré cesse de se perdre
+  - durcit le correctif #5186 — purge chunkée + direction de panne côté DELETE
+  - revalidate() des conversations ne purge plus au-delà de la page reçue
+  - un ratio MESURÉ survit à l'aller-retour v3 — le pont cesse d'en fabriquer un
+  - le CANVAS d'un post voyage enfin jusqu'au fil — et la carte optimiste le porte
+  - le démarrage à froid tient en une poignée de requêtes — le plein descend par /sync en pages d'ancre
+  - --radius-md disparaît — champs en lg, tuiles en lg, .saut en pill (#5178)
+  - l'accordéon de join rend le verdict des droits, plus seulement leur nom (#5175)
+  - canonicalize language equality in MessageActionsBar and its 5 divergent twins (#5173)
+  - le drapeau original/traduit d'un message canonicalise ses codes de langue (#5167)
+  - propagate a failed message-list read instead of a silent empty page (#5165)
+  - dev se réintègre AVANT les gates, et Playwright se joue par projet — les deux leçons du tour 1
+  - remesure documents_du_fil et documents_de_la_galerie après dev
+  - les fixtures de test suivent les ONZE modules après la fusion de dev
+  - `links` déclare enfin son état de session dans jetons-de-vues.json
+  - médias, profil membre, story indisponible et fermeture d'un lien
+  - le convertisseur socket cesse d'écraser translations et isEdited (#5145)
+  - une borne de lecture SEULE ouvre la fenetre -- ma propre analogie avait cree une divergence
+  - un post a enfin un CORPS qu'on peut écrire — la porte CONTENU entre dans la rangée canonique
+  - .bandeau p porte --color-text, pas --color-text-muted
+  - le temoin du brouillon attend l'EFFET du module, plus une minuterie — la CI dev repasse au vert
+  - la légende SORT enfin du composer, et la langue se choisit où le texte se valide
+  - la date et l accusé se posent au bas de la bulle — la ligne qu ils occupaient disparaît
+  - le module du composer DIT qu'il est arme, et son temoin cesse de dormir
+  - la cloche s'observe par ce qu'elle fait PARTIR — seam du service de notifications et temoin de boucle au niveau VM
+  - la cloche emprunte le curseur que le serveur lui sert — et le doublon redevient un SIGNAL
+  - les trois chaines alimentent la fenetre -- un clip rogne joue enfin sa fenetre
+  - le correctif de fusion n'etait pas DANS la fusion
+  - les deux surfaces de lecture SAVENT jouer une fenetre -- il leur manque qui la leur donne
+  - la galerie des medias se compare pleine, et un serveur de test ne laisse plus d'orphelin
+  - le NAVIGATEUR DE ZONE — la coquille ne se reconstruit plus, et l'ecran quitte meurt proprement a chaque traversee
+  - les bornes de LECTURE arrivent au modele -- un clip rogne cesse d'etre invisible au fil
+  - la zone a son TRAVAILLEUR — le role premier se relit hors ligne, et un seul worker detient la portee de l'origine
+  - un paramètre `locale` INERTE est pire qu une absence — et le formatage des tailles avait déjà sa source
+  - le bon modèle au bon moment — fable décrit, sonnet et haiku développent, opus relit et corrige à chaque travail
+  - l objet DIT l état de son asset — « MONTÉE EN COURS · 34 % — 4,8 / 14,2 Mo »
+  - un format porte UN mot -- et le temoin en a trouve deux de plus que je n'en avais vu
+  - un temoin qui depend d'un artefact de build ne juge pas le code
+  - un glyphe figé à 13 pt dans une capsule qui, elle, s'étire
+  - DEV était cassé par mon élargissement de CameraResult — trois consommateurs manqués, et le compilateur déguisait la cause
+  - l'etat vide et le heros portent la charte du tour 3 (#5115)
+  - /feed se rafraichit au retour — la question 13 tranchee par une quatrieme voie
+  - le brouillon du composer survit — un module de 441 o, et sessionStorage
+  - chaque navigation fond-enchaine au lieu de flasher — View Transitions inter-documents et prechargement des hubs, zero octet execute
+  - la banniere en application, sur la loi partagee — une seule, trois clients
+  - le bandeau de reponse cite comme les deux autres peaux -- et la regle redevient PURE
+  - la PLACE OÙ DÉPOSER une pré-montée — adopter par FICHIER, pas par identifiant
+  - la rangee plate cite comme la bulle -- le texte part du deux-points, la miniature se pose sous l'auteur
+  - la loi de la PRÉ-MONTÉE — et sa garantie tient à la FORME, pas à un catch
+  - le TROISIÈME lecteur voit le recadrage — et la projection prend deux axes
+  - le recadrage traversait la passerelle SANS AUCUN LECTEUR — le web le voit, et le fil le déclare
+  - la boîte de notifications se prolonge au-delà de ses trente premières lignes (#5105)
+  - `aspectRatio = 1.0` disait « carré » ET « pas encore mesuré » — l'absence devient représentable
+  - une story part avec son audience REELLEMENT choisie — et la duree annoncee est celle que le serveur applique
+  - on publie un post ou une humeur depuis /composer — deux onglets servis, l'audience qui MUTE la charge
+  - la vignette d'une slide ouvre son FOND — la porte qui manquait à l'éditeur d'objet
+  - un exclude qui désigne un dossier de RUNTIME rend le dépôt inconstructible depuis un clone
+  - une citation part du deux-points de l'auteur, et sa miniature se pose sous lui
+  - les réels connectés jouent dans le MÊME lecteur que les réels partagés (#5101)
+  - l appui long sur la scène DÉCIDE — photo à la levée, vidéo si l on tient, menu si un fond y est déjà
+  - iOS emprunte enfin le curseur des notifications — plus de rang par defaut, la paire du temoin portee cote client
+  - l'éditeur plein écran se manipule — rail détaché, outil qui se referme, texte qui rappelle le clavier
+  - un chrono bâti sur les segments CLOS reste figé pendant toute la prise
+  - l'espace membre ouvre les quatre écrans que rien n'atteignait (#5094)
+  - un trou de sequence declenche la resynchronisation /sync — le hook gapDetected sert enfin les conversations
+  - un aperçu qui se REMPLACE ne peut pas grandir — le viseur devient unique et enveloppe le socle
+  - le delta des conversations passe par /sync — un aller-retour, fusion par champs servis, repli NOMME
+  - la photo arrivait COUCHEE, le seuil trahissait la visee, et (x) devient [ ]
+  - le moteur de sync devient une famille de quatre fichiers — l'extraction qui rend #4172 greffable
+  - le commentaire part sans emporter l'ecran — huitieme module, le fil s'echange, la voix du geste servie
+  - la prise du viseur n'arrivait JAMAIS sur la slide -- scene noire et pastille muette etaient un seul defaut
+  - un commentaire s'ecrit depuis /post/:id — le chemin pauvre d'abord, saisie tenue, motifs dits
+  - creer un lien n'emporte plus l'ecran — la feuille postee par fetch, le carnet echange, trois reponses trois gestes
+  - le verrou d'enregistrement se glisse vers la DROITE, et il se voit approcher
+  - la recherche devient INCREMENTALE — debouncee, un seul vol par saisie, et l'ecran n'est plus jamais recharge
+  - le SDK possede un client /sync — trois issues nettes, les champs qu'il demande, et le 304 enfin atteignable
+  - le recadrage entre au CONTRAT -- une borne normalisee, appliquee par le compositeur, jamais un reencodage
+  - accepter et refuser une demande deviennent optimistes — et le refus est REVERSIBLE, fenetre et focus compris
+  - une permission refusee DIT pourquoi -- « noir » n'etait pas un etat, c'etait trois etats confondus
+  - le rattrapage de la liste ne demande que les deux champs qu'il lit — fields= sur /sync, borne prouvee dans les deux sens
+  - le declencheur ecrasait le volet de description -- ce que le viseur OCCUPE devient une regle
+  - l'apercu naissait a ZERO, le chrome flottait hors de la scene, et le mode se choisissait au lieu de se lire
+  - la surface DOCUMENT quitte l'hote du composer -- 1248 lignes, plafond 1200
+  - /notifications vit en direct — arrivee, lecture, compteur et « Tout lire » optimiste, sans un rechargement
+  - la boîte du mémo d'images animées écrit sa `deinit` nonisolated — NSCache la libère où il veut
+  - « pivoter » avait son champ et pas son ecrivain -- le quart de tour existe enfin
+  - la prise en SEGMENTS -- relacher clot, le bandeau compte, la croix retire un fichier, la coche pose
+  - les options de l'editeur plein ecran s'ancrent EN BAS -- deux causes, et aucune ne suffisait seule
+  - la loi des SEGMENTS -- un segment est un fichier, le retirer en supprime un, valider n'en reencode aucun
+  - le viseur en scene a un flash, une bascule d'objectif -- et surtout une SORTIE
+  - bun.lock recopie les versions des manifestes — trois champs restes au numero d'avant la release
+  - les outils d'un POST descendent sous l'avatar, a gauche, comme en story
+  - une prise du viseur en scene se POSE par le chemin de la feuille, et le viseur se retire
+  - le viseur en scene porte sa barre -- trois pastilles, un declencheur, et une phrase qui DIT le geste
+  - la porte de PARTAGE porte le canal élargi — un site d'appel né pendant l'élargissement
+  - l'appui long ARME le viseur DANS la scene -- la feuille modale ne s'ouvre plus
+  - l'import orphelin du spec tableau — TS6133, la CI type-check l'a vu avant moi
+  - un objet partage depuis une autre app peut se COMPOSER avant de partir (vue 2a)
+  - une story citee garde sa SCENE dans les quatre modes, et la riviere marque enfin les transferts
+  - la capacité de détourage porte son type AVANT le ternaire
+  - /chats n'elevait AUCUNE de ses deux surimpressions en modale
+  - les deux erreurs de compilation du lot — isolation d'extension, et un ternaire non inférable
+  - les trois témoins de la mémoire d'images animées déclarent @MainActor
+  - coller un GIF le pose comme sticker ANIMÉ, et détourer un sujet le fait entrer dans la bibliothèque
+  - /chats connecte rendait 500 — le { params } d'App Router entrait dans la couture et se faisait appeler comme un fetch
+  - la loi du viseur EN SCENE -- trois pastilles, trois gestes, et la pose qui reutilise la galerie
+  - l'adresse rendue sur /links s'ouvre enfin — identifier mshy\_\* pris pour un linkId, des deux côtés
+  - le routeur de staging reclame les six ecrans connectes livres de la v3
+  - la feuille « nouvelle conversation » — deux gestes, et le succes mene AU FIL
+  - la MOITIE PRODUCTION du lot 5054/5055 -- 240ed2a931 n avait pousse que ses temoins
+  - plus aucune porte ne monte un composer historique -- et l ancrage publie enfin
+  - Echap ne ferme pas la feuille des liens, et le temoin le DIT
+  - la feuille « nouveau lien » — trois chemins pour la fermer, aucun champ decoratif
+  - le socle de la feuille « nouveau lien » — ce que la passerelle accepte, et le champ inerte qu'elle n'appliquera jamais
+  - un message transfere se voit avec le MEME nom dans toutes les peaux
+  - editer et republier une story ouvrent le MEUBLE, plus l'atelier nu
+  - une legende depliee se lit sur le media -- ni voile, ni barre
+  - les reglages, un theme a trois etats et la lecon 500
+  - un second fixture de test oubliait 'affiche' — Test web-v3 rouge sur #5062
+  - les six ecrans de reglages, et un theme qui change vraiment
+  - /feed et /composer entrent dans V3_ZONE_PREFIXES — check-v3-pipeline rouge sur #5062
+  - MediaDeStory.affiche manque a un fixture de test — CI rouge sur #5062
+  - les hashtags COLLENT au bas de la scene -- 77 pt de letterbox refermes, et l'ORDRE ne suffisait pas
+  - le socle des réglages — six écrans servables, et les quatre qui ne le sont pas
+  - un texte encore vide se DIT vide -- VoiceOver ne s'arrete plus sur un separateur orphelin
+  - fonds et effets se listent en grille verticale, le nom SOUS la boite -- et trois pastilles cessent de mentir sur leur couleur
+  - les deux bandes de la scene s'alignent enfin sur le MEME bord
+  - /feed sert le fil social — aimer, reposter, rail de stories (#5031)
+  - le panneau de profil d'un participant s'ouvre en modale sur le fil (§ 12.10.3)
+  - l'app cesse de planter au lancement -- le warm-up ne rend plus rien
+  - les passe-plats d'horloge de la story appellent la porte qui existe
+  - sheet:lang — choisir une langue change le texte lu, et l'annonce à voix haute
+  - l'éditeur d'objet s'exploite clavier levé, et se range d'un geste
+  - /reels/:id et /moods/:id — un seul lecteur, et le gate qui interdit la jumelle
+  - l'appui long sur la trace du son offre enfin de la mettre sur la scene
+  - un son de fond peut SORTIR du fond -- la regle, le verbe qui manquait, le menu qui cesse de mentir
+  - les options d'un outil ont le bas pour elles seules
+  - la trace du son se pose enfin sur la carte qu'elle etiquette
+  - la porte image compte AUSSI le fond, et la porte fond se tait
+  - la palette sépare la NATURE de la FAMILLE — switch sticker/smiley, catégories à la verticale
+  - le fil devient un CHAT complet, et /chats se rattrape en temps réel — citation, plein écran, transcription, profil en modale, balayage (#4835, #4753)
+  - une mention NOTE ne part plus sur TOUTES les slides — elle appartient à sa publication
+  - une langue porte UN nom — et c'est le français, puisque le document l'est
+  - l'horloge de /stories/:id s'injecte — la suite ne rougit plus au passage d'une date (#5021)
+  - le point d'état DIT son état — et un témoin de story ne rougit plus à cinq heures
+  - forward-source reciprocity fails closed when participants fetch fails (#5211)
+  - un 403 « not found » ne dit plus ce que son statut tait (#5126)
+  - deactivate share links on conversation closure (#3740) (#5207)
+  - retirer pendingEmail/pendingPhone de formatUserResponse (#4653) (#5180)
+  - GET /attachments/search — média à travers toutes les conversations (#5170) (#5174)
+  - GET /links accepte q, filtre name/identifier (#4962) (#5171)
+  - admin broadcast targeting/report canonicalize systemLanguage (#5166)
+  - enforce per-attachment-type send rights on message send (#5162)
+  - canonicalize ZMQ translation target languages before dedup/send (#5160)
+  - usersByLanguage replie systemLanguage sur son code canonique (#5155)
+  - canSendMessages s'applique au transport canonique et au socket (#5150)
+  - require conversation membership for attachment transcription (#5153)
+  - GET /attachments/:id/metadata exige enfin une appartenance (#4923) (#5149)
+  - GET /attachments/:id/metadata exige enfin une appartenance (#4923)
+  - un message protégé trouvé par recherche/fil/lien sert enfin ses drapeaux (#4885) (#5148)
+  - un message protégé trouvé par recherche/fil/lien sert enfin ses drapeaux (#4885)
+  - le sender ZMQ canonicalise ses langues cibles avant l'envoi — la liste envoyée ne diverge plus de son suivi
+  - un visiteur sans identité sur /links/:id/messages reçoit 401, pas 403
+  - canonicalize ?languages= codes on the REST messages filter
+  - un 403 « not found » disait ce qu'il refusait de dire (#5130)
+  - garder les deux suites sous leur budget de lignes hérité
+  - un 403 « not found » ne dit plus ce que son statut tait (#4856)
+  - le filtre `?languages=` de la liste de messages canonicalise ses codes
+  - expose ETag par CORS — le 304 de /sync devient atteignable
+  - \_merge_group propage un float, plus un booléen (voice_similarity_score)
+  - stop faking autoTranslateEnabled on a served participant (#5172)
+  - la loi de la banniere devient UNE loi pour trois clients
+
 ## 1.16.0
 
 ### Minor Changes
