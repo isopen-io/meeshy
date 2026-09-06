@@ -95,7 +95,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // le comptage manuel de #4889. Qui la baisse doit avoir mesuré une vraie
 // baisse ; qui la relève documente ici pourquoi une entrée neuve est morte à
 // la naissance (une porte posée pour un écran à venir, cf. #4889).
-const BASELINE_DEAD_ENTRIES = 253;
+//
+// 253 → 248 (#5424) : `CleanupEndpoint`, `StatsEndpoint`, `UserStatusEndpoint`,
+// `TestEndpoint` et `InfoEndpoint` ont quitté le catalogue généré — ce sont
+// des routes d'EXPLOITATION admin-only (`OPERATIONAL_ONLY_ROUTES`,
+// `packages/shared/api/build-catalog.ts`), jamais une fonctionnalité client
+// incomplète. `TestEndpoint.root` n'avait qu'un seul usage, dans
+// `MeeshyTests/Unit/Services/APIServiceTests.swift`, comme adresse arbitraire
+// pour exercer le client générique — remplacé par `FictionalEndpoint("/test")`.
+const BASELINE_DEAD_ENTRIES = 248;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

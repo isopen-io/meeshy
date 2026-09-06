@@ -225,9 +225,6 @@ export const API_ENDPOINTS = {
     history: '/api/v1/calls/history',
     root: '/api/v1/calls',
   },
-  cleanup: {
-    root: '/api/v1/cleanup',
-  },
   communities: {
     byId: (id: string) => `/api/v1/communities/${id}`,
     byIdConversations: (id: string) => `/api/v1/communities/${id}/conversations`,
@@ -319,9 +316,6 @@ export const API_ENDPOINTS = {
     metrics: '/api/v1/health/metrics',
     ready: '/api/v1/health/ready',
     root: '/health',
-  },
-  info: {
-    root: '/info',
   },
   invitations: {
     email: '/api/v1/invitations/email',
@@ -470,9 +464,6 @@ export const API_ENDPOINTS = {
   static: {
     byFilename: (filename: string) => `/api/v1/static/${filename}`,
   },
-  stats: {
-    root: '/api/v1/stats',
-  },
   status: {
     byMessageIdByLanguage: (messageId: string, language: string) => `/api/v1/status/${messageId}/${language}`,
   },
@@ -485,9 +476,6 @@ export const API_ENDPOINTS = {
   },
   sync: {
     root: '/api/v1/sync',
-  },
-  test: {
-    root: '/api/v1/test',
   },
   trackingLinks: {
     adminAll: '/api/v1/tracking-links/admin/all',
@@ -526,9 +514,6 @@ export const API_ENDPOINTS = {
     conversations: '/api/v1/user-preferences/conversations',
     conversationsByConversationId: (conversationId: string) => `/api/v1/user-preferences/conversations/${conversationId}`,
     reorder: '/api/v1/user-preferences/reorder',
-  },
-  userStatus: {
-    root: '/api/v1/user-status',
   },
   users: {
     byId: (id: string) => `/api/v1/users/${id}`,
@@ -761,7 +746,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/calls/:callId/transcript',
   '/api/v1/calls/active',
   '/api/v1/calls/history',
-  '/api/v1/cleanup',
   '/api/v1/communities',
   '/api/v1/communities/:id',
   '/api/v1/communities/:id/conversations',
@@ -943,13 +927,11 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/sounds/:id/posts',
   '/api/v1/sounds/mine',
   '/api/v1/static/:filename',
-  '/api/v1/stats',
   '/api/v1/status-metrics',
   '/api/v1/status-metrics/reset',
   '/api/v1/status/:messageId/:language',
   '/api/v1/stories/audio',
   '/api/v1/sync',
-  '/api/v1/test',
   '/api/v1/tracking-links',
   '/api/v1/tracking-links/:token',
   '/api/v1/tracking-links/:token/click',
@@ -976,7 +958,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/user-preferences/conversations',
   '/api/v1/user-preferences/conversations/:conversationId',
   '/api/v1/user-preferences/reorder',
-  '/api/v1/user-status',
   '/api/v1/users/:id',
   '/api/v1/users/:userId/affiliate-token',
   '/api/v1/users/:userId/block',
@@ -1029,7 +1010,6 @@ export const API_PATH_TEMPLATES = [
   '/attachments/:attachmentId/analysis',
   '/attachments/batch/analysis',
   '/health',
-  '/info',
   '/voice/analysis',
 ] as const;
 
@@ -1212,7 +1192,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/calls/:callId/transcript': ['GET'],
   '/api/v1/calls/active': ['GET'],
   '/api/v1/calls/history': ['GET'],
-  '/api/v1/cleanup': ['POST'],
   '/api/v1/communities': ['GET', 'POST'],
   '/api/v1/communities/:id': ['GET', 'PUT', 'DELETE'],
   '/api/v1/communities/:id/conversations': ['GET'],
@@ -1394,13 +1373,11 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/sounds/:id/posts': ['GET'],
   '/api/v1/sounds/mine': ['GET'],
   '/api/v1/static/:filename': ['GET'],
-  '/api/v1/stats': ['GET'],
   '/api/v1/status-metrics': ['GET'],
   '/api/v1/status-metrics/reset': ['POST'],
   '/api/v1/status/:messageId/:language': ['GET'],
   '/api/v1/stories/audio': ['GET'],
   '/api/v1/sync': ['GET'],
-  '/api/v1/test': ['GET'],
   '/api/v1/tracking-links': ['POST'],
   '/api/v1/tracking-links/:token': ['GET', 'PATCH', 'DELETE'],
   '/api/v1/tracking-links/:token/click': ['POST'],
@@ -1427,7 +1404,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/user-preferences/conversations': ['GET'],
   '/api/v1/user-preferences/conversations/:conversationId': ['GET', 'PUT', 'DELETE'],
   '/api/v1/user-preferences/reorder': ['POST'],
-  '/api/v1/user-status': ['POST'],
   '/api/v1/users/:id': ['GET'],
   '/api/v1/users/:userId/affiliate-token': ['GET'],
   '/api/v1/users/:userId/block': ['POST', 'DELETE'],
@@ -1480,6 +1456,5 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/attachments/:attachmentId/analysis': ['GET', 'POST'],
   '/attachments/batch/analysis': ['POST'],
   '/health': ['GET'],
-  '/info': ['GET'],
   '/voice/analysis': ['GET', 'POST'],
 };

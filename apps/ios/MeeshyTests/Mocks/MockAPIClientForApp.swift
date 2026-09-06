@@ -10,10 +10,12 @@ import XCTest
 /// témoin, lui, a besoin d'exprimer l'inexistant — c'est la moitié de son
 /// travail. Ce type le lui permet sans rouvrir la porte au code de production,
 /// puisqu'il vit dans la cible de test.
-/// (Nommée `FictionalEndpoint` et non `TestEndpoint` : le serveur sert bien une
-/// route `/api/v1/test`, donc le catalogue GÉNÉRÉ porte déjà un
-/// `TestEndpoint`. La collision aurait été silencieuse à l'écriture et
-/// déroutante à la lecture.)
+/// (Nommée `FictionalEndpoint`, sans lien avec la route `/api/v1/test` que le
+/// serveur sert réellement : celle-ci est une route d'EXPLOITATION —
+/// health-check du pipeline de traduction, authentifié pour éviter l'abus du
+/// ML — jamais une fonctionnalité client, et le catalogue GÉNÉRÉ ne porte donc
+/// plus de `TestEndpoint` depuis #5424. Le nom est conservé : un témoin qui
+/// désigne une adresse inexistante n'a besoin de heurter aucun cas réel.)
 struct FictionalEndpoint: MeeshyEndpoint {
     let path: String
     init(_ path: String) { self.path = path }

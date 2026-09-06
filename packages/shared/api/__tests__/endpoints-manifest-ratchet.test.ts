@@ -46,7 +46,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../build-catalog.js';
+import { buildApiEndpointsCatalog, OPERATIONAL_ONLY_ROUTES, type ManifestRouteInput } from '../build-catalog.js';
 import { API_ENDPOINTS, API_PATH_TEMPLATES } from '../endpoints.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -157,8 +157,20 @@ describe('Cliquet — api/endpoints.ts reflète route-manifest.json', () => {
     expect(orphaned).toEqual([]);
   });
 
-  it('chaque route du manifeste est représentée dans le catalogue — une route AJOUTÉE sans régénérer fait rougir ce témoin', () => {
-    const manifestShapes = new Set(readFreshManifestRoutes().map((route) => manifestShape(route.path)));
+  it('chaque route CLIENT du manifeste est représentée dans le catalogue — une route AJOUTÉE sans régénérer fait rougir ce témoin', () => {
+    // Les routes d'EXPLOITATION listées par `OPERATIONAL_ONLY_ROUTES` (#5424)
+    // sont exclues par DÉCISION : elles restent dans route-manifest.json (la
+    // vérité de ce que le gateway SERT) mais ne doivent jamais entrer dans le
+    // catalogue client — voir le doc-comment de la liste, dans build-catalog.ts.
+    const routes = readFreshManifestRoutes();
+    const operationalShapes = new Set(
+      routes
+        .filter((route) => OPERATIONAL_ONLY_ROUTES.has(`${route.method} ${route.path}`))
+        .map((route) => manifestShape(route.path))
+    );
+    const manifestShapes = new Set(
+      routes.map((route) => manifestShape(route.path)).filter((shape) => !operationalShapes.has(shape))
+    );
     const catalogShapes = new Set([...flattenGeneratedPaths()].map(templateShape));
 
     const missing = [...manifestShapes].filter((shape) => !catalogShapes.has(shape));

@@ -66,6 +66,42 @@
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+/**
+ * Routes d'EXPLOITATION, jamais de fonctionnalité CLIENT (#5424).
+ *
+ * `route-manifest.json` reste la vérité de CE QUE LE GATEWAY SERT (§ CLAUDE.md
+ * gateway, « Le manifeste recense ce que Meeshy EXPOSE… ») — ces cinq routes y
+ * restent. Elles ne doivent en revanche JAMAIS entrer dans un catalogue
+ * CLIENT : les cinq sont gardées `requireAdmin` (`middleware/auth.ts`, donc
+ * invisibles au discriminant `hierarchyGated`/`adminPrefixed` du collecteur,
+ * qui ne connaît que `middleware/authorize.ts`) et leur description OpenAPI se
+ * déclare elle-même à l'intention des administrateurs SYSTÈME — jamais d'un
+ * écran mobile ou web. Sans cette liste, un futur audit de lecteurs
+ * (#4889/#5372) les compte comme une fonctionnalité client incomplète alors
+ * qu'aucun écran ne devrait jamais les appeler.
+ *
+ * `requireAdmin` seul ne suffit PAS comme discriminant mécanique : la console
+ * admin web appelle légitimement des dizaines de routes `requireAdmin`
+ * (`/admin/users`, `/admin/posts`…) qui DOIVENT rester au catalogue client.
+ * La distinction — « exploitation système » vs « fonctionnalité admin du
+ * produit » — est un jugement par route, jamais une règle générale ; d'où une
+ * liste EXPLICITE et documentée, plutôt qu'une heuristique qui devinerait.
+ *
+ * Clé : `${method} ${path}`, chemin COMPLET tel que porté par le manifeste.
+ */
+export const OPERATIONAL_ONLY_ROUTES: ReadonlySet<string> = new Set([
+  // Monitoring temps réel pour administrateurs système (services/gateway/src/routes/maintenance.ts).
+  'GET /api/v1/stats',
+  // Déclenchement manuel du nettoyage des données expirées (idem).
+  'POST /api/v1/cleanup',
+  // Override manuel du statut en ligne d'un utilisateur, pour dépannage (idem).
+  'POST /api/v1/user-status',
+  // Health-check du pipeline de traduction, authentifié pour éviter l'abus du ML (routes/translation.ts).
+  'GET /api/v1/test',
+  // Diagnostic statique du process (nom, version, build) — services/gateway/src/route-registration.ts.
+  'GET /info',
+]);
+
 /** Le sous-ensemble du manifeste dont cette dérivation a besoin — jamais `securityLevel`. */
 export interface ManifestRouteInput {
   readonly method: string;
@@ -333,9 +369,10 @@ function renderSource(
  * peut pas tomber n'est pas un témoin »).
  */
 export function buildApiEndpointsCatalog(routes: readonly ManifestRouteInput[]): BuiltApiEndpointsCatalog {
+  const clientRoutes = routes.filter((route) => !OPERATIONAL_ONLY_ROUTES.has(`${route.method} ${route.path}`));
   const methodsByPath = new Map<string, Set<HttpMethod>>();
 
-  for (const route of routes) {
+  for (const route of clientRoutes) {
     if (!isHttpMethod(route.method)) {
       throw new Error(
         `Méthode HTTP inconnue dans le manifeste : ${route.method} ${route.path} — ` +

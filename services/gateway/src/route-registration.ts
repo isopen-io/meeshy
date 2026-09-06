@@ -167,12 +167,15 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
         architecture: {
           frontend: 'WebSocket + REST API',
           backend: 'ZMQ + Protocol Buffers',
-          database: 'PostgreSQL + Prisma'
+          database: 'MongoDB 8 + Prisma'
         },
         endpoints: {
           websocket: '/socket.io/',
-          health: '/health',
-          translate: '/translate'
+          health: '/health'
+          // Pas de champ `translate` : la traduction n'a plus de route unique
+          // depuis longtemps (`/api/v1/translation/*` — de nombreuses routes,
+          // cf. `routes/translation.ts`) — en publier une seule serait un
+          // mensonge du même genre que celui corrigé ci-dessus (#5424).
         },
         supportedLanguages: ['fr', 'en', 'es', 'de', 'pt', 'zh', 'ja', 'ar'],
         features: ['real-time translation', 'multiple language support', 'caching', 'typing indicators']

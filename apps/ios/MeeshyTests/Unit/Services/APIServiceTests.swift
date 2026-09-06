@@ -28,7 +28,7 @@ final class APIServiceTests: XCTestCase {
         mock.stub("/test", result: ["key": "value"])
 
         let _: [String: String] = try await mock.request(
-            TestEndpoint.root,
+            FictionalEndpoint("/test"),
             method: "GET",
             body: nil,
             queryItems: nil

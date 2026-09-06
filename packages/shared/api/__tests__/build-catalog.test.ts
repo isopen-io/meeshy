@@ -183,6 +183,34 @@ describe('buildApiEndpointsCatalog — dérivation namespace/clé', () => {
 
     expect(() => buildApiEndpointsCatalog(routes)).toThrow(/méthode/i);
   });
+
+  it('une route d’EXPLOITATION admin-only (#5424) est exclue du catalogue CLIENT, jamais du reste du manifeste', () => {
+    // Décision de #5424 : ces cinq routes sont gardées `requireAdmin` et se
+    // déclarent elles-mêmes, dans leur OpenAPI, à l'intention des
+    // administrateurs système — jamais d'un écran client. Un futur audit de
+    // lecteurs (#4889/#5372) ne doit plus les compter comme une fonctionnalité
+    // client incomplète.
+    const routes: ManifestRouteInput[] = [
+      { method: 'POST', path: '/api/v1/cleanup' },
+      { method: 'GET', path: '/api/v1/stats' },
+      { method: 'POST', path: '/api/v1/user-status' },
+      { method: 'GET', path: '/api/v1/test' },
+      { method: 'GET', path: '/info' },
+      // Une route CLIENT ordinaire, pour prouver que l'exclusion est ciblée
+      // et ne vide pas tout le catalogue.
+      { method: 'GET', path: '/api/v1/auth/me' },
+    ];
+    const { source, entries, pathTemplates } = buildApiEndpointsCatalog(routes);
+
+    expect(entries).toHaveLength(1);
+    expect(pathTemplates).toEqual(['/api/v1/auth/me']);
+    expect(source).toContain("me: '/api/v1/auth/me',");
+    expect(source).not.toContain('cleanup');
+    expect(source).not.toContain('stats');
+    expect(source).not.toContain('userStatus');
+    expect(source).not.toContain("'/api/v1/test'");
+    expect(source).not.toContain("'/info'");
+  });
 });
 
 describe('buildApiEndpointsCatalog — les entrées DÉRIVÉES sont exposées (#4282)', () => {

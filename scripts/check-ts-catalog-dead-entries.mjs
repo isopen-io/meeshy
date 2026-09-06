@@ -139,7 +139,14 @@ export const parseCatalogBlock = (blockLines) => {
 // 277 → 276 (#5430) : `API_ENDPOINTS.admin.shareLinksByIdReveal` a reçu son
 // premier appelant hors test — `apps/web/app/admin/share-links/page.tsx`,
 // qui l'appelle désormais pour réparer les contrôles « Copier »/« Ouvrir ».
-const BASELINE_DEAD_ENTRIES = 276;
+//
+// 276 → 271 (#5424) : `cleanup`, `stats`, `userStatus`, `test` et `info` ont
+// quitté le catalogue CLIENT — ce sont des routes d'EXPLOITATION admin-only
+// (`OPERATIONAL_ONLY_ROUTES`, `packages/shared/api/build-catalog.ts`), jamais
+// une fonctionnalité client incomplète. Elles restent servies (voir
+// `services/gateway/route-manifest.json`), seule leur présence au catalogue
+// GÉNÉRÉ a été retirée.
+const BASELINE_DEAD_ENTRIES = 271;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
