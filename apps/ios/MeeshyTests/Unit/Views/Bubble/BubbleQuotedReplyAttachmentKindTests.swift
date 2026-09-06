@@ -228,8 +228,31 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// donc pas une correction : c'est le CLIQUET qui empêche la peau la plus
     /// vue de gagner un jour le défaut que l'autre vient de perdre.
     func test_loiDesZones_leNomNEstPasUneZoneTactile() throws {
+        // **La tranche part de la ligne de TITRE, pas de la première occurrence
+        // du fichier** (2026-09-06). `Text(quotedTitle)` apparaît DEUX fois :
+        // dans `quotedFlow`, qui compose le nom et l'aperçu en un paragraphe, et
+        // dans la ligne de titre. `range(of:)` sans borne prenait la première,
+        // et la tranche s'étendait alors sur 3252 caractères au lieu de 547 —
+        // elle happait un `.onTapGesture` parfaitement légitime, posé bien plus
+        // bas et sur un tout autre élément.
+        //
+        // > La garde accusait donc le NOM d'une zone tactile qu'il n'a pas, et
+        // > c'est le pire mode d'échec possible pour une garde d'UX : elle
+        // > désigne une violation dans du code sain, et le prochain lecteur
+        // > « corrige » ce qui marchait. Mesuré : la tranche bornée ne contient
+        // > aucun lexème de tap — la LOI DES ZONES est respectée.
+        //
+        // On borne d'abord la LIGNE, puis on y cherche le nom : deux ancres
+        // étroites valent mieux qu'une large, et celle de la ligne est déjà
+        // celle que la garde de la zone 1 utilise juste au-dessus.
         let code = try quotedReplySource()
-        let nameSlice = try slice(of: code, from: "Text(quotedTitle)", to: "moodDateLabel(previewColor: previewColor)")
+        let titleRow = try slice(of: code,
+                                 from: "HStack(alignment: .top, spacing: 6) {",
+                                 to: "moodDateLabel(previewColor: previewColor)")
+        guard let nameStart = titleRow.range(of: "Text(quotedTitle)") else {
+            return XCTFail("`Text(quotedTitle)` introuvable dans la ligne de titre — la garde ne mesure plus rien.")
+        }
+        let nameSlice = titleRow[nameStart.lowerBound...]
 
         var offenders: [String] = []
         for lexeme in Self.tapLexemes where nameSlice.contains(lexeme) {
