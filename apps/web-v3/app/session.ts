@@ -1,4 +1,5 @@
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION, valeurDuCookie } from '@/lib/api/cookies';
+import { COOKIE_DE_FUSEAU, fuseauPlausible } from '@/lib/temps';
 
 /**
  * CE QUE LE SERVEUR SAIT D'UN LECTEUR — deux cookies, et rien d'autre.
@@ -29,6 +30,21 @@ export const aUneSession = (requete: Request): boolean =>
 
 export const jetonDuLecteur = (requete: Request): string | null =>
   valeurDeLaRequete(requete, COOKIE_DE_JETON);
+
+/**
+ * LE FUSEAU DU LECTEUR (décision porteur 2026-09-06, `lib/temps.ts`) — posé
+ * par le module de participation, LU ici pour servir l'heure de réception
+ * exacte dès le premier octet. Comme `meeshy_session`, il peut mentir sans
+ * conséquence : au pire une heure dans un autre fuseau, que le module recale.
+ * La forme est filtrée (`fuseauPlausible`) ; la validité, c'est `heureExacte`
+ * qui la tranche en rendant '' sur un fuseau que l'ICU refuse.
+ */
+export const fuseauDuLecteur = (requete: Request): string | null => {
+  const brut = valeurDeLaRequete(requete, COOKIE_DE_FUSEAU);
+  if (brut === null) return null;
+  const fuseau = decodeURIComponent(brut);
+  return fuseauPlausible(fuseau) ? fuseau : null;
+};
 
 /**
  * LA REQUÊTE EST-ELLE ARRIVÉE EN HTTPS ? — la même dérivation que
