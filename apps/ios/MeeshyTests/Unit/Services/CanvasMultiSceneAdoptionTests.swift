@@ -47,6 +47,78 @@ final class CanvasMultiSceneAdoptionTests: XCTestCase {
         effets((0..<n).map { media("obj-\($0)", background: true) })
     }
 
+    /// **La forme que le composer PUBLIE réellement** — et elle n'est pas celle
+    /// que les témoins ci-dessous fabriquent.
+    ///
+    /// `ComposerStoryCanvas.publishedSlide` pose la première slide en RUNTIME
+    /// (`mediaObjects`) et porte les suivantes dans `canvasV3.scenes`. Les
+    /// scènes 2 à N n'ont donc AUCUN objet dans `mediaObjects` — et c'est là
+    /// que l'adoption les cherchait.
+    private func publicationDeDeuxScenes() -> StoryEffects {
+        var e = effets([media("obj-0", postMediaId: "pre-0", background: true)])
+        e.canvasV3 = CanvasV3(v: 3, scenes: [
+            scene("s1", objet: "obj-0", postMediaId: "pre-0"),
+            scene("s2", objet: "obj-1", postMediaId: "pre-1")
+        ])
+        return e
+    }
+
+    private func scene(_ id: String, objet: String, postMediaId: String) -> SceneV3 {
+        SceneV3(id: id, objects: [
+            ObjectV3(id: objet, kind: .media,
+                     anchor: .free(x: 0.5, y: 0.5), plane: .content, z: 0,
+                     transform: TransformV3(),
+                     payload: ["postMediaId": .string(postMediaId)])
+        ])
+    }
+
+    // MARK: - 0. Les scènes portées par le CANVAS, pas par le runtime
+
+    /// **LE témoin de la panne mesurée le 2026-09-06.** Publication à deux
+    /// scènes composée au simulateur, relue sur staging :
+    ///
+    /// ```
+    /// media du post : ['…4590', '…4591']
+    ///   scène 1 → postMediaId= …4590   ✅ possédé
+    ///   scène 2 → postMediaId= …458f   ✗ ORPHELIN
+    /// ```
+    ///
+    /// À l'écran, la scène 2 ne rendait pas du blanc — elle rendait **l'image
+    /// de la scène 1**, par repli sur le premier visuel du post. C'est pire
+    /// qu'un vide : la carte a l'air d'un rendu réussi, et rien n'invite à
+    /// regarder deux fois.
+    ///
+    /// > **Un correctif de transport doit être suivi jusqu'à ce qui ADOPTE.**
+    /// > Le lot qui a fait voyager les scènes 2 à N par `canvasV3` a laissé
+    /// > l'adoption derrière lui : elle ne connaît que `mediaObjects`, et son
+    /// > invariant — « tout `postMediaId` publié appartient au post » — était
+    /// > vrai de tout ce qu'elle VOYAIT.
+    func test_lesScenesPorteesParLeCanvas_sontAdopteesAussi() throws {
+        let apres = try XCTUnwrap(CanvasMediaAdoption.adopting(
+            publicationDeDeuxScenes(),
+            objectIdsBySourceIndex: ["obj-0", "obj-1"],
+            idsBySourceIndex: [0: "srv-0", 1: "srv-1"],
+            urlsBySourceIndex: [0: "u/0.jpg", 1: "u/1.jpg"]))
+
+        let servis = (apres.canvasV3?.scenes ?? []).compactMap { sc -> String? in
+            guard case .string(let id)? = sc.objects.first?.payload["postMediaId"] else { return nil }
+            return id
+        }
+        XCTAssertEqual(servis, ["srv-0", "srv-1"],
+                       "la scène 2 vit dans le canvas : sans elle, son média reste orphelin")
+    }
+
+    /// **La cohérence se juge sur TOUT le document, pas sur son runtime.**
+    /// `isCoherent` ne regardait que `mediaObjects` — donc elle rendait `true`
+    /// sur la publication exacte qui échouait à l'écran. Une garde qui ne voit
+    /// pas la moitié du document certifie l'autre moitié.
+    func test_laCoherence_voitLesScenesDuCanvas() {
+        let orpheline = publicationDeDeuxScenes()
+        XCTAssertFalse(
+            CanvasMediaAdoption.isCoherent(effects: orpheline, postMediaIds: ["pre-0"]),
+            "la scène 2 désigne « pre-1 », que le post ne possède pas")
+    }
+
     // MARK: - 1. Plusieurs scènes, chacune adoptée
 
     /// **Cinq scènes, cinq médias, cinq adoptions.** Le cas que le porteur
