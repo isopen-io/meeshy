@@ -105,8 +105,8 @@ extension StoryViewModel {
         // identifiant local. Ici l'appel est fire-and-forget, donc rien ne
         // s'accumule — mais laisser partir la moitié jumelle reviendrait à
         // corriger le symptôme (la file) en gardant la cause (un id local qui
-        // atteint le serveur). Doctrine : `MeeshyObjectID`.
-        guard MeeshyObjectID.isValid(storyId) else { return }
+        // atteint le serveur). Doctrine : `ObjectID`.
+        guard ObjectID.isValid(storyId) else { return }
         Task { [postService] in
             do {
                 try await postService.recordImpression(postId: storyId, source: "story")
@@ -126,9 +126,9 @@ extension StoryViewModel {
         // #4044 — un identifiant LOCAL (`pending_<uuid>`, story encore en file
         // de publication) n'entre pas dans la file durable : le serveur ne peut
         // pas l'adresser, la ligne y pourrit en 500 jusqu'à `.exhausted`.
-        // Doctrine complète : `MeeshyObjectID`. Ne gouverne QUE l'envoi — l'état
+        // Doctrine complète : `ObjectID`. Ne gouverne QUE l'envoi — l'état
         // « vu » local ci-dessous reste posé.
-        if MeeshyObjectID.isValid(storyId) {
+        if ObjectID.isValid(storyId) {
             Task { [markViewedOutboxEnqueuer] in
                 do {
                     try await markViewedOutboxEnqueuer(storyId)
