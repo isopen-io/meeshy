@@ -1,5 +1,15 @@
 # @meeshy/translator
 
+## 1.35.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - les quatre jumelles @tanstack s'alignent sur 5.102.8 — le cliquet de types retombe à sa baseline
+  - sélecteur figé sur l'ancien rail flottant — v3-communautes-a11y.spec.ts rouge
+  - le plafond du lot d'impressions a UNE source de verite — le schema disait 100, la garde tronquait a 50 en silence
+
 ## 1.35.0
 
 ### Minor Changes
