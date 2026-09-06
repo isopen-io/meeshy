@@ -1,8 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { adresseDuFil, adresseDuMessage } from '../lib/api/adresses-du-fil';
-import { SIGNAL_DE_DECONNEXION } from '../lib/sw/signal';
+import { adresseAutourDuMessage, adresseDuFil, adresseDuMessage } from '../lib/api/adresses-du-fil';
+import { CACHE_DE_ROTATION_PUSH, CLE_DE_ROTATION_PUSH, SIGNAL_DE_DECONNEXION } from '../lib/sw/signal';
 
 /**
  * LE TRAVAILLEUR DE ZONE (#4473) — et ce qu'il n'a PAS le droit de faire.
@@ -75,7 +75,7 @@ type Monde = {
   fetchImpl: (request: unknown) => Promise<unknown>;
   readonly showNotification: jest.Mock<Promise<void>, [unknown, unknown]>;
   readonly openWindow: jest.Mock<unknown, [string]>;
-  readonly matchAllRendu: { url: string; focus: jest.Mock<unknown, []> }[];
+  readonly matchAllRendu: { url: string; focus: jest.Mock<unknown, []>; navigate: jest.Mock<Promise<unknown>, [string]> }[];
   readonly getSubscription: jest.Mock<Promise<FausseSubscription | null>, []>;
 };
 
@@ -93,7 +93,14 @@ const monteLeMonde = (options?: {
   const nomsExistants = [...(options?.nomsDeCaches ?? [])];
   const showNotification = jest.fn((_titre: unknown, _options: unknown) => Promise.resolve());
   const openWindow = jest.fn((url: string) => ({ url }));
-  const matchAllRendu = (options?.clientsOuverts ?? []).map((url) => ({ url, focus: jest.fn(() => undefined) }));
+  const matchAllRendu = (options?.clientsOuverts ?? []).map((url) => {
+    const focus = jest.fn((): unknown => undefined);
+    return {
+      url,
+      focus,
+      navigate: jest.fn((adresse: string): Promise<unknown> => Promise.resolve({ url: adresse, focus })),
+    };
+  });
   const getSubscription = jest.fn(() =>
     Promise.resolve(options?.subscriptionExistante === undefined ? null : options.subscriptionExistante),
   );
@@ -145,11 +152,19 @@ const monteLeMonde = (options?: {
     monde.fetchAppels.push(String((request as { url?: string }).url ?? request));
     return monde.fetchImpl(request);
   };
+  // `Response` couvre les DEUX usages réels du fichier : `Response.error()`
+  // (le repli hors-ligne d'une entrée d'API absente) et `new Response(corps)`
+  // (le drapeau de rotation push, #5391) — un objet nu ne portait que le
+  // premier, et `new Response(...)` y jetait `TypeError: not a constructor`.
+  function FausseReponse(this: { corps: unknown }, corps: unknown): void {
+    this.corps = corps;
+  }
+  FausseReponse.error = () => ({ estUneErreur: true });
   new Function('self', 'caches', 'fetch', 'Response', 'URL', SOURCE)(
     self,
     monde.caches,
     fetchTrace,
-    { error: () => ({ estUneErreur: true }) },
+    FausseReponse,
     URL,
   );
   return monde;
@@ -204,6 +219,19 @@ const dispatchMessage = async (monde: Monde, data: unknown): Promise<void> => {
   for (const fn of monde.ecouteurs['message'] ?? []) {
     fn({
       data,
+      waitUntil: (p: Promise<unknown>) => {
+        attentes.push(p);
+      },
+    });
+  }
+  await Promise.all(attentes);
+};
+
+/** Un `PushSubscriptionChangeEvent` — livré au WORKER, jamais à une page. */
+const dispatchPushSubscriptionChange = async (monde: Monde): Promise<void> => {
+  const attentes: Promise<unknown>[] = [];
+  for (const fn of monde.ecouteurs['pushsubscriptionchange'] ?? []) {
+    fn({
       waitUntil: (p: Promise<unknown>) => {
         attentes.push(p);
       },
@@ -487,6 +515,47 @@ describe('la purge à la déconnexion — le lot que la décision 2 annonçait',
 });
 
 /**
+ * LA ROTATION DE L'ABONNEMENT PUSH (#5391, suivi de revue) — un navigateur
+ * peut invalider la `PushSubscription` hors du contrôle de toute page ; le
+ * worker qui la détient pose alors un DRAPEAU dans le Cache Storage que
+ * `/notifications/preferences` relit à son prochain chargement
+ * (`lib/realtime/push-abonnement.ts`, témoin séparé). Le CONTRAT (nom de
+ * cache, clé) vit dans `lib/sw/signal.ts`, importé ici — jamais un littéral
+ * dupliqué qui pourrait diverger de celui du fichier plat.
+ */
+describe('la rotation de l’abonnement push — le drapeau posé pour la page', () => {
+  it('`pushsubscriptionchange` pose le drapeau dans le cache STABLE, hors du cycle de version', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPushSubscriptionChange(monde);
+
+    const cache = await monde.caches.open(CACHE_DE_ROTATION_PUSH);
+    const drapeau = await cache.match(CLE_DE_ROTATION_PUSH);
+    expect(drapeau).toBeDefined();
+  });
+
+  it('l’activate suivant n’efface PAS le drapeau — le nom du cache est EXEMPTÉ du nettoyage', async () => {
+    const monde = monteLeMonde({
+      nomsDeCaches: ['meeshy-v3-sw-__V3_SW_EMPREINTE__', CACHE_DE_ROTATION_PUSH],
+    });
+
+    await dispatchActivate(monde);
+
+    expect(monde.caches.supprimes).toEqual([]);
+  });
+
+  it('la purge de déconnexion, elle, efface le drapeau comme le reste du namespace', async () => {
+    const monde = monteLeMonde({
+      nomsDeCaches: ['meeshy-v3-sw-__V3_SW_EMPREINTE__', CACHE_DE_ROTATION_PUSH],
+    });
+
+    await dispatchMessage(monde, { type: SIGNAL_DE_DECONNEXION });
+
+    expect(monde.caches.supprimes.sort()).toEqual(['meeshy-v3-sw-__V3_SW_EMPREINTE__', CACHE_DE_ROTATION_PUSH]);
+  });
+});
+
+/**
  * LE PUSH WEB (#5391) — un événement `push` affiche la notification avec le
  * corps SERVI, jamais recomposé : la passerelle a déjà résolu le Prisme
  * côté serveur (§ 2.4 de la spécification), ce worker ne fait que relayer.
@@ -518,6 +587,14 @@ describe('le push — le corps SERVI, jamais recomposé', () => {
     expect(monde.showNotification).not.toHaveBeenCalled();
   });
 
+  it('une charge dont le TITRE n’est pas une chaîne ne montre rien — jamais le mot « undefined » sur l’écran verrouillé', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, { notification: { body: 'un corps sans titre' }, data: { conversationId: 'conv-1' } });
+
+    expect(monde.showNotification).not.toHaveBeenCalled();
+  });
+
   it('une charge illisible (`json()` qui jette) ne montre rien et ne jette pas', async () => {
     const monde = monteLeMonde();
 
@@ -536,7 +613,7 @@ describe('le push — le corps SERVI, jamais recomposé', () => {
  * `notification.data.cible` — le clic ne la recalcule jamais, il l'ouvre.
  */
 describe('le clic — l’adresse portée par la charge, ouverte dans la zone', () => {
-  it('une charge `fcmOptions.link` au format legacy ouvre EXACTEMENT adresseDuMessage(adresseDuFil(id), messageId)', async () => {
+  it('une charge `fcmOptions.link` au format legacy ouvre EXACTEMENT la TRANCHE du message — adresseDuMessage(adresseAutourDuMessage(adresseDuFil(id), mid), mid)', async () => {
     const monde = monteLeMonde();
 
     await dispatchPush(monde, {
@@ -544,7 +621,12 @@ describe('le clic — l’adresse portée par la charge, ouverte dans la zone', 
       fcmOptions: { link: '/conversations/abc123?messageId=m9' },
     });
     const cible = (monde.showNotification.mock.calls[0]?.[1] as { data: { cible: string } }).data.cible;
-    expect(cible).toBe(adresseDuMessage(adresseDuFil('abc123'), 'm9'));
+    // LA TRANCHE, PAS SEULEMENT L'ANCRE — la porte du fil ne sert qu'une
+    // page ; sans `?autour=`, l'ancre d'un message plus ancien ne désigne
+    // aucun nœud du document servi. La cible est donc EXACTEMENT ce que les
+    // fonctions RÉELLES composent, `adresseAutourDuMessage` comprise.
+    expect(cible).toBe(adresseDuMessage(adresseAutourDuMessage(adresseDuFil('abc123'), 'm9'), 'm9'));
+    expect(cible).toBe('/chats/abc123?autour=m9#m-m9');
 
     await dispatchNotificationClick(monde, { data: { cible } });
 
@@ -552,7 +634,7 @@ describe('le clic — l’adresse portée par la charge, ouverte dans la zone', 
   });
 
   it('un client fenêtre déjà ouvert sur ce chemin est FOCALISÉ — openWindow n’est pas appelé', async () => {
-    const cible = adresseDuMessage(adresseDuFil('abc123'), 'm9');
+    const cible = adresseDuMessage(adresseAutourDuMessage(adresseDuFil('abc123'), 'm9'), 'm9');
     const monde = monteLeMonde({ clientsOuverts: [`https://staging.meeshy.me${cible}`] });
 
     const { fermee } = await dispatchNotificationClick(monde, { data: { cible } });
@@ -602,6 +684,34 @@ describe('le clic — l’adresse portée par la charge, ouverte dans la zone', 
     const cible = (monde.showNotification.mock.calls[0]?.[1] as { data: { cible: string } }).data.cible;
 
     expect(cible).toBe('/notifications');
+  });
+
+  /**
+   * DEUX BANNIÈRES DE LA MÊME CONVERSATION ne portent pas la même ancre :
+   * comparer l'adresse ENTIÈRE ouvrait une SECONDE fenêtre sur un fil déjà
+   * ouvert (défaut de revue). La fenêtre est reconnue par son CHEMIN, puis
+   * NAVIGUÉE vers la tranche annoncée.
+   */
+  it('une fenêtre déjà ouverte sur la MÊME conversation, à une autre ancre, est NAVIGUÉE — jamais dupliquée', async () => {
+    const cible = adresseDuMessage(adresseAutourDuMessage(adresseDuFil('abc123'), 'm42'), 'm42');
+    const monde = monteLeMonde({ clientsOuverts: ['https://staging.meeshy.me/chats/abc123?autour=m9#m-m9'] });
+
+    await dispatchNotificationClick(monde, { data: { cible } });
+
+    expect(monde.matchAllRendu[0]?.navigate).toHaveBeenCalledWith(`https://staging.meeshy.me${cible}`);
+    expect(monde.matchAllRendu[0]?.focus).toHaveBeenCalledTimes(1);
+    expect(monde.openWindow).not.toHaveBeenCalled();
+  });
+
+  it('une fenêtre qui refuse de naviguer est simplement FOCALISÉE — jamais un doublon', async () => {
+    const cible = adresseDuMessage(adresseAutourDuMessage(adresseDuFil('abc123'), 'm42'), 'm42');
+    const monde = monteLeMonde({ clientsOuverts: ['https://staging.meeshy.me/chats/abc123'] });
+    monde.matchAllRendu[0]?.navigate.mockRejectedValueOnce(new Error('refusé'));
+
+    await dispatchNotificationClick(monde, { data: { cible } });
+
+    expect(monde.matchAllRendu[0]?.focus).toHaveBeenCalledTimes(1);
+    expect(monde.openWindow).not.toHaveBeenCalled();
   });
 
   it('un clic sans cible reconnaissable ferme la notification sans ouvrir ni focaliser', async () => {

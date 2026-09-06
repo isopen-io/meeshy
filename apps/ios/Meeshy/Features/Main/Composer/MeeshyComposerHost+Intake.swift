@@ -147,9 +147,16 @@ extension MeeshyComposerHost {
                 } else if slideIdByMediaURL.isEmpty,
                    (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
                     target = viewModel.currentSlide.id
-                } else {
+                } else if viewModel.canAddSlide {
                     viewModel.addSlide()
                     target = viewModel.currentSlide.id
+                } else {
+                    // Le cap de dix slides est un REFUS, pas une pose sur la
+                    // dixième (#4059) : `addSlide()` y est un no-op, et lire
+                    // `currentSlide.id` ensuite fabriquerait une seconde
+                    // entrée de `slideIdByMediaURL` sur le même id.
+                    FeedbackToastManager.shared.showError(ComposerDocumentCopy.mediaCapReached)
+                    continue
                 }
                 documentMediaObjectIdBySource.merge(
                     viewModel.applyContentMedia([media], intoSlideId: target)

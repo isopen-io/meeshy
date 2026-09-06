@@ -169,6 +169,18 @@ const ADRESSE_PAR_DEFAUT = '/notifications';
 const adresseDuFilLocale = (id) => '/chats/' + encodeURIComponent(id);
 const ancreDuMessageLocale = (id) => '#' + encodeURIComponent('m-' + id);
 const adresseDuMessageLocale = (adresse, id) => adresse + ancreDuMessageLocale(id);
+// LA TRANCHE, PAS SEULEMENT L'ANCRE (défaut de revue) — une ancre `#m-<id>`
+// ne trouve son nœud que si le message appartient à la page SERVIE, et la
+// porte du fil n'en sert qu'une tranche : une bannière pour un message plus
+// ancien que la dernière page ouvrait le fil AILLEURS que sur le message
+// annoncé. `?autour=<id>` est le paramètre que `app/connecte/fil-porte.ts`
+// lit précisément pour cela (`PARAM_DE_L_ANCRE`) — la composition rejouée
+// ici est celle d'`adresseDuMessage(adresseAutourDuMessage(…))`, comparée
+// aux fonctions RÉELLES par `__tests__/sw-zone.test.ts`.
+const adresseAutourLocale = (adresse, id) =>
+  adresse + (adresse.indexOf('?') === -1 ? '?' : '&') + 'autour=' + encodeURIComponent(id);
+const cibleDuMessageLocale = (conversationId, messageId) =>
+  adresseDuMessageLocale(adresseAutourLocale(adresseDuFilLocale(conversationId), messageId), messageId);
 
 // Un chemin déjà DANS LA ZONE (fourni tel quel par la charge) est servi sans
 // retouche — la cascade legacy (`/conversations/<id>`) ne s'applique QU'à un
@@ -189,7 +201,7 @@ const cibleDepuisLeLien = (lien) => {
   if (conversation === null) return null;
   const id = decodeURIComponent(conversation[1]);
   const messageId = new URL(lien, 'https://zone.invalide').searchParams.get('messageId');
-  return messageId === null ? adresseDuFilLocale(id) : adresseDuMessageLocale(adresseDuFilLocale(id), messageId);
+  return messageId === null ? adresseDuFilLocale(id) : cibleDuMessageLocale(id, messageId);
 };
 
 const cibleDansLaZone = (charge) => {
@@ -204,7 +216,7 @@ const cibleDansLaZone = (charge) => {
   if (typeof conversationId === 'string' && conversationId !== '') {
     const messageId = charge.data.messageId;
     return typeof messageId === 'string' && messageId !== ''
-      ? adresseDuMessageLocale(adresseDuFilLocale(conversationId), messageId)
+      ? cibleDuMessageLocale(conversationId, messageId)
       : adresseDuFilLocale(conversationId);
   }
 
@@ -226,6 +238,9 @@ self.addEventListener('push', (event) => {
   // signal d'appel annulé. Aucune bannière n'est montrée à leur sujet.
   const notification = charge && charge.notification;
   if (notification === undefined || notification === null) return;
+  // Un titre qui n'est pas une CHAÎNE ne se sert pas : `showNotification`
+  // coercerait `undefined` en le mot « undefined » sur l'écran verrouillé.
+  if (typeof notification.title !== 'string' || notification.title === '') return;
 
   event.waitUntil(
     self.registration.showNotification(notification.title, {
@@ -243,18 +258,37 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   if (typeof cible !== 'string' || cible === '') return;
 
+  // LE MÊME ÉCRAN, PAS LA MÊME ADRESSE (défaut de revue) — deux bannières de
+  // la MÊME conversation portent deux ancres différentes. Comparer l'adresse
+  // ENTIÈRE ouvrait alors une SECONDE fenêtre sur un fil déjà ouvert ; la
+  // fenêtre existante est donc reconnue par son CHEMIN, puis NAVIGUÉE vers la
+  // tranche annoncée quand elle n'y est pas déjà — `navigate` peut manquer ou
+  // refuser (une fenêtre qu'on ne contrôle pas), et le repli est alors le
+  // simple focus, jamais un doublon.
+  const chemin = (adresse) => {
+    try {
+      return new URL(adresse, self.location.href).pathname;
+    } catch {
+      return null;
+    }
+  };
+  const complet = (() => {
+    try {
+      return new URL(cible, self.location.href).href;
+    } catch {
+      return null;
+    }
+  })();
+
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((liste) => {
-      const ouvert = liste.find((client) => {
-        try {
-          const url = new URL(client.url);
-          return url.pathname + url.hash === cible;
-        } catch {
-          return false;
-        }
-      });
-      if (ouvert) return ouvert.focus();
-      return self.clients.openWindow(cible);
+      const vise = chemin(cible);
+      const ouvert = vise === null ? undefined : liste.find((client) => chemin(client.url) === vise);
+      if (!ouvert) return self.clients.openWindow(cible);
+      if (ouvert.url === complet || typeof ouvert.navigate !== 'function') return ouvert.focus();
+      return Promise.resolve(ouvert.navigate(complet))
+        .then((client) => (client && typeof client.focus === 'function' ? client.focus() : ouvert.focus()))
+        .catch(() => ouvert.focus());
     }),
   );
 });
@@ -270,6 +304,29 @@ const purgeLAbonnementPush = async () => {
     // et le token SERVEUR reste retiré par ailleurs (§ 3.5 de la spécification).
   }
 };
+
+// LA ROTATION DE L'ABONNEMENT PUSH (#5391, suivi de revue) — un navigateur
+// PEUT invalider une `PushSubscription` (rotation de clé côté navigateur ou
+// FCM, hors du contrôle de la page) et livre alors `pushsubscriptionchange`
+// au WORKER qui la détient, jamais à une page qui peut être fermée. Ce
+// worker ne peut pas rejouer la danse REST lui-même : la configuration
+// Firebase (`data-firebase-*`) vit sur le DOCUMENT de `/notifications/
+// preferences` (§ 3.4 de la spécification), jamais dans ce fichier plat. Il
+// pose donc un DRAPEAU dans le Cache Storage — sous un nom STABLE, hors du
+// cycle de version (exempté du nettoyage `activate` ci-dessous) — que la
+// page relit à CHAQUE chargement (`lib/realtime/push-abonnement.ts`,
+// `rejoueSiRotation`) et efface après avoir rejoué l'abonnement. Le CONTRAT
+// (le nom de cache, la clé) vit dans `lib/sw/signal.ts`, comme
+// `SIGNAL_DE_DECONNEXION` : ce fichier plat porte le LITTÉRAL,
+// `__tests__/sw-zone.test.ts` l'EXÉCUTE contre la constante importée.
+const CACHE_DE_ROTATION_PUSH = 'meeshy-v3-sw-push-rotation';
+const CLE_DE_ROTATION_PUSH = '/__v3/signal-rotation-push';
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_DE_ROTATION_PUSH).then((cache) => cache.put(CLE_DE_ROTATION_PUSH, new Response('1'))),
+  );
+});
 
 self.addEventListener('message', (event) => {
   const donnees = event.data;
@@ -287,7 +344,7 @@ self.addEventListener('activate', (event) => {
       const noms = await caches.keys();
       await Promise.all(
         noms
-          .filter((nom) => nom.startsWith(NAMESPACE) && nom !== CACHE_NAME)
+          .filter((nom) => nom.startsWith(NAMESPACE) && nom !== CACHE_NAME && nom !== CACHE_DE_ROTATION_PUSH)
           .map((nom) => caches.delete(nom)),
       );
       await self.clients.claim();
