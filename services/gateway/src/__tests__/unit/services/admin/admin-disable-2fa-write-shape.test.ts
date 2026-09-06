@@ -60,7 +60,7 @@ describe('UserManagementService.disable2FA — l’écriture que Prisma accepte'
     const { prisma, update } = prismaStrict();
     const svc = new UserManagementService(prisma);
 
-    await expect(svc.disable2FA('507f1f77bcf86cd799439011', 'admin-1')).resolves.toBeDefined();
+    await expect(svc.disable2FA('507f1f77bcf86cd799439011')).resolves.toBeDefined();
 
     expect(update).toHaveBeenCalledTimes(1);
   });
@@ -69,7 +69,7 @@ describe('UserManagementService.disable2FA — l’écriture que Prisma accepte'
     const { prisma, update } = prismaStrict();
     const svc = new UserManagementService(prisma);
 
-    await svc.disable2FA('507f1f77bcf86cd799439011', 'admin-1');
+    await svc.disable2FA('507f1f77bcf86cd799439011');
 
     const { data } = update.mock.calls[0][0] as { data: Record<string, unknown> };
     expect(Array.isArray(data.twoFactorBackupCodes)).toBe(true);
@@ -81,7 +81,7 @@ describe('UserManagementService.disable2FA — l’écriture que Prisma accepte'
     const { prisma, update } = prismaStrict();
     const svc = new UserManagementService(prisma);
 
-    await svc.disable2FA('507f1f77bcf86cd799439011', 'admin-1');
+    await svc.disable2FA('507f1f77bcf86cd799439011');
 
     const { data } = update.mock.calls[0][0] as { data: Record<string, unknown> };
     for (const champ of CHAMPS_DU_SECOND_FACTEUR) {

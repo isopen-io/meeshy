@@ -251,7 +251,6 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
       'post-id-123',
       'A regular post caption',
       undefined,
-      'user-id-abc',
     );
 
     await app.close();
@@ -281,7 +280,6 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
         'post-id-123',
         'Une phrase à traduire',
         undefined,
-        'user-id-abc',
       );
 
       await app.close();
