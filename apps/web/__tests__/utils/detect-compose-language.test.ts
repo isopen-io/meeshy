@@ -1,7 +1,7 @@
 jest.mock('tinyld/light');
 
 import { detectAll } from 'tinyld/light';
-import { detectComposeLanguage } from '@/utils/language-detection';
+import { detectComposeLanguage, detectMeasuredLanguage } from '@/utils/language-detection';
 
 const mockDetectAll = jest.mocked(detectAll);
 
@@ -38,5 +38,43 @@ describe('detectComposeLanguage', () => {
     });
     expect(() => detectComposeLanguage('some text here', 'fr')).not.toThrow();
     expect(detectComposeLanguage('some text here', 'fr')).toBe('fr');
+  });
+});
+
+// #5349 — la mesure SANS repli : `undefined` dit « pas de mesure fiable »,
+// jamais une préférence d'interface substituée en silence.
+describe('detectMeasuredLanguage', () => {
+  beforeEach(() => {
+    mockDetectAll.mockReset();
+    mockDetectAll.mockImplementation(
+      jest.requireActual<typeof import('tinyld/light')>('tinyld/light').detectAll,
+    );
+  });
+
+  it('detects French content', () => {
+    expect(detectMeasuredLanguage("Bonjour, comment vas-tu aujourd'hui ? J'espère que tout va bien.")).toBe('fr');
+  });
+  it('detects English content', () => {
+    expect(detectMeasuredLanguage('How are you doing today? I hope everything is going well.')).toBe('en');
+  });
+  it('returns undefined on short text — never a guessed fallback', () => {
+    expect(detectMeasuredLanguage('Ok')).toBeUndefined();
+  });
+  it('returns undefined on emoji-only text', () => {
+    expect(detectMeasuredLanguage('🙂🙂🙂')).toBeUndefined();
+  });
+  it('returns undefined on empty string', () => {
+    expect(detectMeasuredLanguage('')).toBeUndefined();
+  });
+  it('does not throw and returns undefined when detectAll throws', () => {
+    mockDetectAll.mockImplementation(() => {
+      throw new Error('tinyld internal error');
+    });
+    expect(() => detectMeasuredLanguage('some text here')).not.toThrow();
+    expect(detectMeasuredLanguage('some text here')).toBeUndefined();
+  });
+  it('returns undefined when confidence is below threshold', () => {
+    mockDetectAll.mockReturnValue([{ lang: 'fr', accuracy: 0.2 }] as ReturnType<typeof detectAll>);
+    expect(detectMeasuredLanguage('quatre mots pas plus')).toBeUndefined();
   });
 });

@@ -401,12 +401,21 @@ export function registerCoreRoutes(
         // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
-        op: () => postService.createPost({
-          ...parsed.data,
-          content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
-          type: parsed.data.type ?? 'POST',
-          visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
-        }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
+        op: () => {
+          // `detectedLanguage` n'est PAS une entrée de `PostService.createPost`
+          // (§ Prisme, #5349) : elle ne se persiste jamais sur `Post`, elle ne
+          // sert qu'à `runPublicationEffects` ci-dessous, sur le pipeline de
+          // traduction. La séparer ici, plutôt que de la laisser traverser par
+          // le spread, empêche qu'elle ne devienne un jour un champ Prisma
+          // implicite au premier renommage voisin.
+          const { detectedLanguage: _detectedLanguage, ...postServiceData } = parsed.data;
+          return postService.createPost({
+            ...postServiceData,
+            content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
+            type: parsed.data.type ?? 'POST',
+            visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
+          }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>;
+        },
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
           return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
@@ -439,6 +448,9 @@ export function registerCoreRoutes(
         // une phrase inventée pour satisfaire l'extracteur, visible de tous et
         // traduite par le Prisme comme du contenu d'auteur.
         declaredMentions: parsed.data.mentions,
+        // Langue MESURÉE côté composer web (#5349) — voir la note d'en-tête
+        // de `runPublicationEffects` pour son rang face à `originalLanguage`.
+        detectedLanguage: parsed.data.detectedLanguage,
         porte: 'POST /posts',
       });
 

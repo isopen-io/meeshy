@@ -65,8 +65,16 @@ export class PostTranslationService {
   /**
    * Translate a post's content to top 5 languages (minus original).
    * Fire-and-forget: results arrive via ZMQ events.
+   *
+   * `detectedLanguage` (#5349) is a client-MEASURED language (on-device
+   * detection over the actually-typed text, e.g. `detectMeasuredLanguage`
+   * on web) — never an interface preference. It only backs up
+   * `originalLanguage` (an author CLAIM, which always wins), and is itself
+   * preferred over this service's own crude regex `detectLanguage(content)`:
+   * a real measurement beats a guess made from a handful of stop-word
+   * patterns.
    */
-  async translatePost(postId: string, content: string, originalLanguage?: string): Promise<void> {
+  async translatePost(postId: string, content: string, originalLanguage?: string, detectedLanguage?: string): Promise<void> {
     // Skip translation for URL-only posts: links carry no translatable text and
     // must be preserved verbatim (NLLB would corrupt them). Mixed content still
     // translates — the translator masks/restores the URLs.
@@ -75,7 +83,7 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = originalLanguage ?? detectLanguage(content);
+    const sourceLang = originalLanguage ?? detectedLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
     /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
