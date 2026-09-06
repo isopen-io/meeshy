@@ -10,7 +10,6 @@ import { notifyReactionAdded, notifyReactionRemoved } from '../../services/notif
 import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import type { AckOf, AckResponseOf, ReactionUpdateEventData } from '@meeshy/shared/types/socketio-events';
-import type { ReactionUpdateEvent } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS, RATE_LIMIT_REFUSAL_MESSAGE } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';

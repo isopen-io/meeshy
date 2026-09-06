@@ -14,7 +14,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AudioTranslateService } from './AudioTranslateService';
 import { ZmqTranslationClient } from './zmq-translation';
-import { normalizeStoredAnalysis, normalizeVoiceProsody } from './voice-analysis-normalize';
+import { normalizeStoredAnalysis } from './voice-analysis-normalize';
 import type {
   VoiceQualityAnalysis,
   VoiceAnalysisType,

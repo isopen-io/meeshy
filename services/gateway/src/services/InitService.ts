@@ -26,9 +26,6 @@ export function reservedGlobalMemberRole(username: string): MemberRoleType {
 export class InitService {
   private prisma: PrismaClient;
   private authService: AuthService;
-  private globalConversationId: string;
-  private directConversationId: string;
-  private groupConversationId: string;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
@@ -100,7 +97,7 @@ export class InitService {
       }
 
 
-      const newConversation = await this.prisma.conversation.create({
+      await this.prisma.conversation.create({
         data: {
           identifier: 'meeshy',
           title: 'Meeshy Global',
@@ -111,8 +108,6 @@ export class InitService {
           updatedAt: new Date()
         }
       });
-
-      this.globalConversationId = newConversation.id;
 
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la création de la conversation globale', error);
@@ -148,7 +143,6 @@ export class InitService {
     const firstName = 'Meeshy'; // FIXE
     const lastName = 'Sama'; // FIXE
     const email = process.env.MEESHY_EMAIL || 'meeshy@meeshy.me'; // CONFIGURABLE
-    const role = 'BIGBOSS'; // FIXE
     const systemLanguage = process.env.MEESHY_SYSTEM_LANGUAGE || 'en'; // CONFIGURABLE
     const regionalLanguage = process.env.MEESHY_REGIONAL_LANGUAGE || 'fr'; // CONFIGURABLE
     const customDestinationLanguage = process.env.MEESHY_CUSTOM_DESTINATION_LANGUAGE || 'pt'; // CONFIGURABLE
@@ -220,7 +214,6 @@ export class InitService {
     const firstName = 'Admin'; // FIXE
     const lastName = 'Manager'; // FIXE
     const email = process.env.ADMIN_EMAIL || 'admin@meeshy.me'; // CONFIGURABLE
-    const role = 'ADMIN'; // FIXE
     const systemLanguage = process.env.ADMIN_SYSTEM_LANGUAGE || 'en'; // CONFIGURABLE - Default: English
     const regionalLanguage = process.env.ADMIN_REGIONAL_LANGUAGE || 'fr'; // CONFIGURABLE - Default: French
     const customDestinationLanguage = process.env.ADMIN_CUSTOM_DESTINATION_LANGUAGE || 'es'; // CONFIGURABLE - Default: Spanish
@@ -559,7 +552,6 @@ export class InitService {
       const identifier = generateCompactConversationIdentifier();
 
       if (existingConversation) {
-        this.directConversationId = existingConversation.id;
         return;
       }
 
@@ -574,8 +566,6 @@ export class InitService {
           createdAt: new Date()
         }
       });
-
-      this.directConversationId = conversation.id;
 
       // Ajouter les deux utilisateurs comme membres
       await this.prisma.participant.createMany({
@@ -624,7 +614,6 @@ export class InitService {
       });
 
       if (existingConversation) {
-        this.groupConversationId = existingConversation.id;
         return;
       }
 
@@ -639,8 +628,6 @@ export class InitService {
           createdAt: new Date()
         }
       });
-
-      this.groupConversationId = conversation.id;
 
       // Ajouter tous les utilisateurs comme membres
       const membersData = userIds.map((userId, index) => ({

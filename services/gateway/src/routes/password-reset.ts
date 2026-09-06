@@ -5,7 +5,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendInternalError, sendBadRequest } from '../utils/response';
 import { PasswordResetService } from '../services/PasswordResetService';
 import { PhonePasswordResetService } from '../services/PhonePasswordResetService';
 import { getCacheStore } from '../services/CacheStore';

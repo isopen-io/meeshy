@@ -23,8 +23,7 @@ import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
-  sendLinkMessageResponseSchema,
-  SendMessageInput
+  sendLinkMessageResponseSchema
 } from './types';
 import type { SharedPlace } from '../../services/location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';

@@ -73,25 +73,6 @@ interface SignalSession {
   preKeyUsed: number | null;
 }
 
-/**
- * Stored session data for database persistence
- * Matches Prisma DMASession model exactly
- */
-interface StoredSessionData {
-  recipientId: string;
-  rootKey: string;
-  chainKeySend: string;
-  chainKeyReceive: string;
-  // DH Ratchet keys (aligned with DB schema)
-  dhRatchetPublicKey: string | null;
-  dhRatchetPrivateKey: string | null;
-  dhRatchetRemoteKey: string | null;
-  // Message counters (aligned with DB schema)
-  messageNumberSend: number;
-  messageNumberReceive: number;
-  previousChainLength: number;
-}
-
 export class SignalProtocolEngine {
   private prisma: PrismaClient;
   private userId?: string;

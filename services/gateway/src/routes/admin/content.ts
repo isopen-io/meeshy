@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendPaginatedSuccess, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   type UserRole,
@@ -248,7 +248,6 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
       // Filtre par periode
       if (period) {
-        const now = new Date();
         let startDate = new Date();
 
         switch (period) {
@@ -635,7 +634,6 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
       // Filtre par periode
       if (period) {
-        const now = new Date();
         let startDate = new Date();
 
         switch (period) {

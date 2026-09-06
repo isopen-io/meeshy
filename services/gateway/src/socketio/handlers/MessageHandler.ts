@@ -6,7 +6,6 @@
  * No more anonymousSenderId / anonymousSender dual path.
  */
 
-import * as path from 'path';
 // Cycle 101 (bis) — ce handler est le ONZIÈME et DERNIER basculé sur
 // `MeeshySocket` : ses émissions sont désormais vérifiées à la compilation
 // contre `ServerToClientEvents`, comme celles des dix autres (cycles 99, 100).
@@ -61,8 +60,6 @@ import {
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
-  extractJWTToken,
-  extractSessionToken,
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
@@ -94,7 +91,6 @@ import { buildMessageEditedCore } from '../messageEditedPayload';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
-import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
 import {

@@ -12,7 +12,6 @@ import type { RetractedNotificationAnnouncer } from './notifications/retractedNo
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
-import { ConflictError } from '../errors/custom-errors';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 

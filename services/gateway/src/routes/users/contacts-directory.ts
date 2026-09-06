@@ -4,11 +4,9 @@ import {
   sendSuccess,
   sendPaginatedSuccess,
   sendUnauthorized,
-  sendBadRequest,
   sendInternalError
 } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
 import { ContactDirectoryService, type DirectoryFilter, type SyncMode } from '../../services/ContactDirectoryService';
 import { directoryEntrySchema } from './contacts-schemas';
 import { viewerFromRequest } from './presence-gate';
@@ -26,8 +24,6 @@ import { synchroniser } from '../directory/contacts-sync';
 
 const DEFAULT_PAGE_SIZE = 100;
 const VALID_FILTERS: DirectoryFilter[] = ['all', 'meeshy', 'invitable'];
-/** Tolérance d'horloge cliente pour `syncStartedAt` — au-delà, 400. */
-const SYNC_STARTED_AT_FUTURE_TOLERANCE_MS = 5_000;
 
 function parseFilter(value: unknown): DirectoryFilter {
   return VALID_FILTERS.includes(value as DirectoryFilter) ? (value as DirectoryFilter) : 'all';

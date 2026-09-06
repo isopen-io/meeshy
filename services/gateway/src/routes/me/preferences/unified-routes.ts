@@ -55,7 +55,7 @@
  * par les défauts — le point 22 de l'audit reste vrai des deux côtés.
  */
 
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { zodIssueSchema, issuesServies } from '../../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';

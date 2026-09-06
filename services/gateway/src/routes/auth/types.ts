@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { AuthService } from '../../services/AuthService';
 import { PhoneTransferService } from '../../services/PhoneTransferService';
 import { SmsService } from '../../services/SmsService';

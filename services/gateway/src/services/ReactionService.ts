@@ -19,7 +19,6 @@ import {
 } from '@meeshy/shared/utils/participant-helpers';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
-import { ConflictError } from '../errors/custom-errors.js';
 import { assertValidObjectId } from '../utils/object-id.js';
 
 /**

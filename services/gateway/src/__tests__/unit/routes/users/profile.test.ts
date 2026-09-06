@@ -901,9 +901,11 @@ describe('PATCH /users/me/username — username taken', () => {
 });
 
 describe('PATCH /users/me/username — rate limited', () => {
-  it('returns 429 when changed within 30 days', async () => {
+  // #4859 — `nextChangeAllowedAt` était calculé puis jamais transmis à `sendError`.
+  it('returns 429 with nextChangeAllowedAt when changed within 30 days', async () => {
     mockBcryptCompare.mockResolvedValueOnce(true);
-    const recentHistory = [{ newUsername: 'alice', changedAt: new Date().toISOString() }];
+    const changedAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const recentHistory = [{ newUsername: 'alice', changedAt: changedAt.toISOString() }];
     const prisma = makePrisma({
       user: {
         findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: recentHistory }),
@@ -917,6 +919,8 @@ describe('PATCH /users/me/username — rate limited', () => {
       payload: { newUsername: 'bob', currentPassword: 'correctpass' },
     });
     expect(res.statusCode).toBe(429);
+    const expected = new Date(changedAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    expect(res.json().nextChangeAllowedAt).toBe(expected);
     await app.close();
   });
 });

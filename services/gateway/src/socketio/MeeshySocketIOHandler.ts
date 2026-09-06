@@ -16,7 +16,6 @@ export class MeeshySocketIOHandler {
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly jwtSecret: string,
     private readonly translationService: MessageTranslationService
   ) {
     // Ne pas initialiser le manager ici, attendre setupSocketIO

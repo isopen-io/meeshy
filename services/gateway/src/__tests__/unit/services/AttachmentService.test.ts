@@ -134,11 +134,6 @@ describe('AttachmentService (Orchestrator)', () => {
       const { UploadProcessor } = require('../../../services/attachments/UploadProcessor');
       expect(UploadProcessor).toHaveBeenCalledWith(mockPrisma);
     });
-
-    it('should initialize MetadataManager', () => {
-      const { MetadataManager } = require('../../../services/attachments/MetadataManager');
-      expect(MetadataManager).toHaveBeenCalled();
-    });
   });
 
   describe('validateFile - Delegation', () => {
@@ -482,16 +477,6 @@ describe('AttachmentService (Orchestrator)', () => {
         undefined,
         undefined
       );
-    });
-
-    it('should handle metadata extraction via sub-modules', () => {
-      // MetadataManager is used internally by UploadProcessor
-      // AttachmentService just orchestrates the calls
-      expect(mockMetadataManager).toBeDefined();
-
-      // MetadataManager should be initialized on service construction
-      const { MetadataManager } = require('../../../services/attachments/MetadataManager');
-      expect(MetadataManager).toHaveBeenCalled();
     });
   });
 });

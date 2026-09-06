@@ -7,13 +7,11 @@
 import type { MeeshyIOServer as SocketIOServer, MeeshySocket as Socket } from '../typed-socket';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import type { ServerToClientEvents } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import type {
   Post,
-  PostComment,
   PostLikedEventData,
   PostUnlikedEventData,
   PostRepostedEventData,

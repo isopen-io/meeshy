@@ -792,9 +792,6 @@ export function registerMessagesListRoute(
       }
 
       timings.total = performance.now() - reqStart;
-      const timingsStr = Object.entries(timings)
-        .map(([k, v]) => `${k}=${Math.round(v)}ms`)
-        .join(', ');
       const level = timings.total > 5000 ? 'warn' : 'info';
       logger[level](`⏱️ GET /conversations/${conversationId}/messages`, {
         durationMs: Math.round(timings.total),

@@ -223,7 +223,11 @@ const SURFACES: Record<string, Classification> = {
   // agrégation par agrégation, l'une d'elles lisant `Message`. Il DÉLÈGUE
   // désormais, et la lecture a suivi le calcul dans `user-stats.ts`, surface
   // déjà déclarée. Aucune lecture n'a disparu : elle a changé de fichier.
-  'users/preferences.ts': { kind: 'exempt', reads: 3, why: 'Compteurs de préférences.' },
+  // 3 → 2 (#4859) : `totalMessages` était calculé par une requête dédiée
+  // (`message.count` sans filtre de date) dont le résultat n'était jamais
+  // servi — l'API rend la valeur de `messagesThisWeek` sous cette clé. La
+  // lecture retirée était une requête gaspillée, pas une garde de masquage.
+  'users/preferences.ts': { kind: 'exempt', reads: 2, why: 'Compteurs de préférences.' },
 };
 
 /**

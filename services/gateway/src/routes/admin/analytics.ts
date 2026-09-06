@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger';
-import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 import { getCacheStore } from '../../services/CacheStore';
@@ -139,7 +138,6 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         return reply.send(JSON.parse(cached));
       }
 
-      const now = new Date();
       const startDate = new Date();
       switch (period) {
         case '24h': startDate.setHours(startDate.getHours() - 24); break;
@@ -285,7 +283,6 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         return reply.send(JSON.parse(cached));
       }
 
-      const now = new Date();
       const startDate = new Date();
       switch (period) {
         case '7d':  startDate.setDate(startDate.getDate() - 7);  break;

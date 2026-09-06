@@ -1,7 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import crypto from 'crypto';
 import { generateNumericCode } from '../utils/verification-code';
-import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
+import { SocketIOUser } from '@meeshy/shared/types';
 import { normalizePhoneNumber } from '../utils/normalize';
 import { RequestContext } from './GeoIPService';
 import { EmailService } from './EmailService';
@@ -357,7 +357,6 @@ export class AuthService {
       // Verify 2FA code
       const cleanCode = code.replace(/-/g, '').toUpperCase();
       let isValid = false;
-      let usedBackupCode = false;
 
       // Try TOTP code first (6 digits)
       if (/^\d{6}$/.test(cleanCode) && user.twoFactorSecret) {
@@ -386,7 +385,6 @@ export class AuthService {
           });
 
           isValid = true;
-          usedBackupCode = true;
           logger.info(`[AUTH_SERVICE] 🔑 Code de secours utilisé pour: ${user.username} - Restants: ${updatedCodes.length}`);
         }
       }

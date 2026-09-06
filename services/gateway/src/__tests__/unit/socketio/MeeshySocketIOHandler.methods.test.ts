@@ -23,7 +23,7 @@ import { MeeshySocketIOHandler } from '../../../socketio/MeeshySocketIOHandler';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeHandler(managerOverrides: Record<string, any> = {}) {
-  const handler = new MeeshySocketIOHandler({} as any, 'secret', {} as any);
+  const handler = new MeeshySocketIOHandler({} as any, {} as any);
   const manager = {
     sendToUser: jest.fn<any>().mockReturnValue(true),
     getConnectedUsers: jest.fn<any>().mockReturnValue(['u-1', 'u-2']),
@@ -36,7 +36,7 @@ function makeHandler(managerOverrides: Record<string, any> = {}) {
 }
 
 function makeHandlerNoManager() {
-  return new MeeshySocketIOHandler({} as any, 'secret', {} as any);
+  return new MeeshySocketIOHandler({} as any, {} as any);
 }
 
 // ─── getManager ───────────────────────────────────────────────────────────────

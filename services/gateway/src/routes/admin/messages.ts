@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } from '../../validation/admin-schemas.js';
 import { requirePermission } from '../../middleware/authorize';
@@ -376,7 +375,6 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       const query = request.query as any;
       const period = query.period || /* istanbul ignore next -- Zod provides default */ '7d';
 
-      const now = new Date();
       let startDate = new Date();
 
       switch (period) {

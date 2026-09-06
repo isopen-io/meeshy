@@ -42,13 +42,13 @@ function makeManager(overrides: Record<string, unknown> = {}) {
 }
 
 function makeHandler(manager = makeManager()) {
-  const handler = new MeeshySocketIOHandler({} as any, 'test-secret', {} as any);
+  const handler = new MeeshySocketIOHandler({} as any, {} as any);
   (handler as any).socketIOManager = manager;
   return { handler, manager };
 }
 
 function makeHandlerNoManager() {
-  const handler = new MeeshySocketIOHandler({} as any, 'test-secret', {} as any);
+  const handler = new MeeshySocketIOHandler({} as any, {} as any);
   return { handler };
 }
 

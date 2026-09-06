@@ -26,7 +26,7 @@ export class BackgroundJobsManager {
   private mutationLogCleanupJob: MutationLogCleanupJob;
   private isRunning: boolean = false;
 
-  constructor(private prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
+  constructor(prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
     // Reuse the existing passwordless-login mechanism for the digest CTA

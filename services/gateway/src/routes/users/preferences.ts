@@ -4,7 +4,6 @@ import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import {
   userMinimalSchema,
-  userStatsSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
@@ -119,7 +118,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         recentConversations,
         totalCommunities,
         recentCommunities,
-        totalMessages,
         messagesThisWeek,
         totalLinks,
         translationsToday
@@ -238,12 +236,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           },
           orderBy: { updatedAt: 'desc' },
           take: 5
-        }),
-        fastify.prisma.message.count({
-          where: {
-            sender: { userId },
-            deletedAt: null
-          }
         }),
         fastify.prisma.message.count({
           where: {

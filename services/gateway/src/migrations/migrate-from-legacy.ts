@@ -267,7 +267,7 @@ function transformConversation(doc: LegacyConversation) {
 // TRANSFORMATION CONVERSATION MEMBER
 // =============================================================================
 
-interface LegacyConversationMember {
+export interface LegacyConversationMember {
   _id: ObjectId;
   conversationId: ObjectId;
   userId: ObjectId;
@@ -376,7 +376,7 @@ function transformMessageAttachment(doc: LegacyMessageAttachment) {
 // TRANSFORMATION MESSAGE TRANSLATION
 // =============================================================================
 
-interface LegacyMessageTranslation {
+export interface LegacyMessageTranslation {
   _id: ObjectId;
   messageId: ObjectId;
   sourceLanguage: string;

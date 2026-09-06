@@ -1431,16 +1431,6 @@ export class NotificationService {
     }
   }
 
-  /**
-   * Vérifie si le mode DND est actuellement actif.
-   * GW7 — délègue au helper PARTAGÉ tz-aware `isWithinDnd` (packages/shared)
-   * — même implémentation que PushNotificationService.isPushAllowed, la
-   * fenêtre est évaluée dans l'heure locale utilisateur (dndUtcOffsetMinutes).
-   */
-  private isDNDActive(prefs: NotifPrefs): boolean {
-    return isWithinDnd(prefs);
-  }
-
   // ==============================================
   // CORE - Méthode générique de création
   // ==============================================
@@ -1995,20 +1985,6 @@ export class NotificationService {
         defaultValue
       });
       return defaultValue;
-    }
-  }
-
-  /**
-   * Convertit une date en ISO string de manière sûre
-   * Retourne null si la date est null/invalide
-   */
-  private toISOStringOrNull(date: Date | null): string | null {
-    if (!date) return null;
-    try {
-      return date.toISOString();
-    } catch (error) {
-      notificationLogger.error('Failed to convert date to ISO string', { error, date });
-      return null;
     }
   }
 
@@ -4206,7 +4182,6 @@ export class NotificationService {
         : 'post_like';
 
     const lang = await this.resolveRecipientLang(params.postAuthorId);
-    const reactPostType = params.postType === 'STORY' ? 'STORY' : params.postType === 'STATUS' ? 'STATUS' : 'POST';
     const subtitlePostType = params.postType ?? 'POST';
 
     // Détail du contenu réagi : extrait texte si présent, sinon vignette/résumé
