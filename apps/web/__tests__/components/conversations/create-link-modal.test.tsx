@@ -15,6 +15,10 @@ jest.mock('@/services/conversations.service', () => ({
 jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: jest.fn(() => 'test-token'),
+    // `api.service.ts` lit désormais `useAuthStore` (#4405 étape 2, sessionToken
+    // du rafraîchissement) : le store RÉEL se charge donc dans cette suite et
+    // s'enregistre auprès d'`authManager` à sa création.
+    registerOnClear: jest.fn(),
   },
 }));
 

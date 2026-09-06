@@ -10,6 +10,7 @@ import { logConversationIdDebug, getConversationIdType, getConversationApiId } f
 import { triggerManualUpdateCheck } from '@/utils/service-worker';
 import type { User } from '@/types';
 import { authService } from '../auth.service';
+import { useAuthStore } from '@/stores/auth-store';
 import type {
   TypedSocket,
   ConnectionState,
@@ -341,7 +342,12 @@ export class ConnectionService {
       // reads storage at the handshake, so the reconnect below already carries
       // whatever the refresh just stored. Assigning `socket.auth` would swap
       // the resolver out for a literal and re-pin the socket.
-      authService.refreshToken().then(() => {
+      //
+      // #4405 étape 2 — `AuthManager` n'a pas de lecteur pour le
+      // `sessionToken` du compte inscrit (seul le store Zustand le garde) ;
+      // sans lui, la fenêtre glissante que le schéma serveur annonce ne
+      // s'arme jamais depuis ce chemin.
+      authService.refreshToken(useAuthStore.getState().sessionToken).then(() => {
         this.reconnect();
       }).catch((err) => {
         logger.warn('[Socket]', 'token refresh failed after auth:token-expired', { err });

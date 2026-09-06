@@ -10,6 +10,7 @@ let mockGetAuthToken = jest.fn();
 let mockDecodeJWT = jest.fn();
 let mockClearAllSessions = jest.fn();
 let mockRefreshToken = jest.fn();
+let mockAuthStoreGetState = jest.fn().mockReturnValue({ sessionToken: null });
 
 // Mock modules BEFORE importing the service
 jest.mock('@/services/auth-manager.service', () => ({
@@ -24,6 +25,14 @@ jest.mock('@/services/auth.service', () => ({
   authService: {
     refreshToken: (...args: any[]) => mockRefreshToken(...args),
   },
+}));
+
+// #4405 étape 2 — le store porte le `sessionToken` du compte inscrit
+// (`AuthManager` n'a pas de lecteur pour lui). `refreshAuthToken()` doit le
+// lire et le transmettre à `authService.refreshToken()`, sans quoi la
+// fenêtre glissante annoncée par le schéma serveur ne s'arme jamais.
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: { getState: (...args: any[]) => mockAuthStoreGetState(...args) },
 }));
 
 jest.mock('@/lib/config', () => ({
@@ -60,6 +69,7 @@ describe('ApiService', () => {
     mockFetch.mockReset();
     mockGetAuthToken.mockReturnValue('test-jwt-token');
     mockDecodeJWT.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 }); // Valid token
+    mockAuthStoreGetState.mockReturnValue({ sessionToken: null });
     // Use real timers for async operations (promises, setTimeout, etc.)
     jest.useRealTimers();
   });
@@ -342,6 +352,26 @@ describe('ApiService', () => {
       expect(mockRefreshToken).toHaveBeenCalled();
       expect(mockFetch).toHaveBeenCalledTimes(2);
       expect(result.success).toBe(true);
+    });
+
+    it('passes the store sessionToken through to authService.refreshToken (sliding window, #4405)', async () => {
+      mockAuthStoreGetState.mockReturnValue({ sessionToken: 'store-session-token-abc' });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ message: 'Unauthorized' }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: 'refreshed' }),
+      });
+      mockRefreshToken.mockResolvedValueOnce({ success: true });
+
+      await apiService.get('/protected-resource');
+
+      expect(mockRefreshToken).toHaveBeenCalledWith('store-session-token-abc');
     });
 
     it('should not retry auth endpoints on 401', async () => {
