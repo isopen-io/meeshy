@@ -29082,7 +29082,7 @@ site d'appel.
 > la moitié absente ; ici, un correctif présent rassure sur le chemin qu'il ne
 > couvre pas.
 
-## Leçon 536 — Un `test-without-building` exécute le dernier bundle QUI EXISTE, pas celui du build qu'on vient de lancer
+## Leçon 539 — Un `test-without-building` exécute le dernier bundle QUI EXISTE, pas celui du build qu'on vient de lancer
 
 **Mesuré le 2026-09-06** (lot #5326, arbre partagé à trois sessions). J'enchaîne
 `build-for-testing ; test-without-building` avec un **point-virgule**. Le build
