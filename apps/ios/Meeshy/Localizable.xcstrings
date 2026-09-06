@@ -35415,6 +35415,53 @@
         }
       }
     },
+    "auth.signup.error.rejectedGeneric": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم رفض التسجيل — أعد المحاولة بعد قليل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Registrierung wurde abgelehnt — versuche es gleich noch einmal."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign-up was refused — try again in a moment."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El registro fue rechazado — inténtalo de nuevo en un momento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'inscription a été refusée — réessayez dans un instant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La registrazione è stata rifiutata — riprova tra un momento."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O cadastro foi recusado — tente novamente em instantes."
+          }
+        }
+      }
+    },
     "auth.signup.haveAccount": {
       "extractionState": "manual",
       "localizations": {
