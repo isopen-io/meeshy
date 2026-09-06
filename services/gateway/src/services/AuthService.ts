@@ -81,6 +81,7 @@ export interface AuthResult {
   session: SessionData;
   requires2FA?: boolean; // True if 2FA verification is needed
   twoFactorToken?: string; // Temporary token for 2FA flow
+  usedBackupCode?: boolean; // True when completeAuthWith2FA consumed a backup code rather than a TOTP code
 }
 
 export type AuthServiceOptions = {
@@ -449,7 +450,8 @@ export class AuthService {
         user: socketIOUser,
         sessionToken,
         session,
-        requires2FA: false
+        requires2FA: false,
+        usedBackupCode
       };
 
     } catch (error) {

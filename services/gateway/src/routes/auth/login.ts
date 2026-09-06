@@ -251,7 +251,8 @@ export function registerLoginRoutes(context: AuthRouteContext) {
                 token: { type: 'string', description: 'JWT access token' },
                 sessionToken: { type: 'string', description: 'Session token' },
                 session: sessionMinimalSchema,
-                expiresIn: { type: 'number', example: 86400 }
+                expiresIn: { type: 'number', example: 86400 },
+                usedBackupCode: { type: 'boolean', description: 'True when a backup code was consumed instead of a TOTP code — the client should prompt the user to regenerate their backup codes', example: false }
               }
             }
           }
@@ -286,7 +287,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const rememberDevice = await consumePendingDeviceTrust({ store: cacheStore, twoFactorToken });
 
       const authResult = result as AuthResult;
-      const { user, sessionToken, session } = authResult;
+      const { user, sessionToken, session, usedBackupCode } = authResult;
 
       logger.info('Connexion 2FA réussie', { username: user.username });
 
@@ -338,7 +339,8 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         token: jwtToken,
         sessionToken,
         session: formatSessionResponse(session, rememberDevice || false),
-        expiresIn
+        expiresIn,
+        usedBackupCode: usedBackupCode || false
       });
 
     } catch (error) {
