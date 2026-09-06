@@ -177,4 +177,67 @@ final class SceneFramingTests: XCTestCase {
         let bande = SceneFraming.backgroundBand(aspect: SceneFraming.sceneAspect)
         XCTAssertEqual(bande, CGRect(x: 0, y: 0, width: 1, height: 1))
     }
+
+    // MARK: - La forme RÉELLE du fil (mesurée le 2026-09-06)
+
+    /// Un fond tel que la production l'écrit : `plane: content`,
+    /// `isBackground: true` et `aspectRatio` au payload.
+    private func fondReel(aspect: Double) -> ObjectV3 {
+        ObjectV3(id: "bg", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                 plane: .content, z: 0,
+                 transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
+                 timing: nil, locale: nil,
+                 payload: ["isBackground": .bool(true),
+                           "aspectRatio": .number(aspect),
+                           "postMediaId": .string("m1"),
+                           "mediaType": .string("image")])
+    }
+
+    /// **LE témoin de la correction du 2026-09-06.** Une première version de
+    /// la règle ne reconnaissait un fond qu'au plan `bg`. Mesuré sur le fil de
+    /// production : un fond réel arrive en `plane: content` avec
+    /// `isBackground: true`. La règle n'aurait donc RIEN cadré, sur aucune
+    /// publication réelle, tout en passant ses propres tests.
+    ///
+    /// > Une règle qui interroge le contrat sans regarder les données passe à
+    /// > côté de ce que les données disent. Le contrat autorisait les deux
+    /// > écritures ; une seule est employée.
+    func test_unFondEnPlanContent_estReconnuCommeFond() throws {
+        let s = scene([fondReel(aspect: 16.0 / 9.0)])
+        XCTAssertNotNil(SceneFraming.backgroundMedia(in: s))
+        let cadre = try XCTUnwrap(SceneFraming.focus(scene: s))
+        XCTAssertLessThan(cadre.height, 0.6, "sa bande, pas toute la scène")
+    }
+
+    /// **La scène DÉCLARE la forme de son fond.** Le payload porte
+    /// `aspectRatio` : la règle n'a besoin ni du post, ni d'une résolution par
+    /// identifiant, ni d'un téléchargement.
+    ///
+    /// C'est ce qui permet à une carte de cadrer AVANT que la moindre image
+    /// n'arrive — donc sans saut de mise en page quand elle arrive.
+    func test_laScene_declareLaFormeDeSonFond() {
+        XCTAssertEqual(SceneFraming.backgroundAspect(in: scene([fondReel(aspect: 1.5)])), 1.5)
+        XCTAssertNil(SceneFraming.backgroundAspect(in: scene([objet(.text)])))
+    }
+
+    /// **Le fond ne compte pas DEUX fois.** Il est exclu de la boucle des
+    /// objets par IDENTITÉ, pas par plan : filtré sur `.bg`, il y serait entré
+    /// comme un objet ordinaire et sa boîte d'ancre aurait élargi le cadre
+    /// autour du centre — annulant précisément le resserrement sur sa bande.
+    func test_leFond_nElargitPasLeCadreCommeUnObjetOrdinaire() throws {
+        let s = scene([fondReel(aspect: 16.0 / 9.0)])
+        let cadre = try XCTUnwrap(SceneFraming.focus(scene: s))
+        let bande = SceneFraming.backgroundBand(aspect: 16.0 / 9.0)
+        XCTAssertEqual(cadre.height, bande.height, accuracy: 0.001,
+                       "le cadre est la bande, pas la bande unie à une boîte d'ancre")
+    }
+
+    /// Un paramètre explicite l'emporte sur la déclaration — pour l'appelant
+    /// qui connaît mieux, parce qu'il a les pixels sous les yeux.
+    func test_unAspectImpose_lEmporteSurLaDeclaration() throws {
+        let s = scene([fondReel(aspect: 16.0 / 9.0)])
+        let impose = try XCTUnwrap(SceneFraming.focus(scene: s, backgroundAspect: 1.0))
+        let declare = try XCTUnwrap(SceneFraming.focus(scene: s))
+        XCTAssertNotEqual(impose.height, declare.height, accuracy: 0.001)
+    }
 }

@@ -80,9 +80,45 @@ public nonisolated enum SceneFraming {
         }
     }
 
-    /// Le média de FOND de la scène — celui qui occupe le plan `bg`.
+    /// **Le média de FOND — et il ne se reconnaît PAS à son plan.**
+    ///
+    /// Mesuré sur le fil de production (2026-09-06) : un fond réel arrive en
+    /// `plane: "content"` avec `isBackground: true` dans son payload. Le plan
+    /// `bg` existe au contrat et reste accepté, mais le composer ne l'emploie
+    /// pas — une première version de cette règle ne cherchait que `.bg` et
+    /// n'aurait donc RIEN trouvé sur aucune publication réelle.
+    ///
+    /// > Une règle qui interroge le contrat sans regarder les données passe à
+    /// > côté de ce que les données disent. Le contrat autorisait les deux
+    /// > écritures ; une seule est employée.
+    public static func isBackground(_ object: ObjectV3) -> Bool {
+        guard object.kind == .media else { return false }
+        if object.plane == .bg { return true }
+        if case .bool(true)? = object.payload["isBackground"] { return true }
+        return false
+    }
+
     public static func backgroundMedia(in scene: SceneV3) -> ObjectV3? {
-        scene.objects.first { $0.kind == .media && $0.plane == .bg }
+        scene.objects.first(where: isBackground)
+    }
+
+    /// **Le rapport DÉCLARÉ par l'objet lui-même.**
+    ///
+    /// Le payload d'un média porte `aspectRatio` — mesuré en production. La
+    /// règle n'a donc besoin de personne pour connaître la forme du fond : ni
+    /// du post, ni d'une résolution par identifiant, ni d'un chargement.
+    ///
+    /// C'est ce qui la garde PURE et immédiate : une carte peut cadrer avant
+    /// que la moindre image ne soit téléchargée, donc sans saut de mise en
+    /// page à l'arrivée du média.
+    public static func declaredAspect(of object: ObjectV3) -> CGFloat? {
+        if case .number(let v)? = object.payload["aspectRatio"], v > 0 { return CGFloat(v) }
+        return nil
+    }
+
+    /// Le rapport du fond de cette scène, tel qu'elle le déclare.
+    public static func backgroundAspect(in scene: SceneV3) -> CGFloat? {
+        backgroundMedia(in: scene).flatMap(declaredAspect)
     }
 
     // MARK: - Le cadre
@@ -98,19 +134,32 @@ public nonisolated enum SceneFraming {
     ///   média de fond (`FeedMedia.width / .height`), ou `nil` s'il n'y en a
     ///   pas ou qu'il est inconnu. Il ne se déduit pas du canvas : le canvas
     ///   dit qu'un média est là, jamais quelle forme il a.
-    public static func focus(scene: SceneV3, backgroundAspect: CGFloat?) -> CGRect? {
+    /// - Parameter backgroundAspect: passer `nil` laisse la scène le DÉCLARER
+    ///   elle-même (`backgroundAspect(in:)`). Le paramètre reste pour qu'un
+    ///   appelant qui connaît mieux — un média déjà chargé, dont les pixels
+    ///   contredisent le fil — puisse l'imposer.
+    public static func focus(scene: SceneV3, backgroundAspect: CGFloat? = nil) -> CGRect? {
         // La bande du média de fond — MESURÉE : elle se déduit de deux
         // rapports connus, sans rien supposer.
         var bande: CGRect?
-        if backgroundMedia(in: scene) != nil, let a = backgroundAspect, a > 0 {
+        let fond = backgroundMedia(in: scene)
+        // `Self.` est obligatoire : le PARAMÈTRE porte le même nom que la
+        // fonction, et sans qualification Swift résout vers la valeur — donc
+        // vers un `CGFloat?` qu'on ne peut pas appeler.
+        if fond != nil, let a = backgroundAspect ?? Self.backgroundAspect(in: scene), a > 0 {
             bande = backgroundBand(aspect: a)
         }
 
-        // Les ancres des objets visibles, hors fond — DEVINÉES : un objet
+        // Les ancres des objets visibles, HORS LE FOND — devinées : un objet
         // porte une ancre, pas une taille.
+        //
+        // L'exclusion se fait par IDENTITÉ et non par plan : le fond arrive en
+        // `plane: content`, et le filtrer sur `.bg` l'aurait laissé entrer ici
+        // comme un objet ordinaire — sa boîte d'ancre aurait alors élargi le
+        // cadre autour du centre, annulant le resserrement sur sa bande.
         var objets: CGRect?
         for objet in scene.objects
-        where isVisible(objet) && objet.plane != .bg {
+        where isVisible(objet) && objet.id != fond?.id {
             let boite = anchorBox(of: objet)
             objets = objets.map { $0.union(boite) } ?? boite
         }
@@ -142,7 +191,7 @@ public nonisolated enum SceneFraming {
     /// `(w × 9) / (h × 16)` : la largeur et la hauteur ne se comparent qu'une
     /// fois ramenées à la même unité, et c'est l'erreur que ferait un `w / h`
     /// posé directement.
-    public static func cardAspect(scene: SceneV3, backgroundAspect: CGFloat?) -> CGFloat? {
+    public static func cardAspect(scene: SceneV3, backgroundAspect: CGFloat? = nil) -> CGFloat? {
         guard let cadre = focus(scene: scene, backgroundAspect: backgroundAspect),
               cadre.height > 0
         else { return nil }
