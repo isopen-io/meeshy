@@ -96,6 +96,7 @@ export const RACINE_V3 = join(__dirname, '..', '..', '..');
 
 export {
   AUTRE_CONVERSATION,
+  CINQUIEME_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
   CONVERSATION_RICHE,
   CREATEUR_DU_LIEN,
@@ -103,6 +104,7 @@ export {
   IDENTIFIANT_DU_LIEN_PARTAGE,
   INVITE,
   LIEN_DU_FIL,
+  LIGNES_DE_CONVERSATIONS_SERVIES,
   MEMBRE,
   messageDeFichier,
   messageProtege,
@@ -116,6 +118,7 @@ export {
   PSEUDO_SUGGERE,
   QUATRIEME_CONVERSATION,
   TROISIEME_CONVERSATION,
+  type LigneDeConversationServie,
   type MessageServi,
 } from './bouchon-monde';
 export { lienParDefaut, type LienDeBouchon } from './bouchon-lien';
@@ -577,7 +580,11 @@ export const passerelleDeBouchon = async (options?: {
     presences,
     // Les rooms que `_joinUserConversations` joint à l'authentification : les
     // deux conversations que `GET /conversations` sert au membre, et le fil
-    // riche. Sans elles, la LISTE n'entendrait aucune frappe.
+    // riche. Sans elles, la LISTE n'entendrait aucune frappe. La volumétrie de
+    // `/chats` (§ T2 de la spécification « le rond flottant ne recouvre plus
+    // le pied de page ») n'AJOUTE rien ici : les témoins de frappe et de
+    // message ne visent que ces trois rooms, et une ligne de garnissage n'a
+    // besoin d'aucune room pour exister dans la liste servie.
     conversationsDuMembre: [conversationId, AUTRE_CONVERSATION.id, CONVERSATION_RICHE.id],
     messages: () => messages,
     modifieUnMessage,

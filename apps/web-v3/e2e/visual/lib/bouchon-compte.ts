@@ -1037,8 +1037,10 @@ export const routesDuCompte =
        * Prisme au niveau CONVERSATION (`lastMessageOriginalLanguage`,
        * `lastMessageTranslations` — une carte `{ langue: aperçu }` restreinte au
        * prisme du lecteur) et `userPreferences`, un TABLEAU d'au plus une
-       * entrée (`take: 1` sur `userId`). Les QUATRE lignes (#5164, correction de
-       * revue) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
+       * entrée (`take: 1` sur `userId`). Les DOUZE lignes (spécification « le
+       * rond flottant ne recouvre plus le pied de page », § T2 — quatre
+       * portées à douze pour démontrer les règles de complétude sur une vraie
+       * volumétrie) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
        * gestionnaire boucle dessus au lieu de porter le littéral.
        *
        * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN
@@ -1059,7 +1061,15 @@ export const routesDuCompte =
         (ligne) => !etat.masquees.has(ligne.id),
       );
 
-      json({ success: true, data: lignes, pagination: { total: 7 } });
+      // `total` = `totalCount` en production : un `prisma.conversation.count()`
+      // sur TOUTES les conversations du lecteur, pas sur la page
+      // (`core-list.ts:503-507`, servi `:887`). Le bouchon rendant sa fixture
+      // ENTIÈRE en une page, les deux coïncident. Il portait `7` EN DUR pour
+      // quatre lignes ; la volumétrie a corrigé ce mensonge. Les trois champs
+      // voisins de la vraie route (`limit`, `offset`, `hasMore`) et son
+      // `cursorPagination` restent TUS tant qu'aucune surface de la v3 ne
+      // pagine — `lib/api/compte.ts` ne lit que `data`.
+      json({ success: true, data: lignes, pagination: { total: lignes.length } });
       return true;
     }
 

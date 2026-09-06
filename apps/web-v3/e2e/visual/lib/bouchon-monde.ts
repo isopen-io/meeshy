@@ -100,6 +100,29 @@ export const QUATRIEME_CONVERSATION = {
   traductions: null as Readonly<Record<string, string>> | null,
 } as const;
 
+/**
+ * LA CINQUIÈME LIGNE — LE TÉMOIN DU RANG ≠ 1 AU NAVIGATEUR (spécification
+ * « le rond flottant ne recouvre plus le pied de page », § T2).
+ *
+ * Le lecteur du bouchon porte un prisme `['fr', 'es']` (`systemLanguage:
+ * 'fr'`, `regionalLanguage: 'es'`, `bouchon-compte.ts:761-762`). Un ORIGINAL
+ * anglais SANS traduction française, mais traduit en ESPAGNOL, force la
+ * descente ordonnée au RANG 2 : le lecteur voit le texte espagnol, `lang="es"`
+ * (≠ `<html lang="fr">`), la pastille annonçant `en` — la langue d'ORIGINE,
+ * jamais celle qu'il sert. `membres: 3` fait aussi parler le compte de
+ * participants (§ 12.10.2), qui se taisait sur les quatre lignes précédentes
+ * (toutes à deux).
+ */
+export const CINQUIEME_CONVERSATION = {
+  id: '68f2a81417a557e8ce4ddfbf',
+  titre: 'Port de Cotonou',
+  membres: 3,
+  nonLus: 0,
+  apercu: 'The shipment left the port',
+  langueOriginale: 'en',
+  traductions: { es: 'El envío salió del puerto' } as Readonly<Record<string, string>> | null,
+} as const;
+
 export const IDENTIFIANT_DU_LIEN_PARTAGE = 'lagos-q1';
 export const DESCRIPTION_DU_LIEN = 'Le canal des opérations de terrain.';
 /** Servi par l'aperçu, JAMAIS attendu dans le HTML : c'est le témoin de la fuite du § 5.1. */
@@ -131,12 +154,74 @@ export type LigneDeConversationServie = {
   readonly participants?: readonly { readonly userId: string; readonly displayName: string }[];
 };
 
+const ilYA = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
+
 /**
- * LES QUATRE LIGNES DE `/chats` (#5164, correction de revue — la cible en
- * dessine QUATRE : une carte mise en avant + trois lignes plates, dont une
- * SANS pastille de langue). Un TABLEAU EXPORTÉ, pour que `bouchon-compte.ts`
- * (déjà à 1 078 lignes) BOUCLE dessus plutôt que de porter le littéral —
- * c'est ce fichier-ci, pas lui, qui grossit d'une ligne de plus demain.
+ * UNE LIGNE DE GARNISSAGE — patron FACTORY (CLAUDE.md § Testing Principles),
+ * pour porter la fixture de `/chats` à une volumétrie qui démontre les règles
+ * de complétude de `matrice.json#chats` (spécification « le rond flottant ne
+ * recouvre plus le pied de page », § T2) sans recopier neuf fois la même
+ * forme de ligne. `unreadCount` reste à `0` : aucune de ces lignes ne dispute
+ * la conversation mise en avant (`vedetteDe`) aux quatre lignes nommées.
+ */
+export const ligneServie = ({
+  id,
+  titre,
+  membres = 2,
+  genre = 'direct',
+  apercu,
+  ilYAMinutes,
+  langueOriginale = 'fr',
+  traductions = null,
+  participants,
+}: {
+  readonly id: string;
+  readonly titre: string;
+  readonly membres?: number;
+  readonly genre?: string;
+  readonly apercu: string;
+  readonly ilYAMinutes: number;
+  readonly langueOriginale?: string;
+  readonly traductions?: Readonly<Record<string, string>> | null;
+  /**
+   * L'HOMOLOGUE D'UN TÊTE-À-TÊTE (§ 12.10.3, correction de revue —
+   * `routes/conversations/core-list.ts:781` sert `participants` sur CHAQUE
+   * ligne, inconditionnellement) — RÉPANDU tel quel, jamais deviné : une
+   * ligne à `membres: 2` qui ne le renseigne pas n'ouvre PAS de profil,
+   * exactement comme la passerelle réelle le rendrait pour un tête-à-tête
+   * dont l'homologue serait absent de la charge.
+   */
+  readonly participants?: readonly { readonly userId: string; readonly displayName: string }[];
+}): LigneDeConversationServie => ({
+  id,
+  identifier: id,
+  title: titre,
+  type: genre,
+  memberCount: membres,
+  unreadCount: 0,
+  lastMessageAt: ilYA(ilYAMinutes),
+  lastMessage: { id: `m-apercu-${id}`, content: apercu },
+  lastMessageOriginalLanguage: langueOriginale,
+  lastMessageTranslations: traductions,
+  ...(participants === undefined ? {} : { participants }),
+});
+
+/**
+ * LES DOUZE LIGNES DE `/chats` (spécification « le rond flottant ne recouvre
+ * plus le pied de page », § T2 — la volumétrie qui démontre les règles de
+ * complétude de `matrice.json#chats` sur une vraie liste, là où quatre lignes
+ * ne montraient jamais ni un défilement réel ni un rang ≠ 1 au navigateur).
+ *
+ * ORDONNÉES PAR `lastMessageAt` DÉCROISSANT, comme `GET /conversations` les
+ * sert (`core-list.ts`) — c'est l'ordre qu'`ORDRE_AU_REPOS`
+ * (`v3-chats.spec.ts`) DÉRIVE de ce tableau, jamais un second littéral. Les
+ * CINQ premières sont NOMMÉES (chacune porte une règle qu'un témoin affirme) ;
+ * les SEPT dernières sont du GARNISSAGE — sans elles, le premier écran ne
+ * défile jamais et la règle 12 (« au moins trois lignes actionnables ») ne
+ * pouvait jamais distinguer « trois lignes visibles » de « toutes les lignes
+ * ». Un TABLEAU EXPORTÉ, pour que `bouchon-compte.ts` (déjà à 1 068 lignes)
+ * BOUCLE dessus plutôt que de porter le littéral — c'est ce fichier-ci, pas
+ * lui, qui grossit d'une ligne de plus demain.
  */
 export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie[] = [
   {
@@ -181,6 +266,12 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     lastMessage: { id: 'm-apercu-3', content: TROISIEME_CONVERSATION.apercu },
     lastMessageOriginalLanguage: TROISIEME_CONVERSATION.langueOriginale,
     lastMessageTranslations: TROISIEME_CONVERSATION.traductions,
+    // Rattrapé (correction de revue) : à deux membres, l'avatar doit ouvrir
+    // le profil de l'homologue — `homologueDe` l'élit en excluant MEMBRE.id.
+    participants: [
+      { userId: 'u-salon-demo', displayName: TROISIEME_CONVERSATION.titre },
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+    ],
   },
   {
     id: QUATRIEME_CONVERSATION.id,
@@ -193,7 +284,92 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     lastMessage: { id: 'm-apercu-4', content: QUATRIEME_CONVERSATION.apercu },
     lastMessageOriginalLanguage: QUATRIEME_CONVERSATION.langueOriginale,
     lastMessageTranslations: QUATRIEME_CONVERSATION.traductions,
+    // Rattrapé (correction de revue), même raison que ci-dessus.
+    participants: [
+      { userId: 'u-support-produit', displayName: QUATRIEME_CONVERSATION.titre },
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+    ],
   },
+  {
+    id: CINQUIEME_CONVERSATION.id,
+    identifier: 'port-cotonou',
+    title: CINQUIEME_CONVERSATION.titre,
+    type: 'group',
+    memberCount: CINQUIEME_CONVERSATION.membres,
+    unreadCount: CINQUIEME_CONVERSATION.nonLus,
+    lastMessageAt: ilYA(5 * 24 * 60),
+    lastMessage: { id: 'm-apercu-5', content: CINQUIEME_CONVERSATION.apercu },
+    lastMessageOriginalLanguage: CINQUIEME_CONVERSATION.langueOriginale,
+    lastMessageTranslations: CINQUIEME_CONVERSATION.traductions,
+  },
+  ligneServie({
+    id: '68f2a81417a557e8ce4ddfc0',
+    titre: 'Comité budget Q1',
+    membres: 5,
+    genre: 'group',
+    apercu: 'Le tableau est à jour.',
+    ilYAMinutes: 6 * 24 * 60,
+  }),
+  ligneServie({
+    id: '68f2a81417a557e8ce4ddfc1',
+    titre: 'Fatou N’Diaye',
+    apercu: 'On se voit demain ?',
+    ilYAMinutes: 7 * 24 * 60,
+    // Tête-à-tête (membres par défaut à 2) : son avatar doit ouvrir un profil.
+    participants: [
+      { userId: 'u-fatou-ndiaye', displayName: 'Fatou N’Diaye' },
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+    ],
+  }),
+  ligneServie({
+    id: '68f2a81417a557e8ce4ddfc2',
+    titre: 'Diaspora FR-EN',
+    membres: 8,
+    genre: 'group',
+    apercu: 'Merci pour les photos.',
+    ilYAMinutes: 8 * 24 * 60,
+  }),
+  /**
+   * LE TITRE LONG — la ligne qui fait travailler `text-overflow:ellipsis`
+   * (`.liste .nom`, `liste-feuille.ts:161`) sur une VRAIE ligne, plutôt que sur
+   * une fixture qui n'en portait jamais un assez long pour déborder.
+   */
+  ligneServie({
+    id: '68f2a81417a557e8ce4ddfc3',
+    titre: 'Comité de pilotage transverse Lagos-Kinshasa-Cotonou-Abidjan',
+    membres: 6,
+    genre: 'group',
+    apercu: 'Ordre du jour envoyé.',
+    ilYAMinutes: 9 * 24 * 60,
+  }),
+  ligneServie({
+    id: '68f2a81417a557e8ce4ddfc4',
+    titre: 'Yao Kouassi',
+    apercu: 'Facture réglée.',
+    ilYAMinutes: 10 * 24 * 60,
+    participants: [
+      { userId: 'u-yao-kouassi', displayName: 'Yao Kouassi' },
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+    ],
+  }),
+  ligneServie({
+    id: '68f2a81417a557e8ce4ddfc5',
+    titre: 'Veille marché',
+    membres: 4,
+    genre: 'group',
+    apercu: 'Nouveau rapport disponible.',
+    ilYAMinutes: 11 * 24 * 60,
+  }),
+  ligneServie({
+    id: '68f2a81417a557e8ce4ddfc6',
+    titre: 'Aicha Traoré',
+    apercu: 'À bientôt !',
+    ilYAMinutes: 12 * 24 * 60,
+    participants: [
+      { userId: 'u-aicha-traore', displayName: 'Aicha Traoré' },
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+    ],
+  }),
 ];
 
 /** La présence de départ : Ibrahim en ligne, Marta hors ligne — ce que `thread.png` dessine (« 1 en ligne » chez le membre, leur ami). */
@@ -201,8 +377,6 @@ export const PRESENCES_INITIALES: readonly (readonly [string, boolean])[] = [
   [PAIR_ANGLOPHONE.id, true],
   [PAIR_HISPANOPHONE.id, false],
 ];
-
-const ilYA = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
 
 /**
  * Les quatre messages que la cible `thread.png` dessine, tels que
