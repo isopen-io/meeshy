@@ -299,34 +299,14 @@ public extension StoryComposerViewModel {
             // écrivains que le chemin caméra — donc par le bump de version que
             // le canvas attend. `preloadTask` est la poignée que le `deinit`
             // annule : une session refermée ne finit pas de décoder.
-            let resolvedId = object.id
-            preloadTask = Task { [weak self] in
-                let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: copied, maxDimension: 400)
-                let asset = AVURLAsset(url: copied)
-                var mediaDuration: Float?
-                if let cmDur = try? await asset.load(.duration) {
-                    let secs = CMTimeGetSeconds(cmDur)
-                    if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
-                }
-                var videoAspectRatio: Double?
-                if let track = try? await asset.loadTracks(withMediaType: .video).first,
-                   let natural = try? await track.load(.naturalSize),
-                   let transform = try? await track.load(.preferredTransform) {
-                    let effective = natural.applying(transform)
-                    let w = abs(effective.width)
-                    let h = abs(effective.height)
-                    if w > 0, h > 0 { videoAspectRatio = Double(w / h) }
-                }
-                guard !Task.isCancelled, let self else { return }
-                if let thumbnail { self.registerLoadedImage(thumbnail, for: resolvedId) }
-                if let videoAspectRatio {
-                    self.setMediaAspectRatio(id: resolvedId, aspectRatio: videoAspectRatio, slideId: slideId)
-                }
-                if let mediaDuration {
-                    self.setMediaDuration(id: resolvedId, duration: mediaDuration, slideId: slideId)
-                    self.autoExtendDuration(forElementEnd: mediaDuration, slideId: slideId)
-                }
-            }
+            // **La mesure vit dans UN site** (#5418) — `measureVideo`. Ce bloc
+            // en portait l'unique exemplaire, et son jumeau du pont
+            // document → canvas ne l'avait pas : deux chemins posaient une
+            // vidéo, un seul la mesurait, et les stories du composer v3
+            // partaient sans ratio ni vignette. Les fondre est ce qui empêche
+            // l'écart de revenir — il n'était pas visible dans les APPELS, il
+            // vivait dans deux `nil` d'arguments.
+            measureVideo(objectId: object.id, fileURL: copied, slideId: slideId)
         }
     }
 }
