@@ -388,3 +388,21 @@ test.describe('Compatibilité — hors Chromium et réseau dégradé (#5268)', (
     await ctx.close();
   });
 });
+
+test.describe('les rendus que le rapport regarde', () => {
+  test('captures 390×844 — la feuille ouverte sur le fil, claire et sombre', async ({ browser }, info) => {
+    const dossier = process.env.RENDUS_DIR ?? join(__dirname, '..', '..', 'test-results', 'rendus');
+    mkdirSync(dossier, { recursive: true });
+    for (const schema of ['light', 'dark'] as const) {
+      const ctx = await contexte(browser, { schema });
+      const page = await ctx.newPage();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`${FIL()}?lien`, { waitUntil: 'load' });
+      await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
+      const chemin = join(dossier, `lienDepuisLeFil-${schema}.png`);
+      await page.screenshot({ path: chemin });
+      info.annotations.push({ type: `rendu ${schema}`, description: chemin });
+      await ctx.close();
+    }
+  });
+});
