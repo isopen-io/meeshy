@@ -1783,21 +1783,20 @@ struct FeedView: View {
                     onDismiss: { editingPost = nil }
                 )
             }
-            // La CITATION passe au meuble, comme sur iPhone
-            // (`RootViewComponents`). Une citation EST un repost commenté :
-            // `.repost(ofPostId:sourceFormat:)` porte déjà l'intention, et
-            // `ComposerFormat(postType:)` traduit le type du fil une fois pour
-            // les trois portes qui posent la même question.
+            // **La CITATION revient à `FeedComposerSheet`** — même raison, même
+            // jour, que sur iPhone (`RootViewComponents`) : `DocumentComposerDoor`
+            // REFUSE un repost tant que la levée 7.5 (un écrivain durable du
+            // repost) n'existe pas, et l'auteur recevait « publication
+            // impossible » au lieu de sa citation. La migration reste la cible.
             .fullScreenCover(item: $quoteTargetPost) { quoted in
-                DocumentComposerDoor(
-                    intent: ComposerIntent(
-                        origin: .repost(ofPostId: quoted.id,
-                                        sourceFormat: ComposerFormat(postType: quoted.type))),
+                FeedComposerSheet(
                     viewModel: viewModel,
-                    storyViewModel: storyViewModel,
-                    router: router,
-                    conversationListViewModel: conversationListViewModel,
-                    statusViewModel: statusViewModel
+                    initialText: "",
+                    pendingAttachmentType: nil,
+                    quotePost: quoted,
+                    onDismiss: {
+                        quoteTargetPost = nil
+                    }
                 )
             }
     }
