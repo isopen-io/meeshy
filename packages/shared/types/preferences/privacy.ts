@@ -30,13 +30,18 @@ export const PrivacyPreferenceSchema = z.object({
   /**
    * `false` par défaut depuis #4578, et ce n'est pas un durcissement gratuit.
    *
-   * Cette préférence est GARDÉE par `dataProcessingConsentAt`
-   * (`ConsentValidationService.validatePrivacyPreferences`) et n'a AUCUN
-   * lecteur d'usage dans le dépôt — mesuré : hors schémas, tests et interface,
-   * les seules occurrences sont la garde elle-même. Sa valeur stockée est donc
-   * la seule chose qui existe, et un défaut `true` faisait affirmer par le
-   * système, pour un compte qui n'a rien consenti, exactement ce que la garde
-   * refuse. L'état PAR DÉFAUT violait le modèle de consentement.
+   * Cette préférence est GARDÉE par `analyticsConsentAt`
+   * (`ConsentValidationService.validatePrivacyPreferences`) — un consentement
+   * DÉDIÉ depuis #4709 (2026-09-02), enfant direct de `dataProcessingConsentAt`
+   * dans `CONSENT_PARENT` (`@meeshy/shared/types/consents`), et plus une
+   * simple retombée du consentement général : le porteur a tranché que
+   * « le consentement à l'analytique est REQUIS », distinctement. Elle n'a
+   * toujours AUCUN lecteur d'usage dans le dépôt — mesuré : hors schémas,
+   * tests et interface, les seules occurrences sont la garde elle-même. Sa
+   * valeur stockée est donc la seule chose qui existe, et un défaut `true`
+   * faisait affirmer par le système, pour un compte qui n'a rien consenti,
+   * exactement ce que la garde refuse. L'état PAR DÉFAUT violait le modèle de
+   * consentement.
    *
    * Conséquence directe, mesurée sur staging : la catégorie `privacy`
    * était INACCESSIBLE à un compte neuf — un `PATCH {"profileVisibility":"private"}` était

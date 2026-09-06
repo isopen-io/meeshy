@@ -75,6 +75,7 @@ describe('ConsentValidationService', () => {
 
       expect(status).toEqual({
         hasDataProcessingConsent: false,
+        hasAnalyticsConsent: false,
         hasVoiceDataConsent: false,
         hasVoiceProfileConsent: false,
         hasVoiceCloningConsent: false,
@@ -115,6 +116,7 @@ describe('ConsentValidationService', () => {
 
       expect(status).toEqual({
         hasDataProcessingConsent: false,
+        hasAnalyticsConsent: false,
         hasVoiceDataConsent: false,
         hasVoiceProfileConsent: false,
         hasVoiceCloningConsent: false,
@@ -559,7 +561,9 @@ describe('ConsentValidationService', () => {
     it('returns no violations when dataProcessingConsent given and flags enabled', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
-        { dataProcessingConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        // #4709 — `allowAnalytics` exige désormais `analyticsConsentAt`, pas
+        // seulement `dataProcessingConsentAt` (dont il reste l'enfant direct).
+        { dataProcessingConsentAt: NOW, analyticsConsentAt: NOW, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         null
       ));
       const violations = await svc.validatePrivacyPreferences(userId, {
@@ -572,11 +576,25 @@ describe('ConsentValidationService', () => {
     it('adds violation for allowAnalytics without dataProcessingConsent', async () => {
       process.env.NODE_ENV = 'test';
       const svc = new ConsentValidationService(makePrisma(
-        { dataProcessingConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        { dataProcessingConsentAt: null, analyticsConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
         null
       ));
       const violations = await svc.validatePrivacyPreferences(userId, { allowAnalytics: true });
       expect(violations.find(v => v.field === 'allowAnalytics')).toBeDefined();
+    });
+
+    // #4709 — avoir SEULEMENT `dataProcessingConsentAt` ne suffit plus :
+    // `analyticsConsentAt` est un consentement dédié, pas une retombée.
+    it('adds violation for allowAnalytics when dataProcessingConsent is present but analyticsConsentAt is not', async () => {
+      process.env.NODE_ENV = 'test';
+      const svc = new ConsentValidationService(makePrisma(
+        { dataProcessingConsentAt: NOW, analyticsConsentAt: null, voiceDataConsentAt: null, voiceProfileConsentAt: null, voiceCloningEnabledAt: null },
+        null
+      ));
+      const violations = await svc.validatePrivacyPreferences(userId, { allowAnalytics: true });
+      const violation = violations.find(v => v.field === 'allowAnalytics');
+      expect(violation).toBeDefined();
+      expect(violation?.requiredConsents).toEqual(['analyticsConsentAt']);
     });
 
     it('adds violation for shareUsageData without dataProcessingConsent', async () => {
