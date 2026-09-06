@@ -1,6 +1,52 @@
 import { FIL } from '@/lib/contenu/fil';
 
 /**
+ * LE COOKIE DU FUSEAU (décision porteur 2026-09-06) — le module de
+ * participation y écrit l'identifiant IANA du lecteur
+ * (`Intl.DateTimeFormat().resolvedOptions().timeZone`) pour que le SERVEUR
+ * puisse rendre l'heure de réception EXACTE dès le premier octet, au lieu du
+ * relatif « il y a 27 min » que le module remontait ensuite en heure locale —
+ * un remplacement VISIBLE au chargement, mesuré par le porteur comme un
+ * scintillement. Muni du fuseau, le serveur sert « 13:10 » directement et le
+ * remontage du module devient idempotent. Sans cookie (toute première visite,
+ * cookie purgé), le relatif reste servi : il n'est jamais FAUX, seulement
+ * moins précis — c'est le repli, plus jamais le nominal.
+ */
+export const COOKIE_DE_FUSEAU = 'meeshy_tz';
+
+/**
+ * Un identifiant IANA plausible (`Europe/Paris`, `America/Sao_Paulo`) — la
+ * forme est vérifiée ici, la VALIDITÉ par `Intl` dans `heureExacte` : un
+ * fuseau inconnu de l'ICU rend '' et le site d'appel sert son repli relatif.
+ */
+export const fuseauPlausible = (fuseau: string): boolean =>
+  fuseau.length > 0 && fuseau.length <= 64 && /^[A-Za-z][A-Za-z0-9_+/-]*$/.test(fuseau);
+
+const formatsExacts = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * L'HEURE DE RÉCEPTION, EXACTE, dans le fuseau du LECTEUR — ce que le serveur
+ * rend quand le cookie du fuseau est là. Rend '' sur un instant illisible OU
+ * un fuseau que l'ICU refuse : l'appelant sert alors le relatif (`quand`),
+ * jamais une heure dans le mauvais fuseau.
+ */
+export const heureExacte = (iso: string, langue: string, fuseau: string): string => {
+  const instant = Date.parse(iso);
+  if (Number.isNaN(instant)) return '';
+  const cle = `${langue}\u0000${fuseau}`;
+  let format = formatsExacts.get(cle);
+  if (format === undefined) {
+    try {
+      format = new Intl.DateTimeFormat(langue, { hour: '2-digit', minute: '2-digit', timeZone: fuseau });
+    } catch {
+      return '';
+    }
+    formatsExacts.set(cle, format);
+  }
+  return format.format(instant);
+};
+
+/**
  * L'HEURE ET LE JOUR D'UNE LIGNE, dans la langue du document — écrits UNE fois
  * pour les deux rendus du fil.
  *

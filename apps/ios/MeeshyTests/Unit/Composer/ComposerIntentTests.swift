@@ -1346,4 +1346,69 @@ final class ComposerIntentTests: XCTestCase {
                          "\(nom(de: origine)) ne reprend aucun brouillon.")
         }
     }
+
+    // MARK: - Le format d'une publication RENDUE (unification 2026-09-06)
+
+    /// **Les quatre types du fil trouvent leur format.** La traduction vit sur
+    /// `ComposerFormat` et non au site qui ouvre la porte : citer, reposter et
+    /// modifier posent la même question, et trois `switch` recopiés auraient
+    /// divergé sur la valeur inconnue.
+    func test_lesTypesDuFil_trouventLeurFormat() {
+        XCTAssertEqual(ComposerFormat(postType: "STORY"), .story)
+        XCTAssertEqual(ComposerFormat(postType: "REEL"), .reel)
+        XCTAssertEqual(ComposerFormat(postType: "STATUS"), .status)
+        XCTAssertEqual(ComposerFormat(postType: "POST"), .post)
+    }
+
+    /// La casse du fil n'est pas garantie — le gateway sert « POST », mais un
+    /// cache local ou un ancien client peut servir autre chose.
+    func test_laCasse_neChangeRienAuVerdict() {
+        XCTAssertEqual(ComposerFormat(postType: "reel"), .reel)
+        XCTAssertEqual(ComposerFormat(postType: "Story"), .story)
+    }
+
+    /// **LE témoin de la direction de l'erreur.** Un type INCONNU — servi par
+    /// un gateway plus récent — retombe sur `.post`, et c'est le seul repli
+    /// sûr : `.post` ouvre le composer le plus GÉNÉRAL, qui sait tout porter.
+    ///
+    /// > Se tromper vers le plus capable coûte un format inattendu ; se
+    /// > tromper vers le plus étroit coûte une composition impossible. La
+    /// > direction de l'erreur se choisit par son coût de réparation.
+    func test_unTypeInconnu_retombeSurLePlusGeneral() {
+        XCTAssertEqual(ComposerFormat(postType: "PODCAST"), .post)
+        XCTAssertEqual(ComposerFormat(postType: ""), .post)
+        XCTAssertEqual(ComposerFormat(postType: nil), .post)
+    }
+
+    /// **La CITATION passe par le meuble** (directive porteur 2026-09-06 :
+    /// « dans tous les cas iPad et iOS doivent utiliser le nouveau composer »).
+    ///
+    /// Elle était le dernier chemin de l'iPhone à monter `FeedComposerSheet`,
+    /// l'ancien composer, qui publie avec `storyEffects: nil` : citer un post
+    /// produisait une publication SANS scène — donc sans légende par média,
+    /// sans texte alternatif, et hors de la mosaïque — sur une app où toute
+    /// photo devient une scène.
+    ///
+    /// Garde de SOURCE parce que la question porte sur un arbre de vues : quel
+    /// composer ce `fullScreenCover` présente-t-il ? Aucun appel de fonction
+    /// n'y répond.
+    func test_laCitation_monteLeMeubleEtNonLAncienComposer() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootViewComponents.swift")
+        let texte = try String(contentsOf: url, encoding: .utf8)
+
+        guard let debut = texte.range(of: ".fullScreenCover(item: $quoteOriginalPost)") else {
+            return XCTFail("le cover de citation est introuvable — la garde ne mesurerait rien")
+        }
+        let bloc = String(texte[debut.lowerBound...].prefix(900))
+
+        XCTAssertTrue(bloc.contains("DocumentComposerDoor("),
+                      "citer doit ouvrir le MEUBLE")
+        XCTAssertTrue(bloc.contains("origin: .repost(ofPostId: quoted.id"),
+                      "une citation EST un repost commenté — elle n'a pas d'origine à elle")
+        XCTAssertFalse(bloc.contains("FeedComposerSheet("),
+                       "l'ancien composer ne doit plus être monté par la citation")
+    }
 }

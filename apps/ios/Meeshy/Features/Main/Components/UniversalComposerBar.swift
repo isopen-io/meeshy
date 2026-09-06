@@ -193,6 +193,17 @@ struct UniversalComposerBar: View {
     /// de tuile (loi 4 : une porte sans effet n'est pas rendue).
     var onRequestStickerPicker: (() -> Void)? = nil
 
+    /// **L'emplacement d'envoi devient un CADRE À MOTS** (#5326, directive
+    /// porteur 2026-09-06). L'hôte reçoit le gabarit choisi et le texte tapé,
+    /// et les envoie comme un message-sticker (`ConversationView.sendTemplateSticker`).
+    ///
+    /// `nil` = la pastille n'est pas rendue et le bouton d'envoi reste :
+    /// `ComposerActionSlot` en fait la condition `offersTextSticker`. Un hôte
+    /// qui ne sait pas envoyer de sticker (commentaires, post, story) n'a donc
+    /// rien à faire pour rester correct — la porte n'existe que là où elle
+    /// mène quelque part (loi 4).
+    var onSendTextSticker: ((StickerTemplate, String) -> Void)? = nil
+
     /// Called when the user taps a thumbnail in the inline recent-media strip
     /// (shown beneath the attachment carousel). When non-nil, the strip is
     /// rendered; the host ingests the resolved photo/video like a camera capture.
@@ -284,6 +295,9 @@ struct UniversalComposerBar: View {
     // MARK: - State (internal for cross-file extension access)
 
     @State var text = ""
+    /// La feuille des dix cadres à mots, ouverte par un appui long sur la
+    /// pastille (#5326).
+    @State var showTextStickerSheet = false
     @FocusState var isFocused: Bool
     @State var sendBounce = false
     @State var focusBounce = false

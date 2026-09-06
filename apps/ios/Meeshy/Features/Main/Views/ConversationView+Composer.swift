@@ -166,6 +166,14 @@ extension ConversationView {
             // Tuile « Sticker » (#4823) : la palette monte en feuille ; ce
             // qu'elle rend part comme un MESSAGE (`ConversationView+Sticker`).
             onRequestStickerPicker: { composerState.showStickerPicker = true },
+            // Cadre à mots (#5326) : la pastille de la barre remet le gabarit
+            // choisi et le texte tapé ; l'envoi passe par le MÊME chemin que la
+            // palette (`sendTemplateSticker` → `sendStickerImage`), qui porte
+            // déjà la bulle optimiste, l'amorce de cache et l'outbox hors-ligne.
+            // Le champ est vidé par la barre, qui en est la source.
+            onSendTextSticker: { gabarit, mots in
+                sendTemplateSticker(gabarit, slots: [StickerSlotFiller.textSlot: mots])
+            },
             onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
             onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
             onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },

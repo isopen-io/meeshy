@@ -402,6 +402,118 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
     }
 
+    // MARK: - Un CANVAS seul, sans texte ni média ni lieu, peut partir
+
+    /// **Le cas mesuré au simulateur le 2026-09-05** (directive porteur : « des
+    /// tests de canvas sans image avec texte sticker dessin, avec fond couleur
+    /// uniquement »).
+    ///
+    /// Un fond de couleur + un texte posé sur la scène : le composer peint
+    /// tout, la flèche s'arme — et le plan refusait `.emptyDraft`. L'auteur
+    /// voyait « Erreur lors de la publication » sur une composition entière.
+    ///
+    /// > **Le même oubli à deux étages.** La porte de la flèche ne comptait pas
+    /// > la matière du canvas ; le plan d'envoi non plus. Corriger la première
+    /// > a rendu le second visible — et sans lui, l'auteur passait d'un bouton
+    /// > mort à un bouton qui échoue, ce qui est pire : le premier ne promet
+    /// > rien, le second promet et trahit.
+    func test_unCanvasSeul_sansTexteNiMediaNiLieu_peutPartir() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertNotEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Un canvas est de la matière — un fond CHOISI est le geste le plus court qui produise " +
+            "une publication qu'on peut regarder."
+        )
+    }
+
+    /// **Un FOND DE COULEUR NU ne publie pas un post** (directive porteur
+    /// 2026-09-06).
+    ///
+    /// > « Il faut juste rendre impossible la publication de canvas vide sans
+    /// > texte, ni autre type d'object ! »
+    ///
+    /// Mesuré au simulateur : trois scènes composées de trois fonds, sans un
+    /// seul objet, partaient — et la carte du fil n'était qu'un rectangle
+    /// coloré muet. La règle du fond-est-de-la-matière reste JUSTE pour une
+    /// story (#4741) ; elle ne l'est pas pour un post.
+    func test_unFondDeCouleurNU_nePublieP0sUnPost() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Une page de couleur sans aucun objet ne dit rien à personne — sa carte dans le fil " +
+            "serait un rectangle muet."
+        )
+    }
+
+    /// …mais le MÊME fond avec un objet part : c'est l'objet qui fait la
+    /// publication, jamais la décoration qui l'entoure.
+    func test_leMemeFond_avecUnTexte_publie() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        effets.textObjects = [StoryTextObject(text: "SANS PHOTO")]
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertNotEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Un texte posé sur la scène est un objet — le canvas a un contenu."
+        )
+    }
+
+    /// **Un texte VIDE n'est pas un objet.** C'est la coquille que le tap sur
+    /// la page blanche pose avant la première frappe ; la compter ferait
+    /// partir une intention qui n'existe pas encore.
+    func test_uneCoquilleDeTexteVIDE_nePublieP0s() {
+        var effets = StoryEffects()
+        effets.background = "#F43F5E"
+        effets.textObjects = [StoryTextObject(text: "   ")]
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
+        )
+        XCTAssertEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Une coquille de texte vide n'est pas une composition."
+        )
+    }
+
+    /// …et un canvas VIDE reste vide. La règle compte la matière, pas la
+    /// présence d'un blob : un `StoryEffects` neuf accompagne toute
+    /// composition dès le premier geste, et l'accepter ferait partir des
+    /// publications que personne n'a composées.
+    func test_unCanvasVIDE_neSuffitPas() {
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: StoryEffects(), mediaCaptions: [:], mediaAlts: [:],
+            mediaObjectIds: [:]
+        )
+        XCTAssertEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Un blob d'effets sans aucune matière n'est pas une composition."
+        )
+    }
+
     // MARK: - T2.6 — Un vocal composé dans le meuble part AVEC sa transcription
 
     /// **Round-trip pur, sans lire de source** — même patron que

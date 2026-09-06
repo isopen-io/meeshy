@@ -53,15 +53,61 @@ extension UniversalComposerBar {
     /// Deux cibles de 44 et la gouttière de 8 qui les sépare.
     static let quickEmojiSlotWidth: CGFloat = 96
 
+    /// **Le cadre à mots servi à la pastille** — `nil` quand l'hôte ne câble
+    /// pas l'envoi de sticker ou quand le catalogue ne rend rien. C'est ce
+    /// `nil` qui fait retomber `ComposerActionSlot` sur le bouton d'envoi :
+    /// une pastille sans destination ne se monte pas (loi 4).
+    var textStickerTemplate: StickerTemplate? {
+        guard onSendTextSticker != nil else { return nil }
+        // Le magasin est LU, jamais observé : la barre se re-rend déjà à chaque
+        // frappe, et un `@ObservedObject` sur un singleton global depuis une
+        // feuille rouvrirait exactement les re-rendus que le § « Zero
+        // Unnecessary Re-render » ferme.
+        return ComposerTextStickerChoice.resolve(
+            recents: StickerUsageStore.shared.recents,
+            favorites: StickerUsageStore.shared.favorites,
+            catalog: StickerTemplateCatalog.templates(family: .text)
+        )
+    }
+
+    /// Ce que l'emplacement de 44 points MONTRE — la règle est dans
+    /// `ComposerActionSlot`, éprouvée état par état ; ici on ne fait que la
+    /// rendre.
+    var actionSlot: ComposerActionSlot {
+        ComposerActionSlot.resolve(
+            hasText: hasText,
+            hasOtherContent: effectiveIsRecording || !allAttachments.isEmpty || externalHasContent,
+            isEditMode: isEditMode,
+            isSending: externalIsSending,
+            keyboardIsUp: isFocused,
+            offersQuickEmoji: showEmoji,
+            offersTextSticker: textStickerTemplate != nil
+        )
+    }
+
     @ViewBuilder
     var actionButton: some View {
         let isReady = (effectiveIsRecording || hasContent) && !externalIsSending
-        let showsQuickEmoji = !isReady && !isEditMode && showEmoji
+        let slot = actionSlot
+        // `slot == .quickEmoji` implique déjà « rien à envoyer » — donc
+        // `isReady == false`. Le redoubler ici ferait croire à deux conditions
+        // là où il n'y en a qu'une, et la seconde ne pourrait jamais tomber.
+        let showsQuickEmoji = slot == .quickEmoji
 
         ZStack {
             if showsQuickEmoji {
                 quickEmojiButtons
                     .transition(tourbillonTransition)
+            } else if slot == .textSticker, let gabarit = textStickerTemplate {
+                ComposerTextStickerButton(
+                    template: gabarit,
+                    text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                    accentColor: accentColor,
+                    isDark: style == .dark,
+                    onSend: { sendTextSticker(gabarit) },
+                    onBrowse: { showTextStickerSheet = true }
+                )
+                .transition(tourbillonTransition)
             } else {
                 sendButton
                     .opacity(isReady ? 1.0 : 0)
@@ -73,6 +119,38 @@ extension UniversalComposerBar {
         .animation(.spring(response: 0.35, dampingFraction: 0.62), value: showsQuickEmoji)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
+    }
+
+    // ========================================================================
+    // MARK: - Envoi d'un cadre à mots (#5326)
+    // ========================================================================
+
+    /// **Le texte part DESSINÉ dans le cadre, et le champ se vide.**
+    ///
+    /// L'usage est noté ici, au moment de l'envoi, dans le MÊME magasin que la
+    /// palette (`StickerUsageStore.noteUse`) : c'est ce qui rend la pastille
+    /// dynamique au tour suivant (`ComposerTextStickerChoice`). L'écrire
+    /// ailleurs aurait fait diverger le cadre que la pastille montre de celui
+    /// que l'auteur vient d'envoyer.
+    ///
+    /// Le champ se vide SANS attendre l'hôte : contrairement à `handleSend`,
+    /// rien ici ne peut être refusé plus loin — le texte est déjà rendu dans
+    /// une image, et la même trimmed-string part au même instant. Le
+    /// `textBinding` est poussé d'abord pour que l'hôte ne relise pas un
+    /// brouillon que la barre vient d'effacer.
+    func sendTextSticker(_ template: StickerTemplate) {
+        let mots = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !mots.isEmpty, let envoi = onSendTextSticker else { return }
+        onAnyInteraction?()
+        StickerUsageStore.shared.noteUse(.template(template))
+        envoi(template, mots)
+        text = ""
+        textBinding?.wrappedValue = ""
+        textAnalyzer.reset()
+        if let id = storyId {
+            onSaveDraft?(id, "", [])
+        }
+        HapticFeedback.light()
     }
 
     // ========================================================================

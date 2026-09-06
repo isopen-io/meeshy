@@ -399,6 +399,20 @@ extension UniversalComposerBar {
                 onDismiss: { textAnalyzer.showLanguagePicker = false }
             )
         }
+        // **Les dix cadres à mots, ouverts par un appui long sur la pastille**
+        // (#5326). La feuille est montée ICI, sur la barre, et pas chez l'hôte :
+        // le texte qu'elle rend est celui du champ, qui vit dans la barre.
+        // Chez l'hôte, elle aurait relu un binding et se serait redessinée un
+        // tour de run loop plus tard que la frappe.
+        .sheet(isPresented: $showTextStickerSheet) {
+            ComposerTextStickerSheet(
+                text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                accentColor: accentColor,
+                onPick: { gabarit in sendTextSticker(gabarit) }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .adaptiveOnChange(of: injectedEmoji.wrappedValue) { _, emoji in
             if !emoji.isEmpty {
                 text += emoji

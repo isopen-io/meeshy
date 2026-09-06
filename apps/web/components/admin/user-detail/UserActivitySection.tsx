@@ -26,7 +26,11 @@ import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 interface ShareLink {
   id: string;
-  linkId: string;
+  // #5299 — `GET /admin/users/:userId/activity` ne charge aucune colonne de
+  // `SHARE_LINK_JOIN_KEY_COLUMNS` (#4692) : `linkId` et `identifier` (celui
+  // du LIEN, pas de la conversation) ne sont jamais servis à cette route.
+  // Les déclarer non-nullables ici mentait sur le contrat réel.
+  linkId?: string;
   identifier: string | null;
   name: string | null;
   description: string | null;
@@ -152,7 +156,11 @@ function ShareLinkCard({ link }: { link: ShareLink }) {
     <div className="p-3 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 space-y-2">
       <div className="flex items-center justify-between">
         <span className="font-medium text-sm dark:text-gray-100">
-          {link.name || link.identifier || link.linkId}
+          {/* #5299 — `identifier` et `linkId` (le secret de jointure, #4692)
+              ne sont jamais servis par cette route : sans repli terminal sur
+              `id` (seul champ garanti présent), un lien sans `name` n'affiche
+              rien du tout. */}
+          {link.name || link.identifier || link.linkId || link.id}
         </span>
         <StatusBadge active={link.isActive} expired={expired} />
       </div>

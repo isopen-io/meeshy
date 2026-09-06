@@ -550,7 +550,41 @@ struct FeedPostCard: View {
                 // compose déjà média + audio + texte. Priorité sur les branches
                 // repost ci-dessous : un post scène n'est ni un repost de story
                 // ni un repost de réel.
-                if let cardSceneDocument {
+                // **Plusieurs scènes ⇒ une MOSAÏQUE** (#5322). Une scène
+                // seule garde son rendu : une mosaïque d'un élément n'est pas
+                // une mosaïque, et le player a une scène à JOUER.
+                //
+                // Les deux branches ne partagent pas leurs modificateurs, et
+                // ce n'est pas une duplication : elles ne portent pas la même
+                // accessibilité. La carte mono-scène est UN bouton — « ouvrir
+                // en plein écran » ; la mosaïque en porte quatre, un par
+                // tuile, chacun menant à SA scène. Les réunir sous un
+                // `.accessibilityElement(children: .ignore)` commun aurait
+                // ravalé les quatre en un seul, et VoiceOver n'aurait plus
+                // atteint que la première scène — le défaut même que ce lot
+                // corrige, réintroduit par l'arbre d'accessibilité.
+                if let cardSceneDocument, cardSceneDocument.scenes.count > 1 {
+                    PostSceneMosaic(
+                        post: post,
+                        document: cardSceneDocument,
+                        accentColor: accentColor,
+                        preferredContentLanguages:
+                            AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                        onTapScene: { _ in
+                            if cardSceneOpensFullscreen { openSceneFullscreen() }
+                            else { onTapPost?(post) }
+                        }
+                    )
+                    // **Aucune légende sur une mosaïque** (directive porteur
+                    // 2026-09-06). La règle est consultée, jamais recopiée :
+                    // elle sait que le compte prime sur le mode.
+                    .overlay(alignment: .bottom) {
+                        if MosaicLayout.showsCaption(mode: cardSceneDocument.resolvedLayout,
+                                                     visualCount: cardSceneDocument.scenes.count) {
+                            FeedCaptionOverlay(caption: cardSceneCaption)
+                        }
+                    }
+                } else if let cardSceneDocument {
                     PostSceneSurface(
                         coordinator: reelAutoplay,
                         post: post,

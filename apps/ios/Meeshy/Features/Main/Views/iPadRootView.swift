@@ -393,7 +393,7 @@ struct iPadRootView: View {
         if isConversationOpen {
             iPadConversationList(showFeedButton: true)
         } else {
-            FeedView()
+            FeedView(conversationListViewModel: conversationViewModel)
         }
     }
 

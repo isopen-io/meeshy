@@ -1209,6 +1209,17 @@ describe('UserActivitySection', () => {
     await waitFor(() => expect(screen.getByText('link-abc')).toBeInTheDocument());
   });
 
+  // #5299 — `GET /admin/users/:userId/activity` ne charge jamais `linkId` ni
+  // `identifier` (#4692) : sans repli terminal sur `id`, un lien sans `name`
+  // n'affichait plus rien du tout sur cette surface.
+  it('share link falls back to id when name, identifier and linkId are all absent', async () => {
+    mockGet.mockResolvedValue(makeActivityResponse({
+      shareLinks: [makeShareLink({ id: 'sl-only-id', name: null, identifier: null, linkId: undefined })],
+    }));
+    render(<UserActivitySection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText('sl-only-id')).toBeInTheDocument());
+  });
+
   it('renders expired share link badge', async () => {
     const pastDate = new Date(Date.now() - 86400000).toISOString();
     mockGet.mockResolvedValue(makeActivityResponse({ shareLinks: [makeShareLink({ expiresAt: pastDate })] }));

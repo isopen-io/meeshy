@@ -29081,3 +29081,61 @@ site d'appel.
 > (leçon 533) vue depuis l'autre bout : là, une moitié présente rassurait sur
 > la moitié absente ; ici, un correctif présent rassure sur le chemin qu'il ne
 > couvre pas.
+
+## Leçon 536 — Un `test-without-building` exécute le dernier bundle QUI EXISTE, pas celui du build qu'on vient de lancer
+
+**Mesuré le 2026-09-06** (lot #5326, arbre partagé à trois sessions). J'enchaîne
+`build-for-testing ; test-without-building` avec un **point-virgule**. Le build
+échoue (`unable to attach DB: … database is locked`), le test tourne quand même,
+et le journal rend :
+
+```
+BUILD_EXIT=65
+** TEST BUILD FAILED **
+TEST_EXIT=0
+	 Executed 31 tests, with 0 failures (0 unexpected)
+```
+
+**Trente-et-un tests verts sur du code qui n'a pas compilé.** Le bundle du build
+PRÉCÉDENT était encore là ; `test-without-building` l'a trouvé et exécuté.
+
+## La forme générale, et pourquoi elle a deux portes
+
+C'est la même panne que celle du `SYMROOT` dépareillé de la veille, dont ce lot
+montre qu'elle n'était qu'un cas particulier :
+
+| variante | ce qui casse le lien build → test |
+|---|---|
+| `SYMROOT` surchargé au build seul | les deux commandes visent deux arbres de produits |
+| build ÉCHOUÉ, test enchaîné par `;` | le build ne produit rien, l'ancien bundle survit |
+
+> **La commande ne dit pas quel binaire elle exécute ; elle dit où le
+> chercher.** Tant qu'un `.xctestrun` existe à cet endroit, il tourne — daté
+> d'hier, produit par le pair, ou construit à partir d'un code depuis modifié.
+
+**Le témoin est le NOMBRE de tests exécutés, suite par suite** — jamais le code
+de sortie, jamais la couleur, jamais l'absence d'échec. Ici : `Executed 10` pour
+une suite qui en portait 11 depuis l'ajustement. Le contrôle tient en une ligne :
+`grep -c 'func test_' <suite>.swift` comparé au `Executed N` du journal.
+
+Les trois ceintures, dans l'ordre de coût croissant : `&&` entre les deux
+commandes ; verdict lu sur `** TEST BUILD SUCCEEDED **` dans le JOURNAL et non
+sur `$?` ; comptage des tests par suite. La dernière est la seule qui attrape
+aussi le cas où le build réussit mais produit ailleurs.
+
+## Le corollaire d'arbre partagé, qui n'est pas le verrou
+
+Le verrou `build.db` fait peur mais échoue franchement — il se voit. Le vrai
+danger de l'arbre partagé est un build qui **LIT pendant qu'une autre session
+ÉCRIT** : une session pair a rapporté dix `extra argument 'keyboardIsUp' in
+call` sur un fichier de témoins pendant que j'ajoutais ce paramètre. Sa
+compilation avait la SOURCE d'avant en cache et les TÉMOINS d'après — une erreur
+qui n'existait dans aucun des deux états, seulement dans leur mélange.
+
+> **Quand une erreur accuse un fichier qu'une autre session édite en ce moment,
+> la relire APRÈS son commit avant de la traiter.** Le diagnostic peut être
+> exact sur les faits et faux sur la cause, parce que la cause est temporelle.
+
+Et le verrou lui-même accuse volontiers le voisin : le mien était tenu par mon
+PROPRE `SWBBuildService`, qui n'avait pas rendu la main deux secondes après la
+sortie en 0 de mon build précédent. `lsof` sur le `build.db` avant d'accuser.

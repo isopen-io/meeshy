@@ -502,7 +502,28 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
         // texte ni média, et `emptyDraft` ne doit se refuser que quand il n'y a
         // NI texte NI média NI lieu.
         let texteVide = draft.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-        guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil else {
+        // **Un CANVAS est de la matière** (2026-09-05). L'énumération ci-dessus
+        // disait « NI texte NI média NI lieu » et le canvas n'y figurait pas :
+        // une composition de texte, de dessin, de stickers ou à fond de couleur
+        // seul — celles que le porteur demande d'éprouver — se faisait refuser
+        // comme « brouillon vide » APRÈS que la flèche se soit armée.
+        //
+        // > **Le même oubli, deux étages plus bas.** La porte de la flèche
+        // > ignorait la matière du canvas (corrigé le même jour) ; le PLAN
+        // > d'envoi l'ignorait aussi. Corriger le premier a rendu le second
+        // > visible — et sans lui, l'auteur passait d'un bouton mort à un
+        // > bouton qui échoue, ce qui est pire.
+        //
+        // La règle n'est pas réécrite : `StorySlidePublishMatter` est le site
+        // unique depuis #4741, et il expose désormais le grain des EFFETS.
+        // **Un fond de couleur NU ne publie pas** (directive porteur
+        // 2026-09-06) : « rendre impossible la publication de canvas vide sans
+        // texte, ni autre type d'object ». D'où `carriesObject` et non
+        // `carriesMatter` — la seconde compte le fond, ce qui reste juste pour
+        // une STORY (#4741) et ne l'est pas pour un post, dont ce plan est le
+        // seul juge (`format == .post` en tête de fonction).
+        let canvasSansMatiere = !(draft.storyEffects.map(StorySlidePublishMatter.carriesObject) ?? false)
+        guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil || !canvasSansMatiere else {
             return .refuse(.emptyDraft)
         }
         // La complétude de l'audience passe par la MÊME règle que le gate de la

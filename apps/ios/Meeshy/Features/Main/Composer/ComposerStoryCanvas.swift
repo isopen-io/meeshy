@@ -92,4 +92,33 @@ nonisolated enum ComposerStoryCanvas {
     static func hasMatter(slides: [StorySlide], slideImageIds: Set<String>) -> Bool {
         StorySlidePublishMatter.anySlideDeservesAPost(slides, slideImageIds: slideImageIds)
     }
+
+    /// **Ce que le FORMAT exige du canvas pour partir** (directive porteur
+    /// 2026-09-06).
+    ///
+    /// > « Il faut juste rendre impossible la publication de canvas vide sans
+    /// > texte, ni autre type d'object ! »
+    ///
+    /// Deux formats, deux exigences, et c'est voulu :
+    ///
+    /// - **une STORY** se publie sur un fond CHOISI — c'est le geste le plus
+    ///   court qui produise une story qu'on peut regarder, décision #4741,
+    ///   testée ;
+    /// - **un POST** exige un OBJET. Une page de couleur nue n'y dit rien à
+    ///   personne, et sa carte dans le fil serait un rectangle muet.
+    ///
+    /// La bifurcation vit ICI plutôt qu'aux deux sites qui la lisent — la
+    /// flèche et le plan d'envoi. Les y écrire toutes deux serait deux
+    /// occasions de les corriger à moitié, et l'écart entre elles a un nom
+    /// mesuré : un bouton armé sur une composition que le plan refuse.
+    static func hasPublishableCanvas(format: ComposerFormat,
+                                     slides: [StorySlide],
+                                     slideImageIds: Set<String>) -> Bool {
+        switch format {
+        case .story:
+            return StorySlidePublishMatter.anySlideDeservesAPost(slides, slideImageIds: slideImageIds)
+        case .post, .status, .reel:
+            return StorySlidePublishMatter.anySlideCarriesObject(slides, slideImageIds: slideImageIds)
+        }
+    }
 }

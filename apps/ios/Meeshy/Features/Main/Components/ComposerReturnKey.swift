@@ -40,6 +40,25 @@ import Foundation
 ///
 /// Un collage d'UN seul caractère « \n » reste indiscernable d'une frappe, et
 /// c'est assumé : les deux ont la même intention lisible.
+///
+/// ## Le saut de ligne : arbitrage porteur du 2026-09-06 (#5326)
+///
+/// Il a été demandé qu'un **appui LONG** sur la touche insère un saut de ligne
+/// là où un appui court envoie. **iOS ne le permet pas** : le clavier logiciel
+/// vit hors du processus de l'app, ne remonte aucun événement de touche, et la
+/// seule chose qu'on observe — l'insertion du « \n » — est identique dans les
+/// deux cas. Un `UITextView` custom n'y changerait rien : `pressesBegan` ne
+/// reçoit que les claviers MATÉRIELS.
+///
+/// > Ce n'est pas une limite du code : c'est la frontière du processus. Aucune
+/// > garde ici ne peut la déplacer, et une heuristique de durée n'aurait rien à
+/// > chronométrer.
+///
+/// **Décision : pas de saut de ligne.** La touche envoie, point. Un texte
+/// multi-lignes reste possible par collage — et c'est exactement ce que la
+/// seconde condition de `submits` protège. Ne pas réintroduire de fenêtre
+/// « double retour rapide » : elle retarderait CHAQUE envoi, le geste le plus
+/// fréquent de l'app, pour servir le plus rare.
 nonisolated enum ComposerReturnKey {
 
     /// **Ce changement de texte est-il un appui sur RETOUR ?**

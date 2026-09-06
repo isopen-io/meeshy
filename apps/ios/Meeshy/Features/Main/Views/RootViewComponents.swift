@@ -918,15 +918,40 @@ struct ThemedFeedOverlay: View {
                 statusViewModel: statusViewModel
             )
         }
+        // **T3.2 — la CITATION passe au meuble** (directive porteur
+        // 2026-09-06 : « dans tous les cas iPad et iOS doivent utiliser le
+        // nouveau composer à présent »).
+        //
+        // Elle était le dernier chemin de l'iPhone à monter l'ANCIEN composer
+        // (`FeedComposerSheet`), et le commentaire de la porte du fil, douze
+        // lignes plus haut, le disait déjà : « la citation reste sur
+        // `FeedComposerSheet` (T3.2, distincte) ». T3.1 avait migré le fil et
+        // laissé la citation derrière.
+        //
+        // Ce que ça répare, au-delà de l'uniformité : l'ancien composer
+        // publiait avec `storyEffects: nil`. Citer un post produisait donc une
+        // publication SANS scène — donc sans légende par média, sans texte
+        // alternatif, et hors de la mosaïque (#5322), sur une app où toute
+        // photo devient une scène. Deux composers, deux formes de
+        // publication, et rien qui le disait à l'auteur.
+        //
+        // `.repost(ofPostId:sourceFormat:)` porte déjà exactement cette
+        // intention — c'est le motif du republish de status
+        // (`RootView.swift`) — et `repostedPostId` le rend au brouillon sans
+        // qu'aucun paramètre supplémentaire ne voyage. Une citation EST un
+        // repost commenté : elle n'avait pas besoin d'une origine à elle.
         .fullScreenCover(item: $quoteOriginalPost) { quoted in
-            FeedComposerSheet(
+            DocumentComposerDoor(
+                intent: ComposerIntent(
+                    origin: .repost(ofPostId: quoted.id,
+                                    sourceFormat: ComposerFormat(postType: quoted.type))),
                 viewModel: viewModel,
-                initialText: "",
-                pendingAttachmentType: nil,
-                quotePost: quoted,
-                onDismiss: {
-                    quoteOriginalPost = nil
-                }
+                // Mêmes réinjections que la porte du fil ci-dessus : un cover
+                // ne recopie pas l'environnement de son hôte.
+                storyViewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationListViewModel,
+                statusViewModel: statusViewModel
             )
         }
     }

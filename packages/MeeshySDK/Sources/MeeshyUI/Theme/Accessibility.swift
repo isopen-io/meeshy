@@ -175,6 +175,11 @@ public enum MeeshyA11yID {
     // Conversation / composer
     public static let composerSend = "composer.send"
     public static let composerQuickEmoji = "composer.quickEmoji"
+    /// La pastille du cadre à mots, qui prend la place du bouton d'envoi quand
+    /// il n'y a que du texte (#5326).
+    public static let composerTextSticker = "composer.textSticker"
+    /// La feuille des dix cadres, ouverte par un appui long sur la pastille.
+    public static let composerTextStickerSheet = "composer.textSticker.sheet"
     public static let composerTextField = "composer.textField"
     public static let conversationMessageList = "conversation.messageList"
     public static let conversationScrollToBottom = "conversation.scrollToBottom"
