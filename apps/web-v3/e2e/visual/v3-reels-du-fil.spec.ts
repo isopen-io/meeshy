@@ -17,12 +17,16 @@
 //
 // CE QUE CE FICHIER NE MESURE PAS, ET POURQUOI C'EST DIT PLUTÔT QUE SAUTÉ. La
 // matrice demande « lecture à 60 fps mesurée pendant le défilement vertical ».
-// La cible (`MeeshyWebV3.dc.html:180`) ne dessine AUCUN défilement : un réel
-// remplit l'écran, et on passe au suivant par un tap. Il n'y a donc pas de
-// geste de défilement à mesurer sur cette géométrie — ni 60 fps à déclarer
-// verts, ni gate à faire semblant de tenir. Le jour où un module apporte un
-// défilement, la mesure vient avec lui. Voir le commentaire de clôture de
-// #5032.
+// Ce fichier ne l'exerce PAS : il juge le document SANS module armé (le tap
+// « Réel suivant » comme seul geste). LE GESTE DE DÉFILEMENT EST ARRIVÉ AVEC
+// LE MODULE DE LECTURE (#5388, `lib/realtime/reels.ts`) — molette, toucher,
+// clavier —, et sa mesure vit dans `e2e/visual/v3-reels-lecture.spec.ts` : le
+// nombre de `<video>` qui survivent au geste, l'autolecture muette, le repli
+// sans JavaScript. Le module n'anime RIEN lui-même (pas de rAF, pas de scroll
+// continu — c'est un CLIC sur un lien déjà composé, § « décision
+// d'architecture » du rapport de #5388) : il n'y a donc toujours pas de 60 fps
+// à déclarer verts ici, ni gate à faire semblant de tenir — la transition est
+// celle de la View Transition du navigateur de zone (§ étage 1, ≤ 150 ms).
 
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type BrowserContext } from '@playwright/test';

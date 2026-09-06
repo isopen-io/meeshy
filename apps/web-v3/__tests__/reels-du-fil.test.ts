@@ -23,6 +23,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { lisLePartage } from '@/app/(public)/partage-porte';
+import { LIS_LE_FIL_DES_REELS } from '@/app/connecte/reels-porte';
+import { GENRE_REEL } from '@/lib/contenu/partage';
+
 /**
  * LE CODE, SANS SES COMMENTAIRES — et ce n'est pas une précaution de confort.
  * Les doc-comments de ce lot NOMMENT le motif qu'il corrige
@@ -39,6 +43,80 @@ const lis = (chemin: string): string =>
 
 const PORTE_DU_FIL = lis('app/connecte/reels-porte.ts');
 const PORTE_DU_PARTAGE = lis('app/(public)/partage-porte.ts');
+
+const COOKIE = 'meeshy_auth=jeton-de-test';
+const ORIGINE = 'https://meeshy.test';
+
+const requeteAuthentifiee = (chemin: string): Request => new Request(`${ORIGINE}${chemin}`, { headers: { cookie: COOKIE } });
+
+const json = (corps: unknown, statut = 200): Response => new Response(JSON.stringify(corps), { status: statut });
+
+const LECTRICE_DE_TEST = {
+  id: 'u-x',
+  username: 'x',
+  displayName: 'X',
+  systemLanguage: 'fr',
+  regionalLanguage: null,
+  customDestinationLanguage: null,
+};
+
+const reelServiDeTest = (id: string) => ({
+  id,
+  type: 'REEL',
+  content: 'Bonjour',
+  originalLanguage: 'fr',
+  translations: {},
+  createdAt: '2026-09-02T18:00:00.000Z',
+  authorId: 'u-y',
+  author: { id: 'u-y', username: 'y', displayName: 'Y' },
+  media: [],
+  isLikedByMe: false,
+});
+
+/**
+ * L'ARMEMENT DU MODULE (#5388) NE FOURCHE PAS LE LECTEUR — le critère de fin
+ * de CE travail, prouvé par l'API PUBLIQUE des deux portes plutôt que par une
+ * lecture de source : `/feed/reels` porte l'attribut et le script, `/reels/:id`
+ * n'en porte AUCUN, et les deux composent toujours la MÊME structure de
+ * lecteur (`<header class="story-tete">`, `<section class="scene">`).
+ */
+describe('l’armement du module de lecture ne fourche pas le lecteur', () => {
+  it('/feed/reels arme le module ET reste composé par documentDuPartage', async () => {
+    const recuperer = async (url: string): Promise<Response> => {
+      if (url.includes('/auth/me')) return json({ success: true, data: LECTRICE_DE_TEST });
+      if (url.includes('/social/posts')) {
+        return json({
+          success: true,
+          data: [reelServiDeTest('reel-1')],
+          pagination: { limit: 1, hasMore: false, nextCursor: null },
+        });
+      }
+      throw new Error(`appel non prévu : ${url}`);
+    };
+    const html = await (await LIS_LE_FIL_DES_REELS(requeteAuthentifiee('/feed/reels'), recuperer)).text();
+
+    expect(html).toMatch(
+      /<main id="main-content" class="story-ecran" data-participation="reels" data-module="\/__v3\/rt\/reels\.[0-9a-f]{16}\.js">/,
+    );
+    expect(html).toContain('<header class="story-tete">');
+    expect(html).toContain('<section class="scene"');
+  });
+
+  it('/reels/:id (lecture partagée) ne porte ni data-module ni chargeur', async () => {
+    const recuperer = async (url: string): Promise<Response> => {
+      if (url.includes('/auth/me')) return json({ success: true, data: LECTRICE_DE_TEST });
+      if (url.includes('/posts/reel-1')) return json({ success: true, data: reelServiDeTest('reel-1') });
+      throw new Error(`appel non prévu : ${url}`);
+    };
+    const html = await (
+      await lisLePartage({ genre: GENRE_REEL, requete: requeteAuthentifiee('/reels/reel-1'), id: 'reel-1', recuperer })
+    ).text();
+
+    expect(html).not.toContain('data-module');
+    expect(html).not.toContain('data-participation');
+    expect(html).not.toContain('<script type="module"');
+  });
+});
 
 describe('un seul lecteur sert les deux routes', () => {
   /**
