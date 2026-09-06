@@ -26,6 +26,15 @@ class MessageLimits:
     # Limite maximale pour les textes longs (legacy)
     MAX_TEXT_LENGTH = int(os.getenv('MAX_TEXT_LENGTH', '10000'))
 
+    # Plafond de durée pour un audio transcrit et traduit (millisecondes)
+    # Aucune limite n'existait avant #3668 : un audio arbitrairement long
+    # traversait transcription + traduction + TTS sans autre borne que le
+    # watchdog TTS (180s, TTS_SYNTH_TIMEOUT_S), qui ne couvre que la synthèse.
+    # Aligné sur MAX_ALLOWED_DURATION du recorder web (10 min, HARD LIMIT) —
+    # apps/web/components/audio/AudioRecorderCard.tsx — pour ne jamais rejeter
+    # un audio qu'un client Meeshy peut légitimement produire.
+    MAX_AUDIO_DURATION_MS = int(os.getenv('MAX_AUDIO_DURATION_MS', '600000'))
+
 
 def validate_message_length(content: str) -> tuple[bool, str | None]:
     """
@@ -54,6 +63,32 @@ def can_translate_message(content: str) -> bool:
         bool: True si le message peut être traduit, False sinon
     """
     return len(content) <= MessageLimits.MAX_TRANSLATION_LENGTH
+
+
+def validate_audio_duration(duration_ms: int | None) -> tuple[bool, str | None]:
+    """
+    Valide la durée d'un audio à transcrire/traduire.
+
+    Un `duration_ms` absent ou nul n'est PAS refusé ici : certains appelants
+    legacy n'ont pas encore mesuré la durée au moment de l'envoi
+    (`audioDurationMs` défaut à 0 dans zmq_audio_handler). Refuser sur
+    l'absence transformerait une métadonnée manquante en refus de service.
+
+    Returns:
+        tuple[bool, str | None]: (is_valid, error_message)
+    """
+    if not duration_ms:
+        return True, None
+
+    if duration_ms > MessageLimits.MAX_AUDIO_DURATION_MS:
+        max_seconds = MessageLimits.MAX_AUDIO_DURATION_MS // 1000
+        got_seconds = duration_ms / 1000
+        return False, (
+            f"L'audio ne peut pas dépasser {max_seconds} secondes "
+            f"({got_seconds:.0f} secondes fournies)"
+        )
+
+    return True, None
 
 
 def should_convert_to_text_attachment(content: str) -> bool:

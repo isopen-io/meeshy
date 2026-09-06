@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
+from config.message_limits import validate_audio_duration
 
 # Import du pipeline audio.
 #
@@ -191,6 +192,26 @@ class AudioHandler:
             for field in required_fields:
                 if not request_data.get(field):
                     raise ValueError(f"Champ requis manquant: {field}")
+
+            # Plafond de durée (#3668) — refus propre AVANT l'acquisition
+            # (téléchargement/décodage) de l'audio, qui est le coût qu'un audio
+            # trop long ferait justement payer inutilement.
+            duration_ok, duration_error = validate_audio_duration(
+                request_data.get('audioDurationMs')
+            )
+            if not duration_ok:
+                logger.warning(
+                    f"⚠️ [TRANSLATOR] Audio refusé (durée): {duration_error} "
+                    f"(messageId={request_data.get('messageId')})"
+                )
+                await self._publish_audio_error(
+                    task_id=task_id,
+                    message_id=request_data.get('messageId', ''),
+                    attachment_id=request_data.get('attachmentId', ''),
+                    error=duration_error,
+                    error_code="audio_too_long"
+                )
+                return
 
             # ═══════════════════════════════════════════════════════════════
             # ACQUISITION AUDIO (binaire multipart > base64 > URL > path legacy)

@@ -86,3 +86,10 @@
 **Decision**: Transcription (Whisper) -> Translation (NLLB) -> TTS (Chatterbox). Cache Redis par tape (`audio:transcription:{id}`, `audio:translation:{id}:{lang}`)
 **Alternatives rejet**: Modle end-to-end (qualit infrieure, moins de langues), pipeline parallle (impossible, transcription requise avant traduction)
 **Cons**: Latence cumule ~1.5s (500ms STT + 200ms MT + 800ms TTS)
+
+## 2026-09: Plafond de duree audio - 10 minutes, refus avant acquisition (#3668)
+**Statut**: Accept
+**Contexte**: Aucune limite de duree ni de taille n'existait cote translator pour un audio transcrit/traduit ; seul le watchdog TTS (180s, `TTS_SYNTH_TIMEOUT_S`) bornait la synthese, sans borner transcription ni traduction. Un audio arbitrairement long (upload direct, client hors recorder web) pouvait donc immobiliser un worker indefiniment.
+**Decision**: `MessageLimits.MAX_AUDIO_DURATION_MS` (config/message_limits.py, defaut 600000ms = 10 min, override `MAX_AUDIO_DURATION_MS`) aligne sur le hard limit du recorder web (`MAX_ALLOWED_DURATION` dans `apps/web/components/audio/AudioRecorderCard.tsx`) pour ne jamais refuser un audio qu'un client Meeshy peut legitimement produire. `zmq_audio_handler._handle_audio_process_request` refuse AVANT l'acquisition audio (le cout qu'un audio trop long ferait payer inutilement) via `validate_audio_duration()`, en publiant `audio_process_error` (`error_code: "audio_too_long"`) avec un message utilisateur clair, qui remonte au client par `audio:translation-failed` (gateway).
+**Alternatives rejetees**: Ecreter la duree en base (`Math.min(duration, cap)`) sans rejeter — corrigerait une metadonnee sans jamais arreter le traitement couteux, exactement le defaut qu'un test jumeau (`routes/posts/__tests__/audio.duration.test.ts`, gateway) documente pour le chemin bibliotheque de sons ; borner seulement au niveau TTS — laisse transcription/traduction d'un audio demesure tourner sans controle.
+**Cons**: Un audio absent de `audioDurationMs` (0/None) n'est pas refuse ici — l'absence de mesure n'est pas une violation ; un client bugue qui n'envoie jamais la duree contourne le plafond, mais n'echappe pas au watchdog TTS existant.
