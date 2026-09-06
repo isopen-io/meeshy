@@ -368,6 +368,15 @@ export class ExpiredMessagesCleanupService {
    * tant que l'onglet vivait — le seul client pour lequel la destruction ne
    * changeait rien à l'écran était celui qui en avait le plus besoin.
    *
+   * `eventType: 'expired'` — pas `'deleted'` — sous son propre nom de fil
+   * (`message:expired`) : les quatre canaux sont identiques à ceux d'une
+   * suppression (même effet visuel, même retrait de la pastille), mais la
+   * CAUSE ne l'est pas — personne n'a demandé ce retrait, le minuteur posé à
+   * l'envoi l'a décidé. Fusionner les deux noms aurait empêché un client qui
+   * veut distinguer les deux (un toast, une ligne de log) de le faire, pour
+   * gagner zéro sur les trois qui ne le veulent pas : ils traitent déjà les
+   * deux événements de façon identique (retirer la bulle).
+   *
    * APRÈS l'effacement, jamais avant : un client qui recharge sur l'événement
    * ne doit pas retrouver la ligne qu'on vient de lui dire détruite.
    *
@@ -391,7 +400,7 @@ export class ExpiredMessagesCleanupService {
       manager,
       conversationId: message.conversationId,
       actorUserId: message.sender?.userId ?? message.senderId,
-      eventType: 'deleted',
+      eventType: 'expired',
       authorId: message.senderId,
       messageId: message.id,
       payload: { messageId: message.id, conversationId: message.conversationId },

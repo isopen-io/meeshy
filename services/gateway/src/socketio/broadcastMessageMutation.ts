@@ -1,6 +1,7 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   MessageDeletedEventData,
+  MessageExpiredEventData,
   MessagePinnedEventData,
   MessageUnpinnedEventData,
 } from '@meeshy/shared/types/socketio-events';
@@ -29,7 +30,7 @@ export interface MessageMutationManager {
     conversationId: string;
     actorUserId: string | null | undefined;
     messageId: string;
-  } & QueuedVariantFor<'edited' | 'deleted' | 'pinned' | 'unpinned'>): Promise<void>;
+  } & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'>): Promise<void>;
   emitUnreadCountsToRecipients?(params: {
     conversationId: string;
     senderId: string | null | undefined;
@@ -58,6 +59,7 @@ export interface MessageMutationManager {
  */
 export type MessageEditedMutationPayload = ReturnType<typeof buildMessageEditedCore>;
 export type MessageDeletedMutationPayload = Anonymized<MessageDeletedEventData>;
+export type MessageExpiredMutationPayload = Anonymized<MessageExpiredEventData>;
 export type MessagePinnedMutationPayload = Anonymized<MessagePinnedEventData>;
 export type MessageUnpinnedMutationPayload = Anonymized<MessageUnpinnedEventData>;
 
@@ -71,20 +73,26 @@ type MessageMutationBase<TPayload> = {
 };
 
 /**
- * `authorId` n'existe QUE sur la suppression, et y est REQUIS.
+ * `authorId` n'existe QUE sur la suppression et sur l'expiration, et y est
+ * REQUIS.
  *
- * Requis, parce qu'une suppression doit repousser la pastille de non-lus et que
+ * Requis, parce que les deux doivent repousser la pastille de non-lus et que
  * l'exclusion porte sur l'AUTEUR du message : le type est ce qui empêche un
- * sixième transport de suppression de rouvrir la brèche en silence.
+ * transport de suppression ou d'expiration de rouvrir la brèche en silence.
+ * `'expired'` est le transport SERVEUR de la même famille — un message
+ * autodestructible échu et brûlé par `ExpiredMessagesCleanupService` plutôt
+ * qu'une suppression demandée — et il ne compte pas plus dans le badge qu'une
+ * suppression : le message ne compte plus, quelle que soit la main qui l'a
+ * retiré.
  *
  * Absent de l'édition, parce qu'éditer ne change aucun compte : redemander le
  * badge y coûterait deux requêtes par frappe validée, pour zéro delta.
  *
- * **`prisma` n'existe QUE sur les deux mutations qui déplacent l'APERÇU**, et
+ * **`prisma` n'existe QUE sur les mutations qui déplacent l'APERÇU**, et
  * c'est la même façon de parler : le type dit quelles audiences chaque mutation
  * doit atteindre, plutôt que de laisser un drapeau le décider au corps de la
- * fonction. Éditer change le texte du dernier message, supprimer change quel
- * message est le dernier — les deux se voient depuis la liste des
+ * fonction. Éditer change le texte du dernier message, supprimer ou expirer
+ * change quel message est le dernier — les trois se voient depuis la liste des
  * conversations. Épingler n'y change RIEN : ni l'aperçu, ni son ordre, ni son
  * compteur. Exiger le client Prisma pour l'épingle aurait fait payer à chaque
  * épinglage la passe d'aperçu (`emitConversationPreviewUpdate` relit la
@@ -99,6 +107,15 @@ export type MessageMutationParams =
     })
   | (MessageMutationBase<MessageDeletedMutationPayload> & {
       eventType: 'deleted';
+      prisma: MutationPrisma;
+      authorId: string | null | undefined;
+    })
+  | (MessageMutationBase<MessageExpiredMutationPayload> & {
+      // Server-initiated twin of 'deleted' (a TTL burn, not a user request) —
+      // same audiences, for the same reason: the destroyed message may have
+      // been the conversation's last, and its author's unread badge must stop
+      // counting it.
+      eventType: 'expired';
       prisma: MutationPrisma;
       authorId: string | null | undefined;
     })
@@ -129,6 +146,9 @@ function emitToConversationRoom(
       return;
     case 'deleted':
       target.emit(SERVER_EVENTS.MESSAGE_DELETED, params.payload);
+      return;
+    case 'expired':
+      target.emit(SERVER_EVENTS.MESSAGE_EXPIRED, params.payload);
       return;
     case 'pinned':
       target.emit(SERVER_EVENTS.MESSAGE_PINNED, params.payload);
@@ -202,12 +222,14 @@ function emitToConversationRoom(
  */
 function queuedVariant(
   params: MessageMutationParams,
-): QueuedVariantFor<'edited' | 'deleted' | 'pinned' | 'unpinned'> {
+): QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'> {
   switch (params.eventType) {
     case 'edited':
       return { eventType: 'edited', payload: params.payload };
     case 'deleted':
       return { eventType: 'deleted', payload: params.payload };
+    case 'expired':
+      return { eventType: 'expired', payload: params.payload };
     case 'pinned':
       return { eventType: 'pinned', payload: params.payload };
     case 'unpinned':
@@ -229,14 +251,19 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
   // L'épingle n'en est pas une (cf. `MessageMutationParams`) : elle ne touche ni
   // l'aperçu, ni son ordre, ni son compteur, et le type est ce qui la dispense —
   // aucun drapeau à lire ici, aucun `prisma` à fournir là-bas.
-  if (params.eventType === 'edited' || params.eventType === 'deleted') {
+  if (
+    params.eventType === 'edited' ||
+    params.eventType === 'deleted' ||
+    params.eventType === 'expired'
+  ) {
     await emitConversationPreviewUpdate(params.prisma, manager.getIO(), conversationId, actorUserId, onError);
   }
 
-  // (4) La pastille de non-lus, sur une SUPPRESSION seulement : le message ne
-  // compte plus, et sans cette poussée la liste web (`staleTime: Infinity`) le
-  // compterait indéfiniment. Le décompte est déjà juste — il ne manquait que de
-  // le redemander. Exclusion sur l'AUTEUR, jamais sur l'acteur : un modérateur
+  // (4) La pastille de non-lus, sur une SUPPRESSION ou une EXPIRATION : le
+  // message ne compte plus, et sans cette poussée la liste web
+  // (`staleTime: Infinity`) le compterait indéfiniment. Le décompte est déjà
+  // juste — il ne manquait que de le redemander. Exclusion sur l'AUTEUR, jamais
+  // sur l'acteur : un modérateur
   // qui supprime le message d'un autre est lui-même un destinataire à
   // rafraîchir. Cf. `README.md` § « La pastille de non-lus ».
   //
@@ -247,7 +274,7 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
   // obligatoire — un rejet non traité termine le process sous le
   // `--unhandled-rejections=throw` par défaut de Node 22 — et le try/catch garde
   // l'APPEL lui-même (un double de manager sans la méthode).
-  if (eventType === 'deleted') {
+  if (eventType === 'deleted' || eventType === 'expired') {
     try {
       void manager.emitUnreadCountsToRecipients?.({
         conversationId,
