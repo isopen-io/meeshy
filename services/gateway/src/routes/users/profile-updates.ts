@@ -33,6 +33,7 @@ import {
   writeAutoTranslateEnabled,
 } from '../../utils/auto-translate-preference';
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
+import { calculateProfileCompletionRate } from '../../utils/profile-completion';
 
 /**
  * Update authenticated user profile
@@ -99,6 +100,26 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // (`contact-change.ts`) — prouve la possession avant d'écrire quoi que
       // ce soit ; ne pas recréer ce raccourci ici.
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
+
+      // Recalcul du taux de complétion (#3688) — SEULEMENT quand un des cinq
+      // champs de la formule bouge (displayName, bio ici ; avatar a sa propre
+      // route). firstName/lastName/langues n'y entrent pas : ne pas ouvrir la
+      // requête de lecture pour rien.
+      if (body.displayName !== undefined || body.bio !== undefined) {
+        const current = await fastify.prisma.user.findUnique({
+          where: { id: userId },
+          select: { displayName: true, avatar: true, bio: true, phoneNumber: true, email: true },
+        });
+        if (current) {
+          updateData.profileCompletionRate = calculateProfileCompletionRate({
+            displayName: updateData.displayName ?? current.displayName,
+            avatar: current.avatar,
+            bio: updateData.bio ?? current.bio,
+            phoneNumber: current.phoneNumber,
+            email: current.email,
+          });
+        }
+      }
 
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
       if (body.regionalLanguage !== undefined) {
@@ -314,9 +335,21 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar URL validated: ${body.avatar}`);
 
+      // Recalcul du taux de complétion (#3688) — l'avatar est un des cinq
+      // champs de la formule ; les quatre autres sont relus pour la recomposer.
+      const current = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true, bio: true, phoneNumber: true, email: true },
+      });
+
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
-        data: { avatar: body.avatar },
+        data: {
+          avatar: body.avatar,
+          ...(current && {
+            profileCompletionRate: calculateProfileCompletionRate({ ...current, avatar: body.avatar }),
+          }),
+        },
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
