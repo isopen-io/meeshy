@@ -184,12 +184,15 @@ export const ligneServie = ({
   readonly langueOriginale?: string;
   readonly traductions?: Readonly<Record<string, string>> | null;
   /**
-   * L'HOMOLOGUE D'UN TÊTE-À-TÊTE (§ 12.10.3, correction de revue —
-   * `routes/conversations/core-list.ts:781` sert `participants` sur CHAQUE
-   * ligne, inconditionnellement) — RÉPANDU tel quel, jamais deviné : une
-   * ligne à `membres: 2` qui ne le renseigne pas n'ouvre PAS de profil,
-   * exactement comme la passerelle réelle le rendrait pour un tête-à-tête
-   * dont l'homologue serait absent de la charge.
+   * `routes/conversations/core-list.ts:718,790` sert `participants` (les
+   * CINQ premiers membres) sur CHAQUE ligne, inconditionnellement — groupe
+   * COMPRIS (correction de revue, défaut 1 : le premier passage ne le
+   * renseignait que sur les tête-à-tête, en divergence avec la route
+   * réelle). RÉPANDU tel quel, jamais deviné : une ligne qui ne le
+   * renseigne pas n'ouvre PAS de profil — au tête-à-tête, ça reproduit un
+   * homologue absent de la charge ; le décodeur (`homologueDe`,
+   * `lib/api/compte.ts:287`) est ce qui doit jeter le champ sur un GROUPE,
+   * jamais son absence dans cette fixture.
    */
   readonly participants?: readonly { readonly userId: string; readonly displayName: string }[];
 }): LigneDeConversationServie => ({
@@ -235,6 +238,16 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     lastMessage: { id: 'm-apercu', content: 'On se cale à 15 h pour la revue ?' },
     lastMessageOriginalLanguage: 'fr',
     lastMessageTranslations: null,
+    // FIDÉLITÉ AU GATEWAY (correction de revue, défaut 1) —
+    // `core-list.ts:718,790` sert `participants` (les CINQ premiers membres)
+    // sur TOUTE ligne, groupe compris, inconditionnellement. Un groupe : le
+    // décodeur (`lib/api/compte.ts:287`) doit la JETER — ce que seul le
+    // témoin qui appelle `conversation()` sur cette charge peut prouver.
+    participants: [
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+      { userId: PAIR_ANGLOPHONE.id, displayName: PAIR_ANGLOPHONE.nom },
+      { userId: PAIR_HISPANOPHONE.id, displayName: PAIR_HISPANOPHONE.nom },
+    ],
   },
   {
     id: AUTRE_CONVERSATION.id,
@@ -301,6 +314,12 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     lastMessage: { id: 'm-apercu-5', content: CINQUIEME_CONVERSATION.apercu },
     lastMessageOriginalLanguage: CINQUIEME_CONVERSATION.langueOriginale,
     lastMessageTranslations: CINQUIEME_CONVERSATION.traductions,
+    // Fidélité au gateway, même raison qu'au premier groupe ci-dessus.
+    participants: [
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+      { userId: 'u-port-cotonou-2', displayName: 'Kwame Boateng' },
+      { userId: 'u-port-cotonou-3', displayName: 'Grace Osei' },
+    ],
   },
   ligneServie({
     id: '68f2a81417a557e8ce4ddfc0',
@@ -309,6 +328,11 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     genre: 'group',
     apercu: 'Le tableau est à jour.',
     ilYAMinutes: 6 * 24 * 60,
+    // Fidélité au gateway, même raison qu'aux deux groupes ci-dessus.
+    participants: [
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+      { userId: 'u-budget-q1-2', displayName: 'Moussa Kane' },
+    ],
   }),
   ligneServie({
     id: '68f2a81417a557e8ce4ddfc1',
@@ -328,6 +352,11 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     genre: 'group',
     apercu: 'Merci pour les photos.',
     ilYAMinutes: 8 * 24 * 60,
+    // Fidélité au gateway, même raison qu'aux groupes ci-dessus.
+    participants: [
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+      { userId: 'u-diaspora-2', displayName: 'Chidi Okafor' },
+    ],
   }),
   /**
    * LE TITRE LONG — la ligne qui fait travailler `text-overflow:ellipsis`
@@ -341,6 +370,11 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     genre: 'group',
     apercu: 'Ordre du jour envoyé.',
     ilYAMinutes: 9 * 24 * 60,
+    // Fidélité au gateway, même raison qu'aux groupes ci-dessus.
+    participants: [
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+      { userId: 'u-pilotage-2', displayName: 'Esther Mwangi' },
+    ],
   }),
   ligneServie({
     id: '68f2a81417a557e8ce4ddfc4',
@@ -359,6 +393,11 @@ export const LIGNES_DE_CONVERSATIONS_SERVIES: readonly LigneDeConversationServie
     genre: 'group',
     apercu: 'Nouveau rapport disponible.',
     ilYAMinutes: 11 * 24 * 60,
+    // Fidélité au gateway, même raison qu'aux groupes ci-dessus.
+    participants: [
+      { userId: MEMBRE.id, displayName: MEMBRE.nom },
+      { userId: 'u-veille-marche-2', displayName: 'Nadia Haddad' },
+    ],
   }),
   ligneServie({
     id: '68f2a81417a557e8ce4ddfc6',

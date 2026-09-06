@@ -5,10 +5,12 @@ import type { Recuperateur } from '@/lib/api/compte';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import { decalageDuFuseau } from '@/lib/decalage-utc';
 import { basculeUnePreference, ecrisUnePreference, preferencesDeNotification, type DocumentDeNotification } from '@/lib/api/preferences';
+import { lisLAppareilPush } from '@/lib/api/push-appareil';
+import { appareilsDuLecteur, enregistreLeJetonPush, retireLeJetonPush } from '@/lib/api/push-tokens';
 import { estUnFuseauDnd, estUneCleDePrefs, HEURE_DND_REGEX, CLES_DE_PREFS, FUSEAU_AUTO, PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
 import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
-import { documentDesPrefs, type EtatDesPrefs, type RegleAppliquee } from './prefs-vue';
+import { documentDesPrefs, type ConfigurationFirebase, type EtatDesPrefs, type EtatPushAppareil, type RegleAppliquee } from './prefs-vue';
 import { documentDePanne } from './vue';
 
 /**
@@ -45,7 +47,7 @@ const versLaConnexion = (): Response =>
 const regleDeLURL = (requete: Request): RegleAppliquee => {
   const valeur = new URL(requete.url).searchParams.get('regle');
   if (valeur === null) return null;
-  if (valeur === 'fenetre-dnd') return valeur;
+  if (valeur === 'fenetre-dnd' || valeur === 'push-abonne' || valeur === 'push-desabonne') return valeur;
   return estUneCleDePrefs(valeur) ? valeur : null;
 };
 
@@ -65,6 +67,75 @@ const moduleDeParticipation = (): EtatDesPrefs['tempsReel'] => {
 const DND_PAR_DEFAUT = { debut: '22:00', fin: '08:00' } as const;
 
 /**
+ * LA CONFIGURATION FIREBASE PUBLIQUE (#5391, § 3.4 de la spécification) — les
+ * MÊMES noms d'environnement que le legacy (`apps/web/firebase-config.ts:
+ * 27-61`), jamais une jumelle de nommage. `null` dès qu'UNE des quatre
+ * manque : c'est ce `null` qui rend la rangée `indisponible` et empêche le
+ * module de s'armer — jamais un second test des mêmes variables côté client.
+ */
+const configurationFirebase = (): ConfigurationFirebase | null => {
+  const apiKey = process.env['NEXT_PUBLIC_FIREBASE_API_KEY'];
+  const projectId = process.env['NEXT_PUBLIC_FIREBASE_PROJECT_ID'];
+  const appId = process.env['NEXT_PUBLIC_FIREBASE_APP_ID'];
+  const vapid = process.env['NEXT_PUBLIC_FIREBASE_VAPID_KEY'];
+  if (!apiKey || !projectId || !appId || !vapid) return null;
+  return {
+    apiKey,
+    projectId,
+    appId,
+    vapid,
+    baseInstallations: process.env['NEXT_PUBLIC_FCM_INSTALLATIONS_BASE'] || 'https://firebaseinstallations.googleapis.com',
+    baseRegistrations: process.env['NEXT_PUBLIC_FCM_REGISTRATIONS_BASE'] || 'https://fcmregistrations.googleapis.com',
+  };
+};
+
+/**
+ * L'ÉTAT SERVI DE LA RANGÉE PUSH (§ 3.2 de la spécification) — `GET /users/
+ * me/devices` filtré par `deviceId`/`platform`/`isActive`, JAMAIS un espoir
+ * local. Un `deviceId` absent (aucun cookie posé, ce navigateur n'a jamais
+ * abonné) rend `non-abonne` SANS appeler la passerelle — rien à y chercher.
+ *
+ * UN 401 SUR CET APPEL SE COMPORTE COMME LE 401 PRINCIPAL : `sert()` (plus
+ * bas) bascule vers la connexion dans les deux cas — une session expirée
+ * entre le chargement et cette lecture n'a pas de raison de se comporter
+ * autrement ici que sur `preferencesDeNotification`.
+ *
+ * UNE PANNE OU UN REFUS DE CET APPEL SECONDAIRE NE CASSE PAS L'ÉCRAN : la
+ * page entière ne doit pas se refuser parce que la liste des appareils est
+ * momentanément indisponible — l'état retombe sur `non-abonne`, sans motif
+ * affiché (le bandeau `.echec` reste réservé aux gestes du lecteur, jamais à
+ * une lecture qui échoue en silence).
+ */
+const etatPush = async ({
+  requete,
+  jeton,
+  recuperer,
+}: {
+  readonly requete: Request;
+  readonly jeton: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<{ readonly genre: 'etat'; readonly push: EtatPushAppareil } | { readonly genre: 'session-expiree' }> => {
+  const configuration = configurationFirebase();
+  if (configuration === null) {
+    return { genre: 'etat', push: { etat: 'indisponible', motif: PREFS.push.motifEnvManquant, deviceId: null, configuration: null } };
+  }
+
+  const deviceId = lisLAppareilPush(requete.headers.get('cookie'));
+  if (deviceId === null) {
+    return { genre: 'etat', push: { etat: 'non-abonne', motif: null, deviceId: null, configuration } };
+  }
+
+  const issue = await appareilsDuLecteur({ jeton, recuperer });
+  if (issue.genre === 'session-expiree') return { genre: 'session-expiree' };
+  const abonne =
+    issue.genre === 'liste' &&
+    issue.appareils.some(
+      (appareil) => appareil['deviceId'] === deviceId && appareil['platform'] === 'web' && appareil['isActive'] === true,
+    );
+  return { genre: 'etat', push: { etat: abonne ? 'abonne' : 'non-abonne', motif: null, deviceId, configuration } };
+};
+
+/**
  * LE DOCUMENT SERVI DEVIENT UN ÉTAT — et c'est ICI, au seul endroit qui les
  * connaisse, que ses valeurs descendent au type de l'écran : `Boolean()` pour
  * les treize bascules, `typeof … === 'string'` pour la fenêtre DND. Le client
@@ -79,6 +150,7 @@ const etatDepuisDocument = (
     readonly echec: boolean;
     readonly motif: string | null;
     readonly decalageDeLAppareil: number | null;
+    readonly push: EtatPushAppareil;
   },
 ): EtatDesPrefs => ({
   reglages: Object.fromEntries(CLES_DE_PREFS.map((cle) => [cle, Boolean(reglages[cle])])) as Record<
@@ -93,6 +165,7 @@ const etatDepuisDocument = (
   echec: options.echec,
   motif: options.motif,
   tempsReel: moduleDeParticipation(),
+  push: options.push,
 });
 
 /**
@@ -127,10 +200,20 @@ const sert = async (
   },
   statut = 200,
 ): Promise<Response> => {
-  const issue = await preferencesDeNotification({ jeton, recuperer });
+  // LES DEUX LECTURES PARTENT ENSEMBLE (défaut de revue) — les préférences et
+  // l'abonnement de cet appareil ne dépendent pas l'une de l'autre : les
+  // enchaîner coûtait un SECOND aller-retour avant le premier pixel, sur la
+  // 3G rurale que la charte vise (§ 12.6). `etatPush` ne fait AUCUN appel
+  // quand la configuration ou le cookie manquent — le parallélisme n'ajoute
+  // donc jamais une requête que la série n'aurait pas faite.
+  const [issue, push] = await Promise.all([
+    preferencesDeNotification({ jeton, recuperer }),
+    etatPush({ requete, jeton, recuperer }),
+  ]);
 
   if (issue.genre === 'session-expiree') return versLaConnexion();
   if (issue.genre !== 'document') return rendu(documentDePanne(), 503);
+  if (push.genre === 'session-expiree') return versLaConnexion();
 
   return rendu(
     documentDesPrefs(
@@ -139,6 +222,7 @@ const sert = async (
         echec,
         motif: motif ?? null,
         decalageDeLAppareil: decalageDeLAppareil(requete),
+        push: push.push,
       }),
     ),
     statut,
@@ -203,6 +287,52 @@ export const PREFERENCES = async (requete: Request, recuperer?: Recuperateur): P
       return redirection(`${CHEMIN}?regle=fenetre-dnd`, { 'cache-control': CACHE_PRIVE });
     }
     return sert({ requete, jeton, regleAppliquee: null, echec: true, recuperer });
+  }
+
+  /**
+   * LE GESTE `push` — L'ABONNEMENT DE CET APPAREIL (#5391, § 3.2 de la
+   * spécification). Distinct de `cle`/`valeur` : l'abonnement n'est PAS une
+   * des treize colonnes de `NotificationPreference`, il vit sur le
+   * NAVIGATEUR — `deviceId` en dit l'identité, `abonnement` porte le jeton
+   * FCM que le module de participation vient de créer.
+   *
+   * `valeur=false` (DÉSABONNER) : LE COOKIE APPAREIL EST LA SOURCE DE
+   * VÉRITÉ — jamais le champ `deviceId` du formulaire, qu'un lecteur pourrait
+   * altérer. Sans cookie, rien n'a jamais pu être créé sur cet appareil :
+   * re-rendu, motif nommé, ZÉRO appel à la passerelle.
+   *
+   * `valeur=true` (ABONNER) champ `abonnement` VIDE : le chemin SANS
+   * JavaScript — seul le navigateur peut créer un abonnement Push. Un état
+   * EXPLIQUÉ, jamais un formulaire qui part à vide (charte règle 7 : un
+   * contrôle a un effet).
+   */
+  if (formulaire?.get('geste') === 'push') {
+    const valeur = formulaire.get('valeur');
+    if (valeur !== 'true' && valeur !== 'false') {
+      return new Response(null, { status: 400, headers: { 'cache-control': CACHE_PRIVE } });
+    }
+
+    if (valeur === 'false') {
+      const deviceId = lisLAppareilPush(requete.headers.get('cookie'));
+      if (deviceId === null) {
+        return sert({ requete, jeton, regleAppliquee: null, echec: true, motif: PREFS.push.motifAucunAbonnementConnu, recuperer });
+      }
+      const issue = await retireLeJetonPush({ jeton, deviceId, recuperer });
+      if (issue.genre === 'session-expiree') return versLaConnexion();
+      if (issue.genre === 'fait') return redirection(`${CHEMIN}?regle=push-desabonne`, { 'cache-control': CACHE_PRIVE });
+      return sert({ requete, jeton, regleAppliquee: null, echec: true, motif: PREFS.push.motifEchecDesabonnement, recuperer });
+    }
+
+    const abonnement = formulaire.get('abonnement');
+    const deviceIdPoste = formulaire.get('deviceId');
+    if (typeof abonnement !== 'string' || abonnement === '' || typeof deviceIdPoste !== 'string' || deviceIdPoste === '') {
+      return sert({ requete, jeton, regleAppliquee: null, echec: true, motif: PREFS.push.motifSansJavascript, recuperer });
+    }
+
+    const issue = await enregistreLeJetonPush({ jeton, token: abonnement, deviceId: deviceIdPoste, recuperer });
+    if (issue.genre === 'session-expiree') return versLaConnexion();
+    if (issue.genre === 'fait') return redirection(`${CHEMIN}?regle=push-abonne`, { 'cache-control': CACHE_PRIVE });
+    return sert({ requete, jeton, regleAppliquee: null, echec: true, motif: PREFS.push.motifEchecAbonnement, recuperer });
   }
 
   const cleSoumise = formulaire?.get('cle');

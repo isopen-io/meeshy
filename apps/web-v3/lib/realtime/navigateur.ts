@@ -193,11 +193,28 @@ const demarre = (): void => {
       // `updateCallbackDone`, le `TypeError` retombe dans le `catch` de
       // `navigue` et l'adresse part en navigation RÉELLE — jamais un écran à
       // moitié composé.
+      //
+      // LES TROIS PROMESSES (#5440) — `ViewTransition` porte `ready`,
+      // `updateCallbackDone` ET `finished`. Quand une SECONDE navigation
+      // appelle `startViewTransition()` sur le MÊME document avant que la
+      // PREMIÈRE n'ait atteint son état final, le navigateur ABANDONNE la
+      // précédente : `ready` et `finished` REJETTENT avec `InvalidStateError`,
+      // pendant qu'`updateCallbackDone` (déjà réglée, `applique()` ayant déjà
+      // tourné) ne bouge plus. Ne jamais laisser `ready` ni `finished` sans
+      // gestionnaire — leur rejet resterait un « Uncaught (in promise) » que
+      // rien n'attrape, exactement la fenêtre que le jeton de génération
+      // documente déjà un cran plus haut (`v3-navigateur-course.spec.ts`,
+      // #5392). Seule `updateCallbackDone` gate la suite (le swap doit être
+      // fait avant la seconde porte de péremption ci-dessous) ; `ready` et
+      // `finished` n'ont qu'à ne pas rejeter dans le vide.
       const transitionne = (
         document as Document & { startViewTransition?: (rappel: () => void) => ViewTransition }
       ).startViewTransition;
       if (typeof transitionne === 'function') {
-        await transitionne.call(document, applique).updateCallbackDone.catch(() => undefined);
+        const transition = transitionne.call(document, applique);
+        transition.ready.catch(() => undefined);
+        transition.finished.catch(() => undefined);
+        await transition.updateCallbackDone.catch(() => undefined);
       } else {
         applique();
       }

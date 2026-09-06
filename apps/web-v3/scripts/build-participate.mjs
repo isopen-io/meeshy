@@ -23,6 +23,17 @@
 // rend rc=1 sur toute croissance : la construction ELLE-MÊME est le témoin,
 // exactement comme pour les pages. Faire monter un plafond exige `--mesure`
 // et un diff relu, jamais un octet qui grossit en silence.
+//
+// `--mesure` N'ENREGISTRE JAMAIS LA SEULE VALEUR DU POSTE QUI L'A LANCÉ
+// (#5343) : le même esbuild, sur les mêmes sources, émet un binaire de
+// quelques dizaines d'octets bruts plus lourd dans le conteneur Docker (CI
+// Linux) que sur un poste macOS — un écart d'ENVIRONNEMENT, pas de code, et
+// il joue dans les deux sens selon qui mesure. Enregistrer la valeur du poste
+// seul fait rougir la CI sur un commit qui n'a rien changé ; enregistrer
+// celle de la CI seule ferait pareil au prochain `--mesure` lancé en local.
+// La règle du fichier (`budgets-mesures.json` › `role`) est d'enregistrer le
+// MAX des deux — mesurer ici, mesurer dans le conteneur (ou lire le job CI
+// « Quality (bun) »), prendre le plus grand.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';

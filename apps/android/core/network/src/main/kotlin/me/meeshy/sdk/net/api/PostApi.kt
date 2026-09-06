@@ -131,12 +131,6 @@ interface PostApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
-    @GET("posts/feed/stories")
-    suspend fun getStories(
-        @Query("cursor") cursor: String? = null,
-        @Query("limit") limit: Int? = null,
-    ): ApiResponse<List<ApiPost>>
-
     /** Friends' mood statuses (`GET /posts/feed/statuses`) — StatusService.Mode.friends. */
     @GET("posts/feed/statuses")
     suspend fun getStatuses(
