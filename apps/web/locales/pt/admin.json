@@ -1990,7 +1990,16 @@
     "deleteTitle": "Excluir link de compartilhamento",
     "deleteDescription": "Esta ação é irreversível. O link de compartilhamento e todos os seus acessos serão excluídos permanentemente.",
     "deleteConfirm": "Excluir",
-    "copyError": "Erro ao copiar o link"
+    "copyError": "Erro ao copiar o link",
+    "revealError": "Não foi possível revelar o link de compartilhamento",
+    "revealReasonTitle": "Motivo obrigatório",
+    "revealReasonNotice": "Revelar a URL completa deste link é uma ação soberana: será registrada no log de auditoria do administrador.",
+    "revealReasonLabel": "Motivo",
+    "revealReasonPlaceholder": "Motivo desta revelação...",
+    "revealReasonHint": "Informe um motivo com pelo menos {min} caracteres.",
+    "revealReasonTooShort": "O motivo deve ter pelo menos {min} caracteres.",
+    "revealConfirm": "Revelar",
+    "revealCancel": "Cancelar"
   },
   "translationsPage": {
     "loadError": "Erro ao carregar traduções",

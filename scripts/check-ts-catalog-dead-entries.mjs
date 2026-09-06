@@ -135,7 +135,13 @@ export const parseCatalogBlock = (blockLines) => {
 // le comptage manuel de #4889. Qui la baisse doit avoir mesuré une vraie
 // baisse ; qui la relève documente ici pourquoi une entrée neuve est morte à
 // la naissance.
-const BASELINE_DEAD_ENTRIES = 274;
+//
+// 277 → 276 (#5430) : `API_ENDPOINTS.admin.shareLinksByIdReveal` a reçu son
+// premier appelant hors test — `apps/web/app/admin/share-links/page.tsx`,
+// qui l'appelle désormais pour réparer les contrôles « Copier »/« Ouvrir ».
+// 276 → 273 (#5423) : les trois routes de sondage mortes (`conversation`,
+// `detectLanguage`, `status`) sont retirées du catalogue avec leurs routes.
+const BASELINE_DEAD_ENTRIES = 273;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

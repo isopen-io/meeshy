@@ -186,6 +186,38 @@ describe('la porte de /feed/reels', () => {
     expect(html).toContain('href="/feed"');
   });
 
+  /**
+   * LE MODULE DE LECTURE (#5388) — armé quand un réel se sert : l'attribut
+   * `data-participation` porte le NOM que le module cherche
+   * (`main[data-participation="reels"]`, `lib/realtime/reels.ts`), et
+   * `data-module` porte une adresse HACHÉE — jamais une adresse écrite en dur,
+   * qui périmerait au premier octet changé.
+   */
+  it('arme le module de lecture — data-participation, data-module haché, chargeur différé', async () => {
+    const { recuperer } = serveur({ data: [reelServi()], hasMore: false, nextCursor: null });
+    const html = await (await LIS_LE_FIL_DES_REELS(requete('/feed/reels'), recuperer)).text();
+
+    expect(html).toMatch(
+      /<main id="main-content" class="story-ecran" data-participation="reels" data-module="\/__v3\/rt\/reels\.[0-9a-f]{16}\.js">/,
+    );
+    expect(html).toContain('<script type="module">');
+  });
+
+  /**
+   * L'ÉTAT VIDE N'ARME RIEN — `documentSansReel` est l'écran de message
+   * générique (`documentDeMessage`), qui n'a pas de vidéo à jouer : un module
+   * arrivé sur cet écran ne trouverait aucun `main[data-participation="reels"]`
+   * et resterait un import silencieusement inutile.
+   */
+  it('l’état vide n’arme rien — aucun module, aucun chargeur', async () => {
+    const { recuperer } = serveur({ data: [], hasMore: false, nextCursor: null });
+    const html = await (await LIS_LE_FIL_DES_REELS(requete('/feed/reels'), recuperer)).text();
+
+    expect(html).not.toContain('data-participation');
+    expect(html).not.toContain('data-module');
+    expect(html).not.toContain('<script type="module">');
+  });
+
   /** UNE LIGNE QUI N'EST PAS UN RÉEL ne se rend pas à moitié. */
   it('rend l’indisponible quand la ligne servie n’est pas un réel', async () => {
     const { recuperer } = serveur({ data: [reelServi({ type: 'POST' })], hasMore: false, nextCursor: null });

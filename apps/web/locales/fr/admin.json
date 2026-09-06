@@ -1990,7 +1990,16 @@
     "deleteTitle": "Supprimer le lien de partage",
     "deleteDescription": "Cette action est irréversible. Le lien de partage et tous ses accès seront supprimés définitivement.",
     "deleteConfirm": "Supprimer",
-    "copyError": "Erreur lors de la copie du lien"
+    "copyError": "Erreur lors de la copie du lien",
+    "revealError": "Erreur lors de la révélation du lien de partage",
+    "revealReasonTitle": "Motif de révélation requis",
+    "revealReasonNotice": "Révéler l'URL complète de ce lien est un geste souverain : il sera enregistré dans le journal d'audit administrateur.",
+    "revealReasonLabel": "Motif",
+    "revealReasonPlaceholder": "Motif de cette révélation...",
+    "revealReasonHint": "Indiquez un motif d'au moins {min} caractères.",
+    "revealReasonTooShort": "Le motif doit contenir au moins {min} caractères.",
+    "revealConfirm": "Révéler",
+    "revealCancel": "Annuler"
   },
   "translationsPage": {
     "loadError": "Erreur lors du chargement des traductions",
