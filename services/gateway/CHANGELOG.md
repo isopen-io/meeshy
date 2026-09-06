@@ -1,5 +1,23 @@
 # @meeshy/gateway
 
+## 1.37.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - realign bun.lock workspace versions with their manifests
+  - un canvas qui laisse un média dehors rend la main à la GALERIE
+  - la destination d'une description devient une RÈGLE, donc un témoin
+  - une description survit à la publication même quand la scène n'a AUCUN média
+  - ma leçon prend le numéro 539 — 536 était déjà pris, et le cliquet l'a vu
+  - un son de fond part avec son FICHIER, plus seulement avec sa description
+  - le fil sert l'heure de réception EXACTE dès le premier octet — fini le scintillement du relatif remplacé
+  - un refus de permission (403) ne deconnecte plus l'utilisateur
+  - apply reader's personal history hiding to forward-source previews
+  - remove dead declarations, fix 3 real gaps, ratchet noUnusedLocals (#5330)
+  - usedBackupCode est enfin servi par POST /login/2fa
+
 ## 1.36.2
 
 ### Patch Changes
