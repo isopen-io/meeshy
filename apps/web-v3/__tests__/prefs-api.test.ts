@@ -2,8 +2,8 @@
  * @jest-environment node
  */
 
-import { basculeUnePreference, preferencesDeNotification } from '@/lib/api/preferences';
-import { NOTIFICATION_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
+import { basculeUnePreference, ecrisUnePreference, lisLesPreferences, preferencesDeNotification } from '@/lib/api/preferences';
+import { NOTIFICATION_PREFERENCE_DEFAULTS, PRIVACY_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
 
 /**
  * `lib/api/preferences.ts` — LE CLIENT DU COMPTE (spécification § 2, § 3.1).
@@ -135,5 +135,67 @@ describe('basculeUnePreference — l’écriture', () => {
     expect(
       (await basculeUnePreference({ jeton: JETON, cle: 'pushEnabled', valeur: false, base: 'https://passerelle.test', recuperer: recupererCoupe })).genre,
     ).toBe('panne');
+  });
+});
+
+describe('lisLesPreferences / ecrisUnePreference — la généralisation multi-catégories (ce lot)', () => {
+  it('compose ?categories=a,b et rend un document PAR catégorie demandée', async () => {
+    const appels: { url: string; options: RequestInit }[] = [];
+    const recuperer = async (url: string, options: RequestInit): Promise<Response> => {
+      appels.push({ url, options });
+      return json({ success: true, data: { privacy: PRIVACY_PREFERENCE_DEFAULTS, document: { autoDownloadEnabled: true } } });
+    };
+
+    const issue = await lisLesPreferences({
+      jeton: JETON,
+      categories: ['privacy', 'document'],
+      base: 'https://passerelle.test',
+      recuperer,
+    });
+
+    expect(appels[0]?.url).toBe('https://passerelle.test/api/v1/me/preferences?categories=privacy,document');
+    expect(issue.genre).toBe('documents');
+    if (issue.genre !== 'documents') throw new Error('attendu : documents');
+    expect(issue.documents.privacy?.showOnlineStatus).toBe(true);
+    expect(issue.documents.document?.autoDownloadEnabled).toBe(true);
+  });
+
+  it('ecrisUnePreference compose { [categorie]: champs } — une seule catégorie par appel', async () => {
+    const appels: { url: string; options: RequestInit }[] = [];
+    const recuperer = async (url: string, options: RequestInit): Promise<Response> => {
+      appels.push({ url, options });
+      return json({ success: true, data: { privacy: { ...PRIVACY_PREFERENCE_DEFAULTS, showOnlineStatus: false } } });
+    };
+
+    await ecrisUnePreference({
+      jeton: JETON,
+      categorie: 'privacy',
+      champs: { showOnlineStatus: false },
+      base: 'https://passerelle.test',
+      recuperer,
+    });
+
+    expect(appels[0]?.options.method).toBe('PATCH');
+    expect(JSON.parse(String(appels[0]?.options.body))).toEqual({ privacy: { showOnlineStatus: false } });
+  });
+
+  it('preferencesDeNotification et basculeUnePreference restent des PROJECTIONS — même comportement observable qu’avant', async () => {
+    const recuperer = async (): Promise<Response> => json({ success: true, data: { notification: NOTIFICATION_PREFERENCE_DEFAULTS } });
+
+    const issue = await preferencesDeNotification({ jeton: JETON, base: 'https://passerelle.test', recuperer });
+
+    expect(issue.genre).toBe('document');
+  });
+
+  it('une catégorie absente du document servi rend `panne` — le contrat non tenu, pas un refus', async () => {
+    const recuperer = async (): Promise<Response> => json({ success: true, data: {} });
+
+    const issue = await lisLesPreferences({ jeton: JETON, categories: ['privacy'], base: 'https://passerelle.test', recuperer });
+
+    // `documents` est bien rendu (l'enveloppe est valide) ; c'est la PROJECTION
+    // vers une seule catégorie qui doit rendre panne si elle en est absente.
+    expect(issue.genre).toBe('documents');
+    const projete = await basculeUnePreference({ jeton: JETON, cle: 'pushEnabled', valeur: true, base: 'https://passerelle.test', recuperer: async () => json({ success: true, data: {} }) });
+    expect(projete.genre).toBe('panne');
   });
 });

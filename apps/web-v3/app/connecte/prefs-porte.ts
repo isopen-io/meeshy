@@ -3,11 +3,11 @@ import { jetonDuLecteur } from '@/app/session';
 import { actifsTempsReel } from '@/lib/actifs-rt';
 import type { Recuperateur } from '@/lib/api/compte';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
-import { basculeUnePreference, preferencesDeNotification, type DocumentDeNotification } from '@/lib/api/preferences';
-import { CLES_DE_PREFS, estUneCleDePrefs, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
+import { basculeUnePreference, ecrisUnePreference, preferencesDeNotification, type DocumentDeNotification } from '@/lib/api/preferences';
+import { estUnFuseauDnd, estUneCleDePrefs, HEURE_DND_REGEX, CLES_DE_PREFS, FUSEAU_AUTO, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
 import { CACHE_PRIVE, redirection, rendu } from './fil-porte';
-import { documentDesPrefs, type EtatDesPrefs } from './prefs-vue';
+import { documentDesPrefs, type EtatDesPrefs, type RegleAppliquee } from './prefs-vue';
 import { documentDePanne } from './vue';
 
 /**
@@ -41,9 +41,11 @@ const versLaConnexion = (): Response =>
     headers: { location: `/login?returnUrl=${encodeURIComponent(CHEMIN)}`, 'cache-control': CACHE_PRIVE },
   });
 
-const regleDeLURL = (requete: Request): CleDePreference | null => {
+const regleDeLURL = (requete: Request): RegleAppliquee => {
   const valeur = new URL(requete.url).searchParams.get('regle');
-  return valeur !== null && estUneCleDePrefs(valeur) ? valeur : null;
+  if (valeur === null) return null;
+  if (valeur === 'fenetre-dnd') return valeur;
+  return estUneCleDePrefs(valeur) ? valeur : null;
 };
 
 /**
@@ -71,7 +73,7 @@ const DND_PAR_DEFAUT = { debut: '22:00', fin: '08:00' } as const;
  */
 const etatDepuisDocument = (
   reglages: DocumentDeNotification,
-  options: { readonly regleAppliquee: CleDePreference | null; readonly echec: boolean },
+  options: { readonly regleAppliquee: RegleAppliquee; readonly echec: boolean },
 ): EtatDesPrefs => ({
   reglages: Object.fromEntries(CLES_DE_PREFS.map((cle) => [cle, Boolean(reglages[cle])])) as Record<
     CleDePreference,
@@ -79,6 +81,7 @@ const etatDepuisDocument = (
   >,
   dndStartTime: typeof reglages.dndStartTime === 'string' ? reglages.dndStartTime : DND_PAR_DEFAUT.debut,
   dndEndTime: typeof reglages.dndEndTime === 'string' ? reglages.dndEndTime : DND_PAR_DEFAUT.fin,
+  dndUtcOffsetMinutes: typeof reglages.dndUtcOffsetMinutes === 'number' ? reglages.dndUtcOffsetMinutes : 0,
   regleAppliquee: options.regleAppliquee,
   echec: options.echec,
   tempsReel: moduleDeParticipation(),
@@ -91,7 +94,7 @@ const sert = async ({
   recuperer,
 }: {
   readonly jeton: string;
-  readonly regleAppliquee: CleDePreference | null;
+  readonly regleAppliquee: RegleAppliquee;
   readonly echec: boolean;
   readonly recuperer?: Recuperateur;
 }): Promise<Response> => {
@@ -114,6 +117,41 @@ export const PREFERENCES = async (requete: Request, recuperer?: Recuperateur): P
   if (origineEtrangere(requete)) return refusDOrigine(requete);
 
   const formulaire = await requete.formData().catch(() => null);
+
+  /**
+   * LE GESTE `fenetre` ÉDITE LA PLAGE DND — distinct du geste `cle`/`valeur`
+   * des treize bascules (un formulaire différent, un corps différent :
+   * `{ dndStartTime, dndEndTime, dndUtcOffsetMinutes? }`). `fuseau=auto`
+   * (`FUSEAU_AUTO`) NE PORTE PAS `dndUtcOffsetMinutes` au corps envoyé — la
+   * valeur déjà stockée survit (spécification § 3 témoin 7).
+   */
+  if (formulaire?.get('geste') === 'fenetre') {
+    const debut = formulaire.get('dndStartTime');
+    const fin = formulaire.get('dndEndTime');
+    const fuseau = formulaire.get('fuseau');
+
+    if (
+      typeof debut !== 'string' ||
+      typeof fin !== 'string' ||
+      typeof fuseau !== 'string' ||
+      !HEURE_DND_REGEX.test(debut) ||
+      !HEURE_DND_REGEX.test(fin) ||
+      !estUnFuseauDnd(fuseau)
+    ) {
+      return new Response(null, { status: 400, headers: { 'cache-control': CACHE_PRIVE } });
+    }
+
+    const champs: Record<string, unknown> = { dndStartTime: debut, dndEndTime: fin };
+    if (fuseau !== FUSEAU_AUTO) champs.dndUtcOffsetMinutes = Number(fuseau);
+
+    const issue = await ecrisUnePreference({ jeton, categorie: 'notification', champs, recuperer });
+    if (issue.genre === 'session-expiree') return versLaConnexion();
+    if (issue.genre === 'documents') {
+      return redirection(`${CHEMIN}?regle=fenetre-dnd`, { 'cache-control': CACHE_PRIVE });
+    }
+    return sert({ jeton, regleAppliquee: null, echec: true, recuperer });
+  }
+
   const cleSoumise = formulaire?.get('cle');
   const valeurSoumise = formulaire?.get('valeur');
 

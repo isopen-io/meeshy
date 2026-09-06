@@ -43,25 +43,33 @@ const APPAREIL: Appareil = { id: 'd1', nom: 'iPhone d’Amina', plateforme: 'ios
 describe('le carrefour des réglages', () => {
   const html = documentDuCarrefour();
 
-  it('mène aux quatre écrans que la passerelle sert', () => {
-    expect(html).toContain('href="/settings/profile"');
-    expect(html).toContain('href="/settings/security"');
-    expect(html).toContain('href="/settings/application"');
-    // Les préférences de notification (#4899) vivent à leur PROPRE adresse,
-    // `/notifications/preferences` — jamais `/settings/notification`, que la
-    // passerelle ne sert toujours pas (témoin suivant).
-    expect(html).toContain('href="/notifications/preferences"');
+  /**
+   * SEPT RANGÉES (lot `reglages-details`, §0 de sa spécification) — les trois
+   * qui manquaient (`/settings/privacy`, `/settings/media`, `/settings/
+   * message`) rejoignent la table : le système unifié de préférences
+   * (#4181, #4589) les sert toutes désormais.
+   */
+  it('mène aux sept destinations de la planche, dans son ordre', () => {
+    const ordre = [
+      '/settings/profile',
+      '/settings/privacy',
+      '/settings/security',
+      '/settings/media',
+      '/settings/message',
+      '/notifications/preferences',
+      '/settings/application',
+    ];
+    const indices = ordre.map((href) => html.indexOf(`href="${href}"`));
+
+    indices.forEach((index) => expect(index).toBeGreaterThan(-1));
+    expect(indices).toEqual([...indices].sort((a, b) => a - b));
   });
 
-  /**
-   * LE TÉMOIN QUI COMPTE. La cible dessine sept rangées ; quatre n'ont aucune
-   * route. Une rangée grisée serait un contrôle sans effet (charte règle 7), et
-   * un lien mort serait pire — il se pré-charge, il s'indexe, et il rend 404.
-   */
-  it('ne mène à AUCUN des quatre écrans que la passerelle ne sert pas', () => {
-    ['/settings/privacy', '/settings/media', '/settings/message', '/settings/notification'].forEach((mort) => {
-      expect(html).not.toContain(`href="${mort}"`);
-    });
+  it('n’a plus de rangée MORTE — `/settings/notification` n’est plus une adresse absente, mais un alias', () => {
+    // La rangée du carrefour reste `/notifications/preferences` (l'adresse
+    // SERVIE) ; `/settings/notification` est un ALIAS 302 vers elle, jamais
+    // une seconde rangée dans ce carrefour (une jumelle).
+    expect(html).not.toContain('href="/settings/notification"');
   });
 });
 

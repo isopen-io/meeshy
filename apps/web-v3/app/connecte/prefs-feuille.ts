@@ -1,6 +1,6 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
-import { avisDEcran } from './atomes-feuille';
+import { avisDEcran, commutateurDEcran } from './atomes-feuille';
 
 /**
  * LA FEUILLE DE `/notifications/preferences` — ce que `cible/notifPrefs.png`
@@ -32,17 +32,12 @@ ${avisDEcran('.prefs-ecran')}
 .groupe-prefs:first-of-type{margin-top:var(--space-4)}
 .groupe-prefs h2{margin:0 0 var(--space-2);font-size:var(--text-xs);font-weight:var(--font-weight-semibold);letter-spacing:.04em;text-transform:uppercase;color:var(--color-text-muted)}
 
-.bascules{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);overflow:hidden}
-.bascules>li{border-bottom:var(--stroke-hair) solid var(--color-border-interactive)}
-.bascules>li:last-child{border-bottom:0}
-.bascules form.bascule{margin:0}
+${commutateurDEcran('.bascules')}
 
-.commutateur{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);width:100%;min-height:var(--target-min);padding:var(--space-3) var(--space-4);border:0;background:none;font:inherit;font-size:var(--text-base);color:var(--color-text);text-align:left;cursor:pointer}
-.commutateur .libelle{flex:1 1 auto;min-width:0}
-
-.commutateur .piste{display:flex;align-items:center;justify-content:flex-start;flex:none;width:var(--space-7);height:var(--space-5);padding:0 var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-interactive);transition:background-color 150ms}
-.commutateur[aria-checked="true"] .piste{justify-content:flex-end;background:var(--color-primary)}
-.commutateur .pouce{width:calc(var(--space-5) - var(--space-1) * 2);height:calc(var(--space-5) - var(--space-1) * 2);border-radius:var(--radius-pill);background:var(--color-on-primary)}
-
-.fenetre{margin:0;padding:0 var(--space-4) var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
+.fenetre-edition{padding:0 var(--space-4) var(--space-3);border-top:var(--stroke-hair) solid var(--color-border-interactive)}
+.fenetre-edition summary{padding:var(--space-3) 0;min-height:var(--target-min);display:flex;align-items:center;font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-primary);cursor:pointer}
+.fenetre-edition form{display:flex;flex-direction:column;gap:var(--space-3);padding-bottom:var(--space-3)}
+.fenetre-edition .champ{display:flex;flex-direction:column;gap:var(--space-1)}
+.fenetre-edition label{font-size:var(--text-sm);color:var(--color-text-muted)}
+.fenetre-edition input,.fenetre-edition select{min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}
 `);

@@ -192,3 +192,98 @@ describe('la porte de /notifications/preferences — POST', () => {
     expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2Fnotifications%2Fpreferences');
   });
 });
+
+describe('la porte de /notifications/preferences — POST du geste `fenetre` (édition DND)', () => {
+  it('poste EXACTEMENT { notification: { dndStartTime, dndEndTime, dndUtcOffsetMinutes } } et redirige vers ?regle=fenetre-dnd', async () => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+    });
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=fenetre&dndStartTime=23%3A30&dndEndTime=07%3A00&fuseau=120',
+      }),
+      recuperer,
+    );
+
+    const patch = vus.find((v) => v.options.method === 'PATCH');
+    expect(patch).toBeDefined();
+    expect(JSON.parse(String(patch?.options.body))).toEqual({
+      notification: { dndStartTime: '23:30', dndEndTime: '07:00', dndUtcOffsetMinutes: 120 },
+    });
+    expect(reponse.status).toBe(303);
+    expect(reponse.headers.get('location')).toBe('/notifications/preferences?regle=fenetre-dnd');
+  });
+
+  it('`fuseau=auto` NE PORTE PAS dndUtcOffsetMinutes — la valeur stockée survit', async () => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+    });
+
+    await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=fenetre&dndStartTime=22%3A00&dndEndTime=08%3A00&fuseau=auto',
+      }),
+      recuperer,
+    );
+
+    const patch = vus.find((v) => v.options.method === 'PATCH');
+    expect(JSON.parse(String(patch?.options.body))).toEqual({
+      notification: { dndStartTime: '22:00', dndEndTime: '08:00' },
+    });
+  });
+
+  it.each(['25:00', '9:00', ''])('une heure invalide (%s) est un 400 SANS appel', async (heure) => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+    });
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: `geste=fenetre&dndStartTime=${encodeURIComponent(heure)}&dndEndTime=08%3A00&fuseau=auto`,
+      }),
+      recuperer,
+    );
+
+    expect(reponse.status).toBe(400);
+    expect(vus).toEqual([]);
+  });
+
+  it('un `fuseau` hors de la table fermée est un 400 SANS appel', async () => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+    });
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=fenetre&dndStartTime=22%3A00&dndEndTime=08%3A00&fuseau=13',
+      }),
+      recuperer,
+    );
+
+    expect(reponse.status).toBe(400);
+    expect(vus).toEqual([]);
+  });
+
+  it('refuse une origine ÉTRANGÈRE avant tout appel', async () => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+    });
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=fenetre&dndStartTime=22%3A00&dndEndTime=08%3A00&fuseau=auto',
+        origine: 'https://ailleurs.test',
+      }),
+      recuperer,
+    );
+
+    expect(vus).toEqual([]);
+    expect(reponse.status).not.toBe(303);
+  });
+});

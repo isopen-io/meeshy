@@ -5,15 +5,17 @@ import { AddressInfo, createServer as createSocketServer } from 'node:net';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+import type { DocumentPreference, NotificationPreference, PrivacyPreference } from '@meeshy/shared/types/preferences';
 
 import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-reseau.d.mts';
 import {
   APPAREILS_DU_BOUCHON,
   boiteDeNotifsDeBouchon,
+  documentPrefsDeBouchon,
   filDeCommentairesDeBouchon,
   filSocialDeBouchon,
   notificationPrefsDeBouchon,
+  privacyPrefsDeBouchon,
   routesDuCompte,
   type BoiteDeNotifsDeBouchon,
   type FilDeCommentairesDeBouchon,
@@ -169,6 +171,10 @@ export type PasserelleDeBouchon = {
    * ce que le document a rendu.
    */
   readonly notificationPrefs: NotificationPreference;
+  /** `/settings/privacy` (travail `reglages-details`) — même loi que `notificationPrefs`, catégorie `privacy`. */
+  readonly privacyPrefs: PrivacyPreference;
+  /** `/settings/media/document` — même loi, catégorie `document` (`autoDownloadEnabled` est la seule clé écrite). */
+  readonly documentPrefs: DocumentPreference;
   /**
    * LES CORPS DE `POST /api/v1/posts` REÇUS (#4966) — ce que le composer a
    * réellement ENVOYÉ. Le critère de fin porte sur la charge (audience, emoji,
@@ -405,6 +411,8 @@ export const passerelleDeBouchon = async (options?: {
   const deLaStory = routesDeLaStory({ creanceDe });
   const filSocial = filSocialDeBouchon();
   const notificationPrefs = await notificationPrefsDeBouchon();
+  const privacyPrefs = await privacyPrefsDeBouchon();
+  const documentPrefs = await documentPrefsDeBouchon();
   const deLaRecherche = routesDeLaRecherche(creanceDe);
   const duCompte = routesDuCompte({
     creanceDe,
@@ -419,6 +427,8 @@ export const passerelleDeBouchon = async (options?: {
     filDeCommentaires,
     filSocial,
     notificationPrefs,
+    privacyPrefs,
+    documentPrefs,
   });
   const carnet = carnetDeBouchon(lien);
   const duCarnet = routesDuCarnet(
@@ -563,6 +573,8 @@ export const passerelleDeBouchon = async (options?: {
     filDeCommentaires,
     filSocial,
     notificationPrefs,
+    privacyPrefs,
+    documentPrefs,
     publicationsRecues,
     placesActives,
     sessionsRevoquees,

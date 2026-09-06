@@ -111,6 +111,49 @@ export const estUneCleDePrefs = (valeur: string): valeur is CleDePreference =>
   (CLES_DE_PREFS as readonly string[]).includes(valeur);
 
 /**
+ * LA PLAGE « NE PAS DÉRANGER » SE MODIFIE (cycle 124, `notification-dnd.ts:53`
+ * — la loi qui la fait RESPECTER par la passerelle, déjà en place, sans elle
+ * la bascule seule ne réglait qu'un horaire par défaut que personne ne pouvait
+ * changer). Le format est celui du schéma : `HH:MM` sur 24 h
+ * (`packages/shared/types/preferences/notification.ts:44-45`).
+ */
+export const HEURE_DND_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * LA TABLE FERMÉE DES FUSEAUX — les décalages UTC usuels, en minutes (bornes
+ * du schéma : −720…840, `notification.ts:52`). Fermée, comme `CLES_DE_PREFS` :
+ * un décalage soumis hors de cette liste est un 400, jamais une écriture.
+ * `'auto'` est un sentinelle CLIENT, jamais envoyé au serveur — la valeur déjà
+ * stockée survit (§ 3 témoin 7 de la spécification).
+ */
+export const FUSEAU_AUTO = 'auto';
+
+const DEUX_CHIFFRES = (n: number): string => String(Math.abs(n)).padStart(2, '0');
+
+const libelleDuFuseau = (minutes: number): string => {
+  if (minutes === 0) return 'UTC';
+  const signe = minutes < 0 ? '−' : '+';
+  return `UTC${signe}${DEUX_CHIFFRES(Math.trunc(Math.abs(minutes) / 60))}:${DEUX_CHIFFRES(Math.abs(minutes) % 60)}`;
+};
+
+/** Les décalages UTC réellement en usage (demi-heures et quarts d'heure compris). */
+const MINUTES_DES_FUSEAUX: readonly number[] = [
+  -720, -660, -600, -570, -540, -480, -420, -360, -300, -270, -240, -210, -180, -120, -60, 0, 60, 120, 180, 210, 240,
+  270, 300, 330, 345, 360, 390, 420, 480, 525, 540, 570, 600, 630, 660, 720, 765, 780, 840,
+];
+
+export type OptionDeFuseau = { readonly valeur: string; readonly libelle: string; readonly minutes: number };
+
+export const FUSEAUX_DND: readonly OptionDeFuseau[] = MINUTES_DES_FUSEAUX.map((minutes) => ({
+  valeur: String(minutes),
+  libelle: libelleDuFuseau(minutes),
+  minutes,
+}));
+
+export const estUnFuseauDnd = (valeur: string): boolean =>
+  valeur === FUSEAU_AUTO || FUSEAUX_DND.some((fuseau) => fuseau.valeur === valeur);
+
+/**
  * LA COPIE DE L'ÉCRAN — ce qu'il DIT hors des treize libellés ci-dessus, qui
  * sont la disposition et non de la prose.
  */
@@ -121,8 +164,16 @@ export const PREFS = {
   actionDepuisLaBoite: 'Réglages de notification',
   activee: 'Activé',
   desactivee: 'Désactivé',
-  /** La fenêtre DND — affichée, jamais éditée (§ 9 question 2 : hors périmètre). */
   fenetre: (debut: string, fin: string): string => `${debut} – ${fin}`,
+  /** L'ÉDITION DE LA PLAGE (`detail-notification`, ce lot) — un `<details>`, pas un `<a>` : elle vit dans la même rangée. */
+  fenetreModifier: 'Modifier la plage',
+  fenetreDebut: 'Début',
+  fenetreFin: 'Fin',
+  fenetreFuseau: 'Fuseau',
+  fenetreFuseauAuto: 'Fuseau de cet appareil',
+  fenetreEnregistrer: 'Enregistrer la plage',
+  fenetreRegle: 'Plage horaire enregistrée.',
+  fenetreHeureInvalide: 'Une heure au format HH:MM est requise pour le début et la fin.',
   /** La réussite, révélée par la région de statut au retour du POST/redirect/GET. */
   regle: (libelle: string): string => `${libelle} : réglage enregistré.`,
   /** Le refus — POST échoué (sans JS) ou fetch échoué (avec JS) : l'état affiché reste celui du serveur. */

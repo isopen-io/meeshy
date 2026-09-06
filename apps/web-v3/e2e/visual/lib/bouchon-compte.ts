@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 
-import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+import type { DocumentPreference, NotificationPreference, PrivacyPreference } from '@meeshy/shared/types/preferences';
 
 import { serviParLAnnuaire } from './bouchon-annuaire';
 import type { Identite } from './bouchon-socket';
@@ -121,6 +121,16 @@ export type EtatDuCompteDeBouchon = {
    * défaut local, gouverne le rendu.
    */
   readonly notificationPrefs: NotificationPreference;
+  /**
+   * `/settings/privacy` (travail `reglages-details`) — les QUATRE bascules
+   * que la v3 EXPOSE (`showOnlineStatus`, `showLastSeen`, `showReadReceipts`,
+   * `showTypingIndicator`, § 0 de sa spécification) vivent dans le MÊME
+   * document que les autres clés du schéma, comme la passerelle réelle les
+   * tient — le bouchon ne recopie pas un sous-ensemble.
+   */
+  readonly privacyPrefs: PrivacyPreference;
+  /** `/settings/media/document` — `autoDownloadEnabled` est la SEULE clé que cet écran écrit. */
+  readonly documentPrefs: DocumentPreference;
 };
 
 /**
@@ -568,6 +578,18 @@ export const notificationPrefsDeBouchon = async (): Promise<NotificationPreferen
   return { ...NOTIFICATION_PREFERENCE_DEFAULTS, reactionEnabled: false };
 };
 
+/** `/settings/privacy` (travail `reglages-details`) — les défauts DU SCHÉMA, jamais recopiés. */
+export const privacyPrefsDeBouchon = async (): Promise<PrivacyPreference> => {
+  const { PRIVACY_PREFERENCE_DEFAULTS } = await import('@meeshy/shared/types/preferences');
+  return { ...PRIVACY_PREFERENCE_DEFAULTS };
+};
+
+/** `/settings/media/document` — `autoDownloadEnabled` naît FAUX, comme le schéma le déclare. */
+export const documentPrefsDeBouchon = async (): Promise<DocumentPreference> => {
+  const { DOCUMENT_PREFERENCE_DEFAULTS } = await import('@meeshy/shared/types/preferences');
+  return { ...DOCUMENT_PREFERENCE_DEFAULTS };
+};
+
 export const routesDuCompte =
   (etat: EtatDuCompteDeBouchon) =>
   ({ requete, url, corps, json }: { readonly requete: IncomingMessage; readonly url: URL; readonly corps: Buffer; readonly json: Reponse }): boolean => {
@@ -674,68 +696,84 @@ export const routesDuCompte =
     }
 
     /**
-     * `GET`/`PATCH /api/v1/me/preferences` (#4899) — les TREIZE (et plus)
-     * préférences de notification du COMPTE, copiées sur
-     * `services/gateway/src/routes/me/preferences/unified-routes.ts:150,229` :
-     * `GET` sert `{ success, data: { notification: {…complet…} } }`, filtré
-     * par `categories=notification` comme la v3 le demande ; `PATCH` FUSIONNE
-     * (`mode=merge`, le seul que la v3 envoie — jamais `replace`) les clés
-     * soumises sur le document que le bouchon TIENT — un 200 qui n'écrirait
-     * rien ferait passer un client qui n'a rien changé (même loi que
-     * `boite.litTout()`). Une catégorie autre que `notification` est 400
-     * `UNKNOWN_CATEGORY` ; une clé absente du schéma, ou d'un type qui ne
-     * concorde pas avec son défaut, est 400 `VALIDATION_ERROR` — la MÊME
-     * distinction que la passerelle réelle (`unified-routes.ts:308,441`).
+     * `GET`/`PATCH /api/v1/me/preferences` — TROIS catégories du COMPTE,
+     * copiées sur `services/gateway/src/routes/me/preferences/
+     * unified-routes.ts:150,229` : `notification` (#4899, TREIZE bascules et
+     * plus), `privacy` et `document` (travail `reglages-details`, ce lot).
+     * `GET` sert `{ success, data: { <categorie>: {…complet…} } }`, filtré
+     * par `?categories=` ; `PATCH` FUSIONNE (`mode=merge`, le seul que la v3
+     * envoie — jamais `replace`) les clés soumises sur le document que le
+     * bouchon TIENT — un 200 qui n'écrirait rien ferait passer un client qui
+     * n'a rien changé (même loi que `boite.litTout()`). Une catégorie hors de
+     * cette table est 400 `UNKNOWN_CATEGORY` ; une clé absente du schéma, ou
+     * d'un type qui ne concorde pas avec son défaut, est 400
+     * `VALIDATION_ERROR` — la MÊME distinction que la passerelle réelle
+     * (`unified-routes.ts:308,441`).
      */
+    const MAGASIN_DES_PREFERENCES: Readonly<Record<string, Record<string, unknown>>> = {
+      notification: etat.notificationPrefs as unknown as Record<string, unknown>,
+      privacy: etat.privacyPrefs as unknown as Record<string, unknown>,
+      document: etat.documentPrefs as unknown as Record<string, unknown>,
+    };
+
     if (chemin === '/api/v1/me/preferences' && (requete.method ?? 'GET') === 'GET') {
       // `?categories=` SÉLECTIONNE : la passerelle ne sert que les catégories
       // nommées, et sert TOUT quand rien n'est nommé (`unified-routes.ts:206`,
       // `parsed.selection.categories`, dont l'ETag hache le RÉSULTAT — « il
-      // varie avec `categories` », `:210`). Le bouchon ne connaît que
-      // `notification` — il l'omet donc quand la sélection ne la nomme pas,
-      // plutôt que de la servir quoi qu'on demande : sans cela, un client qui
-      // aurait perdu son `?categories=notification` resterait vert ici et
-      // vide en production.
+      // varie avec `categories` », `:210`). Le bouchon ne connaît que les
+      // TROIS catégories du magasin — il les omet donc quand la sélection ne
+      // les nomme pas, plutôt que de les servir quoi qu'on demande : sans
+      // cela, un client qui aurait perdu son `?categories=` resterait vert
+      // ici et vide en production.
       const demandees = url.searchParams.get('categories');
-      const servie = demandees === null || demandees.split(',').includes('notification');
-      json({ success: true, data: servie ? { notification: etat.notificationPrefs } : {} });
+      const noms = demandees === null ? Object.keys(MAGASIN_DES_PREFERENCES) : demandees.split(',');
+      const data = Object.fromEntries(
+        noms.filter((nom) => nom in MAGASIN_DES_PREFERENCES).map((nom) => [nom, MAGASIN_DES_PREFERENCES[nom]]),
+      );
+      json({ success: true, data });
       return true;
     }
     if (chemin === '/api/v1/me/preferences' && requete.method === 'PATCH') {
       const soumis = JSON.parse(corps.toString('utf8') || '{}') as Record<string, unknown>;
       const categories = Object.keys(soumis);
-      const categorieInconnue = categories.find((categorie) => categorie !== 'notification');
+      const categorieInconnue = categories.find((categorie) => !(categorie in MAGASIN_DES_PREFERENCES));
       if (categorieInconnue !== undefined) {
         json({ success: false, error: 'UNKNOWN_CATEGORY', message: `Unknown preference category '${categorieInconnue}'` }, 400);
         return true;
       }
 
-      const bloc = soumis.notification;
-      if (typeof bloc !== 'object' || bloc === null || Array.isArray(bloc)) {
-        json({ success: false, error: 'VALIDATION_ERROR', message: 'Body must be an object keyed by preference category' }, 400);
-        return true;
-      }
+      for (const categorie of categories) {
+        const bloc = soumis[categorie];
+        if (typeof bloc !== 'object' || bloc === null || Array.isArray(bloc)) {
+          json({ success: false, error: 'VALIDATION_ERROR', message: 'Body must be an object keyed by preference category' }, 400);
+          return true;
+        }
 
-      const document = etat.notificationPrefs as unknown as Record<string, unknown>;
-      const soumises = bloc as Record<string, unknown>;
-      const cleInvalide = Object.keys(soumises).find(
-        (cle) => !(cle in document) || typeof soumises[cle] !== typeof document[cle],
-      );
-      if (cleInvalide !== undefined) {
-        json(
-          {
-            success: false,
-            error: 'VALIDATION_ERROR',
-            message: `Unknown field '${cleInvalide}'`,
-            details: { issues: [{ path: [cleInvalide], message: 'Unrecognized field' }] },
-          },
-          400,
+        const document = MAGASIN_DES_PREFERENCES[categorie] as Record<string, unknown>;
+        const soumises = bloc as Record<string, unknown>;
+        const cleInvalide = Object.keys(soumises).find(
+          (cle) => !(cle in document) || typeof soumises[cle] !== typeof document[cle],
         );
-        return true;
+        if (cleInvalide !== undefined) {
+          json(
+            {
+              success: false,
+              error: 'VALIDATION_ERROR',
+              message: `Unknown field '${cleInvalide}'`,
+              details: { issues: [{ path: [cleInvalide], message: 'Unrecognized field' }] },
+            },
+            400,
+          );
+          return true;
+        }
+
+        Object.assign(document, soumises);
       }
 
-      Object.assign(etat.notificationPrefs, soumises);
-      json({ success: true, data: { notification: etat.notificationPrefs } });
+      json({
+        success: true,
+        data: Object.fromEntries(categories.map((categorie) => [categorie, MAGASIN_DES_PREFERENCES[categorie]])),
+      });
       return true;
     }
 
