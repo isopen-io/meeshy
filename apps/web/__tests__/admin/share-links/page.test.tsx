@@ -24,6 +24,7 @@ import { adminService } from '@/services/admin.service';
 import { apiService } from '@/services/api.service';
 import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
+import { useUser } from '@/stores';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn(), back: jest.fn() }),
@@ -34,11 +35,15 @@ jest.mock('@/services/admin.service', () => ({
 }));
 
 jest.mock('@/services/api.service', () => ({
-  apiService: { delete: jest.fn() },
+  apiService: { delete: jest.fn(), post: jest.fn() },
 }));
 
 jest.mock('@/lib/clipboard', () => ({
   copyToClipboard: jest.fn().mockResolvedValue({ success: true }),
+}));
+
+jest.mock('@/stores', () => ({
+  useUser: jest.fn(),
 }));
 
 jest.mock('@/hooks/use-i18n', () => ({
@@ -52,6 +57,17 @@ jest.mock('@/hooks/use-i18n', () => ({
         'shareLinks.deleteSuccess': 'Share link closed',
         'shareLinks.deleteError': 'Could not close the share link',
         'shareLinks.loading': 'Loading…',
+        'shareLinks.copy': 'Copy',
+        'shareLinks.open': 'Open',
+        'shareLinks.revealError': 'Could not reveal the share link',
+        'shareLinks.revealReasonTitle': 'Reason required',
+        'shareLinks.revealReasonNotice': 'Revealing this link is a sovereign action: it will be recorded in the audit log.',
+        'shareLinks.revealReasonLabel': 'Reason',
+        'shareLinks.revealReasonPlaceholder': 'Reason for this reveal...',
+        'shareLinks.revealReasonHint': 'Enter a reason of at least {min} characters.',
+        'shareLinks.revealReasonTooShort': 'The reason must be at least {min} characters long.',
+        'shareLinks.revealConfirm': 'Reveal',
+        'shareLinks.revealCancel': 'Cancel',
       };
       const template = dict[key] ?? key;
       return params
@@ -72,11 +88,17 @@ jest.mock('@/components/admin/AdminLayout', () => {
   };
 });
 
+// La vraie `Card` (`components/ui/card.tsx`) transmet TOUTES les props d'un
+// `<div>`, `onClick` compris — `RevealReasonModal` en dépend pour empêcher un
+// clic à l'intérieur de la carte de fermer la modale (`e.stopPropagation()`
+// sur l'overlay). Un double qui ne recopie QUE `children` perd cette
+// transmission en silence : la modale se refermait dès le premier clic sur
+// son propre textarea (`user.type` clique la cible avant de taper).
 jest.mock('@/components/ui/card', () => ({
-  Card: ({ children }: any) => <div>{children}</div>,
-  CardContent: ({ children }: any) => <div>{children}</div>,
-  CardHeader: ({ children }: any) => <div>{children}</div>,
-  CardTitle: ({ children }: any) => <div>{children}</div>,
+  Card: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  CardContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  CardHeader: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  CardTitle: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }));
 
 jest.mock('@/components/ui/button', () => ({
@@ -158,6 +180,7 @@ async function closeTheLink() {
 describe('Console d’administration — fermer un lien de partage (#3734)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (useUser as jest.Mock).mockReturnValue(null);
     (adminService.getShareLinks as jest.Mock).mockResolvedValue(listResponse());
     (apiService.delete as jest.Mock).mockResolvedValue({ success: true, data: { success: true, data: { id: LINK_ROW_ID, isActive: false } } });
   });
@@ -218,6 +241,7 @@ describe('Console d’administration — fermer un lien de partage (#3734)', () 
 describe('Console d’administration — résidus de libellé et de type (#5299)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (useUser as jest.Mock).mockReturnValue(null);
   });
 
   it('replie le libellé sur l’id de la ligne quand name/identifier/linkId sont tous absents', async () => {
@@ -235,13 +259,150 @@ describe('Console d’administration — résidus de libellé et de type (#5299)
     await screen.findByText(LINK_ROW_ID);
   });
 
-  it('ne rend ni « Copier » ni « Ouvrir » — `linkId` n’est jamais servi par cette liste', async () => {
+  // #5430 a remplacé la garde `shareLink.linkId &&` par une garde de RÔLE — un
+  // admin non-BIGBOSS ne verrait de toute façon que des 403 sur le geste
+  // souverain qui les rendrait utiles (§ « un contrôle voué au 403 ne se
+  // propose pas »). Ce témoin reste vrai sous la nouvelle garde ; voir la
+  // suite « #5430 » ci-dessous pour le cas BIGBOSS.
+  it('ne rend ni « Copier » ni « Ouvrir » à un admin non-BIGBOSS', async () => {
     (adminService.getShareLinks as jest.Mock).mockResolvedValue(listResponse());
 
     render(<AdminShareLinksPage />);
 
     await screen.findByText('Public onboarding link');
-    expect(screen.queryByText('shareLinks.copy')).not.toBeInTheDocument();
-    expect(screen.queryAllByText('shareLinks.open')).toHaveLength(0);
+    expect(screen.queryByText('Copy')).not.toBeInTheDocument();
+    expect(screen.queryAllByText('Open')).toHaveLength(0);
+  });
+});
+
+/**
+ * #5430 — « Copier » et « Ouvrir » sont morts depuis #4157 : ils manipulaient
+ * `shareLink.linkId`, qu'aucune liste ne sert plus (#5299/#4692). Décision
+ * produit (issue, § « Critère de fin », option a) : l'admin RÉVÈLE l'URL
+ * complète via le geste souverain déjà existant, audité,
+ * `POST /admin/share-links/:id/reveal` — rang BIGBOSS seul
+ * (`requireSovereign()`, `content-share-links.ts`), motif écrit ≥ 10
+ * caractères.
+ *
+ * Conséquence directe (§ « un contrôle voué au 403 ne se propose pas ») :
+ * les deux contrôles se gardent sur le RÔLE (`currentUser?.role ===
+ * 'BIGBOSS'`), jamais sur `shareLink.linkId` — sans quoi ils resteraient
+ * morts pour tout le monde, `linkId` n'étant jamais servi par la liste.
+ *
+ * Les témoins portent sur l'EFFET de bout en bout : le geste ouvre une
+ * demande de motif, le motif court désactive la confirmation, la confirmation
+ * appelle l'endpoint de révélation avec la RAISON, et c'est la valeur RÉVÉLÉE
+ * (jamais `undefined`) qui est copiée / ouverte.
+ */
+describe('Console d’administration — révéler un lien pour Copier/Ouvrir (#5430)', () => {
+  const REVEALED_LINK_ID = 'mshy_abc123';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (adminService.getShareLinks as jest.Mock).mockResolvedValue(listResponse());
+    (apiService.post as jest.Mock).mockResolvedValue({
+      success: true,
+      data: { success: true, data: { id: LINK_ROW_ID, linkId: REVEALED_LINK_ID, identifier: 'onboarding' } },
+    });
+  });
+
+  it('ne propose « Copier »/« Ouvrir » à AUCUN admin non-BIGBOSS, même ADMIN', async () => {
+    (useUser as jest.Mock).mockReturnValue({ id: 'u9', role: 'ADMIN' });
+
+    render(<AdminShareLinksPage />);
+
+    await screen.findByText('Public onboarding link');
+    expect(screen.queryByText('Copy')).not.toBeInTheDocument();
+    expect(screen.queryAllByText('Open')).toHaveLength(0);
+  });
+
+  it('propose « Copier » et « Ouvrir » à un BIGBOSS malgré `linkId` absent de la liste', async () => {
+    (useUser as jest.Mock).mockReturnValue({ id: 'u1', role: 'BIGBOSS' });
+
+    render(<AdminShareLinksPage />);
+
+    await screen.findByText('Public onboarding link');
+    expect(screen.getAllByText('Copy').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Open').length).toBeGreaterThan(0);
+  });
+
+  it('n’émet AUCUN appel de révélation tant que le motif n’est pas confirmé', async () => {
+    (useUser as jest.Mock).mockReturnValue({ id: 'u1', role: 'BIGBOSS' });
+    const user = userEvent.setup();
+    render(<AdminShareLinksPage />);
+
+    await user.click((await screen.findAllByText('Copy'))[0]);
+
+    expect(await screen.findByText('Reason required')).toBeInTheDocument();
+    expect(apiService.post).not.toHaveBeenCalled();
+  });
+
+  it('désactive la confirmation tant que le motif fait moins de 10 caractères', async () => {
+    (useUser as jest.Mock).mockReturnValue({ id: 'u1', role: 'BIGBOSS' });
+    const user = userEvent.setup();
+    render(<AdminShareLinksPage />);
+
+    await user.click((await screen.findAllByText('Copy'))[0]);
+    const textarea = await screen.findByPlaceholderText('Reason for this reveal...');
+    await user.type(textarea, 'trop bref');
+
+    const confirm = screen.getByText('Reveal');
+    expect(confirm).toBeDisabled();
+    expect(apiService.post).not.toHaveBeenCalled();
+  });
+
+  it('« Copier » révèle puis copie la valeur RÉVÉLÉE (jamais `undefined`)', async () => {
+    (useUser as jest.Mock).mockReturnValue({ id: 'u1', role: 'BIGBOSS' });
+    const { copyToClipboard } = jest.requireMock('@/lib/clipboard') as { copyToClipboard: jest.Mock };
+    const user = userEvent.setup();
+    render(<AdminShareLinksPage />);
+
+    await user.click((await screen.findAllByText('Copy'))[0]);
+    const textarea = await screen.findByPlaceholderText('Reason for this reveal...');
+    await user.type(textarea, 'audit de routine');
+    await user.click(screen.getByText('Reveal'));
+
+    await waitFor(() => expect(apiService.post).toHaveBeenCalledTimes(1));
+    expect(apiService.post).toHaveBeenCalledWith(
+      API_ENDPOINTS.admin.shareLinksByIdReveal(LINK_ROW_ID),
+      { reason: 'audit de routine' }
+    );
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(REVEALED_LINK_ID));
+  });
+
+  it('« Ouvrir » révèle puis ouvre l’URL trackée avec la valeur RÉVÉLÉE', async () => {
+    (useUser as jest.Mock).mockReturnValue({ id: 'u1', role: 'BIGBOSS' });
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const user = userEvent.setup();
+    render(<AdminShareLinksPage />);
+
+    await user.click((await screen.findAllByText('Open'))[0]);
+    const textarea = await screen.findByPlaceholderText('Reason for this reveal...');
+    await user.type(textarea, 'audit de routine');
+    await user.click(screen.getByText('Reveal'));
+
+    await waitFor(() => expect(apiService.post).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(openSpy).toHaveBeenCalledWith(`/tracked/${REVEALED_LINK_ID}`, '_blank', 'noopener,noreferrer')
+    );
+
+    openSpy.mockRestore();
+  });
+
+  it('n’ANNONCE PAS un succès quand la révélation souveraine est refusée', async () => {
+    (useUser as jest.Mock).mockReturnValue({ id: 'u1', role: 'BIGBOSS' });
+    (apiService.post as jest.Mock).mockRejectedValue(new Error('403'));
+    const { copyToClipboard } = jest.requireMock('@/lib/clipboard') as { copyToClipboard: jest.Mock };
+    const user = userEvent.setup();
+    render(<AdminShareLinksPage />);
+
+    await user.click((await screen.findAllByText('Copy'))[0]);
+    const textarea = await screen.findByPlaceholderText('Reason for this reveal...');
+    await user.type(textarea, 'audit de routine');
+    await user.click(screen.getByText('Reveal'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not reveal the share link'));
+    expect(copyToClipboard).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
