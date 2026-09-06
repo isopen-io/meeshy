@@ -244,4 +244,44 @@ describe('PostsFeedScreen — media accessibility relay (C7-UI)', () => {
 
     expect(mockCreatePostMutate.mock.calls[0][0]).not.toHaveProperty('allowSoundExtraction');
   });
+
+  /**
+   * #5349 — rougit si le spread `detectedLanguage` disparaît : la mesure
+   * on-device faite par la surface composer mourrait entre elle et
+   * `createPostMutation`, exactement comme `mediaAlt`/`allowSoundExtraction`
+   * ci-dessus.
+   */
+  it('relays detectedLanguage to createPostMutation', () => {
+    render(<PostsFeedScreen />);
+
+    capturedOnPublish.current!({
+      content: 'Bonjour tout le monde',
+      type: 'POST',
+      visibility: 'PUBLIC',
+      detectedLanguage: 'fr',
+    });
+
+    expect(mockCreatePostMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ detectedLanguage: 'fr' }),
+      expect.anything(),
+    );
+  });
+
+  /**
+   * Rougit si le relais devient inconditionnel : une mesure absente (texte
+   * trop court, confiance trop faible) ne doit jamais devenir une clé
+   * fabriquée — `detectedLanguage: undefined` n'est pas la même chose que
+   * l'absence pour `CreatePostRequest`.
+   */
+  it('omits detectedLanguage when the composer measured nothing reliable', () => {
+    render(<PostsFeedScreen />);
+
+    capturedOnPublish.current!({
+      content: 'Text only',
+      type: 'POST',
+      visibility: 'PUBLIC',
+    });
+
+    expect(mockCreatePostMutate.mock.calls[0][0]).not.toHaveProperty('detectedLanguage');
+  });
 });

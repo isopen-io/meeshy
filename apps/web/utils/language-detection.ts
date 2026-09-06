@@ -217,6 +217,22 @@ const COMPOSE_MIN_ALPHA = 4;
 const COMPOSE_MIN_ACCURACY = 0.5;
 
 /**
+ * Le cœur de la mesure (on-device, via tinyld), SANS repli — `undefined` dit
+ * « aucune mesure fiable », jamais une supposition. Les deux fonctions
+ * publiques ci-dessous en sont des projections : l'une comble l'absence par
+ * une préférence (messages), l'autre la laisse absente (posts, #5349).
+ */
+function detectRankedComposeLanguage(text: string): string | undefined {
+  const cleaned = (text || '').replace(/https?:\/\/\S+/g, ' ');
+  const alpha = (cleaned.match(/\p{L}/gu) || []).length;
+  if (alpha < COMPOSE_MIN_ALPHA) return undefined;
+  const ranked = detectAll(cleaned);
+  const top = ranked && ranked[0];
+  if (!top || top.accuracy < COMPOSE_MIN_ACCURACY) return undefined;
+  return normalizeLanguageCode(top.lang);
+}
+
+/**
  * Détecte la langue du message composé (on-device, via tinyld) pour fixer
  * `originalLanguage` à l'émission. Repli sur `fallback` (langue annoncée /
  * systemLanguage) si le texte est trop court ou la confiance trop faible.
@@ -225,14 +241,24 @@ const COMPOSE_MIN_ACCURACY = 0.5;
 export function detectComposeLanguage(text: string, fallback: string): string {
   try {
     const safeFallback = normalizeLanguageCode(fallback) ?? fallback;
-    const cleaned = (text || '').replace(/https?:\/\/\S+/g, ' ');
-    const alpha = (cleaned.match(/\p{L}/gu) || []).length;
-    if (alpha < COMPOSE_MIN_ALPHA) return safeFallback;
-    const ranked = detectAll(cleaned);
-    const top = ranked && ranked[0];
-    if (!top || top.accuracy < COMPOSE_MIN_ACCURACY) return safeFallback;
-    return normalizeLanguageCode(top.lang) ?? safeFallback;
+    return detectRankedComposeLanguage(text) ?? safeFallback;
   } catch {
     return normalizeLanguageCode(fallback) ?? fallback;
+  }
+}
+
+/**
+ * Langue MESURÉE sur le texte réellement tapé d'un post — jamais un repli de
+ * préférence d'interface. `undefined` signifie « pas de mesure fiable » et
+ * laisse `PostTranslationService.detectLanguage` (gateway) reprendre la main
+ * côté serveur, plutôt que de lui substituer une supposition qui usurperait
+ * son rang. Distincte d'`originalLanguage` (revendication de l'auteur,
+ * prioritaire) : voir `components/composer/payload.ts` et #5349.
+ */
+export function detectMeasuredLanguage(text: string): string | undefined {
+  try {
+    return detectRankedComposeLanguage(text);
+  } catch {
+    return undefined;
   }
 }
