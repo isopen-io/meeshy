@@ -267,14 +267,57 @@ struct PostSceneMosaic: View {
         // **Une scène cinématique se signale comme une vidéo.** Le glyphe ne
         // se pose que sur ce qui NE joue pas : sur la page en lecture, il
         // recouvrirait le mouvement qu'il annonce.
+        //
+        // Et sur celle qui JOUE, c'est le SON qu'il faut dire — le fil joue
+        // muet par construction, et sans ce signe l'utilisateur voit une scène
+        // bouger sans comprendre pourquoi il n'entend rien.
         .overlay(alignment: .bottomTrailing) {
-            if bouge && !joue && tuile.overflow == 0 { glypheDeLecture }
+            if tuile.overflow == 0 {
+                if joue { indicateurDeSonCoupe(document) }
+                else if bouge { glypheDeLecture }
+            }
         }
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture { onTapScene?(tuile.sceneIndex) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(libelle(tuile, bouge: bouge))
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// **Le son est COUPÉ, et voici pourquoi vous n'entendez rien.**
+    ///
+    /// > « Les scènes cinématiques jouent avec signe audio barré » (constat
+    /// > porteur 2026-09-06).
+    ///
+    /// Un INDICATEUR, pas un contrôle — et la distinction est une décision, pas
+    /// une facilité. `ScenePlayerConfig.locksMute` fige le muet du mode `.card`
+    /// PAR CONSTRUCTION (#4084), et son doc-comment dit que la carte de fil
+    /// « n'expose AUCUN bouton de son (elle n'aurait rien à piloter) ». Un
+    /// bouton monté là-dessus serait le contrôle inerte que
+    /// `MuteButtonExistenceGuardTests` a déjà rejeté deux fois.
+    ///
+    /// Le chemin vers le son existe et il est à un doigt : toucher la scène
+    /// ouvre le plein écran, dont le mode `.reader` ne verrouille pas le muet.
+    ///
+    /// **Il ne paraît que si le document a vraiment quelque chose à couper** —
+    /// `SceneMotion.isAudible`, et non `isCinematic` : une vidéo muette bouge
+    /// sans rien faire entendre, et y poser un haut-parleur barré ferait mentir
+    /// l'indicateur sur l'état qu'il annonce.
+    @ViewBuilder
+    private func indicateurDeSonCoupe(_ document: CanvasV3) -> some View {
+        if SceneMotion.isAudible(document) {
+            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(.black.opacity(0.45)))
+                .padding(8)
+                .allowsHitTesting(false)
+                .accessibilityLabel(Text(String(
+                    localized: "feed.scene.sound.muted",
+                    defaultValue: "Son coupé — ouvrir en plein écran pour l'entendre",
+                    bundle: .main)))
+        }
     }
 
     private var glypheDeLecture: some View {
