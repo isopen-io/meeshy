@@ -408,9 +408,17 @@ export const FEUILLE_DES_GESTES = compacte(
     // panneau s'ouvre au-dessus de la ligne QUI L'A OUVERT, jamais dessus.
     // `.ouvre-bas` (posé par `fil-gestes.ts` quand la ligne est trop proche du
     // haut de la liste pour ouvrir vers le haut) bascule le sens.
+    //
+    // `inset-inline-end`, JAMAIS `right` (défaut trouvé en revue de #5159) :
+    // cette règle ANNULE l'ancrage vertical de l'atome partagé `MENU_DE_LIGNE`
+    // pour son propre positionnement, et un `right:0` littéral y avait
+    // survécu — le panneau pendait du mauvais côté dès que le document passe
+    // `dir="rtl"`, exactement le défaut que `/links` (`liens-feuille.ts`)
+    // avait déjà fermé pour son propre ancrage. Témoin :
+    // `v3-fil-gestes.spec.ts` § « le panneau du menu de ligne, en RTL ».
     '.ligne{position:relative}' +
     '.ligne .actions{position:static}' +
-    '.ligne .actions form{position:absolute;right:0;bottom:100%;margin-bottom:var(--space-2);z-index:2;min-width:12rem;max-width:calc(100vw - 2 * var(--space-4));box-shadow:var(--shadow-sm)}' +
+    '.ligne .actions form{position:absolute;inset-inline-end:0;bottom:100%;margin-bottom:var(--space-2);z-index:2;min-width:12rem;max-width:calc(100vw - 2 * var(--space-4));box-shadow:var(--shadow-sm)}' +
     '.ligne .actions.ouvre-bas form{bottom:auto;top:100%;margin-bottom:0;margin-top:var(--space-2)}' +
     // LE BANDEAU DU CONTEXTE — une ligne À ELLE SEULE au-dessus du champ
     // (`order:-2`, avant l'annonce de pièce) : posé dans le flux du composeur,
