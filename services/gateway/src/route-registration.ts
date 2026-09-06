@@ -287,6 +287,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
       prefix: `${API_PREFIX}/voice`,
       audioTranslateService,
       translationService: deps.translationService,
+      prisma: deps.prisma,
     });
     logger.info(`✓ Voice API routes registered (ZMQ ${zmqClient ? 'connected' : 'unavailable — 503 stub'})`);
 

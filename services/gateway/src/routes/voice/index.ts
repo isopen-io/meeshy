@@ -4,6 +4,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { AudioTranslateService } from '../../services/AudioTranslateService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -42,7 +43,8 @@ function registerVoiceRoutesBody(
   fastify: FastifyInstance,
   audioTranslateService: AudioTranslateService | null,
   translationService: MessageTranslationService | undefined,
-  subRoutePrefix: string
+  subRoutePrefix: string,
+  prisma: PrismaClient
 ): void {
   if (!audioTranslateService) {
     fastify.all('/*', async (_request, reply) => {
@@ -55,7 +57,7 @@ function registerVoiceRoutesBody(
   }
 
   // Register translation and transcription routes
-  registerTranslationRoutes(fastify, audioTranslateService, translationService, subRoutePrefix);
+  registerTranslationRoutes(fastify, audioTranslateService, translationService, subRoutePrefix, prisma);
 
   // Register analysis, feedback, and monitoring routes
   registerAnalysisRoutes(fastify, audioTranslateService, subRoutePrefix);
@@ -84,9 +86,10 @@ function registerVoiceRoutesBody(
 export function registerVoiceRoutes(
   fastify: FastifyInstance,
   audioTranslateService: AudioTranslateService,
-  translationService?: MessageTranslationService
+  translationService: MessageTranslationService | undefined,
+  prisma: PrismaClient
 ): void {
-  registerVoiceRoutesBody(fastify, audioTranslateService, translationService, apiPath('/voice'));
+  registerVoiceRoutesBody(fastify, audioTranslateService, translationService, apiPath('/voice'), prisma);
 }
 
 /**
@@ -98,6 +101,7 @@ export function registerVoiceRoutes(
 export type VoiceRoutesPluginOptions = {
   readonly audioTranslateService: AudioTranslateService | null;
   readonly translationService?: MessageTranslationService;
+  readonly prisma: PrismaClient;
 };
 
 /**
@@ -115,5 +119,5 @@ export async function voiceRoutesPlugin(
   fastify: FastifyInstance,
   opts: VoiceRoutesPluginOptions
 ): Promise<void> {
-  registerVoiceRoutesBody(fastify, opts.audioTranslateService, opts.translationService, '');
+  registerVoiceRoutesBody(fastify, opts.audioTranslateService, opts.translationService, '', opts.prisma);
 }
