@@ -856,6 +856,61 @@ describe('l’écran d’inscription — un seul écran, cinq réponses', () => 
   });
 
   /**
+   * LE REFUS DE SCHÉMA PARLE LA LANGUE DU LECTEUR (#5397).
+   *
+   * Reproduit la charge RÉELLE de staging : un nom d'affichage portant un
+   * chiffre (« Test V3 Native ») fait échouer le `pattern` d'Ajv ET,
+   * puisqu'aucun `displayName` valide n'est vu, les deux branches héritées de
+   * l'`anyOf` (`firstName`, `lastName`) — que l'écran ne sert pourtant plus. Le
+   * message du lecteur ne doit parler QUE du champ qu'il a rempli, dans sa
+   * langue, jamais de la regex ni des branches qui ne le concernent pas.
+   */
+  it('traduit un refus de schéma en phrase de lecteur — jamais la regex ni les branches voisines', async () => {
+    const doc = await refuseAvec(
+      {
+        success: false,
+        error: 'Validation Error',
+        code: 'VALIDATION_ERROR',
+        message:
+          'body/displayName must match pattern "^(?=.*\\p{L})[\\p{L}\\p{M}\\s\'’ʼ.-]+$", body must have required property \'firstName\', body must have required property \'lastName\'',
+        details: [
+          { field: 'displayName', message: 'must match pattern "^(?=.*\\p{L})[\\p{L}\\p{M}\\s\'’ʼ.-]+$"' },
+          { field: 'firstName', message: "must have required property 'firstName'" },
+          { field: 'lastName', message: "must have required property 'lastName'" },
+        ],
+      },
+      400,
+    );
+
+    expect(doc).toContain(
+      '<p class="refus" id="refus-nomAffiche">Le nom ne peut contenir que des lettres, espaces, apostrophes, points et tirets.',
+    );
+    expect(doc).not.toContain('\\p{L}');
+    expect(doc).not.toContain('pattern');
+    expect(doc).not.toContain('firstName');
+    expect(doc).not.toContain('lastName');
+  });
+
+  /** Un champ ou une catégorie de contrainte non couverte retombe sur une phrase générique — jamais le texte d'Ajv. */
+  it('retombe sur une phrase générique quand la contrainte de schéma n’est pas connue', async () => {
+    const doc = await refuseAvec(
+      {
+        success: false,
+        error: 'Validation Error',
+        code: 'VALIDATION_ERROR',
+        message: 'body/phoneCountryCode must NOT have more than 2 characters',
+        details: [{ field: 'phoneCountryCode', message: 'must NOT have more than 2 characters' }],
+      },
+      400,
+    );
+
+    expect(doc).toContain(
+      '<p class="refus" id="refus-telephone">Les informations saisies ne sont pas valides. Vérifiez votre saisie.',
+    );
+    expect(doc).not.toContain('characters');
+  });
+
+  /**
    * UN REFUS SANS CHAMP GARDE SON ALERTE. Désigner un champ au hasard serait
    * pire que n'en désigner aucun — c'est la règle que `vue.ts` porte depuis le
    * premier jour, et elle ne change pas : elle se RESTREINT aux refus que la
