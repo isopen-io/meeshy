@@ -307,7 +307,7 @@ export async function updateUsername(fastify: FastifyInstance) {
           lastName: updatedUser.lastName,
         },
       })
-        .catch((err: unknown) => fastify.log.error({ err }, '[USERNAME_CHANGE] emitUserUpdated failed'));
+        .catch((err: unknown) => logError(fastify.log, '[USERNAME_CHANGE] emitUserUpdated failed', err));
 
       // `username` fait partie de l'identité de frappe mise en cache par
       // StatusHandler (`{ username, displayName }`). L'invalider pour que

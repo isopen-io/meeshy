@@ -6,6 +6,7 @@ import { SuggestionsQuerySchema, MessageIdParamSchema, MyMentionsQuerySchema } f
 import type { MentionSuggestion } from '../services/MentionService.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../services/historyFloor.js';
+import { logError } from '../utils/logger.js';
 
 interface MessageParams {
   messageId: string;
@@ -90,16 +91,11 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       }
 
       // Log détaillé de l'erreur pour debug
-      fastify.log.error({
-        err: error,
-        contextId: request.query.contextId,
-        contextType: request.query.contextType,
-        conversationId: request.query.conversationId,
-        query: request.query.query,
-        userId: (request as UnifiedAuthRequest).authContext.userId,
-        stack: error instanceof Error ? error.stack : undefined,
-        message: error instanceof Error ? error.message : String(error)
-      }, 'Error getting mention suggestions');
+      logError(
+        fastify.log,
+        `Error getting mention suggestions (contextId=${request.query.contextId}, contextType=${request.query.contextType}, conversationId=${request.query.conversationId}, query=${request.query.query}, userId=${(request as UnifiedAuthRequest).authContext.userId})`,
+        error
+      );
 
       return sendInternalError(reply, 'Erreur lors de la récupération des suggestions');
     }
@@ -176,7 +172,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         }
       })));
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error getting message mentions');
+      logError(fastify.log, 'Error getting message mentions', error);
       return sendInternalError(reply, 'Erreur lors de la récupération des mentions');
     }
   });
@@ -230,7 +226,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         }
       })));
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error getting user mentions');
+      logError(fastify.log, 'Error getting user mentions', error);
       return sendInternalError(reply, 'Erreur lors de la récupération des mentions');
     }
   });

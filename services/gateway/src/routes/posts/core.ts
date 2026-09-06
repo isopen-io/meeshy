@@ -49,6 +49,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { logError } from '../../utils/logger.js';
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -451,7 +452,7 @@ export function registerCoreRoutes(
       if (error instanceof MutationResultGone) {
         return sendGone(reply, 'Post already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
       }
-      fastify.log.error(`[POST /posts] Error: ${error}`);
+      logError(fastify.log, '[POST /posts] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -483,7 +484,7 @@ export function registerCoreRoutes(
         request,
       }));
     } catch (error) {
-      fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -563,7 +564,7 @@ export function registerCoreRoutes(
         // correction de frappe — elles n'y sont pas, c'est leur raison d'être.
         declared: parsed.data.mentions,
         onError: (err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] post mention reconcile failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] post mention reconcile failed', err);
         },
       });
 
@@ -577,7 +578,7 @@ export function registerCoreRoutes(
         postId,
         resolved: reconciled,
         onError: (err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] post reference reload failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] post reference reload failed', err);
         },
       });
 
@@ -585,11 +586,11 @@ export function registerCoreRoutes(
         const editHashtags = editedContent ? hashtagService.extractHashtags(editedContent) : [];
         if (editHashtags.length > 0) {
           hashtagService.createPostHashtags(postId, editHashtags).catch((err: unknown) => {
-            fastify.log.error(`[PUT /posts/:postId] hashtag persist failed: ${err}`);
+            logError(fastify.log, '[PUT /posts/:postId] hashtag persist failed', err);
           });
         }
         hashtagService.reconcileRemovedHashtags(postId, editHashtags.map((h) => h.tag)).catch((err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] hashtag reconcile failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] hashtag reconcile failed', err);
         });
       }
 
@@ -646,7 +647,7 @@ export function registerCoreRoutes(
       if (error instanceof Error && (error as { statusCode?: number }).statusCode === 422) {
         return sendBadRequest(reply, error.message, { code: 'INVALID_POST_UPDATE' });
       }
-      fastify.log.error(`[PUT /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[PUT /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -683,7 +684,7 @@ export function registerCoreRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to delete this post', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[DELETE /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[DELETE /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -734,7 +735,7 @@ export function registerCoreRoutes(
 
       return sendSuccess(reply, { requested: true, targetLanguage: parsed.data.targetLanguage });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/translate] Error: ${error}`);
+      logError(fastify.log, '[POST /posts/:postId/translate] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
