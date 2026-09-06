@@ -1568,6 +1568,7 @@
 		E6353FE850515109CE573386 /* LocalizedStringKeyLiteralGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96E59706495A95336CA6B005 /* LocalizedStringKeyLiteralGuardTests.swift */; };
 		E688FC6BF00024E493A875EB /* StoryVisibilityUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E743D541B65151C0D8EE1EA6 /* StoryVisibilityUpdateTests.swift */; };
 		E6902627C844A83221A4239B /* MediaSaveLabelGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35C181B964C489B26FA9B0E1 /* MediaSaveLabelGuardTests.swift */; };
+		E692C6CC7CBA742746D8C57C /* ComposerDocumentSendRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 429816152B68265E9F5A1175 /* ComposerDocumentSendRules.swift */; };
 		E6996D9F8470DD62E2648C33 /* StickerSendPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64B0B8AF379864F058F20DB7 /* StickerSendPipeline.swift */; };
 		E6B90708E2146A618798E830 /* NotificationActionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747D30C3641FE7B1DFBE9EE7 /* NotificationActionHandler.swift */; };
 		E6FA330DD225EF96C55A0BCF /* ForwardPickerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF32E2175A4BE741C369645 /* ForwardPickerViewModel.swift */; };
@@ -2280,6 +2281,7 @@
 		4214A069D03AF4CC558089C8 /* NotificationCallRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCallRoutingTests.swift; sourceTree = "<group>"; };
 		421BDC11BEB8B98291D867DC /* ComposerObjectChipsCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerObjectChipsCopy.swift; sourceTree = "<group>"; };
 		424E5C31EE1E800408098C2C /* ConversationAudioCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioCoordinatorTests.swift; sourceTree = "<group>"; };
+		429816152B68265E9F5A1175 /* ComposerDocumentSendRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerDocumentSendRules.swift; sourceTree = "<group>"; };
 		429BF9F5E551C068635786AB /* StatusRealtimePersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusRealtimePersistenceTests.swift; sourceTree = "<group>"; };
 		42B12F8EA4C69910BF01A0AF /* BackgroundTransitionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTransitionCoordinatorTests.swift; sourceTree = "<group>"; };
 		42BB8424852F43DD94575723 /* MyStoriesTabResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoriesTabResolverTests.swift; sourceTree = "<group>"; };
@@ -3991,6 +3993,7 @@
 				555DAF86D4368F5781C5EF63 /* ComposerDescriptionLayer.swift */,
 				E973848FDCDCB019DCD1D204 /* ComposerDocumentDurablePublisher.swift */,
 				35D7FAE022B6E730B22872E9 /* ComposerDocumentRules.swift */,
+				429816152B68265E9F5A1175 /* ComposerDocumentSendRules.swift */,
 				05CBEFC28FF4BCBA63EE589A /* ComposerDocumentSurface.swift */,
 				39641BA346643C788F8912AD /* ComposerDocumentToolRow.swift */,
 				C517426B90406005648F8DAF /* ComposerFirstView.swift */,
@@ -6423,6 +6426,7 @@
 				1FA9FB9C637102DFE3B09CFF /* ComposerDescriptionLayer.swift in Sources */,
 				E19661E7A1CB1D44B5B6A44D /* ComposerDocumentDurablePublisher.swift in Sources */,
 				10DB18B6D07D76F4AC5B06F4 /* ComposerDocumentRules.swift in Sources */,
+				E692C6CC7CBA742746D8C57C /* ComposerDocumentSendRules.swift in Sources */,
 				B627E5029FE6B83248016716 /* ComposerDocumentSurface.swift in Sources */,
 				9BF2D81C3EBF6DD215812A43 /* ComposerDocumentToolRow.swift in Sources */,
 				F3FCD08FE20FAED4B0D781AC /* ComposerDropResolver.swift in Sources */,
