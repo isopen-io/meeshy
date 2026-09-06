@@ -536,6 +536,25 @@ export const passerelleDeBouchon = async (options?: {
       reponse.end(JSON.stringify({ success: false, error: code, message, ...extra }));
     };
 
+    /**
+     * LES DEUX ENDPOINTS FCM (#5391, § 2.5 de la spécification) — le
+     * protocole REST du SDK `firebase/messaging` que
+     * `lib/realtime/push-abonnement.ts` réécrit à la main, jamais le SDK
+     * lui-même. Sous un chemin LOCAL (`/bouchon-fcm/…`), jamais
+     * `firebaseinstallations.googleapis.com` / `fcmregistrations.
+     * googleapis.com` en dur : un témoin CI n'atteint jamais un service
+     * externe, et le module pointe ces DEUX bases par ses attributs `data-`
+     * (§ 3.4), réécrites vers ce bouchon dans les specs e2e.
+     */
+    if (url.pathname === '/bouchon-fcm/installations' && requete.method === 'POST') {
+      json({ authToken: { token: 'jeton-installation-bouchon', expiresIn: '604800s' }, fid: 'fid-bouchon', name: 'installations/fid-bouchon', refreshToken: 'refresh-bouchon' });
+      return;
+    }
+    if (url.pathname === '/bouchon-fcm/registrations' && requete.method === 'POST') {
+      json({ token: 'fcm-token-bouchon' });
+      return;
+    }
+
     // L'ORDRE est celui des chemins les plus PRÉCIS d'abord : le fil (`/conversations/:id…`) avant
     // le compte (`/conversations` nu), le lien (`/links/:key/members`, `/links/:identifier`) avant
     // le compte (`/links` nu) — comme Fastify les distingue par leur route, pas par un préfixe.

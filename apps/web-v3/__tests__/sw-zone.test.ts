@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { adresseDuFil, adresseDuMessage } from '../lib/api/adresses-du-fil';
 import { SIGNAL_DE_DECONNEXION } from '../lib/sw/signal';
 
 /**
@@ -56,6 +57,10 @@ const fauxCache = (): FauxCache => {
   };
 };
 
+type FausseSubscription = {
+  readonly unsubscribe: jest.Mock<Promise<boolean>, []>;
+};
+
 type Monde = {
   readonly ecouteurs: Ecouteurs;
   readonly caches: {
@@ -68,16 +73,30 @@ type Monde = {
   };
   readonly fetchAppels: string[];
   fetchImpl: (request: unknown) => Promise<unknown>;
+  readonly showNotification: jest.Mock<Promise<void>, [unknown, unknown]>;
+  readonly openWindow: jest.Mock<unknown, [string]>;
+  readonly matchAllRendu: { url: string; focus: jest.Mock<unknown, []> }[];
+  readonly getSubscription: jest.Mock<Promise<FausseSubscription | null>, []>;
 };
 
 const monteLeMonde = (options?: {
   readonly url?: string;
   readonly nomsDeCaches?: readonly string[];
+  /** Les clients fenêtre déjà ouverts, rendus par `clients.matchAll`. */
+  readonly clientsOuverts?: readonly string[];
+  /** La subscription push déjà posée sur CE navigateur — `null` par défaut (aucune). */
+  readonly subscriptionExistante?: FausseSubscription | null;
 }): Monde => {
   const ecouteurs: Ecouteurs = {};
   const ouverts = new Map<string, FauxCache>();
   const supprimes: string[] = [];
   const nomsExistants = [...(options?.nomsDeCaches ?? [])];
+  const showNotification = jest.fn((_titre: unknown, _options: unknown) => Promise.resolve());
+  const openWindow = jest.fn((url: string) => ({ url }));
+  const matchAllRendu = (options?.clientsOuverts ?? []).map((url) => ({ url, focus: jest.fn(() => undefined) }));
+  const getSubscription = jest.fn(() =>
+    Promise.resolve(options?.subscriptionExistante === undefined ? null : options.subscriptionExistante),
+  );
   const monde: Monde = {
     ecouteurs,
     caches: {
@@ -101,15 +120,26 @@ const monteLeMonde = (options?: {
     fetchAppels: [],
     fetchImpl: () =>
       Promise.resolve({ ok: true, clone: () => ({ ok: true }), status: 200 }),
+    showNotification,
+    openWindow,
+    matchAllRendu,
+    getSubscription,
   };
   const self = {
     location: { href: options?.url ?? 'https://staging.meeshy.me/__v3/sw?portees=%2Fl%2F%2C%2Fchats%2C%2Fchat%2F' },
     addEventListener: (type: string, fn: (event: unknown) => unknown) => {
       (ecouteurs[type] ??= []).push(fn);
     },
-    clients: { claim: () => Promise.resolve() },
+    clients: {
+      claim: () => Promise.resolve(),
+      matchAll: () => Promise.resolve(matchAllRendu),
+      openWindow,
+    },
     skipWaiting: () => Promise.resolve(),
-    registration: {},
+    registration: {
+      showNotification,
+      pushManager: { getSubscription },
+    },
   };
   const fetchTrace = (request: unknown): Promise<unknown> => {
     monde.fetchAppels.push(String((request as { url?: string }).url ?? request));
@@ -180,6 +210,41 @@ const dispatchMessage = async (monde: Monde, data: unknown): Promise<void> => {
     });
   }
   await Promise.all(attentes);
+};
+
+/** Un `PushEvent` — `event.data.json()` rend la charge, ou jette si elle est illisible. */
+const dispatchPush = async (monde: Monde, charge: unknown | (() => unknown)): Promise<void> => {
+  const attentes: Promise<unknown>[] = [];
+  for (const fn of monde.ecouteurs['push'] ?? []) {
+    fn({
+      data:
+        typeof charge === 'function'
+          ? { json: charge as () => unknown }
+          : { json: () => charge },
+      waitUntil: (p: Promise<unknown>) => {
+        attentes.push(p);
+      },
+    });
+  }
+  await Promise.all(attentes);
+};
+
+const dispatchNotificationClick = async (
+  monde: Monde,
+  notification: { readonly data?: unknown },
+): Promise<{ readonly fermee: boolean }> => {
+  const attentes: Promise<unknown>[] = [];
+  let fermee = false;
+  for (const fn of monde.ecouteurs['notificationclick'] ?? []) {
+    fn({
+      notification: { ...notification, close: () => (fermee = true) },
+      waitUntil: (p: Promise<unknown>) => {
+        attentes.push(p);
+      },
+    });
+  }
+  await Promise.all(attentes);
+  return { fermee };
 };
 
 describe('le namespace de cache — canal 3 du § 4.4 bis', () => {
@@ -392,5 +457,159 @@ describe('la purge à la déconnexion — le lot que la décision 2 annonçait',
     await dispatchMessage(monde, undefined);
 
     expect(monde.caches.supprimes).toEqual([]);
+  });
+
+  /**
+   * LA PURGE DE L'ABONNEMENT PUSH (#5391) — le signal désabonne aussi le
+   * NAVIGATEUR, en plus de purger les caches (le témoin ci-dessus reste vert :
+   * on AJOUTE au `waitUntil`, on ne remplace pas).
+   */
+  it('le signal désabonne aussi la subscription push de CE navigateur — la purge des caches reste intacte', async () => {
+    const unsubscribe = jest.fn(() => Promise.resolve(true));
+    const monde = monteLeMonde({
+      nomsDeCaches: ['meeshy-v3-sw-__V3_SW_EMPREINTE__'],
+      subscriptionExistante: { unsubscribe },
+    });
+
+    await dispatchMessage(monde, { type: SIGNAL_DE_DECONNEXION });
+
+    expect(monde.getSubscription).toHaveBeenCalledTimes(1);
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(monde.caches.supprimes).toEqual(['meeshy-v3-sw-__V3_SW_EMPREINTE__']);
+  });
+
+  it('sans subscription posée, le signal ne jette rien — best-effort', async () => {
+    const monde = monteLeMonde({ nomsDeCaches: ['meeshy-v3-sw-__V3_SW_EMPREINTE__'], subscriptionExistante: null });
+
+    await expect(dispatchMessage(monde, { type: SIGNAL_DE_DECONNEXION })).resolves.toBeUndefined();
+    expect(monde.getSubscription).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * LE PUSH WEB (#5391) — un événement `push` affiche la notification avec le
+ * corps SERVI, jamais recomposé : la passerelle a déjà résolu le Prisme
+ * côté serveur (§ 2.4 de la spécification), ce worker ne fait que relayer.
+ */
+describe('le push — le corps SERVI, jamais recomposé', () => {
+  it('une charge FCM complète affiche la notification avec le titre et le corps EXACTS, verbatim', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, {
+      notification: { title: 'Amina Diallo', body: 'Bonjour, comment vas-tu ?', icon: '/android-chrome-192x192.png', badge: '/badge-72x72.png' },
+      data: { notificationId: 'notif-1', conversationId: 'conv-1' },
+      fcmOptions: { link: '/conversations/conv-1' },
+    });
+
+    expect(monde.showNotification).toHaveBeenCalledTimes(1);
+    const [titre, options] = monde.showNotification.mock.calls[0] as [string, Record<string, unknown>];
+    expect(titre).toBe('Amina Diallo');
+    expect(options.body).toBe('Bonjour, comment vas-tu ?');
+    expect(options.icon).toBe('/android-chrome-192x192.png');
+    expect(options.badge).toBe('/badge-72x72.png');
+    expect(options.tag).toBe('notif-1');
+  });
+
+  it('une charge SANS bloc `notification` (data-only, silencieuse) ne montre JAMAIS de bannière', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, { data: { type: 'call_cancel', conversationId: 'conv-1' } });
+
+    expect(monde.showNotification).not.toHaveBeenCalled();
+  });
+
+  it('une charge illisible (`json()` qui jette) ne montre rien et ne jette pas', async () => {
+    const monde = monteLeMonde();
+
+    await expect(
+      dispatchPush(monde, () => {
+        throw new Error('JSON invalide');
+      }),
+    ).resolves.toBeUndefined();
+    expect(monde.showNotification).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * LE CLIC — l'adresse portée par la charge, ouverte DANS LA ZONE. `cible` est
+ * calculée au moment du `push` (`cibleDansLaZone`) et voyage dans
+ * `notification.data.cible` — le clic ne la recalcule jamais, il l'ouvre.
+ */
+describe('le clic — l’adresse portée par la charge, ouverte dans la zone', () => {
+  it('une charge `fcmOptions.link` au format legacy ouvre EXACTEMENT adresseDuMessage(adresseDuFil(id), messageId)', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, {
+      notification: { title: 'Réponse', body: 'D’accord !' },
+      fcmOptions: { link: '/conversations/abc123?messageId=m9' },
+    });
+    const cible = (monde.showNotification.mock.calls[0]?.[1] as { data: { cible: string } }).data.cible;
+    expect(cible).toBe(adresseDuMessage(adresseDuFil('abc123'), 'm9'));
+
+    await dispatchNotificationClick(monde, { data: { cible } });
+
+    expect(monde.openWindow).toHaveBeenCalledWith(cible);
+  });
+
+  it('un client fenêtre déjà ouvert sur ce chemin est FOCALISÉ — openWindow n’est pas appelé', async () => {
+    const cible = adresseDuMessage(adresseDuFil('abc123'), 'm9');
+    const monde = monteLeMonde({ clientsOuverts: [`https://staging.meeshy.me${cible}`] });
+
+    const { fermee } = await dispatchNotificationClick(monde, { data: { cible } });
+
+    expect(fermee).toBe(true);
+    expect(monde.matchAllRendu[0]?.focus).toHaveBeenCalledTimes(1);
+    expect(monde.openWindow).not.toHaveBeenCalled();
+  });
+
+  it('un `link` ABSOLU vers un autre hôte retombe sur /notifications — fail-closed', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, {
+      notification: { title: 'x', body: 'y' },
+      fcmOptions: { link: 'https://ailleurs.test/vole-la-session' },
+    });
+    const cible = (monde.showNotification.mock.calls[0]?.[1] as { data: { cible: string } }).data.cible;
+
+    expect(cible).toBe('/notifications');
+  });
+
+  it('un chemin HORS ZONE (ni /conversations/, ni un chemin de zone connu) retombe sur /notifications', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, {
+      notification: { title: 'x', body: 'y' },
+      fcmOptions: { link: '/parametres/facturation' },
+    });
+    const cible = (monde.showNotification.mock.calls[0]?.[1] as { data: { cible: string } }).data.cible;
+
+    expect(cible).toBe('/notifications');
+  });
+
+  it('`data.postId` sans lien ouvre /post/<id>', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, { notification: { title: 'x', body: 'y' }, data: { postId: 'post-9' } });
+    const cible = (monde.showNotification.mock.calls[0]?.[1] as { data: { cible: string } }).data.cible;
+
+    expect(cible).toBe('/post/post-9');
+  });
+
+  it('rien du tout (ni lien, ni conversationId, ni postId) retombe sur /notifications', async () => {
+    const monde = monteLeMonde();
+
+    await dispatchPush(monde, { notification: { title: 'x', body: 'y' } });
+    const cible = (monde.showNotification.mock.calls[0]?.[1] as { data: { cible: string } }).data.cible;
+
+    expect(cible).toBe('/notifications');
+  });
+
+  it('un clic sans cible reconnaissable ferme la notification sans ouvrir ni focaliser', async () => {
+    const monde = monteLeMonde();
+
+    const { fermee } = await dispatchNotificationClick(monde, { data: {} });
+
+    expect(fermee).toBe(true);
+    expect(monde.openWindow).not.toHaveBeenCalled();
   });
 });

@@ -32,6 +32,7 @@ const USER_ID = '68a000000000000000000001';
 
 const EMPTY_COLUMNS = {
   dataProcessingConsentAt: null,
+  analyticsConsentAt: null,
   voiceDataConsentAt: null,
   voiceProfileConsentAt: null,
   voiceCloningEnabledAt: null,
@@ -143,7 +144,7 @@ describe('Un 400 de purpose inconnu dit QUELS purpose existent', () => {
   it('allowedPurposes est servi, dans l’ordre de la hiérarchie', async () => {
     const app = await buildApp();
 
-    const res = await putConsent(app, 'analytics', {
+    const res = await putConsent(app, 'unknown-purpose', {
       granted: true,
       policyVersion: CONSENT_POLICY_VERSION,
     });

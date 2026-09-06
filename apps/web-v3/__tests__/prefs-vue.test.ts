@@ -39,6 +39,7 @@ const ETAT_NOMINAL: EtatDesPrefs = {
   echec: false,
   motif: null,
   tempsReel: null,
+  push: { etat: 'non-abonne', motif: null, deviceId: null, configuration: null },
 };
 
 describe('la vue des réglages de notification', () => {
@@ -171,5 +172,99 @@ describe('la vue des réglages de notification', () => {
     const html = documentDesPrefs(ETAT_NOMINAL);
 
     expect(html).not.toContain('data-participation="prefs"');
+  });
+});
+
+/**
+ * LA RANGÉE « SUR CET APPAREIL » (#5391) — PAS une quatorzième bascule : un
+ * geste `push` distinct, `name="geste" value="push"`, jamais `name="cle"`.
+ */
+describe('la rangée push — /notifications/preferences', () => {
+  it('sert la section « Sur cet appareil » après les six sections existantes', () => {
+    const html = documentDesPrefs(ETAT_NOMINAL);
+
+    const rangDeLaDerniereSection = html.indexOf(`<h2>${SECTIONS_DE_PREFS.at(-1)?.titre}</h2>`);
+    const rangDeLaSectionPush = html.indexOf('<h2>Sur cet appareil</h2>');
+
+    expect(rangDeLaDerniereSection).toBeGreaterThan(-1);
+    expect(rangDeLaSectionPush).toBeGreaterThan(rangDeLaDerniereSection);
+    expect(html).toContain('<form class="bascule-push" method="post">');
+    expect(html).not.toMatch(/bascule-push[^>]*action=/);
+    expect(html).toContain('name="geste" value="push"');
+  });
+
+  it('non abonné : le formulaire poste valeur=true, aria-checked="false"', () => {
+    const html = documentDesPrefs({ ...ETAT_NOMINAL, push: { etat: 'non-abonne', motif: null, deviceId: null, configuration: null } });
+
+    const zone = html.slice(html.indexOf('name="geste" value="push"'), html.indexOf('name="geste" value="push"') + 500);
+    expect(zone).toContain('name="valeur" value="true"');
+    expect(zone).toContain('aria-checked="false"');
+    expect(zone).toContain('Non abonné');
+    expect(zone).not.toContain('disabled');
+  });
+
+  it('abonné : le formulaire poste valeur=false, aria-checked="true", et le deviceId voyage', () => {
+    const html = documentDesPrefs({
+      ...ETAT_NOMINAL,
+      push: { etat: 'abonne', motif: null, deviceId: 'device-42', configuration: null },
+    });
+
+    const zone = html.slice(html.indexOf('name="geste" value="push"'), html.indexOf('name="geste" value="push"') + 500);
+    expect(zone).toContain('name="valeur" value="false"');
+    expect(zone).toContain('aria-checked="true"');
+    expect(zone).toContain('name="deviceId" value="device-42"');
+    expect(zone).toContain('Abonné');
+  });
+
+  it('indisponible : le commutateur est désactivé et le motif explique pourquoi', () => {
+    const html = documentDesPrefs({
+      ...ETAT_NOMINAL,
+      push: { etat: 'indisponible', motif: 'Le service de notifications n’est pas configuré pour ce déploiement.', deviceId: null, configuration: null },
+    });
+
+    const zone = html.slice(html.indexOf('name="geste" value="push"'), html.indexOf('name="geste" value="push"') + 500);
+    expect(zone).toContain('disabled');
+    expect(zone).toContain('Indisponible');
+    expect(html).toContain('Le service de notifications n’est pas configuré pour ce déploiement.');
+  });
+
+  it('porte les champs cachés `abonnement` et `deviceId`, vides au repos', () => {
+    const html = documentDesPrefs(ETAT_NOMINAL);
+
+    expect(html).toContain('name="abonnement" value=""');
+  });
+
+  it('sert les attributs data-firebase-* quand la configuration est fournie, aucun sans elle', () => {
+    const avecConfig = documentDesPrefs({
+      ...ETAT_NOMINAL,
+      tempsReel: { module: 'https://x.test/rt/prefs.abc.js', passerelle: 'https://gate.test' },
+      push: {
+        etat: 'non-abonne',
+        motif: null,
+        deviceId: null,
+        configuration: {
+          apiKey: 'AIza-test',
+          projectId: 'meeshy-test',
+          appId: '1:123:web:abc',
+          vapid: 'BExxx',
+          baseInstallations: 'https://firebaseinstallations.googleapis.com',
+          baseRegistrations: 'https://fcmregistrations.googleapis.com',
+        },
+      },
+    });
+    const sansConfig = documentDesPrefs(ETAT_NOMINAL);
+
+    expect(avecConfig).toContain('data-firebase-api-key="AIza-test"');
+    expect(avecConfig).toContain('data-firebase-project-id="meeshy-test"');
+    expect(avecConfig).toContain('data-firebase-vapid="BExxx"');
+    expect(sansConfig).not.toContain('data-firebase-api-key');
+  });
+
+  it('l’avis nomme le geste push distinctement de l’abonnement et du désabonnement', () => {
+    const abonne = documentDesPrefs({ ...ETAT_NOMINAL, regleAppliquee: 'push-abonne' });
+    const desabonne = documentDesPrefs({ ...ETAT_NOMINAL, regleAppliquee: 'push-desabonne' });
+
+    expect(abonne).toContain('abonnement activé');
+    expect(desabonne).toContain('abonnement retiré');
   });
 });
