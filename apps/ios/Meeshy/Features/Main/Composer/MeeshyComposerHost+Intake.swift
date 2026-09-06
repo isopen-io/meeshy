@@ -842,6 +842,55 @@ extension MeeshyComposerHost {
     ///
     /// `medias` vide ⇒ rien, pas même la consommation du drapeau : une
     /// ingestion qui n'a rien produit ne doit pas déclarer que le rail a servi.
+    /// **Le fichier de la graine rejoint la voie DOCUMENT — sans être posé une
+    /// seconde fois sur le canvas** (#5409).
+    ///
+    /// La graine a déjà fait son travail à la construction du ViewModel : son
+    /// objet est sur la scène, et l'auteur le voit. Ce qui manquait est
+    /// ailleurs — dans `documentLocalMedia`, la liste que
+    /// `enqueuePostMedia(sourceMediaURLs:)` téléverse. Sans elle, publier par la
+    /// voie document emportait un `storyEffects` qui référence un chemin local,
+    /// et le média n'arrivait nulle part.
+    ///
+    /// ## Les trois écritures, et pourquoi aucune n'est optionnelle
+    ///
+    /// - `mediaRoleByURL` — c'est le GATE D'IDEMPOTENCE de `syncPostMediaIntoSlides`
+    ///   (`mediaRoleByURL[url] == nil`). Le poser AVANT l'entrée dans la liste
+    ///   est ce qui empêche la mécanique de placement de reposer sur le canvas
+    ///   un média qui y est déjà : sans lui, la scène porterait l'objet EN
+    ///   DOUBLE, et le second par-dessus le premier.
+    /// - `slideIdByMediaURL` — l'index des FONDATIONS, que `ComposerHeaderTiles`
+    ///   lit pour décider qui gagne une tuile. Un fond en a une ; un son n'en a
+    ///   pas, et c'est `Plan.foundsScene` qui tranche.
+    /// - `documentMediaObjectIdBySource` — le pont `URL source → objet de
+    ///   canvas`, dont dépendent les légendes, les alternatives et
+    ///   `mediaObjectIds`. La vidéo nomme son objet ; l'image ne le peut pas
+    ///   (son identité naît dans `init(seeding:)`), alors on la RELIT sur la
+    ///   slide plutôt que de l'inventer.
+    ///
+    /// L'ordre est load-bearing : les trois cartes sont posées AVANT l'append,
+    /// parce que `documentLocalMedia` déclenche `syncPostMediaIntoSlides` par
+    /// `adaptiveOnChange` — écrire la liste d'abord ferait courir la mécanique
+    /// sur des cartes vides.
+    func ingestSeedIntoDocumentIfNeeded() {
+        guard !seedIngestedIntoDocument,
+              let plan = ComposerSeedIngestion.plan(for: mediaSeed) else { return }
+        seedIngestedIntoDocument = true
+
+        mediaRoleByURL[plan.media.url] = plan.foundsScene ? .background : .foreground
+        if plan.foundsScene {
+            slideIdByMediaURL[plan.media.url] = viewModel.currentSlide.id
+        }
+        // L'objet que la graine NOMME, sinon celui qu'elle a posé en fond — et
+        // rien du tout si elle n'a rien posé : une carte qui pointerait un objet
+        // inexistant ferait voyager des légendes vers un identifiant mort.
+        if let objectId = plan.objectId
+            ?? viewModel.currentSlide.effects.resolvedBackgroundMedia?.id {
+            documentMediaObjectIdBySource[plan.media.url] = objectId
+        }
+        documentLocalMedia.append(plan.media)
+    }
+
     func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
         guard !medias.isEmpty else { return }
         consumeRailPosing(medias.map(\.url))
