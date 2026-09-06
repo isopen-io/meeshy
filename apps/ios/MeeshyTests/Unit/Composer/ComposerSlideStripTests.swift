@@ -30,8 +30,29 @@ final class ComposerSlideStripTests: XCTestCase {
 
     /// **Le libellé porte le RANG et le TOTAL.** « Slide 2 » seul laisserait
     /// VoiceOver sans le compte — l'information même qui manquait à l'œil.
+    ///
+    /// Le témoin éprouve les DEUX NOMBRES ET LEUR ORDRE, jamais la langue :
+    /// `libelle` traverse le catalogue, donc son texte suit la locale du
+    /// simulateur. Épingler « Slide 2 sur 3 » ne passait que tant que la clé
+    /// était ABSENTE du catalogue — le `defaultValue` français sortait alors
+    /// pour tout le monde, y compris sur un runner anglophone. Le jour où la
+    /// clé a reçu ses sept traductions (leçon 542), l'assertion est tombée sur
+    /// « Slide 2 of 3 » : elle mesurait la lacune de traduction, pas le
+    /// libellé.
+    ///
+    /// L'ordre compte autant que la présence : `composer.slide.strip.position`
+    /// passe par `String(format:)` avec `%1$d`/`%2$d`, et une traduction qui
+    /// perdrait ses ordinaux annoncerait « la slide 3 sur 2 ».
     func test_leLibelle_diteRangEtTotal() {
-        XCTAssertEqual(ComposerSlideStrip.libelle(index: 1, total: 3), "Slide 2 sur 3")
-        XCTAssertEqual(ComposerSlideStrip.libelle(index: 0, total: 2), "Slide 1 sur 2")
+        let libelle = ComposerSlideStrip.libelle(index: 1, total: 3)
+        guard let rang = libelle.range(of: "2"), let total = libelle.range(of: "3") else {
+            return XCTFail("le libellé ne porte pas ses deux nombres : \(libelle)")
+        }
+        XCTAssertTrue(rang.lowerBound < total.lowerBound,
+                      "le RANG doit précéder le TOTAL, sans quoi « 3 sur 2 » : \(libelle)")
+
+        let premier = ComposerSlideStrip.libelle(index: 0, total: 2)
+        XCTAssertTrue(premier.contains("1") && premier.contains("2"),
+                      "le libellé de la première slide doit porter rang ET total : \(premier)")
     }
 }
