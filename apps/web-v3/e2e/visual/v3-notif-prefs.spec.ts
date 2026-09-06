@@ -461,6 +461,49 @@ test.describe('la rangée push — /notifications/preferences', () => {
       await contexte.close();
     });
 
+    /**
+     * LE CRITÈRE DE FIN, EN ENTIER (#5391) — « l'abonnement se pose et se
+     * RETIRE depuis /notifications/preferences SANS JavaScript (POST) ». Ce
+     * témoin coupe le JavaScript du navigateur : ce qui reste est un
+     * `<form method="post">` et le Post/Redirect/Get de la porte. L'autorité
+     * finale n'est pas le document rendu mais ce que la PASSERELLE a gardé —
+     * l'abonnement est posé par la route RÉELLE (`POST /users/register-
+     * device-token`), puis relu après le geste.
+     */
+    test('SANS JavaScript, le retrait passe par un POST — et la passerelle perd le token de CET appareil', async ({ browser }) => {
+      const contexte = await browser.newContext({ viewport: { width: 390, height: 844 }, javaScriptEnabled: false });
+      await contexte.addCookies([
+        { name: 'meeshy_session', value: 'sonde', url: v3AvecFirebase.base },
+        { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3AvecFirebase.base },
+        { name: 'meeshy_v3_push_appareil', value: 'appareil-sans-js', url: v3AvecFirebase.base },
+      ]);
+
+      const pose = await contexte.request.post(`${passerelleAvecFirebase.base}/api/v1/users/register-device-token`, {
+        headers: { authorization: `Bearer ${JETON_DU_MEMBRE}`, 'content-type': 'application/json' },
+        data: { token: 'fcm-token-sans-js', type: 'fcm', platform: 'web', deviceId: 'appareil-sans-js', deviceName: 'Web v3' },
+      });
+      expect(pose.ok()).toBe(true);
+
+      const page = await contexte.newPage();
+      await page.goto(`${v3AvecFirebase.base}/notifications/preferences`);
+      const commutateur = page.locator('form.bascule-push button[role="switch"]');
+      await expect(commutateur).toHaveAttribute('aria-checked', 'true');
+
+      await commutateur.click();
+      await page.waitForURL(/regle=push-desabonne/);
+
+      await expect(page.locator('form.bascule-push button[role="switch"]')).toHaveAttribute('aria-checked', 'false');
+      await expect(page.locator('.avis')).toContainText('abonnement retiré');
+
+      const liste = await contexte.request.get(`${passerelleAvecFirebase.base}/api/v1/users/me/devices`, {
+        headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+      });
+      const corps = (await liste.json()) as { readonly data: readonly { readonly deviceId?: string }[] };
+      expect(corps.data.some((appareil) => appareil.deviceId === 'appareil-sans-js')).toBe(false);
+
+      await contexte.close();
+    });
+
     test('captures 390×844 de la rangée push, clair et sombre', async ({ browser }) => {
       const dossier = process.env.RENDUS_DIR ?? join(RACINE_V3, '..', '..', '.cache', 'web-v3-workflow', 'rendus');
       mkdirSync(dossier, { recursive: true });
