@@ -339,6 +339,17 @@ jobs:
       - name: dev.sh compose targets guard
         run: node scripts/check-dev-sh-compose-targets.mjs --self-test && node scripts/check-dev-sh-compose-targets.mjs
 
+      # #4553 — `services/gateway/prebuilds` était un lien symbolique SUIVI par
+      # git dont la cible était un chemin absolu posé sur la machine d'une
+      # personne (`/Users/<login>/…`). Mesuré : `node-gyp-build` résout en
+      # réalité le binaire natif depuis `node_modules/@signalapp/libsignal-client/prebuilds/`,
+      # que le paquet livre lui-même — le lien n'a jamais été consulté, et son
+      # commentaire prescrivait un geste qu'aucun déploiement ne tient. La
+      # garde couvre TOUT lien suivi du dépôt, pas seulement ce cas : une cible
+      # absolue, ou une cible relative qui ne résout pas depuis la racine.
+      - name: Tracked symlinks guard
+        run: node scripts/check-tracked-symlinks.mjs --self-test && node scripts/check-tracked-symlinks.mjs
+
       # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
       # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
       # les deux listes ne prouverait rien, deux copies coïncidant toujours le
