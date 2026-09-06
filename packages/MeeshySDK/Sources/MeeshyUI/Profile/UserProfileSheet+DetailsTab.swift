@@ -126,7 +126,7 @@ extension UserProfileSheet {
 
     private var statsSection: some View {
         profileSection(
-            title: String(localized: "profile.section.stats", defaultValue: "Statistiques", bundle: .module),
+            title: String(localized: "profile.section.stats", defaultValue: "STATISTIQUES", bundle: .module),
             icon: "chart.bar.fill"
         ) {
             compactStatsBand

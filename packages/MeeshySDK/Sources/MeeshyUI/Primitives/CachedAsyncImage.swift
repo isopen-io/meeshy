@@ -90,7 +90,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                                 Image(systemName: "arrow.clockwise.circle.fill")
                                     .font(.system(size: 22, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.7))
-                                Text(String(localized: "common.retry", defaultValue: "Retry", bundle: .module))
+                                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(.white.opacity(0.5))
                             }
