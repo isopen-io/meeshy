@@ -86,13 +86,27 @@ final class ComposerAtelierHeaderTests: XCTestCase {
     /// et n'occupe l'écran que quand on l'écrit. Sans ce témoin, la remettre
     /// dans le `body` reprendrait en silence la place que la scène centrée
     /// réclame.
+    /// **Lue sur l'UNITÉ, plus sur le `body`** (2026-09-06).
+    ///
+    /// Les deux zones d'écriture sont sorties du `body` le 2026-09-04 vers
+    /// `textEditingZones` — et pour une raison qui interdit de les y ramener :
+    /// le meuble passait à 1209 lignes contre un plafond DUR de 1200, et la
+    /// directive du 2026-08-28 dit d'extraire AVANT d'ajouter. La garde
+    /// cherchait toujours dans le `body` et rougissait sur son ancrage.
+    ///
+    /// > L'invariant — « la description s'ouvre en ZONE BASSE, la scène
+    /// > remontant au-dessus » — ne dit rien de la PROPRIÉTÉ qui la monte. Le
+    /// > borner à une propriété le faisait tomber au premier découpage, et le
+    /// > découpage est ici une OBLIGATION du budget de fichier : cette garde
+    /// > était donc condamnée à rougir tôt ou tard.
+    ///
+    /// L'assertion négative reste sûre sur l'unité : elle interdit une forme
+    /// précise (`mountedSurface == .scene { sceneDescriptionSection }`), pas un
+    /// mot isolé qu'un voisin pourrait porter légitimement.
     func test_laDescription_neVitPlusSousLaSurface() throws {
         let code = try host()
-        guard let corps = declarationBody(startingAt: "var body: some View", in: code) else {
-            return XCTFail("Le `body` du meuble est introuvable")
-        }
-        let compacte = compact(corps)
-        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui du body.")
+        let compacte = compact(code)
+        XCTAssertTrue(compacte.contains("socle"), "L'unité lue n'est pas celle du meuble — la garde ne mesurerait RIEN.")
         XCTAssertFalse(compacte.contains("mountedSurface==.scene{sceneDescriptionSection}"),
                        "La description est revenue occuper le bas en permanence.")
         // **RETOURNÉ au #4361.** Elle s'ouvrait en COUCHE par-dessus tout ; elle

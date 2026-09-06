@@ -426,13 +426,25 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// plus utilisée. La condition doit donc porter sur la PROPRIÉTÉ DU CHROME,
     /// et sur rien d'autre.
     func test_theSocleYieldsToTheAtelier_andNeverToTheDoor() throws {
+        // **`composerStack`, et non `body`** (2026-09-06). Le `body` du meuble
+        // ne monte plus le socle : il délègue à `composerStack`, qui l'assemble.
+        // La garde lisait donc un bloc où « socle » n'apparaît pas et rougissait
+        // sur son propre ancrage — en annonçant qu'elle « ne mesurerait RIEN »,
+        // ce qui était exact et ne disait rien du produit.
+        //
+        // Les deux assertions NÉGATIVES ci-dessous (`if profile`, `if origin`)
+        // sont la raison pour laquelle ce témoin vise un BLOC et non l'unité :
+        // sur toute l'unité elles rencontreraient des conditions légitimes
+        // portant sur le profil ou l'origine, et interdiraient ce que la loi 5
+        // n'interdit pas. Une garde négative doit être bornée à l'endroit où sa
+        // règle s'applique.
         let code = try hostCode()
-        guard let bodyBlock = declarationBody(startingAt: "var body: some View", in: code) else {
-            return XCTFail("Le `body` du host est introuvable — la garde doit être re-pointée")
+        guard let bodyBlock = declarationBody(startingAt: "var composerStack: some View", in: code) else {
+            return XCTFail("`composerStack` est introuvable — le meuble a changé de forme, la garde doit être re-pointée")
         }
         let compacte = compact(bodyBlock)
 
-        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
+        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui qui monte le socle — la garde ne mesurerait RIEN")
         XCTAssertTrue(
             compacte.contains(compact("if !chromeOwner.assembles(.publish)")),
             "Le socle doit céder à l'atelier par la PROPRIÉTÉ DU CHROME — sans quoi deux barres de publication coexistent"
