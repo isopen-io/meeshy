@@ -364,6 +364,36 @@ describe('POST /login/2fa — success', () => {
     await app.close();
   });
 
+  it('sert `usedBackupCode` dans le corps SÉRIALISÉ — l\'écran de vérification en dépend pour avertir du code de secours consommé (#4458)', async () => {
+    const authService = makeAuthService();
+    authService.completeAuthWith2FA = jest.fn<any>().mockResolvedValue({
+      user: mockUser,
+      sessionToken: 'session-token',
+      session: mockSession,
+      requires2FA: false,
+      usedBackupCode: true,
+    });
+    const { app } = await buildApp({ authService });
+    const res = await app.inject({
+      method: 'POST', url: '/login/2fa',
+      payload: { twoFactorToken: 'tok', code: 'ABCD1234' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.usedBackupCode).toBe(true);
+    await app.close();
+  });
+
+  it('sert `usedBackupCode: false` quand le second facteur a été validé par TOTP', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/login/2fa',
+      payload: { twoFactorToken: 'tok', code: '123456' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.usedBackupCode).toBe(false);
+    await app.close();
+  });
+
   it('NOMME lui aussi la session dans le jeton — la seconde porte n\'émet pas un jeton plus pauvre (#4264)', async () => {
     // La 2FA est le second des CINQ sites d'émission. Un site oublié rouvre
     // toute la garde : il suffit d'entrer par lui pour obtenir un jeton
