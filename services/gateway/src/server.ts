@@ -378,7 +378,6 @@ All endpoints require JWT authentication via Bearer token, unless otherwise spec
 
 ## Rate Limits
 - Global: 300 requests/minute per IP
-- Messages: 20 messages/minute per user
 - Authentication: 5 attempts/15 minutes
 
 ## API Versioning
