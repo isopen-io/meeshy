@@ -170,11 +170,24 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     // MARK: - 3. repostOfId descend jusqu'à la publication
 
     func test_repostOfId_travelsAllTheWayToPublication_neverHardcodedNil() throws {
-        let viewer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        // **La republication est passée au COMPOSER** (2026-09-06). Le geste
+        // partait de `StoryViewerView`, qui posait `repostOfId: wrapper.story.id`
+        // au moment de publier ; il passe désormais par `StoryRepublishComposer`,
+        // qui porte le même id sous le nom de sa propre source
+        // (`repostOfId: source.story.id`). L'invariant n'a pas bougé d'un pouce —
+        // la publication d'une republication porte l'id de l'original — mais le
+        // site qui l'honore a changé, et la garde lisait l'ancien.
+        //
+        // > Une garde qui nomme un FICHIER mesure une géographie, pas une règle.
+        // > Celle-ci nomme désormais le site qui DÉCIDE, et son message dit quoi
+        // > chercher si le geste déménage encore.
+        let composer = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift"))
         XCTAssertTrue(
-            viewer.contains("repostOfId: wrapper.story.id"),
-            "La publication de la republication doit porter l'id de l'original."
+            composer.contains("repostOfId: source.story.id"),
+            "La publication de la republication doit porter l'id de l'original. Si ce site n'est plus "
+                + "celui qui republie, chercher qui pose `repostOfId` sur le chemin de la scène — jamais "
+                + "retirer cette garde : c'est elle qui a attrapé les republications orphelines."
         )
 
         let viewModel = AppSourceGuard.stripComments(
