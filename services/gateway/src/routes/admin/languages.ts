@@ -290,7 +290,6 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       const period = query.period || '7d';
       const language = query.language; // Langue spécifique (optionnel)
 
-      const now = new Date();
       let days = 7;
 
       switch (period) {

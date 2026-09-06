@@ -248,7 +248,6 @@ export class AudioTranslateService extends EventEmitter {
     }
   ): Promise<TranscriptionResult> {
     const messageId = options.messageId || randomUUID();
-    const attachmentId = options.attachmentId || randomUUID();
 
     // Valider qu'on a soit audioPath soit audioBase64
     if (!options.audioPath && !options.audioBase64) {

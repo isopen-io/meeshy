@@ -5026,9 +5026,6 @@ export class CallEventsHandler {
       }
 
       // Créer une notification pour chaque participant qui n'a pas répondu
-      const callerName = callSession.initiator.displayName || callSession.initiator.username;
-      const callerAvatar = callSession.initiator.avatar || undefined;
-
       // Audit P2-GW-2 — derive callType from metadata.type (set by
       // initiateCall) instead of hardcoding 'video'. Misclassified
       // notifications confuse users about what they actually missed.

@@ -58,7 +58,7 @@ describe('MediaService.relativePathFromUrl — ce que la BASE porte (#4324)', ()
 });
 
 describe('MediaService.relativePathFromUrl', () => {
-  const service = new MediaService('/tmp/uploads', '');
+  const service = new MediaService('/tmp/uploads');
 
   it('extracts the relative path from a relative fileUrl', () => {
     const result = service.relativePathFromUrl('/api/v1/attachments/file/2026%2F05%2Fuser%2Ffile.jpg');
@@ -103,7 +103,7 @@ describe('MediaService.duplicateMedia', () => {
 
   beforeEach(async () => {
     tmpDir = await createTempUploadDir();
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {
@@ -189,7 +189,7 @@ describe('MediaService.deleteMedia', () => {
 
   beforeEach(async () => {
     tmpDir = await createTempUploadDir();
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {
@@ -229,7 +229,7 @@ describe('MediaService.duplicateMedia — EEXIST retry loop', () => {
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'meeshy-media-test-'));
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {
@@ -259,7 +259,7 @@ describe('MediaService.planDuplicate', () => {
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'meeshy-plan-test-'));
-    service = new MediaService(tmpDir, '');
+    service = new MediaService(tmpDir);
   });
 
   afterEach(async () => {

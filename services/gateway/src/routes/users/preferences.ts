@@ -118,7 +118,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         recentConversations,
         totalCommunities,
         recentCommunities,
-        totalMessages,
         messagesThisWeek,
         totalLinks,
         translationsToday
@@ -237,12 +236,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           },
           orderBy: { updatedAt: 'desc' },
           take: 5
-        }),
-        fastify.prisma.message.count({
-          where: {
-            sender: { userId },
-            deletedAt: null
-          }
         }),
         fastify.prisma.message.count({
           where: {

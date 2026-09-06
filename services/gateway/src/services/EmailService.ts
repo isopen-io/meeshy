@@ -720,7 +720,7 @@ export class EmailService {
       data.html = data.html.replace('</body>', `${pixel}\n</body>`);
     }
 
-    const { to, subject, html, text } = data;
+    const { to } = data;
 
     if (this.providers.length === 0) {
       logger.warn(`[EmailService] ❌ No providers configured - email not sent to to=${to}`);

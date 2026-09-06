@@ -552,7 +552,6 @@ export function registerConversationAnalysisRoute(
     try {
       const authRequest = request as UnifiedAuthRequest;
       const { id } = request.params;
-      const userId = authRequest.authContext.userId;
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {

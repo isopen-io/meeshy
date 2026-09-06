@@ -31,18 +31,6 @@ interface TranslateRequest {
   conversationId?: string;
 }
 
-interface TranslationResult {
-  translated_text: string;
-  source_language: string;
-  target_language: string;
-  original_text: string;
-  model_used: string;
-  confidence: number;
-  processing_time: number;
-  from_cache: boolean;
-  cache_key?: string;
-}
-
 // Fonction pour prédire le type de modèle selon la taille du texte
 function getPredictedModelType(textLength: number): 'basic' | 'medium' | 'premium' {
   if (textLength < 20) return 'basic';
@@ -248,22 +236,6 @@ const detectLanguageResponseSchema = {
     }
   }
 } as const;
-
-/**
- * OpenAPI schema for E2EE translation error
- */
-const e2eeErrorResponseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', example: false },
-    error: { type: 'string', example: 'E2EE_NOT_TRANSLATABLE' },
-    message: {
-      type: 'string',
-      example: 'End-to-end encrypted messages cannot be translated by the server'
-    }
-  }
-} as const;
-
 
 export async function translationRoutes(fastify: FastifyInstance) {
   // Récupérer le service de traduction depuis les options

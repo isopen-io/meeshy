@@ -27,7 +27,6 @@ export class RedisCacheStore implements CacheStore {
   private redis: Redis | null = null;
   private memoryCache: Map<string, MemoryCacheEntry> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
-  private redisConnected = false;
   private circuitBreaker = CircuitBreakerFactory.createRedisBreaker();
 
   constructor(redisUrl?: string) {
@@ -56,13 +55,8 @@ export class RedisCacheStore implements CacheStore {
         enableOfflineQueue: false,
       });
 
-      this.redis.on('connect', () => {
-        this.redisConnected = true;
-      });
-
       this.redis.on('ready', () => {
         logger.info('Redis ready');
-        this.redisConnected = true;
       });
 
       this.redis.on('error', (error) => {
@@ -70,25 +64,14 @@ export class RedisCacheStore implements CacheStore {
         if (!suppressedErrors.some(code => error.message.includes(code))) {
           logger.warn('Redis error', { error: error.message });
         }
-        this.redisConnected = false;
-      });
-
-      this.redis.on('close', () => {
-        this.redisConnected = false;
-      });
-
-      this.redis.on('end', () => {
-        this.redisConnected = false;
       });
 
       this.redis.connect().catch(() => {
         logger.warn('Redis connection failed, using memory cache');
-        this.redisConnected = false;
       });
     } catch {
       logger.warn('Redis initialization failed, using memory cache');
       this.redis = null;
-      this.redisConnected = false;
     }
   }
 

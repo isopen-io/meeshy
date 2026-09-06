@@ -5899,104 +5899,6 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 51. _resolveMentionUserIds
-  // -------------------------------------------------------------------------
-
-  describe('_resolveMentionUserIds', () => {
-    it('returns empty array for empty input', async () => {
-      const result = await (manager as any)._resolveMentionUserIds([]);
-      expect(result).toEqual([]);
-    });
-
-    it('delegates to the canonical resolveUsernamesToIds (SSOT) and forwards its ids', async () => {
-      // Case-insensitive resolution against case-preserved usernames — the actual
-      // bug: MongoDB ignores `mode: 'insensitive'` with `in`, so a lowercased
-      // `in` list silently dropped mixed-case mentions — is locked in
-      // resolveUsernamesToIds' own unmocked unit test. Here we assert the manager
-      // delegates to that SSOT and forwards the resolved ids verbatim.
-      mockResolveUsernamesToIds.mockResolvedValue(['user-alice', 'user-bob']);
-      const result = await (manager as any)._resolveMentionUserIds(['alice', 'bob']);
-      expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['alice', 'bob']);
-      expect(result).toEqual(['user-alice', 'user-bob']);
-    });
-
-    it('returns empty array on DB error', async () => {
-      mockResolveUsernamesToIds.mockRejectedValue(new Error('DB fail'));
-      const result = await (manager as any)._resolveMentionUserIds(['alice']);
-      expect(result).toEqual([]);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // 52. _notifyAgent
-  // -------------------------------------------------------------------------
-
-  describe('_notifyAgent', () => {
-    it('does nothing when agentClient is null', () => {
-      (manager as any).agentClient = null;
-      expect(() => (manager as any)._notifyAgent({
-        id: 'msg-1', conversationId: 'conv-1', senderId: 'sender-1',
-        content: 'Hello', originalLanguage: 'fr', createdAt: new Date(),
-      })).not.toThrow();
-    });
-
-    it('does nothing when senderId is null', () => {
-      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
-      (manager as any).agentClient = fakeClient;
-      (manager as any)._notifyAgent({
-        id: 'msg-1', conversationId: 'conv-1', senderId: null,
-        content: 'Hello', originalLanguage: 'fr', createdAt: new Date(),
-      });
-      expect(fakeClient.sendEvent).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when content is null', () => {
-      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
-      (manager as any).agentClient = fakeClient;
-      (manager as any)._notifyAgent({
-        id: 'msg-1', conversationId: 'conv-1', senderId: 'sender-1',
-        content: null, originalLanguage: 'fr', createdAt: new Date(),
-      });
-      expect(fakeClient.sendEvent).not.toHaveBeenCalled();
-    });
-
-    it('calls agentClient.sendEvent with correct payload', async () => {
-      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
-      (manager as any).agentClient = fakeClient;
-      const createdAt = new Date('2026-01-01T00:00:00.000Z');
-      (manager as any)._notifyAgent({
-        id: 'msg-n1', conversationId: 'conv-n1', senderId: 'sender-n1',
-        senderDisplayName: 'Alice', senderUsername: 'alice',
-        content: 'Hello agent', originalLanguage: 'fr',
-        replyToId: null, mentionedUserIds: ['user-x'],
-        createdAt,
-      });
-      await new Promise(r => setImmediate(r));
-      expect(fakeClient.sendEvent).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'agent:new-message',
-        conversationId: 'conv-n1',
-        messageId: 'msg-n1',
-        senderId: 'sender-n1',
-        content: 'Hello agent',
-        originalLanguage: 'fr',
-        mentionedUserIds: ['user-x'],
-        timestamp: createdAt.getTime(),
-      }));
-    });
-
-    it('logs warning when sendEvent rejects (non-blocking)', async () => {
-      const fakeClient = { sendEvent: jest.fn().mockRejectedValue(new Error('agent down')) };
-      (manager as any).agentClient = fakeClient;
-      expect(() => (manager as any)._notifyAgent({
-        id: 'msg-err', conversationId: 'conv-err', senderId: 'sender-1',
-        content: 'Hi', originalLanguage: 'fr', createdAt: new Date(),
-      })).not.toThrow();
-      await new Promise(r => setImmediate(r));
-      // Error is swallowed — no re-throw
-    });
-  });
-
-  // -------------------------------------------------------------------------
   // 53. _handleTranslationRequest - direct call unauthenticated (covers 801-802)
   // -------------------------------------------------------------------------
 
@@ -7830,27 +7732,6 @@ describe('MeeshySocketIOManager', () => {
       // participant.findUnique should NOT have been called (senderId is null)
       // And no notification should be created
       expect(mockNotificationServiceInstance.createReactionNotification).not.toHaveBeenCalled();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // 95. _notifyAgent - originalLanguage null fallback (line 2031)
-  // -------------------------------------------------------------------------
-
-  describe('_notifyAgent - originalLanguage null fallback', () => {
-    it('uses "fr" when originalLanguage is null', async () => {
-      const fakeClient = { sendEvent: jest.fn().mockResolvedValue(undefined) };
-      (manager as any).agentClient = fakeClient;
-      const createdAt = new Date('2026-01-01');
-      (manager as any)._notifyAgent({
-        id: 'msg-orig-null', conversationId: 'conv-orig-null', senderId: 'sender-orig-null',
-        content: 'Hello', originalLanguage: null,  // triggers ?? 'fr'
-        createdAt,
-      });
-      await new Promise(r => setImmediate(r));
-      expect(fakeClient.sendEvent).toHaveBeenCalledWith(expect.objectContaining({
-        originalLanguage: 'fr',
-      }));
     });
   });
 

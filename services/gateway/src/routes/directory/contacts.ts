@@ -25,8 +25,6 @@ export const LIMITE_MAX_CONTACTS = 100;
 const LIMITE_DEFAUT_CONTACTS = 50;
 
 const VALID_FILTERS: DirectoryFilter[] = ['all', 'meeshy', 'invitable'];
-/** Tolérance d'horloge cliente pour `syncStartedAt` — au-delà, 400. */
-const TOLERANCE_HORLOGE_MS = 5_000;
 
 function filtre(valeur: unknown): DirectoryFilter {
   return VALID_FILTERS.includes(valeur as DirectoryFilter) ? (valeur as DirectoryFilter) : 'all';

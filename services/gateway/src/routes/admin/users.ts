@@ -333,7 +333,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       // Reinitialiser le mot de passe
-      const updatedUser = await userManagementService.resetPassword(
+      await userManagementService.resetPassword(
         request.params.userId,
         validatedData as ResetPasswordDTO,
         authContext.registeredUser!.id

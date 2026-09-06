@@ -135,11 +135,10 @@ export class MessageReadStatusService {
   private static recentActionCache = new Map<string, number>();
 
   private static readonly DEDUP_TTL_MS = 2000;
-  private static readonly dedupCleanupInterval = (() => {
+  static {
     const handle = setInterval(() => MessageReadStatusService.cleanupDedupCache(), 30_000);
     handle.unref?.();
-    return handle;
-  })();
+  }
 
   /** La consommation des médias vit dans son module (#4605) ; ce service la RELAIE. */
   private readonly media: MessageMediaConsumptionService;

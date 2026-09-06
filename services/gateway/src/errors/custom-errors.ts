@@ -3,10 +3,6 @@
  * Fournit des codes d'erreur spécifiques et des messages clairs
  */
 
-import { enhancedLogger } from '../utils/logger-enhanced.js';
-
-const logger = enhancedLogger.child({ module: 'CustomErrors' });
-
 export class BaseAppError extends Error {
   public readonly statusCode: number;
   public readonly code: string;

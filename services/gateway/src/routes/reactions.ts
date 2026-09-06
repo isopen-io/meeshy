@@ -133,7 +133,6 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const { messageId, emoji } = request.body;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
-      const anonymousUserId = authRequest.authContext.sessionToken;
       const isAnonymous = authRequest.authContext.isAnonymous;
 
       // Validation
@@ -142,9 +141,6 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       }
 
       // Déterminer l'ID utilisateur (authentifié ou anonyme)
-      const actualUserId = !isAnonymous ? userId : undefined;
-      const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
-
       // Résoudre le participantId
       let participantId = authRequest.authContext.participantId;
 
@@ -333,16 +329,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       const { messageId, emoji } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
-      const anonymousUserId = authRequest.authContext.sessionToken;
       const isAnonymous = authRequest.authContext.isAnonymous;
 
       // Décoder l'emoji (URL encoded)
       const decodedEmoji = decodeURIComponent(emoji);
 
       // Déterminer l'ID utilisateur (authentifié ou anonyme)
-      const actualUserId = !isAnonymous ? userId : undefined;
-      const actualAnonymousUserId = isAnonymous ? anonymousUserId : undefined;
-
       // Résoudre le participantId
       let removeParticipantId = authRequest.authContext.participantId;
 

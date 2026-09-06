@@ -208,8 +208,6 @@ export class MessageTranslationService extends EventEmitter {
    */
   async handleNewMessage(messageData: MessageData): Promise<{ messageId: string; status: string }> {
     try {
-      const startTime = Date.now();
-
       // Skip translation for emoji-only messages (no translatable text)
       if (messageData.content && isEmojiOnly(messageData.content)) {
         logger.debug('Skipping translation for emoji-only message', {
@@ -419,10 +417,6 @@ export class MessageTranslationService extends EventEmitter {
   // ENCRYPTION HELPERS - DELEGATED TO EncryptionHelper MODULE
   // ============================================================================
 
-  private async _getConversationEncryptionKey(conversationId: string): Promise<{ keyId: string; key: Buffer } | null> {
-    return this.encryptionHelper.getConversationEncryptionKey(conversationId);
-  }
-
   private async _encryptTranslation(
     plaintext: string,
     conversationId: string
@@ -619,7 +613,7 @@ export class MessageTranslationService extends EventEmitter {
         modelType: finalModelType
       };
 
-      const taskId = await this.zmqClient.sendTranslationRequest(request);
+      await this.zmqClient.sendTranslationRequest(request);
       this.stats.incrementRequestsSent();
 
       const processingTime = Date.now() - startTime;
@@ -933,20 +927,6 @@ export class MessageTranslationService extends EventEmitter {
     }
   }
 
-  private async _getMessageSourceLanguage(conversationId: string): Promise<string> {
-    try {
-      const lastMessage = await this.prisma.message.findFirst({
-        where: { conversationId: conversationId },
-        orderBy: { createdAt: 'desc' },
-        select: { originalLanguage: true }
-      });
-      
-      return lastMessage?.originalLanguage || 'fr';
-    } catch (error) {
-      logger.error(`❌ Erreur récupération langue source: ${error}`);
-      return 'fr';
-    }
-  }
 
   /**
    * Wraps an async ZMQ event handler so that a thrown exception or rejected
@@ -980,8 +960,6 @@ export class MessageTranslationService extends EventEmitter {
     metadata?: any;
   }) {
     try {
-      const startTime = Date.now();
-
       // Le bus `translationCompleted` est MULTIPLEXÉ : posts, commentaires et
       // stories y transitent sous un identifiant namespacé (`post:<id>`,
       // `comment:<id>`, `story:<id>`) et sont persistés par LEURS propres
@@ -1083,9 +1061,7 @@ export class MessageTranslationService extends EventEmitter {
         translationId: translationId, // Ajouter l'ID de la traduction
         metadata: data.metadata || {}
       });
-      
-      const processingTime = Date.now() - startTime;
-      
+
     } catch (error) {
       logger.error(`❌ [TranslationService] Erreur traitement: ${error}`);
       logger.error(`📋 [TranslationService] Données reçues: ${JSON.stringify(data, null, 2)}`);
@@ -2954,8 +2930,6 @@ export class MessageTranslationService extends EventEmitter {
    */
   private async _saveTranslationToDatabase(result: TranslationResult, metadata?: any): Promise<string> {
     try {
-      const startTime = Date.now();
-
       // Extraire les informations techniques du modèle
       const modelInfo = result.translatorModel || result.modelType || 'basic';
       const confidenceScore = result.confidenceScore || 0.9;
@@ -3025,8 +2999,6 @@ export class MessageTranslationService extends EventEmitter {
           data: { translations: translations as any }
         });
       });
-
-      const queryTime = Date.now() - startTime;
 
       // Retourner ID synthétique pour compatibilité logging
       return `${result.messageId}-${result.targetLanguage}`;

@@ -138,7 +138,6 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         return reply.send(JSON.parse(cached));
       }
 
-      const now = new Date();
       const startDate = new Date();
       switch (period) {
         case '24h': startDate.setHours(startDate.getHours() - 24); break;
@@ -284,7 +283,6 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         return reply.send(JSON.parse(cached));
       }
 
-      const now = new Date();
       const startDate = new Date();
       switch (period) {
         case '7d':  startDate.setDate(startDate.getDate() - 7);  break;

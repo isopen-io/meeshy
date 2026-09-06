@@ -1,7 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    // #4859 — le cliquet de dette (`noUnusedLocals`, activé dans tsconfig.json)
+    // vise le code de PRODUCTION que `tsc --noEmit` compile ; ts-jest hérite de
+    // ce tsconfig pour TOUT fichier qu'il transforme, tests compris, et
+    // `diagnostics.ignoreCodes` (jest.config.json) ne couvre pas TS6133/TS6196.
+    // Sans ce retrait, 138 suites tombaient sur des imports/variables de test
+    // légitimement non lus (mocks, scaffolding) — une classe de dette que
+    // l'issue n'a jamais visée.
+    "noUnusedLocals": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

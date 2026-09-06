@@ -621,7 +621,6 @@ export class UploadProcessor {
 
     const fileUrl = this.getAttachmentPath(filePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
-    const serverCopyUrl = serverCopyPath ? this.getAttachmentPath(serverCopyPath) : undefined;
 
     const metadataJson = metadata.audioEffectsTimeline
       ? { audioEffectsTimeline: metadata.audioEffectsTimeline } as any

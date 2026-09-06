@@ -248,7 +248,6 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
       // Filtre par periode
       if (period) {
-        const now = new Date();
         let startDate = new Date();
 
         switch (period) {
@@ -635,7 +634,6 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
       // Filtre par periode
       if (period) {
-        const now = new Date();
         let startDate = new Date();
 
         switch (period) {

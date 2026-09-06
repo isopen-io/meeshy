@@ -37,14 +37,11 @@ const ATTACHMENTS_FILE_SEGMENT = '/attachments/file/';
  */
 export class MediaService implements MediaStorage {
   private readonly uploadBasePath: string;
-  private readonly publicUrl: string;
 
   constructor(
     uploadBasePath: string = process.env['UPLOAD_PATH'] ?? '/app/uploads',
-    publicUrl: string = process.env['PUBLIC_URL'] ?? '',
   ) {
     this.uploadBasePath = uploadBasePath;
-    this.publicUrl = publicUrl;
   }
 
   /**

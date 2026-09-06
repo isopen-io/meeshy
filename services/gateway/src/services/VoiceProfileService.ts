@@ -43,9 +43,6 @@ const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Minimum audio duration for dedicated profile registration (10 seconds)
-const MIN_PROFILE_AUDIO_DURATION_MS = 10000;
-
 // Profile expiration
 const MINOR_PROFILE_EXPIRATION_DAYS = 60;  // 2 months for <18
 const STANDARD_PROFILE_EXPIRATION_DAYS = 90;  // 3 months standard

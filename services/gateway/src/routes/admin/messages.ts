@@ -375,7 +375,6 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       const query = request.query as any;
       const period = query.period || /* istanbul ignore next -- Zod provides default */ '7d';
 
-      const now = new Date();
       let startDate = new Date();
 
       switch (period) {
