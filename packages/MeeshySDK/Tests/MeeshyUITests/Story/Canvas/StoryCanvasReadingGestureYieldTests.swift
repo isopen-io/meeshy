@@ -77,9 +77,12 @@ final class StoryCanvasReadingGestureYieldTests: XCTestCase {
     /// transforment, donc ils n'ont rien à faire en lecture.
     func test_enLecture_lesGestesDeTransformationSontRefuses() {
         let vue = canvas(mode: .play)
-        for recognizer in [vue.pinchRecognizer as UIGestureRecognizer,
-                           vue.rotationRecognizer,
-                           vue.canvasZoomPinchRecognizer] {
+        let transformations: [UIGestureRecognizer] = [
+            vue.pinchRecognizer,
+            vue.rotationRecognizer,
+            vue.canvasZoomPinchRecognizer
+        ]
+        for recognizer in transformations {
             XCTAssertFalse(vue.gestureRecognizerShouldBegin(recognizer))
         }
     }
@@ -105,5 +108,47 @@ final class StoryCanvasReadingGestureYieldTests: XCTestCase {
         XCTAssertTrue(vue.isManipulationRecognizer(vue.pinchRecognizer))
         XCTAssertFalse(vue.isManipulationRecognizer(vue.singleTapRecognizer))
         XCTAssertFalse(vue.isManipulationRecognizer(vue.backgroundLongPressRecognizer))
+    }
+
+    // MARK: - En lecture, le canvas se tient DANS ses bornes
+
+    /// **LE témoin du débordement.** Une tuile de mosaïque arrondit côté
+    /// SwiftUI et ne pose donc AUCUN rayon sur le canvas : c'est exactement le
+    /// cas où `masksToBounds = canvasCornerRadius > 0` laissait les couches
+    /// s'écrire sur la tuile voisine.
+    func test_enLectureSansRayon_leCanvasMasqueQuandMeme() {
+        let vue = canvas(mode: .play)
+        XCTAssertEqual(vue.canvasCornerRadius, 0, "le cas qui débordait : aucun rayon")
+        XCTAssertTrue(vue.layer.masksToBounds,
+                      "en lecture, une couche ne doit pas peindre hors de ses bornes")
+    }
+
+    /// **En ÉDITION, le canvas laisse dépasser** — une poignée de manipulation
+    /// ou un objet en cours de glissement sort légitimement du cadre. Le
+    /// témoin s'écrit sur ce mode-là parce qu'un confinement posé trop large
+    /// amputerait le geste du composer, et ne se verrait pas depuis le fil.
+    func test_enEditionSansRayon_leCanvasLaisseDepasser() {
+        let vue = canvas(mode: .edit)
+        XCTAssertFalse(vue.layer.masksToBounds)
+    }
+
+    /// Le rayon garde son effet propre : il masque, en édition comme ailleurs.
+    /// Les deux questions sont indépendantes — c'est tout l'objet du correctif.
+    func test_unRayonMasqueMemeEnEdition() {
+        let vue = canvas(mode: .edit)
+        vue.canvasCornerRadius = 22
+        XCTAssertTrue(vue.layer.masksToBounds)
+    }
+
+    /// **Le confinement suit le MODE, pas seulement la naissance.** Un canvas
+    /// qui bascule en lecture doit se confiner, et le rendre en revenant à
+    /// l'édition.
+    func test_leConfinementSuitLeChangementDeMode() {
+        let vue = canvas(mode: .edit)
+        XCTAssertFalse(vue.layer.masksToBounds)
+        vue.setMode(.play)
+        XCTAssertTrue(vue.layer.masksToBounds, "passer en lecture confine")
+        vue.setMode(.edit)
+        XCTAssertFalse(vue.layer.masksToBounds, "revenir en édition rend le droit de dépasser")
     }
 }
