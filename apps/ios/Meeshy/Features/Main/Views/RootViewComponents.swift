@@ -918,40 +918,47 @@ struct ThemedFeedOverlay: View {
                 statusViewModel: statusViewModel
             )
         }
-        // **T3.2 — la CITATION passe au meuble** (directive porteur
-        // 2026-09-06 : « dans tous les cas iPad et iOS doivent utiliser le
-        // nouveau composer à présent »).
+        // **La CITATION revient à `FeedComposerSheet` — la migration T3.2 était
+        // PRÉMATURÉE** (2026-09-06).
         //
-        // Elle était le dernier chemin de l'iPhone à monter l'ANCIEN composer
-        // (`FeedComposerSheet`), et le commentaire de la porte du fil, douze
-        // lignes plus haut, le disait déjà : « la citation reste sur
-        // `FeedComposerSheet` (T3.2, distincte) ». T3.1 avait migré le fil et
-        // laissé la citation derrière.
+        // La directive porteur du même jour — « dans tous les cas iPad et iOS
+        // doivent utiliser le nouveau composer à présent » — reste la cible, et
+        // ce qu'elle répare est réel : l'ancien composer publie avec
+        // `storyEffects: nil`, donc sans scène, sans légende par média et hors
+        // mosaïque. Mais la condition technique qu'elle suppose n'est pas
+        // remplie, et `DocumentComposerDoor` l'écrit noir sur blanc : elle NE
+        // sert PAS la citation tant que la **levée 7.5** — un écrivain durable
+        // du repost — n'existe pas.
         //
-        // Ce que ça répare, au-delà de l'uniformité : l'ancien composer
-        // publiait avec `storyEffects: nil`. Citer un post produisait donc une
-        // publication SANS scène — donc sans légende par média, sans texte
-        // alternatif, et hors de la mosaïque (#5322), sur une app où toute
-        // photo devient une scène. Deux composers, deux formes de
-        // publication, et rien qui le disait à l'auteur.
+        // Mesuré, la chaîne entière : une citation pose `repostOfId`, donc
+        // `ComposerDocumentSendRouting.path(isQuote: true)` rend
+        // `.quotedRepost`, dont `isDurable` vaut `false`, donc
+        // `ComposerDocumentSendPlan` rend `.refuse(.nonDurablePath)`, donc
+        // `publishDocument` appelle `refuse()`. **Citer un post était devenu
+        // impossible** : l'auteur écrivait sa citation et recevait « publication
+        // impossible » à chaque envoi.
         //
-        // `.repost(ofPostId:sourceFormat:)` porte déjà exactement cette
-        // intention — c'est le motif du republish de status
-        // (`RootView.swift`) — et `repostedPostId` le rend au brouillon sans
-        // qu'aucun paramètre supplémentaire ne voyage. Une citation EST un
-        // repost commenté : elle n'avait pas besoin d'une origine à elle.
+        // > Une directive de MIGRATION ne demande pas de casser la
+        // > fonctionnalité qu'elle migre. Le chemin cible est le bon ; il
+        // > s'ouvrira quand le repost aura sa file durable (`ComposerIntent`
+        // > l'énonce toujours : « 7.5 n'a pas d'écrivain durable du repost »).
+        // > D'ici là, la citation part par le chemin qui la publie.
+        //
+        // Deux gardes le disaient déjà et redeviennent vertes d'elles-mêmes :
+        // celles qui exigent une citation sur `FeedComposerSheet` dans chaque
+        // racine. La troisième, révisée le matin même, verrouillait l'état
+        // CIBLE (`ancienComposer == 0`) — donc l'état CASSÉ ; elle mesure
+        // désormais ce que le produit fait, et repassera à zéro quand 7.5 sera
+        // livrée.
         .fullScreenCover(item: $quoteOriginalPost) { quoted in
-            DocumentComposerDoor(
-                intent: ComposerIntent(
-                    origin: .repost(ofPostId: quoted.id,
-                                    sourceFormat: ComposerFormat(postType: quoted.type))),
+            FeedComposerSheet(
                 viewModel: viewModel,
-                // Mêmes réinjections que la porte du fil ci-dessus : un cover
-                // ne recopie pas l'environnement de son hôte.
-                storyViewModel: storyViewModel,
-                router: router,
-                conversationListViewModel: conversationListViewModel,
-                statusViewModel: statusViewModel
+                initialText: "",
+                pendingAttachmentType: nil,
+                quotePost: quoted,
+                onDismiss: {
+                    quoteOriginalPost = nil
+                }
             )
         }
     }
