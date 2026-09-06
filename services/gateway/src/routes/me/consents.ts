@@ -31,26 +31,34 @@
  * explicitement « compter les appels Android avant de retirer
  * `/voice/profile/consent` » comme un préalable non fait ici.
  *
- * ## Le régime des quatre `purpose`, et pourquoi `analytics` n'y est pas
+ * ## Le régime des CINQ `purpose` — `analytics` rejoint la liste (#4709)
  *
- * Quatre `purpose` seulement, chacun adossé à UNE colonne `User.*ConsentAt`
- * horodatée par le SERVEUR — jamais un cinquième fabriqué pour l'apparence
- * de la conformité. `allowAnalytics` (`PrivacyPreferenceSchema`) reste une
- * PRÉFÉRENCE booléenne, opt-out, décidée dans le commentaire de fusion de
- * #4348 : un consentement horodaté n'a de sens que s'il gouverne un
- * traitement qui, sans lui, ne peut pas avoir lieu — ce n'est pas le cas
- * aujourd'hui pour l'analytique produit. `analyticsConsentAt` n'existe nulle
- * part dans `schema.prisma`, et ce fichier ne l'invente pas.
+ * Chaque `purpose` est adossé à UNE colonne `User.*ConsentAt` horodatée par
+ * le SERVEUR — jamais un fabriqué pour l'apparence de la conformité. Ce
+ * fichier disait autrefois que l'analytique produit n'avait pas besoin d'un
+ * consentement horodaté, `allowAnalytics` (`PrivacyPreferenceSchema`) restant
+ * une simple préférence opt-out gouvernée par `dataProcessingConsentAt`. Le
+ * porteur a tranché l'inverse (#4709, 2026-09-02) : « le consentement à
+ * l'analytique est REQUIS », et « un refus doit ARRÊTER la mesure,
+ * fail-closed ». `analyticsConsentAt` est donc désormais une colonne réelle
+ * de `schema.prisma`, `PUT /me/consents/analytics` l'écrit, et
+ * `ConsentValidationService` exige `hasAnalyticsConsent` (pas seulement
+ * `hasDataProcessingConsent`) pour laisser passer `allowAnalytics: true`.
+ *
+ * `analytics` est un ENFANT DIRECT de `data-processing`, pas un maillon de
+ * plus dans la chaîne vocale — voir `CONSENT_PARENT`
+ * (`@meeshy/shared/types/consents`) et `ancestorsOf` ci-dessous, qui remonte
+ * désormais cette carte au lieu de découper `CONSENT_PURPOSES` par préfixe.
  *
  * ## `policyVersion` — une version, pas un historique par consentement
  *
  * `schema.prisma` ne porte AUCUNE colonne pour horodater « sous quelle
  * version de la politique ce consentement précis a été donné » — ni sur
- * `User`, ni ailleurs. Ajouter quatre colonnes pour le savoir est un choix de
+ * `User`, ni ailleurs. Ajouter cinq colonnes pour le savoir est un choix de
  * schéma que ni #4348 ni #4335 ne tranchent, et qui engage une décision de
  * gouvernance (garder un historique versionné) hors du périmètre de ce lot.
  * `CONSENT_POLICY_VERSION` est donc une valeur UNIQUE, globale, qui nomme la
- * politique EN VIGUEUR : `GET` la sert identique sur les quatre `purpose`
+ * politique EN VIGUEUR : `GET` la sert identique sur les cinq `purpose`
  * (elle ne prétend pas savoir sous quelle version tel consentement a été
  * donné — seulement quelle version est en vigueur AUJOURD'HUI), et `PUT`
  * EXIGE qu'elle soit citée en retour et REFUSE (409) toute valeur différente
@@ -74,6 +82,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   CONSENT_PURPOSES,
+  CONSENT_PARENT,
   CONSENT_POLICY_VERSION_DEFAULT,
   isConsentPurpose,
   type ConsentPurpose,
@@ -101,12 +110,14 @@ export { CONSENT_PURPOSES, type ConsentPurpose } from '@meeshy/shared/types/cons
 
 type ConsentColumn =
   | 'dataProcessingConsentAt'
+  | 'analyticsConsentAt'
   | 'voiceDataConsentAt'
   | 'voiceProfileConsentAt'
   | 'voiceCloningEnabledAt';
 
 const PURPOSE_COLUMN: Readonly<Record<ConsentPurpose, ConsentColumn>> = {
   'data-processing': 'dataProcessingConsentAt',
+  analytics: 'analyticsConsentAt',
   'voice-data': 'voiceDataConsentAt',
   'voice-profile': 'voiceProfileConsentAt',
   'voice-cloning': 'voiceCloningEnabledAt',
@@ -116,6 +127,7 @@ type ConsentColumns = Record<ConsentColumn, Date | null>;
 
 const CONSENT_SELECT: Readonly<Record<ConsentColumn, true>> = {
   dataProcessingConsentAt: true,
+  analyticsConsentAt: true,
   voiceDataConsentAt: true,
   voiceProfileConsentAt: true,
   voiceCloningEnabledAt: true,
@@ -129,9 +141,21 @@ const CONSENT_SELECT: Readonly<Record<ConsentColumn, true>> = {
 export const CONSENT_POLICY_VERSION =
   process.env.CONSENT_POLICY_VERSION || CONSENT_POLICY_VERSION_DEFAULT;
 
-/** Les ancêtres d'un `purpose`, racine d'abord — jamais lui-même. */
+/**
+ * Les ancêtres d'un `purpose`, racine d'abord — jamais lui-même. Remonte
+ * `CONSENT_PARENT` (un ARBRE, depuis #4709) plutôt que de découper
+ * `CONSENT_PURPOSES` par préfixe : un slice supposerait un ordre total, que
+ * `analytics` (enfant de `data-processing`, frère de `voice-data`) ne
+ * respecte plus.
+ */
 function ancestorsOf(purpose: ConsentPurpose): readonly ConsentPurpose[] {
-  return CONSENT_PURPOSES.slice(0, CONSENT_PURPOSES.indexOf(purpose));
+  const chain: ConsentPurpose[] = [];
+  let current = CONSENT_PARENT[purpose];
+  while (current) {
+    chain.unshift(current);
+    current = CONSENT_PARENT[current];
+  }
+  return chain;
 }
 
 type ConsentEntry = {
@@ -145,7 +169,7 @@ type ConsentEntry = {
 
 /**
  * L'UNIQUE projection colonne → entrée servie — partagée par `GET` (les
- * quatre `purpose`) et par `PUT` (le `purpose` visé, dans sa réponse). Un
+ * cinq `purpose`) et par `PUT` (le `purpose` visé, dans sa réponse). Un
  * consentement accordé ne porte QUE `grantedAt` ; un consentement absent ou
  * retiré ne porte QUE `revokedAt` (toujours `null`, voir doc-comment de
  * module) — jamais les deux à la fois sur la même entrée.
@@ -263,6 +287,7 @@ const derivedSchema = {
     canTranscribeAudio: { type: 'boolean' },
     canTranslateAudio: { type: 'boolean' },
     canUseVoiceCloning: { type: 'boolean' },
+    canCollectAnalytics: { type: 'boolean' },
   },
 } as const;
 
@@ -339,8 +364,8 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       config: { rateLimit: consentRateLimitConfig('read') },
       schema: {
         description:
-          'Lire les quatre consentements horodatés côté serveur (data-processing, ' +
-          'voice-data, voice-profile, voice-cloning), plus le bloc dérivé calculé ' +
+          'Lire les cinq consentements horodatés côté serveur (data-processing, ' +
+          'analytics, voice-data, voice-profile, voice-cloning), plus le bloc dérivé calculé ' +
           'par ConsentValidationService.',
         tags: ['me', 'consents'],
         summary: 'Get consents',
@@ -395,6 +420,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
             canTranscribeAudio: status.canTranscribeAudio,
             canTranslateAudio: status.canTranslateAudio,
             canUseVoiceCloning: status.canUseVoiceCloning,
+            canCollectAnalytics: status.hasAnalyticsConsent,
           },
         });
       } catch (error) {
