@@ -104,6 +104,34 @@ describe('PostTranslationService', () => {
       expect(targets).not.toContain('en');
     });
 
+    // #5349 — `detectedLanguage` (mesure on-device, jamais une préférence) est
+    // un SECOND recours : il ne joue que quand `originalLanguage` (la
+    // revendication) manque, et bat toujours la détection regex maison.
+    describe('detectedLanguage (#5349)', () => {
+      it('is used when originalLanguage is absent', async () => {
+        const { service, zmqClient } = makeService();
+        await service.translatePost('post-1', 'Hello world', undefined, 'es');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('es');
+      });
+
+      it('never overrides a provided originalLanguage', async () => {
+        const { service, zmqClient } = makeService();
+        await service.translatePost('post-1', 'Hello world', 'en', 'es');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('en');
+      });
+
+      it('wins over the regex-based fallback detection', async () => {
+        const { service, zmqClient } = makeService();
+        // Texte sans marqueur reconnu par `detectLanguage` — retomberait sur
+        // 'en' sans la mesure.
+        await service.translatePost('post-1', 'Ola tudo bem', undefined, 'pt');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('pt');
+      });
+    });
+
     it('detects French content via keywords', async () => {
       const { service, zmqClient } = makeService();
       await service.translatePost('post-1', 'Bonjour, comment est le chat?');

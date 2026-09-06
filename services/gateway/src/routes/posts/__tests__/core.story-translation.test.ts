@@ -251,6 +251,9 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
       'post-id-123',
       'A regular post caption',
       undefined,
+      // #5349 — 4e argument : `detectedLanguage`, absent tant que le composer
+      // ne l'a pas mesuré.
+      undefined,
     );
 
     await app.close();
@@ -279,6 +282,9 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
       expect(translatePostMock).toHaveBeenCalledWith(
         'post-id-123',
         'Une phrase à traduire',
+        undefined,
+        // #5349 — `detectedLanguage`, absent tant que le composer ne l'a pas
+        // mesuré.
         undefined,
       );
 
