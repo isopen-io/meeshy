@@ -8531,8 +8531,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Done"
+            "state": "translated",
+            "value": "Terminé"
           }
         },
         "it": {
@@ -8625,8 +8625,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Éditer"
+            "state": "translated",
+            "value": "Modifier"
           }
         },
         "it": {
@@ -8672,8 +8672,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Error"
+            "state": "translated",
+            "value": "Erreur"
           }
         },
         "it": {
@@ -8766,8 +8766,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Retry"
+            "state": "translated",
+            "value": "Réessayer"
           }
         },
         "it": {
@@ -8813,8 +8813,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Sauvegarder"
+            "state": "translated",
+            "value": "Enregistrer"
           }
         },
         "it": {
@@ -14594,8 +14594,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Moderateur"
+            "state": "translated",
+            "value": "Modo"
           }
         },
         "it": {
@@ -28696,7 +28696,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun poste"
+            "value": "Aucune publication"
           }
         },
         "it": {
@@ -28978,7 +28978,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Statistiques"
+            "value": "STATISTIQUES"
           }
         },
         "it": {
