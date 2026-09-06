@@ -39,17 +39,35 @@ public struct SceneFocusFrame<Contenu: View>: View {
     public var body: some View {
         if let focus, focus.width > 0, focus.height > 0 {
             GeometryReader { geo in
-                // La scène entière, à l'échelle où sa zone remplit la carte.
-                let largeurScene = geo.size.width / focus.width
+                // **La zone COUVRE la boîte — elle ne s'y ajuste pas.**
+                //
+                // Une première version calait la zone sur la seule LARGEUR.
+                // Vu au simulateur : dans une tuile de mosaïque, dont le
+                // rapport vient de la GÉOMÉTRIE quand celui de la zone vient du
+                // CONTENU, les deux ne coïncident pas — et la scène laissait
+                // paraître le fond de la tuile en bas et sur les bords.
+                //
+                // > Une fenêtre de cadrage se comporte comme un `.fill`, jamais
+                // > comme un `.fit` : elle montre la zone en entier ET remplit
+                // > ce qu'on lui donne, quitte à déborder sur les côtés. Un
+                // > `.fit` laisse du vide, et du vide dans un cadrage est
+                // > exactement ce qu'on venait retirer.
+                //
+                // L'échelle est donc le MAXIMUM des deux contraintes, et la
+                // zone est CENTRÉE : ce qui dépasse se répartit également des
+                // deux côtés plutôt que de tomber d'un seul.
+                let largeurScene = max(geo.size.width / focus.width,
+                                       geo.size.height * SceneFraming.sceneAspect / focus.height)
                 let hauteurScene = largeurScene / SceneFraming.sceneAspect
+                let debordX = focus.width * largeurScene - geo.size.width
+                let debordY = focus.height * hauteurScene - geo.size.height
                 contenu()
                     .frame(width: largeurScene, height: hauteurScene)
-                    // Amener le coin de la zone à l'origine de la carte. Le
-                    // décalage se compte sur la scène AGRANDIE, pas sur la
-                    // carte — c'est l'erreur qui ferait dériver le cadrage
+                    // Le décalage se compte sur la scène AGRANDIE, pas sur la
+                    // boîte — l'erreur qui ferait dériver le cadrage
                     // proportionnellement au zoom.
-                    .offset(x: -focus.minX * largeurScene,
-                            y: -focus.minY * hauteurScene)
+                    .offset(x: -focus.minX * largeurScene - debordX / 2,
+                            y: -focus.minY * hauteurScene - debordY / 2)
                     .frame(width: geo.size.width, height: geo.size.height,
                            alignment: .topLeading)
                     .clipped()

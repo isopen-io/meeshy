@@ -32,6 +32,14 @@ struct ShareableLink: Identifiable {
 
 // MARK: - Feed View
 struct FeedView: View {
+    /// **La dernière dépendance qui manquait au MEUBLE** (2026-09-06).
+    ///
+    /// `DocumentComposerDoor` en a besoin, et l'arbre iPad l'avait déjà sous
+    /// la main (`iPadRootView.conversationViewModel`) — il ne descendait
+    /// simplement pas jusqu'ici. C'est tout ce qui séparait le fil iPad du
+    /// composer que le fil iPhone emploie depuis T3.1.
+    let conversationListViewModel: ConversationListViewModel
+
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "feed")
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -623,13 +631,33 @@ struct FeedView: View {
                 Spacer()
             }
 
-            // Full-screen composer overlay
-            if showComposer {
-                composerOverlay
-                    // Draft recovery: when the composer opens onto an empty
-                    // compose, pre-fill the last post/reel that got stuck offline.
-                    .task { await recoverStuckPostDraftIfNeeded() }
-            }
+        }
+        // **Le fil iPad monte le MEUBLE** (directive porteur 2026-09-06 :
+        // « dans tous les cas iPad et iOS doivent utiliser le nouveau composer
+        // à présent »).
+        //
+        // Il montait `composerOverlay` — un composer écrit à la main, avec ses
+        // propres boutons photo/caméra/emoji — qui publiait avec
+        // `storyEffects: nil`. Sur une app où TOUTE photo devient une scène
+        // (`syncPostMediaIntoSlides`), l'iPad fabriquait donc des publications
+        // d'une autre nature que l'iPhone : sans scène, sans légende par
+        // média, sans texte alternatif, et hors de la mosaïque (#5322).
+        //
+        // > Deux composers, ce n'est pas deux fois le même écran : c'est deux
+        // > formats de publication, et rien ne le disait à l'auteur.
+        //
+        // L'origine est la MÊME que celle du fil iPhone (`.feedComposer`) —
+        // même intention, même profil, même socle. Une origine « iPad » aurait
+        // fabriqué une seconde vérité à tenir d'accord avec la première.
+        .fullScreenCover(isPresented: $showComposer) {
+            DocumentComposerDoor(
+                intent: ComposerIntent(origin: .feedComposer),
+                viewModel: viewModel,
+                storyViewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationListViewModel,
+                statusViewModel: statusViewModel
+            )
         }
     }
 
@@ -1755,15 +1783,21 @@ struct FeedView: View {
                     onDismiss: { editingPost = nil }
                 )
             }
+            // La CITATION passe au meuble, comme sur iPhone
+            // (`RootViewComponents`). Une citation EST un repost commenté :
+            // `.repost(ofPostId:sourceFormat:)` porte déjà l'intention, et
+            // `ComposerFormat(postType:)` traduit le type du fil une fois pour
+            // les trois portes qui posent la même question.
             .fullScreenCover(item: $quoteTargetPost) { quoted in
-                FeedComposerSheet(
+                DocumentComposerDoor(
+                    intent: ComposerIntent(
+                        origin: .repost(ofPostId: quoted.id,
+                                        sourceFormat: ComposerFormat(postType: quoted.type))),
                     viewModel: viewModel,
-                    initialText: "",
-                    pendingAttachmentType: nil,
-                    quotePost: quoted,
-                    onDismiss: {
-                        quoteTargetPost = nil
-                    }
+                    storyViewModel: storyViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    statusViewModel: statusViewModel
                 )
             }
     }
