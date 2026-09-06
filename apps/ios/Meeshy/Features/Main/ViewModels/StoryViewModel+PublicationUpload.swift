@@ -305,6 +305,21 @@ extension StoryViewModel {
                     // reconciliation: viewer gets a cache hit, never re-downloads.
                     await CacheCoordinator.shared.audio.seed(copyingLocalFile: audioURL, for: result.fileUrl)
                     audioObjects[i].postMediaId = result.id
+                    // **L'ADRESSE, pas seulement l'identifiant** (#5420). Les
+                    // branches vidéo et image, vingt lignes plus haut, posent
+                    // les DEUX ; celle-ci n'en posait qu'un.
+                    //
+                    // Une story ne porte AUCUN `PostMedia` (mesuré : `media = 0`
+                    // sur le fil) — son contenu vit dans le canvas. Le résolveur
+                    // par `postMediaId` de l'hôte (`StoryItem.media`) ne trouve
+                    // donc jamais rien, et `StoryAudioSourceResolver` retombe
+                    // sur `audio.mediaURL`… qui n'était jamais écrit. L'audio
+                    // d'une story était injouable pour tout le monde, l'auteur
+                    // compris.
+                    //
+                    // > Le même patron que #5418 et #5419, sur un troisième
+                    // > médium : l'identifiant voyage, l'adresse reste à quai.
+                    audioObjects[i].mediaURL = result.fileUrl
                     foregroundMediaIds.append(result.id)
                     os.Logger.storyAudio.info(
                         "publish audio uploaded audioId=\(obj.id, privacy: .public) postMediaId=\(result.id, privacy: .public)"
@@ -603,6 +618,21 @@ extension StoryViewModel {
                     )
                     await CacheCoordinator.shared.audio.seed(copyingLocalFile: audioURL, for: result.fileUrl)
                     audioObjects[i].postMediaId = result.id
+                    // **L'ADRESSE, pas seulement l'identifiant** (#5420). Les
+                    // branches vidéo et image, vingt lignes plus haut, posent
+                    // les DEUX ; celle-ci n'en posait qu'un.
+                    //
+                    // Une story ne porte AUCUN `PostMedia` (mesuré : `media = 0`
+                    // sur le fil) — son contenu vit dans le canvas. Le résolveur
+                    // par `postMediaId` de l'hôte (`StoryItem.media`) ne trouve
+                    // donc jamais rien, et `StoryAudioSourceResolver` retombe
+                    // sur `audio.mediaURL`… qui n'était jamais écrit. L'audio
+                    // d'une story était injouable pour tout le monde, l'auteur
+                    // compris.
+                    //
+                    // > Le même patron que #5418 et #5419, sur un troisième
+                    // > médium : l'identifiant voyage, l'adresse reste à quai.
+                    audioObjects[i].mediaURL = result.fileUrl
                     newMediaIds.append(result.id)
                 }
                 updatedEffects.audioPlayerObjects = audioObjects

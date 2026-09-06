@@ -605,7 +605,19 @@ extension StoryRenderer {
     /// regarde.
     nonisolated static func backgroundRoutingKey(postMediaId: String,
                                                  mediaURL: String?) -> String {
-        if let url = mediaURL, url.hasPrefix("http") { return url }
+        // **Une ADRESSE gagne sur un IDENTIFIANT** (#5419). Ce test ne
+        // reconnaissait que `http` : la clé de stockage servie par la
+        // passerelle pour une story — `2026/09/<auteur>/<fichier>.mp4` —
+        // retombait donc sur le `postMediaId`, que le résolveur de l'hôte ne
+        // sait pas résoudre (une story ne porte AUCUN `PostMedia` : son contenu
+        // vit dans le canvas). D'où `bg video configure … resolved=nil`,
+        // définitif, et une story vidéo qui ne se lit jamais.
+        //
+        // La règle vit dans `StoryBackgroundLayer.isAddressable` — le même
+        // prédicat que celui qui décide, un étage plus bas, si la chaîne part
+        // chez `MeeshyConfig.resolveMediaURL`. Deux réponses à une seule
+        // question sont ce qui a produit ce défaut.
+        if let url = mediaURL, StoryBackgroundLayer.isAddressable(url) { return url }
         return postMediaId.isEmpty ? (mediaURL ?? "") : postMediaId
     }
 

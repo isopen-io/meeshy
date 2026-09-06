@@ -8,6 +8,7 @@ Le système de préférences utilisateur intègre une validation automatique des
 
 ```
 dataProcessingConsentAt (BASE OBLIGATOIRE)
+├─> analyticsConsentAt (#4709 — enfant direct, jamais un maillon vocal)
 ├─> voiceDataConsentAt
 │   ├─> audioTranscriptionEnabledAt
 │   │   └─> audioTranslationEnabledAt
@@ -51,7 +52,7 @@ dataProcessingConsentAt (BASE OBLIGATOIRE)
 
 | Préférence | Consentements Requis |
 |------------|---------------------|
-| `allowAnalytics` | `dataProcessingConsentAt` |
+| `allowAnalytics` | `analyticsConsentAt` (#4709 — plus `dataProcessingConsentAt` seul) |
 | `shareUsageData` | `dataProcessingConsentAt` |
 
 ### Message Preferences

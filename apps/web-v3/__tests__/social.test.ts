@@ -125,6 +125,42 @@ describe('textesDuPost — l’énumération des textes distincts', () => {
   });
 });
 
+describe('l’origine des médias du feed est PUBLIQUE, jamais celle du réseau Docker', () => {
+  /**
+   * MESURÉ SUR STAGING (2026-09-06, capture porteur) : chaque image du feed
+   * partait vers `https://gateway-staging:3000/api/v1/attachments/file/…` —
+   * l'adresse INTERNE du conteneur, que le navigateur ne résout pas
+   * (ERR_NAME_NOT_RESOLVED). `filSocial` composait l'origine des pièces avec
+   * `base` — l'adresse que le SERVEUR appelle — au lieu de l'origine que le
+   * NAVIGATEUR suit, la distinction que `messagesDuFil` fait déjà (fil.ts :
+   * `base` interne pour le fetch, `origine` publique pour les pièces).
+   */
+  it('résout les pièces sur l’origine publique quand base est l’adresse interne', async () => {
+    const { recuperer } = passerelle(() =>
+      json(
+        filServi([
+          postServi({
+            media: [{ fileUrl: '/api/v1/attachments/file/2026/x.jpeg', mimeType: 'image/jpeg' }],
+          }),
+        ]),
+      ),
+    );
+
+    const fil = await filSocial({
+      jeton: 'j',
+      langues: ['fr'],
+      base: 'http://gateway-staging:3000',
+      origine: 'https://gate.publique.test',
+      recuperer,
+    });
+
+    if (fil.genre !== 'fil') throw new Error('fil attendu');
+    const url = fil.posts[0]?.medias[0]?.url ?? '';
+    expect(url.startsWith('https://gate.publique.test/')).toBe(true);
+    expect(url).not.toContain('gateway-staging');
+  });
+});
+
 describe('filSocial', () => {
   it('lit scope=home et rend les posts dans l’ordre servi', async () => {
     const { recuperer, vus } = passerelle(() => json(filServi([postServi(), postServi({ id: 'post-2', type: 'REEL' })])));

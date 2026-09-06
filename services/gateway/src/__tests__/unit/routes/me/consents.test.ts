@@ -28,6 +28,7 @@ const USER_ID = '68a000000000000000000001';
 
 type ConsentColumns = {
   dataProcessingConsentAt: Date | null;
+  analyticsConsentAt: Date | null;
   voiceDataConsentAt: Date | null;
   voiceProfileConsentAt: Date | null;
   voiceCloningEnabledAt: Date | null;
@@ -35,6 +36,7 @@ type ConsentColumns = {
 
 const EMPTY_COLUMNS: ConsentColumns = {
   dataProcessingConsentAt: null,
+  analyticsConsentAt: null,
   voiceDataConsentAt: null,
   voiceProfileConsentAt: null,
   voiceCloningEnabledAt: null,
@@ -116,14 +118,14 @@ describe('GET /me/consents', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('rend les quatre purpose, tous non accordés, avec policyVersion et source=server', async () => {
+  it('rend les cinq purpose, tous non accordés, avec policyVersion et source=server', async () => {
     const { app } = await buildApp();
     const res = await getConsents(app, USER_ID);
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
-    expect(body.data.consents).toHaveLength(4);
+    expect(body.data.consents).toHaveLength(5);
     expect(body.data.consents.map((c: any) => c.purpose).sort()).toEqual(
       [...CONSENT_PURPOSES].sort()
     );
@@ -163,6 +165,7 @@ describe('GET /me/consents', () => {
       makePrisma({
         [USER_ID]: {
           dataProcessingConsentAt: now,
+          analyticsConsentAt: now,
           voiceDataConsentAt: now,
           voiceProfileConsentAt: now,
           voiceCloningEnabledAt: now,
@@ -177,6 +180,7 @@ describe('GET /me/consents', () => {
       canTranscribeAudio: true,
       canTranslateAudio: true,
       canUseVoiceCloning: true,
+      canCollectAnalytics: true,
     });
   });
 
@@ -201,7 +205,7 @@ describe('PUT /me/consents/:purpose', () => {
     const { app } = await buildApp();
     const res = await putConsent(
       app,
-      'analytics',
+      'unknown-purpose',
       { granted: true, policyVersion: CONSENT_POLICY_VERSION },
       USER_ID
     );
@@ -262,6 +266,7 @@ describe('PUT /me/consents/:purpose', () => {
       makePrisma({
         [USER_ID]: {
           dataProcessingConsentAt: now,
+          analyticsConsentAt: now,
           voiceDataConsentAt: now,
           voiceProfileConsentAt: now,
           voiceCloningEnabledAt: now,
@@ -301,6 +306,46 @@ describe('PUT /me/consents/:purpose', () => {
     expect(updateCall.data.voiceDataConsentAt).toBeInstanceOf(Date);
     expect(updateCall.data.voiceProfileConsentAt).toBeInstanceOf(Date);
     expect(updateCall.data.dataProcessingConsentAt).toBeInstanceOf(Date);
+  });
+
+  it('accorder `analytics` pose SEULEMENT `data-processing` — jamais la chaîne vocale (#4709, arbre pas chaîne)', async () => {
+    const { app, prisma } = await buildApp();
+
+    const res = await putConsent(
+      app,
+      'analytics',
+      { granted: true, policyVersion: CONSENT_POLICY_VERSION },
+      USER_ID
+    );
+
+    expect(res.statusCode).toBe(200);
+    const updateCall = prisma.user.update.mock.calls[0][0];
+    expect(updateCall.data.analyticsConsentAt).toBeInstanceOf(Date);
+    expect(updateCall.data.dataProcessingConsentAt).toBeInstanceOf(Date);
+    // `analytics` est un enfant DIRECT de `data-processing` — un ancien
+    // slice de tableau l'aurait rendu ancêtre (ou dépendant) de la chaîne
+    // vocale selon sa position ; l'arbre `CONSENT_PARENT` ne touche à AUCUNE
+    // des trois colonnes vocales pour cette feuille.
+    expect(updateCall.data.voiceDataConsentAt).toBeUndefined();
+    expect(updateCall.data.voiceProfileConsentAt).toBeUndefined();
+    expect(updateCall.data.voiceCloningEnabledAt).toBeUndefined();
+  });
+
+  it('accorder `voice-data` ne pose JAMAIS `analyticsConsentAt` — les deux enfants de data-processing sont indépendants', async () => {
+    const { app, prisma } = await buildApp();
+
+    const res = await putConsent(
+      app,
+      'voice-data',
+      { granted: true, policyVersion: CONSENT_POLICY_VERSION },
+      USER_ID
+    );
+
+    expect(res.statusCode).toBe(200);
+    const updateCall = prisma.user.update.mock.calls[0][0];
+    expect(updateCall.data.voiceDataConsentAt).toBeInstanceOf(Date);
+    expect(updateCall.data.dataProcessingConsentAt).toBeInstanceOf(Date);
+    expect(updateCall.data.analyticsConsentAt).toBeUndefined();
   });
 
   it('un ancêtre DÉJÀ accordé garde sa date — la cascade ne l’écrase pas', async () => {

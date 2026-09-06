@@ -31,18 +31,43 @@
  */
 
 /**
- * Les QUATRE `purpose`, dans l'ORDRE de la hiérarchie de dépendance
- * (racine → feuille) — c'est cet ORDRE, pas une table séparée, qui porte la
- * chaîne : les ancêtres d'un `purpose` sont tout ce qui le précède.
+ * Les CINQ `purpose` (#4709 a ajouté `analytics`). Avant #4709, une chaîne
+ * UNIQUE (`data-processing → voice-data → voice-profile → voice-cloning`)
+ * laissait `ancestorsOf()` calculer les ancêtres par un simple PRÉFIXE du
+ * tableau — un slice qui suppose un ORDRE TOTAL. `analytics` casse cette
+ * hypothèse : c'est un second enfant de `data-processing`, pas un maillon de
+ * plus dans la chaîne vocale, et un slice l'aurait rendu ancêtre de
+ * `voice-data` (ou l'inverse, selon sa position) sans qu'aucun des deux ne
+ * dépende réellement de l'autre. `CONSENT_PARENT` ci-dessous porte donc la
+ * hiérarchie RÉELLE — un arbre, pas une chaîne — et cet ordre du tableau ne
+ * sert plus qu'à l'AFFICHAGE (`GET /me/consents`, `allowedPurposes`).
  */
 export const CONSENT_PURPOSES = [
   'data-processing',
+  'analytics',
   'voice-data',
   'voice-profile',
   'voice-cloning',
 ] as const;
 
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
+
+/**
+ * Le PARENT DIRECT de chaque `purpose`, `null` pour la racine — la source
+ * unique de la hiérarchie depuis #4709. `analytics` et `voice-data` sont
+ * tous deux enfants de `data-processing` et ne dépendent pas l'un de
+ * l'autre ; `voice-profile` et `voice-cloning` restent la chaîne vocale
+ * historique. Un consommateur qui a besoin des ANCÊTRES d'un `purpose`
+ * remonte cette carte (voir `ancestorsOf` dans `routes/me/consents.ts`) —
+ * il ne doit plus jamais découper `CONSENT_PURPOSES` par préfixe.
+ */
+export const CONSENT_PARENT: Readonly<Record<ConsentPurpose, ConsentPurpose | null>> = {
+  'data-processing': null,
+  analytics: 'data-processing',
+  'voice-data': 'data-processing',
+  'voice-profile': 'voice-data',
+  'voice-cloning': 'voice-profile',
+};
 
 /**
  * La politique par DÉFAUT. La passerelle peut la surcharger par

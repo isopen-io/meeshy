@@ -19,6 +19,7 @@ import {
   routesDesPreferencesDuCompte,
   type EtatDeSuppressionDeBouchon,
 } from './bouchon-preferences';
+import { routesDuPush } from './bouchon-push';
 
 // Réexportées : `bouchon-preferences.ts` PORTE désormais ces cinq noms (§ son
 // propre en-tête) ; ce fichier les relaie pour que ses appelants existants
@@ -109,8 +110,25 @@ export type EtatDuCompteDeBouchon = {
    * écriture qui n'écrit rien.
    */
   readonly profil: Record<string, string>;
-  /** Les appareils de push, que `DELETE /users/me/devices/:id` retire pour de bon. */
-  readonly appareils: { id: string; deviceName: string; platform: string; lastUsedAt: string | null }[];
+  /**
+   * Les appareils de push, que `DELETE /users/me/devices/:id` retire pour de
+   * bon. `deviceId`/`type`/`isActive`/`token` (#5391) sont OPTIONNELS —
+   * les deux entrées de départ (`APPAREILS_DU_BOUCHON`) n'en portent aucun,
+   * comme des appareils iOS/Android déjà enregistrés hors de ce travail ;
+   * `POST`/`DELETE /api/v1/users/register-device-token`
+   * (`bouchon-push.ts`) les lisent/écrivent sur CE MÊME tableau — un seul
+   * magasin d'appareils, jamais une jumelle.
+   */
+  readonly appareils: {
+    id: string;
+    deviceName: string;
+    platform: string;
+    lastUsedAt: string | null;
+    deviceId?: string;
+    type?: string;
+    isActive?: boolean;
+    token?: string;
+  }[];
   /** Les conversations de GROUPE créées pendant la session — relues par la liste. */
   readonly conversationsCreees: { id: string; titre: string }[];
   /**
@@ -595,6 +613,11 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/posts/') ||
         chemin.startsWith('/api/v1/social/') ||
         chemin.startsWith('/api/v1/users/me') ||
+        // `POST`/`DELETE /api/v1/users/register-device-token` (#5391) — HORS
+        // de `/api/v1/users/me`, une ligne d'admission à elle : sans elle, la
+        // porte lisait un 404 générique comme un succès (même piège que
+        // `/api/v1/me/…` deux lignes plus bas).
+        chemin === '/api/v1/users/register-device-token' ||
         chemin.startsWith('/api/v1/notifications') ||
         // TOUT `/api/v1/me/…` — les TREIZE préférences de notification du
         // compte (#4899, `GET`/`PATCH /api/v1/me/preferences`, DISTINCT de
@@ -693,6 +716,16 @@ export const routesDuCompte =
      * `bouchon-compte.ts` sous le budget de taille.
      */
     if (routesDesPreferencesDuCompte({ notificationPrefs: etat.notificationPrefs, privacyPrefs: etat.privacyPrefs, documentPrefs: etat.documentPrefs, profil: etat.profil, suppression: etat.suppression })({ requete, url, corps, json })) {
+      return true;
+    }
+
+    /**
+     * `POST`/`DELETE /api/v1/users/register-device-token` — LE PUSH WEB
+     * (#5391), EXTRAIT dans `bouchon-push.ts` (même patron que
+     * `bouchon-preferences.ts`). Lit/écrit le MÊME tableau `etat.appareils`
+     * que `GET`/`DELETE /api/v1/users/me/devices` ci-dessous.
+     */
+    if (routesDuPush(etat.appareils)({ requete, url, corps, json })) {
       return true;
     }
 
@@ -1037,8 +1070,10 @@ export const routesDuCompte =
        * Prisme au niveau CONVERSATION (`lastMessageOriginalLanguage`,
        * `lastMessageTranslations` — une carte `{ langue: aperçu }` restreinte au
        * prisme du lecteur) et `userPreferences`, un TABLEAU d'au plus une
-       * entrée (`take: 1` sur `userId`). Les QUATRE lignes (#5164, correction de
-       * revue) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
+       * entrée (`take: 1` sur `userId`). Les DOUZE lignes (spécification « le
+       * rond flottant ne recouvre plus le pied de page », § T2 — quatre
+       * portées à douze pour démontrer les règles de complétude sur une vraie
+       * volumétrie) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
        * gestionnaire boucle dessus au lieu de porter le littéral.
        *
        * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN
@@ -1059,7 +1094,15 @@ export const routesDuCompte =
         (ligne) => !etat.masquees.has(ligne.id),
       );
 
-      json({ success: true, data: lignes, pagination: { total: 7 } });
+      // `total` = `totalCount` en production : un `prisma.conversation.count()`
+      // sur TOUTES les conversations du lecteur, pas sur la page
+      // (`core-list.ts:503-507`, servi `:887`). Le bouchon rendant sa fixture
+      // ENTIÈRE en une page, les deux coïncident. Il portait `7` EN DUR pour
+      // quatre lignes ; la volumétrie a corrigé ce mensonge. Les trois champs
+      // voisins de la vraie route (`limit`, `offset`, `hasMore`) et son
+      // `cursorPagination` restent TUS tant qu'aucune surface de la v3 ne
+      // pagine — `lib/api/compte.ts` ne lit que `data`.
+      json({ success: true, data: lignes, pagination: { total: lignes.length } });
       return true;
     }
 

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import AxeBuilder from '@axe-core/playwright';
@@ -353,5 +353,133 @@ test.describe('les treize bascules, en direct', () => {
       (franchissement) => franchissement.statut === 'GATE',
     );
     expect(franchis.map((franchissement) => franchissement.texte)).toEqual([]);
+  });
+});
+
+/**
+ * LA RANGÉE PUSH « SUR CET APPAREIL » (#5391) — deux déploiements, deux
+ * verdicts SERVIS, jamais une supposition côté navigateur :
+ *
+ *   - SANS configuration Firebase (le `v3` de la suite ci-dessus, démarré
+ *     sans les quatre variables) — la rangée est `indisponible`, désactivée,
+ *     motif nommé ;
+ *   - AVEC configuration Firebase — la rangée est `non-abonne`, activable,
+ *     et sert les attributs `data-firebase-*` que le module d'abonnement lit.
+ *
+ * La danse FCM réelle (Installations/Registrations, § 2.5 de la
+ * spécification) n'est PAS rejouée ici : elle appelle des services Google
+ * réels que ce gate n'a pas vocation à joindre, et la spécification la
+ * réserve à une vérification en staging (§ 9, Q4). Ce que ce gate garde :
+ * l'état SERVI, la configuration EXPOSÉE au module, et le rendu dans les
+ * deux schémas.
+ */
+test.describe('la rangée push — /notifications/preferences', () => {
+  /**
+   * SON PROPRE SERVEUR — jamais `v3`/`passerelle` de la suite du dessus :
+   * ces deux variables sont fermées par SON `afterAll` dès que ses tests
+   * finissent, et un `test.describe` frère du fichier tourne APRÈS (Playwright
+   * exécute les blocs dans l'ORDRE du fichier) — les réutiliser ici viserait
+   * un serveur déjà éteint (`ERR_CONNECTION_REFUSED`, mesuré).
+   */
+  let passerelleSansFirebase: PasserelleDeBouchon;
+  let v3SansFirebase: ServeurV3;
+
+  test.beforeAll(async () => {
+    passerelleSansFirebase = await passerelleDeBouchon();
+    v3SansFirebase = await serveurDeLaV3(passerelleSansFirebase.base);
+  });
+
+  test.afterAll(async () => {
+    await v3SansFirebase?.ferme();
+    await passerelleSansFirebase?.ferme();
+  });
+
+  test('sans configuration Firebase, la rangée est servie indisponible, désactivée', async ({ browser }) => {
+    const contexte = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await contexte.addCookies([
+      { name: 'meeshy_session', value: 'sonde', url: v3SansFirebase.base },
+      { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3SansFirebase.base },
+    ]);
+    const page = await contexte.newPage();
+
+    await page.goto(`${v3SansFirebase.base}/notifications/preferences`);
+    const commutateur = page.locator('form.bascule-push button[role="switch"]');
+
+    await expect(commutateur).toBeDisabled();
+    await expect(commutateur).toHaveAttribute('aria-checked', 'false');
+    await expect(page.locator('.push-detail p')).toContainText('pas configuré');
+
+    await contexte.close();
+  });
+
+  test.describe('avec une configuration Firebase déployée', () => {
+    let passerelleAvecFirebase: PasserelleDeBouchon;
+    let v3AvecFirebase: ServeurV3;
+
+    test.beforeAll(async () => {
+      passerelleAvecFirebase = await passerelleDeBouchon();
+      v3AvecFirebase = await serveurDeLaV3(passerelleAvecFirebase.base, {
+        NEXT_PUBLIC_FIREBASE_API_KEY: 'AIza-bouchon-e2e',
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'meeshy-bouchon-e2e',
+        NEXT_PUBLIC_FIREBASE_APP_ID: '1:000000000000:web:bouchone2e',
+        NEXT_PUBLIC_FIREBASE_VAPID_KEY:
+          'BOxYqz7v0mQ2QwYqz7v0mQ2QwYqz7v0mQ2QwYqz7v0mQ2QwYqz7v0mQ2QwYqz7v0mQ2QwYqz7v0mQ2QwYq',
+        NEXT_PUBLIC_FCM_INSTALLATIONS_BASE: `${passerelleAvecFirebase.base}/bouchon-fcm`,
+        NEXT_PUBLIC_FCM_REGISTRATIONS_BASE: `${passerelleAvecFirebase.base}/bouchon-fcm`,
+      });
+    });
+
+    test.afterAll(async () => {
+      await v3AvecFirebase?.ferme();
+      await passerelleAvecFirebase?.ferme();
+    });
+
+    const contexteDeCetteSuite = (browser: Browser, colorScheme: 'light' | 'dark') =>
+      browser.newContext({
+        viewport: { width: 390, height: 844 },
+        colorScheme,
+      });
+
+    test('sert la rangée activable, avec les attributs data-firebase-* que le module lit', async ({ browser }) => {
+      const contexte = await contexteDeCetteSuite(browser, 'light');
+      await contexte.addCookies([
+        { name: 'meeshy_session', value: 'sonde', url: v3AvecFirebase.base },
+        { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3AvecFirebase.base },
+      ]);
+      const page = await contexte.newPage();
+
+      await page.goto(`${v3AvecFirebase.base}/notifications/preferences`);
+      const commutateur = page.locator('form.bascule-push button[role="switch"]');
+
+      await expect(commutateur).toBeEnabled();
+      await expect(commutateur).toHaveAttribute('aria-checked', 'false');
+      await expect(page.locator('main[data-participation="prefs"]')).toHaveAttribute(
+        'data-firebase-api-key',
+        'AIza-bouchon-e2e',
+      );
+
+      await contexte.close();
+    });
+
+    test('captures 390×844 de la rangée push, clair et sombre', async ({ browser }) => {
+      const dossier = process.env.RENDUS_DIR ?? join(RACINE_V3, '..', '..', '.cache', 'web-v3-workflow', 'rendus');
+      mkdirSync(dossier, { recursive: true });
+
+      for (const schema of ['light', 'dark'] as const) {
+        const contexte = await contexteDeCetteSuite(browser, schema);
+        await contexte.addCookies([
+          { name: 'meeshy_session', value: 'sonde', url: v3AvecFirebase.base },
+          { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3AvecFirebase.base },
+        ]);
+        const page = await contexte.newPage();
+
+        await page.goto(`${v3AvecFirebase.base}/notifications/preferences`);
+        await page.waitForFunction(() => document.querySelector('main[data-participation="prefs"]') !== null);
+        await page.locator('.groupe-push').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: join(dossier, `notifs-${schema}.png`) });
+
+        await contexte.close();
+      }
+    });
   });
 });
