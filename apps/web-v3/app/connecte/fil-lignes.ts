@@ -8,7 +8,7 @@ import { adresseCarte, adresseGeo, type Lieu } from '@/lib/api/lieu';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
 import { EMOJIS_DE_LA_PALETTE, FIL, libelleDeCitation } from '@/lib/contenu/fil';
 import { metaDePiece } from '@/lib/poids';
-import { cleDuJour, libelleDuJour } from '@/lib/temps';
+import { cleDuJour, libelleDuJour, heureExacte } from '@/lib/temps';
 
 import { aFiche, ficheDePiece, gesteDePiece, type GesteDePiece } from './plein-vue';
 import { adresseDuProfil } from './profil-vue';
@@ -420,8 +420,8 @@ const accuse = (message: Message): string => (message.deMoi && !message.systeme 
  * **« si nécessaire »** est rendu par `accuse` lui-même, qui ne peint rien pour
  * un message reçu : la colonne d'un message d'autrui ne porte que son heure.
  */
-const datation = (message: Message, maintenant: number): string =>
-  `<p class="datation">${heure(message, maintenant)}${accuse(message)}</p>`;
+const datation = (message: Message, maintenant: number, langueDuDocument: string, fuseau: string | null | undefined): string =>
+  `<p class="datation">${heure(message, maintenant, langueDuDocument, fuseau)}${accuse(message)}</p>`;
 
 /**
  * La pastille de langue (charte règle 22) : `ph-translate` + le code de la
@@ -563,10 +563,21 @@ export const estUneSuite = (message: Message, precedent: Message | null): boolea
   cleDuJour(message.ecritA) === cleDuJour(precedent.ecritA) &&
   Date.parse(message.ecritA) - Date.parse(precedent.ecritA) < FENETRE_DE_SUITE_MS;
 
-const heure = (message: Message, maintenant: number): string =>
-  message.ecritA === null
-    ? '<time></time>'
-    : `<time datetime="${echappe(message.ecritA)}">${echappe(quand(message.ecritA, maintenant))}</time>`;
+/**
+ * L'heure d'une ligne : EXACTE, au fuseau du lecteur, dès le premier octet
+ * quand le cookie `meeshy_tz` est là (décision porteur 2026-09-06 — fini le
+ * « il y a 27 min » que le module remplaçait en scintillant) ; le relatif ne
+ * reste que pour le lecteur au fuseau inconnu, et `heureExacte` rend '' sur
+ * un fuseau que l'ICU refuse — on retombe alors sur le relatif, jamais sur
+ * une heure dans le mauvais fuseau. `recaleLesHeures` (module) reste : il ne
+ * fait plus que confirmer ce que le serveur a déjà servi.
+ */
+const heure = (message: Message, maintenant: number, langueDuDocument: string, fuseau: string | null | undefined): string => {
+  if (message.ecritA === null) return '<time></time>';
+  const exacte = fuseau == null ? '' : heureExacte(message.ecritA, langueDuDocument, fuseau);
+  const dite = exacte !== '' ? exacte : quand(message.ecritA, maintenant);
+  return `<time datetime="${echappe(message.ecritA)}">${echappe(dite)}</time>`;
+};
 
 /** Le séparateur de jour — UN `<li>` ordinaire, `data-jour` porte la clé locale que le module relit. */
 export const separateurDeJour = ({ iso, maintenant, langueDuDocument }: { readonly iso: string; readonly maintenant: number; readonly langueDuDocument: string }): string =>
@@ -580,6 +591,7 @@ export const ligne = ({
   adresse,
   composeurOuvert,
   estInvite,
+  fuseau = null,
 }: {
   readonly message: Message;
   readonly precedent: Message | null;
@@ -591,11 +603,13 @@ export const ligne = ({
   readonly composeurOuvert: boolean;
   /** L'invité ne modifie ni ne retire (régime 3) — le membre le peut sur ses propres lignes. */
   readonly estInvite: boolean;
+  /** Le fuseau IANA du lecteur (cookie `meeshy_tz`) — absent : l'heure se dit en relatif. */
+  readonly fuseau?: string | null;
 }): string => {
   if (message.systeme) {
     return (
       `<li class="${classes(message, false)}" ${attributs(message)}>` +
-      `<div class="corps"><p class="texte">${svgDuSprite('ph-ghost')} ${echappe(message.texte)}</p>${heure(message, maintenant)}</div>` +
+      `<div class="corps"><p class="texte">${svgDuSprite('ph-ghost')} ${echappe(message.texte)}</p>${heure(message, maintenant, langueDuDocument, fuseau)}</div>` +
       '</li>'
     );
   }
@@ -638,7 +652,7 @@ export const ligne = ({
     '</p>' +
     reactionsHtml(message, adresse) +
     '</div>' +
-    datation(message, maintenant) +
+    datation(message, maintenant, langueDuDocument, fuseau) +
     menuDeLigne(message, adresse, { composeurOuvert, maintenant, estInvite }) +
     '</div>' +
     '</li>'
@@ -662,6 +676,7 @@ export const lignes = ({
   adresse,
   composeurOuvert,
   estInvite,
+  fuseau = null,
 }: {
   readonly messages: readonly Message[];
   readonly maintenant: number;
@@ -671,6 +686,8 @@ export const lignes = ({
   readonly composeurOuvert: boolean;
   /** L'invité ne modifie ni ne retire (régime 3). */
   readonly estInvite: boolean;
+  /** Le fuseau IANA du lecteur (cookie `meeshy_tz`) — voir `heure()`. */
+  readonly fuseau?: string | null;
 }): string =>
   messages
     .map((message, rang) => {
@@ -681,7 +698,7 @@ export const lignes = ({
         message.ecritA !== null && jour !== jourPrecedent
           ? separateurDeJour({ iso: message.ecritA, maintenant, langueDuDocument })
           : '';
-      return ligne({ message, precedent, maintenant, langueDuDocument, adresse, composeurOuvert, estInvite }) + separateur;
+      return ligne({ message, precedent, maintenant, langueDuDocument, adresse, composeurOuvert, estInvite, fuseau }) + separateur;
     })
     .reverse()
     .join('');
@@ -739,6 +756,13 @@ export const gabaritDeLigne = (adresse: string): string =>
   `<span class="attente">${svgDuSprite('ph-clock')}<span class="etat-envoi">${echappe(FIL.enAttente)}</span></span>` +
   `<span class="echec">${svgDuSprite('ph-warning-circle')}<span class="raison">${echappe(FIL.echec)}</span>` +
   `<button type="button" class="action discrete reessayer">${echappe(FIL.reessayer)}</button></span>` +
+  // LA FENÊTRE D'ANNULATION D'UN RETRAIT (suivi #5163 § 12.12) — le MÊME
+  // motif que `.reessayer` juste au-dessus : un `<button>` NU, sans balise
+  // propre, gouverné par la SEULE classe d'envoi posée sur `<li>`
+  // (`.ligne.envoi-retrait-differe .retrait`, `fil-feuille.ts`) — jamais un
+  // `hidden` que ce module devrait lui-même basculer. Sans JavaScript, cette
+  // fente n'existe nulle part : rien n'attend, rien ne s'annule.
+  `<span class="retrait"><button type="button" class="action discrete annuler-le-retrait" aria-label="${echappe(FIL.annulerLeRetrait)}">${echappe(FIL.annuler)}</button></span>` +
   boutonReagir() +
   '</p>' +
   `<ul class="reactions" aria-label="${echappe(FIL.reactions)}" hidden>${pastilleDeReaction({ emoji: '', nombre: 0, messageId: '', adresse })}</ul>` +

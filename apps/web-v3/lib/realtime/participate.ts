@@ -753,7 +753,26 @@ const surTransition = (ctx: Contexte) => (transition: TransitionDeCycle): void =
  */
 const CIBLE_DU_LIEN = { region: '#lien-cree', ouvreur: 'a.partager' } as const;
 
+/**
+ * LE COOKIE DU FUSEAU (décision porteur 2026-09-06, `lib/temps.ts`) — posé au
+ * boot pour que le PROCHAIN document serve l'heure de réception exacte dès le
+ * premier octet (`fuseauDuLecteur`, `app/session.ts`). Un an, `SameSite=Lax`,
+ * jamais `Secure` en dur : le poste de développement sert en clair. Best-effort
+ * dans un try : un navigateur qui refuse d'écrire un cookie ne casse pas le fil.
+ */
+const poseLeFuseau = (): void => {
+  try {
+    const fuseau = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof fuseau === 'string' && fuseau.length > 0 && fuseau.length <= 64) {
+      document.cookie = `meeshy_tz=${encodeURIComponent(fuseau)};path=/;max-age=31536000;samesite=lax`;
+    }
+  } catch {
+    // Sans fuseau lisible, le serveur continue de servir le relatif.
+  }
+};
+
 const demarre = async (): Promise<void> => {
+  poseLeFuseau();
   const main = document.querySelector<HTMLElement>('main[data-participation="fil"]');
   if (main === null) return;
   // AVANT toute créance : une surimpression servie doit se fermer à Échap même

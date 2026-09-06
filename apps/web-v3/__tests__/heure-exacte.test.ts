@@ -53,3 +53,44 @@ describe('le cookie du fuseau', () => {
     expect(fuseauPlausible('1Fuseau')).toBe(false);
   });
 });
+
+describe("le fil sert l'heure exacte dès le premier octet", () => {
+  const message = {
+    id: 'm1', clientMessageId: null, auteur: 'Ada', auteurId: 'u1', anonyme: false,
+    deMoi: false, systeme: false, texte: 'Bonjour', texteOriginal: 'Bonjour',
+    langueServie: null, langueOriginale: null, traductions: {},
+    ecritA: '2026-09-06T12:00:00.000Z', protege: false, edite: false,
+    supprime: false, pieces: [], lieu: null, citations: [], reactions: [],
+    accuse: 'aucun',
+  };
+
+  it("rend l'heure exacte au fuseau du lecteur quand le cookie est là", async () => {
+    const { ligne } = await import('@/app/connecte/fil-lignes');
+    const html = ligne({
+      message: message as never, precedent: null, maintenant: Date.parse('2026-09-06T12:30:00.000Z'),
+      langueDuDocument: 'fr', adresse: '/chats/c1', composeurOuvert: true, estInvite: false,
+      fuseau: 'Europe/Paris',
+    });
+    expect(html).toContain('>14:00<');
+    expect(html).not.toContain('il y a');
+  });
+
+  it('sert le relatif sans fuseau — le comportement historique, jamais une heure fausse', async () => {
+    const { ligne } = await import('@/app/connecte/fil-lignes');
+    const html = ligne({
+      message: message as never, precedent: null, maintenant: Date.parse('2026-09-06T12:30:00.000Z'),
+      langueDuDocument: 'fr', adresse: '/chats/c1', composeurOuvert: true, estInvite: false,
+    });
+    expect(html).toContain('il y a 30 min');
+  });
+
+  it('retombe sur le relatif quand le fuseau du cookie est invalide pour l’ICU', async () => {
+    const { ligne } = await import('@/app/connecte/fil-lignes');
+    const html = ligne({
+      message: message as never, precedent: null, maintenant: Date.parse('2026-09-06T12:30:00.000Z'),
+      langueDuDocument: 'fr', adresse: '/chats/c1', composeurOuvert: true, estInvite: false,
+      fuseau: 'Meeshy/Nulle_Part',
+    });
+    expect(html).toContain('il y a 30 min');
+  });
+});

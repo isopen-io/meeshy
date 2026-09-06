@@ -35,7 +35,7 @@ import { adresseDeLaPorte, documentDuFil, type Composeur } from '@/app/connecte/
 import { chargeLeProfilSiDemande, traiteLActionDeProfil } from '@/app/connecte/profil-porte';
 import { documentDePanne } from '@/app/connecte/vue';
 import { chargementSpeculatif, navigationEtrangere, origineEtrangere, refusDOrigine, sansEffet } from '@/app/provenance';
-import { estSecurisee, jetonDuLecteur } from '@/app/session';
+import { estSecurisee, fuseauDuLecteur, jetonDuLecteur } from '@/app/session';
 
 import {
   CHAMP_DE_LA_LANGUE,
@@ -387,6 +387,7 @@ const invite = async ({
       erreur,
       brouillon,
       maintenant,
+      fuseau: fuseauDuLecteur(requete),
       composeur,
       tempsReel: tempsReelDuDocument(),
       contexte,
