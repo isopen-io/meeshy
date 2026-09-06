@@ -261,6 +261,7 @@
 		253D45D16586B885169965C8 /* ProfilePostsCountsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3617BEA5ABD3D480670C6E3F /* ProfilePostsCountsTests.swift */; };
 		2578DFA0383EA70187D48F56 /* AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7CBA67AA47DF4047719DC2 /* AnalyticsManager.swift */; };
 		258BD6EA5B10B1E3D6B34180 /* AffiliatesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D34DA5C2F91268F510CA73 /* AffiliatesViewModelTests.swift */; };
+		25A985C8C374AEEC4951D5F7 /* OutboxFlushScheduling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83F632BB7879CBAD23D71A80 /* OutboxFlushScheduling.swift */; };
 		25B30F449BE457F6D2458609 /* NotificationContentRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1163722A9E75745FAC983B /* NotificationContentRouter.swift */; };
 		25C1762B70854AC1E4B6631B /* FocalConversationStartRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BEEB36466FD2EAA335857E /* FocalConversationStartRow.swift */; };
 		25C82A76BBB15E1BC38F7013 /* RiverStreamHostSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000DC6B58B09C752A55AB41D /* RiverStreamHostSourceGuardTests.swift */; };
@@ -2749,6 +2750,7 @@
 		839495EDBE7000CFDE795561 /* MockAuthServiceSDK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAuthServiceSDK.swift; sourceTree = "<group>"; };
 		839E92742C7A231B4B7BA7B7 /* ComposerSceneFloatingRailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFloatingRailTests.swift; sourceTree = "<group>"; };
 		83EB0777D0CED31D96207868 /* RiverBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverBubbleView.swift; sourceTree = "<group>"; };
+		83F632BB7879CBAD23D71A80 /* OutboxFlushScheduling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxFlushScheduling.swift; sourceTree = "<group>"; };
 		840369ED47FCE4E9E1C3B56B /* MeeshyComposerHost+Audience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Audience.swift"; sourceTree = "<group>"; };
 		8407CD64C2B1D23C2EB4057A /* LocalBridgeProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBridgeProviderTests.swift; sourceTree = "<group>"; };
 		840A53DFF7BA37312E5CCA38 /* ConversationLoadingPhaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLoadingPhaseTests.swift; sourceTree = "<group>"; };
@@ -5524,6 +5526,7 @@
 				EC2EBD8AB465E1FD32A71531 /* OptimisticAttachmentAdopter.swift */,
 				7E0FFF9C752CE95E58A3223B /* OutboxDispatcher.swift */,
 				397070688CD8000FB7B89F36 /* OutboxDispatcher+Messages.swift */,
+				83F632BB7879CBAD23D71A80 /* OutboxFlushScheduling.swift */,
 				FECBDA2D08B15B462B1099DB /* ParticipantService.swift */,
 				D8EB852270ACE02198984BDD /* PendingStatusQueue.swift */,
 				A7197D1889C1347D2D89484F /* PresenceManager.swift */,
@@ -6820,6 +6823,7 @@
 				B14495C1F010415DDDA436F3 /* OptimisticAttachmentAdopter.swift in Sources */,
 				5D59D6C6A8ECA173F32436CF /* OutboxDispatcher+Messages.swift in Sources */,
 				B88197E7A14C4ED8C9820DDF /* OutboxDispatcher.swift in Sources */,
+				25A985C8C374AEEC4951D5F7 /* OutboxFlushScheduling.swift in Sources */,
 				117760255698C98C224F3E1D /* P2PWebRTCClient.swift in Sources */,
 				E031FB21FE54366CF8443867 /* PanelBackAction.swift in Sources */,
 				95B2B97870BC0F19E0FA0C85 /* ParticipantProfileSheet.swift in Sources */,
