@@ -40,8 +40,47 @@ import { commutateur } from './reglages-socle';
  * travail à part.
  */
 
-/** `'fenetre-dnd'` — le sentinelle de la RÈGLE APPLIQUÉE quand le geste réglé n'est pas une des treize bascules. */
-export type RegleAppliquee = CleDePreference | 'fenetre-dnd' | null;
+/**
+ * `'fenetre-dnd'`, `'push-abonne'`, `'push-desabonne'` — les sentinelles de la
+ * RÈGLE APPLIQUÉE quand le geste réglé n'est pas une des treize bascules. Le
+ * push (#5391) porte DEUX sentinelles, pas une : « abonnement activé » et
+ * « abonnement retiré » ne sont pas le même message, et rien d'autre que le
+ * geste effectué ne le dit (§ 3.2 de la spécification).
+ */
+export type RegleAppliquee = CleDePreference | 'fenetre-dnd' | 'push-abonne' | 'push-desabonne' | null;
+
+/**
+ * L'ÉTAT DU PUSH WEB (#5391) — SERVI, jamais peint depuis un espoir local :
+ * `abonne`/`non-abonne` viennent de `GET /users/me/devices` filtré par
+ * `deviceId`/`platform`/`isActive` (§ 3.2 de la spécification) ;
+ * `indisponible` couvre l'absence de configuration Firebase CÔTÉ SERVEUR
+ * (déploiement sans les variables `NEXT_PUBLIC_FIREBASE_*`) — le navigateur
+ * SANS Push API est une indisponibilité que seul le CLIENT peut mesurer,
+ * dégradée par `lib/realtime/push-abonnement.ts` sans jamais désactiver la
+ * rangée depuis le serveur.
+ */
+export type EtatPushAppareil = {
+  readonly etat: 'abonne' | 'non-abonne' | 'indisponible';
+  readonly motif: string | null;
+  readonly deviceId: string | null;
+  readonly configuration: ConfigurationFirebase | null;
+};
+
+/**
+ * LA CONFIGURATION FIREBASE PUBLIQUE — les MÊMES noms d'environnement que le
+ * legacy (`apps/web/firebase-config.ts:27-61`), jamais une jumelle de
+ * nommage. `baseInstallations`/`baseRegistrations` sont les DEUX bases REST
+ * du protocole SDK réécrit à la main (§ 0, § 2.5 de la spécification) —
+ * paramétrées pour que les témoins e2e les pointent vers le bouchon.
+ */
+export type ConfigurationFirebase = {
+  readonly apiKey: string;
+  readonly projectId: string;
+  readonly appId: string;
+  readonly vapid: string;
+  readonly baseInstallations: string;
+  readonly baseRegistrations: string;
+};
 
 export type EtatDesPrefs = {
   readonly reglages: Readonly<Record<CleDePreference, boolean>>;
@@ -67,6 +106,8 @@ export type EtatDesPrefs = {
    */
   readonly motif: string | null;
   readonly tempsReel: { readonly module: string; readonly passerelle: string } | null;
+  /** L'ABONNEMENT PUSH DE CET APPAREIL (#5391) — voir `EtatPushAppareil` ci-dessus. */
+  readonly push: EtatPushAppareil;
 };
 
 const CHEMIN = '/notifications/preferences';
@@ -84,8 +125,12 @@ const enTete = (): string =>
   '</div>' +
   '</header>';
 
-const messageDeLAvis = (regleAppliquee: Exclude<RegleAppliquee, null>): string =>
-  regleAppliquee === 'fenetre-dnd' ? PREFS.fenetreRegle : PREFS.regle(LIBELLE_PAR_CLE[regleAppliquee]);
+const messageDeLAvis = (regleAppliquee: Exclude<RegleAppliquee, null>): string => {
+  if (regleAppliquee === 'fenetre-dnd') return PREFS.fenetreRegle;
+  if (regleAppliquee === 'push-abonne') return PREFS.push.regleAbonne;
+  if (regleAppliquee === 'push-desabonne') return PREFS.push.regleDesabonne;
+  return PREFS.regle(LIBELLE_PAR_CLE[regleAppliquee]);
+};
 
 const avis = (regleAppliquee: RegleAppliquee): string =>
   `<p class="avis" role="status"${regleAppliquee === null ? ' hidden' : ''}>${
@@ -184,6 +229,52 @@ const section = (
   (s.bascules.some((b) => b.cle === 'dndEnabled') ? formulaireDeLaFenetre(etat) : '') +
   '</section>';
 
+/**
+ * LA RANGÉE « SUR CET APPAREIL » (#5391) — PAS une quatorzième entrée de
+ * `SECTIONS_DE_PREFS` : un geste `push` distinct (`name="geste" value="push"`),
+ * jamais `name="cle"` — l'abonnement vit sur le NAVIGATEUR, pas dans les
+ * treize colonnes de `NotificationPreference`. Même famille visuelle que
+ * `commutateur()` (classes `commutateur`/`piste`/`pouce`/`hors-ecran`), un
+ * markup PROPRE plutôt qu'un partage forcé : `commutateur()` grave
+ * `name="cle"` en dur, et cette rangée n'a pas de `cle`.
+ *
+ * `abonnement` ET `deviceId` sont des champs CACHÉS VIDES au repos — c'est le
+ * module de participation (`lib/realtime/push-abonnement.ts`) qui les
+ * REMPLIT juste avant que la soumission native parte (§ 3.4 de la
+ * spécification). Sans JavaScript, `abonnement` reste vide : la porte le lit
+ * et sert le motif « exige JavaScript », JAMAIS un appel à la passerelle.
+ */
+const rangeePush = (push: EtatPushAppareil): string => {
+  const abonne = push.etat === 'abonne';
+  const indisponible = push.etat === 'indisponible';
+  const libelleEtat = abonne ? PREFS.push.abonne : indisponible ? PREFS.push.indisponible : PREFS.push.nonAbonne;
+  const detail = indisponible && push.motif !== null ? push.motif : PREFS.push.detailCorps;
+  return (
+    '<section class="groupe-prefs groupe-push">' +
+    `<h2>${echappe(PREFS.push.titreSection)}</h2>` +
+    '<ul class="bascules">' +
+    '<li>' +
+    '<form class="bascule-push" method="post">' +
+    '<input type="hidden" name="geste" value="push">' +
+    `<input type="hidden" name="valeur" value="${abonne ? 'false' : 'true'}">` +
+    '<input type="hidden" name="abonnement" value="">' +
+    `<input type="hidden" name="deviceId" value="${echappe(push.deviceId ?? '')}">` +
+    `<button type="submit" class="commutateur" role="switch" aria-checked="${abonne ? 'true' : 'false'}"${indisponible ? ' disabled' : ''}>` +
+    `<span class="libelle">${echappe(PREFS.push.libelle)}</span>` +
+    '<span class="piste" aria-hidden="true"><span class="pouce"></span></span>' +
+    `<span class="hors-ecran">${echappe(libelleEtat)}</span>` +
+    '</button>' +
+    '</form>' +
+    '<details class="push-detail">' +
+    `<summary>${echappe(PREFS.push.detailResume)}</summary>` +
+    `<p>${echappe(detail)}</p>` +
+    '</details>' +
+    '</li>' +
+    '</ul>' +
+    '</section>'
+  );
+};
+
 const corps = (etat: EtatDesPrefs, participation: string): string =>
   `<main id="main-content" class="prefs-ecran"${participation}>` +
   enTete() +
@@ -191,7 +282,20 @@ const corps = (etat: EtatDesPrefs, participation: string): string =>
   echecBandeau(etat.echec, etat.motif) +
   sessionExpireeBandeau() +
   SECTIONS_DE_PREFS.map((s) => section(s, etat)).join('') +
+  rangeePush(etat.push) +
   '</main>';
+
+/**
+ * LES ATTRIBUTS `data-firebase-*` — servis SEULEMENT quand le déploiement a
+ * les quatre variables (§ 3.4 de la spécification) : leur absence est ce qui
+ * fait naître `push.configuration` à `null`, et c'est CE `null` qui empêche
+ * le module de s'armer (`lib/realtime/push-abonnement.ts`) — jamais un
+ * second test côté client des mêmes variables.
+ */
+const attributsFirebase = (configuration: ConfigurationFirebase | null): string =>
+  configuration === null
+    ? ''
+    : ` data-firebase-api-key="${echappe(configuration.apiKey)}" data-firebase-project-id="${echappe(configuration.projectId)}" data-firebase-app-id="${echappe(configuration.appId)}" data-firebase-vapid="${echappe(configuration.vapid)}" data-fcm-installations-base="${echappe(configuration.baseInstallations)}" data-fcm-registrations-base="${echappe(configuration.baseRegistrations)}"`;
 
 export const documentDesPrefs = (etat: EtatDesPrefs): string =>
   documentPleinEcran({
@@ -199,9 +303,10 @@ export const documentDesPrefs = (etat: EtatDesPrefs): string =>
     description: PREFS.sousTitre,
     corps: corps(
       etat,
-      etat.tempsReel === null
+      (etat.tempsReel === null
         ? ''
-        : ` data-participation="prefs" data-module="${echappe(etat.tempsReel.module)}" data-passerelle="${echappe(etat.tempsReel.passerelle)}"`,
+        : ` data-participation="prefs" data-module="${echappe(etat.tempsReel.module)}" data-passerelle="${echappe(etat.tempsReel.passerelle)}"`) +
+        attributsFirebase(etat.push.configuration),
     ),
     feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_PREFS,
     script: etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION,
