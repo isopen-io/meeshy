@@ -1470,8 +1470,22 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // surface, et le montage du meuble l'a suivie. Ce cliquet est le
             // septième laissé derrière par cette extraction — un nom de FICHIER
             // écrit dans une garde ne suit pas le code qui déménage.
+            //
+            // **Trois portes de plus, 2026-09-06** : le partage
+            // (`ShareComposeDoor`), l'édition d'une story (`StoryEditComposer`)
+            // et sa republication (`StoryRepublishComposer`) montent désormais le
+            // MEUBLE plutôt que l'atelier nu. C'est la direction de la migration
+            // — un seul meuble pour toutes les portes —, et les trois passent les
+            // trois canaux vérifiés ci-dessus, ce qui est exactement ce que cette
+            // garde existe pour exiger.
+            //
+            // > Un SET qui grandit dit « une porte de plus » ; un SET qui rétrécit
+            // > dit « une porte a cessé de passer par le meuble et recopie son
+            // > envoi ». Les deux se lisent dans un diff, et c'est pour ça que la
+            // > liste est écrite en toutes lettres plutôt que comptée.
             ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
-             "ConversationMediaComposerDoor.swift"],
+             "ConversationMediaComposerDoor.swift", "ShareComposeDoor.swift",
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
@@ -1503,7 +1517,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let attendus = try libellesDeLInitDuMeuble()
         XCTAssertEqual(
             attendus,
-            ["intent", "initialVisibility", "draftId", "onPublishAllInBackground",
+            // `hydration` est entrée en 4e position (#5053) : le contenu qui EXISTE
+            // DÉJÀ — édition ou republication d'une story. Un seul paramètre pour
+            // deux choses (quel contenu reprendre, quelle audience il autorise)
+            // parce que les séparer aurait permis d'en passer une sans l'autre,
+            // c'est-à-dire de republier SANS PLAFOND, silencieusement.
+            ["intent", "initialVisibility", "draftId", "hydration", "onPublishAllInBackground",
              "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss"],
             "La liste des paramètres du meuble a changé. Ce n'est pas un échec en soi — elle est écrite en "
                 + "toutes lettres ici pour qu'un changement d'ordre se lise dans un diff au lieu de se "
