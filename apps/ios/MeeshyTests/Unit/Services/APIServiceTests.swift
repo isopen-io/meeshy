@@ -191,7 +191,7 @@ final class APIServiceTests: XCTestCase {
         let mock = makeMockClient()
         mock.authToken = "token"
         mock.stub("/test", result: ["k": "v"])
-        let _: [String: String] = try await mock.request(TestEndpoint.root, method: "GET", body: nil, queryItems: nil)
+        let _: [String: String] = try await mock.request(FictionalEndpoint("/test"), method: "GET", body: nil, queryItems: nil)
 
         mock.reset()
 
