@@ -220,8 +220,6 @@ export class SignalKeyManager {
    *
    * Rend les pré-clés PUBLIQUES qui viennent d'être attribuées et persistées —
    * c'est ici, et nulle part ailleurs, que `getNextPreKeyId()` attribue un id.
-   * `SignalProtocolAdapter.generatePreKeyBatch` en dépend pour honorer son
-   * contrat `{ id, publicKey }`.
    */
   async generateAndStorePreKeys(count: number): Promise<Array<{ id: number; publicKey: Buffer }>> {
     if (!this.userId) {
