@@ -21,13 +21,18 @@ import MeeshyUI
 /// pas une réécriture. Les décisions qu'elle portait restent écrites ici.
 struct ComposerTopBar: View {
 
-    /// Les vignettes du rail — une par `MeeshySlide`, ce qui veut dire une par
-    /// média posé en FOND (#4724). L'hôte filtre (`headerTileMedia`) : ce que
-    /// cette barre reçoit est déjà la liste des pages, jamais l'inventaire des
-    /// pièces jointes. Vide ⇒ pas de rail.
-    let localMedia: [ComposerDocumentMedia]
-    let selectedMediaURL: URL?
-    let selectableMediaURLs: Set<URL>
+    /// **Le rail des scènes, monté par l'HÔTE** (constat porteur 2026-09-06).
+    ///
+    /// Il recevait auparavant une liste de MÉDIAS filtrée par l'index des
+    /// fondations, sur l'équivalence « une slide = un média de fond » — vraie
+    /// jusqu'au jour où une scène naît d'un fond COLORÉ. La scène existait alors
+    /// sans tuile, et créer une scène ne produisait aucun retour à l'écran.
+    ///
+    /// Le rail montre désormais une mini-preview par SCÈNE, ce qui demande le
+    /// ViewModel (effets vivants, bitmaps chargés). Cette barre ne le connaît
+    /// pas et n'a pas à le connaître : slot OPAQUE, comme `formatFan` et
+    /// `overflowMenu` juste en dessous. `nil` ⇒ pas de rail.
+    let slideRailSlot: AnyView?
 
     /// L'éventail des profils, monté par l'hôte. `nil` ⇒ un seul format offert,
     /// donc aucun sélecteur (loi 4).
@@ -36,8 +41,6 @@ struct ComposerTopBar: View {
     let overflowMenu: AnyView?
 
     let onClose: () -> Void
-    var onRemoveMedia: ((ComposerDocumentMedia) -> Void)?
-    var onSelectMedia: ((ComposerDocumentMedia) -> Void)?
 
     // **L'historique a quitté cette barre le 2026-08-30.** Il y lisait mal :
     // pendant qu'un outil est ouvert, « Annuler » se comprend comme « fermer
@@ -74,53 +77,31 @@ struct ComposerTopBar: View {
 
  
  
-    /// **Le rail des slides (#4047).** Une vignette par slide, celle qu'on
-    /// regarde cerclée, chacune retirable. `localMedia` vide ⇒ RIEN — pas une
-    /// bande à hauteur nulle, pas un rail de zéro chip : un document sans média
-    /// n'a qu'une slide, et un rail d'un seul élément ne navigue vers rien
-    /// (loi 4).
+    /// **Le rail des SCÈNES (#4047, corrigé le 2026-09-06).**
     ///
-    /// **Une tuile dit le FOND d'une slide, et rien d'autre** (#4724). Le rail
-    /// recevait la liste ENTIÈRE des médias du document et montrait donc une
-    /// tuile pour un son, un PDF, une image posée sur la scène — trois choses
-    /// qui ne sont aucune page. Le filtre vit chez l'hôte, qui seul tient
-    /// l'index des fondations ; cette vue reste sans avis, comme le reste de
-    /// la barre.
+    /// Une mini-preview par scène, celle qu'on compose cerclée. Le contenu est
+    /// monté par l'hôte : il demande les effets VIVANTS et les bitmaps chargés,
+    /// que seule une vue tenant le ViewModel peut fournir. Cette barre garde
+    /// son rôle — donner la PLACE, jamais l'avis.
     ///
-    /// **Aucun `＋` en v1, et c'est une RÉPONSE.** La planche en dessine un,
-    /// mais en Post une slide EST un média : un `＋` y créerait une slide VIDE,
-    /// donc un média fantôme dans le carrousel — un post qu'on publierait avec
-    /// un trou. Le seul geste honnête pour ajouter une slide en Post est
-    /// l'outil photo, qui existe déjà. Le `＋` revient avec le profil où une
-    /// slide vide a un sens (Story), pas avant.
+    /// **Ce que ce rail montrait avant, et pourquoi c'était faux.** Il recevait
+    /// une liste de MÉDIAS filtrée par l'index des fondations, sur
+    /// l'équivalence « une slide = un média posé en fond ». Elle a tenu tant
+    /// que toute scène naissait d'un média ; un fond COLORÉ la brise, et la
+    /// scène existait alors sans tuile. Le doc-comment qui vivait ici l'écrivait
+    /// comme une définition — c'est ce qui l'a rendue invisible.
+    ///
+    /// **Aucun `＋` ici, et c'est une RÉPONSE.** La planche en dessine un ; la
+    /// création d'une scène est le geste du rail DROIT (§ 2 bis), et deux portes
+    /// pour un seul geste sont le motif que « une porte n'a pas de jumelle »
+    /// interdit.
     @ViewBuilder
     private var slideRail: some View {
-        if !localMedia.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(localMedia, id: \.url) { media in
-                        ComposerMediaThumbnail(
-                            media: media,
-                            side: 40,
-                            isSelected: media.url == selectedMediaURL,
-                            showsRemove: ComposerMediaChipAffordance.showsRemove(
-                                isSelected: media.url == selectedMediaURL,
-                                isSelectable: selectableMediaURLs.contains(media.url)
-                            )
-                        ) {
-                            onRemoveMedia?(media)
-                        }
-                        // Loi 4 : la vignette n'est un CONTRÔLE que si l'hôte
-                        // sait quoi faire du tap. Sans relais, elle reste ce
-                        // qu'elle a toujours été.
-                        .onTapGesture { onSelectMedia?(media) }
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
+        if let slideRailSlot {
+            slideRailSlot
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
         }
     }
 }

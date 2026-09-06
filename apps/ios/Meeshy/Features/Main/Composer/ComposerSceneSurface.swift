@@ -39,9 +39,11 @@ struct ComposerSceneSurface: View {
 
     // MARK: - La publication
 
-    let localMedia: [ComposerDocumentMedia]
-    let selectedMediaURL: URL?
-    let selectableMediaURLs: Set<URL>
+    /// **Le rail des SCÈNES**, monté par l'hôte (constat porteur 2026-09-06).
+    /// Slot opaque, comme `formatFan` : une mini-preview demande les effets
+    /// vivants et les bitmaps chargés, donc le ViewModel — que cette surface ne
+    /// connaît pas. `nil` ⇒ pas de rail.
+    var slideRailSlot: AnyView?
     /// **Le format COURANT, parce que la géographie des rails en dépend**
     /// (#4893). Lieu, hashtag, mention et corpus de texte ne se posent sur la
     /// scène qu'en Story ; ailleurs ils qualifient la publication et vivent en
@@ -51,8 +53,6 @@ struct ComposerSceneSurface: View {
     let formatFan: AnyView?
     let overflowMenu: AnyView?
     let onClose: () -> Void
-    var onRemoveMedia: ((ComposerDocumentMedia) -> Void)?
-    var onSelectMedia: ((ComposerDocumentMedia) -> Void)?
 
     // MARK: - La scène
 
@@ -581,14 +581,10 @@ struct ComposerSceneSurface: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ComposerTopBar(
-                localMedia: localMedia,
-                selectedMediaURL: selectedMediaURL,
-                selectableMediaURLs: selectableMediaURLs,
+                slideRailSlot: slideRailSlot,
                 formatFan: formatFan,
                 overflowMenu: overflowMenu,
                 onClose: onClose,
-                onRemoveMedia: onRemoveMedia,
-                onSelectMedia: onSelectMedia
             )
 
             // **La trace du son de FOND, EN TÊTE de la scène** (#5001, directive

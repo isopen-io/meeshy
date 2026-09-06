@@ -277,9 +277,7 @@ extension MeeshyComposerHost {
 
     var sceneSurface: some View {
         ComposerSceneSurface(
-            localMedia: headerTileMedia,
-            selectedMediaURL: selectedSlideMediaURL,
-            selectableMediaURLs: Set(slideIdByMediaURL.keys),
+            slideRailSlot: slideRailSlot,
             format: selectedFormat,
             formatFan: mountsFormatFan
                 && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
@@ -287,13 +285,6 @@ extension MeeshyComposerHost {
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
             onClose: onDismiss,
-            onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
-            onSelectMedia: { media in
-                guard let slideId = slideIdByMediaURL[media.url],
-                      let index = viewModel.slides.firstIndex(where: { $0.id == slideId })
-                else { return }
-                viewModel.selectSlide(at: index)
-            },
             slide: Binding(
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }

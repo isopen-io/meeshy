@@ -63,14 +63,24 @@ private struct StoryMiniFilterModifier: ViewModifier {
 /// paraissait sous son repli emoji au lieu de son dessin. La vignette mentait
 /// donc sur la slide — un auteur qui avait posé un lieu ne le voyait pas dans
 /// la bande.
-struct SlideMiniPreview: View {
+/// `public` depuis le 2026-09-06 : le composer de POST (app) monte cette
+/// mini-preview dans sa rangée haute. Elle reste un ATOME au sens de la règle
+/// de pureté du SDK — elle prend des paramètres opaques (des effets, des
+/// bitmaps) et n'appelle aucun singleton nommé Meeshy.
+public struct SlideMiniPreview: View {
     let effects: StoryEffects
     let bgImage: UIImage?
     let drawingData: Data?
     let loadedImages: [String: UIImage]
     let index: Int
 
-    var body: some View {
+    public init(effects: StoryEffects, bgImage: UIImage?, drawingData: Data?,
+                loadedImages: [String: UIImage], index: Int) {
+        self.effects = effects; self.bgImage = bgImage; self.drawingData = drawingData
+        self.loadedImages = loadedImages; self.index = index
+    }
+
+    public var body: some View {
         GeometryReader { geo in
             ZStack {
                 backgroundLayers(in: geo.size)

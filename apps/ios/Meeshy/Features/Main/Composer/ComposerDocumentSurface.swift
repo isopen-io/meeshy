@@ -65,11 +65,14 @@ struct ComposerDocumentSurface: View {
     /// Un son, un document, une image de premier plan sont des pièces jointes
     /// qui ne sont aucune page — les compter ici faisait grossir le carrousel
     /// d'une tuile qui ne menait nulle part.
-    var localMedia: [ComposerDocumentMedia] = []
+    /// **Le rail des SCÈNES**, monté par l'hôte (constat porteur 2026-09-06).
+    /// Slot opaque, comme `formatFan` : une mini-preview demande les effets
+    /// vivants et les bitmaps chargés, donc le ViewModel — que cette surface ne
+    /// connaît pas. `nil` ⇒ pas de rail.
+    var slideRailSlot: AnyView? = nil
 
     /// Retirer une vignette. Le meuble ôte l'élément de `documentLocalMedia`, ce
     /// qui RE-JUGE le format (loi 4 : le toggle POST↔RÉEL suit le média).
-    var onRemoveMedia: ((ComposerDocumentMedia) -> Void)? = nil
 
     /// **Choisir une couleur de FOND (F2, #3885).** Le geste REMONTE au meuble,
     /// qui pose le fond du socle (`documentBackground`) et bascule la scène 9:16
@@ -109,7 +112,6 @@ struct ComposerDocumentSurface: View {
     /// slides. Lui donner la navigation évite d'ajouter un second rail à côté du
     /// premier, qui montrerait exactement la même chose (loi 2). `nil` ⇒ le rail
     /// reste ce qu'il était, un inventaire avec son bouton de retrait.
-    var onSelectMedia: ((ComposerDocumentMedia) -> Void)? = nil
     /// **Le son de FOND de la publication** (#4657) — `nil` quand il n'y en a
     /// pas, et la rangée retrouve alors sa forme d'avant : avatar et texte côte
     /// à côte. Une pastille toujours montée, vide, occuperait la place d'un son
@@ -182,7 +184,6 @@ struct ComposerDocumentSurface: View {
     /// courante) ; la surface ne fait que le peindre — sans quoi elle aurait
     /// besoin du ViewModel pour savoir où l'on est, et cesserait d'être sans
     /// état. `nil` ⇒ aucun anneau : c'est l'état d'un document sans scène.
-    var selectedMediaURL: URL? = nil
 
     /// **Les médias qu'une slide peut ramener à l'écran (#4052).** Depuis que le
     /// son se pose en BANDE-SON plutôt qu'en page du carrousel, « être dans le
@@ -190,7 +191,6 @@ struct ComposerDocumentSurface: View {
     /// qui tient la carte média → slide —, la surface ne le devine pas : une
     /// règle re-dérivée du mime ici divergerait le jour où un autre type
     /// gagnerait sa slide.
-    var selectableMediaURLs: Set<URL> = []
 
     /// **La teinte du PLATEAU, pour que l'occultation de la rangée d'outils s'y
     /// fonde (#4032).**
@@ -387,14 +387,10 @@ struct ComposerDocumentSurface: View {
     /// scène à la recopier.
     private var exitAffordance: some View {
         ComposerTopBar(
-            localMedia: localMedia,
-            selectedMediaURL: selectedMediaURL,
-            selectableMediaURLs: selectableMediaURLs,
+            slideRailSlot: slideRailSlot,
             formatFan: formatFan,
             overflowMenu: overflowMenu,
             onClose: onClose,
-            onRemoveMedia: onRemoveMedia,
-            onSelectMedia: onSelectMedia
         )
     }
 
