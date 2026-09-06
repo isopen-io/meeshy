@@ -43,6 +43,7 @@ const message = (attributs: Partial<Message> = {}): Message => ({
   citations: [],
   reactions: [],
   accuse: 'envoye',
+  epingle: false,
   ...attributs,
 });
 

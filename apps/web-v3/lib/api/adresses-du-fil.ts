@@ -126,9 +126,19 @@ export const adresseDeModification = (adresse: string, id: string): string =>
 export const adresseDuPlein = (adresse: string, messageId: string, pieceId: string): string =>
   `${adresseAutourDuMessage(adresse, messageId)}&${PARAM_DU_PLEIN}=${encodeURIComponent(pieceId)}`;
 
+/**
+ * L'ADRESSE QUI MÈNE À UN MESSAGE DONNÉ, où qu'il soit dans l'historique — la
+ * tranche qui le contient (`?autour=`), cadrée sur lui (`#m-<id>`). Le SITE
+ * UNIQUE de cette composition : la fermeture du plein écran (juste en
+ * dessous) et le bandeau des épinglés (issue #5385, `app/connecte/
+ * epingles-vue.ts`) mènent au même endroit par le même chemin.
+ */
+export const adresseDuMessageAncre = (adresse: string, messageId: string): string =>
+  adresseDuMessage(adresseAutourDuMessage(adresse, messageId), messageId);
+
 /** La fermeture : la MÊME tranche, cadrée sur le message d'où la pièce vient. */
 export const adresseDuRetourDuPlein = (adresse: string, messageId: string): string =>
-  adresseDuMessage(adresseAutourDuMessage(adresse, messageId), messageId);
+  adresseDuMessageAncre(adresse, messageId);
 
 /**
  * CRÉER UN LIEN DE PARTAGE DEPUIS LE FIL DU MEMBRE EST UN ÉTAT DE PLUS DE LA

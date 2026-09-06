@@ -165,6 +165,9 @@ export const FIL = {
   actionsSurMonMessage: 'Actions sur mon message',
   repondre: 'Répondre',
   modifier: 'Modifier',
+  /** Le geste d'ÉPINGLAGE (issue #5385) — deux libellés, un par état du message, jamais un seul mot ambigu. */
+  epingler: 'Épingler',
+  desepingler: 'Désépingler',
   retirer: 'Retirer',
   annuler: 'Annuler',
   /**
@@ -205,6 +208,11 @@ export const FIL = {
   lieuPartage: 'Position partagée',
   voirSurCarte: 'Voir sur la carte',
   ouvrirLeLieu: (nom: string): string => `Ouvrir ${nom} dans une carte`,
+  /**
+   * LE BANDEAU DES ÉPINGLÉS (issue #5385) — mène au plus RÉCEMMENT épinglé
+   * (l'ordre que sert `GET .../pinned-messages`), avec le compte de TOUS.
+   */
+  messageEpingle: (n: number): string => (n === 1 ? '1 message épinglé' : `${n} messages épinglés`),
 } as const;
 
 /**

@@ -145,6 +145,8 @@ export const bulleOptimiste = ({
   citations: reponseA === undefined ? [] : [citationDeReponse(reponseA)],
   reactions: [],
   accuse: 'envoye',
+  // Un message qui n'existe pas encore côté serveur ne peut pas être épinglé.
+  epingle: false,
   envoi: horsLigne ? 'hors-ligne' : 'en-attente',
   raison: null,
 });

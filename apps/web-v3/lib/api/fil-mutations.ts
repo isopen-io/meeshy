@@ -213,6 +213,70 @@ export const modifie = async ({
  * requête aboutir même quand le document part — le module qui l'a envoyée
  * a déjà été détruit, il ne verra ni la réponse ni un refus.
  */
+export type Epinglage =
+  | { readonly genre: 'fait' }
+  | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };
+
+const REFUS_EPINGLAGE = 'Le message n’a pas pu être épinglé.';
+const REFUS_DESEPINGLAGE = 'Le message n’a pas pu être désépinglé.';
+
+/**
+ * `PUT`/`DELETE /api/v1/conversations/:id/messages/:messageId/pin`
+ * (`routes/conversations/messages-pin.ts`, `requiredAuth` avec
+ * `allowAnonymous: false` — même garde fail-closed que `modifie`/`retire` : un
+ * invité n'a JAMAIS cette capacité). CONTRAIREMENT à `modifie`/`retire`, la
+ * passerelle ne borne PAS à l'auteur : n'importe quel membre peut épingler ou
+ * désépingler n'importe quel message vivant de la conversation.
+ */
+const bascule = async ({
+  creance,
+  conversation,
+  messageId,
+  epingler,
+  base,
+  recuperer,
+}: {
+  readonly creance: Creance;
+  readonly conversation: string;
+  readonly messageId: string;
+  readonly epingler: boolean;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Epinglage> => {
+  const refus = epingler ? REFUS_EPINGLAGE : REFUS_DESEPINGLAGE;
+  if (creance.genre === 'invite') return { genre: 'refus', message: refus, statut: 403 };
+  const reponse = await demande(
+    `${base ?? baseDeLaPasserelle()}/api/v1/conversations/${encodeURIComponent(conversation)}/messages/${encodeURIComponent(messageId)}/pin`,
+    creance,
+    recuperer,
+    { method: epingler ? 'PUT' : 'DELETE' },
+  );
+  if (reponse === null) return { genre: 'refus', message: refus, statut: null };
+  const enveloppe = objet(await reponse.json().catch(() => null));
+  if (enveloppe?.success === true) return { genre: 'fait' };
+  return {
+    genre: 'refus',
+    message: chaine(objet(enveloppe?.error)?.message) ?? chaine(enveloppe?.message) ?? refus,
+    statut: reponse.status,
+  };
+};
+
+export const epingle = (args: {
+  readonly creance: Creance;
+  readonly conversation: string;
+  readonly messageId: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Epinglage> => bascule({ ...args, epingler: true });
+
+export const desepingle = (args: {
+  readonly creance: Creance;
+  readonly conversation: string;
+  readonly messageId: string;
+  readonly base?: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<Epinglage> => bascule({ ...args, epingler: false });
+
 export const retire = async ({
   creance,
   messageId,

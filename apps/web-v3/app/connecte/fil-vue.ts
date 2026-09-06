@@ -28,6 +28,7 @@ import { MEDIAS } from '@/lib/contenu/medias';
 
 import { adresseDuLien } from './contenu';
 import { bandeau } from './bandeau-vue';
+import { bandeauDesEpingles } from './epingles-vue';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
 import { REGION_DE_LA_BANNIERE } from './banniere-vue';
@@ -833,6 +834,7 @@ export const corpsDuFil = (
   enTete(etat, cadre) +
   bandeauDesDroits(etat.porte, etat.fil.titre) +
   puces(etat) +
+  (cadre ? '' : bandeauDesEpingles(etat.fil.epingles ?? [], adresseDeLaPorte(etat.porte))) +
   (cadre ? '' : avisLienCree(etat)) +
   (cadre ? '' : bandeauxDifferes(etat)) +
   (etat.erreur === null ? '' : `<p class="alerte" role="alert">${echappe(etat.erreur)}</p>`) +

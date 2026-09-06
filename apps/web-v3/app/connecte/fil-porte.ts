@@ -11,12 +11,12 @@ import {
 } from '@/lib/api/adresses-du-fil';
 import { creeUnLien, type Lecteur, type Recuperateur } from '@/lib/api/compte';
 import { envoie, televerse, type Creance, type Fil } from '@/lib/api/fil';
-import { accuseLecture, aAccuser, modifie, peutModifier, reagis, retire } from '@/lib/api/fil-mutations';
+import { accuseLecture, aAccuser, desepingle, epingle, modifie, peutModifier, reagis, retire } from '@/lib/api/fil-mutations';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import { FIL } from '@/lib/contenu/fil';
 import { traduisLeMotifDuLien } from '@/lib/contenu/liens';
 
-import { CHAMP_DE_LA_REACTION, CHAMP_DU_MESSAGE_CIBLE } from './fil-lignes';
+import { CHAMP_DE_L_EPINGLE, CHAMP_DE_LA_REACTION, CHAMP_DU_DESEPINGLE, CHAMP_DU_MESSAGE_CIBLE } from './fil-lignes';
 import {
   CHAMP_DE_LA_MODIFICATION,
   CHAMP_DE_LA_PIECE,
@@ -196,18 +196,21 @@ export const champDuFormulaire = async (requete: Request, nom: string): Promise<
  * écrivent.
  */
 /**
- * CE QU'UN FORMULAIRE DU FIL DEMANDE — cinq genres depuis l'issue #5163 :
- * une réaction, un message NU, une RÉPONSE (`replyToId` porté par le champ
- * caché `reponseA` du composeur armé), une MODIFICATION (`modifie`, le champ
- * caché du composeur armé en mode édition) ou un RETRAIT (le bouton
- * `name="retirer"` du menu d'une ligne, posté seul). Lus UNE fois pour les
- * deux portes.
+ * CE QU'UN FORMULAIRE DU FIL DEMANDE — sept genres depuis les issues #5163 et
+ * #5385 : une réaction, un message NU, une RÉPONSE (`replyToId` porté par le
+ * champ caché `reponseA` du composeur armé), une MODIFICATION (`modifie`, le
+ * champ caché du composeur armé en mode édition), un ÉPINGLAGE ou un
+ * DÉSÉPINGLAGE (les boutons `name="epingler"`/`name="desepingler"` du menu
+ * d'une ligne, postés seuls) ou un RETRAIT (le bouton `name="retirer"` du
+ * menu d'une ligne, posté seul). Lus UNE fois pour les deux portes.
  */
 export type SoumissionDuFil =
   | { readonly genre: 'reaction'; readonly messageId: string; readonly emoji: string }
   | { readonly genre: 'message'; readonly texte: string; readonly fichiers: readonly File[] }
   | { readonly genre: 'reponse'; readonly texte: string; readonly replyToId: string; readonly fichiers: readonly File[] }
   | { readonly genre: 'modification'; readonly messageId: string; readonly texte: string; readonly texteOriginal: string }
+  | { readonly genre: 'epingler'; readonly messageId: string }
+  | { readonly genre: 'desepingler'; readonly messageId: string }
   | { readonly genre: 'retrait'; readonly messageId: string };
 
 const texteDe = (formulaire: FormData, nom: string): string => {
@@ -219,16 +222,23 @@ const texteDe = (formulaire: FormData, nom: string): string => {
 const CHAMP_DU_RETRAIT = 'retirer';
 
 /**
- * L'ORDRE DE LECTURE (§ 4 étape 2 de la spécification #5163) : `retirer` →
- * `modifie` → `reaction`+`message` → `reponse`/`message`. Un formulaire ne
- * porte qu'UN de ces cinq genres à la fois — le menu d'une ligne, le
- * composeur et la pastille de réaction sont trois formulaires distincts.
+ * L'ORDRE DE LECTURE (§ 4 étape 2 de la spécification #5163, complété par
+ * #5385) : `retirer` → `epingler`/`desepingler` → `modifie` →
+ * `reaction`+`message` → `reponse`/`message`. Un formulaire ne porte qu'UN de
+ * ces sept genres à la fois — le menu d'une ligne, le composeur et la
+ * pastille de réaction sont des formulaires distincts.
  */
 export const soumissionDuFil = (formulaire: FormData | null): SoumissionDuFil => {
   if (formulaire === null) return { genre: 'message', texte: '', fichiers: [] };
 
   const aRetirer = texteDe(formulaire, CHAMP_DU_RETRAIT);
   if (aRetirer !== '') return { genre: 'retrait', messageId: aRetirer };
+
+  const aEpingler = texteDe(formulaire, CHAMP_DE_L_EPINGLE);
+  if (aEpingler !== '') return { genre: 'epingler', messageId: aEpingler };
+
+  const aDesepingler = texteDe(formulaire, CHAMP_DU_DESEPINGLE);
+  if (aDesepingler !== '') return { genre: 'desepingler', messageId: aDesepingler };
 
   const aModifier = texteDe(formulaire, CHAMP_DE_LA_MODIFICATION);
   if (aModifier !== '')
@@ -368,6 +378,31 @@ const basculeLaReaction = async ({
   return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
 };
 
+/**
+ * L'ÉPINGLAGE / DÉSÉPINGLAGE (issue #5385) — TOUT membre, sur TOUT message
+ * vivant (`lib/api/fil-mutations.ts` › `bascule`, PAS bornée à l'auteur,
+ * contrairement à `modifieLeMessage`/`retireLeMessage`). Fail-closed côté
+ * invité au même endroit que ces deux-là (`epingle`/`desepingle` refusent
+ * SANS requête sur `creance.genre === 'invite'`).
+ */
+const basculeLEpingle = async ({
+  creance,
+  conversation,
+  adresse,
+  messageId,
+  epingler,
+}: {
+  readonly creance: Creance;
+  readonly conversation: string;
+  readonly adresse: string;
+  readonly messageId: string;
+  readonly epingler: boolean;
+}): Promise<IssueDeSoumission> => {
+  const issue = epingler ? await epingle({ creance, conversation, messageId }) : await desepingle({ creance, conversation, messageId });
+  if (issue.genre === 'refus') return { genre: 'erreur', message: issue.message, brouillon: '', statut: issue.statut ?? 400 };
+  return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
+};
+
 export const traiteLaSoumission = ({
   soumission,
   creance,
@@ -387,6 +422,9 @@ export const traiteLaSoumission = ({
   }
   if (soumission.genre === 'modification') {
     return modifieLeMessage({ creance, adresse, messageId: soumission.messageId, texte: soumission.texte, texteOriginal: soumission.texteOriginal });
+  }
+  if (soumission.genre === 'epingler' || soumission.genre === 'desepingler') {
+    return basculeLEpingle({ creance, conversation, adresse, messageId: soumission.messageId, epingler: soumission.genre === 'epingler' });
   }
   if (soumission.genre === 'retrait') {
     return retireLeMessage({ creance, adresse, messageId: soumission.messageId });

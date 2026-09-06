@@ -898,6 +898,7 @@ export const bullesDuDocument = (p: Peintre): readonly Bulle[] =>
         mienne: item.querySelector('button.reaction')?.getAttribute('aria-pressed') === 'true',
       })),
       accuse,
+      epingle: ligne.dataset.epingle === '1',
       envoi: 'servi' as const,
       raison: null,
     };

@@ -55,6 +55,9 @@ export const IDENTIFIANT_DU_GABARIT_DE_PALETTE = 'gabarit-palette';
 /** Les deux champs du formulaire de réaction — lus par les deux routes du fil. */
 export const CHAMP_DE_LA_REACTION = 'reaction';
 export const CHAMP_DU_MESSAGE_CIBLE = 'message';
+/** Les boutons du menu qui basculent l'épingle (issue #5385) — postés seuls, comme `retirer`. */
+export const CHAMP_DE_L_EPINGLE = 'epingler';
+export const CHAMP_DU_DESEPINGLE = 'desepingler';
 
 const FENETRE_DE_SUITE_MS = 5 * 60_000;
 
@@ -466,11 +469,12 @@ const classes = (message: Message, suite: boolean): string =>
     .join(' ');
 
 /**
- * LE MENU D'UNE LIGNE (§ 12.10.1, issue #5163) — l'atome `MENU_DE_LIGNE`
- * partagé avec `/chats` et `/links` (`app/connecte/atomes-feuille.ts`), et le
- * MÊME glyphe de menu (`ph-caret-down`, `liste-vue.ts:88`) : aucun 73e
- * glyphe. Trois boutons possibles, chacun une raison distincte de disparaître
- * plutôt que d'être rendu inerte (charte règle 7) :
+ * LE MENU D'UNE LIGNE (§ 12.10.1, issue #5163 ; épingler/désépingler, issue
+ * #5385) — l'atome `MENU_DE_LIGNE` partagé avec `/chats` et `/links`
+ * (`app/connecte/atomes-feuille.ts`), et le MÊME glyphe de menu
+ * (`ph-caret-down`, `liste-vue.ts:88`) : aucun glyphe de plus. Quatre boutons
+ * possibles, chacun une raison distincte de disparaître plutôt que d'être
+ * rendu inerte (charte règle 7) :
  *
  *   • « Répondre » — SI le composeur est ouvert (`composeurOuvert`) : sur une
  *     ligne close, ou chez un invité sans `canSendMessages`, il n'y a rien à
@@ -479,18 +483,33 @@ const classes = (message: Message, suite: boolean): string =>
  *     (`peutModifier`, borne inclusive comme la passerelle), et JAMAIS chez
  *     l'invité (régime 3, § 2 de la spécification : les quatre portes du
  *     gateway refusent un anonyme) ;
+ *   • « Épingler » / « Désépingler » — TOUT membre, sur TOUT message vivant,
+ *     JAMAIS chez l'invité (`PUT`/`DELETE .../pin`, `requiredAuth` avec
+ *     `allowAnonymous: false`, la même garde que modifier/retirer) — mais
+ *     CONTRAIREMENT à eux, PAS restreint à ses propres messages : la
+ *     passerelle ne borne pas à l'auteur (`lib/api/fil-mutations.ts` ›
+ *     `bascule`). Le libellé et le glyphe suivent `message.epingle`, servi
+ *     par `GET .../messages` (même champ que la liste des épinglés) : le
+ *     lecteur sait TOUJOURS ce que le bouton va faire, jamais un « Épingler »
+ *     qui désépinglerait ;
  *   • « Retirer » — SEULEMENT sur SES propres messages, jamais chez l'invité.
  *
- * `estInvite` gouverne modifier/retirer À LUI SEUL : un membre les voit dès
- * que le message est le sien, quelle que soit la porte qui sert cette ligne.
- * Sans AUCUN bouton admis, le `<details>` n'est pas rendu — un menu vide
- * serait un contrôle sans effet.
+ * `estInvite` gouverne les trois dernières familles À LUI SEUL : un membre les
+ * voit dès que la condition de chacune est remplie, quelle que soit la porte
+ * qui sert cette ligne. Sans AUCUN bouton admis, le `<details>` n'est pas
+ * rendu — un menu vide serait un contrôle sans effet.
  *
  * UN SEUL `<form method="get">` porte « Répondre » et « Modifier » (deux
  * NAVIGATIONS, la même adresse nue, un paramètre différent selon le bouton
- * cliqué — le comportement natif d'un formulaire GET) ; « Retirer » y
- * bascule en POST par `formmethod`, exactement le patron de `/chats`
- * (`liste-vue.ts` › `menu`).
+ * cliqué — le comportement natif d'un formulaire GET) ; « Épingler » /
+ * « Désépingler » et « Retirer » y basculent en POST par `formmethod`,
+ * exactement le patron de `/chats` (`liste-vue.ts` › `menu`).
+ *
+ * LE GABARIT CLONÉ EN DIRECT (`gabaritDuMenu`, plus bas) NE PORTE PAS ENCORE
+ * CE BOUTON — décision assumée (§ 12.4, « module ensuite ») : un message qui
+ * vient d'arriver n'est jamais déjà épinglé, et le câblage du module de
+ * participation qui le révélerait est un lot distinct. Un rechargement le
+ * montre ; la version peinte en direct ne l'offre pas encore.
  */
 export const menuDeLigne = (
   message: Message,
@@ -507,8 +526,9 @@ export const menuDeLigne = (
     ecritA: message.ecritA,
   };
   const admetModifier = !estInvite && peutModifier({ ...candidat, maintenant });
+  const admetEpingler = !estInvite;
   const admetRetirer = !estInvite && peutRetirer(candidat);
-  if (!admetRepondre && !admetModifier && !admetRetirer) return '';
+  if (!admetRepondre && !admetModifier && !admetEpingler && !admetRetirer) return '';
   const nomDuMenu = message.deMoi ? FIL.actionsSurMonMessage : FIL.actionsSurLeMessage(message.auteur);
   return (
     '<details class="actions">' +
@@ -519,6 +539,11 @@ export const menuDeLigne = (
       : '') +
     (admetModifier
       ? `<button type="submit" name="modifier" value="${echappe(message.id)}">${svgDuSprite('ph-note-pencil')}${echappe(FIL.modifier)}</button>`
+      : '') +
+    (admetEpingler
+      ? message.epingle
+        ? `<button type="submit" name="${CHAMP_DU_DESEPINGLE}" value="${echappe(message.id)}" formmethod="post">${svgDuSprite('ph-push-pin')}${echappe(FIL.desepingler)}</button>`
+        : `<button type="submit" name="${CHAMP_DE_L_EPINGLE}" value="${echappe(message.id)}" formmethod="post">${svgDuSprite('ph-push-pin')}${echappe(FIL.epingler)}</button>`
       : '') +
     (admetRetirer
       ? `<button type="submit" name="retirer" value="${echappe(message.id)}" formmethod="post" class="grave">${svgDuSprite('ph-x')}${echappe(FIL.retirer)}</button>`
@@ -545,7 +570,12 @@ const attributs = (message: Message): string =>
   (message.auteurId === null ? '' : ` data-auteur="${echappe(message.auteurId)}"`) +
   (message.ecritA === null ? '' : ` data-ecrit="${echappe(message.ecritA)}"`) +
   (message.langueServie === null ? '' : ` data-servie="${echappe(message.langueServie)}"`) +
-  (message.langueOriginale === null ? '' : ` data-origine="${echappe(message.langueOriginale)}"`);
+  (message.langueOriginale === null ? '' : ` data-origine="${echappe(message.langueOriginale)}"`) +
+  // ÉPINGLÉ (issue #5385) — relu par `bullesDuDocument` (`fil-peinture.ts`) au
+  // premier octet : sans lui, l'état initial rechargerait un message épinglé
+  // comme s'il ne l'était pas, jusqu'au premier événement temps réel qui le
+  // repose. Absent quand `false`, comme les autres attributs conditionnels.
+  (message.epingle ? ' data-epingle="1"' : '');
 
 /**
  * Deux messages se SUIVENT quand le même auteur écrit deux fois en moins de

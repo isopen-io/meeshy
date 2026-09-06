@@ -164,6 +164,13 @@ export type Message = {
   readonly citations: readonly Citation[];
   readonly reactions: readonly Reaction[];
   readonly accuse: Accuse;
+  /**
+   * ÉPINGLÉ POUR TOUTE LA CONVERSATION (issue #5385) — `pinnedAt !== null`,
+   * servi par `GET .../messages` COMME par `GET .../pinned-messages`
+   * (`messages-list-query.ts:266,623`, `messages-pin.ts:408,520`) : le même
+   * champ, sans requête de plus pour le savoir sur une ligne déjà chargée.
+   */
+  readonly epingle: boolean;
 };
 
 /**
@@ -215,6 +222,16 @@ export type Fil = {
    * `mayMintShareLink`).
    */
   readonly rang?: string | null;
+  /**
+   * LES MESSAGES ÉPINGLÉS (issue #5385), du plus récemment épinglé au plus
+   * ancien — `GET .../pinned-messages` (`messages-pin.ts`), MEMBRE SEUL
+   * (`requiredAuth` y porte `allowAnonymous: false`, comme modifier/retirer) :
+   * un invité ne paie jamais cette requête (`fil()` ci-dessous). Optionnel
+   * comme `type`/`rang` — les très nombreux témoins qui construisent un `Fil`
+   * à la main n'ont pas à apprendre un champ de plus qu'ils ne rendent jamais ;
+   * `fil()`, lui, le sert TOUJOURS (`[]` sans épingle, jamais omis).
+   */
+  readonly epingles?: readonly Message[];
 };
 
 export type Issue =
@@ -458,6 +475,7 @@ export const message = (
     citations: supprime ? [] : citations({ brut, moi, protege, mentions: MENTIONS_RETENUES }),
     reactions: reactions(brut.reactionSummary),
     accuse: accuse(brut),
+    epingle: instant(brut.pinnedAt) !== null,
   };
 };
 
@@ -588,9 +606,15 @@ export const fil = async ({
         ? ''
         : `&around=${encodeURIComponent(autour)}`;
 
-  const [detail, liste] = await Promise.all([
+  // LES ÉPINGLÉS (#5385) — en PARALLÈLE, jamais après : un troisième aller-
+  // retour séquentiel doublerait la latence perçue pour un bandeau que rien
+  // n'exige de bloquant. MEMBRE SEUL (`requiredAuth` de la route porte
+  // `allowAnonymous: false`, comme `modifie`/`retire`) : un invité reçoit un
+  // 403 assuré — on ne le paie pas (fail-closed CÔTÉ CLIENT, § 1 sécurité).
+  const [detail, liste, epingles] = await Promise.all([
     demande(racine, creance, recuperer),
     demande(`${racine}/messages?limit=${limite}${curseur}`, creance, recuperer),
+    creance.genre === 'invite' ? Promise.resolve(null) : demande(`${racine}/pinned-messages`, creance, recuperer),
   ]);
 
   if (detail === null || liste === null) return { genre: 'panne' };
@@ -629,6 +653,16 @@ export const fil = async ({
   const id = chaine(conversation.id);
   if (id === null) return { genre: 'panne' };
 
+  // Un échec sur LES ÉPINGLÉS n'est JAMAIS une panne du fil — c'est un
+  // bandeau qui ne rend rien, jamais un fil qui ne rend rien
+  // (`epingles === null` : invité, ou la requête elle-même a échoué ; un
+  // statut ≠ 2xx ou une charge malformée retombent au même verdict : `[]`).
+  const enveloppeEpingles = epingles === null || !epingles.ok ? null : objet(await epingles.json().catch(() => null));
+  const messagesEpingles =
+    enveloppeEpingles?.success === true && Array.isArray(enveloppeEpingles.data)
+      ? messages(enveloppeEpingles.data, moi, langues, originePublique)
+      : [];
+
   return {
     genre: 'fil',
     fil: {
@@ -640,6 +674,7 @@ export const fil = async ({
       // l'autre sens.
       messages: [...messages(enveloppeListe.data, moi, langues, originePublique)].reverse(),
       plusAncien: pagination?.hasMore === true ? chaine(pagination.nextCursor) : null,
+      epingles: messagesEpingles,
       type: chaine(conversation.type) ?? undefined,
       rang: chaine(conversation.currentUserRole),
     },

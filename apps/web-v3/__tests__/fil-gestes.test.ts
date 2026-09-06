@@ -469,9 +469,10 @@ describe('le menu d’une ligne (§ 12.10.1, issue #5163)', () => {
     expect(html).toContain(FIL.actionsSurMonMessage);
   });
 
-  it('les lignes d’autrui ne portent QUE répondre', () => {
+  it('les lignes d’autrui portent répondre ET épingler, jamais modifier ni retirer (issue #5385)', () => {
     const html = SANS_GABARIT(ETAT_DOC(AUTRUI));
     expect(html).toContain('name="repondre" value="m2"');
+    expect(html).toContain('name="epingler" value="m2"');
     expect(html).not.toContain('name="modifier" value="m2"');
     expect(html).not.toContain('name="retirer" value="m2"');
   });
@@ -483,9 +484,22 @@ describe('le menu d’une ligne (§ 12.10.1, issue #5163)', () => {
     expect(html).toContain('name="retirer" value="m3"');
   });
 
-  it('composeur FERMÉ : aucun menu sur les lignes d’autrui', () => {
+  /**
+   * `composeur: { genre: 'ferme' }` NE SURVIENT, en production, que côté
+   * INVITÉ (`/chats/[cle]/route.ts` sert toujours `{ genre: 'ouvert' }` pour
+   * un membre) — cette combinaison est synthétique, posée ici pour isoler la
+   * condition de `répondre`. ÉPINGLER N'EN DÉPEND PAS (issue #5385) : la
+   * passerelle ne borne pas la capacité de pin/unpin à un composeur ouvert,
+   * seulement à `estInvite` (déjà `false` ici) — le menu reste donc rendu,
+   * avec épingler SEUL.
+   */
+  it('composeur FERMÉ : les lignes d’autrui ne gardent QUE épingler', () => {
     const html = SANS_GABARIT(ETAT_DOC(AUTRUI, { composeur: { genre: 'ferme', raison: 'Fermé', cause: 'lien' } }));
-    expect(html).not.toContain('<details class="actions">');
+    expect(html).toContain('<details class="actions">');
+    expect(html).toContain('name="epingler" value="m2"');
+    expect(html).not.toContain('name="repondre" value="m2"');
+    expect(html).not.toContain('name="modifier" value="m2"');
+    expect(html).not.toContain('name="retirer" value="m2"');
   });
 
   it('un invité ne voit jamais modifier ni retirer, même sur ses propres lignes', () => {
