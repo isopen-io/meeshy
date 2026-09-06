@@ -101,7 +101,12 @@ struct ComposerTopBar: View {
             slideRailSlot
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
+                // **Le libellé dit ce que la rangée MONTRE.** Il annonçait
+                // « Médias joints » — vrai quand elle montrait des médias, faux
+                // depuis qu'elle montre des scènes. Un libellé qui survit au
+                // changement de ce qu'il nomme dit le contraire de l'écran, et
+                // seul VoiceOver l'entend.
+                .accessibilityLabel(Text(ComposerSlideRailCopy.rail))
         }
     }
 }

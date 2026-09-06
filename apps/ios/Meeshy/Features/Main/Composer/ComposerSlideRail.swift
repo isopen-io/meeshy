@@ -97,6 +97,13 @@ struct ComposerSlideRail: View {
 /// chaîne composée dans un corps de vue échappe au cliquet de complétude.
 @MainActor
 enum ComposerSlideRailCopy {
+    /// Le nom de la RANGÉE, distinct du libellé d'une tuile : VoiceOver
+    /// annonce le conteneur avant de parcourir ses éléments.
+    static var rail: String {
+        String(localized: "composer.slide.rail", defaultValue: "Scènes de la publication",
+               bundle: .main)
+    }
+
     static func position(index: Int, total: Int) -> String {
         String(format: String(localized: "composer.slide.rail.position",
                               defaultValue: "Scène %1$d sur %2$d", bundle: .main),
