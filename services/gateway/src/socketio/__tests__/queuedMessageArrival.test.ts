@@ -17,6 +17,7 @@ const EXPECTED: Record<QueuedEventType, boolean> = {
 
   edited: false,
   deleted: false,
+  expired: false,
   'reaction-added': false,
   'reaction-removed': false,
   'attachment-reaction-added': false,
