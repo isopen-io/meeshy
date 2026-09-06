@@ -250,7 +250,22 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
 
     func test_loiDesZones_lAvatarEstLaSeulePorteVersLeProfil() throws {
         let code = try quotedReplySource()
-        let titleRow = try slice(of: code, from: "HStack(spacing: 6) {", to: "Text(quotedTitle)")
+        // **L'ancre a suivi l'alignement** (2026-09-06). Elle épinglait
+        // `HStack(spacing: 6) {` ; la ligne de titre porte désormais
+        // `alignment: .top`, pour que l'avatar reste en haut quand le nom et
+        // l'aperçu coulent sur deux lignes. La garde ne trouvait plus sa
+        // tranche et rougissait en s'accusant elle-même — « garde inopérante » —
+        // alors que la LOI DES ZONES était respectée.
+        //
+        // > Une ancre qui reprend la signature COMPLÈTE d'un conteneur se périme
+        // > au premier argument de mise en page ajouté. Celle-ci est la plus
+        // > étroite qui désigne encore une seule ligne du fichier ; si un
+        // > second `HStack(alignment: .top, spacing: 6)` y apparaît, c'est le
+        // > `slice` qu'il faudra rendre positionnel, pas l'ancre qu'il faudra
+        // > élargir.
+        let titleRow = try slice(of: code,
+                                 from: "HStack(alignment: .top, spacing: 6) {",
+                                 to: "Text(quotedTitle)")
         XCTAssertTrue(
             titleRow.contains("authorGate"),
             "l'avatar doit PRÉCÉDER le nom sur la ligne de titre : c'est lui qui porte la porte vers le profil."
