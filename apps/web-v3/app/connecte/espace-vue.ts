@@ -144,9 +144,15 @@ export const feuilleDeLEspace = ({ lecteur, hote }: { readonly lecteur: Lecteur 
  * JavaScript (§ 2.1 de la spécification — l'appel part alors avec le seul
  * jeton porteur). `lib/realtime/deconnexion.ts` le REMPLIT à la soumission
  * depuis `localStorage`, en amélioration progressive.
+ *
+ * LE CHAMP CACHÉ `pushAppareil` (#5391, § 3.5) PART VIDE de la même façon —
+ * `lib/realtime/deconnexion.ts` le remplit depuis le cookie
+ * `meeshy_v3_push_appareil` : la porte l'utilise pour retirer le TOKEN push
+ * de CET appareil, en best-effort, avant d'expirer les cookies du membre.
  */
 const formulaireDeSortie = (): string =>
   '<form class="sortie" method="post" action="/deconnexion">' +
   '<input type="hidden" name="session" value="" />' +
+  '<input type="hidden" name="pushAppareil" value="" />' +
   `<button type="submit">${echappe(ESPACE.deconnecter)}</button>` +
   '</form>';

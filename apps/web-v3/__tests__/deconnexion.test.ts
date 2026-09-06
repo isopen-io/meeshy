@@ -127,6 +127,49 @@ describe('POST /deconnexion — la sortie', () => {
     );
   });
 
+  /**
+   * LA PURGE DU TOKEN PUSH (#5391, § 3.5, § 4.2 point 7 de la spécification)
+   * — `deviceId` SEUL (jamais un corps vide, qui supprimerait aussi les
+   * tokens iOS/Android du même compte).
+   */
+  it('retire le token push de CET appareil quand le formulaire porte pushAppareil', async () => {
+    const { appels, recuperer } = passerelle(() => new Response(JSON.stringify({ success: true }), { status: 200 }));
+
+    await SORTIE(requetePost({ cookie: JAR, corps: { pushAppareil: 'device-77' } }), recuperer);
+
+    const suppression = appels.find((a) => a.url.includes('register-device-token'));
+    expect(suppression).toBeDefined();
+  });
+
+  it('sans champ pushAppareil, aucun appel de suppression de token push', async () => {
+    const { appels, recuperer } = passerelle(() => new Response(JSON.stringify({ success: true }), { status: 200 }));
+
+    await SORTIE(requetePost({ cookie: JAR }), recuperer);
+
+    expect(appels.some((a) => a.url.includes('register-device-token'))).toBe(false);
+  });
+
+  it('la suppression du token push, comme /auth/logout, est BEST-EFFORT — une panne n’empêche pas la sortie', async () => {
+    const recuperer: Recuperateur = async (url) => {
+      if (url.includes('register-device-token')) throw new Error('coupé');
+      return new Response(null, { status: 200 });
+    };
+
+    const reponse = await SORTIE(requetePost({ cookie: JAR, corps: { pushAppareil: 'device-77' } }), recuperer);
+
+    expect(reponse.status).toBe(302);
+    expect(cookieDe('meeshy_auth', reponse.headers.getSetCookie())).toBeDefined();
+  });
+
+  it('expire aussi le cookie meeshy_v3_push_appareil', async () => {
+    const { recuperer } = passerelle(() => new Response(null, { status: 200 }));
+
+    const reponse = await SORTIE(requetePost({ cookie: JAR }), recuperer);
+
+    const cookies = reponse.headers.getSetCookie();
+    expect(cookieDe('meeshy_v3_push_appareil', cookies)).toBe('meeshy_v3_push_appareil=; Max-Age=0; Path=/; SameSite=Lax');
+  });
+
   it('relaie le jeton de session quand le formulaire le porte', async () => {
     const { appels, recuperer } = passerelle(() => new Response(null, { status: 200 }));
 

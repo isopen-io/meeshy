@@ -9,6 +9,7 @@ import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '@/app/authentification/remis
 import { appliqueLeGeste, GESTE_SUR_UNE_LIGNE, soumissionDuGeste } from '@/app/connecte/liste-porte';
 import { documentDesChats } from '@/app/connecte/liste-vue';
 import { ACTIONS, CHATS, CONFIRMATIONS, NOUVELLE_CONVERSATION, vedetteDe } from '@/lib/contenu/liste';
+import { conversation as decodeConversation, homologueDe } from '@/lib/api/compte';
 import type { Conversation } from '@/lib/api/compte';
 
 /**
@@ -86,6 +87,60 @@ describe('la ligne d’une conversation', () => {
 
     expect(corps).not.toContain('<img src=x');
     expect(corps).toContain('&lt;img src=x');
+  });
+});
+
+/**
+ * LE DÉCODEUR, sur la CHARGE BRUTE — pas sur un `Conversation` déjà décodé
+ * (correction de revue, défaut 1). `routes/conversations/core-list.ts:718,790`
+ * sert `participants` sur CHAQUE ligne, groupe compris, inconditionnellement :
+ * ce que doit jeter, pour un groupe, c'est le FILTRE de `conversation()`
+ * (`lib/api/compte.ts:287`) — jamais une fixture qui l'omet. Ce témoin
+ * appelle le décodeur RÉEL avec une charge de groupe qui porte `participants`,
+ * exactement comme la passerelle le ferait : il rougit le jour où quelqu'un
+ * retire le filtre `type !== 'direct'` de `participantsInscrits()`.
+ */
+describe('le décodeur jette les participants d’un GROUPE', () => {
+  const CHARGE_DE_GROUPE = {
+    id: 'c-groupe',
+    identifier: 'c-groupe',
+    title: 'Comité budget Q1',
+    type: 'group',
+    memberCount: 5,
+    unreadCount: 0,
+    lastMessageAt: '2026-09-01T12:00:00.000Z',
+    lastMessage: { id: 'm1', content: 'Le tableau est à jour.' },
+    lastMessageOriginalLanguage: 'fr',
+    lastMessageTranslations: null,
+    // La passerelle la sert quand même — c'est CE champ que le décodeur doit
+    // ignorer sur un groupe, pas son absence dans la fixture.
+    participants: [
+      { userId: 'u-autre', displayName: 'Un autre membre' },
+      { userId: 'u1', displayName: 'Amina Diallo' },
+    ],
+  };
+
+  it('rend `participantsInscrits` vide malgré `participants` sur la charge', () => {
+    const decodee = decodeConversation(CHARGE_DE_GROUPE);
+
+    expect(decodee).not.toBeNull();
+    expect(decodee!.participantsInscrits).toEqual([]);
+  });
+
+  it('`homologueDe` ne peut donc élire personne sur ce groupe', () => {
+    const decodee = decodeConversation(CHARGE_DE_GROUPE)!;
+
+    expect(homologueDe(decodee, 'u1')).toBeNull();
+  });
+
+  it('à l’inverse, un TÊTE-À-TÊTE garde ses `participants` — le témoin de contrôle', () => {
+    const decodee = decodeConversation({ ...CHARGE_DE_GROUPE, type: 'direct', memberCount: 2 })!;
+
+    expect(decodee.participantsInscrits).toEqual([
+      { id: 'u-autre', nom: 'Un autre membre' },
+      { id: 'u1', nom: 'Amina Diallo' },
+    ]);
+    expect(homologueDe(decodee, 'u1')).toEqual({ id: 'u-autre', nom: 'Un autre membre' });
   });
 });
 

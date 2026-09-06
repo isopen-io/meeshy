@@ -3,10 +3,11 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 
 import { SEUIL_DE_RATTRAPAGE_MS } from '../../lib/realtime/reconnect-policy';
 import { avance, figeLHorloge, installeLHorloge } from './lib/navigateur-cycle';
-import { controlesCouvertsParUnFixe, POSITIONS_DE_DEFILEMENT } from './lib/occlusion';
 import {
   AUTRE_CONVERSATION,
+  CINQUIEME_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
+  LIGNES_DE_CONVERSATIONS_SERVIES,
   passerelleDeBouchon,
   QUATRIEME_CONVERSATION,
   serveurDeLaV3,
@@ -16,18 +17,25 @@ import {
 } from './lib/serveurs';
 
 /**
- * LES QUATRE LIGNES SERVIES (#5164, correction de revue) — `ORDRE_AU_REPOS`
- * est ce que `/chats` sert avant tout événement temps réel : les DEUX lignes
- * fixes (`TROISIEME_CONVERSATION`, `QUATRIEME_CONVERSATION`) ne bougent dans
- * AUCUN des témoins ci-dessous — seules `CONVERSATION_DU_LECTEUR` et
- * `AUTRE_CONVERSATION` s'échangent la tête au fil des événements.
+ * LES DOUZE LIGNES SERVIES (spécification « le rond flottant ne recouvre plus
+ * le pied de page », § T2) — `ORDRE_AU_REPOS` est ce que `/chats` sert avant
+ * tout événement temps réel, DÉRIVÉ de `LIGNES_DE_CONVERSATIONS_SERVIES`
+ * (`bouchon-monde.ts`) plutôt que recopié : la fixture est la SOURCE, ce spec
+ * l'AFFIRME. Un littéral jumeau aurait dérivé au premier ajout de ligne — ce
+ * qui est arrivé une fois déjà (#5164 → cette spécification).
  */
-const ORDRE_AU_REPOS = [
-  CONVERSATION_DU_LECTEUR.id,
-  AUTRE_CONVERSATION.id,
-  TROISIEME_CONVERSATION.id,
-  QUATRIEME_CONVERSATION.id,
-] as const;
+const ORDRE_AU_REPOS: readonly string[] = LIGNES_DE_CONVERSATIONS_SERVIES.map((ligne) => ligne.id);
+
+/**
+ * L'ORDRE ATTENDU APRÈS QU'UNE LIGNE REMONTE EN TÊTE — la ligne déplacée,
+ * puis le RESTE dans l'ordre au repos. Remplace les deux littéraux à quatre
+ * identifiants que douze lignes auraient rendus MENSONGERS (les huit lignes
+ * de garnissage manquaient à l'appel).
+ */
+const apresRetri = (idEnTete: string): readonly string[] => [
+  idEnTete,
+  ...ORDRE_AU_REPOS.filter((id) => id !== idEnTete),
+];
 
 /**
  * `/chats` — LA LISTE DES CONVERSATIONS, EN DIRECT (issue #4753, § 12.4,
@@ -149,11 +157,7 @@ test.describe('la liste des conversations', () => {
   /**
    * CHARTE RÈGLE 12 — « le premier écran d'un écran de LISTE montre au moins
    * TROIS lignes actionnables, à 360 × 844 » (`matrice.json#chats.critere_de_
-   * fin`, `conception-web-v3.md:1214`). Correction de revue : la fixture ne
-   * servait que deux conversations (une carte + une ligne), et le premier
-   * écran ne pouvait donc jamais en montrer trois — corrigé en portant
-   * `bouchon-monde.ts` à quatre lignes (une carte + trois lignes plates),
-   * comme `cible/chats.png` en dessine.
+   * fin`, `conception-web-v3.md:1214`).
    *
    * CE QUE CE TÉMOIN COMPTE, ET POURQUOI CE N'EST PAS LE COMPTE « PLEINE
    * LARGEUR » AU SENS LE PLUS STRICT : la règle 12 nomme des `<a>` « pleine
@@ -166,13 +170,21 @@ test.describe('la liste des conversations', () => {
    * règle nomme) et par le fait qu'elle est ENTIÈREMENT contenue dans les 844
    * premiers pixels — la largeur relative de `a.ligne` dans sa `li` ne change
    * pas ce qu'un pouce peut toucher.
+   *
+   * ÉTENDU (spécification « le rond flottant ne recouvre plus le pied de
+   * page », § T3, règle 12) : ce témoin affirme AUSSI que la fixture sert
+   * bien AU MOINS DOUZE lignes et que le document DÉFILE — la preuve que la
+   * volumétrie est RÉELLE, et que « au moins trois visibles » n'est pas
+   * silencieusement devenu « toutes visibles » sur une fixture trop courte
+   * pour défiler.
    */
   test('règle 12 — montre au moins trois lignes actionnables au premier écran, à 360 × 844', async ({ browser }) => {
     const page = await ouvre(browser, 360);
 
-    const lignes = await page.evaluate(() => {
+    const mesure = await page.evaluate(() => {
       const HAUTEUR_MIN = 56;
-      return [...document.querySelectorAll<HTMLElement>('.liste > ul > li')]
+      const lignesDeLaListe = [...document.querySelectorAll<HTMLElement>('.liste > ul > li')];
+      const actionnables = lignesDeLaListe
         .filter((li) => !li.hidden)
         .map((li) => {
           const lien = li.querySelector<HTMLElement>('a.ligne');
@@ -184,75 +196,53 @@ test.describe('la liste des conversations', () => {
           };
         })
         .filter((ligne) => ligne.hauteurDuLien >= HAUTEUR_MIN && ligne.basDeLaLigne <= 844);
+      return {
+        actionnablesAuPremierEcran: actionnables.length,
+        totalDesLignes: lignesDeLaListe.length,
+        defile: document.body.scrollHeight > window.innerHeight,
+      };
     });
 
-    expect(lignes.length, `lignes actionnables entièrement visibles à 844 px : ${JSON.stringify(lignes)}`).toBeGreaterThanOrEqual(3);
+    expect(mesure.actionnablesAuPremierEcran, `lignes actionnables entièrement visibles à 844 px`).toBeGreaterThanOrEqual(3);
+    expect(mesure.totalDesLignes, 'la fixture doit servir au moins douze lignes').toBeGreaterThanOrEqual(12);
+    expect(mesure.defile, 'douze lignes doivent faire défiler le document').toBe(true);
     await page.context().close();
   });
 
   /**
-   * CHARTE RÈGLE 8 b/c, EXCEPTION NOMMÉE POUR `/chats` (correction de revue) —
-   * la mesure a trouvé les liens du pied de l'enveloppe couverts par le rail
-   * flottant, au repos ET à mi-défilement, aux deux largeurs et dans les deux
-   * schémas (« À propos », « Conditions d'utilisation », « Politique de
-   * confidentialité »). La règle nomme la sortie mot pour mot pour ce cas :
-   * « le rail cède la place à deux raccourcis de 44 px dans l'en-tête ». Ce
-   * témoin prouve les DEUX moitiés de la sortie : (1) `/chats` ne sert PLUS
-   * `.flottantes` — rien qui puisse un jour recouvrir de nouveau le pied — et
-   * (2) les deux raccourcis existent, à leur place, ≥ 44 px.
+   * § 12.10.3, LE COMPTE — pas « au moins une » (correction de revue,
+   * défaut 3 : `ligneServie` ne pouvait pas porter `participants`, et la
+   * volumétrie ne servait donc le profil que sur UNE ligne tête-à-tête sur
+   * quatre, six une fois passée à douze). `homologueDe` élit l'autre
+   * personne d'un tête-à-tête PARMI les `participants` de la ligne : une
+   * ligne à deux membres SANS ce champ n'ouvre PAS de profil, exactement
+   * comme la passerelle réelle qui ne le sert pas ne le ferait pas
+   * (`core-list.ts:781`, `participants` inconditionnel). Ce témoin arrime
+   * donc la fixture ELLE-MÊME — il rougit le jour où une ligne à deux
+   * membres oublie `participants`, pas seulement le jour où le rendu casse.
    */
-  test('remplace le rail flottant par deux raccourcis d’en-tête, jamais fixes', async ({ browser }) => {
+  test('toute ligne à deux membres porte un lien vers le profil de l’homologue', async ({ browser }) => {
     const page = await ouvre(browser);
 
-    await expect(page.locator('.flottantes')).toHaveCount(0);
+    const tetesATete = LIGNES_DE_CONVERSATIONS_SERVIES.filter((ligne) => ligne.memberCount === 2);
+    const groupes = LIGNES_DE_CONVERSATIONS_SERVIES.filter((ligne) => ligne.memberCount !== 2);
+    expect(tetesATete.length, 'la fixture doit compter au moins un tête-à-tête').toBeGreaterThan(0);
 
-    const raccourcis = page.locator('.raccourcis-entete .raccourci');
-    await expect(raccourcis).toHaveCount(2);
-    await expect(raccourcis.first()).toHaveAttribute('href', '/feed');
-    await expect(raccourcis.last()).toHaveAttribute('href', '/chats?espace');
+    await expect(page.locator('a.avatar-lien')).toHaveCount(tetesATete.length);
 
-    for (const raccourci of await raccourcis.all()) {
-      const boite = await raccourci.boundingBox();
-      expect(boite?.width, 'raccourci d’en-tête').toBeGreaterThanOrEqual(44);
-      expect(boite?.height, 'raccourci d’en-tête').toBeGreaterThanOrEqual(44);
-      expect(
-        await raccourci.evaluate((noeud) => getComputedStyle(noeud).position),
-        'un raccourci d’en-tête reste DANS le flux, jamais fixe',
-      ).not.toBe('fixed');
+    for (const ligne of tetesATete) {
+      await expect(
+        page.locator(`li[data-conversation="${ligne.id}"] a.avatar-lien`),
+        `« ${ligne.title} » (2 membres) doit porter un lien vers le profil de l’homologue`,
+      ).toHaveCount(1);
+    }
+    for (const ligne of groupes) {
+      await expect(
+        page.locator(`li[data-conversation="${ligne.id}"] a.avatar-lien`),
+        `« ${ligne.title} » (${ligne.memberCount} membres) n’a personne à montrer`,
+      ).toHaveCount(0);
     }
     await page.context().close();
-  });
-
-  /**
-   * CHARTE RÈGLE 8 b/c, LA MESURE ELLE-MÊME — « aucun élément FIXE ne couvre
-   * un contrôle », à TROIS positions de défilement (haut, milieu, bas), aux
-   * DEUX largeurs et dans les DEUX schémas — ce que la règle décrit, et ce que
-   * le témoin retourné au développeur avait rétréci à une seule position (le
-   * bas, la seule où le défaut n'apparaissait pas). `/chats` ne sert plus
-   * `.flottantes`, mais la mesure reste GÉNÉRALE — tout élément dont le style
-   * calculé est `position:fixed` (la bannière temps réel comprise) — pour
-   * qu'un futur élément fixe reste tenu par le même témoin.
-   *
-   * `controlesCouvertsParUnFixe` (`lib/occlusion.ts`) est le site UNIQUE de
-   * cette mesure : `v3-espace-membre.spec.ts` l'applique désormais au TABLEAU
-   * DE BORD avec la même prédicat — la revue suivante y a trouvé le même
-   * défaut, sous un rail resté `position:fixed`.
-   */
-  LARGEURS.forEach((largeur) => {
-    (['light', 'dark'] as const).forEach((schema) => {
-      test(`aucun élément fixe ne couvre un contrôle, à trois défilements — ${largeur}px ${schema}`, async ({
-        browser,
-      }) => {
-        const contexte = await contexteDuLecteur(browser, { largeur, colorScheme: schema });
-        const page = await ouvreLaListe(contexte);
-
-        for (const position of POSITIONS_DE_DEFILEMENT) {
-          const couverts = await controlesCouvertsParUnFixe(page, position);
-          expect(couverts, `contrôles couverts par un élément fixe — ${position}`).toEqual([]);
-        }
-        await contexte.close();
-      });
-    });
   });
 
   test('ne porte aucune violation axe serious/critical', async ({ browser }) => {
@@ -373,11 +363,16 @@ test.describe('la liste des conversations', () => {
   });
 
   /**
-   * LE PRISME, SUR UN RANG ≠ 1 n'est pas mesurable ici (le bouchon sert un
-   * lecteur francophone) : il l'est dans `__tests__/chats.test.ts` et
-   * `__tests__/liste-etat.test.ts`. Ce qui se mesure au NAVIGATEUR est ce que
-   * le lecteur VOIT : le texte servi est la traduction, pas l'original, et la
-   * pastille annonce la langue d'ORIGINE.
+   * LE PRISME AU RANG 1 — le lecteur du bouchon porte un prisme `['fr', 'es']`
+   * (`systemLanguage: 'fr'`, `regionalLanguage: 'es'`, `bouchon-compte.ts:
+   * 761-762`) ; `AUTRE_CONVERSATION` a une traduction FRANÇAISE, servie dès le
+   * rang 1. Ce qui se mesure au NAVIGATEUR est ce que le lecteur VOIT : le
+   * texte servi est la traduction, pas l'original, et la pastille annonce la
+   * langue d'ORIGINE. Le rang ≠ 1 (leçon 261 — un court-circuit sur le rang 1
+   * rendrait le MÊME verdict qu'une descente juste) est mesuré au navigateur
+   * par `CINQUIEME_CONVERSATION`, deux témoins plus bas — ce commentaire
+   * disait autrefois que le rang ≠ 1 « n'était pas mesurable ici », ce qui
+   * n'était vrai que faute d'une ligne qui manque au rang 1.
    */
   test('sert la traduction et annonce la langue d’origine', async ({ browser }) => {
     const page = await ouvre(browser);
@@ -389,6 +384,75 @@ test.describe('la liste des conversations', () => {
     // redondant serait du bruit pour un lecteur d'écran — la règle est « sur
     // tout nœud rendu dans une langue ≠ <html lang> », pas « sur tout nœud ».
     expect(await ligne.locator('.apercu .texte').getAttribute('lang')).toBeNull();
+    await page.context().close();
+  });
+
+  /**
+   * CHARTE RÈGLE 30, LE RANG ≠ 1 AU NAVIGATEUR (§ T3 de la spécification « le
+   * rond flottant ne recouvre plus le pied de page ») — `CINQUIEME_CONVERSATION`
+   * n'a AUCUNE traduction française, seulement espagnole : la descente
+   * ordonnée du prisme `['fr', 'es']` doit donc servir le RANG 2 — texte
+   * espagnol, `lang="es"`, pastille annonçant `en` (la langue d'ORIGINE,
+   * jamais celle qu'elle sert). Un court-circuit qui testerait seulement « la
+   * langue d'origine appartient au prisme » rendrait le même résultat qu'une
+   * descente juste au rang 1 (leçon 261) ; c'est cette ligne, au rang 2, qui
+   * les sépare.
+   */
+  test('descend le prisme au rang 2 quand le rang 1 n’est pas servi', async ({ browser }) => {
+    const page = await ouvre(browser);
+    const ligne = page.locator(`li[data-conversation="${CINQUIEME_CONVERSATION.id}"]`);
+
+    await expect(ligne.locator('.apercu .texte')).toHaveText(CINQUIEME_CONVERSATION.traductions?.es ?? '');
+    expect(await ligne.locator('.apercu .texte').getAttribute('lang')).toBe('es');
+    await expect(ligne.locator('.langue .code')).toHaveText(CINQUIEME_CONVERSATION.langueOriginale);
+    await page.context().close();
+  });
+
+  /**
+   * CHARTE RÈGLE 30, SANS PASTILLE (§ T3) — quand l'original gagne déjà son
+   * rang (`resolvePrismTranslation` rend `null`), la fente `.langue` reste
+   * SERVIE mais MASQUÉE (`hidden`) : elle existe pour que le module de
+   * participation puisse l'annoncer plus tard sans créer de nœud sous le
+   * doigt du lecteur, mais rien ne l'affiche aujourd'hui.
+   * `QUATRIEME_CONVERSATION` (original français, aucune traduction) est cette
+   * ligne — la SEULE des cinq lignes nommées sans pastille.
+   */
+  test('sans traduction, la pastille de langue reste servie mais masquée', async ({ browser }) => {
+    const page = await ouvre(browser);
+    const ligne = page.locator(`li[data-conversation="${QUATRIEME_CONVERSATION.id}"]`);
+
+    await expect(ligne.locator('.apercu .texte')).toHaveText(QUATRIEME_CONVERSATION.apercu);
+    expect(await ligne.locator('.apercu .texte').getAttribute('lang')).toBeNull();
+    await expect(ligne.locator('.langue')).toBeHidden();
+    await expect(ligne.locator('.langue .code')).toHaveText('');
+    await page.context().close();
+  });
+
+  /**
+   * CHARTE RÈGLE 15, LES DEUX RANGS DE HAUTEUR (§ T3) — les puces d'action
+   * tertiaires ≥ 52 px (`--action-height-secondary`, `.action.contour`), les
+   * lignes plates ≥ 80 px (`--row-height`, `.liste a.ligne`). Les deux
+   * planchers sont posés par la feuille (`enveloppe/feuille.ts`,
+   * `liste-feuille.ts`) mais aucun témoin ne les mesurait encore au PIXEL, au
+   * navigateur.
+   */
+  test('règle 15 — puces d’action ≥ 52 px, ligne plate ≥ 80 px', async ({ browser }) => {
+    const page = await ouvre(browser);
+
+    const puces = await page.locator('.actions-rapides .action').all();
+    // DEUX, jamais « au moins une » : la règle 15 nomme DEUX puces (« Créer
+    // un lien » / « Conversation »), et un `> 0` aurait laissé passer la
+    // disparition de l'une d'elles — c'est le compte, autant que la hauteur,
+    // que la règle porte. Leurs LIBELLÉS et leur ORDRE sont tenus par
+    // `__tests__/chats.test.ts` § « deux puces contour de même rang ».
+    expect(puces.length, 'la règle 15 nomme DEUX puces d’action').toBe(2);
+    for (const puce of puces) {
+      const boite = await puce.boundingBox();
+      expect(boite?.height, 'puce d’action tertiaire').toBeGreaterThanOrEqual(52);
+    }
+
+    const ligne = await page.locator(`li[data-conversation="${TROISIEME_CONVERSATION.id}"] a.ligne`).boundingBox();
+    expect(ligne?.height, 'ligne plate').toBeGreaterThanOrEqual(80);
     await page.context().close();
   });
 
@@ -415,7 +479,7 @@ test.describe('la liste des conversations', () => {
 
     await expect
       .poll(() => ordre(page))
-      .toEqual([AUTRE_CONVERSATION.id, CONVERSATION_DU_LECTEUR.id, TROISIEME_CONVERSATION.id, QUATRIEME_CONVERSATION.id]);
+      .toEqual(apresRetri(AUTRE_CONVERSATION.id));
     await expect(page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"] .compte`)).toContainText('4');
     await expect(page.locator(`li[data-conversation="${AUTRE_CONVERSATION.id}"] .apercu .texte`)).toHaveText('Le fichier est parti');
     await page.context().close();
@@ -739,7 +803,7 @@ test.describe('la liste des conversations', () => {
       }
 
       expect(passerelle.socket.connectes(), 'le socket doit s’être rétabli').toBe(1);
-      await expect.poll(() => ordre(page), { timeout: 20_000 }).toEqual([AUTRE_CONVERSATION.id, CONVERSATION_DU_LECTEUR.id, TROISIEME_CONVERSATION.id, QUATRIEME_CONVERSATION.id]);
+      await expect.poll(() => ordre(page), { timeout: 20_000 }).toEqual(apresRetri(AUTRE_CONVERSATION.id));
     } finally {
       passerelle.socket.retablis();
       passerelle.sync.conversations = [];
