@@ -24,6 +24,11 @@ data class StoryLikeRequest(
  * is intentionally not ported (REST surface only).
  */
 interface StoryApi {
+    /**
+     * Sole Kotlin declaration of `GET /posts/feed/stories` (#4889) — `PostApi`
+     * carried an unused twin, `getStories`, removed rather than kept: this is
+     * the endpoint `StoryRepository` actually calls.
+     */
     @GET("posts/feed/stories")
     suspend fun list(
         @Query("cursor") cursor: String? = null,
