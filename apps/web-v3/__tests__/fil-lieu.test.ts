@@ -1,7 +1,8 @@
 import { axe } from 'jest-axe';
 
 import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
-import { message, type Message } from '@/lib/api/fil';
+import { message, MENTION_PROTEGEE, type Message } from '@/lib/api/fil';
+import { depuisLaCharge } from '@/lib/realtime/fil-etat';
 
 /**
  * LE COMPOSEUR ENREGISTRE UN VOCAL ET PARTAGE LA POSITION, ET UNE POSITION
@@ -175,6 +176,82 @@ describe('un lieu partagé se lit comme un LIEU, jamais comme deux nombres', () 
       location: LIEU_BRUT,
     });
     expect(supprime.lieu).toBeNull();
+  });
+
+  /**
+   * TRAVAIL `rich` (2026-09-06) — GET /sync HISSE désormais `location` en
+   * champ de premier niveau (`services/gateway/src/routes/sync/messages.ts`),
+   * exactement la forme que `message:new`/la liste REST servent déjà. Ce
+   * témoin oppose cette charge PRÉCISE au pipeline `depuisLaCharge → message()
+   * → lieuDeMessage` — le point d'entrée COMMUN aux charges socket ET /sync
+   * (`fil-etat.ts:188-196`), traversé par `rattrape()` de `participate.ts`.
+   */
+  it('une charge de /sync — location au premier niveau, metadata sans lieu — se peint comme un LIEU', () => {
+    const bulle = depuisLaCharge(
+      {
+        id: 'm1',
+        content: '',
+        createdAt: '2026-09-01T12:00:00.000Z',
+        senderId: 'u2',
+        sender: { id: 'p2', displayName: 'Ibrahim' },
+        location: LIEU_BRUT,
+        metadata: {},
+      },
+      'u1',
+      LANGUES,
+      ORIGINE,
+    );
+    expect(bulle).not.toBeNull();
+    expect(bulle!.lieu).toEqual({ latitude: 48.8566, longitude: 2.3522, nom: 'Café Le Central', adresse: '12 rue de Rivoli' });
+
+    const html = document_({
+      fil: { id: 'c1', titre: 'Équipe', membres: 2, presence: { participants: [], presents: [] }, messages: [bulle!], plusAncien: null },
+    });
+    const lignesServies = html.split('<template')[0] ?? '';
+    expect(lignesServies).toContain('href="geo:48.8566,2.3522"');
+    expect(lignesServies).toContain('Café Le Central');
+    // L'ADRESSE aussi — le critère de fin dit « nom, adresse, lien geo: », et
+    // servir le nom seul rendrait un lieu à moitié lisible.
+    expect(lignesServies).toContain('12 rue de Rivoli');
+    // Et JAMAIS les coordonnées en TEXTE LU : elles n'ont le droit de vivre que
+    // dans les DEUX href (`geo:` et le repli carte), jamais dans un libellé.
+    expect(lignesServies.replace(/href="[^"]*"/g, '')).not.toContain('48.8566');
+  });
+
+  /**
+   * Second membre du même défaut (§ 1.2 de la spécification) : `/sync` sert
+   * désormais `isViewOnce`/`isBlurred`/`expiresAt` — sans eux, un message
+   * protégé rattrapé par cette voie arrivait sans son drapeau, et ni son
+   * texte ni son lieu ne pouvaient être masqués côté client. Un seul drapeau
+   * suffit à retenir (`estProtege`, `lecture.ts:37-38`) — les trois formes
+   * sont vérifiées dans la même boucle.
+   */
+  it('une charge de /sync protégée — isViewOnce/isBlurred/expiresAt — ne sert ni texte ni lieu', () => {
+    const drapeaux: readonly Record<string, unknown>[] = [
+      { isViewOnce: true },
+      { isBlurred: true },
+      { expiresAt: '2026-09-01T13:00:00.000Z' },
+    ];
+    for (const drapeau of drapeaux) {
+      const bulle = depuisLaCharge(
+        {
+          id: 'm1',
+          content: 'Secret',
+          createdAt: '2026-09-01T12:00:00.000Z',
+          senderId: 'u2',
+          sender: { id: 'p2', displayName: 'Ibrahim' },
+          location: LIEU_BRUT,
+          ...drapeau,
+        },
+        'u1',
+        LANGUES,
+        ORIGINE,
+      );
+      expect(bulle).not.toBeNull();
+      expect(bulle!.protege).toBe(true);
+      expect(bulle!.lieu).toBeNull();
+      expect(bulle!.texte).toBe(MENTION_PROTEGEE);
+    }
   });
 
   it('0 violation axe serious/critical sur un fil qui rend un lieu', async () => {

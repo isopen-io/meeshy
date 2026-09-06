@@ -54,10 +54,19 @@ const IMAGE = corpsDeTaille(4_096, [0xff, 0xd9]);
 const VIDEO = corpsDeTaille(65_536, [0x00, 0x00]);
 const VOCAL = corpsDeTaille(8_192, [0x00, 0x00]);
 const VOCAL_TRADUIT = corpsDeTaille(8_192, [0x00, 0x00]);
+/**
+ * LA VIGNETTE DE `ar1` (`thumbnailUrl`, `bouchon-monde.ts` › `messagesRiches`)
+ * — travail `reglages-details` : `document.autoDownloadEnabled` à `true` la
+ * rend, et le témoin CDP de `v3-reglages-details.spec.ts` compte les requêtes
+ * vers CE chemin, jamais vers l'image entière (`tableau.jpg`). Un corps
+ * DISTINCT, plus petit, pour que compter l'un ne compte jamais l'autre.
+ */
+const VIGNETTE = corpsDeTaille(512, [0xff, 0xd9]);
 
 /** Ce que chaque fixture RÉELLEMENT servie pèse — jamais un chiffre recopié dans un spec : on lit cette table. */
 export const OCTETS_DE_LA_FIXTURE: Readonly<Record<string, number>> = {
   '/api/v1/attachments/file/2026/tableau.jpg': IMAGE.length,
+  '/api/v1/attachments/file/2026/tableau-thumb.jpg': VIGNETTE.length,
   '/api/v1/attachments/file/2026/revue.mp4': VIDEO.length,
   '/api/v1/attachments/file/2026/vocal.m4a': VOCAL.length,
   '/api/v1/attachments/file/2026/vocal-fr.m4a': VOCAL_TRADUIT.length,
@@ -65,6 +74,7 @@ export const OCTETS_DE_LA_FIXTURE: Readonly<Record<string, number>> = {
 
 const CORPS_PAR_CHEMIN: Readonly<Record<string, Buffer>> = {
   '/api/v1/attachments/file/2026/tableau.jpg': IMAGE,
+  '/api/v1/attachments/file/2026/tableau-thumb.jpg': VIGNETTE,
   '/api/v1/attachments/file/2026/revue.mp4': VIDEO,
   '/api/v1/attachments/file/2026/vocal.m4a': VOCAL,
   '/api/v1/attachments/file/2026/vocal-fr.m4a': VOCAL_TRADUIT,

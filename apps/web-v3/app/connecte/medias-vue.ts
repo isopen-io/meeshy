@@ -13,7 +13,7 @@ import { CHARGEUR_DE_PARTICIPATION, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { documentPleinEcran } from './fil-vue';
-import { FEUILLE_DES_MEDIAS } from './medias-feuille';
+import { FEUILLE_DES_APERCUS, FEUILLE_DES_MEDIAS } from './medias-feuille';
 import { FEUILLE_DU_PLEIN } from './plein-feuille';
 import { aFiche, ficheDePiece, gesteDePiece, pieceEnPlein, pleinEcran } from './plein-vue';
 import { blocDeTranscription } from './transcrit';
@@ -24,19 +24,29 @@ import { carteVide } from './vue';
  * on la parcourt, on l'ouvre, et **le poids de chaque pièce est annoncé avant
  * qu'un octet ne parte**.
  *
- * ZÉRO OCTET DE MÉDIA À L'OUVERTURE DE LA GRILLE. La grille ne rend AUCUNE
- * `<img>` et AUCUNE `<video>` : une tuile est un `<a>` au glyphe de son genre,
- * sous lequel son poids (et sa durée quand elle en a une) est écrit. C'est la
- * décision qui porte l'écran : « très faible consommation de données » se joue
- * ici, et une grille de 48 vignettes qui précharge est le contraire de la
- * mission. La cible dessine cette tuile-là — celle qui annonce « ↓ 420 Ko » —,
- * et cet écran n'en connaît pas d'autre, puisque rien n'y est jamais préchargé.
+ * ZÉRO OCTET DE MÉDIA PAR DÉFAUT, ET C'EST UN RÉGLAGE — pas un absolu (travail
+ * `reglages-details`). La grille ne rend AUCUNE `<img>` et AUCUNE `<video>`
+ * tant que le lecteur n'a pas demandé le contraire : une tuile est un `<a>` au
+ * glyphe de son genre, sous lequel son poids (et sa durée quand elle en a une)
+ * est écrit. C'est la décision qui porte l'écran : « très faible consommation
+ * de données » se joue ici, et une grille de 48 vignettes qui précharge est le
+ * contraire de la mission ; la cible dessine cette tuile-là, celle qui annonce
+ * « ↓ 420 Ko ».
  *
- * LE CLS EST NUL PAR CONSTRUCTION, et pas par un `width`/`height` : chaque
- * tuile est un carré (`aspect-ratio:1`) dont la boîte est connue avant tout
- * réseau. Le § 8.5 demande des vignettes dimensionnées ; la règle est tenue
- * par un moyen plus fort que celui qu'elle nomme — il n'y a pas d'image à
- * dimensionner.
+ * `apercusAutomatiques` — `document.autoDownloadEnabled`, réglé à
+ * `/settings/media/document` et relu à chaque chargement — est ce qui la fait
+ * changer. Le défaut du SCHÉMA est `false`
+ * (`packages/shared/types/preferences/document.ts:11`), la panne de sa lecture
+ * retombe sur `false` : l'erreur va toujours vers l'ÉCONOMIE, jamais vers la
+ * dépense. Sans cet effet, le réglage était un contrôle qui MENT — il porte
+ * la phrase « télécharge les images et vidéos dès leur réception » et rien ne
+ * l'appliquait (charte règle 7, cycle 124).
+ *
+ * LE CLS RESTE NUL, et pas par un `width`/`height` : chaque tuile est un carré
+ * (`aspect-ratio:1`) dont la boîte est connue avant tout réseau, et la
+ * vignette REMPLIT cette boîte déjà dimensionnée (`object-fit:cover`). Le
+ * § 8.5 demande des vignettes dimensionnées ; elles le sont par leur
+ * conteneur, quel que soit le réglage.
  *
  * UNE TUILE OUVRE LE MÊME PLEIN ÉCRAN QUE LE FIL (#4525, #5024 point 2, § 4
  * étape 3). Le tap sur une image ou une vidéo mène à l'état `?media=<pièce>`
@@ -90,6 +100,14 @@ export type EtatDesMedias = {
   /** `?media=<pièce>` — l'état plein écran, résolu contre `galerie.medias`. */
   readonly plein: string | null;
   /**
+   * `document.autoDownloadEnabled` du lecteur, RELU du serveur à chaque
+   * chargement (`app/chats/[cle]/medias/route.ts`) : à `true`, une tuile
+   * d'image ou de vidéo qui a une vignette la REND ; à `false` — le défaut du
+   * schéma, et le repli de toute panne de lecture —, la grille ne demande pas
+   * un octet de média.
+   */
+  readonly apercusAutomatiques: boolean;
+  /**
    * Ce qu'un module de participation doit savoir pour se charger — ici, UN
    * appel : `prendsLePleinEcran()`, qui donne à la surimpression servie le
    * voile, le piège à focus et Échap, comme sur le fil et la liste (défaut
@@ -128,11 +146,33 @@ const puces = ({ cle, galerie }: EtatDesMedias): string =>
  * origine que le document, si bien que toucher une tuile SANS le nommer
  * NAVIGUERAIT l'onglet vers le fichier brut sans que rien ne l'annonce.
  */
-const tuile = (piece: PieceJointe, meta: string, contexte: { readonly cle: string; readonly genre: GenreDePiece | null; readonly avant: string | null }): string => {
+/**
+ * L'INTÉRIEUR DE LA VIGNETTE — l'image quand le lecteur l'a DEMANDÉE et que la
+ * passerelle en sert une, le glyphe du genre sinon. `alt=""` et
+ * `aria-hidden` : la tuile porte déjà son nom dans `aria-label` (`gesteDePiece`),
+ * et un texte alternatif de plus le dirait deux fois. `loading="lazy"` +
+ * `decoding="async"` : même sur un lecteur qui a dit oui, ce qui n'est pas à
+ * l'écran ne coûte rien.
+ */
+const vignette = (piece: PieceJointe, apercusAutomatiques: boolean): string =>
+  apercusAutomatiques && piece.affiche !== null
+    ? `<span class="vignette" aria-hidden="true"><img src="${echappe(piece.affiche)}" alt="" loading="lazy" decoding="async"></span>`
+    : `<span class="vignette" aria-hidden="true">${svgDuSprite(formeDePiece(piece.genre).glyphe)}</span>`;
+
+const tuile = (
+  piece: PieceJointe,
+  meta: string,
+  contexte: {
+    readonly cle: string;
+    readonly genre: GenreDePiece | null;
+    readonly avant: string | null;
+    readonly apercusAutomatiques: boolean;
+  },
+): string => {
   const geste = gesteDePiece({ piece, meta, plein: adresseDuPleinDeLaGalerie({ ...contexte, piece: piece.id }) });
   return (
     `<a class="tuile" href="${echappe(geste.href)}"${geste.onglet ? ' target="_blank" rel="noopener"' : ''} aria-label="${echappe(geste.libelle)}">` +
-    `<span class="vignette" aria-hidden="true">${svgDuSprite(formeDePiece(piece.genre).glyphe)}</span>` +
+    vignette(piece, contexte.apercusAutomatiques) +
     `<span class="poids">${svgDuSprite('ph-arrow-down')}${echappe(meta)}</span>` +
     '</a>'
   );
@@ -161,7 +201,15 @@ const lecteur = (piece: PieceJointe, meta: string): string =>
 const entree = (piece: PieceJointe, bloc: string): string =>
   `<li data-piece="${echappe(piece.id)}" data-genre="${piece.genre}">${bloc}</li>`;
 
-const entreeDeTuile = ({ piece }: Media, contexte: { readonly cle: string; readonly genre: GenreDePiece | null; readonly avant: string | null }): string =>
+const entreeDeTuile = (
+  { piece }: Media,
+  contexte: {
+    readonly cle: string;
+    readonly genre: GenreDePiece | null;
+    readonly avant: string | null;
+    readonly apercusAutomatiques: boolean;
+  },
+): string =>
   entree(piece, tuile(piece, metaDePiece(piece), contexte));
 
 const entreeDeLecteur = ({ piece }: Media, contexte: { readonly cle: string; readonly genre: GenreDePiece | null; readonly avant: string | null }): string => {
@@ -193,7 +241,7 @@ const rien = (galerie: Galerie): string =>
  */
 const corps = (etat: EtatDesMedias, { inerte = false }: { readonly inerte?: boolean } = {}): string => {
   const { cle, galerie, plusAncien } = etat;
-  const contexte = { cle, genre: galerie.genre, avant: etat.avant };
+  const contexte = { cle, genre: galerie.genre, avant: etat.avant, apercusAutomatiques: etat.apercusAutomatiques };
   const tuiles = galerie.medias.filter((media) => !sEcouteSurPlace(media.piece.genre));
   const lecteurs = galerie.medias.filter((media) => sEcouteSurPlace(media.piece.genre));
 
@@ -255,6 +303,14 @@ export const documentDesMedias = (etat: EtatDesMedias): string => {
     // le chargeur est le MÊME que celui du fil (`chargeur.ts`), le module visé
     // est le SEUL que la galerie exécute (`lib/realtime/plein.ts`).
     script: CHARGEUR_DE_PARTICIPATION,
-    feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_MEDIAS + (surimpression === '' ? '' : FEUILLE_DU_PLEIN),
+    // `FEUILLE_DES_APERCUS` suit son RÉGLAGE, jamais l'écran : le lecteur qui a
+    // dit « jamais » ne paie pas les deux règles d'une image qu'il ne recevra
+    // pas (doc-comment de la feuille — mesuré, et le plafond dur en dépend).
+    feuille:
+      FEUILLE_CONNECTEE +
+      FEUILLE_DU_FIL +
+      FEUILLE_DES_MEDIAS +
+      (etat.apercusAutomatiques ? FEUILLE_DES_APERCUS : '') +
+      (surimpression === '' ? '' : FEUILLE_DU_PLEIN),
   });
 };

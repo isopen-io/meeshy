@@ -106,7 +106,29 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
     expect(select.content).toBeDefined();
     // Les colonnes ÉPINGLÉES restent : le keyset `(updatedAt, id)` et le
     // partage added/modified les exigent, une page les perdrait sa position.
-    expect(Object.keys(select).sort()).toEqual(['content', 'conversationId', 'createdAt', 'id', 'updatedAt']);
+    //
+    // AMENDÉ EN REVUE (travail `rich`, 2026-09-06) : demander `content`
+    // charge désormais AUSSI les six colonnes de `MESSAGE_PROTECTION_SELECT`
+    // (`isViewOnce`, `maxViewOnceCount`, `viewOnceCount`, `isBlurred`,
+    // `effectFlags`, `expiresAt`) — `syncMessagePlan.columns.content` dans
+    // `routes/sync/messages.ts`. Ce contrat était celui d'un AUTRE lot
+    // (#4173) et ne se change pas en silence : sans cet ajout, une projection
+    // `?fields=messages.content` servait `content` sans que le client puisse
+    // masquer un message protégé — ni son texte, ni son lieu (règle #4885,
+    // « toute route qui sert `Message.content` doit ce bloc »).
+    expect(Object.keys(select).sort()).toEqual([
+      'content',
+      'conversationId',
+      'createdAt',
+      'effectFlags',
+      'expiresAt',
+      'id',
+      'isBlurred',
+      'isViewOnce',
+      'maxViewOnceCount',
+      'updatedAt',
+      'viewOnceCount',
+    ]);
     await app.close();
   });
 

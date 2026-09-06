@@ -178,6 +178,26 @@ export const avisDEcran = (racine: string): string =>
   `${racine}>.avis svg{flex:none;width:var(--glyph-inline);height:var(--glyph-inline)}`;
 
 /**
+ * LE COMMUTATEUR (`role="switch"`, `reglages-socle.ts` › `commutateur`) —
+ * PARAMÉTRÉ par le sélecteur de sa liste porteuse (`.bascules` sur
+ * `/notifications/preferences`, `.rangs` sur `/settings/privacy` et
+ * `/settings/media/document`) pour la même raison qu'`apercuDeLigne` : deux
+ * écrans rendent le MÊME contrôle sous deux racines, et recopier son CSS en
+ * aurait fait deux qui divergent au premier changement de piste.
+ */
+export const commutateurDEcran = (racine: string): string =>
+  `${racine}{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);overflow:hidden}` +
+  `${racine}>li{border-bottom:var(--stroke-hair) solid var(--color-border-interactive)}` +
+  `${racine}>li:last-child{border-bottom:0}` +
+  `${racine} form.bascule{margin:0}` +
+  '.commutateur{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);width:100%;min-height:var(--target-min);padding:var(--space-3) var(--space-4);border:0;background:none;font:inherit;font-size:var(--text-base);color:var(--color-text);text-align:left;cursor:pointer}' +
+  '.commutateur .libelle{flex:1 1 auto;min-width:0}' +
+  '.commutateur .piste{display:flex;align-items:center;justify-content:flex-start;flex:none;width:var(--space-7);height:var(--space-5);padding:0 var(--space-1);border-radius:var(--radius-pill);background:var(--color-border-interactive);transition:background-color 150ms}' +
+  '.commutateur[aria-checked="true"] .piste{justify-content:flex-end;background:var(--color-primary)}' +
+  '.commutateur .pouce{width:calc(var(--space-5) - var(--space-1) * 2);height:calc(var(--space-5) - var(--space-1) * 2);border-radius:var(--radius-pill);background:var(--color-on-primary)}' +
+  '.fenetre{margin:0;padding:0 var(--space-4) var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}';
+
+/**
  * LE CHAMP D'APPEL — la barre tapable qui, en tête d'écran, MÈNE à l'écran qui
  * sait faire la chose : « Rechercher partout » sur le tableau de bord (#5093),
  * « Quoi de neuf ? » sur le fil (#4966).

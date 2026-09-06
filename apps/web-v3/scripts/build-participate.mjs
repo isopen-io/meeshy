@@ -123,7 +123,7 @@ const ecrisLaMesure = (poids) => {
     // LE RATCHET SE DÉCLARE (défaut majeur de revue) — comme `documents_du_fil`
     // et ses voisins de `budgets-mesures.json` : le nom du GATE qui l'oppose,
     // pas seulement de la commande qui l'écrit.
-    temoin: 'cd apps/web-v3 && node scripts/build-participate.mjs — un RATCHET : toute valeur gzip au-dessus de celle enregistrée ici rend rc=1 (l’appel que `bun run build` fait par défaut, SANS --mesure), et la faire monter exige --mesure, donc un diff relu.',
+    temoin: 'cd apps/web-v3 && node scripts/build-participate.mjs — un RATCHET : toute valeur gzip au-dessus de celle enregistrée ici rend rc=1 (l’appel que `bun run build` fait par défaut, SANS --mesure), et la faire monter exige --mesure, donc un diff relu. SECOND GATE (travail `rich`, 2026-09-06) : participate_gzip_9_octets ne peut lui-même dépasser le PLAFOND déclaré dans budgets.json › temps_reel.plafonds, opposé par __tests__/bundle-budget.test.ts § « le plafond du module de participation » — binaire réel ≤ cette mesure ET cette mesure ≤ ce plafond.',
     date: new Date().toISOString().slice(0, 10),
   };
   writeFileSync(MESURES, `${JSON.stringify(mesures, null, 2)}\n`);

@@ -19,11 +19,14 @@ export type Lieu = {
 };
 
 /**
- * `brut.location` D'ABORD — la forme HISSÉE que sert `GET .../messages` ET
- * `message:new` (§ 2.2). `brut.metadata.location` EN REPLI — la même
- * tolérance que `sharedPlaceFromMetadata` (`sharedPlace.ts:74-82`) : un
- * message rattrapé par `GET /sync` n'est PAS hissé (§ 2.2, « aucun hoist » —
- * aucun diff serveur, la v3 lit ce que le contrat expose déjà).
+ * `brut.location` D'ABORD — la forme HISSÉE que servent `GET .../messages`,
+ * `message:new` ET, depuis le travail `rich` (2026-09-06), `GET /sync`
+ * (`services/gateway/src/routes/sync/messages.ts`, `hoistLocationOnto`
+ * appliqué après restriction des champs). `brut.metadata.location` EN
+ * REPLI — la même tolérance que `sharedPlaceFromMetadata`
+ * (`sharedPlace.ts:74-82`) : le repli reste utile pour une passerelle pas
+ * encore redéployée avec ce correctif, jamais parce que `/sync` omettrait le
+ * hoist (ce n'est plus le cas).
  */
 export const lieuDeMessage = (brut: Readonly<Record<string, unknown>>): Lieu | null => {
   const source = objet(brut.location) ?? objet(objet(brut.metadata)?.location);

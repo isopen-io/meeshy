@@ -4,7 +4,9 @@ import { attachmentMediaSelect } from '../../services/attachments/attachmentIncl
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
 import { serializeAttachmentForSocket } from '../../socketio/serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
-import { messageAttachmentSchema, messageTranslationSchema } from '@meeshy/shared/types/api-schemas';
+import { messageAttachmentSchema, messageTranslationSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { MESSAGE_PROTECTION_SELECT } from '../conversations/messages-list-query';
 import { logger } from '../../utils/logger';
 import { loadPersonalHistoryHidingByConversation } from '../../services/personalHistoryFilter';
 import type { CursorKey, SyncCursor } from './cursor';
@@ -41,6 +43,22 @@ type DeletedRef = { id: string; conversationId: string; deletedAt: Date };
  * Cette liste est le contrat, et le témoin de forme l'oppose au select réel :
  * une projection amaigrie pour économiser de la bande passante doit d'abord
  * faire rougir un test plutôt que rendre le rattrapage inapplicable en silence.
+ *
+ * LE BLOC DE PROTECTION — les SIX champs de `MESSAGE_PROTECTION_SELECT`
+ * (`routes/conversations/messages-list-query.ts:195`), et non trois d'entre
+ * eux (travail `rich`, 2026-09-06 ; complété en revue le même jour). Sans
+ * eux, un message rattrapé par `/sync` arrivait sans l'annonce de sa
+ * protection — le client ne pouvait masquer ni son texte ni son lieu
+ * (famille cycle 124 du § Prisme). Le bloc a une SOURCE UNIQUE depuis #4885,
+ * qui l'a posée après avoir mesuré la même absence sur la recherche : « toute
+ * route qui sert `Message.content` doit ce bloc, ou dire pourquoi non ».
+ * `/sync` sert `content` : elle le doit ENTIER. En servir trois sixièmes
+ * laisserait le trou que `api-schemas/message.ts:358-364` documente déjà —
+ * un client qui lit le BITFIELD `effectFlags` plutôt que les trois colonnes
+ * rend une ligne protégée comme une ligne ordinaire.
+ *
+ * `location` n'y figure PAS : ce n'est pas une colonne (elle DÉRIVE de
+ * `metadata` par `hoistLocationOnto`, déjà dans cette liste).
  */
 export const SYNC_MESSAGE_RENDERABLE_KEYS = [
   'id',
@@ -61,6 +79,7 @@ export const SYNC_MESSAGE_RENDERABLE_KEYS = [
   'sender',
   'createdAt',
   'updatedAt',
+  ...(Object.keys(MESSAGE_PROTECTION_SELECT) as (keyof typeof MESSAGE_PROTECTION_SELECT)[]),
 ] as const;
 
 /**
@@ -91,6 +110,10 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   validatedMentions: true,
   createdAt: true,
   updatedAt: true,
+  // Le bloc de protection ENTIER, depuis sa source unique — jamais recopié
+  // (#4885 : c'est la recopie à la main qui avait laissé la recherche servir
+  // un message à vue unique comme un message ordinaire).
+  ...MESSAGE_PROTECTION_SELECT,
   attachments: { select: attachmentMediaSelect },
   sender: {
     select: {
@@ -138,9 +161,34 @@ export const SYNC_MESSAGE_SERVED_FIELDS = Object.keys(syncMessageSelect) as read
  */
 const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt'] as const;
 
+/**
+ * Les SIX colonnes de `MESSAGE_PROTECTION_SELECT`, relevées mécaniquement
+ * depuis sa source unique — jamais recopiées (revue du travail `rich`,
+ * 2026-09-06, défaut §3 : « `?fields=…content` sert `content` SANS le bloc de
+ * protection »).
+ */
+const PROTECTION_KEYS = Object.keys(MESSAGE_PROTECTION_SELECT) as ReadonlyArray<
+  keyof typeof syncMessageSelect & string
+>;
+
+/**
+ * Le `select` que `?fields=messages.content` doit charger.
+ *
+ * `content` seul ne suffit pas à décider si la ligne peut être RENDUE : la
+ * règle #4885 (« toute route qui sert `Message.content` doit le bloc de
+ * protection ») porte sur ce que la route SERT, pas sur ce qu'un `?fields=`
+ * nomme explicitement — un appelant qui demande `content` sans savoir que la
+ * protection existe ne peut pas la nommer à sa place. Charger les six colonnes
+ * dès que `content` est demandé est donc la SEULE lecture qui tient la règle :
+ * l'alternative (répondre 400 à une projection qui omet la protection) reste
+ * ouverte comme décision produit, jamais tranchée en silence ici.
+ */
 export const syncMessagePlan: ColumnPlan<typeof syncMessageSelect> = {
   full: syncMessageSelect,
   pinned: [...SYNC_MESSAGE_PINNED],
+  columns: {
+    content: ['content', ...PROTECTION_KEYS],
+  },
 };
 
 /**
@@ -154,6 +202,20 @@ export const syncMessagePlan: ColumnPlan<typeof syncMessageSelect> = {
  * les plus fréquents d'une ligne de rattrapage.
  */
 const SYNC_MESSAGE_SERVED_PINNED = ['id', 'conversationId'] as const;
+
+/**
+ * Le bloc de protection accompagne `content`, à la SERVIE comme au `select`
+ * (revue du travail `rich`, 2026-09-06, défaut §3). Sans cette seconde moitié,
+ * `syncMessagePlan.columns` aurait chargé les six colonnes en base pour rien :
+ * `restrictFields` les aurait aussitôt retirées de la réponse, puisqu'elles ne
+ * figurent pas dans le `?fields=` demandé par l'appelant. Les deux passes du
+ * même geste doivent donc s'accorder sur la MÊME condition — `content` est-il
+ * servi ?
+ */
+function servedPinnedFor(fields: FieldSet): readonly string[] {
+  const contentServi = fields === null || fields.has('content');
+  return contentServi ? [...SYNC_MESSAGE_SERVED_PINNED, ...PROTECTION_KEYS] : SYNC_MESSAGE_SERVED_PINNED;
+}
 
 /**
  * Ce que la ligne Prisma devient sur le fil.
@@ -237,6 +299,21 @@ const syncMessageSchema = {
     reactionSummary: { type: 'object', nullable: true, additionalProperties: true },
     reactionCount: { type: 'integer' },
     validatedMentions: { type: 'array', items: { type: 'string' } },
+    // Les SIX champs de `MESSAGE_PROTECTION_SELECT`, aux types que le schéma
+    // partagé leur donne (`api-schemas/message.ts:354-364`, `:443-447`) : un
+    // champ chargé mais non DÉCLARÉ est strippé en silence par
+    // fast-json-stringify — c'est exactement ce que ce fichier documente déjà
+    // pour `metadata`, et ce que #4885 a mesuré pour `effectFlags`.
+    isViewOnce: { type: 'boolean' },
+    maxViewOnceCount: { type: 'number', nullable: true },
+    viewOnceCount: { type: 'number' },
+    isBlurred: { type: 'boolean' },
+    effectFlags: { type: 'number' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    location: {
+      ...sharedPlaceResponseSchema,
+      description: 'Lieu partagé — hissé depuis metadata.location par hoistLocationOnto, la même projection que messages-list',
+    },
     attachments: { type: 'array', items: messageAttachmentSchema },
     sender: {
       type: 'object',
@@ -430,11 +507,21 @@ export async function syncMessages(opts: {
   // qu'on SERT. Les deux passes sont nécessaires — une colonne épinglée est lue
   // sans être forcément demandée, et seule cette seconde passe l'empêche
   // d'élargir la réponse au-delà de ce que l'appelant a nommé.
+  //
+  // Le hoist du lieu (`hoistLocationOnto`) s'applique ENSUITE, sur la ligne
+  // déjà restreinte — jamais avant : `location` n'est pas une clé nommable (ce
+  // n'est pas une colonne, elle DÉRIVE de `metadata`), donc un hoist plus tôt
+  // survivrait à une restriction qui a justement retiré `metadata`. En le
+  // posant après, `location` accompagne la `metadata` SERVIE — présente si et
+  // seulement si `metadata` l'est (travail `rich`, 2026-09-06).
+  const servedPinned = servedPinnedFor(fields);
   const serialize = (m: SyncMessage): Record<string, unknown> =>
-    restrictFields(
-      serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
-      fields,
-      SYNC_MESSAGE_SERVED_PINNED,
+    hoistLocationOnto(
+      restrictFields(
+        serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
+        fields,
+        servedPinned,
+      ),
     );
 
   // added = créé après `since` ; modified = pré-existant mais modifié.

@@ -1,6 +1,6 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
-import { BASCULES_DE_PREFS, PREFS, SECTIONS_DE_PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
+import { BASCULES_DE_PREFS, FUSEAUX_DND, FUSEAU_AUTO, PREFS, SECTIONS_DE_PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
 import { bandeau } from './bandeau-vue';
 import { CHARGEUR_DE_PARTICIPATION } from './chargeur';
@@ -8,6 +8,7 @@ import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { documentPleinEcran } from './fil-vue';
 import { FEUILLE_DES_PREFS } from './prefs-feuille';
+import { commutateur } from './reglages-socle';
 
 /**
  * `/notifications/preferences` — LES TREIZE BASCULES DE NOTIFICATION
@@ -39,14 +40,32 @@ import { FEUILLE_DES_PREFS } from './prefs-feuille';
  * travail à part.
  */
 
+/** `'fenetre-dnd'` — le sentinelle de la RÈGLE APPLIQUÉE quand le geste réglé n'est pas une des treize bascules. */
+export type RegleAppliquee = CleDePreference | 'fenetre-dnd' | null;
+
 export type EtatDesPrefs = {
   readonly reglages: Readonly<Record<CleDePreference, boolean>>;
   readonly dndStartTime: string;
   readonly dndEndTime: string;
+  readonly dndUtcOffsetMinutes: number;
+  /**
+   * LE DÉCALAGE MESURÉ DE L'APPAREIL, en minutes à ajouter à UTC — `null`
+   * quand le cookie de fuseau n'est pas là (`app/session.ts` ›
+   * `fuseauDuLecteur`). Il ne PEINT pas la sélection : il NOMME ce que
+   * l'option « cet appareil » écrira, et la porte écrit exactement ça.
+   */
+  readonly decalageDeLAppareil: number | null;
   /** Non nul juste après la redirection du POST — le PRG dit ce qu'il a fait. */
-  readonly regleAppliquee: CleDePreference | null;
+  readonly regleAppliquee: RegleAppliquee;
   /** Vrai quand le POST (sans JS) a échoué — l'état affiché reste celui relu du serveur. */
   readonly echec: boolean;
+  /**
+   * LE MOTIF NOMMÉ DU REFUS, quand la porte en connaît un (une heure hors
+   * format, § du geste `fenetre`). `null` ⇒ le motif générique `PREFS.echec` :
+   * « réessayez » est juste pour un réseau coupé et faux pour une saisie que
+   * réessayer à l'identique refusera pareil.
+   */
+  readonly motif: string | null;
   readonly tempsReel: { readonly module: string; readonly passerelle: string } | null;
 };
 
@@ -65,13 +84,18 @@ const enTete = (): string =>
   '</div>' +
   '</header>';
 
-const avis = (regleAppliquee: CleDePreference | null): string =>
+const messageDeLAvis = (regleAppliquee: Exclude<RegleAppliquee, null>): string =>
+  regleAppliquee === 'fenetre-dnd' ? PREFS.fenetreRegle : PREFS.regle(LIBELLE_PAR_CLE[regleAppliquee]);
+
+const avis = (regleAppliquee: RegleAppliquee): string =>
   `<p class="avis" role="status"${regleAppliquee === null ? ' hidden' : ''}>${
-    regleAppliquee === null ? '' : svgDuSprite('ph-check-circle') + echappe(PREFS.regle(LIBELLE_PAR_CLE[regleAppliquee]))
+    regleAppliquee === null ? '' : svgDuSprite('ph-check-circle') + echappe(messageDeLAvis(regleAppliquee))
   }</p>`;
 
-const echecBandeau = (echec: boolean): string =>
-  `<p class="echec" role="alert"${echec ? '' : ' hidden'}>${echec ? svgDuSprite('ph-warning-circle') + echappe(PREFS.echec) : ''}</p>`;
+const echecBandeau = (echec: boolean, motif: string | null): string =>
+  `<p class="echec" role="alert"${echec ? '' : ' hidden'}>${
+    echec ? svgDuSprite('ph-warning-circle') + echappe(motif ?? PREFS.echec) : ''
+  }</p>`;
 
 /**
  * SERVI CACHÉ, COMME LES BANDEAUX DIFFÉRÉS DU FIL — un 401 en cours de
@@ -93,50 +117,80 @@ const sessionExpireeBandeau = (): string =>
   });
 
 /**
- * UNE RANGÉE — un commutateur qui porte lui-même son texte, sa piste et son
- * pouce (`aria-hidden`, la couleur CONFIRME l'état sans le PORTER). La rangée
- * DND gagne une seconde ligne, hors du formulaire : une VALEUR, jamais une
- * saisie.
+ * UNE RANGÉE — le commutateur PARTAGÉ (`reglages-socle.ts`), avec la valeur
+ * qu'un lecteur d'écran annonce. La rangée DND gagne une seconde ligne, hors
+ * du formulaire de bascule : une VALEUR affichée, puis SON édition (§ 12.10,
+ * ce lot) dans un `<details>` distinct — deux formulaires, deux gestes.
  */
 const ligneBascule = (
   b: { readonly cle: CleDePreference; readonly libelle: string },
   reglages: Readonly<Record<CleDePreference, boolean>>,
   fenetreDnd: string,
-): string => {
-  const etat = reglages[b.cle];
-  return (
-    '<li>' +
-    '<form class="bascule" method="post">' +
-    `<input type="hidden" name="cle" value="${echappe(b.cle)}">` +
-    `<input type="hidden" name="valeur" value="${etat ? 'false' : 'true'}">` +
-    `<button type="submit" class="commutateur" role="switch" aria-checked="${etat ? 'true' : 'false'}">` +
-    `<span class="libelle">${echappe(b.libelle)}</span>` +
-    `<span class="piste" aria-hidden="true"><span class="pouce"></span></span>` +
-    `<span class="hors-ecran">${etat ? echappe(PREFS.activee) : echappe(PREFS.desactivee)}</span>` +
-    '</button>' +
-    '</form>' +
-    (b.cle === 'dndEnabled' ? `<p class="fenetre">${echappe(fenetreDnd)}</p>` : '') +
-    '</li>'
-  );
-};
+): string =>
+  commutateur({
+    cle: b.cle,
+    libelle: b.libelle,
+    actif: reglages[b.cle],
+    libelleActif: PREFS.activee,
+    libelleInactif: PREFS.desactivee,
+    apres: b.cle === 'dndEnabled' ? `<p class="fenetre">${echappe(fenetreDnd)}</p>` : '',
+  });
+
+/**
+ * L'ÉDITION DE LA PLAGE — un `<details>` fermé par défaut (la VALEUR au repos
+ * suffit à la lecture courante), qui s'ouvre sur DEUX `<input type="time">`
+ * et un `<select>` de fuseau FERMÉ (`FUSEAUX_DND`, § 3 témoins 7 et 8 de la
+ * spécification). `fuseau=auto` est le choix par défaut : il ne pose AUCUN
+ * `dndUtcOffsetMinutes` au corps posté, la valeur stockée survit.
+ */
+const optionDeFuseau = (fuseau: { readonly valeur: string; readonly libelle: string }, actuel: number): string =>
+  `<option value="${echappe(fuseau.valeur)}"${Number(fuseau.valeur) === actuel ? ' selected' : ''}>${echappe(fuseau.libelle)}</option>`;
+
+const formulaireDeLaFenetre = (
+  etat: Pick<EtatDesPrefs, 'dndStartTime' | 'dndEndTime' | 'dndUtcOffsetMinutes' | 'decalageDeLAppareil'>,
+): string =>
+  '<details class="fenetre-edition">' +
+  `<summary>${echappe(PREFS.fenetreModifier)}</summary>` +
+  '<form method="post">' +
+  '<input type="hidden" name="geste" value="fenetre">' +
+  '<div class="champ">' +
+  `<label for="dnd-debut">${echappe(PREFS.fenetreDebut)}</label>` +
+  `<input type="time" id="dnd-debut" name="dndStartTime" value="${echappe(etat.dndStartTime)}" required>` +
+  '</div>' +
+  '<div class="champ">' +
+  `<label for="dnd-fin">${echappe(PREFS.fenetreFin)}</label>` +
+  `<input type="time" id="dnd-fin" name="dndEndTime" value="${echappe(etat.dndEndTime)}" required>` +
+  '</div>' +
+  '<div class="champ">' +
+  `<label for="dnd-fuseau">${echappe(PREFS.fenetreFuseau)}</label>` +
+  `<select id="dnd-fuseau" name="fuseau">` +
+  `<option value="${FUSEAU_AUTO}">${echappe(PREFS.fenetreFuseauAuto(etat.decalageDeLAppareil))}</option>` +
+  FUSEAUX_DND.map((fuseau) => optionDeFuseau(fuseau, etat.dndUtcOffsetMinutes)).join('') +
+  '</select>' +
+  '</div>' +
+  `<button type="submit" class="action primaire">${echappe(PREFS.fenetreEnregistrer)}</button>` +
+  '</form>' +
+  '</details>';
 
 const section = (
   s: { readonly titre: string; readonly bascules: readonly { readonly cle: CleDePreference; readonly libelle: string }[] },
-  reglages: Readonly<Record<CleDePreference, boolean>>,
-  fenetreDnd: string,
+  etat: EtatDesPrefs,
 ): string =>
   '<section class="groupe-prefs">' +
   `<h2>${echappe(s.titre)}</h2>` +
-  `<ul class="bascules">${s.bascules.map((b) => ligneBascule(b, reglages, fenetreDnd)).join('')}</ul>` +
+  `<ul class="bascules">${s.bascules
+    .map((b) => ligneBascule(b, etat.reglages, PREFS.fenetre(etat.dndStartTime, etat.dndEndTime)))
+    .join('')}</ul>` +
+  (s.bascules.some((b) => b.cle === 'dndEnabled') ? formulaireDeLaFenetre(etat) : '') +
   '</section>';
 
 const corps = (etat: EtatDesPrefs, participation: string): string =>
   `<main id="main-content" class="prefs-ecran"${participation}>` +
   enTete() +
   avis(etat.regleAppliquee) +
-  echecBandeau(etat.echec) +
+  echecBandeau(etat.echec, etat.motif) +
   sessionExpireeBandeau() +
-  SECTIONS_DE_PREFS.map((s) => section(s, etat.reglages, PREFS.fenetre(etat.dndStartTime, etat.dndEndTime))).join('') +
+  SECTIONS_DE_PREFS.map((s) => section(s, etat)).join('') +
   '</main>';
 
 export const documentDesPrefs = (etat: EtatDesPrefs): string =>

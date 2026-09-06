@@ -143,8 +143,42 @@ nonisolated enum SocialFullscreenRoute {
     /// player n'aurait rien à peindre. La galerie, elle, a toujours les médias.
     static func scene(of post: FeedPost) -> CanvasV3? {
         guard let document = post.storyEffects?.canvasV3,
-              !document.scenes.isEmpty
+              !document.scenes.isEmpty,
+              coversEveryVisual(document, of: post)
         else { return nil }
         return document
+    }
+
+    /// **Un canvas qui ne montre pas TOUT ce que le post porte n'a pas le
+    /// dernier mot** (régression mesurée puis corrigée le 2026-09-06).
+    ///
+    /// Mesuré au simulateur : un post composé de DEUX photos part avec ses deux
+    /// médias et leurs deux légendes — et un canvas d'UNE seule scène, portant
+    /// UN seul média en fond (le composer ne publie que sa slide courante). La
+    /// route vers la scène montrait donc une photo sur deux, sans pellicule ni
+    /// moyen d'atteindre l'autre. La galerie, elle, les montre toutes.
+    ///
+    /// > **Un correctif qui améliore le cas visé peut dégrader son voisin.**
+    /// > Router une scène vers son player est juste quand le canvas EST la
+    /// > publication ; c'est une perte quand il n'en est qu'une partie. La
+    /// > première écriture de cette règle ne posait que la question « y a-t-il
+    /// > une scène ? » — il fallait aussi demander « montre-t-elle tout ? ».
+    ///
+    /// La comparaison porte sur le NOMBRE de visuels, pas sur leur identité :
+    /// pendant la composition les médias n'ont pas encore d'id serveur, et le
+    /// canvas les référence par des clés que le post ne porte pas. Un compte
+    /// suffit à répondre à la seule question qui décide — la scène laisse-t-elle
+    /// quelque chose dehors ?
+    ///
+    /// Le jour où le composer publiera toutes ses slides, cette garde deviendra
+    /// vraie d'elle-même et cessera de router quoi que ce soit vers la galerie.
+    private static func coversEveryVisual(_ document: CanvasV3, of post: FeedPost) -> Bool {
+        let visuelsDuPost = post.media.filter { $0.type == .image || $0.type == .video }.count
+        guard visuelsDuPost > 0 else { return true }
+        let visuelsDuCanvas = document.scenes
+            .flatMap(\.objects)
+            .filter { $0.kind == .media }
+            .count
+        return visuelsDuCanvas >= visuelsDuPost
     }
 }

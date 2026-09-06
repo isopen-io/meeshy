@@ -1,7 +1,10 @@
 import { compacte } from '@/app/enveloppe/feuille';
 
+import { avisDEcran, commutateurDEcran } from './atomes-feuille';
+
 /**
- * LA FEUILLE DES RÉGLAGES — six écrans, une feuille.
+ * LA FEUILLE DES RÉGLAGES — DIX écrans (six d'origine + les quatre
+ * réglages-détails de `reglages-details-vue.ts`), une feuille.
  *
  * Ils partagent une forme : un en-tête qui ramène, des SECTIONS titrées, et
  * dans chacune soit des RANGÉES qui mènent quelque part, soit un formulaire.
@@ -29,6 +32,15 @@ export const FEUILLE_DES_REGLAGES = compacte(`
 .reglages>section{display:flex;flex-direction:column;gap:var(--space-3)}
 .reglages h2{margin:0;font-size:var(--text-sm);font-weight:var(--font-weight-semibold);color:var(--color-text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide)}
 .reglages .phrase{margin:0;font-size:var(--text-sm);color:var(--color-text-muted)}
+${avisDEcran('.reglages')}
+.reglages .avis[role="alert"]{color:var(--color-danger)}
+
+.reglages .rangee-attention .quoi{color:var(--color-danger)}
+.reglages .rangee-attention svg{color:var(--color-danger)}
+.action.attention{background:var(--color-danger);color:var(--color-on-primary)}
+.action.attention:hover{filter:brightness(0.92)}
+
+${commutateurDEcran('.reglages .bascules')}
 
 .rangs{display:flex;flex-direction:column;gap:var(--space-2);margin:0;padding:0;list-style:none}
 .rangee{display:flex;align-items:center;gap:var(--space-3);min-height:var(--target-min);padding:var(--space-3) var(--space-4);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);text-decoration:none;color:var(--color-text)}
@@ -39,6 +51,7 @@ export const FEUILLE_DES_REGLAGES = compacte(`
 .rangee .rang{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-6);height:var(--space-6);border-radius:var(--radius-pill);background:var(--color-bg-sunken);font-size:var(--text-sm);color:var(--color-text-muted)}
 .rangee .valeur{font-size:var(--text-sm);color:var(--color-text-muted)}
 
+.reglages section>form{display:flex;flex-direction:column;gap:var(--space-3);margin:0}
 .champ{display:flex;flex-direction:column;gap:var(--space-2)}
 .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
 .champ input,.champ textarea,.champ select{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}

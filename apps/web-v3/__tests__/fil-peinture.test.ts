@@ -532,6 +532,7 @@ describe('une bulle riche qui arrive', () => {
           nom: 'photo.jpg',
           url: '',
           piste: '',
+          affiche: null,
           octets: 96_000,
           dureeMs: null,
           largeur: null,

@@ -1,6 +1,7 @@
 import { moi } from '@/lib/api/compte';
 import { fil, languesDuLecteur, type Creance } from '@/lib/api/fil';
 import { galerie, genreDemande } from '@/lib/api/medias';
+import { apercusAutomatiques } from '@/lib/api/preferences';
 
 import { CACHE_PRIVE, curseurDemande, pleinDemande, rendu, tempsReelDuDocument } from '@/app/connecte/fil-porte';
 import { documentIntrouvable } from '@/app/connecte/fil-vue';
@@ -28,6 +29,18 @@ import { jetonDuLecteur } from '@/app/session';
  * (`app/chats/[cle]/route.ts`) ; c'est une différence de contrat, pas un oubli.
  * Rien n'étant muté, aucune garde de préchargement n'est posée : un
  * `Sec-Purpose: prefetch` ne peut, sur cette adresse, que réchauffer un cache.
+ *
+ * UN SEUL RÉGLAGE CHANGE CE QUE CET ÉCRAN CONSOMME, et il est RELU du serveur
+ * à chaque chargement : `document.autoDownloadEnabled`
+ * (`/settings/media/document`, travail `reglages-details`). À `false` — le
+ * défaut du schéma — la grille ne demande AUCUN octet de média ; à `true`, une
+ * tuile d'image ou de vidéo rend sa vignette. Sa lecture part EN PARALLÈLE de
+ * `moi()` : elle n'a aucune dépendance sur l'identité, et la sérialiser aurait
+ * ajouté un aller-retour de 3G rurale à un écran qui en compte deux.
+ *
+ * UNE PANNE DE CETTE LECTURE N'EST PAS UNE PANNE D'ÉCRAN. Elle retombe sur
+ * `false` : l'erreur va vers l'ÉCONOMIE, jamais vers la dépense, et jamais
+ * vers un 503 — une préférence absente ne vaut pas de refuser la galerie.
  *
  * LA GALERIE EST UNE PROJECTION DU FIL, jamais une seconde lecture — la raison
  * (protection héritée, transcription au Prisme, piste servie) est écrite au
@@ -60,7 +73,10 @@ export const GET = async (
   const chemin = new URL(requete.url).pathname;
   if (jeton === null) return versLaConnexion(chemin);
 
-  const identite = await moi({ jeton });
+  // EN PARALLÈLE, et pas par élégance : la lecture du réglage n'a aucune
+  // dépendance sur l'identité, et la sérialiser aurait ajouté un aller-retour
+  // entier à un écran de 3G rurale.
+  const [identite, apercus] = await Promise.all([moi({ jeton }), apercusAutomatiques({ jeton })]);
   if (identite.genre === 'session-expiree') return versLaConnexion(chemin);
 
   const lecteur = identite.genre === 'lecteur' ? identite.lecteur : null;
@@ -92,6 +108,7 @@ export const GET = async (
       plusAncien: issue.fil.plusAncien,
       avant,
       plein: pleinDemande(requete),
+      apercusAutomatiques: apercus,
       tempsReel: tempsReelDuDocument(),
     }),
   );
