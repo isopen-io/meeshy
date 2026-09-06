@@ -512,7 +512,7 @@ class TestTranslateSingleLanguage:
         svc.translate_with_structure = AsyncMock(side_effect=asyncio.TimeoutError())
         result = await _translate_single_language(_task(), "fr", "w1", svc, None)
         assert "error" in result
-        assert result["confidenceScore"] == 0.1
+        assert result["confidenceScore"] == 0.0
 
     async def test_service_returns_none_causes_fallback_error(self):
         from services.zmq_pool.translation_processor import _translate_single_language
@@ -530,10 +530,13 @@ class TestTranslateSingleLanguage:
 
     async def test_no_service_returns_fallback_placeholder(self):
         from services.zmq_pool.translation_processor import _translate_single_language
-        result = await _translate_single_language(_task(), "fr", "w1", None, None)
+        task = _task()
+        result = await _translate_single_language(task, "fr", "w1", None, None)
         assert result["modelType"] == "fallback"
         assert "error" in result
-        assert result["confidenceScore"] == 0.1
+        assert result["confidenceScore"] == 0.0
+        # Un échec sert l'ORIGINAL au client, jamais un texte-témoin (#3663).
+        assert result["translatedText"] == task.text
 
     async def test_general_exception_returns_fallback(self):
         from services.zmq_pool.translation_processor import _translate_single_language
@@ -553,8 +556,9 @@ class TestCreateErrorResult:
         assert result["error"] == "something failed"
         assert result["confidenceScore"] == 0.0
         assert result["processingTime"] == 0.0
-        assert "ERROR" in result["translatedText"]
-        assert "something failed" in result["translatedText"]
+        # Un échec sert l'ORIGINAL au client, jamais un texte-témoin "[ERROR: …]"
+        # qui ressemblerait à une traduction valide (#3663).
+        assert result["translatedText"] == task.text
 
 
 # ─── TranslationPoolManager ───────────────────────────────────────────────────

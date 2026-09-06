@@ -167,9 +167,11 @@ async def process_batch_translation(
                     except asyncio.TimeoutError:
                         logger.error(f"⏱️ [BATCH] Timeout ({batch_timeout:.0f}s) for {source_lang}→{target_lang} batch={len(texts)}")
                         raise
+                    item_failed = [False] * len(translated_texts)
                 else:
                     # Fallback: traduire un par un
                     translated_texts = []
+                    item_failed = []
                     for text in texts:
                         single_budget = inference_timeout_for(len(text))
                         try:
@@ -186,18 +188,25 @@ async def process_batch_translation(
                         except asyncio.TimeoutError:
                             logger.error(f"⏱️ [BATCH] Single inference timeout ({single_budget:.0f}s, {len(text)} chars) {source_lang}→{target_lang}")
                             raise
-                        translated_texts.append(result.get('translated_text', text))
+                        # `translate_with_structure` avale ses propres échecs et
+                        # rend un texte de REPLI marqué `error` plutôt que de
+                        # lever — jamais le prendre pour une vraie traduction
+                        # (#3663) : servir l'ORIGINAL, pas le repli.
+                        failed = bool(result.get('error'))
+                        item_failed.append(failed)
+                        translated_texts.append(text if failed else result.get('translated_text', text))
 
                 # Distribuer les résultats
                 for i, (task, translated_text) in enumerate(zip(tasks, translated_texts)):
                     processing_time = time.time() - batch_start
+                    failed = item_failed[i] if i < len(item_failed) else False
 
                     result = {
                         'messageId': task.message_id,
                         'translatedText': translated_text,
                         'sourceLanguage': source_lang,
                         'targetLanguage': target_lang,
-                        'confidenceScore': 0.95,
+                        'confidenceScore': 0.0 if failed else 0.95,
                         'processingTime': processing_time,
                         'modelType': model_type,
                         'workerName': worker_name,
@@ -205,7 +214,8 @@ async def process_batch_translation(
                         'batchSize': len(tasks),
                         'batchIndex': i,
                         'poolType': pool_type,
-                        'created_at': task.created_at
+                        'created_at': task.created_at,
+                        **({'error': 'ML translation unavailable — served original'} if failed else {})
                     }
 
                     await publish_func(task.task_id, result, target_lang)
@@ -320,10 +330,16 @@ async def _translate_single_language(
                 logger.error(f"Invalid result for {worker_name}: {result}")
                 raise Exception(f"Invalid translation result: {result}")
 
+            # `error` marque un texte de REPLI (`_fallback_translate`) — pas une
+            # traduction ML. Un échec est un échec : jamais mis en cache (#3663),
+            # jamais servi tel quel — le client reçoit l'ORIGINAL, comme si
+            # aucune traduction n'avait matché sa langue (règle du Prisme).
+            translation_failed = bool(result.get('error'))
+
             # ═══════════════════════════════════════════════════════════════════
-            # ÉTAPE 3: Mettre en cache la nouvelle traduction
+            # ÉTAPE 3: Mettre en cache la nouvelle traduction (jamais un repli)
             # ═══════════════════════════════════════════════════════════════════
-            if translation_cache:
+            if translation_cache and not translation_failed:
                 await translation_cache.set_translation(
                     text=task.text,
                     source_lang=task.source_language,
@@ -334,28 +350,30 @@ async def _translate_single_language(
 
             return {
                 'messageId': task.message_id,
-                'translatedText': result['translated_text'],
+                'translatedText': task.text if translation_failed else result['translated_text'],
                 'sourceLanguage': result.get('detected_language', task.source_language),
                 'targetLanguage': target_language,
-                'confidenceScore': result.get('confidence', 0.95),
+                'confidenceScore': 0.0 if translation_failed else result.get('confidence', 0.95),
                 'processingTime': processing_time,
                 'modelType': task.model_type,
                 'workerName': worker_name,
                 'fromCache': False,
                 'segmentsCount': result.get('segments_count', 0),
-                'emojisCount': result.get('emojis_count', 0)
+                'emojisCount': result.get('emojis_count', 0),
+                **({'error': result['error']} if translation_failed else {})
             }
         else:
-            # Fallback si pas de service de traduction
-            translated_text = f"[{target_language.upper()}] {task.text}"
+            # Pas de service de traduction disponible : échec explicite, le
+            # client reçoit l'original (jamais un texte-témoin `[XX] …`, ni mis
+            # en cache — #3663).
             processing_time = time.time() - start_time
 
             return {
                 'messageId': task.message_id,
-                'translatedText': translated_text,
+                'translatedText': task.text,
                 'sourceLanguage': task.source_language,
                 'targetLanguage': target_language,
-                'confidenceScore': 0.1,
+                'confidenceScore': 0.0,
                 'processingTime': processing_time,
                 'modelType': 'fallback',
                 'workerName': worker_name,
@@ -364,16 +382,16 @@ async def _translate_single_language(
 
     except Exception as e:
         logger.error(f"Translation error in {worker_name}: {e}")
-        # Fallback en cas d'erreur
-        translated_text = f"[{target_language.upper()}] {task.text}"
+        # Échec explicite : le client reçoit l'ORIGINAL, jamais un texte-témoin
+        # `[XX] …` qui ressemblerait à une traduction valide (#3663).
         processing_time = time.time() - start_time
 
         return {
             'messageId': task.message_id,
-            'translatedText': translated_text,
+            'translatedText': task.text,
             'sourceLanguage': task.source_language,
             'targetLanguage': target_language,
-            'confidenceScore': 0.1,
+            'confidenceScore': 0.0,
             'processingTime': processing_time,
             'modelType': 'fallback',
             'workerName': worker_name,
@@ -387,7 +405,11 @@ def _create_error_result(
     error_message: str
 ) -> dict:
     """
-    Crée un résultat d'erreur pour une traduction échouée
+    Crée un résultat d'erreur pour une traduction échouée.
+
+    `translatedText` porte l'ORIGINAL, jamais un texte-témoin `[ERROR: …]` —
+    un échec est un échec explicite (`error`), pas une traduction dégradée à
+    afficher au client, et rien ici n'est mis en cache (#3663).
 
     Args:
         task: Tâche de traduction
@@ -399,7 +421,7 @@ def _create_error_result(
     """
     return {
         'messageId': task.message_id,
-        'translatedText': f"[ERROR: {error_message}]",
+        'translatedText': task.text,
         'sourceLanguage': task.source_language,
         'targetLanguage': target_language,
         'confidenceScore': 0.0,
