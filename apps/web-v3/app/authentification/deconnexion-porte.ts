@@ -3,6 +3,8 @@ import { estSecurisee, jetonDuLecteur } from '@/app/session';
 import { deconnexion, type Recuperateur } from '@/lib/api/authentification';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION, expireLeCookie } from '@/lib/api/cookies';
 import { cookiesDEffacementDesPlaces } from '@/lib/api/guest-session';
+import { COOKIE_DE_L_APPAREIL_PUSH, lisLAppareilPush } from '@/lib/api/push-appareil';
+import { retireLeJetonPush } from '@/lib/api/push-tokens';
 
 /**
  * LA PORTE DE SORTIE — ON SORT ENFIN DE LA V3 (#5095).
@@ -40,10 +42,24 @@ import { cookiesDEffacementDesPlaces } from '@/lib/api/guest-session';
 
 const REPONSE = { location: '/', 'cache-control': 'no-store, private' } as const;
 
-const champDuFormulaire = async (requete: Request, nom: string): Promise<string | null> => {
+/**
+ * DEUX CHAMPS, UNE SEULE LECTURE DU CORPS — `Request.formData()` consomme le
+ * flux du corps ; l'appeler une SECONDE fois (un second `champDuFormulaire`
+ * qui referait son propre `requete.formData()`) jetterait, et le `.catch(()
+ * => null)` qui protège CETTE lecture aurait alors rendu `null` en SILENCE
+ * pour `pushAppareil` (#5391) — jamais un champ manquant, un corps déjà lu.
+ */
+const champsDuFormulaire = async (
+  requete: Request,
+  noms: readonly string[],
+): Promise<Readonly<Record<string, string | null>>> => {
   const formulaire = await requete.formData().catch(() => null);
-  const brut = formulaire?.get(nom);
-  return typeof brut === 'string' && brut !== '' ? brut : null;
+  return Object.fromEntries(
+    noms.map((nom) => {
+      const brut = formulaire?.get(nom);
+      return [nom, typeof brut === 'string' && brut !== '' ? brut : null];
+    }),
+  );
 };
 
 const composeLesCookiesDeSortie = (requete: Request): readonly string[] => {
@@ -51,6 +67,7 @@ const composeLesCookiesDeSortie = (requete: Request): readonly string[] => {
   return [
     expireLeCookie(COOKIE_DE_JETON, { secure }),
     expireLeCookie(COOKIE_DE_SESSION, { secure }),
+    expireLeCookie(COOKIE_DE_L_APPAREIL_PUSH, { secure }),
     ...cookiesDEffacementDesPlaces(requete.headers.get('cookie'), secure),
   ];
 };
@@ -67,7 +84,21 @@ export const SORTIE = async (requete: Request, recuperer?: Recuperateur): Promis
   if (origineEtrangere(requete)) return refusDOrigine(requete);
 
   const jeton = jetonDuLecteur(requete);
-  const jetonDeSession = await champDuFormulaire(requete, 'session');
+  const champs = await champsDuFormulaire(requete, ['session', 'pushAppareil']);
+  const jetonDeSession = champs['session'] ?? null;
+  /**
+   * LE COOKIE D'ABORD, LE CHAMP ENSUITE (défaut de revue, #5391) — le champ
+   * `pushAppareil` n'est REMPLI que par `lib/realtime/deconnexion.ts`, donc
+   * SANS JavaScript il partait vide et le token FCM de cet appareil restait
+   * ACTIF côté passerelle : le navigateur d'un lecteur déconnecté continuait
+   * de recevoir, sur son écran verrouillé, les bannières d'un compte qu'il
+   * venait de quitter. Le cookie `meeshy_v3_push_appareil` voyage, lui, dans
+   * CHAQUE requête — c'est la même règle que le geste `valeur=false` de
+   * `app/connecte/prefs-porte.ts` : le COOKIE est la source de vérité, le
+   * champ n'est qu'un repli (un navigateur qui aurait effacé ses cookies
+   * mais tiendrait encore l'identifiant en mémoire de page).
+   */
+  const pushAppareil = lisLAppareilPush(requete.headers.get('cookie')) ?? champs['pushAppareil'] ?? null;
 
   if (jeton !== null) {
     // Best-effort : une panne, un délai dépassé ou un 401 de la passerelle
@@ -76,6 +107,19 @@ export const SORTIE = async (requete: Request, recuperer?: Recuperateur): Promis
       await deconnexion({ jeton, jetonDeSession, recuperer });
     } catch {
       // avalée — voir le doc-comment ci-dessus.
+    }
+
+    // LA PURGE DU TOKEN PUSH (#5391, § 3.5) — best-effort, comme la
+    // déconnexion elle-même : un gateway muet, un 401 ou un délai dépassé
+    // n'empêchent JAMAIS la sortie. `deviceId` SEUL (jamais un corps vide)
+    // retire le token de CET appareil sans toucher aux tokens iOS/Android
+    // du même compte (`retireLeJetonPush`, `lib/api/push-tokens.ts`).
+    if (pushAppareil !== null) {
+      try {
+        await retireLeJetonPush({ jeton, deviceId: pushAppareil, recuperer });
+      } catch {
+        // avalée — même raison que ci-dessus.
+      }
     }
   }
 

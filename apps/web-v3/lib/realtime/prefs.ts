@@ -4,6 +4,7 @@ import { estUneCleDePrefs, PREFS, type CleDePreference } from '@/lib/contenu/pre
 
 import { montreLeBandeau } from './bandeau';
 import { annule, bascule, reconcilie, type EtatDePrefs } from './prefs-etat';
+import { armeLAbonnementPush, memoriseLeContextePush, rejoueSiRotation } from './push-abonnement';
 
 /**
  * LE MODULE DE PARTICIPATION DE `/notifications/preferences` (§ 12.4, #4899)
@@ -200,6 +201,21 @@ const demarre = (): void => {
   if (jeton === null) return;
 
   prendsLesGestes({ main, passerelle: config.passerelle, jeton });
+  // LE PUSH WEB (#5391) — armé SÉPARÉMENT : contrairement aux treize
+  // bascules, la rangée push n'appelle jamais `basculeUnePreference` et n'a
+  // pas de session-expirée réseau à réconcilier ici — voir le doc-comment de
+  // tête de `push-abonnement.ts`.
+  armeLAbonnementPush(main);
+  // LE CONTEXTE DURABLE (#5391, suivi de revue défaut 3) — écrit à CHAQUE
+  // chargement, y compris celui qui suit immédiatement un abonnement : c'est
+  // ce que `/chats` relit en arrière-plan pour un lecteur qui ne revient
+  // jamais ici (`rejoueSiRotationEnArrierePlan`, `lib/realtime/liste.ts`).
+  void memoriseLeContextePush(main);
+  // LA ROTATION (#5391, suivi de revue) — best-effort, à CHAQUE chargement :
+  // un drapeau posé par le worker depuis la dernière visite rejoue
+  // l'abonnement sans geste du lecteur — voir le doc-comment de
+  // `rejoueSiRotation`.
+  void rejoueSiRotation(main);
 };
 
 demarre();

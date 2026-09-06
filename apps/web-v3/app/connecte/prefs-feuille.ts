@@ -40,4 +40,10 @@ ${commutateurDEcran('.bascules')}
 .fenetre-edition .champ{display:flex;flex-direction:column;gap:var(--space-1)}
 .fenetre-edition label{font-size:var(--text-sm);color:var(--color-text-muted)}
 .fenetre-edition input,.fenetre-edition select{min-height:var(--target-min);padding:0 var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}
+
+.bascules form.bascule-push{margin:0}
+.commutateur:disabled{opacity:.5;cursor:not-allowed}
+.push-detail{padding:0 var(--space-4) var(--space-3);border-top:var(--stroke-hair) solid var(--color-border-interactive)}
+.push-detail summary{padding:var(--space-3) 0;min-height:var(--target-min);display:flex;align-items:center;font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-primary);cursor:pointer}
+.push-detail p{margin:0 0 var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
 `);
