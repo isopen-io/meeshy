@@ -134,8 +134,24 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     /// armé sans vue hôte bloque ensuite toutes les présentations du feed.
     func test_feedView_postActionPresentations_areNotOwnedByComposerOverlay() throws {
         let code = try source(of: "FeedView.swift")
+        // **L'ABSENCE de l'overlay SATISFAIT l'invariant** (réparé le
+        // 2026-09-06). `composerOverlay` a été retiré de `FeedView` par
+        // `4a50000317` — « 346 lignes qu'aucun appelant ne montait ». Le risque
+        // que cette garde surveille — une présentation portée par une vue qui
+        // n'existe que composer ouvert — devient alors structurellement
+        // impossible : il n'y a plus de vue pour la porter.
+        //
+        // > **Une garde dont le sujet disparaît n'est pas fausse, elle est
+        // > VACANTE.** La faire échouer punit le retrait qu'elle aurait dû
+        // > applaudir ; la supprimer perdrait l'invariant le jour où un overlay
+        // > revient. Elle constate donc l'absence et se rendort — prête à
+        // > reprendre son office si le motif renaît.
         guard let overlayStart = code.range(of: "private var composerOverlay: some View") else {
-            return XCTFail("composerOverlay introuvable — garde à réaligner sur la nouvelle structure.")
+            XCTAssertFalse(
+                code.contains("composerOverlay"),
+                "`composerOverlay` n'est plus déclaré mais reste RÉFÉRENCÉ : " +
+                "une présentation pourrait encore lui être adossée sans hôte.")
+            return
         }
         // Borne la portée à la déclaration suivante : sinon la garde lit tout le
         // reste du fichier — y compris les présentations correctement remontées
