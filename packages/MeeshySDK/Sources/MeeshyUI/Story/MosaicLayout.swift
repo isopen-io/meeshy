@@ -24,7 +24,8 @@ import MeeshySDK
 /// C'est aussi ce qui lève une contradiction du dépôt. La mosaïque des MÉDIAS
 /// avait été retirée du fil (`FeedPostCard+Media.swift`) avec cette raison :
 /// « elle ne pouvait porter AUCUNE légende par média, ce qui est la doctrine
-/// même de `3f` ». La directive tranche autrement — voir `showsCaption`.
+/// même de `3f` ». La directive du 2026-09-06 tranche plus loin encore : la
+/// légende paraît dans TOUS les modes, tronquée — voir `captionLineLimit`.
 ///
 /// ## Ce que cette règle remplace
 ///
@@ -81,7 +82,7 @@ public nonisolated enum MosaicLayout {
     /// **Ce mode PAGINE-t-il ?** — la question que la vue pose pour choisir
     /// entre un empilement de tuiles et un défilement de pages.
     ///
-    /// Offert ici, comme `isMosaic`, pour qu'aucun hôte n'écrive
+    /// Offert ici pour qu'aucun hôte n'écrive
     /// `mode == .carousel` de son côté : le jour où un sixième mode arrive,
     /// une seule ligne décide de quel côté il tombe.
     public static func isPaged(mode: MosaicLayoutMode) -> Bool {
@@ -283,36 +284,53 @@ public nonisolated enum MosaicLayout {
 
     // MARK: - La légende
 
-    /// **Une mosaïque ne porte pas de légende ; un défilement et un visuel
-    /// SEUL en portent une** (directive porteur 2026-09-06).
+    /// **La légende s'affiche dans TOUS les modes** (directive porteur
+    /// 2026-09-06) :
     ///
-    /// > « En mode mosaïque il n'y a pas de légende, mais en mode défilement
-    /// > ou scène unique on laisse la légende. »
+    /// > « La règle "pas de légende en mosaïque" est abolie, parfois la légende
+    /// > est possible il faut les afficher en trimant bien entendu ! »
     ///
-    /// La raison est dans la géométrie, pas dans une préférence : une mosaïque
-    /// montre PLUSIEURS visuels à la fois, et une légende y serait ambiguë —
-    /// laquelle des quatre tuiles décrit-elle ? Le défilement, lui, ne montre
-    /// qu'un visuel à la fois, comme un visuel seul : la légende a un sujet, et
-    /// un seul.
+    /// ## Ce que cette fonction remplace
     ///
-    /// > C'est ce qui réhabilite la mosaïque des MÉDIAS, retirée du fil parce
-    /// > qu'« elle ne pouvait porter aucune légende par média ». Elle n'a pas à
-    /// > en porter. Ce qui manquait n'était pas la légende dans la mosaïque,
-    /// > c'était **le choix** entre les deux présentations — et c'est
-    /// > exactement ce que `layout` ajoute.
+    /// `showsCaption(mode:visualCount:)` et sa négation `isMosaic` disaient
+    /// SI une légende paraît. Elles rendaient `false` sur les quatre mosaïques,
+    /// au motif qu'une légende y serait ambiguë — laquelle des quatre tuiles
+    /// décrit-elle ? Le raisonnement était bon et la directive tranche
+    /// autrement : mieux vaut une légende tronquée qu'une publication muette.
     ///
-    /// Le compte prime sur le mode : un post d'un seul visuel montre sa
-    /// légende quelle que soit la disposition déclarée, parce qu'il n'y a pas
-    /// de mosaïque à un élément.
-    public static func showsCaption(mode: MosaicLayoutMode, visualCount: Int) -> Bool {
-        visualCount <= 1 || mode == .reel || isPaged(mode: mode)
+    /// Ce qui reste vrai de l'ancienne règle, c'est la CONTRAINTE qui la
+    /// motivait — la place. Elle ne décide plus de l'affichage, elle décide de
+    /// la LONGUEUR : c'est le « en trimant bien entendu » de la directive.
+    ///
+    /// > **Une règle abolie ne se remplace pas par une fonction qui rend
+    /// > toujours `true`** : personne ne la relit, et le `if` qu'elle
+    /// > gouvernait revient ailleurs sous une autre forme. Elle se remplace
+    /// > par la question qui reste posée.
+    ///
+    /// ## La limite est en MOTS, jamais en lignes
+    ///
+    /// `FeedCaptionOverlay` porte la leçon dans son propre doc-comment, et
+    /// elle a déjà été payée une fois : **une troncature en LIGNES dépend de
+    /// la largeur, de la police et de la taille Dynamic Type ; une troncature
+    /// en MOTS n'en dépend d'aucune.** Trois surfaces avaient trois vérités
+    /// sur « qu'est-ce qu'une légende abrégée » ; le compte de mots les a
+    /// réunies. Y revenir par une limite de lignes rouvrirait exactement cette
+    /// divergence, avec l'excuse d'une directive qui ne la demande pas.
+    ///
+    /// - Returns: le nombre de MOTS qu'une légende peut porter. Une mosaïque
+    ///   montre plusieurs visuels dans la hauteur d'une carte : sa légende est
+    ///   brève. Un défilement, un carrousel ou un visuel SEUL ont la carte
+    ///   entière, et gardent les vingt mots de la règle commune.
+    public static func captionWordLimit(mode: MosaicLayoutMode, visualCount: Int) -> Int {
+        guard visualCount > 1 else { return fullCaptionWords }
+        switch mode {
+        case .carousel, .reel: return fullCaptionWords
+        case .wave, .hero, .sine: return 8
+        }
     }
 
-    /// **Ce mode dispose-t-il une MOSAÏQUE ?** — la négation exacte du
-    /// défilement, offerte pour que les hôtes n'écrivent pas `mode != .reel`
-    /// chacun de leur côté : le jour où un cinquième mode arrive, une seule
-    /// ligne décide de quel côté il tombe.
-    public static func isMosaic(mode: MosaicLayoutMode, visualCount: Int) -> Bool {
-        !showsCaption(mode: mode, visualCount: visualCount)
-    }
+    /// Les vingt mots de la règle commune du fil — déclarés ici pour que la
+    /// limite d'une mosaïque se lise COMME UNE RÉDUCTION de ce nombre, et non
+    /// comme un second seuil indépendant qui dériverait du premier.
+    public static let fullCaptionWords = 20
 }

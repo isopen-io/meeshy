@@ -583,14 +583,25 @@ struct FeedPostCard: View {
                             else { onTapPost?(post) }
                         }
                     )
-                    // **Aucune légende sur une mosaïque** (directive porteur
-                    // 2026-09-06). La règle est consultée, jamais recopiée :
-                    // elle sait que le compte prime sur le mode.
+                    // **La légende paraît dans TOUS les modes, tronquée**
+                    // (directive porteur 2026-09-06, qui ABOLIT la règle « pas
+                    // de légende en mosaïque » posée le matin même) :
+                    //
+                    // > « parfois la legende est possible il faut les afficher
+                    // > en trimant bien entendu ! »
+                    //
+                    // Ce qui reste de l'ancienne règle est la CONTRAINTE qui la
+                    // motivait — la place —, et elle décide désormais de la
+                    // LONGUEUR : `captionWordLimit`. En MOTS et non en lignes —
+                    // une troncature en lignes dépend de la largeur, de la
+                    // police et du Dynamic Type, et `FeedCaptionOverlay` porte
+                    // déjà cette leçon dans son en-tête.
                     .overlay(alignment: .bottom) {
-                        if MosaicLayout.showsCaption(mode: cardSceneDocument.resolvedLayout,
-                                                     visualCount: cardSceneDocument.scenes.count) {
-                            FeedCaptionOverlay(caption: cardSceneCaption)
-                        }
+                        FeedCaptionOverlay(
+                            caption: cardSceneCaption,
+                            words: MosaicLayout.captionWordLimit(
+                                mode: cardSceneDocument.resolvedLayout,
+                                visualCount: cardSceneDocument.scenes.count))
                     }
                 } else if let cardSceneDocument {
                     PostSceneSurface(

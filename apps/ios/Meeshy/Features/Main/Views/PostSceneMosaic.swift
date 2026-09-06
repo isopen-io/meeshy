@@ -248,6 +248,20 @@ struct PostSceneMosaic: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // **Ce qui dépasse d'une tuile ne doit pas s'écrire sur sa voisine.**
+        //
+        // Mesuré sur une mosaïque `wave` (tuiles de ~81 pt) : les textes des
+        // scènes se chevauchaient d'une tuile à l'autre et se lisaient en
+        // travers de la rangée. La cause n'est pas la géométrie — les cadres
+        // sont justes — mais le rendu : l'hôte canvas est un `UIView` dont les
+        // couches ne sont pas masquées par leurs bornes, et `SceneFocusFrame`
+        // s'efface entièrement quand la scène ne se cadre pas (`focus == nil`),
+        // donc rien ne rognait.
+        //
+        // > Un `clipShape` décrit une FORME ; il ne garantit pas qu'une couche
+        // > UIKit imbriquée reste dedans. `.clipped()` pose le masque de rendu
+        // > que le représentable n'a pas.
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(alignment: .center) { report(tuile) }
         // **Une scène cinématique se signale comme une vidéo.** Le glyphe ne
