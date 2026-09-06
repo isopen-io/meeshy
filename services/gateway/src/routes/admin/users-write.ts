@@ -310,13 +310,13 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
           const apres = (profil as Record<string, unknown>)[champ];
           if (avant !== apres) changes[champ] = { before: avant, after: apres };
         }
-        servi = await userManagementService.updateUser(userId, profil, moi.id);
+        servi = await userManagementService.updateUser(userId, profil);
         await tracer(request, { cible: userId, action: UserAuditAction.UPDATE_PROFILE, changes, motif });
       }
 
       if (nouveauRole) {
         const avant = cible!.role;
-        servi = await userManagementService.updateRole(userId, { role: nouveauRole }, moi.id);
+        servi = await userManagementService.updateRole(userId, { role: nouveauRole });
         await oublierLeCache(userId);
         await tracer(request, {
           cible: userId,
@@ -329,7 +329,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       if (veutStatut) {
         const isActive = z.boolean().parse(corps.isActive);
         const avant = cible!.isActive;
-        servi = await userManagementService.updateStatus(userId, { isActive }, moi.id);
+        servi = await userManagementService.updateStatus(userId, { isActive });
         await oublierLeCache(userId);
         await tracer(request, {
           cible: userId,
@@ -363,7 +363,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       let servi = cible!;
 
       if (valide.unlock) {
-        servi = await userManagementService.unlockAccount(userId, moi.id);
+        servi = await userManagementService.unlockAccount(userId);
         await tracer(request, {
           cible: userId,
           action: UserAuditAction.UNLOCK_ACCOUNT,
@@ -375,8 +375,8 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       if (valide.twoFactorEnabled !== undefined) {
         const avant = cible!.twoFactorEnabledAt ?? null;
         servi = valide.twoFactorEnabled
-          ? await userManagementService.enable2FA(userId, moi.id)
-          : await userManagementService.disable2FA(userId, moi.id);
+          ? await userManagementService.enable2FA(userId)
+          : await userManagementService.disable2FA(userId);
         await tracer(request, {
           cible: userId,
           action: valide.twoFactorEnabled ? UserAuditAction.ENABLE_2FA : UserAuditAction.DISABLE_2FA,
@@ -403,7 +403,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       let servi = cible!;
 
       if (valide.emailVerified !== undefined) {
-        servi = await userManagementService.verifyEmail(userId, valide.emailVerified, moi.id);
+        servi = await userManagementService.verifyEmail(userId, valide.emailVerified);
         await tracer(request, {
           cible: userId,
           action: UserAuditAction.VERIFY_EMAIL,
@@ -413,7 +413,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       }
 
       if (valide.phoneVerified !== undefined) {
-        servi = await userManagementService.verifyPhone(userId, valide.phoneVerified, moi.id);
+        servi = await userManagementService.verifyPhone(userId, valide.phoneVerified);
         await tracer(request, {
           cible: userId,
           action: UserAuditAction.VERIFY_PHONE,
@@ -423,7 +423,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
       }
 
       if (valide.ageVerified !== undefined) {
-        servi = await userManagementService.verifyAge(userId, valide.ageVerified, moi.id);
+        servi = await userManagementService.verifyAge(userId, valide.ageVerified);
         await tracer(request, {
           cible: userId,
           action: UserAuditAction.VERIFY_AGE,
@@ -466,7 +466,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
           before: (cible as unknown as Record<string, unknown>)[CONSENTEMENTS[consentement]] ?? null,
           after: voulu,
         };
-        servi = await userManagementService.toggleVoiceConsent(userId, consentement, voulu, moi.id);
+        servi = await userManagementService.toggleVoiceConsent(userId, consentement, voulu);
       }
 
       await tracer(request, {

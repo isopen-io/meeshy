@@ -146,8 +146,9 @@ final class AppInitWireupTests: XCTestCase {
     /// présentation qui oublie l'injection rend le chip « Lieu » invisible : la
     /// pastille redevient inatteignable, sans le moindre signal.
     func test_everyStoryComposerPresentation_injectsTheLocationPicker() throws {
-        for path in Self.storyComposerPresentationSites {
-            let src = try appSource(path)
+        for unit in Self.storyComposerPresentationUnits {
+            let src = try appUnit(unit)
+            let path = "\(unit)+*.swift"
             let presentations = occurrences(of: "StoryComposerView(", in: src)
                 + occurrences(of: "UnifiedPostComposer(", in: src)
             let injections = occurrences(of: ".storyLocationPickerProvided()", in: src)
@@ -183,8 +184,9 @@ final class AppInitWireupTests: XCTestCase {
                 "sans injection presse-papier, la capsule « Coller » n'est pas rendue — "
                     + "`\\.storyPaste` reste nil et `BlankCanvasPasteStarter` rend un corps vide."
         ]
-        for path in Self.storyComposerPresentationSites {
-            let src = try appSource(path)
+        for unit in Self.storyComposerPresentationUnits {
+            let src = try appUnit(unit)
+            let path = "\(unit)+*.swift"
             let presentations = occurrences(of: "StoryComposerView(", in: src)
                 + occurrences(of: "UnifiedPostComposer(", in: src)
             XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
@@ -234,11 +236,31 @@ final class AppInitWireupTests: XCTestCase {
     /// > une panne : « ne présente plus de composer ? » est ici la bonne nouvelle.
     /// > Le retrait doit donc être fait à la main, en disant pourquoi — sinon la
     /// > session suivante rétablit le site pour faire repasser le test au vert.
-    private static let storyComposerPresentationSites = [
-        // #4102 — `composerSurface`, qui PRÉSENTE l'atelier et pose les
-        // fournisseurs, a suivi le découpage du meuble vers `+Surfaces`.
-        // L'adresse d'une garde suit le montage, jamais le nom du type.
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift"
+    /// **L'UNITÉ, jamais le seul fichier qui PRÉSENTE** (2026-09-06).
+    ///
+    /// Cette liste a nommé `MeeshyComposerHost+Surfaces.swift`, où vit
+    /// `composerSurface` — et son commentaire disait déjà la bonne chose :
+    /// « l'adresse d'une garde suit le montage ». Le montage a rebougé. Les six
+    /// injecteurs d'environnement ont été regroupés dans `+Portals.swift`,
+    /// **au-dessus** du présentateur, précisément pour corriger le défaut que
+    /// ce fichier documente : « deux décisions justes, et un signal orphelin
+    /// entre les deux » — injecter au plus près de ce qui consomme, et
+    /// présenter tous les portails à un seul endroit, dont la SOMME plaçait
+    /// l'injecteur SOUS le présentateur. La garde a donc rougi POUR le
+    /// correctif.
+    ///
+    /// > La question qu'elle pose — « chaque présentation a-t-elle son
+    /// > injecteur ? » — se répond dans l'ARBRE DE VUES, jamais dans un
+    /// > fichier. `+Portals` l'écrit mot pour mot. Le meuble est découpé en
+    /// > quinze extensions ; lire l'UNITÉ est la seule approximation textuelle
+    /// > de son arbre qui ne se périme pas au prochain découpage — la doctrine
+    /// > d'`AppSourceGuard.unit`, portée ici.
+    ///
+    /// La garde ne s'affaiblit pas : elle exige toujours autant d'injections
+    /// que de présentations. Elle cesse seulement d'exiger qu'elles vivent dans
+    /// le MÊME fichier, ce qu'aucune règle du produit n'a jamais demandé.
+    private static let storyComposerPresentationUnits = [
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost"
     ]
 
     // MARK: - V3-2 : la porte de création monte le MEUBLE, pas l'atelier nu
@@ -383,6 +405,27 @@ final class AppInitWireupTests: XCTestCase {
     /// Source d'un fichier de l'app, commentaires `//` retirés — un `.contains`
     /// qui matche un commentaire ne prouve rien (et les doc-comments de ces deux
     /// vues NOMMENT les composers qu'on compte ici).
+    /// Le TYPE et toutes ses extensions — `Foo.swift` + `Foo+*.swift` —
+    /// concaténés puis dépouillés de leurs commentaires, comme `appSource`.
+    ///
+    /// Une garde qui nomme un FICHIER se périme au premier découpage ; une
+    /// garde qui nomme une UNITÉ y survit. C'est la doctrine d'`AppSourceGuard`
+    /// (§ « L'UNITÉ, jamais le seul fichier-tête » du `CLAUDE.md` iOS), portée
+    /// ici parce que ce fichier a son propre lecteur de sources.
+    private func appUnit(_ relativePrefix: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let dossier = (relativePrefix as NSString).deletingLastPathComponent
+        let base = (relativePrefix as NSString).lastPathComponent
+        let absolu = "\(projectRoot)/\(dossier)"
+        let noms = try FileManager.default.contentsOfDirectory(atPath: absolu)
+            .filter { $0 == "\(base).swift" || ($0.hasPrefix("\(base)+") && $0.hasSuffix(".swift")) }
+            .sorted()
+        XCTAssertFalse(noms.isEmpty, "unité « \(relativePrefix) » introuvable — la garde ne garde plus rien")
+        return try noms
+            .map { try appSource("\(dossier)/\($0)") }
+            .joined(separator: "\n")
+    }
+
     private func appSource(_ relativePath: String) throws -> String {
         let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
         let raw = try String(contentsOfFile: "\(projectRoot)/\(relativePath)", encoding: .utf8)

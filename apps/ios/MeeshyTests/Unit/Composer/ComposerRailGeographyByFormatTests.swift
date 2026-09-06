@@ -31,7 +31,25 @@ import XCTest
 final class ComposerRailGeographyByFormatTests: XCTestCase {
 
     /// Les quatre outils que la directive DÉPLACE, nommés une fois.
-    private let outilsMobiles: [ComposerRailDoor] = [.place, .hashtag, .mention, .text]
+    /// **`.text` a quitté cette liste** (directive porteur 2026-09-05 : « mettre
+    /// sur la rangée colonne gauche toutes les modifications spécifiques à la
+    /// scène et non à la publication de type Post »).
+    ///
+    /// Il basculait par format depuis #4893, et la MESURE a tranché contre la
+    /// bascule : `handleRailDoor(.text)` appelle `viewModel.addText()` puis
+    /// ouvre l'éditeur d'objet — quel que soit le format. Un objet texte se
+    /// pose, se déplace, se pince et se tourne sur la scène d'un POST
+    /// exactement comme sur celle d'une Story.
+    ///
+    /// > La porte était rangée en bas d'après ce que le format LAISSAIT croire,
+    /// > jamais d'après ce qu'elle FAIT. Le corps du post a sa propre porte
+    /// > (`.content`) depuis #4890 ; c'est elle qui qualifie la publication, et
+    /// > son existence rend le classement de `.text` en `.publication` non
+    /// > seulement faux mais inutile.
+    ///
+    /// Trois outils basculent donc encore, et le témoin `.text` de la bascule
+    /// est devenu un témoin de la NON-bascule, juste en-dessous.
+    private let outilsMobiles: [ComposerRailDoor] = [.place, .hashtag, .mention]
 
     /// Ce qui ne bouge pas : la matière qu'on pose (média, son, sticker), le
     /// dessin qui ouvre un mode, et la description qui vise la slide.
@@ -48,12 +66,23 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
         }
     }
 
-    func test_level_horsStory_lesQuatreOutilsQualifientLaPublication() {
+    func test_level_horsStory_lesTroisOutilsQualifientLaPublication() {
         for format in [ComposerFormat.reel, .post, .status] {
             for porte in outilsMobiles {
                 XCTAssertEqual(porte.level(for: format), .publication,
                                "\(porte.rawValue) doit rester en bas en \(format)")
             }
+        }
+    }
+
+    /// **Le corpus de texte POSE, dans TOUS les formats** — la contre-épreuve
+    /// de la liste ci-dessus. Sans ce témoin, retirer `.text` d'`outilsMobiles`
+    /// aurait fait DISPARAÎTRE sa couverture au lieu de la déplacer : la
+    /// suppression d'un cas d'une boucle ne laisse aucune trace rouge.
+    func test_level_leTexte_seposeSurLaScene_quelQueSoitLeFormat() {
+        for format in [ComposerFormat.story, .reel, .post, .status] {
+            XCTAssertEqual(ComposerRailDoor.text.level(for: format), .object,
+                           "un objet texte se pose sur la scène d'un \(format) comme sur celle d'une Story")
         }
     }
 
@@ -79,7 +108,7 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
         }
     }
 
-    func test_lowRow_enPost_porteLesQuatreOutilsDeplaces() {
+    func test_lowRow_enPost_porteLesTroisOutilsDeplaces() {
         let bas = ComposerSceneFloatingRail.lowRow(from: ComposerRailDoor.canonicalRail,
                                                    format: .post)
         for porte in outilsMobiles {
@@ -121,13 +150,29 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
                       "le corpus de texte prend sa place")
     }
 
-    func test_offered_enPostEtEnReel_leParagrapheEstServi() {
-        for format in [ComposerFormat.post, .reel] {
-            let offertes = ComposerRailDoor.offered(served: Set(ComposerRailDoor.canonicalRail),
-                                                    format: format, allowsCapture: true)
-            XCTAssertTrue(offertes.contains(.description),
-                          "la légende du canvas doit être atteignable en \(format)")
-        }
+    /// **La légende a quitté le RAIL pour sa propre pastille** (2026-09-06).
+    ///
+    /// Ce témoin exigeait `.description` parmi les portes OFFERTES en post et en
+    /// reel. Elle n'est plus dans `canonicalRail` : posée à droite avec les
+    /// actions, elle portait ce groupe à cinq pastilles sur 402 pt, et la mesure
+    /// a montré le sélecteur d'audience tronqué en « F », l'icône à moitié sous
+    /// la flèche. **Un ATTRIBUT rangé parmi les ACTIONS déborde.** Elle vit
+    /// désormais du côté qui QUALIFIE, avec le type — `atelierDescriptionButton`.
+    ///
+    /// > La question n'est pas « la porte est-elle dans le rail ? » mais **« la
+    /// > légende est-elle ATTEIGNABLE ? »**. La première formulation interdit le
+    /// > déménagement qui vient de corriger un débordement mesuré ; la seconde
+    /// > le laisse passer et attrape toujours le vrai défaut — une légende
+    /// > qu'aucun geste n'ouvre.
+    func test_laLegendeDuCanvas_resteAtteignable_horsDuRail() throws {
+        let hote = try AppSourceGuard.stripComments(AppSourceGuard.composerHostSource())
+        XCTAssertTrue(hote.contains("editsSceneDescription = true"),
+                      "aucun geste n'ouvre plus la légende du canvas — elle est devenue inatteignable")
+        XCTAssertTrue(hote.contains("var atelierDescriptionButton: some View"),
+                      "la pastille qui l'ouvre a disparu : la légende n'a plus de porte du tout")
+        XCTAssertFalse(ComposerRailDoor.canonicalRail.contains(.description),
+                       "si la légende revient au rail, ce témoin doit redevenir celui du rail — et la mesure "
+                           + "du débordement à cinq pastilles doit être refaite avant.")
     }
 
     /// Le `status` n'a pas de toile : la règle de `offered` ne doit pas se

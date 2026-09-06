@@ -210,7 +210,7 @@ const actorContext = {
 async function tenterAdmission(porte: 'invite' | 'participants', actorRole: string) {
   const prisma = buildPrisma(actorRole);
   const fastify = createMockFastify(prisma);
-  registerSharingRoutes(fastify, prisma, noop, noop);
+  registerSharingRoutes(fastify, prisma, noop);
   registerParticipantsRoutes(fastify, prisma, noop, noop);
 
   const route = porte === 'invite'

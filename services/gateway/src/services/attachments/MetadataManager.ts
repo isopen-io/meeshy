@@ -373,13 +373,11 @@ export class MetadataManager {
    * Détecte les incohérences (ex: 1 seconde ne peut pas peser 50MB)
    * @param duration Durée en millisecondes
    * @param fileSize Taille du fichier en bytes
-   * @param bitrate Bitrate en bits/sec
    * @param mimeType Type MIME du fichier
    */
   validateAudioCoherence(
     duration: number,
     fileSize: number,
-    bitrate: number,
     mimeType: string
   ): { isValid: boolean; reason?: string; estimatedDuration?: number } {
     if (duration <= 0 || fileSize <= 0) {
@@ -540,7 +538,6 @@ export class MetadataManager {
         const validation = this.validateAudioCoherence(
           metadata.duration,
           fileSize,
-          metadata.bitrate,
           mimeType
         );
 
@@ -742,14 +739,12 @@ export class MetadataManager {
               const frontendValidation = this.validateAudioCoherence(
                 frontendDuration,
                 fileSize,
-                providedMetadata.bitrate || 128000,
                 mimeType
               );
 
               const backendValidation = this.validateAudioCoherence(
                 backendDuration,
                 fileSize,
-                extractedMeta.bitrate || 128000,
                 mimeType
               );
 

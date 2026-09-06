@@ -187,7 +187,12 @@ final class ComposerObjectEditorTests: XCTestCase {
         guard let debut = code.range(of: "func openObjectEditor(")?.upperBound else {
             return XCTFail("`openObjectEditor` est introuvable.")
         }
-        let corps = compact(String(code[debut...].prefix(400)))
+        // **Le corps ENTIER, pas un préfixe** (2026-09-06). La fenêtre valait
+        // 400 caractères ; `openObjectEditor` a grandi, et `editedObject =
+        // ComposerEditedObject(` est passé au-delà — la garde a rougi sur une
+        // ligne parfaitement présente. Une fenêtre arbitraire se périme à la
+        // première ligne ajoutée, et son rouge accuse le code.
+        let corps = compact(String(code[debut...].prefix(1_200)))
         XCTAssertTrue(corps.contains("presentedPortal=nil"),
                       "Sans cette fermeture, ouvrir l'éditeur depuis une feuille ne "
                       + "montrerait RIEN — le défaut exact de #4632, une présentation plus loin.")
@@ -226,9 +231,15 @@ final class ComposerObjectEditorTests: XCTestCase {
     func test_lEditeur_prendSesOutilsDuSDK_etNeDependDAucunOutilDeployeDuViewModel() throws {
         let code = compact(try source("ComposerObjectEditorView.swift"))
         // `compact` retire TOUS les blancs : le fragment ne peut pas en porter.
-        XCTAssertTrue(code.contains("ForEach(TextEditTool.all.filter{$0 != .style}".replacingOccurrences(of: " ", with: "")),
+        // **Le filtre `.style` a disparu** (directive porteur 2026-09-05) :
+        // POLICE n'est plus un cas particulier, donc la liste ne s'ampute plus.
+        // Ce qui reste gardé est l'essentiel — les outils viennent du SDK.
+        XCTAssertTrue(code.contains("ForEach(TextEditTool.all"),
                       "Les outils doivent venir de `TextEditTool.all` — une liste écrite à "
                       + "la main divergerait au premier outil ajouté au SDK.")
+        XCTAssertFalse(code.contains("filter{$0!=.style}"),
+                       "Le filtre sur `.style` a été retiré avec le cas particulier qu'il servait : "
+                       + "son retour rendrait la POLICE à nouveau introuvable dans la grille.")
         // **#5045 — deux fragments plutôt qu'une signature entière.** Ce témoin
         // épinglait l'appel COMPLET, `TextEditToolOptions(tool:tool,textObject:binding)` ;
         // ajouter un argument le faisait rougir alors que rien de ce qu'il
@@ -332,12 +343,32 @@ final class ComposerObjectEditorTests: XCTestCase {
 
     /// Le style prend la forme du spécimen `2e` — le vrai texte, sur son vrai
     /// fond, et la grille des dix-huit.
-    func test_leStyle_prendLaFormeDuSpecimen() throws {
+    /// **Le spécimen a cédé la place à la GRILLE, sur une mesure**
+    /// (directive porteur 2026-09-05, ex-`test_leStyle_prendLaFormeDuSpecimen`).
+    ///
+    /// `TextStyleSpecimenBand` montrait le vrai texte sur son vrai fond — plus
+    /// riche qu'un « Aa », et c'est ce qui l'avait fait garder. Mesuré au
+    /// simulateur : ses dix-huit vignettes s'étendaient de x=16 à **x=512 sur un
+    /// écran de 402 points**. Neuf polices sur dix-huit étaient hors du champ,
+    /// atteignables par un défilement latéral que rien n'annonce, à l'endroit
+    /// exact où les sept autres outils s'enroulent proprement.
+    ///
+    /// > Une richesse qu'on ne peut pas PARCOURIR ne se compare pas : le choix
+    /// > d'une police se fait en balayant les dix-huit du regard, pas en en
+    /// > révélant neuf au doigt.
+    ///
+    /// La garde suit donc la police là où elle est servie : dans la grille
+    /// commune, qui rend son « Aa » dans l'encre choisie et sous l'effet
+    /// courant. Le spécimen reste dans le SDK — il n'a simplement plus d'hôte
+    /// ici, et une assertion négative empêche son retour silencieux.
+    func test_laPolice_estServieParLaGrilleCommune_plusParUneBandeAPart() throws {
         let code = compact(try source("ComposerObjectEditorView.swift"))
-        XCTAssertTrue(code.contains("TextStyleSpecimenBand("))
-        XCTAssertTrue(code.contains("text:binding.wrappedValue.text"),
-                      "Le spécimen se lit sur le VRAI texte — un texte fabriqué "
-                      + "répondrait à une autre question que celle que l'auteur se pose.")
+        XCTAssertFalse(code.contains("TextStyleSpecimenBand("),
+                       "la bande de spécimens est revenue : neuf polices sur dix-huit repasseraient hors "
+                       + "du champ sur un écran de 402 points. Refaire la mesure avant de la remonter.")
+        XCTAssertTrue(code.contains("layout:.grid"),
+                      "la police doit être servie par la GRILLE, la seule disposition qui enroule les "
+                      + "dix-huit vignettes dans le viewport")
     }
 
     /// **Le plan 2D est celui du SDK, monté tel quel.** En écrire une version

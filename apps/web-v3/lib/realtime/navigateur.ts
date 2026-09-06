@@ -62,11 +62,19 @@ const annonce = (titre: string): void => {
   if (region !== null) region.textContent = titre;
 };
 
-const monteLeModule = async (module: string | null): Promise<void> => {
+const monteLeModule = async (module: string | null, estActuelle: () => boolean): Promise<void> => {
   if (module === null) return;
   const importe = (await import(/* webpackIgnore: true */ module)) as {
     readonly monte?: () => unknown;
   };
+  // LA PORTE SE REVÉRIFIE ICI, APRÈS l'`import()` — pas seulement chez
+  // l'appelant, avant de le lancer. Un `import()` de PREMIÈRE traversée part
+  // sur le réseau (`/rt/<nom>`, doc-comment de `navigue`) et peut mettre
+  // plusieurs frames à revenir : une navigation plus récente peut naître
+  // PENDANT cette attente, une fois la vérification de l'appelant déjà
+  // franchie. Ne revérifier qu'AVANT l'appel laisserait ce module monter
+  // quand même — exactement la fuite que ce fichier existe pour fermer.
+  if (!estActuelle()) return;
   if (typeof importe.monte === 'function') importe.monte();
 };
 
@@ -89,6 +97,19 @@ const demarre = (): void => {
 
   history.scrollRestoration = 'manual';
   let enVol: AbortController | null = null;
+  // LE JETON DE GÉNÉRATION — `enVol?.abort()` n'annule que le `fetch` et la
+  // lecture du corps ; passé `extraitLEchange`, une navigation n'est plus
+  // annulable par l'AbortController (aucune attente réseau n'y reste), alors
+  // qu'au moins une frame (`updateCallbackDone`) et un `import()` dynamique
+  // (`monteLeModule`) restent à courir. Un second clic pendant cette fenêtre
+  // laissait DEUX navigations aller au bout : chacune émettait
+  // `meeshy:zone-depart`, échangeait `<main>` et montait son module — deux
+  // `observeCycleDeVie`, deux sockets vivants. `generation` ferme cette
+  // fenêtre : la navigation périmée se tait aux DEUX points qui ne dépendent
+  // plus du `fetch` — avant `meeshy:zone-depart` (elle n'aura touché ni
+  // destruction ni DOM) et avant `monteLeModule` (elle ne montera pas son
+  // module par-dessus l'écran qu'une navigation plus récente vient de poser).
+  let generation = 0;
 
   const navigue = async (url: string, geste: 'pousse' | 'retour'): Promise<void> => {
     // L'ÉCRAN QUITTÉ PORTE-T-IL UNE SURIMPRESSION ? L'échange ne remet que
@@ -98,6 +119,7 @@ const demarre = (): void => {
       window.location.assign(url);
       return;
     }
+    const mienne = ++generation;
     enVol?.abort();
     const controleur = new AbortController();
     enVol = controleur;
@@ -118,6 +140,12 @@ const demarre = (): void => {
         window.location.assign(url);
         return;
       }
+      // PÉRIMÉE ? Une navigation plus récente est partie pendant que celle-ci
+      // attendait le réseau — elle n'a encore rien touché : elle se tait ICI,
+      // avant `meeshy:zone-depart`, sans détruire l'écran courant ni toucher
+      // au DOM. Jamais un `window.location.assign` : la navigation gagnante
+      // reste seule maîtresse de l'adresse et du document.
+      if (mienne !== generation) return;
 
       // L'écran quittant se détruit AVANT que son DOM parte — socket fermée,
       // écouteurs retirés (lifecycle.ts, le point d'écoute unique).
@@ -137,16 +165,54 @@ const demarre = (): void => {
         annonce(echange.titre);
       };
 
+      // `updateCallbackDone` EST ATTENDUE — jamais l'objet transition jeté.
+      //
+      // `startViewTransition(applique)` n'appelle JAMAIS `applique()`
+      // synchroniquement : l'algorithme de la View Transition API capture
+      // l'ancien état puis met le rappel en file pour la prochaine étape
+      // « update the rendering » — au mieux une FRAME plus tard. Ce qui a
+      // longtemps masqué le défaut, c'est la ligne d'après : `monteLeModule`
+      // attend un `import()` DYNAMIQUE. À la PREMIÈRE traversée vers un écran,
+      // le module part sur le réseau (`/rt/<nom>`) et met des frames à
+      // revenir — le rappel a largement eu le temps de courir. Dès que le
+      // module est DANS la carte des modules (tout retour vers un écran déjà
+      // visité — `/chats`, chargé au premier pixel, l'est dès le premier
+      // retour), la promesse d'import se règle en une MICROTÂCHE, donc AVANT
+      // toute occasion de rendu : `monte()` s'exécutait contre l'ANCIEN
+      // `<main>`, `document.querySelector('main[data-participation=…]')` de
+      // son `demarre()` rendait `null`, et l'écran ARRIVANT ne montait JAMAIS
+      // — aucun socket, aucun écouteur, sans qu'aucune erreur ne le signale.
+      // Mesuré (#5163 § 12.11.3 point 4) : sur `/chats → fil → /chats`, le fil
+      // montait UNE fois puis plus aucun écran ne remontait, tandis que le DOM
+      // continuait de basculer normalement — la panne n'était visible que sur
+      // ce que le module APPORTE (socket, temps réel), jamais sur la
+      // navigation elle-même. C'est le témoin de fuite qui l'a trouvée.
+      //
+      // Le REPLI tient aux deux bouts : sans `startViewTransition`, `applique()`
+      // court tout de suite ; avec une implémentation qui ne rendrait pas
+      // `updateCallbackDone`, le `TypeError` retombe dans le `catch` de
+      // `navigue` et l'adresse part en navigation RÉELLE — jamais un écran à
+      // moitié composé.
       const transitionne = (
-        document as Document & { startViewTransition?: (rappel: () => void) => unknown }
+        document as Document & { startViewTransition?: (rappel: () => void) => ViewTransition }
       ).startViewTransition;
       if (typeof transitionne === 'function') {
-        transitionne.call(document, applique);
+        await transitionne.call(document, applique).updateCallbackDone.catch(() => undefined);
       } else {
         applique();
       }
 
-      await monteLeModule(echange.module);
+      // PÉRIMÉE, DEUXIÈME PORTE : le DOM a déjà basculé au-dessus (le
+      // dispatch de `meeshy:zone-depart` a franchi la première porte avant
+      // qu'une navigation plus récente ne démarre) — annuler l'échange
+      // reviendrait sur un `<main>` déjà remplacé. Ce qui reste à retenir
+      // est le SEUL geste qui ferait fuir un socket : monter le module d'un
+      // écran que la navigation gagnante a déjà remplacé. La vérification ICI
+      // évite un `import()` inutile pour une navigation déjà périmée ;
+      // `monteLeModule` la reprend une seconde fois APRÈS l'import, pour la
+      // navigation qui devient périmée PENDANT qu'il est en vol.
+      if (mienne !== generation) return;
+      await monteLeModule(echange.module, () => mienne === generation);
     } catch (erreur) {
       if ((erreur as { name?: string }).name === 'AbortError') return;
       window.location.assign(url);

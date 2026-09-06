@@ -104,8 +104,15 @@ extension FeedPostCard {
     /// ou un simple fond de couleur se rejouent aussi bien. Le site unique
     /// (`socialMediaGallery`) lit la nature du post et choisit le player ;
     /// `fullscreenMediaId` reste nul, la galerie n'ayant rien à feuilleter.
-    func openSceneFullscreen() {
+    ///
+    /// **L'index dit SUR QUELLE scène on entre** (directive porteur
+    /// 2026-09-06) : « lorsqu'on montre la mosaïque on doit pouvoir cliquer sur
+    /// n'importe quelle scène et l'afficher en plein écran ». Sans lui, les
+    /// quatre tuiles menaient toutes à la première — un seul bouton dessiné
+    /// quatre fois.
+    func openSceneFullscreen(at index: Int = 0) {
         fullscreenMediaId = nil
+        fullscreenSceneIndex = index
         showFullscreenGallery = true
         HapticFeedback.light()
     }

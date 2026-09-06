@@ -356,7 +356,7 @@ describe('POST /posts/from-attachment — iOS-02(c) : le Prisme couvre la légen
     expect(res.statusCode).toBe(201);
     await new Promise((resolve) => setImmediate(resolve));
     expect(translationMock()).toHaveBeenCalledTimes(1);
-    expect(translationMock()).toHaveBeenCalledWith('post-tr', 'Bonjour', 'fr', USER_ID);
+    expect(translationMock()).toHaveBeenCalledWith('post-tr', 'Bonjour', 'fr');
     await app.close();
   });
 

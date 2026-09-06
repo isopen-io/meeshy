@@ -18,7 +18,7 @@ import { COOKIE_DE_JETON } from '../../lib/api/cookies';
 import { NOUVEAU_LIEN } from '../../lib/contenu/liens';
 import { violationsBloquantes, rapporteViolations } from './lib/a11y';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
-import { CONVERSATION_DU_LECTEUR, passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
+import { AUTRE_CONVERSATION, CONVERSATION_DU_LECTEUR, passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 import { COLONNES_DE_THEME } from './lib/verdict-axe';
 
 let passerelle: PasserelleDeBouchon;
@@ -237,6 +237,92 @@ test.describe('avec JavaScript — fetch, aucun rechargement', () => {
     await expect(page.locator('dialog.nouveau-lien [role="alert"]')).toContainText('Vous n’êtes pas membre de cette conversation');
     await expect(page.locator('input[name="nom"]')).toHaveValue('Voisins de Lagos');
     expect(await page.evaluate(() => (window as unknown as { __sansRechargement?: number }).__sansRechargement)).toBe(1);
+
+    await ctx.close();
+  });
+});
+
+/**
+ * LA MOITIÉ E2E DU CRITÈRE DE FIN (§ « La puce Lien », suivi #5034) — la
+ * moitié unitaire (`nouveau-lien-depuis-le-fil.test.ts:106-137`) prouve dans
+ * jsdom que la puce n'est pas RENDUE ; cette section prouve, contre un VRAI
+ * navigateur et la passerelle de bouchon, qu'elle n'a laissé DERRIÈRE elle
+ * ni contrôle inerte ni chemin de soumission — le 403 verbatim est hors du
+ * chemin nominal (loi 4 : un contrôle existe s'il a un effet).
+ */
+test.describe('sur un tête-à-tête, la puce « Lien » n’existe pas', () => {
+  const DIRECT = (): string => `${v3.base}/chats/${AUTRE_CONVERSATION.id}`;
+
+  test('la puce est absente — rien d’inerte, aucun POST /links n’a atteint la passerelle', async ({ browser }) => {
+    const ctx = await contexte(browser);
+    const page = await ctx.newPage();
+
+    // FIDÉLITÉ DU BOUCHON D'ABORD — sans cette lecture, l'absence de la puce
+    // serait un vert PAR OMISSION : `peutCreerUnLien` fail-close aussi bien
+    // sur un `type` MANQUANT que sur un `direct`, et une fixture muette
+    // rendrait donc le MÊME verdict qu'une fixture juste. La passerelle réelle
+    // sert TOUJOURS les deux champs sur le profil par défaut
+    // (`conversations/core-detail.ts:172-196`, servis :510).
+    const detail = await ctx.request.get(`${passerelle.base}/api/v1/conversations/${AUTRE_CONVERSATION.id}`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+    });
+    const charge = (await detail.json()) as { readonly data: { readonly type?: unknown; readonly currentUserRole?: unknown } };
+    expect(charge.data.type).toBe('direct');
+    expect(charge.data.currentUserRole).toBe('member');
+    passerelle.oublie();
+
+    await page.goto(DIRECT(), { waitUntil: 'load' });
+
+    await expect(page.locator('a.partager')).toHaveCount(0);
+    // Contre-témoin : c'est bien le GATING qui retire la puce « Lien », pas
+    // un fil cassé — « Médias », elle, reste rendue avec une adresse réelle.
+    await expect(page.locator('a.medias')).toHaveCount(1);
+    await expect(page.locator('a.medias')).toHaveAttribute('href', /\/chats\/.+\/medias/);
+    expect(passerelle.journal.some((appel) => appel.methode === 'POST' && appel.chemin === '/api/v1/links')).toBe(false);
+
+    await ctx.close();
+  });
+
+  test('taper ?lien à la main ne sert pas la feuille — le fil reste ACTIF', async ({ browser }) => {
+    const ctx = await contexte(browser, { javaScriptEnabled: false });
+    const page = await ctx.newPage();
+
+    await page.goto(`${DIRECT()}?lien`, { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('dialog.nouveau-lien')).toHaveCount(0);
+    await expect(page.locator('#main-content')).not.toHaveAttribute('inert', '');
+
+    await ctx.close();
+  });
+
+  /**
+   * Défaut de revue (majeur, § « La puce Lien », suivi #5034) : la branche
+   * d'écriture du bouchon (`POST /conversations/:id/messages`) écrivait
+   * INCONDITIONNELLEMENT dans `etat.conversationId` — la conversation du
+   * LECTEUR — quel que soit l'`:id` de l'adresse. Un futur témoin postant
+   * depuis une annexe aurait été vert en écrivant AILLEURS que sa cible.
+   * Ce témoin prouve le refus explicite, et que le fil du lecteur n'a rien
+   * reçu de ce POST égaré.
+   */
+  test('POST sur une annexe est refusé — rien ne s’écrit à côté, dans le fil du lecteur', async ({ browser }) => {
+    const ctx = await contexte(browser);
+
+    const avant = await ctx.request.get(`${passerelle.base}/api/v1/conversations/${CONVERSATION_DU_LECTEUR.id}/messages`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+    });
+    const { data: messagesAvant } = (await avant.json()) as { readonly data: readonly unknown[] };
+
+    const post = await ctx.request.post(`${passerelle.base}/api/v1/conversations/${AUTRE_CONVERSATION.id}/messages`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+      data: { content: 'Ce message ne devrait atterrir nulle part' },
+    });
+    expect(post.status()).toBe(404);
+
+    const apres = await ctx.request.get(`${passerelle.base}/api/v1/conversations/${CONVERSATION_DU_LECTEUR.id}/messages`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+    });
+    const { data: messagesApres } = (await apres.json()) as { readonly data: readonly unknown[] };
+    expect(messagesApres.length).toBe(messagesAvant.length);
 
     await ctx.close();
   });

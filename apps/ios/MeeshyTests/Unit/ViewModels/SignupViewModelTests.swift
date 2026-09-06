@@ -230,9 +230,30 @@ final class SignupViewModelTests: XCTestCase {
 
         XCTAssertFalse(created)
         XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneOwnershipConflictMessage)
-        XCTAssertTrue(
-            SignupViewModel.phoneOwnershipConflictMessage.contains("vide"),
-            "le seul refus dont l'écran connaît le remède doit le DIRE : laisser le champ vide"
+        // **Le REMÈDE, pas le MOT** (2026-09-06). Ce témoin cherchait « vide »
+        // dans le message. Or `String(localized:bundle:)` suit la locale du
+        // BUNDLE : en CI, le simulateur démarre en anglais et rend « Leave it
+        // empty to continue » — pas de « vide ». Le témoin passait sur une
+        // machine française et tombait en intégration, alors que le catalogue
+        // est complet et juste sur les sept langues.
+        //
+        // > Un test qui affirme un MOT teste la locale de la machine qui
+        // > l'exécute. Ce qui distingue ce refus des autres n'est pas son
+        // > vocabulaire : c'est qu'il porte une SORTIE là où les autres
+        // > constatent un échec. Cela se mesure sans lire un seul mot.
+        XCTAssertFalse(
+            SignupViewModel.phoneOwnershipConflictMessage.isEmpty,
+            "le seul refus dont l'écran connaît le remède doit le DIRE"
+        )
+        XCTAssertNotEqual(
+            SignupViewModel.phoneOwnershipConflictMessage,
+            SignupViewModel.genericFailureMessage,
+            "… et le dire AUTREMENT que l'échec générique : sans texte propre, le remède n'existe pas"
+        )
+        XCTAssertNotEqual(
+            SignupViewModel.phoneOwnershipConflictMessage,
+            SignupViewModel.networkUnavailableMessage,
+            "… et autrement que la panne réseau, qui ne propose aucune sortie à l'auteur"
         )
         XCTAssertNil(sut.bannerError)
     }

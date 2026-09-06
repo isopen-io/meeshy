@@ -70,6 +70,14 @@ struct ComposerSceneCameraBar: View {
     /// La pulsation du témoin d'enregistrement. Elle vit dans la vue parce
     /// qu'elle ne décrit RIEN du modèle : c'est une animation, et une animation
     /// rangée dans l'état métier se rejoue à chaque changement de ce dernier.
+    /// **Reduce Motion coupe le battement, jamais le témoin** (dimension 5 du
+    /// `CLAUDE.md` racine). Une boucle sans fin doit choisir : se taire, ou se
+    /// poser sur une valeur qui DIT encore ce que le mouvement disait. Ici le
+    /// point rouge PLEIN le dit déjà — c'est sa couleur qui porte « ça
+    /// enregistre », le battement ne faisait que le rendre impossible à
+    /// confondre avec un état figé.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var recordingBlink: Double = 1
 
     @State private var pressedAt: Date?
@@ -178,12 +186,12 @@ struct ComposerSceneCameraBar: View {
                     Circle()
                         .fill(MeeshyColors.error)
                         .frame(width: 6, height: 6)
-                        .opacity(stage == .recording ? recordingBlink : 1)
-                        .animation(stage == .recording
+                        .opacity(stage == .recording && !reduceMotion ? recordingBlink : 1)
+                        .animation(stage == .recording && !reduceMotion
                                    ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
                                    : .default,
                                    value: recordingBlink)
-                        .onAppear { recordingBlink = 0.25 }
+                        .onAppear { if !reduceMotion { recordingBlink = 0.25 } }
                     Text(LocalizedNumber.duration(
                         seconds: ComposerCaptureSegments.elapsed(
                             segments: segments,
@@ -235,7 +243,11 @@ struct ComposerSceneCameraBar: View {
     /// remplit ; à 1, le geste bascule.
     private var lockTrack: some View {
         HStack(spacing: 6) {
-            Image(systemName: "chevron.right")
+            // `forward`, jamais `right` : ce chevron montre la direction du
+            // GESTE — remonter vers le cadenas pour verrouiller la prise — et
+            // en arabe la piste part de l'autre bord. Un côté physique y
+            // pointerait à l'opposé du doigt.
+            Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(11, weight: .bold))
                 .foregroundStyle(.white.opacity(0.35 + 0.65 * lockProgress))
             Image(systemName: "lock.fill")

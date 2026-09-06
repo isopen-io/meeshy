@@ -291,7 +291,6 @@ export async function runPublicationEffects(
         // revendication brute du client : elle incorpore déjà la normalisation
         // (ou le repli détecté) et correspond aux clés source de NLLB.
         asOptionalString(post.originalLanguage),
-        authorId,
       ).catch((err) => fastify.log.warn({ err }, `[${porte}]: translate post failed`));
     } catch {
       // PostTranslationService not initialized — skip silently

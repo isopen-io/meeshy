@@ -417,7 +417,7 @@ describe('#4151 — le Prisme couvre la légende, quelle que soit la porte', () 
     await settle();
 
     expect(mockTranslatePost).toHaveBeenCalledWith(
-      PUBLISHED_ROW.id, PUBLISHED_ROW.content, 'fr', USER_ID,
+      PUBLISHED_ROW.id, PUBLISHED_ROW.content, 'fr',
     );
     expect(res.statusCode).toBe(201);
 

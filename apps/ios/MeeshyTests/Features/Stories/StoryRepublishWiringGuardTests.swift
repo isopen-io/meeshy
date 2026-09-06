@@ -151,17 +151,38 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
 
     // MARK: - 2. L'audience est plafonnée
 
+    /// **Le plafond a rejoint l'HYDRATATION** (#5053, 2026-09-06).
+    ///
+    /// La présentation posait `allowedVisibilities:` et construisait le
+    /// ViewModel de repost côté `StoryViewerView`. Les deux vivent désormais
+    /// dans `ComposerHydration` — « un seul paramètre pour deux choses (quel
+    /// contenu reprendre, quelle audience il autorise) parce que les séparer
+    /// aurait permis d'en passer une sans l'autre, c'est-à-dire de republier
+    /// SANS PLAFOND, silencieusement ».
+    ///
+    /// > Le déménagement RENFORCE la loi que ce témoin garde : elle n'est plus
+    /// > à reposer sur chaque présentation, elle est portée par le type que
+    /// > toute republication doit passer. La garde suit donc le site qui la
+    /// > DÉCIDE, et non plus celui qui la recopiait.
     func test_composerPresentation_capsTheAudienceWithTheSharedLaw() throws {
-        let viewer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        let hydration = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Composer/ComposerHydration.swift"))
 
         XCTAssertTrue(
-            viewer.contains("allowedVisibilities: StoryRepostAudience.allowed(fromRawValue:"),
-            "La présentation du composeur de republication doit plafonner le " +
-            "sélecteur d'audience par la loi — même audience ou plus restreinte."
+            hydration.contains("StoryRepostAudience.allowed(fromRawValue: story.visibility)"),
+            "La republication doit plafonner le sélecteur d'audience par la loi — même audience ou " +
+            "plus restreinte. Le plafond est une affordance, mais une affordance dont l'absence " +
+            "transforme un refus serveur en échec inexpliqué au moment de publier."
         )
         XCTAssertTrue(
-            viewer.contains("StoryComposerViewModel(") && viewer.contains("reposting:"),
+            hydration.contains("case .editingStory:") && hydration.contains("return nil"),
+            "… et l'ÉDITION rend `nil` : le ViewModel hydraté porte sa propre visibilité initiale, " +
+            "et en poser une seconde ici ferait deux sources pour une même valeur."
+        )
+
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(
+            host.contains("StoryComposerViewModel(reposting: story, authorHandle: authorHandle)"),
             "Le composeur doit être construit par l'initialiseur de repost, qui " +
             "préremplit la slide source et verrouille le badge d'attribution."
         )
@@ -170,11 +191,24 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     // MARK: - 3. repostOfId descend jusqu'à la publication
 
     func test_repostOfId_travelsAllTheWayToPublication_neverHardcodedNil() throws {
-        let viewer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        // **La republication est passée au COMPOSER** (2026-09-06). Le geste
+        // partait de `StoryViewerView`, qui posait `repostOfId: wrapper.story.id`
+        // au moment de publier ; il passe désormais par `StoryRepublishComposer`,
+        // qui porte le même id sous le nom de sa propre source
+        // (`repostOfId: source.story.id`). L'invariant n'a pas bougé d'un pouce —
+        // la publication d'une republication porte l'id de l'original — mais le
+        // site qui l'honore a changé, et la garde lisait l'ancien.
+        //
+        // > Une garde qui nomme un FICHIER mesure une géographie, pas une règle.
+        // > Celle-ci nomme désormais le site qui DÉCIDE, et son message dit quoi
+        // > chercher si le geste déménage encore.
+        let composer = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift"))
         XCTAssertTrue(
-            viewer.contains("repostOfId: wrapper.story.id"),
-            "La publication de la republication doit porter l'id de l'original."
+            composer.contains("repostOfId: source.story.id"),
+            "La publication de la republication doit porter l'id de l'original. Si ce site n'est plus "
+                + "celui qui republie, chercher qui pose `repostOfId` sur le chemin de la scène — jamais "
+                + "retirer cette garde : c'est elle qui a attrapé les republications orphelines."
         )
 
         let viewModel = AppSourceGuard.stripComments(

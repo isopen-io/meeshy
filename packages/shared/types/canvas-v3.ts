@@ -177,9 +177,13 @@ const SceneV3Schema = z.object({
  * même post.
  *
  * Miroirs à tenir ENSEMBLE : `MosaicLayoutMode` (Swift, `CanvasV3.swift`) et le
- * miroir Kotlin. Le défaut de lecture est `wave` sur les trois plateformes.
+ * miroir Kotlin. Le défaut de lecture est `carousel` sur les trois plateformes
+ * (directive porteur 2026-09-06 : « le défilement image par image […] doit être
+ * le mode par défaut »), et c'est celui que reçoit TOUT le corpus antérieur au
+ * champ. Seul mode PAGINÉ — une scène par page — donc le seul qui ne plafonne
+ * ni ne reporte.
  */
-export const MosaicLayoutModeSchema = z.enum(['wave', 'hero', 'reel', 'sine']);
+export const MosaicLayoutModeSchema = z.enum(['wave', 'hero', 'reel', 'sine', 'carousel']);
 export type MosaicLayoutMode = z.infer<typeof MosaicLayoutModeSchema>;
 
 export const CanvasV3Schema = z.object({
@@ -189,8 +193,8 @@ export const CanvasV3Schema = z.object({
   scenes: z.array(SceneV3Schema).min(1).max(10).optional(),
   sound: BackgroundSoundSchema.optional(),
   // OPTIONNEL et ADDITIF : absent de toute publication antérieure au
-  // 2026-09-06, et le lecteur retombe alors sur `wave`. Un canvas mono-scène
-  // n'a rien à en dire — une mosaïque d'un élément n'est pas une mosaïque.
+  // 2026-09-06, et le lecteur retombe alors sur `carousel`. Un canvas
+  // mono-scène n'a rien à en dire — une mosaïque d'un élément n'en est pas une.
   layout: MosaicLayoutModeSchema.optional(),
 });
 

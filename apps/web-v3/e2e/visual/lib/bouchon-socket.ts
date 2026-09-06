@@ -223,6 +223,23 @@ export type BouchonSocket = {
    */
   readonly deconnexions: () => number;
   /**
+   * Le NOMBRE TOTAL de connexions ACCEPTÉES depuis l'ouverture du bouchon —
+   * cumulatif, jamais décrémenté (`connectes()` porte le solde courant, ce
+   * champ porte le total accepté). Le témoin de fuite `navigateur-de-zone`
+   * (#5163 § 12.11.3 point 6) l'oppose à `deconnexions()` : `connexions() -
+   * deconnexions() === 1` sur toute la séquence dit qu'il ne reste EXACTEMENT
+   * que la connexion de l'écran courant, sans épingler un total absolu qui
+   * romprait le jour où deux écrans partageraient un socket authentifié.
+   */
+  readonly connexions: () => number;
+  /**
+   * La POINTE de connexions SIMULTANÉES observée depuis l'ouverture du
+   * bouchon — le témoin de forme du point 6 : l'ancienne socket qui se ferme
+   * et la neuve qui s'ouvre peuvent chevaucher le temps d'un handshake (2),
+   * jamais s'accumuler (3+).
+   */
+  readonly pointe: () => number;
+  /**
    * CE QU'UN MESSAGE DOIT À LA LIGNE DE LISTE de chaque destinataire —
    * `conversation:updated` (le rang et l'aperçu DÉJÀ descendu au prisme du
    * lecteur : `MeeshySocketIOManager.ts:3216`, `MessageHandler.ts:1691`) puis
@@ -455,6 +472,8 @@ export const bouchonSocket = ({
   });
   const recus: Emission[] = [];
   let fermetures = 0;
+  let ouvertures = 0;
+  let pointeDeConcurrence = 0;
   const identites = new Map<string, Identite>();
   let jonctionsRefusees = 0;
 
@@ -546,6 +565,8 @@ export const bouchonSocket = ({
   };
 
   io.on('connection', (socket) => {
+    ouvertures += 1;
+    pointeDeConcurrence = Math.max(pointeDeConcurrence, io.sockets.sockets.size);
     const auth = (socket.handshake.auth ?? {}) as Record<string, unknown>;
 
     // L'authentification est EN COURS pendant `DELAI_D_AUTHENTIFICATION_MS` :
@@ -773,6 +794,8 @@ export const bouchonSocket = ({
   return {
     io,
     deconnexions: () => fermetures,
+    connexions: () => ouvertures,
+    pointe: () => pointeDeConcurrence,
     recus,
     emets: (conversationId, evenement, charge) => {
       io.to(room(conversationId)).emit(evenement, charge);

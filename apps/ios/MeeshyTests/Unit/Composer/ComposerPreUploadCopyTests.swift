@@ -33,20 +33,48 @@ final class ComposerPreUploadCopyTests: XCTestCase {
 
     // MARK: - Les deux états qui parlent
 
+    /// **Ce que `locale:` gouverne ICI, et ce qu'il ne gouverne pas**
+    /// (2026-09-06).
+    ///
+    /// Ces deux témoins affirmaient les MOTS — « PRÊT », « MONTÉE EN COURS » —
+    /// en passant `Locale(identifier: "fr_FR")`. Ce paramètre ne les décide
+    /// pas : les mots viennent de `String(localized:bundle: .main)`, qui suit
+    /// la locale du BUNDLE, jamais un `Locale` passé en argument. Les témoins
+    /// passaient donc sur une machine réglée en français et tombaient en CI,
+    /// où le simulateur démarre en anglais — « READY » au lieu de « PRÊT ».
+    ///
+    /// > Un test qui affirme une TRADUCTION teste la locale de la machine qui
+    /// > l'exécute. Le catalogue, lui, est complet et juste (mesuré : les sept
+    /// > langues, `fr` = « PRÊT ») — le produit n'a jamais été en cause.
+    ///
+    /// Ce que `locale:` gouverne réellement, ce sont les NOMBRES —
+    /// `LocalizedNumber.percent` et `bytes` —, et c'est ce que le second témoin
+    /// mesure encore : la virgule décimale française de « 4,8 », qui deviendrait
+    /// un point en anglais. La couverture des libellés est ailleurs, dans les
+    /// gardes de catalogue qui interrogent le `.xcstrings` sans dépendre d'une
+    /// locale d'exécution.
     func test_unAssetPret_leDit() {
         let phrase = ComposerPreUploadCopy.label(
             for: .ready(postMediaId: "m1", remoteURL: "https://cdn/x"), locale: fr)
-        XCTAssertEqual(phrase, "PRÊT")
+        // Le CONTRASTE avec les trois silences ci-dessus est tout l'invariant :
+        // `idle` et `failed` rendent `nil`, `ready` PARLE.
+        XCTAssertNotNil(phrase, "un asset prêt doit le DIRE — c'est ce qui le sépare des deux silences")
+        XCTAssertFalse(phrase?.isEmpty ?? true,
+                       "et le dire par une phrase, jamais par une chaîne vide qui se concatène en silence")
     }
 
-    /// La phrase de la planche, dans ses trois morceaux.
+    /// La phrase de la planche, dans ses trois morceaux — dont les deux que
+    /// `locale:` décide vraiment.
     func test_uneMonteeEnCours_portePourcentageEtOctets() throws {
         let phrase = try XCTUnwrap(ComposerPreUploadCopy.label(
             for: .uploading(sent: 4_800_000, total: 14_200_000), locale: fr))
-        XCTAssertTrue(phrase.contains("MONTÉE EN COURS"), phrase)
         XCTAssertTrue(phrase.contains("34"), phrase)
+        // La VIRGULE décimale est le témoin de la locale : en anglais ce serait
+        // « 4.8 ». C'est la seule partie de cette phrase que `locale:` gouverne.
         XCTAssertTrue(phrase.contains("4,8"), phrase)
         XCTAssertTrue(phrase.contains("14,2"), phrase)
+        XCTAssertTrue(phrase.contains("·") && phrase.contains("—"),
+                      "la phrase garde ses deux séparateurs — en-tête · pourcentage — octets : \(phrase)")
     }
 
     // MARK: - Les octets
