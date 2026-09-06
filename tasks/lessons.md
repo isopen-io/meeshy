@@ -29139,3 +29139,224 @@ qui n'existait dans aucun des deux états, seulement dans leur mélange.
 Et le verrou lui-même accuse volontiers le voisin : le mien était tenu par mon
 PROPRE `SWBBuildService`, qui n'avait pas rendu la main deux secondes après la
 sortie en 0 de mon build précédent. `lsof` sur le `build.db` avant d'accuser.
+
+## Leçon 540 — Trois fois le même jour : une vérification qui CONFIRME l'hypothèse au lieu de l'éprouver
+
+**Mesuré le 2026-09-06**, sur un lot de 47 correctifs de CI dans un arbre partagé
+à quatre sessions. Trois défauts que j'ai INTRODUITS, tous après une vérification
+que j'avais jugée faite — et chacun bloquant à un étage de plus que le précédent.
+
+| ce que j'ai vérifié | ce que la question ne pouvait pas voir | coût |
+|---|---|---|
+| « quels symboles de MA LISTE ce bloc utilise-t-il ? » | `AnyCancellable` n'était pas dans la liste ⇒ `import Combine` manquant | l'app ne compile plus |
+| « où est LE helper de ce fichier ? » | le fichier porte DIX-NEUF classes ⇒ helpers hors de portée de leurs appelants | le bundle de tests ne compile plus |
+| « les accolades s'équilibrent-elles ? » | le compteur ignorait les chaînes `"""` ⇒ faux positif | une heure de doute sur du code sain |
+
+Et un quatrième, de la même famille, trouvé par un pair : les deux conformances
+extraites de `CallManager` touchaient six membres **`private`** — le piège que le
+`CLAUDE.md` d'`apps/ios` documente en toutes lettres, et que j'avais lu. Ma
+question portait sur les SYMBOLES du bloc ; la visibilité de ces symboles n'y
+entrait pas.
+
+## Ce qui les unit
+
+> **Une vérification construite à partir de ce qu'on s'attend à trouver ne peut
+> pas signaler ce à quoi on n'a pas pensé.** Elle rend « rien à signaler » avec
+> exactement la même sortie qu'un contrôle exhaustif, et cette identité de forme
+> est ce qui la rend dangereuse : elle ACHÈTE de la confiance au lieu d'en
+> retirer.
+
+Le renversement tient en une phrase : **partir de l'OBJET, jamais de la liste.**
+Pas « ce bloc utilise-t-il l'un de ces cinq symboles ? » mais « quels types ce
+bloc nomme-t-il, et qui les fournit ? ». Pas « où est le helper ? » mais « dans
+quelle classe vit chaque appelant ? ».
+
+## Les trois questions d'une extraction Swift
+
+Elles se posent AVANT de couper, et aucune ne se déduit des autres :
+
+1. **quels TYPES le bloc nomme-t-il** — chaque majuscule confrontée au framework
+   qui la fournit, jamais une liste d'imports recopiée du fichier d'origine ;
+2. **quels MEMBRES touche-t-il** — un `private` du fichier hôte devient
+   inaccessible dès la première ligne d'un fichier frère (`CLAUDE.md` iOS,
+   § « Piège accès cross-file ») ;
+3. **où vivent ses APPELANTS** — dans un fichier à plusieurs types, « le »
+   helper n'existe pas ; il y en a un par classe.
+
+## Le corollaire qui coûte le plus cher
+
+Les trois défauts ci-dessus ont cassé la COMPILATION, et deux sessions se sont
+retrouvées incapables de mesurer quoi que ce soit. Or **un `** TEST FAILED **` de
+compilation ne se distingue pas d'une suite rouge dans un journal lu vite** — le
+même piège que la leçon 539, un étage plus haut. Pendant qu'un arbre partagé ne
+compile pas, tout verdict lu est un verdict sur autre chose.
+
+D'où la ceinture, pour un arbre à plusieurs sessions : **avant de conclure quoi
+que ce soit d'un job rouge, chercher `error:` de compilation dans le journal.**
+S'il y en a, la liste d'échecs de tests qui suit ne décrit rien.
+
+## Ce qui a marché
+
+Annuler plutôt que réparer sous pression. Le `CLAUDE.md` prescrivait de retirer
+`private` ; élargir la visibilité de six membres d'un manager d'appel pour faire
+retomber un cliquet est une décision de revue, pas d'urgence. Le revert a rendu
+l'arbre compilable en trois commits, au prix d'un cliquet rouge qui, lui, dit
+quelque chose de vrai. **Un cliquet rouge coûte moins que deux sessions
+bloquées.**
+
+## Leçon 541 — Un COMPTAGE ne voit ni les doublons ni les absences : compter les noms DISTINCTS
+
+**2026-09-06, résolution de conflit sur `v3-nouveau-lien-depuis-le-fil.spec.ts` (merge `5bc2447960`).**
+
+En résolvant le conflit de #5350 j'ai vérifié ma fusion, et je l'ai vérifiée
+sérieusement : **128/128 accolades appariées, 6 `describe`, 14 `test`**. Les
+trois comptes étaient JUSTES. Le fichier compilait, les tests s'exécutaient.
+
+Il portait pourtant **deux `describe` de même nom**, verbatim identiques
+— « les rendus que le rapport regarde », aux lignes 331 et 410. Playwright
+refuse alors de DÉMARRER :
+
+```
+Error: duplicate test title "les rendus que le rapport regarde › captures 390×844 — …"
+       first declared in visual/v3-nouveau-lien-depuis-le-fil.spec.ts:332
+```
+
+Conséquence hors de proportion avec la cause : le gate `A11y web-v3` est devenu
+rouge sur `dev` **et sur toute PR qui en hérite**. Trois PR ouvertes (#5359,
+#5363, #5365) y échouaient simultanément, dont une sur les routes voice du
+gateway — **dont l'échec n'avait aucun rapport avec son contenu**. Le temps que
+trois sessions pouvaient perdre à diagnostiquer trois faux problèmes est le vrai
+coût.
+
+> **Un total est aveugle à l'identité de ses termes.** « 6 describes » est vrai
+> qu'ils portent six noms ou trois noms doublés. La vérification qui l'attrape
+> ne coûte pas plus cher — elle change seulement d'unité :
+> `grep -o "describe('[^']*'" f | sort | uniq -c | sort -rn`. Compter les noms
+> DISTINCTS, jamais les occurrences.
+
+Le motif est plus large que les tests. Toute fusion qui réapplique un diff
+contre un blob qui a bougé peut dupliquer un bloc VERBATIM : la duplication ne
+casse ni la syntaxe, ni le typage, ni les accolades — les trois choses qu'on
+pense à vérifier. Elle ne se voit qu'en cherchant des NOMS répétés.
+
+### Le corollaire, tombé le même jour : une repro qui passe des deux côtés ne prouve rien
+
+Sur le second gate rouge du même lot (`Chaînes web-v3`), j'ai écrit un correctif
+plausible, puis reproduit en local : **4/4 verts**. J'ai failli l'annoncer
+comme corrigé. Le témoin SANS le correctif rend **4/4 verts aussi** — puis
+22/22 sur la suite entière. La repro locale tourne en 1,3 min là où le runner
+met 3,7 min : la course ne s'y joue jamais.
+
+> **Un vert obtenu des deux côtés du diff ne mesure pas le diff — il mesure la
+> machine.** Avant d'annoncer une correction sur un défaut de TIMING, exiger le
+> témoin qui ÉCHOUE sans elle. Sans lui, on ne sait pas si l'on a corrigé
+> quelque chose ou seulement couru plus vite. Et le dire dans le fichier : le
+> doc-comment du correctif porte ce qui est MESURÉ (les échecs CI, leur motif)
+> et ce qui ne l'est PAS (le chemin exact de la fuite d'état).
+
+C'est la forme jumelle de la leçon 540 (« une vérification qui confirme
+l'hypothèse au lieu de l'éprouver ») avec une différence utile : ici la
+vérification n'était pas complaisante, elle était **hors de portée du
+phénomène**. Une repro trop rapide et un filtre trop étroit rendent le même
+silence — le vert par omission.
+
+### Troisième volet, même journée : deux correctifs concurrents d'un doublon s'ADDITIONNENT
+
+Le doublon ci-dessus a été corrigé **deux fois, en parallèle, par deux
+sessions** — et chacune a retiré un bloc DIFFÉRENT :
+
+```
+aa302f076b (#5362, mergée)  retire le PREMIER (milieu de fichier)
+d637aa4a0b (point d'étape)  retire celui de FIN
+```
+
+Somme : **plus aucun bloc**. Le témoin des captures 390×844 clair/sombre a
+disparu du dépôt. Git n'a signalé aucun conflit — deux suppressions de blocs
+distincts se fusionnent proprement.
+
+**Et le gate est passé VERT.** C'est ce qui rend ce défaut dangereux : le
+symptôme visé (le doublon) avait bien disparu, donc `A11y web-v3` ne rougissait
+plus. **Un témoin absent ne peut pas échouer** — la suppression de trop se
+présentait exactement comme la réussite du correctif. Le fichier serait parti
+amputé sur `main` sans une relecture de dernière minute.
+
+> **Un merge SANS CONFLIT de deux suppressions concurrentes n'est pas une
+> réconciliation : c'est une addition.** Vérifier la disparition du SYMPTÔME
+> (« plus de doublon », « le merge est passé ») ne dit rien de l'ÉTAT FINAL.
+> Compter ce qui doit RESTER, jamais constater ce qui a disparu.
+
+Corollaire de pilotage, appris en le payant : **fermer une PR redondante ne
+défait pas son diff.** J'avais fermé #5367 comme doublon de #5362 en croyant le
+sujet clos ; son correctif vivait déjà dans un WIP en vol chez une autre
+session. Une PR fermée retire une INTENTION du tableau, pas un changement d'un
+arbre de travail.
+
+C'est la forme collective de la leçon ci-dessus : là, un comptage était aveugle
+aux noms de ses termes ; ici, il est aveugle au fait qu'une autre main corrige
+le même défaut au même moment. Dans un arbre partagé par plusieurs sessions, la
+question « ai-je corrigé ce défaut ? » est incomplète — la bonne est
+**« combien de fois ce défaut a-t-il été corrigé, et que reste-t-il ? »**.
+
+## Leçon 542 — Une clé SYMBOLIQUE cataloguée sans son français affiche son IDENTIFIANT
+
+**2026-09-06, catalogue iOS (`apps/ios/Meeshy/Localizable.xcstrings`).**
+
+Quatorze clés livrées dans la journée portaient un `defaultValue` français sans
+entrée au catalogue. Trois gardes le disaient — leur texte français partait aux
+**sept** locales : un lecteur arabophone lisait « Une grande, les autres à
+côté ».
+
+En les ajoutant, j'ai omis l'entrée `fr`, sur ce raisonnement :
+*« `sourceLanguage` vaut `fr`, donc le français vient du `defaultValue` — une
+entrée `fr` serait redondante »*. Un exemple du catalogue le confirmait : la
+clé `%@` porte six locales, sans `fr`.
+
+**Le raisonnement est juste pour une clé LITTÉRALE et faux pour une
+SYMBOLIQUE.**
+
+| forme | exemple | entrée `fr` ? |
+|---|---|---|
+| littérale — l'identifiant EST le français | `%@ Vues`, `%@ caractères` | inutile (381 clés dans ce cas) |
+| symbolique — l'identifiant est un chemin | `composer.mosaic.hero` | **obligatoire** |
+
+Dès qu'une clé symbolique EXISTE au catalogue, le `defaultValue` du code n'est
+plus consulté pour la locale manquante : le système rend l'identifiant. L'app
+affichait donc `composer.mosaic.hero` en français, et `"Slide 2 of 3"` là où le
+test attendait `"Slide 2 sur 3"`.
+
+> **Mon correctif était PIRE que le défaut qu'il corrigeait.** Avant : le
+> français fuyait vers six locales étrangères. Après : le français lui-même
+> était perdu, remplacé par un identifiant technique. C'est la forme
+> [[reference_an_apparent_conformance_is_worse_than_an_absence]] appliquée au
+> catalogue — une clé PRÉSENTE et vide bat une clé absente, dans le mauvais
+> sens.
+
+La distinction ne se voit **nulle part dans le code appelant** :
+`String(localized:defaultValue:)` s'écrit pareil pour les deux formes. Elle
+n'est nommée qu'à un seul endroit — le nom du test,
+`test_noSymbolicKey_isCataloguedWithoutItsFrench`.
+
+### Le corollaire de méthode, tombé dans le même quart d'heure
+
+Mon balayage de contrôle annonçait **43 autres clés symboliques sans
+français**. J'ai failli les « corriger ». Toutes fausses : elles portent leur
+français sous `variations.plural` (`one` / `other`), pas sous `stringUnit`, et
+mon détecteur ne lisait que le second.
+
+> **Une absence rendue par un détecteur incomplet n'est pas une absence.**
+> Avant d'agir sur ce qu'un balayage déclare MANQUANT, vérifier qu'il sait lire
+> toutes les formes sous lesquelles la chose peut être présente — ici, deux
+> (`stringUnit` et `variations`). Le même piège que la leçon 541 sous un autre
+> angle : là, un comptage aveugle aux noms ; ici, un balayage aveugle à une
+> forme.
+
+**Règle de lot** (adoptée avec `v2-meeshy-dc`, dont les huit clés mosaïque
+étaient concernées) : toute nouvelle `String(localized:defaultValue:)` reçoit
+son entrée au catalogue, **dans les sept locales, dans le MÊME lot**. Et
+`meeshy.sh test` complet avant commit — une suite ciblée (`-only-testing:`) ne
+prouve que ce qu'on a pensé à interroger, alors qu'un cliquet surveille
+précisément ce à quoi on ne pense pas.
+
+**Placeholders** : `%1$d`/`%2$d` doivent survivre à la traduction — un ordinal
+perdu inverse les deux nombres en arabe (« la slide 3 sur 2 »). Vérifier, pas
+supposer.

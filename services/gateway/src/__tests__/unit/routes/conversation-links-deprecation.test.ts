@@ -50,7 +50,7 @@ async function buildApp(membership: unknown = { role: 'member' }): Promise<Fasti
   // [fastify.authenticate]` — un décorateur posé ailleurs en production.
   // `registerSharingRoutes` lève à l'ENREGISTREMENT sans lui.
   app.decorate('authenticate', fakeRequiredAuth as never);
-  registerSharingRoutes(app as never, (app as any).prisma, noopOptionalAuth, fakeRequiredAuth);
+  registerSharingRoutes(app as never, (app as any).prisma, fakeRequiredAuth);
   await app.ready();
   return app;
 }

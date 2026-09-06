@@ -137,6 +137,7 @@ const etat = (attributs: Partial<EtatDesMedias> = {}): EtatDesMedias => ({
   plusAncien: null,
   avant: null,
   plein: null,
+  apercusAutomatiques: false,
   tempsReel: TEMPS_REEL_DES_MEDIAS,
   ...attributs,
 });

@@ -117,9 +117,29 @@ function makeTranslationService(overrides: Record<string, any> = {}) {
   };
 }
 
+// #3624 — le chemin `attachmentId` vérifie désormais l'appartenance de
+// l'appelant à sa conversation (`ensureVoiceAttachmentAccessible`). Le défaut
+// simule un membre légitime, pour ne pas dévier les témoins de ce fichier
+// (qui portent sur d'autres branches) vers la garde d'appartenance.
+function makePrismaMock(overrides: Record<string, any> = {}) {
+  return {
+    messageAttachment: {
+      findUnique: jest.fn<any>().mockResolvedValue({ id: 'att-1', messageId: 'msg-1', uploadedBy: 'user-1' }),
+    },
+    message: {
+      findUnique: jest.fn<any>().mockResolvedValue({ conversationId: 'conv-1', deletedAt: null, expiresAt: null }),
+    },
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
+    },
+    ...overrides,
+  };
+}
+
 type AppOptions = {
   audioService?: ReturnType<typeof makeAudioService>;
   translationService?: ReturnType<typeof makeTranslationService> | null;
+  prisma?: ReturnType<typeof makePrismaMock>;
 };
 
 // Chaque route voice exige désormais `fastify.authenticate` en `preHandler`
@@ -144,13 +164,14 @@ async function buildApp(opts: AppOptions = {}) {
   const translationService = Object.prototype.hasOwnProperty.call(opts, 'translationService')
     ? opts.translationService
     : makeTranslationService();
+  const prisma = opts.prisma ?? makePrismaMock();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   // Inject a user so getUserId() returns a value
   app.addHook('preHandler', async (req) => {
     (req as any).user = { userId: 'user-1', role: 'user' };
   });
   decorateAuthenticate(app);
-  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX);
+  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX, prisma as any);
   await app.ready();
   return app;
 }
@@ -160,10 +181,11 @@ async function buildAppNoAuth(opts: AppOptions = {}) {
   const translationService = Object.prototype.hasOwnProperty.call(opts, 'translationService')
     ? opts.translationService
     : makeTranslationService();
+  const prisma = opts.prisma ?? makePrismaMock();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   // No user injected → getUserId() returns null
   decorateAuthenticate(app);
-  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX);
+  registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX, prisma as any);
   await app.ready();
   return app;
 }

@@ -5,16 +5,19 @@ import { AddressInfo, createServer as createSocketServer } from 'node:net';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import type { NotificationPreference } from '@meeshy/shared/types/preferences';
+import type { DocumentPreference, NotificationPreference, PrivacyPreference } from '@meeshy/shared/types/preferences';
 
 import type { franchissementsReseau, mesurePage } from '../../../scripts/mesure-reseau.d.mts';
 import {
   APPAREILS_DU_BOUCHON,
   boiteDeNotifsDeBouchon,
+  documentPrefsDeBouchon,
   filDeCommentairesDeBouchon,
   filSocialDeBouchon,
   notificationPrefsDeBouchon,
+  privacyPrefsDeBouchon,
   routesDuCompte,
+  suppressionDeBouchon,
   type BoiteDeNotifsDeBouchon,
   type FilDeCommentairesDeBouchon,
   type FilSocialDeBouchon,
@@ -169,6 +172,10 @@ export type PasserelleDeBouchon = {
    * ce que le document a rendu.
    */
   readonly notificationPrefs: NotificationPreference;
+  /** `/settings/privacy` (travail `reglages-details`) — même loi que `notificationPrefs`, catégorie `privacy`. */
+  readonly privacyPrefs: PrivacyPreference;
+  /** `/settings/media/document` — même loi, catégorie `document` (`autoDownloadEnabled` est la seule clé écrite). */
+  readonly documentPrefs: DocumentPreference;
   /**
    * LES CORPS DE `POST /api/v1/posts` REÇUS (#4966) — ce que le composer a
    * réellement ENVOYÉ. Le critère de fin porte sur la charge (audience, emoji,
@@ -291,6 +298,10 @@ export const passerelleDeBouchon = async (options?: {
   readonly appelsReduits?: boolean;
   /** `/communities` sans aucune communauté — l'état VIDE du carnet, distinct du lecteur sans rien. */
   readonly communautesVides?: boolean;
+  /** `POST /me/account/deletion` répond 409 `ALREADY_PENDING` (travail `reglages-details`). */
+  readonly suppressionDejaEnCours?: boolean;
+  /** `POST /me/account/deletion` répond 409 `NO_EMAIL` (travail `reglages-details`). */
+  readonly suppressionSansEmail?: boolean;
 }): Promise<PasserelleDeBouchon> => {
   const journal: AppelRecu[] = [];
   const conversationId = CONVERSATION_DU_LECTEUR.id;
@@ -352,7 +363,27 @@ export const passerelleDeBouchon = async (options?: {
   const filsAnnexes = new Map<string, FilAnnexe>([
     [
       CONVERSATION_RICHE.id,
-      { id: CONVERSATION_RICHE.id, titre: CONVERSATION_RICHE.titre, membres: CONVERSATION_RICHE.membres, messages: messagesRiches(CONVERSATION_RICHE.id) },
+      {
+        id: CONVERSATION_RICHE.id,
+        titre: CONVERSATION_RICHE.titre,
+        membres: CONVERSATION_RICHE.membres,
+        messages: messagesRiches(CONVERSATION_RICHE.id),
+        type: 'group',
+        // `member` — fidèle au profil que la passerelle sert (elle rend
+        // TOUJOURS `currentUserRole`) et sans dériver la capture `rich` : un
+        // rang ordinaire refuse déjà la puce « Lien » (< MODERATOR), comme
+        // avant que ce champ n'existe (§ « La puce Lien », suivi #5034).
+        rangDuLecteur: 'member',
+      },
+    ],
+    // `AUTRE_CONVERSATION` (« Marta Ruiz », déjà `type: 'direct'` dans la
+    // liste `/chats`, `LIGNES_DE_CONVERSATIONS_SERVIES`) devient adressable
+    // comme FIL — une seule vérité, pas une troisième conversation inventée.
+    // Un `direct` refuse la puce « Lien » quel que soit le rang : `member`
+    // ici n'a pas besoin d'être `creator`.
+    [
+      AUTRE_CONVERSATION.id,
+      { id: AUTRE_CONVERSATION.id, titre: AUTRE_CONVERSATION.titre, membres: AUTRE_CONVERSATION.membres, messages: [], type: 'direct', rangDuLecteur: 'member' },
     ],
   ]);
 
@@ -405,6 +436,12 @@ export const passerelleDeBouchon = async (options?: {
   const deLaStory = routesDeLaStory({ creanceDe });
   const filSocial = filSocialDeBouchon();
   const notificationPrefs = await notificationPrefsDeBouchon();
+  const privacyPrefs = await privacyPrefsDeBouchon();
+  const documentPrefs = await documentPrefsDeBouchon();
+  const suppression = suppressionDeBouchon({
+    dejaEnCours: options?.suppressionDejaEnCours,
+    sansEmail: options?.suppressionSansEmail,
+  });
   const deLaRecherche = routesDeLaRecherche(creanceDe);
   const duCompte = routesDuCompte({
     creanceDe,
@@ -419,6 +456,9 @@ export const passerelleDeBouchon = async (options?: {
     filDeCommentaires,
     filSocial,
     notificationPrefs,
+    privacyPrefs,
+    documentPrefs,
+    suppression,
   });
   const carnet = carnetDeBouchon(lien);
   const duCarnet = routesDuCarnet(
@@ -563,6 +603,8 @@ export const passerelleDeBouchon = async (options?: {
     filDeCommentaires,
     filSocial,
     notificationPrefs,
+    privacyPrefs,
+    documentPrefs,
     publicationsRecues,
     placesActives,
     sessionsRevoquees,

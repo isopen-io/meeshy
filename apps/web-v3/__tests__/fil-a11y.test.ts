@@ -11,7 +11,16 @@ import type { CleDeLien } from '@/lib/api/guest-session';
  * violation `axe` `serious`/`critical` ». Le harnais est celui de la vitrine :
  * le document COMPLET, tel que le gestionnaire le sert — `html-has-lang`,
  * `landmark-one-main`, `page-has-heading-one`, les `lang` des textes traduits.
+ *
+ * Le plus lourd des onze documents (les six formes de message dans un même
+ * fil) dépasse le délai par défaut de jest (5 s) sous charge CPU partagée
+ * (exécution parallèle, `--maxWorkers=50%`) — `axe.run()` reste alors en
+ * vol après le timeout et verrouille les appels suivants du même fichier
+ * (« Axe is already running »), en série pure comme sous charge. Même
+ * remède que `zone-lint.test.ts` / `zone-cycle-de-vie.test.ts` : un délai
+ * réaliste pour un calcul CPU-bound, aucune assertion ni seuil affaibli.
  */
+jest.setTimeout(30_000);
 
 const graves = async (): Promise<readonly string[]> => {
   const rapport = await axe(document.documentElement);

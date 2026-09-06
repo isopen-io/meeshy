@@ -53,9 +53,27 @@ nonisolated enum CanvasMediaAdoption {
     /// ferait rougir ce témoin sur un cas que le code traite déjà, en connaissance.
     static func orphanIds(in effects: StoryEffects, postMediaIds: [String]) -> [String] {
         let possedes = Set(postMediaIds)
-        return (effects.mediaObjects ?? [])
-            .map(\.postMediaId)
+        return designatedIds(in: effects)
             .filter { !$0.isEmpty && !possedes.contains($0) }
+    }
+
+    /// **Tous les `postMediaId` que le document DÉSIGNE**, où qu'ils vivent.
+    ///
+    /// Un document publié en porte à DEUX endroits : le runtime
+    /// (`mediaObjects`, la première slide) et les scènes que `canvasV3`
+    /// transporte pour les suivantes. N'en lire qu'un rendait `isCoherent`
+    /// vraie sur la publication exacte qui échouait à l'écran — **une garde qui
+    /// ne voit pas la moitié du document certifie l'autre moitié.**
+    static func designatedIds(in effects: StoryEffects) -> [String] {
+        let runtime = (effects.mediaObjects ?? []).map(\.postMediaId)
+        let scenes = (effects.canvasV3?.scenes ?? [])
+            .flatMap(\.objects)
+            .filter { $0.kind == .media }
+            .compactMap { objet -> String? in
+                guard case .string(let id)? = objet.payload["postMediaId"] else { return nil }
+                return id
+            }
+        return runtime + scenes
     }
 
     /// `true` ⇔ tout ce que le canvas désigne est attaché au post.
@@ -135,6 +153,80 @@ nonisolated extension CanvasMediaAdoption {
             }
         }
         effets.mediaObjects = objets
+        effets.canvasV3 = adopting(effets.canvasV3,
+                                   objectIdsBySourceIndex: objectIds,
+                                   idsBySourceIndex: idsBySourceIndex,
+                                   urlsBySourceIndex: urlsBySourceIndex)
         return effets
     }
+
+    /// **Les scènes que le CANVAS transporte s'adoptent comme le runtime.**
+    ///
+    /// `ComposerStoryCanvas.publishedSlide` pose la première slide en runtime et
+    /// porte les suivantes dans `canvasV3.scenes` — sans changer aucune
+    /// signature, ce qui est ce qui a rendu ce transport possible. La
+    /// contrepartie est ici : les objets des scènes 2 à N n'apparaissent dans
+    /// AUCUN `mediaObjects`, donc la boucle ci-dessus ne les voyait pas, et
+    /// leur `postMediaId` restait celui de la pré-montée.
+    ///
+    /// Mesuré au simulateur le 2026-09-06 : la scène 2 d'une publication à deux
+    /// photos désignait un id que le post ne possédait pas. Elle ne rendait pas
+    /// du blanc — elle rendait **l'image de la scène 1**, par repli sur le
+    /// premier visuel. Un rendu qui a l'air réussi n'invite pas à regarder deux
+    /// fois.
+    ///
+    /// > **Un correctif de transport se suit jusqu'à ce qui ADOPTE.** Le lot qui
+    /// > a fait voyager les scènes par le canvas a laissé derrière lui une règle
+    /// > dont l'invariant restait vrai de tout ce qu'elle voyait.
+    ///
+    /// L'appariement est le MÊME — par identifiant d'objet — parce que la
+    /// migration réutilise l'id du `StoryMediaObject` comme id de l'`ObjectV3`.
+    /// Un second critère (la position, l'ordre) aurait divergé du premier.
+    private static func adopting(
+        _ document: CanvasV3?,
+        objectIdsBySourceIndex: [String?],
+        idsBySourceIndex: [Int: String],
+        urlsBySourceIndex: [Int: String]
+    ) -> CanvasV3? {
+        guard let document, !document.scenes.isEmpty else { return document }
+        var servisParObjet: [String: (id: String, url: String?)] = [:]
+        for (index, objectId) in objectIdsBySourceIndex.enumerated() {
+            guard let objectId, !objectId.isEmpty,
+                  let servedId = idsBySourceIndex[index] else { continue }
+            servisParObjet[objectId] = (servedId, urlsBySourceIndex[index])
+        }
+        guard !servisParObjet.isEmpty else { return document }
+
+        // **Reconstruit, jamais muté** : `SceneV3` et `ObjectV3` sont
+        // immuables. Et reconstruire oblige à ÉNUMÉRER ce qui voyage avec ce
+        // qu'on change — l'ouverture, la fermeture, les transitions, la durée,
+        // le thumbHash, le rapport porteur. Les omettre les perdrait en
+        // silence : rien ne rougit quand une transition disparaît d'un canvas
+        // publié.
+        let scenesAdoptees = document.scenes.map { scene -> SceneV3 in
+            SceneV3(
+                id: scene.id,
+                objects: scene.objects.map { objet -> ObjectV3 in
+                    guard objet.kind == .media,
+                          let servi = servisParObjet[objet.id] else { return objet }
+                    var charge = objet.payload
+                    charge["postMediaId"] = .string(servi.id)
+                    // L'URL n'est réécrite que si le dispatch en a servi une :
+                    // un objet dont le fichier est déjà en ligne garde la sienne.
+                    if let url = servi.url { charge["mediaURL"] = .string(url) }
+                    return ObjectV3(id: objet.id, kind: objet.kind, anchor: objet.anchor,
+                                    plane: objet.plane, z: objet.z, transform: objet.transform,
+                                    timing: objet.timing, locale: objet.locale, payload: charge)
+                },
+                opening: scene.opening,
+                closing: scene.closing,
+                clipTransitions: scene.clipTransitions,
+                timelineDuration: scene.timelineDuration,
+                thumbHash: scene.thumbHash,
+                carrierAspect: scene.carrierAspect)
+        }
+        return CanvasV3(v: document.v, scenes: scenesAdoptees,
+                        sound: document.sound, layout: document.layout)
+    }
+
 }

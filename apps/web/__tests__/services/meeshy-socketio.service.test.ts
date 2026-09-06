@@ -13,6 +13,10 @@ jest.mock('@/services/auth-manager.service', () => ({
     getAnonymousSession: jest.fn(() => null),
     logout: jest.fn(),
     registerOnTokensUpdated: jest.fn(() => jest.fn()),
+    // `connection.service.ts` lit désormais `useAuthStore` (#4405 étape 2,
+    // sessionToken du rafraîchissement) : le store RÉEL se charge donc dans
+    // cette suite et s'enregistre auprès d'`authManager` à sa création.
+    registerOnClear: jest.fn(),
   },
 }));
 

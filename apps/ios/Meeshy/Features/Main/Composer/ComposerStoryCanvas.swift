@@ -122,3 +122,77 @@ nonisolated enum ComposerStoryCanvas {
         }
     }
 }
+
+// MARK: - Ce qui PART, quand la publication a plusieurs slides
+
+extension ComposerStoryCanvas {
+
+    /// **La slide que le brouillon emporte — et TOUT ce qui l'accompagne**
+    /// (directive porteur 2026-09-06).
+    ///
+    /// ## Le défaut que cette règle ferme
+    ///
+    /// Le socle posait `viewModel.currentSlide.effects` : la slide COURANTE, et
+    /// elle seule. Composer trois slides, en publier une. Le fil, le détail et
+    /// le plein écran savaient pourtant montrer plusieurs scènes depuis le même
+    /// jour — mosaïque, carrousel, défilement vertical, tuile qui ouvre SA
+    /// scène —, et aucune de ces surfaces ne pouvait s'afficher.
+    ///
+    /// > C'est la forme la plus coûteuse du défaut « une vue sans
+    /// > consommateur » : quatre surfaces livrées, testées, correctes, et rien
+    /// > à leur donner à peindre. Rien ne rougit — il n'y a pas de site où ça
+    /// > pourrait.
+    ///
+    /// ## Comment les scènes voyagent sans qu'aucun porteur ne change de forme
+    ///
+    /// Le runtime (`StoryEffects`) décrit UNE slide, et c'est lui que le
+    /// brouillon, l'intention de publication et la file hors-ligne
+    /// transportent. Les autres slides voyagent dans `canvasV3`, la propriété
+    /// que le décodage remplit DÉJÀ à la lecture d'un document v3 :
+    /// `StoryEffects.encode` compose la première scène depuis le runtime et
+    /// garde les suivantes du document (`CanvasV3.init(migrating:keeping:)`).
+    ///
+    /// Aucune signature ne change — ni le brouillon, ni `PublishIntent`, ni la
+    /// file. C'est ce qui rend ce lot possible sans toucher trois fichiers déjà
+    /// hors du budget de taille.
+    ///
+    /// ## Pourquoi la PREMIÈRE slide et non la courante
+    ///
+    /// Le runtime devient la scène 1. Partir de la slide courante ferait de la
+    /// slide qu'on regardait au moment d'appuyer la première scène de la
+    /// publication — l'ordre de lecture dépendrait alors du hasard du geste.
+    ///
+    /// ## La DISPOSITION voyage avec les scènes
+    ///
+    /// Le fil honore cinq dispositions ; le composer n'en choisissait aucune,
+    /// donc `layout` partait toujours `nil` et toute publication s'affichait
+    /// dans le repli. Quatre dispositions écrites, testées et peintes étaient
+    /// inatteignables depuis l'app.
+    ///
+    /// `nil` reste une réponse LÉGITIME et c'est le défaut : il signifie « je
+    /// n'impose rien », et `CanvasV3.resolvedLayout` tranche. Écrire le repli en
+    /// dur ici figerait dans chaque publication une valeur que personne ne
+    /// relirait le jour où le repli change.
+    ///
+    /// - Parameter slides: toutes les slides de l'atelier, dans l'ordre.
+    /// - Parameter layout: la disposition demandée par l'auteur. `nil` ⇒ aucune
+    ///   n'est imposée. Elle n'est portée que là où elle a un effet — mêmes
+    ///   termes que `ComposerMosaicChoice.isServed`, et l'invariant est éprouvé
+    ///   en interrogeant les deux ensemble.
+    /// - Returns: `nil` quand aucune scène n'est à l'écran — un canvas vide
+    ///   encodé ferait croire à une scène composée puis effacée.
+    static func publishedSlide(format: ComposerFormat,
+                               sceneIsPresent: Bool,
+                               slides: [StorySlide],
+                               layout: MosaicLayoutMode? = nil) -> StoryEffects? {
+        guard sceneIsPresent, let premiere = slides.first else { return nil }
+        // Une seule slide, ou un canal qui ne publie pas de document : rien ne
+        // change — le comportement est celui d'avant ce lot, à l'identique.
+        guard slides.count > 1,
+              ComposerPublishChannel.channel(for: format) == .document
+        else { return premiere.effects }
+        var runtime = premiere.effects
+        runtime.canvasV3 = CanvasV3(migrating: slides.map(\.effects), layout: layout)
+        return runtime
+    }
+}

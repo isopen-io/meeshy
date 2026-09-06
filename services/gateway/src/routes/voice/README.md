@@ -18,7 +18,7 @@ src/routes/voice/
 
 ### `index.ts`
 Point d'entrée qui orchestre les sous-modules.
-- Export: `registerVoiceRoutes(fastify, audioTranslateService, translationService?)`
+- Export: `registerVoiceRoutes(fastify, audioTranslateService, translationService, prisma)`
 
 ### `types.ts`
 Définitions de types TypeScript et schémas OpenAPI pour la validation.
@@ -62,6 +62,12 @@ Routes pour la traduction et la transcription audio.
 - Webhooks pour notifications asynchrones
 - Compatibilité OpenAI (endpoint transcribe)
 
+**Sécurité** (#3624) : le chemin `attachmentId` des trois routes ci-dessus vérifie
+l'appartenance de l'appelant à la conversation de la pièce jointe
+(`resolveAttachmentReadVerdict`, source unique partagée avec
+`routes/attachments/*`) avant toute lecture, traduction ou transcription —
+d'où le paramètre `prisma` de `registerTranslationRoutes`.
+
 ### `analysis.ts`
 Routes pour l'analyse vocale, le feedback et le monitoring.
 
@@ -89,7 +95,7 @@ import { registerVoiceRoutes } from './routes/voice';
 import { registerVoiceRoutes } from './routes/voice/index';
 
 // Enregistrer les routes
-registerVoiceRoutes(fastify, audioTranslateService, translationService);
+registerVoiceRoutes(fastify, audioTranslateService, translationService, prisma);
 ```
 
 ## Principes de conception

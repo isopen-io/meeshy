@@ -31,6 +31,10 @@ extension View {
     ///     l'hôte n'a pas à garder son binding, ce qui évite le cas où l'on
     ///     ouvre un plein écran vide pendant un rechargement.
     ///   - startMediaId: le média par lequel on ENTRE. `nil` ⇒ le premier.
+    ///   - startSceneIndex: la SCÈNE par laquelle on entre, quand le post en
+    ///     porte plusieurs — le doigt sur une tuile de mosaïque ouvre SA scène
+    ///     (directive porteur 2026-09-06). Sans défaut chez les appelants qui
+    ///     n'ont qu'un média à feuilleter : `0` ne coûte rien à une galerie.
     ///   - preferredContentLanguages: le Prisme du LECTEUR, servi au player
     ///     quand le post porte une scène. Vide ⇒ le player retombe sur les
     ///     textes originaux, ce qui est licite mais jamais souhaitable.
@@ -38,6 +42,7 @@ extension View {
         post: FeedPost?,
         isPresented: Binding<Bool>,
         startMediaId: String?,
+        startSceneIndex: Int = 0,
         accentColor: String,
         preferredContentLanguages: [String] = []
     ) -> some View {
@@ -59,8 +64,43 @@ extension View {
                         post: post,
                         document: document,
                         accentColor: accentColor,
-                        preferredContentLanguages: preferredContentLanguages
+                        preferredContentLanguages: preferredContentLanguages,
+                        startSceneIndex: startSceneIndex
                     )
+                    // **La scène d'entrée doit RECRÉER la vue, pas seulement la
+                    // reconfigurer** (directive porteur 2026-09-06 : « en
+                    // touchant une scène voisine, j'ai la première scène qui
+                    // ouvre en plein écran »).
+                    //
+                    // `SocialSceneFullscreenView` sème son `@State` depuis
+                    // `startSceneIndex` dans son `init` — et **un `@State` ne
+                    // s'initialise qu'à la PREMIÈRE naissance d'une identité de
+                    // vue**. SwiftUI réutilisant l'identité d'une présentation à
+                    // la suivante, la deuxième ouverture reconstruisait bien la
+                    // `struct` (donc `startSceneIndex`, un `let`, était juste)
+                    // mais IGNORAIT le `State(initialValue:)` : la scène
+                    // courante restait celle de l'ouverture précédente, et la
+                    // toute première ouverture faisait donc entrer sur la
+                    // scène 1 pour toujours.
+                    //
+                    // > **Un `init` qui a l'air de tout recalculer peut n'en
+                    // > garder qu'une moitié.** Les propriétés stockées suivent,
+                    // > les `@State` non — et rien ne distingue les deux à la
+                    // > lecture du site d'appel. C'est ce qui rend le défaut
+                    // > invisible ici comme dans la vue.
+                    //
+                    // `.id()` répond au bon niveau : entrer sur une AUTRE scène
+                    // est une autre présentation, pas la même reconfigurée.
+                    // Poser le correctif dans la vue (resynchroniser au
+                    // `onAppear`) laisserait le pager, le compteur et la légende
+                    // se contredire pendant une frame — chacun ayant sa propre
+                    // horloge de rattrapage.
+                    //
+                    // L'identité est STABLE pendant la présentation :
+                    // `startSceneIndex` est le point d'ENTRÉE, jamais la scène
+                    // courante. Le doigt qui feuillette ne le change pas, donc
+                    // rien n'est recréé pendant qu'on regarde.
+                    .id(startSceneIndex)
                 } else {
                     SocialMediaGalleryContent(
                         post: post, startMediaId: startMediaId, accentColor: accentColor

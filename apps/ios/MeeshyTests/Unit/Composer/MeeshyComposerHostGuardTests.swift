@@ -426,13 +426,25 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// plus utilisée. La condition doit donc porter sur la PROPRIÉTÉ DU CHROME,
     /// et sur rien d'autre.
     func test_theSocleYieldsToTheAtelier_andNeverToTheDoor() throws {
+        // **`composerStack`, et non `body`** (2026-09-06). Le `body` du meuble
+        // ne monte plus le socle : il délègue à `composerStack`, qui l'assemble.
+        // La garde lisait donc un bloc où « socle » n'apparaît pas et rougissait
+        // sur son propre ancrage — en annonçant qu'elle « ne mesurerait RIEN »,
+        // ce qui était exact et ne disait rien du produit.
+        //
+        // Les deux assertions NÉGATIVES ci-dessous (`if profile`, `if origin`)
+        // sont la raison pour laquelle ce témoin vise un BLOC et non l'unité :
+        // sur toute l'unité elles rencontreraient des conditions légitimes
+        // portant sur le profil ou l'origine, et interdiraient ce que la loi 5
+        // n'interdit pas. Une garde négative doit être bornée à l'endroit où sa
+        // règle s'applique.
         let code = try hostCode()
-        guard let bodyBlock = declarationBody(startingAt: "var body: some View", in: code) else {
-            return XCTFail("Le `body` du host est introuvable — la garde doit être re-pointée")
+        guard let bodyBlock = declarationBody(startingAt: "var composerStack: some View", in: code) else {
+            return XCTFail("`composerStack` est introuvable — le meuble a changé de forme, la garde doit être re-pointée")
         }
         let compacte = compact(bodyBlock)
 
-        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
+        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui qui monte le socle — la garde ne mesurerait RIEN")
         XCTAssertTrue(
             compacte.contains(compact("if !chromeOwner.assembles(.publish)")),
             "Le socle doit céder à l'atelier par la PROPRIÉTÉ DU CHROME — sans quoi deux barres de publication coexistent"
@@ -1458,8 +1470,22 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // surface, et le montage du meuble l'a suivie. Ce cliquet est le
             // septième laissé derrière par cette extraction — un nom de FICHIER
             // écrit dans une garde ne suit pas le code qui déménage.
+            //
+            // **Trois portes de plus, 2026-09-06** : le partage
+            // (`ShareComposeDoor`), l'édition d'une story (`StoryEditComposer`)
+            // et sa republication (`StoryRepublishComposer`) montent désormais le
+            // MEUBLE plutôt que l'atelier nu. C'est la direction de la migration
+            // — un seul meuble pour toutes les portes —, et les trois passent les
+            // trois canaux vérifiés ci-dessus, ce qui est exactement ce que cette
+            // garde existe pour exiger.
+            //
+            // > Un SET qui grandit dit « une porte de plus » ; un SET qui rétrécit
+            // > dit « une porte a cessé de passer par le meuble et recopie son
+            // > envoi ». Les deux se lisent dans un diff, et c'est pour ça que la
+            // > liste est écrite en toutes lettres plutôt que comptée.
             ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
-             "ConversationMediaComposerDoor.swift"],
+             "ConversationMediaComposerDoor.swift", "ShareComposeDoor.swift",
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
@@ -1491,7 +1517,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let attendus = try libellesDeLInitDuMeuble()
         XCTAssertEqual(
             attendus,
-            ["intent", "initialVisibility", "draftId", "onPublishAllInBackground",
+            // `hydration` est entrée en 4e position (#5053) : le contenu qui EXISTE
+            // DÉJÀ — édition ou republication d'une story. Un seul paramètre pour
+            // deux choses (quel contenu reprendre, quelle audience il autorise)
+            // parce que les séparer aurait permis d'en passer une sans l'autre,
+            // c'est-à-dire de republier SANS PLAFOND, silencieusement.
+            ["intent", "initialVisibility", "draftId", "hydration", "onPublishAllInBackground",
              "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss"],
             "La liste des paramètres du meuble a changé. Ce n'est pas un échec en soi — elle est écrite en "
                 + "toutes lettres ici pour qu'un changement d'ordre se lise dans un diff au lieu de se "
@@ -2471,10 +2502,28 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
 
         let compacte = compact(code)
+        // **L'ENVOI, et le RELAIS** (2026-09-06). Ce cliquet exigeait UNE seule
+        // occurrence de `onPublishAllInBackground(`. Il y en a deux, et la
+        // seconde n'est pas un second chemin d'envoi : c'est un PASSE-PLAT, la
+        // closure que le meuble donne à sa surface, qui rappelle celle qu'il a
+        // reçue après y avoir greffé les légendes d'accessibilité
+        // (`accessibilityCarryingComposerCaptions`, site unique de cette greffe).
+        //
+        // > Compter un NOM ne distingue pas celui qui ENVOIE de celui qui
+        // > TRANSMET. La règle — « la fermeture de la scène se presse à un
+        // > site » — se vérifie en nommant ce site, pas en comptant.
+        guard let scene = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
+            return XCTFail("`publishStoryScene` est introuvable — le seul site d'envoi de la scène a disparu.")
+        }
+        XCTAssertTrue(
+            compact(scene).contains("onPublishAllInBackground("),
+            "La fermeture de la scène se presse dans `publishStoryScene` — ou pas du tout."
+        )
         XCTAssertEqual(
-            occurrences(of: "onPublishAllInBackground(", in: compacte), 1,
-            "La fermeture de la scène se presse à UN site — `publishStoryScene` — ou pas du tout. "
-                + "Un second appel est un second chemin d'envoi, quel que soit le nom qu'il porte."
+            occurrences(of: "onPublishAllInBackground(", in: compacte), 2,
+            "Exactement DEUX : l'envoi de `publishStoryScene`, et le relais qui greffe les légendes. "
+                + "Un TROISIÈME serait un second chemin d'envoi, quel que soit le nom qu'il porte — et "
+                + "un seul dirait que le relais a cessé de greffer, donc que les légendes se perdent."
         )
         guard let relais = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
             return XCTFail("`publishStoryScene` est introuvable dans le meuble — la garde ne mesurerait RIEN")

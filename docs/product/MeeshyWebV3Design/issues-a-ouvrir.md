@@ -213,8 +213,15 @@ Passerelle d'abord (TDD) : chaque réglage en PATCH vers /me/preferences avec le
 
 Si le tour ne peut livrer les QUATRE, livrer privacy et notification d'abord (dimensions 1 et 8) et déclarer le reste à l'issue.
 
+### Mise à jour 2026-09-06 (revue croisée)
+Les quatre écrans sont livrés (`app/settings/{privacy,media,message,notification}`, `app/connecte/reglages-details-{vue,porte}.ts`, `lib/contenu/reglages-details.ts`, `lib/api/reglages-details.ts`) et branchés sur `GET`/`PATCH /api/v1/me/preferences` (§ 0 de la spécification du travail corrige la ligne « aucune route » de ce Contexte, périmée depuis #4181/#4589).
+
+**Mesure de conformité, et pourquoi elle N'EST PAS un défaut propre à ce travail.** `bun run scripts/conformite-des-vues.ts detail-privacy detail-media detail-message detail-notification` rend `0/8 conformes`, structure 0.44–0.52 pour un seuil de 0.15 (`rapport-conformite.json`). Rejoué sur trois écrans PRÉEXISTANTS, non touchés par ce travail (`detail-application`, `detail-profile`, `detail-security`) : **0/6 conformes**, structure 0.49–0.55 — même ordre de grandeur. Ce n'est donc pas une régression de `reglages-details` : c'est la panne SYSTÉMIQUE déjà mesurée et déjà tracée à `conception-web-v3.md` § 11 question 15 (« 48/48 vues hors cible, `ecart_structurel_max=0,5507`, 2026-09-05 » — antérieure à ce tour) et au point 10 de ce fichier (`infra-1`), qui porte déjà la décision-produit à ouvrir (le référentiel du gate : réparer l'instrument, changer de référentiel, ou déclasser la mesure — la régénération des cibles a été FAITE le 2026-09-05/06 et le gate reste rouge après). La conception dit explicitement, pour ce cas : « la conformité visuelle de ce tour est rapportée BLOQUÉE (pas verte, pas maquillée) ». Ouvrir une SECONDE issue de maturation pour `reglages-details` dupliquerait `infra-1` — ne pas le faire ; ce travail se rattache à `infra-1` pour ce volet.
+
+**Ce qui reste réellement OUVERT et n'est tracé nulle part avant cette mise à jour** : `hideProfileFromSearch` et `allowContactRequests` (section « Communications » de `cible/detail-privacy.png`) n'ont aucun lecteur serveur (grep `src/` hors `preferences/`, `__tests__` : 0 — mesuré 2026-09-06) et ne sont donc pas rendus (régime 3, testé par `reglages-details-vue.test.ts`). Décision-produit à ouvrir : implémenter l'obéissance serveur pour ces deux clés (qui les ferait rejoindre `showOnlineStatus`/`showLastSeen`/`showReadReceipts`/`showTypingIndicator`), ou amender `cible/detail-privacy.png` pour retirer la section — avec la raison écrite, comme pour la question 10 de la conception (`detail-media`/`detail-message` « À DÉFINIR »).
+
 ### Source
-Lot: ordre.md (#5066, focus porteur) | Cible: cible/detail-privacy.png, detail-media.png, detail-message.png, detail-notification.png | Matrice: matrice.json#detail-* | Conception: conception-web-v3.md § 3.1 (placement)
+Lot: ordre.md (#5066, focus porteur) | Cible: cible/detail-privacy.png, detail-media.png, detail-message.png, detail-notification.png | Matrice: matrice.json#detail-* | Conception: conception-web-v3.md § 3.1 (placement), § 11 question 15 (gate de conformité transversal)
 
 ---
 
@@ -250,24 +257,46 @@ Lot: ordre.md (#4371, épopée) | Conception: conception-web-v3.md § 12.11.3 (n
 
 **Clé**: `infra-1`  
 **Genre**: infra  
-**Route**: (transversal — les 48 vues)  
+**Route**: (transversal — les vues de `matrice.json` ; le gate en mesure 24 à route non paramétrée, × 2 thèmes = 48 entrées)  
 **Priorité**: P1 — rôle secondaire  
 **Audience**: les deux
 
 ### Contexte
-L'issue décision-produit q15 n'existe pas encore d'après la conception. compare-rendu.js, capture-cibles.js et conformite-des-vues.ts existent et tournent ; 48/48 vues hors cible (ecart_structurel_max=0,5507, 2026-09-05) parce que thread/chats/rich portent une barre de navigation globale (§ 12.11) que les captures cible ne montrent pas — seuls cible/thread.png, rich.png, rights.png ont été régénérés. § 11 q. 15 nomme la décision-produit à ouvrir : (a) régénérer cible/*.png post-nav-en-une-page pour toute la matrice, ou ajuster le socle ; (b) trancher le paradigme de sheet:link (formulaire livré vs feuille sommaire dessinée).
+Le gate de conformité visuelle (`compare-rendu.js`, seuil structurel 0.15) rapporte l'intégralité des vues mesurables hors cible : 48 entrées rouges = 24 vues non paramétrées × 2 thèmes (2026-09-05), rejoué le 2026-09-06 sur 6 vues représentatives → 0/12 conformes, structure 0,43–0,56. Le code interne de cette décision est **q15** (conception § 11) ; le travail de tour qui la porte est `infra-1`.
+
+**Ce qui a déjà été tenté, et mesuré insuffisant.** Les 40 captures cible ont été régénérées d'une commande (`capture-cibles.js`, commits `4817317404` et `ce297b9fdb`, 2026-09-05/06) après réconciliation partielle de la planche (#5164 : rails flottants → raccourcis d'en-tête, rangées en cartes). Le gate reste 0/12 APRÈS.
+
+**Les deux causes mesurées.**
+1. *Référentiel* : les rendus réels portent le chrome du site — barre « Meeshy » + « Retour à l'accueil » (`app/enveloppe/vue.ts:52-53`) et pied de page — et le rythme vertical aéré de la charte (§ 12) ; la planche ne dessine ni l'un ni l'autre. Écart réel, décidé, non dessiné.
+2. *Instrument* : l'écart structurel (profil de luminance ligne à ligne → corrélation) a été étalonné cible-contre-cible (même moteur de rendu). Appliqué planche-contre-app, il ne sépare plus rien : une paire quasi identique à l'œil (`vitrine`) mesure Pearson brut **−0,12** (écart 0,56) ; au meilleur décalage vertical (recherche par pas de 4 px sur ±400 px, rejouée le 2026-09-06), les paires même-écran (**0,2045–0,4174** : vitrine 0,2045, chats 0,3190, home 0,3948, thread 0,4108, detail-profile 0,4174) ne mesurent pas mieux que les paires écrans-différents (**0,2978–0,4034** : `cible/home` vs `rendu/thread` 0,2978, `cible/chats` vs `rendu/vitrine` 0,3630, `cible/thread` vs `rendu/detail-profile` 0,4034) — les deux nuages se recouvrent. La typographie assumée différente (CLAUDE.md « Conformité ») déplace chaque hauteur de bloc, et l'instrument ne mesure QUE des hauteurs de bloc.
+   *Le témoin qui tranche, sur la métrique BRUTE du gate — celle qui décide, sans aucune recherche de décalage* (rejoué le 2026-09-06 avec `profilEncre`/`reechantillonne`/`pearson` de `compare-rendu.js`) : **une paire FAUSSE mesure MIEUX qu'une paire juste.** `cible/chats` contre `rendu/vitrine.dark` rend **0,4258**, sous les **0,5624** de `cible/vitrine` contre `rendu/vitrine.dark` ET sous les **0,5327** de `cible/chats` contre `rendu/chats.dark`. Un instrument qui classe l'écran d'à côté devant l'écran mesuré ne mesure plus la conformité : aucun réglage de seuil ne le rattrape.
+
+**Options — (a) le référentiel du gate.**
+- **A. Garder la planche comme référentiel et réparer l'instrument.** Redessiner d'abord dans la planche ce qui est décidé et absent (chrome du site, rythme), puis réécrire la mesure (`ecartStructurel`, tolérance au décalage et à la dilatation verticale) et RE-ÉTALONNER sur des paires cible-vs-rendu MESURÉES. Coût : édition de planche écran par écran (~24 vues non paramétrées) + réécriture d'un outil de 271 lignes + étalonnage. Risque mesuré : aucune garantie de séparation — au meilleur décalage, la séparation est aujourd'hui NULLE ; cette option commence par un spike d'étalonnage qui peut conclure à l'impossibilité.
+- **B. Changer de référentiel : la cible devient un rendu APPROUVÉ de l'app.** La chaîne existante (`conformite-des-vues.ts` : passerelle de bouchon + build) sait déjà servir les 40 vues avec sessions et jetons ; un script les capture d'UNE commande (aucune capture à la main — la règle actuelle est conservée), chaque régénération est un commit motivé dont la revue regarde les diffs d'images. Le seuil 0.15 redevient signifiant : même moteur de rendu des deux côtés (l'étalonnage existant y mesure l'identité à 0,000). La planche reste l'intention de design ; le gate détecte les RÉGRESSIONS, plus la conformité à la planche. Coût : ~1 script (réutilise `compare-rendu.js` et la chaîne), une prise initiale revue à l'œil vue par vue. Risque : entériner à la prise initiale un écart réel au design — mitigé par la revue vue par vue contre la planche, une fois, à la prise.
+- **C. Déclasser la mesure en indicatif.** Coût nul ; le rapport unique (`scripts/v3-rapport.mjs`) cesse de compter la conformité du rendu comme rouge. Perte : plus aucun gate automatique de disposition. (Statu quo honnête, pas un maquillage : la mesure continue d'être rendue.)
+
+**Option — (b) le paradigme de `sheet:link`.** Indépendante de (a). `cible/lienDepuisLeFil.png` dessine une feuille SOMMAIRE (lien + « Copier », trois lignes à icône, un CTA) ; l'écran livré est un FORMULAIRE complet (nom, échéance, capacité, six permissions), épinglé par 16 tests Playwright (8 dans `v3-nouveau-lien.spec.ts`, 8 dans `v3-nouveau-lien-depuis-le-fil.spec.ts`). Trancher : formulaire assumé (la planche se redessine, les tests ne bougent pas) ou feuille sommaire (l'écran se redessine, les 16 tests se réécrivent).
+
+**Critère de fin de la décision** : (a) tranché ⇒ le gate rejoué rend un ensemble hors cible NOMMÉ, chaque écart restant tracé vers son issue ; (b) tranché ⇒ la cible et l'écran disent la même chose, dans un sens ou dans l'autre.
+
+Source : `conception-web-v3.md` § 11 q. 15, § 12.10.9 ; `issues-a-ouvrir.md` § 10 ; mesures du 2026-09-06 (chaîne `conformite-des-vues.ts`, build local, passerelle de bouchon).
 
 **Source fichier**: scripts/conformite-des-vues.ts ; docs/product/conception-web-v3.md § 11 q15
 
 ### Preuve attendue
-- L'issue décision-produit q15 existe, labellisée et assignée au porteur avec les deux options chiffrées
-- Si (a) est tranché : `bun run scripts/conformite-des-vues.ts` ne rapporte plus la barre de navigation comme écart ; le nombre de vues hors cible chute de 48 à un ensemble nommé, chaque écart restant étant un VRAI écart tracé vers son issue
+- L'issue décision-produit q15 existe, labellisée `décision-produit` et assignée au porteur, portant les options (a) A/B/C et (b) avec leurs coûts et leurs risques MESURÉS
+- Si (a) est tranché : `bun run scripts/conformite-des-vues.ts` rejoué rend un ensemble hors cible NOMMÉ (et non plus la totalité des vues mesurables), chaque écart restant étant un VRAI écart tracé vers son issue — avec `rapport-conformite.json` à l'appui, AVANT et APRÈS
 
 ### Critère de fin
-OUVRIR l'issue décision-produit q15 (label décision-produit, assignée au porteur, milestone 74). Dès que le porteur tranche (a) : `node capture-cibles.js` régénère cible/, vues.md et les captures d'UNE commande (aucune capture à la main), commit avec la raison. Si le porteur ne tranche pas dans le tour, la moitié (1) est le livrable et le gate reste rapporté rouge-transversal (§ 12.10.9 : un rouge transversal n'arrête pas la PR, il s'y dit).
+OUVRIR l'issue décision-produit q15 (label `décision-produit`, assignée au porteur, milestone 74) avec le corps ci-dessus.
+
+**Ce que le critère de fin ne dit PLUS, et pourquoi.** Il promettait : « dès que le porteur tranche (a), `node capture-cibles.js` régénère cible/ d'UNE commande ». Cette promesse est **FALSIFIÉE** : la régénération complète des 40 captures a eu lieu (commits `4817317404`, `ce297b9fdb`) et le gate mesure **0/12** APRÈS (2026-09-06, rejoué par la revue, `rapport-conformite.json`, rc=1). Régénérer était nécessaire et ne suffit pas — c'est précisément ce qui rend la décision (a) nécessaire, et ce qui fait que son option A commence par un spike d'étalonnage.
+
+Si le porteur ne tranche pas dans le tour, l'ouverture de l'issue est le livrable et le gate reste rapporté rouge-transversal (§ 12.10.9 : un rouge transversal n'arrête pas la PR, il s'y dit).
 
 ### Source
-Lot: ordre.md (#4371, épopée) | Conception: conception-web-v3.md § 11 questions | Scripts: docs/product/MeeshyWebV3Design/scripts/compare-rendu.js, capture-cibles.js
+Lot: ordre.md (#4371, épopée) | Conception: conception-web-v3.md § 11 questions | Scripts: docs/product/MeeshyWebV3Design/compare-rendu.js, docs/product/MeeshyWebV3Design/capture-cibles.js, apps/web-v3/scripts/conformite-des-vues.ts
 
 ---
 
@@ -295,6 +324,44 @@ Projeter type et rang du lecteur dans la charge du fil (lib/api/fil.ts — véri
 ### Source
 Lot: ordre.md (fil) | Cible: cible/thread.png | Matrice: matrice.json#thread | Conception: conception-web-v3.md § 12.10.5 (existant non-livré)
 
+
+---
+
+## Journal de livraison — 2026-09-06
+
+**GitHub MCP indisponible pour tout ce tour** (`plugin:github:github (400): "Error POSTing to endpoint: bad request: Authorization header is badly formatted"`, confirmé par deux tentatives `ToolSearch` à des heures différentes). Aucun commentaire de clôture n'a pu être posté sur les six travaux listés ci-dessus (thread, rich, reglages-details, navigateur-de-zone, infra-1, links) : leurs numéros d'issue sont inconnus (`#?`) et les outils `mcp__github__*` ne répondent pas. Ce journal tient lieu de preuve écrite en attendant qu'une session avec un jeton GitHub valide les ouvre / les commente.
+
+**Livraison de ce tour** : commit `0302db2a31` (`fix(web-v3): sept écrans de réglages retrouvent leur session, /search perd un en-tête erroné`), poussé directement sur `origin/dev` — la branche courante de cette session EST `dev` (consigne de mission : ne jamais en changer, ne pas créer de worktree), donc aucune PR n'est ouvrable (tête = base). Contenu du commit :
+
+1. `docs/product/MeeshyWebV3Design/jetons-de-vues.json` — trois entrées manquantes (`detail-profile`, `detail-security`, `detail-application`) reçoivent `"@session": "membre"`, au même titre que leurs cinq voisines déjà présentes. Sans cette entrée, `compare-rendu.js` ne posait aucun cookie de session pour ces trois vues, la route redirigeait vers `/login`, et le gate de conformité comparait une page de connexion contre la cible du réglage — exactement le symptôme déjà mesuré et documenté ligne 219 de ce fichier (« trois écrans PRÉEXISTANTS, non touchés par [reglages-details] ») avant que sa cause ne soit identifiée. Ce correctif règle la CAUSE ; il ne règle PAS le rouge structurel de fond (`infra-1`, point 10 ci-dessus) — les deux restent des défauts distincts, l'un de câblage de session, l'autre de référentiel de mesure.
+2. `apps/web-v3/__tests__/index-des-vues.test.ts` — garde de non-régression paramétrée sur les 7 vue_id de `settings/*`, qui aurait rougi sur les trois entrées manquantes avant le correctif 1.
+3. `apps/web-v3/app/connecte/recherche-vue.ts` — retrait de `raccourcisEntete('/search')`, dont la classification initiale (« un seul site pour `/chats` et le tableau de bord ») n'avait jamais été revue quand la cible de `/search` est apparue avec les deux ronds d'espace membre (Q7) ; l'appel produisait un rendu erroné pour cet écran. Purement soustractif.
+4. `apps/web-v3/__tests__/fil-a11y.test.ts` — `jest.setTimeout(30_000)` sur le document le plus lourd (six formes de message), même remède que `zone-lint.test.ts` / `zone-cycle-de-vie.test.ts` déjà dans le dépôt (timeout par défaut trop court sous charge CPU partagée, aucune assertion affaiblie).
+
+Gates rejoués pour ce commit : `type-check` vert, `lint` vert (eslint + jetons), `jest fil-a11y + index-des-vues` 25/25 vert. Les gates 9/9bis/10 (conformité visuelle, `compare-rendu.js` / `conformite-des-vues.ts`) restent rouges sur l'ensemble de la matrice — rouge PRÉEXISTANT et TRANSVERSAL au chantier de navigation en une page (§12.11), déjà cadré et porté par `infra-1` (point 10 de ce fichier) ; non causé par ce commit, qui ne fait qu'en retirer une cause additionnelle superposée (le défaut de session).
+
+**Relevé des branches vivantes** (`scripts/releve-branches-vivantes.mjs --fetch --exige-frais`) : code 1 — `claude/nice-galileo-9ud1x7` (32 h) écrit aussi dans `apps/web-v3/__tests__/fil-a11y.test.ts`, sur une ligne disjointe de la mienne (elle ajoute `droits:` à un objet `apercu` de test, loin de mon `jest.setTimeout` en tête de fichier — vérifié par `git diff` ligne à ligne, aucun chevauchement). Poussé quand même conformément à la règle du code 1 ; nommé ici pour que la fusion éventuelle se fasse en connaissance de cause.
+
 ---
 
 _Generated by [Claude Code](https://claude.ai/code)_
+
+---
+
+## Étape 4 rejouée — 2026-09-06 (session avec jeton `gh` valide)
+
+Le journal ci-dessus demandait qu'une session disposant d'un jeton GitHub valide ouvre/commente les issues du tour. C'est fait, tout est inscrit au projet « Meeshy — pilotage », milestone 74 :
+
+| Travail | Issue | État |
+|---|---|---|
+| thread (§ 6) | #5379 | créée + fermée avec preuve |
+| rich (§ 7) | #5273 (préexistante, fermée) + #5380 (complément protection + plafond) | fermées avec preuve |
+| reglages-details (§ 8) | #5066 (préexistante) | fermée avec preuve |
+| navigateur-de-zone (§ 9) | #5381 | créée + fermée avec preuve ; avancée commentée sur #5266 |
+| infra-1 (§ 10) | #5320 enrichie du corps q15 complet (options A/B/C mesurées), label `décision-produit` | ouverte — attend le porteur |
+| links (§ 11) | #5382 | créée + fermée avec preuve |
+| déconnexion (§ 2, tour antérieur) | #5095 | fermée avec preuve |
+
+Décisions-produit ouvertes : #5383 (privacy : `hideProfileFromSearch`/`allowContactRequests`), #5384 (feuille de lien : formulaire vs sommaire) — s'ajoutent à #5320 (q15).
+
+Suivis ouverts (manques legacy + restantes des fermetures) : #5385 (épinglage), #5386 (transfert), #5387 (retrait différé persistant + annonce SR), #5388 (lecture des réels), #5389 (story avec média), #5390 (post avec médias), #5391 (Web Push du travailleur de zone), #5392 (socket partagé + course de double-navigation).

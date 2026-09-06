@@ -162,7 +162,7 @@ async function buildTable(): Promise<readonly MountedRoute[]> {
   await app.register(async (instance) => {
     const noop = async () => {};
     registerMessagesRoutes(instance, {} as never, {} as never, noop, noop);
-    registerMessagesAdvancedRoutes(instance, {} as never, {} as never, noop, noop);
+    registerMessagesAdvancedRoutes(instance, {} as never, noop);
   });
   await app.register(reactionRoutes);
   await app.ready();

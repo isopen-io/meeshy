@@ -600,6 +600,21 @@ async function readPeople(
 ): Promise<{ ok: true; payload: ReceiptsPayload } | ReceiptFailure> {
   if (messageIds.length !== 1) return failure(400, 'detail=people exige exactement un messageId');
 
+  // Même garde d'appartenance que `applyReceipt` (`caughtUpToMessageId`) :
+  // le scope `recent` borne déjà `messageIds` à `reader.conversationId`
+  // (`resolveRequestedMessageIds`), mais la liste EXPLICITE ne vérifie que le
+  // format ObjectId. Sans cette garde, `messageIds[0]` pouvait désigner un
+  // message de N'IMPORTE QUELLE conversation : `getMessageStatusDetails`
+  // résout son propre `conversationId` depuis le message et ne le confronte
+  // jamais à celui de l'appelant — tout lecteur authentifié pouvait lire la
+  // liste NOMINATIVE (qui a reçu/lu, et quand) d'un message appartenant à
+  // une conversation dont il n'est pas membre.
+  const belongs = await ctx.prisma.message.findFirst({
+    where: { id: messageIds[0], conversationId: reader.conversationId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!belongs) return failure(404, 'Message non trouvé');
+
   const offset = decodeReceiptCursor(params.cursor);
   if (offset === null) return failure(400, 'Curseur invalide');
   const limit = Math.min(params.limit ?? RECEIPTS_PEOPLE_DEFAULT_LIMIT, RECEIPTS_PEOPLE_MAX_LIMIT);

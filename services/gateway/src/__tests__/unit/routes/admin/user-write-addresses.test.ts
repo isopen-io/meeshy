@@ -243,8 +243,8 @@ describe('PATCH /admin/users/:userId/verifications', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(service.verifyEmail).toHaveBeenCalledWith(CIBLE_ID, true, ADMIN_ID);
-    expect(service.verifyAge).toHaveBeenCalledWith(CIBLE_ID, true, ADMIN_ID);
+    expect(service.verifyEmail).toHaveBeenCalledWith(CIBLE_ID, true);
+    expect(service.verifyAge).toHaveBeenCalledWith(CIBLE_ID, true);
     // L'âge était journalisé en UPDATE_PROFILE : la ligne ne disait pas quel
     // geste avait eu lieu.
     expect(derniereTrace('VERIFY_AGE')).toBeDefined();
@@ -301,7 +301,7 @@ describe('PATCH /admin/users/:userId/consents — le rang souverain', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(service.toggleVoiceConsent).toHaveBeenCalledWith(CIBLE_ID, 'voiceProfile', true, ADMIN_ID);
+    expect(service.toggleVoiceConsent).toHaveBeenCalledWith(CIBLE_ID, 'voiceProfile', true);
     const trace = derniereTrace('UPDATE_CONSENT');
     expect(trace?.changes).toEqual({ voiceProfile: { before: null, after: true } });
     expect(trace?.metadata).toEqual({ reason: 'demande RGPD ecrite du 2026-08-29' });

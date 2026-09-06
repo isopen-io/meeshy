@@ -15,6 +15,24 @@ public struct MessageDeletedEvent: Decodable, Sendable {
     }
 }
 
+/// `message:expired` — un message autodestructible échu, brûlé par le SERVEUR
+/// (`ExpiredMessagesCleanupService`) plutôt que supprimé par un utilisateur.
+///
+/// Même forme, même effet local que `MessageDeletedEvent` (la bulle disparaît) :
+/// un événement distinct existe pour que la CAUSE reste distinguable, si un
+/// consommateur en a besoin (un log, un futur toast). Sans handler dédié, ce
+/// client n'a aucun traitement d'éphémère et un message échu restait affiché
+/// tant que la conversation restait ouverte.
+public struct MessageExpiredEvent: Decodable, Sendable {
+    public let messageId: String
+    public let conversationId: String
+
+    public init(messageId: String, conversationId: String) {
+        self.messageId = messageId
+        self.conversationId = conversationId
+    }
+}
+
 /// L'ADRESSE d'un message dont la visibilité PERSONNELLE vient de changer.
 ///
 /// Le couple, jamais le seul `messageId` : un lot de masquage traverse
@@ -1626,6 +1644,11 @@ public protocol MessageSocketProviding: Sendable {
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
+    /// `message:expired` — jumeau SERVEUR de `messageDeleted` pour un message
+    /// autodestructible échu. Dans le protocole pour la même raison que
+    /// `messageHiddenForMe` : le consommateur (`ConversationSocketHandler`) ne
+    /// détient qu'un `MessageSocketProviding`.
+    var messageExpired: PassthroughSubject<MessageExpiredEvent, Never> { get }
     /// `message:hidden-for-me` — le canal de visibilité PERSONNELLE. Dans le
     /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
@@ -1942,6 +1965,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageReceived = PassthroughSubject<APIMessage, Never>()
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+    public let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
@@ -3200,6 +3224,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(MessageDeletedEvent.self, from: data) { [weak self] event in
                 self?.messageDeleted.send(event)
+            }
+        }
+
+        // Jumeau SERVEUR de `message:deleted` : un message autodestructible
+        // échu, brûlé par `ExpiredMessagesCleanupService`. Nom distinct, effet
+        // local identique — voir le doc-comment de `MessageExpiredEvent`.
+        socket.on("message:expired") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageExpiredEvent.self, from: data) { [weak self] event in
+                self?.messageExpired.send(event)
             }
         }
 

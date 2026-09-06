@@ -73,6 +73,19 @@
  * cliquet borne la dette et force sa décrue ; il ne la solde pas — découper ces
  * 87 fichiers est un lot par fichier, pas un lot de refactor.
  *
+ * ## Ce cliquet ne mord QUE sur les fichiers listés dans `DETTE_HERITEE` (#4615)
+ *
+ * Corriger un doc-comment devenu faux dans un fichier de témoins **absent de
+ * cette liste** ne peut PAS faire rougir la règle 3, quelle que soit sa taille,
+ * tant qu'il reste sous `MAX_LINES` (règle 1, un signal séparé et évident). Deux
+ * agents ont pourtant renoncé à corriger un commentaire faux dans des fichiers
+ * de 622 et 310 lignes — loin de tout seuil — par prudence généralisée à partir
+ * d'incidents survenus sur d'AUTRES fichiers, eux dans la liste. **La règle
+ * qu'on retient en travaillant (« ajouter une ligne à un fichier de témoins
+ * fait rougir `dev` ») est plus large et plus mémorable que la vraie règle** :
+ * avant de s'abstenir, vérifier le chemin du fichier contre `DETTE_HERITEE`
+ * ci-dessous — son absence de la liste vaut liberté totale sous ce cliquet.
+ *
  * ## Ce que la liste porte, et ce qu'elle ne porte pas
  *
  * Fichier + nombre de lignes, **jamais un numéro de ligne** — une clé de ligne

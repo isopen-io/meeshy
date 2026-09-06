@@ -699,6 +699,74 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertNil(deleted?.content, "content must be blanked after socket delete")
     }
 
+    // MARK: - messageExpired
+    //
+    // Server-initiated twin of `messageDeleted` for a self-destructing message
+    // burned by `ExpiredMessagesCleanupService` — same local write, distinct
+    // socket event so a consumer that needs to tell the two apart can.
+
+    func test_messageExpired_setsIsDeletedAndClearsContent() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+
+        // Seed a row so markDeleted has something to update.
+        let record = MessageRecord(
+            localId: "msg1", serverId: nil,
+            conversationId: conversationId, senderId: otherUserId,
+            content: "Will expire", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await actor.insertOptimistic(record)
+
+        socket.simulateMessageExpired(MessageExpiredEvent(messageId: "msg1", conversationId: conversationId))
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let expired = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        XCTAssertNotNil(expired?.deletedAt, "deletedAt must be set after socket expiry")
+        XCTAssertNil(expired?.content, "content must be blanked after socket expiry")
+    }
+
+    func test_messageExpired_unknownMessage_noEffect() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.messages = [makeMessage(id: "msg1", content: "Keep me")]
+        delegate.invalidateIndex()
+
+        socket.simulateMessageExpired(MessageExpiredEvent(messageId: "unknown", conversationId: conversationId))
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertFalse(delegate.messages[0].isDeleted)
+        XCTAssertEqual(delegate.messages[0].content, "Keep me")
+    }
+
     func test_messageDeleted_unknownMessage_noEffect() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut

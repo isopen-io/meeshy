@@ -173,3 +173,31 @@ describe('la branche COMPARAISON du résolveur, par le chemin RÉEL', () => {
     expect(selection.refus.map((r) => r.id)).toEqual(['linkRedirect', 'linkExpired']);
   });
 });
+
+// LES SEPT ÉCRANS DE `reglages-details` (matrice.json) SONT DES SIBLINGS : les
+// sept servent `/settings/*` derrière la MÊME garde MEMBRE. Trois d'entre eux
+// (`detail-profile`, `detail-security`, `detail-application`) n'avaient AUCUNE
+// entrée dans `jetons-de-vues.json` : `creanceDeVue` (compare-rendu.js) posait
+// alors ZÉRO cookie, la route redirigeait vers `/login`, et le gate de
+// conformité comparait un FORMULAIRE DE CONNEXION contre la cible du réglage —
+// une mesure qui ne pouvait jamais dire si l'écran EST conforme, mesurée le
+// 2026-09-06 (`rendu/detail-profile.dark.png` = page `/login`, aux deux
+// bornes : next-start nu ET passerelle de bouchon correctement montée).
+describe('les sept écrans de réglages MEMBRE déclarent tous leur session', () => {
+  const ECRANS_DE_REGLAGES = [
+    'detail-profile',
+    'detail-privacy',
+    'detail-security',
+    'detail-media',
+    'detail-message',
+    'detail-notification',
+    'detail-application',
+  ] as const;
+
+  it.each(ECRANS_DE_REGLAGES)('%s déclare @session: membre dans jetons-de-vues.json', (id) => {
+    const annexe = JSON.parse(readFileSync(ANNEXE, 'utf8')) as {
+      jetons: Record<string, Record<string, string> | undefined>;
+    };
+    expect(annexe.jetons[id]?.['@session']).toBe('membre');
+  });
+});

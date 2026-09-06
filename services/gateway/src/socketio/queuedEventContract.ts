@@ -43,6 +43,7 @@ export const DRAINED_EVENT = {
   new: SERVER_EVENTS.MESSAGE_NEW,
   edited: SERVER_EVENTS.MESSAGE_EDITED,
   deleted: SERVER_EVENTS.MESSAGE_DELETED,
+  expired: SERVER_EVENTS.MESSAGE_EXPIRED,
   'reaction-added': SERVER_EVENTS.REACTION_ADDED,
   'reaction-removed': SERVER_EVENTS.REACTION_REMOVED,
   'attachment-reaction-added': SERVER_EVENTS.ATTACHMENT_REACTION_ADDED,
@@ -277,10 +278,28 @@ type _EditedMapsToMessageEdited = AssertQueue<
   Same<(typeof DRAINED_EVENT)['edited'], typeof SERVER_EVENTS.MESSAGE_EDITED>
 >;
 
+/**
+ * `'deleted'` et `'expired'` portent la MÊME charge — `{messageId,
+ * conversationId}` des deux côtés — précisément la condition qui rend une
+ * inversion silencieuse (§ commentaire des paires `added`/`removed`
+ * ci-dessus). L'ancre porte donc sur le NOM, pas sur la forme : un rejeu
+ * d'expiration sous `message:deleted` ferait perdre la distinction que
+ * `MESSAGE_EXPIRED` existe pour porter, sans qu'aucun test de forme ne le
+ * voie.
+ */
+type _DeletedMapsToMessageDeleted = AssertQueue<
+  Same<(typeof DRAINED_EVENT)['deleted'], typeof SERVER_EVENTS.MESSAGE_DELETED>
+>;
+type _ExpiredMapsToMessageExpired = AssertQueue<
+  Same<(typeof DRAINED_EVENT)['expired'], typeof SERVER_EVENTS.MESSAGE_EXPIRED>
+>;
+
 export type QueuedEventContractRatchet = [
   _ReactionsMapToTheirOwnEvent,
   _ReactionRemovalMapsToItsOwnEvent,
   _LinkMessageStoresTheEnvelope,
   _NewMapsToMessageNew,
   _EditedMapsToMessageEdited,
+  _DeletedMapsToMessageDeleted,
+  _ExpiredMapsToMessageExpired,
 ];

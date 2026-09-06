@@ -34,9 +34,11 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
     }
 
     /// Corps d'un membre, borné par le membre suivant. Nécessaire pour compter
-    /// des occurrences : la feuille contient TROIS `Button` (les deux boutons
-    /// d'action et la rangée de conversation), donc un décompte sur le fichier
-    /// entier mesurerait autre chose que ce qu'il prétend.
+    /// des occurrences : la feuille en contient plusieurs — ceux de la barre
+    /// d'action ET la rangée de conversation —, donc un décompte sur le fichier
+    /// entier mesurerait autre chose que ce qu'il prétend. Le nombre exact n'est
+    /// pas écrit ici : il a déjà changé une fois (l'ajout de « Composer »), et
+    /// un chiffre dans un doc-comment se périme sans que rien ne rougisse.
     private func member(_ signature: String, in source: String) throws -> String {
         guard let range = source.range(of: signature) else {
             XCTFail("ShareViewController doit déclarer \(signature)")
@@ -203,20 +205,35 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
         )
     }
 
+    /// **CHAQUE bouton de la barre, quel que soit leur NOMBRE** (2026-09-06).
+    ///
+    /// Ce témoin épinglait `2`, et la barre en compte désormais trois — un
+    /// bouton « Composer » s'est ajouté entre « Annuler » et « Envoyer ». Il est
+    /// tombé alors que les trois portaient correctement leur pilule tactile :
+    /// un nombre écrit en dur ne mesurait pas l'invariant, il mesurait
+    /// l'époque, et un quatrième bouton le referait tomber.
+    ///
+    /// > La question n'est pas « y a-t-il deux boutons ? » mais **« reste-t-il
+    /// > un bouton dont la pilule n'est pas tactile ? »** — la seule forme qui
+    /// > attrape le vrai défaut, et la seule qui survive au bouton suivant.
     func test_actionButtons_areTappableAcrossTheirWholePill() throws {
         // `.frame(maxWidth:).padding()` appliqués À L'EXTÉRIEUR d'un Button
         // dessinent la pilule mais laissent la zone tactile sur le seul glyphe.
         // À l'intérieur du label, c'est toute la pilule de 44 pt qui répond.
         let bar = condensed(try member("private var actionBar: some View", in: try shareSource()))
+        let boutons = bar.components(separatedBy: "Button {").count - 1
 
+        XCTAssertGreaterThan(boutons, 1, "la barre doit porter au moins Annuler et Envoyer")
         XCTAssertEqual(
-            bar.components(separatedBy: "} label: {").count - 1, 2,
-            "Les deux boutons d'action doivent utiliser la forme à label fermant."
+            bar.components(separatedBy: "} label: {").count - 1, boutons,
+            "Chaque bouton d'action doit utiliser la forme à label fermant — \(boutons) bouton(s) "
+            + "dans la barre."
         )
         XCTAssertEqual(
-            bar.components(separatedBy: ".frame(maxWidth: .infinity) .padding()").count - 1, 2,
-            "Les deux boutons doivent porter .frame(maxWidth: .infinity) et .padding() DANS "
-            + "leur label, pour que toute la pilule soit tactile et pas seulement le texte."
+            bar.components(separatedBy: ".frame(maxWidth: .infinity) .padding()").count - 1, boutons,
+            "Chaque bouton doit porter .frame(maxWidth: .infinity) et .padding() DANS "
+            + "son label, pour que toute la pilule soit tactile et pas seulement le texte. "
+            + "L'un des \(boutons) ne l'a pas."
         )
     }
 }

@@ -2,9 +2,9 @@
 
 > Exhaustive list of **every** source file, grouped by feature/domain. `[~]` = a same-named test exists today (heuristic — may be shallow); `[ ]` = no obvious test. The routine must bring each to **92% line+branch** and flip to `[x]` once reviewer-approved.
 
-- Source files: **316**
+- Source files: **314**
 - With a same-named test today (heuristic): **88** (28%)
-- Needing tests / verification: **228**
+- Needing tests / verification: **226**
 
 Heuristic note: a `[~]` only means a similarly-named test file exists — it does NOT mean 92% coverage. Every file, `[~]` included, must be verified to 92%.
 
@@ -23,17 +23,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/config/message-limits.ts`
 - [x] `services/gateway/src/config/user-preferences-defaults.ts`
 
-## dma-interoperability/adapters  (0/1 have a test)
-
-- [ ] `services/gateway/src/dma-interoperability/adapters/LibraryAdapters.ts`
-
-## dma-interoperability/signal-protocol  (3/5 have a test)
+## dma-interoperability/signal-protocol  (3/4 have a test)
 
 - [~] `services/gateway/src/dma-interoperability/signal-protocol/DoubleRatchet.ts`
 - [~] `services/gateway/src/dma-interoperability/signal-protocol/SignalKeyManager.ts`
 - [ ] `services/gateway/src/dma-interoperability/signal-protocol/SignalProtocolEngine.ts`
 - [~] `services/gateway/src/dma-interoperability/signal-protocol/X3DHKeyAgreement.ts`
-- [ ] `services/gateway/src/dma-interoperability/signal-protocol/adapters/SignalProtocolAdapter.ts`
 
 ## errors  (0/1 have a test)
 

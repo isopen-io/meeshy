@@ -301,18 +301,35 @@ final class StoryTextAttributeCycleTests: XCTestCase {
 
     // MARK: - Effet (#4870)
 
-    /// Le cycle visite les quatre valeurs et reboucle sur « aucun » : un effet
-    /// doit pouvoir se RETIRER d'un tap, pas seulement se changer.
+    /// Le cycle visite CHAQUE effet de la gamme puis reboucle sur « aucun » : un
+    /// effet doit pouvoir se RETIRER d'un tap, pas seulement se changer.
+    ///
+    /// **La gamme se LIT, elle ne se recopie pas.** Ce témoin épinglait
+    /// `["glow", "shadow", "relief", nil]` — les quatre effets de l'époque. La
+    /// gamme est passée à quatorze, puis a gagné cinq néons : le témoin est
+    /// tombé alors que le cycle faisait exactement son travail. Une liste
+    /// recopiée mesure la DATE du témoin, pas la règle ; `allCases` est déjà ce
+    /// que `advanceEffect` parcourt, et c'est donc la seule référence qui ne
+    /// puisse pas diverger de lui.
     func test_effect_visitsEveryStepThenWrapsAround() {
-        let seen = trace(.effect, from: text(), taps: 4) { $0.textEffect }
-        XCTAssertEqual(seen, ["glow", "shadow", "relief", nil])
+        let gamme = StoryTextEffect.allCases
+        // `rawValue`, jamais `gamme.first == StoryTextEffect.none` : sur un
+        // Optional, `.none` se résout vers `Optional.none` et le témoin dirait
+        // « la gamme est VIDE » en croyant dire « elle commence par aucun ».
+        XCTAssertEqual(gamme.first?.rawValue, StoryTextEffect.none.rawValue,
+                       "« aucun » ouvre la gamme — le cycle en dépend")
+        let attendus = gamme.dropFirst().map { Optional($0.rawValue) } + [nil]
+        let seen = trace(.effect, from: text(), taps: gamme.count) { $0.textEffect }
+        XCTAssertEqual(seen, attendus, "le cycle doit visiter toute la gamme, puis rendre la main à « aucun »")
     }
 
     /// « Aucun » s'écrit `nil`, jamais `"none"` : un texte sans effet garde le
     /// JSON qu'il avait, et un blob publié ne change pas de forme.
     func test_effect_returningToNone_writesNil() {
         var obj = text()
-        obj.textEffect = "relief"
+        // Le DERNIER de la gamme, pas un effet nommé : c'est lui qui précède le
+        // retour à « aucun », et il change à chaque élargissement.
+        obj.textEffect = StoryTextEffect.allCases.last?.rawValue
         StoryTextAttributeCycle.advance(.effect, on: &obj)
         XCTAssertNil(obj.textEffect)
         XCTAssertEqual(obj.parsedTextEffect, StoryTextEffect.none)

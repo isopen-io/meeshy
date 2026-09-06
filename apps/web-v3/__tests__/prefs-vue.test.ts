@@ -18,7 +18,9 @@ import { BASCULES_DE_PREFS, SECTIONS_DE_PREFS, type CleDePreference } from '@/li
  *   - les fentes de statut sont SERVIES MÊME VIDES, `hidden` quand muettes ;
  *   - l'état se DIT (`hors-ecran` « Activé »/« Désactivé »), pas seulement la
  *     couleur ;
- *   - la rangée DND affiche la fenêtre comme VALEUR, sans contrôle d'édition.
+ *   - la rangée DND affiche la fenêtre comme VALEUR, ET porte son ÉDITION
+ *     (`<details>` fermé, deux `<input type="time">`, un `<select>` de
+ *     fuseau) — le trou que #4899 avait explicitement différé.
  */
 
 // `Object.fromEntries` ne peut pas préserver les clés LITTÉRALES : l'assertion
@@ -31,8 +33,11 @@ const ETAT_NOMINAL: EtatDesPrefs = {
   reglages: REGLAGES_SERVIS,
   dndStartTime: '22:00',
   dndEndTime: '08:00',
+  dndUtcOffsetMinutes: 0,
+  decalageDeLAppareil: null,
   regleAppliquee: null,
   echec: false,
+  motif: null,
   tempsReel: null,
 };
 
@@ -127,12 +132,28 @@ describe('la vue des réglages de notification', () => {
     expect(html).not.toMatch(/<p class="echec" role="alert" hidden>/);
   });
 
-  it('affiche la fenêtre DND comme une VALEUR, sans contrôle d’édition', () => {
+  it('affiche la fenêtre DND comme une VALEUR', () => {
     const html = documentDesPrefs(ETAT_NOMINAL);
 
     expect(html).toContain('22:00 – 08:00');
-    // Aucun <input> de saisie de temps, aucun <select> pour les heures.
-    expect(html).not.toContain('type="time"');
+  });
+
+  it('porte SON édition — deux `<input type="time">` pré-remplis avec les valeurs SERVIES, pas les défauts', () => {
+    const html = documentDesPrefs({ ...ETAT_NOMINAL, dndStartTime: '23:30', dndEndTime: '07:00', dndUtcOffsetMinutes: 120 });
+
+    expect(html).toContain('<details class="fenetre-edition">');
+    expect(html).toContain('name="geste" value="fenetre"');
+    expect(html).toContain('name="dndStartTime" value="23:30"');
+    expect(html).toContain('name="dndEndTime" value="07:00"');
+    expect(html).toMatch(/<option value="120" selected>/);
+    // Le bouton de soumission est une cible d'au moins 44 px (charte) — porté par la feuille, pas testé ici.
+  });
+
+  it('la sélection du fuseau suit la valeur SERVIE, pas le premier de la liste', () => {
+    const html = documentDesPrefs({ ...ETAT_NOMINAL, dndUtcOffsetMinutes: -300 });
+
+    expect(html).toMatch(/<option value="-300" selected>/);
+    expect(html).not.toMatch(/<option value="0" selected>/);
   });
 
   it('sert le module de participation quand le temps réel est fourni', () => {

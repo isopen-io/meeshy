@@ -83,20 +83,11 @@ async function buildApp(opts: {
     ? { isAuthenticated: true, isAnonymous: true, userId: 'anon-1', participantId: 'anon-1', registeredUser: null }
     : null;
 
-  const authRequired = async (req: FastifyRequest) => {
-    if (auth !== 'authenticated') {
-      // auth required hook — set no authContext; handler won't be reached
-      (req as any).authContext = null;
-    } else {
-      (req as any).authContext = authContext;
-    }
-  };
-
   const authOptional = async (req: FastifyRequest) => {
     (req as any).authContext = authContext;
   };
 
-  await registerMetadataRoutes(app, authRequired, authOptional, prisma);
+  await registerMetadataRoutes(app, authOptional, prisma);
   await app.ready();
   return { app };
 }

@@ -15,6 +15,7 @@ const SERVER_EVENTS_MOCK = {
   MESSAGE_NEW: 'message:new',
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
+  MESSAGE_EXPIRED: 'message:expired',
   MESSAGE_CONSUMED: 'message:consumed',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
@@ -61,6 +62,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_NEW: 'message:new',
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
+    MESSAGE_EXPIRED: 'message:expired',
     MESSAGE_CONSUMED: 'message:consumed',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
     MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
@@ -766,6 +768,26 @@ describe('MessagingService', () => {
           '[MessagingService]',
           'Message deleted',
           expect.objectContaining({ messageId: 'del-1' })
+        );
+      });
+    });
+
+    describe('message:expired', () => {
+      it('calls delete listener with messageId — same effect as message:deleted', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessageDeleted(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_EXPIRED, { messageId: 'exp-1' });
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith('exp-1');
+        expect(mockLogger.debug).toHaveBeenCalledWith(
+          '[MessagingService]',
+          'Message expired',
+          expect.objectContaining({ messageId: 'exp-1' })
         );
       });
     });

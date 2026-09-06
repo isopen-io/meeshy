@@ -82,3 +82,25 @@ export const FEUILLE_DES_MEDIAS = compacte(`
 .grille{grid-template-columns:repeat(4,1fr)}
 }
 `);
+
+/**
+ * LES DEUX RÈGLES DE L'APERÇU — servies UNIQUEMENT au lecteur qui a demandé le
+ * téléchargement automatique (`documentDesMedias`, `apercusAutomatiques`), le
+ * MÊME patron que `FEUILLE_DE_LA_CAPTURE` et `FEUILLE_DES_GESTES` : une règle
+ * qui ne gouverne rien dans le document servi n'y voyage pas.
+ *
+ * Ce n'est pas une micro-optimisation. Mesuré : dans `FEUILLE_DES_MEDIAS`,
+ * elles portaient `documents_de_la_galerie.galerie_o` de 9 179 à 9 225 o
+ * gzip — 9 o AU-DESSUS du plafond dur `documents.document_o` (9 216, charte
+ * § 12.5 règle 4) — et les auraient fait payer à TOUS les lecteurs, y compris
+ * ceux dont le réglage à « jamais » est précisément une demande de ne rien
+ * dépenser. La 3G rurale est la raison d'être du réglage ; sa feuille suit son
+ * réglage.
+ *
+ * La boîte, elle, est dimensionnée dans les DEUX cas par `.tuile`
+ * (`aspect-ratio:1`) : le CLS reste nul sans que rien ici ne soit servi.
+ */
+export const FEUILLE_DES_APERCUS = compacte(`
+.tuile .vignette:has(img){flex:1;align-self:stretch;min-height:0;overflow:hidden}
+.tuile .vignette img{width:100%;height:100%;object-fit:cover}
+`);

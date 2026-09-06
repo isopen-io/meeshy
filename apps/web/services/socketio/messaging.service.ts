@@ -232,6 +232,18 @@ export class MessagingService {
       this.deleteListeners.forEach(listener => listener(data.messageId));
     });
 
+    // Message autodestructible échu, brûlé par le serveur
+    // (`ExpiredMessagesCleanupService`) plutôt que supprimé par un utilisateur.
+    // L'effet local est mot pour mot celui d'une suppression — la bulle s'en
+    // va — d'où la réutilisation des mêmes écouteurs (même raison que
+    // `MESSAGE_HIDDEN_FOR_ME` ci-dessous). Ce client n'a jusqu'ici AUCUN
+    // traitement d'éphémère : sans ce handler, un message échu restait affiché
+    // et lisible tant que l'onglet vivait.
+    socket.on(SERVER_EVENTS.MESSAGE_EXPIRED, (data) => {
+      logger.debug('[MessagingService]', 'Message expired', { messageId: data.messageId });
+      this.deleteListeners.forEach(listener => listener(data.messageId));
+    });
+
     // « Supprimer pour moi » venu d'un AUTRE appareil du même utilisateur.
     //
     // L'effet local est mot pour mot celui d'une suppression : la bulle s'en

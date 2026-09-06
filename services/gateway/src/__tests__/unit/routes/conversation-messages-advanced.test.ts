@@ -373,7 +373,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
     mockCollectContentTrackingLinks.mockResolvedValue([]);
 
-    registerMessagesAdvancedRoutes(fastify, prisma, translationService, optionalAuth, requiredAuth);
+    registerMessagesAdvancedRoutes(fastify, prisma, requiredAuth);
   });
 
   // ─── PUT /conversations/:id/messages/:messageId ────────────────────────────
@@ -3040,7 +3040,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       localPrisma.message.update.mockResolvedValue({
         id: MSG_ID, content: 'hello', validatedMentions: [], translations: null,
       });
-      registerMessagesAdvancedRoutes(fastifyNullSocket, localPrisma, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(fastifyNullSocket, localPrisma, jest.fn());
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -3355,7 +3355,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       const p = makePrisma();
       p.message.findFirst.mockResolvedValue(makeExistingMessage());
       p.message.update.mockResolvedValue({ id: MSG_ID, content: 'hello', validatedMentions: [], translations: null });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(f, p, jest.fn());
 
       const handler = getHandler(f, 'PUT', ':messageId');
       const reply = makeReply();
@@ -3374,7 +3374,7 @@ describe('registerMessagesAdvancedRoutes', () => {
         attachments: [],
       });
       p.message.update.mockResolvedValue({});
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(f, p, jest.fn());
 
       const handler = getHandler(f, 'DELETE', ':messageId');
       const reply = makeReply();
@@ -3389,7 +3389,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       const p = makePrisma();
       p.message.findFirst.mockResolvedValue(makeExistingMessage());
       p.message.update.mockResolvedValue({ id: MSG_ID, content: 'hello', validatedMentions: [], translations: null });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
+      registerMessagesAdvancedRoutes(f, p, jest.fn());
 
       const handler = getHandler(f, 'PUT', ':messageId');
       const reply = makeReply();

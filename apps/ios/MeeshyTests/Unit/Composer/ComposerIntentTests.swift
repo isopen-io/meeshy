@@ -1392,7 +1392,29 @@ final class ComposerIntentTests: XCTestCase {
     /// Garde de SOURCE parce que la question porte sur un arbre de vues : quel
     /// composer ce `fullScreenCover` présente-t-il ? Aucun appel de fonction
     /// n'y répond.
-    func test_laCitation_monteLeMeubleEtNonLAncienComposer() throws {
+    /// **RETOURNÉ le 2026-09-06 : la citation reste sur l'ancien composer.**
+    ///
+    /// Ce témoin exigeait le MEUBLE, et il est né dans le commit `148ef2dbd7`
+    /// — celui-là même qui a fait la migration. Une garde écrite par le lot
+    /// qu'elle garde ne peut pas le contredire : elle atteste d'une intention,
+    /// pas d'un résultat.
+    ///
+    /// Le résultat, mesuré de bout en bout : une citation pose `repostOfId`,
+    /// donc `ComposerDocumentSendRouting.path(isQuote: true)` rend
+    /// `.quotedRepost`, dont `isDurable` vaut `false`, donc
+    /// `ComposerDocumentSendPlan` rend `.refuse(.nonDurablePath)`, donc
+    /// `publishDocument` appelle `refuse()`. **Citer un post ne publiait plus
+    /// rien** — l'auteur recevait « publication impossible ».
+    ///
+    /// `DocumentComposerDoor` l'écrit dans son propre doc-comment : elle ne sert
+    /// PAS la citation avant la levée 7.5, un écrivain durable du repost, qui
+    /// n'existe pas (`PublishIntent.document` ne porte aucun `repostOfId`).
+    ///
+    /// > Trois témoins antérieurs disaient l'inverse de celui-ci, et c'est le
+    /// > PRODUIT qui les départage, jamais leur nombre. La cible reste le
+    /// > meuble ; ce témoin y reviendra le jour où l'envoi y aboutira — et son
+    /// > message dit quoi vérifier ce jour-là.
+    func test_laCitation_resteSurLAncienComposer_jusquALaLevee_7_5() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -1404,11 +1426,14 @@ final class ComposerIntentTests: XCTestCase {
         }
         let bloc = String(texte[debut.lowerBound...].prefix(900))
 
-        XCTAssertTrue(bloc.contains("DocumentComposerDoor("),
-                      "citer doit ouvrir le MEUBLE")
-        XCTAssertTrue(bloc.contains("origin: .repost(ofPostId: quoted.id"),
-                      "une citation EST un repost commenté — elle n'a pas d'origine à elle")
-        XCTAssertFalse(bloc.contains("FeedComposerSheet("),
-                       "l'ancien composer ne doit plus être monté par la citation")
+        XCTAssertTrue(bloc.contains("FeedComposerSheet("),
+                      "citer doit ouvrir le composer qui PUBLIE la citation. Le meuble la refuse "
+                          + "(`.nonDurablePath(.quotedRepost)`) tant que le repost n'a pas de file durable.")
+        XCTAssertTrue(bloc.contains("quotePost: quoted"),
+                      "et lui passer le post cité — sans quoi la citation part sans son original")
+        XCTAssertFalse(bloc.contains("DocumentComposerDoor("),
+                       "le MEUBLE ne doit pas être monté ici avant la levée 7.5 : il se refermerait sur un "
+                           + "refus. Le jour où il le sera, vérifier d'abord que `path(isQuote: true)` rend "
+                           + "un chemin DURABLE — sans quoi citer cesse de publier, en silence pour la garde.")
     }
 }

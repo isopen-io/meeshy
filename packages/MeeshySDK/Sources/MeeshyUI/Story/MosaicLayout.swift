@@ -24,7 +24,8 @@ import MeeshySDK
 /// C'est aussi ce qui lève une contradiction du dépôt. La mosaïque des MÉDIAS
 /// avait été retirée du fil (`FeedPostCard+Media.swift`) avec cette raison :
 /// « elle ne pouvait porter AUCUNE légende par média, ce qui est la doctrine
-/// même de `3f` ». La directive tranche autrement — voir `showsCaption`.
+/// même de `3f` ». La directive du 2026-09-06 tranche plus loin encore : la
+/// légende paraît dans TOUS les modes, tronquée — voir `captionLineLimit`.
 ///
 /// ## Ce que cette règle remplace
 ///
@@ -64,6 +65,28 @@ public nonisolated enum MosaicLayout {
     /// Combien de tuiles se peignent.
     public static func visibleCount(sceneCount: Int) -> Int {
         max(0, min(sceneCount, maxVisible))
+    }
+
+    /// **Combien de cadres ce mode produit — le plafond ne vaut pas pour tous.**
+    ///
+    /// Une mosaïque plafonne à quatre parce qu'au-delà elle cesse d'être
+    /// lisible d'un coup d'œil, ce qui est sa seule raison d'être. Un
+    /// carrousel ne se lit pas d'un coup d'œil : il se PARCOURT. Lui appliquer
+    /// le plafond enfermerait les scènes 5 à 10 derrière un « +6 » que rien
+    /// n'ouvrirait — soit exactement le défaut que la mosaïque venait corriger,
+    /// réintroduit par la disposition PAR DÉFAUT.
+    public static func pageCount(sceneCount: Int, mode: MosaicLayoutMode) -> Int {
+        isPaged(mode: mode) ? max(0, sceneCount) : visibleCount(sceneCount: sceneCount)
+    }
+
+    /// **Ce mode PAGINE-t-il ?** — la question que la vue pose pour choisir
+    /// entre un empilement de tuiles et un défilement de pages.
+    ///
+    /// Offert ici pour qu'aucun hôte n'écrive
+    /// `mode == .carousel` de son côté : le jour où un sixième mode arrive,
+    /// une seule ligne décide de quel côté il tombe.
+    public static func isPaged(mode: MosaicLayoutMode) -> Bool {
+        mode == .carousel
     }
 
     /// **Ce qui reste À VOIR — jamais le total.**
@@ -109,9 +132,11 @@ public nonisolated enum MosaicLayout {
     /// mosaïque d'un élément n'est pas une mosaïque, et lui appliquer une
     /// vague la ferait flotter dans un cadre trop grand pour elle.
     public static func tiles(sceneCount: Int, mode: MosaicLayoutMode) -> [Tile] {
-        let n = visibleCount(sceneCount: sceneCount)
+        // Le COMPTE passe par `pageCount` : le plafond de quatre est celui des
+        // mosaïques, pas celui du carrousel, qui n'en cache aucune.
+        let n = pageCount(sceneCount: sceneCount, mode: mode)
         guard n > 0 else { return [] }
-        let reste = overflow(sceneCount: sceneCount)
+        let reste = isPaged(mode: mode) ? 0 : overflow(sceneCount: sceneCount)
         guard n > 1 else {
             return [Tile(sceneIndex: 0, x: 0, y: 0, width: 1, height: 1, overflow: reste)]
         }
@@ -121,6 +146,7 @@ public nonisolated enum MosaicLayout {
         case .hero: brutes = hero(n)
         case .reel: brutes = reel(n)
         case .sine: brutes = sine(n)
+        case .carousel: brutes = pages(n)
         }
         // Le report se pose sur la DERNIÈRE tuile, quel que soit le mode : la
         // règle est une, la géométrie est quatre.
@@ -146,6 +172,11 @@ public nonisolated enum MosaicLayout {
         // plus haute des quatre, et c'est ce qui le fait ressembler aux réels.
         case .reel: return 1.05
         case .sine: return 0.92
+        // Une PAGE porte une scène entière : son rapport est celui de la
+        // scène (9:16), et c'est un REPLI — la vue paginée prend d'abord le
+        // cadrage de ses scènes (`SceneFraming.cardAspect`), qui donne des
+        // cartes courtes quand le contenu s'y prête.
+        case .carousel: return 1 / SceneFraming.sceneAspect
         }
     }
 
@@ -211,6 +242,16 @@ public nonisolated enum MosaicLayout {
     /// Les tuiles font une demi-hauteur et sautent d'un bord à l'autre. C'est
     /// la disposition la plus lisible pour un récit : l'œil zigzague dans
     /// l'ordre des scènes au lieu de balayer une rangée.
+    /// **Pages** — chacune occupe TOUT le cadre, et elles se superposent.
+    ///
+    /// Ce ne sont pas des positions : c'est la vue qui les fait défiler. Les
+    /// poser côte à côte (comme `.reel`) donnerait une géométrie que le
+    /// défilement paginé recalculerait aussitôt, et un test ne saurait plus
+    /// laquelle des deux fait foi.
+    private static func pages(_ n: Int) -> [Tile] {
+        (0..<n).map { Tile(sceneIndex: $0, x: 0, y: 0, width: 1, height: 1) }
+    }
+
     private static func sine(_ n: Int) -> [Tile] {
         let largeur = (1 - gutter * CGFloat(n - 1)) / CGFloat(n)
         let hauteur: CGFloat = 0.62
@@ -243,36 +284,118 @@ public nonisolated enum MosaicLayout {
 
     // MARK: - La légende
 
-    /// **Une mosaïque ne porte pas de légende ; un défilement et un visuel
-    /// SEUL en portent une** (directive porteur 2026-09-06).
+    /// **La légende s'affiche dans TOUS les modes** (directive porteur
+    /// 2026-09-06) :
     ///
-    /// > « En mode mosaïque il n'y a pas de légende, mais en mode défilement
-    /// > ou scène unique on laisse la légende. »
+    /// > « La règle "pas de légende en mosaïque" est abolie, parfois la légende
+    /// > est possible il faut les afficher en trimant bien entendu ! »
     ///
-    /// La raison est dans la géométrie, pas dans une préférence : une mosaïque
-    /// montre PLUSIEURS visuels à la fois, et une légende y serait ambiguë —
-    /// laquelle des quatre tuiles décrit-elle ? Le défilement, lui, ne montre
-    /// qu'un visuel à la fois, comme un visuel seul : la légende a un sujet, et
-    /// un seul.
+    /// ## Ce que cette fonction remplace
     ///
-    /// > C'est ce qui réhabilite la mosaïque des MÉDIAS, retirée du fil parce
-    /// > qu'« elle ne pouvait porter aucune légende par média ». Elle n'a pas à
-    /// > en porter. Ce qui manquait n'était pas la légende dans la mosaïque,
-    /// > c'était **le choix** entre les deux présentations — et c'est
-    /// > exactement ce que `layout` ajoute.
+    /// `showsCaption(mode:visualCount:)` et sa négation `isMosaic` disaient
+    /// SI une légende paraît. Elles rendaient `false` sur les quatre mosaïques,
+    /// au motif qu'une légende y serait ambiguë — laquelle des quatre tuiles
+    /// décrit-elle ? Le raisonnement était bon et la directive tranche
+    /// autrement : mieux vaut une légende tronquée qu'une publication muette.
     ///
-    /// Le compte prime sur le mode : un post d'un seul visuel montre sa
-    /// légende quelle que soit la disposition déclarée, parce qu'il n'y a pas
-    /// de mosaïque à un élément.
-    public static func showsCaption(mode: MosaicLayoutMode, visualCount: Int) -> Bool {
-        visualCount <= 1 || mode == .reel
+    /// Ce qui reste vrai de l'ancienne règle, c'est la CONTRAINTE qui la
+    /// motivait — la place. Elle ne décide plus de l'affichage, elle décide de
+    /// la LONGUEUR : c'est le « en trimant bien entendu » de la directive.
+    ///
+    /// > **Une règle abolie ne se remplace pas par une fonction qui rend
+    /// > toujours `true`** : personne ne la relit, et le `if` qu'elle
+    /// > gouvernait revient ailleurs sous une autre forme. Elle se remplace
+    /// > par la question qui reste posée.
+    ///
+    /// ## La limite est en MOTS, jamais en lignes
+    ///
+    /// `FeedCaptionOverlay` porte la leçon dans son propre doc-comment, et
+    /// elle a déjà été payée une fois : **une troncature en LIGNES dépend de
+    /// la largeur, de la police et de la taille Dynamic Type ; une troncature
+    /// en MOTS n'en dépend d'aucune.** Trois surfaces avaient trois vérités
+    /// sur « qu'est-ce qu'une légende abrégée » ; le compte de mots les a
+    /// réunies. Y revenir par une limite de lignes rouvrirait exactement cette
+    /// divergence, avec l'excuse d'une directive qui ne la demande pas.
+    ///
+    /// - Returns: le nombre de MOTS qu'une légende peut porter. Une mosaïque
+    ///   montre plusieurs visuels dans la hauteur d'une carte : sa légende est
+    ///   brève. Un défilement, un carrousel ou un visuel SEUL ont la carte
+    ///   entière, et gardent les vingt mots de la règle commune.
+    public static func captionWordLimit(mode: MosaicLayoutMode, visualCount: Int) -> Int {
+        guard visualCount > 1 else { return fullCaptionWords }
+        switch mode {
+        case .carousel, .reel: return fullCaptionWords
+        case .wave, .hero, .sine: return 8
+        }
     }
 
-    /// **Ce mode dispose-t-il une MOSAÏQUE ?** — la négation exacte du
-    /// défilement, offerte pour que les hôtes n'écrivent pas `mode != .reel`
-    /// chacun de leur côté : le jour où un cinquième mode arrive, une seule
-    /// ligne décide de quel côté il tombe.
-    public static func isMosaic(mode: MosaicLayoutMode, visualCount: Int) -> Bool {
-        !showsCaption(mode: mode, visualCount: visualCount)
+    /// **Quelle tuile porte une légende** (directive porteur 2026-09-06).
+    ///
+    /// > « Il ne faut pas systématiquement mettre la légende sur la tuile !
+    /// > Mais le faire sur les formats le permettant (défilement continu, image
+    /// > par image, mode hero sur la première image, une seule scène). »
+    ///
+    /// Le critère est la PLACE, et il explique les exclusions d'un seul coup :
+    /// `wave` et `sine` posent leurs tuiles à ~0,23 de la rangée — ~87 pt sur
+    /// une carte de 375 —, et les trois satellites d'un `hero` sont dans le même
+    /// cas. Rien de lisible n'y entre ; une légende y recouvrirait la scène
+    /// qu'elle légende.
+    ///
+    /// **Une question, pas un `if` dans la vue.** Elle se pose au même endroit
+    /// que `isPaged` et pour la même raison : un sixième mode doit avoir UN seul
+    /// endroit où déclarer ce qu'il permet, sinon il l'apprend deux fois et
+    /// diverge à la première correction.
+    public static func tileCarriesCaption(mode: MosaicLayoutMode,
+                                          sceneIndex: Int,
+                                          visualCount: Int) -> Bool {
+        guard visualCount > 1 else { return true }
+        switch mode {
+        // Une page occupe toute la carte, et la vue n'en peint qu'une.
+        case .carousel: return true
+        // Des tuiles de 0,60 de rangée — la place y est, et c'est le format que
+        // la directive nomme « défilement continu ».
+        case .reel: return true
+        // La GRANDE tuile seulement : ses satellites sont aussi étroits qu'une
+        // tuile de vague.
+        case .hero: return sceneIndex == 0
+        case .wave, .sine: return false
+        }
     }
+
+    /// **Ce qu'une TUILE peut porter** (directive porteur 2026-09-06 : « la
+    /// légende doit s'afficher par-dessus la scène précise et non par-dessus le
+    /// poste entier ! Chaque scène a sa légende d'image ! »).
+    ///
+    /// Une légende par scène veut dire une légende par TUILE — et les tuiles
+    /// n'ont pas la même largeur. Sur une vague à quatre scènes, chacune tient
+    /// dans 0,235 de la rangée, soit ~87 pt : les huit mots du mode y
+    /// composeraient un pavé qui recouvre la scène qu'il légende.
+    ///
+    /// La limite du mode se lit donc comme un budget PLEINE LARGEUR, que la
+    /// part de la tuile réduit. Un plancher la retient : **une tuile AUTORISÉE
+    /// à porter une légende en porte toujours une**, sinon la réduction
+    /// proportionnelle rétablirait en silence une exclusion que
+    /// `tileCarriesCaption` est seule à prononcer — une seconde règle de place,
+    /// cachée dans une arithmétique.
+    ///
+    /// - Parameter tileWidth: la part de la RANGÉE que la tuile occupe (les
+    ///   cadres de `tiles(sceneCount:mode:)` sont en fractions). `1` ⇒ une page
+    ///   pleine largeur, qui garde le budget entier.
+    public static func captionWordLimit(mode: MosaicLayoutMode,
+                                        visualCount: Int,
+                                        tileWidth: CGFloat) -> Int {
+        let plein = captionWordLimit(mode: mode, visualCount: visualCount)
+        guard tileWidth < 1 else { return plein }
+        return max(captionWordFloor, Int((CGFloat(plein) * max(0, tileWidth)).rounded()))
+    }
+
+    /// **Deux mots.** Le plus court énoncé qui reste une légende plutôt qu'une
+    /// étiquette — et le plancher qui empêche la réduction proportionnelle de
+    /// rendre zéro sur les tuiles les plus étroites.
+    public static let captionWordFloor = 2
+
+    /// Les vingt mots de la règle commune du fil — déclarés ici pour que la
+    /// limite d'une mosaïque se lise COMME UNE RÉDUCTION de ce nombre, et non
+    /// comme un second seuil indépendant qui dériverait du premier.
+    public static let fullCaptionWords = 20
 }

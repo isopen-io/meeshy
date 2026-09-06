@@ -296,7 +296,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/trends', {
     onRequest: [fastify.authenticate, requireAdmin]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);

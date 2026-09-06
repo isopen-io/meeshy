@@ -15,10 +15,18 @@ final class StickerPaletteTests: XCTestCase {
 
     /// Emoji, amour et heure ne dépendent de RIEN : ni permission, ni magasin.
     /// Ils sont toujours là.
+    ///
+    /// **Le LIEU les a rejoints le 2026-09-05** (directive porteur) : ses dix
+    /// styles n'ont pas besoin du GPS — seule la DONNÉE en a besoin. Une palette
+    /// nue ne perd donc plus qu'un seul onglet, « Mes stickers », qui n'a
+    /// littéralement rien à montrer sans son magasin. C'est le SEUL que la
+    /// loi 4 retire encore ici, et le contraste est ce qui rend ce témoin
+    /// lisible.
     func test_threeTabs_neverDependOnAProvider() {
         let nu = StickerPaletteTab.offered(hasLibrary: false, hasNearbyPlaces: false)
-        XCTAssertEqual(nu, StickerPaletteTab.canonicalOrder.filter { $0 != .place && $0 != .library })
+        XCTAssertEqual(nu, StickerPaletteTab.canonicalOrder.filter { $0 != .library })
         XCTAssertTrue(nu.contains(.emoji) && nu.contains(.text) && nu.contains(.love) && nu.contains(.time))
+        XCTAssertTrue(nu.contains(.place), "les styles de lieu ne dépendent pas du GPS")
     }
 
     /// **Un outil non servi est ABSENT, jamais grisé.** Un onglet « Mes
@@ -31,15 +39,33 @@ final class StickerPaletteTests: XCTestCase {
             StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: true).contains(.library))
     }
 
-    /// Idem pour le lieu : sans fournisseur (autorisation refusée), l'onglet
-    /// n'existe pas. C'est distinct de « l'onglet existe et ne trouve rien »,
-    /// que la vue rend par un état vide.
-    func test_placeTab_absentWithoutItsProvider() {
-        XCTAssertFalse(
-            StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: false).contains(.place))
+    /// **Le lieu fait exception, et c'est la loi 4 bien lue** (directive porteur
+    /// 2026-09-05, inversion du contrat d'avant).
+    ///
+    /// Ce témoin exigeait l'inverse — pas de fournisseur, pas d'onglet — au nom
+    /// de « un outil qu'on ne peut pas servir est absent, jamais grisé ». Le
+    /// motif est juste ; il ne s'appliquait pas. **Les dix styles de lieu n'ont
+    /// pas besoin du GPS : seule la DONNÉE en a besoin.** Autorisation refusée,
+    /// simulateur sans position, intérieur d'un bâtiment — et le catalogue
+    /// entier disparaissait, dessinateurs et traductions compris.
+    ///
+    /// > « On ne peut pas servir » et « on n'a pas encore de quoi remplir » sont
+    /// > deux états différents, et un seul justifie une absence. Le second se
+    /// > dit, il ne se cache pas.
+    ///
+    /// La bibliothèque, elle, garde l'ancienne règle : sans magasin derrière,
+    /// « Mes stickers » ne peut rien montrer, jamais — c'est le contraste qui
+    /// rend ce témoin lisible.
+    func test_placeTab_staysOfferedWithoutItsProvider() {
+        XCTAssertTrue(
+            StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: false).contains(.place),
+            "les styles de lieu ne dépendent pas du GPS — seule la donnée en dépend")
         XCTAssertTrue(
             StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: false).contains(.emoji),
-            "retirer le lieu ne doit pas emporter les onglets voisins")
+            "et le lieu ne doit pas emporter les onglets voisins")
+        XCTAssertFalse(
+            StickerPaletteTab.offered(hasLibrary: false, hasNearbyPlaces: false).contains(.library),
+            "la bibliothèque, elle, reste absente sans magasin : elle n'a RIEN à montrer")
     }
 
     /// L'ordre est celui que les doigts apprennent : il vient de la liste

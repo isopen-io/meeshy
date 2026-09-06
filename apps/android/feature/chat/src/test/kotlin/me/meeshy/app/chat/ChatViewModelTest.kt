@@ -146,6 +146,7 @@ class ChatViewModelTest {
             every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
             every { messageEdited } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
+            every { messageExpired } returns MutableSharedFlow()
             every { this@mockk.messagePinned } returns this@ChatViewModelTest.messagePinned
             every { this@mockk.messageUnpinned } returns this@ChatViewModelTest.messageUnpinned
             every { this@mockk.translationReceived } returns this@ChatViewModelTest.translationReceived

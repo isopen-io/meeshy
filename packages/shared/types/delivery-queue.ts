@@ -24,6 +24,11 @@ export type QueuedMessagePayload = {
   /** Absent (or 'new') = original behavior: a MESSAGE_NEW replay that also
    * bumps the recipient's delivered receipt on drain. 'edited'/'deleted'
    * replay the matching event without touching delivery receipts.
+   * 'expired' replays MESSAGE_EXPIRED — the server-initiated twin of
+   * 'deleted' for a self-destructing message burned by
+   * `ExpiredMessagesCleanupService` rather than by a user action — and is
+   * equally exempt from delivery receipts: nothing was delivered, something
+   * was destroyed.
    * 'reaction-added'/'reaction-removed' replay REACTION_ADDED/REACTION_REMOVED
    * so an offline peer's reaction state converges on reconnect (same as
    * edits/deletes) — they never carry a delivery receipt.
@@ -84,6 +89,7 @@ export type QueuedMessagePayload = {
     | 'new'
     | 'edited'
     | 'deleted'
+    | 'expired'
     | 'reaction-added'
     | 'reaction-removed'
     | 'attachment-reaction-added'

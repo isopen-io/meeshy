@@ -38,7 +38,6 @@ import {
   type PreKeyBundle,
 } from '../../dma-interoperability/signal-protocol/X3DHKeyAgreement';
 import { SignalKeyManager } from '../../dma-interoperability/signal-protocol/SignalKeyManager';
-import { SignalProtocolAdapter } from '../../dma-interoperability/signal-protocol/adapters/SignalProtocolAdapter';
 import { SignalProtocolEngine } from '../../dma-interoperability/signal-protocol/SignalProtocolEngine';
 import { DoubleRatchet, type DoubleRatchetSession } from '../../dma-interoperability/signal-protocol/DoubleRatchet';
 
@@ -226,53 +225,6 @@ describe("X3DH — la pré-clé signée est confrontée à la clé d'identité",
       signedPreKeysRejected: 0,
       initiatorSessions: 1,
     });
-  });
-});
-
-describe("SignalProtocolAdapter — la signature voyage jusqu'au vérificateur", () => {
-  const makeAdapter = (): SignalProtocolAdapter =>
-    new SignalProtocolAdapter({} as unknown as PrismaClient, crypto.randomBytes(32));
-
-  it("rend la clé éphémère PUBLIQUE — sans elle le pair ne peut rien dériver", async () => {
-    const responderIdentity = generateKeyPair();
-    const initiator = generateKeyPair();
-    const signedPreKey = await producedSignedPreKey(responderIdentity);
-    const adapter = makeAdapter();
-    adapter.setUserId('507f1f77bcf86cd799439011');
-    (
-      adapter as unknown as { keyManager: { identityKeyPair?: KeyPair } }
-    ).keyManager.identityKeyPair = initiator;
-
-    const result = await adapter.performX3DH({
-      ourIdentityPrivate: initiator.privateKey,
-      theirIdentityPublic: responderIdentity.publicKey,
-      theirSignedPreKeyPublic: signedPreKey.publicKey,
-      theirSignedPreKeySignature: signedPreKey.signature,
-    });
-
-    expect(result.rootKey).toHaveLength(32);
-    expect(crypto.createPublicKey({ key: result.ourEphemeralPublic, format: 'der', type: 'spki' })).
-      toBeDefined();
-  });
-
-  it('REJETTE le paquet que sa signature ne rattache pas à la clé d’identité annoncée', async () => {
-    const responderIdentity = generateKeyPair();
-    const impostor = generateKeyPair();
-    const initiator = generateKeyPair();
-    const signedPreKey = await producedSignedPreKey(impostor);
-    const adapter = makeAdapter();
-    (
-      adapter as unknown as { keyManager: { identityKeyPair?: KeyPair } }
-    ).keyManager.identityKeyPair = initiator;
-
-    await expect(
-      adapter.performX3DH({
-        ourIdentityPrivate: initiator.privateKey,
-        theirIdentityPublic: responderIdentity.publicKey,
-        theirSignedPreKeyPublic: signedPreKey.publicKey,
-        theirSignedPreKeySignature: signedPreKey.signature,
-      })
-    ).rejects.toThrow(X3DHSignedPreKeyRejected);
   });
 });
 

@@ -180,7 +180,24 @@ final class SignupViewModel: ObservableObject {
         // Un refus qu'aucun champ ne porte doit rester VISIBLE : sans ce
         // repli, un code inconnu effacerait le formulaire de toute trace de
         // l'échec et le bouton redeviendrait actif sans explication.
-        bannerError = placed.isEmpty ? rejection.message : nil
+        //
+        // Le bandeau NE REND JAMAIS `rejection.message` tel quel (#5325) : un
+        // contrat de passerelle plus ancien que l'app (validation Fastify par
+        // défaut, hors de `sendError`) porte dans ce champ une phrase
+        // TECHNIQUE en anglais (« body must have required property
+        // 'username' ») — jamais destinée à l'écran, quoi qu'en dise le
+        // doc-comment d'`APIRejection.message`. Un message humain, localisé,
+        // porte le code à la place : le lecteur comprend, le support trace.
+        bannerError = placed.isEmpty ? Self.rejectionBannerMessage(for: rejection) : nil
+    }
+
+    /// Le bandeau d'un refus qu'aucun champ ne porte : toujours une phrase
+    /// HUMAINE dans la langue du lecteur, jamais le texte brut du serveur.
+    /// Le code machine — ou, à défaut, le statut HTTP — l'accompagne pour que
+    /// le support puisse le retrouver.
+    static func rejectionBannerMessage(for rejection: APIRejection) -> String {
+        let supportCode = rejection.code ?? String(rejection.statusCode)
+        return "\(rejectionGenericMessage) (\(supportCode))"
     }
 
     // MARK: - Table code → champ
@@ -240,6 +257,18 @@ final class SignupViewModel: ObservableObject {
     static let genericFailureMessage = String(
         localized: "auth.signup.error.generic",
         defaultValue: "La création du compte a échoué. Réessayez.",
+        bundle: .main
+    )
+
+    /// Le refus RENVOYÉ PAR LA PASSERELLE mais qu'AUCUN champ ne porte : un
+    /// code inconnu, une clé de validation que le client ne mappe pas, ou —
+    /// le cas qui a motivé #5325 — une réponse hors du contrat `sendError`
+    /// (validation Fastify par défaut) dont `message` est un texte technique
+    /// anglais. Jamais affiché seul : `rejectionBannerMessage(for:)` lui
+    /// adjoint le code machine ou le statut HTTP.
+    static let rejectionGenericMessage = String(
+        localized: "auth.signup.error.rejectedGeneric",
+        defaultValue: "L'inscription a été refusée — réessayez dans un instant.",
         bundle: .main
     )
 }

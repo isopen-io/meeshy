@@ -18,7 +18,7 @@ import { COOKIE_DE_JETON } from '../../lib/api/cookies';
 import { NOUVEAU_LIEN } from '../../lib/contenu/liens';
 import { violationsBloquantes, rapporteViolations } from './lib/a11y';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
-import { CONVERSATION_DU_LECTEUR, passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
+import { AUTRE_CONVERSATION, CONVERSATION_DU_LECTEUR, passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 import { COLONNES_DE_THEME } from './lib/verdict-axe';
 
 let passerelle: PasserelleDeBouchon;
@@ -237,6 +237,153 @@ test.describe('avec JavaScript — fetch, aucun rechargement', () => {
     await expect(page.locator('dialog.nouveau-lien [role="alert"]')).toContainText('Vous n’êtes pas membre de cette conversation');
     await expect(page.locator('input[name="nom"]')).toHaveValue('Voisins de Lagos');
     expect(await page.evaluate(() => (window as unknown as { __sansRechargement?: number }).__sansRechargement)).toBe(1);
+
+    await ctx.close();
+  });
+});
+
+/**
+ * LA MOITIÉ E2E DU CRITÈRE DE FIN (§ « La puce Lien », suivi #5034) — la
+ * moitié unitaire (`nouveau-lien-depuis-le-fil.test.ts:106-137`) prouve dans
+ * jsdom que la puce n'est pas RENDUE ; cette section prouve, contre un VRAI
+ * navigateur et la passerelle de bouchon, qu'elle n'a laissé DERRIÈRE elle
+ * ni contrôle inerte ni chemin de soumission — le 403 verbatim est hors du
+ * chemin nominal (loi 4 : un contrôle existe s'il a un effet).
+ */
+test.describe('sur un tête-à-tête, la puce « Lien » n’existe pas', () => {
+  const DIRECT = (): string => `${v3.base}/chats/${AUTRE_CONVERSATION.id}`;
+
+  test('la puce est absente — rien d’inerte, aucun POST /links n’a atteint la passerelle', async ({ browser }) => {
+    const ctx = await contexte(browser);
+    const page = await ctx.newPage();
+
+    // FIDÉLITÉ DU BOUCHON D'ABORD — sans cette lecture, l'absence de la puce
+    // serait un vert PAR OMISSION : `peutCreerUnLien` fail-close aussi bien
+    // sur un `type` MANQUANT que sur un `direct`, et une fixture muette
+    // rendrait donc le MÊME verdict qu'une fixture juste. La passerelle réelle
+    // sert TOUJOURS les deux champs sur le profil par défaut
+    // (`conversations/core-detail.ts:172-196`, servis :510).
+    const detail = await ctx.request.get(`${passerelle.base}/api/v1/conversations/${AUTRE_CONVERSATION.id}`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+    });
+    const charge = (await detail.json()) as { readonly data: { readonly type?: unknown; readonly currentUserRole?: unknown } };
+    expect(charge.data.type).toBe('direct');
+    expect(charge.data.currentUserRole).toBe('member');
+    passerelle.oublie();
+
+    await page.goto(DIRECT(), { waitUntil: 'load' });
+
+    await expect(page.locator('a.partager')).toHaveCount(0);
+    // Contre-témoin : c'est bien le GATING qui retire la puce « Lien », pas
+    // un fil cassé — « Médias », elle, reste rendue avec une adresse réelle.
+    await expect(page.locator('a.medias')).toHaveCount(1);
+    await expect(page.locator('a.medias')).toHaveAttribute('href', /\/chats\/.+\/medias/);
+    expect(passerelle.journal.some((appel) => appel.methode === 'POST' && appel.chemin === '/api/v1/links')).toBe(false);
+
+    await ctx.close();
+  });
+
+  test('taper ?lien à la main ne sert pas la feuille — le fil reste ACTIF', async ({ browser }) => {
+    const ctx = await contexte(browser, { javaScriptEnabled: false });
+    const page = await ctx.newPage();
+
+    await page.goto(`${DIRECT()}?lien`, { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('dialog.nouveau-lien')).toHaveCount(0);
+    await expect(page.locator('#main-content')).not.toHaveAttribute('inert', '');
+
+    await ctx.close();
+  });
+
+  /**
+   * Défaut de revue (majeur, § « La puce Lien », suivi #5034) : la branche
+   * d'écriture du bouchon (`POST /conversations/:id/messages`) écrivait
+   * INCONDITIONNELLEMENT dans `etat.conversationId` — la conversation du
+   * LECTEUR — quel que soit l'`:id` de l'adresse. Un futur témoin postant
+   * depuis une annexe aurait été vert en écrivant AILLEURS que sa cible.
+   * Ce témoin prouve le refus explicite, et que le fil du lecteur n'a rien
+   * reçu de ce POST égaré.
+   */
+  test('POST sur une annexe est refusé — rien ne s’écrit à côté, dans le fil du lecteur', async ({ browser }) => {
+    const ctx = await contexte(browser);
+
+    const avant = await ctx.request.get(`${passerelle.base}/api/v1/conversations/${CONVERSATION_DU_LECTEUR.id}/messages`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+    });
+    const { data: messagesAvant } = (await avant.json()) as { readonly data: readonly unknown[] };
+
+    const post = await ctx.request.post(`${passerelle.base}/api/v1/conversations/${AUTRE_CONVERSATION.id}/messages`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+      data: { content: 'Ce message ne devrait atterrir nulle part' },
+    });
+    expect(post.status()).toBe(404);
+
+    const apres = await ctx.request.get(`${passerelle.base}/api/v1/conversations/${CONVERSATION_DU_LECTEUR.id}/messages`, {
+      headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+    });
+    const { data: messagesApres } = (await apres.json()) as { readonly data: readonly unknown[] };
+    expect(messagesApres.length).toBe(messagesAvant.length);
+
+    await ctx.close();
+  });
+});
+
+test.describe('Compatibilité — hors Chromium et réseau dégradé (#5268)', () => {
+  test('la feuille s’ouvre et fonctionne SANS showModal — un moteur sans dialogue modal garde la surimpression entière', async ({ browser }) => {
+    const ctx = await contexte(browser);
+    // `prendsLePleinEcran` (`lib/realtime/plein-ecran.ts:29`) détecte
+    // l'ABSENCE de la méthode (`typeof … !== 'function'`) et sort AVANT tout
+    // appel — retirer la méthode du prototype est donc la simulation la plus
+    // fidèle d'un moteur qui ne l'implémente pas, posée AVANT le premier
+    // script de la page.
+    await ctx.addInitScript(() => {
+      Object.defineProperty(window.HTMLDialogElement.prototype, 'showModal', { value: undefined, configurable: true });
+    });
+    const page = await ctx.newPage();
+
+    await page.goto(`${FIL()}?lien`, { waitUntil: 'load' });
+    // Ni voile ni `:modal` : la feuille reste celle SERVIE — `open`, jamais élevée.
+    await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
+    await expect(page.locator('dialog.nouveau-lien')).toHaveJSProperty('open', true);
+    expect(await page.evaluate(() => document.querySelector('dialog.nouveau-lien')?.matches(':modal') ?? null)).toBe(false);
+
+    // Le reste de la chaîne ne dépend d'AUCUNE modale : remplir et créer
+    // aboutit exactement comme dans « la même chaîne, sans navigation : succès ».
+    await page.locator('input[name="nom"]').fill('Voisins de Lagos');
+    await page.getByRole('button', { name: NOUVEAU_LIEN.creer }).click();
+
+    await expect(page.locator('dialog.nouveau-lien')).toHaveCount(0, { timeout: 5000 });
+    await expect(page.locator('#lien-cree')).toContainText(NOUVEAU_LIEN.cree);
+
+    await ctx.close();
+  });
+
+  test('l’état ?lien se sert et se lit en réseau dégradé (Fast 3G) — pas d’écran blanc, refus lisible', async ({ browser }) => {
+    passerelle.carnet.refuseLaProchaineCreation('Cette conversation est terminée', 400);
+    const ctx = await contexte(browser);
+    const page = await ctx.newPage();
+    const cdp = await ctx.newCDPSession(page);
+    // LE MÊME PROFIL que le reste du dépôt mesure (`budgets.json#reseau.profil`,
+    // Fast 3G — préréglage Chrome DevTools) : un chiffre qui ne s'oppose à aucun
+    // budget nommé serait vrai et hors sujet (en-tête de `scripts/mesure-reseau.mjs`).
+    await cdp.send('Network.enable');
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 562.5,
+      downloadThroughput: 188743,
+      uploadThroughput: 86400,
+    });
+
+    await page.goto(`${FIL()}?lien`, { waitUntil: 'load', timeout: 45000 });
+    // PAS D'ÉCRAN BLANC : la feuille est servie SSR — visible dès le premier
+    // document, la latence ajoutée n'y change rien.
+    await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
+
+    await page.locator('input[name="nom"]').fill('Voisins de Lagos');
+    await page.getByRole('button', { name: NOUVEAU_LIEN.creer }).click();
+
+    await expect(page.locator('dialog.nouveau-lien [role="alert"]')).toContainText('Cette conversation est terminée', { timeout: 15000 });
+    await expect(page.locator('input[name="nom"]')).toHaveValue('Voisins de Lagos');
 
     await ctx.close();
   });

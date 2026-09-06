@@ -32,6 +32,15 @@ export const SERVER_EVENTS = {
   MESSAGE_NEW: 'message:new',
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
+  /**
+   * A self-destructing message (`Message.expiresAt`) was destroyed by the
+   * server's own sweep (`ExpiredMessagesCleanupService`), not by a user
+   * action — contrast with `MESSAGE_DELETED`, which is always the result of
+   * someone asking for the deletion. Same visual effect for a client (drop
+   * the bubble), distinct cause, so a client that wants to tell the two
+   * apart (a toast, a distinct log line) can.
+   */
+  MESSAGE_EXPIRED: 'message:expired',
   MESSAGE_TRANSLATION: 'message:translation',
   // Pas de `MESSAGE_TRANSLATED` : la traduction d'un message voyage sous
   // `message:translation`, et sous ce nom seul. `message:translated` a été

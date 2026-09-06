@@ -121,7 +121,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     logger.info('Configuring REST API routes...');
 
     // Health check endpoint
-    server.get('/health', async (request, reply) => {
+    server.get('/health', async (_request, reply) => {
       try {
         const [userCount, translationHealthy] = await Promise.all([
           deps.prisma.user.count(),
@@ -158,7 +158,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     });
 
     // Service information endpoint
-    server.get('/info', async (request, reply) => {
+    server.get('/info', async (_request, _reply) => {
       return {
         name: 'Meeshy Translation Gateway',
         version: '1.0.0',
@@ -287,6 +287,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
       prefix: `${API_PREFIX}/voice`,
       audioTranslateService,
       translationService: deps.translationService,
+      prisma: deps.prisma,
     });
     logger.info(`✓ Voice API routes registered (ZMQ ${zmqClient ? 'connected' : 'unavailable — 503 stub'})`);
 

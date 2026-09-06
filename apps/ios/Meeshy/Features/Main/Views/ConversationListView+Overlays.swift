@@ -174,7 +174,7 @@ extension ConversationListView {
         if LentilleFeatureFlag.isLentilleListEnabled {
             LentilleReadingModeSubmenu(
                 conversation: conversation,
-                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true
+                isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser)
             )
         }
 
