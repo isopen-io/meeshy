@@ -3,8 +3,10 @@ import { message, type Message } from '@/lib/api/fil';
 import type { Contexte } from '@/lib/realtime/fil-contexte';
 import { bulleServie, type Bulle } from '@/lib/realtime/fil-etat';
 import * as F from '@/lib/realtime/fil-etat';
-import { FENETRE_D_ANNULATION_DU_RETRAIT_MS, prendsLesRetraits } from '@/lib/realtime/fil-gestes';
+import { FENETRE_D_ANNULATION_DU_RETRAIT_MS, prendsLesRetraits, reprendLesRetraits } from '@/lib/realtime/fil-gestes';
 import { peintre, peins } from '@/lib/realtime/fil-peinture';
+import { retraitsEnAttente } from '@/lib/realtime/fil-reserve';
+import type { Reserve } from '@/lib/realtime/reserve';
 
 /**
  * « ANNULER » PENDANT LA FENÊTRE OPTIMISTE D'UN RETRAIT (suivi #5163
@@ -61,12 +63,45 @@ const socketDeTest = (repondsPar: (evenement: string, charge: unknown) => { succ
   };
 };
 
+/**
+ * UNE RÉSERVE EN MÉMOIRE — le même patron que `fil-capture.test.ts` §
+ * « la file hors ligne garde le lieu d'une bulle » : un `Reserve` réel (le
+ * TYPE du dépôt, jamais une jumelle), pour observer ce que `differe()` /
+ * `annule()` / `flush()` y écrivent et effacent, sans IndexedDB.
+ */
+const reserveEnMemoire = (): { readonly r: Reserve; readonly carte: Map<string, unknown> } => {
+  const carte = new Map<string, unknown>();
+  return {
+    carte,
+    r: {
+      lis: async (cle) => carte.get(cle),
+      ecris: async (cle, valeur) => {
+        carte.set(cle, valeur);
+      },
+      efface: async (cle) => {
+        carte.delete(cle);
+      },
+      cles: async (prefixe) => [...carte.keys()].filter((cle) => cle.startsWith(prefixe)).sort(),
+    },
+  };
+};
+
+const CLES_DE_TEST = { file: 'file:', brouillon: 'brouillon:', retrait: 'retrait:' } as const;
+
 const monte = ({
   pret = false,
   socket = null,
   cache = false,
   enLigne = true,
-}: { readonly pret?: boolean; readonly socket?: unknown; readonly cache?: boolean; readonly enLigne?: boolean } = {}) => {
+  reserve = null,
+}: {
+  readonly pret?: boolean;
+  readonly socket?: unknown;
+  readonly cache?: boolean;
+  readonly enLigne?: boolean;
+  /** `null` — la plupart des témoins ne portent pas sur la persistance ; les leurs la fournissent. */
+  readonly reserve?: Reserve | null;
+} = {}) => {
   document.open();
   document.write(documentDuFil(etatDuDocument()));
   document.close();
@@ -88,6 +123,12 @@ const monte = ({
     enLigne,
     creance: { genre: 'membre', jeton: 'j' },
     config: { passerelle: ORIGINE },
+    // `null` — jamais `undefined` — quand aucune réserve n'est fournie :
+    // `memoriseLeRetrait`/`oublieLeRetrait`/`retraitsEnAttente`
+    // (`fil-reserve.ts`) lisent `ctx.cles` au sens du TYPE, qui ne l'omet
+    // jamais (`fil-contexte.ts`).
+    r: reserve,
+    cles: reserve === null ? null : CLES_DE_TEST,
   } as unknown as Contexte;
   const applique = (c: Contexte, suivant: F.EtatDuFil): void => {
     etat = suivant;
@@ -184,10 +225,18 @@ describe('la fenêtre expirée envoie UNE fois, puis confirme sur l’accusé', 
 });
 
 describe('un refus au flush rétablit la bulle et dit sa raison', () => {
+  /**
+   * « You are not authorized… » (`MessageHandler.ts:1126`) — un refus qui
+   * n'a RIEN d'idempotent : le message tient toujours, seul le droit manque.
+   * `'Message not found'` ne convient plus à ce témoin depuis la revue
+   * (suivi #5163 § 12.12, défaut majeur « rechargé pendant la fenêtre montre
+   * le message revenu ») — cette raison-là est désormais traitée comme
+   * l'état DÉJÀ atteint (voir le describe suivant), jamais comme un refus.
+   */
   it('la ligne redevient visible, la raison est affichée dans #refus-du-composeur', () => {
     jest.useFakeTimers();
     try {
-      const { socket, recus } = socketDeTest(() => ({ success: false, error: 'Message not found' }));
+      const { socket, recus } = socketDeTest(() => ({ success: false, error: 'You are not authorized to delete this message' }));
       const { ctx, applique, ligne, main } = monte({ pret: true, socket });
       const retraits = prendsLesRetraits({ ctx, applique });
 
@@ -199,7 +248,40 @@ describe('un refus au flush rétablit la bulle et dit sa raison', () => {
         expect(ligne().querySelector('.texte')?.textContent).toBe('Un message que je peux retirer');
         const refus = main.querySelector<HTMLElement>('#refus-du-composeur')!;
         expect(refus.hidden).toBe(false);
-        expect(refus.textContent).toBe('Message not found');
+        expect(refus.textContent).toBe('You are not authorized to delete this message');
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+/**
+ * IDEMPOTENT — DÉFAUT MAJEUR DE REVUE (suivi #5163 § 12.12, « rechargé
+ * pendant la fenêtre montre le message revenu ») : `'Message not found'`
+ * (`MessageHandler.ts:1105`) n'est pas un ÉCHEC de CE `DELETE` quand la bulle
+ * était bien en retrait différé — c'est l'état DÉJÀ atteint, exactement
+ * comme `reagis()` le traite pour une réaction (`fil-mutations.ts`, un 404
+ * au retrait d'une réaction absente). Sans ce repli, un retrait REPRIS après
+ * un rechargement (`reprendLesRetraits`) dont le `keepalive` de la page
+ * précédente avait déjà abouti RESSUSCITAIT la bulle sur ce refus — le
+ * défaut même que la reprise corrige, rejoué un cran plus loin.
+ */
+describe('« Message not found » au flush est IDEMPOTENT — pas un refus', () => {
+  it('confirme (jamais ne rétablit), et n’affiche aucun refus', () => {
+    jest.useFakeTimers();
+    try {
+      const { socket, recus } = socketDeTest(() => ({ success: false, error: 'Message not found' }));
+      const { ctx, applique, ligne, main } = monte({ pret: true, socket });
+      const retraits = prendsLesRetraits({ ctx, applique });
+
+      retraits.differe('m1');
+      jest.advanceTimersByTime(FENETRE_D_ANNULATION_DU_RETRAIT_MS);
+      return Promise.resolve().then(() => {
+        expect(recus).toHaveLength(1);
+        expect(ligne().classList.contains('supprime')).toBe(true);
+        expect(ligne().querySelector('.texte')?.textContent).toBe('Ce message a été supprimé');
+        expect(main.querySelector<HTMLElement>('#refus-du-composeur')!.hidden).toBe(true);
       });
     } finally {
       jest.useRealTimers();
@@ -367,6 +449,7 @@ describe('detruit() vide la file par la route, keepalive', () => {
         enLigne: true,
         creance: { genre: 'membre', jeton: 'j' },
         config: { passerelle: ORIGINE },
+        cles: null,
       } as unknown as Contexte;
       const applique = (c: Contexte, suivant: F.EtatDuFil): void => {
         etat = suivant;
@@ -417,5 +500,112 @@ describe('l’état neuf passe toutes les portes du type', () => {
     const avant = F.insere(F.ETAT_VIDE, bulleServie(M1));
     const parti = F.partLeRetrait(avant, 'm1');
     expect(parti).toEqual(avant);
+  });
+});
+
+/**
+ * DÉFAUT MAJEUR DE REVUE (suivi #5163 § 12.12) — « un retrait différé ne
+ * survit pas à un rechargement ». `differe()` mémorise désormais
+ * l'INTENTION dans la réserve (`memoriseLeRetrait`, `fil-reserve.ts`),
+ * `annule()` et `flush()` l'effacent dès que le sort du retrait est décidé —
+ * jamais un snapshot de contenu, seulement l'identifiant : c'est la bulle
+ * SERVIE par le document neuf qui fait foi au rechargement.
+ */
+describe('l’intention d’un retrait est DURABLE — la réserve la tient jusqu’à son issue', () => {
+  it('differe() écrit l’identifiant dans la réserve, sous le préfixe `retrait`', async () => {
+    const { r, carte } = reserveEnMemoire();
+    const { socket } = socketDeTest(() => ({ success: true }));
+    const { ctx, applique } = monte({ pret: true, socket, reserve: r });
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    retraits.differe('m1');
+
+    expect(await retraitsEnAttente(ctx)).toEqual(['m1']);
+    expect(carte.has(`${CLES_DE_TEST.retrait}m1`)).toBe(true);
+  });
+
+  it('annule() efface l’intention — plus rien à reprendre à un rechargement suivant', async () => {
+    const { r } = reserveEnMemoire();
+    const { socket } = socketDeTest(() => ({ success: true }));
+    const { ctx, applique } = monte({ pret: true, socket, reserve: r });
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    retraits.differe('m1');
+    retraits.annule('m1');
+
+    expect(await retraitsEnAttente(ctx)).toEqual([]);
+  });
+
+  it('flush() efface l’intention une fois le retrait envoyé et confirmé', () => {
+    jest.useFakeTimers();
+    try {
+      const { r } = reserveEnMemoire();
+      const { socket } = socketDeTest(() => ({ success: true }));
+      const { ctx, applique } = monte({ pret: true, socket, reserve: r });
+      const retraits = prendsLesRetraits({ ctx, applique });
+
+      retraits.differe('m1');
+      jest.advanceTimersByTime(FENETRE_D_ANNULATION_DU_RETRAIT_MS);
+      return Promise.resolve().then(async () => {
+        expect(await retraitsEnAttente(ctx)).toEqual([]);
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+/**
+ * REPRENDRE APRÈS UN RECHARGEMENT (défauts majeur et bloquant de revue,
+ * suivi #5163 § 12.12 : « ne survit pas à un rechargement » et « le document
+ * rechargé montre le message revenu ») — `reprendLesRetraits` lit la réserve
+ * UNE fois, au montage, contre la bulle SERVIE par le document neuf.
+ */
+describe('reprendLesRetraits — au montage, contre l’état SERVI par le document neuf', () => {
+  it('la passerelle n’a toujours rien reçu : rejoue differe(), le document ne montre jamais le texte d’origine', async () => {
+    const { r } = reserveEnMemoire();
+    await r.ecris(`${CLES_DE_TEST.retrait}m1`, { messageId: 'm1' });
+    const { socket, recus } = socketDeTest(() => ({ success: true }));
+    const { ctx, applique, ligne } = monte({ pret: true, socket, reserve: r });
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    await reprendLesRetraits(ctx, retraits);
+
+    expect(ligne().classList.contains('envoi-retrait-differe')).toBe(true);
+    expect(ligne().querySelector('.texte')?.textContent).toBe('Message retiré');
+    expect(ligne().querySelector('.annuler-le-retrait')).not.toBeNull();
+    // Une fenêtre FRAÎCHE — l'intention reprise n'a rien envoyé toute seule.
+    expect(recus).toEqual([]);
+  });
+
+  it('la passerelle a déjà tout reçu (bulle SERVIE `supprime`) : rien à rejouer, l’intention est oubliée', async () => {
+    const { r, carte } = reserveEnMemoire();
+    await r.ecris(`${CLES_DE_TEST.retrait}m1`, { messageId: 'm1' });
+    const { socket, recus } = socketDeTest(() => ({ success: true }));
+    const { ctx, applique, ligne } = monte({ pret: true, socket, reserve: r });
+    // La bulle SERVIE par un document rechargé APRÈS que la passerelle a
+    // traité le `keepalive` — le cas du second rechargement du défaut de
+    // revue.
+    applique(ctx, F.retire(ctx.etat, 'm1'));
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    await reprendLesRetraits(ctx, retraits);
+
+    expect(ligne().classList.contains('envoi-retrait-differe')).toBe(false);
+    expect(ligne().querySelector('.texte')?.textContent).toBe('Ce message a été supprimé');
+    expect(recus).toEqual([]);
+    expect(carte.has(`${CLES_DE_TEST.retrait}m1`)).toBe(false);
+  });
+
+  it('un identifiant qui n’est plus dans la fenêtre servie est laissé tel quel — relu au prochain montage', async () => {
+    const { r, carte } = reserveEnMemoire();
+    await r.ecris(`${CLES_DE_TEST.retrait}m9`, { messageId: 'm9' });
+    const { socket } = socketDeTest(() => ({ success: true }));
+    const { ctx, applique } = monte({ pret: true, socket, reserve: r });
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    await reprendLesRetraits(ctx, retraits);
+
+    expect(carte.has(`${CLES_DE_TEST.retrait}m9`)).toBe(true);
   });
 });

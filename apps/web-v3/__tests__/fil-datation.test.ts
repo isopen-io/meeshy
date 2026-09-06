@@ -161,7 +161,7 @@ describe('la feuille tient la colonne', () => {
   it('ne fait pas payer la fenêtre d’annulation aux écrans qui ne la rendent jamais', () => {
     expect(FEUILLE_DU_FIL).not.toContain('envoi-retrait-differe');
     expect(FEUILLE_DU_FIL).not.toContain('.ligne .retrait{');
-    expect(FEUILLE_DES_GESTES).toContain('.ligne .retrait{display:none;align-items:center;gap:var(--space-2)}');
+    expect(FEUILLE_DES_GESTES).toContain('.ligne .retrait{display:none;position:relative;align-items:center;gap:var(--space-2)}');
     expect(FEUILLE_DES_GESTES).toContain('.ligne.envoi-retrait-differe .retrait{display:inline-flex}');
     expect(FEUILLE_DES_GESTES).toContain('.ligne .retrait .action{width:auto;min-height:var(--target-min)');
   });

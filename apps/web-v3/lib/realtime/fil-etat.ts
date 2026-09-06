@@ -158,10 +158,24 @@ const memeBulle = (a: Bulle, b: Bulle): boolean =>
  * jusqu'aux appareils de l'EXPÉDITEUR, et à eux seuls »), et un rattrapage par
  * `/sync` peut rendre un message déjà peint : dans les deux cas la charge
  * serveur REMPLACE, elle ne s'ajoute pas.
+ *
+ * SAUF quand l'existante est en RETRAIT DIFFÉRÉ (suivi #5163 § 12.12, défaut
+ * bloquant de revue « un retrait interrompu une seconde est perdu en
+ * silence ») — tant que rien n'est parti vers la passerelle, le message y
+ * est toujours et un rattrapage `/sync` (ou un `message:new` tardif de la
+ * même bulle) le rend forcément SERVI, intact : fusionner l'aurait
+ * RESSUSCITÉ sous les yeux du lecteur, effaçant l'intention locale sans un
+ * mot — et le retrait, une fois sa fenêtre expirée, ne trouvait plus rien à
+ * envoyer (`flush()` renonçait en silence, `!encoreDiffere`). L'intention
+ * locale est ici la SEULE source de vérité tant qu'elle n'a pas elle-même
+ * conclu (confirmée par `confirmeLaMutation`, ou rétablie par `retabli`) —
+ * un `message:deleted` explicite reste, lui, traité par `retire()`, jamais
+ * par `insere()`.
  */
 export const insere = (etat: EtatDuFil, bulle: Bulle): EtatDuFil => {
   const existante = etat.bulles.find((candidate) => memeBulle(candidate, bulle));
   if (existante === undefined) return { ...etat, bulles: citantes(triee([...etat.bulles, bulle])) };
+  if (existante.envoi === 'retrait-differe') return etat;
 
   const fusion: Bulle = {
     ...bulle,

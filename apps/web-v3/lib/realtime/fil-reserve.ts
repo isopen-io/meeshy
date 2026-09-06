@@ -80,6 +80,32 @@ export const oublieHorsLigne = async (ctx: Contexte, clientMessageId: string): P
   await Promise.all(cles.filter((cle) => cle.endsWith(`:${clientMessageId}`)).map((cle) => ctx.r.efface(cle)));
 };
 
+/**
+ * L'INTENTION D'UN RETRAIT (suivi #5163 § 12.12, défaut de revue « un retrait
+ * différé ne survit pas à un rechargement ») — mémorisée dès que `differe()`
+ * peint la bulle « Message retiré », effacée dès que son sort est décidé.
+ * AUCUN contenu à côté de l'identifiant : contrairement à un envoi, un retrait
+ * ne se rejoue pas avec un texte — `reprendLesRetraits` (`fil-gestes.ts`) lit
+ * la bulle DÉJÀ servie par le document pour savoir si elle tient encore.
+ */
+export const memoriseLeRetrait = async (ctx: Contexte, messageId: string): Promise<void> => {
+  if (ctx.cles === null) return;
+  await ctx.r.ecris(`${ctx.cles.retrait}${messageId}`, { messageId }).catch(() => undefined);
+};
+
+export const oublieLeRetrait = async (ctx: Contexte, messageId: string): Promise<void> => {
+  if (ctx.cles === null) return;
+  await ctx.r.efface(`${ctx.cles.retrait}${messageId}`).catch(() => undefined);
+};
+
+/** Les identifiants dont un retrait attendait encore sa fenêtre à la fermeture — lus UNE fois, au montage. */
+export const retraitsEnAttente = async (ctx: Contexte): Promise<readonly string[]> => {
+  if (ctx.cles === null) return [];
+  const prefixe = ctx.cles.retrait;
+  const cles = await ctx.r.cles(prefixe).catch(() => []);
+  return cles.map((cle) => cle.slice(prefixe.length)).filter((messageId) => messageId !== '');
+};
+
 /** Ce qui attendait dans la réserve à l'ouverture (une page rechargée hors ligne) reprend sa place. */
 export const relisLaFile = async (ctx: Contexte): Promise<void> => {
   if (ctx.cles === null) return;

@@ -16,8 +16,20 @@ import { clesDeLaReserve, purgeLesAutres, reserve } from '../lib/realtime/reserv
 
 describe('les clés de la réserve', () => {
   it('portent l’identité du lecteur avant la conversation', () => {
-    expect(clesDeLaReserve({ moi: 'u1', conversation: 'c1' })).toEqual({ file: 'file:u1:c1:', brouillon: 'brouillon:u1:c1' });
-    expect(clesDeLaReserve({ moi: 'p-tolu', conversation: 'c1' })).toEqual({ file: 'file:p-tolu:c1:', brouillon: 'brouillon:p-tolu:c1' });
+    // `retrait` (suivi #5163 § 12.12, défaut majeur de revue « un retrait
+    // différé ne survit pas à un rechargement ») — la TROISIÈME famille,
+    // à côté de `file` et `brouillon` : l'intention d'un retrait, tenue
+    // jusqu'à son issue (`fil-gestes.ts` › `reprendLesRetraits`).
+    expect(clesDeLaReserve({ moi: 'u1', conversation: 'c1' })).toEqual({
+      file: 'file:u1:c1:',
+      brouillon: 'brouillon:u1:c1',
+      retrait: 'retrait:u1:c1:',
+    });
+    expect(clesDeLaReserve({ moi: 'p-tolu', conversation: 'c1' })).toEqual({
+      file: 'file:p-tolu:c1:',
+      brouillon: 'brouillon:p-tolu:c1',
+      retrait: 'retrait:p-tolu:c1:',
+    });
   });
 
   it('refusent d’écrire sans identité — une file sans propriétaire est ce que l’indexation interdit', () => {
@@ -30,21 +42,25 @@ describe('les clés de la réserve', () => {
 });
 
 describe('la purge à l’ouverture', () => {
-  it('efface la file et le brouillon d’une AUTRE identité, et garde les miens', async () => {
+  it('efface la file, le brouillon et un retrait en attente d’une AUTRE identité, et garde les miens', async () => {
     const r = await reserve();
     await r.ecris('file:u1:c1:2026-09-01T12:00:00.000Z:cid_a', { clientMessageId: 'cid_a', texte: 'de A' });
     await r.ecris('brouillon:u1:c1', 'brouillon de A');
+    await r.ecris('retrait:u1:c1:m1', { messageId: 'm1' });
     await r.ecris('file:u2:c1:2026-09-01T12:00:00.000Z:cid_b', { clientMessageId: 'cid_b', texte: 'de B' });
     await r.ecris('brouillon:u2:c9', 'brouillon de B');
+    await r.ecris('retrait:u2:c1:m2', { messageId: 'm2' });
 
     await purgeLesAutres(r, 'u2');
 
     expect(await r.cles('file:')).toEqual(['file:u2:c1:2026-09-01T12:00:00.000Z:cid_b']);
     expect(await r.cles('brouillon:')).toEqual(['brouillon:u2:c9']);
+    expect(await r.cles('retrait:')).toEqual(['retrait:u2:c1:m2']);
     expect(await r.lis('brouillon:u1:c1')).toBeUndefined();
+    expect(await r.lis('retrait:u1:c1:m1')).toBeUndefined();
   });
 
-  it('ne touche à rien d’autre que les deux familles de la réserve', async () => {
+  it('ne touche à rien d’autre que les trois familles de la réserve', async () => {
     const r = await reserve();
     await r.ecris('autre:u1', 'x');
     await purgeLesAutres(r, 'u2');

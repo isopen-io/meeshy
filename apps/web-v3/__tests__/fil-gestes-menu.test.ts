@@ -76,6 +76,10 @@ const monte = () => {
     socket: null,
     pret: false,
     creance: { genre: 'membre', jeton: 'j' },
+    // `null` — jamais `undefined` : `reprendLesRetraits` (`prendsLesGestes`,
+    // appelée par `monte()` ci-dessous) lit `ctx.cles` au montage, comme le
+    // ferait la vraie page (`fil-contexte.ts`, le type ne l'omet jamais).
+    cles: null,
     config: { passerelle: ORIGINE },
   } as unknown as Contexte;
   const applique = jest.fn();

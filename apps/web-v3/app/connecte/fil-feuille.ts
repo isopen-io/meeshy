@@ -434,12 +434,30 @@ export const FEUILLE_DES_GESTES = compacte(
     // La SEULE trace qui reste dans la feuille partagée est l'exclusion
     // `:not(.retrait)` du sélecteur de la méta vidée — un site unique qu'on
     // ne recopie pas ici pour cinq octets.
-    '.ligne .retrait{display:none;align-items:center;gap:var(--space-2)}' +
+    // REVUE — DEUX DÉFAUTS MAJEURS SUR LA MÊME FENTE (suivi #5163 § 12.12) :
+    // (1) « Annuler » ne se DISTINGUAIT du texte voisin que par le poids et
+    // la taille — en sombre, sa couleur était identique à `.texte`, l'unique
+    // repentir d'un geste DESTRUCTIF invisible comme contrôle. La peau vient
+    // des MÊMES jetons que `.action.contour` (`app/enveloppe/feuille.ts`),
+    // jamais une couleur en dur. (2) rien ne disait que la fenêtre se
+    // referme : la barre sur `::after` anime de `scaleX(1)` à `0` sur
+    // `--duree-retrait` — posée par `differe()` (`fil-gestes.ts`) à LA MÊME
+    // valeur que la minuterie, pour que les deux ne puissent jamais diverger
+    // — et COUPE ENTIÈREMENT sous `prefers-reduced-motion`, qui révèle alors
+    // `.decompte` (masqué le reste du temps) : la réduction de mouvement ne
+    // redevient jamais une absence d'information.
+    '.ligne .retrait{display:none;position:relative;align-items:center;gap:var(--space-2)}' +
     '.ligne .retrait .action{width:auto;min-height:var(--target-min);padding:0 var(--space-3);font-size:var(--text-sm)}' +
+    '.ligne .retrait .action.annuler-le-retrait{color:var(--color-primary);background:var(--color-tint-primary);border:var(--stroke-strong) solid var(--color-border-interactive);font-weight:var(--font-weight-semibold)}' +
+    '.ligne .retrait .action.annuler-le-retrait:hover{border-color:var(--color-primary)}' +
+    '.ligne .retrait .decompte{display:none;font-size:var(--text-xs);color:var(--color-text-muted)}' +
     '.ligne.envoi-retrait-differe .retrait{display:inline-flex}' +
+    '.ligne.envoi-retrait-differe .retrait::after{content:"";position:absolute;left:0;right:0;bottom:-3px;height:2px;border-radius:var(--radius-pill);background:var(--color-primary);transform-origin:left;animation:retrait-decompte var(--duree-retrait,5000ms) linear forwards}' +
+    '@keyframes retrait-decompte{from{transform:scaleX(1)}to{transform:scaleX(0)}}' +
     '.ligne.envoi-retrait-differe .texte{color:var(--color-text-muted)}' +
     '.ligne.envoi-retrait-differe .accuse{display:none}' +
-    '.ligne.envoi-retrait-differe .meta{margin-top:var(--space-1)}',
+    '.ligne.envoi-retrait-differe .meta{margin-top:var(--space-1)}' +
+    '@media (prefers-reduced-motion:reduce){.ligne.envoi-retrait-differe .retrait::after{content:none;animation:none}.ligne.envoi-retrait-differe .retrait .decompte{display:inline}}',
 );
 
 /**

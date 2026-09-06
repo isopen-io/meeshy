@@ -762,7 +762,14 @@ export const gabaritDeLigne = (adresse: string): string =>
   // (`.ligne.envoi-retrait-differe .retrait`, `fil-feuille.ts`) — jamais un
   // `hidden` que ce module devrait lui-même basculer. Sans JavaScript, cette
   // fente n'existe nulle part : rien n'attend, rien ne s'annule.
-  `<span class="retrait"><button type="button" class="action discrete annuler-le-retrait" aria-label="${echappe(FIL.annulerLeRetrait)}">${echappe(FIL.annuler)}</button></span>` +
+  // `.decompte` — le REPÈRE TEXTUEL de l'échéance (défaut majeur de revue
+  // « rien ne dit que la fenêtre se referme ») : dans le DOM en PERMANENCE,
+  // masqué par la feuille tant que la barre de progression tourne, révélé
+  // SEULEMENT sous `prefers-reduced-motion: reduce` — jamais l'inverse, sans
+  // quoi la réduction de mouvement redeviendrait une absence d'information.
+  // Le module y écrit le décompte (`differe()`, `fil-gestes.ts`) au moment
+  // même où il arme `--duree-retrait` sur `.retrait` — la MÊME source.
+  `<span class="retrait"><button type="button" class="action discrete annuler-le-retrait" aria-label="${echappe(FIL.annulerLeRetrait)}">${echappe(FIL.annuler)}</button><span class="decompte" aria-hidden="true"></span></span>` +
   boutonReagir() +
   '</p>' +
   `<ul class="reactions" aria-label="${echappe(FIL.reactions)}" hidden>${pastilleDeReaction({ emoji: '', nombre: 0, messageId: '', adresse })}</ul>` +

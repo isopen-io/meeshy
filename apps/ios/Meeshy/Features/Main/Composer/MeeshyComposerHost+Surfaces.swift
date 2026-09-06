@@ -838,10 +838,11 @@ extension MeeshyComposerHost {
     var sceneDescriptionBinding: Binding<String> {
         Binding(
             get: {
-                switch ComposerSlideTextRole.role(for: selectedFormat) {
-                case .content:
+                switch ComposerSlideTextRole.descriptionTarget(
+                    format: selectedFormat, media: selectedSlideMediaURL) {
+                case .slideContent:
                     return viewModel.currentSlide.content ?? ""
-                case .caption:
+                case .postContent:
                     // **Sans média porteur, la description EST le contenu du
                     // post** (2026-09-06). Ce getter rendait `""` et son
                     // commentaire disait pourquoi : « aucune raison de retomber
@@ -861,15 +862,17 @@ extension MeeshyComposerHost {
                     // > { return }`). Mesuré au simulateur : un canvas de
                     // > texte publié avec une description part avec
                     // > `content: ""` et aucune légende nulle part.
-                    guard let media = selectedSlideMediaURL else { return documentText }
+                    return documentText
+                case .mediaCaption(let media):
                     return documentMediaCaptions[media] ?? ""
                 }
             },
             set: { texte in
-                switch ComposerSlideTextRole.role(for: selectedFormat) {
-                case .content:
+                switch ComposerSlideTextRole.descriptionTarget(
+                    format: selectedFormat, media: selectedSlideMediaURL) {
+                case .slideContent:
                     viewModel.applyContentText(texte)
-                case .caption:
+                case .postContent:
                     // Le pendant du getter : sans média porteur, ce que
                     // l'auteur écrit va au CONTENU du post — le seul champ qui
                     // décrit la publication entière, et celui que le fil rend
@@ -877,10 +880,8 @@ extension MeeshyComposerHost {
                     // silencieusement (`guard let media`), ce qui est le bon
                     // comportement pour une LÉGENDE et le mauvais pour la
                     // seule zone d'écriture de l'écran.
-                    guard let media = selectedSlideMediaURL else {
-                        documentText = texte
-                        return
-                    }
+                    documentText = texte
+                case .mediaCaption(let media):
                     ComposerSlideTextRole.applyCaption(texte,
                                                        to: media,
                                                        in: &documentMediaCaptions)

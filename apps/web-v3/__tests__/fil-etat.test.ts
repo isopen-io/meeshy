@@ -22,6 +22,7 @@ import {
   reagisMoiMeme,
   reagit,
   retire,
+  retireMoiMeme,
   traduit,
   type EtatDuFil,
 } from '../lib/realtime/fil-etat';
@@ -92,6 +93,30 @@ describe('insérer — dans l’ordre d’écriture, sans doublon', () => {
     expect(etat.bulles[0]?.id).toBe('m9');
     expect(etat.bulles[0]?.envoi).toBe('servi');
     expect(etat.bulles[0]?.ecritA).toBe('2026-09-01T12:00:01.000Z');
+  });
+
+  /**
+   * DÉFAUT BLOQUANT DE REVUE (suivi #5163 § 12.12) — « un retrait interrompu
+   * une seconde est perdu en silence ». Tant que rien n'est parti vers la
+   * passerelle, le message y est TOUJOURS : un rattrapage `/sync` reçu
+   * pendant la fenêtre (masquage, puis reprise) le rend forcément SERVI et
+   * intact — fusionner l'aurait RESSUSCITÉ sous les yeux du lecteur, et le
+   * retrait, à l'expiration de sa fenêtre, ne trouvait alors plus rien à
+   * envoyer (`flush()`, `fil-gestes.ts`, `!encoreDiffere`). L'intention
+   * locale reste la SEULE source de vérité tant qu'elle n'a pas elle-même
+   * conclu.
+   */
+  it('NE fusionne PAS une charge servie sur une bulle en retrait différé — le rattrapage /sync ne la ressuscite pas', () => {
+    const avant = insere(ETAT_VIDE, bulle());
+    const differe = retireMoiMeme(avant, 'm1');
+    expect(differe.bulles[0]?.envoi).toBe('retrait-differe');
+
+    // Le MÊME message, tel qu'un `GET /sync` le rendrait — intact, servi.
+    const apres = insere(differe, bulle());
+
+    expect(apres).toBe(differe);
+    expect(apres.bulles[0]?.envoi).toBe('retrait-differe');
+    expect(apres.bulles[0]?.supprime).toBe(true);
   });
 });
 

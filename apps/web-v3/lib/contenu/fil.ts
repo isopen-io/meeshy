@@ -179,6 +179,14 @@ export const FIL = {
    */
   messageRetire: 'Message retiré',
   annulerLeRetrait: 'Annuler le retrait du message',
+  /**
+   * LE REPÈRE TEXTUEL DE LA FENÊTRE (suivi #5163 § 12.12, défaut majeur de
+   * revue « rien ne dit que la fenêtre se referme ») — masqué tant que
+   * l'animation de `fil-feuille.ts` tourne, seul visible sous
+   * `prefers-reduced-motion: reduce` : la coupure de l'animation ne redevient
+   * jamais une absence d'information.
+   */
+  decompteDuRetrait: (secondes: number): string => `${secondes} s`,
   enregistrer: 'Enregistrer',
   modification: 'Modification du message',
   /**
