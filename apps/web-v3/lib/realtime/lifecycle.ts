@@ -118,6 +118,37 @@ export type OptionsDuCycleDeVie = {
   readonly onglet?: string;
 };
 
+/**
+ * L'IDEMPOTENCE PAR ÉCRAN (#5163, revue de `navigateur-de-zone`) — SITE
+ * UNIQUE, appelé par les trois modules de participation qui s'auto-démarrent
+ * (`participate.ts`, `liste.ts`, `notifs.ts`), jamais recopié.
+ *
+ * Sans lui, la PREMIÈRE traversée douce vers un écran encore jamais visité
+ * double le montage : l'auto-démarrage (`void demarre();`, en tête de chaque
+ * module) court à la PREMIÈRE évaluation du module — celle que déclenche
+ * l'`import()` dynamique du navigateur de zone (`navigateur.ts:monteLeModule`)
+ * — puis ce même appelant appelle `monte()` EXPLICITEMENT sur ce module déjà
+ * évalué, contre le MÊME `<main>` que l'auto-démarrage vient de monter : deux
+ * sockets, deux `observeCycleDeVie`, et pour le fil les cinq écouteurs du
+ * composeur reposés (`composeur.ts`) — un message envoyé part deux fois.
+ *
+ * Le marqueur vit sur le NŒUD `<main>` et non dans une variable de module :
+ * il disparaît donc avec lui. `echangeLeDocument` (`navigateur.ts`) REMPLACE
+ * `<main>` à chaque navigation — le `<main>` neuf n'a jamais porté le
+ * marqueur —, si bien qu'aucun état global n'est à remettre à zéro entre deux
+ * écrans, et qu'une navigation LÉGITIME vers un écran déjà visité (retour au
+ * `<main>` frais que le serveur vient de servir) continue de monter
+ * normalement.
+ *
+ * Rend `true` la PREMIÈRE fois qu'un `<main>` donné est présenté (l'appelant
+ * doit monter), `false` ensuite (l'appelant doit se taire).
+ */
+export const unSeulMontageParEcran = (main: HTMLElement): boolean => {
+  if (main.dataset.monte === '1') return false;
+  main.dataset.monte = '1';
+  return true;
+};
+
 type MessageDuCanal =
   | {
       readonly type: 'revendication';

@@ -2,7 +2,7 @@ import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { boiteDuLecteur, notificationServie, toutMarquerLu } from '@/lib/api/notifications';
 import { NOTIFS } from '@/lib/contenu/notifs';
 
-import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
+import { observeCycleDeVie, unSeulMontageParEcran, type TransitionDeCycle } from './lifecycle';
 import * as N from './notifs-etat';
 import { etatDuDocument, peins, peintre, type PeintreDesNotifs } from './notifs-peinture';
 import { doitRattraper, POLITIQUE_DE_RECONNEXION } from './reconnect-policy';
@@ -209,6 +209,7 @@ const surTransition = (ctx: Contexte) => (transition: TransitionDeCycle): void =
 const demarre = async (): Promise<void> => {
   const main = document.querySelector<HTMLElement>('main[data-participation="notifs"]');
   if (main === null) return;
+  if (!unSeulMontageParEcran(main)) return;
   const config = configuration(main);
   if (config === null) return;
   const jeton = valeurDuCookie(document.cookie, COOKIE_DE_JETON);

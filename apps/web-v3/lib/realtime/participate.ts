@@ -29,7 +29,7 @@ import {
   type ContexteMenu,
 } from './fil-peinture';
 import { memoriseHorsLigne, oublieHorsLigne, piecesLocales, relisLaFile } from './fil-reserve';
-import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
+import { observeCycleDeVie, unSeulMontageParEcran, type TransitionDeCycle } from './lifecycle';
 import { armeLaFeuilleDeLien } from './feuille-de-lien';
 import { prendsLePleinEcran } from './plein-ecran';
 import {
@@ -775,6 +775,7 @@ const demarre = async (): Promise<void> => {
   poseLeFuseau();
   const main = document.querySelector<HTMLElement>('main[data-participation="fil"]');
   if (main === null) return;
+  if (!unSeulMontageParEcran(main)) return;
   // AVANT toute créance : une surimpression servie doit se fermer à Échap même
   // sur un fil dont l'authentification a échoué (`plein-ecran.ts`).
   prendsLePleinEcran();
