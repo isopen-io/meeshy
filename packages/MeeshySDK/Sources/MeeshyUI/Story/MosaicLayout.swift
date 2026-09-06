@@ -329,6 +329,71 @@ public nonisolated enum MosaicLayout {
         }
     }
 
+    /// **Quelle tuile porte une légende** (directive porteur 2026-09-06).
+    ///
+    /// > « Il ne faut pas systématiquement mettre la légende sur la tuile !
+    /// > Mais le faire sur les formats le permettant (défilement continu, image
+    /// > par image, mode hero sur la première image, une seule scène). »
+    ///
+    /// Le critère est la PLACE, et il explique les exclusions d'un seul coup :
+    /// `wave` et `sine` posent leurs tuiles à ~0,23 de la rangée — ~87 pt sur
+    /// une carte de 375 —, et les trois satellites d'un `hero` sont dans le même
+    /// cas. Rien de lisible n'y entre ; une légende y recouvrirait la scène
+    /// qu'elle légende.
+    ///
+    /// **Une question, pas un `if` dans la vue.** Elle se pose au même endroit
+    /// que `isPaged` et pour la même raison : un sixième mode doit avoir UN seul
+    /// endroit où déclarer ce qu'il permet, sinon il l'apprend deux fois et
+    /// diverge à la première correction.
+    public static func tileCarriesCaption(mode: MosaicLayoutMode,
+                                          sceneIndex: Int,
+                                          visualCount: Int) -> Bool {
+        guard visualCount > 1 else { return true }
+        switch mode {
+        // Une page occupe toute la carte, et la vue n'en peint qu'une.
+        case .carousel: return true
+        // Des tuiles de 0,60 de rangée — la place y est, et c'est le format que
+        // la directive nomme « défilement continu ».
+        case .reel: return true
+        // La GRANDE tuile seulement : ses satellites sont aussi étroits qu'une
+        // tuile de vague.
+        case .hero: return sceneIndex == 0
+        case .wave, .sine: return false
+        }
+    }
+
+    /// **Ce qu'une TUILE peut porter** (directive porteur 2026-09-06 : « la
+    /// légende doit s'afficher par-dessus la scène précise et non par-dessus le
+    /// poste entier ! Chaque scène a sa légende d'image ! »).
+    ///
+    /// Une légende par scène veut dire une légende par TUILE — et les tuiles
+    /// n'ont pas la même largeur. Sur une vague à quatre scènes, chacune tient
+    /// dans 0,235 de la rangée, soit ~87 pt : les huit mots du mode y
+    /// composeraient un pavé qui recouvre la scène qu'il légende.
+    ///
+    /// La limite du mode se lit donc comme un budget PLEINE LARGEUR, que la
+    /// part de la tuile réduit. Un plancher la retient : **une tuile AUTORISÉE
+    /// à porter une légende en porte toujours une**, sinon la réduction
+    /// proportionnelle rétablirait en silence une exclusion que
+    /// `tileCarriesCaption` est seule à prononcer — une seconde règle de place,
+    /// cachée dans une arithmétique.
+    ///
+    /// - Parameter tileWidth: la part de la RANGÉE que la tuile occupe (les
+    ///   cadres de `tiles(sceneCount:mode:)` sont en fractions). `1` ⇒ une page
+    ///   pleine largeur, qui garde le budget entier.
+    public static func captionWordLimit(mode: MosaicLayoutMode,
+                                        visualCount: Int,
+                                        tileWidth: CGFloat) -> Int {
+        let plein = captionWordLimit(mode: mode, visualCount: visualCount)
+        guard tileWidth < 1 else { return plein }
+        return max(captionWordFloor, Int((CGFloat(plein) * max(0, tileWidth)).rounded()))
+    }
+
+    /// **Deux mots.** Le plus court énoncé qui reste une légende plutôt qu'une
+    /// étiquette — et le plancher qui empêche la réduction proportionnelle de
+    /// rendre zéro sur les tuiles les plus étroites.
+    public static let captionWordFloor = 2
+
     /// Les vingt mots de la règle commune du fil — déclarés ici pour que la
     /// limite d'une mosaïque se lise COMME UNE RÉDUCTION de ce nombre, et non
     /// comme un second seuil indépendant qui dériverait du premier.

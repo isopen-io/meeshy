@@ -376,7 +376,9 @@ struct FeedPostCard: View {
     /// fil (`SocialMediaCaption`), et jamais le texte du post : celui-ci est
     /// déjà rendu au-dessus de la carte.
     private var cardSceneCaption: String? {
-        cardSceneFullscreenMedia?.caption
+        guard let cardSceneDocument else { return cardSceneFullscreenMedia?.caption }
+        return SceneCaption.resolve(sceneIndex: 0, in: cardSceneDocument, post: post,
+                                    carrierFallback: false)
     }
 
     /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (corrigé
@@ -585,24 +587,14 @@ struct FeedPostCard: View {
                     )
                     // **La légende paraît dans TOUS les modes, tronquée**
                     // (directive porteur 2026-09-06, qui ABOLIT la règle « pas
-                    // de légende en mosaïque » posée le matin même) :
+                    // de légende en mosaïque ») — mais elle est peinte PAR
+                    // `PostSceneMosaic`, et non ici en `overlay`.
                     //
-                    // > « parfois la legende est possible il faut les afficher
-                    // > en trimant bien entendu ! »
-                    //
-                    // Ce qui reste de l'ancienne règle est la CONTRAINTE qui la
-                    // motivait — la place —, et elle décide désormais de la
-                    // LONGUEUR : `captionWordLimit`. En MOTS et non en lignes —
-                    // une troncature en lignes dépend de la largeur, de la
-                    // police et du Dynamic Type, et `FeedCaptionOverlay` porte
-                    // déjà cette leçon dans son en-tête.
-                    .overlay(alignment: .bottom) {
-                        FeedCaptionOverlay(
-                            caption: cardSceneCaption,
-                            words: MosaicLayout.captionWordLimit(
-                                mode: cardSceneDocument.resolvedLayout,
-                                visualCount: cardSceneDocument.scenes.count))
-                    }
+                    // La raison est la PAGE : le carrousel est le mode par
+                    // défaut, sa page courante vit dans cette vue-là, et une
+                    // légende posée au-dessus d'elle ne pouvait pas la
+                    // connaître. Elle restait figée sur le premier média
+                    // pendant que le doigt faisait défiler les scènes.
                 } else if let cardSceneDocument {
                     PostSceneSurface(
                         coordinator: reelAutoplay,
