@@ -13,6 +13,7 @@ import { ADRESSE_DE_MON_COMPTE } from '../../lib/contenu/espace';
 import { ACTION_SECONDAIRE, TARGET_MIN } from './lib/cibles';
 import { COLONNES_DE_THEME, violationsBloquantes } from './lib/verdict-axe';
 import {
+  AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
   INVITE,
   MEMBRE,
@@ -362,9 +363,14 @@ test.describe('depuis /chats (la liste) — sans JavaScript', () => {
     const page = await contexte.newPage();
     await page.goto(`${v3.base}/chats`, { waitUntil: 'load' });
 
-    const avatar = page.locator('a.avatar-lien');
+    // Scopé à la ligne de Marta (`AUTRE_CONVERSATION`) : la liste sert
+    // désormais plusieurs tête-à-tête (chacun avec son propre `a.avatar-lien`,
+    // `bouchon-monde.ts`), et un sélecteur non scopé viole le mode strict de
+    // Playwright dès qu'une deuxième ligne en porte un.
+    const selecteurAvatar = `li[data-conversation="${AUTRE_CONVERSATION.id}"] a.avatar-lien`;
+    const avatar = page.locator(selecteurAvatar);
     await expect(avatar).toHaveAttribute('href', `/chats?profil=${PAIR_HISPANOPHONE.id}`);
-    await cliqueEtNavigue(page, 'a.avatar-lien', (u) => u.pathname === '/chats' && u.searchParams.get('profil') === PAIR_HISPANOPHONE.id);
+    await cliqueEtNavigue(page, selecteurAvatar, (u) => u.pathname === '/chats' && u.searchParams.get('profil') === PAIR_HISPANOPHONE.id);
 
     await expect(page.locator('dialog.profil h2')).toHaveText('Marta Ruiz');
     // La conversation en commun, retrouvée LOCALEMENT.
