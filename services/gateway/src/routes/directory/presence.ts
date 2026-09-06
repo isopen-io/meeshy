@@ -5,6 +5,7 @@ import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { presenceFor, viewerFromAuthContext } from '../users/presence-gate';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { logError } from '../../utils/logger.js';
 
 /** La borne anti-moisson, conservée telle quelle. */
 export const MAX_IDS_PAR_REQUETE = 200;
@@ -184,7 +185,7 @@ export async function directoryPresenceRoutes(fastify: FastifyInstance) {
     try {
       return sendSuccess(reply, { users: await servirPresence(fastify, request, decode.ids) });
     } catch (error) {
-      fastify.log.error({ error }, '[directory/presence] Failed to resolve presence');
+      logError(fastify.log, '[directory/presence] Failed to resolve presence', error);
       return sendInternalError(reply, 'Failed to resolve presence');
     }
   });

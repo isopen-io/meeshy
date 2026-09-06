@@ -13,6 +13,7 @@ import {
   NOT_MUTED_WHERE,
 } from '../../services/posts/soundFormats';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { logError } from '../../utils/logger.js';
 
 // Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
 // Surtout PAS sous UPLOAD_PATH : tout ce qui s'y trouve est exposé par
@@ -121,7 +122,7 @@ export function registerStoryAudioRoutes(
       // précisément ce qu'un ayant droit a fait couper. 503 explicite plutôt
       // qu'une 500 anonyme — et la route n'est de toute façon atteignable que
       // si l'authentification a abouti.
-      request.log.error({ err, filename: safeName }, 'static: mute lookup failed');
+      logError(request.log, `static: mute lookup failed (filename=${safeName})`, err);
       return sendError(reply, 503, 'Sound availability cannot be verified', { code: 'SOUND_LOOKUP_FAILED' });
     }
     if (muted) {

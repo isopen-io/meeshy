@@ -4,6 +4,7 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendInternalError } from '../utils/response';
 import { NOT_DELETED } from '../services/posts/softDelete';
+import { logError } from '../utils/logger.js';
 
 const ACHIEVEMENT_THRESHOLDS = {
   polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB' },
@@ -279,7 +280,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         const stats = await computeUserStats(fastify.prisma, userId);
         return { success: true, data: stats };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching user stats');
+        logError(fastify.log, 'Error fetching user stats', error);
         return sendInternalError(reply, 'Failed to fetch user stats');
       }
     }
@@ -354,7 +355,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
 
         return { success: true, data: timeline };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching user timeline');
+        logError(fastify.log, 'Error fetching user timeline', error);
         return sendInternalError(reply, 'Failed to fetch user timeline');
       }
     }
@@ -390,7 +391,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
         const { achievements } = await computeUserAchievementStats(fastify.prisma, userId);
         return { success: true, data: achievements };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching achievements');
+        logError(fastify.log, 'Error fetching achievements', error);
         return sendInternalError(reply, 'Failed to fetch achievements');
       }
     }
