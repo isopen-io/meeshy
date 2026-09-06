@@ -666,6 +666,24 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
+    /// **L'ÉDITEUR D'OBJET, où la frappe a réellement lieu depuis #4634.**
+    ///
+    /// Les quatre gardes de mention ci-dessous lisaient le MEUBLE. La saisie a
+    /// migré vers l'écran modal — le meuble POSSÈDE toujours la boîte et la lui
+    /// confie (`mentionBox: sceneMentionBox`), mais c'est l'éditeur qui écrit,
+    /// interroge et montre la bande. Une garde qui reste sur le propriétaire
+    /// cesse de voir ce que fait le consommateur.
+    private func objectEditorSource() throws -> String {
+        AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
+    }
+
+    /// La BOÎTE, qui possède le contrôleur et l'alimente.
+    private func mentionBoxSource() throws -> String {
+        AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Components/ComposerMentionControllerBox.swift"))
+    }
+
     private func compact(_ t: String) -> String {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
@@ -1761,23 +1779,28 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
     }
 
     func test_laSource_estLisible() throws {
-        XCTAssertTrue(try hostSource().contains("sceneMentionStrip"))
+        // `sceneMentionStrip` était le nom que le meuble donnait à sa bande ;
+        // l'éditeur monte le composant partagé sous son vrai nom.
+        XCTAssertTrue(try objectEditorSource().contains("ComposerMentionStrip("),
+                      "la bande de suggestions n'est plus montée — un `@` n'ouvrirait plus rien")
     }
 
     /// **La frappe nourrit la requête** — et c'est tout ce qu'il a fallu.
     /// `onInlineTextChanged` remonte déjà le texte à chaque caractère ; le
     /// canvas UIKit n'a pas eu à changer d'un octet.
     func test_laFrappe_nourritLaRequete() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("sceneMentionBox.controller.handleQuery(in:texte)"))
+        let source = compact(try objectEditorSource())
+        XCTAssertTrue(source.contains("mentionBox.controller.handleQuery(in:texte)"),
+                      "la frappe doit alimenter la requête — sans quoi la bande resterait sur son premier résultat")
     }
 
     /// **Le choix écrit dans l'OBJET, par le même site que la frappe.** Un
     /// `@State` intermédiaire aurait fait diverger ce que le canvas affiche de
     /// ce que la publication emporte.
     func test_leChoix_ecritDansLObjet() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("viewModel.updateTextContent(id:id,text:remplace)"))
+        let source = compact(try objectEditorSource())
+        XCTAssertTrue(source.contains("viewModel.updateTextContent(id:id,text:remplace)"),
+                      "choisir une mention doit ÉCRIRE dans l'objet — sinon la suggestion s'affiche et ne pose rien")
     }
 
     /// **Trois conditions, dont la troisième s'oublie** : sans
@@ -1822,8 +1845,13 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
     /// Deux chargements auraient donné deux listes à faire diverger, et deux
     /// moments où « aucun ami » se lit différemment.
     func test_lesCandidats_viennentDeLaSourcePartagee() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.acceptedFriends()"))
+        // La BOÎTE alimente le contrôleur : cache d'abord, réseau ensuite. C'est
+        // elle qui possède ce chemin, pas le meuble qui la transporte.
+        let source = compact(try mentionBoxSource())
+        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.acceptedFriends()"),
+                      "les candidats doivent venir de la source PARTAGÉE, jamais d'une liste locale")
+        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.cachedFriends()"),
+                      "et le cache doit servir en premier — sinon un `@` reste vide le temps d'un aller-retour")
     }
 }
 
