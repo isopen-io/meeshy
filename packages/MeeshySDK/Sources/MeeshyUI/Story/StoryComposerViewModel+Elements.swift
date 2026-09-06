@@ -716,17 +716,43 @@ extension StoryComposerViewModel {
     /// `public` parce que le REGISTRE de pré-montée vit côté app : le SDK
     /// fournit l'atome — muter le document —, l'app décide QUAND l'appeler.
     @discardableResult
+    /// **L'adoption couvre les DEUX familles qui portent un fichier** — les
+    /// médias visuels ET l'audio (2026-09-06).
+    ///
+    /// Elle ne connaissait que `mediaObjects`. Un son — de fond ou posé —
+    /// partait donc avec `mediaURL: null` et `postMediaId: null` : sa durée et
+    /// sa forme d'onde voyageaient, le FICHIER non. Mesuré sur un post
+    /// publié : « Son de fond, 33 secondes » à la composition, et rien à jouer
+    /// à la lecture, ni en détail, ni en réel.
+    ///
+    /// > **Une coquille voyage mieux qu'un fichier.** Tout ce qui DÉCRIT le son
+    /// > tenait dans le blob et partait ; seul le contenu manquait — et rien
+    /// > n'a rougi, parce qu'un objet audio sans URL reste un objet audio
+    /// > parfaitement formé.
+    ///
+    /// `StoryAudioPlayerObject` porte exactement la même paire
+    /// `postMediaId` / `mediaURL` que `StoryMediaObject` : la règle est la
+    /// même, seule la famille change, et c'est pourquoi elle s'écrit une fois
+    /// pour les deux plutôt qu'en cascade.
     public func adoptPreUploadedMedia(localURL: String, postMediaId: String, remoteURL: String) -> Bool {
         for slideIdx in slides.indices {
             var effects = slides[slideIdx].effects
-            guard var medias = effects.mediaObjects,
-                  let mediaIdx = medias.firstIndex(where: { $0.mediaURL == localURL })
-            else { continue }
-            medias[mediaIdx].postMediaId = postMediaId
-            medias[mediaIdx].mediaURL = remoteURL
-            effects.mediaObjects = medias
-            slides[slideIdx].effects = effects
-            return true
+            if var medias = effects.mediaObjects,
+               let mediaIdx = medias.firstIndex(where: { $0.mediaURL == localURL }) {
+                medias[mediaIdx].postMediaId = postMediaId
+                medias[mediaIdx].mediaURL = remoteURL
+                effects.mediaObjects = medias
+                slides[slideIdx].effects = effects
+                return true
+            }
+            if var audios = effects.audioPlayerObjects,
+               let audioIdx = audios.firstIndex(where: { $0.mediaURL == localURL }) {
+                audios[audioIdx].postMediaId = postMediaId
+                audios[audioIdx].mediaURL = remoteURL
+                effects.audioPlayerObjects = audios
+                slides[slideIdx].effects = effects
+                return true
+            }
         }
         return false
     }

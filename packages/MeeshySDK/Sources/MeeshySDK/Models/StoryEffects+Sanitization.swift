@@ -45,6 +45,29 @@ extension StoryEffects {
                 return stripped
             }
         }
+        // **L'AUDIO passe par le même filet** (2026-09-06).
+        //
+        // Le sanitizer gardait une famille et laissait l'autre : un son dont la
+        // pré-montée n'avait pas abouti partait avec son `file:///Users/…`,
+        // c'est-à-dire un chemin de disque qu'aucun lecteur ne peut résoudre —
+        // et qui porte au passage le nom de compte de l'auteur.
+        //
+        // > **Une garde se mesure sur tout ce que la charge TRANSPORTE**, pas
+        // > sur la famille pour laquelle elle a été écrite. C'est la leçon 275
+        // > du dépôt, ici dans sa forme la plus littérale : le champ voisin
+        // > porte le même nom, le même type et le même risque, et n'était pas
+        // > gardé.
+        if let audios = copy.audioPlayerObjects {
+            copy.audioPlayerObjects = audios.map { audio in
+                guard let raw = audio.mediaURL, Self.isLocalFileURL(raw) else { return audio }
+                Self.logger.error(
+                    "Sanitizer caught local file:// mediaURL on StoryAudioPlayerObject id=\(audio.id, privacy: .public) postMediaId=\(audio.postMediaId, privacy: .public) — call-site forgot to flip to CDN URL after upload. Nullifying."
+                )
+                var stripped = audio
+                stripped.mediaURL = nil
+                return stripped
+            }
+        }
         return copy
     }
 
