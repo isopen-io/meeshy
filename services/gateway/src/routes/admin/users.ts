@@ -38,7 +38,7 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
-import { logWarn } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger.js';
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -168,7 +168,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       sendSuccess(reply, response);
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching users');
+      logError(fastify.log, 'Error fetching users', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch users' });
     }
   });
@@ -210,7 +210,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       sendSuccess(reply, sanitizedUser);
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user');
+      logError(fastify.log, 'Error fetching user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user details' });
     }
   });
@@ -275,7 +275,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
-      fastify.log.error({ err: error }, 'Error creating user');
+      logError(fastify.log, 'Error creating user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to create user' });
     }
   });
@@ -353,7 +353,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
-      fastify.log.error({ err: error }, 'Error resetting password');
+      logError(fastify.log, 'Error resetting password', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to reset password' });
     }
   });
@@ -399,7 +399,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       sendSuccess(reply, { message: 'User deleted successfully' });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error deleting user');
+      logError(fastify.log, 'Error deleting user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to delete user' });
     }
   });
@@ -555,7 +555,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         },
       });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user activity');
+      logError(fastify.log, 'Error fetching user activity', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user activity' });
     }
   });
@@ -653,7 +653,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         hasMore: offsetNum + conversations.length < total
       });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user conversations');
+      logError(fastify.log, 'Error fetching user conversations', error);
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user conversations' });
     }
   });
@@ -763,7 +763,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         hasMore: offsetNum + pageSlice.length < total
       });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user media');
+      logError(fastify.log, 'Error fetching user media', error);
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user media' });
     }
   });
@@ -840,7 +840,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         hasMore: offsetNum + participants.length < total
       });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching conversation participants');
+      logError(fastify.log, 'Error fetching conversation participants', error);
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation participants' });
     }
   });

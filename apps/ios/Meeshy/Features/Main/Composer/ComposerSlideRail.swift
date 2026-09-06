@@ -50,6 +50,11 @@ struct ComposerSlideRail: View {
     /// — sinon une image éditée resterait affichée dans son état d'avant.
     let imagesVersion: UInt64
     let onSelect: (Int) -> Void
+    /// **Supprimer la scène courante** (constat porteur 2026-09-06 : « il
+    /// manque la poubelle pour supprimer les scènes »). L'ancienne rangée de
+    /// médias portait cette croix ; ma rangée de scènes ne l'avait pas reprise
+    /// — une capacité perdue au passage d'un lot.
+    let onDelete: (Int) -> Void
 
     private static let height: CGFloat = 44
 
@@ -62,6 +67,7 @@ struct ComposerSlideRail: View {
                             tuile(slide, index: index)
                         }
                         .buttonStyle(.plain)
+                        .overlay(alignment: .topTrailing) { corbeille(index) }
                         .accessibilityLabel(Text(ComposerSlideRailCopy.position(
                             index: index + 1, total: slides.count)))
                     }
@@ -69,6 +75,29 @@ struct ComposerSlideRail: View {
                 .padding(.vertical, 2)
             }
             .id(imagesVersion)
+        }
+    }
+
+    /// La corbeille — sur la tuile COURANTE, et jamais sous deux scènes. La
+    /// règle vit dans `ComposerHeaderTiles.showsDelete`, où elle s'éprouve ;
+    /// cette vue la consulte, elle ne la refait pas.
+    @ViewBuilder
+    private func corbeille(_ index: Int) -> some View {
+        if ComposerHeaderTiles.showsDelete(sceneIndex: index,
+                                           currentIndex: currentIndex,
+                                           sceneCount: slides.count) {
+            Button { onDelete(index) } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(3)
+                    .background(Circle().fill(Color.black.opacity(0.55)))
+            }
+            .buttonStyle(.plain)
+            // La CIBLE reste visible sans déborder de la tuile : la corbeille
+            // est un contrôle secondaire, la sélection reste le geste premier.
+            .offset(x: 4, y: -4)
+            .accessibilityLabel(Text(ComposerSlideRailCopy.delete(index: index + 1)))
         }
     }
 
@@ -102,6 +131,11 @@ enum ComposerSlideRailCopy {
     static var rail: String {
         String(localized: "composer.slide.rail", defaultValue: "Scènes de la publication",
                bundle: .main)
+    }
+
+    static func delete(index: Int) -> String {
+        String(format: String(localized: "composer.slide.rail.delete",
+                              defaultValue: "Supprimer la scène %1$d", bundle: .main), index)
     }
 
     static func position(index: Int, total: Int) -> String {

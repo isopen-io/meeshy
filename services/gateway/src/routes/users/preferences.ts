@@ -327,7 +327,6 @@ export async function getDashboardStats(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      fastify.log.error(`[DASHBOARD] Error getting stats: ${error instanceof Error ? error.message : String(error)}`);
       logError(fastify.log, 'Get user dashboard stats error:', error);
       return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
@@ -442,7 +441,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       }));
 
     } catch (error) {
-      fastify.log.error(`[USER_STATS] Error getting user stats: ${error instanceof Error ? error.message : String(error)}`);
+      logError(fastify.log, '[USER_STATS] Error getting user stats', error);
       return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
   });

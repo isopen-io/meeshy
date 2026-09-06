@@ -104,3 +104,15 @@
   --color-avatar-4: #f59e0b;
   --color-on-avatar: #0b0c14;
 }
+
+/* UN ÉCRAN LARGE N'EST PAS UN TÉLÉPHONE CENTRÉ (2026-09-06, demande porteur).
+   Au-delà de 1024 px, la coquille passe à sa largeur wide — redéfinie ICI,
+   dans la table de jetons (règle 28 : aucune feuille ne déclare de variable),
+   pour que les huit écrans qui consomment --shell-width suivent d'un seul
+   site. Le jour où une planche desktop tranche une autre géographie (deux
+   colonnes liste + fil), c'est cette seule règle qui se reprend. */
+@media (min-width: 1024px) {
+  :root {
+    --shell-width: var(--shell-width-wide);
+  }
+}

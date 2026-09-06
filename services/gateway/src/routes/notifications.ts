@@ -12,7 +12,6 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
-import { logWarn } from '../utils/logger';
 import {
   cursorPage,
   cursorPaginationSchema,
@@ -21,6 +20,7 @@ import {
   encodePageCursor,
   type CursorSort,
 } from '../utils/cursor-pagination';
+import { logError, logWarn } from '../utils/logger.js';
 
 /**
  * L'ordre TOTAL de l'inbox, DÉCLARÉ une fois — et ce que le curseur encode.
@@ -216,7 +216,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           unreadCount,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching notifications');
+        logError(fastify.log, 'Error fetching notifications', error);
         return sendInternalError(reply, 'Failed to fetch notifications');
       }
     }
@@ -287,7 +287,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, { total, unread, byType });
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching notification counts');
+        logError(fastify.log, 'Error fetching notification counts', error);
         return sendInternalError(reply, 'Failed to fetch notification counts');
       }
     }
@@ -328,7 +328,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching unread count');
+        logError(fastify.log, 'Error fetching unread count', error);
         return sendInternalError(reply, 'Failed to fetch unread count');
       }
     }
@@ -389,7 +389,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, updated);
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking notification as read');
+        logError(fastify.log, 'Error marking notification as read', error);
         return sendInternalError(reply, 'Failed to mark notification as read');
       }
     }
@@ -433,7 +433,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking all notifications as read');
+        logError(fastify.log, 'Error marking all notifications as read', error);
         return sendInternalError(reply, 'Failed to mark all notifications as read');
       }
     }
@@ -492,7 +492,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking conversation notifications as read');
+        logError(fastify.log, 'Error marking conversation notifications as read', error);
         return sendInternalError(reply, 'Failed to mark conversation notifications as read');
       }
     }
@@ -553,7 +553,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking post notifications as read');
+        logError(fastify.log, 'Error marking post notifications as read', error);
         return sendInternalError(reply, 'Failed to mark post notifications as read');
       }
     }
@@ -612,7 +612,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error marking notifications by types as read');
+        logError(fastify.log, 'Error marking notifications by types as read', error);
         return sendInternalError(reply, 'Failed to mark notifications as read');
       }
     }
@@ -658,7 +658,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           count,
         };
       } catch (error) {
-        fastify.log.error({ error }, 'Error deleting read notifications');
+        logError(fastify.log, 'Error deleting read notifications', error);
         return sendInternalError(reply, 'Failed to delete read notifications');
       }
     }
@@ -722,7 +722,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, undefined);
       } catch (error) {
-        fastify.log.error({ error }, 'Error deleting notification');
+        logError(fastify.log, 'Error deleting notification', error);
         return sendInternalError(reply, 'Failed to delete notification');
       }
     }
@@ -778,7 +778,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, { deletedCount: result.count });
       } catch (error) {
-        fastify.log.error({ error }, 'Error clearing notifications');
+        logError(fastify.log, 'Error clearing notifications', error);
         return sendInternalError(reply, 'Failed to clear notifications');
       }
     }

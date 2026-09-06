@@ -40,6 +40,7 @@ import {
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { depreciee } from '../../../utils/deprecation';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+import { logError } from '../../../utils/logger.js';
 import { apiPath } from '@meeshy/shared/api/prefix';
 
 const logger = enhancedLogger.child({ module: 'UserPreferencesRoutes' });
@@ -173,7 +174,7 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
           lastKeyRotation: activeBundle?.lastRotatedAt ?? null
         });
       } catch (error: any) {
-        fastify.log.error({ error }, 'Error fetching encryption preferences');
+        logError(fastify.log, 'Error fetching encryption preferences', error);
         return sendInternalError(reply, 'FETCH_ERROR', { message: error.message || 'Failed to fetch encryption preferences' });
       }
     }

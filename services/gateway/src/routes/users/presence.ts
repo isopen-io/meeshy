@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response';
 import { decoderIds, servirPresence, presenceResponseSchema, MAX_IDS_PAR_REQUETE } from '../directory/presence';
+import { logError } from '../../utils/logger.js';
 
 /**
  * `GET /users/presence?ids=…` — ALIAS de `GET /directory/presence` (#4164).
@@ -42,7 +43,7 @@ export async function getUsersPresence(fastify: FastifyInstance) {
     try {
       return sendSuccess(reply, { users: await servirPresence(fastify, request, decode.ids) });
     } catch (error) {
-      fastify.log.error({ error }, '[users/presence] Failed to resolve presence');
+      logError(fastify.log, '[users/presence] Failed to resolve presence', error);
       return sendInternalError(reply, 'Failed to resolve presence');
     }
   });

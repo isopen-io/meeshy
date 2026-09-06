@@ -67,6 +67,28 @@ final class ComposerSlideRailTests: XCTestCase {
         XCTAssertEqual(ComposerHeaderTiles.tiles(for: slides).map(\.id), ["z", "a", "m"])
     }
 
+    // MARK: - La corbeille
+
+    /// **Seule la tuile qu'on REGARDE porte la corbeille.** Six cibles
+    /// destructrices dans une rangée de navigation, c'est une suppression par
+    /// mégarde qui attend son heure.
+    func test_laCorbeille_estSurLaTuileCourante_etElleSeule() {
+        for index in 0..<3 {
+            XCTAssertEqual(
+                ComposerHeaderTiles.showsDelete(sceneIndex: index, currentIndex: 1, sceneCount: 3),
+                index == 1, "tuile \(index)")
+        }
+    }
+
+    /// **Aucune corbeille sous deux scènes.** `removeSlide` refuse de descendre
+    /// au-dessous d'une slide : l'offrir là donnerait un bouton qui ne fait
+    /// rien. Le témoin discriminant du lot — sans lui, la règle « la tuile
+    /// courante » suffirait et laisserait passer le contrôle mort.
+    func test_uneSeuleScene_nOffrePasLaCorbeille() {
+        XCTAssertFalse(
+            ComposerHeaderTiles.showsDelete(sceneIndex: 0, currentIndex: 0, sceneCount: 1))
+    }
+
     /// Aucune scène ⇒ aucune rangée. Un rail vide occuperait la hauteur d'une
     /// bande pour ne rien dire (loi 4).
     func test_aucuneScene_aucuneTuile() {

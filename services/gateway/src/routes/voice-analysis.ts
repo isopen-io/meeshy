@@ -22,6 +22,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { voiceQualityAnalysisSchema } from './voice/types';
 import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { logError } from '../utils/logger.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { dateDeRetrait, depreciee } from '../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
@@ -198,7 +199,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, result);
     } catch (error: any) {
-      fastify.log.error({ error }, '[VoiceAnalysis] Attachment analysis error');
+      logError(fastify.log, '[VoiceAnalysis] Attachment analysis error', error);
       return sendInternalError(reply, error.message || 'Voice analysis failed');
     }
   });
@@ -331,7 +332,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
         failureCount: result.failures.length
       });
     } catch (error: any) {
-      fastify.log.error({ error }, '[VoiceAnalysis] Batch analysis error');
+      logError(fastify.log, '[VoiceAnalysis] Batch analysis error', error);
       return sendInternalError(reply, error.message || 'Batch voice analysis failed');
     }
   });
@@ -388,7 +389,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, analysis ? { analysis } : null);
     } catch (error: any) {
-      fastify.log.error({ error }, '[VoiceAnalysis] Get attachment analysis error');
+      logError(fastify.log, '[VoiceAnalysis] Get attachment analysis error', error);
       return sendInternalError(reply, error.message || 'Failed to retrieve analysis');
     }
   });
@@ -465,7 +466,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, result);
     } catch (error: any) {
-      fastify.log.error({ error }, '[VoiceAnalysis] Profile analysis error');
+      logError(fastify.log, '[VoiceAnalysis] Profile analysis error', error);
       return sendInternalError(reply, error.message || 'Voice profile analysis failed');
     }
   });
@@ -510,7 +511,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, analysis ? { analysis } : null);
     } catch (error: any) {
-      fastify.log.error({ error }, '[VoiceAnalysis] Get profile analysis error');
+      logError(fastify.log, '[VoiceAnalysis] Get profile analysis error', error);
       return sendInternalError(reply, error.message || 'Failed to retrieve profile analysis');
     }
   });
