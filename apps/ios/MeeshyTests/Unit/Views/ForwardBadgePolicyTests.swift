@@ -127,15 +127,41 @@ final class ForwardAttributionSiteGuardTests: XCTestCase {
         try String(contentsOf: repoRoot().appendingPathComponent(relativePath), encoding: .utf8)
     }
 
+    /// **Le résolveur est passé EN AMONT — et la garde le suit** (2026-09-06).
+    ///
+    /// La bulle appelait `ForwardBadgePolicy.attribution(for:)` sur le `Message`
+    /// qu'elle avait sous la main ; la rangée plate ne l'avait PAS et retombait
+    /// sur `.anonymous`. Une règle de CONFIDENTIALITÉ résolue à deux endroits
+    /// est une règle qui divergera : la liste blanche de `ForwardBadgePolicy`
+    /// échoue FERMÉ, et une peau qui la contourne pour « faire pareil »
+    /// ouvrirait la fuite que la liste existe pour fermer.
+    ///
+    /// > Un seul site résout, trois peaux rendent. Exiger l'appel DANS la peau
+    /// > interdisait précisément la centralisation qui ferme l'écart — la garde
+    /// > défendait le défaut qu'elle nommait.
+    ///
+    /// Les assertions sont donc devenues symétriques : la peau ne résout PLUS
+    /// rien, et le site amont résout.
     func test_theBubble_neverReadsTheForwardSenderName() throws {
-        let code = try source("apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
+        let peau = try source("apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
         XCTAssertFalse(
-            code.contains("message.forwardedFrom?.senderName"),
+            peau.contains("message.forwardedFrom?.senderName"),
             "la bulle ne peut plus choisir la personne : elle reçoit une attribution déjà tranchée"
         )
+        XCTAssertFalse(
+            peau.contains("ForwardBadgePolicy."),
+            "et elle ne doit plus INTERROGER la politique non plus : une seconde résolution, même "
+                + "correcte aujourd'hui, est celle qui divergera demain"
+        )
         XCTAssertTrue(
-            code.contains("ForwardBadgePolicy.attribution(for: message.forwardedFrom)"),
-            "un seul résolveur décide qui a le droit d'être nommé"
+            peau.contains("content.forwardAttribution"),
+            "elle rend l'attribution que le contenu porte déjà — c'est tout ce qu'une peau doit faire"
+        )
+
+        let amont = try source("apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift")
+        XCTAssertTrue(
+            amont.contains("ForwardBadgePolicy.attribution(for: message.forwardedFrom)"),
+            "un seul résolveur décide qui a le droit d'être nommé, et il est en AMONT des trois peaux"
         )
     }
 
