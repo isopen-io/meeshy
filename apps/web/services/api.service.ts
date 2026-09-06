@@ -5,6 +5,7 @@ import { getGeolocationHeaders } from '@/lib/geolocation';
 import { isJWTExpired } from '@/utils/auth';
 import { authManager } from './auth-manager.service';
 import { authService } from './auth.service';
+import { useAuthStore } from '@/stores/auth-store';
 import type { ApiResponse, ApiError } from '@meeshy/shared/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -163,7 +164,12 @@ class ApiService {
     this.isRefreshing = true;
     this.refreshPromise = (async () => {
       try {
-        const response = await authService.refreshToken();
+        // #4405 étape 2 — `AuthManager` n'a pas de lecteur pour le
+        // `sessionToken` du compte inscrit (le store Zustand le garde seul) ;
+        // sans lui, la fenêtre glissante que le schéma serveur annonce ne
+        // s'arme jamais depuis ce chemin.
+        const { sessionToken } = useAuthStore.getState();
+        const response = await authService.refreshToken(sessionToken);
         return !!response.success;
       } catch {
         // Session persists across refresh failures. Only an explicit

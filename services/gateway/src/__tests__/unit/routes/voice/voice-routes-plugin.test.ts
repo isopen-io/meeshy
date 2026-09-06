@@ -22,7 +22,7 @@ jest.mock('../../../../utils/logger', () => ({
 // test, donc les deux sont doublés par un stub minimal qui pose UNE route
 // connue (`/probe`) pour vérifier qu'elle atterrit au bon endroit.
 jest.mock('../../../../routes/voice/translation', () => ({
-  registerTranslationRoutes: (fastify: any, _svc: unknown, _t: unknown, prefix: string) => {
+  registerTranslationRoutes: (fastify: any, _svc: unknown, _t: unknown, prefix: string, _prisma: unknown) => {
     fastify.get(`${prefix}/probe`, async () => ({ hit: 'translation-probe' }));
   },
 }));
@@ -38,6 +38,7 @@ describe('voiceRoutesPlugin — enregistrement inconditionnel + 503 explicite (#
     await app.register(voiceRoutesPlugin, {
       prefix: '/api/v1/voice',
       audioTranslateService: {} as any,
+      prisma: {} as any,
     });
     await app.ready();
 
@@ -53,6 +54,7 @@ describe('voiceRoutesPlugin — enregistrement inconditionnel + 503 explicite (#
     await app.register(voiceRoutesPlugin, {
       prefix: '/api/v1/voice',
       audioTranslateService: null,
+      prisma: {} as any,
     });
     await app.ready();
 
@@ -72,6 +74,7 @@ describe('voiceRoutesPlugin — enregistrement inconditionnel + 503 explicite (#
     await app.register(voiceRoutesPlugin, {
       prefix: '/api/v1/voice',
       audioTranslateService: null,
+      prisma: {} as any,
     });
     await app.ready();
 
@@ -91,6 +94,7 @@ describe('voiceRoutesPlugin — enregistrement inconditionnel + 503 explicite (#
     await app.register(voiceRoutesPlugin, {
       prefix: '/api/v1/voice',
       audioTranslateService: null,
+      prisma: {} as any,
     });
     await app.register(
       async (instance) => {

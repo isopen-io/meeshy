@@ -3,8 +3,10 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { logger } from '../../utils/logger';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import {
@@ -15,6 +17,53 @@ import {
   errorResponseSchema,
   getUserId
 } from './types';
+
+/**
+ * #3624 — les trois routes `attachmentId` de ce fichier chargeaient et
+ * traduisaient/transcrivaient une pièce jointe PAR ID sans jamais vérifier
+ * que l'appelant appartient à sa conversation : lecture de transcriptions
+ * d'autrui, écriture de traductions, coût Whisper/TTS déclenchable par
+ * n'importe quel utilisateur authentifié. Même verdict que les octets
+ * (`routes/attachments/download.ts`), le détail (#4923) et la route jumelle
+ * `routes/attachments/translation.ts` (#5152) — source unique
+ * `resolveAttachmentReadVerdict`, jamais réécrite ici.
+ *
+ * Ce fichier authentifie via `getUserId()`/`request.user` (JWT registered
+ * user only — `fastify.authenticate` est monté avec `allowAnonymous: false`,
+ * voir server.ts), pas via `UnifiedAuthRequest.authContext` comme les routes
+ * d'attachments. Le verdict partagé ne lit que `authContext` : on lui fournit
+ * donc un contexte minimal dérivé de l'identité déjà vérifiée, plutôt que de
+ * dupliquer sa logique d'appartenance.
+ */
+async function ensureVoiceAttachmentAccessible(
+  reply: FastifyReply,
+  prisma: PrismaClient,
+  userId: string,
+  attachmentId: string
+): Promise<boolean> {
+  const attachment = await prisma.messageAttachment.findUnique({
+    where: { id: attachmentId },
+    select: { messageId: true, uploadedBy: true }
+  });
+
+  if (!attachment) {
+    sendNotFound(reply, 'NOT_FOUND', { message: 'Attachment not found' });
+    return false;
+  }
+
+  const verdict = await resolveAttachmentReadVerdict(
+    { authContext: { isAuthenticated: true, isAnonymous: false, userId } } as unknown as FastifyRequest,
+    attachment,
+    prisma
+  );
+
+  if (verdict !== 'allow') {
+    denyAttachmentRead(reply, verdict, 'Attachment not found');
+    return false;
+  }
+
+  return true;
+}
 
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
   if (error instanceof AudioTranslateError) {
@@ -37,7 +86,8 @@ export function registerTranslationRoutes(
   fastify: FastifyInstance,
   audioTranslateService: AudioTranslateService,
   translationService: MessageTranslationService | undefined,
-  prefix: string
+  prefix: string,
+  prisma: PrismaClient
 ): void {
   /**
    * POST /api/v1/voice/translate
@@ -114,6 +164,10 @@ export function registerTranslationRoutes(
           description: 'Authentication required',
           ...errorResponseSchema
         },
+        403: {
+          description: 'Access denied to this attachment (caller is not a member of its conversation)',
+          ...errorResponseSchema
+        },
         404: {
           description: 'Attachment not found (when using attachmentId)',
           ...errorResponseSchema
@@ -174,6 +228,10 @@ export function registerTranslationRoutes(
 
       if (!translationService) {
         return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+      }
+
+      if (!(await ensureVoiceAttachmentAccessible(reply, prisma, userId, attachmentId!))) {
+        return;
       }
 
       const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);
@@ -297,6 +355,10 @@ export function registerTranslationRoutes(
           description: 'Authentication required',
           ...errorResponseSchema
         },
+        403: {
+          description: 'Access denied to this attachment (caller is not a member of its conversation)',
+          ...errorResponseSchema
+        },
         404: {
           description: 'Attachment not found (when using attachmentId)',
           ...errorResponseSchema
@@ -365,6 +427,10 @@ export function registerTranslationRoutes(
 
       if (!translationService) {
         return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+      }
+
+      if (!(await ensureVoiceAttachmentAccessible(reply, prisma, userId, attachmentId!))) {
+        return;
       }
 
       const result = await translationService.translateAttachment(attachmentId!, {
@@ -599,6 +665,10 @@ export function registerTranslationRoutes(
           description: 'Authentication required',
           ...errorResponseSchema
         },
+        403: {
+          description: 'Access denied to this attachment (caller is not a member of its conversation)',
+          ...errorResponseSchema
+        },
         404: {
           description: 'Attachment not found (when using attachmentId)',
           ...errorResponseSchema
@@ -691,6 +761,10 @@ export function registerTranslationRoutes(
 
       if (!translationService) {
         return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
+      }
+
+      if (!(await ensureVoiceAttachmentAccessible(reply, prisma, userId, attachmentId!))) {
+        return;
       }
 
       const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);

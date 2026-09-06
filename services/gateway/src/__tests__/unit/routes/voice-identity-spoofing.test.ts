@@ -131,7 +131,10 @@ function buildApp() {
   });
 
   const audioService = makeAudioService();
-  registerVoiceRoutes(app, audioService as any, undefined);
+  // translationService est `undefined` ici (aucun test de ce fichier n'exerce
+  // le chemin `attachmentId`) : la garde d'appartenance (#3624) n'est donc
+  // jamais atteinte et `prisma` n'a besoin d'être qu'un objet opaque.
+  registerVoiceRoutes(app, audioService as any, undefined, {} as any);
   return { app, audioService };
 }
 

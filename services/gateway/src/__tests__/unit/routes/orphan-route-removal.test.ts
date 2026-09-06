@@ -128,7 +128,8 @@ type RegisterTusRoutes = (fastify: FastifyInstance) => Promise<void>;
 type RegisterVoiceRoutes = (
   fastify: FastifyInstance,
   audioTranslateService: unknown,
-  translationService?: unknown
+  translationService: unknown,
+  prisma: unknown
 ) => void;
 type RegisterStoryAudioRoutes = (
   fastify: FastifyInstance,
@@ -298,7 +299,7 @@ describe('#4190 — la voix ne monte plus /health ni /stats', () => {
     collectRoutes(app, voiceRoutes);
     // Les handlers seuls consomment le service : la TABLE de routes ne dépend
     // que du montage, d'où un service vide plutôt qu'un faux complet.
-    registerVoiceRoutes(app, {}, undefined);
+    registerVoiceRoutes(app, {}, undefined, {});
     await app.ready();
     await app.close();
   });
