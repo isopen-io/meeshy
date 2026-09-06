@@ -92,7 +92,7 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
       return path === '/health' || path === '/healthz' || path === '/ready'
         || path === apiPath('/health/ready');
     },
-    errorResponseBuilder: (request, context) => {
+    errorResponseBuilder: (_request, context) => {
       return {
         success: false,
         error: 'Trop de requêtes. Veuillez réessayer plus tard.',

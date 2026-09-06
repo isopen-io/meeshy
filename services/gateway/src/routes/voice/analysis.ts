@@ -514,7 +514,7 @@ export function registerAnalysisRoutes(
         }
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const result = await audioTranslateService.getSupportedLanguages();
       return sendSuccess(reply, result);

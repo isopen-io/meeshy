@@ -111,7 +111,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
   await Promise.all([
     registerUploadRoutes(fastify, authOptional, prisma),
     registerDownloadRoutes(fastify, prisma),
-    registerMetadataRoutes(fastify, authRequired, authOptional, prisma),
+    registerMetadataRoutes(fastify, authOptional, prisma),
     registerTranslationRoutes(fastify, authRequired, prisma, translateService),
   ]);
 }

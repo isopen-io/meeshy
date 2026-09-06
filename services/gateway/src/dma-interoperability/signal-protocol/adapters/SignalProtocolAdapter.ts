@@ -48,7 +48,14 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     return this.keyManager.generateAndStorePreKeys(count);
   }
 
-  async generateSignedPreKey(id: number): Promise<{ id: number; publicKey: Buffer; signature: Buffer }> {
+  // `id` fait partie du contrat `ISignalProtocolAdapter` mais n'est pas
+  // honoré : `generateAndStoreSignedPreKey()` attribue son propre id (même
+  // raison que `generatePreKeyBatch` ci-dessus), et aucun appelant de
+  // production n'existe aujourd'hui pour cette méthode (mesuré : seule
+  // l'interface la déclare). Suivi ouvert : #5238-like — SignalProtocolAdapter
+  // n'est instancié par aucun chemin de production, SignalProtocolEngine
+  // implémentant sa propre crypto en direct.
+  async generateSignedPreKey(_id: number): Promise<{ id: number; publicKey: Buffer; signature: Buffer }> {
     const signedPreKey = await this.keyManager.generateAndStoreSignedPreKey();
     return {
       id: signedPreKey.id,
@@ -103,10 +110,15 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     };
   }
 
+  // `messageNumber` fait partie du contrat mais n'est pas utilisé comme AAD —
+  // symétrique avec `decryptMessage`, qui ne le reçoit pas non plus : aucune
+  // asymétrie de vérification, mais aucun lien cryptographique entre le
+  // numéro et le chiffré. Même statut que `generateSignedPreKey` ci-dessus :
+  // ni appelé en production, ni prouvé par un témoin de bout en bout.
   async encryptMessage(
     sessionKey: Buffer,
     plaintext: Buffer,
-    messageNumber: number
+    _messageNumber: number
   ): Promise<{
     ciphertext: Buffer;
     iv: Buffer;

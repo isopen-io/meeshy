@@ -566,7 +566,7 @@ export function registerMessagesListRoute(
         let audioWithTranscriptionCount = 0;
         let audioWithTranslatedAudiosCount = 0;
 
-        (messages as any[]).forEach((msg, index) => {
+        (messages as any[]).forEach((msg) => {
           if (msg.attachments && msg.attachments.length > 0) {
             msg.attachments.forEach((att: any) => {
               // Vérifier si c'est un audio

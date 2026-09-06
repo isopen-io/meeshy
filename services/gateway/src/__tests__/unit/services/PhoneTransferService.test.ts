@@ -339,6 +339,31 @@ describe('resendCode', () => {
       60
     );
   });
+
+  // #5331 — `resendCode` prenait `ipAddress` sans jamais l'utiliser : contrairement
+  // à ses trois voisins (`initiateTransfer`, `verifyAndTransfer`,
+  // `initiateTransferForRegistration`) et à sa jumelle
+  // `PhonePasswordResetService.resendCode`, aucun événement de sécurité
+  // n'était journalisé pour un renvoi de code de transfert de téléphone.
+  it('logs a PHONE_TRANSFER_CODE_RESENT security event with the caller IP on success', async () => {
+    const td = makeTransferData();
+    const { _code, ...data } = td;
+    const { sut, prisma } = makeSut({
+      cacheData: { 'phone-transfer:xfer-ok': JSON.stringify(data) },
+    });
+
+    await sut.resendCode('xfer-ok', '9.9.9.9');
+
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: data.toUserId,
+          eventType: 'PHONE_TRANSFER_CODE_RESENT',
+          ipAddress: '9.9.9.9',
+        }),
+      })
+    );
+  });
 });
 
 // ─── initiateTransferForRegistration ─────────────────────────────────────────

@@ -580,7 +580,12 @@ export class PostFeedService {
     return { items, nextCursor, hasMore };
   }
 
-  async getDiscoverStatuses(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
+  // `userId` n'est pas encore lu : « Discover » ne sert QUE des statuts `PUBLIC`
+  // (`visibility: PostVisibility.PUBLIC` ci-dessous), sans passer par
+  // `buildVisibilityFilter` — rien à gater par viewer aujourd'hui. Gardé pour la
+  // même signature que `getFeed`/`getReels`/`getStatuses`, au cas où ce flux
+  // personnalise un jour (affinité, exclusion des posts déjà vus).
+  async getDiscoverStatuses(_userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
 

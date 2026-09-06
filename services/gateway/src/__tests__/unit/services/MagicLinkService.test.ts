@@ -275,6 +275,36 @@ describe('MagicLinkService', () => {
         expect(result.success).toBe(true);
         expect(mockPrisma.user.findFirst).toHaveBeenCalled();
       });
+
+      // #5331 — `checkRateLimit` prenait `ipAddress` sans jamais le lire : un
+      // appelant unique pouvait épuiser la voie magic-link en tournant sur des
+      // adresses e-mail distinctes, chacune sous son propre quota jamais
+      // touché. `PasswordResetService.checkRateLimit` applique déjà les DEUX
+      // bornes (email + IP) ; c'est la jumelle qui en manquait une.
+      it('should rate-limit by IP even when the email quota is untouched', async () => {
+        mockRedis.get.mockImplementation(((key: string) =>
+          Promise.resolve(String(key).includes(':ip:') ? '9999' : '0')) as any);
+        mockPrisma.user.findFirst.mockResolvedValue(null);
+
+        const result = await service.requestMagicLink(validMagicLinkRequest);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('RATE_LIMITED');
+        expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+      });
+
+      it('should increment the IP rate limit counter alongside the email counter', async () => {
+        mockRedis.get.mockResolvedValue('0');
+        mockPrisma.user.findFirst.mockResolvedValue(null);
+
+        await service.requestMagicLink(validMagicLinkRequest);
+
+        expect(mockRedis.set).toHaveBeenCalledWith(
+          expect.stringContaining('ratelimit:magic-link:ip:'),
+          '1',
+          3600
+        );
+      });
     });
 
     describe('User Not Found', () => {

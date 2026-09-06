@@ -720,10 +720,18 @@ export class PasswordResetService {
     return isValid;
   }
 
+  // #5331 (suivi) — `deviceFingerprint`/`ipAddress` sont chargés (`lastLoginDevice`,
+  // `lastLoginIp`) précisément pour être comparés ici, et ne le sont pas : seule
+  // l'anomalie géographique (« impossible travel ») est détectée. Un
+  // changement d'appareil ou d'IP sans déplacement de pays passe donc
+  // inaperçu. Non traité dans ce lot : le SEUIL d'un tel signal (tout nouvel
+  // appareil est-il suspect, ou seulement combiné à autre chose ?) est une
+  // décision produit, pas un paramètre mort à instruire au passage — voir
+  // #5331 pour le suivi ouvert.
   private async detectAnomalies(
     userId: string,
-    deviceFingerprint: string,
-    ipAddress: string,
+    _deviceFingerprint: string,
+    _ipAddress: string,
     geoLocation: string
   ): Promise<{ isAnomaly: boolean; reason?: string }> {
     const user = await this.prisma.user.findUnique({

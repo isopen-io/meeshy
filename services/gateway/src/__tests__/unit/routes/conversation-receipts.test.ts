@@ -358,6 +358,22 @@ describe('#4349 critère 2 — GET /conversations/:conversationId/receipts', () 
     );
   });
 
+  // #5331 — `readPeople` recevait `reader` sans jamais le lire : rien ne
+  // confrontait `messageIds[0]` à `reader.conversationId` avant d'appeler
+  // `getMessageStatusDetails`, qui résout SON PROPRE `conversationId` depuis
+  // le message. Un membre authentifié de N'IMPORTE QUELLE conversation
+  // pouvait donc lire la liste NOMINATIVE (qui a reçu/lu, et quand) d'un
+  // message d'une conversation à laquelle il n'appartient pas.
+  it("refuse detail=people sur un message d'une AUTRE conversation (404, indiscernable d'un id inconnu)", async () => {
+    mockPrisma.message.findFirst.mockResolvedValue(null);
+    const app = await buildApp();
+
+    const response = await get(app, `messageIds=${MESSAGE_ID}&detail=people`);
+
+    expect(response.statusCode).toBe(404);
+    expect(mockGetMessageStatusDetails).not.toHaveBeenCalled();
+  });
+
   it('If-None-Match rend 304 sur une charge inchangée, et 200 sinon', async () => {
     const app = await buildApp();
 

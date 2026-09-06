@@ -170,7 +170,7 @@ async function buildApp(): Promise<FastifyInstance> {
   };
   const setAuth = async (req: FastifyRequest) => { (req as any).authContext = authContext; };
 
-  await registerMetadataRoutes(app, setAuth, setAuth, prisma);
+  await registerMetadataRoutes(app, setAuth, prisma);
   await app.ready();
   return app;
 }

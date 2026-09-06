@@ -362,7 +362,7 @@ export class AttachmentTranslateService {
 
       // Si c'est un transfert, copier les traductions de l'original vers le nouvel attachement
       if (isForwarded && attachment.id !== originalAttachmentId) {
-        await this._copyTranslationsForForward(originalAttachmentId, attachment.id, attachment.message?.id);
+        await this._copyTranslationsForForward(originalAttachmentId, attachment.id);
       }
 
       // Construire la réponse à partir du cache
@@ -629,8 +629,7 @@ export class AttachmentTranslateService {
    */
   private async _copyTranslationsForForward(
     originalAttachmentId: string,
-    targetAttachmentId: string,
-    targetMessageId?: string
+    targetAttachmentId: string
   ): Promise<void> {
     try {
       // 1. Récupérer l'attachement source avec transcription et traductions
@@ -688,9 +687,9 @@ export class AttachmentTranslateService {
   }
 
   private async translateImage(
-    userId: string,
-    attachment: any,
-    options: TranslateOptions
+    _userId: string,
+    _attachment: any,
+    _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Image translation not yet implemented
     return {
@@ -701,9 +700,9 @@ export class AttachmentTranslateService {
   }
 
   private async translateVideo(
-    userId: string,
-    attachment: any,
-    options: TranslateOptions
+    _userId: string,
+    _attachment: any,
+    _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Video translation not yet implemented
     return {
@@ -714,9 +713,9 @@ export class AttachmentTranslateService {
   }
 
   private async translateDocument(
-    userId: string,
-    attachment: any,
-    options: TranslateOptions
+    _userId: string,
+    _attachment: any,
+    _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Document translation not yet implemented
     return {

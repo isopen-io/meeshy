@@ -9,7 +9,13 @@
     // Sans ce retrait, 138 suites tombaient sur des imports/variables de test
     // légitimement non lus (mocks, scaffolding) — une classe de dette que
     // l'issue n'a jamais visée.
-    "noUnusedLocals": false
+    "noUnusedLocals": false,
+    // #5331 — même raison, pour `noUnusedParameters` : mesuré à 74
+    // diagnostics sur les tests (handlers Socket.IO mockés en
+    // `(event, data) => {...}` où `event` est ignoré, callbacks de test
+    // scaffolding), contre 0 sur `src/**/*` de production une fois le cliquet
+    // posé. Retiré pour la même classe de dette que #4859 n'a jamais visée.
+    "noUnusedParameters": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
