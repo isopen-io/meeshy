@@ -2502,10 +2502,28 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
 
         let compacte = compact(code)
+        // **L'ENVOI, et le RELAIS** (2026-09-06). Ce cliquet exigeait UNE seule
+        // occurrence de `onPublishAllInBackground(`. Il y en a deux, et la
+        // seconde n'est pas un second chemin d'envoi : c'est un PASSE-PLAT, la
+        // closure que le meuble donne à sa surface, qui rappelle celle qu'il a
+        // reçue après y avoir greffé les légendes d'accessibilité
+        // (`accessibilityCarryingComposerCaptions`, site unique de cette greffe).
+        //
+        // > Compter un NOM ne distingue pas celui qui ENVOIE de celui qui
+        // > TRANSMET. La règle — « la fermeture de la scène se presse à un
+        // > site » — se vérifie en nommant ce site, pas en comptant.
+        guard let scene = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
+            return XCTFail("`publishStoryScene` est introuvable — le seul site d'envoi de la scène a disparu.")
+        }
+        XCTAssertTrue(
+            compact(scene).contains("onPublishAllInBackground("),
+            "La fermeture de la scène se presse dans `publishStoryScene` — ou pas du tout."
+        )
         XCTAssertEqual(
-            occurrences(of: "onPublishAllInBackground(", in: compacte), 1,
-            "La fermeture de la scène se presse à UN site — `publishStoryScene` — ou pas du tout. "
-                + "Un second appel est un second chemin d'envoi, quel que soit le nom qu'il porte."
+            occurrences(of: "onPublishAllInBackground(", in: compacte), 2,
+            "Exactement DEUX : l'envoi de `publishStoryScene`, et le relais qui greffe les légendes. "
+                + "Un TROISIÈME serait un second chemin d'envoi, quel que soit le nom qu'il porte — et "
+                + "un seul dirait que le relais a cessé de greffer, donc que les légendes se perdent."
         )
         guard let relais = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
             return XCTFail("`publishStoryScene` est introuvable dans le meuble — la garde ne mesurerait RIEN")
