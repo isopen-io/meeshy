@@ -48,10 +48,24 @@ export type EtatDesPrefs = {
   readonly dndStartTime: string;
   readonly dndEndTime: string;
   readonly dndUtcOffsetMinutes: number;
+  /**
+   * LE DÉCALAGE MESURÉ DE L'APPAREIL, en minutes à ajouter à UTC — `null`
+   * quand le cookie de fuseau n'est pas là (`app/session.ts` ›
+   * `fuseauDuLecteur`). Il ne PEINT pas la sélection : il NOMME ce que
+   * l'option « cet appareil » écrira, et la porte écrit exactement ça.
+   */
+  readonly decalageDeLAppareil: number | null;
   /** Non nul juste après la redirection du POST — le PRG dit ce qu'il a fait. */
   readonly regleAppliquee: RegleAppliquee;
   /** Vrai quand le POST (sans JS) a échoué — l'état affiché reste celui relu du serveur. */
   readonly echec: boolean;
+  /**
+   * LE MOTIF NOMMÉ DU REFUS, quand la porte en connaît un (une heure hors
+   * format, § du geste `fenetre`). `null` ⇒ le motif générique `PREFS.echec` :
+   * « réessayez » est juste pour un réseau coupé et faux pour une saisie que
+   * réessayer à l'identique refusera pareil.
+   */
+  readonly motif: string | null;
   readonly tempsReel: { readonly module: string; readonly passerelle: string } | null;
 };
 
@@ -78,8 +92,10 @@ const avis = (regleAppliquee: RegleAppliquee): string =>
     regleAppliquee === null ? '' : svgDuSprite('ph-check-circle') + echappe(messageDeLAvis(regleAppliquee))
   }</p>`;
 
-const echecBandeau = (echec: boolean): string =>
-  `<p class="echec" role="alert"${echec ? '' : ' hidden'}>${echec ? svgDuSprite('ph-warning-circle') + echappe(PREFS.echec) : ''}</p>`;
+const echecBandeau = (echec: boolean, motif: string | null): string =>
+  `<p class="echec" role="alert"${echec ? '' : ' hidden'}>${
+    echec ? svgDuSprite('ph-warning-circle') + echappe(motif ?? PREFS.echec) : ''
+  }</p>`;
 
 /**
  * SERVI CACHÉ, COMME LES BANDEAUX DIFFÉRÉS DU FIL — un 401 en cours de
@@ -130,7 +146,9 @@ const ligneBascule = (
 const optionDeFuseau = (fuseau: { readonly valeur: string; readonly libelle: string }, actuel: number): string =>
   `<option value="${echappe(fuseau.valeur)}"${Number(fuseau.valeur) === actuel ? ' selected' : ''}>${echappe(fuseau.libelle)}</option>`;
 
-const formulaireDeLaFenetre = (etat: Pick<EtatDesPrefs, 'dndStartTime' | 'dndEndTime' | 'dndUtcOffsetMinutes'>): string =>
+const formulaireDeLaFenetre = (
+  etat: Pick<EtatDesPrefs, 'dndStartTime' | 'dndEndTime' | 'dndUtcOffsetMinutes' | 'decalageDeLAppareil'>,
+): string =>
   '<details class="fenetre-edition">' +
   `<summary>${echappe(PREFS.fenetreModifier)}</summary>` +
   '<form method="post">' +
@@ -146,7 +164,7 @@ const formulaireDeLaFenetre = (etat: Pick<EtatDesPrefs, 'dndStartTime' | 'dndEnd
   '<div class="champ">' +
   `<label for="dnd-fuseau">${echappe(PREFS.fenetreFuseau)}</label>` +
   `<select id="dnd-fuseau" name="fuseau">` +
-  `<option value="${FUSEAU_AUTO}">${echappe(PREFS.fenetreFuseauAuto)}</option>` +
+  `<option value="${FUSEAU_AUTO}">${echappe(PREFS.fenetreFuseauAuto(etat.decalageDeLAppareil))}</option>` +
   FUSEAUX_DND.map((fuseau) => optionDeFuseau(fuseau, etat.dndUtcOffsetMinutes)).join('') +
   '</select>' +
   '</div>' +
@@ -170,7 +188,7 @@ const corps = (etat: EtatDesPrefs, participation: string): string =>
   `<main id="main-content" class="prefs-ecran"${participation}>` +
   enTete() +
   avis(etat.regleAppliquee) +
-  echecBandeau(etat.echec) +
+  echecBandeau(etat.echec, etat.motif) +
   sessionExpireeBandeau() +
   SECTIONS_DE_PREFS.map((s) => section(s, etat)).join('') +
   '</main>';

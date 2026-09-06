@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 
+import { svgDuSprite } from '@/app/actifs-inlines';
 import { documentDesMedias, type EtatDesMedias } from '@/app/connecte/medias-vue';
 import { message, type Fil, type Message } from '@/lib/api/fil';
 import { galerie, genreDemande } from '@/lib/api/medias';
@@ -70,6 +71,11 @@ const filDe = (messages: readonly Message[], plusAncien: string | null = null): 
 });
 
 const IMAGE = lu(brut({ id: 'r1', attachments: [PIECE()] }));
+
+/** La MÊME image, telle que la passerelle la sert VRAIMENT : avec sa vignette (`attachmentMediaSelect`). */
+const IMAGE_AVEC_VIGNETTE = lu(
+  brut({ id: 'r1', attachments: [PIECE({ thumbnailUrl: '/api/v1/attachments/file/2026/tableau.min.jpg' })] }),
+);
 
 const VIDEO = lu(
   brut({
@@ -152,6 +158,7 @@ const etat = (attributs: Partial<EtatDesMedias> = {}): EtatDesMedias => ({
   plusAncien: null,
   avant: null,
   plein: null,
+  apercusAutomatiques: false,
   tempsReel: TEMPS_REEL_DES_MEDIAS,
   ...attributs,
 });
@@ -354,5 +361,54 @@ describe('l’écran DIT ce qu’il sert, et dessine ce qu’il n’a pas', () =
     const rendu = documentDesMedias(etat());
     expect(rendu).toContain('<meta name="robots" content="noindex, nofollow"/>');
     expect(rendu).toContain('<html lang="fr"');
+  });
+});
+
+
+/**
+ * L'EFFET DE `document.autoDownloadEnabled` (critère de fin `detail-media`,
+ * travail `reglages-details`) — « modifier téléchargement automatique CHANGE le
+ * comportement observé sur /chats/:cle/medias ».
+ *
+ * Le témoin est écrit sur ce qui PART, pas sur ce qui s'affiche : une `<img>`
+ * dans le document EST une requête de plus au premier rendu, et son absence
+ * EST le zéro octet du critère. Il porte sur les DEUX moitiés du réglage —
+ * sans quoi seule la moitié « jamais » (le comportement d'avant ce lot) serait
+ * gardée, et un réglage inerte resterait vert.
+ */
+describe('les aperçus automatiques CHANGENT ce que la grille demande', () => {
+  const galerieDeLImage = galerie({ messages: [IMAGE_AVEC_VIGNETTE], genre: null });
+
+  it('à « jamais » (le défaut) — AUCUNE `<img>`, donc zéro octet de média', () => {
+    const document_ = documentDesMedias(etat({ galerie: galerieDeLImage, apercusAutomatiques: false }));
+
+    expect(document_).not.toContain('<img');
+    expect(document_).not.toContain('tableau.min.jpg');
+    expect(document_).toContain(`<span class="vignette" aria-hidden="true">${svgDuSprite('ph-image')}</span>`);
+  });
+
+  it('à « automatique » — la tuile rend SA vignette, différée et sans texte alternatif', () => {
+    const document_ = documentDesMedias(etat({ galerie: galerieDeLImage, apercusAutomatiques: true }));
+
+    expect(document_).toContain('src="https://gate.test/api/v1/attachments/file/2026/tableau.min.jpg"');
+    expect(document_).toContain('loading="lazy"');
+    expect(document_).toContain('alt=""');
+  });
+
+  it('à « jamais », la FEUILLE de l’aperçu ne voyage pas non plus — le réglage gouverne aussi les octets de CSS', () => {
+    const sansAperçus = documentDesMedias(etat({ galerie: galerieDeLImage, apercusAutomatiques: false }));
+    const avecAperçus = documentDesMedias(etat({ galerie: galerieDeLImage, apercusAutomatiques: true }));
+
+    expect(sansAperçus).not.toContain('object-fit:cover');
+    expect(avecAperçus).toContain('object-fit:cover');
+  });
+
+  it('une pièce SANS vignette reste une tuile-glyphe, même à « automatique » — jamais un `src` vide', () => {
+    const document_ = documentDesMedias(
+      etat({ galerie: galerie({ messages: [IMAGE], genre: null }), apercusAutomatiques: true }),
+    );
+
+    expect(document_).not.toContain('<img');
+    expect(document_).toContain(`<span class="vignette" aria-hidden="true">${svgDuSprite('ph-image')}</span>`);
   });
 });

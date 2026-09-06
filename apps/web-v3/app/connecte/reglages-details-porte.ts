@@ -162,20 +162,35 @@ const AVIS_DE_SUPPRESSION: Readonly<Record<Exclude<Awaited<ReturnType<typeof dem
 export const SUPPRESSION = async (requete: Request, recuperer?: Recuperateur): Promise<Response> =>
   avecJeton(requete, CHEMIN_SUPPRESSION, async (jeton) => {
     if (requete.method !== 'POST') {
-      return rendu(documentDeLaSuppression({ genre: 'formulaire', avis: null }));
+      return rendu(documentDeLaSuppression({ genre: 'formulaire', avis: null, phrase: '' }));
     }
 
     if (origineEtrangere(requete)) return refusDOrigine(requete);
 
     const formulaire = await requete.formData().catch(() => null);
-    const phrase = formulaire?.get('confirmationPhrase');
+    const soumise = formulaire?.get('confirmationPhrase');
     const motDePasse = formulaire?.get('currentPassword');
+    // CE QUI EST REPOSÉ : la phrase tapée, jamais le mot de passe (le type de
+    // la vue le dit). Une soumission illisible repose la chaîne vide, pas une
+    // valeur inventée.
+    const phrase = typeof soumise === 'string' ? soumise : '';
 
-    if (typeof phrase !== 'string' || typeof motDePasse !== 'string' || motDePasse === '') {
-      return rendu(documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.phraseInvalide }), 422);
-    }
+    // DEUX REFUS, DEUX MOTIFS. Ils étaient confondus sous « Recopiez
+    // exactement la phrase demandée » — que l'écran servait à qui avait
+    // parfaitement recopié la phrase et laissé le mot de passe vide : un
+    // refus qui désigne la mauvaise moitié du geste fait recommencer la
+    // bonne.
     if (phrase !== REGLAGES_DETAILS.suppression.phraseAConfirmer) {
-      return rendu(documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.phraseInvalide }), 422);
+      return rendu(
+        documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.phraseInvalide, phrase }),
+        422,
+      );
+    }
+    if (typeof motDePasse !== 'string' || motDePasse === '') {
+      return rendu(
+        documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.motDePasseRequis, phrase }),
+        422,
+      );
     }
 
     const issue = await demandeDeSuppression({ jeton, confirmationPhrase: phrase, motDePasse, recuperer });
@@ -183,7 +198,7 @@ export const SUPPRESSION = async (requete: Request, recuperer?: Recuperateur): P
     if (issue.genre === 'demandee') return rendu(documentDeLaSuppression({ genre: 'demandee' }));
 
     return rendu(
-      documentDeLaSuppression({ genre: 'formulaire', avis: AVIS_DE_SUPPRESSION[issue.genre] }),
+      documentDeLaSuppression({ genre: 'formulaire', avis: AVIS_DE_SUPPRESSION[issue.genre], phrase }),
       issue.genre === 'mot-de-passe-invalide' ? 400 : issue.genre === 'panne' ? 503 : 409,
     );
   });

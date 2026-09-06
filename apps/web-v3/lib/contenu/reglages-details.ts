@@ -83,6 +83,7 @@ export const REGLAGES_DETAILS = {
     demandee: 'Un e-mail de confirmation vous a été envoyé. Votre compte n’est pas encore supprimé.',
     motDePasseInvalide: 'Votre mot de passe est incorrect.',
     phraseInvalide: 'Recopiez exactement la phrase demandée.',
+    motDePasseRequis: 'Votre mot de passe est requis pour confirmer.',
     sansEmail: 'Ajoutez et vérifiez une adresse e-mail avant de demander la suppression.',
     dejaEnCours: 'Une demande de suppression est déjà en cours — vérifiez vos e-mails.',
     panne: 'La demande n’a pas pu être envoyée. Réessayez dans un instant.',

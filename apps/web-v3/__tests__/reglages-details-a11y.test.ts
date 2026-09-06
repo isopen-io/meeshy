@@ -46,7 +46,7 @@ describe('0 violation serious/critical — reglages-details', () => {
   });
 
   it('/settings/privacy/delete', async () => {
-    expect(await graves(documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.dejaEnCours }))).toEqual([]);
+    expect(await graves(documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.dejaEnCours, phrase: '' }))).toEqual([]);
   });
 
   it('/settings/media — le hub', async () => {

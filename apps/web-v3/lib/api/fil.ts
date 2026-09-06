@@ -90,6 +90,19 @@ export type PieceJointe = {
    * son nom et son poids. Deux adresses parce que deux gestes.
    */
   readonly piste: string;
+  /**
+   * LA VIGNETTE — `thumbnailUrl` tel que la passerelle le sert
+   * (`attachmentMediaSelect`, `services/gateway/src/services/attachments/
+   * attachmentIncludes.ts:76`), résolu sur SON origine comme `url`.
+   *
+   * Elle est SERVIE mais jamais rendue d'office : c'est un OCTET qui part, et
+   * la v3 le fait dépendre d'un réglage du lecteur
+   * (`document.autoDownloadEnabled`, `/settings/media/document`). `null`
+   * quand la passerelle n'en a pas — la tuile-glyphe reste alors le rendu,
+   * même quand le réglage est actif : une `<img src="">` demanderait le
+   * DOCUMENT lui-même, ce qui est le contraire de l'économie visée.
+   */
+  readonly affiche: string | null;
   /** Le poids ANNONCÉ avant tout téléchargement — `null` quand la passerelle ne le sert pas. */
   readonly octets: number | null;
   readonly dureeMs: number | null;
@@ -322,6 +335,7 @@ const piece = (
     preferredLanguages: langues,
   });
   const genre: GenreDePiece = genreDeMime(chaine(brut.mimeType));
+  const affiche = chaine(brut.thumbnailUrl);
   // UNE descente, deux projections : le TEXTE que `traduite` élit, et la PISTE
   // que sa langue désigne dans la carte jumelle. Descendre le prisme une
   // seconde fois pour le son servirait « la réunion est déplacée » au-dessus
@@ -341,6 +355,7 @@ const piece = (
     nom: chaine(brut.originalName) ?? chaine(brut.fileName) ?? 'Pièce jointe',
     url,
     piste: piste?.url === undefined ? url : urlDePiece(piste.url, origine),
+    affiche: affiche === null ? null : urlDePiece(affiche, origine),
     octets: nombre(brut.fileSize),
     dureeMs: nombre(brut.duration),
     largeur: nombre(brut.width),

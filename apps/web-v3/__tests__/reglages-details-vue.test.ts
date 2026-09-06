@@ -95,7 +95,7 @@ describe('/settings/privacy/export', () => {
 
 describe('/settings/privacy/delete', () => {
   it('rend le formulaire (phrase + mot de passe) et l’avertissement d’irréversibilité', () => {
-    const html = documentDeLaSuppression({ genre: 'formulaire', avis: null });
+    const html = documentDeLaSuppression({ genre: 'formulaire', avis: null, phrase: '' });
 
     expect(html).toContain('name="confirmationPhrase"');
     expect(html).toContain('name="currentPassword"');
@@ -103,7 +103,7 @@ describe('/settings/privacy/delete', () => {
   });
 
   it('affiche le motif du refus quand il y en a un', () => {
-    const html = documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.dejaEnCours });
+    const html = documentDeLaSuppression({ genre: 'formulaire', avis: REGLAGES_DETAILS.suppression.dejaEnCours, phrase: '' });
     expect(html).toContain(REGLAGES_DETAILS.suppression.dejaEnCours);
   });
 

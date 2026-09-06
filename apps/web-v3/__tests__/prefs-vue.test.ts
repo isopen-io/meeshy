@@ -34,8 +34,10 @@ const ETAT_NOMINAL: EtatDesPrefs = {
   dndStartTime: '22:00',
   dndEndTime: '08:00',
   dndUtcOffsetMinutes: 0,
+  decalageDeLAppareil: null,
   regleAppliquee: null,
   echec: false,
+  motif: null,
   tempsReel: null,
 };
 

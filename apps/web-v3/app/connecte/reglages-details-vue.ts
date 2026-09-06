@@ -126,10 +126,14 @@ export const documentDeLaConfidentialite = (etat: EtatDeLaConfidentialite): stri
 
 // ─── /settings/privacy/export ───────────────────────────────────────────────
 
-export type EtatDeLExport =
-  | { readonly genre: 'formulaire' }
-  | { readonly genre: 'fait'; readonly document: Readonly<Record<string, unknown>> }
-  | { readonly genre: 'panne' };
+/**
+ * DEUX ÉTATS, PAS TROIS. L'export RÉUSSI n'est PAS un document : c'est une
+ * pièce jointe que la porte remet telle quelle (`reglages-details-porte.ts` ›
+ * `EXPORT`, `content-disposition: attachment`). Une variante `fait` ici aurait
+ * été un état que rien ne rend — le genre de branche morte qui finit par
+ * mentir sur ce que l'écran sait faire.
+ */
+export type EtatDeLExport = { readonly genre: 'formulaire' } | { readonly genre: 'panne' };
 
 export const documentDeLExport = (etat: EtatDeLExport): string =>
   page({
@@ -154,7 +158,22 @@ export const documentDeLExport = (etat: EtatDeLExport): string =>
 // ─── /settings/privacy/delete ───────────────────────────────────────────────
 
 export type EtatDeLaSuppression =
-  | { readonly genre: 'formulaire'; readonly avis: string | null }
+  | {
+      readonly genre: 'formulaire';
+      readonly avis: string | null;
+      /**
+       * LA PHRASE DÉJÀ TAPÉE, REPOSÉE — la loi que `reglages-feuille.ts`
+       * énonce pour tous les écrans de réglages (« un champ en erreur garde sa
+       * saisie […] perdre ce qu'on vient de taper est le défaut le plus cher
+       * d'un formulaire »). Elle vaut DOUBLE ici : recopier « SUPPRIMER MON
+       * COMPTE » est déjà l'effort que l'écran demande, et le faire recommencer
+       * parce que le MOT DE PASSE était faux punit la mauvaise moitié du geste.
+       *
+       * Le MOT DE PASSE, lui, n'est JAMAIS reposé : il n'a rien à faire dans
+       * un document que la porte vient de servir.
+       */
+      readonly phrase: string;
+    }
   | { readonly genre: 'demandee' };
 
 const champDeSuppression = ({
@@ -162,14 +181,19 @@ const champDeSuppression = ({
   nom,
   type,
   libelle,
+  valeur = '',
+  remplissage,
 }: {
   readonly id: string;
   readonly nom: string;
   readonly type: string;
   readonly libelle: string;
+  readonly valeur?: string;
+  readonly remplissage: string;
 }): string =>
   `<div class="champ"><label for="${id}">${echappe(libelle)}</label>` +
-  `<input id="${id}" name="${echappe(nom)}" type="${type}" required autocomplete="off"></div>`;
+  `<input id="${id}" name="${echappe(nom)}" type="${type}" required autocomplete="${echappe(remplissage)}"` +
+  `${valeur === '' ? '' : ` value="${echappe(valeur)}"`}></div>`;
 
 export const documentDeLaSuppression = (etat: EtatDeLaSuppression): string =>
   page({
@@ -185,7 +209,12 @@ export const documentDeLaSuppression = (etat: EtatDeLaSuppression): string =>
       (etat.genre === 'demandee'
         ? carteVide({ glyphe: 'ph-check-circle', titre: REGLAGES_DETAILS.suppression.demandee, phrase: '' })
         : '<section>' +
-          `<p class="avis" role="alert">${svgDuSprite('ph-warning-circle')}${echappe(REGLAGES_DETAILS.suppression.avertissement)}</p>` +
+          // L'AVERTISSEMENT PERMANENT N'EST PAS UNE ALERTE. Il est là au
+          // chargement, il décrit l'écran ; `role="alert"` est réservé à ce qui
+          // SURVIENT (la loi du socle, `avis`). Deux `role="alert"` sur le même
+          // document faisaient perdre le motif du REFUS dans le bruit du
+          // rappel — c'est la seconde annonce qui compte.
+          `<p class="avis">${svgDuSprite('ph-warning-circle')}${echappe(REGLAGES_DETAILS.suppression.avertissement)}</p>` +
           (etat.avis === null ? '' : `<p class="avis" role="alert">${svgDuSprite('ph-x-circle')}${echappe(etat.avis)}</p>`) +
           '<form method="post">' +
           champDeSuppression({
@@ -193,12 +222,15 @@ export const documentDeLaSuppression = (etat: EtatDeLaSuppression): string =>
             nom: 'confirmationPhrase',
             type: 'text',
             libelle: REGLAGES_DETAILS.suppression.champPhrase,
+            valeur: etat.phrase,
+            remplissage: 'off',
           }) +
           champDeSuppression({
             id: 'motdepasse',
             nom: 'currentPassword',
             type: 'password',
             libelle: REGLAGES_DETAILS.suppression.champMotDePasse,
+            remplissage: 'current-password',
           }) +
           `<button type="submit" class="action attention">${echappe(REGLAGES_DETAILS.suppression.bouton)}</button>` +
           '</form>' +

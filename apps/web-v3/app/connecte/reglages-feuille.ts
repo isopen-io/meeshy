@@ -51,6 +51,7 @@ ${commutateurDEcran('.reglages .bascules')}
 .rangee .rang{display:inline-flex;align-items:center;justify-content:center;flex:none;width:var(--space-6);height:var(--space-6);border-radius:var(--radius-pill);background:var(--color-bg-sunken);font-size:var(--text-sm);color:var(--color-text-muted)}
 .rangee .valeur{font-size:var(--text-sm);color:var(--color-text-muted)}
 
+.reglages section>form{display:flex;flex-direction:column;gap:var(--space-3);margin:0}
 .champ{display:flex;flex-direction:column;gap:var(--space-2)}
 .champ label{font-size:var(--text-sm);font-weight:var(--font-weight-medium)}
 .champ input,.champ textarea,.champ select{min-height:var(--target-min);padding:var(--space-2) var(--space-3);border:var(--stroke-hair) solid var(--color-border-interactive);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text);font:inherit}

@@ -342,3 +342,51 @@ describe('MESSAGES', () => {
     expect(reponse.status).toBe(302);
   });
 });
+
+/**
+ * LES DEUX CORRECTIONS DE LA REVUE sur `/settings/privacy/delete` — la loi que
+ * `reglages-feuille.ts` énonce pour TOUS les écrans de réglages (« un champ en
+ * erreur garde sa saisie ») et la distinction des deux refus locaux.
+ */
+describe('SUPPRESSION — un refus dit LEQUEL, et ne fait pas recommencer ce qui était juste', () => {
+  const poste = (corps: string): Promise<Response> =>
+    SUPPRESSION(requete('https://meeshy.test/settings/privacy/delete', { method: 'POST', corps }));
+
+  it('un mot de passe VIDE ne se dit pas « recopiez la phrase » — la phrase était juste', async () => {
+    const html = await (
+      await poste('confirmationPhrase=SUPPRIMER+MON+COMPTE&currentPassword=')
+    ).text();
+
+    expect(html).toContain('Votre mot de passe est requis');
+    expect(html).not.toContain('Recopiez exactement');
+  });
+
+  it('repose la phrase déjà tapée, et JAMAIS le mot de passe', async () => {
+    const html = await (
+      await poste('confirmationPhrase=SUPPRIMER+MON+COMPTE&currentPassword=')
+    ).text();
+
+    expect(html).toContain('value="SUPPRIMER MON COMPTE"');
+    expect(html).not.toContain('secret-du-lecteur');
+  });
+
+  it('une phrase FAUSSE la repose telle quelle — on corrige, on ne retape pas', async () => {
+    const html = await (
+      await poste('confirmationPhrase=supprimer+mon+compte&currentPassword=secret-du-lecteur')
+    ).text();
+
+    expect(html).toContain('Recopiez exactement');
+    expect(html).toContain('value="supprimer mon compte"');
+    expect(html).not.toContain('secret-du-lecteur');
+  });
+
+  it('n’annonce qu’UNE alerte — l’avertissement permanent n’en est pas une', async () => {
+    const html = await (await SUPPRESSION(requete('https://meeshy.test/settings/privacy/delete'))).text();
+
+    // Le `role="alert"` de la FEUILLE (`.reglages .avis[role="alert"]`) n'est
+    // pas un nœud annoncé : l'assertion porte sur le BALISAGE.
+    expect(html.match(/<p class="avis" role="alert"/g) ?? []).toHaveLength(0);
+    expect(html).toContain('<p class="avis">');
+    expect(html).toContain('IRRÉVERSIBLE');
+  });
+});

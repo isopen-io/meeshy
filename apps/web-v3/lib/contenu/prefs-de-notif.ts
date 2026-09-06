@@ -20,6 +20,8 @@
 
 import type { NotificationPreference } from '@meeshy/shared/types/preferences';
 
+import { libelleDuDecalage } from '@/lib/decalage-utc';
+
 export type CleDePreference = Extract<
   keyof NotificationPreference,
   | 'pushEnabled'
@@ -128,14 +130,6 @@ export const HEURE_DND_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
  */
 export const FUSEAU_AUTO = 'auto';
 
-const DEUX_CHIFFRES = (n: number): string => String(Math.abs(n)).padStart(2, '0');
-
-const libelleDuFuseau = (minutes: number): string => {
-  if (minutes === 0) return 'UTC';
-  const signe = minutes < 0 ? '−' : '+';
-  return `UTC${signe}${DEUX_CHIFFRES(Math.trunc(Math.abs(minutes) / 60))}:${DEUX_CHIFFRES(Math.abs(minutes) % 60)}`;
-};
-
 /** Les décalages UTC réellement en usage (demi-heures et quarts d'heure compris). */
 const MINUTES_DES_FUSEAUX: readonly number[] = [
   -720, -660, -600, -570, -540, -480, -420, -360, -300, -270, -240, -210, -180, -120, -60, 0, 60, 120, 180, 210, 240,
@@ -146,7 +140,7 @@ export type OptionDeFuseau = { readonly valeur: string; readonly libelle: string
 
 export const FUSEAUX_DND: readonly OptionDeFuseau[] = MINUTES_DES_FUSEAUX.map((minutes) => ({
   valeur: String(minutes),
-  libelle: libelleDuFuseau(minutes),
+  libelle: libelleDuDecalage(minutes),
   minutes,
 }));
 
@@ -170,7 +164,20 @@ export const PREFS = {
   fenetreDebut: 'Début',
   fenetreFin: 'Fin',
   fenetreFuseau: 'Fuseau',
-  fenetreFuseauAuto: 'Fuseau de cet appareil',
+  /**
+   * L'OPTION « CET APPAREIL » DIT CE QU'ELLE FERA, jamais ce qu'on aimerait
+   * qu'elle fasse (défaut relevé en revue). Le décalage vient du cookie de
+   * fuseau (`lib/temps.ts` › `decalageDuFuseau`, la SEULE source de l'heure
+   * locale du lecteur dans la v3) : mesuré, il se NOMME — « Fuseau de cet
+   * appareil (UTC+02:00) » —, et le POST écrit `dndUtcOffsetMinutes`.
+   * Non mesuré (première visite, cookie purgé, fuseau refusé par l'ICU),
+   * choisir cette option ne change RIEN au décalage enregistré : elle le
+   * DIT, plutôt que de promettre une détection qui n'aura pas lieu. Sans
+   * cela, une plage 22:00–08:00 posée depuis Paris silençait de 00 h à 10 h,
+   * l'évaluation restant en UTC (`notification-dnd.ts:56`).
+   */
+  fenetreFuseauAuto: (decalage: number | null): string =>
+    decalage === null ? 'Ne pas changer le fuseau' : `Fuseau de cet appareil (${libelleDuDecalage(decalage)})`,
   fenetreEnregistrer: 'Enregistrer la plage',
   fenetreRegle: 'Plage horaire enregistrée.',
   fenetreHeureInvalide: 'Une heure au format HH:MM est requise pour le début et la fin.',

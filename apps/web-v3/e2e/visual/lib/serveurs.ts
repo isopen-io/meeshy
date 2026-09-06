@@ -17,6 +17,7 @@ import {
   notificationPrefsDeBouchon,
   privacyPrefsDeBouchon,
   routesDuCompte,
+  suppressionDeBouchon,
   type BoiteDeNotifsDeBouchon,
   type FilDeCommentairesDeBouchon,
   type FilSocialDeBouchon,
@@ -297,6 +298,10 @@ export const passerelleDeBouchon = async (options?: {
   readonly appelsReduits?: boolean;
   /** `/communities` sans aucune communauté — l'état VIDE du carnet, distinct du lecteur sans rien. */
   readonly communautesVides?: boolean;
+  /** `POST /me/account/deletion` répond 409 `ALREADY_PENDING` (travail `reglages-details`). */
+  readonly suppressionDejaEnCours?: boolean;
+  /** `POST /me/account/deletion` répond 409 `NO_EMAIL` (travail `reglages-details`). */
+  readonly suppressionSansEmail?: boolean;
 }): Promise<PasserelleDeBouchon> => {
   const journal: AppelRecu[] = [];
   const conversationId = CONVERSATION_DU_LECTEUR.id;
@@ -413,6 +418,10 @@ export const passerelleDeBouchon = async (options?: {
   const notificationPrefs = await notificationPrefsDeBouchon();
   const privacyPrefs = await privacyPrefsDeBouchon();
   const documentPrefs = await documentPrefsDeBouchon();
+  const suppression = suppressionDeBouchon({
+    dejaEnCours: options?.suppressionDejaEnCours,
+    sansEmail: options?.suppressionSansEmail,
+  });
   const deLaRecherche = routesDeLaRecherche(creanceDe);
   const duCompte = routesDuCompte({
     creanceDe,
@@ -429,6 +438,7 @@ export const passerelleDeBouchon = async (options?: {
     notificationPrefs,
     privacyPrefs,
     documentPrefs,
+    suppression,
   });
   const carnet = carnetDeBouchon(lien);
   const duCarnet = routesDuCarnet(

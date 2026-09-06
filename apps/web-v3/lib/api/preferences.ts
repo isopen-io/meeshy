@@ -285,3 +285,23 @@ export const basculeUnePreference = async ({ cle, valeur, ...args }: ArgumentsDe
     await ecrisUnePreference({ ...args, categorie: 'notification', champs: { [cle]: valeur } }),
     'notification',
   );
+
+/**
+ * `document.autoDownloadEnabled` — LE SEUL RÉGLAGE QUI CHANGE CE QUE LA
+ * GALERIE CONSOMME (`/chats/:cle/medias`, critère de fin `detail-media`).
+ *
+ * Une PROJECTION de plus, et surtout une projection qui NE PEUT PAS ÉCHOUER :
+ * elle rend un booléen, jamais une issue. Un écran de conversation ne se
+ * refuse pas parce qu'une préférence n'a pas été lue — session expirée,
+ * refus, panne réseau et contrat non tenu retombent tous sur `false`, c'est-
+ * à-dire sur l'ÉCONOMIE. La direction de l'erreur est choisie par son COÛT DE
+ * RÉPARATION : servir la grille sobre à qui voulait des vignettes se répare
+ * d'un rechargement ; envoyer 48 vignettes à qui a demandé « jamais » a déjà
+ * dépensé ses octets quand il s'en aperçoit.
+ *
+ * Seul un `true` explicitement SERVI ouvre les aperçus.
+ */
+export const apercusAutomatiques = async (args: ArgumentsDeLecture): Promise<boolean> => {
+  const issue = await lisLesPreferences({ ...args, categories: ['document'] });
+  return issue.genre === 'documents' && issue.documents.document?.autoDownloadEnabled === true;
+};

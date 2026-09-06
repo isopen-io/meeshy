@@ -2,7 +2,13 @@
  * @jest-environment node
  */
 
-import { basculeUnePreference, ecrisUnePreference, lisLesPreferences, preferencesDeNotification } from '@/lib/api/preferences';
+import {
+  apercusAutomatiques,
+  basculeUnePreference,
+  ecrisUnePreference,
+  lisLesPreferences,
+  preferencesDeNotification,
+} from '@/lib/api/preferences';
 import { NOTIFICATION_PREFERENCE_DEFAULTS, PRIVACY_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
 
 /**
@@ -23,6 +29,15 @@ import { NOTIFICATION_PREFERENCE_DEFAULTS, PRIVACY_PREFERENCE_DEFAULTS } from '@
 const JETON = 'jeton-de-test';
 
 const json = (corps: unknown, statut = 200): Response => new Response(JSON.stringify(corps), { status: statut });
+
+const passerelle = (repond: () => Response) => {
+  const vus: { url: string; options: RequestInit }[] = [];
+  const recuperer = async (url: string, options: RequestInit): Promise<Response> => {
+    vus.push({ url, options });
+    return repond();
+  };
+  return { recuperer, vus };
+};
 
 describe('preferencesDeNotification — la lecture', () => {
   it('compose GET /api/v1/me/preferences?categories=notification avec le porteur', async () => {
@@ -197,5 +212,51 @@ describe('lisLesPreferences / ecrisUnePreference — la généralisation multi-c
     expect(issue.genre).toBe('documents');
     const projete = await basculeUnePreference({ jeton: JETON, cle: 'pushEnabled', valeur: true, base: 'https://passerelle.test', recuperer: async () => json({ success: true, data: {} }) });
     expect(projete.genre).toBe('panne');
+  });
+});
+
+/**
+ * `apercusAutomatiques` — LA PROJECTION QUI NE PEUT PAS ÉCHOUER (revue du
+ * travail `reglages-details`). Elle gouverne ce que `/chats/:cle/medias`
+ * CONSOMME : chaque issue de la lecture doit retomber sur l'ÉCONOMIE, jamais
+ * sur la dépense ni sur un écran refusé. Le témoin énumère les issues, parce
+ * qu'un seul cas vert (« ça marche quand ça marche ») ne dirait rien de la
+ * DIRECTION de l'erreur.
+ */
+describe('apercusAutomatiques — un booléen, et l’erreur va toujours vers l’économie', () => {
+  it('rend `true` seulement sur un `true` explicitement SERVI', async () => {
+    const { recuperer } = passerelle(() =>
+      new Response(JSON.stringify({ success: true, data: { document: { autoDownloadEnabled: true } } }), { status: 200 }),
+    );
+
+    await expect(apercusAutomatiques({ jeton: 'j', recuperer })).resolves.toBe(true);
+  });
+
+  it('demande la catégorie `document`, et elle seule', async () => {
+    const { recuperer, vus } = passerelle(() =>
+      new Response(JSON.stringify({ success: true, data: { document: { autoDownloadEnabled: true } } }), { status: 200 }),
+    );
+
+    await apercusAutomatiques({ jeton: 'j', recuperer });
+
+    expect(vus[0]?.url).toContain('categories=document');
+  });
+
+  it.each([
+    ['le réglage est à faux', () => new Response(JSON.stringify({ success: true, data: { document: { autoDownloadEnabled: false } } }), { status: 200 })],
+    ['la catégorie manque au contrat', () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 })],
+    ['la session a expiré', () => new Response('{}', { status: 401 })],
+    ['la passerelle refuse', () => new Response('{}', { status: 403 })],
+    ['la passerelle est en panne', () => new Response('{}', { status: 500 })],
+  ])('rend `false` quand %s', async (_cas, reponse) => {
+    const { recuperer } = passerelle(reponse);
+    await expect(apercusAutomatiques({ jeton: 'j', recuperer })).resolves.toBe(false);
+  });
+
+  it('rend `false` — jamais une exception — quand le réseau est coupé', async () => {
+    const recuperer = async (): Promise<Response> => {
+      throw new Error('réseau coupé');
+    };
+    await expect(apercusAutomatiques({ jeton: 'j', recuperer })).resolves.toBe(false);
   });
 });

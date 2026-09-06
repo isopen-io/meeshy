@@ -216,7 +216,7 @@ describe('la porte de /notifications/preferences — POST du geste `fenetre` (é
     expect(reponse.headers.get('location')).toBe('/notifications/preferences?regle=fenetre-dnd');
   });
 
-  it('`fuseau=auto` NE PORTE PAS dndUtcOffsetMinutes — la valeur stockée survit', async () => {
+  it('`fuseau=auto` SANS cookie de fuseau n’écrit AUCUN décalage — la valeur stockée survit', async () => {
     const { recuperer, vus } = passerelle({
       '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
     });
@@ -235,7 +235,64 @@ describe('la porte de /notifications/preferences — POST du geste `fenetre` (é
     });
   });
 
-  it.each(['25:00', '9:00', ''])('une heure invalide (%s) est un 400 SANS appel', async (heure) => {
+  /**
+   * LE TÉMOIN DE LA MESURE (défaut relevé en revue) : « Fuseau de cet appareil »
+   * n'annonçait un fuseau et n'en mesurait aucun — la plage d'un lecteur de
+   * Paris se décalait de deux heures, `isWithinDnd` évaluant en UTC
+   * (`packages/shared/utils/notification-dnd.ts:56`). Le décalage vient du
+   * cookie que le fil pose déjà (`lib/temps.ts` › `COOKIE_DE_FUSEAU`), jamais
+   * d'un second mécanisme.
+   *
+   * Le témoin porte sur un fuseau SANS heure d'été (`Asia/Kolkata`, +05:30) :
+   * une zone à DST rendrait l'assertion dépendante de la date d'exécution.
+   */
+  it('`fuseau=auto` AVEC le cookie de fuseau écrit le décalage MESURÉ de l’appareil', async () => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+    });
+
+    await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=fenetre&dndStartTime=22%3A00&dndEndTime=08%3A00&fuseau=auto',
+        headers: { cookie: `${COOKIE}; meeshy_tz=Asia%2FKolkata` },
+      }),
+      recuperer,
+    );
+
+    const patch = vus.find((v) => v.options.method === 'PATCH');
+    expect(JSON.parse(String(patch?.options.body))).toEqual({
+      notification: { dndStartTime: '22:00', dndEndTime: '08:00', dndUtcOffsetMinutes: 330 },
+    });
+  });
+
+  it('l’option « cet appareil » NOMME le décalage mesuré, et ne le promet pas quand il manque', async () => {
+    const { recuperer } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+    });
+
+    const avec = await (
+      await PREFERENCES(
+        requete('https://meeshy.test/notifications/preferences', {
+          headers: { cookie: `${COOKIE}; meeshy_tz=Asia%2FKolkata` },
+        }),
+        recuperer,
+      )
+    ).text();
+    const sans = await (await PREFERENCES(requete('https://meeshy.test/notifications/preferences'), recuperer)).text();
+
+    expect(avec).toContain('Fuseau de cet appareil (UTC+05:30)');
+    expect(sans).not.toContain('Fuseau de cet appareil');
+    expect(sans).toContain('Ne pas changer le fuseau');
+  });
+
+  /**
+   * UNE HEURE ILLISIBLE SE DIT. `<input type="time">` retombe en champ TEXTE
+   * là où il n'est pas supporté : « 9:00 » tapé à la main est un chemin de
+   * lecteur, et le 400 sans corps y était un écran blanc. Ce qui reste
+   * INTERDIT est l'ÉCRITURE : le PATCH ne part pas.
+   */
+  it.each(['25:00', '9:00', ''])('une heure invalide (%s) se DIT — 422, aucune ÉCRITURE', async (heure) => {
     const { recuperer, vus } = passerelle({
       '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
     });
@@ -247,12 +304,14 @@ describe('la porte de /notifications/preferences — POST du geste `fenetre` (é
       }),
       recuperer,
     );
+    const html = await reponse.text();
 
-    expect(reponse.status).toBe(400);
-    expect(vus).toEqual([]);
+    expect(reponse.status).toBe(422);
+    expect(vus.filter((v) => v.options.method === 'PATCH')).toEqual([]);
+    expect(html).toContain('Une heure au format HH:MM est requise');
   });
 
-  it('un `fuseau` hors de la table fermée est un 400 SANS appel', async () => {
+  it('un `fuseau` hors de la table fermée est refusé SANS écriture', async () => {
     const { recuperer, vus } = passerelle({
       '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
     });
@@ -265,8 +324,8 @@ describe('la porte de /notifications/preferences — POST du geste `fenetre` (é
       recuperer,
     );
 
-    expect(reponse.status).toBe(400);
-    expect(vus).toEqual([]);
+    expect(reponse.status).toBe(422);
+    expect(vus.filter((v) => v.options.method === 'PATCH')).toEqual([]);
   });
 
   it('refuse une origine ÉTRANGÈRE avant tout appel', async () => {
