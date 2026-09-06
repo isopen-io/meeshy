@@ -59,42 +59,26 @@ final class ComposerMediaPlacementTests: XCTestCase {
             "un rôle déclaré à l'entrée doit être celui que le modèle écrira à la sortie")
     }
 
-    // MARK: - Ce qui gagne une tuile
+    // MARK: - Ce qui gagne une tuile — la garantie a changé de NATURE
 
-    /// **Le témoin s'écrit à DEUX médias.** À un seul, « toutes les tuiles » et
-    /// « les tuiles des fonds » rendent le même écran.
-    func test_unMediaDePremierPlan_nAPasDeTuile() {
-        let fond = media("fond.jpg"), pose = media("pose.jpg")
-        let tuiles = ComposerHeaderTiles.tiles([fond, pose],
-                                               founding: [url("fond.jpg"): "slide-1"])
-        XCTAssertEqual(tuiles.map(\.url.lastPathComponent), ["fond.jpg"])
-    }
-
-    /// **Un SON n'a pas de tuile** — il n'a pas de place de fond visuel, et sa
-    /// carte le dit déjà sous le texte. Il vivait pourtant dans la rangée haute,
-    /// parce qu'elle lisait `documentLocalMedia` sans rien demander.
-    func test_unSon_nApparaitPasDansLaRangeeHaute() {
-        let fond = media("fond.jpg"), son = media("voix.m4a", mime: "audio/mp4")
-        let tuiles = ComposerHeaderTiles.tiles([fond, son],
-                                               founding: [url("fond.jpg"): "slide-1"])
-        XCTAssertEqual(tuiles.map(\.url.lastPathComponent), ["fond.jpg"])
-    }
-
-    /// Un DOCUMENT part en pièce jointe et n'est aucune page.
-    func test_unDocument_nApparaitPasDansLaRangeeHaute() {
-        let pdf = media("contrat.pdf", mime: "application/pdf")
-        XCTAssertTrue(ComposerHeaderTiles.tiles([pdf], founding: [:]).isEmpty)
-    }
-
-    /// **L'ordre est celui de la POSE**, jamais celui des slides : c'est le seul
-    /// que l'auteur puisse prévoir, et le retrait d'un média au milieu fait
-    /// mentir tout ordre reconstruit.
-    func test_lOrdreDesTuiles_estCeluiDeLaPose() {
-        let a = media("a.jpg"), b = media("b.jpg"), c = media("c.jpg")
-        let tuiles = ComposerHeaderTiles.tiles([a, b, c],
-                                               founding: [url("c.jpg"): "s3", url("a.jpg"): "s1"])
-        XCTAssertEqual(tuiles.map(\.url.lastPathComponent), ["a.jpg", "c.jpg"])
-    }
+    /// **Ces témoins ont été retirés le 2026-09-06, et leur garantie est plus
+    /// forte qu'avant.**
+    ///
+    /// Ils éprouvaient `ComposerHeaderTiles.tiles(_:founding:)` : qu'un média de
+    /// PREMIER PLAN, un SON et un DOCUMENT n'obtiennent pas de tuile dans la
+    /// rangée haute. La règle filtrait des médias par l'index des fondations.
+    ///
+    /// La rangée ne compte plus des médias : elle compte des SCÈNES
+    /// (`tiles(for: [StorySlide])`). Un son, un PDF ou une image posée ne
+    /// PEUVENT plus y entrer — non parce qu'un filtre les écarte, mais parce
+    /// qu'ils ne sont pas du bon type. **Le compilateur tient l'invariant que
+    /// ces quatre témoins vérifiaient à l'exécution.**
+    ///
+    /// > Une règle abolie ne se remplace pas par un test qui passe toujours :
+    /// > elle se remplace par la question qui reste posée. Ici la question
+    /// > — « la rangée montre-t-elle chaque scène ? » — vit dans
+    /// > `ComposerSlideRailTests`, et son témoin discriminant est la scène SANS
+    /// > média, que l'ancienne règle rendait précisément invisible.
 
     // MARK: - Quand la scène reste montée (défaut V2)
 
@@ -130,11 +114,4 @@ final class ComposerMediaPlacementTests: XCTestCase {
                                                      sceneObjectCount: 0))
     }
 
-    /// Aucune fondation ⇒ aucune tuile. Pas une rangée à hauteur nulle, pas une
-    /// tuile par défaut : un document dont rien n'a fondé de page n'a pas de
-    /// carrousel à montrer (loi 4).
-    func test_sansFondation_laRangeeEstVide() {
-        XCTAssertTrue(ComposerHeaderTiles.tiles([media("a.jpg"), media("b.jpg")],
-                                                founding: [:]).isEmpty)
-    }
 }

@@ -89,9 +89,30 @@ nonisolated enum ComposerHeaderTiles {
 
     /// Les médias qui ont droit à une tuile, dans l'ordre de la liste du
     /// document — le seul ordre que l'auteur puisse prévoir.
-    static func tiles(_ media: [ComposerDocumentMedia],
-                      founding slideIdByMediaURL: [URL: String]) -> [ComposerDocumentMedia] {
-        media.filter { slideIdByMediaURL[$0.url] != nil }
+    /// **La rangée compte les SCÈNES** (constat porteur 2026-09-06 : « lorsque
+    /// je crée une nouvelle scène elle n'apparaît pas immédiatement dans la
+    /// mini-preview »).
+    ///
+    /// La règle précédente filtrait les MÉDIAS par l'index des fondations —
+    /// « une tuile par média posé en fond ». Elle rendait le bon résultat tant
+    /// que toute scène naissait d'un média, et le doc-comment de
+    /// `ComposerTopBar` énonçait d'ailleurs cette coïncidence comme une
+    /// définition : « une par `MeeshySlide`, ce qui veut dire une par média
+    /// posé en FOND ».
+    ///
+    /// Un fond COLORÉ sépare les deux termes : la scène existe, elle n'a aucun
+    /// média, et la rangée n'avait rien à montrer. L'auteur créait une scène
+    /// et rien à l'écran ne le lui disait.
+    ///
+    /// > **Une équivalence écrite comme un fait ne se relit pas** — elle se lit
+    /// > comme une définition. C'est ce qui la rend invisible le jour où ses
+    /// > deux termes divergent.
+    ///
+    /// La règle est donc devenue la QUESTION qui restait posée : que compte la
+    /// rangée ? Des scènes. Elle ne filtre plus — et c'est le point : tout
+    /// filtre y était une occasion de perdre une scène.
+    static func tiles(for slides: [StorySlide]) -> [StorySlide] {
+        slides
     }
 }
 

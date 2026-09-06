@@ -32,8 +32,7 @@ extension MeeshyComposerHost {
             focusesOnAppear: ComposerSurfaceRouting.focusesContentOnAppear(opening: profile.opensWith),
             onClose: onDismiss,
             onTool: { tool in handleDocumentTool(tool) },
-            localMedia: headerTileMedia,
-            onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
+            slideRailSlot: slideRailSlot,
             onPickBackground: { hex in
                 // Phase 2 (#3939) — choisir un fond pose la couleur SUR la slide
                 // courante et fait apparaître la scène INCRUSTÉE dans l'écran
@@ -73,16 +72,6 @@ extension MeeshyComposerHost {
             // ce qui a été touché, l'app décide ce que cela sélectionne.
             onSceneBackgroundTapped: { handleSceneBackgroundTap() },
             onSceneBackgroundLongPressed: { handleSceneCaptureLongPress() },
-            // Taper une vignette amène SA slide sur la scène (#4038). La table
-            // `slideIdByMediaURL` est justement l'index qui relie les deux ;
-            // sans elle il faudrait deviner par l'ordre, qui ment dès qu'un
-            // média est retiré au milieu.
-            onSelectMedia: { media in
-                guard let slideId = slideIdByMediaURL[media.url],
-                      let index = viewModel.slides.firstIndex(where: { $0.id == slideId })
-                else { return }
-                viewModel.selectSlide(at: index)
-            },
             // #4657 — la rangée de l'avatar montre le son de fond : la note,
             // l'onde et la durée à côté du visage, et le texte descend.
             // **Ce qu'elle a le DROIT de montrer est une loi** (#4670), pas la
@@ -113,11 +102,6 @@ extension MeeshyComposerHost {
             // entrée ⇒ `nil` ⇒ aucun bouton (loi 4).
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
-            selectedMediaURL: selectedSlideMediaURL,
-            // #4052 — la carte média → slide est ICI, et elle est la seule
-            // vérité sur « ce chip mène-t-il quelque part ? ». Un son n'y entre
-            // pas : il est la bande-son, pas une page.
-            selectableMediaURLs: Set(slideIdByMediaURL.keys),
             // #4032 — l'occultation de la rangée défilante se peint de la teinte
             // que le meuble applique DÉJÀ à tout l'écran, jamais d'une couleur
             // re-choisie. C'est le retour porteur du 2026-08-27, tenu.
@@ -231,8 +215,26 @@ extension MeeshyComposerHost {
     /// La règle lit l'index des FONDATIONS, jamais une seconde vérité :
     /// `slideIdByMediaURL` dit déjà « ce média a fondé cette slide », ce qui est
     /// exactement l'ensemble des fonds.
-    var headerTileMedia: [ComposerDocumentMedia] {
-        ComposerHeaderTiles.tiles(documentLocalMedia, founding: slideIdByMediaURL)
+    /// **Le rail des scènes, monté UNE fois pour les deux surfaces.**
+    ///
+    /// Il montre une mini-preview par SCÈNE — y compris celle qui n'a aucun
+    /// média, née d'un fond coloré. C'est le défaut que le porteur a signalé le
+    /// 2026-09-06 : la rangée comptait les médias fondateurs, donc créer une
+    /// scène ne produisait aucun retour tant qu'on ne lui avait pas donné de
+    /// photo.
+    ///
+    /// `nil` sous deux scènes : un rail d'un seul élément ne navigue vers rien
+    /// (loi 4), et le compte se lit alors sur la scène elle-même.
+    var slideRailSlot: AnyView? {
+        let scenes = ComposerHeaderTiles.tiles(for: viewModel.slides)
+        guard scenes.count > 1 else { return nil }
+        return AnyView(ComposerSlideRail(
+            slides: scenes,
+            currentIndex: viewModel.currentSlideIndex,
+            slideImages: viewModel.slideImages,
+            loadedImages: viewModel.loadedImages,
+            imagesVersion: viewModel.loadedImagesVersion,
+            onSelect: { viewModel.selectSlide(at: $0) }))
     }
 
     var documentContentMedia: [ComposerContentMedia] {
