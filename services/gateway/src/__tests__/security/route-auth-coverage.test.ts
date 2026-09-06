@@ -289,7 +289,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/info', why: "métadonnées statiques du service, aucune donnée d'utilisateur" },
   { method: 'GET', url: '/api/v1/languages', why: 'liste statique de langues supportées' },
   { method: 'GET', url: '/api/v1/app/min-version', why: 'plancher de version applicative pour le bootstrap de la porte cliente (spec R6) — config statique lue avant toute session, aucune donnée utilisateur' },
-  { method: 'POST', url: '/api/v1/detect-language', why: 'détection regex stateless, aucun accès DB/pipeline ML' },
 
   // --- Entrée du flux d'authentification (translation.ts a réparé /test,
   //     ce qui reste ici est volontairement sans session : on n'a pas
