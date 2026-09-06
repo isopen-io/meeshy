@@ -402,7 +402,12 @@ class TranslationService:
         model_type: str,
         source_channel: str
     ) -> Dict[str, Any]:
-        """Traduction de fallback si ML non disponible"""
+        """Traduction de repli si le ML n'est pas disponible (modèle non chargé,
+        service non initialisé). Ni un mot-à-mot ni un texte-témoin ne sont des
+        traductions : `error` marque le résultat comme un ÉCHEC EXPLICITE, pour
+        que l'appelant (a) ne le mette JAMAIS en cache comme une vraie traduction
+        et (b) serve l'original plutôt que ce texte de repli au client (#3663).
+        """
         logger.warning(f"Utilisation du fallback pour {model_type} [{source_channel}]")
 
         # Dictionnaire simple
@@ -433,7 +438,8 @@ class TranslationService:
             'model_used': f"{model_type}_fallback",
             'from_cache': False,
             'processing_time': 0.001,
-            'source_channel': source_channel
+            'source_channel': source_channel,
+            'error': 'ML translation unavailable — served fallback'
         }
 
     def _update_stats(self, processing_time: float, source_channel: str):

@@ -488,6 +488,13 @@ struct ComposerSceneSurface: View {
     /// `nil` ⇒ la bande ne paraît pas. Un hôte sans navigation de slide ne doit
     /// pas montrer des pastilles qui ne mèneraient nulle part (loi 4).
     var onSelectSlide: ((Int) -> Void)?
+    /// La disposition demandée par l'auteur pour ses scènes. `nil` ⇒ aucune
+    /// n'est imposée (le modèle tranche).
+    var mosaicLayout: MosaicLayoutMode?
+    /// `nil` ⇒ l'hôte n'offre pas le choix ; le contrôle ne se monte pas. Même
+    /// forme que `onSelectSlide` juste au-dessus, et pour la même raison : un
+    /// contrôle sans destinataire serait inerte.
+    var onSelectMosaic: ((MosaicLayoutMode) -> Void)?
 
     // MARK: - La description
 
@@ -930,12 +937,30 @@ struct ComposerSceneSurface: View {
                 // droit créait bien une slide, et RIEN à l'écran ne le disait —
                 // ni compte, ni rang, ni retour vers la précédente. Il fallait
                 // publier pour savoir ce qu'on avait composé.
-                if let onSelectSlide {
-                    ComposerSlideStrip(slideCount: slideCount,
-                                       currentIndex: currentSlideIndex,
-                                       accentColor: MeeshyColors.indigo400,
-                                       leadingInset: sceneCardLeading,
-                                       onSelect: onSelectSlide)
+                if onSelectSlide != nil || onSelectMosaic != nil {
+                    HStack(spacing: 0) {
+                        if let onSelectSlide {
+                            ComposerSlideStrip(slideCount: slideCount,
+                                               currentIndex: currentSlideIndex,
+                                               accentColor: MeeshyColors.indigo400,
+                                               leadingInset: sceneCardLeading,
+                                               onSelect: onSelectSlide)
+                        }
+                        Spacer(minLength: 8)
+                        // **Comment ces scènes s'arrangeront dans le fil.** Même
+                        // ligne que les pastilles parce que c'est la même
+                        // question à deux niveaux : elles disent COMBIEN, il dit
+                        // COMMENT. Et il paraît sous la même condition — sans
+                        // plusieurs scènes, il n'y a rien à disposer.
+                        if let onSelectMosaic,
+                           ComposerMosaicChoice.isServed(slideCount: slideCount,
+                                                         format: format) {
+                            ComposerMosaicPicker(selection: mosaicLayout,
+                                                 accentColor: MeeshyColors.indigo400,
+                                                 onSelect: onSelectMosaic)
+                                .padding(.trailing, sceneCardLeading)
+                        }
+                    }
                 }
 
                 // **La bande contextuelle, entre la scène et la description**

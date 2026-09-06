@@ -432,6 +432,66 @@ extension StoryBackgroundLayer {
             && filterUnchanged
         if nothingChanged { return }
 
+        // **Une reconfiguration qui ne sait pas résoudre son NOUVEAU sujet n'a
+        // rien à dire sur l'ANCIEN** (directive porteur 2026-09-06 : « quand
+        // j'ajoute un média de fond, ça disparaît immédiatement »).
+        //
+        // ## Ce que la trace montre
+        //
+        // Le fond est d'abord configuré sur le FICHIER LOCAL et se peint :
+        //
+        //     bg video configure id=…-60848601514B.mp4  resolved=CCEAFC3C-….mp4
+        //     bg video path=local-file
+        //     arm video readiness  layerReady=true  itemStatus=1     ← prêt
+        //
+        // Puis la pré-montée aboutit, le média reçoit son id SERVEUR, et le
+        // canvas est reconfiguré sur cette nouvelle identité :
+        //
+        //     pré-montée aboutie: …  id=6a9d44a3…  adoptée=true
+        //     bg video configure  id=6a9d44a3…  resolved=nil         ← ✗
+        //     readiness eval  hasPlayer=false hasItem=false
+        //
+        // Le média n'a pas disparu : **il a changé de nom**, et la couche a
+        // suivi le changement sans savoir résoudre le nouveau. Le fond se
+        // serait affiché si le téléversement avait duré une seconde de plus.
+        //
+        // ## Pourquoi les gardes en place ne l'attrapaient pas
+        //
+        // Les deux branches replient sur une ABSENCE, chacune en supposant que
+        // la résolution reviendra : la vidéo laisse la couche transparente
+        // (« le resolver peut retourner nil 1-2 frames le temps que le
+        // postMediaId soit enregistré côté cache ») et l'image sort par un
+        // `guard let uiImage else { return }` muet. Ces replis sont justes pour
+        // une attente de deux frames ; ici le `nil` est DÉFINITIF — rien ne
+        // reconfigure une troisième fois — et une garde écrite pour un état
+        // transitoire tient une absence permanente.
+        //
+        // > **Attendre n'est pas abandonner.** C'est le pendant, un étage plus
+        // > bas, du « ne rien faire n'est pas laisser passer » des gestes de
+        // > lecture : une décision juste dont l'hypothèse implicite ne tient
+        // > plus.
+        //
+        // ## Ce que cette garde fait, et ce qu'elle NE fait pas
+        //
+        // Elle refuse la SEULE reconfiguration nuisible : celle qui change
+        // l'identité, ne sait pas résoudre la nouvelle, et détruirait un
+        // contenu visible. Détruire est une affirmation ; ici la couche n'en a
+        // aucune à faire. Tout le reste passe — même identité, identité
+        // résolvable, ou absence de contenu à préserver (auquel cas les replis
+        // d'origine gardent leur rôle, y compris le placeholder ThumbHash).
+        //
+        // Elle ne touche PAS au modèle : `self.kind` n'est pas réécrit, donc
+        // la couche continue de peindre ce qu'elle peignait, pendant que le
+        // document porte bien le nouvel id — c'est lui, et non cette couche,
+        // que la publication relit. Une résolution ultérieure du même id
+        // repassera d'elle-même par ce point et sera acceptée.
+        if hasVisibleContent,
+           previousContentIdentity != nextContentIdentity,
+           !Self.canResolve(kind, resolver: resolver) {
+            storyMediaLog.info("bg configure IGNORÉE — nouvelle identité non résolvable, fond conservé")
+            return
+        }
+
         // Reuse the existing content sublayer ONLY when identity AND filter AND
         // content version are unchanged. A filter switch or an in-place bitmap
         // edit (same id, bumped version) must fall through to a fresh fetch +
@@ -1032,6 +1092,30 @@ extension StoryBackgroundLayer {
     /// le `resolver`/`imageCache` ne sont jamais branchés en édition (ils sont
     /// fournis uniquement par le reader). Cette détection limite la confusion
     /// aux strings parsables en URL avec un scheme connu.
+    /// **Cette identité de fond mène-t-elle quelque part ?**
+    ///
+    /// La question que `configure` doit poser AVANT de défaire un fond qui se
+    /// peint : une nouvelle identité qu'on ne sait pas résoudre ne peut rien
+    /// remplacer, donc elle n'a pas à détruire.
+    ///
+    /// Elle interroge exactement les deux sources que les branches `.image` et
+    /// `.video` interrogeront ensuite — l'URL directe, puis le résolveur — pour
+    /// qu'un `true` ici ne puisse pas devenir un `nil` là-bas. Un troisième
+    /// chemin de résolution ajouté à l'une des branches sans l'être ici
+    /// rouvrirait le défaut : les deux listes se tiennent ENSEMBLE.
+    ///
+    /// Les fonds COLORÉS sont toujours résolvables : ils ne dépendent d'aucune
+    /// adresse, ils portent leur valeur.
+    nonisolated static func canResolve(_ kind: Kind, resolver: ((String) -> URL?)?) -> Bool {
+        switch kind {
+        case .solidColor, .gradient:
+            return true
+        case .image(let postMediaId, _), .video(let postMediaId, _, _, _):
+            if directURLIfAny(from: postMediaId) != nil { return true }
+            return resolver?(postMediaId) != nil
+        }
+    }
+
     nonisolated static func directURLIfAny(from candidate: String) -> URL? {
         guard !candidate.isEmpty else { return nil }
         // Local composer asset — returned verbatim, never network-normalized.

@@ -166,6 +166,18 @@ from utils.performance import (
 from utils.pipeline_cache import LRUPipelineCache
 
 
+class TranslationInferenceError(RuntimeError):
+    """Échec RÉEL de l'inférence ML (pipeline indisponible, résultat inattendu,
+    exception du modèle). Ne JAMAIS l'attraper pour retourner un texte de
+    substitution (`[ML-Pipeline-Error] …`, `[ML-Batch-Error] …`) comme si
+    c'était une traduction : cette valeur remonte jusqu'à
+    `translate_with_structure`, qui la mettait en cache 30 jours et
+    l'assemblait dans le texte final sans qu'aucun contrôle de validité ne
+    puisse la détecter au milieu d'un texte multi-segments (#3663). Laisser
+    l'exception se propager pour que l'appelant retombe sur le texte
+    original."""
+
+
 class TranslatorEngine:
     """
     Moteur de traduction utilisant les modèles NLLB
@@ -433,11 +445,13 @@ class TranslatorEngine:
                     return result[0]['translation_text']
                 else:
                     logger.error(f"[NLLB] Résultat inattendu: {result}")
-                    return f"[NLLB-No-Result] {text}"
+                    raise TranslationInferenceError(f"Résultat NLLB inattendu: {result}")
 
+            except TranslationInferenceError:
+                raise
             except Exception as e:
                 logger.error(f"Erreur pipeline {model_type}: {e}")
-                return f"[ML-Pipeline-Error] {text}"
+                raise TranslationInferenceError(f"Erreur pipeline {model_type}: {e}") from e
 
         # Exécuter de manière asynchrone
         loop = asyncio.get_event_loop()
@@ -552,10 +566,10 @@ class TranslatorEngine:
                         for result in results:
                             if isinstance(result, dict) and 'translation_text' in result:
                                 all_results.append(result['translation_text'])
-                            elif isinstance(result, list) and len(result) > 0:
-                                all_results.append(result[0].get('translation_text', '[No-Result]'))
+                            elif isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
+                                all_results.append(result[0]['translation_text'])
                             else:
-                                all_results.append('[Batch-No-Result]')
+                                raise TranslationInferenceError(f"Résultat batch NLLB inattendu: {result}")
 
                 logger.info(f"🔓 [MODEL_LOCK] Batch '{model_type}' terminé (lock libéré entre chunks)")
 
@@ -570,11 +584,13 @@ class TranslatorEngine:
                 logger.info(f"[BATCH-SYNC] ✅ Fin translate_batch_sync: {len(all_results)} traductions")
                 return all_results
 
+            except TranslationInferenceError:
+                raise
             except Exception as e:
                 logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {e}")
                 import traceback
                 traceback.print_exc()
-                return [f"[ML-Batch-Error] {t}" for t in texts]
+                raise TranslationInferenceError(f"Erreur batch pipeline {model_type}: {e}") from e
 
         # Exécuter de manière asynchrone
         logger.info(f"[BATCH] 🔄 Soumission à executor (threads actifs: {self.executor._max_workers})")
