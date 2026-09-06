@@ -84,8 +84,7 @@ describe('broadcastToUser', () => {
       categoryId: 'cat-1',
     })).toBe(false);
     expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u', event: SERVER_EVENTS.CATEGORY_DELETED }),
-      expect.stringContaining('Socket.IO layer unavailable'),
+      expect.stringContaining('Socket.IO layer unavailable (userId=u, event=category:deleted)'),
     );
   });
 
@@ -103,9 +102,9 @@ describe('broadcastToUser', () => {
     });
     expect(broadcastToUser(fastify, 'u', 'x', {})).toBe(false);
     expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u', event: 'x', err: expect.any(Error) }),
-      expect.stringContaining('emit failed'),
+      expect.stringContaining('emit failed (userId=u, event=x)'),
     );
+    expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith('boom');
   });
 
   test('resolveSocketIO returns null without handler', () => {

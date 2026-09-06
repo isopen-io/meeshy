@@ -6,7 +6,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { withAudit } from '../../middleware/authorize';
@@ -212,9 +212,10 @@ export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRout
 
       const invalidationStatus = await broadcastInvalidation({ global: true });
       if (!invalidationStatus.anyChannelSucceeded) {
-        fastify.log.warn(
-          { invalidationStatus },
+        logWarn(
+          fastify.log,
           '[AgentGlobalConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 10 min',
+          JSON.stringify(invalidationStatus),
         );
       }
 

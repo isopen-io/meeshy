@@ -23,6 +23,7 @@ import {
 } from '../utils/rate-limiter.js';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
+import { logWarn } from '../utils/logger';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 // Zod schemas for request validation
@@ -319,7 +320,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           io: fastify.socketIOHandler?.getManager?.()?.getIO(),
           userId: result.userId ?? '',
           reason: 'password_changed',
-          onError: (err) => fastify.log.warn({ err }, '[PasswordReset] socket fanout failed after reset'),
+          onError: (err) => logWarn(fastify.log, '[PasswordReset] socket fanout failed after reset', err),
         });
         return sendSuccess(reply, { message: result.message });
       } else {

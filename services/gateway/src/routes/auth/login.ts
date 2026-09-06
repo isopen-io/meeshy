@@ -23,6 +23,7 @@ import {
 } from './types';
 import type { AuthResult } from '../../services/AuthService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { logWarn } from '../../utils/logger';
 import {
   sendSuccess,
   sendUnauthorized,
@@ -402,7 +403,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
           });
           sessionId = session?.id;
         } catch (error) {
-          fastify.log.warn({ err: error }, '[AUTH] session lookup failed on logout');
+          logWarn(fastify.log, '[AUTH] session lookup failed on logout', error);
         }
 
         const loggedOut = await authService.logout(sessionToken);
@@ -421,7 +422,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
             userId,
             sessionId,
             message: 'Signed out.',
-            onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket cut failed on logout'),
+            onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on logout', error),
           });
         }
       }

@@ -54,6 +54,7 @@ jest.mock('../../../utils/logger', () => ({
     error: jest.fn(),
   },
   logError: jest.fn(),
+  logWarn: jest.fn(),
 }));
 
 jest.mock('../../../middleware/auth', () => ({

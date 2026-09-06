@@ -41,6 +41,7 @@ import { createPreferenceRateLimitConfig } from '../../../routes/me/preferences/
 
 jest.mock('../../../utils/logger', () => ({
   logError: jest.fn(),
+  logWarn: jest.fn(),
   logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 

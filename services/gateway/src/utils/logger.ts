@@ -106,20 +106,38 @@ export function logError(loggerOrMessage: any, message?: string | unknown, error
   }
 }
 
-export function logWarn(logger: any, message: string, error: unknown | any): void {
-  try {
-    if (logger && typeof logger.warn === 'function') {
-      logger.warn(message);
+/**
+ * Trace un avertissement — et la fait SORTIR.
+ *
+ * Même défaut que `logError()` avant #3617, jamais corrigé pour ce niveau
+ * (#5415) : l'ancienne version délègue au seul logger reçu. `fastify.log.warn`
+ * (et `request.log.warn`, le même objet) est le no-op d'`abstract-logging` sous
+ * `logger: false` — il existe, ne rejette pas, et n'écrit rien. La branche
+ * `else`/`catch` qui écrivait réellement en console n'était donc jamais
+ * atteinte par un appelant qui lui passe `fastify.log`.
+ *
+ * La ligne part donc TOUJOURS par le `logger` de ce module, comme `logError()`.
+ * Le logger reçu (`sink`) est servi EN PLUS quand il sait émettre.
+ */
+export function logWarn(sink: any, message: string, error: unknown | any): void {
+  const detail = error instanceof Error
+    ? `${error.message}${error.stack ? `\n${error.stack}` : ''}`
+    : String(error);
+
+  logger.warn(message, detail);
+
+  if (sink && typeof sink.warn === 'function') {
+    try {
+      sink.warn(message);
       if (error instanceof Error) {
-        logger.warn(error.message);
+        sink.warn(error.message);
       } else {
-        logger.warn(String(error));
+        sink.warn(String(error));
       }
-    } else {
-      console.warn(message, error);
+    } catch {
+      // Un logger d'appelant qui casse ne doit pas emporter la trace : la
+      // ligne est déjà partie par `logger.warn` ci-dessus.
     }
-  } catch (e) {
-    console.warn(message, error);
   }
 }
 

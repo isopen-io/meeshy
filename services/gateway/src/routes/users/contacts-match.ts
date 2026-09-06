@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
@@ -97,8 +97,10 @@ export async function matchContacts(fastify: FastifyInstance) {
       const contacts = normalizeContacts(body.contacts, body.defaultCountry as string | undefined);
 
       if (totalContacts > MAX_CONTACTS_PER_SYNC) {
-        fastify.log.warn(
-          `[CONTACTS-MATCH] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`
+        logWarn(
+          fastify.log,
+          `[CONTACTS-MATCH] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`,
+          ''
         );
       }
 

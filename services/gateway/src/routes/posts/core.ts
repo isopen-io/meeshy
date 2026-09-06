@@ -29,6 +29,7 @@ import {
 import { protectedPreview, maskedAttachment } from '../../services/notifications/NotificationService';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
+import { logWarn } from '../../utils/logger';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { issuesServies } from '../../utils/zod-issue-schema';
@@ -621,11 +622,11 @@ export function registerCoreRoutes(
           // peuvent pas diverger sur un même payload.
           socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
             engagementReset: storyContentEditRequested(parsed.data),
-          }).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
+          }).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast story updated failed', err));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
+          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast status updated failed', err));
         } else {
-          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
+          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast post updated failed', err));
         }
       }
 
@@ -675,7 +676,7 @@ export function registerCoreRoutes(
       broadcastPostRemoval(
         fastify.socialEvents,
         result,
-        (err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast deletion failed')
+        (err) => logWarn(fastify.log, '[DELETE /posts/:postId]: broadcast deletion failed', err)
       );
 
       return sendSuccess(reply, { deleted: true });

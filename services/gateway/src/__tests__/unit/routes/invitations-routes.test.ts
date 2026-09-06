@@ -11,6 +11,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 jest.mock('../../../utils/logger', () => ({
   logError: jest.fn(),
+  logWarn: jest.fn(),
 }));
 
 // ─── Import route under test ──────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../utils/response.js';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
 import { ContactDirectoryService, type SyncMode } from '../../services/ContactDirectoryService';
@@ -61,8 +61,10 @@ export async function synchroniser(
 
     const tronque = totalContacts > MAX_CONTACTS_PER_SYNC;
     if (tronque) {
-      fastify.log.warn(
-        `[DIR-CONTACTS] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`
+      logWarn(
+        fastify.log,
+        `[DIR-CONTACTS] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`,
+        ''
       );
     }
 

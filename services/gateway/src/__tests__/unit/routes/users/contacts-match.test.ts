@@ -20,6 +20,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
+  logWarn: jest.fn(),
 }));
 
 const mockResolveForTargets = jest.fn<any>();
