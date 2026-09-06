@@ -29,7 +29,7 @@ import Foundation
 /// au client de tenir la MÊME frontière AVANT d'écrire dans une file durable :
 /// une mutation que le serveur ne peut structurellement pas adresser n'y
 /// attend pas un réseau, elle y pourrit.
-public enum MeeshyObjectID {
+public enum ObjectID {
 
     /// Un ObjectId MongoDB est exactement 24 caractères hexadécimaux, casse
     /// indifférente. Miroir de `OBJECT_ID_REGEX` (`/^[0-9a-fA-F]{24}$/`).
