@@ -15,10 +15,18 @@ final class StickerPaletteTests: XCTestCase {
 
     /// Emoji, amour et heure ne dépendent de RIEN : ni permission, ni magasin.
     /// Ils sont toujours là.
+    ///
+    /// **Le LIEU les a rejoints le 2026-09-05** (directive porteur) : ses dix
+    /// styles n'ont pas besoin du GPS — seule la DONNÉE en a besoin. Une palette
+    /// nue ne perd donc plus qu'un seul onglet, « Mes stickers », qui n'a
+    /// littéralement rien à montrer sans son magasin. C'est le SEUL que la
+    /// loi 4 retire encore ici, et le contraste est ce qui rend ce témoin
+    /// lisible.
     func test_threeTabs_neverDependOnAProvider() {
         let nu = StickerPaletteTab.offered(hasLibrary: false, hasNearbyPlaces: false)
-        XCTAssertEqual(nu, StickerPaletteTab.canonicalOrder.filter { $0 != .place && $0 != .library })
+        XCTAssertEqual(nu, StickerPaletteTab.canonicalOrder.filter { $0 != .library })
         XCTAssertTrue(nu.contains(.emoji) && nu.contains(.text) && nu.contains(.love) && nu.contains(.time))
+        XCTAssertTrue(nu.contains(.place), "les styles de lieu ne dépendent pas du GPS")
     }
 
     /// **Un outil non servi est ABSENT, jamais grisé.** Un onglet « Mes
