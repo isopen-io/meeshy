@@ -1278,6 +1278,15 @@ sur la passerelle cite la route. Une specification qui devine est pire qu'aucune
     const modeleDev = spec && spec.modele === 'petit' ? MODELE.petit : MODELE.developper
     log(`${t.cle} : specifie — developpement par ${modeleDev}${spec && spec.modele === 'petit' ? ' (travail petit)' : ''}${phare ? ' — ecran PHARE' : ''}`)
 
+    // #5243 — LE POINT D'ETAPE LE MOINS CHER DU DEPOT : la specification qui vient d'etre ecrite
+    // (dossierDeTravail/specs/<cle>.md) est le SQUELETTE de ce travail — l'intention devient un
+    // fait git opposable des maintenant, plutot que de rester invisible pendant toute la duree
+    // (potentiellement longue) de l'implementation qui suit. Sans ce point d'etape, une session
+    // voisine qui choisit un travail entre ici et la phase Livrer ne voit RIEN de cette specification
+    // et peut converger sur le meme fichier (doctrine : « pousser le squelette dans les quinze
+    // minutes » + corollaire d'asymetrie — celui qui n'a rien ecrit cede).
+    const synchroApresSpec = await resynchroniser(`apres specification de ${t.cle}, avant l'implementation`)
+
     // ---------------------------------------------------------------- Implementer (developper)
     phase('Implementer')
     const fait = await agent(`${SOCLE}
@@ -1287,6 +1296,7 @@ TA MISSION — LIVRER ce travail, en TDD, en ENTIER, en suivant SA SPECIFICATION
 TRAVAIL : ${t.titre_issue}
 ${ligneDeTravail(t)}${cible}
 ${num ? `\nISSUE : #${num}. Le commit final la fermera (Closes #${num}) — la phase Livrer s'en charge.` : ''}
+${synchroApresSpec && synchroApresSpec.fichiers_touches_par_dev ? `\nCE QUE LES SESSIONS VOISINES ONT BOUGE dans \`${DEPUIS}\` pendant la specification — lis-le AVANT d'implementer, pour ne pas refaire ce qui est fait :\n${court(synchroApresSpec.fichiers_touches_par_dev, 3000)}` : ''}
 
 LA SPECIFICATION (ecrite par le specificateur ; elle est aussi dans ${dossierDeTravail}/specs/${t.cle}.md) :
 ${SPEC_TEXTE}
