@@ -391,9 +391,9 @@
     "unite": "octets gzip -9, tels que compilés par scripts/build-participate.mjs",
     "plafonds": {
       "participate_gzip_9_octets": {
-        "valeur": 34785,
+        "valeur": 29600,
         "statut": "GATE",
-        "source": "budgets-mesures.json › participate.participate_gzip_9_octets (mesure MAX des environnements, 2026-09-06) — le plafond naît de la mesure (§ 12.6), jamais d'un chiffre inventé ; le faire monter exige un diff relu de CE fichier. MONTÉ 34 763 → 34 785 le 2026-09-06 pour la portabilité d'environnement (#5343) : le conteneur Docker rend +22 o gzip sur le MÊME code que les 34 763 du poste/CI (run 34035871842) — un plafond sous la mesure d'un des environnements opposerait deux machines en croyant opposer du code. RELEVÉ antérieur (code réel) : 34 703 → 34 728 (+25 o gzip, +0,07 %) à la revue de `reglages-details`.",
+        "source": "budgets-mesures.json › participate.participate_gzip_9_octets — le plafond naît de la mesure (§ 12.6). DESCENDU 34 785 → 29 600 le 2026-09-06 avec la baisse #5396 (la table des langues sort du bundle : mesure max-environnements 29 505) ; les ~95 o d'écart absorbent la variance inter-environnements MESURÉE (#5343 : le conteneur Docker rend jusqu'à +22 o gzip sur un code identique) sans autoriser de croissance réelle. Un plafond suit la mesure DANS LES DEUX SENS quand la baisse est structurelle. Historique : monté 34 763 → 34 785 le matin même pour la portabilité (#5343) ; relevé antérieur 34 703 → 34 728 (reglages-details).",
         "temoin": "apps/web-v3/__tests__/bundle-budget.test.ts § « le plafond du module de participation » ; la moitié binaire-réel ≤ mesure est tenue par scripts/build-participate.mjs (rc=1 dans bun run build)"
       }
     }
