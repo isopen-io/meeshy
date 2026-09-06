@@ -199,23 +199,56 @@ struct PostSceneMosaic: View {
         GeometryReader { geo in
             let boite = CGSize(width: geo.size.width,
                                height: geo.size.width * MosaicLayout.aspectRatio(mode: mode))
-            ZStack(alignment: .topLeading) {
-                ForEach(tuiles, id: \.sceneIndex) { tuile in
-                    vignette(tuile, joue: false)
-                        .frame(width: tuile.width * boite.width,
-                               height: tuile.height * boite.height)
-                        .offset(x: tuile.x * boite.width, y: tuile.y * boite.height)
+            mosaiqueDefilante(
+                ZStack(alignment: .topLeading) {
+                    ForEach(tuiles, id: \.sceneIndex) { tuile in
+                        vignette(tuile, joue: false)
+                            .frame(width: tuile.width * boite.width,
+                                   height: tuile.height * boite.height)
+                            .offset(x: tuile.x * boite.width, y: tuile.y * boite.height)
+                    }
                 }
-            }
+                .frame(width: largeurUtile(boite), height: boite.height,
+                       alignment: .topLeading)
+            )
+            // Le DÉFILEMENT fait la largeur de la boîte ; c'est son CONTENU qui
+            // déborde (`largeurUtile`, posée juste au-dessus). Contraindre le
+            // conteneur à la largeur utile lui ferait dépasser la carte au lieu
+            // de la faire défiler — le débordement reviendrait par la porte
+            // qu'on vient de fermer.
             .frame(width: boite.width, height: boite.height, alignment: .topLeading)
-            // Seul le DÉFILEMENT déborde ; les trois mosaïques tiennent dans
-            // leur boîte et n'ont rien à rogner. Rogner quand même coûterait
-            // une couche de composition à chaque carte du fil.
-            .modifier(RognageDeMosaique(actif: mode == .reel))
         }
         .aspectRatio(1 / MosaicLayout.aspectRatio(mode: mode), contentMode: .fit)
         .frame(maxWidth: PostSceneCard.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    /// **Le défilement DÉFILE** (directive porteur 2026-09-06 : « permettre
+    /// donc le défilement continu »).
+    ///
+    /// Le mode `.reel` déborde volontairement à droite — c'est l'amorce qui dit
+    /// « il y en a d'autres ». Mais rien ne le faisait défiler : ses tuiles 3 et
+    /// 4 vivaient à x ≥ 456 pt sur un écran de 402, hors du cadre et
+    /// inatteignables par aucun geste. **Un mode qui déborde sans défiler cache
+    /// ses tuiles au lieu de les offrir.**
+    ///
+    /// Rogner était la moitié fausse du remède : ça masquait le débordement au
+    /// lieu de le rendre parcourable.
+    @ViewBuilder
+    private func mosaiqueDefilante(_ contenu: some View) -> some View {
+        if mode == .reel {
+            ScrollView(.horizontal, showsIndicators: false) { contenu }
+        } else {
+            contenu
+        }
+    }
+
+    /// La largeur RÉELLE de la rangée : les trois mosaïques tiennent dans leur
+    /// boîte, le défilement s'étend au-delà pour que son contenu existe et
+    /// puisse être atteint.
+    private func largeurUtile(_ boite: CGSize) -> CGFloat {
+        guard mode == .reel, let derniere = tuiles.last else { return boite.width }
+        return max(boite.width, (derniere.x + derniere.width) * boite.width)
     }
 
     // MARK: - Une tuile, une page
@@ -227,10 +260,29 @@ struct PostSceneMosaic: View {
         let bouge = scene.map(SceneMotion.isCinematic) ?? false
         ZStack {
             if scene != nil {
-                // Chaque cadre CADRE sa propre scène : le cadrage raccourcit la
-                // carte, il ne zoome pas dessus (directive porteur 2026-09-06,
-                // réalisée dans `SceneFraming`).
-                SceneFocusFrame(focus: scene.flatMap { SceneFraming.focus(scene: $0) }) {
+                // **Une TUILE montre la scène ENTIÈRE, réduite** (directive
+                // porteur 2026-09-06 : « la mise à l'échelle d'une scène doit
+                // mettre à l'échelle tout son contenu »).
+                //
+                // Le cadrage par contenu ne s'applique donc qu'aux PAGES. Sur
+                // une carte ou une page — pleine largeur, dont la boîte adopte
+                // le rapport du cadrage — les deux termes du `max` s'égalisent
+                // et l'échelle reste 1. Dans une TUILE, le rapport de la boîte
+                // vient de la GÉOMÉTRIE et non du cadrage : le canvas reçoit
+                // alors `1 / focus.width` fois la largeur de la tuile, soit
+                // jusqu'à **× 2,4** (le plancher `minimumSide` vaut 0,42).
+                //
+                // `CanvasGeometry.scaleFactor = renderSize.width / 1080` : tout
+                // le contenu suit cette largeur. Un canvas 2,4 fois trop large
+                // rend donc un texte 2,4 fois trop gros — mesuré sur une tuile
+                // `reel` de 200 pt : 25 pt au lieu des 9 pt attendus.
+                //
+                // > Il n'y a d'ailleurs aucun vide à gagner dans une tuile : le
+                // > cadrage sert à RACCOURCIR une carte, et une tuile impose
+                // > déjà son propre rapport.
+                SceneFocusFrame(focus: MosaicLayout.isPaged(mode: mode)
+                                ? scene.flatMap { SceneFraming.focus(scene: $0) }
+                                : nil) {
                     MeeshyScenePlayer(
                         document: document,
                         mode: .card,
@@ -376,10 +428,8 @@ struct PostSceneMosaic: View {
     }
 }
 
-/// Rogner ne se paie que là où quelque chose dépasse.
-private struct RognageDeMosaique: ViewModifier {
-    let actif: Bool
-    func body(content: Content) -> some View {
-        if actif { content.clipped() } else { content }
-    }
-}
+// `RognageDeMosaique` a été RETIRÉ le 2026-09-06 : il rognait le débordement
+// du mode `.reel`, c'est-à-dire qu'il CACHAIT les tuiles que le porteur
+// demande maintenant d'atteindre (« permettre donc le défilement continu »).
+// Un `ScrollView` les offre au lieu de les masquer, et le modificateur n'avait
+// plus de consommateur — une vue sans appelant ne rougit nulle part.
