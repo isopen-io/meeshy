@@ -19,6 +19,7 @@ const NOW = new Date();
 function makeUser(overrides: Record<string, any> = {}) {
   return {
     dataProcessingConsentAt: null,
+    analyticsConsentAt: null,
     voiceDataConsentAt: null,
     voiceProfileConsentAt: null,
     voiceCloningEnabledAt: null,
@@ -352,6 +353,18 @@ describe('ConsentValidationService', () => {
       expect(violations.some(v => v.field === 'allowAnalytics')).toBe(true);
     });
 
+    // #4709 — `analyticsConsentAt` est un consentement DÉDIÉ, enfant direct
+    // de `dataProcessingConsentAt` : l'avoir ne suffit plus.
+    it('returns violation for allowAnalytics when dataProcessingConsent is present but analyticsConsentAt is not', async () => {
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW, analyticsConsentAt: null }));
+
+      const violations = await sut.validatePrivacyPreferences('u1', { allowAnalytics: true });
+
+      const violation = violations.find(v => v.field === 'allowAnalytics');
+      expect(violation).toBeDefined();
+      expect(violation?.requiredConsents).toEqual(['analyticsConsentAt']);
+    });
+
     it('returns violation for shareUsageData without dataProcessingConsent', async () => {
       const sut = makeSut(makePrisma());
 
@@ -363,7 +376,8 @@ describe('ConsentValidationService', () => {
     it('returns no violations when dataProcessingConsent is present', async () => {
       // #4348 — plus de court-circuit `NODE_ENV` : le consentement vient
       // d'une vraie colonne, pas de l'environnement d'exécution.
-      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW }));
+      // #4709 — `allowAnalytics` exige en outre `analyticsConsentAt`.
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: NOW, analyticsConsentAt: NOW }));
 
       const violations = await sut.validatePrivacyPreferences('u1', {
         allowAnalytics: true,
