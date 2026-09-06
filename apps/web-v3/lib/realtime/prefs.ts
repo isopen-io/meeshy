@@ -4,6 +4,7 @@ import { estUneCleDePrefs, PREFS, type CleDePreference } from '@/lib/contenu/pre
 
 import { montreLeBandeau } from './bandeau';
 import { annule, bascule, reconcilie, type EtatDePrefs } from './prefs-etat';
+import { armeLAbonnementPush } from './push-abonnement';
 
 /**
  * LE MODULE DE PARTICIPATION DE `/notifications/preferences` (§ 12.4, #4899)
@@ -200,6 +201,11 @@ const demarre = (): void => {
   if (jeton === null) return;
 
   prendsLesGestes({ main, passerelle: config.passerelle, jeton });
+  // LE PUSH WEB (#5391) — armé SÉPARÉMENT : contrairement aux treize
+  // bascules, la rangée push n'appelle jamais `basculeUnePreference` et n'a
+  // pas de session-expirée réseau à réconcilier ici — voir le doc-comment de
+  // tête de `push-abonnement.ts`.
+  armeLAbonnementPush(main);
 };
 
 demarre();

@@ -129,11 +129,156 @@ const purgeLeNamespace = async () => {
   await Promise.all(cibles.map((nom) => caches.delete(nom)));
 };
 
+// LE PUSH WEB (#5391) — le travailleur de zone porte trois lots de plus, dans
+// le style plat de ce fichier :
+//
+//   1. `push` : la passerelle n'envoie QUE par FCM (`services/gateway/src/
+//      services/PushNotificationService.ts:657-672`) — le corps arrive sous
+//      `charge.notification.{title,body,icon,badge}`, DÉJÀ RÉSOLU AU PRISME
+//      côté serveur (loi de la bannière, § Prisme du CLAUDE.md). Ce worker ne
+//      touche à AUCUN des deux : ni troncature, ni recomposition, ni
+//      résolution de langue — il les sert VERBATIM. `silent: true` (les
+//      révocations, `call_cancel`) ⇒ `dataOnly` ⇒ le champ `notification` est
+//      ABSENT de la charge (`PushNotificationService.ts:55`) : aucune
+//      bannière n'est montrée, jamais une fabriquée à partir du seul `data`.
+//   2. `notificationclick` : ouvre l'ADRESSE PORTÉE PAR LA CHARGE, DANS LA
+//      ZONE — jamais un lien absolu forgé, jamais un hôte étranger. La
+//      cascade (`cibleDansLaZone`) est la TRADUCTION, aux adresses de la
+//      zone, de celle du legacy (`buildNotificationTargetUrl`,
+//      `apps/web/public/firebase-messaging-sw.js:26-50`) : `fcmOptions.link`
+//      (les deux casses du fil, § 2.4 de la spécification) au format legacy
+//      `/conversations/<id>?messageId=<mid>` transposé sur `adresseDuFil` /
+//      `adresseDuMessage` (`lib/api/adresses-du-fil.ts`) ; sinon
+//      `data.conversationId` ; sinon `data.postId` (`/post/<id>`, la seule
+//      adresse de contenu social de la v3 à ce jour) ; sinon
+//      `/notifications`. Toute cible ABSOLUE ou HORS ZONE retombe sur
+//      `/notifications` — FAIL-CLOSED : un `link` forgé n'ouvre jamais un
+//      site tiers.
+//   3. La purge de déconnexion (#5095, ci-dessus) désabonne aussi le
+//      NAVIGATEUR — `self.registration.pushManager` — en BEST-EFFORT, à côté
+//      de la purge des caches qu'elle faisait déjà : la déconnexion retire
+//      l'abonnement de CET appareil, jamais celui d'un autre.
+//
+// `cibleDansLaZone` ne peut PAS importer `lib/api/adresses-du-fil.ts` — ce
+// fichier est du JS plat, sans module — donc elle en RÉÉCRIT la formule
+// (`/chats/<id>`, `#m-<id>`) : le lien entre les deux est l'EXÉCUTION, pas un
+// import — `__tests__/sw-zone.test.ts` importe les fonctions réelles et
+// compare leur résultat à ce que ce worker calcule, pour CHAQUE cas.
+const ADRESSE_PAR_DEFAUT = '/notifications';
+
+const adresseDuFilLocale = (id) => '/chats/' + encodeURIComponent(id);
+const ancreDuMessageLocale = (id) => '#' + encodeURIComponent('m-' + id);
+const adresseDuMessageLocale = (adresse, id) => adresse + ancreDuMessageLocale(id);
+
+// Un chemin déjà DANS LA ZONE (fourni tel quel par la charge) est servi sans
+// retouche — la cascade legacy (`/conversations/<id>`) ne s'applique QU'à un
+// lien qui n'en est pas un.
+const estUnCheminDeZone = (chemin) =>
+  chemin.startsWith('/chats/') ||
+  chemin.startsWith('/chat/') ||
+  chemin.startsWith('/post/') ||
+  chemin === '/notifications';
+
+const estAbsolue = (lien) => /^[a-z][a-z0-9+.-]*:\/\//i.test(lien);
+
+const cibleDepuisLeLien = (lien) => {
+  if (typeof lien !== 'string' || lien === '' || estAbsolue(lien) || !lien.startsWith('/')) return null;
+  const chemin = lien.split('?')[0].split('#')[0];
+  if (estUnCheminDeZone(chemin)) return lien;
+  const conversation = /^\/conversations\/([^/?#]+)/.exec(lien);
+  if (conversation === null) return null;
+  const id = decodeURIComponent(conversation[1]);
+  const messageId = new URL(lien, 'https://zone.invalide').searchParams.get('messageId');
+  return messageId === null ? adresseDuFilLocale(id) : adresseDuMessageLocale(adresseDuFilLocale(id), messageId);
+};
+
+const cibleDansLaZone = (charge) => {
+  const lien =
+    (charge.fcmOptions && charge.fcmOptions.link) ||
+    (charge.fcm_options && charge.fcm_options.link) ||
+    (charge.data && charge.data.url);
+  const depuisLeLien = cibleDepuisLeLien(lien);
+  if (depuisLeLien !== null) return depuisLeLien;
+
+  const conversationId = charge.data && charge.data.conversationId;
+  if (typeof conversationId === 'string' && conversationId !== '') {
+    const messageId = charge.data.messageId;
+    return typeof messageId === 'string' && messageId !== ''
+      ? adresseDuMessageLocale(adresseDuFilLocale(conversationId), messageId)
+      : adresseDuFilLocale(conversationId);
+  }
+
+  const postId = charge.data && charge.data.postId;
+  if (typeof postId === 'string' && postId !== '') return '/post/' + encodeURIComponent(postId);
+
+  return ADRESSE_PAR_DEFAUT;
+};
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  let charge;
+  try {
+    charge = event.data.json();
+  } catch {
+    return;
+  }
+  // `dataOnly` (`silent: true`) : AUCUN bloc `notification` — révocations,
+  // signal d'appel annulé. Aucune bannière n'est montrée à leur sujet.
+  const notification = charge && charge.notification;
+  if (notification === undefined || notification === null) return;
+
+  event.waitUntil(
+    self.registration.showNotification(notification.title, {
+      body: notification.body,
+      icon: notification.icon,
+      badge: notification.badge,
+      tag: (charge.data && charge.data.notificationId) || undefined,
+      data: { cible: cibleDansLaZone(charge) },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  const cible = event.notification.data && event.notification.data.cible;
+  event.notification.close();
+  if (typeof cible !== 'string' || cible === '') return;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((liste) => {
+      const ouvert = liste.find((client) => {
+        try {
+          const url = new URL(client.url);
+          return url.pathname + url.hash === cible;
+        } catch {
+          return false;
+        }
+      });
+      if (ouvert) return ouvert.focus();
+      return self.clients.openWindow(cible);
+    }),
+  );
+});
+
+const purgeLAbonnementPush = async () => {
+  const gestionnaire = self.registration && self.registration.pushManager;
+  if (!gestionnaire) return;
+  try {
+    const abonnement = await gestionnaire.getSubscription();
+    if (abonnement) await abonnement.unsubscribe();
+  } catch {
+    // best-effort — un navigateur qui refuse laisse l'abonnement en place,
+    // et le token SERVEUR reste retiré par ailleurs (§ 3.5 de la spécification).
+  }
+};
+
 self.addEventListener('message', (event) => {
   const donnees = event.data;
   if (typeof donnees !== 'object' || donnees === null || donnees.type !== 'meeshy-v3:deconnexion') return;
   cacheSuspenduJusqua = Date.now() + DUREE_DE_SUPPRESSION_MS;
-  if (event.waitUntil) event.waitUntil(purgeLeNamespace());
+  if (event.waitUntil) {
+    event.waitUntil(purgeLeNamespace());
+    event.waitUntil(purgeLAbonnementPush());
+  }
 });
 
 self.addEventListener('activate', (event) => {

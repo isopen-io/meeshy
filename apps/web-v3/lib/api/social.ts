@@ -2,7 +2,7 @@ import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normali
 
 import { chaine, instant, nombre, objet } from './lecture';
 import { demande, media, servie, traductions, type MediaDeStory, type Recuperateur } from './publication';
-import { baseDeLaPasserelle } from './passerelle';
+import { baseDeLaPasserelle, baseDeLaPasserellePublique } from './links';
 
 /**
  * LE FIL SOCIAL (`/feed`, #5031) — les posts et réels du VOISINAGE du lecteur,
@@ -201,19 +201,24 @@ export const filSocial = async ({
   curseur,
   limite = 20,
   base,
+  origine,
   recuperer,
 }: {
   readonly jeton: string;
   readonly langues: readonly string[];
   readonly curseur?: string;
   readonly limite?: number;
+  /** L'adresse que le SERVEUR appelle — interne au réseau du conteneur. */
   readonly base?: string;
+  /** L'origine que le NAVIGATEUR suit pour une pièce — publique (fil.ts fait la même distinction). */
+  readonly origine?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Fil> => {
-  const origine = base ?? baseDeLaPasserelle();
+  const racine = base ?? baseDeLaPasserelle();
+  const originePublique = origine ?? baseDeLaPasserellePublique();
   const parametres = new URLSearchParams({ scope: 'home', limit: String(limite) });
   if (curseur !== undefined) parametres.set('cursor', curseur);
-  const reponse = await demande(`${origine}${CHEMIN_DES_POSTS}?${parametres.toString()}`, jeton, recuperer);
+  const reponse = await demande(`${racine}${CHEMIN_DES_POSTS}?${parametres.toString()}`, jeton, recuperer);
 
   if (reponse === null) return { genre: 'panne' };
   if (reponse.status === 401) return { genre: 'session-expiree' };
@@ -227,7 +232,7 @@ export const filSocial = async ({
     posts: enveloppe.data
       .map((ligne) => objet(ligne))
       .filter((ligne): ligne is Readonly<Record<string, unknown>> => ligne !== null)
-      .map((ligne) => posteDuFil({ brut: ligne, langues, origine }))
+      .map((ligne) => posteDuFil({ brut: ligne, langues, origine: originePublique }))
       .filter((post): post is PostDuFil => post !== null),
     curseurSuivant:
       objet(enveloppe.pagination)?.hasMore === true ? (chaine(objet(enveloppe.pagination)?.nextCursor) ?? null) : null,

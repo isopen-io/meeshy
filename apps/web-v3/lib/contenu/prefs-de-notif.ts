@@ -200,4 +200,29 @@ export const PREFS = {
     corps: 'Ce réglage n’a pas été enregistré. Reconnectez-vous pour continuer à modifier vos préférences.',
     action: 'Se reconnecter',
   },
+  /**
+   * LE PUSH WEB (#5391) — la rangée « Sur cet appareil ». PAS une
+   * quatorzième bascule de `BASCULES_DE_PREFS` : un geste `push` distinct
+   * (§ 3.2 de la spécification), parce que l'abonnement vit sur LE
+   * NAVIGATEUR, jamais dans les treize colonnes de `NotificationPreference`.
+   */
+  push: {
+    titreSection: 'Sur cet appareil',
+    libelle: 'Notifications push sur cet appareil',
+    abonne: 'Abonné',
+    nonAbonne: 'Non abonné',
+    indisponible: 'Indisponible',
+    detailResume: 'Ce que cet appareil recevra',
+    detailCorps:
+      'Un abonnement crée un lien entre ce navigateur et votre compte : les notifications que vos réglages autorisent ci-dessus (messages, mentions, réactions…) s’affichent alors même quand l’onglet est fermé. Vous pouvez retirer cet abonnement à tout moment, sans toucher aux autres appareils.',
+    motifEnvManquant: 'Le service de notifications n’est pas configuré pour ce déploiement.',
+    motifSansJavascript: 'S’abonner exige JavaScript — seul le navigateur peut créer l’abonnement.',
+    motifAucunAbonnementConnu: 'Aucun abonnement connu sur cet appareil.',
+    motifEchecAbonnement: 'L’abonnement n’a pas pu être créé. Réessayez.',
+    motifEchecDesabonnement: 'L’abonnement n’a pas pu être retiré. Réessayez.',
+    motifNavigateurIncompatible: 'Ce navigateur ne prend pas en charge les notifications push.',
+    motifPermissionRefusee: 'La permission de notification a été refusée.',
+    regleAbonne: 'Notifications sur cet appareil : abonnement activé.',
+    regleDesabonne: 'Notifications sur cet appareil : abonnement retiré.',
+  },
 } as const;
