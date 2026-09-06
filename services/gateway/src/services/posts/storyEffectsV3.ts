@@ -473,7 +473,14 @@ export function convertV1ToV3(
  * rang inconnu lu strictement ferait échapper tout son canvas au claim.
  */
 const CLAIM_BEARING_KINDS: ReadonlySet<string> = new Set(['sticker', 'media']);
-const CLAIM_PAYLOAD_KEYS = ['mediaId', 'postMediaId'] as const;
+/**
+ * Les deux clés de charge sous lesquelles un objet v3 référence un
+ * `PostMedia` par id — exportée pour `storyEffectsMediaRemap.ts`, qui doit
+ * réutiliser CETTE liste plutôt que la retaper (#4883) : c'est ce module qui
+ * sait lire un objet v3, jamais une seconde énumération de `scenes[].objects`
+ * écrite ailleurs.
+ */
+export const CLAIM_PAYLOAD_KEYS = ['mediaId', 'postMediaId'] as const;
 
 export function unclaimedCanvasMediaIds(
   blob: unknown,
@@ -497,6 +504,48 @@ export function unclaimedCanvasMediaIds(
     }
   }
   return unclaimed;
+}
+
+/**
+ * Réécrit, à toute profondeur de scène, les références `payload.mediaId` /
+ * `payload.postMediaId` d'un document v3 selon `idMap` (ancien id `PostMedia`
+ * → nouveau) — le pendant v3 de `remapRefs` (`storyEffectsMediaRemap.ts`), qui
+ * ne sait lire que la forme legacy (`mediaObjects[]` / `audioPlayerObjects[]`
+ * racine). Un repost v3 sans cette fonction pointait encore les médias de son
+ * ancêtre (#4883) : `remapStoryEffectsMediaIds` n'a jamais rien trouvé à
+ * remapper à la racine d'un blob v3, qui ne porte pas ces deux clés.
+ *
+ * Contrairement à `unclaimedCanvasMediaIds`, TOUT objet est parcouru, sans
+ * filtrer par `kind` : un objet `audio` porte aussi `payload.postMediaId`
+ * (piste de fond), et `remapRefs` remappait déjà `audioPlayerObjects` au même
+ * titre que `mediaObjects` côté legacy — restreindre ici aux seuls kinds
+ * « claim-bearing » (`sticker`/`media`) laisserait les pistes audio d'un
+ * repost pointer l'ancêtre.
+ */
+export function remapCanvasV3MediaIds(
+  blob: CanvasV3,
+  idMap: Readonly<Record<string, string>>
+): { blob: CanvasV3; changed: boolean } {
+  let changed = false;
+  const scenes = (blob.scenes ?? []).map((scene) => ({
+    ...scene,
+    objects: scene.objects.map((object) => {
+      const payload = object.payload;
+      const nextPayload: Record<string, unknown> = { ...payload };
+      let objectChanged = false;
+      for (const key of CLAIM_PAYLOAD_KEYS) {
+        const id = payload[key];
+        if (typeof id === 'string' && idMap[id] !== undefined && idMap[id] !== id) {
+          nextPayload[key] = idMap[id];
+          objectChanged = true;
+        }
+      }
+      if (!objectChanged) return object;
+      changed = true;
+      return { ...object, payload: nextPayload };
+    }),
+  }));
+  return changed ? { blob: { ...blob, scenes }, changed: true } : { blob, changed: false };
 }
 
 /**
