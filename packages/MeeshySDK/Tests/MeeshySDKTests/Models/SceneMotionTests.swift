@@ -138,6 +138,54 @@ final class SceneMotionTests: XCTestCase {
             scene([objet(.text)], clipTransitions: [["type": .string("crossfade")]])))
     }
 
+    // MARK: - Ce qui a du SON
+
+    /// **« Bouger » et « avoir du son » sont deux questions** (constat porteur
+    /// 2026-09-06 : « les scènes cinématiques jouent avec signe audio barré »).
+    ///
+    /// Une vidéo MUETTE bouge sans rien faire entendre ; un son de fond se fait
+    /// entendre sans rien montrer. Répondre à la seconde question avec la
+    /// première poserait un haut-parleur barré sur une scène qui n'a aucun son
+    /// à couper — la définition d'un indicateur qui ment.
+    func test_uneVideoMUETTE_bougeSansEtreAudible() {
+        let muette = scene([objet(.media, payload: ["mediaType": .string("video"),
+                                                    "muted": .bool(true)])])
+        XCTAssertTrue(SceneMotion.isCinematic(muette), "elle bouge")
+        XCTAssertFalse(SceneMotion.isAudible(CanvasV3(scenes: [muette])),
+                       "…et elle n'a rien à faire entendre")
+    }
+
+    /// Une vidéo qui ne se déclare pas muette l'est par défaut sur le fil, mais
+    /// elle PORTE une piste : c'est ce que l'indicateur annonce.
+    func test_uneVideoNonMuette_estAudible() {
+        let sonore = scene([objet(.media, payload: ["mediaType": .string("video")])])
+        XCTAssertTrue(SceneMotion.isAudible(CanvasV3(scenes: [sonore])))
+    }
+
+    /// Le son de fond appartient au DOCUMENT : il rend la publication audible
+    /// même si aucune scène ne bouge.
+    func test_unFondSonore_rendLeDocumentAudible() {
+        let fixe = CanvasV3(scenes: [scene([objet(.text)])],
+                            sound: BackgroundSoundV3(source: .library(soundId: "s"), volume: 1))
+        XCTAssertTrue(SceneMotion.isAudible(fixe))
+    }
+
+    /// Une piste POSÉE sur la scène s'entend aussi.
+    func test_unePisteAudioPosee_estAudible() {
+        XCTAssertTrue(SceneMotion.isAudible(CanvasV3(scenes: [scene([objet(.audio)])])))
+    }
+
+    /// **Une scène de texte, de dessin ou de photo n'a AUCUN son.** C'est le
+    /// cas nominal, et le plus important à tenir : un haut-parleur barré y
+    /// serait du chrome mort.
+    func test_uneSceneSansSon_nEstPasAudible() {
+        XCTAssertFalse(SceneMotion.isAudible(CanvasV3(scenes: [
+            scene([objet(.text), objet(.drawing),
+                   objet(.media, payload: ["mediaType": .string("image")])])
+        ])))
+        XCTAssertFalse(SceneMotion.isAudible(CanvasV3(scenes: [])))
+    }
+
     // MARK: - Le DOCUMENT
 
     /// **Le son de fond appartient au DOCUMENT, pas à une scène.** Un canvas

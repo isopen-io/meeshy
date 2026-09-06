@@ -519,7 +519,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         }
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     return sendSuccess(reply, {
       languages: [
@@ -645,7 +645,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         }
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Test avec un nouveau message (comportement WebSocket)
       const messageData: any = {

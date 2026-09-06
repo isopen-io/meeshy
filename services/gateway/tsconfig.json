@@ -13,6 +13,13 @@
     "noImplicitReturns": false,
     "noImplicitThis": false,
     "noUnusedLocals": true,
+    // #5331 — famille DISTINCTE de `noUnusedLocals` (#4859) : un paramètre
+    // déclaré et jamais lu dans le corps d'une fonction. 73 diagnostics
+    // mesurés et triés à l'activation (reliquats de refactor retirés, deux
+    // gardes de sécurité manquantes corrigées — voir le commit), désormais à
+    // zéro. Scopée hors `tsconfig.test.json`, comme `noUnusedLocals` : les
+    // tests utilisent massivement des paramètres de mock non lus.
+    "noUnusedParameters": true,
     "useUnknownInCatchVariables": false,
     "noImplicitOverride": false,
     "noPropertyAccessFromIndexSignature": false,

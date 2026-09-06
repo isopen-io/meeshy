@@ -312,7 +312,7 @@ async function buildApp(senderShape: SenderShape = REGISTERED_SENDER) {
   const passThroughAuth = async (req: any) => {
     req.authContext = authContext;
   };
-  registerMessagesAdvancedRoutes(app, prisma, translationService, passThroughAuth, passThroughAuth);
+  registerMessagesAdvancedRoutes(app, prisma, passThroughAuth);
   await app.ready();
   return app;
 }

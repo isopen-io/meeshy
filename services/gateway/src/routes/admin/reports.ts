@@ -156,7 +156,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/stats', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const stats = await reportService.getReportStats();
 

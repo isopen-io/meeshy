@@ -2019,7 +2019,7 @@ describe('MeeshySocketIOManager', () => {
 
     it('returns early when no conversationId found', async () => {
       prisma.message.findUnique.mockResolvedValue(null);
-      await (manager as any)._broadcastTranslationEvent(baseAudioData, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯');
+      await (manager as any)._broadcastTranslationEvent(baseAudioData, SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯');
       expect(ioState.to).not.toHaveBeenCalledWith(expect.stringContaining('conversation:'));
     });
 
@@ -2027,7 +2027,6 @@ describe('MeeshySocketIOManager', () => {
       prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-123456789012' });
       await (manager as any)._broadcastTranslationEvent(
         { ...baseAudioData, translatedAudio: undefined },
-        'audioTranslationReady',
         SERVER_EVENTS.AUDIO_TRANSLATION_READY,
         '🎯'
       );
@@ -2039,7 +2038,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.messageAttachment.findUnique.mockResolvedValue(null);
 
       await (manager as any)._broadcastTranslationEvent(
-        baseAudioData, 'audioTranslationReady', SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯'
+        baseAudioData, SERVER_EVENTS.AUDIO_TRANSLATION_READY, '🎯'
       );
 
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));

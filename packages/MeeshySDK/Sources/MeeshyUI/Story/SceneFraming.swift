@@ -102,6 +102,29 @@ public nonisolated enum SceneFraming {
         scene.objects.first(where: isBackground)
     }
 
+    /// **Cette scène montre-t-elle quelque chose ?**
+    ///
+    /// Un fond de couleur nu n'est pas « quelque chose » : il remplit le cadre
+    /// sans rien y placer, et le raccourcir ne fait perdre aucun contenu. Un
+    /// fond MÉDIA, lui, compte — c'est une image, et elle a une forme.
+    ///
+    /// Le prédicat existe pour désambiguïser le `nil` de `focus(scene:)`, qui
+    /// dit à la fois « tout est déjà montré » et « il n'y a rien à montrer ».
+    /// Voir `SceneCarouselLayout.cardAspect`.
+    public static func showsSomething(_ scene: SceneV3) -> Bool {
+        scene.objects.contains { objet in
+            guard isVisible(objet) else { return false }
+            // Un fond ne compte QUE s'il porte un média : le composer pose un
+            // objet `media` de plan `bg` pour une simple couleur, et cet objet
+            // n'a alors ni adresse ni forme.
+            guard isBackground(objet) else { return true }
+            if case .string(let url)? = objet.payload["mediaURL"], !url.isEmpty { return true }
+            if case .string(let identity)? = objet.payload["postMediaId"],
+               !identity.isEmpty { return true }
+            return declaredAspect(of: objet) != nil
+        }
+    }
+
     /// **Le rapport DÉCLARÉ par l'objet lui-même.**
     ///
     /// Le payload d'un média porte `aspectRatio` — mesuré en production. La
@@ -326,12 +349,30 @@ public nonisolated enum SceneCarouselLayout {
     /// Le rapport LARGEUR / HAUTEUR de la boîte — même convention que
     /// `SceneFraming.cardAspect`, dont il est le minimum.
     ///
-    /// Un document dont aucune scène ne se resserre garde le gabarit 9:16 : il
-    /// n'y a alors rien à raccourcir, et forcer une autre forme rognerait des
-    /// scènes qui tenaient.
+    /// Un document dont aucune scène n'exprime d'exigence garde le gabarit
+    /// 9:16 : il n'y a alors rien à raccourcir.
+    ///
+    /// ## Ce que « pas de cadrage » veut dire — et il y a DEUX réponses
+    ///
+    /// Mesuré au simulateur le 2026-09-06 : une publication composée d'une
+    /// scène à texte et d'une scène à fond nu rendait une carte de **601 pt**,
+    /// le gabarit entier. La scène nue votait pour lui — son cadrage est `nil`,
+    /// donc elle prenait le repli, donc elle gagnait le minimum.
+    ///
+    /// > **`nil` a deux sens, et un seul justifie le gabarit plein.** Il dit
+    /// > « tout est déjà montré » sur une photo qui couvre la scène — et là,
+    /// > raccourcir COUPERAIT. Il dit « il n'y a rien à montrer » sur un fond
+    /// > nu — et là, raccourcir ne coûte rien. Les confondre fait payer à toute
+    /// > la publication la hauteur d'une scène qui n'a aucune exigence.
+    ///
+    /// Une scène SANS exigence ne vote donc pas. Les autres gardent le dernier
+    /// mot, et c'est ce qui empêche ce correctif de devenir un rognage.
     public static func cardAspect(document: CanvasV3) -> CGFloat {
-        let rapports = document.scenes.map { scene in
-            SceneFraming.cardAspect(scene: scene) ?? SceneFraming.sceneAspect
+        let rapports = document.scenes.compactMap { scene -> CGFloat? in
+            if let propre = SceneFraming.cardAspect(scene: scene) { return propre }
+            // Pas de cadrage : la scène impose le gabarit SEULEMENT si elle
+            // montre quelque chose. Sinon elle s'abstient.
+            return SceneFraming.showsSomething(scene) ? SceneFraming.sceneAspect : nil
         }
         return rapports.min() ?? SceneFraming.sceneAspect
     }

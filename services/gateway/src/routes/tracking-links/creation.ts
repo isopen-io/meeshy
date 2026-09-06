@@ -207,7 +207,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       if (existingLink) {
         return sendSuccess(reply, {
-          trackingLink: enrichTrackingLink(existingLink, request),
+          trackingLink: enrichTrackingLink(existingLink),
           existed: true
         });
       }
@@ -226,7 +226,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       });
 
       return sendSuccess(reply, {
-        trackingLink: enrichTrackingLink(trackingLink, request)
+        trackingLink: enrichTrackingLink(trackingLink)
       }, { statusCode: 201 });
 
     } catch (error) {
@@ -879,7 +879,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         newToken: body.newToken
       });
 
-      return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink, request) }, { message: 'Lien mis à jour avec succès' });
+      return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink) }, { message: 'Lien mis à jour avec succès' });
 
     } catch (error) {
       if (error instanceof Error) {

@@ -419,7 +419,7 @@ describe('UserManagementService.createUser', () => {
       displayName: null,
       bio: null,
       phoneNumber: null,
-    }, 'creator-id');
+    });
 
     expect(mockHash).toHaveBeenCalledWith('plaintext');
     // Le coût UNIQUE du dépôt : ce service posait 10, les autres portes 12.
@@ -437,7 +437,7 @@ describe('UserManagementService.createUser', () => {
       username: 'alice', firstName: 'A', lastName: 'B',
       email: 'alice@ex.com', password: 'pw',
       displayName: null, bio: null, phoneNumber: null,
-    }, 'creator');
+    });
 
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.role).toBe('USER');
@@ -451,7 +451,7 @@ describe('UserManagementService.createUser', () => {
       username: 'u', firstName: 'F', lastName: 'L',
       email: 'u@e.com', password: 'pw',
       displayName: null, bio: null, phoneNumber: null,
-    }, 'creator');
+    });
 
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.systemLanguage).toBe('en');
@@ -478,7 +478,7 @@ describe('UserManagementService.createUser — adhésion au salon global', () =>
     (prisma as any).conversation.findFirst.mockResolvedValue({ id: 'conv-global', identifier: 'meeshy' });
     const svc = makeService(prisma);
 
-    await svc.createUser(CREATE_DTO as any, 'creator-id');
+    await svc.createUser(CREATE_DTO as any);
 
     expect((prisma as any).participant.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -498,7 +498,7 @@ describe('UserManagementService.createUser — adhésion au salon global', () =>
     (prisma as any).conversation.findFirst.mockRejectedValue(new Error('mongo down'));
     const svc = makeService(prisma);
 
-    const result = await svc.createUser(CREATE_DTO as any, 'creator-id');
+    const result = await svc.createUser(CREATE_DTO as any);
 
     expect(result).toBe(user);
   });
@@ -509,7 +509,7 @@ describe('UserManagementService.createUser — adhésion au salon global', () =>
     const prisma = makePrisma({ create }); // conversation.findFirst → null par défaut
     const svc = makeService(prisma);
 
-    const result = await svc.createUser(CREATE_DTO as any, 'creator-id');
+    const result = await svc.createUser(CREATE_DTO as any);
 
     expect(result).toBe(user);
     expect((prisma as any).participant.create).not.toHaveBeenCalled();
@@ -523,7 +523,7 @@ describe('UserManagementService.updateUser', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ firstName: 'Updated' }));
     const svc = makeService(makePrisma({ update }));
 
-    const result = await svc.updateUser('user-id', { firstName: 'Updated' } as any, 'updater');
+    const result = await svc.updateUser('user-id', { firstName: 'Updated' } as any);
 
     expect(update).toHaveBeenCalledWith({
       where: { id: 'user-id' },
@@ -540,7 +540,7 @@ describe('UserManagementService.updateEmail', () => {
     const findUnique = jest.fn().mockResolvedValue(null);
     const svc = makeService(makePrisma({ findUnique }));
 
-    await expect(svc.updateEmail('user-id', { password: 'pw', newEmail: 'new@ex.com' }, 'updater'))
+    await expect(svc.updateEmail('user-id', { password: 'pw', newEmail: 'new@ex.com' }))
       .rejects.toThrow('User not found');
   });
 
@@ -549,7 +549,7 @@ describe('UserManagementService.updateEmail', () => {
     const findUnique = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ findUnique }));
 
-    await expect(svc.updateEmail('user-id', { password: 'wrong', newEmail: 'new@ex.com' }, 'updater'))
+    await expect(svc.updateEmail('user-id', { password: 'wrong', newEmail: 'new@ex.com' }))
       .rejects.toThrow('Invalid password');
   });
 
@@ -559,7 +559,7 @@ describe('UserManagementService.updateEmail', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ email: 'new@ex.com' }));
     const svc = makeService(makePrisma({ findUnique, update }));
 
-    const result = await svc.updateEmail('user-id', { password: 'correct', newEmail: 'new@ex.com' }, 'updater');
+    const result = await svc.updateEmail('user-id', { password: 'correct', newEmail: 'new@ex.com' });
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ email: 'new@ex.com' }),
@@ -575,7 +575,7 @@ describe('UserManagementService.updateRole', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ role: 'MODERATOR' }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.updateRole('user-id', { role: 'MODERATOR' }, 'updater');
+    await svc.updateRole('user-id', { role: 'MODERATOR' });
 
     expect(update).toHaveBeenCalledWith({
       where: { id: 'user-id' },
@@ -591,7 +591,7 @@ describe('UserManagementService.updateStatus', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: true, deactivatedAt: null }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.updateStatus('user-id', { isActive: true }, 'updater');
+    await svc.updateStatus('user-id', { isActive: true });
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: true, deactivatedAt: null }),
@@ -602,7 +602,7 @@ describe('UserManagementService.updateStatus', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: false }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.updateStatus('user-id', { isActive: false }, 'updater');
+    await svc.updateStatus('user-id', { isActive: false });
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.deactivatedAt).toBeInstanceOf(Date);
@@ -629,7 +629,7 @@ describe('UserManagementService.updateStatus — révocation des sockets du comp
     const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    await svc.updateStatus('user-id', { isActive: false }, 'updater');
+    await svc.updateStatus('user-id', { isActive: false });
 
     expect(revokeSessions).toHaveBeenCalledTimes(1);
     expect(revokeSessions).toHaveBeenCalledWith('user-id');
@@ -641,7 +641,7 @@ describe('UserManagementService.updateStatus — révocation des sockets du comp
     const revokeSessions = jest.fn(async () => 0);
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    await svc.updateStatus('user-id', { isActive: true }, 'updater');
+    await svc.updateStatus('user-id', { isActive: true });
 
     expect(update).toHaveBeenCalledTimes(1);
     expect(revokeSessions).not.toHaveBeenCalled();
@@ -654,7 +654,7 @@ describe('UserManagementService.updateStatus — révocation des sockets du comp
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    const result = await svc.updateStatus('user-id', { isActive: false }, 'updater');
+    const result = await svc.updateStatus('user-id', { isActive: false });
 
     expect(update).toHaveBeenCalledTimes(1);
     expect(result).toBe(written);
@@ -668,7 +668,7 @@ describe('UserManagementService.updateStatus — révocation des sockets du comp
     const update = jest.fn().mockResolvedValue(written);
     const svc = makeService(makePrisma({ update }));
 
-    await expect(svc.updateStatus('user-id', { isActive: false }, 'updater')).resolves.toBe(written);
+    await expect(svc.updateStatus('user-id', { isActive: false })).resolves.toBe(written);
   });
 });
 
@@ -679,7 +679,7 @@ describe('UserManagementService.resetPassword', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.resetPassword('user-id', { newPassword: 'newpass' }, 'resetter');
+    await svc.resetPassword('user-id', { newPassword: 'newpass' });
 
     expect(mockHash).toHaveBeenCalledWith('newpass');
     expect(BCRYPT_COST).toBe(12);
@@ -696,7 +696,7 @@ describe('UserManagementService.deleteUser', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: false }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.deleteUser('user-id', 'deleter');
+    await svc.deleteUser('user-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: false }),
@@ -711,7 +711,7 @@ describe('UserManagementService.restoreUser', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: true }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.restoreUser('user-id', 'restorer');
+    await svc.restoreUser('user-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: true }),
@@ -754,7 +754,7 @@ describe('UserManagementService.verifyEmail', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyEmail('user-id', true, 'updater');
+    await svc.verifyEmail('user-id', true);
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.emailVerifiedAt).toBeInstanceOf(Date);
@@ -764,7 +764,7 @@ describe('UserManagementService.verifyEmail', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ emailVerifiedAt: null }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyEmail('user-id', false, 'updater');
+    await svc.verifyEmail('user-id', false);
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ emailVerifiedAt: null }),
@@ -777,7 +777,7 @@ describe('UserManagementService.verifyPhone', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyPhone('user-id', true, 'updater');
+    await svc.verifyPhone('user-id', true);
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.phoneVerifiedAt).toBeInstanceOf(Date);
@@ -787,7 +787,7 @@ describe('UserManagementService.verifyPhone', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyPhone('user-id', false, 'updater');
+    await svc.verifyPhone('user-id', false);
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ phoneVerifiedAt: null }),
@@ -802,7 +802,7 @@ describe('UserManagementService.unlockAccount', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.unlockAccount('user-id', 'admin');
+    await svc.unlockAccount('user-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
@@ -821,7 +821,7 @@ describe('UserManagementService.enable2FA', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.enable2FA('user-id', 'admin');
+    await svc.enable2FA('user-id');
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.twoFactorEnabledAt).toBeInstanceOf(Date);
@@ -838,7 +838,7 @@ describe('UserManagementService.disable2FA', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.disable2FA('user-id', 'admin');
+    await svc.disable2FA('user-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
@@ -869,7 +869,7 @@ describe('UserManagementService.toggleVoiceConsent', () => {
       const update = jest.fn().mockResolvedValue(makeUser());
       const svc = makeService(makePrisma({ update }));
 
-      await svc.toggleVoiceConsent('user-id', consentType, true, 'admin');
+      await svc.toggleVoiceConsent('user-id', consentType, true);
 
       const callData = (update.mock.calls[0] as any[])[0].data;
       expect(callData[fieldMap[consentType]]).toBeInstanceOf(Date);
@@ -879,7 +879,7 @@ describe('UserManagementService.toggleVoiceConsent', () => {
       const update = jest.fn().mockResolvedValue(makeUser());
       const svc = makeService(makePrisma({ update }));
 
-      await svc.toggleVoiceConsent('user-id', consentType, false, 'admin');
+      await svc.toggleVoiceConsent('user-id', consentType, false);
 
       const callData = (update.mock.calls[0] as any[])[0].data;
       expect(callData[fieldMap[consentType]]).toBeNull();
@@ -894,7 +894,7 @@ describe('UserManagementService.verifyAge', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyAge('user-id', true, 'admin');
+    await svc.verifyAge('user-id', true);
 
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.ageVerifiedAt).toBeInstanceOf(Date);
@@ -904,7 +904,7 @@ describe('UserManagementService.verifyAge', () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
 
-    await svc.verifyAge('user-id', false, 'admin');
+    await svc.verifyAge('user-id', false);
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ ageVerifiedAt: null }),
@@ -927,7 +927,7 @@ describe('UserManagementService.deleteUser — révocation des sockets du compte
     const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    await svc.deleteUser('user-id', 'deleter');
+    await svc.deleteUser('user-id');
 
     expect(revokeSessions).toHaveBeenCalledTimes(1);
     expect(revokeSessions).toHaveBeenCalledWith('user-id');
@@ -941,7 +941,7 @@ describe('UserManagementService.deleteUser — révocation des sockets du compte
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    const result = await svc.deleteUser('user-id', 'deleter');
+    const result = await svc.deleteUser('user-id');
 
     expect(update).toHaveBeenCalledTimes(1);
     expect(result).toBe(written);
@@ -955,7 +955,7 @@ describe('UserManagementService.deleteUser — révocation des sockets du compte
     const revokeSessions = jest.fn(async () => 0);
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    await svc.restoreUser('user-id', 'restorer');
+    await svc.restoreUser('user-id');
 
     expect(update).toHaveBeenCalledTimes(1);
     expect(revokeSessions).not.toHaveBeenCalled();

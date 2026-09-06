@@ -29139,3 +29139,67 @@ qui n'existait dans aucun des deux états, seulement dans leur mélange.
 Et le verrou lui-même accuse volontiers le voisin : le mien était tenu par mon
 PROPRE `SWBBuildService`, qui n'avait pas rendu la main deux secondes après la
 sortie en 0 de mon build précédent. `lsof` sur le `build.db` avant d'accuser.
+
+## Leçon 540 — Trois fois le même jour : une vérification qui CONFIRME l'hypothèse au lieu de l'éprouver
+
+**Mesuré le 2026-09-06**, sur un lot de 47 correctifs de CI dans un arbre partagé
+à quatre sessions. Trois défauts que j'ai INTRODUITS, tous après une vérification
+que j'avais jugée faite — et chacun bloquant à un étage de plus que le précédent.
+
+| ce que j'ai vérifié | ce que la question ne pouvait pas voir | coût |
+|---|---|---|
+| « quels symboles de MA LISTE ce bloc utilise-t-il ? » | `AnyCancellable` n'était pas dans la liste ⇒ `import Combine` manquant | l'app ne compile plus |
+| « où est LE helper de ce fichier ? » | le fichier porte DIX-NEUF classes ⇒ helpers hors de portée de leurs appelants | le bundle de tests ne compile plus |
+| « les accolades s'équilibrent-elles ? » | le compteur ignorait les chaînes `"""` ⇒ faux positif | une heure de doute sur du code sain |
+
+Et un quatrième, de la même famille, trouvé par un pair : les deux conformances
+extraites de `CallManager` touchaient six membres **`private`** — le piège que le
+`CLAUDE.md` d'`apps/ios` documente en toutes lettres, et que j'avais lu. Ma
+question portait sur les SYMBOLES du bloc ; la visibilité de ces symboles n'y
+entrait pas.
+
+## Ce qui les unit
+
+> **Une vérification construite à partir de ce qu'on s'attend à trouver ne peut
+> pas signaler ce à quoi on n'a pas pensé.** Elle rend « rien à signaler » avec
+> exactement la même sortie qu'un contrôle exhaustif, et cette identité de forme
+> est ce qui la rend dangereuse : elle ACHÈTE de la confiance au lieu d'en
+> retirer.
+
+Le renversement tient en une phrase : **partir de l'OBJET, jamais de la liste.**
+Pas « ce bloc utilise-t-il l'un de ces cinq symboles ? » mais « quels types ce
+bloc nomme-t-il, et qui les fournit ? ». Pas « où est le helper ? » mais « dans
+quelle classe vit chaque appelant ? ».
+
+## Les trois questions d'une extraction Swift
+
+Elles se posent AVANT de couper, et aucune ne se déduit des autres :
+
+1. **quels TYPES le bloc nomme-t-il** — chaque majuscule confrontée au framework
+   qui la fournit, jamais une liste d'imports recopiée du fichier d'origine ;
+2. **quels MEMBRES touche-t-il** — un `private` du fichier hôte devient
+   inaccessible dès la première ligne d'un fichier frère (`CLAUDE.md` iOS,
+   § « Piège accès cross-file ») ;
+3. **où vivent ses APPELANTS** — dans un fichier à plusieurs types, « le »
+   helper n'existe pas ; il y en a un par classe.
+
+## Le corollaire qui coûte le plus cher
+
+Les trois défauts ci-dessus ont cassé la COMPILATION, et deux sessions se sont
+retrouvées incapables de mesurer quoi que ce soit. Or **un `** TEST FAILED **` de
+compilation ne se distingue pas d'une suite rouge dans un journal lu vite** — le
+même piège que la leçon 539, un étage plus haut. Pendant qu'un arbre partagé ne
+compile pas, tout verdict lu est un verdict sur autre chose.
+
+D'où la ceinture, pour un arbre à plusieurs sessions : **avant de conclure quoi
+que ce soit d'un job rouge, chercher `error:` de compilation dans le journal.**
+S'il y en a, la liste d'échecs de tests qui suit ne décrit rien.
+
+## Ce qui a marché
+
+Annuler plutôt que réparer sous pression. Le `CLAUDE.md` prescrivait de retirer
+`private` ; élargir la visibilité de six membres d'un manager d'appel pour faire
+retomber un cliquet est une décision de revue, pas d'urgence. Le revert a rendu
+l'arbre compilable en trois commits, au prix d'un cliquet rouge qui, lui, dit
+quelque chose de vrai. **Un cliquet rouge coûte moins que deux sessions
+bloquées.**

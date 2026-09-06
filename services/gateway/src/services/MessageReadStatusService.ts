@@ -2627,7 +2627,7 @@ export class MessageReadStatusService {
   }
 
   // No-op method replacing legacy implementation
-  async updateMessageComputedStatus(messageId: string): Promise<void> {
+  async updateMessageComputedStatus(_messageId: string): Promise<void> {
     // Legacy: Computed fields are no longer stored on Message to improve write performance.
     // Read statuses are computed dynamically via cursors.
     return;

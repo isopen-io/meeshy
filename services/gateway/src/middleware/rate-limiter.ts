@@ -133,7 +133,7 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
       // les 2 s, quoi qu'il arrive.
       return HEALTH_PROBE_ALLOWLISTED_PATHS.includes(path);
     },
-    errorResponseBuilder: (request, context) => {
+    errorResponseBuilder: (_request, context) => {
       return {
         success: false,
         error: 'Trop de requêtes. Veuillez réessayer plus tard.',

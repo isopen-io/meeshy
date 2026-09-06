@@ -182,49 +182,179 @@ final class MosaicLayoutTests: XCTestCase {
 
     // MARK: - La légende
 
-    /// **LE témoin de la seconde directive** : « en mode mosaïque il n'y a pas
-    /// de légende, mais en mode défilement ou scène unique on laisse la
-    /// légende. »
+    /// **LE témoin de l'abolition** (directive porteur 2026-09-06) :
     ///
-    /// La raison est géométrique, pas décorative : une mosaïque montre
-    /// plusieurs visuels à la fois, et une légende y serait ambiguë —
-    /// laquelle des quatre tuiles décrit-elle ?
-    func test_uneMosaique_neMontrePasDeLegende() {
+    /// > « La règle "pas de légende en mosaïque" est abolie, parfois la légende
+    /// > est possible il faut les afficher en trimant bien entendu ! »
+    ///
+    /// La règle précédente rendait `false` sur les quatre mosaïques. Ces
+    /// témoins gardent ce qui la remplace : la place ne décide plus de
+    /// l'AFFICHAGE, elle décide de la LONGUEUR.
+    func test_uneMosaique_montreSaLegendeEnBREF() {
         for mode in [MosaicLayoutMode.wave, .hero, .sine] {
-            XCTAssertFalse(MosaicLayout.showsCaption(mode: mode, visualCount: 4), "\(mode)")
-            XCTAssertTrue(MosaicLayout.isMosaic(mode: mode, visualCount: 4), "\(mode)")
+            let limite = MosaicLayout.captionWordLimit(mode: mode, visualCount: 4)
+            XCTAssertLessThan(limite, MosaicLayout.fullCaptionWords,
+                              "\(mode) : plusieurs visuels dans la hauteur d'une carte — " +
+                              "la légende y est BRÈVE, mais elle PARAÎT")
+            XCTAssertGreaterThan(limite, 0, "\(mode)")
         }
     }
 
-    /// Le défilement ne montre qu'un visuel à la fois : la légende y a un
-    /// sujet, et un seul.
-    func test_leDefilement_montreLaLegende() {
-        XCTAssertTrue(MosaicLayout.showsCaption(mode: .reel, visualCount: 4))
-        XCTAssertFalse(MosaicLayout.isMosaic(mode: .reel, visualCount: 4))
+    /// Un défilement et un carrousel ne montrent qu'un visuel à la fois : leur
+    /// légende a la carte entière, donc deux lignes.
+    func test_unDefilement_gardeLesVingtMotsDeLaRegleCommune() {
+        XCTAssertEqual(MosaicLayout.captionWordLimit(mode: .reel, visualCount: 4),
+                       MosaicLayout.fullCaptionWords)
+        XCTAssertEqual(MosaicLayout.captionWordLimit(mode: .carousel, visualCount: 9),
+                       MosaicLayout.fullCaptionWords)
     }
 
-    /// **Le COMPTE prime sur le mode.** Un post d'un seul visuel montre sa
-    /// légende même s'il déclare une vague — il n'y a pas de mosaïque à un
-    /// élément, donc aucune ambiguïté à lever.
-    ///
-    /// Sans cette priorité, un post-photo unique déclarant `hero` perdrait sa
-    /// légende : exactement le défaut corrigé le 2026-09-05, réintroduit par
-    /// une règle plus récente.
-    func test_unVisuelSeul_montreSaLegendeQuelQueSoitLeMode() {
+    /// **Le COMPTE prime sur le mode.** Un post d'un seul visuel a toute la
+    /// place, quelle que soit la disposition déclarée — il n'y a pas de
+    /// mosaïque à un élément.
+    func test_unVisuelSeul_aTouteLaPlaceQuelQueSoitLeMode() {
         for mode in modes {
-            XCTAssertTrue(MosaicLayout.showsCaption(mode: mode, visualCount: 1), "\(mode)")
-            XCTAssertTrue(MosaicLayout.showsCaption(mode: mode, visualCount: 0), "\(mode)")
+            XCTAssertEqual(MosaicLayout.captionWordLimit(mode: mode, visualCount: 1),
+                           MosaicLayout.fullCaptionWords, "\(mode)")
+            XCTAssertEqual(MosaicLayout.captionWordLimit(mode: mode, visualCount: 0),
+                           MosaicLayout.fullCaptionWords, "\(mode)")
+        }
+    }
+
+    /// **Aucun mode ne fait DISPARAÎTRE la légende.** C'est l'affirmation
+    /// centrale de l'abolition, et elle s'écrit sur la limite plutôt que sur un
+    /// booléen : une limite de zéro mot serait l'ancienne règle sous un autre
+    /// nom.
+    func test_aucunMode_neSupprimeLaLegende() {
+        for mode in modes {
+            for compte in [0, 1, 2, 4, 9] {
+                XCTAssertGreaterThan(
+                    MosaicLayout.captionWordLimit(mode: mode, visualCount: compte), 0,
+                    "\(mode) / \(compte) visuels")
+            }
+        }
+    }
+
+    // MARK: - La légende suit la TUILE, pas la vue
+
+    /// **Le BUDGET ne tombe jamais à zéro.** Ce qui décide qu'une tuile porte
+    /// ou non une légende est `tileCarriesCaption` ; la réduction
+    /// proportionnelle ne doit pas prononcer une SECONDE exclusion en rendant
+    /// zéro mot sur une tuile autorisée — une règle de place cachée dans une
+    /// arithmétique serait invisible à qui relit la première.
+    func test_leBudgetDUneTuile_neTombeJamaisAZero() {
+        for mode in modes {
+            for scenes in [2, 3, 4] {
+                for tuile in MosaicLayout.tiles(sceneCount: scenes, mode: mode) {
+                    XCTAssertGreaterThanOrEqual(
+                        MosaicLayout.captionWordLimit(mode: mode, visualCount: scenes,
+                                                      tileWidth: tuile.width),
+                        MosaicLayout.captionWordFloor,
+                        "\(mode) / \(scenes) scènes / tuile \(tuile.sceneIndex)")
+                }
+            }
+        }
+    }
+
+    /// **Une tuile étroite porte MOINS qu'une large.** Le témoin discriminant :
+    /// sans la part de largeur, les deux satellites d'un `hero` recevraient le
+    /// budget de la grande tuile qu'ils accompagnent.
+    func test_uneTuileEtroite_porteMoinsQueSaVoisineLarge() {
+        let tuiles = MosaicLayout.tiles(sceneCount: 3, mode: .hero)
+        let grande = MosaicLayout.captionWordLimit(mode: .hero, visualCount: 3,
+                                                   tileWidth: tuiles[0].width)
+        let satellite = MosaicLayout.captionWordLimit(mode: .hero, visualCount: 3,
+                                                      tileWidth: tuiles[1].width)
+        XCTAssertGreaterThan(tuiles[0].width, tuiles[1].width, "prémisse de la géométrie hero")
+        XCTAssertGreaterThan(grande, satellite,
+                             "la tuile qui domine peut porter une légende plus longue")
+    }
+
+    /// Une PAGE occupe toute la rangée : elle garde le budget du mode, sans
+    /// réduction. C'est ce qui distingue le carrousel — le mode par défaut —
+    /// des quatre mosaïques.
+    func test_unePagePleineLargeur_gardeLeBudgetDuMode() {
+        for tuile in MosaicLayout.tiles(sceneCount: 4, mode: .carousel) {
+            XCTAssertEqual(
+                MosaicLayout.captionWordLimit(mode: .carousel, visualCount: 4,
+                                              tileWidth: tuile.width),
+                MosaicLayout.fullCaptionWords)
+        }
+    }
+
+    /// **Une largeur aberrante ne fabrique pas un budget négatif.** Le plancher
+    /// répond, plutôt qu'un `Int` négatif qui ferait rendre « … » seul.
+    func test_uneLargeurAberrante_retombeSurLePlancher() {
+        XCTAssertEqual(
+            MosaicLayout.captionWordLimit(mode: .wave, visualCount: 4, tileWidth: -3),
+            MosaicLayout.captionWordFloor)
+    }
+
+    // MARK: - Quelle tuile porte la légende (la PLACE décide)
+
+    /// **Le témoin d'EXCLUSION**, et le seul des trois qui puisse attraper une
+    /// règle écrite à l'envers : sur `hero` et `reel`, une implémentation qui
+    /// légenderait TOUTES les tuiles rendrait le même verdict qu'une
+    /// implémentation juste. Il faut un cas dont la réponse attendue est
+    /// *aucune* pour que la règle soit vraiment interrogée.
+    func test_vagueEtSinusoide_nePortentAucuneLegende() {
+        for mode in [MosaicLayoutMode.wave, .sine] {
+            for index in 0..<4 {
+                XCTAssertFalse(
+                    MosaicLayout.tileCarriesCaption(mode: mode, sceneIndex: index,
+                                                    visualCount: 4),
+                    "\(mode) tuile \(index) : ~87 pt de large, rien de lisible n'y entre")
+            }
+        }
+    }
+
+    /// **`hero` légende sa GRANDE tuile, et elle seule** — ses satellites sont
+    /// aussi étroits qu'une tuile de vague.
+    func test_hero_neLegendeQueSaPremiereTuile() {
+        XCTAssertTrue(MosaicLayout.tileCarriesCaption(mode: .hero, sceneIndex: 0,
+                                                      visualCount: 5))
+        for index in 1..<5 {
+            XCTAssertFalse(
+                MosaicLayout.tileCarriesCaption(mode: .hero, sceneIndex: index,
+                                                visualCount: 5),
+                "satellite \(index)")
+        }
+    }
+
+    /// Défilement continu et image par image : la place y est sur CHAQUE tuile.
+    func test_defilementEtCarrousel_legendentToutesLeursTuiles() {
+        for mode in [MosaicLayoutMode.reel, .carousel] {
+            for index in 0..<5 {
+                XCTAssertTrue(
+                    MosaicLayout.tileCarriesCaption(mode: mode, sceneIndex: index,
+                                                    visualCount: 5),
+                    "\(mode) tuile \(index)")
+            }
+        }
+    }
+
+    /// **Une seule scène a toute la carte**, quelle que soit la disposition
+    /// déclarée : il n'y a pas de mosaïque à un élément, et la contrainte de
+    /// place qui motive les exclusions n'existe pas.
+    func test_uneSeuleScene_porteToujoursSaLegende() {
+        for mode in modes {
+            for compte in [0, 1] {
+                XCTAssertTrue(
+                    MosaicLayout.tileCarriesCaption(mode: mode, sceneIndex: 0,
+                                                    visualCount: compte),
+                    "\(mode) / \(compte)")
+            }
         }
     }
 
     // MARK: - Le défilement image par image
 
-    /// **Le carrousel montre UN visuel à la fois, donc il porte sa légende** —
-    /// même raison que le défilement, et c'est ce qui en fait un défaut
-    /// acceptable pour tout le corpus.
-    func test_leCarrousel_montreSaLegende() {
-        XCTAssertTrue(MosaicLayout.showsCaption(mode: .carousel, visualCount: 4))
-        XCTAssertFalse(MosaicLayout.isMosaic(mode: .carousel, visualCount: 4))
+    /// **Le carrousel montre UN visuel à la fois, donc sa légende garde toute
+    /// sa longueur** — même raison que le défilement, et c'est ce qui en fait
+    /// un défaut acceptable pour tout le corpus.
+    func test_leCarrousel_gardeUneLegendeEntiere() {
+        XCTAssertEqual(MosaicLayout.captionWordLimit(mode: .carousel, visualCount: 4),
+                       MosaicLayout.fullCaptionWords)
     }
 
     /// **Un carrousel se PAGINE ; une mosaïque se pose.** Les quatre autres

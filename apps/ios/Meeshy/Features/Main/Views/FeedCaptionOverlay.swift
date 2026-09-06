@@ -41,13 +41,23 @@ struct FeedCaptionOverlay: View {
 
     let caption: String?
 
+    /// **Combien de mots cette surface peut porter.** Défaut : les vingt de la
+    /// règle commune, ce qui laisse tous les appelants existants inchangés.
+    /// Une mosaïque en demande moins — la place y est partagée entre plusieurs
+    /// tuiles (`MosaicLayout.captionWordLimit`).
+    ///
+    /// En MOTS et non en lignes : c'est la leçon que ce fichier porte déjà
+    /// dans son en-tête, et la directive qui a ouvert la légende aux mosaïques
+    /// ne la remet pas en cause.
+    var words: Int = wordCount
+
     /// Le texte servi : les vingt premiers mots, suivis d'un « … » SEULEMENT
     /// s'il reste quelque chose. Une ellipse posée sur une légende complète
     /// promettrait une suite qui n'existe pas.
-    static func abridged(_ caption: String) -> String? {
+    static func abridged(_ caption: String, words: Int = wordCount) -> String? {
         let propre = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !propre.isEmpty else { return nil }
-        let (tete, tronquee) = MediaCaptionRule.collapse(propre, words: wordCount)
+        let (tete, tronquee) = MediaCaptionRule.collapse(propre, words: words)
         return tronquee ? "\(tete)…" : tete
     }
 
@@ -83,7 +93,7 @@ struct FeedCaptionOverlay: View {
     @State private var deplie = false
 
     var body: some View {
-        if let caption, let texte = Self.abridged(caption) {
+        if let caption, let texte = Self.abridged(caption, words: words) {
             contenu(caption: caption, abrege: texte)
         }
     }

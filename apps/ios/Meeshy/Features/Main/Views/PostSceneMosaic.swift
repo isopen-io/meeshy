@@ -58,6 +58,46 @@ struct PostSceneMosaic: View {
     /// tient déjà pour les médias.
     @State private var page = 0
 
+    /// **Chaque scène porte SA légende — là où la place le permet** (directive
+    /// porteur 2026-09-06, en deux temps).
+    ///
+    /// > « La légende doit s'afficher par-dessus la scène PRÉCISE et non
+    /// > par-dessus le poste entier ! Chaque scène a sa légende d'image ! »
+    ///
+    /// > « Il ne faut pas systématiquement mettre la légende sur la tuile !
+    /// > Mais le faire sur les formats le permettant (défilement continu, image
+    /// > par image, mode hero sur la première image, une seule scène). »
+    ///
+    /// D'où un bandeau peint DANS la tuile, et non au bas de la vue. Une
+    /// première écriture posait un seul bandeau sur l'ensemble : juste sur un
+    /// carrousel — où la tuile visible EST la vue — et faux sur les quatre
+    /// mosaïques, où quatre scènes se partagent l'écran et n'auraient eu qu'une
+    /// légende pour elles quatre, à cheval sur les tuiles.
+    ///
+    /// `carrierFallback: false` : le texte de la publication est déjà rendu
+    /// au-dessus de la carte, et le répéter par-dessus la scène ne serait pas
+    /// afficher une légende.
+    ///
+    /// Ce que la vue NE décide pas : quelle tuile a la place
+    /// (`MosaicLayout.tileCarriesCaption`) ni combien de mots elle porte
+    /// (`captionWordLimit(…tileWidth:)`) — deux questions pures, éprouvées sans
+    /// écran, qu'un sixième mode n'aura à renseigner qu'une fois.
+    @ViewBuilder private func bandeauDeLegende(_ tuile: MosaicLayout.Tile) -> some View {
+        // Le report `+N` porte déjà un voile et un compteur au centre : une
+        // légende y ferait une troisième chose au même endroit.
+        if tuile.overflow == 0,
+           MosaicLayout.tileCarriesCaption(mode: mode, sceneIndex: tuile.sceneIndex,
+                                           visualCount: document.scenes.count) {
+            FeedCaptionOverlay(
+                caption: SceneCaption.resolve(sceneIndex: tuile.sceneIndex,
+                                              in: document, post: post,
+                                              carrierFallback: false),
+                words: MosaicLayout.captionWordLimit(mode: mode,
+                                                     visualCount: document.scenes.count,
+                                                     tileWidth: tuile.width))
+        }
+    }
+
     private var mode: MosaicLayoutMode { document.resolvedLayout }
     private var tuiles: [MosaicLayout.Tile] {
         MosaicLayout.tiles(sceneCount: document.scenes.count, mode: mode)
@@ -199,23 +239,56 @@ struct PostSceneMosaic: View {
         GeometryReader { geo in
             let boite = CGSize(width: geo.size.width,
                                height: geo.size.width * MosaicLayout.aspectRatio(mode: mode))
-            ZStack(alignment: .topLeading) {
-                ForEach(tuiles, id: \.sceneIndex) { tuile in
-                    vignette(tuile, joue: false)
-                        .frame(width: tuile.width * boite.width,
-                               height: tuile.height * boite.height)
-                        .offset(x: tuile.x * boite.width, y: tuile.y * boite.height)
+            mosaiqueDefilante(
+                ZStack(alignment: .topLeading) {
+                    ForEach(tuiles, id: \.sceneIndex) { tuile in
+                        vignette(tuile, joue: false)
+                            .frame(width: tuile.width * boite.width,
+                                   height: tuile.height * boite.height)
+                            .offset(x: tuile.x * boite.width, y: tuile.y * boite.height)
+                    }
                 }
-            }
+                .frame(width: largeurUtile(boite), height: boite.height,
+                       alignment: .topLeading)
+            )
+            // Le DÉFILEMENT fait la largeur de la boîte ; c'est son CONTENU qui
+            // déborde (`largeurUtile`, posée juste au-dessus). Contraindre le
+            // conteneur à la largeur utile lui ferait dépasser la carte au lieu
+            // de la faire défiler — le débordement reviendrait par la porte
+            // qu'on vient de fermer.
             .frame(width: boite.width, height: boite.height, alignment: .topLeading)
-            // Seul le DÉFILEMENT déborde ; les trois mosaïques tiennent dans
-            // leur boîte et n'ont rien à rogner. Rogner quand même coûterait
-            // une couche de composition à chaque carte du fil.
-            .modifier(RognageDeMosaique(actif: mode == .reel))
         }
         .aspectRatio(1 / MosaicLayout.aspectRatio(mode: mode), contentMode: .fit)
         .frame(maxWidth: PostSceneCard.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    /// **Le défilement DÉFILE** (directive porteur 2026-09-06 : « permettre
+    /// donc le défilement continu »).
+    ///
+    /// Le mode `.reel` déborde volontairement à droite — c'est l'amorce qui dit
+    /// « il y en a d'autres ». Mais rien ne le faisait défiler : ses tuiles 3 et
+    /// 4 vivaient à x ≥ 456 pt sur un écran de 402, hors du cadre et
+    /// inatteignables par aucun geste. **Un mode qui déborde sans défiler cache
+    /// ses tuiles au lieu de les offrir.**
+    ///
+    /// Rogner était la moitié fausse du remède : ça masquait le débordement au
+    /// lieu de le rendre parcourable.
+    @ViewBuilder
+    private func mosaiqueDefilante(_ contenu: some View) -> some View {
+        if mode == .reel {
+            ScrollView(.horizontal, showsIndicators: false) { contenu }
+        } else {
+            contenu
+        }
+    }
+
+    /// La largeur RÉELLE de la rangée : les trois mosaïques tiennent dans leur
+    /// boîte, le défilement s'étend au-delà pour que son contenu existe et
+    /// puisse être atteint.
+    private func largeurUtile(_ boite: CGSize) -> CGFloat {
+        guard mode == .reel, let derniere = tuiles.last else { return boite.width }
+        return max(boite.width, (derniere.x + derniere.width) * boite.width)
     }
 
     // MARK: - Une tuile, une page
@@ -227,10 +300,29 @@ struct PostSceneMosaic: View {
         let bouge = scene.map(SceneMotion.isCinematic) ?? false
         ZStack {
             if scene != nil {
-                // Chaque cadre CADRE sa propre scène : le cadrage raccourcit la
-                // carte, il ne zoome pas dessus (directive porteur 2026-09-06,
-                // réalisée dans `SceneFraming`).
-                SceneFocusFrame(focus: scene.flatMap { SceneFraming.focus(scene: $0) }) {
+                // **Une TUILE montre la scène ENTIÈRE, réduite** (directive
+                // porteur 2026-09-06 : « la mise à l'échelle d'une scène doit
+                // mettre à l'échelle tout son contenu »).
+                //
+                // Le cadrage par contenu ne s'applique donc qu'aux PAGES. Sur
+                // une carte ou une page — pleine largeur, dont la boîte adopte
+                // le rapport du cadrage — les deux termes du `max` s'égalisent
+                // et l'échelle reste 1. Dans une TUILE, le rapport de la boîte
+                // vient de la GÉOMÉTRIE et non du cadrage : le canvas reçoit
+                // alors `1 / focus.width` fois la largeur de la tuile, soit
+                // jusqu'à **× 2,4** (le plancher `minimumSide` vaut 0,42).
+                //
+                // `CanvasGeometry.scaleFactor = renderSize.width / 1080` : tout
+                // le contenu suit cette largeur. Un canvas 2,4 fois trop large
+                // rend donc un texte 2,4 fois trop gros — mesuré sur une tuile
+                // `reel` de 200 pt : 25 pt au lieu des 9 pt attendus.
+                //
+                // > Il n'y a d'ailleurs aucun vide à gagner dans une tuile : le
+                // > cadrage sert à RACCOURCIR une carte, et une tuile impose
+                // > déjà son propre rapport.
+                SceneFocusFrame(focus: MosaicLayout.isPaged(mode: mode)
+                                ? scene.flatMap { SceneFraming.focus(scene: $0) }
+                                : nil) {
                     MeeshyScenePlayer(
                         document: document,
                         mode: .card,
@@ -248,19 +340,79 @@ struct PostSceneMosaic: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Posée AVANT le rognage : une légende qui déborderait s'écrirait sur
+        // la tuile voisine, exactement comme le texte d'une scène le faisait.
+        .overlay(alignment: .bottom) { bandeauDeLegende(tuile) }
+        // **Ce qui dépasse d'une tuile ne doit pas s'écrire sur sa voisine.**
+        //
+        // Mesuré sur une mosaïque `wave` (tuiles de ~81 pt) : les textes des
+        // scènes se chevauchaient d'une tuile à l'autre et se lisaient en
+        // travers de la rangée. La cause n'est pas la géométrie — les cadres
+        // sont justes — mais le rendu : l'hôte canvas est un `UIView` dont les
+        // couches ne sont pas masquées par leurs bornes, et `SceneFocusFrame`
+        // s'efface entièrement quand la scène ne se cadre pas (`focus == nil`),
+        // donc rien ne rognait.
+        //
+        // > Un `clipShape` décrit une FORME ; il ne garantit pas qu'une couche
+        // > UIKit imbriquée reste dedans. `.clipped()` pose le masque de rendu
+        // > que le représentable n'a pas.
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(alignment: .center) { report(tuile) }
         // **Une scène cinématique se signale comme une vidéo.** Le glyphe ne
         // se pose que sur ce qui NE joue pas : sur la page en lecture, il
         // recouvrirait le mouvement qu'il annonce.
+        //
+        // Et sur celle qui JOUE, c'est le SON qu'il faut dire — le fil joue
+        // muet par construction, et sans ce signe l'utilisateur voit une scène
+        // bouger sans comprendre pourquoi il n'entend rien.
         .overlay(alignment: .bottomTrailing) {
-            if bouge && !joue && tuile.overflow == 0 { glypheDeLecture }
+            if tuile.overflow == 0 {
+                if joue { indicateurDeSonCoupe(document) }
+                else if bouge { glypheDeLecture }
+            }
         }
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture { onTapScene?(tuile.sceneIndex) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(libelle(tuile, bouge: bouge))
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// **Le son est COUPÉ, et voici pourquoi vous n'entendez rien.**
+    ///
+    /// > « Les scènes cinématiques jouent avec signe audio barré » (constat
+    /// > porteur 2026-09-06).
+    ///
+    /// Un INDICATEUR, pas un contrôle — et la distinction est une décision, pas
+    /// une facilité. `ScenePlayerConfig.locksMute` fige le muet du mode `.card`
+    /// PAR CONSTRUCTION (#4084), et son doc-comment dit que la carte de fil
+    /// « n'expose AUCUN bouton de son (elle n'aurait rien à piloter) ». Un
+    /// bouton monté là-dessus serait le contrôle inerte que
+    /// `MuteButtonExistenceGuardTests` a déjà rejeté deux fois.
+    ///
+    /// Le chemin vers le son existe et il est à un doigt : toucher la scène
+    /// ouvre le plein écran, dont le mode `.reader` ne verrouille pas le muet.
+    ///
+    /// **Il ne paraît que si le document a vraiment quelque chose à couper** —
+    /// `SceneMotion.isAudible`, et non `isCinematic` : une vidéo muette bouge
+    /// sans rien faire entendre, et y poser un haut-parleur barré ferait mentir
+    /// l'indicateur sur l'état qu'il annonce.
+    @ViewBuilder
+    private func indicateurDeSonCoupe(_ document: CanvasV3) -> some View {
+        if SceneMotion.isAudible(document) {
+            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(.black.opacity(0.45)))
+                .padding(8)
+                .allowsHitTesting(false)
+                .accessibilityLabel(Text(String(
+                    localized: "feed.scene.sound.muted",
+                    defaultValue: "Son coupé — ouvrir en plein écran pour l'entendre",
+                    bundle: .main)))
+        }
     }
 
     private var glypheDeLecture: some View {
@@ -319,10 +471,8 @@ struct PostSceneMosaic: View {
     }
 }
 
-/// Rogner ne se paie que là où quelque chose dépasse.
-private struct RognageDeMosaique: ViewModifier {
-    let actif: Bool
-    func body(content: Content) -> some View {
-        if actif { content.clipped() } else { content }
-    }
-}
+// `RognageDeMosaique` a été RETIRÉ le 2026-09-06 : il rognait le débordement
+// du mode `.reel`, c'est-à-dire qu'il CACHAIT les tuiles que le porteur
+// demande maintenant d'atteindre (« permettre donc le défilement continu »).
+// Un `ScrollView` les offre au lieu de les masquer, et le modificateur n'avait
+// plus de consommateur — une vue sans appelant ne rougit nulle part.

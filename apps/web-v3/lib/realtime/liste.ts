@@ -12,7 +12,7 @@ import {
 import { brancheLaBanniere } from './banniere';
 import { prendsLeBalayage } from './balayage';
 import { armeLaDeconnexion } from './deconnexion';
-import { observeCycleDeVie, type TransitionDeCycle } from './lifecycle';
+import { observeCycleDeVie, unSeulMontageParEcran, type TransitionDeCycle } from './lifecycle';
 import { prendsLePleinEcran } from './plein-ecran';
 import * as L from './liste-etat';
 import { CHAMPS_DU_RATTRAPAGE } from './liste-etat';
@@ -528,6 +528,7 @@ const demarre = async (): Promise<void> => {
 
   const main = document.querySelector<HTMLElement>('main[data-participation="liste"]');
   if (main === null) return;
+  if (!unSeulMontageParEcran(main)) return;
   const config = configuration(main);
   if (config === null) return;
   const jeton = valeurDuCookie(document.cookie, COOKIE_DE_JETON);

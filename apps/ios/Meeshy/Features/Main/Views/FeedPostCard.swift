@@ -376,7 +376,9 @@ struct FeedPostCard: View {
     /// fil (`SocialMediaCaption`), et jamais le texte du post : celui-ci est
     /// déjà rendu au-dessus de la carte.
     private var cardSceneCaption: String? {
-        cardSceneFullscreenMedia?.caption
+        guard let cardSceneDocument else { return cardSceneFullscreenMedia?.caption }
+        return SceneCaption.resolve(sceneIndex: 0, in: cardSceneDocument, post: post,
+                                    carrierFallback: false)
     }
 
     /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (corrigé
@@ -583,15 +585,16 @@ struct FeedPostCard: View {
                             else { onTapPost?(post) }
                         }
                     )
-                    // **Aucune légende sur une mosaïque** (directive porteur
-                    // 2026-09-06). La règle est consultée, jamais recopiée :
-                    // elle sait que le compte prime sur le mode.
-                    .overlay(alignment: .bottom) {
-                        if MosaicLayout.showsCaption(mode: cardSceneDocument.resolvedLayout,
-                                                     visualCount: cardSceneDocument.scenes.count) {
-                            FeedCaptionOverlay(caption: cardSceneCaption)
-                        }
-                    }
+                    // **La légende paraît dans TOUS les modes, tronquée**
+                    // (directive porteur 2026-09-06, qui ABOLIT la règle « pas
+                    // de légende en mosaïque ») — mais elle est peinte PAR
+                    // `PostSceneMosaic`, et non ici en `overlay`.
+                    //
+                    // La raison est la PAGE : le carrousel est le mode par
+                    // défaut, sa page courante vit dans cette vue-là, et une
+                    // légende posée au-dessus d'elle ne pouvait pas la
+                    // connaître. Elle restait figée sur le premier média
+                    // pendant que le doigt faisait défiler les scènes.
                 } else if let cardSceneDocument {
                     PostSceneSurface(
                         coordinator: reelAutoplay,

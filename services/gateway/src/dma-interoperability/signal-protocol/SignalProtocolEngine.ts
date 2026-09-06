@@ -101,8 +101,6 @@ export class SignalProtocolEngine {
    * cette information ne franchit même pas `initialize()`. Le seuil était
    * infranchissable : le moteur construisait son gestionnaire de clés sans
    * jamais lui transmettre d'identité, et n'en possédait aucune à transmettre.
-   * `SignalProtocolAdapter` — la jumelle de ce moteur — portait ce point d'entrée
-   * depuis toujours ; c'est le même, à la même place.
    */
   setUserId(userId: string): void {
     this.userId = userId;
@@ -324,8 +322,7 @@ export class SignalProtocolEngine {
         // ne peut calculer NI DH2, NI DH3, NI DH4. Omise, `initializeSession`
         // laissait `dhRatchetKeyPair` à `undefined` et le message partait avec un
         // `Buffer.alloc(0)` en guise de clé publique — un accord que le pair ne
-        // pouvait par construction jamais retrouver. Même défaut que celui corrigé
-        // au cycle 96 sur `SignalProtocolAdapter`, la JUMELLE de ce moteur.
+        // pouvait par construction jamais retrouver.
         ratchetSession = this.doubleRatchet.initializeSession(
           session.rootKey,
           session.chainKeySend,
@@ -343,9 +340,8 @@ export class SignalProtocolEngine {
       logger.trace('Generated message key', { messageNumber: messageKey.messageNumber });
 
       // Step 3: Encrypt plaintext with AES-256-GCM
-      // Nonce de 96 bits — voir `SignalProtocolAdapter.encryptMessage` : c'est la
-      // largeur que `SignalValidation.validateEncryptedPayload` et
-      // `SignalSchemas.encryptedMessage` DÉCLARENT, et la seule qui interopère.
+      // Nonce de 96 bits — la largeur que `SignalValidation.validateEncryptedPayload`
+      // et `SignalSchemas.encryptedMessage` DÉCLARENT, et la seule qui interopère.
       // L'IV voyage avec le message : un chiffré émis sous l'ancienne largeur se
       // déchiffre encore, `decryptMessage` lisant `encryptedMessage.iv` tel quel.
       const iv = crypto.randomBytes(SignalProtocolLimits.AES_GCM_IV_SIZE);

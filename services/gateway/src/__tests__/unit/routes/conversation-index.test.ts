@@ -139,7 +139,7 @@ describe('conversationRoutes (index.ts)', () => {
 
     expect(mockRegisterCore).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
     expect(mockRegisterParticipants).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
-    expect(mockRegisterSharing).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
+    expect(mockRegisterSharing).toHaveBeenCalledWith(fastify, MOCK_PRISMA, requiredAuth);
     expect(mockRegisterLeave).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
     expect(mockRegisterDeleteForMe).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
     expect(mockRegisterBan).toHaveBeenCalledWith(fastify, MOCK_PRISMA, optionalAuth, requiredAuth);
@@ -160,7 +160,7 @@ describe('conversationRoutes (index.ts)', () => {
       fastify, MOCK_PRISMA, MOCK_TRANSLATION_SERVICE, optionalAuth, requiredAuth
     );
     expect(mockRegisterMessagesAdvanced).toHaveBeenCalledWith(
-      fastify, MOCK_PRISMA, MOCK_TRANSLATION_SERVICE, optionalAuth, requiredAuth
+      fastify, MOCK_PRISMA, requiredAuth
     );
   });
 });
