@@ -278,7 +278,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
       - "traefik.http.routers.gateway-staging.rule=Host(`gate.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.gateway-staging.middlewares=compress@file"
+      - "traefik.http.routers.gateway-staging.middlewares=rate-limit@file,compress@file"
       - "traefik.http.routers.gateway-staging.entrypoints=websecure"
       - "traefik.http.routers.gateway-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"

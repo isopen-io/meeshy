@@ -324,7 +324,7 @@ services:
       - "traefik.http.routers.gateway.rule=Host(`gate.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
       - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.gateway.middlewares=compress@file"
+      - "traefik.http.routers.gateway.middlewares=rate-limit@file,compress@file"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}
