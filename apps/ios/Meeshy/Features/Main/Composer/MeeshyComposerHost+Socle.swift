@@ -863,7 +863,12 @@ extension MeeshyComposerHost {
                 storyEffects: ComposerStoryCanvas.publishedSlide(
                     format: selectedFormat,
                     sceneIsPresent: sceneIsPresent,
-                    slides: viewModel.slides),
+                    slides: viewModel.slides,
+                    // **La disposition demandée voyage avec les scènes.** Sans
+                    // cette ligne le contrôle serait un décor : l'auteur
+                    // choisirait « en vague » et la publication partirait dans
+                    // le repli.
+                    layout: mosaicLayout),
                 // **Les légendes du composer, enfin remises** (#4756). Cette
                 // carte avait un écrivain et aucun lecteur sur cette voie : ce
                 // qui manquait n'était pas la saisie, c'était ce passage-ci.

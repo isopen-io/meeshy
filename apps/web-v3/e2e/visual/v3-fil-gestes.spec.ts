@@ -56,6 +56,31 @@ const ouvreLeMenu = async (page: Page, id: string) => {
   return menu;
 };
 
+/**
+ * DÉSARMER un retrait différé avant de fermer la page. Une épreuve qui arme une
+ * minuterie et s'en va sans l'éteindre laisse derrière elle un envoi qui n'a
+ * plus de propriétaire — `remets()` remet les MESSAGES du bouchon, il n'annule
+ * pas ce qui est déjà en vol.
+ *
+ * CE QUI EST MESURÉ (CI, 2026-09-06) : le SECOND témoin de chaque paire de
+ * l'état différé tombe en cherchant le menu de `m4` — 120 s d'attente sur
+ * `details.actions`, donc une ligne SERVIE COMME RETIRÉE à une épreuve qui n'a
+ * rien retiré. Sur `dev` : `:459` à 390 px et `:475` en sombre ; le premier de
+ * chaque paire (360 px, clair) passe. Le chemin exact par lequel l'état fuit
+ * n'est PAS établi — la fenêtre est persistée (`reserve.ts`, famille `retrait`)
+ * et le bouchon socket diffuse `message:deleted`, donc plusieurs chemins
+ * l'expliqueraient.
+ *
+ * CE QUI NE PROUVE RIEN : la repro locale. Elle passe AVEC et SANS ce
+ * désarmement (22/22, 1,3 min contre 3,7 min en CI) — la course ne se joue
+ * qu'à la lenteur du runner. Un vert local sur un défaut de timing est un vert
+ * par omission.
+ */
+const desarmeLeRetrait = async (page: Page): Promise<void> => {
+  await page.locator('li[data-id="m4"] button.annuler-le-retrait').click();
+  await expect(page.locator('li[data-id="m4"] details.actions')).toBeVisible();
+};
+
 test.beforeAll(async () => {
   passerelle = await passerelleDeBouchon();
   v3 = await serveurDeLaV3(passerelle.base);
@@ -467,6 +492,7 @@ test.describe('la charte, sur les trois gestes', () => {
       const petites = ciblesTropPetites(mesurees);
       expect(petites, `cibles sous ${TARGET_MIN} px : ${JSON.stringify(petites)} — ${COMMANDE}`).toEqual([]);
 
+      await desarmeLeRetrait(page);
       await contexte.close();
     });
   });
@@ -483,6 +509,7 @@ test.describe('la charte, sur les trois gestes', () => {
       const graves = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
       expect(graves.map((v) => `${v.id} — ${v.nodes.length} nœud(s)`), COMMANDE).toEqual([]);
 
+      await desarmeLeRetrait(page);
       await contexte.close();
     });
   });

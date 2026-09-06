@@ -328,6 +328,67 @@ test.describe('sur un tête-à-tête, la puce « Lien » n’existe pas', () => 
   });
 });
 
+test.describe('Compatibilité — hors Chromium et réseau dégradé (#5268)', () => {
+  test('la feuille s’ouvre et fonctionne SANS showModal — un moteur sans dialogue modal garde la surimpression entière', async ({ browser }) => {
+    const ctx = await contexte(browser);
+    // `prendsLePleinEcran` (`lib/realtime/plein-ecran.ts:29`) détecte
+    // l'ABSENCE de la méthode (`typeof … !== 'function'`) et sort AVANT tout
+    // appel — retirer la méthode du prototype est donc la simulation la plus
+    // fidèle d'un moteur qui ne l'implémente pas, posée AVANT le premier
+    // script de la page.
+    await ctx.addInitScript(() => {
+      Object.defineProperty(window.HTMLDialogElement.prototype, 'showModal', { value: undefined, configurable: true });
+    });
+    const page = await ctx.newPage();
+
+    await page.goto(`${FIL()}?lien`, { waitUntil: 'load' });
+    // Ni voile ni `:modal` : la feuille reste celle SERVIE — `open`, jamais élevée.
+    await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
+    await expect(page.locator('dialog.nouveau-lien')).toHaveJSProperty('open', true);
+    expect(await page.evaluate(() => document.querySelector('dialog.nouveau-lien')?.matches(':modal') ?? null)).toBe(false);
+
+    // Le reste de la chaîne ne dépend d'AUCUNE modale : remplir et créer
+    // aboutit exactement comme dans « la même chaîne, sans navigation : succès ».
+    await page.locator('input[name="nom"]').fill('Voisins de Lagos');
+    await page.getByRole('button', { name: NOUVEAU_LIEN.creer }).click();
+
+    await expect(page.locator('dialog.nouveau-lien')).toHaveCount(0, { timeout: 5000 });
+    await expect(page.locator('#lien-cree')).toContainText(NOUVEAU_LIEN.cree);
+
+    await ctx.close();
+  });
+
+  test('l’état ?lien se sert et se lit en réseau dégradé (Fast 3G) — pas d’écran blanc, refus lisible', async ({ browser }) => {
+    passerelle.carnet.refuseLaProchaineCreation('Cette conversation est terminée', 400);
+    const ctx = await contexte(browser);
+    const page = await ctx.newPage();
+    const cdp = await ctx.newCDPSession(page);
+    // LE MÊME PROFIL que le reste du dépôt mesure (`budgets.json#reseau.profil`,
+    // Fast 3G — préréglage Chrome DevTools) : un chiffre qui ne s'oppose à aucun
+    // budget nommé serait vrai et hors sujet (en-tête de `scripts/mesure-reseau.mjs`).
+    await cdp.send('Network.enable');
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: 562.5,
+      downloadThroughput: 188743,
+      uploadThroughput: 86400,
+    });
+
+    await page.goto(`${FIL()}?lien`, { waitUntil: 'load', timeout: 45000 });
+    // PAS D'ÉCRAN BLANC : la feuille est servie SSR — visible dès le premier
+    // document, la latence ajoutée n'y change rien.
+    await expect(page.locator('dialog.nouveau-lien')).toBeVisible();
+
+    await page.locator('input[name="nom"]').fill('Voisins de Lagos');
+    await page.getByRole('button', { name: NOUVEAU_LIEN.creer }).click();
+
+    await expect(page.locator('dialog.nouveau-lien [role="alert"]')).toContainText('Cette conversation est terminée', { timeout: 15000 });
+    await expect(page.locator('input[name="nom"]')).toHaveValue('Voisins de Lagos');
+
+    await ctx.close();
+  });
+});
+
 test.describe('les rendus que le rapport regarde', () => {
   test('captures 390×844 — la feuille ouverte sur le fil, claire et sombre', async ({ browser }, info) => {
     const dossier = process.env.RENDUS_DIR ?? join(__dirname, '..', '..', 'test-results', 'rendus');
