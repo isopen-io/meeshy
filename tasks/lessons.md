@@ -29259,3 +29259,40 @@ l'hypothèse au lieu de l'éprouver ») avec une différence utile : ici la
 vérification n'était pas complaisante, elle était **hors de portée du
 phénomène**. Une repro trop rapide et un filtre trop étroit rendent le même
 silence — le vert par omission.
+
+### Troisième volet, même journée : deux correctifs concurrents d'un doublon s'ADDITIONNENT
+
+Le doublon ci-dessus a été corrigé **deux fois, en parallèle, par deux
+sessions** — et chacune a retiré un bloc DIFFÉRENT :
+
+```
+aa302f076b (#5362, mergée)  retire le PREMIER (milieu de fichier)
+d637aa4a0b (point d'étape)  retire celui de FIN
+```
+
+Somme : **plus aucun bloc**. Le témoin des captures 390×844 clair/sombre a
+disparu du dépôt. Git n'a signalé aucun conflit — deux suppressions de blocs
+distincts se fusionnent proprement.
+
+**Et le gate est passé VERT.** C'est ce qui rend ce défaut dangereux : le
+symptôme visé (le doublon) avait bien disparu, donc `A11y web-v3` ne rougissait
+plus. **Un témoin absent ne peut pas échouer** — la suppression de trop se
+présentait exactement comme la réussite du correctif. Le fichier serait parti
+amputé sur `main` sans une relecture de dernière minute.
+
+> **Un merge SANS CONFLIT de deux suppressions concurrentes n'est pas une
+> réconciliation : c'est une addition.** Vérifier la disparition du SYMPTÔME
+> (« plus de doublon », « le merge est passé ») ne dit rien de l'ÉTAT FINAL.
+> Compter ce qui doit RESTER, jamais constater ce qui a disparu.
+
+Corollaire de pilotage, appris en le payant : **fermer une PR redondante ne
+défait pas son diff.** J'avais fermé #5367 comme doublon de #5362 en croyant le
+sujet clos ; son correctif vivait déjà dans un WIP en vol chez une autre
+session. Une PR fermée retire une INTENTION du tableau, pas un changement d'un
+arbre de travail.
+
+C'est la forme collective de la leçon ci-dessus : là, un comptage était aveugle
+aux noms de ses termes ; ici, il est aveugle au fait qu'une autre main corrige
+le même défaut au même moment. Dans un arbre partagé par plusieurs sessions, la
+question « ai-je corrigé ce défaut ? » est incomplète — la bonne est
+**« combien de fois ce défaut a-t-il été corrigé, et que reste-t-il ? »**.
