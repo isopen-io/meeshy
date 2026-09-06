@@ -212,6 +212,23 @@ jobs:
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
 
+      # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
+      # sans appelant se compte comme un lecteur : un décideur qui cherche qui
+      # consomme un champ voit la déclaration `case foo(...)` /
+      # `foo: '/chemin'` et GARDE, alors que rien ne l'appelle jamais. Les
+      # deux catalogues (`packages/MeeshySDK/.../Networking/Endpoints/*.swift`,
+      # `packages/shared/api/endpoints.ts`) sont GÉNÉRÉS depuis
+      # `services/gateway/route-manifest.json` — un marqueur posé à la main
+      # sur une entrée y serait écrasé (ou rejeté par le cliquet de
+      # régénération TS) à la prochaine régénération. Ces deux cliquets à deux
+      # sens gardent donc le compte de dette à CÔTÉ des catalogues plutôt que
+      # dedans, sur le modèle du ratchet de types ci-dessus.
+      - name: Swift catalog dead-entries ratchet
+        run: node scripts/check-swift-catalog-dead-entries.mjs --self-test && node scripts/check-swift-catalog-dead-entries.mjs
+
+      - name: TS catalog dead-entries ratchet
+        run: node scripts/check-ts-catalog-dead-entries.mjs --self-test && node scripts/check-ts-catalog-dead-entries.mjs
+
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
