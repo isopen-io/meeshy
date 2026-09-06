@@ -93,6 +93,9 @@ struct FeedPostCard: View {
     @State var secondaryLangCode: String? = nil
     @State private var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
+    /// La scène par laquelle on ENTRE en plein écran — posée par le doigt sur
+    /// une tuile de mosaïque ou une page de carrousel.
+    @State var fullscreenSceneIndex: Int = 0
     @State var showFullscreenGallery = false
     @State private var isTextExpanded = false
     /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
@@ -564,14 +567,19 @@ struct FeedPostCard: View {
                 // atteint que la première scène — le défaut même que ce lot
                 // corrige, réintroduit par l'arbre d'accessibilité.
                 if let cardSceneDocument, cardSceneDocument.scenes.count > 1 {
-                    PostSceneMosaic(
+                    PostSceneMosaicSurface(
+                        // Le coordinateur DESCEND : sans lui, un carrousel de
+                        // scènes serait la seule surface de canvas du fil à ne
+                        // jamais jouer — une quatrième politique de lecture.
+                        coordinator: reelAutoplay,
                         post: post,
                         document: cardSceneDocument,
                         accentColor: accentColor,
                         preferredContentLanguages:
                             AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                        onTapScene: { _ in
-                            if cardSceneOpensFullscreen { openSceneFullscreen() }
+                        // **L'index VOYAGE** : la tuile touchée ouvre SA scène.
+                        onTapScene: { index in
+                            if cardSceneOpensFullscreen { openSceneFullscreen(at: index) }
                             else { onTapPost?(post) }
                         }
                     )
@@ -778,6 +786,7 @@ struct FeedPostCard: View {
             post: post,
             isPresented: $showFullscreenGallery,
             startMediaId: fullscreenMediaId,
+            startSceneIndex: fullscreenSceneIndex,
             accentColor: accentColor,
             preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         )

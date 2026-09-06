@@ -121,6 +121,94 @@ final class SceneFramingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(cadre.height, SceneFraming.minimumSide - 0.001)
     }
 
+    // MARK: - Raccourcir, jamais zoomer
+
+    /// **LE témoin de la directive du 2026-09-06** :
+    ///
+    /// > « Le cadrage de la scène permet d'avoir des cards de Feeds COURTES en
+    /// > hauteur et non pas de ZOOMER sur la scène sur les cards ! »
+    ///
+    /// Un cadre plus étroit que la scène force le rendu à l'AGRANDIR pour
+    /// remplir la carte : la scène est alors montrée à une échelle qu'elle n'a
+    /// nulle part ailleurs, et le texte de l'auteur y arrive deux fois trop
+    /// gros. Le cadre ne resserre donc QUE la hauteur — la largeur reste
+    /// pleine, l'échelle reste 1, et la carte raccourcit.
+    ///
+    /// Éprouvé sur les trois formes qui produisaient un cadre étroit : le
+    /// sticker seul (plancher), le fond uni avec un texte, et l'objet au bord.
+    func test_leCadre_prendTOUJOURSlaLargeurEntiere() throws {
+        let cas: [(String, SceneV3)] = [
+            ("un sticker seul", scene([objet(.sticker, x: 0.5, y: 0.5, scale: 0.5)])),
+            ("un fond uni + texte", scene([objet(.text, x: 0.5, y: 0.22)])),
+            ("un objet au bord", scene([objet(.text, x: 0.02, y: 0.5)])),
+            ("une photo paysage", scene([objet(.media, plane: .bg)]))
+        ]
+        for (quoi, s) in cas {
+            let cadre = try XCTUnwrap(SceneFraming.focus(scene: s, backgroundAspect: paysage), quoi)
+            XCTAssertEqual(cadre.minX, 0, accuracy: 0.0001, quoi)
+            XCTAssertEqual(cadre.width, 1, accuracy: 0.0001,
+                           "\(quoi) : un cadre plus étroit que la scène AGRANDIT le rendu — " +
+                           "c'est le zoom que la directive refuse")
+        }
+    }
+
+    /// …et la contrepartie : le cadre RACCOURCIT bel et bien. Sans cette
+    /// moitié, « largeur pleine » se satisferait d'un cadre qui couvre tout,
+    /// c'est-à-dire d'un cadrage qui ne cadre rien.
+    func test_leCadre_raccourcitLaCarte() throws {
+        let photo = try XCTUnwrap(
+            SceneFraming.focus(scene: scene([objet(.media, plane: .bg)]),
+                               backgroundAspect: paysage))
+        XCTAssertLessThan(photo.height, 0.5, "une photo paysage tient dans une bande")
+        let rapport = try XCTUnwrap(
+            SceneFraming.cardAspect(scene: scene([objet(.media, plane: .bg)]),
+                                    backgroundAspect: paysage))
+        XCTAssertGreaterThan(rapport, 1, "la carte est plus LARGE que haute — donc courte")
+    }
+
+    // MARK: - La forme d'un carrousel
+
+    /// **Un carrousel a UNE forme, et c'est la plus HAUTE de ses pages.**
+    ///
+    /// Une hauteur par page ferait sauter la carte à chaque glissement ; la
+    /// forme de la tête de lot couperait le texte des pages plus verticales.
+    /// La plus haute ne perd rien de personne — elle laisse du vide, ce qui
+    /// est réversible, là où un rognage ne l'est pas.
+    func test_leCarrousel_prendLaFormeDeSaPageLaPlusHAUTE() {
+        // La scène DÉCLARE la forme de son fond (`aspectRatio` au payload) :
+        // sans elle, `cardAspect` n'a rien à resserrer et rend le gabarit 9:16
+        // — c'est-à-dire la page la plus haute, ce qui ferait passer le témoin
+        // pour la mauvaise raison.
+        let paysageDeclare = ObjectV3(id: "bg", kind: .media,
+                                      anchor: .free(x: 0.5, y: 0.5), plane: .bg, z: 0,
+                                      transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
+                                      payload: ["aspectRatio": .number(16.0 / 9.0)])
+        let courte = scene([paysageDeclare])                     // paysage → carte courte
+        let haute = scene([objet(.text, x: 0.5, y: 0.5)])        // fond uni → plancher
+        let document = CanvasV3(scenes: [courte, haute])
+        let rapport = SceneCarouselLayout.cardAspect(document: document)
+        let rapportCourte = SceneFraming.cardAspect(scene: courte) ?? SceneFraming.sceneAspect
+        let rapportHaute = SceneFraming.cardAspect(scene: haute) ?? SceneFraming.sceneAspect
+        XCTAssertEqual(rapport, min(rapportCourte, rapportHaute), accuracy: 0.0001)
+        XCTAssertLessThan(rapport, rapportCourte,
+                          "la page la plus haute impose sa forme — sinon elle serait rognée")
+        XCTAssertGreaterThan(rapportCourte, 1,
+                             "témoin du témoin : la page paysage doit bien être COURTE, " +
+                             "sans quoi la comparaison ci-dessus ne compare rien")
+    }
+
+    /// Un document dont aucune scène ne se resserre garde le gabarit 9:16 : il
+    /// n'y a rien à raccourcir, et lui imposer une autre forme rognerait des
+    /// scènes qui tenaient.
+    func test_unCarrouselSansCadrage_gardeLeGabaritDeLaScene() {
+        let document = CanvasV3(scenes: [scene([]), scene([])])
+        XCTAssertEqual(SceneCarouselLayout.cardAspect(document: document),
+                       SceneFraming.sceneAspect, accuracy: 0.0001)
+        XCTAssertEqual(SceneCarouselLayout.cardAspect(document: CanvasV3(scenes: [])),
+                       SceneFraming.sceneAspect, accuracy: 0.0001,
+                       "un document vide ne fabrique pas une forme")
+    }
+
     // MARK: - Les bornes
 
     /// **Un objet au bord fait GLISSER le cadre, il ne le rogne pas.** Rogner

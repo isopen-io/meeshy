@@ -66,6 +66,28 @@ public nonisolated enum MosaicLayout {
         max(0, min(sceneCount, maxVisible))
     }
 
+    /// **Combien de cadres ce mode produit — le plafond ne vaut pas pour tous.**
+    ///
+    /// Une mosaïque plafonne à quatre parce qu'au-delà elle cesse d'être
+    /// lisible d'un coup d'œil, ce qui est sa seule raison d'être. Un
+    /// carrousel ne se lit pas d'un coup d'œil : il se PARCOURT. Lui appliquer
+    /// le plafond enfermerait les scènes 5 à 10 derrière un « +6 » que rien
+    /// n'ouvrirait — soit exactement le défaut que la mosaïque venait corriger,
+    /// réintroduit par la disposition PAR DÉFAUT.
+    public static func pageCount(sceneCount: Int, mode: MosaicLayoutMode) -> Int {
+        isPaged(mode: mode) ? max(0, sceneCount) : visibleCount(sceneCount: sceneCount)
+    }
+
+    /// **Ce mode PAGINE-t-il ?** — la question que la vue pose pour choisir
+    /// entre un empilement de tuiles et un défilement de pages.
+    ///
+    /// Offert ici, comme `isMosaic`, pour qu'aucun hôte n'écrive
+    /// `mode == .carousel` de son côté : le jour où un sixième mode arrive,
+    /// une seule ligne décide de quel côté il tombe.
+    public static func isPaged(mode: MosaicLayoutMode) -> Bool {
+        mode == .carousel
+    }
+
     /// **Ce qui reste À VOIR — jamais le total.**
     ///
     /// L'erreur classique est de poser `+\(scenes.count)` : le badge compte
@@ -109,9 +131,11 @@ public nonisolated enum MosaicLayout {
     /// mosaïque d'un élément n'est pas une mosaïque, et lui appliquer une
     /// vague la ferait flotter dans un cadre trop grand pour elle.
     public static func tiles(sceneCount: Int, mode: MosaicLayoutMode) -> [Tile] {
-        let n = visibleCount(sceneCount: sceneCount)
+        // Le COMPTE passe par `pageCount` : le plafond de quatre est celui des
+        // mosaïques, pas celui du carrousel, qui n'en cache aucune.
+        let n = pageCount(sceneCount: sceneCount, mode: mode)
         guard n > 0 else { return [] }
-        let reste = overflow(sceneCount: sceneCount)
+        let reste = isPaged(mode: mode) ? 0 : overflow(sceneCount: sceneCount)
         guard n > 1 else {
             return [Tile(sceneIndex: 0, x: 0, y: 0, width: 1, height: 1, overflow: reste)]
         }
@@ -121,6 +145,7 @@ public nonisolated enum MosaicLayout {
         case .hero: brutes = hero(n)
         case .reel: brutes = reel(n)
         case .sine: brutes = sine(n)
+        case .carousel: brutes = pages(n)
         }
         // Le report se pose sur la DERNIÈRE tuile, quel que soit le mode : la
         // règle est une, la géométrie est quatre.
@@ -146,6 +171,11 @@ public nonisolated enum MosaicLayout {
         // plus haute des quatre, et c'est ce qui le fait ressembler aux réels.
         case .reel: return 1.05
         case .sine: return 0.92
+        // Une PAGE porte une scène entière : son rapport est celui de la
+        // scène (9:16), et c'est un REPLI — la vue paginée prend d'abord le
+        // cadrage de ses scènes (`SceneFraming.cardAspect`), qui donne des
+        // cartes courtes quand le contenu s'y prête.
+        case .carousel: return 1 / SceneFraming.sceneAspect
         }
     }
 
@@ -211,6 +241,16 @@ public nonisolated enum MosaicLayout {
     /// Les tuiles font une demi-hauteur et sautent d'un bord à l'autre. C'est
     /// la disposition la plus lisible pour un récit : l'œil zigzague dans
     /// l'ordre des scènes au lieu de balayer une rangée.
+    /// **Pages** — chacune occupe TOUT le cadre, et elles se superposent.
+    ///
+    /// Ce ne sont pas des positions : c'est la vue qui les fait défiler. Les
+    /// poser côte à côte (comme `.reel`) donnerait une géométrie que le
+    /// défilement paginé recalculerait aussitôt, et un test ne saurait plus
+    /// laquelle des deux fait foi.
+    private static func pages(_ n: Int) -> [Tile] {
+        (0..<n).map { Tile(sceneIndex: $0, x: 0, y: 0, width: 1, height: 1) }
+    }
+
     private static func sine(_ n: Int) -> [Tile] {
         let largeur = (1 - gutter * CGFloat(n - 1)) / CGFloat(n)
         let hauteur: CGFloat = 0.62
@@ -265,7 +305,7 @@ public nonisolated enum MosaicLayout {
     /// légende quelle que soit la disposition déclarée, parce qu'il n'y a pas
     /// de mosaïque à un élément.
     public static func showsCaption(mode: MosaicLayoutMode, visualCount: Int) -> Bool {
-        visualCount <= 1 || mode == .reel
+        visualCount <= 1 || mode == .reel || isPaged(mode: mode)
     }
 
     /// **Ce mode dispose-t-il une MOSAÏQUE ?** — la négation exacte du

@@ -178,10 +178,36 @@ public nonisolated enum SceneFraming {
         guard var resultat = [bande, objets].compactMap({ $0 })
             .reduce(nil as CGRect?, { acc, r in acc.map { $0.union(r) } ?? r })
         else { return nil }
-        resultat = clampToScene(resultat)
-        // Un cadre qui couvre tout n'est pas un cadre.
-        guard resultat.width < 0.999 || resultat.height < 0.999 else { return nil }
+        resultat = clampToScene(fullWidth(resultat))
+        // Un cadre qui couvre tout n'est pas un cadre. La largeur étant
+        // toujours pleine, c'est la HAUTEUR qui décide — la tester encore
+        // reviendrait à demander si 1 < 0,999.
+        guard resultat.height < 0.999 else { return nil }
         return resultat
+    }
+
+    /// **Le cadre ne resserre QUE la hauteur** (directive porteur 2026-09-06).
+    ///
+    /// > « Le cadrage de la scène permet d'avoir des cards de Feeds courtes en
+    /// > hauteur et non pas de ZOOMER sur la scène sur les cards ! »
+    ///
+    /// Un cadre plus étroit que la scène oblige le rendu à l'AGRANDIR pour
+    /// remplir la carte : la scène apparaît alors à une échelle qu'elle n'a
+    /// nulle part ailleurs, et le texte que l'auteur a posé arrive deux fois
+    /// trop gros. Largeur pleine ⇒ échelle 1 ⇒ la carte RACCOURCIT au lieu de
+    /// grossir, ce qui était le but depuis le début.
+    ///
+    /// > **Un cadrage a deux libertés et une seule sert le fil.** Resserrer en
+    /// > largeur ne gagne aucune place — la carte fait déjà la largeur de
+    /// > l'écran — et coûte un zoom. Resserrer en hauteur gagne exactement ce
+    /// > que la carte occupe de trop. La première version prenait les deux
+    /// > parce qu'un « cadre » se pense naturellement comme un rectangle.
+    ///
+    /// La borne horizontale ne disparaît pas pour autant : `anchorBox` et le
+    /// plancher continuent de dire ce qui doit rester VISIBLE, et un objet à
+    /// gauche est déjà dans une bande pleine largeur.
+    static func fullWidth(_ rect: CGRect) -> CGRect {
+        CGRect(x: 0, y: rect.origin.y, width: 1, height: rect.height)
     }
 
     /// **Le rapport que la carte doit adopter** — dérivé du cadre, jamais posé
@@ -235,6 +261,12 @@ public nonisolated enum SceneFraming {
     }
 
     /// Le plancher : sous `minimumSide`, on ne cadre plus, on zoome.
+    ///
+    /// Il borne encore les deux côtés bien que la largeur soit ramenée à 1 en
+    /// sortie (`fullWidth`) : ce qui est calculé ici est l'union des zones à
+    /// MONTRER, et une union trop plate en hauteur reste un zoom. Retirer la
+    /// borne horizontale ne changerait aucun résultat mais ferait mentir le
+    /// nom.
     static func enforceMinimum(_ rect: CGRect) -> CGRect {
         var r = rect
         if r.width < minimumSide {
@@ -261,5 +293,46 @@ public nonisolated enum SceneFraming {
         if r.height >= 1 { r.origin.y = 0; r.size.height = 1 }
         else { r.origin.y = min(max(r.origin.y, 0), 1 - r.height) }
         return r
+    }
+}
+
+// MARK: - La forme d'un carrousel de scènes
+
+/// **La forme d'un carrousel de scènes — une seule, pour toutes ses pages**
+/// (directive porteur 2026-09-06).
+///
+/// > « Le défilement image par image est aussi un mode de mosaïque à prendre et
+/// > ce doit être le mode par défaut ! »
+///
+/// ## Pourquoi une forme unique
+///
+/// Une hauteur par page ferait SAUTER la carte à chaque glissement : le texte
+/// et la rangée d'actions se déplaceraient pendant le geste, ce que la
+/// fluidité interdit. C'est déjà la conclusion de `FeedCarouselLayout` pour le
+/// carrousel des MÉDIAS ; les deux carrousels partagent la contrainte sans
+/// partager le calcul, parce qu'ils ne cadrent pas la même chose — l'un des
+/// pixels mesurés, l'autre des scènes qui DÉCLARENT leur cadrage.
+///
+/// ## Pourquoi la plus VERTICALE, et pas la première
+///
+/// Prendre la forme de la tête de lot est ce que fait le carrousel des médias,
+/// et c'est juste là-bas : un média déborde en `.fill`, donc au pire il est
+/// rogné sur les bords. Une scène, elle, porte du TEXTE posé par l'auteur —
+/// rogner une page reviendrait à couper un mot. La boîte prend donc la forme de
+/// la page la plus haute : les autres y laissent du vide en haut et en bas,
+/// personne n'y perd de contenu, et rien n'y est agrandi.
+public nonisolated enum SceneCarouselLayout {
+
+    /// Le rapport LARGEUR / HAUTEUR de la boîte — même convention que
+    /// `SceneFraming.cardAspect`, dont il est le minimum.
+    ///
+    /// Un document dont aucune scène ne se resserre garde le gabarit 9:16 : il
+    /// n'y a alors rien à raccourcir, et forcer une autre forme rognerait des
+    /// scènes qui tenaient.
+    public static func cardAspect(document: CanvasV3) -> CGFloat {
+        let rapports = document.scenes.map { scene in
+            SceneFraming.cardAspect(scene: scene) ?? SceneFraming.sceneAspect
+        }
+        return rapports.min() ?? SceneFraming.sceneAspect
     }
 }

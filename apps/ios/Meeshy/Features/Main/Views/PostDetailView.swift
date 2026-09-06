@@ -91,8 +91,11 @@ struct PostDetailView: View {
     @State private var likeScale: CGFloat = 1.0
     @State private var secondaryLangCode: String? = nil
     @State private var activeDisplayLangCode: String? = nil
-    @State private var fullscreenMediaId: String? = nil
-    @State private var showFullscreenGallery = false
+    @State var fullscreenMediaId: String? = nil
+    @State var showFullscreenGallery = false
+    /// La scène par laquelle on ENTRE en plein écran depuis la mosaïque du
+    /// détail (directive porteur 2026-09-06).
+    @State var detailSceneIndex: Int = 0
     @State private var audioFullscreen: AudioFullscreenSource?
     /// Lieu du post ouvert plein écran (sticker / carte de la page Detail).
     @State var detailFullscreenPlace: BubbleFullscreenPlace?
@@ -377,7 +380,11 @@ struct PostDetailView: View {
 
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
-    private var accentColor: String {
+    /// Non `private` : `PostDetailView+Canvas.swift` en a besoin pour monter la
+    /// mosaïque de scènes. Un `private` sur une propriété d'une `View` la rend
+    /// inaccessible depuis un fichier d'extension du MÊME module — piège
+    /// documenté au `CLAUDE.md` d'`apps/ios`.
+    var accentColor: String {
         displayPost?.authorColor ?? "6366F1"
     }
 
@@ -1049,33 +1056,27 @@ struct PostDetailView: View {
                 senderName: displayPost?.author
             )
         }
-        .fullScreenCover(isPresented: $showFullscreenGallery) {
-            if let post = displayPost {
-                let attachments = post.media
-                    .filter { $0.type == .image || $0.type == .video }
-                    .map { $0.toMessageAttachment() }
-                // Infos auteur en bas de la galerie (au-dessus des dimensions),
-                // identique au chemin feed (`FeedPostCard`). Tous les médias d'un
-                // poste partagent le même auteur.
-                let senderInfo = ConversationViewModel.MediaSenderInfo(
-                    senderName: post.author,
-                    senderAvatarURL: post.authorAvatarURL,
-                    senderColor: post.authorColor,
-                    sentAt: post.timestamp
-                )
-                let senderMap = Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, senderInfo) })
-                ConversationMediaGalleryView(
-                    allAttachments: attachments,
-                    startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
-                    accentColor: accentColor,
-                    captionServings: Self.captionServings(for: post),
-                    captionMap: SocialMediaCaption.map(
-                        for: post.media, carrierText: post.displayContent
-                    ),
-                    senderInfoMap: senderMap
-                )
-            }
-        }
+        // **Le plein écran du détail passe par son SITE UNIQUE** (#4927,
+        // raccordé le 2026-09-06).
+        //
+        // Cette vingtaine de lignes était le dernier des trois exemplaires que
+        // `socialMediaGallery` a été écrit pour remplacer — la carte du fil a
+        // été raccordée la veille, le détail ne l'était pas. Le brancher n'est
+        // pas qu'un nettoyage : c'est ce qui apporte au détail la branche
+        // SCÈNE, qui rejoue le canvas au lieu d'ouvrir son fond, et le
+        // transport de l'index de scène que la mosaïque vient de câbler.
+        //
+        // Aucune légende ne change au passage : `Self.captionServings` était
+        // déjà `SocialMediaCaption.serving(for:carrier:)`, mot pour mot, et le
+        // site unique appelle la même.
+        .socialMediaGallery(
+            post: displayPost,
+            isPresented: $showFullscreenGallery,
+            startMediaId: fullscreenMediaId,
+            startSceneIndex: detailSceneIndex,
+            accentColor: accentColor,
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
     }

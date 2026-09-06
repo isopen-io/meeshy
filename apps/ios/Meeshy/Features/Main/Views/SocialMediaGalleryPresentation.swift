@@ -31,6 +31,10 @@ extension View {
     ///     l'hôte n'a pas à garder son binding, ce qui évite le cas où l'on
     ///     ouvre un plein écran vide pendant un rechargement.
     ///   - startMediaId: le média par lequel on ENTRE. `nil` ⇒ le premier.
+    ///   - startSceneIndex: la SCÈNE par laquelle on entre, quand le post en
+    ///     porte plusieurs — le doigt sur une tuile de mosaïque ouvre SA scène
+    ///     (directive porteur 2026-09-06). Sans défaut chez les appelants qui
+    ///     n'ont qu'un média à feuilleter : `0` ne coûte rien à une galerie.
     ///   - preferredContentLanguages: le Prisme du LECTEUR, servi au player
     ///     quand le post porte une scène. Vide ⇒ le player retombe sur les
     ///     textes originaux, ce qui est licite mais jamais souhaitable.
@@ -38,6 +42,7 @@ extension View {
         post: FeedPost?,
         isPresented: Binding<Bool>,
         startMediaId: String?,
+        startSceneIndex: Int = 0,
         accentColor: String,
         preferredContentLanguages: [String] = []
     ) -> some View {
@@ -59,7 +64,8 @@ extension View {
                         post: post,
                         document: document,
                         accentColor: accentColor,
-                        preferredContentLanguages: preferredContentLanguages
+                        preferredContentLanguages: preferredContentLanguages,
+                        startSceneIndex: startSceneIndex
                     )
                 } else {
                     SocialMediaGalleryContent(

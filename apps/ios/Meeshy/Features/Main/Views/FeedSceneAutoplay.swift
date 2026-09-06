@@ -263,6 +263,71 @@ struct PostSceneSurface: View {
     }
 }
 
+// MARK: - Mosaïque et carrousel d'un post à plusieurs scènes
+
+/// Observe le coordinateur et pilote la lecture de la MOSAÏQUE d'un post —
+/// jumeau exact de `PostSceneCardContainer`, pour la surface qui montre
+/// plusieurs scènes.
+///
+/// Sans lui, un carrousel de scènes était la seule surface de canvas du fil à
+/// ne jamais jouer : la carte mono-scène jouait quand le viewport l'élisait, la
+/// story repartagée aussi, et un post à plusieurs scènes restait figé — une
+/// QUATRIÈME politique de lecture, celle-là même que ce fichier existe pour
+/// empêcher.
+struct PostSceneMosaicContainer: View {
+    @ObservedObject var coordinator: ReelFeedAutoplayCoordinator
+    let post: FeedPost
+    let document: CanvasV3
+    let accentColor: String
+    let preferredContentLanguages: [String]
+    var onTapScene: ((Int) -> Void)?
+
+    var body: some View {
+        PostSceneMosaic(
+            post: post,
+            document: document,
+            accentColor: accentColor,
+            preferredContentLanguages: preferredContentLanguages,
+            isActive: coordinator.activeReelId == post.id,
+            onTapScene: onTapScene
+        )
+    }
+}
+
+/// Le pendant de `PostSceneSurface` pour une publication à plusieurs scènes —
+/// même règle, même raison de vivre à un seul endroit : un hôte de fil tient un
+/// coordinateur, un hôte isolé n'en a pas et la scène y reste en pause.
+struct PostSceneMosaicSurface: View {
+    let coordinator: ReelFeedAutoplayCoordinator?
+    let post: FeedPost
+    let document: CanvasV3
+    let accentColor: String
+    let preferredContentLanguages: [String]
+    var onTapScene: ((Int) -> Void)?
+
+    var body: some View {
+        if let coordinator {
+            PostSceneMosaicContainer(
+                coordinator: coordinator,
+                post: post,
+                document: document,
+                accentColor: accentColor,
+                preferredContentLanguages: preferredContentLanguages,
+                onTapScene: onTapScene
+            )
+        } else {
+            PostSceneMosaic(
+                post: post,
+                document: document,
+                accentColor: accentColor,
+                preferredContentLanguages: preferredContentLanguages,
+                isActive: false,
+                onTapScene: onTapScene
+            )
+        }
+    }
+}
+
 // MARK: - Story repartagée
 
 /// Observe le coordinateur et pilote la lecture de la story repartagée d'un

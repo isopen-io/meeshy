@@ -180,7 +180,22 @@ private extension StoryEffects {
 // MARK: - Publication / migration : v1 runtime → v3
 
 public extension CanvasV3 {
-    init(migrating effects: StoryEffects) {
+
+    /// **Le plafond du contrat** (`canvas-v3.ts`, `scenes.min(1).max(10)`).
+    ///
+    /// Il est tenu ICI, avant le fil : une onzième scène ferait refuser le
+    /// canvas EN BLOC par la passerelle — donc la publication entière serait
+    /// perdue, pas seulement sa scène en trop.
+    static let maxScenes = 10
+
+    /// Une slide, une scène — ou `nil` quand elle ne porte rien (règle O3).
+    ///
+    /// Extrait de `init(migrating:)` le 2026-09-06 pour qu'une publication
+    /// puisse en produire PLUSIEURS. Le corps est inchangé, à deux choses
+    /// près : l'identité de la scène est un paramètre (elle était gravée
+    /// `"s1"`), et le son en est sorti — il appartient au DOCUMENT, pas à une
+    /// scène, et le laisser ici en aurait fabriqué un par slide.
+    static func migratedScene(_ effects: StoryEffects, id: String) -> SceneV3? {
         var objects: [ObjectV3] = []
         var slot = 0
 
@@ -370,7 +385,7 @@ public extension CanvasV3 {
         }
 
         let scene = SceneV3(
-            id: "s1",
+            id: id,
             objects: remapped,
             opening: effects.openingWire ?? effects.opening.map { ["type": .string($0.rawValue)] },
             closing: effects.closingWire ?? effects.closing.map { ["type": .string($0.rawValue)] },
@@ -383,6 +398,22 @@ public extension CanvasV3 {
             // perte sèche.
             carrierAspect: effects.canvasAspectRatio)
 
+        // O3 — un cadre n'existe que s'il PORTE quelque chose : objet, empreinte
+        // (thumbHash calculé en aval du persist par la file hors-ligne), durée
+        // ou transition. Un canvas réellement vide n'émet toujours aucune scène.
+        let sceneCarriesSomething = !remapped.isEmpty
+            || scene.thumbHash != nil
+            || scene.timelineDuration != nil
+            || scene.opening != nil
+            || scene.closing != nil
+            || scene.clipTransitions?.isEmpty == false
+        return sceneCarriesSomething ? scene : nil
+    }
+
+    /// **Le son de fond appartient au DOCUMENT**, jamais à une scène — c'est ce
+    /// que dit `CanvasV3.sound`, à la racine. Une publication de dix slides a
+    /// une seule bande-son.
+    static func migratedSound(_ effects: StoryEffects) -> BackgroundSoundV3? {
         let transcriptions = (effects.voiceTranscriptions ?? [])
             .filter { !$0.language.isEmpty }
             .map { BackgroundSoundV3.Transcription(language: $0.language, content: $0.content) }
@@ -419,17 +450,64 @@ public extension CanvasV3 {
         } else {
             sound = nil
         }
+        return sound
+    }
 
-        // O3 — un cadre n'existe que s'il PORTE quelque chose : objet, empreinte
-        // (thumbHash calculé en aval du persist par la file hors-ligne), durée
-        // ou transition. Un canvas réellement vide n'émet toujours aucune scène.
-        let sceneCarriesSomething = !remapped.isEmpty
-            || scene.thumbHash != nil
-            || scene.timelineDuration != nil
-            || scene.opening != nil
-            || scene.closing != nil
-            || scene.clipTransitions?.isEmpty == false
-        self.init(v: 3, scenes: sceneCarriesSomething ? [scene] : [], sound: sound)
+    /// La forme historique : une slide, un canvas. Conservée telle quelle —
+    /// c'est ce que la story publie, et ce que `StoryEffects.encode` appelait
+    /// jusqu'ici.
+    init(migrating effects: StoryEffects) {
+        self.init(migrating: [effects])
+    }
+
+    /// **Une publication à plusieurs slides part avec TOUTES ses scènes**
+    /// (directive porteur 2026-09-06).
+    ///
+    /// Le fil, le détail et le plein écran savaient montrer plusieurs scènes
+    /// avant que quoi que ce soit puisse en produire : `scenes: [scene]`
+    /// n'émettait que la slide courante, si bien que la mosaïque, le carrousel
+    /// et le défilement vertical n'avaient RIEN à peindre. C'est la forme la
+    /// plus coûteuse du défaut « une vue sans consommateur » — quatre surfaces
+    /// livrées, testées, correctes, et aucun site où rougir.
+    ///
+    /// Une slide qui ne porte rien n'émet pas de scène (O3, par slide) ; les
+    /// suivantes ne se décalent pas pour autant.
+    init(migrating slides: [StoryEffects], layout: MosaicLayoutMode? = nil) {
+        let scenes = slides.prefix(CanvasV3.maxScenes).enumerated().compactMap { index, effects in
+            CanvasV3.migratedScene(effects, id: "s\(index + 1)")
+        }
+        self.init(v: 3,
+                  scenes: scenes,
+                  // La PREMIÈRE bande-son trouvée gouverne la publication.
+                  sound: slides.lazy.compactMap(CanvasV3.migratedSound).first,
+                  layout: layout)
+    }
+
+    /// **Le runtime réécrit la PREMIÈRE scène ; le document mémorisé porte les
+    /// autres** — la voie par laquelle une publication multi-scènes survit à
+    /// l'encodage sans qu'aucun porteur du dépôt ne change de forme.
+    ///
+    /// `StoryEffects.encode` part du runtime courant, jamais du `canvasV3`
+    /// mémorisé, et cette règle est juste : une composition neuve doit émettre
+    /// l'état RÉEL du canvas, pas un document servi par le serveur. Elle
+    /// n'était fausse que sur ce qu'elle ne dit pas — le runtime ne décrit
+    /// qu'UNE slide, donc tout ce qui vivait au-delà disparaissait.
+    ///
+    /// > **Rouvrir un post servi à trois scènes, changer son texte et
+    /// > renvoyer en émettait UNE.** Le défaut existait avant ce lot ; il
+    /// > n'était visible nulle part, faute de publication multi-scènes.
+    ///
+    /// La disposition (`layout`) vient elle aussi du document : le runtime v1
+    /// ne l'exprime pas, et la jeter à chaque aller-retour ramènerait tout le
+    /// monde au défaut sans qu'aucun témoin ne tombe.
+    init(migrating effects: StoryEffects, keeping document: CanvasV3?) {
+        let premiere = CanvasV3.migratedScene(effects, id: "s1")
+        let suivantes = Array((document?.scenes ?? []).dropFirst())
+        let scenes = ([premiere].compactMap { $0 } + suivantes).prefix(CanvasV3.maxScenes)
+        self.init(v: 3,
+                  scenes: Array(scenes),
+                  sound: CanvasV3.migratedSound(effects) ?? document?.sound,
+                  layout: document?.layout)
     }
 
     private static func mediaPayload(_ media: StoryMediaObject) -> [String: CanvasJSONValue] {

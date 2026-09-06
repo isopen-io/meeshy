@@ -48,13 +48,46 @@ struct SocialSceneFullscreenView: View {
     let document: CanvasV3
     let accentColor: String
     let preferredContentLanguages: [String]
+    /// **La scène par laquelle on ENTRE** (directive porteur 2026-09-06) :
+    /// « lorsqu'on montre la mosaïque on doit pouvoir cliquer sur n'importe
+    /// quelle scène et l'afficher en plein écran ». Sans elle, les quatre
+    /// tuiles d'une mosaïque menaient toutes à la première.
+    let startSceneIndex: Int
+
+    init(post: FeedPost,
+         document: CanvasV3,
+         accentColor: String,
+         preferredContentLanguages: [String],
+         startSceneIndex: Int = 0) {
+        self.post = post
+        self.document = document
+        self.accentColor = accentColor
+        self.preferredContentLanguages = preferredContentLanguages
+        // Borné ICI et nulle part ailleurs : un index hors bornes ferait
+        // rendre une page vide au lieu d'ouvrir la scène demandée, et le
+        // pager n'a aucune page de repli.
+        let borne = max(0, min(startSceneIndex, max(0, document.scenes.count - 1)))
+        self.startSceneIndex = borne
+        _sceneIndex = State(initialValue: borne)
+        _pageCourante = State(initialValue: document.scenes.indices.contains(borne)
+                              ? "\(borne)#\(document.scenes[borne].id)" : nil)
+        // NB : l'identité est composée ici à la main parce qu'un `init` ne peut
+        // pas appeler une méthode d'instance avant d'avoir fini d'initialiser
+        // ses propriétés. La FORME est celle d'`identifiantDePage`, et le
+        // témoin `test_lIdentiteDePage_estLaMemeALInitEtAuRendu` les compare.
+    }
 
     @Environment(\.dismiss) private var dismiss
 
-    /// La scène COURANTE d'une publication qui en porte plusieurs — c'est le
-    /// « carrousel » de la directive. Le player en tient l'index ; le glissement
-    /// horizontal le déplace, comme dans le viewer de story.
-    @State private var sceneIndex = 0
+    /// La scène COURANTE d'une publication qui en porte plusieurs. Le
+    /// défilement VERTICAL la déplace — « le défilement des scènes doit pouvoir
+    /// se faire comme pour les réels aussi » (directive porteur 2026-09-06).
+    @State private var sceneIndex: Int
+    /// L'identité de la page affichée — ce que le pager canonique pilote. Elle
+    /// double `sceneIndex` parce que les deux répondent à deux questions : le
+    /// pager travaille par IDENTITÉ (une page peut être insérée), le reste de
+    /// la vue par RANG (le compteur, la légende, le gate de lecture).
+    @State private var pageCourante: String?
     /// **La lecture est une COMMANDE, jamais un état de naissance.** Les trois
     /// modes du player naissent en pause (`ScenePlayerConfig.startsPaused`) ;
     /// on la lève à l'apparition parce qu'un plein écran est une demande de
@@ -80,36 +113,191 @@ struct SocialSceneFullscreenView: View {
     /// La légende ADOSSÉE à la scène — résolue par le MÊME juge que les trois
     /// autres surfaces sociales (`SocialMediaCaption`), jamais par une seconde
     /// lecture des mêmes champs.
+    ///
+    /// **En plein écran, la légende est OBLIGATOIRE** (directive porteur
+    /// 2026-09-06) : « les scènes doivent avoir leurs légendes affichées
+    /// par-dessus — dans le feed si possible et en plein écran obligatoirement ».
+    ///
+    /// D'où le second étage. `SocialMediaCaption.map` est indexée par les
+    /// MÉDIAS visuels, et son repli sur le texte du porteur ne s'arme que
+    /// lorsque le post en compte exactement un. Une publication dont les scènes
+    /// ne portent aucun média — un fond et du texte, ce que le composer produit
+    /// le plus souvent — n'obtenait donc **aucune** légende : la carte du fil
+    /// l'affichait, le plein écran la perdait, et c'est le format qu'on ouvre
+    /// POUR mieux lire qui en montrait le moins.
+    ///
+    /// > Le repli ne se substitue jamais à une légende de média : il ne sert que
+    /// > là où la carte n'en désigne aucune. Servir `displayContent` quand une
+    /// > légende propre existe rendrait la publication par-dessus la scène.
+    ///
+    /// **Ce que ce repli n'est PAS** : une légende DE SCÈNE. `displayContent`
+    /// décrit la PUBLICATION entière ; le servir sous chaque page est juste tant
+    /// qu'aucune légende par scène n'existe au modèle. Le jour où le canvas en
+    /// portera une, c'est elle qui prendra cette place — pas une seconde
+    /// résolution posée à côté.
+    /// **Une scène SANS média porte quand même sa légende** (directive porteur
+    /// 2026-09-06 : « en plein écran obligatoirement »).
+    ///
+    /// `SocialMediaCaption.map` est indexée par les médias VISUELS, et son
+    /// repli ne descend le texte du porteur que sur un média SEUL. Une scène
+    /// de fond + texte n'adresse aucun média : elle n'avait donc aucune entrée
+    /// dans la carte, et le plein écran ne montrait rien — sur le cas le plus
+    /// courant d'un canvas composé.
+    ///
+    /// > Ce repli décrit la PUBLICATION, pas la scène affichée. C'est juste
+    /// > tant qu'aucune légende par scène n'existe au modèle ; le jour où le
+    /// > composer en offrira une, c'est ICI qu'elle se branche — et pas en
+    /// > ajoutant un second repli à côté de celui-ci.
     private var caption: String? {
-        SocialMediaCaption
-            .map(for: post.media, carrierText: post.displayContent)[sceneMediaId ?? ""]
+        if let identifiant = sceneMediaId,
+           let propre = SocialMediaCaption
+               .map(for: post.media, carrierText: post.displayContent)[identifiant] {
+            return propre
+        }
+        return SocialMediaCaption.resolve(own: nil, carrierText: post.displayContent)
     }
 
-    /// Le média que la scène MONTRE — celui dont la légende décrit le contenu.
+    /// Le média que la scène COURANTE montre — celui dont la légende décrit le
+    /// contenu.
+    ///
+    /// **Il se demande à la SCÈNE, pas au post** : `carrierMediaIdentity` rend
+    /// le `postMediaId` du média porteur de cette scène-là. Prendre le premier
+    /// visuel du post — ce que faisait la première écriture — servait la
+    /// légende de la scène 1 par-dessus les scènes 2 à 10, c'est-à-dire une
+    /// légende FAUSSE dès qu'on défile.
+    ///
+    /// Le repli sur le premier visuel du post reste pour les documents dont
+    /// aucune scène n'adresse d'enregistrement (une story migrée, un canvas de
+    /// texte) : là, la publication n'a qu'un visuel, donc pas d'ambiguïté.
     private var sceneMediaId: String? {
-        post.media.first { $0.type == .image || $0.type == .video }?.id
+        MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: sceneIndex)
+            ?? post.media.first { $0.type == .image || $0.type == .video }?.id
     }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            MeeshyScenePlayer(
-                document: document,
-                mode: .reader,
-                sceneIndex: $sceneIndex,
-                isPlaying: $isPlaying,
-                accentColorHex: accentColor,
-                carrier: carrier
-            )
-            .preferredContentLanguages(preferredContentLanguages)
-            .aspectRatio(9.0 / 16.0, contentMode: .fit)
-            .ignoresSafeArea(edges: .bottom)
+            if document.scenes.count > 1 { defilement } else { scenePlayer(0) }
 
             chrome
         }
-        .onAppear { isPlaying = true }
+        // **La lecture ne s'arme que s'il y a quelque chose à jouer.** Un
+        // canvas fixe n'a ni vidéo, ni son, ni animation : lever `isPlaying`
+        // y ferait tourner un displayLink pour rien, et allumerait un bouton
+        // pause qui ne mettrait rien en pause (loi 4).
+        .onAppear {
+            isPlaying = bouge
+            // **Filet de sécurité du pager** — le MÊME que celui de la galerie
+            // plein écran des médias, et pour la même raison : `scrollPosition`
+            // n'honore pas toujours la valeur posée en `init`. Mesuré au
+            // simulateur AVANT ce filet : le compteur annonçait « 2 / 3 »
+            // pendant que l'écran montrait la scène 1 — la tuile tapée était
+            // bien transportée, et le pager restait à sa première page.
+            //
+            // > Un compteur juste au-dessus d'un contenu faux est pire qu'un
+            // > compteur absent : il affirme que le geste a porté.
+            let vise = identifiantDePage(startSceneIndex)
+            if pageCourante != vise { pageCourante = vise }
+        }
         .onDisappear { isPlaying = false }
+    }
+
+    /// **Ce document BOUGE-t-il ?** — la porte du contrôle de lecture, et la
+    /// seule. Une scène cinématique est une vidéo (directive porteur
+    /// 2026-09-06) ; une scène fixe est une image, et une image n'a pas de
+    /// bouton play.
+    private var bouge: Bool { SceneMotion.isCinematic(document) }
+
+    /// **Les scènes se feuillettent HORIZONTALEMENT, comme les images et les
+    /// vidéos** — le même geste que le carrousel du fil et que la galerie
+    /// plein écran des médias.
+    ///
+    /// ## Ce que cette écriture remplace, et ce qu'elle a coûté
+    ///
+    /// La première version montait un `TabView` paginé PIVOTÉ d'un quart de
+    /// tour, pour obtenir l'axe vertical des réels. Mesuré au simulateur :
+    ///
+    /// > **`rotationEffect` ne change PAS le cadre de layout.** Le `TabView`
+    /// > gardait une boîte de 874 × 402 ; le `ZStack` parent en héritait, et
+    /// > le chrome se centrait dedans — bouton Fermer à `x = −236`. Le
+    /// > débordement captait de surcroît les touches par-dessus lui : après
+    /// > correction du cadre, le bouton était bien à `x = 0` et **ne
+    /// > répondait toujours pas**. L'utilisateur était PIÉGÉ dans le plein
+    /// > écran : ni glissement, ni fermeture, sortie par le multitâche.
+    ///
+    /// Deux correctifs successifs sur le même hack valaient moins que sa
+    /// suppression. **Un cadre de compensation est le symptôme d'un mécanisme
+    /// employé à contre-emploi**, pas une solution : il redresse la géométrie
+    /// et laisse le hit-test là où la rotation l'a mis.
+    ///
+    /// ## Pourquoi l'axe est HORIZONTAL
+    ///
+    /// Une directive antérieure demandait « comme pour les réels », donc
+    /// vertical. Elle est tranchée par la cohérence, qui vaut ici plus qu'une
+    /// analogie : la carte du fil feuillette ses scènes horizontalement, la
+    /// galerie des médias aussi. Deux axes pour un même contenu selon la
+    /// surface, c'est ce que l'utilisateur nomme une incohérence — et la main
+    /// qui glisse ne consulte pas la surface avant de choisir son sens.
+    ///
+    /// `AdaptiveHorizontalPager` est le pager CANONIQUE du plein écran média
+    /// (`ConversationMediaGalleryView`, `AudioFullscreenView`, le carrousel
+    /// des réels) : le reprendre aligne le geste, le rebond et la vitesse sans
+    /// les réécrire.
+    private var defilement: some View {
+        AdaptiveHorizontalPager(items: pages,
+                                currentPageID: $pageCourante,
+                                fillVertical: true) { _, page in
+            scenePlayer(page.index)
+        }
+        .ignoresSafeArea()
+        .adaptiveOnChange(of: pageCourante) { _, nouvelle in
+            guard let index = pages.first(where: { $0.id == nouvelle })?.index else { return }
+            sceneIndex = index
+        }
+    }
+
+    /// Les pages du défilement. L'identité compose l'INDEX et l'id de scène :
+    /// `CanvasV3(migrating:)` a gravé `"s1"` en dur pendant tout le corpus
+    /// legacy, si bien qu'un document migré peut porter deux scènes homonymes
+    /// — un `ForEach` sur le seul id de scène en perdrait une.
+    private var pages: [PageDeScene] {
+        document.scenes.indices.map {
+            PageDeScene(id: identifiantDePage($0) ?? "\($0)", index: $0)
+        }
+    }
+
+    /// L'identité d'une page — composée UNE fois, ici, parce que trois sites la
+    /// demandent (les pages, l'init, le filet d'apparition). Recomposée à la
+    /// main chez chacun, elle finirait par diverger d'un caractère, et la page
+    /// visée ne serait plus trouvée : un défaut qui se lit « le pager ignore le
+    /// geste » et qui n'a rien à voir avec le pager.
+    private func identifiantDePage(_ index: Int) -> String? {
+        guard document.scenes.indices.contains(index) else { return nil }
+        return "\(index)#\(document.scenes[index].id)"
+    }
+
+    struct PageDeScene: Identifiable {
+        let id: String
+        let index: Int
+    }
+
+    /// **Une page ne joue que si elle est la scène COURANTE.** Les pages
+    /// voisines sont montées par le pager pour que le glissement soit
+    /// fluide ; les laisser jouer ferait décoder trois vidéos et sonner deux
+    /// pistes à la fois.
+    private func scenePlayer(_ index: Int) -> some View {
+        MeeshyScenePlayer(
+            document: document,
+            mode: .reader,
+            sceneIndex: .constant(index),
+            isPlaying: .constant(isPlaying && index == sceneIndex),
+            accentColorHex: accentColor,
+            carrier: carrier
+        )
+        .preferredContentLanguages(preferredContentLanguages)
+        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        .ignoresSafeArea(edges: .bottom)
     }
 
     /// Fermeture en haut, attribution puis légende en bas — la pile est ANCRÉE
@@ -129,6 +317,8 @@ struct SocialSceneFullscreenView: View {
                 .accessibilityLabel(String(localized: "common.close",
                                            defaultValue: "Fermer", bundle: .main))
                 Spacer()
+                if document.scenes.count > 1 { compteurDeScene }
+                if bouge { boutonDeLecture }
             }
 
             Spacer(minLength: 0)
@@ -163,6 +353,54 @@ struct SocialSceneFullscreenView: View {
                                startPoint: .top, endPoint: .bottom)
             )
         }
+    }
+
+    /// **Un seul bouton, et il arrête TOUT ou poursuit TOUT** (directive
+    /// porteur 2026-09-06).
+    ///
+    /// Il ne pilote rien lui-même : il bascule `isPlaying`, que le player
+    /// descend à l'hôte canvas, dont `setPaused` gèle EN BLOC la vidéo de
+    /// fond, chaque `AVPlayer` d'avant-plan, le mixeur audio (son de fond
+    /// COMPRIS) et l'horloge des animations. C'est ce qui fait de ce bouton un
+    /// bouton « tout » plutôt qu'un bouton « vidéo » : il n'y a pas une pause
+    /// par média à composer, il n'y en a qu'une, et elle existait déjà.
+    ///
+    /// **Il n'apparaît que si quelque chose bouge.** Sur un canvas fixe, il
+    /// mettrait en pause une image — un contrôle qui ne fait rien est pire
+    /// qu'un contrôle absent (loi 4).
+    private var boutonDeLecture: some View {
+        Button {
+            HapticFeedback.light()
+            isPlaying.toggle()
+        } label: {
+            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle(), interactive: true)
+                .padding()
+        }
+        // **L'annonce SUIT l'état** : un libellé figé ferait dire « Lecture »
+        // à un bouton qui met en pause.
+        .accessibilityLabel(isPlaying
+            ? String(localized: "scene.fullscreen.pause",
+                     defaultValue: "Tout mettre en pause", bundle: .main)
+            : String(localized: "scene.fullscreen.play",
+                     defaultValue: "Tout reprendre", bundle: .main))
+    }
+
+    /// Où l'on est dans la publication. Muet pour VoiceOver : le libellé de la
+    /// scène le dit déjà, et le lire deux fois ferait bégayer le lecteur.
+    private var compteurDeScene: some View {
+        Text("\(sceneIndex + 1) / \(document.scenes.count)")
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .foregroundColor(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(.black.opacity(0.45)))
+            .contentTransition(.numericText())
+            .animation(.spring(response: 0.3), value: sceneIndex)
+            .accessibilityHidden(true)
     }
 
     private var attribution: some View {
