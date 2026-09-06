@@ -65,9 +65,11 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
 
         /**
          * @param onSessionExpired appele quand la passerelle refuse l'identite
-         *   (401/403) hors des routes d'authentification. Sans lui, une session
+         *   (401) hors des routes d'authentification. Sans lui, une session
          *   expiree remontait comme une erreur de chargement et l'utilisateur
          *   lisait « verifiez votre connexion » alors que le reseau allait bien.
+         *   Un 403 (refus de permission — role insuffisant, non-membre, banni) ne
+         *   declenche plus ceci depuis #4862 : ce n'est pas une session expiree.
          */
         fun create(
             config: MeeshyConfig,

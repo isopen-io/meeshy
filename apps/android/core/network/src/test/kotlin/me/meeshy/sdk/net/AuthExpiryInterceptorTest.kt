@@ -10,7 +10,7 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 /**
- * Constate a l'usage : une session expiree produit 401/403 sur /conversations,
+ * Constate a l'usage : une session expiree produisait 401 sur /conversations,
  * /posts/feed/stories et /friend-requests, et l'ecran affichait « Check your
  * connection and try again » alors que le reseau fonctionnait. Le message accusait
  * le reseau, et rien ne disait a l'utilisateur qu'il devait se reconnecter.
@@ -43,11 +43,16 @@ class AuthExpiryInterceptorTest {
         assertEquals(1, expired)
     }
 
+    // 403 est le refus NOMINAL du produit (banni, non-membre, role insuffisant) —
+    // pas une anomalie. Le traiter comme une expiration ejectait l'utilisateur de
+    // l'application pour avoir touche une porte fermee (#4862). La raison qui avait
+    // fait ajouter 403 ici a disparu avec #4760 : une session ABSENTE rend
+    // desormais 401, jamais 403.
     @Test
-    fun `a 403 signals an expired session too`() {
+    fun `a 403 does not signal an expired session`() {
         var expired = 0
         AuthExpiryInterceptor { expired++ }.intercept(chainReturning(403))
-        assertEquals(1, expired)
+        assertEquals(0, expired)
     }
 
     // Une panne serveur ne doit PAS deconnecter : l'utilisateur perdrait sa session
@@ -94,6 +99,16 @@ class AuthExpiryInterceptorTest {
         AuthExpiryInterceptor { expired++ }
             .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/me/account/deletion"))
         assertEquals(0, expired)
+    }
+
+    // Un refus de permission doit atteindre l'appelant AVEC son code et son corps :
+    // c'est ce qui permet a `apiErrorFromHttpException` (core:network/ApiCall.kt)
+    // de servir le message reel de la passerelle ("Insufficient role", etc.) au lieu
+    // d'un ecran de reconnexion.
+    @Test
+    fun `a 403 response passes through unchanged`() {
+        val response = AuthExpiryInterceptor { }.intercept(chainReturning(403))
+        assertEquals(403, response.code)
     }
 
     // La reponse doit traverser l'intercepteur intacte : l'appelant a toujours

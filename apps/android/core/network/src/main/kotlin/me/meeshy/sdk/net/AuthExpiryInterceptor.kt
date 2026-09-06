@@ -7,7 +7,7 @@ import okhttp3.Response
  * Traduit une session expiree en evenement, au lieu de la laisser remonter comme une
  * erreur de chargement.
  *
- * Constate a l'usage : une session expiree produit 401/403 sur `/conversations`,
+ * Constate a l'usage : une session expiree produisait 401 sur `/conversations`,
  * `/posts/feed/stories` et `/friend-requests`, et l'ecran affichait « Couldn't load
  * conversations — Check your connection and try again » alors que le reseau
  * fonctionnait parfaitement. Le message accusait le reseau, et rien n'indiquait a
@@ -36,11 +36,16 @@ public class AuthExpiryInterceptor(
 
     private companion object {
         /**
-         * 403 y figure aussi : la passerelle repond « Authentication required to
-         * access conversations » avec ce code. 500 en est volontairement ABSENT —
-         * un hoquet de la passerelle ne doit pas deconnecter l'utilisateur.
+         * 403 en est desormais ABSENT (#4862) : la passerelle ne le sert plus pour
+         * une session absente depuis #4760 (une session absente rend 401, un role
+         * insuffisant rend 403) — la raison qui avait fait ajouter 403 ici a
+         * disparu. Le garder aurait deconnecte l'utilisateur sur CHAQUE refus de
+         * permission nominal (banni d'une conversation, non-membre, role trop bas),
+         * qui n'a jamais eu de rapport avec une session. 500 en est volontairement
+         * ABSENT aussi — un hoquet de la passerelle ne doit pas deconnecter
+         * l'utilisateur.
          */
-        private val EXPIRY_CODES = setOf(401, 403)
+        private val EXPIRY_CODES = setOf(401)
 
         /**
          * Un 401 sur ces routes n'est pas une session expiree mais la reponse
