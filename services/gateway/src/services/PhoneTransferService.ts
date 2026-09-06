@@ -453,6 +453,11 @@ export class PhoneTransferService {
       // 6. Set resend rate limit
       await this.cache.set(resendKey, '1', 60);
 
+      await this.logSecurityEvent(transferData.toUserId, 'PHONE_TRANSFER_CODE_RESENT', 'LOW', {
+        transferId,
+        ipAddress,
+      });
+
       return { success: true };
     } catch (error) {
       logger.error('[PhoneTransfer] Error in resendCode', error);

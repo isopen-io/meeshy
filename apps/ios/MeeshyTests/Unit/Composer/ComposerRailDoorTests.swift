@@ -666,6 +666,7 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
+
     private func compact(_ t: String) -> String {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
@@ -1756,46 +1757,102 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
+    /// **L'ÉDITEUR D'OBJET, où la frappe a réellement lieu depuis #4634.**
+    ///
+    /// Les quatre gardes de mention ci-dessous lisaient le MEUBLE. La saisie a
+    /// migré vers l'écran modal — le meuble POSSÈDE toujours la boîte et la lui
+    /// confie (`mentionBox: sceneMentionBox`), mais c'est l'éditeur qui écrit,
+    /// interroge et montre la bande. Une garde qui reste sur le propriétaire
+    /// cesse de voir ce que fait le consommateur.
+    private func objectEditorSource() throws -> String {
+        AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
+    }
+
+    /// La BOÎTE, qui possède le contrôleur et l'alimente.
+    private func mentionBoxSource() throws -> String {
+        AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Components/ComposerMentionControllerBox.swift"))
+    }
+
     private func compact(_ t: String) -> String {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
     func test_laSource_estLisible() throws {
-        XCTAssertTrue(try hostSource().contains("sceneMentionStrip"))
+        // `sceneMentionStrip` était le nom que le meuble donnait à sa bande ;
+        // l'éditeur monte le composant partagé sous son vrai nom.
+        XCTAssertTrue(try objectEditorSource().contains("ComposerMentionStrip("),
+                      "la bande de suggestions n'est plus montée — un `@` n'ouvrirait plus rien")
     }
 
     /// **La frappe nourrit la requête** — et c'est tout ce qu'il a fallu.
     /// `onInlineTextChanged` remonte déjà le texte à chaque caractère ; le
     /// canvas UIKit n'a pas eu à changer d'un octet.
     func test_laFrappe_nourritLaRequete() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("sceneMentionBox.controller.handleQuery(in:texte)"))
+        let source = compact(try objectEditorSource())
+        XCTAssertTrue(source.contains("mentionBox.controller.handleQuery(in:texte)"),
+                      "la frappe doit alimenter la requête — sans quoi la bande resterait sur son premier résultat")
     }
 
     /// **Le choix écrit dans l'OBJET, par le même site que la frappe.** Un
     /// `@State` intermédiaire aurait fait diverger ce que le canvas affiche de
     /// ce que la publication emporte.
     func test_leChoix_ecritDansLObjet() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("viewModel.updateTextContent(id:id,text:remplace)"))
+        let source = compact(try objectEditorSource())
+        XCTAssertTrue(source.contains("viewModel.updateTextContent(id:id,text:remplace)"),
+                      "choisir une mention doit ÉCRIRE dans l'objet — sinon la suggestion s'affiche et ne pose rien")
     }
 
     /// **Trois conditions, dont la troisième s'oublie** : sans
     /// `!suggestions.isEmpty`, la bande de verre se peindrait VIDE quand aucun
     /// ami accepté ne correspond — un état nominal, pas un chargement.
-    func test_laBande_neSePeintJamaisVide() throws {
+    /// **Le meuble CONFIE la boîte, il ne réécrit pas la règle** (2026-09-06,
+    /// ex-`test_laBande_neSePeintJamaisVide`).
+    ///
+    /// Ce témoin exigeait que le meuble porte `activeQuery != nil` ET
+    /// `!suggestions.isEmpty` — la règle de montage de la bande de mentions,
+    /// recopiée alors sur les trois surfaces du composer. Elle a été centralisée
+    /// dans `MentionComposerController.showsSuggestions`, et **son SENS a changé
+    /// en même temps** : `activeQuery != nil && (!suggestions.isEmpty ||
+    /// !isResolving)`.
+    ///
+    /// > Une bande vide n'est plus un silence : c'est la réponse « personne »,
+    /// > que `ComposerMentionStrip` écrit en toutes lettres. Le nom
+    /// > « ne se peint jamais vide » décrivait donc une règle ABANDONNÉE — la
+    /// > justification d'origine (« aucun appel réseau ne remplira la liste plus
+    /// > tard ») est devenue fausse le jour où un brouillon a pu interroger
+    /// > l'annuaire.
+    ///
+    /// Ce qui reste à garder, et qui vaut mieux : le meuble POSSÈDE la boîte et
+    /// la CONFIE aux surfaces qui montrent la bande — il ne réécrit pas la
+    /// condition chez lui. Une copie qui reviendrait ici se périmerait
+    /// séparément de la règle centrale, exactement comme les trois précédentes.
+    func test_leMeuble_confieSaBoiteDeMentions_sansReecrireLaRegle() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("sceneMentionBox.controller.activeQuery!=nil"))
-        XCTAssertTrue(source.contains("!sceneMentionBox.controller.suggestions.isEmpty"))
-        XCTAssertTrue(source.contains("viewModel.textEditingMode.activeTextId"))
+        XCTAssertTrue(source.contains("mentionBox:sceneMentionBox"),
+                      "Le meuble doit CONFIER sa boîte de mentions à la surface qui montre la bande.")
+        XCTAssertFalse(source.contains("sceneMentionBox.controller.activeQuery!=nil"),
+                       "La règle de montage de la bande ne se réécrit pas dans le meuble : elle vit une seule "
+                       + "fois, dans `MentionComposerController.showsSuggestions`.")
+        XCTAssertFalse(source.contains("!sceneMentionBox.controller.suggestions.isEmpty"),
+                       "Idem — et cette moitié-là est celle dont le SENS a changé : une bande vide est "
+                       + "désormais la réponse « personne », pas un silence à cacher.")
+        XCTAssertTrue(source.contains("viewModel.textEditingMode.activeTextId"),
+                      "Le meuble reste celui qui sait quel texte est en cours d'édition.")
     }
 
     /// **Les candidats viennent de la MÊME source que la bande du document.**
     /// Deux chargements auraient donné deux listes à faire diverger, et deux
     /// moments où « aucun ami » se lit différemment.
     func test_lesCandidats_viennentDeLaSourcePartagee() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.acceptedFriends()"))
+        // La BOÎTE alimente le contrôleur : cache d'abord, réseau ensuite. C'est
+        // elle qui possède ce chemin, pas le meuble qui la transporte.
+        let source = compact(try mentionBoxSource())
+        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.acceptedFriends()"),
+                      "les candidats doivent venir de la source PARTAGÉE, jamais d'une liste locale")
+        XCTAssertTrue(source.contains("ComposerMentionFriendsSource.cachedFriends()"),
+                      "et le cache doit servir en premier — sinon un `@` reste vide le temps d'un aller-retour")
     }
 }
 

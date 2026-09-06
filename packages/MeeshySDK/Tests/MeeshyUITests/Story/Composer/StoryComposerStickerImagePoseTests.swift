@@ -140,8 +140,22 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
 
         // Et la pose AIGUILLE selon la famille : un lieu doit devenir un
         // `StoryLocationObject`, jamais un sticker qui perdrait ses coordonnées.
+        //
+        // **`func pose(`, sans le modificateur d'accès** (2026-09-06). Le
+        // témoin cherchait `private func pose(` et ne trouvait plus rien : la
+        // fonction est passée `internal` le 2026-09-05, parce que les onglets
+        // FAVORIS et RÉCENTS posent les mêmes gabarits depuis un autre fichier
+        // d'extension — `private` y aurait imposé une SECONDE pose, donc une
+        // seconde décision sur la famille LIEU, le gel de l'heure et
+        // l'enregistrement de l'usage.
+        //
+        // > Un témoin qui épingle un MODIFICATEUR D'ACCÈS rougit sur le
+        // > correctif qui l'élargit, et cesse au passage de garder quoi que ce
+        // > soit — le `XCTUnwrap` échouait avant même d'atteindre les deux
+        // > assertions qui portent la règle. Le NOM de la fonction suffit à la
+        // > désigner ; sa visibilité n'a jamais fait partie de ce qu'on garde.
         let poseurs = try ComposerSourceGuard.allStorySources()
-            .compactMap { ComposerSourceGuard.functionBody(named: "private func pose(", in: $0.code) }
+            .compactMap { ComposerSourceGuard.functionBody(named: "func pose(", in: $0.code) }
         let poseur = try XCTUnwrap(poseurs.first, "Le poseur de décoration est introuvable.")
         XCTAssertTrue(poseur.contains("onLocationTemplateSelected("),
                       "Une décoration de LIEU se poserait en sticker et perdrait sa donnée géographique.")

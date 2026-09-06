@@ -244,26 +244,42 @@ final class ComposerSceneActivationTests: XCTestCase {
         // > la moitié du défaut que le lot corrige — une garde qui protège la
         // > panne, comme celle de la flèche du socle au même moment.
         XCTAssertTrue(
-            src.contains("switchComposerSlideTextRole.role(for:selectedFormat)"),
+            // **L'aiguillage a TROIS cibles depuis le 2026-09-06**, et s'appelle
+            // `descriptionTarget(format:media:)` — il prend AUSSI le média,
+            // parce que sans média porteur la description EST le contenu du
+            // post. `role(for:)` ne pouvait pas exprimer ce troisième cas.
+            src.contains("switchComposerSlideTextRole.descriptionTarget("),
             "La destination du texte se DÉCIDE par le rôle, jamais au site : c'est le "
                 + "recouvrement du mot « description » sur deux rôles qui a laissé le défaut vivre."
         )
         XCTAssertTrue(
-            src.contains("case.content:returnviewModel.currentSlide.content??\"\"") ,
+            src.contains("case.slideContent:returnviewModel.currentSlide.content??\"\"") ,
             "En S/R/M, la LECTURE vient de la slide COURANTE : lire le texte de la publication "
                 + "montrerait la description d'une autre slide, et la ferait écraser."
         )
         XCTAssertTrue(
-            src.contains("case.caption:guardletmedia=selectedSlideMediaURLelse{return\"\"}"),
-            "En Post, elle vient du MÉDIA de la slide — et sans média, rien : retomber sur le "
-                + "contenu servirait le texte du post comme légende de ce média."
+            src.contains("case.mediaCaption(letmedia):returndocumentMediaCaptions[media]??\"\""),
+            "En Post AVEC média, elle vient du MÉDIA de la slide : servir le texte du post "
+                + "comme légende de ce média serait le recouvrement que cet aiguillage défait."
         )
         XCTAssertTrue(
-            src.contains("case.content:viewModel.applyContentText(texte)"),
+            src.contains("case.postContent:"),
+            "… et SANS média porteur, elle EST le contenu du post — la troisième cible, née de la "
+                + "mesure : un canvas sans média voyait sa description refusée en silence par "
+                + "`applyCaption` (`guard let media else { return }`)."
+        )
+        XCTAssertTrue(
+            src.contains("case.slideContent:viewModel.applyContentText(texte)"),
             "… et l'écriture suit le même aiguillage."
         )
         XCTAssertTrue(
-            src.contains("ComposerSlideTextRole.applyCaption(texte,to:selectedSlideMediaURL,in:&documentMediaCaptions)"),
+            // **`to: media`, pas `to: selectedSlideMediaURL`** (2026-09-06). Le
+            // média vient désormais de la CIBLE que l'aiguillage a élue
+            // (`case .mediaCaption(let media)`), et non d'une seconde lecture de
+            // la slide courante. C'est plus sûr que ce que ce témoin exigeait :
+            // une relecture peut diverger de l'élection entre les deux lignes,
+            // l'associé du cas ne le peut pas.
+            src.contains("ComposerSlideTextRole.applyCaption(texte,to:media,in:&documentMediaCaptions)"),
             "La légende s'écrit par MÉDIA. Une carte par SLIDE passerait au compilateur et "
                 + "servirait le mauvais média le jour où un post en portera deux sur une slide."
         )

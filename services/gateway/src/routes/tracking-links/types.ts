@@ -1,14 +1,16 @@
 import { z } from 'zod';
-import type { FastifyRequest } from 'fastify';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { httpUrlSchema } from '@meeshy/shared/utils/validation';
 
 /**
- * Helper pour enrichir un TrackingLink avec l'URL complète
- * Construit l'URL basée sur FRONTEND_URL ou le domaine de la requête
+ * Helper pour enrichir un TrackingLink avec l'URL complète.
+ * Construite via `TrackingLinkService.buildTrackingUrl()`, dont
+ * `resolveFrontendBaseUrl()` est l'unique source — `FRONTEND_URL`, jamais le
+ * domaine de la requête (fallback fixe `meeshy.me`, jamais `localhost`, pour
+ * qu'un lien partagé ne casse pas selon qui le rouvre).
  */
-export function enrichTrackingLink(link: TrackingLink, request?: FastifyRequest): TrackingLink & { fullUrl?: string } {
+export function enrichTrackingLink(link: TrackingLink): TrackingLink & { fullUrl?: string } {
   const trackingService = new TrackingLinkService(null as any);
   const fullUrl = trackingService.buildTrackingUrl(link.token);
 

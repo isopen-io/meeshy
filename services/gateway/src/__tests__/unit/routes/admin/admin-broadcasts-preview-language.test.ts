@@ -58,6 +58,10 @@ const mockPrisma: any = {
   user: {
     count: jest.fn<any>(),
     groupBy: jest.fn<any>(),
+    // #5334 — le rapport par langue résout désormais le Prisme (rangs 1→4)
+    // via un `findMany` sur les colonnes de `RECIPIENT_LANG_SELECT`, la MÊME
+    // fonction que l'envoi réel — plus un `groupBy` brut sur `systemLanguage`
+    // seul (rang 1).
     findMany: jest.fn<any>(),
   },
 };
@@ -93,24 +97,42 @@ function buildApp(): FastifyInstance {
   return app;
 }
 
+type RecipientLangRow = {
+  systemLanguage?: string | null;
+  regionalLanguage?: string | null;
+  customDestinationLanguage?: string | null;
+  deviceLocale?: string | null;
+};
+
 function setupPreviewMocks(opts: {
   targeting?: any;
   languageVariants?: string[];
-  recipientsByLanguage?: Array<{ systemLanguage: string; _count: number }>;
+  recipientLangUsers?: RecipientLangRow[];
 } = {}) {
   const {
     targeting = {},
     languageVariants = [],
-    recipientsByLanguage = [{ systemLanguage: 'en', _count: 5 }],
+    recipientLangUsers = [
+      { systemLanguage: 'en' }, { systemLanguage: 'en' }, { systemLanguage: 'en' },
+      { systemLanguage: 'en' }, { systemLanguage: 'en' },
+    ],
   } = opts;
   mockPrisma.adminBroadcast.findUnique.mockResolvedValue(fakeBroadcast({ targeting, status: 'DRAFT' }));
   mockPrisma.user.count.mockResolvedValue(10);
-  mockPrisma.user.groupBy
-    .mockResolvedValueOnce(recipientsByLanguage)
-    .mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]);
-  // #5161 — `resolveSystemLanguageVariants` lit les valeurs verbatim distinctes
-  // via `findMany({ distinct: ['systemLanguage'] })` avant de construire le `where`.
-  mockPrisma.user.findMany.mockResolvedValue(languageVariants.map(systemLanguage => ({ systemLanguage })));
+  // Le seul `groupBy` restant est celui du pays — le rapport de langue (#5334)
+  // descend désormais le Prisme par-utilisateur, via `findMany`.
+  mockPrisma.user.groupBy.mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]);
+  // Deux appels `findMany` distincts partagent le même mock, discriminés par
+  // leur forme : `resolveSystemLanguageVariants` (#5161) demande les valeurs
+  // VERBATIM distinctes (`distinct: ['systemLanguage']`) pour élargir le
+  // FILTRE ; le rapport de langue (#5334) demande les quatre colonnes du
+  // Prisme (`RECIPIENT_LANG_SELECT`) pour chaque destinataire ciblé.
+  mockPrisma.user.findMany.mockImplementation((args: any) => {
+    if (args?.distinct?.includes('systemLanguage')) {
+      return Promise.resolve(languageVariants.map(systemLanguage => ({ systemLanguage })));
+    }
+    return Promise.resolve(recipientLangUsers);
+  });
   mockTranslateContent.mockResolvedValue({ subjects: {}, bodies: {} });
   mockPrisma.adminBroadcast.update.mockResolvedValue(fakeBroadcast({ status: 'READY' }));
 }
@@ -151,10 +173,11 @@ describe('POST /:id/preview — ciblage et rapport de langue (#5161)', () => {
 
   it('folds recipientsByLanguage buckets onto their canonical code and sums their counts', async () => {
     setupPreviewMocks({
-      recipientsByLanguage: [
-        { systemLanguage: 'fr', _count: 3 },
-        { systemLanguage: 'FR', _count: 2 },
-        { systemLanguage: 'en', _count: 5 },
+      recipientLangUsers: [
+        { systemLanguage: 'fr' }, { systemLanguage: 'fr' }, { systemLanguage: 'fr' },
+        { systemLanguage: 'FR' }, { systemLanguage: 'FR' },
+        { systemLanguage: 'en' }, { systemLanguage: 'en' }, { systemLanguage: 'en' },
+        { systemLanguage: 'en' }, { systemLanguage: 'en' },
       ],
     });
 
@@ -168,6 +191,31 @@ describe('POST /:id/preview — ciblage et rapport de langue (#5161)', () => {
     );
   });
 
+  /**
+   * #5334 — le défaut que #5161 ne pouvait pas voir : un compte dont la langue
+   * applicative vit à un rang ≠ 1 (ici `regionalLanguage`, rang 2, faute de
+   * `systemLanguage`) doit être compté dans SA langue résolue, pas perdu ou
+   * mal rangé par un `groupBy` brut sur `systemLanguage` seul. Au rang 1, la
+   * règle simple et la règle juste rendent le même verdict (leçon 261) — ce
+   * témoin pose donc un compte dont le rang 1 est VIDE pour pouvoir tomber.
+   */
+  it('compte un destinataire par sa langue RÉSOLUE (Prisme), pas seulement systemLanguage (#5334)', async () => {
+    setupPreviewMocks({
+      recipientLangUsers: [
+        { systemLanguage: null, regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null },
+        { systemLanguage: 'en', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+      ],
+    });
+
+    const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.data.recipientsByLanguage).toEqual(
+      expect.arrayContaining([{ language: 'es', count: 1 }, { language: 'en', count: 1 }])
+    );
+  });
+
   // La fixture cible l'ANGLAIS, pas le français : la diffusion est en `fr`
   // (`sourceLanguage`), et les cibles EXCLUENT la langue source (#5247). Le
   // repli `en-US`/`en_US` → `en` reste ce que ce témoin mesure ; l'écrire sur
@@ -175,10 +223,10 @@ describe('POST /:id/preview — ciblage et rapport de langue (#5161)', () => {
   // qu'elle est le correctif.
   it('derives targetLanguages (sent to translation and persisted) from the CANONICAL buckets, not the verbatim ones', async () => {
     setupPreviewMocks({
-      recipientsByLanguage: [
-        { systemLanguage: 'en', _count: 1 },
-        { systemLanguage: 'en-US', _count: 1 },
-        { systemLanguage: 'en_US', _count: 1 },
+      recipientLangUsers: [
+        { systemLanguage: 'en' },
+        { systemLanguage: 'en-US' },
+        { systemLanguage: 'en_US' },
       ],
     });
 
@@ -207,11 +255,12 @@ describe('POST /:id/preview — ciblage et rapport de langue (#5161)', () => {
    */
   it('exclut la langue SOURCE des cibles — y compris sous ses variantes verbatim', async () => {
     setupPreviewMocks({
-      recipientsByLanguage: [
-        { systemLanguage: 'fr', _count: 1 },
-        { systemLanguage: 'FR', _count: 1 },
-        { systemLanguage: 'fr-FR', _count: 1 },
-        { systemLanguage: 'en', _count: 2 },
+      recipientLangUsers: [
+        { systemLanguage: 'fr' },
+        { systemLanguage: 'FR' },
+        { systemLanguage: 'fr-FR' },
+        { systemLanguage: 'en' },
+        { systemLanguage: 'en' },
       ],
     });
 

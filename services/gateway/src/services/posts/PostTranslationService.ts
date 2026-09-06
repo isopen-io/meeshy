@@ -66,7 +66,7 @@ export class PostTranslationService {
    * Translate a post's content to top 5 languages (minus original).
    * Fire-and-forget: results arrive via ZMQ events.
    */
-  async translatePost(postId: string, content: string, originalLanguage?: string, authorId?: string): Promise<void> {
+  async translatePost(postId: string, content: string, originalLanguage?: string): Promise<void> {
     // Skip translation for URL-only posts: links carry no translatable text and
     // must be preserved verbatim (NLLB would corrupt them). Mixed content still
     // translates — the translator masks/restores the URLs.

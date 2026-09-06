@@ -75,6 +75,29 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     private static let unreachableAllowlist: Set<String> = [
         "buildNativeMessageMenu",
 
+        // ── 2026-09-06 · la reprise d'un post bloqué DORT, et sa dette est NOMMÉE ──
+        //
+        // `recoverStuckPostDraftIfNeeded` pré-remplissait le composer avec le
+        // dernier post ou réel resté hors ligne. Son appelant unique était
+        // `.task { … }` sur `composerOverlay`, que `70598711d9` a remplacé par
+        // le MEUBLE sur le fil iPad — l'appel est parti avec l'overlay.
+        //
+        // Ce n'est pas un débranchement passé inaperçu : `DocumentComposerDoor`
+        // le dit dans son doc-comment, au paragraphe « ce qu'elle ne fait PAS,
+        // et qu'il ne faut pas lire comme tenu » — le meuble n'a pas de canal de
+        // graine pour un DOCUMENT (`moodSeed` est le seul), et lui en ouvrir un
+        // déplacerait l'`init` que le lot 5.5 a déjà réservé. « Dette NOMMÉE,
+        // non refermée ici — elle ne perd rien aujourd'hui, la ligne bloquée
+        // partant seule à la reconnexion. »
+        //
+        // > Ce qui est perdu n'est donc pas l'ENVOI mais la RÉOUVERTURE en
+        // > brouillon : le post bloqué part quand même au retour du réseau, il
+        // > ne revient simplement plus sous les yeux de son auteur pour être
+        // > repris. La supprimer serait jeter le code qu'il faudra réécrire à
+        // > l'ouverture de ce canal ; la laisser sans l'inscrire ici la rendrait
+        // > indiscernable d'un vestige.
+        "recoverStuckPostDraftIfNeeded",
+
         // ── 244i · le fil : trois méthodes dont le SEUL appelant est la SUITE ──
         //
         // `likePost`, `bookmarkPost` et `clearTranslationOverride` sont

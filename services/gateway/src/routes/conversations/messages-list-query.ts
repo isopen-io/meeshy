@@ -20,6 +20,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
+import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
@@ -739,7 +740,23 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
  * Enrichit `mappedMessages` (mutation en place) avec l'aperçu des messages
  * transférés — source directe (`forwardedFrom`) et conversation source
  * (`forwardedFromConversation`) — en respectant la réciprocité de partage de
- * l'auteur du transfert (`resolveForwardSourceGateForReader`).
+ * l'auteur du transfert (`resolveForwardSourceGateForReader`) ET le masquage
+ * personnel du LECTEUR sur le message source (#3616).
+ *
+ * Cette fonction relit le message source par son id — `where: { id: { in:
+ * … } } }`, sans le `where` de la liste principale — donc sans le bénéfice
+ * de `applyPersonalHistoryHiding` que porte cette dernière. Un lecteur ayant
+ * effacé son historique avant une date, ou supprimé-pour-lui le message
+ * source précis, le reverrait sinon resurgir intact dans l'aperçu de
+ * transfert d'un AUTRE message, dans une AUTRE conversation — la fuite est
+ * appliquée EN MÉMOIRE (`loadPersonalHistoryHidingByConversation`), et non
+ * par un merge de `where`, parce que les messages sources d'une même page
+ * peuvent appartenir à plusieurs conversations différentes ; même patron que
+ * `ConversationBridgeService.buildBridgeDataForViewers`. Un message masqué
+ * est traité comme un message introuvable : il n'entre jamais dans
+ * `forwardedMap`, donc `msg.forwardedFrom` reste absent — la même issue que
+ * le code suit déjà quand le message source a été supprimé pour tout le
+ * monde.
  */
 export async function enrichForwardedMessagesForList(
   prisma: PrismaClient,
@@ -793,7 +810,26 @@ export async function enrichForwardedMessagesForList(
           }
         });
 
-        const forwardedMap = new Map(forwardedMessages.map(m => [m.id, m]));
+        // Masquage personnel du LECTEUR sur le message SOURCE (#3616) — voir
+        // le doc-comment de la fonction. Une lecture groupée par conversation
+        // source, jamais par message : `hiddenMessageIds` est déjà scopé par
+        // conversation côté chargeur, et `clearHistoryBefore` l'est par
+        // construction (`UserConversationPreferences` est une ligne par
+        // (userId, conversationId)).
+        const sourceConversationIds = [...new Set(forwardedMessages.map((m) => m.conversationId))];
+        const readerHidingBySourceConversation = await loadPersonalHistoryHidingByConversation(prisma, {
+          userId,
+          conversationIds: sourceConversationIds,
+        });
+        const isHiddenFromReader = (message: { id: string; conversationId: string; createdAt: Date }): boolean => {
+          const hiding = readerHidingBySourceConversation.get(message.conversationId) ?? NO_PERSONAL_HIDING;
+          if (hiding.hiddenMessageIds.includes(message.id)) return true;
+          return hiding.clearHistoryBefore !== null && message.createdAt.getTime() < hiding.clearHistoryBefore.getTime();
+        };
+
+        const forwardedMap = new Map(
+          forwardedMessages.filter((m) => !isHiddenFromReader(m)).map(m => [m.id, m])
+        );
 
         // Charger les conversations sources
         const convIds = mappedMessages

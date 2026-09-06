@@ -1352,12 +1352,17 @@ public struct StoryEffects: Codable, Sendable {
         return (effect, wire)
     }
 
-    /// Le fil n'accepte plus que le canvas v3 : l'encodage part TOUJOURS du
-    /// runtime courant, jamais du `canvasV3` mémorisé — une composition neuve
-    /// (aucun document servi) et une story éditée émettent donc l'une comme
-    /// l'autre l'état réel du canvas.
+    /// Le fil n'accepte plus que le canvas v3 : la PREMIÈRE scène part TOUJOURS
+    /// du runtime courant, jamais du `canvasV3` mémorisé — une composition
+    /// neuve (aucun document servi) et une story éditée émettent donc l'une
+    /// comme l'autre l'état réel du canvas.
+    ///
+    /// **Les scènes SUIVANTES, elles, viennent du document** (2026-09-06). Le
+    /// runtime ne décrit qu'une slide : partir de lui seul jetait tout ce qui
+    /// vivait au-delà — une publication à trois scènes rouverte, éditée puis
+    /// renvoyée en émettait UNE. Détail : `CanvasV3.init(migrating:keeping:)`.
     public func encode(to encoder: Encoder) throws {
-        try CanvasV3(migrating: self).encode(to: encoder)
+        try CanvasV3(migrating: self, keeping: canvasV3).encode(to: encoder)
     }
 
     /// Forme v1 COMPLÈTE des effets — l'empreinte LOCALE dont l'écran dépend.

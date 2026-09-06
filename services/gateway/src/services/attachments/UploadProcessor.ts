@@ -182,7 +182,10 @@ export class UploadProcessor {
    * Applique +9dB pour améliorer la transcription et la diarization
    */
   private async amplifyAudio(buffer: Buffer, mimeType: string): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
+    // Best-effort : chaque branche d'erreur RÉSOUT avec le buffer d'origine
+    // plutôt que de rejeter — une amplification ratée ne doit pas faire
+    // échouer l'upload. `reject` n'est donc jamais appelé, par construction.
+    return new Promise((resolve, _reject) => {
       // Déterminer le format de sortie basé sur le mimeType
       let outputFormat = 'mp4';
       if (mimeType.includes('webm')) outputFormat = 'webm';

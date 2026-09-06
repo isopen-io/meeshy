@@ -35,6 +35,19 @@ import { UnifiedAuthRequest } from './auth';
 import { getCacheStore } from '../services/CacheStore';
 
 /**
+ * Chemins exemptés du débit — sondes de disponibilité (#4219). Nommée et
+ * EXPORTÉE plutôt que fermée dans `allowList`, pour que la garde de #5333
+ * (`rate-limit-allowlist-inheritance-guard.test.ts`) mesure la MÊME liste,
+ * jamais une copie qui pourrait diverger.
+ */
+export const HEALTH_PROBE_ALLOWLISTED_PATHS: readonly string[] = [
+  '/health',
+  '/healthz',
+  '/ready',
+  apiPath('/health/ready'),
+];
+
+/**
  * Rate limiter global pour toutes les routes API
  * Max 300 requêtes par minute par IP (augmenté pour permettre l'édition de liens)
  */
@@ -81,6 +94,35 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     // `172.x` pour tout le monde. Depuis #4137, `trustProxy` rend l'adresse de
     // l'appelant ; la conclusion ne change pas pour autant : ce qui exempte
     // ici, ce sont des CHEMINS de sonde, jamais une plage d'adresses.
+    // `allowList`, comme `skipOnError` au-dessus, est une valeur GLOBALE que
+    // `mergeParams` (`Object.assign`) étale dans toute config de route qui ne
+    // la redéclare pas (#5333, suivi ouvert à la clôture de #4687). Décision :
+    // ne PAS exiger de déclaration explicite par route, contrairement à
+    // `skipOnError` — et la raison n'est pas la même question posée deux fois.
+    //
+    // `skipOnError` varie légitimement par route (le sens de l'échec est un
+    // choix de risque PROPRE à chaque limiteur). `allowList` ici n'encode
+    // AUCUN choix par route : c'est une exemption d'INFRASTRUCTURE (les sondes
+    // de disponibilité) valable pour la plateforme entière, quelle que soit la
+    // route qui l'hérite. Redéclarer cette même fonction sur chacune des ~50
+    // configs de route dupliquerait une connaissance d'infrastructure dans
+    // des dizaines de fabriques qui n'ont rien à voir avec elle — l'inverse
+    // d'une source de vérité unique, pour un risque qui n'existe pas :
+    //
+    // `onRoute` (`@fastify/rate-limit/index.js:174`) monte le limiteur de LA
+    // ROUTE À LA PLACE du global — jamais en plus. L'allowList hérité par une
+    // route ne peut donc s'appliquer QUE si cette route est mesurée sur l'un
+    // des chemins ci-dessous. Mesuré sur `route-manifest.json` (2026-09-06) :
+    // aucune route qui déclare un `config.rateLimit` propre n'est montée sur
+    // `/health`, `/healthz`, `/ready` ou `/api/v1/health/ready` — les trois
+    // routes de sonde (`routes/health/index.ts`) n'ont elles-mêmes AUCUN
+    // `config.rateLimit` et s'appuient directement sur ce limiteur global.
+    // L'héritage est donc structurellement inerte aujourd'hui, et le restera
+    // tant que cette disjonction tient — gardée par
+    // `rate-limit-allowlist-inheritance-guard.test.ts`, qui rougit dès qu'une
+    // route à configuration propre atterrit sur l'un de ces chemins : c'est
+    // CE moment-là qui doit rouvrir la question d'une déclaration explicite,
+    // pas une règle appliquée par réflexe à 50 sites qui n'en ont pas besoin.
     allowList: (request: FastifyRequest) => {
       const path = request.url.split('?')[0];
       // `/api/v1/health/ready` rejoint les sondes exemptées (#4219), pour la
@@ -89,10 +131,9 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
       // n'ouvre pas d'amplificateur anonyme — le verdict est mémoïsé 2 s dans
       // `routes/health/index.ts`, donc une cadence infinie coûte un ping toutes
       // les 2 s, quoi qu'il arrive.
-      return path === '/health' || path === '/healthz' || path === '/ready'
-        || path === apiPath('/health/ready');
+      return HEALTH_PROBE_ALLOWLISTED_PATHS.includes(path);
     },
-    errorResponseBuilder: (request, context) => {
+    errorResponseBuilder: (_request, context) => {
       return {
         success: false,
         error: 'Trop de requêtes. Veuillez réessayer plus tard.',

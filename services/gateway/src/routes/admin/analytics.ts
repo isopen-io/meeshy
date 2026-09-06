@@ -36,7 +36,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/realtime', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:realtime';
       const cached = await getCacheStore().get(cacheKey);
@@ -87,7 +87,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/hourly-activity', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:hourly-activity';
       const cached = await getCacheStore().get(cacheKey);
@@ -175,7 +175,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/user-distribution', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:user-distribution';
       const cached = await getCacheStore().get(cacheKey);
@@ -329,7 +329,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/volume-timeline', {
     onRequest: [fastify.authenticate, requireAnalyticsPermission]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const cacheKey = 'admin:analytics:volume-timeline';
       const cached = await getCacheStore().get(cacheKey);

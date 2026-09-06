@@ -70,23 +70,72 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
         )
     }
 
-    func test_actionButtonBlock_hidesQuickEmojiInEditModeAndWhenEmojiDisabled() throws {
-        let block = try Self.actionButtonBlock()
-        guard let range = block.range(of: "let showsQuickEmoji = ") else {
-            return XCTFail("déclaration de `showsQuickEmoji` introuvable")
-        }
-        let lineEnd = block[range.upperBound...].firstIndex(of: "\n") ?? block.endIndex
-        let line = block[range.lowerBound..<lineEnd]
-        XCTAssertTrue(line.contains("!isEditMode"), "les emojis rapides ne doivent jamais remplacer le bouton « enregistrer » de l'édition")
-        XCTAssertTrue(line.contains("showEmoji"), "les emojis rapides doivent respecter le drapeau `showEmoji` de l'hôte")
+    /// **L'invariant a MIGRÉ, il n'a pas disparu** (#5326, 2026-09-06).
+    ///
+    /// La bascule tenait dans une ligne — `let showsQuickEmoji = !isEditMode &&
+    /// showEmoji && …` — et cette garde lisait cette LIGNE. Depuis que
+    /// l'emplacement porte TROIS contenus (emojis rapides · cadre à mots ·
+    /// bouton d'envoi), la décision vit dans une règle PURE,
+    /// `ComposerActionSlot.resolve(…)`, éprouvée par dix témoins de
+    /// comportement qui n'ont pas besoin de monter un clavier.
+    ///
+    /// > Une garde qui lit une ligne se périme quand la ligne devient une
+    /// > fonction. Elle ne doit alors pas être supprimée — elle doit SUIVRE la
+    /// > décision : ce qui compte n'est plus « la condition nomme-t-elle
+    /// > `isEditMode` ? » mais **« les deux entrées atteignent-elles encore la
+    /// > règle ? »**. Sans elles, `resolve` déciderait juste sur des données
+    /// > fausses, et les dix témoins resteraient verts.
+    func test_actionSlot_feedsEditModeAndTheEmojiFlagIntoTheRule() throws {
+        let block = try Self.propertyBlock(anchor: "var actionSlot: ComposerActionSlot {")
+        XCTAssertTrue(
+            block.contains("ComposerActionSlot.resolve("),
+            "la bascule doit venir de la règle pure, jamais d'une condition réécrite dans la vue"
+        )
+        XCTAssertTrue(
+            block.contains("isEditMode: isEditMode"),
+            "les emojis rapides ne doivent jamais remplacer le bouton « enregistrer » de l'édition — `isEditMode` doit ATTEINDRE la règle"
+        )
+        XCTAssertTrue(
+            block.contains("offersQuickEmoji: showEmoji"),
+            "les emojis rapides doivent respecter le drapeau `showEmoji` de l'hôte — il doit ATTEINDRE la règle"
+        )
     }
 
-    // MARK: - Transition tourbillon appliquée aux deux branches
-
-    func test_actionButtonBlock_appliesTourbillonTransitionToBothBranches() throws {
+    /// Et la vue ne doit pas re-décider par-dessus la règle : `showsQuickEmoji`
+    /// n'est qu'une PROJECTION du slot élu. Une seconde condition ici rouvrirait
+    /// exactement le chemin que la règle pure vient de fermer.
+    func test_actionButtonBlock_derivesTheEmojiBranchFromTheResolvedSlot() throws {
         let block = try Self.actionButtonBlock()
-        let occurrences = block.components(separatedBy: "tourbillonTransition").count - 1
-        XCTAssertEqual(occurrences, 2, "la transition tourbillon doit s'appliquer aux DEUX branches (emojis ↔ bouton d'envoi) — trouvé \(occurrences)")
+        XCTAssertTrue(
+            block.contains("let showsQuickEmoji = slot == .quickEmoji"),
+            "la branche emoji se LIT sur le slot élu — pas une condition parallèle qui pourrait diverger de la règle"
+        )
+    }
+
+    // MARK: - Transition tourbillon appliquée à CHAQUE branche
+
+    /// **Chaque branche du slot entre et sort en tourbillon — quel que soit
+    /// leur NOMBRE.**
+    ///
+    /// Ce témoin épinglait `2`, et l'arrivée d'un troisième contenu (le cadre à
+    /// mots, #5326) l'a fait tomber alors que le code était juste : les trois
+    /// branches portaient bien leur transition. Un nombre écrit en dur ne
+    /// mesurait pas l'invariant, il mesurait l'ÉPOQUE.
+    ///
+    /// > La question n'est pas « y a-t-il deux transitions ? » mais **« reste-t-il
+    /// > une branche SANS transition ? »** — la seule forme qui attrape le vrai
+    /// > défaut (un contenu qui apparaît sec) et qui survit au contenu suivant.
+    func test_actionButtonBlock_appliesTourbillonTransitionToEveryBranch() throws {
+        let block = try Self.actionButtonBlock()
+        let transitions = block.components(separatedBy: "transition(tourbillonTransition)").count - 1
+        // Les branches du `ZStack` : le `if` d'ouverture, puis chaque `else`.
+        let branches = 1 + (block.components(separatedBy: "} else").count - 1)
+        XCTAssertGreaterThan(branches, 1, "le slot doit bien BASCULER entre plusieurs contenus")
+        XCTAssertEqual(
+            transitions,
+            branches,
+            "chaque branche du slot doit entrer et sortir en tourbillon — \(branches) branche(s) pour \(transitions) transition(s) : l'une d'elles apparaîtrait sèchement"
+        )
     }
 
     func test_tourbillonTransition_isAsymmetricWithOppositeRotationSigns() throws {

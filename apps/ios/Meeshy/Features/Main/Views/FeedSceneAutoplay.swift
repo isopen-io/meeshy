@@ -160,6 +160,34 @@ struct PostSceneCard: View {
         .frame(maxWidth: Self.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        // **Le son est COUPÉ, et il faut le dire** (constat porteur 2026-09-06 :
+        // « les scènes cinématiques jouent avec signe audio barré »).
+        //
+        // Un INDICATEUR, jamais un bouton : `ScenePlayerConfig.locksMute` fige
+        // le muet du mode `.card` par construction (#4084), et son doc-comment
+        // écrit que la carte de fil « n'expose AUCUN bouton de son (elle
+        // n'aurait rien à piloter) ». Le chemin vers le son est à un doigt —
+        // toucher la scène ouvre le plein écran, où le muet se relève.
+        //
+        // Seulement quand la scène JOUE (sinon rien n'est coupé, tout est
+        // simplement en pause) et quand le document a vraiment une piste
+        // (`isAudible`, pas `isCinematic` — une vidéo muette bouge sans rien
+        // faire entendre).
+        .overlay(alignment: .bottomTrailing) {
+            if isActive, SceneMotion.isAudible(document) {
+                Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(.black.opacity(0.45)))
+                    .padding(10)
+                    .allowsHitTesting(false)
+                    .accessibilityLabel(Text(String(
+                        localized: "feed.scene.sound.muted",
+                        defaultValue: "Son coupé — ouvrir en plein écran pour l'entendre",
+                        bundle: .main)))
+            }
+        }
         .reportReelFrame(id: post.id, kind: .scene)
         .contentShape(Rectangle())
         // **Le doigt sur l'IMAGE ouvre l'image** (directive porteur
@@ -259,6 +287,71 @@ struct PostSceneSurface: View {
                 onTapScene: onTapScene
             )
             .equatable()
+        }
+    }
+}
+
+// MARK: - Mosaïque et carrousel d'un post à plusieurs scènes
+
+/// Observe le coordinateur et pilote la lecture de la MOSAÏQUE d'un post —
+/// jumeau exact de `PostSceneCardContainer`, pour la surface qui montre
+/// plusieurs scènes.
+///
+/// Sans lui, un carrousel de scènes était la seule surface de canvas du fil à
+/// ne jamais jouer : la carte mono-scène jouait quand le viewport l'élisait, la
+/// story repartagée aussi, et un post à plusieurs scènes restait figé — une
+/// QUATRIÈME politique de lecture, celle-là même que ce fichier existe pour
+/// empêcher.
+struct PostSceneMosaicContainer: View {
+    @ObservedObject var coordinator: ReelFeedAutoplayCoordinator
+    let post: FeedPost
+    let document: CanvasV3
+    let accentColor: String
+    let preferredContentLanguages: [String]
+    var onTapScene: ((Int) -> Void)?
+
+    var body: some View {
+        PostSceneMosaic(
+            post: post,
+            document: document,
+            accentColor: accentColor,
+            preferredContentLanguages: preferredContentLanguages,
+            isActive: coordinator.activeReelId == post.id,
+            onTapScene: onTapScene
+        )
+    }
+}
+
+/// Le pendant de `PostSceneSurface` pour une publication à plusieurs scènes —
+/// même règle, même raison de vivre à un seul endroit : un hôte de fil tient un
+/// coordinateur, un hôte isolé n'en a pas et la scène y reste en pause.
+struct PostSceneMosaicSurface: View {
+    let coordinator: ReelFeedAutoplayCoordinator?
+    let post: FeedPost
+    let document: CanvasV3
+    let accentColor: String
+    let preferredContentLanguages: [String]
+    var onTapScene: ((Int) -> Void)?
+
+    var body: some View {
+        if let coordinator {
+            PostSceneMosaicContainer(
+                coordinator: coordinator,
+                post: post,
+                document: document,
+                accentColor: accentColor,
+                preferredContentLanguages: preferredContentLanguages,
+                onTapScene: onTapScene
+            )
+        } else {
+            PostSceneMosaic(
+                post: post,
+                document: document,
+                accentColor: accentColor,
+                preferredContentLanguages: preferredContentLanguages,
+                isActive: false,
+                onTapScene: onTapScene
+            )
         }
     }
 }

@@ -55,6 +55,15 @@ export type UserManagementServiceDeps = {
   readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
 };
 
+/**
+ * #5331 — les méthodes d'écriture prenaient un `updaterId`/`creatorId` jamais
+ * lu : la piste d'audit de CE service n'est pas ici, elle est posée par
+ * l'appelant (`routes/admin/users-write.ts::tracer`, qui dérive l'acteur du
+ * `request` via `acteurDe()` et écrit sa propre ligne `AuditLog`). Un
+ * paramètre décrivant qui a agi sans jamais le consommer est une signature
+ * qui MENT sur ce que la fonction fait de son entrée — retiré plutôt que
+ * silencé.
+ */
 export class UserManagementService {
   constructor(
     private prisma: PrismaClient,
@@ -178,7 +187,7 @@ export class UserManagementService {
    * Best-effort, comme l'inscription publique : une panne de l'ajout au salon
    * global ne doit pas faire échouer la création du compte.
    */
-  async createUser(data: CreateUserDTO, creatorId: string): Promise<FullUser> {
+  async createUser(data: CreateUserDTO): Promise<FullUser> {
     // Le coût de hachage était 10 ICI et 12 aux trois autres portes (#3629,
     // soldé au #5216) : un compte créé par un administrateur repartait avec un
     // hash quatre fois moins cher à casser que celui d'un compte inscrit par la
@@ -230,8 +239,7 @@ export class UserManagementService {
    */
   async updateUser(
     userId: string,
-    data: UpdateUserProfileDTO,
-    updaterId: string
+    data: UpdateUserProfileDTO
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -249,8 +257,7 @@ export class UserManagementService {
    */
   async updateEmail(
     userId: string,
-    data: UpdateEmailDTO,
-    updaterId: string
+    data: UpdateEmailDTO
   ): Promise<FullUser> {
     // Vérifier le mot de passe actuel
     const user = await this.prisma.user.findUnique({
@@ -283,8 +290,7 @@ export class UserManagementService {
    */
   async updateRole(
     userId: string,
-    data: UpdateRoleDTO,
-    updaterId: string
+    data: UpdateRoleDTO
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -302,8 +308,7 @@ export class UserManagementService {
    */
   async updateStatus(
     userId: string,
-    data: UpdateStatusDTO,
-    updaterId: string
+    data: UpdateStatusDTO
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -342,8 +347,7 @@ export class UserManagementService {
    */
   async resetPassword(
     userId: string,
-    data: ResetPasswordDTO,
-    resetById: string
+    data: ResetPasswordDTO
   ): Promise<FullUser> {
     const hashedPassword = await hashPassword(data.newPassword);
 
@@ -361,7 +365,7 @@ export class UserManagementService {
   /**
    * Supprime un utilisateur (soft delete)
    */
-  async deleteUser(userId: string, deletedById: string): Promise<FullUser> {
+  async deleteUser(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -378,7 +382,7 @@ export class UserManagementService {
   /**
    * Restaure un utilisateur supprimé
    */
-  async restoreUser(userId: string, restoredById: string): Promise<FullUser> {
+  async restoreUser(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -425,8 +429,7 @@ export class UserManagementService {
    */
   async verifyEmail(
     userId: string,
-    verified: boolean,
-    updaterId: string
+    verified: boolean
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -444,8 +447,7 @@ export class UserManagementService {
    */
   async verifyPhone(
     userId: string,
-    verified: boolean,
-    updaterId: string
+    verified: boolean
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -461,7 +463,7 @@ export class UserManagementService {
   /**
    * Déverrouille un compte utilisateur
    */
-  async unlockAccount(userId: string, updaterId: string): Promise<FullUser> {
+  async unlockAccount(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -478,7 +480,7 @@ export class UserManagementService {
   /**
    * Active la 2FA pour un utilisateur
    */
-  async enable2FA(userId: string, updaterId: string): Promise<FullUser> {
+  async enable2FA(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -503,7 +505,7 @@ export class UserManagementService {
    * `twoFactorPendingSecret` compris : sans lui, un appairage entamé survivait
    * au désarmement et pouvait être repris là où il s'était arrêté.
    */
-  async disable2FA(userId: string, updaterId: string): Promise<FullUser> {
+  async disable2FA(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -524,8 +526,7 @@ export class UserManagementService {
   async toggleVoiceConsent(
     userId: string,
     consentType: 'voiceProfile' | 'voiceData' | 'dataProcessing' | 'voiceCloning',
-    enabled: boolean,
-    updaterId: string
+    enabled: boolean
   ): Promise<FullUser> {
     const fieldMap = {
       voiceProfile: 'voiceProfileConsentAt',
@@ -551,8 +552,7 @@ export class UserManagementService {
    */
   async verifyAge(
     userId: string,
-    verified: boolean,
-    updaterId: string
+    verified: boolean
   ): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },

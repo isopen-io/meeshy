@@ -228,8 +228,31 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// donc pas une correction : c'est le CLIQUET qui empêche la peau la plus
     /// vue de gagner un jour le défaut que l'autre vient de perdre.
     func test_loiDesZones_leNomNEstPasUneZoneTactile() throws {
+        // **La tranche part de la ligne de TITRE, pas de la première occurrence
+        // du fichier** (2026-09-06). `Text(quotedTitle)` apparaît DEUX fois :
+        // dans `quotedFlow`, qui compose le nom et l'aperçu en un paragraphe, et
+        // dans la ligne de titre. `range(of:)` sans borne prenait la première,
+        // et la tranche s'étendait alors sur 3252 caractères au lieu de 547 —
+        // elle happait un `.onTapGesture` parfaitement légitime, posé bien plus
+        // bas et sur un tout autre élément.
+        //
+        // > La garde accusait donc le NOM d'une zone tactile qu'il n'a pas, et
+        // > c'est le pire mode d'échec possible pour une garde d'UX : elle
+        // > désigne une violation dans du code sain, et le prochain lecteur
+        // > « corrige » ce qui marchait. Mesuré : la tranche bornée ne contient
+        // > aucun lexème de tap — la LOI DES ZONES est respectée.
+        //
+        // On borne d'abord la LIGNE, puis on y cherche le nom : deux ancres
+        // étroites valent mieux qu'une large, et celle de la ligne est déjà
+        // celle que la garde de la zone 1 utilise juste au-dessus.
         let code = try quotedReplySource()
-        let nameSlice = try slice(of: code, from: "Text(quotedTitle)", to: "moodDateLabel(previewColor: previewColor)")
+        let titleRow = try slice(of: code,
+                                 from: "HStack(alignment: .top, spacing: 6) {",
+                                 to: "moodDateLabel(previewColor: previewColor)")
+        guard let nameStart = titleRow.range(of: "Text(quotedTitle)") else {
+            return XCTFail("`Text(quotedTitle)` introuvable dans la ligne de titre — la garde ne mesure plus rien.")
+        }
+        let nameSlice = titleRow[nameStart.lowerBound...]
 
         var offenders: [String] = []
         for lexeme in Self.tapLexemes where nameSlice.contains(lexeme) {
@@ -250,7 +273,22 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
 
     func test_loiDesZones_lAvatarEstLaSeulePorteVersLeProfil() throws {
         let code = try quotedReplySource()
-        let titleRow = try slice(of: code, from: "HStack(spacing: 6) {", to: "Text(quotedTitle)")
+        // **L'ancre a suivi l'alignement** (2026-09-06). Elle épinglait
+        // `HStack(spacing: 6) {` ; la ligne de titre porte désormais
+        // `alignment: .top`, pour que l'avatar reste en haut quand le nom et
+        // l'aperçu coulent sur deux lignes. La garde ne trouvait plus sa
+        // tranche et rougissait en s'accusant elle-même — « garde inopérante » —
+        // alors que la LOI DES ZONES était respectée.
+        //
+        // > Une ancre qui reprend la signature COMPLÈTE d'un conteneur se périme
+        // > au premier argument de mise en page ajouté. Celle-ci est la plus
+        // > étroite qui désigne encore une seule ligne du fichier ; si un
+        // > second `HStack(alignment: .top, spacing: 6)` y apparaît, c'est le
+        // > `slice` qu'il faudra rendre positionnel, pas l'ancre qu'il faudra
+        // > élargir.
+        let titleRow = try slice(of: code,
+                                 from: "HStack(alignment: .top, spacing: 6) {",
+                                 to: "Text(quotedTitle)")
         XCTAssertTrue(
             titleRow.contains("authorGate"),
             "l'avatar doit PRÉCÉDER le nom sur la ligne de titre : c'est lui qui porte la porte vers le profil."

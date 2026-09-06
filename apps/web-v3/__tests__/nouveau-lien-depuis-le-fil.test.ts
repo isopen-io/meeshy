@@ -187,6 +187,25 @@ describe('la feuille « nouveau lien » ouverte sur le fil', () => {
     );
     expect(doc).not.toContain('<dialog class="nouveau-lien"');
   });
+
+  /**
+   * FAIL-CLOSED CÔTÉ SURIMPRESSION, PAS SEULEMENT CÔTÉ PUCE — un membre qui
+   * tape `?lien` à la main sur un fil que `peutCreerUnLien` refuse (un
+   * `direct`, ou un rang trop bas dans un groupe) ne doit jamais recevoir
+   * une feuille dont la soumission est un 403 garanti (loi 4 : un contrôle
+   * n'existe que s'il a un effet). Miroir du témoin invité ci-dessus, pour
+   * le membre.
+   */
+  it.each([
+    ['un DIRECT', { type: 'direct' as const, rang: 'creator' as const }],
+    ['un groupe où le rang est insuffisant', { type: 'group' as const, rang: 'member' as const }],
+  ])(
+    'le MEMBRE d’%s ne rend JAMAIS la feuille, même avec l’état `?lien` posé (fail-closed dans la vue)',
+    (_libelle, filRefuse) => {
+      const doc = documentDuFil(ETAT({ fil: { ...FIL, ...filRefuse }, lien: { saisie: SAISIE, motif: null } }));
+      expect(doc).not.toContain('<dialog class="nouveau-lien"');
+    },
+  );
 });
 
 describe('une seule surimpression à la fois — profil > lien > plein écran', () => {
@@ -242,12 +261,24 @@ describe('la porte du fil — créer un lien de partage (§ 12.10.5, #5034)', ()
   const contexte = { params: Promise.resolve({ cle: CLE }) };
   const COOKIE = 'meeshy_auth=JWT';
 
-  const conversationServie = { success: true, data: { id: CLE, title: TITRE, memberCount: 4, participants: [] } };
+  // `type`/`currentUserRole` : la passerelle les sert TOUJOURS sur le profil
+  // par défaut (`core-detail.ts`, doc de `Fil.type`/`Fil.rang`) — un fixture
+  // qui les omet ferait mentir le fail-closed de `peutCreerUnLien` /
+  // `surimpressionDuLien` (le rang « moderator » ici reflète la conversation
+  // par défaut de ce fichier, `FIL`, un groupe modéré par le lecteur).
+  const conversationServie = {
+    success: true,
+    data: { id: CLE, title: TITRE, memberCount: 4, participants: [], type: 'group', currentUserRole: 'moderator' },
+  };
   const messagesServis = { success: true, data: [], cursorPagination: { hasMore: false, nextCursor: null } };
   const moiServi = { success: true, data: { id: 'u1', displayName: 'Amina' } };
 
-  /** Le dispatcheur générique : chaque test ne fournit que ce qui le distingue (la réponse POST /links). */
-  const bouchon = (reponseDesLiens: (init: RequestInit) => Response) => {
+  /**
+   * Le dispatcheur générique : chaque test ne fournit que ce qui le distingue
+   * (la réponse POST /links, et — pour le seul témoin de la RÉTROGRADATION —
+   * la conversation que la RE-LECTURE rend après le refus).
+   */
+  const bouchon = (reponseDesLiens: (init: RequestInit) => Response, conversationRelue: unknown = conversationServie) => {
     const vus: { readonly url: string; readonly methode: string; readonly corps: string | null }[] = [];
     globalThis.fetch = (async (url: string | URL | Request, init: RequestInit = {}) => {
       const cible = String(url);
@@ -255,7 +286,7 @@ describe('la porte du fil — créer un lien de partage (§ 12.10.5, #5034)', ()
       if (cible.includes('/api/v1/links')) return reponseDesLiens(init);
       if (cible.includes('/auth/me')) return new Response(JSON.stringify(moiServi));
       if (cible.includes('/messages')) return new Response(JSON.stringify(messagesServis));
-      if (cible.includes('/api/v1/conversations/')) return new Response(JSON.stringify(conversationServie));
+      if (cible.includes('/api/v1/conversations/')) return new Response(JSON.stringify(conversationRelue));
       throw new Error(`route non bouchonnée : ${cible}`);
     }) as typeof fetch;
     return vus;
@@ -352,6 +383,37 @@ describe('la porte du fil — créer un lien de partage (§ 12.10.5, #5034)', ()
 
     expect(html).toContain(motifFrancais);
     expect(html).not.toContain(motifAnglais);
+  });
+
+  /**
+   * LE FAIL-CLOSED DE LA VUE NE DOIT PAS AVALER UN REFUS DÉJÀ SERVI (défaut de
+   * revue, suivi #5034). Le cas NOMINAL des deux motifs traduits ci-dessus est
+   * précisément celui que `peutCreerUnLien` refuse : un rang rétrogradé entre
+   * le chargement du fil et la soumission. La RE-LECTURE qui suit le 403 rend
+   * alors le rang NEUF (`member`) — si la garde de `surimpressionDuLien` s'y
+   * appliquait sans condition, la feuille disparaîtrait AVEC son motif et sa
+   * saisie : le lecteur verrait un fil muet là où la passerelle vient de lui
+   * dire NON. Un refus invisible est pire qu'un refus en anglais.
+   */
+  it('rang RÉTROGRADÉ entre le chargement et la soumission ⇒ le refus reste VISIBLE, la saisie tenue', async () => {
+    const relueRetrogradee = {
+      success: true,
+      data: { id: CLE, title: TITRE, memberCount: 4, participants: [], type: 'group', currentUserRole: 'member' },
+    };
+    bouchon(
+      () =>
+        new Response(JSON.stringify({ success: false, error: { message: 'You do not have the necessary rights to perform this operation' } }), {
+          status: 403,
+        }),
+      relueRetrogradee,
+    );
+
+    const reponse = await POST(posteLaFeuille({ nom: 'Voisins' }), contexte);
+    const html = await reponse.text();
+
+    expect(html).toContain('<dialog class="nouveau-lien"');
+    expect(html).toContain('Vous n’avez pas les droits nécessaires pour créer un lien sur cette conversation.');
+    expect(html).toContain('value="Voisins"');
   });
 
   it('panne (fetch en échec) ⇒ 503, feuille re-servie', async () => {

@@ -622,6 +622,14 @@ extension MeeshyComposerHost {
             // d'accord — et la première divergence serait invisible.
             onOpenHashtags: { handleRailDoor(.hashtag) },
             onOpenMentions: { handleRailDoor(.mention) },
+            // **Le compte des slides et le rang courant, servis au couloir bas.**
+            // Le rail droit crée des slides depuis toujours ; jusqu'ici rien ne
+            // les montrait, et l'auteur composait à l'aveugle. Le même
+            // `selectSlide` que la sélection par média — un seul chemin vers le
+            // changement de slide, jamais deux.
+            slideCount: viewModel.slides.count,
+            currentSlideIndex: viewModel.currentSlideIndex,
+            onSelectSlide: { viewModel.selectSlide(at: $0) },
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )

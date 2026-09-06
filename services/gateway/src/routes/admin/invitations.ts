@@ -143,7 +143,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/stats', {
     onRequest: [fastify.authenticate, requireAdmin]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const [
         totalInvitations,
@@ -310,7 +310,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/timeline/daily', {
     onRequest: [fastify.authenticate, requireAdmin]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);

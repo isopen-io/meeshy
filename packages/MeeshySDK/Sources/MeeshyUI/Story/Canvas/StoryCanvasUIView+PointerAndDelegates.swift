@@ -86,7 +86,47 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
     /// recognition behavior is unchanged.
     public override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         noteEditInteraction()
+        // **En LECTURE, un geste de manipulation ne doit pas seulement ne rien
+        // faire : il ne doit pas RECONNAÎTRE** (directive porteur 2026-09-06 :
+        // « impossible de swiper les scènes pour passer aux suivantes »).
+        //
+        // `handlePan` sortait déjà par `guard mode == .edit else { return }` —
+        // et c'est exactement ce qui rendait le défaut invisible en lecture de
+        // code : le geste ne PRODUISAIT rien, donc il avait l'air inoffensif.
+        // Mais il avait déjà été RECONNU. Un `UIPanGestureRecognizer` qui
+        // reconnaît prive le `UIScrollView` du pager parent de son propre pan,
+        // et le carrousel de scènes cessait de tourner — dans la carte du fil
+        // comme en plein écran.
+        //
+        // > **Ne rien faire n'est pas la même chose que laisser passer.** Un
+        // > garde posé dans le HANDLER arrive trop tard : la décision qui
+        // > compte est celle de RECONNAÎTRE, et elle se prend ici.
+        //
+        // Le défaut nous a doublement trompés : le glissement échouait aussi
+        // sous `idb`, et nous en avons conclu — deux sessions, séparément — que
+        // l'outil ne savait pas produire un geste paginé. C'est le produit qui
+        // ne l'acceptait pas. **Un outil muet et un produit sourd rendent le
+        // même silence** ; seul un vrai doigt sur un vrai écran les sépare, et
+        // c'est le porteur qui a tranché.
+        //
+        // Les TAPS ne sont pas concernés : ils n'entrent pas en concurrence
+        // avec un défilement, et ce sont eux qui ouvrent le plein écran.
+        if mode != .edit, isManipulationRecognizer(gestureRecognizer) { return false }
         return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+
+    /// **Les gestes qui TRANSFORMENT un objet**, par opposition à ceux qui le
+    /// désignent.
+    ///
+    /// Nommés par identité et non par classe : `singleTapRecognizer` et
+    /// `doubleTapRecognizer` sont aussi des `UIGestureRecognizer`, et un test
+    /// de type les rangerait du mauvais côté le jour où un tap servirait à
+    /// déplacer quelque chose.
+    func isManipulationRecognizer(_ recognizer: UIGestureRecognizer) -> Bool {
+        recognizer === panRecognizer
+            || recognizer === pinchRecognizer
+            || recognizer === rotationRecognizer
+            || recognizer === canvasZoomPinchRecognizer
     }
 
     /// **Le champ de saisie possède ses touches** (#5099).

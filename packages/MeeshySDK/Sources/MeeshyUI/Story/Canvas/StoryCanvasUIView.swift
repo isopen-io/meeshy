@@ -136,8 +136,50 @@ public final class StoryCanvasUIView: UIView {
         didSet {
             guard oldValue != canvasCornerRadius else { return }
             layer.cornerRadius = canvasCornerRadius
-            layer.masksToBounds = canvasCornerRadius > 0
+            applyReadingClip()
         }
+    }
+
+    /// **En LECTURE, le canvas ne peint jamais hors de ses bornes** (directive
+    /// porteur 2026-09-06 : le texte d'une scène débordait sur la tuile
+    /// voisine).
+    ///
+    /// ## Deux questions, longtemps répondues par une seule valeur
+    ///
+    /// `masksToBounds` était asservi à `canvasCornerRadius > 0`. Or ce sont
+    /// deux questions distinctes :
+    ///
+    /// - *ai-je des coins arrondis ?* — une affaire de forme, décidée par l'hôte ;
+    /// - *ai-je le droit de peindre en dehors de mes bornes ?* — une affaire de
+    ///   confinement, qui ne dépend pas du tout de la première.
+    ///
+    /// Une tuile de mosaïque arrondit côté SwiftUI et ne pose donc aucun rayon
+    /// ici : le masque restait absent, et sur des tuiles de ~81 pt les textes
+    /// des scènes se lisaient en travers de la rangée, chacun écrivant sur sa
+    /// voisine.
+    ///
+    /// > **Un `.clipped()` ou un `.clipShape` SwiftUI ne masque PAS l'arbre de
+    /// > CALayers d'un `UIViewRepresentable`** — le doc-comment de
+    /// > `canvasCornerRadius` le dit quatre lignes plus haut, et c'est
+    /// > pourtant par là qu'un premier correctif est passé. Seule la couche
+    /// > UIKit peut se confiner elle-même.
+    ///
+    /// ## Pourquoi la lecture, et pas l'édition
+    ///
+    /// En `.edit`, une poignée de manipulation ou un objet en cours de
+    /// glissement dépasse légitimement du cadre : confiner l'édition
+    /// amputerait le geste. En `.play`, la scène se REGARDE — c'est le même
+    /// raisonnement que le refus des gestes de transformation en lecture, sur
+    /// le même objet.
+    ///
+    /// ## Pourquoi une méthode, et pas une ligne dans le `didSet`
+    ///
+    /// Un `didSet` ne tire pas quand la valeur assignée égale l'ancienne, ni à
+    /// l'initialisation d'une propriété stockée. Faire dépendre le confinement
+    /// d'une écriture de `canvasCornerRadius` le rendrait absent exactement là
+    /// où il manquait : une tuile qui ne pose jamais de rayon.
+    func applyReadingClip() {
+        layer.masksToBounds = canvasCornerRadius > 0 || mode == .play
     }
 
     /// Opt-in du **composer** (`StoryComposerCanvasView`) pour faire JOUER et
@@ -826,6 +868,10 @@ public final class StoryCanvasUIView: UIView {
         // le son une fois — exactement ce que cette révision doit éviter.
         self.slideStructureFingerprint = Self.structureFingerprint(of: slide)
         super.init(frame: .zero)
+        // Posé DÈS la naissance : une tuile de mosaïque ne pose jamais de rayon
+        // d'arrondi, donc le `didSet` de `canvasCornerRadius` ne tirerait
+        // jamais pour elle — et c'est précisément elle qui débordait.
+        applyReadingClip()
         layer.addSublayer(rootLayer)
         rootLayer.insertSublayer(backgroundLayer, at: 0)
         rootLayer.addSublayer(itemsContainer)

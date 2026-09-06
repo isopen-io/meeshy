@@ -2062,7 +2062,12 @@ export class PostService {
     return recorded;
   }
 
-  async sharePost(postId: string, userId: string, platform?: string) {
+  // `userId`/`platform` : pas de table de partage par utilisateur/plateforme
+  // aujourd'hui — `shareCount` est un compteur agrégé. Signature conservée
+  // pour l'appelant (`routes/posts/share.ts`), qui les connaît déjà ; les
+  // consommer suppose une décision produit (suivi par plateforme ?) hors
+  // périmètre d'un correctif de paramètre mort.
+  async sharePost(postId: string, _userId: string, _platform?: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
     });
