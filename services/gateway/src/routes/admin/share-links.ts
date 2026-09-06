@@ -63,6 +63,22 @@
  * est enregistré directement sous le même préfixe : le chemin servi est le
  * même, la ressource est la même. Les réunir dans un seul module est
  * souhaitable et reste à faire.
+ *
+ * ## La RÉOUVERTURE (#5429)
+ *
+ * `PATCH /admin/share-links/:id { active: true }` est la contrepartie
+ * symétrique de `DELETE` ci-dessus : la fermeture de #3734 était une
+ * asymétrie de LIVRAISON, jamais une décision de sécurité — rien dans #3734
+ * ni dans le code n'exigeait l'irréversibilité, et la fermeture est un simple
+ * bascule de `isActive` (#4170), pas une destruction. Même garde
+ * (`requireAdmin` + `canManageConversations`), même ObjectId opaque en
+ * paramètre.
+ *
+ * Elle ne rétablit PAS les invités révoqués à la fermeture : `revokeShareLinkGuests`
+ * a déjà déconnecté leurs sockets et ils n'ont plus de `Participant` actif sur
+ * cette conversation. Rouvrir rend le lien à nouveau JOIGNABLE avec son
+ * `mshy_*` existant — un nouvel arrivant rejoint normalement — ce n'est pas la
+ * restauration d'une session passée.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
@@ -165,6 +181,94 @@ export function registerAdminShareLinkRoutes(fastify: FastifyInstance): void {
       );
     } catch (error) {
       logError(fastify.log, 'Close admin share link error:', error);
+      return sendInternalError(reply, 'Erreur interne du serveur');
+    }
+  });
+
+  fastify.patch('/share-links/:id', {
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description:
+        'Reopen a conversation share link closed from the platform administration console (#5429, symmetric to DELETE). Requires canManageConversations. Takes the opaque ObjectId served by GET /admin/share-links. Does not restore guests revoked at closing time — the link becomes joinable again with its existing mshy_* secret.',
+      tags: ['admin'],
+      summary: 'Reopen a share link (admin)',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'ConversationShareLink.id (ObjectId), as served by GET /admin/share-links' }
+        }
+      },
+      body: {
+        type: 'object',
+        required: ['active'],
+        properties: {
+          active: { type: 'boolean', const: true, description: 'Must be true — this endpoint only reopens a link' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Share link reopened',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                isActive: { type: 'boolean', example: true }
+              }
+            },
+            message: { type: 'string', example: 'Lien rouvert avec succès' }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const actor = authContext.registeredUser;
+      const permissions = permissionsService.getUserPermissions(actor.role as UserRole);
+
+      if (!permissions.canManageConversations) {
+        return sendForbidden(reply, 'Permission insuffisante pour gerer les liens de partage');
+      }
+
+      const { id } = request.params as { id: string };
+
+      const shareLink = await fastify.prisma.conversationShareLink.findUnique({
+        where: { id },
+        select: { id: true, isActive: true }
+      });
+
+      if (!shareLink) {
+        return sendNotFound(reply, 'Lien de partage non trouvé');
+      }
+
+      await fastify.prisma.conversationShareLink.update({
+        where: { id: shareLink.id },
+        data: { isActive: true }
+      });
+
+      await withAudit(request, {
+        action: 'ADMIN_SHARE_LINK_REOPENED',
+        entity: 'ConversationShareLink',
+        entityId: shareLink.id,
+        userId: actor.id,
+      });
+
+      return sendSuccess(
+        reply,
+        { id: shareLink.id, isActive: true },
+        { message: 'Lien rouvert avec succès' }
+      );
+    } catch (error) {
+      logError(fastify.log, 'Reopen admin share link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
