@@ -10,8 +10,7 @@ import { THEME_PAR_DEFAUT } from '@/app/theme-script';
  * leurs lecteurs historiques.
  */
 export { type TempsReel } from './chargeur';
-import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, SCRIPT_DU_TRAVAILLEUR, blocDuNavigateur, type TempsReel } from './chargeur';
-import { porteesDuTravailleur } from '@/lib/sw/portees';
+import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, blocDuNavigateur, scriptDuTravailleur, type TempsReel } from './chargeur';
 export { CHARGEUR_DE_PARTICIPATION };
 import { adresseDeLaFeuilleDeLien, adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
 import { citationDeReponse, resoutContreLaPage } from '@/lib/api/citations';
@@ -898,7 +897,7 @@ export const documentPleinEcran = ({
   // que son cache sert en premier. Sans `V3_SW_PORTEES` dans l'environnement, le
   // script n'existe pas. Aucun des quatre n'est dans le `<main>` qu'une
   // surimpression rend `inert` : une croix inerte serait un contrôle sans effet.
-  `<body>${banniere}${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}${SCRIPT_DU_TRAVAILLEUR(porteesDuTravailleur(process.env['V3_SW_PORTEES']))}${blocDuNavigateur()}</body>` +
+  `<body>${banniere}${corps}${script}${hubs ? REGLES_DE_SPECULATION : ''}${scriptDuTravailleur()}${blocDuNavigateur()}</body>` +
   '</html>';
 
 /**
