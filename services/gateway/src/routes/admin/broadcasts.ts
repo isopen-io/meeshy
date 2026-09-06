@@ -325,12 +325,26 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       // langue applicative vit au rang 2, 3 ou 4 tombait dans la mauvaise case
       // de l'aperçu (ou hors de toute case, `systemLanguage` étant vide) alors
       // qu'il recevra la diffusion dans sa vraie langue résolue. Même SSOT que
-      // l'envoi : un `findMany` sur les colonnes du Prisme, résolu PAR
-      // UTILISATEUR, jamais un `groupBy` sur une seule colonne.
-      const recipientsForLanguageBreakdown = await fastify.prisma.user.findMany({
-        where,
-        select: RECIPIENT_LANG_SELECT,
-      });
+      // l'envoi : les colonnes du Prisme, résolues PAR UTILISATEUR, jamais un
+      // `groupBy` sur une seule colonne. Paginé par lots (#4165, comme
+      // `BroadcastSenderJob`) : jamais de collection entière en mémoire.
+      const LANGUAGE_BREAKDOWN_BATCH_SIZE = 500;
+      const recipientsByCanonicalLanguage: Record<string, number> = {};
+      for (let skip = 0; ; skip += LANGUAGE_BREAKDOWN_BATCH_SIZE) {
+        const batch = await fastify.prisma.user.findMany({
+          where,
+          select: RECIPIENT_LANG_SELECT,
+          skip,
+          take: LANGUAGE_BREAKDOWN_BATCH_SIZE,
+          orderBy: { createdAt: 'asc' },
+        });
+        for (const user of batch) {
+          // #5161 — repli sur le code CANONIQUE ; les variantes convergent.
+          const canonical = normalizeLanguageForDedup(recipientLanguage(user, 'en'));
+          recipientsByCanonicalLanguage[canonical] = (recipientsByCanonicalLanguage[canonical] ?? 0) + 1;
+        }
+        if (batch.length < LANGUAGE_BREAKDOWN_BATCH_SIZE) break;
+      }
 
       // Group by registrationCountry
       const recipientsByCountry = await fastify.prisma.user.groupBy({
@@ -338,20 +352,6 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         where,
         _count: true,
       });
-
-      // #5161 — replier chaque langue RÉSOLUE sur son code canonique et
-      // ADDITIONNER les comptes qui convergent (même patron que #5155,
-      // `usersLanguageMap`) : sans ça, `targetLanguages` fait traduire le
-      // contenu de la diffusion vers CHAQUE variante au lieu d'une fois par
-      // langue canonique — traductions dupliquées, appels ML gaspillés. Le
-      // repli 'en' est celui de l'envoi réel (`recipientLanguage(user, 'en')`
-      // dans `BroadcastSenderJob`/`BroadcastInAppSenderJob`) : l'aperçu doit
-      // élire la même langue que celle qui sera effectivement servie.
-      const recipientsByCanonicalLanguage: Record<string, number> = {};
-      for (const user of recipientsForLanguageBreakdown) {
-        const canonical = normalizeLanguageForDedup(recipientLanguage(user, 'en'));
-        recipientsByCanonicalLanguage[canonical] = (recipientsByCanonicalLanguage[canonical] ?? 0) + 1;
-      }
 
       // Les CIBLES du translator passent en plus par `broadcastTargetLanguages`
       // (#5247), qui fait ce que la carte ne fait pas : EXCLURE la langue
