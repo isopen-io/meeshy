@@ -18,6 +18,15 @@ jest.mock('@/services/auth-manager.service', () => ({
   },
 }));
 
+// `api.service.ts` reads the store's `sessionToken` to arm the server's
+// sliding session window on refresh (#4405, étape 2) — mocked rather than
+// letting the REAL `auth-store.ts` load, which would call
+// `authManager.registerOnClear` at module init (absent from the partial
+// double above).
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: { getState: () => ({ sessionToken: null }) },
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
 
