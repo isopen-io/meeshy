@@ -99,6 +99,23 @@ const nextConfig: NextConfig = {
         destination: '/',
         permanent: false,
       },
+      // `/policy` n'a jamais existé et la fiche App Store de la 1.0.5, FIGÉE
+      // (non modifiable après publication), y pointe encore : un utilisateur
+      // resté sur cette version tombe sur un lien mort (#3539).
+      //
+      // **La destination est `/terms`, pas `/privacy`** — correction du porteur
+      // le 2026-09-06. Le premier correctif visait `/privacy` en lisant « policy
+      // » comme « politique de confidentialité », ce que le français rend
+      // plausible ; c'est la page des CONDITIONS que la fiche désigne. Rien
+      // dans le dépôt ne pouvait trancher : aucune métadonnée App Store n'y est
+      // versionnée, et `/policy` n'y apparaît nulle part ailleurs. Seul qui
+      // tient la fiche le sait — raison de plus pour que l'URL déclarée y soit
+      // un jour inscrite plutôt que devinée.
+      {
+        source: '/policy',
+        destination: '/terms',
+        permanent: true,
+      },
     ];
   },
 
