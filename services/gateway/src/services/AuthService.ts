@@ -357,6 +357,7 @@ export class AuthService {
       // Verify 2FA code
       const cleanCode = code.replace(/-/g, '').toUpperCase();
       let isValid = false;
+      let usedBackupCode = false;
 
       // Try TOTP code first (6 digits)
       if (/^\d{6}$/.test(cleanCode) && user.twoFactorSecret) {
@@ -385,6 +386,7 @@ export class AuthService {
           });
 
           isValid = true;
+          usedBackupCode = true;
           logger.info(`[AUTH_SERVICE] 🔑 Code de secours utilisé pour: ${user.username} - Restants: ${updatedCodes.length}`);
         }
       }
