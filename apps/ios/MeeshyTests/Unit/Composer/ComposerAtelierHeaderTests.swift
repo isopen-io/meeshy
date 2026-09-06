@@ -140,10 +140,27 @@ final class ComposerAtelierHeaderTests: XCTestCase {
             "La scène remonte parce que le meuble DÉCLARE ce qu'il occupe en bas. Sans cette "
                 + "déclaration, la saisie recouvrirait la scène — le geste que #4361 retire."
         )
+        // **La condition s'est ÉLARGIE, la règle n'a pas bougé** (2026-09-05).
+        // Le ternaire ne testait que `editsSceneDescription` ; il teste désormais
+        // `editsSceneDescription || editsPostContent` — la zone d'écriture du
+        // CORPS du post réserve la même hauteur, et l'oublier laissait la scène
+        // recouverte dans ce mode-là. Le témoin épinglait la condition ; ce qu'il
+        // garde est la HAUTEUR.
+        //
+        // > Une garde qui cite une condition entière rougit à chaque cas ajouté,
+        // > y compris quand le cas ajouté est le correctif. Les deux fragments
+        // > ci-dessous survivent à un troisième état, et tombent sur ce qui
+        // > compte : une constante à la place de la mesure, ou une réserve qui
+        // > ne retombe pas à zéro.
         XCTAssertTrue(
-            compacte.contains("editsSceneDescription?sceneDescriptionEditorHeight:0"),
+            compacte.contains("?sceneDescriptionEditorHeight:0"),
             "… et la réserve est la hauteur MESURÉE, remise à zéro à la fermeture : une constante "
                 + "ferait remonter la scène du mauvais nombre de points dès la deuxième ligne."
+        )
+        XCTAssertTrue(
+            compacte.contains("editsSceneDescription"),
+            "… et c'est bien l'ouverture d'une zone d'écriture qui la déclenche, quel que soit le "
+                + "nombre de zones qui la partagent."
         )
     }
 
