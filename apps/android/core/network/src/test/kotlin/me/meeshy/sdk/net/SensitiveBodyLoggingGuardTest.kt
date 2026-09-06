@@ -65,15 +65,24 @@ class SensitiveBodyLoggingGuardTest {
         }
     }
 
-    /** Un garde dont les deux loggers ecrivent dans [lignes]. */
+    /**
+     * Un garde dont les deux loggers ecrivent dans [lignes] — le MEME montage
+     * qu'`atLevel()` (niveaux fixes, en-tetes rediges sans condition de route,
+     * #4843), reconstruit ici avec un [HttpLoggingInterceptor.Logger] observable
+     * plutot qu'appele via `atLevel()`, qui n'expose pas d'injection de logger.
+     */
     private fun gardeQuiEcritDans(lignes: MutableCollection<String>): SensitiveBodyLoggingGuard {
         val recueil = HttpLoggingInterceptor.Logger { lignes.add(it) }
         return SensitiveBodyLoggingGuard(
             full = HttpLoggingInterceptor(recueil).apply {
                 level = HttpLoggingInterceptor.Level.BODY
+                redactHeader("Authorization")
+                redactHeader("Cookie")
             },
             sensitive = HttpLoggingInterceptor(recueil).apply {
                 level = HttpLoggingInterceptor.Level.BASIC
+                redactHeader("Authorization")
+                redactHeader("Cookie")
             },
         )
     }
