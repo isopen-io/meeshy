@@ -17,6 +17,10 @@ const EXPECTED: Record<QueuedEventType, boolean> = {
 
   edited: false,
   deleted: false,
+  // Un message auto-détruit ANNONCE SA DISPARITION, il n'annonce aucune
+  // arrivée : même famille que `deleted`, dont il ne diffère que par la cause
+  // (l'horloge plutôt qu'un geste). Le drain ne doit pas bumper d'accusé de
+  // réception pour un message que le destinataire ne verra jamais.
   expired: false,
   'reaction-added': false,
   'reaction-removed': false,

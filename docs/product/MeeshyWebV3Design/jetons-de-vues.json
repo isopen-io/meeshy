@@ -133,7 +133,13 @@
   "notifPrefs": {
    "@session": "membre"
   },
+  "detail-profile": {
+   "@session": "membre"
+  },
   "detail-privacy": {
+   "@session": "membre"
+  },
+  "detail-security": {
    "@session": "membre"
   },
   "detail-media": {
@@ -143,6 +149,9 @@
    "@session": "membre"
   },
   "detail-notification": {
+   "@session": "membre"
+  },
+  "detail-application": {
    "@session": "membre"
   },
   "chats": {
