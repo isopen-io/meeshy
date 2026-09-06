@@ -520,6 +520,10 @@ export function PostsFeedScreen() {
           ...(data.allowSoundExtraction === undefined
             ? {}
             : { allowSoundExtraction: data.allowSoundExtraction }),
+          // Langue MESURÉE sur la légende tapée (#5349) — DISTINCTE
+          // d'`originalLanguage`, jamais relayée à sa place. Absente tant que
+          // la mesure n'est pas fiable (voir `payload.ts`).
+          ...(data.detectedLanguage ? { detectedLanguage: data.detectedLanguage } : {}),
         },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),

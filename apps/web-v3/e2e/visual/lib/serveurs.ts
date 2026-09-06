@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AddressInfo, createServer as createSocketServer } from 'node:net';
 import { join } from 'node:path';
@@ -687,10 +687,56 @@ export const tueLeGroupeDeProcessus = (pid: number, signal: NodeJS.Signals = 'SI
  * L'absence de build est une ERREUR, jamais un test ignoré : une mesure dont le
  * prérequis manque doit se voir (§ 9.2), et un `skip` la rendrait verte.
  */
+/**
+ * UNE ORIGINE BOUCLE LOCALE — la seule que `bun run build` peut inliner SANS
+ * rendre la recette non concluante (défaut MAJEUR de revue #5387). Le même
+ * motif que `BOUCLE_LOCALE` de `lib/api/passerelle.ts`, dupliqué ICI plutôt
+ * qu'importé : ce fichier lit un `.env.local` de DÉVELOPPEMENT, jamais le
+ * code de production, et les deux motifs ne doivent RIEN se devoir l'un à
+ * l'autre pour rester lisibles isolément.
+ */
+const ORIGINE_LOCALE_SEULEMENT = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?\/?$/i;
+
+/**
+ * REFUSE DE MESURER CONTRE UN BUILD QUI A PU INLINER UNE PASSERELLE RÉELLE
+ * (défaut MAJEUR de revue #5387) — `lib/api/passerelle.ts` le dit dans son
+ * propre doc-comment : Next.js inline TOUTE variable `NEXT_PUBLIC_*` PRÉSENTE
+ * au moment de `next build`, y compris côté serveur ; le harnais ne peut
+ * alors plus la faire pointer vers le bouchon (l'affectation faite plus bas,
+ * à `next start`, arrive beaucoup trop tard pour une valeur déjà gravée dans
+ * les fichiers compilés). Un `apps/web-v3/.env.local` — un fichier de
+ * confort de DÉVELOPPEMENT, jamais suivi par git — qui déclare
+ * `NEXT_PUBLIC_API_URL` vers une origine RÉELLE (mesuré : une passerelle de
+ * staging) fait alors échouer toute la suite d'une façon qui ne nomme pas sa
+ * cause : chaque assertion qui attend le temps réel du BOUCHON échoue contre
+ * une connexion socket.io réelle, y compris sur des témoins que le diff
+ * n'a jamais touchés. Un gate qui dit POURQUOI il ne peut pas mesurer vaut
+ * mieux qu'un gate qui mesure autre chose en silence.
+ */
+export const verifieQueLeBuildNAPasInlineUnePasserelleReelle = (racine: string = RACINE_V3): void => {
+  const chemin = join(racine, '.env.local');
+  if (!existsSync(chemin)) return;
+  const ligne = readFileSync(chemin, 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.startsWith('NEXT_PUBLIC_API_URL='));
+  if (ligne === undefined) return;
+  const valeur = ligne.slice('NEXT_PUBLIC_API_URL='.length).trim().replace(/^["']|["']$/g, '');
+  if (valeur === '' || ORIGINE_LOCALE_SEULEMENT.test(valeur)) return;
+  throw new Error(
+    `apps/web-v3/.env.local déclare NEXT_PUBLIC_API_URL=${valeur} — une origine RÉELLE, pas le bouchon. ` +
+      "Next.js inline cette variable au moment de `next build` (voir lib/api/passerelle.ts) : le serveur " +
+      "que cette suite lève ne peut alors plus la faire pointer vers la passerelle de bouchon, et TOUTE " +
+      'la recette devient non concluante (échecs trompeurs sur des témoins non touchés par le diff). ' +
+      'Retirez ou renommez ce fichier, RECONSTRUISEZ (`bun run build`), puis relancez la suite.',
+  );
+};
+
 export const serveurDeLaV3 = async (
   passerelle: string,
   environnement: Record<string, string> = {},
 ): Promise<ServeurV3> => {
+  verifieQueLeBuildNAPasInlineUnePasserelleReelle(RACINE_V3);
   if (!existsSync(join(RACINE_V3, '.next', 'app-build-manifest.json'))) {
     throw new Error("apps/web-v3 n'est pas construit — lancer d'abord `cd apps/web-v3 && bun run build`");
   }

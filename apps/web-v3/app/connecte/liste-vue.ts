@@ -18,7 +18,7 @@ import {
 } from '@/lib/contenu/liste';
 import type { Contact } from '@/lib/api/contacts';
 
-import { CHARGEUR_DE_PARTICIPATION, blocDuNavigateur, type TempsReel } from './chargeur';
+import { CHARGEUR_DE_PARTICIPATION, blocDuNavigateur, scriptDuTravailleur, type TempsReel } from './chargeur';
 import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DE_LA_BANNIERE } from './banniere-feuille';
 import { REGION_DE_LA_BANNIERE } from './banniere-vue';
@@ -536,6 +536,10 @@ export const documentDesChats = (etat: EtatDesChats): string => {
     // Voir `documentDuFil` : la région suit le module, jamais l'écran.
     banniere: etat.tempsReel === null ? '' : REGION_DE_LA_BANNIERE,
     attributsDuMain: attributsDeParticipation(etat),
-    script: (etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION) + blocDuNavigateur(),
+    // LE TRAVAILLEUR DE ZONE (#5321) — voir le même commentaire sur
+    // `documentDuTableau` (`connecte/vue.ts`) : `documentDuSite` sert aussi
+    // les pages du site, donc la registration reste explicite ici plutôt que
+    // posée d'office comme dans `documentPleinEcran`.
+    script: (etat.tempsReel === null ? '' : CHARGEUR_DE_PARTICIPATION) + blocDuNavigateur() + scriptDuTravailleur(),
   });
 };

@@ -53,6 +53,7 @@ import {
 } from '../../utils/normalize';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { searchTokensFor } from '../../utils/search-tokens';
+import { calculateProfileCompletionRate } from '../../utils/profile-completion';
 import { hashPassword } from '../../utils/password-hash';
 import { candidatsDePseudo } from '../../utils/username-candidates';
 import type { AfterResponse } from '../../utils/after-response';
@@ -362,6 +363,16 @@ export async function registerAccount(
       customDestinationLanguage: languages.customDestinationLanguage,
       deviceLocale: languages.deviceLocale,
       displayName: normalizedDisplayName,
+      // Calculé, jamais laissé au `@default(0)` de la colonne (#3688) — sinon
+      // tout compte reste à 0 % jusqu'à sa première mise à jour de profil.
+      // Avatar et bio sont toujours absents à la création.
+      profileCompletionRate: calculateProfileCompletionRate({
+        displayName: normalizedDisplayName,
+        avatar: null,
+        bio: null,
+        phoneNumber: telephone.phoneNumber,
+        email: normalizedEmail,
+      }),
       isOnline: true,
       lastActiveAt: new Date(),
       // L'acte de CRÉATION vaut acceptation des conditions : les trois clients

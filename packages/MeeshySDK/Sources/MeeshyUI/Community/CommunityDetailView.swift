@@ -78,9 +78,9 @@ public struct CommunityDetailView: View {
             } else if let error = viewModel.errorMessage {
                 EmptyStateView(
                     icon: "exclamationmark.triangle",
-                    title: String(localized: "common.error", defaultValue: "Error", bundle: .module),
+                    title: String(localized: "common.error", defaultValue: "Erreur", bundle: .module),
                     subtitle: error,
-                    actionLabel: String(localized: "common.retry", defaultValue: "Retry", bundle: .module),
+                    actionLabel: String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module),
                     onAction: { Task { await viewModel.load() } }
                 )
             }

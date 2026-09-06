@@ -408,9 +408,17 @@ export const FEUILLE_DES_GESTES = compacte(
     // panneau s'ouvre au-dessus de la ligne QUI L'A OUVERT, jamais dessus.
     // `.ouvre-bas` (posé par `fil-gestes.ts` quand la ligne est trop proche du
     // haut de la liste pour ouvrir vers le haut) bascule le sens.
+    //
+    // `inset-inline-end`, JAMAIS `right` (défaut trouvé en revue de #5159) :
+    // cette règle ANNULE l'ancrage vertical de l'atome partagé `MENU_DE_LIGNE`
+    // pour son propre positionnement, et un `right:0` littéral y avait
+    // survécu — le panneau pendait du mauvais côté dès que le document passe
+    // `dir="rtl"`, exactement le défaut que `/links` (`liens-feuille.ts`)
+    // avait déjà fermé pour son propre ancrage. Témoin :
+    // `v3-fil-gestes.spec.ts` § « le panneau du menu de ligne, en RTL ».
     '.ligne{position:relative}' +
     '.ligne .actions{position:static}' +
-    '.ligne .actions form{position:absolute;right:0;bottom:100%;margin-bottom:var(--space-2);z-index:2;min-width:12rem;max-width:calc(100vw - 2 * var(--space-4));box-shadow:var(--shadow-sm)}' +
+    '.ligne .actions form{position:absolute;inset-inline-end:0;bottom:100%;margin-bottom:var(--space-2);z-index:2;min-width:12rem;max-width:calc(100vw - 2 * var(--space-4));box-shadow:var(--shadow-sm)}' +
     '.ligne .actions.ouvre-bas form{bottom:auto;top:100%;margin-bottom:0;margin-top:var(--space-2)}' +
     // LE BANDEAU DU CONTEXTE — une ligne À ELLE SEULE au-dessus du champ
     // (`order:-2`, avant l'annonce de pièce) : posé dans le flux du composeur,
@@ -457,7 +465,29 @@ export const FEUILLE_DES_GESTES = compacte(
     '.ligne.envoi-retrait-differe .texte{color:var(--color-text-muted)}' +
     '.ligne.envoi-retrait-differe .accuse{display:none}' +
     '.ligne.envoi-retrait-differe .meta{margin-top:var(--space-1)}' +
-    '@media (prefers-reduced-motion:reduce){.ligne.envoi-retrait-differe .retrait::after{content:none;animation:none}.ligne.envoi-retrait-differe .retrait .decompte{display:inline}}',
+    '@media (prefers-reduced-motion:reduce){.ligne.envoi-retrait-differe .retrait::after{content:none;animation:none}.ligne.envoi-retrait-differe .retrait .decompte{display:inline}}' +
+    // LA FENÊTRE SANS JAVASCRIPT (#5387, `?retirer=<id>`) — la ligne visée
+    // TERNIT son texte (le même traitement que `.envoi-retrait-differe`,
+    // sans en changer le contenu : la passerelle n'a RIEN reçu, le texte
+    // reste celui qu'elle sert), et sa fente SERVIE porte les deux
+    // formulaires — `.action.discrete` leur donne déjà 44 px, sans règle à
+    // elle.
+    //
+    // `.retrait-servie` VIT DANS `.bulle` (défaut BLOQUANT de revue — la
+    // bulle s'écrasait à 0 px de large, la ligne à 912 px de haut à 390 px
+    // d'écran) — JAMAIS comme troisième enfant de `.corps.colonnes`
+    // (`fil-lignes.ts` › `ligne()`). Ce rang flex n'accueille QUE des
+    // enfants dont le contenu réel est HORS FLUX (`.bulle{flex:1}`,
+    // `.datation{flex:none}`, et `details.actions` dont le FORMULAIRE est
+    // `position:absolute`, ci-dessus) : `.retrait-servie` porte deux
+    // `<form>` bien réels, dans le flux normal — posée ici, elle disputait
+    // sa part du rang flex à `.bulle`. Postée dans `.bulle` (un bloc
+    // ORDINAIRE, pas un conteneur flex), elle prend simplement sa largeur.
+    '.ligne.retrait-en-attente .texte{color:var(--color-text-muted)}' +
+    '.retrait-servie{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin-top:var(--space-2)}' +
+    '.retrait-servie .mention{flex-basis:100%;margin:0;font-size:var(--text-sm);color:var(--color-text-muted)}' +
+    '.retrait-servie form{flex:none}' +
+    '.retrait-servie .action.grave{color:var(--color-danger)}',
 );
 
 /**

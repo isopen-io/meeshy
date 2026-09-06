@@ -11,7 +11,16 @@ import type { CleDeLien } from '@/lib/api/guest-session';
  * violation `axe` `serious`/`critical` ». Le harnais est celui de la vitrine :
  * le document COMPLET, tel que le gestionnaire le sert — `html-has-lang`,
  * `landmark-one-main`, `page-has-heading-one`, les `lang` des textes traduits.
+ *
+ * Le plus lourd des onze documents (les six formes de message dans un même
+ * fil) dépasse le délai par défaut de jest (5 s) sous charge CPU partagée
+ * (exécution parallèle, `--maxWorkers=50%`) — `axe.run()` reste alors en
+ * vol après le timeout et verrouille les appels suivants du même fichier
+ * (« Axe is already running »), en série pure comme sous charge. Même
+ * remède que `zone-lint.test.ts` / `zone-cycle-de-vie.test.ts` : un délai
+ * réaliste pour un calcul CPU-bound, aucune assertion ni seuil affaibli.
  */
+jest.setTimeout(30_000);
 
 const graves = async (): Promise<readonly string[]> => {
   const rapport = await axe(document.documentElement);
@@ -227,6 +236,50 @@ describe('le fil face à axe', () => {
   it('rougit sur un document dont la structure est fautive', async () => {
     ecris('<html><body><div tabindex="0"><img src="x"></div></body></html>');
     expect(await graves()).not.toEqual([]);
+  });
+
+  /**
+   * LA RÉGION DES ANNONCES DE GESTES (#5387) — SERVIE VIDE, comme la
+   * bannière : présente AVANT tout geste, sur les DEUX portes du fil, sinon
+   * une région créée après coup n'est annoncée par aucun lecteur d'écran.
+   */
+  it('sert la région #annonces-du-fil VIDE, role="status", hors écran — présente avant tout geste', () => {
+    ecris(documentDuFil(etat()));
+    const region = document.querySelector('#annonces-du-fil');
+    expect(region).not.toBeNull();
+    expect(region?.tagName).toBe('OUTPUT');
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.classList.contains('hors-ecran')).toBe(true);
+    expect(region?.textContent).toBe('');
+  });
+
+  it('la région des annonces est servie sur la porte de l’invité aussi', () => {
+    ecris(
+      documentDuFil(
+        etat({
+          porte: {
+            genre: 'invite',
+            lien: 'mshy_lagos' as CleDeLien,
+            segment: 'lagos-q1',
+            pseudo: 'Tolu',
+            droits: { canSendMessages: true, canSendFiles: false, canSendImages: false, canViewHistory: true },
+            jonctionFraiche: false,
+          },
+          lecteur: { id: 'p9', nom: 'Tolu', langues: ['fr'] },
+        }),
+      ),
+    );
+    expect(document.querySelector('#annonces-du-fil')).not.toBeNull();
+  });
+
+  /**
+   * `?retirer=<id>` (#5387) — la ligne en attente et ses deux formulaires ne
+   * portent aucune violation grave.
+   */
+  it('ne porte aucune violation grave — ?retirer= sur une ligne en attente', async () => {
+    ecris(documentDuFil(etat({ retrait: 'm2' })));
+    expect(document.querySelector('.retrait-servie')).not.toBeNull();
+    expect(await graves()).toEqual([]);
   });
 });
 

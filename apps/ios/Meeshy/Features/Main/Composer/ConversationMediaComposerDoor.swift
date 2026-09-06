@@ -81,19 +81,30 @@ enum ConversationMediaSeeding {
             // rejouer à chaque construction du ViewModel, donc à chaque passe de
             // rendu de cette porte. La décoder en bitmap perdrait le son et le
             // mouvement — c'est-à-dire la vidéo.
-            return StoryComposerSeed.video(copying: localFile)
-                .map { StoryComposerSeed(payload: $0.payload, description: plan.description) }
+            return StoryComposerSeed.video(copying: localFile,
+                                           declaredMimeType: attachment.mimeType)
+                .map { StoryComposerSeed(payload: $0.payload, description: plan.description, origin: $0.origin) }
         case .audio:
             // #4461 — le son reste un FICHIER, comme la vidéo, et la copie se
             // fait à la fabrique. Le décoder n'aurait aucun sens : il n'y a rien
             // à rendre, seulement à jouer.
-            return StoryComposerSeed.audio(copying: localFile)
-                .map { StoryComposerSeed(payload: $0.payload, description: plan.description) }
+            return StoryComposerSeed.audio(copying: localFile,
+                                           declaredMimeType: attachment.mimeType)
+                .map { StoryComposerSeed(payload: $0.payload, description: plan.description, origin: $0.origin) }
         case .image:
             guard let data = try? Data(contentsOf: localFile, options: .mappedIfSafe),
                   let bitmap = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080)
             else { return nil }
-            return StoryComposerSeed(payload: .image(bitmap), description: plan.description)
+            // **Le bitmap est pour le CANVAS, le fichier pour la PUBLICATION**
+            // (#5409). Ce site résolvait déjà `localFile` puis n'en gardait que
+            // l'image décodée à 1080 px : la voie document n'avait alors rien à
+            // téléverser, et le média semé ne quittait jamais l'appareil.
+            return StoryComposerSeed(
+                payload: .image(bitmap),
+                description: plan.description,
+                origin: StoryComposerSeed.Origin(fileURL: localFile,
+                                                 mimeType: attachment.mimeType)
+            )
         }
     }
 }
@@ -302,19 +313,20 @@ struct ConversationMediaComposerDoor: View {
                 // file d'attente plutôt que de rester dans le composer.
                 return true
             },
-            onPublishDocument: { _ in
-                // `.mediaSeeded` route TOUS les formats vers la SCÈNE — c'est
-                // ce qui tient la loi 6 ici : `ComposerDocumentDraft` n'a ni
-                // `mediaIds`, ni fichier, ni lieu, et y router « Post » ferait
-                // disparaître le média semé de l'écran ET de la publication. Le
-                // socle n'est donc jamais peint, et cette fermeture jamais
-                // appelée. Elle REFUSE plutôt qu'elle n'accepte : un `true`
-                // fermerait le composer sur une publication qui n'a pas eu lieu.
-                false
+            // **La voie DOCUMENT publie pour de bon depuis #5409.** Cette
+            // fermeture rendait `false` — un refus assumé, tant que
+            // `.mediaSeeded` montait la scène et que le socle n'était jamais
+            // peint. La porte monte désormais le meuble v3 comme sa jumelle
+            // `ShareComposeDoor`, et publie par le MÊME publieur qu'elle : deux
+            // portes qui composent le même brouillon ne peuvent pas l'envoyer
+            // par deux chemins sans diverger.
+            onPublishDocument: { draft in
+                let accepte = await ComposerDocumentDurablePublisher.publish(draft)
+                if accepte { onDismiss() }
+                return accepte
             },
-            // Aucun mood : cette porte n'atteint pas la surface du mood, pour
-            // la raison ci-dessus. Écrit en toutes lettres — le paramètre n'a
-            // pas de défaut.
+            // Aucun mood : un média reçu n'est pas une humeur, et la surface du
+            // mood est sans scène — y router une graine la ferait disparaître.
             moodSeed: nil,
             mediaSeed: graine,
             onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in

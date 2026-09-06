@@ -187,8 +187,11 @@ final class SignupViewModelTests: XCTestCase {
 
     /// Une violation sur un champ que l'écran ne montre pas (la langue régionale
     /// est déduite, jamais saisie) ne peut se poser nulle part : elle DOIT rester
-    /// visible en bandeau, sinon le bouton redevient actif sans explication.
-    func test_violationOnAnUnshownField_fallsBackToTheBanner() async {
+    /// visible en bandeau, sinon le bouton redevient actif sans explication —
+    /// mais le bandeau reste un message HUMAIN (#5325), jamais `rejection.message`
+    /// tel quel : le serveur peut y mettre n'importe quel texte, y compris
+    /// technique.
+    func test_violationOnAnUnshownField_fallsBackToTheHumanBanner() async {
         let (sut, registrar) = makeSUT()
         fillValidForm(sut)
         registrar.registerResult = .failure(
@@ -199,14 +202,16 @@ final class SignupViewModelTests: XCTestCase {
 
         _ = await sut.submit()
 
-        XCTAssertEqual(sut.bannerError, "Données invalides")
+        XCTAssertEqual(sut.bannerError, "\(SignupViewModel.rejectionGenericMessage) (VALIDATION_ERROR)")
         XCTAssertNil(sut.error(for: .displayName))
         XCTAssertNil(sut.error(for: .email))
     }
 
     /// Un code que le client ne connaît pas ne doit pas disparaître : le refus
-    /// reste lisible, faute de mieux, en bandeau.
-    func test_unknownCode_fallsBackToTheBanner() async {
+    /// reste lisible en bandeau — mais jamais avec la phrase brute du serveur,
+    /// que le code SOIT connu du client ou non. Le code machine l'accompagne
+    /// pour le support.
+    func test_unknownCode_fallsBackToTheHumanBannerWithItsCode() async {
         let (sut, registrar) = makeSUT()
         fillValidForm(sut)
         registrar.registerResult = .failure(
@@ -215,7 +220,33 @@ final class SignupViewModelTests: XCTestCase {
 
         _ = await sut.submit()
 
-        XCTAssertEqual(sut.bannerError, "Refus inattendu")
+        XCTAssertEqual(sut.bannerError, "\(SignupViewModel.rejectionGenericMessage) (SOMETHING_NEW)")
+    }
+
+    /// **Le cas qui a motivé #5325.** Une passerelle plus ancienne que l'app
+    /// (contrat pré-#5218, qui exigeait encore `username`) refuse la requête
+    /// AVANT d'atteindre `sendError` : c'est la validation Fastify par défaut
+    /// qui répond, sans `code`, sans `field`, sans `violations` — juste un
+    /// `message` technique en anglais qui nomme une clé que ce client
+    /// n'envoie plus. Rien ne doit distinguer ce cas d'un code inconnu : la
+    /// clé de validation, quelle qu'elle soit, ne doit JAMAIS atteindre
+    /// l'écran telle quelle, et le statut HTTP sert de repère au support à
+    /// défaut de code machine.
+    func test_unmappedValidationKeyWithNoCode_neverLeaksTheRawGatewayText() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        registrar.registerResult = .failure(
+            rejection(status: 400, message: "body must have required property 'username'")
+        )
+
+        _ = await sut.submit()
+
+        XCTAssertEqual(sut.bannerError, "\(SignupViewModel.rejectionGenericMessage) (400)")
+        XCTAssertFalse(
+            sut.bannerError?.contains("username") ?? true,
+            "le texte technique du serveur ne doit jamais atteindre l'écran"
+        )
+        XCTAssertTrue(SignupField.allCases.allSatisfy { sut.error(for: $0) == nil })
     }
 
     // MARK: - Le conflit de numéro (un 200 qui ne crée rien)

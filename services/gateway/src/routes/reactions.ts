@@ -10,6 +10,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
+import { logError } from '../utils/logger.js';
 import {
   sendSuccess,
   sendBadRequest,
@@ -215,7 +216,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           messageId,
           emoji,
           payload: updateEvent,
-          onError: (error) => fastify.log.error({ error }, 'REST reaction broadcast failed'),
+          onError: (error) => logError(fastify.log, 'REST reaction broadcast failed', error),
         });
       }
 
@@ -228,12 +229,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         { prisma, notificationService: fastify.notificationService },
         { messageId, reactorParticipantId: participantId, emoji, isAnonymous }
       ).catch((error: unknown) => {
-        fastify.log.error({ error }, 'REST reaction notification creation failed');
+        logError(fastify.log, 'REST reaction notification creation failed', error);
       });
 
       return sendSuccess(reply, reaction, { statusCode: 201 });
     } catch (error) {
-      fastify.log.error({ error }, 'Error adding reaction');
+      logError(fastify.log, 'Error adding reaction', error);
 
       // Plafond des cinq réactions par personne et par objet
       // (`packages/shared/utils/reaction-limit.ts`) : `ReactionService`
@@ -397,7 +398,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           messageId,
           emoji: decodedEmoji,
           payload: updateEvent,
-          onError: (error) => fastify.log.error({ error }, 'REST reaction removal broadcast failed'),
+          onError: (error) => logError(fastify.log, 'REST reaction removal broadcast failed', error),
         });
       }
 
@@ -410,12 +411,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         { prisma, notificationService: fastify.notificationService },
         { messageId, reactorParticipantId: removeParticipantId, emoji: decodedEmoji, isAnonymous }
       ).catch((error: unknown) => {
-        fastify.log.error({ error }, 'REST reaction notification retraction failed');
+        logError(fastify.log, 'REST reaction notification retraction failed', error);
       });
 
       return sendSuccess(reply, { message: 'Reaction removed successfully' });
     } catch (error) {
-      fastify.log.error({ error }, 'Error removing reaction');
+      logError(fastify.log, 'Error removing reaction', error);
 
       if (error.message === 'Invalid emoji format') {
         return sendBadRequest(reply, 'Invalid emoji format');
@@ -545,7 +546,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, reactions);
     } catch (error) {
-      fastify.log.error({ error }, 'Error getting reactions');
+      logError(fastify.log, 'Error getting reactions', error);
 
       return sendInternalError(reply, 'Failed to get reactions');
     }
@@ -619,7 +620,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, reactions);
     } catch (error) {
-      fastify.log.error({ error }, 'Error getting user reactions');
+      logError(fastify.log, 'Error getting user reactions', error);
 
       return sendInternalError(reply, 'Failed to get user reactions');
     }

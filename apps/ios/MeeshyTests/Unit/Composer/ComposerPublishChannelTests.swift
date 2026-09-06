@@ -36,23 +36,34 @@ final class ComposerPublishChannelTests: XCTestCase {
         XCTAssertEqual(ComposerPublishChannel.channel(for: .story), .scene)
     }
 
-    /// **Le réel n'a PAS le canal de la scène, et le témoin garde la mesure.**
+    /// **Le réel n'a pas le canal de la SCÈNE, et il a désormais celui du
+    /// DOCUMENT** (#4869, directive porteur 2026-09-06).
     ///
-    /// Il y a été routé le 2026-09-02, puis retiré le jour même : le canal de
-    /// la scène publie UN POST PAR SLIDE
+    /// Il a été routé sur la scène le 2026-09-02, puis retiré le jour même : ce
+    /// canal publie UN POST PAR SLIDE
     /// (`for (slideIdx, slide) in upload.slides.enumerated()`), sémantique juste
     /// pour une story dont chaque unité EST une publication, fausse pour un réel
-    /// qui est UNE publication à plusieurs médias. Mesuré au simulateur : un
-    /// réel de deux photos y produisait **deux posts** au lieu d'un.
+    /// qui est UNE publication à plusieurs médias. Mesuré : un réel de deux
+    /// photos y produisait **deux posts**.
     ///
-    /// > Le silence d'avant était un défaut ; publier deux posts au lieu d'un
-    /// > en est un PIRE — il ne se voit qu'à l'ARRIVÉE, sur un contenu qu'on ne
-    /// > peut plus rattraper.
+    /// Le refus `.unsupported` qui a suivi était HONNÊTE — il disait la vérité
+    /// à l'auteur — mais ce n'était pas une décision de produit : c'était
+    /// l'absence d'une décision. Mesuré au simulateur le 2026-09-06 : vidéo de
+    /// 6 s, format Réel, Publier ⇒ **rien ne part, le composer reste ouvert**.
     ///
-    /// Ce témoin tombera le jour où le réel aura son vrai canal — et c'est le
-    /// bon moment pour relire la mesure ci-dessus, pas avant.
-    func test_leReel_nAPasEncoreDeCanal_etLeRefusLeDIT() {
-        XCTAssertEqual(ComposerPublishChannel.channel(for: .reel), .unsupported)
+    /// Le document publie UNE fois et porte tout ce qu'un réel emporte : ses
+    /// fichiers, sa scène (#4756) et son type déclaré.
+    func test_leReel_partParLeDocument() {
+        XCTAssertEqual(ComposerPublishChannel.channel(for: .reel), .document)
+    }
+
+    /// **Aucun format n'est plus sans canal.** Le témoin porte sur la RÈGLE et
+    /// non sur les quatre cas : un cinquième format ne pourra pas naître muet.
+    func test_aucunFormatNestSansCanal() {
+        for format in [ComposerFormat.post, .story, .reel, .status] {
+            XCTAssertNotEqual(ComposerPublishChannel.channel(for: format), .unsupported,
+                              "le format \(format) doit savoir par où il part")
+        }
     }
 
     /// Le post et le mood se composent dans le DOCUMENT — texte, pièces
@@ -91,8 +102,12 @@ final class ComposerPublishChannelTests: XCTestCase {
         let horsDocument = ComposerFormat.allComposable.filter {
             ComposerPublishChannel.channel(for: $0) != .document
         }
-        XCTAssertEqual(horsDocument, [.story, .reel])
-        XCTAssertTrue(code.contains("case.story,.reel:returnrefuse()"),
+        // **Le réel a quitté cette liste le 2026-09-06** (#4869), et la porte a
+        // cessé de le refuser DANS LE MÊME LOT — c'est exactement ce que cette
+        // garde existe pour imposer : le jour où un format change de canal, son
+        // refus doit bouger avec lui, sinon il devient impubliable en silence.
+        XCTAssertEqual(horsDocument, [.story])
+        XCTAssertTrue(code.contains("case.story:returnrefuse()"),
                       "La porte du document refuse EXACTEMENT ce qui ne part pas par le "
                       + "document. Si elle en refusait un de plus, il deviendrait "
                       + "impubliable en silence — le défaut du réel, à l'identique.")

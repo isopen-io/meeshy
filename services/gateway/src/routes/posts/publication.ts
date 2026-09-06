@@ -63,6 +63,7 @@ import {
 import type { ExtractedHashtag } from '../../services/HashtagService';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import { logError } from '../../utils/logger.js';
 
 /**
  * La ligne écrite, telle que le noyau a besoin de la LIRE.
@@ -233,6 +234,15 @@ export interface PublicationEffectsParams {
    * canal `mentions` déclaré — seul le texte nomme alors.
    */
   readonly declaredMentions?: readonly DeclaredPostMention[];
+  /**
+   * Langue MESURÉE côté client sur `submittedContent` (tinyld, jamais une
+   * préférence d'interface, #5349) — distincte d'`originalLanguage`
+   * (revendication, § `post.originalLanguage` ci-dessous, qui garde son
+   * rang). Sert de second recours à `PostTranslationService`, avant sa
+   * détection serveur par regex, quand aucun `originalLanguage` n'a été
+   * persisté.
+   */
+  readonly detectedLanguage?: string;
   /** Préfixe de journal, pour que l'erreur nomme la porte qui l'a produite. */
   readonly porte: string;
 }
@@ -265,7 +275,8 @@ export async function runPublicationEffects(
 ): Promise<Record<string, unknown>> {
   const {
     fastify, prisma, request, mentionService, hashtagService,
-    post, authorId, postType, submittedContent, storyEffects, declaredMentions, porte,
+    post, authorId, postType, submittedContent, storyEffects, declaredMentions,
+    detectedLanguage, porte,
   } = params;
 
   const postId = post.id;
@@ -291,6 +302,9 @@ export async function runPublicationEffects(
         // revendication brute du client : elle incorpore déjà la normalisation
         // (ou le repli détecté) et correspond aux clés source de NLLB.
         asOptionalString(post.originalLanguage),
+        // Second recours (#5349), UNIQUEMENT si aucune revendication n'a été
+        // persistée : une détection on-device réelle, jamais une préférence.
+        detectedLanguage,
       ).catch((err) => fastify.log.warn({ err }, `[${porte}]: translate post failed`));
     } catch {
       // PostTranslationService not initialized — skip silently
@@ -330,7 +344,7 @@ export async function runPublicationEffects(
     storyEffects,
     declared: declaredMentions,
     onError: (err: unknown) => {
-      fastify.log.error(`[${porte}] post mention reconcile failed: ${err}`);
+      logError(fastify.log, `[${porte}] post mention reconcile failed`, err);
     },
   });
 
@@ -339,7 +353,7 @@ export async function runPublicationEffects(
     postId,
     resolved: createdMentions,
     onError: (err: unknown) => {
-      fastify.log.error(`[${porte}] post reference reload failed: ${err}`);
+      logError(fastify.log, `[${porte}] post reference reload failed`, err);
     },
   });
 
@@ -365,7 +379,7 @@ export async function runPublicationEffects(
     const hashtags = hashtagService.extractHashtags(postSignals);
     if (hashtags.length > 0) {
       hashtagService.createPostHashtags(postId, hashtags).catch((err: unknown) => {
-        fastify.log.error(`[${porte}] hashtag persist failed: ${err}`);
+        logError(fastify.log, `[${porte}] hashtag persist failed`, err);
       });
     }
   }
@@ -386,7 +400,7 @@ export async function runPublicationEffects(
       visibility,
       visibilityUserIds,
     }).catch((err: unknown) => {
-      fastify.log.error(`[${porte}] friend content notification fan-out failed: ${err}`);
+      logError(fastify.log, `[${porte}] friend content notification fan-out failed`, err);
     });
   }
 

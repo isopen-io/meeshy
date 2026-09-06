@@ -85,4 +85,4 @@ export const glypheDuSprite = (nom: string): string =>
  * pire que le silence.
  */
 export const svgDuSprite = (nom: string): string =>
-  `<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">${glypheDuSprite(nom)}</svg>`;
+  `<svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true">${glypheDuSprite(nom)}</svg>`;

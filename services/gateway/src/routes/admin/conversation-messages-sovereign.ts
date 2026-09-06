@@ -56,6 +56,7 @@ import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../uti
 // (`mediaAttachmentIsProtected`), dans `routes/admin/media-protection.ts` —
 // voir son doc-comment pour le détail des six colonnes.
 import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
+import { logError } from '../../utils/logger.js';
 
 const REASON_MIN_LENGTH = 10;
 
@@ -242,7 +243,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
         hasMore: offsetNum + messages.length < total
       });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching sovereign conversation messages');
+      logError(fastify.log, 'Error fetching sovereign conversation messages', error);
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation messages' });
     }
   });

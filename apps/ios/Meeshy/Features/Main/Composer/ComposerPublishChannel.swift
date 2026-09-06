@@ -79,8 +79,28 @@ nonisolated enum ComposerPublishChannel {
     static func channel(for format: ComposerFormat) -> Channel {
         switch format {
         case .story: return .scene
-        case .post, .status: return .document
-        case .reel: return .unsupported
+        // **Le RÉEL part par le DOCUMENT depuis #4869** (directive porteur
+        // 2026-09-06 : « il semblerait qu'il ne soit pas possible de publier
+        // des réels »).
+        //
+        // Il n'a PAS le canal de la scène, et la mesure qui l'a décidé tient
+        // toujours : ce canal publie UN POST PAR SLIDE — sémantique juste pour
+        // une story, dont chaque unité EST une publication, fausse pour un réel
+        // qui est UNE publication à plusieurs médias. Un réel de deux photos y
+        // produisait deux posts.
+        //
+        // Le document, lui, publie UNE fois et porte tout ce qu'un réel
+        // emporte : ses fichiers (`localMedia`, téléversés par
+        // `enqueuePostMedia`), sa scène (`storyEffects`, #4756 — première scène
+        // en runtime, suivantes dans `canvasV3`, donc UNE publication quel que
+        // soit le nombre de slides) et son type déclaré (`format.postType`).
+        //
+        // > `.unsupported` était un refus HONNÊTE — il disait la vérité à
+        // > l'auteur au lieu de le laisser presser une flèche muette. Ce n'était
+        // > pas une décision de produit : c'était l'absence d'une décision, et
+        // > le témoin qui la gelait disait de relire la mesure avant de le
+        // > changer. Elle a été relue.
+        case .post, .status, .reel: return .document
         }
     }
 }

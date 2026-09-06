@@ -493,6 +493,24 @@ export const CONTEXTE_MENU_PAR_DEFAUT: ContexteMenu = { composeurOuvert: true, e
  * `poseLeBoutonReagir` / `poseApres` (`details.original`).
  */
 const remplisLeMenu = (ligne: HTMLElement, bulle: Bulle, p: Peintre, { composeurOuvert, estInvite }: ContexteMenu, maintenant: number): void => {
+  // UNE FENÊTRE DE RETRAIT SERVIE (#5387, `?retirer=<id>`) POSSÈDE SEULE LA
+  // LIGNE — le serveur ne rend AUCUN menu pour elle (`fil-lignes.ts` ›
+  // `ligne()`, `enAttenteDeRetrait`), et ce module n'en ajoute pas non plus.
+  //
+  // SANS CETTE GARDE (défaut MAJEUR de revue « la ligne porte deux fenêtres
+  // de retrait à la fois ») : `bullesDuDocument` ne reconnaît PAS
+  // `retrait-en-attente` — une ligne servie dans cet état s'y lit `supprime:
+  // false, envoi: 'servi'`, un message ORDINAIRE (la passerelle n'a en effet
+  // rien reçu). Le PREMIER `peins()` du montage (`participate.ts`, avant même
+  // que `reprendLesRetraits` ne s'exécute) traitait donc cette ligne comme
+  // n'importe quelle autre, et lui CLONAIT un `details.actions` tout neuf —
+  // un second « Retirer », cliquable, par-dessus les deux formulaires servis.
+  // Reconstruire l'état pour cette seule ligne aurait fallu lui inventer un
+  // état de PLUS (ni `servi` ni `retrait-differe` : rien n'est parti, mais
+  // rien ne doit non plus proposer de menu) — la garder ICI, contre le
+  // balisage que le serveur a réellement rendu, est le site UNIQUE qui décide
+  // et ne peut jamais désynchroniser d'un état recalculé ailleurs.
+  if (ligne.querySelector('.retrait-servie') !== null) return;
   const admetTout = !bulle.systeme && !bulle.supprime && !bulle.protege && bulle.envoi === 'servi';
   const candidat = { deMoi: bulle.deMoi, systeme: bulle.systeme, supprime: bulle.supprime, protege: bulle.protege, ecritA: bulle.ecritA, envoi: bulle.envoi };
   const admetRepondre = admetTout && composeurOuvert;

@@ -47,6 +47,14 @@ nonisolated enum ComposerMosaicChoice {
     /// « défaut » une disposition qui n'en est plus une.
     static var fallback: MosaicLayoutMode { .fallback }
 
+    /// Le titre de la section dans l'éventail de format — il dit de QUOI on
+    /// choisit la disposition, sinon cinq entrées apparaissent sous les quatre
+    /// formats sans qu'on sache ce qu'elles règlent.
+    static var sectionTitle: String {
+        String(localized: "composer.mosaic.section",
+               defaultValue: "Disposition des scènes", bundle: .main)
+    }
+
     /// Le libellé dit ce que l'auteur VERRA, jamais le nom interne du mode :
     /// « sinusoïde » ne décrit rien pour qui publie deux photos.
     static func label(_ mode: MosaicLayoutMode) -> String {

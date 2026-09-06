@@ -269,15 +269,28 @@ public extension StoryComposerViewModel {
                     continue
                 }
                 let duration = item.durationMs.map { Float($0) / 1000 }
-                guard insertForegroundVideo(
+                // **`thumbnail: nil, aspectRatio: nil` — et c'était le défaut**
+                // (#5418). Ces deux `nil` sont posés parce que les mesurer est
+                // ASYNCHRONE et que la pose doit rester synchrone ; ils sont
+                // rattrapés par `measureVideo` juste après l'insertion. Sans
+                // elle, une story publiée depuis le composer v3 partait avec
+                // `aspectRatio: null` — le lecteur perdait sa source de
+                // dimensionnement primaire — et sa vignette, calculée sans
+                // image chargée, sortait VIDE. Mesuré sur staging le
+                // 2026-09-06 : la même story avec une IMAGE portait `1.498`.
+                guard let objetVideo = insertForegroundVideo(
                         url: copied, thumbnail: nil, aspectRatio: nil,
-                        duration: duration, intoSlideId: slideId, objectId: objectId) != nil
+                        duration: duration, intoSlideId: slideId, objectId: objectId)
                 else {
                     journal.error(
                         "applyContentMedia: INSERTION refusée pour la vidéo — slide=\(slideId, privacy: .public)"
                     )
                     continue
                 }
+                // L'identifiant RETENU, jamais celui demandé : `addMediaObject`
+                // peut en choisir un autre, et mesurer sous l'id provisoire
+                // poserait la vignette sur un objet qui n'existe pas.
+                measureVideo(objectId: objetVideo.id, fileURL: copied, slideId: slideId)
                 carriedContentSources.insert(item.sourceURL)
                 objetParSource[item.sourceURL] = objectId
 

@@ -58,6 +58,13 @@ function asArray(v: unknown): Record<string, unknown>[] {
   return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
 }
 
+/** Un objet qui porte au moins une clé — `undefined` sinon (un `{}` ne dit rien). */
+function objectWithKeys(v: unknown): Record<string, unknown> | undefined {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return undefined;
+  const record = v as Record<string, unknown>;
+  return Object.keys(record).length > 0 ? record : undefined;
+}
+
 function isStringMap(v: unknown): v is Record<string, string> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
     && Object.values(v as Record<string, unknown>).every((value) => typeof value === 'string')
@@ -132,10 +139,24 @@ export function convertV1ToV3(
   const objects: ObjectV3[] = [];
   let z = 0;
 
-  if (str(blob.background)) {
+  // **Le porteur du FOND existe dès que le fond a quelque chose à dire**
+  // (#5406) — jumeau EXACT de `CanvasV3.migratedScene` (Swift), qui portait la
+  // même condition et donc le même trou.
+  //
+  // `backgroundTransform` ne voyage QUE dans cette charge, et son champ le plus
+  // utile — `videoFitMode`, le cadrage que le double-tap fond choisit — ne vaut
+  // que sur un fond MÉDIA, c'est-à-dire là où une couleur de fond n'a aucune
+  // raison d'exister. Conditionner le porteur à la seule couleur jetait donc le
+  // cadrage précisément dans le cas où l'auteur venait de le choisir.
+  const bgTransform = objectWithKeys(blob.backgroundTransform);
+  const bgColor = str(blob.background);
+  if (bgColor !== undefined || bgTransform !== undefined) {
     objects.push({
       ...baseObject({ id: 'bg' }, 'media', 'bg', z++),
-      payload: { background: blob.background, transform: blob.backgroundTransform ?? null },
+      payload: {
+        ...(bgColor !== undefined ? { background: bgColor } : {}),
+        transform: bgTransform ?? null,
+      },
     });
   }
 

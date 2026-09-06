@@ -1,5 +1,6 @@
 import { actifsTempsReel } from '@/lib/actifs-rt';
 import {
+  adresseDeRetrait,
   adresseDuLienCree,
   adresseDuMessage,
   PARAM_DE_L_ANCRE,
@@ -8,10 +9,11 @@ import {
   PARAM_DU_LIEN,
   PARAM_DU_LIEN_CREE,
   PARAM_DU_PLEIN,
+  PARAM_DU_RETRAIT,
 } from '@/lib/api/adresses-du-fil';
 import { creeUnLien, type Lecteur, type Recuperateur } from '@/lib/api/compte';
 import { envoie, televerse, type Creance, type Fil } from '@/lib/api/fil';
-import { accuseLecture, aAccuser, modifie, peutModifier, reagis, retire } from '@/lib/api/fil-mutations';
+import { accuseLecture, aAccuser, modifie, peutModifier, peutRetirer, reagis, retire } from '@/lib/api/fil-mutations';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import { FIL } from '@/lib/contenu/fil';
 import { traduisLeMotifDuLien } from '@/lib/contenu/liens';
@@ -114,6 +116,17 @@ export const modificationDemandee = (requete: Request): string | null => {
 };
 
 /**
+ * `?retirer=<id>` — LA FENÊTRE D'ANNULATION D'UN RETRAIT, SANS JAVASCRIPT
+ * (#5387). Lue ICI, comme `?repondre=`/`?modifier=` juste au-dessus : un
+ * quatrième état de la même adresse hôte, résolu contre ce qui est SERVI par
+ * `resoutLeRetrait`.
+ */
+export const retraitDemande = (requete: Request): string | null => {
+  const valeur = new URL(requete.url).searchParams.get(PARAM_DU_RETRAIT);
+  return valeur === null || valeur.trim() === '' ? null : valeur;
+};
+
+/**
  * `?lien` — LA FEUILLE « NOUVEAU LIEN DE PARTAGE », OUVERTE DEPUIS LE FIL
  * (#5034, § 12.10.5). Lue ICI, comme `?media=`, `?profil=`, `?autour=` :
  * membre SEUL (`app/chats/[cle]/route.ts` — l'invité de `/chat/:lien` ne
@@ -179,6 +192,29 @@ export const resoutLeContexte = ({
   return null;
 };
 
+/**
+ * LA CIBLE DE `?retirer=<id>` (#5387), RÉSOLUE CONTRE CE QUI EST SERVI — le
+ * même patron que `resoutLeContexte` juste au-dessus : une cible ABSENTE de
+ * la tranche, ou qu'on ne peut pas retirer (pas la sienne, système, déjà
+ * supprimée, protégée), ou un INVITÉ (régime 3, fail-closed), n'atteint
+ * jamais l'état IGNORÉ — le fil reste NOMINAL, jamais un contrôle inerte.
+ * PURE, délibérément : elle ne fait confiance à AUCUN appelant.
+ */
+export const resoutLeRetrait = ({
+  idRetrait,
+  fil,
+  estInvite,
+}: {
+  readonly idRetrait: string | null;
+  readonly fil: Fil;
+  readonly estInvite: boolean;
+}): string | null => {
+  if (idRetrait === null || estInvite) return null;
+  const cible = fil.messages.find((m) => m.id === idRetrait);
+  if (cible === undefined) return null;
+  return peutRetirer({ deMoi: cible.deMoi, systeme: cible.systeme, supprime: cible.supprime, protege: cible.protege }) ? idRetrait : null;
+};
+
 /** Le formulaire posté, ou `null` — un corps illisible n'est pas une exception. */
 export const lisLeFormulaire = async (requete: Request): Promise<FormData | null> =>
   requete.formData().catch(() => null);
@@ -208,27 +244,43 @@ export type SoumissionDuFil =
   | { readonly genre: 'message'; readonly texte: string; readonly fichiers: readonly File[] }
   | { readonly genre: 'reponse'; readonly texte: string; readonly replyToId: string; readonly fichiers: readonly File[] }
   | { readonly genre: 'modification'; readonly messageId: string; readonly texte: string; readonly texteOriginal: string }
-  | { readonly genre: 'retrait'; readonly messageId: string };
+  /**
+   * `confirme` DISTINGUE LES DEUX TEMPS DE LA FENÊTRE (#5387) : `false` — le
+   * premier clic, celui du menu — n'envoie RIEN, il ouvre `?retirer=<id>` ;
+   * `true` — « Confirmer le retrait », le SEUL chemin qui envoie le `DELETE`.
+   */
+  | { readonly genre: 'retrait'; readonly messageId: string; readonly confirme: boolean }
+  /** « Annuler » de la fenêtre servie (#5387) — redirige, n'envoie rien. */
+  | { readonly genre: 'annulation-de-retrait'; readonly messageId: string };
 
 const texteDe = (formulaire: FormData, nom: string): string => {
   const brut = formulaire.get(nom);
   return typeof brut === 'string' ? brut.trim() : '';
 };
 
-/** Le nom du bouton `retirer` du menu d'une ligne — posté SEUL, jamais avec les champs du composeur (§ 12.10.1). */
+/** Le nom du bouton `retirer` du menu d'une ligne et de la fenêtre servie — posté SEUL (§ 12.10.1, #5387). */
 const CHAMP_DU_RETRAIT = 'retirer';
+/** « Annuler » de la fenêtre servie sans JavaScript (#5387) — distinct de `CHAMP_DE_LA_REPONSE`/l'annulation du composeur. */
+const CHAMP_DE_L_ANNULATION_DU_RETRAIT = 'annuler-le-retrait';
+/** Le champ caché qui distingue le premier clic (rien n'envoie) de la confirmation (#5387). */
+const CHAMP_DE_LA_CONFIRMATION_DU_RETRAIT = 'confirme';
 
 /**
- * L'ORDRE DE LECTURE (§ 4 étape 2 de la spécification #5163) : `retirer` →
- * `modifie` → `reaction`+`message` → `reponse`/`message`. Un formulaire ne
- * porte qu'UN de ces cinq genres à la fois — le menu d'une ligne, le
- * composeur et la pastille de réaction sont trois formulaires distincts.
+ * L'ORDRE DE LECTURE (§ 4 étape 2 des spécifications #5163/#5387) :
+ * `annuler-le-retrait` → `retirer` → `modifie` → `reaction`+`message` →
+ * `reponse`/`message`. Un formulaire ne porte qu'UN de ces six genres à la
+ * fois — le menu d'une ligne, sa fenêtre servie, le composeur et la
+ * pastille de réaction sont autant de formulaires distincts.
  */
 export const soumissionDuFil = (formulaire: FormData | null): SoumissionDuFil => {
   if (formulaire === null) return { genre: 'message', texte: '', fichiers: [] };
 
+  const aAnnulerLeRetrait = texteDe(formulaire, CHAMP_DE_L_ANNULATION_DU_RETRAIT);
+  if (aAnnulerLeRetrait !== '') return { genre: 'annulation-de-retrait', messageId: aAnnulerLeRetrait };
+
   const aRetirer = texteDe(formulaire, CHAMP_DU_RETRAIT);
-  if (aRetirer !== '') return { genre: 'retrait', messageId: aRetirer };
+  if (aRetirer !== '')
+    return { genre: 'retrait', messageId: aRetirer, confirme: texteDe(formulaire, CHAMP_DE_LA_CONFIRMATION_DU_RETRAIT) === '1' };
 
   const aModifier = texteDe(formulaire, CHAMP_DE_LA_MODIFICATION);
   if (aModifier !== '')
@@ -326,16 +378,27 @@ const modifieLeMessage = async ({
   return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
 };
 
+/**
+ * LA FENÊTRE D'ANNULATION D'UN RETRAIT, SANS JAVASCRIPT (#5387) — le PREMIER
+ * clic (`confirme === false`) n'envoie RIEN : il redirige vers `?retirer=<id>`,
+ * l'adresse qui EST la fenêtre (§ ci-dessus, `adresses-du-fil.ts`). Seule la
+ * CONFIRMATION envoie le `DELETE` — le même patron que le différé du module
+ * (`prendsLesRetraits`, `fil-gestes.ts`) : rien ne part tant que le geste
+ * n'est pas répété.
+ */
 const retireLeMessage = async ({
   creance,
   adresse,
   messageId,
+  confirme,
 }: {
   readonly creance: Creance;
   readonly adresse: string;
   readonly messageId: string;
+  readonly confirme: boolean;
 }): Promise<IssueDeSoumission> => {
   if (creance.genre === 'invite') return { genre: 'erreur', message: FIL.refuse, brouillon: '', statut: 403 };
+  if (!confirme) return { genre: 'redirection', vers: adresseDuMessage(adresseDeRetrait(adresse, messageId), messageId) };
   const issue = await retire({ creance, messageId });
   if (issue.genre === 'refus') return { genre: 'erreur', message: issue.message, brouillon: '', statut: issue.statut ?? 400 };
   return { genre: 'redirection', vers: adresseDuMessage(adresse, messageId) };
@@ -389,7 +452,17 @@ export const traiteLaSoumission = ({
     return modifieLeMessage({ creance, adresse, messageId: soumission.messageId, texte: soumission.texte, texteOriginal: soumission.texteOriginal });
   }
   if (soumission.genre === 'retrait') {
-    return retireLeMessage({ creance, adresse, messageId: soumission.messageId });
+    return retireLeMessage({ creance, adresse, messageId: soumission.messageId, confirme: soumission.confirme });
+  }
+  if (soumission.genre === 'annulation-de-retrait') {
+    // AUCUNE REQUÊTE : rien n'était parti — l'adresse nue est la seule
+    // trace de ce qu'on vient de refuser de faire (§ 4 étape 2, #5387).
+    // L'INVITÉ EST REFUSÉ ICI AUSSI (revue) : les TROIS genres du retrait
+    // sont fermés au même endroit, sans quoi la lecture « qui peut retirer ? »
+    // aurait deux réponses selon le bouton — et la troisième porte serait la
+    // seule à ne pas le dire.
+    if (creance.genre === 'invite') return Promise.resolve({ genre: 'erreur', message: FIL.refuse, brouillon: '', statut: 403 });
+    return Promise.resolve({ genre: 'redirection', vers: adresseDuMessage(adresse, soumission.messageId) });
   }
   return envoieLeMessage({ creance, conversation, adresse, texte: soumission.texte, fichiers: soumission.fichiers });
 };

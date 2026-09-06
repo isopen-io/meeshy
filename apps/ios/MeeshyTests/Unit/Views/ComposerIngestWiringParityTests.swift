@@ -28,24 +28,50 @@ final class ComposerIngestWiringParityTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// Les six hôtes qui présentent `UniversalComposerBar`, listés par la
-    /// spec du 2026-07-30 : conversations, post, deux surfaces de
-    /// commentaires, et réponse à une story.
-    private static let hosts = [
-        "Meeshy/Features/Main/Views/ConversationView+Composer.swift",
-        "Meeshy/Features/Main/Views/FeedView.swift",
-        "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
-        "Meeshy/Features/Main/Views/PostDetailView.swift",
-        "Meeshy/Features/Main/Views/FeedCommentsSheet.swift",
-        // 2026-09-02 — `StoryComposerBarView` a quitté `StoryViewerView+Canvas.swift`
-        // (dette de taille) pour son propre fichier ; l'hôte suit le SITE qui
-        // instancie `UniversalComposerBar`, pas le nom historique du fichier.
-        "Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift",
-    ]
+    /// **Les hôtes se COMPTENT, ils ne se citent pas** (réparé le 2026-09-06).
+    ///
+    /// Cette liste était écrite à la main — six chemins, tenus à jour par
+    /// quiconque déplaçait une barre. Le retrait de l'overlay inline
+    /// (`4a50000317`) a sorti `UniversalComposerBar` de `FeedView.swift`, et la
+    /// garde a continué d'EXIGER un câblage dans un fichier qui n'héberge plus
+    /// rien : elle rougissait sur une conformité devenue sans objet.
+    ///
+    /// > **Un inventaire écrit à la main ne vieillit pas avec le code qu'il
+    /// > décrit.** Il ne se trompe pas au moment où on l'écrit — il se trompe
+    /// > le jour où quelqu'un déplace ce qu'il énumère, et c'est justement le
+    /// > jour où personne ne pense à lui.
+    ///
+    /// L'inventaire est donc DÉRIVÉ : est hôte tout fichier qui instancie
+    /// `UniversalComposerBar(`. Un hôte neuf est couvert sans qu'on y pense ;
+    /// un hôte retiré cesse d'être exigé.
+    private func hostsInstantiatingTheBar() throws -> [String] {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        guard let parcours = FileManager.default.enumerator(
+            at: racine, includingPropertiesForKeys: nil) else { return [] }
+        var hotes: [String] = []
+        for cas in parcours {
+            guard let url = cas as? URL, url.pathExtension == "swift" else { continue }
+            guard let code = try? String(contentsOf: url, encoding: .utf8),
+                  code.contains("UniversalComposerBar(") else { continue }
+            hotes.append(url.path)
+        }
+        return hotes.sorted()
+    }
 
     func test_universalComposerBarHosts_allWireOnIngest() throws {
-        for host in Self.hosts {
-            let source = try appSource(host)
+        let hotes = try hostsInstantiatingTheBar()
+        // **Un balayage qui ne trouve rien passerait au VERT.** Le plancher est
+        // le seul moyen de distinguer « tous les hôtes câblent » de « la
+        // recherche s'est cassée » — deux verdicts identiques sans lui.
+        XCTAssertGreaterThanOrEqual(
+            hotes.count, 4,
+            "aucun hôte trouvé : le balayage est cassé, pas le code")
+
+        for host in hotes {
+            let source = try String(contentsOf: URL(fileURLWithPath: host), encoding: .utf8)
 
             // Un site d'appel réel : `onIngest:` suivi d'une fermeture, pas
             // d'un `nil` littéral qui désactiverait le dépôt/collage.

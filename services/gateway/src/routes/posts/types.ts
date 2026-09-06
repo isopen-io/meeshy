@@ -249,6 +249,11 @@ export const CreatePostSchema = z.object({
   // Original language override (ISO 639-1/639-3, optional BCP-47 region, e.g. "fr", "bas-CM").
   // `.max(6)` : parité avec la SSOT `CommonSchemas.language`.
   originalLanguage: z.string().min(2).max(6).optional(),
+  // Langue MESURÉE côté client sur `content` (tinyld, `detectMeasuredLanguage`,
+  // #5349) — jamais une préférence d'interface, jamais confondue avec
+  // `originalLanguage` (revendication) ci-dessus. `PostTranslationService` la
+  // préfère à sa propre détection par regex quand `originalLanguage` manque.
+  detectedLanguage: z.string().min(2).max(6).optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
   // Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un id

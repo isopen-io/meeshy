@@ -14,6 +14,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
+import { logError } from '../../utils/logger.js';
 
 /**
  * Les écritures d'un compte administré, gouvernées par la loi de leur CHAMP (#4154).
@@ -214,7 +215,7 @@ function rendreErreur(
     sendBadRequest(reply, 'Invalid input data');
     return;
   }
-  fastify.log.error({ err: error }, message);
+  logError(fastify.log, message, error);
   sendInternalError(reply, 'Internal server error', { message });
 }
 

@@ -212,6 +212,23 @@ jobs:
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
 
+      # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
+      # sans appelant se compte comme un lecteur : un décideur qui cherche qui
+      # consomme un champ voit la déclaration `case foo(...)` /
+      # `foo: '/chemin'` et GARDE, alors que rien ne l'appelle jamais. Les
+      # deux catalogues (`packages/MeeshySDK/.../Networking/Endpoints/*.swift`,
+      # `packages/shared/api/endpoints.ts`) sont GÉNÉRÉS depuis
+      # `services/gateway/route-manifest.json` — un marqueur posé à la main
+      # sur une entrée y serait écrasé (ou rejeté par le cliquet de
+      # régénération TS) à la prochaine régénération. Ces deux cliquets à deux
+      # sens gardent donc le compte de dette à CÔTÉ des catalogues plutôt que
+      # dedans, sur le modèle du ratchet de types ci-dessus.
+      - name: Swift catalog dead-entries ratchet
+        run: node scripts/check-swift-catalog-dead-entries.mjs --self-test && node scripts/check-swift-catalog-dead-entries.mjs
+
+      - name: TS catalog dead-entries ratchet
+        run: node scripts/check-ts-catalog-dead-entries.mjs --self-test && node scripts/check-ts-catalog-dead-entries.mjs
+
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
@@ -321,6 +338,17 @@ jobs:
       # silencieuse jusqu'à ce qu'un développeur lance la commande.
       - name: dev.sh compose targets guard
         run: node scripts/check-dev-sh-compose-targets.mjs --self-test && node scripts/check-dev-sh-compose-targets.mjs
+
+      # #4553 — `services/gateway/prebuilds` était un lien symbolique SUIVI par
+      # git dont la cible était un chemin absolu posé sur la machine d'une
+      # personne (`/Users/<login>/…`). Mesuré : `node-gyp-build` résout en
+      # réalité le binaire natif depuis `node_modules/@signalapp/libsignal-client/prebuilds/`,
+      # que le paquet livre lui-même — le lien n'a jamais été consulté, et son
+      # commentaire prescrivait un geste qu'aucun déploiement ne tient. La
+      # garde couvre TOUT lien suivi du dépôt, pas seulement ce cas : une cible
+      # absolue, ou une cible relative qui ne résout pas depuis la racine.
+      - name: Tracked symlinks guard
+        run: node scripts/check-tracked-symlinks.mjs --self-test && node scripts/check-tracked-symlinks.mjs
 
       # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
       # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait

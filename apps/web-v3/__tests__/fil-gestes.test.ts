@@ -8,6 +8,7 @@ import {
   reponseDemandee,
   modificationDemandee,
   resoutLeContexte,
+  resoutLeRetrait,
   soumissionDuFil,
   traiteLaSoumission,
 } from '@/app/connecte/fil-porte';
@@ -48,7 +49,7 @@ const brut = (attributs: Record<string, unknown> = {}): Record<string, unknown> 
 const rendus = (bruts: readonly Record<string, unknown>[], langues: readonly string[] = ['fr'], moi = 'u1'): readonly Message[] =>
   tranche(bruts, moi, langues, ORIGINE);
 
-describe('soumissionDuFil lit les cinq genres', () => {
+describe('soumissionDuFil lit les six genres (#5163, #5387)', () => {
   const formulaire = (entrees: Readonly<Record<string, string>>): FormData => {
     const donnees = new FormData();
     Object.entries(entrees).forEach(([cle, valeur]) => donnees.set(cle, valeur));
@@ -73,14 +74,27 @@ describe('soumissionDuFil lit les cinq genres', () => {
     });
   });
 
-  it('un retrait — le bouton du menu, posté seul', () => {
-    expect(soumissionDuFil(formulaire({ retirer: 'r5' }))).toEqual({ genre: 'retrait', messageId: 'r5' });
+  it('un retrait — le bouton du menu, posté seul, SANS confirme (#5387 : le premier clic n’envoie rien)', () => {
+    expect(soumissionDuFil(formulaire({ retirer: 'r5' }))).toEqual({ genre: 'retrait', messageId: 'r5', confirme: false });
   });
 
-  it('retirer l’emporte sur modifie, qui l’emporte sur la réponse', () => {
+  it('« Confirmer le retrait » — le champ caché confirme=1 porte la confirmation (#5387)', () => {
+    expect(soumissionDuFil(formulaire({ retirer: 'r5', confirme: '1' }))).toEqual({ genre: 'retrait', messageId: 'r5', confirme: true });
+  });
+
+  it('« Annuler » de la fenêtre servie — le bouton annuler-le-retrait, posté seul (#5387)', () => {
+    expect(soumissionDuFil(formulaire({ 'annuler-le-retrait': 'r5' }))).toEqual({ genre: 'annulation-de-retrait', messageId: 'r5' });
+  });
+
+  it('annuler-le-retrait l’emporte sur retirer, qui l’emporte sur modifie, qui l’emporte sur la réponse', () => {
+    expect(soumissionDuFil(formulaire({ 'annuler-le-retrait': 'r3', retirer: 'r9', modifie: 'r5', reponseA: 'r1', texte: 'x' }))).toEqual({
+      genre: 'annulation-de-retrait',
+      messageId: 'r3',
+    });
     expect(soumissionDuFil(formulaire({ retirer: 'r9', modifie: 'r5', reponseA: 'r1', texte: 'x' }))).toEqual({
       genre: 'retrait',
       messageId: 'r9',
+      confirme: false,
     });
     expect(soumissionDuFil(formulaire({ modifie: 'r5', reponseA: 'r1', texte: 'x' }))).toEqual({
       genre: 'modification',
@@ -167,9 +181,9 @@ describe('traiteLaSoumission — la bonne route, avec la bonne créance', () => 
     expect(appels).toEqual([]);
   });
 
-  it('un retrait DELETE /messages/:id, et redirige vers le message VISÉ', async () => {
+  it('un retrait CONFIRMÉ DELETE /messages/:id, et redirige vers le message VISÉ (#5387)', async () => {
     const issue = await traiteLaSoumission({
-      soumission: { genre: 'retrait', messageId: 'r5' },
+      soumission: { genre: 'retrait', messageId: 'r5', confirme: true },
       creance: { genre: 'membre', jeton: 'JWT' },
       conversation: 'c1',
       adresse: '/chats/c1',
@@ -177,6 +191,34 @@ describe('traiteLaSoumission — la bonne route, avec la bonne créance', () => 
     expect(issue).toEqual({ genre: 'redirection', vers: '/chats/c1#m-r5' });
     expect(appels[0]?.methode).toBe('DELETE');
     expect(appels[0]?.url).toContain('/api/v1/messages/r5');
+  });
+
+  /**
+   * LA FENÊTRE SANS JAVASCRIPT (#5387) — le PREMIER clic (`confirme: false`,
+   * le bouton du menu) n'envoie RIEN : il redirige vers `?retirer=<id>`,
+   * l'adresse qui EST la fenêtre. Seule la CONFIRMATION (test ci-dessus)
+   * envoie le `DELETE`.
+   */
+  it('un retrait NON confirmé redirige vers ?retirer=<id> — AUCUNE requête (#5387)', async () => {
+    const issue = await traiteLaSoumission({
+      soumission: { genre: 'retrait', messageId: 'r5', confirme: false },
+      creance: { genre: 'membre', jeton: 'JWT' },
+      conversation: 'c1',
+      adresse: '/chats/c1',
+    });
+    expect(issue).toEqual({ genre: 'redirection', vers: '/chats/c1?retirer=r5#m-r5' });
+    expect(appels).toEqual([]);
+  });
+
+  it('« Annuler » de la fenêtre servie redirige NUE — AUCUNE requête (#5387)', async () => {
+    const issue = await traiteLaSoumission({
+      soumission: { genre: 'annulation-de-retrait', messageId: 'r5' },
+      creance: { genre: 'membre', jeton: 'JWT' },
+      conversation: 'c1',
+      adresse: '/chats/c1',
+    });
+    expect(issue).toEqual({ genre: 'redirection', vers: '/chats/c1#m-r5' });
+    expect(appels).toEqual([]);
   });
 
   /**
@@ -211,13 +253,30 @@ describe('traiteLaSoumission — la bonne route, avec la bonne créance', () => 
       adresse: '/chat/lnk',
     });
     const issueRetrait = await traiteLaSoumission({
-      soumission: { genre: 'retrait', messageId: 'r5' },
+      soumission: { genre: 'retrait', messageId: 'r5', confirme: true },
+      creance: { genre: 'invite', jeton: 'SESSION' },
+      conversation: 'c1',
+      adresse: '/chat/lnk',
+    });
+    // LES TROIS GENRES DU RETRAIT SONT FERMÉS AU MÊME ENDROIT (revue #5387) —
+    // le premier clic, la confirmation ET l'annulation : sans le troisième,
+    // « qui peut retirer ? » avait deux réponses selon le bouton posté.
+    const issueOuverture = await traiteLaSoumission({
+      soumission: { genre: 'retrait', messageId: 'r5', confirme: false },
+      creance: { genre: 'invite', jeton: 'SESSION' },
+      conversation: 'c1',
+      adresse: '/chat/lnk',
+    });
+    const issueAnnulation = await traiteLaSoumission({
+      soumission: { genre: 'annulation-de-retrait', messageId: 'r5' },
       creance: { genre: 'invite', jeton: 'SESSION' },
       conversation: 'c1',
       adresse: '/chat/lnk',
     });
     expect(issueModif.genre).toBe('erreur');
     expect(issueRetrait.genre).toBe('erreur');
+    expect(issueOuverture).toEqual({ genre: 'erreur', message: FIL.refuse, brouillon: '', statut: 403 });
+    expect(issueAnnulation).toEqual({ genre: 'erreur', message: FIL.refuse, brouillon: '', statut: 403 });
     expect(appels).toEqual([]);
   });
 
@@ -286,6 +345,49 @@ describe('resoutLeContexte — la cible doit être SERVIE, et le composeur OUVER
     expect(
       resoutLeContexte({ idReponse: null, idModification: 'r1', fil: filDeMoi, maintenant: troisJoursPlusTard, composeurOuvert: true, estInvite: false }),
     ).toBeNull();
+  });
+});
+
+/**
+ * `?retirer=<id>` — LA FENÊTRE SANS JAVASCRIPT (#5387). `resoutLeRetrait` est
+ * le jumeau PUR de `resoutLeContexte` : une cible absente, pas la mienne,
+ * système, déjà supprimée, protégée, ou un invité — l'état est IGNORÉ, jamais
+ * un contrôle inerte.
+ */
+describe('resoutLeRetrait — la cible doit être SERVIE, mienne, et vivante', () => {
+  const FIL_DE_TEST: Fil = {
+    id: 'c1',
+    titre: 'Équipe Lagos',
+    membres: 4,
+    presence: { participants: [], presents: [] },
+    messages: rendus([brut()], ['fr'], 'u2'),
+    plusAncien: null,
+  };
+
+  it('résout la cible quand elle est SERVIE et que je peux la retirer', () => {
+    expect(resoutLeRetrait({ idRetrait: 'r1', fil: FIL_DE_TEST, estInvite: false })).toBe('r1');
+  });
+
+  it('ignore une cible absente de la tranche', () => {
+    expect(resoutLeRetrait({ idRetrait: 'introuvable', fil: FIL_DE_TEST, estInvite: false })).toBeNull();
+  });
+
+  it('ignore une cible qui n’est pas la mienne', () => {
+    const filDAutrui: Fil = { ...FIL_DE_TEST, messages: rendus([brut()]) };
+    expect(resoutLeRetrait({ idRetrait: 'r1', fil: filDAutrui, estInvite: false })).toBeNull();
+  });
+
+  it('ignore un identifiant absent — état IGNORÉ, jamais un refus', () => {
+    expect(resoutLeRetrait({ idRetrait: null, fil: FIL_DE_TEST, estInvite: false })).toBeNull();
+  });
+
+  it('un invité n’a JAMAIS de fenêtre (régime 3) — même sur SA propre ligne', () => {
+    expect(resoutLeRetrait({ idRetrait: 'r1', fil: FIL_DE_TEST, estInvite: true })).toBeNull();
+  });
+
+  it('ignore une cible déjà supprimée', () => {
+    const filSupprime: Fil = { ...FIL_DE_TEST, messages: rendus([brut({ deletedAt: '2026-09-01T12:10:00.000Z' })], ['fr'], 'u2') };
+    expect(resoutLeRetrait({ idRetrait: 'r1', fil: filSupprime, estInvite: false })).toBeNull();
   });
 });
 
@@ -531,6 +633,71 @@ describe('le contexte du composeur — ?repondre= et ?modifier= (§ 12.10.1, iss
   it('sans contexte et sans temps réel, la fente n’est pas servie du tout', () => {
     const html = SANS_GABARIT(ETAT_DOC([CIBLE]));
     expect(html).not.toContain('contexte-du-composeur');
+  });
+});
+
+/**
+ * `?retirer=<id>` — LA FENÊTRE SANS JAVASCRIPT (#5387). La ligne visée porte
+ * l'état « retrait en attente », ses DEUX formulaires — jamais le menu — et
+ * rien d'autre ne bouge.
+ */
+describe('la vue du retrait sans JavaScript — ?retirer=<id> (#5387)', () => {
+  const MIEN = rendus(
+    [brut({ id: 'm1', content: 'Je le mets dans mars.', originalLanguage: 'fr', translations: [], senderId: 'u1', sender: { id: 'u1', displayName: 'Amina' } })],
+    ['fr'],
+    'u1',
+  );
+
+  it('la ligne visée porte la classe, la mention, et DEUX formulaires — jamais le menu', () => {
+    const html = SANS_GABARIT(ETAT_DOC(MIEN, { retrait: 'm1' }));
+    expect(html).toContain('<li class="ligne mien retrait-en-attente"');
+    expect(html).toContain('<div class="retrait-servie">');
+    expect(html).toContain(FIL.retraitEnAttente);
+    expect(html).toContain('name="annuler-le-retrait" value="m1"');
+    expect(html).toContain('name="retirer" value="m1"');
+    expect(html).toContain('name="confirme" value="1"');
+    expect(html).toContain(FIL.confirmerLeRetrait);
+    // Le menu n'est PAS rendu pour cette ligne — les deux formulaires SONT le menu.
+    expect(html).not.toContain('<details class="actions">');
+  });
+
+  /**
+   * DÉFAUT MAJEUR DE REVUE #5387 — « rien n'annonce le retrait au lecteur
+   * d'écran, sans JavaScript ». MESURÉ au navigateur : `autofocus` sur
+   * « Annuler » NE FONCTIONNE PAS ici, la redirection portant TOUJOURS un
+   * FRAGMENT (`#m-<id>`, `adresseDuMessage`) — la « partie indiquée du
+   * document » (WHATWG) l'emporte sur `autofocus`. `tabindex="-1"` sur la
+   * LIGNE elle-même est le mécanise NATIF qui pose le focus SANS script,
+   * exactement comme le fragment le ferait pour n'importe quel élément
+   * focalisable (voir le doc-comment de `retraitServi`, `fil-lignes.ts`).
+   */
+  it('la ligne visée porte tabindex="-1" — le fragment #m-<id> la rend focalisable sans JavaScript', () => {
+    const html = SANS_GABARIT(ETAT_DOC(MIEN, { retrait: 'm1' }));
+    expect(html).toMatch(/<li class="ligne mien retrait-en-attente" id="m-m1" data-id="m1" tabindex="-1"/);
+    expect(html).not.toContain('autofocus');
+  });
+
+  it('une ligne ORDINAIRE ne porte PAS tabindex="-1" — pas un arrêt Tab de plus pour rien', () => {
+    const html = SANS_GABARIT(ETAT_DOC(MIEN));
+    expect(html).not.toContain('tabindex="-1"');
+  });
+
+  it('le texte du message reste lisible — jamais remplacé (la passerelle n’a rien reçu)', () => {
+    const html = SANS_GABARIT(ETAT_DOC(MIEN, { retrait: 'm1' }));
+    expect(html).toContain('Je le mets dans mars.');
+  });
+
+  it('sans ?retirer=, aucune trace de la fenêtre', () => {
+    const html = SANS_GABARIT(ETAT_DOC(MIEN));
+    expect(html).not.toContain('<div class="retrait-servie">');
+    expect(html).not.toMatch(/<li class="[^"]*retrait-en-attente/);
+    expect(html).toContain('<details class="actions">');
+  });
+
+  it('une cible que la porte n’a pas résolue (retrait: null) rend le fil NOMINAL', () => {
+    const html = SANS_GABARIT(ETAT_DOC(MIEN, { retrait: null }));
+    expect(html).not.toMatch(/<li class="[^"]*retrait-en-attente/);
+    expect(html).toContain('<details class="actions">');
   });
 });
 

@@ -210,6 +210,30 @@ describe('[hidden] l’emporte sur toute règle de display', () => {
   });
 });
 
+/**
+ * UN ÉCRAN LARGE N'EST PAS UN TÉLÉPHONE CENTRÉ — premier pas desktop (2026-09-06).
+ *
+ * Toute la v3 borne ses écrans à `var(--shell-width)` (680 px) ; à 1440 px,
+ * plus de la moitié de la fenêtre restait vide (mesuré au rendu, demande
+ * porteur). La bascule vit dans la TABLE DE JETONS — la règle 28 interdit à
+ * toute feuille de déclarer une variable, et c'est elle qui a renvoyé ce
+ * témoin au bon site — et redéfinit LA VARIABLE plutôt que d'éditer chaque
+ * conteneur : les huit écrans qui la consomment suivent d'un seul site. Le
+ * jour où une planche desktop tranche une autre géographie (deux colonnes
+ * liste + fil), c'est cette seule règle qui se reprend.
+ */
+describe('au-delà de 1024 px, la coquille passe en largeur wide', () => {
+  it('la table de jetons redéfinit --shell-width vers --shell-width-wide sous @media', () => {
+    const jetons = readFileSync(
+      join(__dirname, '..', '..', '..', 'packages', 'design-tokens', 'tokens.css'),
+      'utf8',
+    );
+    const bascule = jetons.replace(/\s+/g, '');
+    expect(bascule).toContain('@media(min-width:1024px){:root{--shell-width:var(--shell-width-wide);}}');
+    expect(SOCLE_DU_DOCUMENT).not.toContain('--shell-width-wide');
+  });
+});
+
 describe('règle 2 — corps 17 px, pile système, aucune police demandée', () => {
   it('pose le corps sur la pile native, en --text-md et interligne détendu', () => {
     expect(SOCLE_DU_DOCUMENT).toContain('font-family:var(--font-native)');
