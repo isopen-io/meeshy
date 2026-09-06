@@ -2727,6 +2727,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         var montages = 0
         var ancienComposer = 0
         var racinesQuiMontent: Set<String> = []
+        var racinesQuiMontentLAncien: Set<String> = []
         for case let url as URL in enumerateur where url.pathExtension == "swift" {
             let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             declarations += occurrences(of: "struct DocumentComposerDoor", in: source)
@@ -2741,7 +2742,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             // comptée par ce motif. Un premier jet la retranchait quand même
             // et rendait −1 — une garde qui se trompe de signe accuse un code
             // sain.
-            ancienComposer += occurrences(of: "FeedComposerSheet(", in: source)
+            let a = occurrences(of: "FeedComposerSheet(", in: source)
+            ancienComposer += a
+            if a > 0 { racinesQuiMontentLAncien.insert(url.lastPathComponent) }
         }
 
         XCTAssertEqual(declarations, 1, "La porte doit exister, et une seule fois — sinon la garde ne mesure rien.")
@@ -2776,13 +2779,49 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 + "texte alternatif — sur une app où toute photo devient une scène. "
                 + "Racines mesurées : \(racinesQuiMontent.sorted())"
         )
+        // **T3.2 est DIFFÉRÉE — les deux CITATIONS restent sur l'ancien
+        // composer** (2026-09-06, après mesure de la chaîne d'envoi).
+        //
+        // Cette assertion a exigé `ancienComposer == 0` pendant quelques heures,
+        // sur la foi de la directive porteur du jour (« dans tous les cas iPad
+        // et iOS doivent utiliser le nouveau composer »). La directive reste la
+        // cible ; la condition technique qu'elle suppose n'est pas remplie, et
+        // `DocumentComposerDoor` l'écrivait déjà : elle NE sert PAS la citation
+        // avant la **levée 7.5** — un écrivain durable du repost.
+        //
+        // Mesuré, la chaîne entière : une citation pose `repostOfId`, donc
+        // `ComposerDocumentSendRouting.path(isQuote: true)` rend
+        // `.quotedRepost`, dont `isDurable` vaut `false`, donc le plan rend
+        // `.refuse(.nonDurablePath)`, donc `publishDocument` appelle `refuse()`.
+        // **Citer un post était devenu impossible sur les DEUX racines** :
+        // l'auteur recevait « publication impossible » à chaque envoi. Et la
+        // voie durable ne peut pas le rattraper — `PublishIntent.document` ne
+        // porte aucun `repostOfId`.
+        //
+        // > Un témoin qui verrouille l'état CIBLE d'une migration inachevée
+        // > verrouille l'état CASSÉ. Il doit mesurer ce que le produit fait,
+        // > pas ce qu'on voudrait qu'il fasse — sinon il défend la régression
+        // > contre le correctif.
+        //
+        // Ce compte redeviendra `0` quand 7.5 sera livrée, et c'est le sens des
+        // deux assertions ci-dessous : les citations, exactement, et rien de
+        // plus. Un TROISIÈME montage de l'ancien composer serait, lui, une vraie
+        // régression — un chemin qui aurait dû passer au meuble et ne l'a pas.
         XCTAssertEqual(
-            ancienComposer, 0,
-            "Plus aucun site ne doit monter `FeedComposerSheet` — l'ANCIEN composer, qui publie avec "
-                + "`storyEffects: nil`. C'est l'achèvement de T3.2 : sa déclaration survit encore (code "
-                + "mort, suppression dans un lot à part) mais rien ne l'ouvre. Un montage qui revient "
-                + "réintroduirait deux formats de publication dans la même app, sans que rien ne le dise "
-                + "à l'auteur."
+            ancienComposer, 2,
+            "Exactement DEUX sites montent encore `FeedComposerSheet` : les deux CITATIONS, que "
+                + "`DocumentComposerDoor` refuse tant que le repost n'a pas de file durable (levée 7.5). "
+                + "Zéro dirait que T3.2 a été prise — vérifier alors que `.quotedRepost` est devenu "
+                + "durable, sans quoi citer un post ne publie plus rien. Trois ou plus dirait qu'un "
+                + "chemin est retombé sur l'ancien composer, qui publie avec `storyEffects: nil`. "
+                + "Montages mesurés : \(ancienComposer)"
+        )
+        XCTAssertEqual(
+            racinesQuiMontentLAncien, ["FeedView.swift", "RootViewComponents.swift"],
+            "Et ce sont les DEUX racines — `RootViewComponents` (iPhone) et `FeedView` (iPad) —, "
+                + "chacune pour sa citation. Une racine qui disparaît de ce SET a migré sa citation vers "
+                + "une porte qui la REFUSE en la faisant échouer à l'envoi. "
+                + "Racines mesurées : \(racinesQuiMontentLAncien.sorted())"
         )
         // **RETOURNÉE au T3.1.** `.microphone` avait gagné son effet
         // (`.attachesTranscribedAudio`) au T2.6, dernier des six outils — la
