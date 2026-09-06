@@ -30,9 +30,16 @@ final class CameraPreviewLayerUpdateUIViewSourceGuardTests: XCTestCase {
     /// future occurrence non liée de `DispatchQueue.main.async` ailleurs dans `CameraView.swift` ne
     /// doit ni faire échouer ni masquer cette garde précise.
     private func updateUIViewBody(in src: String) throws -> String {
-        let marker = "func updateUIView(_ uiView: UIView, context: Context) {"
+        // **Le NOM, jamais la SIGNATURE** (2026-09-06). Ce marqueur épinglait
+        // `(_ uiView: UIView, context: Context)`. Le paramètre est devenu
+        // `PreviewHost` — un type d'hôte plus précis —, et la garde a cessé de
+        // trouver son bloc : elle a rougi en accusant le fichier d'« avoir
+        // changé de forme », alors qu'elle ne mesurait plus rien. Une garde
+        // aveugle est pire que rouge, parce qu'un `DispatchQueue.main.async`
+        // réintroduit dans ce corps serait passé inaperçu.
+        let marker = "func updateUIView("
         guard let start = src.range(of: marker) else {
-            XCTFail("Signature de updateUIView introuvable — CameraView.swift a changé de forme.")
+            XCTFail("`func updateUIView(` introuvable dans CameraView.swift — la garde ne mesure plus rien.")
             throw XCTSkip("marker")
         }
         guard let end = src.range(of: "\n    func makeCoordinator()", range: start.upperBound..<src.endIndex) else {
