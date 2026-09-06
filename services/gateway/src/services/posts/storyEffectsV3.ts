@@ -475,6 +475,51 @@ export function convertV1ToV3(
 const CLAIM_BEARING_KINDS: ReadonlySet<string> = new Set(['sticker', 'media']);
 const CLAIM_PAYLOAD_KEYS = ['mediaId', 'postMediaId'] as const;
 
+/**
+ * Rewrites `payload.mediaId` / `payload.postMediaId` references inside a v3+
+ * canvas's `scenes[].objects[]`, using `idMap` (old `PostMedia` id → new
+ * `PostMedia` id) — the v3 counterpart of `remapStoryEffectsMediaIds`
+ * (`storyEffectsMediaRemap.ts`), needed because a v3 blob has no
+ * `mediaObjects[]` / `audioPlayerObjects[]` for that function to walk (#4883):
+ * its media references live under `scenes[].objects[].payload`, exactly where
+ * `unclaimedCanvasMediaIds` already reads them. Sharing `CLAIM_PAYLOAD_KEYS`
+ * keeps the two in lockstep by construction — a third key added to one is a
+ * key the other must also gain.
+ *
+ * Returns `null` when `blob` isn't v3-native (caller falls back to the legacy
+ * reader), never when there's simply nothing to remap — `changed: false`
+ * covers that case, matching the legacy function's contract.
+ */
+export function remapCanvasV3MediaIds(
+  blob: unknown,
+  idMap: Readonly<Record<string, string>>
+): { blob: CanvasV3; changed: boolean } | null {
+  if (!isCanvasV3OrNewer(blob)) return null;
+  let changed = false;
+  const scenes = asArray((blob as { scenes?: unknown }).scenes).map((scene) => {
+    const objects = asArray(scene.objects).map((object) => {
+      const payload = typeof object.payload === 'object' && object.payload !== null
+        ? (object.payload as Record<string, unknown>)
+        : undefined;
+      if (!payload) return object;
+      let payloadChanged = false;
+      const nextPayload = { ...payload };
+      for (const key of CLAIM_PAYLOAD_KEYS) {
+        const id = str(payload[key]);
+        const mapped = id !== undefined ? idMap[id] : undefined;
+        if (mapped === undefined || mapped === id) continue;
+        nextPayload[key] = mapped;
+        payloadChanged = true;
+      }
+      if (!payloadChanged) return object;
+      changed = true;
+      return { ...object, payload: nextPayload };
+    });
+    return { ...scene, objects };
+  });
+  return { blob: { ...(blob as CanvasV3), scenes } as CanvasV3, changed };
+}
+
 export function unclaimedCanvasMediaIds(
   blob: unknown,
   claimedMediaIds: readonly string[]

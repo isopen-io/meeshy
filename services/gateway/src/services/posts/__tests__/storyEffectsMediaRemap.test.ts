@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { remapStoryEffectsMediaIds } from '../storyEffectsMediaRemap';
+import { isRecognizedStoryEffectsShape, remapStoryEffectsMediaIds } from '../storyEffectsMediaRemap';
 
 describe('remapStoryEffectsMediaIds', () => {
   it('remaps mediaObjects[].postMediaId using the id map', () => {
@@ -86,5 +86,130 @@ describe('remapStoryEffectsMediaIds', () => {
       stickerObjects: [{ id: 'sticker-1', emoji: '🔥' }],
       mediaObjects: [{ id: 'el-1', postMediaId: 'new-1' }],
     });
+  });
+
+  describe('v3 canvas blobs (#4883)', () => {
+    it('remaps payload.postMediaId inside scenes[].objects[]', () => {
+      const effects = {
+        v: 3,
+        scenes: [{
+          id: 's1',
+          objects: [{ id: 'o1', kind: 'media', payload: { postMediaId: 'old-1' } }],
+        }],
+      };
+      const result = remapStoryEffectsMediaIds(effects, { 'old-1': 'new-1' });
+
+      expect(result.changed).toBe(true);
+      expect(result.effects).toEqual({
+        v: 3,
+        scenes: [{
+          id: 's1',
+          objects: [{ id: 'o1', kind: 'media', payload: { postMediaId: 'new-1' } }],
+        }],
+      });
+    });
+
+    it('remaps payload.mediaId (sticker) alongside payload.postMediaId, across multiple scenes', () => {
+      const effects = {
+        v: 3,
+        scenes: [
+          { id: 's1', objects: [{ id: 'o1', kind: 'sticker', payload: { mediaId: 'old-1' } }] },
+          { id: 's2', objects: [{ id: 'o2', kind: 'media', payload: { postMediaId: 'old-2' } }] },
+        ],
+      };
+      const result = remapStoryEffectsMediaIds(effects, { 'old-1': 'new-1', 'old-2': 'new-2' });
+
+      expect(result.changed).toBe(true);
+      expect(result.effects).toEqual({
+        v: 3,
+        scenes: [
+          { id: 's1', objects: [{ id: 'o1', kind: 'sticker', payload: { mediaId: 'new-1' } }] },
+          { id: 's2', objects: [{ id: 'o2', kind: 'media', payload: { postMediaId: 'new-2' } }] },
+        ],
+      });
+    });
+
+    it('supports a repost-of-repost: remapping the immediate ancestor\'s ids is enough at each hop', () => {
+      // Depth-2 chain: hop 1 already rewrote grandparent's id to parent's id;
+      // this call is hop 2, remapping parent's id to this repost's own id.
+      const parentEffects = {
+        v: 3,
+        scenes: [{ id: 's1', objects: [{ id: 'o1', kind: 'media', payload: { postMediaId: 'parent-1' } }] }],
+      };
+      const result = remapStoryEffectsMediaIds(parentEffects, { 'parent-1': 'grandchild-1' });
+
+      expect(result.changed).toBe(true);
+      expect(result.effects).toEqual({
+        v: 3,
+        scenes: [{ id: 's1', objects: [{ id: 'o1', kind: 'media', payload: { postMediaId: 'grandchild-1' } }] }],
+      });
+    });
+
+    it('leaves an id unchanged when it is absent from the id map', () => {
+      const effects = {
+        v: 3,
+        scenes: [{ id: 's1', objects: [{ id: 'o1', kind: 'media', payload: { postMediaId: 'untracked-1' } }] }],
+      };
+      const result = remapStoryEffectsMediaIds(effects, { 'old-1': 'new-1' });
+
+      expect(result.changed).toBe(false);
+      expect(result.effects).toEqual(effects);
+    });
+
+    it('preserves objects that carry no payload id and unrelated top-level fields', () => {
+      const effects = {
+        v: 3,
+        sound: { source: { t: 'original' }, volume: 1 },
+        scenes: [{
+          id: 's1',
+          objects: [
+            { id: 'o1', kind: 'text', payload: { text: 'hi' } },
+            { id: 'o2', kind: 'media', payload: { postMediaId: 'old-1' } },
+          ],
+        }],
+      };
+      const result = remapStoryEffectsMediaIds(effects, { 'old-1': 'new-1' });
+
+      expect(result.changed).toBe(true);
+      expect(result.effects).toEqual({
+        v: 3,
+        sound: { source: { t: 'original' }, volume: 1 },
+        scenes: [{
+          id: 's1',
+          objects: [
+            { id: 'o1', kind: 'text', payload: { text: 'hi' } },
+            { id: 'o2', kind: 'media', payload: { postMediaId: 'new-1' } },
+          ],
+        }],
+      });
+    });
+  });
+});
+
+describe('isRecognizedStoryEffectsShape', () => {
+  it('recognizes a v3-native blob', () => {
+    expect(isRecognizedStoryEffectsShape({ v: 3, scenes: [] })).toBe(true);
+  });
+
+  it('recognizes a document from a rank newer than v3 (read tolerantly, like the rest of this file)', () => {
+    expect(isRecognizedStoryEffectsShape({ v: 4, scenes: [] })).toBe(true);
+  });
+
+  it('recognizes the legacy shape via mediaObjects, even when empty', () => {
+    expect(isRecognizedStoryEffectsShape({ mediaObjects: [] })).toBe(true);
+  });
+
+  it('recognizes the legacy shape via audioPlayerObjects, even when empty', () => {
+    expect(isRecognizedStoryEffectsShape({ audioPlayerObjects: [] })).toBe(true);
+  });
+
+  it('does not recognize a blob with neither a v3 marker nor either legacy media key', () => {
+    expect(isRecognizedStoryEffectsShape({ textObjects: [{ id: 'el-1', text: 'hi' }] })).toBe(false);
+  });
+
+  it('does not recognize undefined, null, or a non-object value', () => {
+    expect(isRecognizedStoryEffectsShape(undefined)).toBe(false);
+    expect(isRecognizedStoryEffectsShape(null)).toBe(false);
+    expect(isRecognizedStoryEffectsShape('not-an-object')).toBe(false);
   });
 });

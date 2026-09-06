@@ -26,7 +26,7 @@ import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
-import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { correctRepostStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
@@ -2474,36 +2474,14 @@ export class PostService {
         // reader's plain `postMediaId` lookup (scoped to the post's own
         // `media[]`) would never find them — the exact "contenu non affiché"
         // bug. Rewrite them here so every repost is self-contained regardless
-        // of chain depth.
-        let finalRepost = repost;
-        if (snapshotStoryEffects !== undefined) {
-          const repostMedia = repost.media ?? [];
-          const idMap: Record<string, string> = {};
-          originalMedia.forEach((om, idx) => {
-            const newMedia = repostMedia[idx];
-            if (newMedia) {
-              idMap[om.id] = newMedia.id;
-            }
-          });
-
-          const remapped = remapStoryEffectsMediaIds(snapshotStoryEffects, idMap);
-          if (remapped.changed) {
-            try {
-              await this.prisma.post.update({
-                where: { id: repost.id },
-                data: { storyEffects: remapped.effects },
-              });
-              // Cast: `remapped.effects` is `Prisma.InputJsonValue` (write-side
-              // JSON type); `repost.storyEffects` is Prisma's read-side JSON
-              // output type. They're structurally the same data, but Prisma
-              // generates them as separate, not-mutually-assignable aliases —
-              // this cast bridges that without widening to `any`.
-              finalRepost = { ...repost, storyEffects: remapped.effects as typeof repost.storyEffects };
-            } catch (err) {
-              log.warn('repostPost: failed to correct storyEffects media ids', { repostId: repost.id, err });
-            }
-          }
-        }
+        // of chain depth (v3 canvas blobs included — #4883).
+        const finalRepost = await correctRepostStoryEffectsMediaIds({
+          prisma: this.prisma,
+          log,
+          repost,
+          originalMediaIds: originalMedia.map((om) => om.id),
+          snapshotStoryEffects,
+        });
 
         await this.prisma.post.update({
           where: { id: postId },
