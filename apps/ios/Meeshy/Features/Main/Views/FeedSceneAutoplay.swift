@@ -125,17 +125,38 @@ struct PostSceneCard: View {
                   createdAt: post.timestamp)
     }
 
+    /// **La scène jouée** — celle que le cadrage regarde, et la seule que le
+    /// player monte. Une publication multi-scènes est servie par
+    /// `PostSceneMosaic`, pas ici.
+    private var sceneJouee: SceneV3? { document.scenes.first }
+
+    /// La zone à montrer, et le rapport que la carte adopte. `nil` ⇒ le
+    /// gabarit 9:16 d'origine, inchangé.
+    private var cadre: CGRect? {
+        sceneJouee.flatMap { SceneFraming.focus(scene: $0) }
+    }
+
     var body: some View {
-        MeeshyScenePlayer(
-            document: document,
-            mode: .card,
-            sceneIndex: .constant(0),
-            isPlaying: .constant(isActive),
-            accentColorHex: accentColor,
-            carrier: carrier
-        )
-        .preferredContentLanguages(preferredContentLanguages)
-        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        // **Le cadrage enveloppe le player, il ne le remplace pas** : la scène
+        // rendue reste entière, c'est la fenêtre qui bouge. Sans cadre,
+        // `SceneFocusFrame` s'efface et le rendu est celui d'avant, à
+        // l'identique.
+        SceneFocusFrame(focus: cadre) {
+            MeeshyScenePlayer(
+                document: document,
+                mode: .card,
+                sceneIndex: .constant(0),
+                isPlaying: .constant(isActive),
+                accentColorHex: accentColor,
+                carrier: carrier
+            )
+            .preferredContentLanguages(preferredContentLanguages)
+        }
+        // Le rapport SUIT le cadre — sinon la carte remplirait une boîte au
+        // mauvais rapport et rognerait de nouveau ce que le cadrage venait de
+        // choisir.
+        .aspectRatio(sceneJouee.flatMap { SceneFraming.cardAspect(scene: $0) } ?? (9.0 / 16.0),
+                     contentMode: .fit)
         .frame(maxWidth: Self.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipShape(RoundedRectangle(cornerRadius: 16))

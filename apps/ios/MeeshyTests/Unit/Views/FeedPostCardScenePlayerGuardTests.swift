@@ -159,17 +159,42 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
 
     // MARK: - 3. Hauteur dérivée du ratio 9:16 sur la largeur RÉELLE (correctif rejet DoD rév. 15, constat 2)
 
+    /// **Le témoin garde la RÈGLE, plus le littéral** (révision 2026-09-06).
+    ///
+    /// Il exigeait `.aspectRatio(9.0 / 16.0, …)` au caractère près. Sa raison
+    /// écrite, elle, n'a jamais porté sur le nombre : « dériver la hauteur d'un
+    /// RATIO appliqué à la largeur réellement proposée par le parent, jamais
+    /// une hauteur en POINTS figée sur la largeur maximale ». C'est la forme
+    /// qui compte, et le 9:16 n'en était qu'une valeur.
+    ///
+    /// Le cadrage par contenu (#5322) rend ce ratio VARIABLE : une carte qui
+    /// resserre sur la bande d'une photo paysage adopte le rapport de cette
+    /// bande. Épingler `9.0 / 16.0` interdisait donc la feature au nom d'une
+    /// règle qu'elle respecte.
+    ///
+    /// > Un témoin qui épingle une VALEUR là où sa raison parle d'une FORME
+    /// > rougit sur le premier changement légitime — et pousse à l'affaiblir
+    /// > au lieu de le repointer. Il garde désormais les deux moitiés qui
+    /// > comptent : un ratio est appliqué, et aucune hauteur n'est figée.
     func test_scenePlayer_usesAspectRatioNineBySixteen() throws {
         let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
-            block.contains(".aspectRatio(9.0 / 16.0, contentMode: .fit)"),
-            "La scène de carte doit dériver sa hauteur du ratio 9:16 appliqué à la largeur " +
-            "RÉELLEMENT proposée par le parent — même patron que le voisin StoryRepostEmbedCell " +
-            "(même hôte StoryReaderRepresentable, même fil) — jamais une hauteur en points figée " +
-            "sur la largeur MAXIMALE (420pt × 16/9 = 747pt), qui déforme la scène dès que la " +
-            "largeur réelle de la carte (≈329pt sur iPhone 16 Pro, après le double padding " +
-            "horizontal de 16pt) est inférieure au plafond."
+            block.contains(".aspectRatio(") && block.contains("contentMode: .fit"),
+            "La scène de carte doit dériver sa hauteur d'un RATIO appliqué à la largeur " +
+            "réellement proposée par le parent — même patron que le voisin StoryRepostEmbedCell."
+        )
+        XCTAssertFalse(
+            block.contains(".frame(height:"),
+            "…et jamais d'une hauteur en POINTS figée sur la largeur MAXIMALE " +
+            "(420pt × 16/9 = 747pt), qui déforme la scène dès que la largeur réelle de la " +
+            "carte (≈329pt sur iPhone 16 Pro, après le double padding horizontal de 16pt) " +
+            "est inférieure au plafond."
+        )
+        XCTAssertTrue(
+            block.contains("9.0 / 16.0"),
+            "Le 9:16 doit rester le REPLI : sans cadrage à appliquer, la carte garde le " +
+            "gabarit de composition de la scène."
         )
     }
 
