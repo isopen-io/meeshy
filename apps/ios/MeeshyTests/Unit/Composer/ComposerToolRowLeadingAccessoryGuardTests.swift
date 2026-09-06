@@ -74,7 +74,7 @@ final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
 
     // MARK: - `toolRow` rend le slot DANS le même HStack que les icônes
 
-    func test_toolRow_rendersLeadingAccessoryInsideTheSameHStackAsTheIcons() throws {
+    func test_toolRow_rendersLeadingAccessoryInsideItsHStack_aheadOfTheTrailingOne() throws {
         let source = try surfaceSource()
         guard let toolRow = body(of: "private var toolRow: some View {", in: source) else {
             return XCTFail("`toolRow` introuvable — la garde ne mesurerait rien.")
@@ -90,12 +90,27 @@ final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
         // `toolRowLeadingAccessory != nil` (pour ne pas cacher le chip quand
         // `tools` est vide) — une première occurrence LÉGITIME avant le
         // `HStack`, que `range(of:)` sans borne aurait prise pour LE slot.
+        // **Les OUTILS ont quitté cette rangée** (2026-09-06). Le repère de fin
+        // était `ForEach(tools` ; les icônes vivent désormais dans `toolRail`,
+        // une COLONNE verticale, et les deux accessoires sont restés en bas près
+        // du socle. Ce n'est pas une perte : la puce de lieu et la capsule de
+        // langue disent d'où l'on publie et dans quelle langue — des métadonnées
+        // de la PUBLICATION, pas des outils de composition. C'est la répartition
+        // par NIVEAU du `CLAUDE.md` iOS (§ « les trois zones du plateau »).
+        //
+        // > Le repère qui disait « slot de TÊTE » a déménagé ; la TÊTE, elle,
+        // > existe toujours. Ce qui la définit est désormais la symétrie avec le
+        // > slot de QUEUE, dans le même `HStack` — et cette symétrie survit au
+        // > départ des icônes, alors qu'un repère posé sur elles ne le pouvait
+        // > pas.
         guard let hstackRange = toolRow.range(of: "HStack(spacing: 16) {"),
               let accessoryRange = toolRow.range(
                 of: "toolRowLeadingAccessory", range: hstackRange.upperBound..<toolRow.endIndex
               ),
-              let forEachRange = toolRow.range(of: "ForEach(tools") else {
-            return XCTFail("Structure de `toolRow` inattendue — HStack/accessoire/ForEach introuvables.")
+              let trailingRange = toolRow.range(
+                of: "toolRowTrailingAccessory", range: hstackRange.upperBound..<toolRow.endIndex
+              ) else {
+            return XCTFail("Structure de `toolRow` inattendue — HStack ou l'un des deux accessoires introuvable.")
         }
         XCTAssertTrue(
             hstackRange.lowerBound < accessoryRange.lowerBound,
@@ -103,9 +118,10 @@ final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
                 + "sinon il resterait hors de la disposition qui garantit l'absence de chevauchement."
         )
         XCTAssertTrue(
-            accessoryRange.lowerBound < forEachRange.lowerBound,
-            "`toolRowLeadingAccessory` doit précéder `ForEach(tools` : c'est le slot de TÊTE de la rangée, "
-                + "symétrique de la place qu'occupait l'ancien overlay `.bottomLeading`."
+            accessoryRange.lowerBound < trailingRange.lowerBound,
+            "`toolRowLeadingAccessory` doit précéder `toolRowTrailingAccessory` : c'est le slot de TÊTE de la "
+                + "rangée, symétrique de la place qu'occupait l'ancien overlay `.bottomLeading`. Les deux dans "
+                + "le désordre remettraient la puce de lieu là où la capsule de langue est attendue."
         )
     }
 
