@@ -145,8 +145,28 @@ struct SocialSceneFullscreenView: View {
             //
             // > Un compteur juste au-dessus d'un contenu faux est pire qu'un
             // > compteur absent : il affirme que le geste a porté.
+            //
+            // **Et ce filet a passé une journée INERTE** (mesuré le 2026-09-06,
+            // deux scènes de couleurs distinctes) : il était gardé par
+            // `if pageCourante != vise`, alors que l'`init` venait de poser
+            // `vise` dans `_pageCourante`. La condition était donc TOUJOURS
+            // fausse — sur le cas exact que le filet existe pour rattraper.
+            //
+            // > **Un filet gardé par une condition que son propre
+            // > initialiseur rend fausse ne s'arme jamais.** Il compile, il se
+            // > lit bien, il cite la bonne leçon — et il ne tire pas. Le
+            // > symptôme est identique à son absence, ce qui l'a rendu
+            // > invisible : le compteur annonçait « 2 / 2 » au-dessus de la
+            // > scène 1, exactement comme avant qu'on l'écrive.
+            //
+            // Reposer la MÊME valeur ne produit rien non plus : `scrollPosition`
+            // n'observe qu'un CHANGEMENT. On la retire donc, puis on la remet à
+            // la passe suivante — la seule forme qui produise une transition
+            // que le défilement puisse suivre.
             let vise = identifiantDePage(startSceneIndex)
-            if pageCourante != vise { pageCourante = vise }
+            guard startSceneIndex > 0 else { return }
+            pageCourante = nil
+            DispatchQueue.main.async { pageCourante = vise }
         }
         .onDisappear { isPlaying = false }
     }
