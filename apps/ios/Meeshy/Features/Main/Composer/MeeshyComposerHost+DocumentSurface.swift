@@ -234,7 +234,8 @@ extension MeeshyComposerHost {
             slideImages: viewModel.slideImages,
             loadedImages: viewModel.loadedImages,
             imagesVersion: viewModel.loadedImagesVersion,
-            onSelect: { viewModel.selectSlide(at: $0) }))
+            onSelect: { viewModel.selectSlide(at: $0) },
+            onDelete: { viewModel.removeSlide(at: $0) }))
     }
 
     var documentContentMedia: [ComposerContentMedia] {

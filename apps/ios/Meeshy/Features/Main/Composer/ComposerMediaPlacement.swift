@@ -114,6 +114,27 @@ nonisolated enum ComposerHeaderTiles {
     static func tiles(for slides: [StorySlide]) -> [StorySlide] {
         slides
     }
+
+    /// **Quelle tuile porte la corbeille** (constat porteur 2026-09-06 : « il
+    /// manque la poubelle pour supprimer les scènes »).
+    ///
+    /// Deux conditions, et chacune évite un contrôle qui MENT :
+    ///
+    /// 1. **la tuile COURANTE seulement.** Une corbeille sur chaque tuile ferait
+    ///    six cibles destructrices dans une rangée où le doigt navigue ; le
+    ///    geste de suppression vise ce qu'on REGARDE, comme l'ancienne rangée le
+    ///    faisait déjà pour les médias (`showsRemove(isSelected:…)`) ;
+    /// 2. **jamais sous deux scènes.** `removeSlide` refuse de descendre
+    ///    au-dessous d'une slide (`guard slides.count > 1`) : offrir la
+    ///    corbeille là serait un bouton qui ne fait rien — exactement le
+    ///    contrôle inerte que la loi 4 interdit.
+    ///
+    /// > La seconde condition ne se DÉDUIT pas de la première : une rangée
+    /// > montée à une seule scène aurait une tuile courante, donc une corbeille,
+    /// > et elle serait morte. C'est le modèle qui la donne, pas la vue.
+    static func showsDelete(sceneIndex: Int, currentIndex: Int, sceneCount: Int) -> Bool {
+        sceneCount > 1 && sceneIndex == currentIndex
+    }
 }
 
 /// **Quand la scène reste MONTÉE** (#4724, défaut V2 mesuré au simulateur).
