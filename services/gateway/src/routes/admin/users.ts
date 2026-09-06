@@ -38,7 +38,7 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
-import { logError } from '../../utils/logger.js';
+import { logError, logWarn } from '../../utils/logger.js';
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -87,7 +87,7 @@ function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker
     io: fastify.socketIOHandler?.getManager?.()?.getIO(),
     userId,
     reason: 'admin_revoke',
-    onError: (err) => fastify.log.warn({ err, userId }, '[ADMIN] socket fanout failed on user deactivation'),
+    onError: (err) => logWarn(fastify.log, `[ADMIN] socket fanout failed on user deactivation (userId=${userId})`, err),
   });
 }
 
