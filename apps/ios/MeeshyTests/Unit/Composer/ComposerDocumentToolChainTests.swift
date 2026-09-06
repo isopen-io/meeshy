@@ -404,34 +404,21 @@ final class ComposerDocumentToolChainTests: XCTestCase {
 
     // MARK: - Un CANVAS seul, sans texte ni média ni lieu, peut partir
 
-    /// **Le cas mesuré au simulateur le 2026-09-05** (directive porteur : « des
-    /// tests de canvas sans image avec texte sticker dessin, avec fond couleur
-    /// uniquement »).
-    ///
-    /// Un fond de couleur + un texte posé sur la scène : le composer peint
-    /// tout, la flèche s'arme — et le plan refusait `.emptyDraft`. L'auteur
-    /// voyait « Erreur lors de la publication » sur une composition entière.
-    ///
-    /// > **Le même oubli à deux étages.** La porte de la flèche ne comptait pas
-    /// > la matière du canvas ; le plan d'envoi non plus. Corriger la première
-    /// > a rendu le second visible — et sans lui, l'auteur passait d'un bouton
-    /// > mort à un bouton qui échoue, ce qui est pire : le premier ne promet
-    /// > rien, le second promet et trahit.
-    func test_unCanvasSeul_sansTexteNiMediaNiLieu_peutPartir() {
-        var effets = StoryEffects()
-        effets.background = "#F43F5E"
-        let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "", visibility: .public,
-            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
-            references: [], storyEffects: effets, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:]
-        )
-        XCTAssertNotEqual(
-            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
-            "Un canvas est de la matière — un fond CHOISI est le geste le plus court qui produise " +
-            "une publication qu'on peut regarder."
-        )
-    }
+    // **Le témoin « un canvas SEUL part » a été RETIRÉ le 2026-09-06.**
+    //
+    // Il affirmait qu'un fond de couleur nu suffisait à publier — vrai le
+    // 2026-09-05, faux le lendemain : « il faut juste rendre impossible la
+    // publication de canvas vide sans texte, ni autre type d'object ».
+    //
+    // Il n'est pas corrigé mais SUPPRIMÉ, parce que sa moitié encore vraie est
+    // déjà dite ailleurs, mieux : `test_leMemeFond_avecUnTexte_publie` couvre
+    // « un canvas avec objet part », et les deux témoins ci-dessous couvrent
+    // les deux refus. Le garder « corrigé » aurait fait trois témoins pour deux
+    // règles, dont un dont personne n'aurait su ce qu'il ajoutait.
+    //
+    // > **Une garde qui épingle une décision renversée rougit sur le
+    // > correctif** — et se lit comme une régression. C'est la deuxième fois
+    // > cette nuit ; la première était sur le tap de la carte de scène.
 
     /// **Un FOND DE COULEUR NU ne publie pas un post** (directive porteur
     /// 2026-09-06).
