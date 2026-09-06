@@ -25,6 +25,10 @@ jest.mock('@/services/auth-manager.service', () => ({
     getAuthToken: (...args: any[]) => mockGetAuthToken(...args),
     decodeJWT: (...args: any[]) => mockDecodeJWT(...args),
     clearAllSessions: (...args: any[]) => mockClearAllSessions(...args),
+    // `api.service.ts` lit désormais `useAuthStore` (#4405 étape 2, sessionToken
+    // du rafraîchissement) : le store RÉEL se charge donc dans cette suite et
+    // s'enregistre auprès d'`authManager` à sa création.
+    registerOnClear: jest.fn(),
   },
 }));
 

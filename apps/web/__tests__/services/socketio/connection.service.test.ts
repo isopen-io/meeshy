@@ -42,6 +42,10 @@ const mockAuthManager = {
 const mockGetConversationApiId = jest.fn().mockReturnValue('conv-api-id');
 const mockTriggerManualUpdateCheck = jest.fn();
 const mockAuthRefreshToken = jest.fn().mockResolvedValue({});
+// #4405 étape 2 — `AuthManager` n'a pas de lecteur pour le `sessionToken`
+// du compte inscrit ; seul le store Zustand le garde. `null` par défaut :
+// la plupart des témoins existants ne parlent pas de session.
+const mockAuthStoreGetState = jest.fn().mockReturnValue({ sessionToken: null });
 
 const SERVER_EVENTS_MOCK = {
   AUTHENTICATED: 'authenticated',
@@ -99,6 +103,10 @@ jest.mock('@/services/auth.service', () => ({
   authService: {
     refreshToken: (...args: unknown[]) => mockAuthRefreshToken(...args),
   },
+}));
+
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: { getState: (...args: unknown[]) => mockAuthStoreGetState(...args) },
 }));
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
@@ -196,6 +204,7 @@ describe('ConnectionService', () => {
     // comparent la charge du handshake par égalité stricte.
     mockAuthManager.getSessionToken.mockReturnValue(null);
     mockIsJWTExpired.mockReturnValue(false);
+    mockAuthStoreGetState.mockReturnValue({ sessionToken: null });
   });
 
   // ─── Constructor ───────────────────────────────────────────────────────────
@@ -1238,6 +1247,31 @@ describe('ConnectionService', () => {
 
         expect(mockAuthRefreshToken).toHaveBeenCalledTimes(1);
         expect(reconnectSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('passes the store sessionToken through to authService.refreshToken (sliding window, #4405)', async () => {
+        const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const localSocket = {
+          ...mockSocket,
+          on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+            eventHandlers[event] = handler;
+          }),
+        };
+
+        mockAuthRefreshToken.mockResolvedValue({});
+        mockAuthManager.getAuthToken.mockReturnValue('new-token');
+        mockAuthStoreGetState.mockReturnValue({ sessionToken: 'store-session-xyz' });
+
+        const svc = new ConnectionService();
+        (svc as any).state.socket = localSocket;
+        jest.spyOn(svc, 'reconnect').mockImplementation(() => {});
+        svc.setupConnectionListeners();
+
+        eventHandlers[SERVER_EVENTS_MOCK.AUTH_TOKEN_EXPIRED]();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mockAuthRefreshToken).toHaveBeenCalledWith('store-session-xyz');
       });
 
       it('leaves the handshake resolver in place instead of pinning a token onto the socket', async () => {
