@@ -1,0 +1,42 @@
+{
+  "name": "@meeshy/web-v4",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "POC v4 \u2014 une application TypeScript unique (SPA) servie en web, installable en PWA, et empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:react": "MEESHY_RUNTIME=react vite build",
+    "preview": "vite preview --port 4173",
+    "type-check": "tsc --noEmit",
+    "mesure": "node scripts/mesure-poids.mjs",
+    "cap:sync": "cap sync",
+    "test": "bun test",
+    "gate": "bun run type-check && bun test && bun run build && node scripts/mesure-poids.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.102.8",
+    "@tanstack/react-router": "1.170.32",
+    "preact": "10.29.8",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@meeshy/design-tokens": "workspace:*",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwindcss": "4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "8.2.2",
+    "vite-plugin-pwa": "1.3.0"
+  },
+  "optionalDependencies": {
+    "@capacitor/android": "8.5.1",
+    "@capacitor/cli": "8.5.1",
+    "@capacitor/core": "8.5.1",
+    "@capacitor/ios": "8.5.1"
+  }
+}

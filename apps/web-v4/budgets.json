@@ -1,0 +1,25 @@
+{
+  "role": "Les PLAFONDS de la v4. Les valeurs MESUREES vivent dans budgets-mesures.json — ce fichier-ci n'en porte aucune, exactement comme apps/web-v3/budgets.json dont il reprend la discipline.",
+  "lu_par": ["apps/web-v4/scripts/mesure-poids.mjs"],
+  "note": "Le modele de cout a CHANGE entre la v3 et la v4, et c'est la seule raison pour laquelle ces plafonds ne sont pas ceux du § 8.3. La v3 sert un DOCUMENT par ecran : le lecteur paie ~8 Ko a chaque ecran, a chaque session. La v4 sert UNE application : le lecteur paie une fois, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois.",
+  "premiere_peinture": {
+    "sujet": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
+    "ko": {
+      "valeur": 120,
+      "statut": "CIBLE — PROPOSEE PAR LE POC, NON ARBITREE",
+      "source": "Aucune directive du porteur ne donne ce chiffre : il est propose par le POC et attend l'arbitrage. Sa justification est un calcul, pas une mesure — 120 Ko sur le profil ci-dessous font ~5,2 s de telechargement seul au demarrage a froid, une fois, contre 80 Ko par session de dix ecrans dans le modele v3. Il se remplace par la valeur que le porteur tranche."
+    }
+  },
+  "reseau_note": "Le profil est REPRIS TEL QUEL de apps/web-v3/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",
+  "reseau": {
+    "profil": {
+      "nom": "Fast 3G — prereglage de Chrome DevTools, applique par Network.emulateNetworkConditions",
+      "download_bps": 188743,
+      "upload_bps": 86400,
+      "latence_ms": 562.5,
+      "repetitions": 5,
+      "percentile": 75,
+      "source": "conception v3 § 8.3 — « 3G Fast simule, p75 »"
+    }
+  }
+}

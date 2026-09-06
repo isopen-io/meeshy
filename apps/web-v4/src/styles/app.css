@@ -1,0 +1,238 @@
+/* LE PONT entre packages/design-tokens et Tailwind v4.
+ *
+ * Regle de fond, heritee de la charte v3 (§ 12.5 regle 1) : UNE table, zero
+ * valeur ailleurs. Ce fichier n'invente AUCUNE valeur — il ne fait que donner
+ * aux jetons existants un NOM D'UTILITAIRE.
+ *
+ * `@theme inline` est le mecanisme qui rend ca possible : Tailwind emet
+ * `var(--color-surface)` DANS l'utilitaire au lieu d'en recopier la valeur.
+ * Le basculement clair/sombre continue donc de passer par la classe `.light`
+ * de la table, sans qu'aucune variante `dark:` soit necessaire — c'est la
+ * raison pour laquelle ce POC n'ecrit presque jamais `light:` : une couleur
+ * juste l'est dans les deux schemas, par construction.
+ *
+ * Et les NOMS choisis ne sont pas des synonymes : ce sont les ROLES que la
+ * charte assigne deja a chaque jeton (regle 2 pour le texte, regle 9 pour les
+ * rayons). `rounded-carte`, `text-corps` : l'utilitaire DIT son metier, donc
+ * un mesusage se voit en revue au lieu de se cacher derriere `rounded-lg`.
+ */
+@import 'tailwindcss';
+@import '@meeshy/design-tokens/tokens.css';
+@import './ios.css';
+
+/* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
+   s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
+   ou une regle ne peut pas s'exprimer en jetons. */
+@custom-variant light (&:where(:root.light, :root.light *));
+
+@theme inline {
+  /* ---- PLANS (echelle strictement croissante en luminance) ---- */
+  --color-fond: var(--color-bg);
+  --color-fond-creux: var(--color-bg-sunken);
+  --color-plan: var(--color-surface);
+  --color-plan-haut: var(--color-surface-raised);
+
+  /* ---- ENCRES (regle 18 : le gris est reserve a ce qu'on peut ne pas lire) ---- */
+  --color-encre: var(--color-text);
+  --color-encre-douce: var(--color-text-muted);
+  --color-encre-tenue: var(--color-text-subtle);
+
+  /* ---- MARQUE ---- */
+  --color-primaire: var(--color-primary);
+  --color-primaire-fort: var(--color-primary-strong);
+  --color-primaire-doux: var(--color-primary-soft);
+  --color-primaire-tenu: var(--color-primary-softer);
+  --color-sur-primaire: var(--color-on-primary);
+  --color-teinte-primaire: var(--color-tint-primary);
+
+  /* ---- ETATS ----
+     `erreur` et non `danger`, `anneau` et non `focus`, `av-N` et non
+     `avatar-N`, `pile` et non `native` : un alias `@theme` qui porte le NOM du
+     jeton qu'il lit s'auto-reference (`--color-danger: var(--color-danger)`),
+     et la variable devient invalide au calcul — sans erreur de build, sans
+     avertissement, avec juste une couleur qui disparait. Tout alias doit donc
+     porter un nom DIFFERENT de sa source. */
+  --color-succes: var(--color-success);
+  --color-succes-doux: var(--color-success-soft);
+  --color-alerte: var(--color-warning);
+  --color-erreur: var(--color-danger);
+  --color-erreur-douce: var(--color-danger-soft);
+  --color-sur-etat: var(--color-on-status);
+  --color-teinte-succes: var(--color-tint-success);
+  --color-teinte-alerte: var(--color-tint-warning);
+  --color-teinte-erreur: var(--color-tint-danger);
+
+  /* ---- TRAITS (regle 16 : filet != contour ; --color-border est BANNI, 1,28:1) ---- */
+  --color-filet: var(--color-border-strong);
+  --color-contour: var(--color-border-interactive);
+  --color-anneau: var(--color-focus);
+  --color-anneau-contra: var(--color-focus-contra);
+  --color-voile: var(--color-overlay);
+
+  /* ---- PRESENCE (regle produit 1/3/5) ---- */
+  --color-presence-en-ligne: var(--color-presence-online);
+  --color-presence-absent: var(--color-presence-away);
+  --color-presence-inactif: var(--color-presence-idle);
+
+  /* ---- AVATARS (palette categorielle, hors schema) ---- */
+  --color-av-1: var(--color-avatar-1);
+  --color-av-2: var(--color-avatar-2);
+  --color-av-3: var(--color-avatar-3);
+  --color-av-4: var(--color-avatar-4);
+  --color-sur-av: var(--color-on-avatar);
+
+  /* ---- TYPOGRAPHIE : un jeton = un METIER (charte regle 2) ---- */
+  --font-pile: var(--font-native);
+  --font-code: var(--font-mono);
+  --text-accroche: var(--text-4xl);
+  --text-ecran: var(--text-3xl);
+  --text-section: var(--text-2xl);
+  --text-fil: var(--text-xl);
+  --text-marque: var(--text-lg);
+  --text-corps: var(--text-md);
+  --text-second: var(--text-base);
+  --text-meta: var(--text-sm);
+  --text-pastille: var(--text-xs);
+
+  /* ---- RAYONS : cinq roles, pas cinq tailles (charte regle 9) ---- */
+  --radius-menu: var(--radius-xs);
+  --radius-champ: var(--radius-sm);
+  --radius-carte: var(--radius-lg);
+  --radius-heros: var(--radius-xl);
+  --radius-feuille: var(--radius-2xl);
+  --radius-pastille: var(--radius-pill);
+
+  /* ---- OMBRES ---- */
+  --shadow-douce: var(--shadow-sm);
+  --shadow-portee: var(--shadow-lg);
+  --shadow-primaire: var(--shadow-primary);
+
+  /* ---- ESPACE : l'echelle FERMEE de la charte (regle 10).
+     `--spacing: 4px` fait tomber les 9 pas exactement sur les multiplicateurs
+     1 2 3 4 6 8 12 16 24 de Tailwind (4 8 12 16 24 32 48 64 96 px). Les pas
+     intermediaires que Tailwind autoriserait (p-5, p-7...) sont HORS echelle
+     et refuses par scripts/check-echelle.mjs — le gate, pas la config, tient
+     la fermeture, parce que Tailwind n'a pas de moyen de la declarer. ---- */
+  --spacing: 4px;
+
+  /* ---- GEOMETRIE (cibles, avatars, glyphes) ---- */
+  --size-cible: var(--target-min);
+  --size-action: var(--action-height);
+  --size-action-2: var(--action-height-secondary);
+  --size-champ: var(--field-height);
+  --size-ligne: var(--row-height);
+  --size-avatar: var(--avatar);
+  --size-avatar-petit: var(--avatar-small);
+  --size-glyphe: var(--glyph);
+  --size-glyphe-inline: var(--glyph-inline);
+  --size-glyphe-grand: var(--glyph-large);
+  --size-pastille-presence: var(--presence-dot);
+
+  /* ---- LARGEURS DE COQUILLE ---- */
+  --container-coquille: var(--shell-width);
+  --container-mesure: var(--measure);
+}
+
+@layer base {
+  html {
+    /* La pile NATIVE : aucune @font-face, aucune requete de police.
+       C'est le jeton de la table qui le dit, pas cette feuille. */
+    font-family: var(--font-native);
+    -webkit-text-size-adjust: 100%;
+    /* La coque Capacitor et le mode standalone d'une PWA n'ont pas de barre
+       d'URL qui rattrape le rebond : on le coupe ici, une fois. */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    /* Les plans de l'interface iOS, pas ceux de la v3 web : la directive du
+       porteur est « la PWA reprend l'interface iOS ». Voir ios.css. */
+    background-color: var(--ios-plan-fond);
+    color: var(--ios-encre);
+    /* Les encoches. `viewport-fit=cover` dans l'index les expose ; sans ces
+       quatre lignes, l'en-tete passe SOUS l'encoche sur iPhone et sous la
+       barre de gestes Android. */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Regle 17 : le focus est un COUPLE (anneau + contre-anneau) — aucune
+     couleur seule ne tient sur les huit fonds de la table. */
+  :focus-visible {
+    outline: var(--stroke-focus) solid var(--color-focus);
+    outline-offset: var(--stroke-strong);
+    box-shadow: 0 0 0 var(--stroke-strong) var(--color-focus-contra);
+  }
+
+  /* Regle 32 : le mouvement ne deplace rien, et se coupe entierement. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* L'UNIQUE @keyframes du POC — les trois points de l'indicateur de frappe.
+   La charte v3 en autorise une au plus (regle 32) ; elle n'anime que
+   `opacity`/`scale`, jamais la geometrie, et `prefers-reduced-motion` la coupe
+   par la regle generale de @layer base. */
+@keyframes pointFrappe {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Le LIEN D'EVITEMENT : hors ecran au repos, PASTILLE VISIBLE au clavier.
+   Il ne peut pas s'ecrire en utilitaires seuls, parce que `clip-path` doit
+   etre annule sous `:focus-visible` UNIQUEMENT — pose en style inline il
+   annulerait aussi l'etat de repos, et le lien flotterait en permanence. */
+.lien-evitement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lien-evitement:focus-visible {
+  position: fixed;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  width: auto;
+  height: var(--action-height-secondary);
+  padding-inline: var(--space-4);
+  overflow: visible;
+  clip-path: none;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  color: white;
+  background-color: var(--ios-indigo-500);
+  border-radius: var(--radius-pill);
+}
+
+@utility hors-ecran {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
