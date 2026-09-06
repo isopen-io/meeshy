@@ -191,6 +191,14 @@ extension StickerPickerView {
         }
     }
 
+    /// **Chercher les lieux — site UNIQUE** (#5407). Deux déclencheurs le
+    /// consultent : l'arrivée de la section à l'écran, et l'arrivée du
+    /// fournisseur. Idempotent par `places.isEmpty`, comme avant.
+    func chercheLesLieuxSiBesoin() {
+        guard let nearbyPlaces, places.isEmpty else { return }
+        Task { places = await nearbyPlaces.nearby() }
+    }
+
     var currentPlace: SharedPlace? {
         guard places.indices.contains(selectedPlaceIndex) else { return places.first }
         return places[selectedPlaceIndex]
