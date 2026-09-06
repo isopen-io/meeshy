@@ -316,6 +316,13 @@ export const messagesRiches = (conversationId: string): MessageServi[] => [
           fileSize: 430_080,
           width: 1200,
           height: 900,
+          // `thumbnailUrl` (`attachmentMediaSelect`,
+          // `services/gateway/src/services/attachments/attachmentIncludes.ts:76`)
+          // — travail `reglages-details` : `document.autoDownloadEnabled` la
+          // rend en `<img>` (`app/connecte/medias-vue.ts` › `vignette`), un
+          // chemin DISTINCT de l'image entière pour que le témoin CDP compte
+          // l'une sans compter l'autre (`bouchon-galerie.ts`).
+          thumbnailUrl: '/api/v1/attachments/file/2026/tableau-thumb.jpg',
         },
       ],
       createdAt: ilYA(24),

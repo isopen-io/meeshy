@@ -11,6 +11,7 @@ import { FEUILLE_CONNECTEE } from './feuille';
 import { FEUILLE_DU_FIL } from './fil-feuille';
 import { FEUILLE_DES_REGLAGES } from './reglages-feuille';
 import { documentPleinEcran } from './fil-vue';
+import { avis, enTete, rangeeDite, rangeeLien, rangs, section } from './reglages-socle';
 import { carteVide } from './vue';
 
 /**
@@ -41,40 +42,17 @@ const CHEMIN = {
   application: '/settings/application',
   securite: '/settings/security',
   motDePasse: '/settings/security/password',
+  confidentialite: '/settings/privacy',
+  medias: '/settings/media',
+  messages: '/settings/message',
 } as const;
 
 /**
- * L'EN-TÊTE EST CELUI DU FIL, réemployé — `fil-tete` porte déjà le retour, le
- * titre et son sous-titre, et la zone connectée sert sa feuille sur tous ses
- * écrans pleins. En redessiner un ici aurait fait un second en-tête à corriger
- * deux fois.
+ * LA PAGE — la feuille et le squelette communs aux dix écrans de réglages
+ * (`enTete`, `section`, `avis`, `rangeeLien`, `rangeeDite`, `rangs` et
+ * `commutateur` vivent dans `reglages-socle.ts`, PARTAGÉS avec
+ * `reglages-details-vue.ts` et `prefs-vue.ts`).
  */
-const enTete = ({
-  titre,
-  sous,
-  retour,
-  libelleDuRetour,
-}: {
-  readonly titre: string;
-  readonly sous: string;
-  readonly retour: string;
-  readonly libelleDuRetour: string;
-}): string =>
-  '<header class="fil-tete">' +
-  `<a class="retour" href="${echappe(retour)}" aria-label="${echappe(libelleDuRetour)}">${svgDuSprite('ph-caret-left')}</a>` +
-  '<div class="titre">' +
-  `<h1>${echappe(titre)}</h1>` +
-  `<p class="sous">${echappe(sous)}</p>` +
-  '</div>' +
-  '</header>';
-
-const section = ({ titre, corps, phrase = '' }: { readonly titre: string; readonly corps: string; readonly phrase?: string }): string =>
-  '<section>' +
-  `<h2>${echappe(titre)}</h2>` +
-  (phrase === '' ? '' : `<p class="phrase">${echappe(phrase)}</p>`) +
-  corps +
-  '</section>';
-
 const page = ({ titre, description, corps }: { readonly titre: string; readonly description: string; readonly corps: string }): string =>
   documentPleinEcran({
     titre: `${titre} — Meeshy`,
@@ -83,71 +61,16 @@ const page = ({ titre, description, corps }: { readonly titre: string; readonly 
     feuille: FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_REGLAGES,
   });
 
-/**
- * L'AVIS DU POST — ce que le geste vient de faire, dit au RETOUR de la
- * redirection et jamais par le formulaire lui-même. `role="status"` le fait
- * annoncer sans voler le focus ; un `role="alert"` interromprait la lecture
- * pour un succès.
- */
-const avis = (phrase: string | null, echoue = false): string =>
-  phrase === null
-    ? ''
-    : `<p class="avis" role="status">${svgDuSprite(echoue ? 'ph-x-circle' : 'ph-check-circle')}${echappe(phrase)}</p>`;
-
-const rangeeLien = ({
-  href,
-  quoi,
-  sous = '',
-  valeur = '',
-}: {
-  readonly href: string;
-  readonly quoi: string;
-  readonly sous?: string;
-  readonly valeur?: string;
-}): string =>
-  `<li><a class="rangee" href="${echappe(href)}">` +
-  '<span class="dit">' +
-  `<span class="quoi">${echappe(quoi)}</span>` +
-  (sous === '' ? '' : `<span class="sous">${echappe(sous)}</span>`) +
-  '</span>' +
-  (valeur === '' ? '' : `<span class="valeur">${echappe(valeur)}</span>`) +
-  svgDuSprite('ph-caret-right') +
-  '</a></li>';
-
-/**
- * UNE RANGÉE QUI SE LIT SANS SE TOUCHER. Le même dessin qu'un lien, sans le
- * chevron ni la cible : le chevron est ce qui ANNONCE qu'on peut aller
- * quelque part, et le laisser sur une ligne inerte serait exactement le
- * contrôle qui ment que la règle 7 interdit.
- */
-const rangeeDite = ({
-  quoi,
-  valeur,
-  sous = '',
-}: {
-  readonly quoi: string;
-  readonly valeur: string;
-  readonly sous?: string;
-}): string =>
-  '<li><div class="rangee">' +
-  '<span class="dit">' +
-  `<span class="quoi">${echappe(quoi)}</span>` +
-  (sous === '' ? '' : `<span class="sous">${echappe(sous)}</span>`) +
-  '</span>' +
-  `<span class="valeur">${echappe(valeur)}</span>` +
-  '</div></li>';
-
-const rangs = (contenu: string, libelle: string): string =>
-  `<ul class="rangs" aria-label="${echappe(libelle)}">${contenu}</ul>`;
-
 // ─── /settings — le carrefour ───────────────────────────────────────────────
 
 /**
- * TROIS DESTINATIONS, ET LA CIBLE EN DESSINE SEPT. Les quatre absentes —
- * confidentialité, médias, messages, notifications — n'ont aucune route dans la
- * passerelle (`lib/contenu/reglages.ts` porte le relevé daté). Les dessiner
- * grisées occuperait la place de vraies destinations et ferait chercher au
- * clavier une rangée qui n'ouvre rien.
+ * SEPT DESTINATIONS, DANS L'ORDRE DE LA PLANCHE (`MeeshyWebV3.dc.html`,
+ * `settings:` — profil, confidentialité, sécurité, médias, messages,
+ * notifications, application). Les trois dernières absentes — confidentialité,
+ * médias, messages — ont rejoint la table au lot `reglages-details` : le
+ * système unifié de préférences (#4181, #4589) les sert toutes, un relevé
+ * périmé de `lib/contenu/reglages.ts` disait le contraire (§ 0 de sa
+ * spécification).
  */
 export const documentDuCarrefour = (): string =>
   page({
@@ -162,19 +85,26 @@ export const documentDuCarrefour = (): string =>
       }) +
       rangs(
         rangeeLien({ href: CHEMIN.profil, quoi: REGLAGES.carrefour.profil.titre, sous: REGLAGES.carrefour.profil.phrase }) +
-          rangeeLien({ href: CHEMIN.securite, quoi: REGLAGES.carrefour.securite.titre, sous: REGLAGES.carrefour.securite.phrase }) +
           rangeeLien({
-            href: CHEMIN.application,
-            quoi: REGLAGES.carrefour.application.titre,
-            sous: REGLAGES.carrefour.application.phrase,
+            href: CHEMIN.confidentialite,
+            quoi: REGLAGES.carrefour.confidentialite.titre,
+            sous: REGLAGES.carrefour.confidentialite.phrase,
           }) +
-          // Vit à SA PROPRE adresse (`/notifications/preferences`, #4899),
-          // pas sous `/settings/*` : la planche la range sous la boîte de
-          // notifications (`lib/contenu/reglages.ts`, doc-comment de tête).
+          rangeeLien({ href: CHEMIN.securite, quoi: REGLAGES.carrefour.securite.titre, sous: REGLAGES.carrefour.securite.phrase }) +
+          rangeeLien({ href: CHEMIN.medias, quoi: REGLAGES.carrefour.medias.titre, sous: REGLAGES.carrefour.medias.phrase }) +
+          rangeeLien({ href: CHEMIN.messages, quoi: REGLAGES.carrefour.messages.titre, sous: REGLAGES.carrefour.messages.phrase }) +
+          // Vit à SA PROPRE adresse (`/notifications/preferences`, #4899) ;
+          // `/settings/notification` (ce lot) n'est qu'un ALIAS qui y redirige
+          // — la planche la range sous la boîte de notifications, pas ici.
           rangeeLien({
             href: '/notifications/preferences',
             quoi: REGLAGES.carrefour.notifications.titre,
             sous: REGLAGES.carrefour.notifications.phrase,
+          }) +
+          rangeeLien({
+            href: CHEMIN.application,
+            quoi: REGLAGES.carrefour.application.titre,
+            sous: REGLAGES.carrefour.application.phrase,
           }),
         REGLAGES.carrefour.liste,
       ),

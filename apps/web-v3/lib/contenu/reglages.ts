@@ -1,16 +1,18 @@
 /**
- * LA COPIE DES RÉGLAGES — ce que les six écrans DISENT.
+ * LA COPIE DES RÉGLAGES — ce que les six écrans D'ORIGINE DISENT ; les quatre
+ * réglages-détails (`detail-privacy`, `detail-media`, `detail-message`,
+ * `detail-notification`) sont dans `lib/contenu/reglages-details.ts`, un
+ * fichier séparé pour ne pas faire grossir celui-ci hors budget.
  *
- * SIX, ET NON DIX. La matrice en dessine dix ; trois n'ont toujours aucune
- * route pour les servir, et le relevé est daté (2026-09-04, sur les routes
- * assemblées) : `detail-privacy`, `detail-media` et `detail-message` n'ont,
- * dans la passerelle, ni lecture ni écriture. Les dessiner ferait des rangées
- * qui n'ouvrent rien, c'est-à-dire exactement ce que la charte règle 7
- * interdit (« un contrôle existe s'il a un EFFET »). Le carrefour ne liste donc
- * que les destinations qui MÈNENT quelque part, et ce qui manque est dit dans
- * la PR plutôt que grisé à l'écran.
+ * §0 DE LA SPÉCIFICATION `reglages-details` CORRIGE LE PARAGRAPHE CI-DESSOUS,
+ * PÉRIMÉ DEPUIS LE 2026-09-06 : il disait `detail-privacy`, `detail-media` et
+ * `detail-message` sans AUCUNE route de passerelle — un grep qui cherchait de
+ * mauvais noms (`privacySettings`, `mediaSettings`…) plutôt que le système
+ * unifié de préférences (#4181, #4589) : `GET`/`PATCH /api/v1/me/preferences`
+ * sert SEPT catégories, dont `privacy`, `message` et `document`. Les trois
+ * écrans sont désormais servis — `app/connecte/reglages-details-vue.ts`.
  *
- * `detail-notification` N'EST PLUS DANS CETTE LISTE (#4899) : `GET`/`PATCH
+ * `detail-notification` VIT À SA PROPRE ADRESSE (#4899) : `GET`/`PATCH
  * /me/preferences?categories=notification` EXISTE
  * (`services/gateway/src/routes/me/preferences/unified-routes.ts:150,229`),
  * et l'écran qui la sert vit à SA PROPRE adresse — `/notifications/
@@ -18,7 +20,7 @@
  * parce que la planche la range sous la boîte de notifications, pas sous ce
  * carrefour (nav planche ligne 875 : `notifPrefs → notifs`). Le carrefour n'en
  * garde donc qu'un LIEN, comme un raccourci vers une destination qui vit
- * ailleurs — la rangée que la table ci-dessous nomme.
+ * ailleurs ; `/settings/notification` (ce lot) est un ALIAS qui y redirige.
  *
  * CE QUE LA PASSERELLE SERT, ET QUI DÉCIDE DE CE LOT :
  *
@@ -30,6 +32,14 @@
  *   | `/settings/application`        | aucune — le thème est un cookie de cet appareil          |
  *   | `/settings/security`           | `GET`/`DELETE /users/me/devices` (`push-tokens.ts:355`)  |
  *   | `/settings/security/password`  | `PATCH /users/me/password` (`profile-credentials.ts:32`) |
+ *   | `/settings/privacy`            | `GET`/`PATCH /me/preferences?categories=privacy`         |
+ *   | `/settings/privacy/export`     | `GET /me/export` (`routes/me/export.ts:52`)              |
+ *   | `/settings/privacy/delete`     | `POST /me/account/deletion` (`delete-account.ts:176`)    |
+ *   | `/settings/media`              | aucune — un hub de liens                                 |
+ *   | `/settings/media/document`     | `GET`/`PATCH /me/preferences?categories=document`        |
+ *   | `/settings/media/audio,video`  | aucune — régime 3, état dessiné                          |
+ *   | `/settings/message`            | aucune — régime 3, « À DÉFINIR »                         |
+ *   | `/settings/notification`       | aucune — alias 302 vers `/notifications/preferences`     |
  *   | `/notifications/preferences`   | `GET`/`PATCH /me/preferences?categories=notification`    |
  *
  * CE QUE LES CIBLES DESSINENT ET QUE LA V3 NE SERT PAS, écran par écran —
@@ -58,7 +68,10 @@ export const REGLAGES = {
   carrefour: {
     liste: 'Vos réglages',
     profil: { titre: 'Profil', phrase: 'Votre identité et les langues dans lesquelles vous lisez.' },
+    confidentialite: { titre: 'Confidentialité', phrase: 'Ce que les autres voient de vous.' },
     securite: { titre: 'Sécurité', phrase: 'Votre mot de passe et vos appareils.' },
+    medias: { titre: 'Médias', phrase: 'Téléchargement, transcription, appels.' },
+    messages: { titre: 'Messages', phrase: 'Réglages de conversation.' },
     application: { titre: 'Application', phrase: 'Le thème de Meeshy sur cet appareil.' },
     notifications: { titre: 'Notifications', phrase: 'Ce qui vous alerte, et comment.' },
   },

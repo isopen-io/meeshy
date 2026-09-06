@@ -107,6 +107,110 @@ export const supprimePourMoi = async ({ jeton, conversation, base, recuperer }: 
   );
 
 /**
+ * LES SEPT CATÉGORIES DE `/me/preferences` (#4181, #4589) — `privacy`,
+ * `audio`, `message`, `notification`, `video`, `document`, `application` —
+ * chacune une colonne JSON de `UserPreferences`
+ * (`services/gateway/src/routes/me/preferences/preference-registry.ts:131`).
+ * `CategorieDePreference` est une restriction locale : cette liste n'a de sens
+ * QUE pour les quatre écrans que la v3 sert (`detail-privacy`, `detail-media`
+ * › document, `detail-notification`) — la déclarer plus large offrirait des
+ * catégories qu'aucun écran ne consomme encore.
+ */
+export type CategorieDePreference = 'privacy' | 'document' | 'notification';
+
+/** Un document par catégorie demandée — pas encore un réglage : voir `DocumentDeNotification` ci-dessous. */
+export type DocumentDePreference = Readonly<Record<string, unknown>>;
+export type DocumentsDePreferences = Readonly<Record<string, DocumentDePreference>>;
+
+export type IssueDesPreferences =
+  | { readonly genre: 'documents'; readonly documents: DocumentsDePreferences }
+  | { readonly genre: 'session-expiree' }
+  | { readonly genre: 'refus'; readonly statut: number }
+  | { readonly genre: 'panne' };
+
+const enveloppeDeCategories = (valeur: unknown): DocumentsDePreferences | null => {
+  if (typeof valeur !== 'object' || valeur === null || Array.isArray(valeur)) return null;
+  const data = (valeur as { readonly data?: unknown }).data;
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
+  return data as DocumentsDePreferences;
+};
+
+const issueDesPreferences = async (reponse: Response | null): Promise<IssueDesPreferences> => {
+  if (reponse === null) return { genre: 'panne' };
+  if (reponse.status === 401) return { genre: 'session-expiree' };
+  if (!reponse.ok) return reponse.status >= 500 ? { genre: 'panne' } : { genre: 'refus', statut: reponse.status };
+
+  const documents = enveloppeDeCategories(await reponse.json().catch(() => null));
+  return documents === null ? { genre: 'panne' } : { genre: 'documents', documents };
+};
+
+const appelleDesPreferences = async (
+  url: string,
+  options: RequestInit,
+  recuperer?: (url: string, options: RequestInit) => Promise<Response>,
+): Promise<IssueDesPreferences> =>
+  issueDesPreferences(
+    await (recuperer ?? ((u, o) => fetch(u, o)))(url, {
+      ...options,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(DELAI_MS),
+    }).catch(() => null),
+  );
+
+/**
+ * `GET /api/v1/me/preferences?categories=a,b` (`unified-routes.ts:150`) — UN
+ * appel pour plusieurs catégories, jamais une par catégorie : c'est ce qui
+ * évite à `/settings/privacy` de payer deux allers-retours le jour où un
+ * écran voudra `privacy` ET `document` sur la même page.
+ */
+export const lisLesPreferences = async ({
+  jeton,
+  categories,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly categories: readonly CategorieDePreference[];
+  readonly base?: string;
+  readonly recuperer?: (url: string, options: RequestInit) => Promise<Response>;
+}): Promise<IssueDesPreferences> =>
+  appelleDesPreferences(
+    `${base ?? baseDeLaPasserelle()}/api/v1/me/preferences?categories=${categories.map(encodeURIComponent).join(',')}`,
+    { method: 'GET', headers: enTetes(jeton) },
+    recuperer,
+  );
+
+/**
+ * `PATCH /api/v1/me/preferences` (`:229`, `mode=merge` par défaut — jamais
+ * `replace`) — UNE CATÉGORIE, UN CORPS : `{ [categorie]: champs }`. La réponse
+ * est une RELECTURE (le mode `merge` rend le document complet), donc du même
+ * type que `lisLesPreferences` : l'appelant réconcilie sur ce que la
+ * passerelle a ÉCRIT, jamais sur ce qu'il a envoyé.
+ */
+export const ecrisUnePreference = async ({
+  jeton,
+  categorie,
+  champs,
+  base,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly categorie: CategorieDePreference;
+  readonly champs: Readonly<Record<string, unknown>>;
+  readonly base?: string;
+  readonly recuperer?: (url: string, options: RequestInit) => Promise<Response>;
+}): Promise<IssueDesPreferences> =>
+  appelleDesPreferences(
+    `${base ?? baseDeLaPasserelle()}/api/v1/me/preferences`,
+    {
+      method: 'PATCH',
+      headers: { ...enTetes(jeton), 'content-type': 'application/json' },
+      body: JSON.stringify({ [categorie]: champs }),
+    },
+    recuperer,
+  );
+
+/**
  * LES PRÉFÉRENCES DE NOTIFICATION DU COMPTE (`/notifications/preferences`,
  * #4899) — deux routes RÉELLES, lues dans
  * `services/gateway/src/routes/me/preferences/unified-routes.ts` :
@@ -141,7 +245,7 @@ export const supprimePourMoi = async ({ jeton, conversation, base, recuperer }: 
  * attendent. Sans cela, les coercitions qu'ils écrivent auraient l'air
  * redondantes, alors qu'elles sont le SEUL contrôle de la charge.
  */
-export type DocumentDeNotification = Readonly<Record<string, unknown>>;
+export type DocumentDeNotification = DocumentDePreference;
 
 export type IssueDePreferences =
   | { readonly genre: 'document'; readonly reglages: DocumentDeNotification }
@@ -149,40 +253,18 @@ export type IssueDePreferences =
   | { readonly genre: 'refus'; readonly statut: number }
   | { readonly genre: 'panne' };
 
-const corpsDeNotification = (valeur: unknown): DocumentDeNotification | null => {
-  if (typeof valeur !== 'object' || valeur === null || Array.isArray(valeur)) return null;
-  const data = (valeur as { readonly data?: unknown }).data;
-  if (typeof data !== 'object' || data === null) return null;
-  const notification = (data as { readonly notification?: unknown }).notification;
-  if (typeof notification !== 'object' || notification === null || Array.isArray(notification)) return null;
-  return notification as DocumentDeNotification;
+/**
+ * LA PROJECTION D'UNE CATÉGORIE — le pont entre `IssueDesPreferences`
+ * (multi-catégories, § ci-dessus) et la forme à une seule catégorie que
+ * `prefs-porte.ts` attend depuis #4899. `documents[categorie]` absent alors
+ * que la passerelle a répondu 2xx est le CONTRAT qui n'est pas tenu, pas un
+ * refus du lecteur — la même distinction que le 5xx.
+ */
+const projectionDeCategorie = (issue: IssueDesPreferences, categorie: CategorieDePreference): IssueDePreferences => {
+  if (issue.genre !== 'documents') return issue;
+  const reglages = issue.documents[categorie];
+  return reglages === undefined ? { genre: 'panne' } : { genre: 'document', reglages };
 };
-
-const issueDePreferences = async (reponse: Response | null): Promise<IssueDePreferences> => {
-  if (reponse === null) return { genre: 'panne' };
-  if (reponse.status === 401) return { genre: 'session-expiree' };
-  if (!reponse.ok) return reponse.status >= 500 ? { genre: 'panne' } : { genre: 'refus', statut: reponse.status };
-
-  const corps = await reponse.json().catch(() => null);
-  const reglages = corpsDeNotification(corps);
-  // La passerelle a répondu 2xx sans le document attendu : c'est le CONTRAT
-  // qui n'est pas tenu, pas un refus du lecteur — la même distinction que le
-  // 5xx ci-dessus.
-  return reglages === null ? { genre: 'panne' } : { genre: 'document', reglages };
-};
-
-const appellePreferences = async (
-  url: string,
-  options: RequestInit,
-  recuperer?: (url: string, options: RequestInit) => Promise<Response>,
-): Promise<IssueDePreferences> =>
-  issueDePreferences(
-    await (recuperer ?? ((u, o) => fetch(u, o)))(url, {
-      ...options,
-      cache: 'no-store',
-      signal: AbortSignal.timeout(DELAI_MS),
-    }).catch(() => null),
-  );
 
 export type ArgumentsDeLecture = {
   readonly jeton: string;
@@ -190,35 +272,36 @@ export type ArgumentsDeLecture = {
   readonly recuperer?: (url: string, options: RequestInit) => Promise<Response>;
 };
 
-export const preferencesDeNotification = async ({
-  jeton,
-  base,
-  recuperer,
-}: ArgumentsDeLecture): Promise<IssueDePreferences> =>
-  appellePreferences(
-    `${base ?? baseDeLaPasserelle()}/api/v1/me/preferences?categories=notification`,
-    { method: 'GET', headers: enTetes(jeton) },
-    recuperer,
-  );
+export const preferencesDeNotification = async (args: ArgumentsDeLecture): Promise<IssueDePreferences> =>
+  projectionDeCategorie(await lisLesPreferences({ ...args, categories: ['notification'] }), 'notification');
 
 export type ArgumentsDeLaBascule = ArgumentsDeLecture & {
   readonly cle: CleDePreference;
   readonly valeur: boolean;
 };
 
-export const basculeUnePreference = async ({
-  jeton,
-  cle,
-  valeur,
-  base,
-  recuperer,
-}: ArgumentsDeLaBascule): Promise<IssueDePreferences> =>
-  appellePreferences(
-    `${base ?? baseDeLaPasserelle()}/api/v1/me/preferences`,
-    {
-      method: 'PATCH',
-      headers: { ...enTetes(jeton), 'content-type': 'application/json' },
-      body: JSON.stringify({ notification: { [cle]: valeur } }),
-    },
-    recuperer,
+export const basculeUnePreference = async ({ cle, valeur, ...args }: ArgumentsDeLaBascule): Promise<IssueDePreferences> =>
+  projectionDeCategorie(
+    await ecrisUnePreference({ ...args, categorie: 'notification', champs: { [cle]: valeur } }),
+    'notification',
   );
+
+/**
+ * `document.autoDownloadEnabled` — LE SEUL RÉGLAGE QUI CHANGE CE QUE LA
+ * GALERIE CONSOMME (`/chats/:cle/medias`, critère de fin `detail-media`).
+ *
+ * Une PROJECTION de plus, et surtout une projection qui NE PEUT PAS ÉCHOUER :
+ * elle rend un booléen, jamais une issue. Un écran de conversation ne se
+ * refuse pas parce qu'une préférence n'a pas été lue — session expirée,
+ * refus, panne réseau et contrat non tenu retombent tous sur `false`, c'est-
+ * à-dire sur l'ÉCONOMIE. La direction de l'erreur est choisie par son COÛT DE
+ * RÉPARATION : servir la grille sobre à qui voulait des vignettes se répare
+ * d'un rechargement ; envoyer 48 vignettes à qui a demandé « jamais » a déjà
+ * dépensé ses octets quand il s'en aperçoit.
+ *
+ * Seul un `true` explicitement SERVI ouvre les aperçus.
+ */
+export const apercusAutomatiques = async (args: ArgumentsDeLecture): Promise<boolean> => {
+  const issue = await lisLesPreferences({ ...args, categories: ['document'] });
+  return issue.genre === 'documents' && issue.documents.document?.autoDownloadEnabled === true;
+};

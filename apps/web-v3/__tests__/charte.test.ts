@@ -719,6 +719,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // pouce lui-même restent sur l'encre — l'état se DIT par le texte
     // (« Activé »/« Désactivé »), la couleur ne fait que le CONFIRMER.
     '.commutateur[aria-checked="true"] .piste',
+    // L'édition de la fenêtre DND (`detail-notification`, ce lot) : le
+    // cliquable — un `<summary>`, même emploi que `.original summary` du fil
+    // et `.langues summary` de la story : il déplie un formulaire, jamais un
+    // contenu qu'il faudrait lire. Les champs de saisie et le bouton restent
+    // sur l'encre (`.action.primaire`, déjà nommé).
+    '.fenetre-edition summary',
     // L'historique des appels (`cible/calls.png`, #5108) : la tuile d'une ligne
     // VIDÉO — même emploi que `dialog.espace .rangee .tuile` et `.marque
     // .tuile` : le glyphe d'une NATURE, ici celle de l'appel plutôt que celle

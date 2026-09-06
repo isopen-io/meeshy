@@ -357,6 +357,14 @@ export class AuthService {
       // Verify 2FA code
       const cleanCode = code.replace(/-/g, '').toUpperCase();
       let isValid = false;
+      // RESTAURÉ EN REVUE (2026-09-06) — le balayage `noUnusedLocals` de
+      // 158ac8beb4 a retiré cette déclaration et son affectation en les
+      // croyant mortes : le SEUL usage est la propriété ABRÉGÉE
+      // `usedBackupCode` du littéral rendu plus bas, que `tsc` a aussitôt
+      // rougie (TS18004). Le gateway ne compilait plus, et le drapeau que
+      // l'appelant lit pour dire « vous venez d'utiliser un code de secours »
+      // avait disparu du contrat.
+      let usedBackupCode = false;
 
       // Try TOTP code first (6 digits)
       if (/^\d{6}$/.test(cleanCode) && user.twoFactorSecret) {
@@ -385,6 +393,7 @@ export class AuthService {
           });
 
           isValid = true;
+          usedBackupCode = true;
           logger.info(`[AUTH_SERVICE] 🔑 Code de secours utilisé pour: ${user.username} - Restants: ${updatedCodes.length}`);
         }
       }

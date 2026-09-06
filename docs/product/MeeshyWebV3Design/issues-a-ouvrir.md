@@ -213,8 +213,15 @@ Passerelle d'abord (TDD) : chaque réglage en PATCH vers /me/preferences avec le
 
 Si le tour ne peut livrer les QUATRE, livrer privacy et notification d'abord (dimensions 1 et 8) et déclarer le reste à l'issue.
 
+### Mise à jour 2026-09-06 (revue croisée)
+Les quatre écrans sont livrés (`app/settings/{privacy,media,message,notification}`, `app/connecte/reglages-details-{vue,porte}.ts`, `lib/contenu/reglages-details.ts`, `lib/api/reglages-details.ts`) et branchés sur `GET`/`PATCH /api/v1/me/preferences` (§ 0 de la spécification du travail corrige la ligne « aucune route » de ce Contexte, périmée depuis #4181/#4589).
+
+**Mesure de conformité, et pourquoi elle N'EST PAS un défaut propre à ce travail.** `bun run scripts/conformite-des-vues.ts detail-privacy detail-media detail-message detail-notification` rend `0/8 conformes`, structure 0.44–0.52 pour un seuil de 0.15 (`rapport-conformite.json`). Rejoué sur trois écrans PRÉEXISTANTS, non touchés par ce travail (`detail-application`, `detail-profile`, `detail-security`) : **0/6 conformes**, structure 0.49–0.55 — même ordre de grandeur. Ce n'est donc pas une régression de `reglages-details` : c'est la panne SYSTÉMIQUE déjà mesurée et déjà tracée à `conception-web-v3.md` § 11 question 15 (« 48/48 vues hors cible, `ecart_structurel_max=0,5507`, 2026-09-05 » — antérieure à ce tour) et au point 10 de ce fichier (`infra-1`), qui porte déjà la décision-produit à ouvrir (régénérer `cible/*.png` post-nav-en-une-page, ou ajuster le socle). La conception dit explicitement, pour ce cas : « la conformité visuelle de ce tour est rapportée BLOQUÉE (pas verte, pas maquillée) ». Ouvrir une SECONDE issue de maturation pour `reglages-details` dupliquerait `infra-1` — ne pas le faire ; ce travail se rattache à `infra-1` pour ce volet.
+
+**Ce qui reste réellement OUVERT et n'est tracé nulle part avant cette mise à jour** : `hideProfileFromSearch` et `allowContactRequests` (section « Communications » de `cible/detail-privacy.png`) n'ont aucun lecteur serveur (grep `src/` hors `preferences/`, `__tests__` : 0 — mesuré 2026-09-06) et ne sont donc pas rendus (régime 3, testé par `reglages-details-vue.test.ts`). Décision-produit à ouvrir : implémenter l'obéissance serveur pour ces deux clés (qui les ferait rejoindre `showOnlineStatus`/`showLastSeen`/`showReadReceipts`/`showTypingIndicator`), ou amender `cible/detail-privacy.png` pour retirer la section — avec la raison écrite, comme pour la question 10 de la conception (`detail-media`/`detail-message` « À DÉFINIR »).
+
 ### Source
-Lot: ordre.md (#5066, focus porteur) | Cible: cible/detail-privacy.png, detail-media.png, detail-message.png, detail-notification.png | Matrice: matrice.json#detail-* | Conception: conception-web-v3.md § 3.1 (placement)
+Lot: ordre.md (#5066, focus porteur) | Cible: cible/detail-privacy.png, detail-media.png, detail-message.png, detail-notification.png | Matrice: matrice.json#detail-* | Conception: conception-web-v3.md § 3.1 (placement), § 11 question 15 (gate de conformité transversal)
 
 ---
 
@@ -258,6 +265,8 @@ Lot: ordre.md (#4371, épopée) | Conception: conception-web-v3.md § 12.11.3 (n
 L'issue décision-produit q15 n'existe pas encore d'après la conception. compare-rendu.js, capture-cibles.js et conformite-des-vues.ts existent et tournent ; 48/48 vues hors cible (ecart_structurel_max=0,5507, 2026-09-05) parce que thread/chats/rich portent une barre de navigation globale (§ 12.11) que les captures cible ne montrent pas — seuls cible/thread.png, rich.png, rights.png ont été régénérés. § 11 q. 15 nomme la décision-produit à ouvrir : (a) régénérer cible/*.png post-nav-en-une-page pour toute la matrice, ou ajuster le socle ; (b) trancher le paradigme de sheet:link (formulaire livré vs feuille sommaire dessinée).
 
 **Source fichier**: scripts/conformite-des-vues.ts ; docs/product/conception-web-v3.md § 11 q15
+
+**Mise à jour 2026-09-06 (revue croisée reglages-details)** — la cause « barre de navigation globale » ci-dessus n'explique QUE thread/chats/rich : `detail-privacy`, `detail-media`, `detail-message`, `detail-notification` (aucune navigation persistante, cf. § 11 q6) échouent au même ordre de grandeur (structure 0.44–0.52), et TROIS écrans de réglages préexistants et non touchés par ce tour (`detail-application`, `detail-profile`, `detail-security`) échouent aussi (0.49–0.55, mesuré avec `bun run scripts/conformite-des-vues.ts detail-application detail-profile detail-security`). La cause n'est donc pas UNIQUEMENT la barre de navigation : au moins une seconde cause, non identifiée, touche des écrans qui n'en portent pas. Ne pas clore q15/infra-1 sur la seule régénération post-nav-en-une-page sans revérifier les écrans `settings/*` après coup.
 
 ### Preuve attendue
 - L'issue décision-produit q15 existe, labellisée et assignée au porteur avec les deux options chiffrées

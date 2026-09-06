@@ -31,8 +31,10 @@ export const piecesLocales = (clientMessageId: string, fichiers: readonly File[]
     nom: fichier.name,
     url: '',
     // Rien à jouer tant que rien n'est parti : la piste d'une pièce locale est
-    // son adresse — vide, comme elle.
+    // son adresse — vide, comme elle. Et rien à AFFICHER : la vignette est un
+    // fichier que la passerelle fabrique à la réception.
     piste: '',
+    affiche: null,
     octets: fichier.size,
     dureeMs: null,
     largeur: null,
