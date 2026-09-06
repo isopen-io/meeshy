@@ -26,6 +26,11 @@ jest.mock('@/services/auth.service', () => ({
   },
 }));
 
+let mockAuthStoreState = { sessionToken: null as string | null };
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: { getState: () => mockAuthStoreState },
+}));
+
 jest.mock('@/lib/config', () => ({
   buildApiUrl: jest.fn((path: string) => `https://gate.meeshy.me${path}`),
 }));
@@ -60,6 +65,7 @@ describe('ApiService', () => {
     mockFetch.mockReset();
     mockGetAuthToken.mockReturnValue('test-jwt-token');
     mockDecodeJWT.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 }); // Valid token
+    mockAuthStoreState = { sessionToken: null };
     // Use real timers for async operations (promises, setTimeout, etc.)
     jest.useRealTimers();
   });
@@ -375,6 +381,49 @@ describe('ApiService', () => {
         expect(error).toBeInstanceOf(ApiServiceError);
         expect((error as ApiServiceError).code).toBe('TOKEN_EXPIRED');
       }
+    });
+
+    // #4405 (étape 2) : sans ce jeton, la fenêtre glissante de session ne
+    // s'arme jamais côté serveur — un compte ayant coché "se souvenir de cet
+    // appareil" expirerait quand même après 365 jours d'inactivité, alors
+    // qu'iOS (qui le passe déjà) ne perd jamais sa session tant qu'il rouvre
+    // l'app dans la fenêtre.
+    it('threads the store sessionToken through refreshAuthToken, arming the sliding session window', async () => {
+      mockAuthStoreState = { sessionToken: 'trusted-session-token' };
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ message: 'Unauthorized' }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: 'refreshed' }),
+      });
+      mockRefreshToken.mockResolvedValueOnce({ success: true });
+
+      await apiService.get('/protected-resource');
+
+      expect(mockRefreshToken).toHaveBeenCalledWith('trusted-session-token');
+    });
+
+    it('passes a null sessionToken through rather than omitting the argument, when no trusted session exists', async () => {
+      mockAuthStoreState = { sessionToken: null };
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ message: 'Unauthorized' }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: 'refreshed' }),
+      });
+      mockRefreshToken.mockResolvedValueOnce({ success: true });
+
+      await apiService.get('/protected-resource');
+
+      expect(mockRefreshToken).toHaveBeenCalledWith(null);
     });
   });
 

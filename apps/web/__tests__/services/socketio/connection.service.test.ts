@@ -101,6 +101,11 @@ jest.mock('@/services/auth.service', () => ({
   },
 }));
 
+let mockAuthStoreState = { sessionToken: null as string | null };
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: { getState: () => mockAuthStoreState },
+}));
+
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     AUTHENTICATED: 'authenticated',
@@ -196,6 +201,7 @@ describe('ConnectionService', () => {
     // comparent la charge du handshake par égalité stricte.
     mockAuthManager.getSessionToken.mockReturnValue(null);
     mockIsJWTExpired.mockReturnValue(false);
+    mockAuthStoreState = { sessionToken: null };
   });
 
   // ─── Constructor ───────────────────────────────────────────────────────────
@@ -1238,6 +1244,35 @@ describe('ConnectionService', () => {
 
         expect(mockAuthRefreshToken).toHaveBeenCalledTimes(1);
         expect(reconnectSpy).toHaveBeenCalledTimes(1);
+      });
+
+      // #4405 (étape 2) : sans le sessionToken du store, ce chemin de
+      // rafraîchissement (déclenché par le SERVEUR sur un JWT expiré, distinct
+      // du chemin REST de `api.service.ts`) n'arme jamais la fenêtre glissante
+      // — une session "dont on se souvient" expirerait quand même.
+      it('threads the store sessionToken through refreshToken, arming the sliding session window', async () => {
+        mockAuthStoreState = { sessionToken: 'trusted-session-token' };
+        const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const localSocket = {
+          ...mockSocket,
+          on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+            eventHandlers[event] = handler;
+          }),
+        };
+
+        mockAuthRefreshToken.mockResolvedValue({});
+        mockAuthManager.getAuthToken.mockReturnValue('new-token');
+
+        const svc = new ConnectionService();
+        (svc as any).state.socket = localSocket;
+        jest.spyOn(svc, 'reconnect').mockImplementation(() => {});
+        svc.setupConnectionListeners();
+
+        eventHandlers[SERVER_EVENTS_MOCK.AUTH_TOKEN_EXPIRED]();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mockAuthRefreshToken).toHaveBeenCalledWith('trusted-session-token');
       });
 
       it('leaves the handshake resolver in place instead of pinning a token onto the socket', async () => {

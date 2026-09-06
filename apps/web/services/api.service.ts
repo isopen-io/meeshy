@@ -5,6 +5,7 @@ import { getGeolocationHeaders } from '@/lib/geolocation';
 import { isJWTExpired } from '@/utils/auth';
 import { authManager } from './auth-manager.service';
 import { authService } from './auth.service';
+import { useAuthStore } from '@/stores/auth-store';
 import type { ApiResponse, ApiError } from '@meeshy/shared/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -154,6 +155,13 @@ class ApiService {
    * de rafraîchissement du dépôt web — les chemins qui contournent `request()`
    * (upload XHR brut, etc.) doivent l'appeler plutôt que de réimplémenter la
    * logique de rafraîchissement.
+   *
+   * Passe le `sessionToken` du store (#4405, étape 2) : c'est lui qui arme la
+   * fenêtre glissante de session côté serveur (`markSessionTrusted` a posé
+   * jusqu'à 365 jours à la connexion — sans ce jeton à CHAQUE refresh, cette
+   * échéance ne recule plus jamais). iOS le fait déjà sur son propre appel
+   * (`AuthManager.refreshSession`, `MeeshySDK`) ; en omettre un sur le web
+   * rouvrirait exactement l'asymétrie de plateforme que la dimension 6 interdit.
    */
   async refreshAuthToken(): Promise<boolean> {
     if (this.isRefreshing && this.refreshPromise) {
@@ -163,7 +171,7 @@ class ApiService {
     this.isRefreshing = true;
     this.refreshPromise = (async () => {
       try {
-        const response = await authService.refreshToken();
+        const response = await authService.refreshToken(useAuthStore.getState().sessionToken);
         return !!response.success;
       } catch {
         // Session persists across refresh failures. Only an explicit
