@@ -151,17 +151,38 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
 
     // MARK: - 2. L'audience est plafonnée
 
+    /// **Le plafond a rejoint l'HYDRATATION** (#5053, 2026-09-06).
+    ///
+    /// La présentation posait `allowedVisibilities:` et construisait le
+    /// ViewModel de repost côté `StoryViewerView`. Les deux vivent désormais
+    /// dans `ComposerHydration` — « un seul paramètre pour deux choses (quel
+    /// contenu reprendre, quelle audience il autorise) parce que les séparer
+    /// aurait permis d'en passer une sans l'autre, c'est-à-dire de republier
+    /// SANS PLAFOND, silencieusement ».
+    ///
+    /// > Le déménagement RENFORCE la loi que ce témoin garde : elle n'est plus
+    /// > à reposer sur chaque présentation, elle est portée par le type que
+    /// > toute republication doit passer. La garde suit donc le site qui la
+    /// > DÉCIDE, et non plus celui qui la recopiait.
     func test_composerPresentation_capsTheAudienceWithTheSharedLaw() throws {
-        let viewer = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        let hydration = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Composer/ComposerHydration.swift"))
 
         XCTAssertTrue(
-            viewer.contains("allowedVisibilities: StoryRepostAudience.allowed(fromRawValue:"),
-            "La présentation du composeur de republication doit plafonner le " +
-            "sélecteur d'audience par la loi — même audience ou plus restreinte."
+            hydration.contains("StoryRepostAudience.allowed(fromRawValue: story.visibility)"),
+            "La republication doit plafonner le sélecteur d'audience par la loi — même audience ou " +
+            "plus restreinte. Le plafond est une affordance, mais une affordance dont l'absence " +
+            "transforme un refus serveur en échec inexpliqué au moment de publier."
         )
         XCTAssertTrue(
-            viewer.contains("StoryComposerViewModel(") && viewer.contains("reposting:"),
+            hydration.contains("case .editingStory:") && hydration.contains("return nil"),
+            "… et l'ÉDITION rend `nil` : le ViewModel hydraté porte sa propre visibilité initiale, " +
+            "et en poser une seconde ici ferait deux sources pour une même valeur."
+        )
+
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(
+            host.contains("StoryComposerViewModel(reposting: story, authorHandle: authorHandle)"),
             "Le composeur doit être construit par l'initialiseur de repost, qui " +
             "préremplit la slide source et verrouille le badge d'attribution."
         )
