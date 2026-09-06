@@ -1120,7 +1120,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/admin/reports/stats': ['GET'],
   '/api/v1/admin/route-usage': ['GET'],
   '/api/v1/admin/share-links': ['GET'],
-  '/api/v1/admin/share-links/:id': ['DELETE'],
+  '/api/v1/admin/share-links/:id': ['PATCH', 'DELETE'],
   '/api/v1/admin/share-links/:id/reveal': ['POST'],
   '/api/v1/admin/translations': ['GET'],
   '/api/v1/admin/users': ['GET', 'POST'],
