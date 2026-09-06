@@ -401,11 +401,11 @@ describe('modifier / retirer — optimiste, confirmé, rétabli (fil-etat pur)',
     expect(restauree.bulles.find((b) => b.id === 'r1')).toEqual(bulleDAvant);
   });
 
-  it('retireMoiMeme efface le contenu tout de suite, en attente', () => {
+  it('retireMoiMeme efface le contenu tout de suite, en différé — rien ne part encore', () => {
     const avant = insere(ETAT_VIDE, SERVIE);
     const retiree = retireMoiMeme(avant, 'r1');
     const bulle = retiree.bulles.find((b) => b.id === 'r1');
-    expect(bulle).toMatchObject({ supprime: true, texte: '', pieces: [], citations: [], reactions: [], envoi: 'en-attente' });
+    expect(bulle).toMatchObject({ supprime: true, texte: '', pieces: [], citations: [], reactions: [], envoi: 'retrait-differe' });
   });
 
   it('un retrait refusé RÉTABLIT texte, pièces, citations, réactions', () => {

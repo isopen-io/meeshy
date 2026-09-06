@@ -188,6 +188,30 @@ export default defineConfig({
       testIgnore: SUITES_DE_PAGE,
       use: cadreMobile,
     },
+    /**
+     * LES GESTES DU FIL, HORS CHROMIUM (suivi #5163 § 12.12) — la réplique de
+     * `v3-fil-gestes.spec.ts` est jusqu'ici éprouvée sur UN SEUL moteur, quand
+     * la charte (§ 12.5) vaut sur tous les navigateurs courants. Deux projets
+     * DÉDIÉS, plutôt qu'ajouter WebKit/Firefox à `chaines` : la contrainte de
+     * `chaines`/`pages` ci-dessus (le chargeur `.mjs` installé par une suite
+     * de page) ne concerne pas cette suite, mais mélanger des moteurs dans un
+     * projet qui en attend un seul romprait `cadreMobile`'s
+     * `launchOptions.executablePath`/`args`, RÉSERVÉS à Chromium — un moteur
+     * qui ne les comprend pas échoue au lancement plutôt qu'à un test. Les
+     * captures de cette suite restent bornées à Chromium par le spec lui-même
+     * (`test.skip(({ browserName }) => …)`) : ces deux projets ne mesurent que
+     * le COMPORTEMENT, jamais un rendu.
+     */
+    {
+      name: 'gestes-webkit',
+      testMatch: '**/v3-fil-gestes.spec.ts',
+      use: { ...devices['Desktop Safari'], viewport: { width: 390, height: 844 }, isMobile: false },
+    },
+    {
+      name: 'gestes-firefox',
+      testMatch: '**/v3-fil-gestes.spec.ts',
+      use: { ...devices['Desktop Firefox'], viewport: { width: 390, height: 844 }, isMobile: false },
+    },
   ],
   ...(webServer === undefined ? {} : { webServer }),
 });
