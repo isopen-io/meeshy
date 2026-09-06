@@ -894,6 +894,17 @@ nonisolated enum ComposerDocumentCopy {
                bundle: .main)
     }
 
+    /// **Le onzième média n'a nulle part où aller** (#4059).
+    ///
+    /// Un post plafonne à dix slides (`StoryComposerViewModel.canAddSlide`) ;
+    /// au-delà, `addSlide()` est un no-op et le média refusé doit se VOIR —
+    /// jamais se poser en silence sur la dernière slide créée.
+    static var mediaCapReached: String {
+        String(localized: "composer.document.media.capReached",
+               defaultValue: "Dix médias au maximum par post — celui-ci n'a pas été ajouté",
+               bundle: .main)
+    }
+
     /// **Aucune clé neuve pour les six outils** — la famille `composer.attach.*`
     /// existe, elle est traduite dans les sept langues du catalogue, et c'est
     /// déjà le vocabulaire d'attache du composer (`UniversalComposerBar`).

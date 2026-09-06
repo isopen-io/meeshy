@@ -141,7 +141,39 @@ describe('POST /deconnexion — la sortie', () => {
     expect(suppression).toBeDefined();
   });
 
-  it('sans champ pushAppareil, aucun appel de suppression de token push', async () => {
+  /**
+   * SANS JAVASCRIPT (défaut de revue) — le champ `pushAppareil` reste VIDE,
+   * puisque seul `lib/realtime/deconnexion.ts` le remplit. Le COOKIE, lui,
+   * voyage dans la requête : sans cette lecture, le token FCM survivait à la
+   * déconnexion et le navigateur d'un lecteur sorti continuait de recevoir
+   * les bannières du compte quitté.
+   */
+  it('SANS JavaScript — le cookie appareil suffit : le token push est retiré, par deviceId seul', async () => {
+    const { appels, recuperer } = passerelle(() => new Response(JSON.stringify({ success: true }), { status: 200 }));
+
+    await SORTIE(
+      requetePost({ cookie: `${JAR}; meeshy_v3_push_appareil=device-99` }),
+      recuperer,
+    );
+
+    const suppression = appels.find((a) => a.url.includes('register-device-token'));
+    expect(suppression).toBeDefined();
+    expect(suppression?.url).toContain('/api/v1/users/register-device-token');
+  });
+
+  it('le corps de la suppression porte le deviceId SEUL — jamais un corps vide, qui tuerait iOS et Android', async () => {
+    const corpsVus: unknown[] = [];
+    const recuperer: Recuperateur = async (url, options) => {
+      if (url.includes('register-device-token')) corpsVus.push(JSON.parse(String(options.body)));
+      return new Response(null, { status: 200 });
+    };
+
+    await SORTIE(requetePost({ cookie: `${JAR}; meeshy_v3_push_appareil=device-99` }), recuperer);
+
+    expect(corpsVus).toEqual([{ deviceId: 'device-99' }]);
+  });
+
+  it('sans champ pushAppareil NI cookie appareil, aucun appel de suppression de token push', async () => {
     const { appels, recuperer } = passerelle(() => new Response(JSON.stringify({ success: true }), { status: 200 }));
 
     await SORTIE(requetePost({ cookie: JAR }), recuperer);

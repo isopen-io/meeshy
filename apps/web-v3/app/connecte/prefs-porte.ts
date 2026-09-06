@@ -200,12 +200,19 @@ const sert = async (
   },
   statut = 200,
 ): Promise<Response> => {
-  const issue = await preferencesDeNotification({ jeton, recuperer });
+  // LES DEUX LECTURES PARTENT ENSEMBLE (défaut de revue) — les préférences et
+  // l'abonnement de cet appareil ne dépendent pas l'une de l'autre : les
+  // enchaîner coûtait un SECOND aller-retour avant le premier pixel, sur la
+  // 3G rurale que la charte vise (§ 12.6). `etatPush` ne fait AUCUN appel
+  // quand la configuration ou le cookie manquent — le parallélisme n'ajoute
+  // donc jamais une requête que la série n'aurait pas faite.
+  const [issue, push] = await Promise.all([
+    preferencesDeNotification({ jeton, recuperer }),
+    etatPush({ requete, jeton, recuperer }),
+  ]);
 
   if (issue.genre === 'session-expiree') return versLaConnexion();
   if (issue.genre !== 'document') return rendu(documentDePanne(), 503);
-
-  const push = await etatPush({ requete, jeton, recuperer });
   if (push.genre === 'session-expiree') return versLaConnexion();
 
   return rendu(
