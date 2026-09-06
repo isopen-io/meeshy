@@ -350,7 +350,7 @@ class ServerKeyVault {
     logger.info('Clearing all encryption keys from memory');
 
     // Zeroize all cached keys
-    for (const [keyId, entry] of this.keyCache.entries()) {
+    for (const entry of this.keyCache.values()) {
       if (entry.key) {
         entry.key.fill(0); // Zeroize key data
       }
@@ -378,7 +378,6 @@ class ServerKeyVault {
  * - Signal Protocol pre-key bundle generation
  */
 export class EncryptionService {
-  private prisma: PrismaClient;
   private keyVault: ServerKeyVault;
   private signalService: any = null; // Will be initialized when @signalapp/libsignal-client is available
   private initialized = false;
@@ -387,7 +386,6 @@ export class EncryptionService {
   private keyGenerationLocks: Map<string, { promise: Promise<string>; resolve: (value: string) => void }> = new Map();
 
   constructor(prisma: PrismaClient) {
-    this.prisma = prisma;
     this.keyVault = new ServerKeyVault(prisma);
   }
 

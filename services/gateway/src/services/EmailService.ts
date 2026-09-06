@@ -14,7 +14,6 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { replaceLiteral } from '../utils/string-replace';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -721,7 +720,7 @@ export class EmailService {
       data.html = data.html.replace('</body>', `${pixel}\n</body>`);
     }
 
-    const { to, subject, html, text } = data;
+    const { to } = data;
 
     if (this.providers.length === 0) {
       logger.warn(`[EmailService] ❌ No providers configured - email not sent to to=${to}`);

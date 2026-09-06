@@ -4,7 +4,8 @@
     "apps/web-v3/scripts/check-bundle-budget.mjs (groupes, routes)",
     "apps/web-v3/scripts/mesure-reseau.mjs (reseau)",
     "packages/icons/scripts/build-sprite.ts (actifs)",
-    "apps/web-v3/__tests__/charte.test.ts (feuilles, et reseau.transverses.css_ko)"
+    "apps/web-v3/__tests__/charte.test.ts (feuilles, et reseau.transverses.css_ko)",
+    "apps/web-v3/__tests__/bundle-budget.test.ts (groupes, routes, questions_ouvertes, reseau.ecrans, temps_reel.plafonds)"
   ],
   "note": "Un plafond « À ÉTABLIR » n'est comparé à rien : la conception ne le donne pas, et un chiffre qu'on n'a pas mesuré ne s'invente pas. Il se remplit par la première mesure de l'écran qui le porte, dans le commit de cet écran. Les valeurs MESURÉES vivent dans budgets-mesures.json — ce fichier-ci ne porte que des PLAFONDS.",
   "motifs": "Un motif s'écrit contre l'URL servie (« /stories/* »). Next conserve pourtant le segment de groupe dans la clé du manifeste (« /(public)/stories/[id]/page ») : le gate normalise donc la clé avant de la classer. Un motif qui porte lui-même un segment « (…) » est, lui, comparé à la clé BRUTE — seule façon de distinguer (public)/page de (connected)/page.",
@@ -385,5 +386,16 @@
       }
     ]
   },
-  "temps_reel_note": "Les DEUX modules de participation (§ 12.4) — lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, compilés en deux modules ES servis dans la zone sous /__v3/rt/ — et socket.io-client (12 849 o gzip mesurés), chargé par l'un ou l'autre, arrivent APRÈS le premier pixel de /chats, /chats/:cle et /chat/:lien (état INVITÉ) : ils n'entrent ni dans requetes_avant_premier_pixel ni dans le JS de page (0 Ko : ces écrans sont des gestionnaires de route). DEUX modules et non un : /chats n'exécute pas une ligne du composeur, de la réserve, du plein écran ni de la peinture de bulles, et lui faire télécharger les 26 Ko gzip du fil après son premier pixel coûterait plus d'une seconde sur la 3G rurale du § 12.6. Le socle qu'ils PARTAGENT — socket.io-client — reste UN actif, à UNE adresse, donc mis en cache une seule fois pour les deux écrans. Leurs poids propres sont MESURÉS dans budgets-mesures.json → participate, jamais inventés."
+  "temps_reel_note": "Les DEUX modules de participation (§ 12.4) — lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, compilés en deux modules ES servis dans la zone sous /__v3/rt/ — et socket.io-client (12 849 o gzip mesurés), chargé par l'un ou l'autre, arrivent APRÈS le premier pixel de /chats, /chats/:cle et /chat/:lien (état INVITÉ) : ils n'entrent ni dans requetes_avant_premier_pixel ni dans le JS de page (0 Ko : ces écrans sont des gestionnaires de route). DEUX modules et non un : /chats n'exécute pas une ligne du composeur, de la réserve, du plein écran ni de la peinture de bulles, et lui faire télécharger les 26 Ko gzip du fil après son premier pixel coûterait plus d'une seconde sur la 3G rurale du § 12.6. Le socle qu'ils PARTAGENT — socket.io-client — reste UN actif, à UNE adresse, donc mis en cache une seule fois pour les deux écrans. Leurs poids propres sont MESURÉS dans budgets-mesures.json → participate ; le PLAFOND de participate.js — le module du fil, seul concerné par ce travail — vit ci-dessous dans temps_reel.plafonds, opposé par __tests__/bundle-budget.test.ts § « le plafond du module de participation ».",
+  "temps_reel": {
+    "unite": "octets gzip -9, tels que compilés par scripts/build-participate.mjs",
+    "plafonds": {
+      "participate_gzip_9_octets": {
+        "valeur": 34703,
+        "statut": "GATE",
+        "source": "budgets-mesures.json › participate.participate_gzip_9_octets (mesure du jour du commit, 2026-09-06) — le plafond naît de la mesure (§ 12.6), jamais d'un chiffre inventé ; le faire monter exige un diff relu de CE fichier",
+        "temoin": "apps/web-v3/__tests__/bundle-budget.test.ts § « le plafond du module de participation » ; la moitié binaire-réel ≤ mesure est tenue par scripts/build-participate.mjs (rc=1 dans bun run build)"
+      }
+    }
+  }
 }

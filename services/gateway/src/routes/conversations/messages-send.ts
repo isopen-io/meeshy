@@ -312,6 +312,13 @@ export function registerSendMessageRoute(
         originalLanguage,
         messageType,
         replyToId,
+        // #4859 — accepté par le schéma (ligne 61/144) et destructuré du corps
+        // depuis toujours, mais jamais transmis ici : le chemin WS
+        // (`MessageHandler.ts:390,622`) et `MessageProcessor` (qui capture le
+        // `postReplyTo` et écrit la colonne) le portent tous les deux — seul
+        // ce transport REST le laissait tomber, silencieusement, malgré la
+        // validation qui l'accepte.
+        storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
         copyAttachmentsFromMessageId,

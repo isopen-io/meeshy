@@ -8,7 +8,6 @@
 import { ISignalProtocolAdapter } from '../../adapters/LibraryAdapters';
 import { SignalKeyManager } from '../SignalKeyManager';
 import { X3DHKeyAgreement, type PreKeyBundle } from '../X3DHKeyAgreement';
-import { DoubleRatchet } from '../DoubleRatchet';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SignalProtocolLimits } from '@meeshy/shared/utils/validation';
 import * as crypto from 'crypto';
@@ -16,8 +15,6 @@ import * as crypto from 'crypto';
 export class SignalProtocolAdapter implements ISignalProtocolAdapter {
   private keyManager: SignalKeyManager;
   private x3dh: X3DHKeyAgreement;
-  private doubleRatchet: DoubleRatchet;
-  private prisma: PrismaClient;
 
   /**
    * Create a Signal Protocol adapter
@@ -25,13 +22,11 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
    * @param masterKey - Optional master encryption key for key storage
    */
   constructor(prisma: PrismaClient, masterKey?: Buffer) {
-    this.prisma = prisma;
     this.keyManager = new SignalKeyManager(prisma, masterKey);
     // X3DHKeyAgreement REQUIERT son gestionnaire de clés et son client Prisma :
     // sans eux, `initiatorKeyAgreement` lit `this.keyManager.getIdentityPublicKey()`
     // sur `undefined` et tout accord de clés passant par cet adaptateur lève.
     this.x3dh = new X3DHKeyAgreement(this.keyManager, prisma);
-    this.doubleRatchet = new DoubleRatchet();
   }
 
   /**

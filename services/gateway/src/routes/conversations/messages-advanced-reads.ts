@@ -101,7 +101,6 @@ export function registerMessagesAdvancedReadRoutes(
     try {
       const { id } = request.params;
       const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
 
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
@@ -260,7 +259,6 @@ export function registerMessagesAdvancedReadRoutes(
     try {
       const { id } = request.params;
       const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
 
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);

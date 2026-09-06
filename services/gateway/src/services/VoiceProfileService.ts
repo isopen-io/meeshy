@@ -20,7 +20,6 @@ import path from 'path';
 import {
   ZmqTranslationClient,
   VoiceProfileAnalyzeRequest,
-  VoiceProfileVerifyRequest,
   VoiceProfileAnalyzeResult,
   VoiceProfileVerifyResult,
   VoiceProfileEvent
@@ -31,10 +30,8 @@ import {
   VoiceProfileDetails as SharedVoiceProfileDetails,
   VoiceProfileTranscription,
   BrowserTranscription,
-  VoiceProfileSegment,
   ServiceResult,
   VoiceCloningUserSettings,
-  DEFAULT_VOICE_CLONING_SETTINGS,
   VoicePreviewSample
 } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -45,9 +42,6 @@ const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
-
-// Minimum audio duration for dedicated profile registration (10 seconds)
-const MIN_PROFILE_AUDIO_DURATION_MS = 10000;
 
 // Profile expiration
 const MINOR_PROFILE_EXPIRATION_DAYS = 60;  // 2 months for <18

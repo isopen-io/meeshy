@@ -12,19 +12,18 @@ import { applyMediaText } from './posts/mediaText';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
-import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
+import { isEphemeralPostType } from './posts/postVisibility';
 import {
   isRepostVisibilityAllowed,
   repostVisibilityInheritsAudienceList,
 } from '@meeshy/shared/utils/repost-audience';
-import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { buildViewerVisibilityFilter } from './posts/viewerAudience';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
-import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
+import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';

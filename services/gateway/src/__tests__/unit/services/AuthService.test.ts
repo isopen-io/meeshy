@@ -1684,14 +1684,33 @@ describe('AuthService - completeAuthWith2FA', () => {
     const result = await authService.completeAuthWith2FA('valid-token', backupCode);
 
     expect('success' in result && result.success === false).toBe(false);
-    const authResult = result as { user: unknown; sessionToken: string; session: unknown; requires2FA: boolean };
+    const authResult = result as { user: unknown; sessionToken: string; session: unknown; requires2FA: boolean; usedBackupCode?: boolean };
     expect(authResult.requires2FA).toBe(false);
     expect(authResult.sessionToken).toBe('mock-session-token');
+    // #4458 — usedBackupCode était calculé et jamais retourné : l'écran de
+    // vérification lit ce champ pour avertir l'utilisateur que son code de
+    // secours vient d'être consommé, et ne pouvait jamais le faire.
+    expect(authResult.usedBackupCode).toBe(true);
     // Backup code should be removed
     expect(mockPrisma.user.update).toHaveBeenCalledWith({
       where: { id: userWithBackupCode.id },
       data: { twoFactorBackupCodes: [] }
     });
+  });
+
+  it('should mark usedBackupCode:false when a valid TOTP code (not a backup code) is used', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const speakeasy = require('speakeasy');
+    const validTotpCode = speakeasy.totp({ secret: userWith2FA.twoFactorSecret, encoding: 'base32' });
+
+    mockPrisma.user.findFirst.mockResolvedValue(userWith2FA);
+    mockPrisma.user.update.mockResolvedValue(userWith2FA);
+
+    const result = await authService.completeAuthWith2FA('valid-token', validTotpCode);
+
+    expect('success' in result && result.success === false).toBe(false);
+    const authResult = result as { usedBackupCode?: boolean };
+    expect(authResult.usedBackupCode).toBe(false);
   });
 
   it('should complete login with requestContext after valid 2FA', async () => {

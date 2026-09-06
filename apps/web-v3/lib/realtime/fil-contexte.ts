@@ -99,7 +99,7 @@ export type Contexte = {
   readonly r: Reserve;
   readonly defile: Defilement;
   /** Les clés de la réserve pour CE lecteur — `null` quand le document n'a servi aucune identité. */
-  readonly cles: { readonly file: string; readonly brouillon: string } | null;
+  readonly cles: { readonly file: string; readonly brouillon: string; readonly retrait: string } | null;
   /** Les fichiers d'une bulle qui attend son envoi, par `clientMessageId` — un `File` ne vit pas dans l'état. */
   readonly fichiers: Map<string, readonly File[]>;
   /** Ce qui a été affiché et n'a pas encore été DIT à la passerelle. */

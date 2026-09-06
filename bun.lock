@@ -18,7 +18,7 @@
     },
     "apps/web": {
       "name": "@meeshy/web",
-      "version": "1.36.0",
+      "version": "1.36.1",
       "dependencies": {
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
@@ -227,7 +227,7 @@
     },
     "services/gateway": {
       "name": "@meeshy/gateway",
-      "version": "1.36.1",
+      "version": "1.36.2",
       "dependencies": {
         "@fastify/cors": "^11.3.0",
         "@fastify/helmet": "^13.0.2",
@@ -309,7 +309,7 @@
     },
     "services/translator": {
       "name": "@meeshy/translator",
-      "version": "1.35.0",
+      "version": "1.35.1",
     },
   },
   "overrides": {

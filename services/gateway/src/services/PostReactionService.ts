@@ -11,7 +11,6 @@
 import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
-import { ConflictError } from '../errors/custom-errors';
 import { assertValidObjectId } from '../utils/object-id.js';
 
 export interface PostReactionAggregation {

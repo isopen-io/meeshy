@@ -2,14 +2,11 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
-  conversationSchema,
   conversationParticipantSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { canAccessConversation } from './utils/access-control';
 // #4169 — `resolveConversationId`, la génération d'identifiants, la garde 410
 // et la garde de RANG ne vivent plus ici : `mintConversationShareLink` est
 // désormais la porte UNIQUE de création d'un lien, partagée avec `POST

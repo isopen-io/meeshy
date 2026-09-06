@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { ContactDirectoryService, type DirectoryFilter, type SyncMode } from '../../services/ContactDirectoryService';
+import { ContactDirectoryService, type DirectoryFilter } from '../../services/ContactDirectoryService';
 import { directoryEntrySchema } from '../users/contacts-schemas';
 import { viewerFromRequest } from '../users/presence-gate';
 import type { AuthenticatedRequest } from '../users/types';
@@ -25,8 +25,6 @@ export const LIMITE_MAX_CONTACTS = 100;
 const LIMITE_DEFAUT_CONTACTS = 50;
 
 const VALID_FILTERS: DirectoryFilter[] = ['all', 'meeshy', 'invitable'];
-/** Tolérance d'horloge cliente pour `syncStartedAt` — au-delà, 400. */
-const TOLERANCE_HORLOGE_MS = 5_000;
 
 function filtre(valeur: unknown): DirectoryFilter {
   return VALID_FILTERS.includes(valeur as DirectoryFilter) ? (valeur as DirectoryFilter) : 'all';

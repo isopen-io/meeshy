@@ -95,7 +95,7 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
-import { emitServerEvent, type ServerEventName } from './serverEmit';
+import { emitServerEvent } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
@@ -2987,8 +2987,6 @@ export class MeeshySocketIOManager {
       }
 
       if (message.attachments && message.attachments.length > 0) {
-        const first = message.attachments[0] as unknown as Record<string, unknown>;
-        const firstMeta = typeof first['metadata'] === 'object' && first['metadata'] ? first['metadata'] as Record<string, unknown> : null;
         logger.debug(`message:new broadcast messageId=${message.id} attachments=${message.attachments.length}`);
       }
 
@@ -3084,8 +3082,6 @@ export class MeeshySocketIOManager {
           logger.warn(`⚠️ [MENTION] Failed to resolve mention usernames for broadcast (mentions skipped): ${error}`);
         }
       }
-
-      const roomClients = this.io.sockets.adapter.rooms.get(room);
 
       // 3. Synchronisation temps réel de la liste des conversations — les
       //    trois portes de sortie du message (enfilage hors ligne,
@@ -3647,42 +3643,4 @@ export class MeeshySocketIOManager {
     }
   }
 
-  private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
-    if (usernames.length === 0) return [];
-    try {
-      return await resolveUsernamesToIds(this.prisma, usernames);
-    } catch {
-      return [];
-    }
-  }
-
-  private _notifyAgent(message: {
-    id: string;
-    conversationId: string;
-    senderId: string | null;
-    senderDisplayName?: string;
-    senderUsername?: string;
-    content: string | null;
-    originalLanguage: string | null;
-    replyToId?: string | null;
-    mentionedUserIds?: string[];
-    createdAt: Date;
-  }): void {
-    if (!this.agentClient || !message.senderId || !message.content) return;
-    this.agentClient.sendEvent({
-      type: 'agent:new-message',
-      conversationId: message.conversationId,
-      messageId: message.id,
-      senderId: message.senderId,
-      senderDisplayName: message.senderDisplayName,
-      senderUsername: message.senderUsername,
-      content: message.content,
-      originalLanguage: message.originalLanguage ?? 'fr',
-      replyToId: message.replyToId ?? undefined,
-      mentionedUserIds: message.mentionedUserIds ?? [],
-      timestamp: message.createdAt.getTime(),
-    }).catch((err: unknown) => {
-      logger.warn('[Agent] sendEvent error (non-blocking):', err);
-    });
-  }
 }

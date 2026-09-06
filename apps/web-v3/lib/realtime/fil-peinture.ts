@@ -102,7 +102,7 @@ const classe = (noeud: HTMLElement, nom: string, actif: boolean): void => {
   if (noeud.classList.contains(nom) !== actif) noeud.classList.toggle(nom, actif);
 };
 
-const CLASSES_D_ENVOI: readonly string[] = ['envoi-attente', 'envoi-hors-ligne', 'envoi-echec'];
+const CLASSES_D_ENVOI: readonly string[] = ['envoi-attente', 'envoi-hors-ligne', 'envoi-echec', 'envoi-retrait-differe'];
 
 const classeDEnvoi = (bulle: Bulle): string | null =>
   bulle.envoi === 'en-attente'
@@ -111,7 +111,9 @@ const classeDEnvoi = (bulle: Bulle): string | null =>
       ? 'envoi-hors-ligne'
       : bulle.envoi === 'en-echec'
         ? 'envoi-echec'
-        : null;
+        : bulle.envoi === 'retrait-differe'
+          ? 'envoi-retrait-differe'
+          : null;
 
 const clone = <T extends Element>(gabarit: HTMLTemplateElement | null, selecteur: string): T | null => {
   const modele = gabarit?.content.querySelector<T>(selecteur) ?? null;
@@ -565,7 +567,11 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre, menu: Cont
   // ce qui la citait (original, langue, pièces, réactions) s'efface avec elle.
   const corps = ligne.querySelector<HTMLElement>('.texte');
   if (corps !== null) {
-    const voulu = bulle.supprime ? FIL.supprime : bulle.texte;
+    // TANT QUE LA FENÊTRE D'ANNULATION EST OUVERTE, rien n'est parti : la
+    // mention dit « Message retiré », jamais « Ce message a été supprimé »
+    // (`FIL.supprime`) — qui affirmerait à tort que la passerelle le sait déjà
+    // (suivi #5163 § 12.12).
+    const voulu = bulle.supprime ? (bulle.envoi === 'retrait-differe' ? FIL.messageRetire : FIL.supprime) : bulle.texte;
     if (corps.textContent !== voulu) corps.textContent = voulu;
     poseLang(corps, bulle.supprime ? null : (bulle.langueServie ?? bulle.langueOriginale), p.langueDuDocument);
   }
@@ -622,6 +628,17 @@ export const remplis = (ligne: HTMLElement, bulle: Bulle, p: Peintre, menu: Cont
   if (mentionDeModification !== null) mentionDeModification.hidden = !(bulle.edite && !bulle.supprime);
   texte(ligne, '.etat-envoi', bulle.envoi === 'hors-ligne' ? FIL.horsLigne : FIL.enAttente);
   if (bulle.raison !== null) texte(ligne, '.echec .raison', bulle.raison);
+
+  // « ANNULER » — comme `.langue`/`.modifie` ci-dessus, une fente ABSENTE
+  // d'une ligne SERVIE (`fil-lignes.ts` › `ligne()` ne la rend jamais, § 12.12
+  // du suivi #5163) : un retrait peut viser une ligne rechargée au premier
+  // chargement, pas seulement une ligne née du gabarit. Une fois posée, sa
+  // visibilité reste ENTIÈREMENT gouvernée par la classe d'envoi sur `<li>`
+  // (`.ligne.envoi-retrait-differe .retrait`, `fil-feuille.ts`) — jamais un
+  // `hidden` à re-poser ici.
+  if (bulle.envoi === 'retrait-differe' && ligne.querySelector('.retrait') === null) {
+    poseAuDebut(ligne, '.meta', clone<HTMLElement>(p.gabarit, '.retrait'));
+  }
 
   const heure = ligne.querySelector<HTMLTimeElement>('time');
   if (heure !== null && bulle.ecritA !== null) {

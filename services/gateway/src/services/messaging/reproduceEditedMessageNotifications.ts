@@ -74,8 +74,6 @@ const BODY_DERIVES_FROM_MESSAGE = new Set(['new_message', 'user_mentioned', 'mes
  */
 const PREVIEW_MAX_LENGTH = 100;
 
-type JsonBlob = Record<string, unknown> | null | undefined;
-
 interface NotificationRow {
   readonly id: string;
   readonly userId: string;

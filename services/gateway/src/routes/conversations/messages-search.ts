@@ -33,7 +33,7 @@ import {
   type MessagesDeRefusDAcces
 } from './utils/access-control';
 import type { ConversationParams } from './types';
-import { sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendNotFound, sendInternalError } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';

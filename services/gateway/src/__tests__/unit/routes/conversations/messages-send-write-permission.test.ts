@@ -112,4 +112,28 @@ describe('POST /conversations/:id/messages — statut du refus (#4855)', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  // #4859 — `storyReplyToId` était accepté par le schéma et destructuré du
+  // corps, mais jamais transmis à `handleMessage` : le seul transport REST
+  // laissait tomber une réponse à une story, contrairement au chemin WS
+  // (`MessageHandler.ts`), qui la porte depuis toujours.
+  it('transmet storyReplyToId à handleMessage quand le client répond à une story', async () => {
+    const handleMessage = jest.fn().mockResolvedValue({
+      success: true,
+      data: { id: '507f1f77bcf86cd799439077' },
+    });
+    app = await buildApp(handleMessage);
+
+    const storyReplyToId = '507f1f77bcf86cd799439088';
+    await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONV_ID}/messages`,
+      payload: { content: 'Bonjour', storyReplyToId },
+    });
+
+    expect(handleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ storyReplyToId }),
+      expect.any(String)
+    );
+  });
 });

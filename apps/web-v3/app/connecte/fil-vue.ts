@@ -139,6 +139,8 @@ export type EtatDuFil = {
   readonly erreur: string | null;
   readonly brouillon: string;
   readonly maintenant: number;
+  /** Le fuseau IANA du lecteur (cookie `meeshy_tz`, `fuseauDuLecteur`) — absent : heures en relatif. */
+  readonly fuseau?: string | null;
   readonly composeur: Composeur;
   /** `?repondre=<id>` / `?modifier=<id>` — le contexte que le composeur arme (issue #5163). `null` : le cas nominal. */
   readonly contexte: ContexteDuComposeur;
@@ -518,7 +520,7 @@ const listeDesMessages = (etat: EtatDuFil, inerte: boolean): string => {
     (fil.messages.length === 0 && !inerte && etat.composeur.genre === 'ouvert'
       ? carteVide({ glyphe: 'ph-chat-circle', titre: FIL.vide, phrase: FIL.videPrecision })
       : '') +
-    `<ol class="lignes" id="lignes" aria-label="${echappe(FIL.messagesOrdre)}">${lignes({ messages: fil.messages, maintenant: etat.maintenant, langueDuDocument: DOCUMENT_LANGUAGE, adresse, composeurOuvert: etat.composeur.genre === 'ouvert', estInvite: etat.porte.genre === 'invite' })}</ol>` +
+    `<ol class="lignes" id="lignes" aria-label="${echappe(FIL.messagesOrdre)}">${lignes({ messages: fil.messages, maintenant: etat.maintenant, langueDuDocument: DOCUMENT_LANGUAGE, adresse, composeurOuvert: etat.composeur.genre === 'ouvert', estInvite: etat.porte.genre === 'invite', fuseau: etat.fuseau ?? null })}</ol>` +
     // La liste est close : sa dernière ligne, complète, se montre (feuille du fil, CLS).
     `<style>${REVELE_LA_DERNIERE_LIGNE}</style>` +
     '</div>' +

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // LE MODULE DE PARTICIPATION, COMPILÉ — conception § 12.4.
 //
-//   cd apps/web-v3 && node scripts/build-participate.mjs          # → .rt/participate.js
-//   node scripts/build-participate.mjs --mesure                    # + écrit budgets-mesures.json → participate
+//   cd apps/web-v3 && node scripts/build-participate.mjs          # → .rt/, GATE contre budgets-mesures.json
+//   node scripts/build-participate.mjs --mesure                    # + ENREGISTRE les valeurs mesurées
 //
 // `lib/realtime/participate.ts` est écrit en TypeScript strict et n'est JAMAIS
 // importé par `app/` : il devient UN module ES de navigateur, minifié, que
@@ -14,6 +14,15 @@
 // Ce script est le seul producteur de `.rt/`, et le seul à MESURER le poids du
 // module : un chiffre qu'on n'a pas mesuré ne s'invente pas (§ 12.6), et le
 // mesurer ici est ce qui le rend rejouable en une ligne.
+//
+// UN RATCHET, COMME `check-bundle-budget.mjs` (défaut majeur de revue,
+// suivi #5163 § 12.12 : « --mesure RÉÉCRIT au lieu d'opposer, aucun témoin ne
+// les lit »). L'appel SANS `--mesure` — celui que `bun run build` fait à
+// chaque build (`package.json` › `build`) — COMPARE désormais le poids
+// fraîchement compilé à celui enregistré dans `budgets-mesures.json` et
+// rend rc=1 sur toute croissance : la construction ELLE-MÊME est le témoin,
+// exactement comme pour les pages. Faire monter un plafond exige `--mesure`
+// et un diff relu, jamais un octet qui grossit en silence.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -111,9 +120,40 @@ const ecrisLaMesure = (poids) => {
     socket_io_client_brut_octets: poids.socket?.brut ?? null,
     socket_io_client_gzip_9_octets: poids.socket?.gzip ?? null,
     commande: 'cd apps/web-v3 && node scripts/build-participate.mjs --mesure',
+    // LE RATCHET SE DÉCLARE (défaut majeur de revue) — comme `documents_du_fil`
+    // et ses voisins de `budgets-mesures.json` : le nom du GATE qui l'oppose,
+    // pas seulement de la commande qui l'écrit.
+    temoin: 'cd apps/web-v3 && node scripts/build-participate.mjs — un RATCHET : toute valeur gzip au-dessus de celle enregistrée ici rend rc=1 (l’appel que `bun run build` fait par défaut, SANS --mesure), et la faire monter exige --mesure, donc un diff relu. SECOND GATE (travail `rich`, 2026-09-06) : participate_gzip_9_octets ne peut lui-même dépasser le PLAFOND déclaré dans budgets.json › temps_reel.plafonds, opposé par __tests__/bundle-budget.test.ts § « le plafond du module de participation » — binaire réel ≤ cette mesure ET cette mesure ≤ ce plafond.',
     date: new Date().toISOString().slice(0, 10),
   };
   writeFileSync(MESURES, `${JSON.stringify(mesures, null, 2)}\n`);
+};
+
+/**
+ * OPPOSER, PAS RÉÉCRIRE — la moitié qui manquait (défaut majeur de revue).
+ * Sans enregistrement préalable (premier tour, ou fichier absent), rien à
+ * opposer : `ok` reste vrai, comme un ratchet neuf qui n'a encore rien à
+ * défendre.
+ */
+const compare = (poids) => {
+  if (!existsSync(MESURES)) return { ok: true, depassements: [] };
+  const enregistre = JSON.parse(readFileSync(MESURES, 'utf8')).participate;
+  if (enregistre === undefined) return { ok: true, depassements: [] };
+  const depassements = [
+    ...SOURCES.flatMap(({ base }) => {
+      const plafond = enregistre[`${base}_gzip_9_octets`];
+      const mesure = poids[base]?.gzip;
+      return typeof plafond === 'number' && typeof mesure === 'number' && mesure > plafond
+        ? [`${base}.js : ${mesure} o gzip -9 > ${plafond} o enregistrés`]
+        : [];
+    }),
+    ...(typeof enregistre.socket_io_client_gzip_9_octets === 'number' &&
+    typeof poids.socket?.gzip === 'number' &&
+    poids.socket.gzip > enregistre.socket_io_client_gzip_9_octets
+      ? [`socket.io.esm.min.js : ${poids.socket.gzip} o gzip -9 > ${enregistre.socket_io_client_gzip_9_octets} o enregistrés`]
+      : []),
+  ];
+  return { ok: depassements.length === 0, depassements };
 };
 
 const main = () => {
@@ -123,7 +163,17 @@ const main = () => {
       (poids.socket === null ? '' : ` · socket.io.esm.min.js : ${poids.socket.brut} o bruts, ${poids.socket.gzip} o gzip -9`) +
       '\n',
   );
-  if (process.argv.includes('--mesure')) ecrisLaMesure(poids);
+  if (process.argv.includes('--mesure')) {
+    ecrisLaMesure(poids);
+    return;
+  }
+  const { ok, depassements } = compare(poids);
+  if (!ok) {
+    process.stderr.write(
+      `Croissance SILENCIEUSE du poids de participate (budgets-mesures.json › participate) — rejouer avec --mesure pour l'enregistrer, dans un diff relu :\n${depassements.map((ligne) => `  - ${ligne}`).join('\n')}\n`,
+    );
+    process.exitCode = 1;
+  }
 };
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) main();

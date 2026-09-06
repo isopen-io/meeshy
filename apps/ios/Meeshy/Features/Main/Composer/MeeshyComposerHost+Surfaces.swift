@@ -838,24 +838,52 @@ extension MeeshyComposerHost {
     var sceneDescriptionBinding: Binding<String> {
         Binding(
             get: {
-                switch ComposerSlideTextRole.role(for: selectedFormat) {
-                case .content:
+                switch ComposerSlideTextRole.descriptionTarget(
+                    format: selectedFormat, media: selectedSlideMediaURL) {
+                case .slideContent:
                     return viewModel.currentSlide.content ?? ""
-                case .caption:
-                    // Sans média sur la slide courante, il n'y a pas de légende
-                    // à lire — et surtout aucune raison de retomber sur le
-                    // contenu, qui appartient au post et non à ce média.
-                    guard let media = selectedSlideMediaURL else { return "" }
+                case .postContent:
+                    // **Sans média porteur, la description EST le contenu du
+                    // post** (2026-09-06). Ce getter rendait `""` et son
+                    // commentaire disait pourquoi : « aucune raison de retomber
+                    // sur le contenu, qui appartient au post et non à ce
+                    // média ». Le raisonnement est juste tant qu'il Y A un
+                    // média — la légende décrit alors CE visuel, pas la
+                    // publication. Il ne l'est plus quand la scène n'en porte
+                    // aucun : le volet est alors le SEUL endroit où l'auteur
+                    // peut écrire, et ce qu'il y écrit ne décrit rien d'autre
+                    // que la publication elle-même.
+                    //
+                    // > **Un raisonnement juste sur le cas nominal peut jeter
+                    // > le cas dégénéré.** Ici la conséquence était muette :
+                    // > l'auteur tapait sa description, la voyait, la validait
+                    // > — et le `set` symétrique la jetait faute de clé où la
+                    // > ranger (`applyCaption` fait `guard let media else
+                    // > { return }`). Mesuré au simulateur : un canvas de
+                    // > texte publié avec une description part avec
+                    // > `content: ""` et aucune légende nulle part.
+                    return documentText
+                case .mediaCaption(let media):
                     return documentMediaCaptions[media] ?? ""
                 }
             },
             set: { texte in
-                switch ComposerSlideTextRole.role(for: selectedFormat) {
-                case .content:
+                switch ComposerSlideTextRole.descriptionTarget(
+                    format: selectedFormat, media: selectedSlideMediaURL) {
+                case .slideContent:
                     viewModel.applyContentText(texte)
-                case .caption:
+                case .postContent:
+                    // Le pendant du getter : sans média porteur, ce que
+                    // l'auteur écrit va au CONTENU du post — le seul champ qui
+                    // décrit la publication entière, et celui que le fil rend
+                    // au-dessus de la carte. `applyCaption` refuserait
+                    // silencieusement (`guard let media`), ce qui est le bon
+                    // comportement pour une LÉGENDE et le mauvais pour la
+                    // seule zone d'écriture de l'écran.
+                    documentText = texte
+                case .mediaCaption(let media):
                     ComposerSlideTextRole.applyCaption(texte,
-                                                       to: selectedSlideMediaURL,
+                                                       to: media,
                                                        in: &documentMediaCaptions)
                 }
             }

@@ -28,7 +28,7 @@ import {
   trackingLinkAdminAllResponseSchema,
   trackingLinkAdminClicksResponseSchema
 } from './response-schemas';
-import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 
 /**

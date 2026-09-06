@@ -1,13 +1,8 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { MentionService } from '../services/MentionService.js';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { SuggestionsQuerySchema, MessageIdParamSchema, MyMentionsQuerySchema } from '../validation/mentions-schemas.js';
-import type {
-  MentionSuggestionsResponse,
-  GetMessageMentionsResponse,
-  GetUserMentionsResponse
-} from '@meeshy/shared/types/index';
 import type { MentionSuggestion } from '../services/MentionService.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../services/historyFloor.js';

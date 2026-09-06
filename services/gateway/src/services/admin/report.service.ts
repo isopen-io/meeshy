@@ -4,10 +4,7 @@ import type {
   CreateReportDTO,
   UpdateReportDTO,
   ReportFilters,
-  ReportStats,
-  ReportStatus,
-  ReportType,
-  ReportedType
+  ReportStats
 } from '@meeshy/shared/types';
 
 /**

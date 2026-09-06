@@ -167,6 +167,26 @@ export const FIL = {
   modifier: 'Modifier',
   retirer: 'Retirer',
   annuler: 'Annuler',
+  /**
+   * LA FENÊTRE D'ANNULATION D'UN RETRAIT (suivi #5163 § 12.12) — DISTINCTE de
+   * `supprime` (« Ce message a été supprimé », le retrait CONFIRMÉ) : tant
+   * que rien n'est parti, le lecteur doit pouvoir dire la différence entre
+   * « c'est fait » et « vous pouvez encore revenir dessus ». Le bouton
+   * réutilise `FIL.annuler` (site unique déjà servi par le composeur armé) —
+   * seul son `aria-label` lui est propre, pour ne pas confondre les DEUX
+   * « Annuler » qui peuvent coexister à l'écran (celui du composeur et
+   * celui d'une ligne retirée).
+   */
+  messageRetire: 'Message retiré',
+  annulerLeRetrait: 'Annuler le retrait du message',
+  /**
+   * LE REPÈRE TEXTUEL DE LA FENÊTRE (suivi #5163 § 12.12, défaut majeur de
+   * revue « rien ne dit que la fenêtre se referme ») — masqué tant que
+   * l'animation de `fil-feuille.ts` tourne, seul visible sous
+   * `prefers-reduced-motion: reduce` : la coupure de l'animation ne redevient
+   * jamais une absence d'information.
+   */
+  decompteDuRetrait: (secondes: number): string => `${secondes} s`,
   enregistrer: 'Enregistrer',
   modification: 'Modification du message',
   /**

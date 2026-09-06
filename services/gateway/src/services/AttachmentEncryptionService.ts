@@ -432,7 +432,7 @@ export class AttachmentEncryptionService {
    * @throws Error if file buffer is empty or exceeds size limits
    */
   async encryptAttachment(options: EncryptAttachmentOptions): Promise<EncryptAttachmentResult> {
-    const { fileBuffer, filename, mimeType, mode, thumbnailBuffer, conversationId } = options;
+    const { fileBuffer, mimeType, mode, thumbnailBuffer, conversationId } = options;
 
     // Validate inputs
     if (!fileBuffer || fileBuffer.length === 0) {

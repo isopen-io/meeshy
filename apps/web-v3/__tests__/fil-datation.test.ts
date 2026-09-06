@@ -1,4 +1,4 @@
-import { FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
+import { FEUILLE_DES_GESTES, FEUILLE_DU_FIL } from '@/app/connecte/fil-feuille';
 import { gabaritDeLigne, lignes } from '@/app/connecte/fil-lignes';
 import type { Message } from '@/lib/api/fil';
 
@@ -143,8 +143,27 @@ describe('la feuille tient la colonne', () => {
    * états d'envoi la reprennent, eux, puisqu'ils s'affichent à cet endroit.
    */
   it('annule la marge de la méta quand rien n’y est visible, et la rend aux états d’envoi', () => {
-    expect(FEUILLE_DU_FIL).toContain('.ligne .meta:not(:has(>:not(.reagir-slot):not(.attente):not(.echec):not([hidden]))){margin-top:0}');
+    expect(FEUILLE_DU_FIL).toContain('.ligne .meta:not(:has(>:not(.reagir-slot):not(.attente):not(.echec):not(.retrait):not([hidden]))){margin-top:0}');
     expect(FEUILLE_DU_FIL).toContain('.ligne.envoi-attente .meta,.ligne.envoi-hors-ligne .meta,.ligne.envoi-echec .meta{margin-top:var(--space-1)}');
+  });
+
+  /**
+   * REVUE (suivi #5163 § 12.12) — LA FENÊTRE D'ANNULATION NE SE PAIE QUE SUR
+   * LE FIL. `FEUILLE_DU_FIL` est inlinée par NEUF écrans qui ne servent
+   * jamais `gabaritDeLigne` (`fil-vue.ts:841` en est l'unique appelant) :
+   * y poser les règles de `.retrait` poussait le document de la GALERIE
+   * au-dessus du plafond dur `documents.document_o` (mesuré 9 220 o pour un
+   * plafond de 9 216). Elles vivent donc dans `FEUILLE_DES_GESTES`, servie
+   * par `documentDuFil` SEUL. La SEULE trace admise dans la feuille partagée
+   * est l'exclusion `:not(.retrait)` ci-dessus — un site unique, cinq octets,
+   * plutôt qu'un sélecteur jumeau.
+   */
+  it('ne fait pas payer la fenêtre d’annulation aux écrans qui ne la rendent jamais', () => {
+    expect(FEUILLE_DU_FIL).not.toContain('envoi-retrait-differe');
+    expect(FEUILLE_DU_FIL).not.toContain('.ligne .retrait{');
+    expect(FEUILLE_DES_GESTES).toContain('.ligne .retrait{display:none;position:relative;align-items:center;gap:var(--space-2)}');
+    expect(FEUILLE_DES_GESTES).toContain('.ligne.envoi-retrait-differe .retrait{display:inline-flex}');
+    expect(FEUILLE_DES_GESTES).toContain('.ligne .retrait .action{width:auto;min-height:var(--target-min)');
   });
 
   /**

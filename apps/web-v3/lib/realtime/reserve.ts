@@ -97,8 +97,23 @@ export const reserve = async (): Promise<Reserve> => {
   }
 };
 
-/** Les deux familles de la réserve — et rien d'autre n'y est écrit. */
-const FAMILLES = ['file', 'brouillon'] as const;
+/**
+ * Les TROIS familles de la réserve — et rien d'autre n'y est écrit. `retrait`
+ * (suivi #5163 § 12.12, défaut de revue « un retrait différé ne survit pas à
+ * un rechargement ») tient l'INTENTION d'un retrait tant que rien n'est parti
+ * vers la passerelle : une entrée par `messageId`, posée par `differe()`,
+ * effacée dès que son sort est décidé (annulé, envoyé, ou disarmé par un
+ * `message:deleted` reçu d'ailleurs). Une famille à PART, jamais fondue dans
+ * `file` : `file` porte du CONTENU à ENVOYER (texte, pièces, lieu) que
+ * `relisLaFile` rejoue comme un message neuf ; un retrait n'a pas de contenu
+ * et ne se rejoue pas de la même façon — une entrée `file` sans texte ni pièce
+ * serait rejetée par `relisLaFile` elle-même (`texte === '' && fichiers... ===
+ * 0`). Le PRINCIPE que #1163 réclame — « un retrait en attente survit à un
+ * crash, et rien ne l'oublie en silence » — est tenu par cette famille et par
+ * `reprendLesRetraits` (`fil-gestes.ts`), pas par une jumelle du transport
+ * d'envoi.
+ */
+const FAMILLES = ['file', 'brouillon', 'retrait'] as const;
 
 /**
  * Les CLÉS d'un lecteur pour une conversation. `moi` est l'identité que le
@@ -112,6 +127,8 @@ export const clesDeLaReserve = ({ moi, conversation }: { readonly moi: string | 
         /** Le préfixe des envois en attente : chaque entrée y ajoute `<instant>:<clientMessageId>`. */
         file: `file:${moi}:${conversation}:`,
         brouillon: `brouillon:${moi}:${conversation}`,
+        /** Le préfixe des retraits en attente : chaque entrée y ajoute `<messageId>`. */
+        retrait: `retrait:${moi}:${conversation}:`,
       };
 
 /**

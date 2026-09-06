@@ -908,29 +908,6 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
   });
 
   // =========================================================================
-  // _getMessageSourceLanguage
-  // =========================================================================
-  describe('_getMessageSourceLanguage', () => {
-    it('returns originalLanguage of the last message', async () => {
-      prisma.message.findFirst.mockResolvedValue({ originalLanguage: 'de' });
-      const lang = await (svc as any)._getMessageSourceLanguage('conv-1');
-      expect(lang).toBe('de');
-    });
-
-    it('returns "fr" when no message found', async () => {
-      prisma.message.findFirst.mockResolvedValue(null);
-      const lang = await (svc as any)._getMessageSourceLanguage('conv-empty');
-      expect(lang).toBe('fr');
-    });
-
-    it('returns "fr" on DB error', async () => {
-      prisma.message.findFirst.mockRejectedValue(new Error('fail'));
-      const lang = await (svc as any)._getMessageSourceLanguage('conv-err');
-      expect(lang).toBe('fr');
-    });
-  });
-
-  // =========================================================================
   // _handleTranslationCompleted — dedup, error handling
   // =========================================================================
   describe('_handleTranslationCompleted', () => {

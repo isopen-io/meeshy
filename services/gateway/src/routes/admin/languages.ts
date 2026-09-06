@@ -2,8 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { logError } from '../../utils/logger';
-import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
 import { requirePermission } from '../../middleware/authorize';
@@ -291,7 +290,6 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       const period = query.period || '7d';
       const language = query.language; // Langue spécifique (optionnel)
 
-      const now = new Date();
       let days = 7;
 
       switch (period) {

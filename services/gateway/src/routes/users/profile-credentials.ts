@@ -243,7 +243,12 @@ export async function updateUsername(fastify: FastifyInstance) {
 
         if (daysSinceLastChange < RATE_LIMIT_DAYS) {
           const nextChangeAllowedAt = new Date(lastChange.getTime() + RATE_LIMIT_DAYS * 24 * 60 * 60 * 1000);
-          return sendError(reply, 429, `Username change limited to once every ${RATE_LIMIT_DAYS} days`);
+          // #4859 — le schéma 429 déclare `nextChangeAllowedAt` (compte à
+          // rebours affiché au client) depuis toujours ; jamais transmis, le
+          // champ n'a jamais atteint personne.
+          return sendError(reply, 429, `Username change limited to once every ${RATE_LIMIT_DAYS} days`, {
+            details: { nextChangeAllowedAt: nextChangeAllowedAt.toISOString() },
+          });
         }
       }
 

@@ -11,7 +11,7 @@
 // Load environment configuration first
 import './env';
 
-import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
@@ -31,7 +31,7 @@ import { MessageTranslationService } from './services/message-translation/Messag
 import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
-import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
+import { createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { registerRouteUsageHook } from './plugins/route-usage.plugin';
@@ -83,7 +83,6 @@ interface Config {
 function loadConfiguration(): Config {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const isDev = nodeEnv === 'development';
-  const dbUrl = process.env.DATABASE_URL || '';
   return {
     nodeEnv,
     isDev,
@@ -102,50 +101,6 @@ const config = loadConfiguration();
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
-
-interface WebSocketMessage {
-  type: 'translate' | 'translate_multi' | 'typing' | 'stop_typing' | 'new_message' | 'join_conversation' | 'leave_conversation' | 'user_typing';
-  messageId?: string;
-  text?: string;
-  sourceLanguage?: string;
-  targetLanguage?: string;
-  targetLanguages?: string[];
-  conversationId?: string;
-  userId?: string;
-  data?: any; // Pour les données spécifiques au type de message
-}
-
-interface WebSocketResponse {
-  type: 'translation' | 'translation_multi' | 'error' | 'typing' | 'stop_typing' | 'message_sent' | 'conversation_joined' | 'conversation_left';
-  messageId?: string;
-  originalText?: string;
-  translatedText?: string;
-  translations?: Array<{
-    language: string;
-    text: string;
-    confidence: number;
-  }>;
-  sourceLanguage?: string;
-  targetLanguage?: string;
-  confidence?: number;
-  fromCache?: boolean;
-  modelUsed?: string;
-  conversationId?: string;
-  userId?: string;
-  error?: string;
-  data?: any; // Pour les données spécifiques au type de réponse
-  timestamp: string;
-}
-
-interface WebSocketConnection {
-  send: (data: string) => void;
-}
-
-interface TranslationRequest {
-  text: string;
-  source_language: string;
-  target_language: string;
-}
 
 // Fastify type extensions
 declare module 'fastify' {
@@ -169,7 +124,6 @@ class MeeshyServer {
   private messagingService: MessagingService;
   private mentionService: MentionService;
   private statusService: StatusService;
-  private authMiddleware: AuthMiddleware;
   private socketIOHandler: MeeshySocketIOHandler;
   private callCleanupService: CallCleanupService;
   private backgroundJobs: BackgroundJobsManager;
@@ -262,9 +216,6 @@ class MeeshyServer {
     // NOUVEAU: Initialiser le StatusService en premier (requis par AuthMiddleware)
     this.statusService = new StatusService(this.prisma);
 
-    // Initialiser le middleware d'authentification unifié avec StatusService
-    this.authMiddleware = new AuthMiddleware(this.prisma, this.statusService);
-
     // Initialiser le cache multi-niveau partagé pour les mappings de jobs (avant MessageTranslationService)
     this.jobMappingCache = new MultiLevelJobMappingCache(getCacheStore());
 
@@ -280,7 +231,6 @@ class MeeshyServer {
     // Initialiser le handler Socket.IO avec l'instance de translationService qui reçoit les événements ZMQ
     this.socketIOHandler = new MeeshySocketIOHandler(
       this.prisma,
-      config.jwtSecret,
       this.translationService // ← Instance initialisée qui reçoit les événements ZMQ
     );
 
@@ -818,24 +768,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
   // HELPER METHODS
   // --------------------------------------------------------------------------
 
-  private sendWebSocketMessage(connection: WebSocketConnection, message: WebSocketResponse): void {
-    try {
-      connection.send(JSON.stringify(message));
-    } catch (error) {
-      logger.error('Failed to send WebSocket message:', error);
-    }
-  }
-
-  private sendWebSocketError(connection: WebSocketConnection, messageId: string | undefined, error: string): void {
-    const response: WebSocketResponse = {
-      type: 'error',
-      messageId,
-      error,
-      timestamp: new Date().toISOString()
-    };
-    this.sendWebSocketMessage(connection, response);
-  }
-
   // --------------------------------------------------------------------------
   // REST API ROUTES
   // --------------------------------------------------------------------------
@@ -938,8 +870,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
   }
 
   private displayStartupBanner(): void {
-    const dbStatus = config.databaseUrl ? 'Connected' : 'Not configured'.padEnd(48);
-    const translateUrl = `tcp://0.0.0.0:${(process.env.ZMQ_TRANSLATOR_PORT || '5555').padEnd(37)}`;
     const useHttps = process.env.USE_HTTPS === 'true';
     const localIp = process.env.LOCAL_IP || '192.168.1.39';
     const domain = process.env.DOMAIN || 'localhost';
@@ -952,40 +882,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       logger.info(`📱 Network access: ${protocol}://${localIp}:${config.port}`);
       if (domain !== 'localhost') {
         logger.info(`🌐 Custom domain: ${protocol}://${domain}:${config.port}`);
-        const banner = `
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                       🌍 MEESHY GATEWAY 🌍                       ║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  Environment: ${config.nodeEnv.padEnd(48)}   ║
-    ║  Port:        ${config.port.toString().padEnd(48)}   ║
-    ║  Database:    ${dbStatus}                                          ║
-    ║  Translator:  ${translateUrl}║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  📡 WebSocket:    ${wsProtocol}://localhost:${config.port}/socket.io/${' '.repeat(20 - wsProtocol.length - config.port.toString().length)} ║
-    ║  🏥 Health:       ${protocol}://localhost:${config.port}/health${' '.repeat(24 - protocol.length - config.port.toString().length)} ║
-    ║  📖 Info:         ${protocol}://localhost:${config.port}/info${' '.repeat(26 - protocol.length - config.port.toString().length)} ║
-    ║  📱 Network:      ${protocol}://${localIp}:${config.port}${' '.repeat(38 - protocol.length - localIp.length - config.port.toString().length)} ║
-    ╚══════════════════════════════════════════════════════════════════╝
-        `.trim();
         logger.info(`🔌 WebSocket: ${wsProtocol}://localhost:${config.port}`);
       }else{
         logger.info(`🌐 Local access only (no custom domain configured)`);
-
-        const banner = `
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                       🌍 MEESHY GATEWAY 🌍                       ║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  Environment: ${config.nodeEnv.padEnd(48)}   ║
-    ║  Port:        ${config.port.toString().padEnd(48)}   ║
-    ║  Database:    ${dbStatus}                                          ║
-    ║  Translator:  ${translateUrl}║
-    ╠══════════════════════════════════════════════════════════════════╣
-    ║  📡 WebSocket:    ${wsProtocol}://gate.${domain}:${config.port}/socket.io/${' '.repeat(20 - wsProtocol.length - config.port.toString().length)} ║
-    ║  🏥 Health:       ${protocol}://gate.${domain}:${config.port}/health${' '.repeat(24 - protocol.length - config.port.toString().length)} ║
-    ║  📖 Info:         ${protocol}://gate.${domain}:${config.port}/info${' '.repeat(26 - protocol.length - config.port.toString().length)} ║
-    ║  📱 Network:      ${protocol}://${localIp}:${config.port}${' '.repeat(38 - protocol.length - localIp.length - config.port.toString().length)} ║
-    ╚══════════════════════════════════════════════════════════════════╝
-        `.trim();
         logger.info(`🔌 WebSocket: ${wsProtocol}://gate.${domain}:${config.port}`);
       }
 

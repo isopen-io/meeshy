@@ -9,7 +9,6 @@ import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';

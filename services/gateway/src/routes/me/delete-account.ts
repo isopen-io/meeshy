@@ -9,11 +9,8 @@ import { verifyPassword } from '../../utils/password-hash.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
-import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
-
-const GRACE_PERIOD_DAYS = 90;
 
 /** 72 h — la durée de vie d'un lien de confirmation (#4183). */
 export const TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
@@ -34,10 +31,6 @@ function hashToken(token: string): string {
 export function buildDeletionPageUrl(action: 'confirm' | 'cancel' | 'purge', token: string): string {
   const base = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://meeshy.me';
   return `${base.replace(/\/+$/, '')}/account/deletion?token=${encodeURIComponent(token)}&action=${action}`;
-}
-
-function htmlPage(title: string, emoji: string, message: string, detail: string, color: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} - Meeshy</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f9fafb}@media(prefers-color-scheme:dark){body{background:#111827;color:#e5e7eb}.card{background:#1f2937!important;border-color:#374151!important}.detail{color:#9ca3af!important}}.card{background:white;border-radius:16px;padding:40px;text-align:center;max-width:480px;margin:20px;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid #e5e7eb}.emoji{font-size:48px;margin-bottom:16px}.title{font-size:22px;font-weight:700;color:${color};margin-bottom:12px}.message{font-size:16px;line-height:1.5;margin-bottom:8px}.detail{font-size:14px;color:#6b7280}</style></head><body><div class="card"><div class="emoji">${emoji}</div><div class="title">${title}</div><p class="message">${message}</p><p class="detail">${detail}</p></div></body></html>`;
 }
 
 export async function deleteAccountRoutes(fastify: FastifyInstance) {

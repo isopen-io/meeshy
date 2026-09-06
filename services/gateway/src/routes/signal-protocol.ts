@@ -21,7 +21,6 @@ import { amitieAcceptee } from '../services/friendship';
 import {
   errorResponseSchema,
   validationErrorResponseSchema,
-  signalPreKeyBundleSchema,
   generatePreKeyBundleRequestSchema,
   generatePreKeyBundleResponseSchema,
   getPreKeyBundleResponseSchema,

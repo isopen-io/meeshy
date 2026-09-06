@@ -43,7 +43,7 @@ import { message, MENTIONS_RETENUES, type Accuse, type Lieu, type Message } from
  * la remplace à sa place — jamais un saut.
  */
 
-export type EtatDEnvoi = 'servi' | 'en-attente' | 'hors-ligne' | 'en-echec';
+export type EtatDEnvoi = 'servi' | 'en-attente' | 'hors-ligne' | 'en-echec' | 'retrait-differe';
 
 export type Bulle = Message & {
   readonly envoi: EtatDEnvoi;
@@ -158,10 +158,24 @@ const memeBulle = (a: Bulle, b: Bulle): boolean =>
  * jusqu'aux appareils de l'EXPÉDITEUR, et à eux seuls »), et un rattrapage par
  * `/sync` peut rendre un message déjà peint : dans les deux cas la charge
  * serveur REMPLACE, elle ne s'ajoute pas.
+ *
+ * SAUF quand l'existante est en RETRAIT DIFFÉRÉ (suivi #5163 § 12.12, défaut
+ * bloquant de revue « un retrait interrompu une seconde est perdu en
+ * silence ») — tant que rien n'est parti vers la passerelle, le message y
+ * est toujours et un rattrapage `/sync` (ou un `message:new` tardif de la
+ * même bulle) le rend forcément SERVI, intact : fusionner l'aurait
+ * RESSUSCITÉ sous les yeux du lecteur, effaçant l'intention locale sans un
+ * mot — et le retrait, une fois sa fenêtre expirée, ne trouvait plus rien à
+ * envoyer (`flush()` renonçait en silence, `!encoreDiffere`). L'intention
+ * locale est ici la SEULE source de vérité tant qu'elle n'a pas elle-même
+ * conclu (confirmée par `confirmeLaMutation`, ou rétablie par `retabli`) —
+ * un `message:deleted` explicite reste, lui, traité par `retire()`, jamais
+ * par `insere()`.
  */
 export const insere = (etat: EtatDuFil, bulle: Bulle): EtatDuFil => {
   const existante = etat.bulles.find((candidate) => memeBulle(candidate, bulle));
   if (existante === undefined) return { ...etat, bulles: citantes(triee([...etat.bulles, bulle])) };
+  if (existante.envoi === 'retrait-differe') return etat;
 
   const fusion: Bulle = {
     ...bulle,
@@ -317,19 +331,34 @@ export const modifieMoiMeme = (etat: EtatDuFil, id: string, texte: string): Etat
 
 /**
  * Un retrait OPTIMISTE efface le contenu TOUT DE SUITE — la même chose
- * qu'un `retire()` reçu, sauf `envoi`, qui reste `en-attente` jusqu'à
- * l'accusé ou le `message:deleted` que la passerelle diffuse (même à
- * l'auteur du retrait, § 2).
+ * qu'un `retire()` reçu, sauf `envoi`, qui passe `retrait-differe` :
+ * RIEN ne part encore vers la passerelle (fenêtre d'annulation, issue de
+ * suivi #5163 § 12.12). `partLeRetrait` fait passer le relais à
+ * `en-attente` quand la fenêtre expire et que l'envoi part enfin.
  */
 export const retireMoiMeme = (etat: EtatDuFil, id: string): EtatDuFil => ({
   ...etat,
   bulles: citantes(
     etat.bulles.map((bulle) =>
       bulle.id === id
-        ? { ...bulle, supprime: true, texte: '', pieces: [], lieu: null, citations: [], reactions: [], envoi: 'en-attente' }
+        ? { ...bulle, supprime: true, texte: '', pieces: [], lieu: null, citations: [], reactions: [], envoi: 'retrait-differe' }
         : bulle,
     ),
   ),
+});
+
+/**
+ * LA FENÊTRE D'ANNULATION EXPIRE — l'envoi PART enfin (`message:delete` ou
+ * `DELETE /messages/:id`) : `retrait-differe` (rien n'est parti) devient
+ * `en-attente` (le transport est en vol), exactement le vocabulaire d'un
+ * envoi normal. Idempotente : une bulle qui n'est plus `retrait-differe` —
+ * un `message:deleted` d'AUTRUI l'a désarmée entre-temps (`retire`, plus
+ * haut) — n'est pas touchée, ce qui laisse l'appelant DÉCIDER de ne rien
+ * envoyer plutôt que de le lui interdire ici.
+ */
+export const partLeRetrait = (etat: EtatDuFil, id: string): EtatDuFil => ({
+  ...etat,
+  bulles: etat.bulles.map((bulle) => (bulle.id === id && bulle.envoi === 'retrait-differe' ? { ...bulle, envoi: 'en-attente' } : bulle)),
 });
 
 /** L'accusé d'une mutation (`{ success: true }` de `message:edit`/`message:delete`, ou une réponse REST 200) : `en-attente` devient `servi`. */

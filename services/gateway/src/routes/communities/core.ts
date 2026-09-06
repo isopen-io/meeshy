@@ -5,21 +5,19 @@ import { FastifyInstance } from 'fastify';
 import {
   communitySchema,
   createCommunityRequestSchema,
-  updateCommunityRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateConversationParticipantsPresence } from './member-presence';
 import {
   CreateCommunitySchema,
-  UpdateCommunitySchema,
   CommunityRole,
   generateIdentifier
 } from './types';
 import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { communityConversationSchema, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';

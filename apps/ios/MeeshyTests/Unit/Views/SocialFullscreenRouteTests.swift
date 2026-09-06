@@ -35,6 +35,13 @@ final class SocialFullscreenRouteTests: XCTestCase {
         SceneV3(id: id, objects: [])
     }
 
+    private func mediaObject(_ id: String) -> ObjectV3 {
+        ObjectV3(id: id, kind: .media,
+                 anchor: .free(x: 0.5, y: 0.5),
+                 plane: .content, z: 1,
+                 transform: TransformV3(), payload: [:])
+    }
+
     func test_unPostAvecCanvas_ouvreLaSCENE() {
         let document = CanvasV3(scenes: [scene()])
         XCTAssertEqual(SocialFullscreenRoute.scene(of: post(canvas: document))?.scenes.count, 1,
@@ -59,6 +66,47 @@ final class SocialFullscreenRouteTests: XCTestCase {
     /// **Le carrousel est le player lui-même.** Plusieurs slides doivent
     /// arriver ENTIÈRES au plein écran : c'est lui qui les feuillette, et le
     /// tronquer ici perdrait tout ce qui suit la première.
+    /// **Un canvas qui laisse un média dehors rend la main à la GALERIE**
+    /// (régression mesurée le 2026-09-06).
+    ///
+    /// Un post de deux photos part avec ses deux médias — et un canvas d'une
+    /// seule scène portant un seul média en fond, le composer ne publiant que
+    /// sa slide courante. Router vers la scène montrait alors UNE photo sur
+    /// deux, sans pellicule ni moyen d'atteindre l'autre.
+    ///
+    /// > **Un correctif qui améliore le cas visé peut dégrader son voisin.**
+    /// > La première écriture de cette règle demandait « y a-t-il une scène ? » ;
+    /// > il fallait aussi demander « montre-t-elle tout ? ».
+    func test_unCanvasQuiOublieUnMedia_retombeSurLaGalerie() {
+        let document = CanvasV3(scenes: [SceneV3(id: "s1", objects: [mediaObject("m1")])])
+        var post = self.post(canvas: document)
+        post.media = [.image(), .image()]
+        XCTAssertNil(SocialFullscreenRoute.scene(of: post),
+                     "Deux photos publiées, une seule dans le canvas : la galerie les montre " +
+                     "toutes, le player n'en montrerait qu'une.")
+    }
+
+    /// …et un canvas COMPLET garde la main : c'est le cas nominal, celui où le
+    /// canvas EST la publication.
+    func test_unCanvasQuiCouvreTousLesMedias_ouvreLaSCENE() {
+        let document = CanvasV3(scenes: [
+            SceneV3(id: "s1", objects: [mediaObject("m1"), mediaObject("m2")])
+        ])
+        var post = self.post(canvas: document)
+        post.media = [.image(), .image()]
+        XCTAssertNotNil(SocialFullscreenRoute.scene(of: post),
+                        "Le canvas montre les deux visuels : il est la publication.")
+    }
+
+    /// **Un canvas SANS média reste maître chez lui** — texte, dessin,
+    /// stickers, fond de couleur. Le post ne porte aucun visuel, il n'y a donc
+    /// rien à laisser dehors, et la galerie n'aurait rien à feuilleter.
+    func test_unCanvasSansMediaEtUnPostSansVisuel_ouvreLaSCENE() {
+        let document = CanvasV3(scenes: [SceneV3(id: "s1", objects: [])])
+        XCTAssertNotNil(SocialFullscreenRoute.scene(of: post(canvas: document)),
+                        "Sans visuel au post, la scène ne laisse rien dehors.")
+    }
+
     func test_plusieursScenes_voyagentTOUTES() {
         let document = CanvasV3(scenes: [scene("a"), scene("b"), scene("c"), scene("d")])
         XCTAssertEqual(SocialFullscreenRoute.scene(of: post(canvas: document))?.scenes.map(\.id),

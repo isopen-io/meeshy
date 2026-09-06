@@ -8,10 +8,8 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type {
   Attachment,
-  AttachmentType,
-  ACCEPTED_MIME_TYPES,
+  AttachmentType
 } from '@meeshy/shared/types/attachment';
-import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
 import {
   AttachmentEncryptionService,
@@ -23,7 +21,6 @@ import {
   type UploadResult,
   type EncryptedUploadResult,
 } from './UploadProcessor';
-import { MetadataManager } from './MetadataManager';
 import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
@@ -36,10 +33,8 @@ const logger = enhancedLogger.child({ module: 'AttachmentService' });
 export class AttachmentService {
   private prisma: PrismaClient;
   private uploadBasePath: string;
-  private publicUrl: string;
   private encryptionService: AttachmentEncryptionService;
   private uploadProcessor: UploadProcessor;
-  private metadataManager: MetadataManager;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
@@ -47,41 +42,6 @@ export class AttachmentService {
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
     this.uploadProcessor = new UploadProcessor(prisma);
-    this.metadataManager = new MetadataManager(this.uploadBasePath);
-    this.publicUrl = this.determinePublicUrl();
-  }
-
-  /**
-   * Détermine l'URL publique selon l'environnement
-   */
-  private determinePublicUrl(): string {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'local';
-
-    if (process.env.PUBLIC_URL) {
-      return process.env.PUBLIC_URL;
-    }
-
-    if (isProduction) {
-      const domain = process.env.DOMAIN || 'meeshy.me';
-      const url = `https://gate.${domain}`;
-      logger.warn('PUBLIC_URL non définie, utilisation du domaine par défaut', { url });
-      return url;
-    }
-
-    if (isDevelopment) {
-      if (process.env.BACKEND_URL) return process.env.BACKEND_URL;
-      if (process.env.NEXT_PUBLIC_BACKEND_URL) return process.env.NEXT_PUBLIC_BACKEND_URL;
-
-      const port = process.env.PORT || '3000';
-      const url = `http://localhost:${port}`;
-      logger.warn('BACKEND_URL non définie, utilisation de localhost', { url });
-      return url;
-    }
-
-    const fallback = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-    logger.error('Impossible de déterminer PUBLIC_URL', { fallback });
-    return fallback;
   }
 
   // ==================== DÉLÉGATION UPLOAD ====================

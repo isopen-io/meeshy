@@ -482,6 +482,25 @@ extension MeeshyComposerHost {
                            mimeType: String,
                            durationMs: Int,
                            transcription: MobileTranscriptionPayload?) {
+        // **Un son POSÉ déclenche sa pré-montée** (2026-09-06).
+        //
+        // Le balayage part de la fin de la dérivation du DOCUMENT, dont le
+        // doc-comment promet qu'« une sixième porte hérite de la pré-montée
+        // sans que personne n'ait à y penser ». C'est vrai des portes qui
+        // passent par cette dérivation ; la porte SON n'y passe pas — elle
+        // écrit dans la scène, pas dans les médias du document.
+        //
+        // > **Un déclencheur unique ne couvre que ce qui passe par lui.** La
+        // > phrase qui rassure — « ici, une sixième porte hérite » — décrit un
+        // > mécanisme réel, et c'est ce qui la rend dangereuse : elle a
+        // > dispensé de vérifier que la porte suivante y passait. Un son de
+        // > fond partait donc sans fichier, et rien ne rougissait.
+        //
+        // En `defer` plutôt qu'en queue de corps : la fonction a trois
+        // sorties, dont un `return` anticipé pour la pastille de scène, et le
+        // balayage est idempotent — il ne coûte rien là où il n'y a rien à
+        // monter.
+        defer { startPendingPreUploads() }
         // **Une ÉDITION remplace, elle n'ajoute pas** (directive porteur
         // 2026-09-01). Le retrait précède le `switch` — et non l'une de ses
         // branches — parce que l'auteur peut aussi avoir fait passer le son en

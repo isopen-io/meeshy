@@ -1,7 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import crypto from 'crypto';
 import { generateNumericCode } from '../utils/verification-code';
-import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
+import { SocketIOUser } from '@meeshy/shared/types';
 import { normalizePhoneNumber } from '../utils/normalize';
 import { RequestContext } from './GeoIPService';
 import { EmailService } from './EmailService';
@@ -81,6 +81,7 @@ export interface AuthResult {
   session: SessionData;
   requires2FA?: boolean; // True if 2FA verification is needed
   twoFactorToken?: string; // Temporary token for 2FA flow
+  usedBackupCode?: boolean; // True when completeAuthWith2FA consumed a backup code rather than a TOTP code
 }
 
 export type AuthServiceOptions = {
@@ -356,6 +357,13 @@ export class AuthService {
       // Verify 2FA code
       const cleanCode = code.replace(/-/g, '').toUpperCase();
       let isValid = false;
+      // RESTAURÉ EN REVUE (2026-09-06) — le balayage `noUnusedLocals` de
+      // 158ac8beb4 a retiré cette déclaration et son affectation en les
+      // croyant mortes : le SEUL usage est la propriété ABRÉGÉE
+      // `usedBackupCode` du littéral rendu plus bas, que `tsc` a aussitôt
+      // rougie (TS18004). Le gateway ne compilait plus, et le drapeau que
+      // l'appelant lit pour dire « vous venez d'utiliser un code de secours »
+      // avait disparu du contrat.
       let usedBackupCode = false;
 
       // Try TOTP code first (6 digits)
@@ -449,7 +457,8 @@ export class AuthService {
         user: socketIOUser,
         sessionToken,
         session,
-        requires2FA: false
+        requires2FA: false,
+        usedBackupCode
       };
 
     } catch (error) {

@@ -99,22 +99,6 @@ const conversationPreferencesSchema = {
   }
 } as const;
 
-const conversationCategorySchema = {
-  type: 'object',
-  description: 'User-defined conversation category',
-  properties: {
-    id: { type: 'string', description: 'Unique category ID' },
-    userId: { type: 'string', description: 'User ID' },
-    name: { type: 'string', description: 'Category name' },
-    color: { type: 'string', nullable: true, description: 'Display color (hex code)' },
-    icon: { type: 'string', nullable: true, description: 'Icon identifier' },
-    order: { type: 'number', description: 'Display order among categories' },
-    isExpanded: { type: 'boolean', description: 'Whether category is expanded in UI' },
-    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
-    updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' }
-  }
-} as const;
-
 const updateConversationPreferencesRequestSchema = {
   type: 'object',
   properties: {
@@ -139,29 +123,6 @@ const updateConversationPreferencesRequestSchema = {
   }
 } as const;
 
-const createCategoryRequestSchema = {
-  type: 'object',
-  required: ['name'],
-  properties: {
-    name: { type: 'string', minLength: 1, maxLength: 100, description: 'Category name' },
-    color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$', description: 'Hex color code' },
-    icon: { type: 'string', maxLength: 50, description: 'Icon identifier' },
-    order: { type: 'number', minimum: 0, description: 'Display order' },
-    isExpanded: { type: 'boolean', description: 'Whether expanded by default' }
-  }
-} as const;
-
-const updateCategoryRequestSchema = {
-  type: 'object',
-  properties: {
-    name: { type: 'string', minLength: 1, maxLength: 100, description: 'Category name' },
-    color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$', description: 'Hex color code' },
-    icon: { type: 'string', maxLength: 50, description: 'Icon identifier' },
-    order: { type: 'number', minimum: 0, description: 'Display order' },
-    isExpanded: { type: 'boolean', description: 'Whether expanded' }
-  }
-} as const;
-
 const reorderConversationsRequestSchema = {
   type: 'object',
   required: ['updates'],
@@ -183,25 +144,6 @@ const reorderConversationsRequestSchema = {
         }
       },
       description: 'Array of conversation reorder updates (max 200)'
-    }
-  }
-} as const;
-
-const reorderCategoriesRequestSchema = {
-  type: 'object',
-  required: ['updates'],
-  properties: {
-    updates: {
-      type: 'array',
-      items: {
-        type: 'object',
-        required: ['categoryId', 'order'],
-        properties: {
-          categoryId: { type: 'string', description: 'Category ID' },
-          order: { type: 'number', minimum: 0, description: 'New order value' }
-        }
-      },
-      description: 'Array of category reorder updates'
     }
   }
 } as const;

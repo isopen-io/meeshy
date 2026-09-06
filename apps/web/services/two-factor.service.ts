@@ -59,10 +59,11 @@ export interface TwoFactorVerifyResponse {
     token: string;
     sessionToken?: string;
     expiresIn: number;
-    // `POST /auth/login/2fa` ne rend jamais ce champ (ni son `AuthResult`
-    // interne, ni son handler ne le portent, mesuré) : gardé optionnel pour
-    // ne pas casser l'appelant qui le lit déjà (`verify-2fa/page.tsx`), mais
-    // toujours `undefined` en pratique tant que le gateway ne le sert pas.
+    // Vrai quand le second facteur a été validé par un code de secours plutôt
+    // que par TOTP — servi par la passerelle depuis #4458, lu par
+    // `verify-2fa/page.tsx` pour avertir l'utilisateur que ce code vient
+    // d'être consommé. Optionnel car un serveur antérieur au correctif ne le
+    // porte pas.
     usedBackupCode?: boolean;
   };
   error?: string;

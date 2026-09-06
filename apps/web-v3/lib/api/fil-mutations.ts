@@ -121,7 +121,7 @@ export type CandidatDeMutation = {
   readonly supprime: boolean;
   readonly protege: boolean;
   readonly ecritA?: string | null;
-  readonly envoi?: 'servi' | 'en-attente' | 'hors-ligne' | 'en-echec';
+  readonly envoi?: 'servi' | 'en-attente' | 'hors-ligne' | 'en-echec' | 'retrait-differe';
 };
 
 const mienEtVivant = (candidat: CandidatDeMutation): boolean =>
@@ -206,21 +206,30 @@ export const modifie = async ({
   };
 };
 
-/** `DELETE /api/v1/messages/:messageId` (`routes/messages-writes.ts:428`) — même garde fail-closed que `modifie`. */
+/**
+ * `DELETE /api/v1/messages/:messageId` (`routes/messages-writes.ts:428`) —
+ * même garde fail-closed que `modifie`. `keepalive` (suivi #5163 § 12.12,
+ * `prendsLesRetraits.detruit`, `lib/realtime/fil-gestes.ts`) laisse la
+ * requête aboutir même quand le document part — le module qui l'a envoyée
+ * a déjà été détruit, il ne verra ni la réponse ni un refus.
+ */
 export const retire = async ({
   creance,
   messageId,
   base,
   recuperer,
+  keepalive,
 }: {
   readonly creance: Creance;
   readonly messageId: string;
   readonly base?: string;
   readonly recuperer?: Recuperateur;
+  readonly keepalive?: boolean;
 }): Promise<Mutation> => {
   if (creance.genre === 'invite') return { genre: 'refus', message: REFUS_RETRAIT, statut: 403 };
   const reponse = await demande(`${base ?? baseDeLaPasserelle()}/api/v1/messages/${encodeURIComponent(messageId)}`, creance, recuperer, {
     method: 'DELETE',
+    ...(keepalive === undefined ? {} : { keepalive }),
   });
   if (reponse === null) return { genre: 'refus', message: REFUS_RETRAIT, statut: null };
   const enveloppe = objet(await reponse.json().catch(() => null));

@@ -13,7 +13,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --maxWorkers=50%",
     "e2e:run": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test",
-    "e2e": "npm run test:pages && npm run test:chaines",
+    "e2e": "npm run test:pages && npm run test:chaines && npm run test:gestes-moteurs",
     "clean": "rm -rf .next node_modules",
     "baseline": "node scripts/baseline.mjs",
     "test:a11y": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test e2e/visual/v3-a11y.spec.ts",
@@ -21,7 +21,8 @@
     "test:fil-a11y": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test e2e/visual/v3-fil-a11y.spec.ts",
     "test:lifecycle": "CHROMIUM_PATH=\"${CHROMIUM_PATH:-$(node -e \"process.stdout.write(require('../../scripts/lib/navigateur.cjs').chromiumPath())\")}\" playwright test e2e/visual/v3-lifecycle.spec.ts",
     "test:pages": "npm run e2e:run -- --project=pages",
-    "test:chaines": "npm run e2e:run -- --project=chaines"
+    "test:chaines": "npm run e2e:run -- --project=chaines",
+    "test:gestes-moteurs": "npm run e2e:run -- --project=gestes-webkit --project=gestes-firefox"
   },
   "dependencies": {
     "@meeshy/design-tokens": "workspace:*",

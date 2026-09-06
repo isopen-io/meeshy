@@ -652,7 +652,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
       const date = new Date().toISOString().slice(0, 10);
       const isWknd = [0, 6].includes(new Date().getUTCDay());
 
-      const [lastScanRaw, budgetRaw, usersCount, lastBurstRaw] = await Promise.all([
+      const [lastScanRaw, budgetRaw, , lastBurstRaw] = await Promise.all([
         cache.get(`agent:last-scan:${conversationId}`),
         cache.get(`agent:budget:${conversationId}:${date}`),
         cache.get(`agent:budget:${conversationId}:${date}:users`),

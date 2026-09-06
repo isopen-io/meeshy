@@ -2725,21 +2725,64 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         var declarations = 0
         var montages = 0
+        var ancienComposer = 0
+        var racinesQuiMontent: Set<String> = []
         for case let url as URL in enumerateur where url.pathExtension == "swift" {
             let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             declarations += occurrences(of: "struct DocumentComposerDoor", in: source)
-            montages += occurrences(of: "DocumentComposerDoor(", in: source)
+            let n = occurrences(of: "DocumentComposerDoor(", in: source)
+            montages += n
+            if n > 0 { racinesQuiMontent.insert(url.lastPathComponent) }
+            // L'ancien composer : sa DÉCLARATION survit (code mort, lot de
+            // suppression à part), mais plus aucun site ne doit le MONTER.
+            //
+            // Aucune soustraction ici : `struct FeedComposerSheet: View` ne
+            // porte PAS de parenthèse, donc la déclaration n'est jamais
+            // comptée par ce motif. Un premier jet la retranchait quand même
+            // et rendait −1 — une garde qui se trompe de signe accuse un code
+            // sain.
+            ancienComposer += occurrences(of: "FeedComposerSheet(", in: source)
         }
 
         XCTAssertEqual(declarations, 1, "La porte doit exister, et une seule fois — sinon la garde ne mesure rien.")
+
+        // **LA RÈGLE, et non plus un COMPTE** (révision 2026-09-06).
+        //
+        // Cette garde exigeait `montages == 1`, et son message disait pourquoi :
+        // « la CITATION reste sur `FeedComposerSheet` (T3.2, distincte) ».
+        // C'était vrai, et ça a cessé de l'être le jour où T3.2 a été prise —
+        // la citation ET le fil iPad sont passés au meuble, portant le compte
+        // à quatre (deux racines × fil + citation).
+        //
+        // > Un témoin qui épingle un NOMBRE de sites rougit à chaque hôte
+        // > légitime qu'on ajoute, et pousse à l'affaiblir plutôt qu'à le
+        // > repointer. Ce qui compte n'a jamais été « combien » mais « qui » :
+        // > la porte est-elle câblée, et l'ANCIEN composer est-il mort ?
+        //
+        // Les trois assertions qui suivent survivent à un cinquième hôte, et
+        // tombent sur ce qu'il faut : un débranchement, une racine oubliée, ou
+        // le retour de l'ancien composer.
+        XCTAssertGreaterThan(
+            montages, 0,
+            "Aucun site de production ne monte `DocumentComposerDoor` — le câblage a régressé."
+        )
+        XCTAssertTrue(
+            racinesQuiMontent.contains("RootViewComponents.swift")
+                && racinesQuiMontent.contains("FeedView.swift"),
+            "Les DEUX racines doivent monter la porte : `RootViewComponents` (iPhone) et `FeedView` "
+                + "(iPad, monté par `iPadRootView`). Directive porteur 2026-09-06 : « dans tous les cas "
+                + "iPad et iOS doivent utiliser le nouveau composer ». Une racine qui la perd fabrique "
+                + "des publications d'une autre NATURE — sans scène, donc sans légende par média ni "
+                + "texte alternatif — sur une app où toute photo devient une scène. "
+                + "Racines mesurées : \(racinesQuiMontent.sorted())"
+        )
         XCTAssertEqual(
-            montages, 1,
-            "Exactement UN site de production doit monter `DocumentComposerDoor` : RootViewComponents "
-                + "(le PLEIN composer du fil, `.fullScreenCover(isPresented: $showFullComposer)`) — c'est "
-                + "la levée décidée à T3.1, la rangée d'outils du document couvrant désormais celle de la "
-                + "feuille historique. Zéro dirait que le câblage a régressé ; deux ou plus dirait qu'un "
-                + "second site l'a montée en plus du fil — la CITATION, elle, reste sur `FeedComposerSheet` "
-                + "(c'est T3.2, distincte)."
+            ancienComposer, 0,
+            "Plus aucun site ne doit monter `FeedComposerSheet` — l'ANCIEN composer, qui publie avec "
+                + "`storyEffects: nil`. C'est l'achèvement de T3.2 : sa déclaration survit encore (code "
+                + "mort, suppression dans un lot à part) mais rien ne l'ouvre. Un montage qui revient "
+                + "réintroduirait deux formats de publication dans la même app, sans que rien ne le dise "
+                + "à l'auteur."
         )
         // **RETOURNÉE au T3.1.** `.microphone` avait gagné son effet
         // (`.attachesTranscribedAudio`) au T2.6, dernier des six outils — la

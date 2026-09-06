@@ -65,12 +65,21 @@ const SURFACES: Record<string, Classification> = {
   // 6+0+2+2=10 applications) — aucune lecture ni application n'a été
   // ajoutée ni retirée, seul le fichier a changé. L'écart d'une unité entre
   // lectures et applications, jusqu'ici anonyme dans le compte global du
-  // fichier unique, se trouve maintenant sur `messages-list-query.ts` :
+  // fichier unique, se trouvait sur `messages-list-query.ts` :
   // `enrichForwardedMessagesForList` y relit le message SOURCE d'un
-  // transfert par id direct (`where: { id: { in: … } }`), gardé par sa
-  // propre réciprocité (`resolveForwardSourceGateForReader`) plutôt que par
+  // transfert par id direct (`where: { id: { in: … } }`), gardée par sa
+  // propre réciprocité (`resolveForwardSourceGateForReader`) mais pas par
   // `applyPersonalHistoryHiding` — le même écart qu'avant le découpage,
   // seulement plus précisément localisé.
+  //
+  // #3616 a fermé l'écart, EN MÉMOIRE plutôt qu'en `where` : les messages
+  // sources d'une même page peuvent appartenir à plusieurs conversations, et
+  // `applyPersonalHistoryHiding` ne merge qu'un SEUL `where`. Le
+  // `applications: 0` ci-dessous reste donc exact au sens du balayage
+  // TEXTUEL (`applyPersonalHistoryHiding(` littéral) — la couverture réelle
+  // est portée par `loadPersonalHistoryHidingByConversation` et gardée par
+  // `ROUTE_IN_MEMORY_HIDING_SURFACES` plus bas, même patron que
+  // `ConversationBridgeService.ts` côté service.
   'conversations/messages-list.ts': { kind: 'applies', reads: 6, applications: 6 },
   'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 0 },
   'conversations/messages-pin.ts': { kind: 'applies', reads: 2, applications: 2 },
@@ -223,7 +232,11 @@ const SURFACES: Record<string, Classification> = {
   // agrégation par agrégation, l'une d'elles lisant `Message`. Il DÉLÈGUE
   // désormais, et la lecture a suivi le calcul dans `user-stats.ts`, surface
   // déjà déclarée. Aucune lecture n'a disparu : elle a changé de fichier.
-  'users/preferences.ts': { kind: 'exempt', reads: 3, why: 'Compteurs de préférences.' },
+  // 3 → 2 (#4859) : `totalMessages` était calculé par une requête dédiée
+  // (`message.count` sans filtre de date) dont le résultat n'était jamais
+  // servi — l'API rend la valeur de `messagesThisWeek` sous cette clé. La
+  // lecture retirée était une requête gaspillée, pas une garde de masquage.
+  'users/preferences.ts': { kind: 'exempt', reads: 2, why: 'Compteurs de préférences.' },
 };
 
 /**
@@ -350,6 +363,24 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
   ],
 };
 
+/**
+ * Le même besoin, sous `src/routes/` cette fois (#3616) : l'aperçu de
+ * transfert de `messages-list-query.ts` relit son message SOURCE par id, hors
+ * du `where` de la liste principale, et ces sources peuvent appartenir à
+ * PLUSIEURS conversations dans une même page — `applyPersonalHistoryHiding`
+ * ne peut merger qu'un seul `where`. Le masquage du lecteur y est donc
+ * appliqué EN MÉMOIRE, par conversation source, exactement comme
+ * `ConversationBridgeService.ts` ci-dessus. Sans ces marqueurs, le
+ * `applications: 0` déclaré pour ce fichier se relirait comme un trou.
+ */
+const ROUTE_IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
+  'conversations/messages-list-query.ts': [
+    'loadPersonalHistoryHidingByConversation(',
+    'hiddenMessageIds.includes(',
+    'clearHistoryBefore',
+  ],
+};
+
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry);
@@ -471,6 +502,15 @@ describe('personal history hiding — dénombrement des surfaces de lecture', ()
   it('tient les applications EN MÉMOIRE, que le balayage ne peut pas voir', () => {
     const missing = Object.entries(IN_MEMORY_HIDING_SURFACES).flatMap(([relative, markers]) => {
       const source = readFileSync(join(SERVICES_DIR, relative), 'utf8');
+      return markers.filter((marker) => !source.includes(marker)).map((marker) => `${relative}: ${marker}`);
+    });
+
+    expect(missing).toEqual([]);
+  });
+
+  it('tient les applications EN MÉMOIRE côté routes (#3616), que le balayage ne peut pas voir', () => {
+    const missing = Object.entries(ROUTE_IN_MEMORY_HIDING_SURFACES).flatMap(([relative, markers]) => {
+      const source = readFileSync(join(ROUTES_DIR, relative), 'utf8');
       return markers.filter((marker) => !source.includes(marker)).map((marker) => `${relative}: ${marker}`);
     });
 

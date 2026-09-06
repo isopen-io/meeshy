@@ -26,7 +26,7 @@ import { saisieDuFil, type SaisieDuLien } from '@/app/connecte/nouveau-lien-vue'
 import { chargeLeProfilSiDemande, traiteLActionDeProfil } from '@/app/connecte/profil-porte';
 import { documentDePanne } from '@/app/connecte/vue';
 import { chargementSpeculatif, origineEtrangere, refusDOrigine, sansEffet } from '@/app/provenance';
-import { jetonDuLecteur } from '@/app/session';
+import { fuseauDuLecteur, jetonDuLecteur } from '@/app/session';
 
 /**
  * `/chats/:cle` — LE FIL D'UNE CONVERSATION, porte du MEMBRE. `:cle` est son
@@ -145,6 +145,7 @@ const charge = async ({
       erreur,
       brouillon,
       maintenant,
+      fuseau: fuseauDuLecteur(requete),
       composeur: { genre: 'ouvert' },
       tempsReel: tempsReelDuDocument(),
       contexte,

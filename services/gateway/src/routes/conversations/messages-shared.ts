@@ -10,7 +10,7 @@
 // mort pré-existant sur la même ligne que `enhancedLogger`, qui lui EST
 // utilisé ci-dessous). Conservé tel quel, non ré-exporté : rien n'importait
 // `performanceLogger` depuis `messages.ts`.
-import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 
 // Logger dédié pour messages
 export const logger = enhancedLogger.child({ module: 'messages' });

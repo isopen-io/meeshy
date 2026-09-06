@@ -90,6 +90,42 @@ nonisolated enum ComposerSlideTextRole: Equatable {
     /// `media == nil` ⇒ rien n'est écrit. Il n'y a pas de légende « de la
     /// publication », et fabriquer une clé de repli poserait le texte sur un
     /// média que l'auteur n'a pas désigné.
+    /// **Où le volet de description écrit, une fois le rôle ET le média
+    /// connus** (2026-09-06).
+    ///
+    /// Le rôle seul ne suffit pas à décider : `.caption` désigne « la légende
+    /// du média de cette slide », ce qui n'a pas de destinataire quand la
+    /// slide ne porte AUCUN média — un canvas de texte, de dessin, de stickers
+    /// ou à fond de couleur.
+    ///
+    /// Le binding décidait cela en ligne, donc sans témoin possible ; il rendait
+    /// `""` en lecture et jetait le texte en écriture (`applyCaption` fait
+    /// `guard let media else { return }`). L'auteur tapait sa description, la
+    /// voyait, la validait — et elle mourait à la publication.
+    ///
+    /// > **Une décision enfouie dans un `Binding` ne s'éprouve pas.** Elle se
+    /// > lit, elle a l'air juste, et son cas dégénéré ne rougit nulle part.
+    /// > Sortie ici, elle a trois cas nommés et quatre témoins.
+    nonisolated enum DescriptionTarget: Equatable {
+        /// Story, réel, mood : le texte de la slide EST le contenu.
+        case slideContent
+        /// Post avec un média sur la slide : le texte est SA légende.
+        case mediaCaption(URL)
+        /// Post dont la slide ne porte aucun média : le volet est la seule zone
+        /// d'écriture de l'écran, et ce qu'on y met décrit la publication.
+        case postContent
+    }
+
+    static func descriptionTarget(format: ComposerFormat, media: URL?) -> DescriptionTarget {
+        switch role(for: format) {
+        case .content:
+            return .slideContent
+        case .caption:
+            guard let media else { return .postContent }
+            return .mediaCaption(media)
+        }
+    }
+
     static func applyCaption(_ text: String, to media: URL?, in captions: inout ComposerMediaCaptions) {
         guard let media else { return }
         if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

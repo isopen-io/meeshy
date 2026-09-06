@@ -7,6 +7,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { ciblesMesurees, ciblesTropPetites, LARGEURS, TARGET_MIN } from './lib/cibles';
+import { occulte, revele } from './lib/navigateur-cycle';
 import { CONVERSATION_DU_LECTEUR, passerelleDeBouchon, RACINE_V3, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 
 /**
@@ -254,7 +255,13 @@ test.describe('avec JavaScript — les trois gestes, sans rechargement', () => {
     await contexte.close();
   });
 
-  test('retirer : optimiste, puis confirmé par message:deleted du bouchon', async ({ browser }) => {
+  /**
+   * « ANNULER » PENDANT LA FENÊTRE OPTIMISTE (suivi #5163 § 12.12) — retirer
+   * n'envoie RIEN tant que la fenêtre est ouverte ; Annuler restaure la ligne
+   * SANS rechargement, ET le serveur n'a RIEN perdu (aucune requête n'est
+   * jamais partie — un rechargement le prouve).
+   */
+  test('retirer affiche « Annuler » ; Annuler restaure la ligne SANS rechargement, et le serveur n’a rien perdu', async ({ browser }) => {
     const contexte = await contexteDuMembre(browser);
     const page = await ouvreLeFil(contexte);
     await attendLeTempsReel(page);
@@ -263,13 +270,112 @@ test.describe('avec JavaScript — les trois gestes, sans rechargement', () => {
     await menu.locator('button[name="retirer"]').click();
 
     const bulle = page.locator('li[data-id="m4"]');
+    await expect(bulle).toHaveClass(/envoi-retrait-differe/);
+    await expect(bulle.locator('.texte')).toHaveText('Message retiré');
+    const annuler = bulle.locator('button.annuler-le-retrait');
+    await expect(annuler).toBeVisible();
+
+    await annuler.click();
+
+    await expect(bulle.locator('.texte')).toHaveText('Parfait, je crée le lien pour Marta.');
+    await expect(bulle).not.toHaveClass(/envoi-retrait-differe/);
+    await expect(bulle).not.toHaveClass(/supprime/);
+    expect(page.url()).toBe(FIL());
+    expect(passerelle.socket.recus.filter((r) => r.evenement === 'message:delete')).toEqual([]);
+    expect(passerelle.journal.filter((a) => a.methode === 'DELETE')).toEqual([]);
+
+    // Le serveur n'a RIEN perdu : un rechargement retrouve la même ligne.
+    await page.reload({ waitUntil: 'load' });
+    await expect(page.locator('li[data-id="m4"] .texte')).toHaveText('Parfait, je crée le lien pour Marta.');
+
+    await contexte.close();
+  });
+
+  test('retirer : différé, puis parti à l’expiration, confirmé par message:deleted', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await ouvreLeFil(contexte);
+    await attendLeTempsReel(page);
+
+    const menu = await ouvreLeMenu(page, 'm4');
+    await menu.locator('button[name="retirer"]').click();
+
+    const bulle = page.locator('li[data-id="m4"]');
+    await expect(bulle).toHaveClass(/envoi-retrait-differe/);
+    // RIEN ne part pendant la fenêtre — la première moitié du témoin.
+    expect(passerelle.socket.recus.filter((r) => r.evenement === 'message:delete')).toEqual([]);
+
+    // Puis, à l'expiration, UN SEUL message:delete part — la seconde moitié.
+    await expect
+      .poll(() => passerelle.socket.recus.filter((r) => r.evenement === 'message:delete').length, { timeout: 15_000, message: COMMANDE })
+      .toBe(1);
+    const retrait = passerelle.socket.recus.find((r) => r.evenement === 'message:delete');
+    expect(retrait!.charge).toMatchObject({ messageId: 'm4' });
+
     await expect(bulle).toHaveClass(/supprime/);
+    await expect(bulle).not.toHaveClass(/envoi-retrait-differe/);
     await expect(bulle.locator('.texte')).toHaveText('Ce message a été supprimé');
+    // Le bouton reste dans le DOM (cloné une fois, comme « Voir l'original » —
+    // jamais réécrit) mais n'est plus VISIBLE : sa visibilité suit la SEULE
+    // classe d'envoi sur `<li>`, retombée à `supprime` sans `envoi-retrait-differe`.
+    await expect(bulle.locator('button.annuler-le-retrait')).not.toBeVisible();
     expect(page.url()).toBe(FIL());
 
-    const retrait = passerelle.socket.recus.find((r) => r.evenement === 'message:delete');
-    expect(retrait, `aucun message:delete observé — ${COMMANDE}`).toBeDefined();
-    expect(retrait!.charge).toMatchObject({ messageId: 'm4' });
+    await contexte.close();
+  });
+
+  /**
+   * UN COUP D'ŒIL D'UNE SECONDE PENDANT LA FENÊTRE NE PERD PAS LE RETRAIT
+   * (défaut BLOQUANT de revue, suivi #5163 § 12.12) — masquer l'onglet coupe
+   * le socket (§ 8.5), le démasquer déclenche la `reprise` → `GET /sync`, qui
+   * rend le message tel que la passerelle le connaît encore : SERVI, intact
+   * (rien n'est encore parti). Sans la garde d'`insere()` (`fil-etat.ts`), le
+   * rattrapage RESSUSCITAIT la bulle en silence et `flush()`, à l'expiration,
+   * ne trouvait plus rien à envoyer — le message restait indéfiniment côté
+   * serveur, et le lecteur n'en savait rien. Ce témoin — sur la CHAÎNE réelle,
+   * pas jsdom — est celui que jsdom ne peut pas rendre : il faut un VRAI
+   * `/sync` de bouchon pour observer la course.
+   */
+  test('un coup d’œil d’une seconde pendant la fenêtre ne perd pas le retrait — le rattrapage /sync ne le ressuscite pas', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await ouvreLeFil(contexte);
+    await attendLeTempsReel(page);
+
+    const menu = await ouvreLeMenu(page, 'm4');
+    await menu.locator('button[name="retirer"]').click();
+
+    const bulle = page.locator('li[data-id="m4"]');
+    await expect(bulle).toHaveClass(/envoi-retrait-differe/);
+    await expect(bulle.locator('.texte')).toHaveText('Message retiré');
+
+    // LE COUP D'ŒIL — une seconde, bien à l'intérieur de la fenêtre de 5 s.
+    await occulte(page);
+    await expect.poll(() => passerelle.socket.connectes()).toBe(0);
+    await page.waitForTimeout(1_000);
+    await revele(page);
+
+    // La reprise reconnecte ET rattrape par `/sync` — les DEUX doivent
+    // achever avant l'assertion qui suit, sans quoi elle observerait une
+    // course qu'elle n'a pas fini de gagner ou de perdre.
+    await expect.poll(() => passerelle.socket.connectes()).toBe(1);
+    await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'connecte', { timeout: 15_000 });
+    await page.waitForTimeout(500);
+
+    // LE CŒUR DU DÉFAUT : juste après le retour, la bulle est TOUJOURS en
+    // retrait différé — jamais ressuscitée par ce que `/sync` vient de rendre.
+    await expect(bulle).toHaveClass(/envoi-retrait-differe/);
+    await expect(bulle.locator('.texte')).toHaveText('Message retiré');
+    expect(passerelle.socket.recus.filter((r) => r.evenement === 'message:delete')).toEqual([]);
+
+    // Et le retrait ABOUTIT — une seule fois — au lieu de se perdre en silence.
+    await expect
+      .poll(() => passerelle.socket.recus.filter((r) => r.evenement === 'message:delete').length, { timeout: 15_000, message: COMMANDE })
+      .toBe(1);
+    await expect(bulle).toHaveClass(/supprime/);
+    await expect(bulle.locator('.texte')).toHaveText('Ce message a été supprimé');
+
+    // Le serveur n'a JAMAIS eu à ressusciter le message : un rechargement le confirme supprimé.
+    await page.reload({ waitUntil: 'load' });
+    await expect(page.locator('li[data-id="m4"] .texte')).toHaveText('Ce message a été supprimé');
 
     await contexte.close();
   });
@@ -343,9 +449,53 @@ test.describe('la charte, sur les trois gestes', () => {
       await contexte.close();
     });
   });
+
+  /**
+   * L'ÉTAT DIFFÉRÉ (suivi #5163 § 12.12) — le bouton « Annuler » d'une ligne
+   * retirée a lui aussi sa cible et son axe, un état de plus ouvert avant la
+   * mesure.
+   */
+  LARGEURS.forEach((largeur) => {
+    test(`aucune cible sous ${TARGET_MIN} px, ligne en retrait différé, à ${largeur} px`, async ({ browser }) => {
+      const contexte = await contexteDuMembre(browser, { viewport: { width: largeur, height: 844 } });
+      const page = await ouvreLeFil(contexte);
+      await attendLeTempsReel(page);
+      await (await ouvreLeMenu(page, 'm4')).locator('button[name="retirer"]').click();
+      await expect(page.locator('li[data-id="m4"] button.annuler-le-retrait')).toBeVisible();
+
+      const mesurees = await ciblesMesurees(page);
+      const petites = ciblesTropPetites(mesurees);
+      expect(petites, `cibles sous ${TARGET_MIN} px : ${JSON.stringify(petites)} — ${COMMANDE}`).toEqual([]);
+
+      await contexte.close();
+    });
+  });
+
+  (['light', 'dark'] as const).forEach((schema) => {
+    test(`0 violation axe serious/critical — ligne en retrait différé (${schema})`, async ({ browser }) => {
+      const contexte = await contexteDuMembre(browser, { colorScheme: schema, viewport: { width: 390, height: 844 } });
+      const page = await ouvreLeFil(contexte);
+      await attendLeTempsReel(page);
+      await (await ouvreLeMenu(page, 'm4')).locator('button[name="retirer"]').click();
+      await expect(page.locator('li[data-id="m4"] button.annuler-le-retrait')).toBeVisible();
+
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      const graves = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+      expect(graves.map((v) => `${v.id} — ${v.nodes.length} nœud(s)`), COMMANDE).toEqual([]);
+
+      await contexte.close();
+    });
+  });
 });
 
 test.describe('les rendus que le rapport regarde', () => {
+  // LES CAPTURES SE PRENNENT SUR UN SEUL MOTEUR (doctrine de `playwright.config.ts`,
+  // « un second moteur de rendu ferait diverger les captures d'un gate à
+  // l'autre ») — désormais que cette suite tourne aussi sur `gestes-webkit` /
+  // `gestes-firefox` (§ 12.11 étage… suivi #5163 § 12.12), ce describe reste
+  // borné à Chromium ; les témoins de COMPORTEMENT, eux, tournent sur les trois.
+  test.skip(({ browserName }) => browserName !== 'chromium', 'les captures ne se prennent que sur Chromium');
+
   test('captures 390×844 — menu ouvert et composeur armé, clair et sombre', async ({ browser }) => {
     const dossier = process.env.RENDUS_DIR ?? join(RACINE_V3, 'test-results', 'rendus');
     mkdirSync(dossier, { recursive: true });
@@ -358,6 +508,29 @@ test.describe('les rendus que le rapport regarde', () => {
       await page.screenshot({ path: join(dossier, `thread-gestes-${schema}.png`) });
       await contexte.close();
     }
+  });
+
+  /**
+   * REVUE — LA FENÊTRE D'ANNULATION SE REGARDE. Un état neuf qu'aucune capture
+   * ne montre est un état que le porteur découvre en production : celle-ci
+   * rend la ligne retirée, sa mention « Message retiré » et son bouton
+   * « Annuler », dans les DEUX schémas.
+   */
+  // UN SCHÉMA PAR TEST — la fenêtre exige d'armer le temps réel, ce qu'une
+  // BOUCLE de deux contextes fait dépasser le délai d'un seul test (mesuré).
+  (['light', 'dark'] as const).forEach((schema) => {
+    test(`capture 390×844 — la fenêtre d’annulation d’un retrait (${schema})`, async ({ browser }) => {
+      const dossier = process.env.RENDUS_DIR ?? join(RACINE_V3, 'test-results', 'rendus');
+      mkdirSync(dossier, { recursive: true });
+
+      const contexte = await contexteDuMembre(browser, { colorScheme: schema, viewport: { width: 390, height: 844 } });
+      const page = await ouvreLeFil(contexte);
+      await attendLeTempsReel(page);
+      await (await ouvreLeMenu(page, 'm4')).locator('button[name="retirer"]').click();
+      await expect(page.locator('li[data-id="m4"] button.annuler-le-retrait')).toBeVisible();
+      await page.screenshot({ path: join(dossier, `thread-retrait-differe-${schema}.png`) });
+      await contexte.close();
+    });
   });
 });
 

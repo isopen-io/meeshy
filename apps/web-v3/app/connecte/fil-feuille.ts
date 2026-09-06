@@ -151,7 +151,13 @@ import { avisDEcran, MENU_DE_LIGNE, PASTILLE_DE_LANGUE, PUCE_DU_PRISME, rondDEnT
  * `:not([hidden])`) — et les états d'envoi la reprennent par la règle
  * suivante, puisqu'ils s'affichent là. Un navigateur sans `:has()` ignore la
  * règle et garde `var(--space-1)` : la dégradation coûte quatre pixels,
- * jamais une ligne.
+ * jamais une ligne. `.retrait` — la fenêtre d'annulation d'un retrait,
+ * suivi #5163 § 12.12 — est la QUATRIÈME exclusion, et la SEULE chose que
+ * cette feuille partagée sait d'elle : le sélecteur reste un site UNIQUE (le
+ * recopier dans `FEUILLE_DES_GESTES` pour l'y narrower en aurait fait deux,
+ * qui divergent le jour où l'on ajoute une cinquième fente), et la fente
+ * elle-même — sa boîte, son bouton, ses états — vit là où seul le fil la
+ * paie.
  *
  * REVUE DE #5061 — le slot VIDE restait à `height:0` (aucune ligne blanche
  * avant que `poseLeBoutonReagir`, `fil-peinture.ts`, n'y insère le bouton),
@@ -263,7 +269,7 @@ ${PUCE_DU_PRISME}
 .ligne.envoi-attente .texte,.ligne.envoi-hors-ligne .texte{color:var(--color-text-muted)}
 .ligne.supprime .texte,.ligne.protege .texte{color:var(--color-text-muted);font-style:italic}
 .ligne .meta{margin:var(--space-1) 0 0;display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-xs);color:var(--color-text-subtle)}
-.ligne .meta:not(:has(>:not(.reagir-slot):not(.attente):not(.echec):not([hidden]))){margin-top:0}
+.ligne .meta:not(:has(>:not(.reagir-slot):not(.attente):not(.echec):not(.retrait):not([hidden]))){margin-top:0}
 .ligne.envoi-attente .meta,.ligne.envoi-hors-ligne .meta,.ligne.envoi-echec .meta{margin-top:var(--space-1)}
 .ligne .meta svg{width:var(--glyph-inline);height:var(--glyph-inline)}
 .ligne .accuse{display:inline-flex;color:var(--color-primary)}
@@ -412,7 +418,46 @@ export const FEUILLE_DES_GESTES = compacte(
     '.composeur .contexte{order:-2;flex-basis:100%;display:flex;align-items:center;gap:var(--space-2);min-width:0}' +
     '.composeur .contexte .citations{flex:1;min-width:0;margin:0}' +
     '.composeur .contexte .quoi-modif{flex:1;min-width:0;margin:0;font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-text-muted)}' +
-    '.composeur .contexte .annuler{flex:none}',
+    '.composeur .contexte .annuler{flex:none}' +
+    // LA FENÊTRE D'ANNULATION D'UN RETRAIT (suivi #5163 § 12.12) — ICI, et
+    // jamais dans `FEUILLE_DU_FIL` : SEUL le fil sert le gabarit qui porte la
+    // fente (`gabaritDeLigne`, `fil-vue.ts:841` en est l'unique appelant) et
+    // SEUL le fil ouvre le menu qui met une ligne en `envoi-retrait-differe`.
+    // Posées dans la feuille partagée, ces cinq règles faisaient payer la
+    // fente à NEUF écrans qui ne la rendent jamais (`/notifications`,
+    // `/post/:id`, `/contacts`, `/appels`, `/links`, `/communities`,
+    // `/preferences`, `composer`, la galerie) et poussaient le document de la
+    // GALERIE au-dessus du plafond dur `documents.document_o` (9 216 o) —
+    // exactement ce que le doc-comment de `FEUILLE_DES_GESTES` décrit avoir
+    // déjà coûté une fois. MESURÉ : la galerie retombe de 9 220 à 9 179 o, le
+    // fil paie 3 o de plus (14 104 → 14 107) pour le déplacement.
+    // La SEULE trace qui reste dans la feuille partagée est l'exclusion
+    // `:not(.retrait)` du sélecteur de la méta vidée — un site unique qu'on
+    // ne recopie pas ici pour cinq octets.
+    // REVUE — DEUX DÉFAUTS MAJEURS SUR LA MÊME FENTE (suivi #5163 § 12.12) :
+    // (1) « Annuler » ne se DISTINGUAIT du texte voisin que par le poids et
+    // la taille — en sombre, sa couleur était identique à `.texte`, l'unique
+    // repentir d'un geste DESTRUCTIF invisible comme contrôle. La peau vient
+    // des MÊMES jetons que `.action.contour` (`app/enveloppe/feuille.ts`),
+    // jamais une couleur en dur. (2) rien ne disait que la fenêtre se
+    // referme : la barre sur `::after` anime de `scaleX(1)` à `0` sur
+    // `--duree-retrait` — posée par `differe()` (`fil-gestes.ts`) à LA MÊME
+    // valeur que la minuterie, pour que les deux ne puissent jamais diverger
+    // — et COUPE ENTIÈREMENT sous `prefers-reduced-motion`, qui révèle alors
+    // `.decompte` (masqué le reste du temps) : la réduction de mouvement ne
+    // redevient jamais une absence d'information.
+    '.ligne .retrait{display:none;position:relative;align-items:center;gap:var(--space-2)}' +
+    '.ligne .retrait .action{width:auto;min-height:var(--target-min);padding:0 var(--space-3);font-size:var(--text-sm)}' +
+    '.ligne .retrait .action.annuler-le-retrait{color:var(--color-primary);background:var(--color-tint-primary);border:var(--stroke-strong) solid var(--color-border-interactive);font-weight:var(--font-weight-semibold)}' +
+    '.ligne .retrait .action.annuler-le-retrait:hover{border-color:var(--color-primary)}' +
+    '.ligne .retrait .decompte{display:none;font-size:var(--text-xs);color:var(--color-text-muted)}' +
+    '.ligne.envoi-retrait-differe .retrait{display:inline-flex}' +
+    '.ligne.envoi-retrait-differe .retrait::after{content:"";position:absolute;left:0;right:0;bottom:-3px;height:2px;border-radius:var(--radius-pill);background:var(--color-primary);transform-origin:left;animation:retrait-decompte var(--duree-retrait,5000ms) linear forwards}' +
+    '@keyframes retrait-decompte{from{transform:scaleX(1)}to{transform:scaleX(0)}}' +
+    '.ligne.envoi-retrait-differe .texte{color:var(--color-text-muted)}' +
+    '.ligne.envoi-retrait-differe .accuse{display:none}' +
+    '.ligne.envoi-retrait-differe .meta{margin-top:var(--space-1)}' +
+    '@media (prefers-reduced-motion:reduce){.ligne.envoi-retrait-differe .retrait::after{content:none;animation:none}.ligne.envoi-retrait-differe .retrait .decompte{display:inline}}',
 );
 
 /**

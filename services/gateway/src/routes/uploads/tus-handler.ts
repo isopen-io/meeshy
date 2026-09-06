@@ -69,16 +69,6 @@ function getMaxFileSize(): number {
   return Math.max(...Object.values(UPLOAD_LIMITS));
 }
 
-function buildPublicUrl(): string {
-  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL;
-  const isProduction = process.env.NODE_ENV === 'production';
-  if (isProduction) {
-    const domain = process.env.DOMAIN || 'meeshy.me';
-    return `https://gate.${domain}`;
-  }
-  return process.env.BACKEND_URL || `http://localhost:${process.env.PORT || '3000'}`;
-}
-
 type UploadCallerIdentity = {
   readonly userId: string;
   readonly isAnonymous: boolean;
@@ -175,7 +165,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
   const uploadsPath = opts.basePath || DEFAULT_UPLOADS_PATH;
 
   const metadataManager = new MetadataManager(UPLOAD_PATH);
-  const publicUrl = buildPublicUrl();
   // Référence conservée séparément (plutôt que lue depuis `tusServer` une
   // fois construit) : `onIncomingRequest`, ci-dessous, doit pouvoir
   // interroger le magasin AVANT que `new Server({...})` ne rende l'instance

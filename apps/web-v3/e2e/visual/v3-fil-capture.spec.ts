@@ -5,9 +5,11 @@ import { expect, test, type Browser, type BrowserContext, type CDPSession, type 
 import AxeBuilder from '@axe-core/playwright';
 
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
-import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
+import { chargeDeMessage, JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { ciblesMesurees, ciblesTropPetites } from './lib/cibles';
-import { CONVERSATION_DU_LECTEUR, passerelleDeBouchon, RACINE_V3, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
+import { estMutante, rapporteRequetesInterdites, requetesPendantOngletCache } from './lib/lifecycle';
+import { DELAI_D_OBSERVATION_MS, enregistre, occulte, revele } from './lib/navigateur-cycle';
+import { CONVERSATION_DU_LECTEUR, PAIR_ANGLOPHONE, passerelleDeBouchon, RACINE_V3, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 
 /**
  * LE COMPOSEUR ENREGISTRE UN VOCAL ET PARTAGE LA POSITION, ET UNE POSITION
@@ -242,6 +244,75 @@ test.describe('la position — un LIEU, jamais des coordonnées ; zéro tuile t�
     await page.locator('#bouton-position').click();
     await expect(page.locator('li.mien[data-cid] .lieu-lien').last()).toBeVisible({ timeout: 10_000 });
 
+    expect(requetesDeCarte, COMMANDE).toEqual([]);
+
+    await contexte.close();
+  });
+
+  /**
+   * TRAVAIL `rich` (2026-09-06) — GET /sync hisse désormais `location` en
+   * champ de premier niveau (`services/gateway/src/routes/sync/messages.ts`),
+   * la même forme que `message:new`. Patron de `v3-fil.spec.ts:605` (« hidden
+   * ⇒ zéro requête, le socket se ferme ; visible ⇒ … arrive par UN /sync ») :
+   * le socket est COUPÉ pendant l'absence, donc SEUL le rattrapage `/sync` au
+   * retour peut faire arriver ce message — la preuve que la voie testée est
+   * bien celle du travail, pas `message:new`.
+   *
+   * La fixture ci-dessous — `chargeDeMessage({ …, location })` — MIME
+   * l'émetteur réel `services/gateway/src/routes/sync/messages.ts` (fonction
+   * `syncMessages`, `serialize`) tel que corrigé par ce travail : `location`
+   * au premier niveau, SANS `metadata.location` (`chargeDeMessage` ne pose
+   * `location` que si on le lui passe, jamais sous `metadata` — même charge
+   * que `messages-list.ts`/`message:new` hissent déjà).
+   */
+  test('un lieu reçu pendant l’absence arrive par UN /sync et se peint comme un LIEU', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await ouvreLeFil(contexte);
+    await attendLeTempsReel(page);
+    const journal = enregistre(contexte);
+
+    const cdp: CDPSession = await contexte.newCDPSession(page);
+    await cdp.send('Network.enable');
+    const requetesDeCarte: string[] = [];
+    cdp.on('Network.requestWillBeSent', ({ request }) => {
+      if (request.url.includes('openstreetmap') || request.url.includes('tile')) requetesDeCarte.push(request.url);
+    });
+
+    const debut = Date.now();
+    await occulte(page);
+    await expect.poll(() => passerelle.socket.connectes()).toBe(0);
+
+    passerelle.ajouteUnMessage(
+      chargeDeMessage({
+        id: 'm701',
+        conversationId: CONVERSATION_DU_LECTEUR.id,
+        senderId: PAIR_ANGLOPHONE.id,
+        content: '',
+        sender: { id: 'p-ibrahim', displayName: PAIR_ANGLOPHONE.nom, userId: PAIR_ANGLOPHONE.id },
+        location: { latitude: 48.8566, longitude: 2.3522, name: 'Café de Flore', address: '172 bd Saint-Germain' },
+      }),
+    );
+    await page.waitForTimeout(DELAI_D_OBSERVATION_MS);
+    const fin = Date.now();
+    await revele(page);
+
+    const fenetres = [{ debut, fin }];
+    const pendant = requetesPendantOngletCache({ journal: journal(), fenetres });
+    expect(pendant, rapporteRequetesInterdites('fil du membre, lieu reçu onglet caché', pendant, fenetres)).toEqual([]);
+    await expect.poll(() => passerelle.socket.connectes()).toBe(1);
+    await attendLeTempsReel(page);
+
+    // Une seule requête /sync a porté ce message — pas message:new (le socket
+    // était fermé pendant l'absence).
+    expect(journal().filter((e) => e.emiseA >= fin && e.url.includes('/api/v1/sync'))).toHaveLength(1);
+    expect(journal().filter(estMutante)).toEqual([]);
+
+    const bulle = page.locator('li[data-id="m701"]');
+    await expect(bulle.locator('.lieu-lien')).toBeVisible({ timeout: 10_000 });
+    await expect(bulle.locator('.lieu-lien')).toHaveAttribute('href', 'geo:48.8566,2.3522');
+    await expect(bulle.locator('.nom-du-lieu')).toHaveText('Café de Flore');
+    const texteDeLaBulle = await bulle.innerText();
+    expect(texteDeLaBulle).not.toContain('48.85');
     expect(requetesDeCarte, COMMANDE).toEqual([]);
 
     await contexte.close();

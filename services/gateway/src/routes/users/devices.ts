@@ -1,19 +1,15 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { buildPaginationMeta } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'UserDevicesRoutes' });
 import {
   userMinimalSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import type { AuthenticatedRequest, IdParams, FriendRequestBody, FriendRequestActionBody, UserIdParams, AffiliateTokenData } from './types';
-import type { NotificationService } from '../../services/notifications/NotificationService';
-import type { EmailService } from '../../services/EmailService';
+import type { AuthenticatedRequest, UserIdParams } from './types';
 import { validatePagination } from '../../utils/pagination';
-import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { servirParties } from '../directory/friend-requests-core';
 
 /**

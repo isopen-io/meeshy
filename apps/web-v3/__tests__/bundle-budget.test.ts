@@ -516,6 +516,65 @@ describe('le fichier budgets.json du dépôt', () => {
 });
 
 /**
+ * Travail `rich` (2026-09-06) — `budgets.json` déclarait un `temps_reel_note`
+ * en prose (« leurs poids propres sont MESURÉS dans budgets-mesures.json →
+ * participate, jamais inventés ») sans jamais l'opposer à un chiffre : aucun
+ * plafond `GATE` n'existait pour `participate.js`, donc rien ne pouvait
+ * rougir sur sa croissance — seul `scripts/build-participate.mjs` (le
+ * RATCHET, binaire réel ≤ dernière mesure enregistrée) la retenait, et une
+ * mesure peut monter d'un `--mesure` sans qu'aucun gate ne la questionne.
+ *
+ * La chaîne de garde COMPLÈTE, désormais : binaire réel ≤ mesure enregistrée
+ * (`build-participate.mjs`, rc=1 dans `bun run build`) ET mesure ≤ plafond
+ * (ce describe) ⇒ binaire ≤ plafond. Ce fichier ne recompile rien : il lit
+ * deux JSON déjà écrits sur disque.
+ */
+describe('le plafond du module de participation — budgets.json › temps_reel', () => {
+  /** LE prédicat du seuil — nommé pour qu'il soit exerçable dans les DEUX sens. */
+  const tientSousLePlafond = (mesure: number, plafond: number): boolean => mesure <= plafond;
+
+  type BudgetsTempsReel = {
+    readonly temps_reel?: {
+      readonly plafonds?: Readonly<
+        Record<string, { readonly valeur: number | null; readonly statut: string }>
+      >;
+    };
+  };
+
+  const budgets: BudgetsTempsReel = JSON.parse(
+    readFileSync(join(__dirname, '..', 'budgets.json'), 'utf8'),
+  );
+  const mesures: Readonly<Record<string, number>> = JSON.parse(
+    readFileSync(join(__dirname, '..', 'budgets-mesures.json'), 'utf8'),
+  ).participate ?? {};
+
+  it('budgets.json déclare le plafond de participate.js — un GATE chiffré, plus jamais « à établir »', () => {
+    const plafond = budgets.temps_reel?.plafonds?.participate_gzip_9_octets;
+
+    expect(plafond).toBeDefined();
+    expect(plafond?.statut).toBe('GATE');
+    expect(typeof plafond?.valeur).toBe('number');
+    expect(plafond?.valeur ?? 0).toBeGreaterThan(0);
+  });
+
+  it('la mesure enregistrée tient sous le plafond — rougit sur tout dépassement', () => {
+    const plafond = budgets.temps_reel?.plafonds?.participate_gzip_9_octets?.valeur ?? 0;
+    const mesure = mesures.participate_gzip_9_octets;
+
+    // Le chiffre doit EXISTER — un `?? 0` silencieux rendrait la garde verte
+    // sur un `budgets-mesures.json` amputé de sa mesure.
+    expect(typeof mesure).toBe('number');
+    expect(tientSousLePlafond(mesure ?? Number.POSITIVE_INFINITY, plafond)).toBe(true);
+
+    // La MOITIÉ NÉGATIVE — le prédicat qu'on vient d'employer doit REFUSER une
+    // mesure d'un octet au-dessus. Sans elle, l'assertion ci-dessus resterait
+    // verte sous un prédicat cassé en `() => true`, et la garde entière serait
+    // décorative (§ « un témoin qui ne peut pas tomber n'est pas un témoin »).
+    expect(tientSousLePlafond(plafond + 1, plafond)).toBe(false);
+  });
+});
+
+/**
  * LE CRITÈRE DE FIN DE `home` — « `CallManager` absent du layout connecté
  * (assertion sur `app-build-manifest.json`) ».
  *

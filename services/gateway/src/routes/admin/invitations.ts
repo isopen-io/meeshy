@@ -2,10 +2,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { logError } from '../../utils/logger';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
-import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { requirePermission } from '../../middleware/authorize';
 
 // Middleware pour vérifier les permissions admin

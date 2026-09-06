@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendInternalError } from '../../utils/response.js';
 import { type AnonymousUserListQuery } from './types';
 import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';

@@ -30,10 +30,30 @@ extension MeeshyComposerHost {
                 postMediaId: postMediaId,
                 remoteURL: remote) ?? false
         }
+        // **Le balayage couvre toutes les familles qui portent un FICHIER**
+        // (2026-09-06) — les médias visuels ET l'audio.
+        //
+        // Il n'en voyait qu'une, et le doc-comment ci-dessus dit pourquoi
+        // c'était invisible : il annonce avoir remplacé l'inventaire des
+        // PORTES par un balayage de ce qui est ARRIVÉ. C'est vrai des portes,
+        // et faux des FAMILLES — la boucle en énumérait une sur cinq.
+        //
+        // > **Remplacer un inventaire par un balayage ne supprime pas
+        // > l'inventaire : il le déplace.** Ici, des portes vers les familles
+        // > d'objets, où plus rien ne le surveillait. Un son de fond partait
+        // > donc en coquille — durée, forme d'onde, placement, et aucun
+        // > fichier ; il n'y avait rien à jouer nulle part.
+        //
+        // Une seule paire (`postMediaId`, `mediaURL`) décrit les deux familles,
+        // d'où une liste plate plutôt qu'une boucle par famille : ajouter une
+        // troisième famille porteuse de fichier ne demandera qu'une ligne.
         for slide in viewModel.slides {
-            for media in slide.effects.mediaObjects ?? [] {
+            let porteurs: [(postMediaId: String, mediaURL: String?)] =
+                (slide.effects.mediaObjects ?? []).map { ($0.postMediaId, $0.mediaURL) }
+                + (slide.effects.audioPlayerObjects ?? []).map { ($0.postMediaId, $0.mediaURL) }
+            for porteur in porteurs {
                 guard let fichier = ComposerPreUploadSweep.pendingFile(
-                    postMediaId: media.postMediaId, mediaURL: media.mediaURL),
+                    postMediaId: porteur.postMediaId, mediaURL: porteur.mediaURL),
                       let taille = ComposerPreUploadSweep.fileSize(at: fichier)
                 else { continue }
                 preUploads.begin(
@@ -44,7 +64,7 @@ extension MeeshyComposerHost {
                     // remettre le fait. `pendingFile` a déjà écarté les objets
                     // distants, mais le registre le revérifie — deux gardes
                     // pour un doublon serveur, c'est le bon nombre.
-                    alreadyRemote: !media.postMediaId.isEmpty)
+                    alreadyRemote: !porteur.postMediaId.isEmpty)
             }
         }
     }

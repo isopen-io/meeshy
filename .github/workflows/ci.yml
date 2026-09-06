@@ -584,7 +584,13 @@ jobs:
     name: Chaînes web-v3 (lien partagé, vitals réseau)
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 20
+    # 20 → 30 (suivi #5163 § 12.12) : ce job installe désormais WebKit et
+    # Firefox EN PLUS de Chromium, et rejoue la suite des gestes du fil sur
+    # les deux — mesuré en local ~2 min pour l'installation des deux
+    # navigateurs et sous la minute pour chaque suite, mais `--with-deps` sur
+    # un runner GitHub (paquets système) peut coûter plus que sur un poste
+    # déjà équipé.
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -645,6 +651,19 @@ jobs:
         run: |
           cd apps/web-v3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:chaines
+
+      # Suivi #5163 § 12.12 — la réplique des gestes du fil (répondre, modifier,
+      # retirer + la fenêtre d'annulation) doit tourner sur WebKit et Firefox,
+      # pas seulement Chromium : un instrument DÉCLARÉ (les deux projets de
+      # `playwright.config.ts`) n'est pas un instrument LANCÉ tant qu'aucun pas
+      # ne l'exécute — c'est ce trou, précisément, que ce pas comble.
+      - name: Install Playwright browsers (WebKit, Firefox)
+        run: npx playwright install --with-deps webkit firefox
+
+      - name: Gate gestes du fil — WebKit et Firefox
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:gestes-moteurs
 
       - name: Upload Playwright traces
         uses: actions/upload-artifact@v7
