@@ -197,6 +197,45 @@ final class SceneFramingTests: XCTestCase {
                              "sans quoi la comparaison ci-dessus ne compare rien")
     }
 
+    /// **Une scène qui ne montre RIEN n'impose rien** (mesuré au simulateur
+    /// le 2026-09-06).
+    ///
+    /// Publication composée : la scène 1 porte un texte, la scène 2 n'a qu'un
+    /// fond de couleur. La carte du fil rendait **601 pt** — le gabarit 9:16
+    /// entier — parce que la scène 2 votait pour lui : son cadrage est `nil`,
+    /// donc elle prenait le repli, donc elle gagnait le minimum.
+    ///
+    /// > **`nil` a deux sens, et un seul justifie le gabarit plein.** Il dit
+    /// > « tout est déjà montré » sur une photo qui couvre la scène — et là,
+    /// > raccourcir COUPERAIT. Il dit « il n'y a rien à montrer » sur un fond
+    /// > nu — et là, raccourcir ne coûte rien. Les traiter pareil fait payer à
+    /// > toute la publication la hauteur d'une scène qui n'a aucune exigence.
+    func test_uneSceneSansRienDeVisible_nImposePasSonGabarit() {
+        let porteuse = scene([objet(.text, x: 0.5, y: 0.5)])       // se cadre
+        let nue = scene([objet(.media, plane: .bg)])               // fond sans aspect déclaré
+        let rapport = SceneCarouselLayout.cardAspect(document: CanvasV3(scenes: [porteuse, nue]))
+        let seule = SceneFraming.cardAspect(scene: porteuse) ?? SceneFraming.sceneAspect
+        XCTAssertEqual(rapport, seule, accuracy: 0.0001,
+                       "la scène nue n'a rien à protéger : elle ne doit pas ramener " +
+                       "toute la publication au gabarit 9:16")
+    }
+
+    /// …mais une scène qui montre quelque chose SANS pouvoir se resserrer
+    /// impose bien son gabarit : là, raccourcir couperait du contenu. C'est la
+    /// moitié qui empêche le correctif ci-dessus de devenir un rognage.
+    func test_uneSceneQuiCouvreTout_imposeBienSonGabarit() {
+        let couvrante = scene([objet(.text, x: 0.5, y: 0.05),
+                               objet(.text, x: 0.5, y: 0.95)])     // haut ET bas : rien à retirer
+        let courte = scene([ObjectV3(id: "bg", kind: .media,
+                                     anchor: .free(x: 0.5, y: 0.5), plane: .bg, z: 0,
+                                     transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
+                                     payload: ["aspectRatio": .number(16.0 / 9.0)])])
+        let rapport = SceneCarouselLayout.cardAspect(document: CanvasV3(scenes: [courte, couvrante]))
+        let rapportCourte = SceneFraming.cardAspect(scene: courte) ?? SceneFraming.sceneAspect
+        XCTAssertLessThan(rapport, rapportCourte,
+                          "la scène qui couvre tout garde le dernier mot — sinon on la rogne")
+    }
+
     /// Un document dont aucune scène ne se resserre garde le gabarit 9:16 : il
     /// n'y a rien à raccourcir, et lui imposer une autre forme rognerait des
     /// scènes qui tenaient.
