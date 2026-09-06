@@ -47,6 +47,38 @@ public nonisolated enum SceneMotion {
         return document.scenes.contains(where: isCinematic)
     }
 
+    /// **Ce document a-t-il quelque chose à FAIRE ENTENDRE ?**
+    ///
+    /// Distincte de `isCinematic`, et la distinction porte : une vidéo MUETTE
+    /// bouge sans rien faire entendre ; un son de fond s'entend sans rien
+    /// montrer. Le fil joue ses scènes MUETTES par construction
+    /// (`ScenePlayerConfig.locksMute` sur le mode `.card`, #4084) — l'indicateur
+    /// « haut-parleur barré » que le porteur demande dit donc à l'utilisateur
+    /// *pourquoi* il n'entend rien, et il ne doit paraître que là où il y a
+    /// effectivement quelque chose à couper.
+    ///
+    /// > Répondre à « y a-t-il du son ? » avec « est-ce que ça bouge ? »
+    /// > poserait un haut-parleur barré sur une photo animée sans piste : un
+    /// > indicateur qui ment sur l'état qu'il annonce.
+    public static func isAudible(_ document: CanvasV3) -> Bool {
+        if document.sound != nil { return true }
+        return document.scenes.contains { scene in
+            scene.objects.contains(where: objectSounds)
+        }
+    }
+
+    /// Cet objet porte-t-il une piste sonore ?
+    ///
+    /// Une vidéo compte SAUF si elle se déclare muette — la migration écrit
+    /// `payload["muted"]` depuis `StoryMediaObject.isMuted`, et une vidéo sans
+    /// la clé porte sa piste.
+    public static func objectSounds(_ object: ObjectV3) -> Bool {
+        if object.kind == .audio { return true }
+        guard isVideo(object) else { return false }
+        if case .bool(true)? = object.payload["muted"] { return false }
+        return true
+    }
+
     /// **Cet objet bouge-t-il ?**
     ///
     /// Exposé parce qu'une surface qui peint UNE tuile a besoin de savoir si

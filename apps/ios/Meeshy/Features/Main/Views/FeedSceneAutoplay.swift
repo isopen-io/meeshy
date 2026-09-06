@@ -160,6 +160,34 @@ struct PostSceneCard: View {
         .frame(maxWidth: Self.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        // **Le son est COUPÉ, et il faut le dire** (constat porteur 2026-09-06 :
+        // « les scènes cinématiques jouent avec signe audio barré »).
+        //
+        // Un INDICATEUR, jamais un bouton : `ScenePlayerConfig.locksMute` fige
+        // le muet du mode `.card` par construction (#4084), et son doc-comment
+        // écrit que la carte de fil « n'expose AUCUN bouton de son (elle
+        // n'aurait rien à piloter) ». Le chemin vers le son est à un doigt —
+        // toucher la scène ouvre le plein écran, où le muet se relève.
+        //
+        // Seulement quand la scène JOUE (sinon rien n'est coupé, tout est
+        // simplement en pause) et quand le document a vraiment une piste
+        // (`isAudible`, pas `isCinematic` — une vidéo muette bouge sans rien
+        // faire entendre).
+        .overlay(alignment: .bottomTrailing) {
+            if isActive, SceneMotion.isAudible(document) {
+                Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(.black.opacity(0.45)))
+                    .padding(10)
+                    .allowsHitTesting(false)
+                    .accessibilityLabel(Text(String(
+                        localized: "feed.scene.sound.muted",
+                        defaultValue: "Son coupé — ouvrir en plein écran pour l'entendre",
+                        bundle: .main)))
+            }
+        }
         .reportReelFrame(id: post.id, kind: .scene)
         .contentShape(Rectangle())
         // **Le doigt sur l'IMAGE ouvre l'image** (directive porteur

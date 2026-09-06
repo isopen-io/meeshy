@@ -2929,11 +2929,15 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         XCTAssertEqual(
             // #4103 — le PLAN (`ComposerDocumentSendPlan`) a suivi les règles
-            // pures dans leur propre fichier ; l'appelant unique s'appelle donc
-            // désormais `ComposerDocumentRules.swift`. Ce n'est pas un
-            // relâchement : une règle qui appelle une règle est plus juste
-            // qu'une règle appelée depuis un fichier de VUE.
-            fichiersAppelants, ["ComposerDocumentRules.swift"],
+            // pures dans leur propre fichier ; l'appelant unique n'est donc pas
+            // une VUE. Ce n'est pas un relâchement : une règle qui appelle une
+            // règle est plus juste qu'une règle appelée depuis un fichier de vue.
+            //
+            // **Le nom a changé le 2026-09-06** : les cinq types de l'envoi sont
+            // sortis dans `ComposerDocumentSendRules.swift` quand le fichier a
+            // franchi le plafond DUR de 1200 lignes. Ce que la garde protège est
+            // inchangé — UN appelant, et qui soit une règle.
+            fichiersAppelants, ["ComposerDocumentSendRules.swift"],
             "L'unique appelant doit être le PLAN du meuble. Une porte de présentation, un modèle ou une vue "
                 + "qui interrogerait la table pour son compte serait un second chemin d'envoi."
         )
