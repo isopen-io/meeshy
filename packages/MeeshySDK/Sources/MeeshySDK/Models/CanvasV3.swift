@@ -28,8 +28,26 @@ public enum MosaicLayoutMode: String, CaseIterable, Equatable, Codable, Sendable
     case reel
     /// Une en haut, une en bas, une en haut, une en bas.
     case sine
+    /// **Défilement image par image** — une scène par page, on passe à la
+    /// suivante d'un glissement (directive porteur 2026-09-06).
+    ///
+    /// > « Le défilement image par image est aussi un mode de mosaïque à
+    /// > prendre et ce doit être le mode par défaut ! »
+    ///
+    /// C'est le seul mode PAGINÉ : les quatre autres posent des tuiles côte à
+    /// côte, celui-ci empile des pages. Il ne plafonne donc pas à quatre et ne
+    /// reporte rien — il n'y a rien à cacher quand on peut tout parcourir.
+    case carousel
 
-    public static let fallback: MosaicLayoutMode = .wave
+    /// **Le défaut est le défilement image par image**, et il vaut pour tout
+    /// le corpus : aucune publication antérieure au 2026-09-06 ne porte de
+    /// `layout`, donc TOUTES reçoivent celui-ci.
+    ///
+    /// C'est ce qui le justifie plus qu'une préférence esthétique : il est le
+    /// seul mode qui ne suppose rien du nombre de visuels, ne rétrécit aucune
+    /// tuile sur un petit écran, et garde la légende — parce qu'il n'affiche
+    /// qu'un sujet à la fois.
+    public static let fallback: MosaicLayoutMode = .carousel
 
     public init(from decoder: Decoder) throws {
         let brut = try decoder.singleValueContainer().decode(String.self)

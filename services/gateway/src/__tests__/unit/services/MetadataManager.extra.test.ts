@@ -475,7 +475,7 @@ describe('MetadataManager – extra coverage', () => {
   describe('validateAudioCoherence', () => {
     it('detects bitrate too low (line 374: estimatedDuration returned)', () => {
       // duration=1000s, fileSize=100bytes → actualBitrate = (100*8)/1000 = 0.8 bps << min 32000
-      const r = mgr.validateAudioCoherence(1000000, 100, 0, 'audio/mpeg');
+      const r = mgr.validateAudioCoherence(1000000, 100, 'audio/mpeg');
       expect(r.isValid).toBe(false);
       expect(r.reason).toBe('Bitrate trop faible');
       expect(r.estimatedDuration).toBeGreaterThan(0);
@@ -483,22 +483,22 @@ describe('MetadataManager – extra coverage', () => {
 
     it('detects bitrate too high (lines 422-432: estimatedDuration returned)', () => {
       // duration=1ms, fileSize=1MB → actualBitrate = (1000000*8)/0.001 = insane >> 320000*2
-      const r = mgr.validateAudioCoherence(1, 1000000, 0, 'audio/mpeg');
+      const r = mgr.validateAudioCoherence(1, 1000000, 'audio/mpeg');
       expect(r.isValid).toBe(false);
       expect(r.reason).toBe('Bitrate trop élevé');
       expect(r.estimatedDuration).toBeGreaterThan(0);
     });
 
     it('uses generic range for unknown mimeType', () => {
-      const r = mgr.validateAudioCoherence(60000, 1000, 0, 'audio/x-unknown');
+      const r = mgr.validateAudioCoherence(60000, 1000, 'audio/x-unknown');
       // actualBitrate = (1000*8)/60 ≈ 133 bps, expected min generic 8000
       // 133 < 8000*0.5=4000 → invalid
       expect(r.isValid).toBe(false);
     });
 
     it('returns isValid:false with no reason for zero duration or fileSize', () => {
-      expect(mgr.validateAudioCoherence(0, 1000, 0, 'audio/mpeg').isValid).toBe(false);
-      expect(mgr.validateAudioCoherence(1000, 0, 0, 'audio/mpeg').isValid).toBe(false);
+      expect(mgr.validateAudioCoherence(0, 1000, 'audio/mpeg').isValid).toBe(false);
+      expect(mgr.validateAudioCoherence(1000, 0, 'audio/mpeg').isValid).toBe(false);
     });
   });
 

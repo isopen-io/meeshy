@@ -122,7 +122,7 @@ async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', buildDefaultPrisma() as never);
   decorateAuthenticate(app);
-  registerSharingRoutes(app as never, (app as any).prisma, noopOptionalAuth, fakeRequiredAuth);
+  registerSharingRoutes(app as never, (app as any).prisma, fakeRequiredAuth);
   // Enregistrée sur le MÊME app, avec le MÊME `prisma` : c'est ce qui rend le
   // témoin de SYMÉTRIE possible — les deux portes lisent le même lien.
   registerLinkAdmissionRoutes(app as never, (app as any).prisma, noopOptionalAuth, noopOptionalAuth);
@@ -543,7 +543,7 @@ describe('POST /conversations/join/:linkId — préservé : auto-jonction Socket
       const createMemberJoinedNotification = jest.fn<any>().mockResolvedValue(undefined);
       const createMemberJoinedNotificationsBatch = jest.fn<any>().mockResolvedValue(0);
       (app as any).notificationService = { createMemberJoinedNotification, createMemberJoinedNotificationsBatch };
-      registerSharingRoutes(app as never, (app as any).prisma, noopOptionalAuth, fakeRequiredAuth);
+      registerSharingRoutes(app as never, (app as any).prisma, fakeRequiredAuth);
       await app.ready();
       return { app, joinUserToConversationRoom, createMemberJoinedNotification, createMemberJoinedNotificationsBatch };
     })();

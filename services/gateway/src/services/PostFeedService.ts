@@ -580,7 +580,7 @@ export class PostFeedService {
     return { items, nextCursor, hasMore };
   }
 
-  async getDiscoverStatuses(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
+  async getDiscoverStatuses(_userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
 

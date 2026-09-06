@@ -65,16 +65,48 @@ extension PostDetailView {
     /// d'un côté sans l'autre (post-revue 2026-07-13).
     @ViewBuilder
     func storyCanvasSection(_ post: FeedPost, renderedItem: StoryItem) -> some View {
-        storyCanvasOrPlaceholder(renderedItem: renderedItem) {
-            StoryReaderRepresentable(
-                story: renderedItem,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                mute: isCanvasMuted,
-                isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+        // **Les dispositions de scène valent AUSSI sur la page détail**
+        // (directive porteur 2026-09-06). Le détail rendait `sceneIndex: 0` par
+        // l'hôte reader : un post de dix scènes n'en montrait qu'une, et les
+        // neuf autres n'étaient atteignables par aucun geste — le défaut même
+        // que la mosaïque a corrigé dans le FIL, resté entier ici.
+        if let document = post.storyEffects?.canvasV3, document.scenes.count > 1 {
+            PostSceneMosaic(
+                post: post,
+                document: document,
+                accentColor: accentColor,
+                preferredContentLanguages:
+                    AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                // **Le détail JOUE — c'est la même règle que le canvas
+                // mono-scène juste en dessous.** Il n'y a qu'une publication à
+                // l'écran, donc aucune élection à arbitrer : ce qui gouverne
+                // est la visibilité et l'appel en cours, comme pour le reader.
+                // C'est ce qui fait que le son de fond s'active à l'ouverture
+                // du détail — la directive du 2026-09-05, tenue aussi pour un
+                // post à plusieurs scènes.
+                isActive: !StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
+                                                              callActive: isCallActive),
+                onTapScene: { index in
+                    detailSceneIndex = index
+                    fullscreenMediaId = nil
+                    showFullscreenGallery = true
+                    HapticFeedback.light()
+                }
             )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        } else {
+            storyCanvasOrPlaceholder(renderedItem: renderedItem) {
+                StoryReaderRepresentable(
+                    story: renderedItem,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    mute: isCanvasMuted,
+                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
     }
 
     /// Shared canvas wrapper for BOTH the native story and the STORY-repost paths

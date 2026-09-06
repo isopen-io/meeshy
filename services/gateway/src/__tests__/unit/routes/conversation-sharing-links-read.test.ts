@@ -252,7 +252,7 @@ function setup() {
   const prisma = createMockPrisma();
   const optionalAuth = jest.fn<any>();
   const requiredAuth = jest.fn<any>();
-  registerSharingRoutes(fastify as any, prisma, optionalAuth, requiredAuth);
+  registerSharingRoutes(fastify as any, prisma, requiredAuth);
   return { fastify, prisma, reply: createMockReply(), optionalAuth, requiredAuth };
 }
 

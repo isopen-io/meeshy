@@ -66,8 +66,26 @@ final class FeedInlineComposerGuardTests: XCTestCase {
         )
     }
 
-    // 3 — FeedView() n'a qu'UN hôte de production : c'est le fait qui rend cet
+    // 3 — FeedView n'a qu'UN hôte de production : c'est le fait qui rend cet
     //     overlay « iPad ». Un second hôte l'amènerait sur l'iPhone.
+    //
+    //     **Le constructeur, jamais sa SIGNATURE** (2026-09-06). Cette garde
+    //     cherchait la chaîne `FeedView()` — la vue n'avait alors aucun
+    //     paramètre. Elle en a gagné un (`conversationListViewModel:`), et la
+    //     recherche est tombée à ZÉRO : le témoin a rougi en annonçant
+    //     « aucun hôte » pour une vue montée normalement.
+    //
+    //     Le rouge était le moindre mal. Une garde qui ne trouve plus rien ne
+    //     garde plus rien : tant qu'elle a cherché `FeedView()`, un second
+    //     montage `FeedView(quelqueChose:)` sur iPhone serait passé INAPERÇU —
+    //     exactement la régression qu'elle existe pour interdire. Elle
+    //     n'aurait rougi qu'en le disant à l'envers.
+    //
+    //     > Un inventaire qui épingle une SIGNATURE se périme au premier
+    //     > paramètre ajouté, et se périme EN SILENCE dans le sens qui compte.
+    //     > Le nom du type suivi de sa parenthèse ouvrante survit à ses
+    //     > paramètres — et il n'y a qu'un type nommé `FeedView` dans l'app,
+    //     > donc pas d'homonyme à écarter.
     func test_feedView_naQuUnHoteDeProduction_iPadRootView() throws {
         let appRoot = Self.iosRoot.appendingPathComponent("Meeshy")
         let fm = FileManager.default
@@ -75,12 +93,12 @@ final class FeedInlineComposerGuardTests: XCTestCase {
         if let it = fm.enumerator(at: appRoot, includingPropertiesForKeys: nil) {
             for case let url as URL in it where url.pathExtension == "swift" {
                 let code = compact((try? String(contentsOf: url, encoding: .utf8)) ?? "")
-                if code.contains("FeedView()") { hôtes.insert(url.lastPathComponent) }
+                if code.contains("FeedView(") { hôtes.insert(url.lastPathComponent) }
             }
         }
         XCTAssertEqual(
             hôtes, ["iPadRootView.swift"],
-            "`FeedView()` ne doit être monté que par `iPadRootView.swift` — le fait qui rend cet overlay "
+            "`FeedView` ne doit être monté que par `iPadRootView.swift` — le fait qui rend cet overlay "
                 + "« iPad ». Un second hôte le ferait atteindre l'iPhone, et la mesure du lot serait fausse."
         )
     }

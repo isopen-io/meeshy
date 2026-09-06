@@ -477,6 +477,18 @@ struct ComposerSceneSurface: View {
     var onOpenHashtags: (() -> Void)?
     var onOpenMentions: (() -> Void)?
 
+    // MARK: - Combien de slides, et laquelle (constat porteur 2026-09-06)
+
+    /// Le COMPTE de slides de la publication et le RANG de celle qu'on compose.
+    /// Reçus en primitives, comme le reste : la surface ne connaît pas le
+    /// ViewModel, et un entier ne fait pas re-rendre la scène quand il ne
+    /// change pas.
+    var slideCount: Int = 1
+    var currentSlideIndex: Int = 0
+    /// `nil` ⇒ la bande ne paraît pas. Un hôte sans navigation de slide ne doit
+    /// pas montrer des pastilles qui ne mèneraient nulle part (loi 4).
+    var onSelectSlide: ((Int) -> Void)?
+
     // MARK: - La description
 
     @Binding var description: String
@@ -908,6 +920,22 @@ struct ComposerSceneSurface: View {
                         .padding(.top, -ComposerRailGeometry.referencesLift(
                             cardBottomInset: sceneCardBottom,
                             gutter: ComposerRailGeometry.referencesGutter))
+                }
+
+                // **Combien de slides, et laquelle on compose.** Même couloir
+                // et même nature que le pied ci-dessus : une zone de CONSTAT,
+                // qui dit ce que la publication porte et où le doigt navigue.
+                //
+                // Mesuré au simulateur avant ce montage : le `[+]` du rail
+                // droit créait bien une slide, et RIEN à l'écran ne le disait —
+                // ni compte, ni rang, ni retour vers la précédente. Il fallait
+                // publier pour savoir ce qu'on avait composé.
+                if let onSelectSlide {
+                    ComposerSlideStrip(slideCount: slideCount,
+                                       currentIndex: currentSlideIndex,
+                                       accentColor: MeeshyColors.indigo400,
+                                       leadingInset: sceneCardLeading,
+                                       onSelect: onSelectSlide)
                 }
 
                 // **La bande contextuelle, entre la scène et la description**

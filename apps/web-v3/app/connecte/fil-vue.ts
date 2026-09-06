@@ -929,6 +929,16 @@ const surimpressionDuLien = (etat: EtatDuFil): string | null => {
   if (etat.porte.genre !== 'membre') return null;
   const lien = etat.lien ?? null;
   if (lien === null) return null;
+  // FAIL-CLOSED SUR L'ÉTAT OUVERT PAR L'ADRESSE, JAMAIS SUR UN REFUS DÉJÀ
+  // SERVI (#5034, suivi § 12.10.5). Un `direct` ou un rang trop bas ne rend
+  // jamais la feuille sur un simple `?lien` tapé à la main — la promesse de
+  // `versLeLien` ci-dessus, tenue ici aussi. Mais `motif !== null` signifie
+  // que la passerelle a DÉJÀ répondu : c'est exactement le cas que
+  // `traduisLeMotifDuLien` existe pour peindre (rang rétrogradé entre le
+  // chargement et la soumission), et l'avaler rendrait un fil MUET là où le
+  // lecteur vient de se voir refuser son geste — pire qu'un refus en anglais
+  // (correction de revue).
+  if (lien.motif === null && !peutCreerUnLien(etat.fil)) return null;
   const adresseHote = adresseDeLaPorte(etat.porte);
   return nouveauLien({
     saisie: lien.saisie,

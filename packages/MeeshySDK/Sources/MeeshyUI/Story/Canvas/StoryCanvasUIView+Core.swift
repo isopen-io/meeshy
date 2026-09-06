@@ -133,6 +133,10 @@ extension StoryCanvasUIView {
         let wasPlay = mode == .play
         let didChange = mode != newMode
         mode = newMode
+        // Le confinement suit le MODE, pas le rayon d'arrondi : un canvas qui
+        // passe en lecture cesse de peindre hors de ses bornes, et un retour en
+        // édition rend à la poignée le droit de dépasser.
+        applyReadingClip()
         currentTime = time
         if newMode == .play {
             completionFired = false

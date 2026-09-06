@@ -342,9 +342,9 @@ P2025 → NotFoundError
 
 ## Rate Limiting
 - Global: 300 req/min per IP
-- Messages: 20/min per user
 - Mentions: max 50 per message, 5/min per recipient
 - Status updates: throttled to once per 5 seconds
+- No per-account cap on message sending: `registerMessageRateLimiter` (20/min) had no production caller and was removed by #4687 — the global 300 req/min limiter is the only guard on `POST /messages`
 
 ## Response Format
 Producteur unique : `sendSuccess()`/`sendError()` (`utils/response.ts`), forme déclarée par `errorResponseSchema` (`packages/shared/types/api-schemas/error.ts`) — voir § « Un schéma d'ERREUR se confronte à l'enveloppe » plus bas, ne pas la reproduire ici (#4884). `error` est une CHAÎNE PLATE :
