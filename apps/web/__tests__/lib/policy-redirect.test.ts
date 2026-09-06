@@ -18,7 +18,14 @@ describe('next.config redirects — /policy', () => {
   it('redirige /policy en permanence vers /terms, jamais vers /privacy', async () => {
     const redirects = await nextConfig.redirects!();
 
-    const policyRedirect = redirects.find((redirect) => redirect.source === '/policy');
+    // Le paramètre est typé EXPLICITEMENT : `redirects()` rend un tableau dont
+    // TypeScript ne déduit pas l'élément ici, et un `any` implicite fait
+    // remonter le cliquet de dette d'`apps/web` (baseline 1180) — c'est par là
+    // que ce témoin a fait rougir `dev`.
+    const policyRedirect = redirects.find(
+      (redirect: { source: string; destination: string; permanent: boolean }) =>
+        redirect.source === '/policy',
+    );
 
     expect(policyRedirect).toEqual({
       source: '/policy',
