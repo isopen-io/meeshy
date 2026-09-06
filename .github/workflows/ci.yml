@@ -299,6 +299,17 @@ jobs:
       - name: Compose host variables guard
         run: node scripts/check-compose-required-vars.mjs --self-test && node scripts/check-compose-required-vars.mjs
 
+      # #4547 — `scripts/dev.sh --https` invoquait un fichier
+      # (`docker-compose.local-https.yml`) qui n'a jamais existé sous
+      # `infrastructure/docker/compose/` : le drapeau échouait systématiquement,
+      # silencieusement, derrière un message Docker opaque. `--https` est
+      # désormais un alias documenté de `docker-compose.local.yml`. La garde
+      # vérifie que toute référence `$COMPOSE_DIR/docker-compose*.yml` du script
+      # résout réellement, pour qu'une régression future ne redevienne pas
+      # silencieuse jusqu'à ce qu'un développeur lance la commande.
+      - name: dev.sh compose targets guard
+        run: node scripts/check-dev-sh-compose-targets.mjs --self-test && node scripts/check-dev-sh-compose-targets.mjs
+
       # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
       # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
       # les deux listes ne prouverait rien, deux copies coïncidant toujours le
