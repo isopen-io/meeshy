@@ -29360,3 +29360,74 @@ précisément ce à quoi on ne pense pas.
 **Placeholders** : `%1$d`/`%2$d` doivent survivre à la traduction — un ordinal
 perdu inverse les deux nombres en arabe (« la slide 3 sur 2 »). Vérifier, pas
 supposer.
+
+---
+
+## Leçon 543 — Un porteur dont l'existence dépend d'un SEUL de ses champs perd tous les autres en silence
+
+**Contexte** (#5406, retour porteur 2026-09-06). Le double-tap sur le fond du
+composer choisit son cadrage (`videoFitMode` : centré-letterbox ou plein cadre).
+Après publication, l'image remplissait toujours le canvas.
+
+**Ce que le champ traverse.** Le pan et l'échelle du fond voyagent sur
+`mediaObjects[bg]` ; `videoFitMode` est le seul qui ne soit pas une coordonnée
+géométrique et vit sur `effects.backgroundTransform` — lequel ne voyage QUE dans
+la charge de l'objet `bg` du document v3.
+
+**Le défaut.** Cet objet n'était émis que `if let background = nonEmpty(effects.background)`,
+c'est-à-dire si une COULEUR de fond était déclarée. **La condition de perte et la
+condition d'utilité du geste sont la même** : un cadrage ne vaut que sur un fond
+MÉDIA, là où une couleur n'a aucune raison d'exister.
+
+> Rien ne rougit, et il n'y a rien à trouver : l'objet n'est pas amputé, **il
+> n'est pas là**. Un champ absent d'une charge ne laisse aucune trace, à la
+> différence d'un champ vidé par un sérialiseur.
+
+**Les deux questions à poser à tout porteur de fil** :
+1. *Son existence est-elle conditionnée à l'un de ses champs ?* Si oui, tous les
+   autres partent avec ce champ.
+2. *Le champ qui décide est-il celui qui compte ?* Ici il ne l'était pas — et sa
+   présence était même ANTI-corrélée à celle du champ utile.
+
+**Le témoin ne pouvait pas tomber.** `testStoryEffectsWithBackgroundTransformRoundtrip`
+posait `background: "FF0000"`. C'est la leçon 261 sous un autre angle : un témoin
+de rang s'écrit sur un rang AUTRE que le premier, et ici le « rang 1 » est le cas
+où la couleur existe.
+
+**Et la règle était écrite deux fois** — `CanvasV3.migratedScene` (Swift) et
+`convertV1ToV3` (gateway) — **avec le même trou aux deux exemplaires**. Corriger
+une jumelle sans l'autre n'aurait rien réglé pour les clients qui passent par le
+convertisseur serveur.
+
+## Leçon 544 — Une garde de permission qui ne s'abonne à rien fige la permission au premier rendu
+
+**Contexte** (#5407, même retour porteur). La section « Lieu » de la palette de
+stickers affichait « Active la position pour épingler un lieu » alors que la
+localisation était active.
+
+**Le défaut.** `stickerNearbyPlacesProvided()` lisait
+`CLLocationManager().authorizationStatus` **à la volée, dans une expression de
+`body`**. La valeur est juste à cet instant — et rien ne la relit : SwiftUI ne
+réévalue un `body` que si un état OBSERVÉ change, et un statut système n'en est
+pas un. Un refus puis une autorisation accordée dans Réglages laissait le
+fournisseur à `nil` pour toute la session.
+
+> **La question à poser à toute lecture d'autorisation n'est pas « lit-elle la
+> bonne propriété ? » mais « que se passe-t-il quand la réponse CHANGE ? »**
+> L'API qui le dit existait et n'était pas branchée :
+> `locationManagerDidChangeAuthorization(_:)`.
+
+**Le message ne mentait pas — il rendait fidèlement un fournisseur absent.**
+C'est ce qui rend ce défaut coûteux à diagnostiquer : la chaîne d'affichage est
+correcte de bout en bout, et l'erreur est trois couches plus haut, dans la
+FRAÎCHEUR de la valeur injectée.
+
+**Le second manque, en aval.** Le chargement des lieux n'avait qu'un
+déclencheur : l'`onAppear` de la section. Une section déjà montée ne réapparaît
+pas — une permission fraîchement accordée n'avait donc aucun site où déclencher
+la recherche. Sans ce second déclencheur, le correctif aurait fait disparaître
+le message sur une grille restée vide : **pire que le message**.
+
+**Forme générale** : quand on rend une valeur d'environnement RÉACTIVE, chercher
+tout consommateur dont le déclencheur est un événement de CYCLE DE VIE
+(`onAppear`, `task`) — il ne se rejouera pas, et son travail restera à faire.
