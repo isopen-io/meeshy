@@ -148,13 +148,17 @@ final class ComposerIntakePortalsTests: XCTestCase {
 
     /// Et le meuble monte bien la vue ENVELOPPÉE, pas l'aiguillage nu — sans
     /// quoi les portails existeraient sans être à l'écran.
+    /// **`composerStack`, et non `body`** (2026-09-06) : le `body` du meuble
+    /// délègue, et c'est `composerStack` qui assemble le socle et la vue
+    /// enveloppée. La garde lisait un bloc où ni l'un ni l'autre n'apparaît, et
+    /// rougissait sur son propre ancrage sans rien dire du produit.
     func test_leMeuble_monteLaVueEnveloppee() throws {
         let code = try hostSource()
-        guard let corps = declarationBody(startingAt: "var body: some View", in: code) else {
-            return XCTFail("Le `body` du meuble est introuvable")
+        guard let corps = declarationBody(startingAt: "var composerStack: some View", in: code) else {
+            return XCTFail("`composerStack` est introuvable — le meuble a changé de forme, la garde doit être re-pointée")
         }
         let compacte = compact(corps)
-        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui du body.")
+        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui qui assemble le meuble.")
         XCTAssertTrue(compacte.contains("surfaceWithIntakePortals"),
                       "Le body doit monter la vue qui porte les portails.")
     }
