@@ -14,6 +14,7 @@ import { prendsLeBalayage } from './balayage';
 import { armeLaDeconnexion } from './deconnexion';
 import { observeCycleDeVie, unSeulMontageParEcran, type TransitionDeCycle } from './lifecycle';
 import { prendsLePleinEcran } from './plein-ecran';
+import { rejoueSiRotationEnArrierePlan } from './push-abonnement';
 import * as L from './liste-etat';
 import { CHAMPS_DU_RATTRAPAGE } from './liste-etat';
 import { etatDuDocument, montreLeTrou, peins, peintre, type Peintre } from './liste-peinture';
@@ -556,6 +557,12 @@ const demarre = async (): Promise<void> => {
   // pu attendre dans le cache du navigateur, et « à l'instant » y aurait vieilli.
   peins(p, ctx.etat, Date.now());
   prendsLesGestes(ctx);
+
+  // LE REJEU DE ROTATION PUSH EN ARRIÈRE-PLAN (#5391, suivi de revue défaut
+  // 3) — `/chats` est la surface que le lecteur RÉOUVRE ; best-effort, sans
+  // rapport avec le fil de participation ci-dessous — voir le doc-comment de
+  // `rejoueSiRotationEnArrierePlan`.
+  void rejoueSiRotationEnArrierePlan();
 
   observeCycleDeVie({ cleDuJeton: 'meeshy-liste', sur: surTransition(ctx) });
 
