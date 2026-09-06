@@ -26,16 +26,19 @@ import XCTest
 /// directive interdit d'ajouter à un fichier hors budget avant de l'extraire.
 final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
 
-    /// La seule clé POINTÉE encore absente du catalogue, avec sa raison.
+    /// Les clés POINTÉES encore absentes du catalogue, chacune avec sa raison.
     ///
-    /// Ce n'est pas un compteur : c'est le texte des conditions d'utilisation,
-    /// une trentaine de lignes de prose juridique passées en `defaultValue`
-    /// multi-lignes. La traduire relève d'un lot de LOCALISATION JURIDIQUE, pas
-    /// d'un correctif de pluriel — et sa version française vit déjà dans le
-    /// catalogue sous une clé qui EST son propre texte (famille de #4621).
-    private static let attendues: Set<String> = [
-        "onboarding.step.recap.terms.body",
-    ]
+    /// **Vide, et c'est un état normal — pas un oubli.** L'ensemble a porté
+    /// `onboarding.step.recap.terms.body` (une trentaine de lignes de prose
+    /// juridique en `defaultValue` multi-lignes) jusqu'au 2026-09-06 ; plus
+    /// aucun site ne pointe cette clé, et l'exemption ne décrivait donc plus
+    /// rien. `test_aucuneExemptionPerimee` a rougi pour exactement ça.
+    ///
+    /// > Une exemption survit à ce qu'elle exempte, et devient alors un
+    /// > mensonge silencieux : elle raconte une dette réglée, et couvrirait
+    /// > une clé homonyme réintroduite plus tard sans que personne ne l'ait
+    /// > décidé. C'est pourquoi la garde interroge les exemptions elles-mêmes.
+    private static let attendues: Set<String> = []
 
     /// **Chaque cible a SON catalogue, et c'est le `bundle:` qui décide.**
     ///
