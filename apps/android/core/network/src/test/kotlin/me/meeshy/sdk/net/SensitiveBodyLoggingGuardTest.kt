@@ -38,11 +38,12 @@ class SensitiveBodyLoggingGuardTest {
     /** Le corps qu'aucune ligne de journal ne doit contenir. */
     private val motDePasse = "hunter2-ne-doit-jamais-paraitre"
 
-    private fun chain(path: String): Interceptor.Chain {
-        val request = Request.Builder()
+    private fun chain(path: String, jeton: String? = null): Interceptor.Chain {
+        val builder = Request.Builder()
             .url("https://gate.meeshy.me/api/v1$path")
             .post("""{"password":"$motDePasse"}""".toRequestBody("application/json".toMediaType()))
-            .build()
+        if (jeton != null) builder.header("Authorization", "Bearer $jeton")
+        val request = builder.build()
         val response = Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
@@ -102,6 +103,44 @@ class SensitiveBodyLoggingGuardTest {
         assertTrue(
             "le niveau complet n'a pas ete applique hors des routes sensibles",
             lignes.any { it.contains(motDePasse) },
+        )
+    }
+
+    /**
+     * (#4843) L'en-tete `Authorization` porte le jeton de la session — sur
+     * TOUTE requete authentifiee, jamais seulement sur une route choisie a
+     * l'avance. Contrairement au corps, redige par ROUTE (`SENSITIVE_PATHS`),
+     * cette redaction ne depend d'AUCUNE liste : une route ordinaire, au
+     * niveau BODY complet (en-tetes ET corps), ne doit jamais laisser
+     * paraitre le jeton porteur.
+     */
+    @Test
+    fun `l'en-tete Authorization ne fuit jamais, meme sur une route ordinaire`() {
+        val jeton = "jwt-jamais-vu-en-clair"
+        val lignes = mutableListOf<String>()
+        gardeQuiEcritDans(lignes).intercept(chain("/conversations", jeton = jeton))
+
+        assertTrue(
+            "le jeton Authorization a fuite : ${lignes.joinToString(" | ")}",
+            lignes.none { it.contains(jeton) },
+        )
+    }
+
+    /**
+     * (#4843) `/auth/login/2fa` porte le code de second facteur au corps —
+     * absent de `SENSITIVE_PATHS` avant ce correctif. Ce temoin cible LA
+     * ROUTE directement, sans passer par l'iteration du set : un set qui
+     * omettrait cette route encore demain ne ferait tomber aucun des temoins
+     * existants, puisqu'ils ne testent que ce que le set contient deja.
+     */
+    @Test
+    fun `le code de second facteur ne fuit pas via slash-auth-login-2fa`() {
+        val lignes = mutableListOf<String>()
+        gardeQuiEcritDans(lignes).intercept(chain("/auth/login/2fa"))
+
+        assertTrue(
+            "/auth/login/2fa a journalise son corps : ${lignes.joinToString(" | ")}",
+            lignes.none { it.contains(motDePasse) },
         )
     }
 
