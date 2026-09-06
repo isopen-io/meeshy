@@ -16,7 +16,10 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../utils/logger') as object),
+  logError: jest.fn(),
+}));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   errorResponseSchema: {
