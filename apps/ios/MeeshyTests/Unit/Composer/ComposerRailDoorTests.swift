@@ -666,23 +666,6 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
-    /// **L'ÉDITEUR D'OBJET, où la frappe a réellement lieu depuis #4634.**
-    ///
-    /// Les quatre gardes de mention ci-dessous lisaient le MEUBLE. La saisie a
-    /// migré vers l'écran modal — le meuble POSSÈDE toujours la boîte et la lui
-    /// confie (`mentionBox: sceneMentionBox`), mais c'est l'éditeur qui écrit,
-    /// interroge et montre la bande. Une garde qui reste sur le propriétaire
-    /// cesse de voir ce que fait le consommateur.
-    private func objectEditorSource() throws -> String {
-        AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
-    }
-
-    /// La BOÎTE, qui possède le contrôleur et l'alimente.
-    private func mentionBoxSource() throws -> String {
-        AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Components/ComposerMentionControllerBox.swift"))
-    }
 
     private func compact(_ t: String) -> String {
         t.components(separatedBy: .whitespacesAndNewlines).joined()
@@ -1772,6 +1755,24 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
 
     private func hostSource() throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    /// **L'ÉDITEUR D'OBJET, où la frappe a réellement lieu depuis #4634.**
+    ///
+    /// Les quatre gardes de mention ci-dessous lisaient le MEUBLE. La saisie a
+    /// migré vers l'écran modal — le meuble POSSÈDE toujours la boîte et la lui
+    /// confie (`mentionBox: sceneMentionBox`), mais c'est l'éditeur qui écrit,
+    /// interroge et montre la bande. Une garde qui reste sur le propriétaire
+    /// cesse de voir ce que fait le consommateur.
+    private func objectEditorSource() throws -> String {
+        AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift"))
+    }
+
+    /// La BOÎTE, qui possède le contrôleur et l'alimente.
+    private func mentionBoxSource() throws -> String {
+        AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Components/ComposerMentionControllerBox.swift"))
     }
 
     private func compact(_ t: String) -> String {
