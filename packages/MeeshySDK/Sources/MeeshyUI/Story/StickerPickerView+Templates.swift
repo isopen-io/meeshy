@@ -353,8 +353,12 @@ extension StickerPickerView {
     /// VoiceOver n'en sert qu'un : « 14:32 » se LIT « quatorze heures
     /// trente-deux » mais se DIT mal seul — il lui faut le nom de ce qu'il
     /// décore.
-    static func accessibilityLabel(for template: StickerTemplate,
-                                   slots: [String: String]) -> String {
+    /// `public` depuis le 2026-09-06 (#5326) : la pastille de cadre à mots du
+    /// composer d'app dit la MÊME phrase que la vignette de la palette. Deux
+    /// formulations pour la même décoration se seraient contredites au premier
+    /// gabarit ajouté.
+    public static func accessibilityLabel(for template: StickerTemplate,
+                                          slots: [String: String]) -> String {
         // Une VALEUR (« 14:32 ») comme une PROSE (« Bon anniversaire ») se
         // disent : les deux sont ce que la décoration montre.
         let valeurs = template.slots
@@ -368,7 +372,7 @@ extension StickerPickerView {
     /// Le nom d'un gabarit — celui que son DESSINATEUR déclare, à côté de son
     /// dessin (`StickerTemplateDrawer.name`). Un id inconnu de ce binaire
     /// (publié par une version plus récente) reçoit le libellé générique.
-    static func templateName(_ id: String) -> String {
+    public static func templateName(_ id: String) -> String {
         StickerTemplateRenderer.drawer(for: id)?.name()
             ?? String(localized: "sticker.template.unknown",
                       defaultValue: "Décoration", bundle: .module)
@@ -381,14 +385,24 @@ extension StickerPickerView {
 /// produite par `StickerTemplateRenderer`, le moteur qui dessinera sur la
 /// scène. Une vignette peinte à part aurait dérivé du rendu au premier
 /// ajustement, sans qu'aucun témoin ne rougisse.
-struct StickerTemplatePreview: View {
+/// `public` depuis le 2026-09-06 (#5326) : la barre de composition de l'app
+/// porte une pastille qui montre le cadre à mots avec le texte tapé. Elle a
+/// besoin de LA vignette, pas d'une jumelle — c'est tout l'objet de l'exigence
+/// #4110 ci-dessus, qu'un second site de rendu défairait.
+public struct StickerTemplatePreview: View {
     let template: StickerTemplate
     let slots: [String: String]
     let side: CGFloat
 
     @State private var image: UIImage?
 
-    var body: some View {
+    public init(template: StickerTemplate, slots: [String: String], side: CGFloat) {
+        self.template = template
+        self.slots = slots
+        self.side = side
+    }
+
+    public var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.primary.opacity(0.05))

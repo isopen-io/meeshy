@@ -87,8 +87,22 @@ extension UniversalComposerBar {
                         // son propre texte. Elle refuse un collage
                         // multi-lignes, dont l'envoi serait irréversible.
                         if ComposerReturnKey.submits(previous: oldValue, current: newValue) {
-                            text = ComposerReturnKey.stripped(newValue)
+                            // Le texte SANS son saut de ligne est poussé à
+                            // l'hôte AVANT l'envoi : `onCustomSend` lit la
+                            // source de l'hôte SYNCHRONEMENT, alors que la
+                            // synchro `text` → `textBinding` est différée d'un
+                            // tour de rendu — sans ça, l'hôte enverrait le
+                            // texte d'AVANT la frappe (même écart que
+                            // `sendQuickEmoji`, 2026-08-27).
+                            let sansRetour = ComposerReturnKey.stripped(newValue)
+                            text = sansRetour
+                            textBinding?.wrappedValue = sansRetour
                             handleSend()
+                            // Et le champ vaut ensuite ce que l'HÔTE dit qu'il
+                            // vaut : vidé s'il a pris le texte, intact s'il a
+                            // refusé l'envoi (#5326, `ComposerFieldAfterSend`).
+                            text = ComposerFieldAfterSend.resolve(local: text,
+                                                                  host: textBinding?.wrappedValue)
                             return
                         }
                         if let maxLen = resolvedMaxLength, newValue.count > maxLen {
