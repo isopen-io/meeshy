@@ -181,7 +181,19 @@ enum AppSourceGuard {
         // budget : il l'est quand les gardes qui le nommaient pointent l'unité
         // (leçon 347).
         "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift",
-        "Meeshy/Features/Main/Composer/ComposerMediaThumbnail.swift"
+        "Meeshy/Features/Main/Composer/ComposerMediaThumbnail.swift",
+        // **Les cinq types de l'ENVOI, extraits le 2026-09-06** quand
+        // `ComposerDocumentRules` a franchi le plafond DUR de 1200 lignes —
+        // chemin, aiguillage, refus, plan et issue. Même raison que les quatre
+        // compagnons ci-dessus, et le doc-comment le disait d'avance : « un
+        // découpage n'est pas fini quand le fichier passe sous le budget ; il
+        // l'est quand les gardes qui le nommaient pointent l'unité ».
+        //
+        // Trois gardes l'ont appris à mes dépens le jour même : elles
+        // cherchaient `enum ComposerDocumentSendPlan` dans une unité qui ne le
+        // contenait plus, et rendaient « bloc introuvable — la garde ne
+        // mesurerait RIEN ».
+        "Meeshy/Features/Main/Composer/ComposerDocumentSendRules.swift"
     ]
 
     static func composerSurfaceURLs() -> [URL] {
