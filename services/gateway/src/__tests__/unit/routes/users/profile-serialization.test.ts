@@ -116,7 +116,12 @@ async function buildApp(routes: Array<(f: FastifyInstance) => Promise<void>>): P
   const app = Fastify({ logger: false });
 
   app.decorate('prisma', {
-    user: { update: jest.fn<any>().mockResolvedValue(fullUser) },
+    user: {
+      update: jest.fn<any>().mockResolvedValue(fullUser),
+      // PATCH /users/me/avatar relit displayName/bio/phoneNumber/email pour
+      // recomposer `profileCompletionRate` (#3688) avant d'écrire l'avatar.
+      findUnique: jest.fn<any>().mockResolvedValue(fullUser),
+    },
   } as any);
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = {

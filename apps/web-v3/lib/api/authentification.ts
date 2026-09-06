@@ -247,6 +247,83 @@ const champEnDefaut = (corps: Readonly<Record<string, unknown>> | null): string 
 };
 
 /**
+ * LE REFUS DE SCHÉMA PARLE ANGLAIS TECHNIQUE, ET C'EST LE SEUL (#5397).
+ *
+ * `details[].message` porte le texte BRUT d'Ajv (« must match pattern "^(?=…" »,
+ * « must NOT have fewer than 6 characters ») — celui que Fastify rend AVANT le
+ * gestionnaire de route, sur le corps entier. Il agrège en prime des branches de
+ * schéma (l'`anyOf` prénom/nom hérité) que l'écran ne sert pas : la version
+ * courte, seule affichée ici, ne parle QUE du champ que le formulaire a
+ * réellement posé.
+ *
+ * Le texte AJV n'a pas de vocabulaire stable — seule sa FORME l'a. Catégoriser
+ * plutôt que faire correspondre au mot près : la même contrainte (`pattern`,
+ * `minLength`…) se retrouve sur plusieurs champs, une table par champ EXACT
+ * doublerait chaque nouvelle règle de longueur.
+ */
+type CategorieDeRefusDeSchema = 'motif' | 'trop-court' | 'trop-long' | 'courriel-invalide';
+
+const categoriseLeRefusDeSchema = (messageBrut: string): CategorieDeRefusDeSchema | null => {
+  if (/must match pattern/.test(messageBrut)) return 'motif';
+  if (/must NOT have fewer than/.test(messageBrut)) return 'trop-court';
+  if (/must NOT have more than/.test(messageBrut)) return 'trop-long';
+  if (/must match format "email"/.test(messageBrut)) return 'courriel-invalide';
+  return null;
+};
+
+/**
+ * UNE PHRASE PAR CHAMP ET PAR CATÉGORIE — jamais par mot-clé anglais recopié.
+ * Un champ ou une catégorie qui manque ici retombe sur `REFUS_DE_SCHEMA_GENERIQUE`
+ * (fail-closed) : aucun texte d'Ajv n'atteint jamais l'écran, connu ou pas.
+ */
+const PHRASE_DE_SCHEMA_PAR_CHAMP: Readonly<
+  Partial<Record<string, Readonly<Partial<Record<CategorieDeRefusDeSchema, string>>>>>
+> = {
+  nomAffiche: {
+    motif: 'Le nom ne peut contenir que des lettres, espaces, apostrophes, points et tirets.',
+    'trop-court': 'Le nom doit contenir au moins un caractère.',
+    'trop-long': 'Le nom est trop long (100 caractères maximum).',
+  },
+  motDePasse: {
+    'trop-court': 'Le mot de passe doit contenir au moins 6 caractères.',
+  },
+  courriel: {
+    'courriel-invalide': 'Cette adresse e-mail n’est pas valide.',
+  },
+  telephone: {
+    motif: 'Ce numéro de téléphone n’est pas valide.',
+  },
+};
+
+const REFUS_DE_SCHEMA_GENERIQUE = 'Les informations saisies ne sont pas valides. Vérifiez votre saisie.';
+
+/**
+ * `null` quand la passerelle ne rend PAS un refus de schéma (`details` absent) —
+ * la vue retombe alors sur `messageDuServeur`, qui parle déjà français pour les
+ * refus de service (e-mail pris, numéro invalide…). Sinon, TOUJOURS une phrase :
+ * celle du champ routé si elle est connue, sinon la générique — jamais le texte
+ * d'Ajv, connu ou pas.
+ */
+const messageDuRefusDeSchema = (
+  corps: Readonly<Record<string, unknown>> | null,
+  champRoute: string | null,
+): string | null => {
+  const details = corps?.details;
+  if (!Array.isArray(details) || details.length === 0) return null;
+
+  const messageBrut = champRoute === null
+    ? null
+    : chaine(objet(details.find((detail) => champDeLaViolation(detail) === champRoute))?.message);
+
+  const categorie = messageBrut === null ? null : categoriseLeRefusDeSchema(messageBrut);
+  const phrase = champRoute === null || categorie === null
+    ? undefined
+    : PHRASE_DE_SCHEMA_PAR_CHAMP[champRoute]?.[categorie];
+
+  return phrase ?? REFUS_DE_SCHEMA_GENERIQUE;
+};
+
+/**
  * UN NUMÉRO DÉJÀ RATTACHÉ N'EST PAS UNE ERREUR — la passerelle rend 200,
  * `success: true`, et ne crée AUCUN compte. Le lire comme un succès ouvrirait
  * une session qui n'existe pas ; le lire comme une panne cacherait la seule
@@ -266,9 +343,10 @@ const relayer =
     if (objet(corps?.data)?.phoneOwnershipConflict === true) {
       return { message: CONFLIT_DE_NUMERO, champ: 'telephone', recours: null };
     }
+    const champ = champEnDefaut(corps);
     return {
-      message: messageDuServeur(corps) ?? defaut,
-      champ: champEnDefaut(corps),
+      message: messageDuRefusDeSchema(corps, champ) ?? messageDuServeur(corps) ?? defaut,
+      champ,
       recours: chaine(corps?.code) === 'EMAIL_TAKEN' ? RECOURS_DE_CONNEXION : null,
     };
   };

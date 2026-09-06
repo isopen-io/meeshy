@@ -117,7 +117,7 @@ public struct CommunitySettingsView: View {
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo500)
                 } else {
-                    Text(String(localized: "common.save", defaultValue: "Sauvegarder", bundle: .module))
+                    Text(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }

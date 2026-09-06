@@ -117,7 +117,7 @@ private struct ProfilePostsEmpty: View {
                 .font(.system(size: 28))
                 .foregroundColor(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
-            Text(String(localized: "profile.posts.empty", defaultValue: "Aucun poste", bundle: .module))
+            Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .module))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(theme.textMuted.opacity(0.7))
         }

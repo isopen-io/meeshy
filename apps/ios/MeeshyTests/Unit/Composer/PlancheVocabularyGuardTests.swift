@@ -101,15 +101,19 @@ final class PlancheVocabularyGuardTests: XCTestCase {
     /// du vocabulaire ; c'est ce qui a tenu 123 occurrences en place pendant
     /// cinq jours.
     ///
-    /// Le motif exclut `MeeshyObjectID` — un type RÉEL et sans rapport
-    /// (validation d'ObjectId MongoDB, `Utils/ObjectID.swift`). Un renommage
-    /// naïf l'aurait emporté et cassé la compilation.
+    /// Le motif portait une exception `(?!ID)` pour `MeeshyObjectID` — un type
+    /// RÉEL et sans rapport (validation d'ObjectId MongoDB), dont le préfixe
+    /// aurait autrement fait tomber cette garde sur un renommage qui l'aurait
+    /// cassée. #5238 a retiré ce préfixe (`ObjectID`, sans rapport lexical
+    /// avec `MeeshyObject`) dans le même commit que ce retrait — une garde
+    /// négative qui garde une exception pour un nom qui n'existe plus ne
+    /// protège rien, elle documente une dette réglée comme si elle ne l'était pas.
     func test_laPlanche_nEmploiePlusLeNomAbandonne() throws {
         // Les DEUX fichiers. Le reste de cette garde lit le `.md`, dont la
         // logique de paragraphes est markdown — mais `planche.md:271` déclare que
         // **le HTML fait foi** et que le `.md` en est la transcription. Un nom qui
         // revient revient d'abord dans la source.
-        let abandonne = try NSRegularExpression(pattern: "MeeshyObject(?!ID)")
+        let abandonne = try NSRegularExpression(pattern: "MeeshyObject")
 
         for (fichier, texte) in [("planche-meeshy-composer.md", try plancheSource()),
                                  ("planche-meeshy-composer.html", try plancheHTML())] {

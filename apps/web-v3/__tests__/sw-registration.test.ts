@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { documentDuTableau } from '@/app/connecte/vue';
 import { SCRIPT_DU_TRAVAILLEUR } from '@/app/connecte/chargeur';
+import { documentDesChats } from '@/app/connecte/liste-vue';
 import { porteesDuTravailleur } from '@/lib/sw/portees';
 
 /**
@@ -64,6 +66,79 @@ describe('SCRIPT_DU_TRAVAILLEUR — la registration que le document sert', () =>
     const script = SCRIPT_DU_TRAVAILLEUR(['/l/']);
     expect(script).not.toContain('controllerchange');
     expect(script).not.toContain('reload');
+  });
+});
+
+describe('la registration ATTEINT les documents de la zone connectée (#5321)', () => {
+  const ANCIENNE_VALEUR = process.env['V3_SW_PORTEES'];
+
+  afterEach(() => {
+    if (ANCIENNE_VALEUR === undefined) delete process.env['V3_SW_PORTEES'];
+    else process.env['V3_SW_PORTEES'] = ANCIENNE_VALEUR;
+  });
+
+  const CONVERSATION = {
+    id: '68f2a81417a557e8ce4ddfbb',
+    identifiant: 'lagos',
+    titre: 'Équipe Lagos',
+    genre: 'group' as const,
+    membres: 4,
+    nonLus: 3,
+    dernierMessageA: '2026-09-01T12:00:00.000Z',
+    apercu: 'On se cale à 15 h pour la revue ?',
+    apercuTraductions: null,
+    apercuLangueOriginale: 'fr',
+    sourdine: false,
+    archivee: false,
+    participantsInscrits: [],
+  };
+
+  const MAINTENANT = Date.parse('2026-09-01T12:30:00.000Z');
+
+  /**
+   * `SCRIPT_DU_TRAVAILLEUR n'a qu'UN appelant (le fil)` disait l'audit source
+   * de cette issue — vrai de l'IDENTIFIANT (`fil-vue.ts` est le seul fichier
+   * qui l'importe), mais `documentPleinEcran` qu'il sert est lui-même partagé
+   * par la plupart des écrans membres. Les DEUX documents qui composent par
+   * `documentDuSite` sans passer par lui — la liste et le tableau de bord —
+   * sont le trou réel, mesuré `REGS: []` sur `/chats`.
+   */
+  it("documentDesChats (/chats) sert la registration quand l'environnement déclare des portées", () => {
+    process.env['V3_SW_PORTEES'] = '/l/,/chats';
+    const doc = documentDesChats({ conversations: [CONVERSATION], maintenant: MAINTENANT, langues: ['fr'], moi: 'u1', tempsReel: null });
+    expect(doc).toContain('/__v3/sw?portees=');
+  });
+
+  it('documentDesChats (/chats) ne sert AUCUN script sans portée déclarée', () => {
+    delete process.env['V3_SW_PORTEES'];
+    const doc = documentDesChats({ conversations: [CONVERSATION], maintenant: MAINTENANT, langues: ['fr'], moi: 'u1', tempsReel: null });
+    expect(doc).not.toContain('/__v3/sw?portees=');
+  });
+
+  it("documentDuTableau (/) sert la registration quand l'environnement déclare des portées", () => {
+    process.env['V3_SW_PORTEES'] = '/l/,/chats';
+    const doc = documentDuTableau({
+      lecteur: null,
+      conversations: [CONVERSATION],
+      total: 1,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
+    expect(doc).toContain('/__v3/sw?portees=');
+  });
+
+  it('documentDuTableau (/) ne sert AUCUN script sans portée déclarée', () => {
+    delete process.env['V3_SW_PORTEES'];
+    const doc = documentDuTableau({
+      lecteur: null,
+      conversations: [CONVERSATION],
+      total: 1,
+      liens: { genre: 'liste', liens: [] },
+      maintenant: MAINTENANT,
+      espace: false,
+    });
+    expect(doc).not.toContain('/__v3/sw?portees=');
   });
 });
 

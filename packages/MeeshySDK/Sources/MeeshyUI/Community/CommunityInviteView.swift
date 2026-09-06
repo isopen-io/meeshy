@@ -33,7 +33,7 @@ public struct CommunityInviteView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.done", defaultValue: "Done", bundle: .module)) {
+                    Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .module)) {
                         if let onDone { onDone() } else { dismiss() }
                     }
                         .foregroundColor(theme.textSecondary)
