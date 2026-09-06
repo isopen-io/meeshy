@@ -410,7 +410,7 @@ export const FEUILLE_DES_GESTES = compacte(
     // haut de la liste pour ouvrir vers le haut) bascule le sens.
     '.ligne{position:relative}' +
     '.ligne .actions{position:static}' +
-    '.ligne .actions form{position:absolute;right:0;bottom:100%;margin-bottom:var(--space-2);z-index:2;min-width:12rem;max-width:calc(100vw - 2 * var(--space-4));box-shadow:var(--shadow-sm)}' +
+    '.ligne .actions form{position:absolute;inset-inline-end:0;bottom:100%;margin-bottom:var(--space-2);z-index:2;min-width:12rem;max-width:calc(100vw - 2 * var(--space-4));box-shadow:var(--shadow-sm)}' +
     '.ligne .actions.ouvre-bas form{bottom:auto;top:100%;margin-bottom:0;margin-top:var(--space-2)}' +
     // LE BANDEAU DU CONTEXTE — une ligne À ELLE SEULE au-dessus du champ
     // (`order:-2`, avant l'annonce de pièce) : posé dans le flux du composeur,

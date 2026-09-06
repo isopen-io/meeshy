@@ -859,3 +859,62 @@ test.describe('le panneau du menu ne recouvre plus le fil (défaut §4), et se r
     await contexte.close();
   });
 });
+
+/**
+ * LE PANNEAU DU MENU DE LIGNE, EN RTL (#5412) — `FEUILLE_DES_GESTES` ANNULE
+ * l'ancrage de `MENU_DE_LIGNE` pour poser le panneau AU-DESSUS de sa ligne
+ * (§4, ci-dessus) ; cette règle propre portait `right:0` LITTÉRAL au lieu de
+ * `inset-inline-end:0`, le même patron déjà éprouvé sur `/links`
+ * (`v3-fermer-un-lien.spec.ts` § « le panneau du menu reste dans le viewport
+ * en RTL »). Aucun module n'est requis — c'est le `<details>` natif, en CSS
+ * pur, que le témoin éprouve.
+ *
+ * DEUX MESURES, ET LA SECONDE EST CELLE QUI PEUT ROUGIR (contre-revue) : aux
+ * largeurs TÉLÉPHONE, le panneau (`min-width:12rem`) est AUSSI LARGE que sa
+ * ligne — `right:0` et `inset-inline-end:0` le posent alors au MÊME pixel, et
+ * un témoin qui ne regarde que le viewport passe avec le défaut en place. Le
+ * côté ne se mesure donc qu'à une largeur où le panneau est PLUS ÉTROIT que
+ * sa ligne (900 px) : là, en RTL, son bord de FIN est le bord GAUCHE de la
+ * ligne — jamais le bord DROIT que `right:0` lui aurait donné.
+ */
+test.describe('le panneau du menu de ligne, en RTL', () => {
+  ([360, 390] as const).forEach((largeur) => {
+    test(`la boîte du panneau reste dans le viewport à ${largeur}px`, async ({ browser }) => {
+      const contexte = await contexteDuMembre(browser, { viewport: { width: largeur, height: 844 }, javaScriptEnabled: false });
+      const page = await ouvreLeFil(contexte);
+      await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+
+      const menu = await ouvreLeMenu(page, 'm4');
+      const panneau = menu.locator('form');
+      await expect(panneau).toBeVisible();
+      const boite = await panneau.boundingBox();
+      expect(boite).not.toBeNull();
+      expect(boite?.x ?? -1).toBeGreaterThanOrEqual(0);
+      expect((boite?.x ?? 0) + (boite?.width ?? 0)).toBeLessThanOrEqual(largeur);
+
+      await contexte.close();
+    });
+  });
+
+  test('à une largeur où le panneau est plus étroit que sa ligne, il pend du côté de FIN', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { viewport: { width: 900, height: 844 }, javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+    await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+
+    const menu = await ouvreLeMenu(page, 'm4');
+    const panneau = menu.locator('form');
+    await expect(panneau).toBeVisible();
+    const boite = await panneau.boundingBox();
+    const rangee = await page.locator('li[data-id="m4"]').boundingBox();
+    expect(boite).not.toBeNull();
+    expect(rangee).not.toBeNull();
+    // La mesure n'a de sens que si les deux boîtes diffèrent : sinon les deux
+    // ancrages donnent le même pixel et le témoin ne peut pas rougir.
+    expect(boite?.width ?? 0).toBeLessThan(rangee?.width ?? 0);
+    // En RTL, le bord de FIN du panneau est le bord GAUCHE de la ligne. Avec
+    // `right:0` il pendrait à DROITE — c'est ce que cette assertion attrape.
+    expect(Math.abs((boite?.x ?? 0) - (rangee?.x ?? 0))).toBeLessThanOrEqual(1);
+
+    await contexte.close();
+  });
+});
