@@ -93,7 +93,6 @@ export const conversationShareLinkResponseSchema = {
 export function registerSharingRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  optionalAuth: any,
   requiredAuth: any
 ) {
   fastify.post<{

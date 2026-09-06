@@ -305,7 +305,7 @@ function setup() {
   const prisma = createMockPrisma();
   const optionalAuth = jest.fn<any>();
   const requiredAuth = jest.fn<any>();
-  registerSharingRoutes(fastify as any, prisma, optionalAuth, requiredAuth);
+  registerSharingRoutes(fastify as any, prisma, requiredAuth);
   return { fastify, prisma, reply: createMockReply(), optionalAuth, requiredAuth };
 }
 
@@ -652,7 +652,7 @@ describe('POST /conversations/:id/invite', () => {
   function getInviteRoute() {
     const fastify = createMockFastify();
     const prisma = createMockPrisma();
-    registerSharingRoutes(fastify as any, prisma, jest.fn(), jest.fn());
+    registerSharingRoutes(fastify as any, prisma, jest.fn());
     const route = getRoute(fastify, 'POST', 'invite');
     const reply = createMockReply();
     return { fastify, prisma, reply, route };
@@ -995,7 +995,7 @@ describe('POST /conversations/:id/invite', () => {
     const fastify = createMockFastify();
     (fastify as any).notificationService = undefined;
     const prisma = createMockPrisma();
-    registerSharingRoutes(fastify as any, prisma, jest.fn(), jest.fn());
+    registerSharingRoutes(fastify as any, prisma, jest.fn());
     const route = getRoute(fastify, 'POST', 'invite');
     const reply = createMockReply();
     const inviter = makeInviterParticipant('admin');
@@ -1051,7 +1051,7 @@ describe('POST /conversations/:id/invite', () => {
     const fastify = createMockFastify();
     (fastify as any).mentionService = undefined;
     const prisma = createMockPrisma();
-    registerSharingRoutes(fastify as any, prisma, jest.fn(), jest.fn());
+    registerSharingRoutes(fastify as any, prisma, jest.fn());
     const route = getRoute(fastify, 'POST', 'invite');
     const reply = createMockReply();
     const inviter = makeInviterParticipant('admin');

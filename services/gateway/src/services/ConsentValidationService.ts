@@ -371,8 +371,8 @@ export class ConsentValidationService {
    * Valide les préférences de documents contre les consentements
    */
   async validateDocumentPreferences(
-    userId: string,
-    preferences: Record<string, any>
+    _userId: string,
+    _preferences: Record<string, any>
   ): Promise<ConsentViolation[]> {
     // #4343 — `scanFilesForMalware` n'exige plus aucun consentement.
     //

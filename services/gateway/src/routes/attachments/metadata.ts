@@ -85,7 +85,6 @@ const conversationAttachmentListItemSchema = {
 
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
-  authRequired: any,
   authOptional: any,
   prisma: PrismaClient
 ) {

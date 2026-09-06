@@ -157,9 +157,9 @@ export class NotificationDigestJob {
       for (let i = 0; i < userEntries.length; i += BATCH_SIZE) {
         const batch = userEntries.slice(i, i + BATCH_SIZE);
 
-        for (const [userId, count] of batch) {
+        for (const [userId] of batch) {
           try {
-            const sent = await this.processUser(userId, count);
+            const sent = await this.processUser(userId);
             if (sent) emailsSent++;
             else usersSkipped++;
           } catch (err) {
@@ -179,7 +179,7 @@ export class NotificationDigestJob {
     }
   }
 
-  private async processUser(userId: string, unreadCount: number): Promise<boolean> {
+  private async processUser(userId: string): Promise<boolean> {
     // Check user preferences — source unique : UserPreferences.notification (JSON)
     const prefs = await this.prisma.userPreferences.findFirst({
       where: { userId },

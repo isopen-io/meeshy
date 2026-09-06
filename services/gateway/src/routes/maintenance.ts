@@ -56,7 +56,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const stats = await maintenanceService.getMaintenanceStats();
 
@@ -96,7 +96,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       await maintenanceService.cleanupExpiredData();
 
@@ -185,7 +185,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       const metrics = statusService.getMetrics();
       const throttleRate = metrics.totalRequests > 0
@@ -224,7 +224,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         500: errorResponseSchema
       }
     }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
       statusService.resetMetrics();
 

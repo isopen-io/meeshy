@@ -102,19 +102,6 @@ async function buildApp({
 } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
-  const authRequired = async (req: any, reply: any) => {
-    if (authMode !== 'registered') {
-      return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } });
-    }
-    (req as any).authContext = {
-      isAuthenticated: true,
-      isAnonymous: false,
-      type: 'registered',
-      userId: USER_ID,
-      registeredUser: { id: USER_ID, role },
-    };
-  };
-
   const authOptional = async (req: any) => {
     if (authMode === 'registered') {
       (req as any).authContext = {
@@ -142,7 +129,7 @@ async function buildApp({
   };
 
   const prisma = makePrisma(prismaOverrides);
-  await registerMetadataRoutes(app, authRequired, authOptional, prisma as any);
+  await registerMetadataRoutes(app, authOptional, prisma as any);
   await app.ready();
   (app as any).__prisma = prisma;
   return app;

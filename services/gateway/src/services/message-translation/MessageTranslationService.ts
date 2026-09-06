@@ -1040,7 +1040,7 @@ export class MessageTranslationService extends EventEmitter {
       // SAUVEGARDE EN BASE DE DONNÉES (traduction validée par le Translator)
       let translationId: string | null = null;
       try {
-        translationId = await this._saveTranslationToDatabase(data.result, data.metadata);
+        translationId = await this._saveTranslationToDatabase(data.result);
       } catch (error) {
         logger.error(`❌ [TranslationService] Erreur sauvegarde traduction: ${error}`);
         // Continuer même si la sauvegarde échoue
@@ -2928,7 +2928,7 @@ export class MessageTranslationService extends EventEmitter {
    * SECURITY: Encrypts translation content for server/hybrid mode conversations
    * using the same encryption key as the parent message
    */
-  private async _saveTranslationToDatabase(result: TranslationResult, metadata?: any): Promise<string> {
+  private async _saveTranslationToDatabase(result: TranslationResult): Promise<string> {
     try {
       // Extraire les informations techniques du modèle
       const modelInfo = result.translatorModel || result.modelType || 'basic';
