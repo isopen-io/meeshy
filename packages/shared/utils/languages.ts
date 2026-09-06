@@ -15,6 +15,8 @@
  * - Translation: Traduction de texte
  */
 
+import { SUPPORTED_LANGUAGE_CODES } from './language-codes.js';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -1591,10 +1593,15 @@ export function isSupportedLanguage(code: string | undefined): boolean {
 }
 
 /**
- * Obtient tous les codes de langue supportés
+ * Obtient tous les codes de langue supportés.
+ *
+ * Dérivé de la feuille {@link SUPPORTED_LANGUAGE_CODES} (`language-codes.ts`),
+ * pas d'un `.map()` sur {@link SUPPORTED_LANGUAGES} : un consommateur qui
+ * n'a besoin QUE de cette liste (`language-normalize.ts`) importe la feuille
+ * directement, sans embarquer la table complète des métadonnées (#5396).
  */
 export function getSupportedLanguageCodes(): string[] {
-  return SUPPORTED_LANGUAGES.map(lang => lang.code);
+  return [...SUPPORTED_LANGUAGE_CODES];
 }
 
 // ============================================================================

@@ -1,4 +1,4 @@
-import { getSupportedLanguageCodes } from './languages.js';
+import { SUPPORTED_LANGUAGE_CODES } from './language-codes.js';
 
 /**
  * Ensemble des codes de langue supportés par Meeshy (lowercase), incluant les
@@ -9,9 +9,15 @@ import { getSupportedLanguageCodes } from './languages.js';
  * traduction, mapping NLLB, `MessageTranslation.targetLanguage`) — ils NE
  * doivent JAMAIS être tronqués à 2 lettres (`'bas'` → `'ba'` = Bachkir, langue
  * sans rapport), sous peine de casser la résolution du Prisme Linguistique.
+ *
+ * Lu depuis la feuille `language-codes.ts` (#5396), jamais `languages.ts` :
+ * ce module est le consommateur qui n'a besoin QUE de la liste des codes, et
+ * importer la table complète des métadonnées TTS/STT (30 Ko minifiés) pour un
+ * seul `.map()` faisait payer cette table à tout bundle navigateur qui
+ * traverse `conversation-helpers.ts` (le Prisme).
  */
 const SUPPORTED_CODES = new Set(
-  getSupportedLanguageCodes().map((code) => code.toLowerCase())
+  SUPPORTED_LANGUAGE_CODES.map((code) => code.toLowerCase())
 );
 
 /**
@@ -103,7 +109,7 @@ export const LEGACY_ISO_639_1: Readonly<Record<string, string>> = {
  *   (`ConversationLanguagePreferences.normalize`, délègue à `MeeshyUser`)
  *
  * @see packages/shared/utils/conversation-helpers.ts — consommateur principal
- * @see packages/shared/utils/languages.ts — source des codes supportés
+ * @see packages/shared/utils/language-codes.ts — source des codes supportés
  * @see packages/shared/utils/attachment-validators.ts — `languageCodeSchema`
  *   valide la forme BCP-47 brute (sans normaliser).
  */

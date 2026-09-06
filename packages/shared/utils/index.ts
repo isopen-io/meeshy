@@ -3,6 +3,7 @@
  * Exporte tous les helpers et utilitaires réutilisables
  */
 
+export * from './language-codes.js';
 export * from './languages.js';
 export * from './errors.js';
 export * from './validation.js';
