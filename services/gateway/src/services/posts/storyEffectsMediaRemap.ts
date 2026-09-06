@@ -1,4 +1,8 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { isCanvasV3OrNewer, remapCanvasV3MediaIds } from './storyEffectsV3';
+
+const log = enhancedLogger.child({ module: 'storyEffectsMediaRemap' });
 
 /**
  * Structural shape covering both `StoryMediaObjectSchema` and
@@ -40,16 +44,25 @@ function remapRefs(
 }
 
 /**
- * Rewrites `postMediaId` references inside a story's `storyEffects` blob
- * (`mediaObjects[]`, `audioPlayerObjects[]`) using `idMap` (old PostMedia id
- * → new PostMedia id). Used by `PostService.repostPost()` right after it
- * duplicates a reposted story's media, so the repost's own `storyEffects`
- * always points at its own media — never at an ancestor's — no matter how
- * many reposts deep the chain goes.
+ * Rewrites `postMediaId`/`mediaId` references inside a story's
+ * `storyEffects` blob using `idMap` (old PostMedia id → new PostMedia id).
+ * Used by `PostService.repostPost()` right after it duplicates a reposted
+ * story's media, so the repost's own `storyEffects` always points at its own
+ * media — never at an ancestor's — no matter how many reposts deep the chain
+ * goes, and regardless of whether the blob is legacy (`mediaObjects[]` /
+ * `audioPlayerObjects[]` at the root) or v3 (`{ v: 3, scenes: [...] }`,
+ * references under `scenes[].objects[].payload`).
  *
- * A `postMediaId` not covered by `idMap` (unknown/legacy data) is left
- * untouched rather than nulled out, matching the fail-soft passthrough
- * policy already documented on `StoryEffectsSchema`.
+ * A reference not covered by `idMap` (unknown/legacy data) is left untouched
+ * rather than nulled out, matching the fail-soft passthrough policy already
+ * documented on `StoryEffectsSchema`.
+ *
+ * A blob this function does not recognize (versioned — carries a `v` key —
+ * but not v3-or-newer) is passed through too, but DISTINGUISHABLY: it is
+ * logged rather than silently reported as "nothing to change" (#4883). An
+ * unversioned object (no `v` key) is the historical v1 shape — a bag of
+ * optional fields — and legitimately has nothing to remap when it carries
+ * neither `mediaObjects` nor `audioPlayerObjects`.
  */
 export function remapStoryEffectsMediaIds(
   effects: Prisma.InputJsonValue | undefined,
@@ -58,12 +71,23 @@ export function remapStoryEffectsMediaIds(
   if (effects === undefined || effects === null || typeof effects !== 'object' || Array.isArray(effects)) {
     return { effects, changed: false };
   }
+
+  if (isCanvasV3OrNewer(effects)) {
+    const { blob, changed } = remapCanvasV3MediaIds(effects, idMap);
+    return { effects: (changed ? blob : effects) as Prisma.InputJsonValue, changed };
+  }
+
   const raw = effects as StoryEffectsRaw;
 
   const mediaObjects = remapRefs(raw.mediaObjects, idMap);
   const audioPlayerObjects = remapRefs(raw.audioPlayerObjects, idMap);
 
   if (!mediaObjects.changed && !audioPlayerObjects.changed) {
+    if (Object.prototype.hasOwnProperty.call(raw, 'v')) {
+      log.warn('remapStoryEffectsMediaIds: versioned storyEffects not recognized as v3-or-newer — passthrough without remap', {
+        versionMarker: (raw as { v?: unknown }).v,
+      });
+    }
     return { effects, changed: false };
   }
 

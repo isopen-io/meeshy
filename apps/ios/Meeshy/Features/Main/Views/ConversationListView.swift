@@ -4,6 +4,19 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Anonymat du lecteur (mode Résumé)
+
+/// `currentUser == nil` est un état TRANSITOIRE (démarrage à froid, session en
+/// cours de restauration), jamais une preuve d'anonymat. Le repli `?? true`
+/// masquait le mode Résumé aux utilisateurs inscrits pendant ce court
+/// chargement (#3592) : seul un `MeeshyUser.isAnonymous` EXPLICITEMENT vrai
+/// doit fermer une capacité réservée aux inscrits.
+nonisolated enum ConversationListReaderAnonymity {
+    static func isAnonymous(currentUser: MeeshyUser?) -> Bool {
+        currentUser?.isAnonymous ?? false
+    }
+}
+
 // MARK: - Section Frame Registry
 
 /// Boîte mutable INERTE : les GeometryReader des headers de section y écrivent
@@ -861,7 +874,7 @@ struct ConversationListView: View {
             focusElection: focusElection,
             sceneActivity: sceneActivity,
             magnification: LentilleMagnification(
-                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
+                isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser),
                 categories: conversationViewModel.userCategories,
                 activeTagFilter: conversationViewModel.activeTagFilter,
                 onMoveToSection: { sectionId in
