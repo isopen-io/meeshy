@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// **L'éventail** — le sélecteur de format du composer unifié (C3).
@@ -289,6 +290,15 @@ struct ComposerFormatFan: View {
     var carriesMoreThanText: Bool
     @Binding var selection: ComposerFormat
 
+    /// **Combien de scènes la publication porte** — la moitié de la condition
+    /// qui décide si la disposition a un effet. L'autre moitié est `selection`.
+    var slideCount: Int = 1
+    /// La disposition demandée. `nil` ⇒ l'auteur n'a rien imposé, et c'est le
+    /// repli du modèle qui s'appliquera.
+    var mosaicLayout: MosaicLayoutMode?
+    /// `nil` ⇒ l'hôte n'offre pas le choix ; la section ne paraît pas.
+    var onSelectMosaic: ((MosaicLayoutMode) -> Void)?
+
     private var candidates: [ComposerFormat] {
         candidateFormats.isEmpty ? offeredFormats : candidateFormats
     }
@@ -349,6 +359,7 @@ struct ComposerFormatFan: View {
                 }
                 .disabled(!verdict.isChoosable)
             }
+            dispositions
         } label: {
             // **Premier plan ADAPTATIF depuis #4124.** Les deux couleurs étaient
             // codées `isDark: true` — juste tant que le chip ne vivait que sur
@@ -371,5 +382,55 @@ struct ComposerFormatFan: View {
         }
         .accessibilityLabel(Text(ComposerFormatCopy.selector))
         .accessibilityValue(Text(ComposerFormatCopy.label(selection)))
+    }
+}
+
+/// La section « disposition » de l'éventail, séparée du corps pour la raison
+/// habituelle du dépôt : une condition écrite en ligne dans un `Menu` n'est
+/// interrogeable par aucun témoin.
+extension ComposerFormatFan {
+
+    /// **La disposition se choisit LÀ OÙ l'on choisit le type de publication**
+    /// (directive porteur 2026-09-06).
+    ///
+    /// > « Les options il faut les mettre dans la sélection de type de poste, et
+    /// > lorsqu'on sélectionne post on propose. »
+    ///
+    /// Elle vivait dans le couloir bas, sur la ligne des pastilles de slides.
+    /// Deux raisons de l'avoir déplacée, et la seconde est celle qui compte :
+    ///
+    /// 1. cette ligne est partie — « l'indicateur de passage à l'image suivante
+    ///    dans le plateau est inutile », et la rangée de tuiles du header disait
+    ///    déjà combien de scènes existent et laquelle on compose ;
+    /// 2. **la disposition est un attribut du TYPE de publication.** Un post à
+    ///    plusieurs scènes s'affiche en mosaïque ; une story ne s'affiche pas du
+    ///    tout ainsi. La ranger sous le sélecteur de format, c'est la ranger
+    ///    avec la décision dont elle dépend.
+    ///
+    /// La section n'existe que là où le choix a un EFFET (loi 4) :
+    /// `ComposerMosaicChoice.isServed` porte les deux mêmes termes que
+    /// `ComposerStoryCanvas.publishedSlide`, et un témoin les interroge ensemble.
+    @ViewBuilder var dispositions: some View {
+        if let onSelectMosaic,
+           ComposerMosaicChoice.isServed(slideCount: slideCount, format: selection) {
+            Section(ComposerMosaicChoice.sectionTitle) {
+                ForEach(ComposerMosaicChoice.ordered, id: \.self) { mode in
+                    Button {
+                        onSelectMosaic(mode)
+                    } label: {
+                        // Le glyphe ANNONCE la disposition ; la coche dit
+                        // laquelle est courante. Un menu qui remplace l'icône du
+                        // mode par une coche ne dit plus ce que le mode produit,
+                        // mais c'est l'idiome de l'éventail juste au-dessus —
+                        // deux conventions de sélection dans le MÊME menu
+                        // coûteraient plus que l'icône perdue.
+                        Label(ComposerMosaicChoice.label(mode),
+                              systemImage: mode == (mosaicLayout ?? ComposerMosaicChoice.fallback)
+                                  ? "checkmark"
+                                  : ComposerMosaicChoice.symbol(mode))
+                    }
+                }
+            }
+        }
     }
 }

@@ -622,20 +622,6 @@ extension MeeshyComposerHost {
             // d'accord — et la première divergence serait invisible.
             onOpenHashtags: { handleRailDoor(.hashtag) },
             onOpenMentions: { handleRailDoor(.mention) },
-            // **Le compte des slides et le rang courant, servis au couloir bas.**
-            // Le rail droit crée des slides depuis toujours ; jusqu'ici rien ne
-            // les montrait, et l'auteur composait à l'aveugle. Le même
-            // `selectSlide` que la sélection par média — un seul chemin vers le
-            // changement de slide, jamais deux.
-            slideCount: viewModel.slides.count,
-            currentSlideIndex: viewModel.currentSlideIndex,
-            onSelectSlide: { viewModel.selectSlide(at: $0) },
-            // **Ce que l'auteur choisit ARRIVE dans ce qui part.** L'écriture
-            // va droit au `@State` ; la lecture repasse par lui — un seul site,
-            // donc rien à faire diverger entre ce que le contrôle affiche et ce
-            // que le socle publie.
-            mosaicLayout: mosaicLayout,
-            onSelectMosaic: { mosaicLayout = $0 },
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
@@ -1013,7 +999,14 @@ extension MeeshyComposerHost {
             // l'a produite. Les lire ici plutôt que de les recalculer dans
             // l'éventail est ce qui garde les deux d'accord.
             carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
-            selection: formatSelection
+            selection: formatSelection,
+            // **La disposition se choisit avec le TYPE de publication**
+            // (directive porteur 2026-09-06). Elle n'apparaît que là où elle a
+            // un effet — `ComposerMosaicChoice.isServed`, la MÊME règle que la
+            // publication consulte.
+            slideCount: viewModel.slides.count,
+            mosaicLayout: mosaicLayout,
+            onSelectMosaic: { mosaicLayout = $0 }
         )
         .font(.footnote.weight(.semibold))
         .glassControlForeground()
