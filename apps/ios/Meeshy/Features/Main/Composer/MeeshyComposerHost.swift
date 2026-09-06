@@ -204,6 +204,12 @@ struct MeeshyComposerHost: View {
     /// L'emoji du mood — la seule matière SANS laquelle un mood ne part pas
     /// (`ComposerMoodPolicy.canPublish`). Il vit ici pour la même raison que
     /// `documentText` : le publieur est le socle, pas la surface.
+    /// **La disposition que l'auteur demande pour ses scènes.** `nil` ⇒ il n'a
+    /// rien imposé, et `CanvasV3.resolvedLayout` tranche — le composer ne grave
+    /// pas le repli, sinon chaque publication figerait une valeur que personne
+    /// ne relirait le jour où ce repli change.
+    @State var mosaicLayout: MosaicLayoutMode?
+
     @State var moodEmoji: String?
 
     /// L'audience du meuble et sa liste nominative — **UNE seule pour ses deux

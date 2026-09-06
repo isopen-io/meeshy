@@ -162,12 +162,29 @@ extension ComposerStoryCanvas {
     /// slide qu'on regardait au moment d'appuyer la première scène de la
     /// publication — l'ordre de lecture dépendrait alors du hasard du geste.
     ///
+    /// ## La DISPOSITION voyage avec les scènes
+    ///
+    /// Le fil honore cinq dispositions ; le composer n'en choisissait aucune,
+    /// donc `layout` partait toujours `nil` et toute publication s'affichait
+    /// dans le repli. Quatre dispositions écrites, testées et peintes étaient
+    /// inatteignables depuis l'app.
+    ///
+    /// `nil` reste une réponse LÉGITIME et c'est le défaut : il signifie « je
+    /// n'impose rien », et `CanvasV3.resolvedLayout` tranche. Écrire le repli en
+    /// dur ici figerait dans chaque publication une valeur que personne ne
+    /// relirait le jour où le repli change.
+    ///
     /// - Parameter slides: toutes les slides de l'atelier, dans l'ordre.
+    /// - Parameter layout: la disposition demandée par l'auteur. `nil` ⇒ aucune
+    ///   n'est imposée. Elle n'est portée que là où elle a un effet — mêmes
+    ///   termes que `ComposerMosaicChoice.isServed`, et l'invariant est éprouvé
+    ///   en interrogeant les deux ensemble.
     /// - Returns: `nil` quand aucune scène n'est à l'écran — un canvas vide
     ///   encodé ferait croire à une scène composée puis effacée.
     static func publishedSlide(format: ComposerFormat,
                                sceneIsPresent: Bool,
-                               slides: [StorySlide]) -> StoryEffects? {
+                               slides: [StorySlide],
+                               layout: MosaicLayoutMode? = nil) -> StoryEffects? {
         guard sceneIsPresent, let premiere = slides.first else { return nil }
         // Une seule slide, ou un canal qui ne publie pas de document : rien ne
         // change — le comportement est celui d'avant ce lot, à l'identique.
@@ -175,7 +192,7 @@ extension ComposerStoryCanvas {
               ComposerPublishChannel.channel(for: format) == .document
         else { return premiere.effects }
         var runtime = premiere.effects
-        runtime.canvasV3 = CanvasV3(migrating: slides.map(\.effects))
+        runtime.canvasV3 = CanvasV3(migrating: slides.map(\.effects), layout: layout)
         return runtime
     }
 }

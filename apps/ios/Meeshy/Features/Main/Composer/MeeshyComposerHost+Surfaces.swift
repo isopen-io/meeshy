@@ -630,6 +630,12 @@ extension MeeshyComposerHost {
             slideCount: viewModel.slides.count,
             currentSlideIndex: viewModel.currentSlideIndex,
             onSelectSlide: { viewModel.selectSlide(at: $0) },
+            // **Ce que l'auteur choisit ARRIVE dans ce qui part.** L'écriture
+            // va droit au `@State` ; la lecture repasse par lui — un seul site,
+            // donc rien à faire diverger entre ce que le contrôle affiche et ce
+            // que le socle publie.
+            mosaicLayout: mosaicLayout,
+            onSelectMosaic: { mosaicLayout = $0 },
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
