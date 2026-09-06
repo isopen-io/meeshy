@@ -216,6 +216,18 @@ export type FilAnnexe = {
   readonly titre: string;
   readonly membres: number;
   readonly messages: readonly MessageServi[];
+  /**
+   * `conversation.type` — la passerelle le sert TOUJOURS sur le profil par
+   * défaut (`core-detail.ts`, doc de `Fil.type` dans `lib/api/fil.ts`) ;
+   * un bouchon fidèle ne l'omet jamais (§ « La puce Lien », suivi #5034).
+   */
+  readonly type: string;
+  /**
+   * `conversation.currentUserRole` — le rang du LECTEUR dans CETTE annexe,
+   * jamais servi à l'invité (même garde que la branche « conversation du
+   * lecteur » ci-dessous, `identite.genre === 'membre' ? … : null`).
+   */
+  readonly rangDuLecteur: string | null;
 };
 
 export type EtatDuFilDeBouchon = {
@@ -676,11 +688,38 @@ export const routesDuFil = (etat: EtatDuFilDeBouchon) => {
     // Une conversation ANNEXE se lit par son identifiant, comme la passerelle le
     // fait — et seulement en lecture : elle n'a ni lien, ni place, ni socket.
     const annexe = etat.filsAnnexes.get(fil[1] ?? '');
+    // Un ÉCRIT (POST/PUT/DELETE) sur une annexe n'a NULLE PART où aller dans
+    // cette fixture — ni magasin de messages, ni socket propres — et les
+    // branches d'écriture plus bas écrivent INCONDITIONNELLEMENT dans
+    // `etat.conversationId`, la conversation du LECTEUR. Sans ce refus
+    // explicite, un futur témoin qui poste depuis une annexe serait vert en
+    // écrivant AILLEURS que l'adresse qu'il vise — un bouchon qui ment plutôt
+    // qu'un bouchon qui refuse (défaut majeur de revue, § « La puce Lien »,
+    // suivi #5034). Le magasin propre à chaque annexe reste un travail
+    // séparé, à re-mesurer contre `v3-fil-riche` et `compare-rendu`.
+    if (annexe !== undefined && methode !== 'GET') {
+      erreur(404, 'NOT_FOUND', 'Écriture non supportée sur cette conversation annexe (fixture)');
+      return true;
+    }
     if (annexe !== undefined && methode === 'GET') {
       const tri = [...annexe.messages].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       json(
         fil[2] === undefined
-          ? { success: true, data: { id: annexe.id, identifier: annexe.id, title: annexe.titre, type: 'group', memberCount: annexe.membres, participants: [], unreadCount: 0 } }
+          ? {
+              success: true,
+              data: {
+                id: annexe.id,
+                identifier: annexe.id,
+                title: annexe.titre,
+                type: annexe.type,
+                memberCount: annexe.membres,
+                participants: [],
+                unreadCount: 0,
+                // `currentUserRole` — même garde que la branche « conversation
+                // du lecteur » ci-dessous : jamais de rang servi à l'invité.
+                currentUserRole: identite.genre === 'membre' ? annexe.rangDuLecteur : null,
+              },
+            }
           : {
               success: true,
               data: tri,

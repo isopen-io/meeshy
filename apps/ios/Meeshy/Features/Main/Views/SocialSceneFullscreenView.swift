@@ -110,68 +110,16 @@ struct SocialSceneFullscreenView: View {
                   createdAt: post.timestamp)
     }
 
-    /// La légende ADOSSÉE à la scène — résolue par le MÊME juge que les trois
-    /// autres surfaces sociales (`SocialMediaCaption`), jamais par une seconde
-    /// lecture des mêmes champs.
+    /// La légende ADOSSÉE à la scène courante — la règle vit dans
+    /// `SceneCaption`, appelée ici et par la carte du fil.
     ///
-    /// **En plein écran, la légende est OBLIGATOIRE** (directive porteur
-    /// 2026-09-06) : « les scènes doivent avoir leurs légendes affichées
-    /// par-dessus — dans le feed si possible et en plein écran obligatoirement ».
-    ///
-    /// D'où le second étage. `SocialMediaCaption.map` est indexée par les
-    /// MÉDIAS visuels, et son repli sur le texte du porteur ne s'arme que
-    /// lorsque le post en compte exactement un. Une publication dont les scènes
-    /// ne portent aucun média — un fond et du texte, ce que le composer produit
-    /// le plus souvent — n'obtenait donc **aucune** légende : la carte du fil
-    /// l'affichait, le plein écran la perdait, et c'est le format qu'on ouvre
-    /// POUR mieux lire qui en montrait le moins.
-    ///
-    /// > Le repli ne se substitue jamais à une légende de média : il ne sert que
-    /// > là où la carte n'en désigne aucune. Servir `displayContent` quand une
-    /// > légende propre existe rendrait la publication par-dessus la scène.
-    ///
-    /// **Ce que ce repli n'est PAS** : une légende DE SCÈNE. `displayContent`
-    /// décrit la PUBLICATION entière ; le servir sous chaque page est juste tant
-    /// qu'aucune légende par scène n'existe au modèle. Le jour où le canvas en
-    /// portera une, c'est elle qui prendra cette place — pas une seconde
-    /// résolution posée à côté.
-    /// **Une scène SANS média porte quand même sa légende** (directive porteur
-    /// 2026-09-06 : « en plein écran obligatoirement »).
-    ///
-    /// `SocialMediaCaption.map` est indexée par les médias VISUELS, et son
-    /// repli ne descend le texte du porteur que sur un média SEUL. Une scène
-    /// de fond + texte n'adresse aucun média : elle n'avait donc aucune entrée
-    /// dans la carte, et le plein écran ne montrait rien — sur le cas le plus
-    /// courant d'un canvas composé.
-    ///
-    /// > Ce repli décrit la PUBLICATION, pas la scène affichée. C'est juste
-    /// > tant qu'aucune légende par scène n'existe au modèle ; le jour où le
-    /// > composer en offrira une, c'est ICI qu'elle se branche — et pas en
-    /// > ajoutant un second repli à côté de celui-ci.
+    /// **En plein écran, elle est OBLIGATOIRE** (directive porteur 2026-09-06 :
+    /// « dans le feed si possible et en plein écran obligatoirement »), d'où le
+    /// repli sur le texte du porteur : rien d'autre ne le rend ici, et sans lui
+    /// le format qu'on ouvre POUR mieux lire est celui qui montre le moins.
     private var caption: String? {
-        if let identifiant = sceneMediaId,
-           let propre = SocialMediaCaption
-               .map(for: post.media, carrierText: post.displayContent)[identifiant] {
-            return propre
-        }
-        return SocialMediaCaption.resolve(own: nil, carrierText: post.displayContent)
-    }
-
-    /// Le média que la scène COURANTE montre — celui dont la légende décrit le
-    /// contenu.
-    ///
-    /// **Il se demande à la SCÈNE, pas au post** : `carrierMediaIdentity` rend
-    /// le `postMediaId` du média porteur de cette scène-là. Prendre le premier
-    /// visuel du post — ce que faisait la première écriture — servait la
-    /// légende de la scène 1 par-dessus les scènes 2 à 10, c'est-à-dire une
-    /// légende FAUSSE dès qu'on défile.
-    ///
-    /// Le repli sur le premier visuel du post reste pour les documents dont
-    /// aucune scène n'adresse d'enregistrement (une story migrée, un canvas de
-    /// texte) : là, la publication n'a qu'un visuel, donc pas d'ambiguïté.
-    private var sceneMediaId: String? {
-        MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: sceneIndex)
-            ?? post.media.first { $0.type == .image || $0.type == .video }?.id
+        SceneCaption.resolve(sceneIndex: sceneIndex, in: document, post: post,
+                             carrierFallback: true)
     }
 
     var body: some View {

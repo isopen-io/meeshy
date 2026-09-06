@@ -363,7 +363,27 @@ export const passerelleDeBouchon = async (options?: {
   const filsAnnexes = new Map<string, FilAnnexe>([
     [
       CONVERSATION_RICHE.id,
-      { id: CONVERSATION_RICHE.id, titre: CONVERSATION_RICHE.titre, membres: CONVERSATION_RICHE.membres, messages: messagesRiches(CONVERSATION_RICHE.id) },
+      {
+        id: CONVERSATION_RICHE.id,
+        titre: CONVERSATION_RICHE.titre,
+        membres: CONVERSATION_RICHE.membres,
+        messages: messagesRiches(CONVERSATION_RICHE.id),
+        type: 'group',
+        // `member` — fidèle au profil que la passerelle sert (elle rend
+        // TOUJOURS `currentUserRole`) et sans dériver la capture `rich` : un
+        // rang ordinaire refuse déjà la puce « Lien » (< MODERATOR), comme
+        // avant que ce champ n'existe (§ « La puce Lien », suivi #5034).
+        rangDuLecteur: 'member',
+      },
+    ],
+    // `AUTRE_CONVERSATION` (« Marta Ruiz », déjà `type: 'direct'` dans la
+    // liste `/chats`, `LIGNES_DE_CONVERSATIONS_SERVIES`) devient adressable
+    // comme FIL — une seule vérité, pas une troisième conversation inventée.
+    // Un `direct` refuse la puce « Lien » quel que soit le rang : `member`
+    // ici n'a pas besoin d'être `creator`.
+    [
+      AUTRE_CONVERSATION.id,
+      { id: AUTRE_CONVERSATION.id, titre: AUTRE_CONVERSATION.titre, membres: AUTRE_CONVERSATION.membres, messages: [], type: 'direct', rangDuLecteur: 'member' },
     ],
   ]);
 

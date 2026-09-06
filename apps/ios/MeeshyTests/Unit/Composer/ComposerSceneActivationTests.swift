@@ -273,7 +273,13 @@ final class ComposerSceneActivationTests: XCTestCase {
             "… et l'écriture suit le même aiguillage."
         )
         XCTAssertTrue(
-            src.contains("ComposerSlideTextRole.applyCaption(texte,to:selectedSlideMediaURL,in:&documentMediaCaptions)"),
+            // **`to: media`, pas `to: selectedSlideMediaURL`** (2026-09-06). Le
+            // média vient désormais de la CIBLE que l'aiguillage a élue
+            // (`case .mediaCaption(let media)`), et non d'une seconde lecture de
+            // la slide courante. C'est plus sûr que ce que ce témoin exigeait :
+            // une relecture peut diverger de l'élection entre les deux lignes,
+            // l'associé du cas ne le peut pas.
+            src.contains("ComposerSlideTextRole.applyCaption(texte,to:media,in:&documentMediaCaptions)"),
             "La légende s'écrit par MÉDIA. Une carte par SLIDE passerait au compilateur et "
                 + "servirait le mauvais média le jour où un post en portera deux sur une slide."
         )

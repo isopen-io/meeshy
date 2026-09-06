@@ -58,6 +58,46 @@ struct PostSceneMosaic: View {
     /// tient déjà pour les médias.
     @State private var page = 0
 
+    /// **Chaque scène porte SA légende — là où la place le permet** (directive
+    /// porteur 2026-09-06, en deux temps).
+    ///
+    /// > « La légende doit s'afficher par-dessus la scène PRÉCISE et non
+    /// > par-dessus le poste entier ! Chaque scène a sa légende d'image ! »
+    ///
+    /// > « Il ne faut pas systématiquement mettre la légende sur la tuile !
+    /// > Mais le faire sur les formats le permettant (défilement continu, image
+    /// > par image, mode hero sur la première image, une seule scène). »
+    ///
+    /// D'où un bandeau peint DANS la tuile, et non au bas de la vue. Une
+    /// première écriture posait un seul bandeau sur l'ensemble : juste sur un
+    /// carrousel — où la tuile visible EST la vue — et faux sur les quatre
+    /// mosaïques, où quatre scènes se partagent l'écran et n'auraient eu qu'une
+    /// légende pour elles quatre, à cheval sur les tuiles.
+    ///
+    /// `carrierFallback: false` : le texte de la publication est déjà rendu
+    /// au-dessus de la carte, et le répéter par-dessus la scène ne serait pas
+    /// afficher une légende.
+    ///
+    /// Ce que la vue NE décide pas : quelle tuile a la place
+    /// (`MosaicLayout.tileCarriesCaption`) ni combien de mots elle porte
+    /// (`captionWordLimit(…tileWidth:)`) — deux questions pures, éprouvées sans
+    /// écran, qu'un sixième mode n'aura à renseigner qu'une fois.
+    @ViewBuilder private func bandeauDeLegende(_ tuile: MosaicLayout.Tile) -> some View {
+        // Le report `+N` porte déjà un voile et un compteur au centre : une
+        // légende y ferait une troisième chose au même endroit.
+        if tuile.overflow == 0,
+           MosaicLayout.tileCarriesCaption(mode: mode, sceneIndex: tuile.sceneIndex,
+                                           visualCount: document.scenes.count) {
+            FeedCaptionOverlay(
+                caption: SceneCaption.resolve(sceneIndex: tuile.sceneIndex,
+                                              in: document, post: post,
+                                              carrierFallback: false),
+                words: MosaicLayout.captionWordLimit(mode: mode,
+                                                     visualCount: document.scenes.count,
+                                                     tileWidth: tuile.width))
+        }
+    }
+
     private var mode: MosaicLayoutMode { document.resolvedLayout }
     private var tuiles: [MosaicLayout.Tile] {
         MosaicLayout.tiles(sceneCount: document.scenes.count, mode: mode)
@@ -300,6 +340,9 @@ struct PostSceneMosaic: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Posée AVANT le rognage : une légende qui déborderait s'écrirait sur
+        // la tuile voisine, exactement comme le texte d'une scène le faisait.
+        .overlay(alignment: .bottom) { bandeauDeLegende(tuile) }
         // **Ce qui dépasse d'une tuile ne doit pas s'écrire sur sa voisine.**
         //
         // Mesuré sur une mosaïque `wave` (tuiles de ~81 pt) : les textes des
