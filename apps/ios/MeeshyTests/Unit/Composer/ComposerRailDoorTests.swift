@@ -1783,11 +1783,39 @@ final class ComposerSceneMentionWiringGuardTests: XCTestCase {
     /// **Trois conditions, dont la troisième s'oublie** : sans
     /// `!suggestions.isEmpty`, la bande de verre se peindrait VIDE quand aucun
     /// ami accepté ne correspond — un état nominal, pas un chargement.
-    func test_laBande_neSePeintJamaisVide() throws {
+    /// **Le meuble CONFIE la boîte, il ne réécrit pas la règle** (2026-09-06,
+    /// ex-`test_laBande_neSePeintJamaisVide`).
+    ///
+    /// Ce témoin exigeait que le meuble porte `activeQuery != nil` ET
+    /// `!suggestions.isEmpty` — la règle de montage de la bande de mentions,
+    /// recopiée alors sur les trois surfaces du composer. Elle a été centralisée
+    /// dans `MentionComposerController.showsSuggestions`, et **son SENS a changé
+    /// en même temps** : `activeQuery != nil && (!suggestions.isEmpty ||
+    /// !isResolving)`.
+    ///
+    /// > Une bande vide n'est plus un silence : c'est la réponse « personne »,
+    /// > que `ComposerMentionStrip` écrit en toutes lettres. Le nom
+    /// > « ne se peint jamais vide » décrivait donc une règle ABANDONNÉE — la
+    /// > justification d'origine (« aucun appel réseau ne remplira la liste plus
+    /// > tard ») est devenue fausse le jour où un brouillon a pu interroger
+    /// > l'annuaire.
+    ///
+    /// Ce qui reste à garder, et qui vaut mieux : le meuble POSSÈDE la boîte et
+    /// la CONFIE aux surfaces qui montrent la bande — il ne réécrit pas la
+    /// condition chez lui. Une copie qui reviendrait ici se périmerait
+    /// séparément de la règle centrale, exactement comme les trois précédentes.
+    func test_leMeuble_confieSaBoiteDeMentions_sansReecrireLaRegle() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("sceneMentionBox.controller.activeQuery!=nil"))
-        XCTAssertTrue(source.contains("!sceneMentionBox.controller.suggestions.isEmpty"))
-        XCTAssertTrue(source.contains("viewModel.textEditingMode.activeTextId"))
+        XCTAssertTrue(source.contains("mentionBox:sceneMentionBox"),
+                      "Le meuble doit CONFIER sa boîte de mentions à la surface qui montre la bande.")
+        XCTAssertFalse(source.contains("sceneMentionBox.controller.activeQuery!=nil"),
+                       "La règle de montage de la bande ne se réécrit pas dans le meuble : elle vit une seule "
+                       + "fois, dans `MentionComposerController.showsSuggestions`.")
+        XCTAssertFalse(source.contains("!sceneMentionBox.controller.suggestions.isEmpty"),
+                       "Idem — et cette moitié-là est celle dont le SENS a changé : une bande vide est "
+                       + "désormais la réponse « personne », pas un silence à cacher.")
+        XCTAssertTrue(source.contains("viewModel.textEditingMode.activeTextId"),
+                      "Le meuble reste celui qui sait quel texte est en cours d'édition.")
     }
 
     /// **Les candidats viennent de la MÊME source que la bande du document.**
