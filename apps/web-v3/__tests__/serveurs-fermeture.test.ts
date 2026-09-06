@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { tueLeGroupeDeProcessus } from '../e2e/visual/lib/serveurs';
+import { tueLeGroupeDeProcessus, verifieQueLeBuildNAPasInlineUnePasserelleReelle } from '../e2e/visual/lib/serveurs';
 
 /**
  * La fuite mesurée avant ce correctif : `serveurDeLaV3()` lançait `next
@@ -71,5 +74,58 @@ describe('tueLeGroupeDeProcessus — corrige la fuite de `next-server` orphelins
     // Un PID qui n'existe (quasi) certainement pas : le processus mort ne
     // doit jamais faire échouer la fermeture d'une suite.
     expect(() => tueLeGroupeDeProcessus(999_999)).not.toThrow();
+  });
+});
+
+/**
+ * DÉFAUT MAJEUR DE REVUE (#5387) — un `apps/web-v3/.env.local` de confort
+ * déclarant `NEXT_PUBLIC_API_URL` vers une origine RÉELLE fait échouer toute
+ * la suite d'une façon qui ne nomme pas sa cause : Next.js inline cette
+ * variable au moment de `next build` (`lib/api/passerelle.ts`), donc
+ * l'affectation faite à `next start` par `serveurDeLaV3` arrive TROP TARD.
+ * Un répertoire TEMPORAIRE, jamais `.env.local` du dépôt lui-même : le témoin
+ * ne doit dépendre d'aucun état laissé par un poste de développement.
+ */
+describe('verifieQueLeBuildNAPasInlineUnePasserelleReelle — le build ne peut pas avoir inliné une passerelle réelle', () => {
+  const dans = (contenu: string): string => {
+    const racine = mkdtempSync(join(tmpdir(), 'meeshy-v3-env-'));
+    writeFileSync(join(racine, '.env.local'), contenu, 'utf8');
+    return racine;
+  };
+
+  it("ne lève rien quand .env.local n'existe pas", () => {
+    const racine = mkdtempSync(join(tmpdir(), 'meeshy-v3-env-'));
+    try {
+      expect(() => verifieQueLeBuildNAPasInlineUnePasserelleReelle(racine)).not.toThrow();
+    } finally {
+      rmSync(racine, { recursive: true, force: true });
+    }
+  });
+
+  it("ne lève rien quand NEXT_PUBLIC_API_URL pointe la boucle locale", () => {
+    const racine = dans('NEXT_PUBLIC_API_URL=http://127.0.0.1:3000\n');
+    try {
+      expect(() => verifieQueLeBuildNAPasInlineUnePasserelleReelle(racine)).not.toThrow();
+    } finally {
+      rmSync(racine, { recursive: true, force: true });
+    }
+  });
+
+  it("ne lève rien quand .env.local ne déclare pas NEXT_PUBLIC_API_URL du tout", () => {
+    const racine = dans('MEESHY_GATEWAY_URL=http://127.0.0.1:3000\n');
+    try {
+      expect(() => verifieQueLeBuildNAPasInlineUnePasserelleReelle(racine)).not.toThrow();
+    } finally {
+      rmSync(racine, { recursive: true, force: true });
+    }
+  });
+
+  it('lève, en NOMMANT la cause, quand NEXT_PUBLIC_API_URL pointe une origine RÉELLE — le cas mesuré en revue', () => {
+    const racine = dans('NEXT_PUBLIC_API_URL=https://gate.staging.meeshy.me\nMEESHY_GATEWAY_URL=https://gate.staging.meeshy.me\n');
+    try {
+      expect(() => verifieQueLeBuildNAPasInlineUnePasserelleReelle(racine)).toThrow(/NEXT_PUBLIC_API_URL=https:\/\/gate\.staging\.meeshy\.me/);
+    } finally {
+      rmSync(racine, { recursive: true, force: true });
+    }
   });
 });

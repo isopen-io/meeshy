@@ -169,7 +169,13 @@ test.describe('sans JavaScript — le formulaire fait les trois gestes', () => {
     await contexte.close();
   });
 
-  test('retirer : DELETE observé, et la bulle relue porte sa mention de retrait', async ({ browser }) => {
+  /**
+   * LA FENÊTRE SANS JAVASCRIPT (#5387) — le PREMIER clic n'envoie RIEN : il
+   * ouvre `?retirer=<id>`, l'adresse qui EST la fenêtre. Rechargée pendant
+   * cette fenêtre, elle offre TOUJOURS « Annuler » et « Confirmer le
+   * retrait » — l'adresse ne s'use pas.
+   */
+  test('retirer (1/2) : le premier clic n’envoie AUCUNE requête, et un rechargement offre encore les deux issues', async ({ browser }) => {
     const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
     const page = await ouvreLeFil(contexte);
 
@@ -179,15 +185,102 @@ test.describe('sans JavaScript — le formulaire fait les trois gestes', () => {
       menu.locator('button[name="retirer"]').click(),
     ]);
 
+    await expect(page).toHaveURL(new RegExp(`\\?retirer=m4#m-m4$`));
+    expect(passerelle.journal.filter((a) => a.chemin === '/api/v1/messages/m4')).toEqual([]);
+
+    const bulle = page.locator('li[data-id="m4"]');
+    await expect(bulle).toHaveClass(/retrait-en-attente/);
+    // Le texte reste LISIBLE — la passerelle n'a RIEN reçu.
+    await expect(bulle.locator('.texte')).toHaveText('Parfait, je crée le lien pour Marta.');
+    await expect(bulle.locator('.retrait-servie button[name="annuler-le-retrait"]')).toBeVisible();
+    await expect(bulle.locator('.retrait-servie button[name="retirer"]')).toBeVisible();
+    await expect(bulle.locator('details.actions')).toHaveCount(0);
+
+    // DÉFAUT MAJEUR DE REVUE #5387 — « rien n'annonce le retrait au lecteur
+    // d'écran, sans JavaScript » : le document neuf pose le focus SANS
+    // script, sur la LIGNE elle-même — `autofocus` sur un bouton ne marche
+    // PAS ici (mesuré : la redirection porte TOUJOURS un fragment `#m-m4`,
+    // et la « partie indiquée du document » l'emporte sur `autofocus`).
+    // `tabindex="-1"` sur la ligne la rend focalisable, et c'est CE mécanisme
+    // natif — le même qui amène déjà la ligne à l'écran — qui pose le focus.
+    const focus = await page.evaluate(() => ({
+      id: (document.activeElement as HTMLElement | null)?.id ?? null,
+      nom: document.activeElement?.nodeName ?? null,
+    }));
+    expect(focus.nom).not.toBe('BODY');
+    expect(focus.id).toBe('m-m4');
+
+    // DÉFAUT BLOQUANT DE REVUE #5387 — « la bulle s'écrase à 0 px de large,
+    // 912 px de haut » : `.retrait-servie` disputait l'espace flex de
+    // `.corps.colonnes` à `.bulle`. Mesuré à 390 px, la ligne visée reste
+    // dans un ordre de grandeur RAISONNABLE et la bulle garde une largeur
+    // RÉELLE — jamais écrasée à 0.
+    const boites = await page.evaluate(() => {
+      const ligne = document.querySelector('li[data-id="m4"]') as HTMLElement;
+      const bulleEl = ligne.querySelector('.bulle') as HTMLElement;
+      return { ligne: ligne.getBoundingClientRect(), bulle: bulleEl.getBoundingClientRect() };
+    });
+    expect(boites.bulle.width).toBeGreaterThan(100);
+    expect(boites.ligne.height).toBeLessThan(400);
+
+    // RECHARGÉE PENDANT LA FENÊTRE — l'adresse EST la fenêtre : « Annuler »
+    // et « Confirmer le retrait » sont ENCORE offerts, et AUCUNE requête
+    // n'est jamais partie sur tout le scénario.
+    await page.reload({ waitUntil: 'load' });
+    const bulleRechargee = page.locator('li[data-id="m4"]');
+    await expect(bulleRechargee).toHaveClass(/retrait-en-attente/);
+    await expect(bulleRechargee.locator('.retrait-servie button[name="annuler-le-retrait"]')).toBeVisible();
+    await expect(bulleRechargee.locator('.retrait-servie button[name="retirer"]')).toBeVisible();
+    expect(passerelle.journal.filter((a) => a.chemin === '/api/v1/messages/m4')).toEqual([]);
+
+    await contexte.close();
+  });
+
+  test('retirer (1/2) puis « Annuler » : 303 nu, la ligne intacte, ZÉRO DELETE sur tout le scénario', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    const menu = await ouvreLeMenu(page, 'm4');
+    await menu.locator('button[name="retirer"]').click();
+    await expect(page).toHaveURL(new RegExp(`\\?retirer=m4#m-m4$`));
+
+    await page.locator('li[data-id="m4"] .retrait-servie button[name="annuler-le-retrait"]').click();
+
+    await expect(page).toHaveURL(`${FIL()}#m-m4`);
+    expect(page.url()).not.toContain('retirer=');
+    const bulle = page.locator('li[data-id="m4"]');
+    await expect(bulle).not.toHaveClass(/retrait-en-attente/);
+    await expect(bulle.locator('.texte')).toHaveText('Parfait, je crée le lien pour Marta.');
+    await expect(bulle.locator('details.actions')).toHaveCount(1);
+    expect(passerelle.journal.filter((a) => a.chemin === '/api/v1/messages/m4')).toEqual([]);
+
+    await contexte.close();
+  });
+
+  test('retirer (2/2) « Confirmer le retrait » : UN DELETE observé, la ligne relue porte sa mention', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser, { javaScriptEnabled: false });
+    const page = await ouvreLeFil(contexte);
+
+    const menu = await ouvreLeMenu(page, 'm4');
+    await menu.locator('button[name="retirer"]').click();
+    await expect(page).toHaveURL(new RegExp(`\\?retirer=m4#m-m4$`));
+
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === 'GET' && r.url().startsWith(FIL())),
+      page.locator('li[data-id="m4"] .retrait-servie button[name="retirer"]').click(),
+    ]);
+
     const mutation = passerelle.journal.find((a) => a.methode === 'DELETE' && a.chemin === '/api/v1/messages/m4');
     expect(mutation, `aucun DELETE observé — ${COMMANDE}`).toBeDefined();
     expect(mutation!.statut).toBe(200);
+    expect(passerelle.journal.filter((a) => a.methode === 'DELETE')).toHaveLength(1);
 
     const bulle = page.locator('li[data-id="m4"]');
     await expect(bulle).toHaveClass(/supprime/);
     await expect(bulle.locator('.texte')).toHaveText('Ce message a été supprimé');
     // Une ligne retirée n'offre plus aucun geste.
     await expect(bulle.locator('details.actions')).toHaveCount(0);
+    await expect(bulle.locator('.retrait-servie')).toHaveCount(0);
 
     await contexte.close();
   });
@@ -312,6 +405,141 @@ test.describe('avec JavaScript — les trois gestes, sans rechargement', () => {
     // Le serveur n'a RIEN perdu : un rechargement retrouve la même ligne.
     await page.reload({ waitUntil: 'load' });
     await expect(page.locator('li[data-id="m4"] .texte')).toHaveText('Parfait, je crée le lien pour Marta.');
+
+    await contexte.close();
+  });
+
+  /**
+   * RECHARGÉ PENDANT LA FENÊTRE (#5387, critère de fin de l'issue) — le
+   * différé survit à un rechargement AVEC JavaScript : `reprendLesRetraits`
+   * (`fil-gestes.ts`) rejoue `differe()` au montage contre la bulle SERVIE,
+   * donc « Annuler » est ENCORE offert, et « Annuler » restaure la ligne
+   * comme si rien n'avait eu lieu — AUCUN `DELETE`/`message:delete` sur tout
+   * le scénario.
+   */
+  test('retirer, RECHARGER pendant la fenêtre — « Annuler » encore offert, restaure la ligne', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await ouvreLeFil(contexte);
+    await attendLeTempsReel(page);
+
+    const menu = await ouvreLeMenu(page, 'm4');
+    await menu.locator('button[name="retirer"]').click();
+    await expect(page.locator('li[data-id="m4"]')).toHaveClass(/envoi-retrait-differe/);
+
+    await page.reload({ waitUntil: 'load' });
+    await attendLeTempsReel(page);
+
+    // CE TÉMOIN ARBITRE LA DÉCISION Option A (revue #5387) — `detruit()`
+    // (`lib/realtime/fil-gestes.ts`) n'envoie plus RIEN à `pagehide` : les
+    // deux moitiés livrées séparément (le vidage à la fermeture, #5163
+    // § 12.12 ; la reprise au montage) sont désormais réconciliées en
+    // laissant l'intention, seule, décider — jamais un envoi à la fermeture
+    // ET une reprise au montage suivant. La passerelle n'ayant AUCUNE route
+    // de restauration (`routes/messages-writes.ts` — `PUT` et `DELETE`,
+    // rien d'autre), c'est la seule lecture qui tient la promesse du TITRE
+    // de l'issue : un retrait ne prend effet qu'au retour du lecteur, jamais
+    // deux fois, jamais avant que la fenêtre entière n'ait été offerte.
+    expect(passerelle.journal.filter((a) => a.methode === 'DELETE')).toEqual([]);
+
+    const bulle = page.locator('li[data-id="m4"]');
+    await expect(bulle).toHaveClass(/envoi-retrait-differe/);
+    await expect(bulle.locator('.texte')).toHaveText('Message retiré');
+    const annuler = bulle.locator('button.annuler-le-retrait');
+    await expect(annuler).toBeVisible();
+
+    await annuler.click();
+
+    await expect(bulle.locator('.texte')).toHaveText('Parfait, je crée le lien pour Marta.');
+    await expect(bulle).not.toHaveClass(/envoi-retrait-differe/);
+    expect(passerelle.socket.recus.filter((r) => r.evenement === 'message:delete')).toEqual([]);
+    expect(passerelle.journal.filter((a) => a.methode === 'DELETE')).toEqual([]);
+
+    await contexte.close();
+  });
+
+  /**
+   * RECHARGÉ PENDANT LA FENÊTRE, PUIS EXPIRATION — la fenêtre REPRISE expire
+   * comme l'originale : EXACTEMENT UN retrait atteint le bouchon (route OU
+   * socket — les deux comptés, total = 1), jamais deux pour un rechargement
+   * qui aurait réarmé une seconde minuterie parallèle.
+   */
+  test('retirer, RECHARGER, puis expiration — UN SEUL retrait atteint le bouchon', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await ouvreLeFil(contexte);
+    await attendLeTempsReel(page);
+
+    const menu = await ouvreLeMenu(page, 'm4');
+    await menu.locator('button[name="retirer"]').click();
+    await expect(page.locator('li[data-id="m4"]')).toHaveClass(/envoi-retrait-differe/);
+
+    await page.reload({ waitUntil: 'load' });
+    await attendLeTempsReel(page);
+    const bulle = page.locator('li[data-id="m4"]');
+    await expect(bulle).toHaveClass(/envoi-retrait-differe/);
+
+    // CE TÉMOIN ARBITRE LA DÉCISION Option A (revue #5387), par l'autre
+    // bout que le précédent : `detruit()` n'envoyant plus rien à la
+    // fermeture, la SEULE fenêtre qui puisse jamais flusher est celle-ci,
+    // REPRISE au montage — jamais un envoi de fermeture EN PLUS.
+    await expect
+      .poll(
+        () =>
+          passerelle.socket.recus.filter((r) => r.evenement === 'message:delete').length +
+          passerelle.journal.filter((a) => a.methode === 'DELETE' && a.chemin === '/api/v1/messages/m4').length,
+        { timeout: 15_000, message: COMMANDE },
+      )
+      .toBe(1);
+
+    await expect(bulle).toHaveClass(/supprime/);
+    await expect(bulle.locator('.texte')).toHaveText('Ce message a été supprimé');
+
+    await contexte.close();
+  });
+
+  /**
+   * L'ADRESSE `?retirer=<id>` N'ENGAGE RIEN (revue de #5387 — la § 4 étape 3
+   * de la spécification demandait un « pont » qui l'adopte en fenêtre
+   * différée ; il est RETIRÉ). Une adresse se met en signet, se copie, et le
+   * bouton RETOUR y ramène : l'adopter armait une minuterie qui SUPPRIME le
+   * message cinq secondes plus tard sans que personne n'ait confirmé. Un GET
+   * ne commet jamais une mutation destructrice — c'est la raison d'être des
+   * deux formulaires POST que la porte sert dans cet état, et ils restent
+   * cliquables avec JavaScript comme sans lui.
+   */
+  test('ouvrir ?retirer=<id> AVEC JavaScript n’engage RIEN — ni au chargement, ni après la fenêtre', async ({ browser }) => {
+    const contexte = await contexteDuMembre(browser);
+    const page = await contexte.newPage();
+    await page.goto(`${FIL()}?retirer=m4`, { waitUntil: 'load' });
+    await attendLeTempsReel(page);
+
+    const bulle = page.locator('li[data-id="m4"]');
+    // La fenêtre SERVIE reste celle que la porte a décidée — le module ne
+    // l'adopte pas, ne la masque pas, et n'ouvre aucune minuterie.
+    await expect(bulle.locator('.retrait-servie button[name="annuler-le-retrait"]')).toBeVisible();
+    await expect(bulle).not.toHaveClass(/envoi-retrait-differe/);
+    await expect(bulle.locator('.texte')).toHaveText('Parfait, je crée le lien pour Marta.');
+    // DÉFAUT MAJEUR DE REVUE #5387 — « la ligne porte deux fenêtres de
+    // retrait à la fois » : le premier `peins()` du montage traitait cette
+    // ligne comme une ligne ordinaire (`bullesDuDocument` ne reconnaît pas
+    // `retrait-en-attente`) et lui clonait un `details.actions` EN PLUS des
+    // deux formulaires servis. AUCUN menu ne doit exister tant que la
+    // fenêtre servie possède la ligne.
+    await expect(bulle.locator('details.actions')).toHaveCount(0);
+    // L'ADRESSE RESTE — elle EST l'état que le document rend.
+    expect(page.url()).toContain('retirer=m4');
+
+    // Bien AU-DELÀ de la fenêtre du module : rien ne part, jamais.
+    await page.waitForTimeout(8_000);
+    expect(passerelle.socket.recus.filter((r) => r.evenement === 'message:delete')).toEqual([]);
+    expect(passerelle.journal.filter((a) => a.chemin === '/api/v1/messages/m4')).toEqual([]);
+    await expect(bulle).not.toHaveClass(/supprime/);
+
+    // Et « Annuler » y fonctionne comme sans JavaScript : un POST, la ligne
+    // intacte, son menu revenu.
+    await page.locator('li[data-id="m4"] .retrait-servie button[name="annuler-le-retrait"]').click();
+    await expect(page).toHaveURL(`${FIL()}#m-m4`);
+    await expect(page.locator('li[data-id="m4"] details.actions')).toHaveCount(1);
+    expect(passerelle.journal.filter((a) => a.methode === 'DELETE')).toEqual([]);
 
     await contexte.close();
   });

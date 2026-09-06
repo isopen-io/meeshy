@@ -457,7 +457,29 @@ export const FEUILLE_DES_GESTES = compacte(
     '.ligne.envoi-retrait-differe .texte{color:var(--color-text-muted)}' +
     '.ligne.envoi-retrait-differe .accuse{display:none}' +
     '.ligne.envoi-retrait-differe .meta{margin-top:var(--space-1)}' +
-    '@media (prefers-reduced-motion:reduce){.ligne.envoi-retrait-differe .retrait::after{content:none;animation:none}.ligne.envoi-retrait-differe .retrait .decompte{display:inline}}',
+    '@media (prefers-reduced-motion:reduce){.ligne.envoi-retrait-differe .retrait::after{content:none;animation:none}.ligne.envoi-retrait-differe .retrait .decompte{display:inline}}' +
+    // LA FENÊTRE SANS JAVASCRIPT (#5387, `?retirer=<id>`) — la ligne visée
+    // TERNIT son texte (le même traitement que `.envoi-retrait-differe`,
+    // sans en changer le contenu : la passerelle n'a RIEN reçu, le texte
+    // reste celui qu'elle sert), et sa fente SERVIE porte les deux
+    // formulaires — `.action.discrete` leur donne déjà 44 px, sans règle à
+    // elle.
+    //
+    // `.retrait-servie` VIT DANS `.bulle` (défaut BLOQUANT de revue — la
+    // bulle s'écrasait à 0 px de large, la ligne à 912 px de haut à 390 px
+    // d'écran) — JAMAIS comme troisième enfant de `.corps.colonnes`
+    // (`fil-lignes.ts` › `ligne()`). Ce rang flex n'accueille QUE des
+    // enfants dont le contenu réel est HORS FLUX (`.bulle{flex:1}`,
+    // `.datation{flex:none}`, et `details.actions` dont le FORMULAIRE est
+    // `position:absolute`, ci-dessus) : `.retrait-servie` porte deux
+    // `<form>` bien réels, dans le flux normal — posée ici, elle disputait
+    // sa part du rang flex à `.bulle`. Postée dans `.bulle` (un bloc
+    // ORDINAIRE, pas un conteneur flex), elle prend simplement sa largeur.
+    '.ligne.retrait-en-attente .texte{color:var(--color-text-muted)}' +
+    '.retrait-servie{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin-top:var(--space-2)}' +
+    '.retrait-servie .mention{flex-basis:100%;margin:0;font-size:var(--text-sm);color:var(--color-text-muted)}' +
+    '.retrait-servie form{flex:none}' +
+    '.retrait-servie .action.grave{color:var(--color-danger)}',
 );
 
 /**

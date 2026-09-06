@@ -154,3 +154,18 @@ export const PARAM_DU_LIEN_CREE = 'cree';
 /** Le retour du Post/Redirect/Get, portant l'identifiant du lien qui vient d'être créé. */
 export const adresseDuLienCree = (adresseHote: string, identifiant: string): string =>
   `${adresseHote}?${PARAM_DU_LIEN_CREE}=${encodeURIComponent(identifiant)}`;
+
+/**
+ * LA FENÊTRE D'ANNULATION D'UN RETRAIT, SANS JAVASCRIPT (#5387) — un ÉTAT DE
+ * PLUS DE LA MÊME ADRESSE HÔTE (la famille de `?media=`, `?repondre=`,
+ * `?modifier=`) : rien ne part vers la passerelle tant que cet état est
+ * porté, exactement comme la fenêtre différée du module (`fil-gestes.ts`)
+ * n'envoie rien pendant les cinq secondes qu'elle tient en mémoire. L'ADRESSE
+ * EST LA FENÊTRE — un rechargement pendant qu'elle est portée montre encore
+ * « Annuler », parce que rien n'a jamais été demandé.
+ */
+export const PARAM_DU_RETRAIT = 'retirer';
+
+/** L'ouverture de la fenêtre : l'adresse de l'hôte, plus `?retirer=<id>`. */
+export const adresseDeRetrait = (adresse: string, id: string): string =>
+  `${adresse}?${PARAM_DU_RETRAIT}=${encodeURIComponent(id)}`;

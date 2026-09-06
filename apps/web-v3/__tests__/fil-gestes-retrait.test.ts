@@ -1,10 +1,11 @@
 import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
 import { message, type Message } from '@/lib/api/fil';
+import { FIL } from '@/lib/contenu/fil';
 import type { Contexte } from '@/lib/realtime/fil-contexte';
 import { bulleServie, type Bulle } from '@/lib/realtime/fil-etat';
 import * as F from '@/lib/realtime/fil-etat';
-import { FENETRE_D_ANNULATION_DU_RETRAIT_MS, prendsLesRetraits, reprendLesRetraits } from '@/lib/realtime/fil-gestes';
-import { peintre, peins } from '@/lib/realtime/fil-peinture';
+import { FENETRE_D_ANNULATION_DU_RETRAIT_MS, prendsLesGestes, prendsLesRetraits, reprendLesRetraits } from '@/lib/realtime/fil-gestes';
+import { bullesDuDocument, peintre, peins } from '@/lib/realtime/fil-peinture';
 import { retraitsEnAttente } from '@/lib/realtime/fil-reserve';
 import type { Reserve } from '@/lib/realtime/reserve';
 
@@ -421,8 +422,19 @@ describe('le focus ne tombe jamais sur <body> quand la fenêtre se referme', () 
   });
 });
 
-describe('detruit() vide la file par la route, keepalive', () => {
-  it('deux retraits différés partent chacun en DELETE keepalive, et les minuteurs sont purgés', () => {
+/**
+ * DÉCISION Option A (défauts BLOQUANT et MAJEUR de revue #5387 — « recharger
+ * pendant la fenêtre commet le retrait », « deux retraits atteignent la
+ * passerelle pour un seul geste ») — `detruit()` N'ENVOIE PLUS RIEN : la
+ * version précédente flushait ICI en `DELETE keepalive`, ce qui faisait
+ * partir un retrait non confirmé au premier `pagehide` (donc à CHAQUE
+ * rechargement pendant la fenêtre, pas seulement à la fermeture réelle de
+ * l'onglet), puis un SECOND à l'expiration de la fenêtre REPRISE par le
+ * document neuf — deux `DELETE` pour un seul geste. Voir le doc-comment de
+ * `detruit` (`fil-gestes.ts`) pour l'arbitrage complet.
+ */
+describe('detruit() n’envoie plus rien — l’intention reste dans la réserve (décision Option A, #5387)', () => {
+  it('deux retraits différés : AUCUNE requête à la destruction, les minuteurs sont purgés', () => {
     jest.useFakeTimers();
     try {
       const M2 = mienMessage('m2', 'Un second message');
@@ -466,14 +478,60 @@ describe('detruit() vide la file par la route, keepalive', () => {
       retraits.detruit();
       jest.runAllTimers();
 
-      expect(fetchEspion).toHaveBeenCalledTimes(2);
-      const appels = fetchEspion.mock.calls as unknown as readonly [string, RequestInit][];
-      const cibles = appels.map(([url]) => url).sort();
-      expect(cibles).toEqual([`${ORIGINE}/api/v1/messages/m1`, `${ORIGINE}/api/v1/messages/m2`]);
-      appels.forEach(([, options]) => {
-        expect(options.method).toBe('DELETE');
-        expect(options.keepalive).toBe(true);
-      });
+      // AUCUNE requête, ni tout de suite, ni après les minuteurs purgés : un
+      // écran qui part ne décide plus du sort du retrait à la place du
+      // lecteur.
+      expect(fetchEspion).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  /**
+   * LE TÉMOIN QUI ARBITRE LE DÉFAUT BLOQUANT — reproduit la SÉQUENCE exacte
+   * du rapport de revue : `differe()`, puis l'écran part (`detruit()`,
+   * simulant `pagehide` sur un rechargement), puis un document NEUF se
+   * monte (`reprendLesRetraits`) et sa fenêtre expire. Une SEULE requête
+   * doit jamais atteindre la passerelle pour ce geste — jamais deux.
+   */
+  it('rechargement pendant la fenêtre : detruit() puis reprendLesRetraits() puis expiration — UN SEUL retrait part, jamais deux', async () => {
+    jest.useFakeTimers();
+    try {
+      const { r } = reserveEnMemoire();
+      const { socket: socketAvant, recus: recusAvant } = socketDeTest(() => ({ success: true }));
+      const { ctx: ctxAvant, applique: appliqueAvant } = monte({ pret: true, socket: socketAvant, reserve: r });
+      const retraitsAvant = prendsLesRetraits({ ctx: ctxAvant, applique: appliqueAvant });
+
+      retraitsAvant.differe('m1');
+      // L'ÉCRAN PART — un rechargement déclenche `pagehide` exactement comme
+      // une fermeture réelle, AVANT que le document neuf ne charge.
+      retraitsAvant.detruit();
+
+      // LE DOCUMENT NEUF — un second `monte()`, la même réserve (persistée),
+      // exactement ce qu'un rechargement réel donnerait : la bulle SERVIE
+      // n'est PAS `supprime` (rien n'est jamais parti), l'intention est
+      // toujours dans la réserve.
+      const emissionsApres: Emis[] = [];
+      const socketApres = {
+        timeout: () => ({
+          emit: (evenement: string, charge: unknown, rappel: (erreur: unknown, reponse: unknown) => void) => {
+            emissionsApres.push({ evenement, charge });
+            rappel(null, { success: true });
+          },
+        }),
+      };
+      const { ctx: ctxApres, applique: appliqueApres } = monte({ pret: true, socket: socketApres, reserve: r });
+      const retraitsApres = prendsLesRetraits({ ctx: ctxApres, applique: appliqueApres });
+
+      await reprendLesRetraits(ctxApres, retraitsApres);
+      jest.advanceTimersByTime(FENETRE_D_ANNULATION_DU_RETRAIT_MS);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(emissionsApres.filter((e) => e.evenement === 'message:delete')).toHaveLength(1);
+      // ET la fenêtre d'AVANT le rechargement n'a JAMAIS émis quoi que ce
+      // soit — son propre `detruit()` s'est tu.
+      expect(recusAvant).toEqual([]);
     } finally {
       jest.useRealTimers();
     }
@@ -607,5 +665,230 @@ describe('reprendLesRetraits — au montage, contre l’état SERVI par le docum
     await reprendLesRetraits(ctx, retraits);
 
     expect(carte.has(`${CLES_DE_TEST.retrait}m9`)).toBe(true);
+  });
+});
+
+/**
+ * LE RETRAIT ET LE RÉTABLISSEMENT S'ANNONCENT AU LECTEUR D'ÉCRAN (#5387) —
+ * dans `#annonces-du-fil`, la région SERVIE VIDE (`fil-vue.ts`). Le geste
+ * s'annonce SANS voler le focus : le focus, lui, reste sur « Annuler »
+ * (déjà couvert plus haut) ou sur la ligne.
+ */
+describe('le retrait et le rétablissement s’annoncent au lecteur d’écran (#5387)', () => {
+  const region = (main: HTMLElement): HTMLElement => main.querySelector<HTMLElement>('#annonces-du-fil')!;
+
+  it('differe() écrit l’annonce de retrait dans #annonces-du-fil', () => {
+    jest.useFakeTimers();
+    try {
+      const { socket } = socketDeTest(() => ({ success: true }));
+      const { ctx, applique, main } = monte({ pret: true, socket });
+      const retraits = prendsLesRetraits({ ctx, applique });
+
+      retraits.differe('m1');
+      jest.advanceTimersByTime(0);
+
+      expect(region(main).textContent).toBe(FIL.retraitAnnonce(5));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('annule() écrit l’annonce de rétablissement', () => {
+    jest.useFakeTimers();
+    try {
+      const { socket } = socketDeTest(() => ({ success: true }));
+      const { ctx, applique, main } = monte({ pret: true, socket });
+      const retraits = prendsLesRetraits({ ctx, applique });
+
+      retraits.differe('m1');
+      retraits.annule('m1');
+      jest.advanceTimersByTime(0);
+
+      expect(region(main).textContent).toBe(FIL.retablissementAnnonce);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('reprendLesRetraits() (rechargement) ré-annonce le retrait — gratuit via differe()', async () => {
+    const { r } = reserveEnMemoire();
+    await r.ecris(`${CLES_DE_TEST.retrait}m1`, { messageId: 'm1' });
+    const { socket } = socketDeTest(() => ({ success: true }));
+    const { ctx, applique, main } = monte({ pret: true, socket, reserve: r });
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    await reprendLesRetraits(ctx, retraits);
+    await new Promise((resolu) => setTimeout(resolu, 0));
+
+    expect(region(main).textContent).toBe(FIL.retraitAnnonce(5));
+  });
+
+  /**
+   * DEUX ANNONCES SUCCESSIVES IDENTIQUES SONT RE-ANNONCÉES — et ce témoin
+   * observe ce qu'un LECTEUR D'ÉCRAN observe : le CONTENU de la région à
+   * chaque fin de tâche, jamais le nombre d'écritures faites dessus. Entre
+   * deux retraits au MÊME libellé, la région doit REPASSER PAR LE VIDE :
+   * sans ce passage, le contenu final est identique au précédent, rien ne
+   * change, et le second geste est muet. La version précédente vidait et
+   * réécrivait dans la MÊME tâche — deux écritures, un seul état observable :
+   * elle ne pouvait être prise en défaut que par un espion sur le setter,
+   * c'est-à-dire par l'implémentation.
+   */
+  it('deux retraits consécutifs : la région repasse par le VIDE, donc chacun s’annonce', () => {
+    jest.useFakeTimers();
+    try {
+      const M2 = mienMessage('m2', 'Un second message');
+      document.open();
+      document.write(documentDuFil({ ...etatDuDocument(), fil: { ...etatDuDocument().fil, messages: [M2, M1] } }));
+      document.close();
+      const main = document.querySelector<HTMLElement>('main')!;
+      const p = peintre(main)!;
+      let etat: F.EtatDuFil = { bulles: [M1, M2].map(bulleServie), frappeurs: [], presents: [] };
+      const ctx = {
+        main,
+        p,
+        etat,
+        composeur: null,
+        ferme: false,
+        socket: null,
+        pret: false,
+        cache: false,
+        enLigne: true,
+        creance: { genre: 'membre', jeton: 'j' },
+        config: { passerelle: ORIGINE },
+        cles: null,
+      } as unknown as Contexte;
+      const applique = (c: Contexte, suivant: F.EtatDuFil): void => {
+        etat = suivant;
+        c.etat = suivant;
+        peins(c.p, suivant, Date.now());
+      };
+      const retraits = prendsLesRetraits({ ctx, applique });
+      const noeud = region(main);
+
+      retraits.differe('m1');
+      jest.advanceTimersByTime(0);
+      expect(noeud.textContent).toBe(FIL.retraitAnnonce(5));
+
+      retraits.differe('m2');
+      // LE VIDE OBSERVABLE — l'état que le lecteur d'écran voit à la fin de
+      // CETTE tâche, et sans lequel la seconde annonce n'existerait pas.
+      expect(noeud.textContent).toBe('');
+
+      jest.advanceTimersByTime(0);
+      expect(noeud.textContent).toBe(FIL.retraitAnnonce(5));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('la région ABSENTE ne fait pas planter le geste (même tolérance que afficheLeRefus)', () => {
+    jest.useFakeTimers();
+    try {
+      const { socket } = socketDeTest(() => ({ success: true }));
+      const { ctx, applique, main } = monte({ pret: true, socket });
+      main.querySelector('#annonces-du-fil')?.remove();
+      const retraits = prendsLesRetraits({ ctx, applique });
+
+      expect(() => {
+        retraits.differe('m1');
+        retraits.annule('m1');
+        jest.advanceTimersByTime(0);
+      }).not.toThrow();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+/**
+ * L'ADRESSE `?retirer=<id>` N'ENGAGE RIEN — UNE NAVIGATION NE SUPPRIME PAS UN
+ * MESSAGE (revue de #5387). La fenêtre SANS JavaScript vit dans l'adresse ;
+ * une adresse se met en signet, se copie, et le bouton RETOUR y ramène. Si le
+ * module l'ADOPTAIT en fenêtre différée, il armerait une minuterie qui
+ * supprime cinq secondes plus tard sans que personne n'ait confirmé : revenir
+ * en arrière après « Annuler » perdait le message, rouvrir l'adresse aussi.
+ * Le module la laisse donc intacte — les deux formulaires POST servis par la
+ * porte sont le seul chemin, et « Confirmer le retrait » le seul qui envoie.
+ */
+describe('l’adresse `?retirer=<id>` n’engage rien, même avec JavaScript (#5387)', () => {
+  it('monter le module dessus n’ouvre AUCUNE fenêtre, n’envoie JAMAIS le retrait, et ne touche pas à l’adresse', () => {
+    jest.useFakeTimers();
+    const fetchEspion = jest.fn();
+    globalThis.fetch = fetchEspion as unknown as typeof fetch;
+    try {
+      const { socket, recus } = socketDeTest(() => ({ success: true }));
+      const { ctx, applique, ligne } = monte({ pret: true, socket });
+      window.history.replaceState(null, '', '/chats/c1?retirer=m1');
+
+      prendsLesGestes({ ctx, applique, envoieLaBulle: async () => undefined });
+      jest.advanceTimersByTime(FENETRE_D_ANNULATION_DU_RETRAIT_MS * 4);
+
+      expect(recus).toEqual([]);
+      expect(fetchEspion).not.toHaveBeenCalled();
+      expect(ligne().classList.contains('envoi-retrait-differe')).toBe(false);
+      // L'ADRESSE RESTE : elle EST l'état que le document rend. La nettoyer
+      // désynchroniserait l'URL de ce qui est affiché — un rechargement ou un
+      // retour arrière retrouverait alors une page qui ne dit plus ce qu'elle
+      // montre.
+      expect(window.location.search).toBe('?retirer=m1');
+    } finally {
+      jest.useRealTimers();
+      window.history.replaceState(null, '', '/');
+    }
+  });
+});
+
+/**
+ * UNE FENÊTRE SERVIE (`?retirer=<id>`, #5387) N'A JAMAIS DE MENU EN PLUS
+ * (défaut MAJEUR de revue « la ligne porte deux fenêtres de retrait à la
+ * fois ») — reproduit la séquence EXACTE du bogue : le serveur rend
+ * `.retrait-servie` pour la ligne visée (`retrait: 'm1'`), et le PREMIER
+ * `peins()` du montage — celui que `participate.ts` exécute AVANT même que
+ * `prendsLesGestes`/`reprendLesRetraits` n'existent — repeint depuis l'état
+ * que `bullesDuDocument` en tire (`supprime: false`, `envoi: 'servi'`, la
+ * passerelle n'ayant rien reçu). Sans la garde de `remplisLeMenu`
+ * (`fil-peinture.ts`), ce premier passage clonait un `details.actions` tout
+ * neuf à côté des deux formulaires déjà servis.
+ */
+describe('une fenêtre de retrait SERVIE ne reçoit jamais de menu en plus (#5387)', () => {
+  it('le premier peins() du montage ne clone AUCUN details.actions sur une ligne `?retirer=`', () => {
+    document.open();
+    document.write(documentDuFil({ ...etatDuDocument(), retrait: 'm1' }));
+    document.close();
+    const main = document.querySelector<HTMLElement>('main')!;
+    const p = peintre(main)!;
+    const ligne = main.querySelector<HTMLElement>('li[data-id="m1"]')!;
+
+    expect(ligne.querySelector('.retrait-servie')).not.toBeNull();
+    expect(ligne.querySelector('details.actions')).toBeNull();
+
+    // LE PREMIER PEINS() DU MONTAGE — exactement celui de `participate.ts`,
+    // AVANT `prendsLesGestes` : l'état vient de `bullesDuDocument`, jamais
+    // d'une bulle fabriquée à la main, pour ne pas manquer ce que le parseur
+    // RÉEL produit sur cette ligne.
+    peins(p, { bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, Date.now(), { composeurOuvert: true, estInvite: false });
+
+    expect(ligne.querySelector('.retrait-servie')).not.toBeNull();
+    expect(ligne.querySelector('details.actions')).toBeNull();
+    // Les deux formulaires servis restent seuls maîtres — Annuler et
+    // Confirmer, jamais un troisième contrôle de retrait.
+    expect(ligne.querySelectorAll('form').length).toBe(2);
+  });
+
+  it('une ligne ORDINAIRE (sans retrait servi) continue de recevoir son menu au premier peins()', () => {
+    document.open();
+    document.write(documentDuFil(etatDuDocument()));
+    document.close();
+    const main = document.querySelector<HTMLElement>('main')!;
+    const p = peintre(main)!;
+    const ligne = main.querySelector<HTMLElement>('li[data-id="m1"]')!;
+
+    // Servie d'origine, sur cette ligne ordinaire (`menuDeLigne`, #5163).
+    expect(ligne.querySelector('details.actions')).not.toBeNull();
+
+    peins(p, { bulles: bullesDuDocument(p), frappeurs: [], presents: [] }, Date.now(), { composeurOuvert: true, estInvite: false });
+
+    expect(ligne.querySelector('details.actions')).not.toBeNull();
   });
 });
