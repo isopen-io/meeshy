@@ -433,6 +433,59 @@ describe('PATCH /users/me — with language change fires socketIO refresh', () =
   });
 });
 
+describe('PATCH /users/me — recalcule profileCompletionRate (#3688)', () => {
+  it('recompose le taux depuis les champs actuels + le displayName modifié', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { displayName: 'Bob Jones' },
+    });
+    expect(res.statusCode).toBe(200);
+    // mockUser : displayName (nouveau, présent) + avatar null + bio 11 car. (>10)
+    // + phoneNumber + email ⇒ 4/5 = 80.
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ profileCompletionRate: 80 }) })
+    );
+    await app.close();
+  });
+
+  it('recompose le taux quand seule la bio change, en gardant le displayName actuel', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { bio: 'x' }, // 1 caractère : ne compte plus dans la formule
+    });
+    expect(res.statusCode).toBe(200);
+    // displayName présent (inchangé) + avatar null + bio courte (false) +
+    // phoneNumber + email ⇒ 3/5 = 60.
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ profileCompletionRate: 60 }) })
+    );
+    await app.close();
+  });
+
+  it('ne touche pas profileCompletionRate quand aucun des cinq champs ne change', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { systemLanguage: 'en' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ profileCompletionRate: expect.anything() }),
+      })
+    );
+    await app.close();
+  });
+});
+
 describe('PATCH /users/me — realtime propagation to conversation partners', () => {
   it('emits USER_UPDATED with the whole name group when displayName/firstName/lastName change', async () => {
     const prisma = makePrisma();
@@ -579,6 +632,30 @@ describe('PATCH /users/me/avatar — success', () => {
     const body = res.json();
     expect(body.data.user).toHaveProperty('emailVerifiedAt');
     expect(body.data.user.autoTranslateEnabled).toBe(true);
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me/avatar — recalcule profileCompletionRate (#3688)', () => {
+  it('recompose le taux depuis les quatre autres champs + le nouvel avatar', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserAvatar], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/avatar',
+      payload: { avatar: 'https://example.com/avatar.jpg' },
+    });
+    expect(res.statusCode).toBe(200);
+    // mockUser : displayName + bio (11 car.) + phoneNumber + email + avatar
+    // (nouveau) ⇒ 5/5 = 100.
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          avatar: 'https://example.com/avatar.jpg',
+          profileCompletionRate: 100,
+        }),
+      })
+    );
     await app.close();
   });
 });
