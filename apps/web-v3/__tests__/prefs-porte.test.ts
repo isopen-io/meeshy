@@ -423,6 +423,44 @@ describe('la porte de /notifications/preferences — GET, la rangée push', () =
     expect(zone).toContain('name="valeur" value="true"');
   });
 
+  /**
+   * DEUX LECTURES, UN SEUL ALLER-RETOUR (défaut de revue) — la porte lisait
+   * `GET /me/preferences` PUIS `GET /users/me/devices` en SÉRIE : sur la 3G
+   * rurale que la charte vise (§ 12.6, latence 500 ms+), l'écran attendait
+   * DEUX allers-retours avant son premier pixel là où un seul suffit. Le
+   * témoin ne regarde pas l'implémentation : il retient la réponse des
+   * préférences et vérifie que la lecture des appareils est DÉJÀ partie.
+   */
+  it('les DEUX lectures partent ENSEMBLE — la liste des appareils n’attend pas la réponse des préférences', async () => {
+    const partis: string[] = [];
+    const attente: { resoud: (() => void) | null } = { resoud: null };
+    const recuperer = async (url: string): Promise<Response> => {
+      partis.push(url);
+      if (url.includes('/me/preferences')) {
+        await new Promise<void>((resoud) => {
+          attente.resoud = resoud;
+        });
+        return json({ success: true, data: { notification: DOCUMENT_SERVI } });
+      }
+      return json({ success: true, data: [] });
+    };
+
+    const promesse = avecEnvFirebase(async () =>
+      PREFERENCES(
+        requete('https://meeshy.test/notifications/preferences', {
+          headers: { cookie: `${COOKIE}; meeshy_v3_push_appareil=device-42` },
+        }),
+        recuperer,
+      ),
+    );
+    await new Promise((resoud) => setTimeout(resoud, 0));
+    const avantLaReponse = [...partis];
+    attente.resoud?.();
+    await promesse;
+
+    expect(avantLaReponse.some((url) => url.includes('/users/me/devices'))).toBe(true);
+  });
+
   it('un cookie appareil qui ne figure PAS parmi les appareils actifs rend `non-abonne`', async () => {
     const { recuperer } = passerelle({
       '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),

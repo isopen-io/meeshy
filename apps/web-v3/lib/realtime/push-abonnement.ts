@@ -1,5 +1,6 @@
-import { poseLAppareilPush } from '@/lib/api/push-appareil';
+import { lisLAppareilPush, poseLAppareilPush } from '@/lib/api/push-appareil';
 import { PREFS } from '@/lib/contenu/prefs-de-notif';
+import { CACHE_DE_ROTATION_PUSH, CLE_DE_CONTEXTE_PUSH, CLE_DE_ROTATION_PUSH } from '@/lib/sw/signal';
 
 /**
  * LE MODULE D'ABONNEMENT PUSH (#5391, § 3.4 de la spécification) — armé par
@@ -122,8 +123,37 @@ export const genereUnFid = (): string => {
     .slice(0, 22);
 };
 
-/** Les DEUX appels REST (§ 0, § 2.5) — jamais le SDK. Jette sur toute forme inattendue : l'appelant peint l'échec. */
-const creeLAbonnementFCM = async (configuration: ConfigurationFCM, souscription: PushSubscription): Promise<string> => {
+/**
+ * L'HÔTE DE LA PORTÉE — `web.origin` du corps Registrations
+ * (`getRegistrationOrigin`, SDK réel) : l'hôte que la registration du
+ * travailleur de zone sert, jamais un hôte forgé. Un `scope` non-URL
+ * (harnais de test, registration dégradée) ne fait pas jeter l'abonnement
+ * pour autant — `origin` est absent du corps plutôt qu'inventé.
+ */
+const origineDeLaPortee = (scope: string): string | undefined => {
+  try {
+    return new URL(scope).host;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Les DEUX appels REST (§ 0, § 2.5) — jamais le SDK, mais leur FORME est
+ * celle du SDK réel, comparée au source vendoré (`node_modules/.bun/
+ * @firebase+messaging@0.13.0…/dist/esm/index.esm.js`, `getHeaders`/
+ * `getBody`) plutôt que devinée. DEUX défauts trouvés à cette comparaison
+ * (revue de #5391) : l'en-tête d'autorisation Installations→Registrations
+ * porte le jeton NU quand la passerelle FCM exige `FIS ${jeton}` (espace
+ * compris — `getHeaders`), et le corps omettait `web.origin` (l'hôte de la
+ * portée, `getRegistrationOrigin`) que `getBody` sert toujours. Jette sur
+ * toute forme inattendue : l'appelant peint l'échec.
+ */
+const creeLAbonnementFCM = async (
+  configuration: ConfigurationFCM,
+  souscription: PushSubscription,
+  scope: string,
+): Promise<string> => {
   const brute = souscription.toJSON() as { readonly endpoint?: string; readonly keys?: Readonly<Record<string, string>> };
   const endpoint = brute.endpoint;
   const p256dh = brute.keys?.['p256dh'];
@@ -141,14 +171,17 @@ const creeLAbonnementFCM = async (configuration: ConfigurationFCM, souscription:
   const jetonAuth = ((await installations.json()) as { readonly authToken?: { readonly token?: string } }).authToken?.token;
   if (jetonAuth === undefined) throw new Error('jeton d’installation absent');
 
+  const origin = origineDeLaPortee(scope);
   const registrations = await fetch(`${configuration.baseRegistrations}/v1/projects/${configuration.projectId}/registrations`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-goog-api-key': configuration.apiKey,
-      'x-goog-firebase-installations-auth': jetonAuth,
+      'x-goog-firebase-installations-auth': `FIS ${jetonAuth}`,
     },
-    body: JSON.stringify({ web: { endpoint, p256dh, auth, applicationPubKey: configuration.vapid } }),
+    body: JSON.stringify({
+      web: { ...(origin === undefined ? {} : { origin }), endpoint, auth, p256dh, applicationPubKey: configuration.vapid },
+    }),
   });
   if (!registrations.ok) throw new Error('registrations FCM en échec');
   const jeton = ((await registrations.json()) as { readonly token?: string }).token;
@@ -156,10 +189,25 @@ const creeLAbonnementFCM = async (configuration: ConfigurationFCM, souscription:
   return jeton;
 };
 
-/** La registration DE ZONE (`/__v3/sw`) — préférée sur la portée du fil, sinon la première trouvée. */
+/**
+ * La registration DE ZONE (`/__v3/sw`) — préférée sur la portée du fil, sinon
+ * la première trouvée.
+ *
+ * PAS SEULEMENT `active` (défaut de revue) : `/notifications/preferences` est
+ * HORS des portées du travailleur (§ `V3_SW_PORTEES`), donc cette page n'est
+ * contrôlée par aucun worker et ne peut pas attendre `navigator.serviceWorker
+ * .ready`. Au TOUT PREMIER passage, le worker que le document vient
+ * d'enregistrer est encore `installing`/`waiting` — ne regarder que `active`
+ * rendait alors `null`, et le lecteur lisait « L'abonnement n'a pas pu être
+ * créé » pour un worker qui existait. `pushManager` vit sur la REGISTRATION,
+ * pas sur le worker : elle sert dès qu'elle est trouvée.
+ */
+const scriptDe = (registration: ServiceWorkerRegistration): string | undefined =>
+  (registration.active ?? registration.waiting ?? registration.installing)?.scriptURL;
+
 const trouveLaRegistrationDeZone = async (): Promise<ServiceWorkerRegistration | null> => {
   const registrations = await navigator.serviceWorker.getRegistrations();
-  const deZone = registrations.filter((r) => r.active?.scriptURL.includes('/__v3/sw') === true);
+  const deZone = registrations.filter((r) => scriptDe(r)?.includes('/__v3/sw') === true);
   return deZone.find((r) => r.scope.includes('/chats')) ?? deZone[0] ?? null;
 };
 
@@ -192,7 +240,7 @@ const surSoumissionAbonner = async (main: HTMLElement, formulaire: HTMLFormEleme
       // la VALEUR reste les mêmes octets, la clé publique VAPID.
       applicationServerKey: urlBase64VersOctets(configuration.vapid) as BufferSource,
     });
-    const jetonFCM = await creeLAbonnementFCM(configuration, souscription);
+    const jetonFCM = await creeLAbonnementFCM(configuration, souscription, registration.scope);
     const deviceId = poseLAppareilPush({ secure: location.protocol === 'https:' });
 
     const champAbonnement = formulaire.querySelector<HTMLInputElement>('input[name="abonnement"]');
@@ -231,4 +279,171 @@ export const armeLAbonnementPush = (main: HTMLElement): void => {
     evenement.preventDefault();
     void surSoumissionAbonner(main, formulaire);
   });
+};
+
+const effaceLeDrapeauDeRotation = async (): Promise<void> => {
+  try {
+    const cache = await caches.open(CACHE_DE_ROTATION_PUSH);
+    await cache.delete(CLE_DE_ROTATION_PUSH);
+  } catch {
+    // best-effort — un navigateur qui refuse le Cache Storage laisse le
+    // drapeau en place, et le prochain chargement retentera le rejeu.
+  }
+};
+
+/**
+ * LE REJEU DE LA ROTATION (#5391, suivi de revue) — un navigateur peut
+ * invalider la `PushSubscription` HORS du contrôle de toute page (rotation
+ * de clé côté navigateur ou FCM) ; l'événement `pushsubscriptionchange`
+ * n'arrive alors qu'au WORKER (`lib/sw/travailleur.js`), qui pose un DRAPEAU
+ * dans le Cache Storage (contrat `lib/sw/signal.ts`) faute de pouvoir
+ * rejouer lui-même la danse REST — la configuration Firebase vit sur CE
+ * document, jamais dans le fichier plat.
+ *
+ * Sans ce rejeu, RIEN ne le fait : la passerelle détient un token FCM MORT,
+ * la rangée continue d'afficher « Abonné » (elle relit `GET /users/me/
+ * devices`, qui ne sait rien d'une rotation navigateur), et les
+ * notifications cessent en SILENCE.
+ *
+ * N'AGIT QUE SI LA RANGÉE DIT DÉJÀ « ABONNÉ » (`valeur=false`, l'inverse que
+ * le PROCHAIN clic enverrait — `peinsLaRangee`, `lib/realtime/prefs.ts`) :
+ * un lecteur qui s'est explicitement désabonné n'a pas à être réabonné dans
+ * son dos par un drapeau resté d'avant son geste.
+ */
+export const rejoueSiRotation = async (main: HTMLElement): Promise<void> => {
+  if (!('caches' in window)) return;
+  if (configurationDepuis(main) === null) return;
+  const formulaire = main.querySelector<HTMLFormElement>('form.bascule-push');
+  if (formulaire === null) return;
+  const champValeur = formulaire.querySelector<HTMLInputElement>('input[name="valeur"]');
+  if (champValeur === null || champValeur.value !== 'false') return;
+
+  let drapeau: unknown;
+  try {
+    const cache = await caches.open(CACHE_DE_ROTATION_PUSH);
+    drapeau = await cache.match(CLE_DE_ROTATION_PUSH);
+  } catch {
+    return;
+  }
+  if (drapeau === undefined) return;
+
+  await effaceLeDrapeauDeRotation();
+  await surSoumissionAbonner(main, formulaire);
+};
+
+/**
+ * LE CONTEXTE DURABLE (#5391, suivi de revue défaut 3) — écrit à CHAQUE
+ * chargement de `/notifications/preferences`, y compris le rechargement qui
+ * suit immédiatement un premier abonnement (Post/Redirect/Get) : c'est ce qui
+ * garantit qu'un lecteur qui « ouvre la page UNE fois pour s'abonner, plus
+ * jamais » laisse quand même un contexte utilisable derrière lui.
+ *
+ * `deviceId` vient du COOKIE — jamais `poseLAppareilPush`, qui EN CRÉERAIT UN
+ * pour un visiteur qui n'a jamais rien abonné : ce module lit, il ne pose
+ * pas. Sans cookie, rien n'a jamais pu être créé sur cet appareil — rien à
+ * mémoriser.
+ */
+export const memoriseLeContextePush = async (main: HTMLElement): Promise<void> => {
+  if (!('caches' in window)) return;
+  const configuration = configurationDepuis(main);
+  if (configuration === null) return;
+  const deviceId = lisLAppareilPush(document.cookie);
+  if (deviceId === null) return;
+
+  const formulaire = main.querySelector<HTMLFormElement>('form.bascule-push');
+  const champValeur = formulaire?.querySelector<HTMLInputElement>('input[name="valeur"]');
+  // `valeur=false` = la rangée dit déjà « Abonné » (`peinsLaRangee` pose
+  // l'inverse de l'état affiché) — même convention que `rejoueSiRotation`.
+  const abonne = champValeur?.value === 'false';
+
+  try {
+    const cache = await caches.open(CACHE_DE_ROTATION_PUSH);
+    await cache.put(CLE_DE_CONTEXTE_PUSH, new Response(JSON.stringify({ configuration, abonne, deviceId })));
+  } catch {
+    // best-effort — un navigateur qui refuse le Cache Storage n'a simplement
+    // pas de rejeu en arrière-plan ; `rejoueSiRotation` reste son seul filet,
+    // sur cette page.
+  }
+};
+
+/**
+ * LE REJEU EN ARRIÈRE-PLAN (#5391, suivi de revue défaut 3) — `rejoueSiRotation`
+ * ci-dessus ne peut vivre QUE sur `/notifications/preferences` : c'est la
+ * SEULE page qui sert la configuration Firebase et le formulaire
+ * `bascule-push`. Un lecteur qui l'ouvre UNE fois pour s'abonner puis n'y
+ * revient JAMAIS (le cas nominal) laissait un token FCM mort survivre sans
+ * fin en cas de rotation — le symptôme même que #5391 nommait, déplacé d'un
+ * cran plutôt que fermé.
+ *
+ * Ce second rejeu vit sur la surface que le lecteur RÉOUVRE — `/chats`
+ * (`lib/realtime/liste.ts`) — et lit le CONTEXTE DURABLE que
+ * `memoriseLeContextePush` a écrit lors du dernier passage sur les
+ * préférences (même Cache Storage, même origine — § doc-comment de
+ * `CLE_DE_CONTEXTE_PUSH`). Sans ce contexte (préférences jamais ouvertes,
+ * jamais abonné), rien à rejouer : ce module n'invente ni configuration ni
+ * consentement, il relit ce qu'un geste explicite a déjà écrit.
+ *
+ * PAS DE NAVIGATION : contrairement à `rejoueSiRotation`, qui laisse le
+ * formulaire de la page préférences faire un Post/Redirect/Get, ce rejeu
+ * poste en ARRIÈRE-PLAN (`fetch`, même origine, mêmes champs que la porte
+ * attend, § 2.5) — recharger `/chats` sous le lecteur pour une rotation de
+ * clé serait une régression pire que le token mort qu'il corrige.
+ *
+ * `Notification.permission` est LU, jamais REDEMANDÉ : `abonne === true`
+ * suppose déjà un octroi passé — solliciter `requestPermission()` en tâche de
+ * fond ferait surgir l'invite du navigateur sans geste du lecteur.
+ */
+export const rejoueSiRotationEnArrierePlan = async (): Promise<void> => {
+  if (!('caches' in window)) return;
+
+  let drapeauPose: boolean;
+  let brut: unknown;
+  try {
+    const cache = await caches.open(CACHE_DE_ROTATION_PUSH);
+    drapeauPose = (await cache.match(CLE_DE_ROTATION_PUSH)) !== undefined;
+    if (!drapeauPose) return;
+    const reponseContexte = await cache.match(CLE_DE_CONTEXTE_PUSH);
+    brut = reponseContexte === undefined ? undefined : await reponseContexte.json();
+  } catch {
+    return;
+  }
+  if (brut === undefined || typeof brut !== 'object' || brut === null) return;
+
+  const { configuration, abonne, deviceId } = brut as {
+    readonly configuration?: ConfigurationFCM;
+    readonly abonne?: boolean;
+    readonly deviceId?: string;
+  };
+  if (configuration === undefined || abonne !== true || typeof deviceId !== 'string' || deviceId === '') return;
+  if (
+    !('Notification' in window) ||
+    Notification.permission !== 'granted' ||
+    !('serviceWorker' in navigator) ||
+    !('PushManager' in window)
+  ) {
+    return;
+  }
+
+  try {
+    const registration = await trouveLaRegistrationDeZone();
+    if (registration === null) return;
+    const souscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64VersOctets(configuration.vapid) as BufferSource,
+    });
+    const jetonFCM = await creeLAbonnementFCM(configuration, souscription, registration.scope);
+
+    const reponse = await fetch('/notifications/preferences', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ geste: 'push', valeur: 'true', abonnement: jetonFCM, deviceId }),
+    });
+    if (!reponse.ok) return;
+
+    await effaceLeDrapeauDeRotation();
+  } catch {
+    // best-effort — un échec laisse le drapeau posé : le prochain chargement
+    // (préférences ou `/chats`) retentera le rejeu.
+  }
 };

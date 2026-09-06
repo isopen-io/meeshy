@@ -3,7 +3,7 @@ import { estSecurisee, jetonDuLecteur } from '@/app/session';
 import { deconnexion, type Recuperateur } from '@/lib/api/authentification';
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION, expireLeCookie } from '@/lib/api/cookies';
 import { cookiesDEffacementDesPlaces } from '@/lib/api/guest-session';
-import { COOKIE_DE_L_APPAREIL_PUSH } from '@/lib/api/push-appareil';
+import { COOKIE_DE_L_APPAREIL_PUSH, lisLAppareilPush } from '@/lib/api/push-appareil';
 import { retireLeJetonPush } from '@/lib/api/push-tokens';
 
 /**
@@ -86,7 +86,19 @@ export const SORTIE = async (requete: Request, recuperer?: Recuperateur): Promis
   const jeton = jetonDuLecteur(requete);
   const champs = await champsDuFormulaire(requete, ['session', 'pushAppareil']);
   const jetonDeSession = champs['session'] ?? null;
-  const pushAppareil = champs['pushAppareil'] ?? null;
+  /**
+   * LE COOKIE D'ABORD, LE CHAMP ENSUITE (défaut de revue, #5391) — le champ
+   * `pushAppareil` n'est REMPLI que par `lib/realtime/deconnexion.ts`, donc
+   * SANS JavaScript il partait vide et le token FCM de cet appareil restait
+   * ACTIF côté passerelle : le navigateur d'un lecteur déconnecté continuait
+   * de recevoir, sur son écran verrouillé, les bannières d'un compte qu'il
+   * venait de quitter. Le cookie `meeshy_v3_push_appareil` voyage, lui, dans
+   * CHAQUE requête — c'est la même règle que le geste `valeur=false` de
+   * `app/connecte/prefs-porte.ts` : le COOKIE est la source de vérité, le
+   * champ n'est qu'un repli (un navigateur qui aurait effacé ses cookies
+   * mais tiendrait encore l'identifiant en mémoire de page).
+   */
+  const pushAppareil = lisLAppareilPush(requete.headers.get('cookie')) ?? champs['pushAppareil'] ?? null;
 
   if (jeton !== null) {
     // Best-effort : une panne, un délai dépassé ou un 401 de la passerelle
