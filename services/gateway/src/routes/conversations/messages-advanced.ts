@@ -1,6 +1,5 @@
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import {
@@ -36,8 +35,6 @@ export { editedMessageResponseSchema, patchedMessageResponseSchema } from './mes
 export function registerMessagesAdvancedRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  translationService: MessageTranslationService,
-  optionalAuth: any,
   requiredAuth: any
 ) {
   const socketIOHandler = fastify.socketIOHandler;

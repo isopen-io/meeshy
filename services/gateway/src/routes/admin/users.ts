@@ -252,8 +252,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       // Creer l'utilisateur
       const newUser = await userManagementService.createUser(
-        validatedData as CreateUserDTO,
-        authContext.registeredUser!.id
+        validatedData as CreateUserDTO
       );
 
       // Log d'audit
@@ -335,8 +334,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Reinitialiser le mot de passe
       await userManagementService.resetPassword(
         request.params.userId,
-        validatedData as ResetPasswordDTO,
-        authContext.registeredUser!.id
+        validatedData as ResetPasswordDTO
       );
 
       // Log d'audit
@@ -387,10 +385,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       // Supprimer l'utilisateur (soft delete)
-      await userManagementService.deleteUser(
-        request.params.userId,
-        authContext.registeredUser.id
-      );
+      await userManagementService.deleteUser(request.params.userId);
 
       // Log d'audit
       await userAuditService.logDeleteUser(

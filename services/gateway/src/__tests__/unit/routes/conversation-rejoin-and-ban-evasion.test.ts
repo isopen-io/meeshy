@@ -267,7 +267,7 @@ function setup(state: LeftoverState, targetUserId: string) {
   if (targetUserId !== ACTOR_ID) rows.push(leftoverRow('active', ACTOR_ID));
   const prisma = buildPrisma(rows);
   const fastify = createMockFastify(prisma);
-  registerSharingRoutes(fastify as any, prisma, jest.fn<any>(), jest.fn<any>());
+  registerSharingRoutes(fastify as any, prisma, jest.fn<any>());
   registerParticipantsRoutes(fastify as any, prisma, jest.fn<any>(), jest.fn<any>());
   return { fastify, prisma, reply: createMockReply() };
 }

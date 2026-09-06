@@ -121,7 +121,7 @@ function buildApp(authContext: unknown, prismaOverrides: any = {}) {
   const prisma = makePrisma(prismaOverrides);
   // Les deux slots reçoivent la même garde : la route n'utilise plus que
   // `authOptional` (#4923) — voir le commentaire au site d'enregistrement.
-  registerMetadataRoutes(app, auth, auth, prisma as any);
+  registerMetadataRoutes(app, auth, prisma as any);
   return app;
 }
 

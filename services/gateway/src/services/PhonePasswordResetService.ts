@@ -334,7 +334,7 @@ export class PhonePasswordResetService {
       });
 
       if (consumed.count === 0) {
-        await this.revokeToken(token.id, 'MAX_IDENTITY_ATTEMPTS');
+        await this.revokeToken(token.id);
         await this.logSecurityEvent(token.userId, 'PHONE_RESET_IDENTITY_BLOCKED', 'HIGH', {
           tokenId: token.id,
           attempts: token.identityAttempts,
@@ -460,7 +460,7 @@ export class PhonePasswordResetService {
       });
 
       if (consumed.count === 0) {
-        await this.revokeToken(token.id, 'MAX_CODE_ATTEMPTS');
+        await this.revokeToken(token.id);
         await this.logSecurityEvent(token.userId, 'PHONE_RESET_CODE_BLOCKED', 'HIGH', {
           tokenId: token.id,
           attempts: token.codeAttempts,
@@ -705,7 +705,7 @@ export class PhonePasswordResetService {
     return false;
   }
 
-  private async revokeToken(tokenId: string, reason: string): Promise<void> {
+  private async revokeToken(tokenId: string): Promise<void> {
     await this.prisma.phonePasswordResetToken.update({
       where: { id: tokenId },
       data: { isRevoked: true }

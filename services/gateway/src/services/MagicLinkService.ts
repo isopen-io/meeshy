@@ -5,7 +5,7 @@
  * - SHA-256 hashed tokens
  * - 10 minute token expiry (returned as expiresInSeconds to clients)
  * - Single-use tokens
- * - Rate limiting (3 requests per hour per email)
+ * - Rate limiting (3 requests per hour per email, 10 per hour per IP)
  * - Device tracking (IP, location, browser)
  * - Security event logging
  * - Automatic session creation with full context
@@ -29,6 +29,12 @@ const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 const TOKEN_EXPIRY_MINUTES = 10; // 10 minutes
 // Higher limit in development for testing, strict in production
 const MAX_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 3 : 20;
+// Second, wider bound on the CALLER's address — mirrors
+// `PasswordResetService.checkRateLimit`. Without it, a single IP throttled
+// only by email could exhaust the magic-link pipeline (SMTP sends, token
+// creation) by rotating through distinct addresses, each under its own
+// untouched quota.
+const MAX_IP_REQUESTS_PER_HOUR = process.env.NODE_ENV === 'production' ? 10 : 50;
 
 /**
  * L'état du second facteur d'un compte, en TROIS valeurs — pas deux (#4534).
@@ -500,6 +506,7 @@ export class MagicLinkService {
    */
   private async checkRateLimit(email: string, ipAddress: string): Promise<boolean> {
     const emailKey = `ratelimit:magic-link:email:${email}`;
+    const ipKey = `ratelimit:magic-link:ip:${ipAddress}`;
 
     try {
       // Check email rate limit
@@ -510,9 +517,17 @@ export class MagicLinkService {
         return true;
       }
 
-      // Increment counter using set with expiry
-      const newCount = count + 1;
-      await this.cache.set(emailKey, newCount.toString(), 3600); // 1 hour
+      // Check IP rate limit — see MAX_IP_REQUESTS_PER_HOUR above
+      const ipCount = await this.cache.get(ipKey);
+      const ipCountNum = ipCount ? parseInt(ipCount) : 0;
+
+      if (ipCountNum >= MAX_IP_REQUESTS_PER_HOUR) {
+        return true;
+      }
+
+      // Increment counters using set with expiry
+      await this.cache.set(emailKey, (count + 1).toString(), 3600); // 1 hour
+      await this.cache.set(ipKey, (ipCountNum + 1).toString(), 3600); // 1 hour
 
       return false;
     } catch (error) {

@@ -236,7 +236,7 @@ export class AudioTranslateService extends EventEmitter {
    * - audioBase64 + audioFormat: Audio encodé en base64 (pour transcription directe)
    */
   async transcribeOnly(
-    userId: string,
+    _userId: string,
     options: {
       audioBase64?: string;
       audioFormat?: string;  // Requis si audioBase64 est fourni (wav, mp3, ogg, webm, m4a)

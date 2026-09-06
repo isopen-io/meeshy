@@ -36,9 +36,9 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   // Enregistrer toutes les routes par domaine fonctionnel
   registerCoreRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerMessagesRoutes(fastify, prisma, translationService, optionalAuth, requiredAuth);
-  registerMessagesAdvancedRoutes(fastify, prisma, translationService, optionalAuth, requiredAuth);
+  registerMessagesAdvancedRoutes(fastify, prisma, requiredAuth);
   registerParticipantsRoutes(fastify, prisma, optionalAuth, requiredAuth);
-  registerSharingRoutes(fastify, prisma, optionalAuth, requiredAuth);
+  registerSharingRoutes(fastify, prisma, requiredAuth);
   registerSearchRoutes(fastify, prisma, requiredAuth);
   registerLeaveRoutes(fastify, prisma, optionalAuth, requiredAuth);
   registerDeleteForMeRoutes(fastify, prisma, optionalAuth, requiredAuth);

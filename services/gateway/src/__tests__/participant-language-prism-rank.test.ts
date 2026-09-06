@@ -267,7 +267,7 @@ async function langueRemiseParLeLien(ligne: Record<string, unknown>): Promise<{
 }> {
   const prisma = passerelleServant(ligne);
   const fastify = fastifyDeTest(prisma);
-  registerSharingRoutes(fastify, prisma, noop, noop);
+  registerSharingRoutes(fastify, prisma, noop);
 
   await routePour(fastify, 'POST', 'join/:linkId').handler(
     { params: { linkId: 'mshy_Lien1' }, headers: {}, ip: '127.0.0.1',
