@@ -9,6 +9,7 @@ import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
 import { resolveSystemLanguageVariants } from '../../jobs/broadcast-recipients';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
@@ -318,11 +319,17 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       // Count total recipients
       const recipientCount = await fastify.prisma.user.count({ where });
 
-      // Group by systemLanguage
-      const recipientsByLanguage = await fastify.prisma.user.groupBy({
-        by: ['systemLanguage'],
+      // #5334 — l'aperçu comptait par `systemLanguage` SEUL (rang 1 du Prisme),
+      // quand l'envoi réel (`BroadcastSenderJob`/`BroadcastInAppSenderJob`)
+      // descend les quatre rangs via `recipientLanguage()`. Un compte dont la
+      // langue applicative vit au rang 2, 3 ou 4 tombait dans la mauvaise case
+      // de l'aperçu (ou hors de toute case, `systemLanguage` étant vide) alors
+      // qu'il recevra la diffusion dans sa vraie langue résolue. Même SSOT que
+      // l'envoi : un `findMany` sur les colonnes du Prisme, résolu PAR
+      // UTILISATEUR, jamais un `groupBy` sur une seule colonne.
+      const recipientsForLanguageBreakdown = await fastify.prisma.user.findMany({
         where,
-        _count: true,
+        select: RECIPIENT_LANG_SELECT,
       });
 
       // Group by registrationCountry
@@ -332,20 +339,19 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         _count: true,
       });
 
-      // #5161 — replier chaque bucket VERBATIM sur son code canonique et
+      // #5161 — replier chaque langue RÉSOLUE sur son code canonique et
       // ADDITIONNER les comptes qui convergent (même patron que #5155,
       // `usersLanguageMap`) : sans ça, `targetLanguages` fait traduire le
       // contenu de la diffusion vers CHAQUE variante au lieu d'une fois par
-      // langue canonique — traductions dupliquées, appels ML gaspillés. La
-      // carte est CONSERVÉE : le rapport rendu plus bas en a besoin avec ses
-      // comptes (`recipientsByLanguage`, l. ~385).
-      const recipientsByCanonicalLanguage = recipientsByLanguage.reduce((acc: Record<string, number>, g: any) => {
-        if (g.systemLanguage) {
-          const canonical = normalizeLanguageForDedup(g.systemLanguage);
-          acc[canonical] = (acc[canonical] ?? 0) + (g._count as number);
-        }
-        return acc;
-      }, {} as Record<string, number>);
+      // langue canonique — traductions dupliquées, appels ML gaspillés. Le
+      // repli 'en' est celui de l'envoi réel (`recipientLanguage(user, 'en')`
+      // dans `BroadcastSenderJob`/`BroadcastInAppSenderJob`) : l'aperçu doit
+      // élire la même langue que celle qui sera effectivement servie.
+      const recipientsByCanonicalLanguage: Record<string, number> = {};
+      for (const user of recipientsForLanguageBreakdown) {
+        const canonical = normalizeLanguageForDedup(recipientLanguage(user, 'en'));
+        recipientsByCanonicalLanguage[canonical] = (recipientsByCanonicalLanguage[canonical] ?? 0) + 1;
+      }
 
       // Les CIBLES du translator passent en plus par `broadcastTargetLanguages`
       // (#5247), qui fait ce que la carte ne fait pas : EXCLURE la langue

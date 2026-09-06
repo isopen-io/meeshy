@@ -588,10 +588,16 @@ describe('broadcastRoutes', () => {
       mockPrisma.adminBroadcast.findUnique.mockResolvedValue(
         fakeBroadcast({ targeting, status: 'DRAFT' })
       );
-      mockPrisma.user.count.mockResolvedValue(10); mockPrisma.user.findMany.mockResolvedValue([]); // #5161 resolveSystemLanguageVariants
-      mockPrisma.user.groupBy
-        .mockResolvedValueOnce([{ systemLanguage: 'en', _count: 5 }, { systemLanguage: 'fr', _count: 5 }])
-        .mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]);
+      mockPrisma.user.count.mockResolvedValue(10);
+      // `findMany` sert DEUX appels distincts : `resolveSystemLanguageVariants`
+      // (#5161, valeurs verbatim distinctes) et le rapport de langue (#5334,
+      // résolution du Prisme par utilisateur — `RECIPIENT_LANG_SELECT`). `[]`
+      // satisfait les deux sans rien affirmer sur leur contenu ; ce fichier ne
+      // teste pas la répartition par langue, voir `admin-broadcasts-preview-language.test.ts`.
+      mockPrisma.user.findMany.mockResolvedValue([]);
+      // #5334 — le seul `groupBy` restant sur `preview` est celui du PAYS ; la
+      // langue descend désormais le Prisme via `findMany` (ci-dessus).
+      mockPrisma.user.groupBy.mockResolvedValueOnce([{ registrationCountry: 'US', _count: 10 }]);
       mockTranslateContent.mockResolvedValue({ subjects: { fr: 'Bonjour' }, bodies: { fr: 'Corps' } });
       mockPrisma.adminBroadcast.update.mockResolvedValue(fakeBroadcast({ status: 'READY' }));
     }
