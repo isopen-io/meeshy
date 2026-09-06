@@ -12,6 +12,18 @@ data class MessageDeletedEvent(
     val deletedAt: String? = null,
 )
 
+/**
+ * `message:expired` — server-initiated twin of `message:deleted` for a
+ * self-destructing message burned by `ExpiredMessagesCleanupService` rather
+ * than a user request. Same local effect (drop the bubble), distinct name so
+ * a consumer that needs to tell the two apart can.
+ */
+@Serializable
+data class MessageExpiredEvent(
+    val messageId: String,
+    val conversationId: String,
+)
+
 /** `message:pinned` — a conversation member pinned [messageId]. */
 @Serializable
 data class MessagePinnedEvent(

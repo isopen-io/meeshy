@@ -16,6 +16,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageReceived = PassthroughSubject<APIMessage, Never>()
     let messageEdited = PassthroughSubject<APIMessage, Never>()
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+    let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
     let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
@@ -301,6 +302,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
 
     func simulateMessageDeleted(_ event: MessageDeletedEvent) {
         messageDeleted.send(event)
+    }
+
+    func simulateMessageExpired(_ event: MessageExpiredEvent) {
+        messageExpired.send(event)
     }
 
     func simulateMessageHiddenForMe(_ event: MessageHiddenForMeEvent) {

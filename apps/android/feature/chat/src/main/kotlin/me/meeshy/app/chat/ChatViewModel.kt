@@ -626,6 +626,16 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
+                // Server-initiated twin of messageDeleted for a self-destructing
+                // message burned by ExpiredMessagesCleanupService — same local
+                // effect (refresh drops the burned message from the list).
+                messageSocketManager.messageExpired.collect { event ->
+                    if (event.conversationId == conversationId) {
+                        messageRepository.refresh(conversationId)
+                    }
+                }
+            }
+            launch {
                 messageSocketManager.messageEdited.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.refresh(conversationId)

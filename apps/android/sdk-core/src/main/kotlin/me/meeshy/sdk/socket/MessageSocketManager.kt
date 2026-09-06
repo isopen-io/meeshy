@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.MessageDeletedEvent
+import me.meeshy.sdk.model.MessageExpiredEvent
 import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
@@ -56,6 +57,7 @@ class MessageSocketManager @Inject constructor(
     private val _messageReceived = buf<ApiMessage>()
     private val _messageEdited = buf<ApiMessage>()
     private val _messageDeleted = buf<MessageDeletedEvent>()
+    private val _messageExpired = buf<MessageExpiredEvent>()
     private val _messagePinned = buf<MessagePinnedEvent>()
     private val _messageUnpinned = buf<MessageUnpinnedEvent>()
     private val _typingStarted = buf<TypingEvent>()
@@ -90,6 +92,13 @@ class MessageSocketManager @Inject constructor(
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageEdited: SharedFlow<ApiMessage> = _messageEdited.asSharedFlow()
     val messageDeleted: SharedFlow<MessageDeletedEvent> = _messageDeleted.asSharedFlow()
+    /**
+     * `message:expired` — server-initiated twin of `messageDeleted` for a
+     * self-destructing message burned by `ExpiredMessagesCleanupService`
+     * rather than a user request. Same local effect (drop the bubble),
+     * distinct flow so a consumer that needs to tell the two apart can.
+     */
+    val messageExpired: SharedFlow<MessageExpiredEvent> = _messageExpired.asSharedFlow()
     val messagePinned: SharedFlow<MessagePinnedEvent> = _messagePinned.asSharedFlow()
     val messageUnpinned: SharedFlow<MessageUnpinnedEvent> = _messageUnpinned.asSharedFlow()
     val typingStarted: SharedFlow<TypingEvent> = _typingStarted.asSharedFlow()
@@ -154,6 +163,7 @@ class MessageSocketManager @Inject constructor(
         listen("message:new", _messageReceived)
         listen("message:edited", _messageEdited)
         listen("message:deleted", _messageDeleted)
+        listen("message:expired", _messageExpired)
         listen("message:pinned", _messagePinned)
         listen("message:unpinned", _messageUnpinned)
         listen("typing:start", _typingStarted)

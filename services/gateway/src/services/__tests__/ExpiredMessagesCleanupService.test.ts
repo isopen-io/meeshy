@@ -321,18 +321,22 @@ describe('ExpiredMessagesCleanupService', () => {
     await expect(service.cleanup()).resolves.toEqual({ burned: 0 });
   });
 
-  it('annonce la destruction à la room, à la liste et à la file hors ligne', async () => {
+  it('annonce la destruction à la room, à la liste et à la file hors ligne, sous son propre nom', async () => {
+    // `message:expired`, pas `message:deleted` : même effet visuel pour un
+    // client (retirer la bulle), mais la CAUSE diffère — personne n'a demandé
+    // ce retrait, le minuteur posé à l'envoi l'a décidé. Un client qui veut
+    // distinguer les deux (toast, log) doit pouvoir le faire sur le NOM.
     const { service, manager } = buildService([messageRow()]);
 
     await service.cleanup();
 
     expect(manager!.to).toHaveBeenCalledWith('conversation:conv-1');
-    expect(manager!.emit).toHaveBeenCalledWith('message:deleted', {
+    expect(manager!.emit).toHaveBeenCalledWith('message:expired', {
       messageId: 'msg-1',
       conversationId: 'conv-1',
     });
     expect(manager!.enqueueOfflineMessageMutation).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: 'deleted', messageId: 'msg-1' }),
+      expect.objectContaining({ eventType: 'expired', messageId: 'msg-1' }),
     );
   });
 

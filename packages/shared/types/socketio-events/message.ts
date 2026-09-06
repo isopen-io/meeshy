@@ -19,6 +19,17 @@ export interface MessageDeletedEventData {
 }
 
 /**
+ * Same shape as `MessageDeletedEventData` — a client removes the bubble
+ * identically either way — but a distinct event name lets a client that
+ * cares (a toast, a distinct log line) tell a server-initiated TTL burn
+ * apart from a user-requested deletion. @see MESSAGE_EXPIRED
+ */
+export interface MessageExpiredEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
+/**
  * Résumé des statuts de lecture pour enrichir les événements temps réel
  */
 export interface ReadStatusSummary {

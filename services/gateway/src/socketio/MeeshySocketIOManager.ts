@@ -1048,7 +1048,7 @@ export class MeeshySocketIOManager {
     conversationId: string;
     actorUserId: string | null | undefined;
     messageId: string;
-  } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted'>): Promise<void> {
+  } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted' | 'expired'>): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
 

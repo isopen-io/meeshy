@@ -692,6 +692,29 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Expired messages — server-initiated twin of a deletion (a
+        // self-destructing message burned by `ExpiredMessagesCleanupService`
+        // rather than a user request). Same local effect, so the same write.
+        socketManager.messageExpired
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                if let persistence = self.persistence {
+                    let now = Date()
+                    let msgId = event.messageId
+                    Task {
+                        do {
+                            try await persistence.markDeleted(localId: msgId, deletedAt: now)
+                        } catch {
+                            Logger.messages.warning("[ConversationSocket] markDeleted (expired) failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
+                }
+                StarredMessagesStore.shared.remove(messageId: event.messageId)
+            }
+            .store(in: &cancellables)
+
         // Masquage PERSONNEL — CE lecteur a retiré des messages de SA vue depuis
         // un autre de ses appareils.
         //
