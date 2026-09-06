@@ -29431,3 +29431,67 @@ le message sur une grille restée vide : **pire que le message**.
 **Forme générale** : quand on rend une valeur d'environnement RÉACTIVE, chercher
 tout consommateur dont le déclencheur est un événement de CYCLE DE VIE
 (`onAppear`, `task`) — il ne se rejouera pas, et son travail restera à faire.
+
+---
+
+## Leçon 545 — Deux canaux de publication, deux inventaires de ce qui PART
+
+**Contexte** (#5409). Le longpress d'un message ouvrait encore l'ancien atelier.
+Le reroutage vers le composer v3 tenait en trois lignes ; ce qui l'avait
+empêché pendant plusieurs lots tenait en deux choses, et aucune n'était celle
+qui était écrite.
+
+**Ce qui était ÉCRIT.** Un doc-comment justifiait le routage vers l'atelier :
+« `ComposerDocumentDraft` n'a ni `mediaIds`, ni fichier, ni lieu ». Faux sur les
+trois points depuis #4756. Son JUMEAU, sur une autre porte, disait exactement la
+même chose et avait déjà été corrigé — la correction n'avait pas été portée ici.
+
+> Un doc-comment qui EXEMPTE une unité d'une règle se vérifie comme une
+> affirmation, pas comme une décision. Et corriger un exemplaire ne corrige pas
+> sa jumelle : le commentaire ne documente que le fichier qui le porte
+> (leçon 85).
+
+**Ce qui bloquait VRAIMENT.** `documentLocalMedia` — la seule liste que la voie
+document téléverse — n'a QU'UN écrivain, l'INTAKE. Une GRAINE va directement au
+canvas et saute l'intake. Tant que sa surface était la SCÈNE, cela ne coûtait
+rien : le canal scène reçoit tous les actifs chargés. La voie DOCUMENT ne les
+voit pas.
+
+> **Deux canaux de publication ⇒ deux inventaires de ce qui part.** Un média peut
+> être posé sur le canvas, visible à l'écran, décrit dans le blob publié — et
+> n'avoir aucun TÉLÉVERSEUR. Rien ne rougit : le canvas est juste, c'est la
+> publication qui est vide.
+
+C'est la forme exacte de la leçon 543 (#5406) sur un autre étage : un champ
+parfaitement produit, qu'aucun chemin ne fait voyager. **La question à poser à
+tout contenu composé n'est pas « est-il correct ? » mais « par quel canal
+part-il, et ce canal le connaît-il ? ».**
+
+**La jumelle avait déjà le défaut, en production.** Une autre porte montait déjà
+la surface document AVEC une graine et publiait pour de bon : partager une image
+depuis une autre app puis publier en POST perdait l'image. Elle n'a pas été
+trouvée en cherchant le bug — elle est tombée en posant la question ci-dessus à
+tous les monteurs de graine.
+
+## Leçon 546 — Un gate en arbre PARTAGÉ mesure l'arbre ; isoler est la seule mesure
+
+**Contexte** (#5409, même lot). Le build de l'app a échoué sur des fichiers que
+je n'avais pas touchés. `lsof` sur le verrou `build.db` a nommé le détenteur :
+une AUTRE session travaillait dans le même arbre, avec 8 fichiers du composer en
+vol — dont une signature de fonction à moitié changée.
+
+**Ce qu'il ne faut pas faire** : tuer son processus, ni committer le
+`project.pbxproj` (il porte les références de ses fichiers neufs, non
+committés — la CI casserait sur des chemins absents).
+
+**Ce qui mesure** : `git worktree add` depuis `HEAD`, y copier SES SEULS fichiers
+modifiés, régénérer le projet, compiler et tester là. Le verdict porte alors sur
+le diff, pas sur l'arbre.
+
+**Deux pièges pratiques mesurés dans la foulée :**
+- un build iOS complet dépasse la limite d'un job de fond (`BUILD INTERRUPTED`,
+  exit 144) — relancer en avant-plan par tranches, le cache est chaud et chaque
+  passe avance ;
+- ne PAS committer `project.pbxproj` est SÛR ici, et c'est vérifiable : les
+  workflows iOS lancent `xcodegen generate` avant de builder, et `meeshy.sh`
+  régénère sur dérive constatée.
