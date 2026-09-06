@@ -62863,6 +62863,12 @@
             "value": "Disposición de las escenas: %@"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disposition des scènes : %@"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -62901,6 +62907,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Toca dos veces para cambiar la disposición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche deux fois pour changer la disposition"
           }
         },
         "it": {
@@ -62943,6 +62955,12 @@
             "value": "Imagen por imagen"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image par image"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -62981,6 +62999,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Una grande, las demás al lado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une grande, les autres à côté"
           }
         },
         "it": {
@@ -63023,6 +63047,12 @@
             "value": "Desplazamiento continuo"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Défilement continu"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -63058,6 +63088,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En zigzag"
+          }
+        },
+        "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "En zigzag"
@@ -63101,6 +63137,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "En ola"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En vague"
           }
         },
         "it": {
@@ -67257,6 +67299,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diapositiva %1$d de %2$d"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide %1$d sur %2$d"
           }
         },
         "it": {
@@ -102154,6 +102202,12 @@
             "value": "Escena siguiente"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scène suivante"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -102192,6 +102246,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Escena anterior"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scène précédente"
           }
         },
         "it": {
@@ -102328,6 +102388,12 @@
             "value": "vídeo"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vidéo"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -102366,6 +102432,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sonido desactivado: abre en pantalla completa para oírlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son coupé — ouvrir en plein écran pour l'entendre"
           }
         },
         "it": {
@@ -132430,6 +132502,12 @@
             "value": "Pausar todo"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout mettre en pause"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -132468,6 +132546,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reanudar todo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout reprendre"
           }
         },
         "it": {
