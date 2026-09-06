@@ -37,6 +37,7 @@ import {
   type PreferenceSchema,
 } from './preference-registry';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { logError } from '../../../utils/logger.js';
 
 export type { CategoryStorage };
 
@@ -147,7 +148,7 @@ export function createPreferenceRouter(
         try {
           return sendSuccess(reply, await resolveCompleteFor(userId));
         } catch (error: any) {
-          fastify.log.error({ error, category }, 'Error fetching preferences');
+          logError(fastify.log, `Error fetching preferences (category=${category})`, error);
           return sendInternalError(reply, 'FETCH_ERROR', { message: 'Failed to fetch preferences' });
         }
       }
@@ -285,7 +286,7 @@ export function createPreferenceRouter(
             });
           }
 
-          fastify.log.error({ error, category }, 'Error updating preferences');
+          logError(fastify.log, `Error updating preferences (category=${category})`, error);
           return sendInternalError(reply, 'UPDATE_ERROR', { message: 'Failed to update preferences' });
         }
       }
@@ -450,7 +451,7 @@ export function createPreferenceRouter(
             });
           }
 
-          fastify.log.error({ error, category }, 'Error partially updating preferences');
+          logError(fastify.log, `Error partially updating preferences (category=${category})`, error);
           return sendInternalError(reply, 'UPDATE_ERROR', { message: 'Failed to update preferences' });
         }
       }
@@ -503,7 +504,7 @@ export function createPreferenceRouter(
 
           return sendSuccess(reply, undefined, { message: `${category} preferences reset to defaults` });
         } catch (error: any) {
-          fastify.log.error({ error, category }, 'Error resetting preferences');
+          logError(fastify.log, `Error resetting preferences (category=${category})`, error);
           return sendInternalError(reply, 'RESET_ERROR', { message: 'Failed to reset preferences' });
         }
       }

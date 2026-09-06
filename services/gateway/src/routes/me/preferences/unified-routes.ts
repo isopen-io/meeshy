@@ -79,6 +79,7 @@ import {
 } from './preference-registry';
 import { parseSelection, projectSelection } from './preference-selection';
 import { createPreferenceRateLimitConfig } from './preference-rate-limit';
+import { logError } from '../../../utils/logger.js';
 
 type PreferenceQuery = { readonly categories?: string; readonly fields?: string; readonly mode?: string };
 
@@ -214,7 +215,7 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
 
         return sendSuccess(reply, payload);
       } catch (error) {
-        fastify.log.error({ error }, 'Error fetching preferences');
+        logError(fastify.log, 'Error fetching preferences', error);
         return sendInternalError(reply, 'FETCH_ERROR', {
           message: 'Failed to fetch preferences',
         });
@@ -430,7 +431,7 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
           });
         }
 
-        fastify.log.error({ error }, 'Error updating preferences');
+        logError(fastify.log, 'Error updating preferences', error);
         return sendInternalError(reply, 'UPDATE_ERROR', {
           message: 'Failed to update preferences',
         });
@@ -518,7 +519,7 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
           { message: `${categories.length} preference categories reset to defaults` }
         );
       } catch (error) {
-        fastify.log.error({ error }, 'Error resetting preferences');
+        logError(fastify.log, 'Error resetting preferences', error);
         return sendInternalError(reply, 'RESET_ERROR', {
           message: 'Failed to reset preferences',
         });

@@ -16,6 +16,7 @@ import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
 import { HashtagPostsQuerySchema, chargerPostsParHashtag } from './hashtag';
 import { NearbyQuerySchema, chargerPostsProches, verifierPlafondDecouverteScope } from './nearby';
 import { MineQuerySchema as SoundPostsQuerySchema, OBJECT_ID as SOUND_ID_PATTERN, chargerPostsParSon } from './sounds';
+import { logError } from '../../utils/logger.js';
 
 /**
  * Le fil social — QUINZE routes qui lisent la même ligne `Post`, distinguée
@@ -408,7 +409,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/feed] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/feed] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -477,7 +478,7 @@ export function registerFeedRoutes(
         },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/feed/stories] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -517,7 +518,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/stories/mine] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/stories/mine] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -556,7 +557,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/feed/reels] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/feed/reels] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -590,7 +591,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/feed/statuses] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/feed/statuses] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -624,7 +625,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/feed/statuses/discover] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/feed/statuses/discover] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -659,7 +660,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/user/:userId] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/user/:userId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -694,7 +695,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/community/:communityId] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/community/:communityId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -729,7 +730,7 @@ export function registerFeedRoutes(
         pagination: { limit, hasMore: resultat.hasMore, nextCursor: resultat.nextCursor },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/bookmarks] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/bookmarks] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -873,7 +874,7 @@ export function registerFeedRoutes(
         }
       }
     } catch (error) {
-      fastify.log.error(`[GET /social/posts] Error: ${error}`);
+      logError(fastify.log, '[GET /social/posts] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

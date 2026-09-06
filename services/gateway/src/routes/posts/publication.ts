@@ -63,6 +63,7 @@ import {
 import type { ExtractedHashtag } from '../../services/HashtagService';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import { logError } from '../../utils/logger.js';
 
 /**
  * La ligne écrite, telle que le noyau a besoin de la LIRE.
@@ -330,7 +331,7 @@ export async function runPublicationEffects(
     storyEffects,
     declared: declaredMentions,
     onError: (err: unknown) => {
-      fastify.log.error(`[${porte}] post mention reconcile failed: ${err}`);
+      logError(fastify.log, `[${porte}] post mention reconcile failed`, err);
     },
   });
 
@@ -339,7 +340,7 @@ export async function runPublicationEffects(
     postId,
     resolved: createdMentions,
     onError: (err: unknown) => {
-      fastify.log.error(`[${porte}] post reference reload failed: ${err}`);
+      logError(fastify.log, `[${porte}] post reference reload failed`, err);
     },
   });
 
@@ -365,7 +366,7 @@ export async function runPublicationEffects(
     const hashtags = hashtagService.extractHashtags(postSignals);
     if (hashtags.length > 0) {
       hashtagService.createPostHashtags(postId, hashtags).catch((err: unknown) => {
-        fastify.log.error(`[${porte}] hashtag persist failed: ${err}`);
+        logError(fastify.log, `[${porte}] hashtag persist failed`, err);
       });
     }
   }
@@ -386,7 +387,7 @@ export async function runPublicationEffects(
       visibility,
       visibilityUserIds,
     }).catch((err: unknown) => {
-      fastify.log.error(`[${porte}] friend content notification fan-out failed: ${err}`);
+      logError(fastify.log, `[${porte}] friend content notification fan-out failed`, err);
     });
   }
 
