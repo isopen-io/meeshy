@@ -4,6 +4,8 @@
  *
  * Hiérarchie des consentements :
  * - dataProcessingConsentAt (BASE OBLIGATOIRE pour tout)
+ *   ├─> analyticsConsentAt (requis pour allowAnalytics — #4709, enfant
+ *   │     direct, jamais un maillon de la chaîne vocale)
  *   ├─> voiceDataConsentAt (requis pour audio)
  *   │     ├─> audioTranscriptionEnabledAt
  *   │     │     └─> audioTranslationEnabledAt
@@ -40,6 +42,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 export interface ConsentStatus {
   hasDataProcessingConsent: boolean;
+  hasAnalyticsConsent: boolean;
   hasVoiceDataConsent: boolean;
   hasVoiceProfileConsent: boolean;
   hasVoiceCloningConsent: boolean;
@@ -67,6 +70,7 @@ export class ConsentValidationService {
       where: { id: userId },
       select: {
         dataProcessingConsentAt: true,
+        analyticsConsentAt: true,
         voiceDataConsentAt: true,
         voiceProfileConsentAt: true,
         voiceCloningEnabledAt: true
@@ -116,11 +120,15 @@ export class ConsentValidationService {
     // désormais ces cinq clés (`z.never()`, #4180) : le blob ne peut plus
     // les porter, et cette lecture n'a donc plus de second hasard à départager.
     const dataProcessingConsentAt = user.dataProcessingConsentAt;
+    const analyticsConsentAt = user.analyticsConsentAt;
     const voiceDataConsentAt = user.voiceDataConsentAt;
     const voiceProfileConsentAt = user.voiceProfileConsentAt;
     const voiceCloningEnabledAt = user.voiceCloningEnabledAt;
 
     const hasDataProcessingConsent = !!dataProcessingConsentAt;
+    // `analytics` est un enfant DIRECT de `data-processing` (CONSENT_PARENT,
+    // #4709) — frère de `voice-data`, jamais un maillon de sa chaîne.
+    const hasAnalyticsConsent = !!analyticsConsentAt && hasDataProcessingConsent;
     const hasVoiceDataConsent = !!voiceDataConsentAt && hasDataProcessingConsent;
     const hasVoiceProfileConsent = !!voiceProfileConsentAt && hasVoiceDataConsent;
 
@@ -178,6 +186,7 @@ export class ConsentValidationService {
 
     return {
       hasDataProcessingConsent,
+      hasAnalyticsConsent,
       hasVoiceDataConsent,
       hasVoiceProfileConsent,
       hasVoiceCloningConsent,
@@ -315,12 +324,15 @@ export class ConsentValidationService {
     const status = await this.getConsentStatus(userId);
     const violations: ConsentViolation[] = [];
 
-    // Analytics requiert dataProcessingConsent
-    if (preferences.allowAnalytics === true && !status.hasDataProcessingConsent) {
+    // Analytics requiert son propre consentement horodaté (#4709) — la
+    // dépendance à `dataProcessingConsentAt` seul a été retenue insuffisante
+    // par le porteur : « le consentement à l'analytique est REQUIS », pas
+    // simplement hérité du traitement général des données.
+    if (preferences.allowAnalytics === true && !status.hasAnalyticsConsent) {
       violations.push({
         field: 'allowAnalytics',
-        message: 'Analytics requires data processing consent',
-        requiredConsents: ['dataProcessingConsentAt']
+        message: 'Analytics requires analytics consent',
+        requiredConsents: ['analyticsConsentAt']
       });
     }
 

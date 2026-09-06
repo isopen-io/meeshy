@@ -346,3 +346,212 @@ describe('la porte de /notifications/preferences — POST du geste `fenetre` (é
     expect(reponse.status).not.toBe(303);
   });
 });
+
+/**
+ * LE GESTE `push` — L'ABONNEMENT DE CET APPAREIL (#5391, § 3.2, § 4.2 de la
+ * spécification). Les quatre variables Firebase sont posées/retirées
+ * autour de chaque test — `configurationFirebase()` (`prefs-porte.ts`) les
+ * lit à l'appel, jamais au chargement du module.
+ */
+const ENV_FIREBASE: Readonly<Record<string, string>> = {
+  NEXT_PUBLIC_FIREBASE_API_KEY: 'AIza-test',
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'meeshy-test',
+  NEXT_PUBLIC_FIREBASE_APP_ID: '1:123:web:abc',
+  NEXT_PUBLIC_FIREBASE_VAPID_KEY: 'BExxx',
+};
+
+const CLES_ENV_FIREBASE = Object.keys(ENV_FIREBASE);
+
+const avecEnvFirebase = <T>(execute: () => Promise<T>): Promise<T> => {
+  const avant: Record<string, string | undefined> = {};
+  for (const cle of CLES_ENV_FIREBASE) {
+    avant[cle] = process.env[cle];
+    process.env[cle] = ENV_FIREBASE[cle];
+  }
+  return execute().finally(() => {
+    for (const cle of CLES_ENV_FIREBASE) {
+      if (avant[cle] === undefined) delete process.env[cle];
+      else process.env[cle] = avant[cle];
+    }
+  });
+};
+
+describe('la porte de /notifications/preferences — GET, la rangée push', () => {
+  it('sans configuration Firebase, l’état servi est `indisponible`, sans appel à /users/me/devices', async () => {
+    const { recuperer, vus } = NOMINALE();
+
+    const html = await (await PREFERENCES(requete('https://meeshy.test/notifications/preferences'), recuperer)).text();
+
+    expect(html).toContain('Sur cet appareil');
+    expect(vus.some((v) => v.url.includes('/users/me/devices'))).toBe(false);
+    const zone = html.slice(html.indexOf('name="geste" value="push"'), html.indexOf('name="geste" value="push"') + 500);
+    expect(zone).toContain('disabled');
+  });
+
+  it('avec configuration Firebase et un cookie appareil ABONNÉ (present dans /users/me/devices), aria-checked="true"', async () => {
+    const { recuperer } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+      '/api/v1/users/me/devices': () =>
+        json({ success: true, data: [{ id: 'pt-1', deviceId: 'device-42', platform: 'web', isActive: true }] }),
+    });
+
+    const html = await avecEnvFirebase(async () =>
+      (
+        await PREFERENCES(
+          requete('https://meeshy.test/notifications/preferences', { headers: { cookie: `${COOKIE}; meeshy_v3_push_appareil=device-42` } }),
+          recuperer,
+        )
+      ).text(),
+    );
+
+    const zone = html.slice(html.indexOf('name="geste" value="push"'), html.indexOf('name="geste" value="push"') + 500);
+    expect(zone).toContain('aria-checked="true"');
+    expect(zone).toContain('name="valeur" value="false"');
+    expect(html).toContain('data-firebase-api-key="AIza-test"');
+  });
+
+  it('avec configuration Firebase et AUCUN cookie appareil, l’état est `non-abonne` SANS appeler /users/me/devices', async () => {
+    const { recuperer, vus } = NOMINALE();
+
+    const html = await avecEnvFirebase(async () =>
+      (await PREFERENCES(requete('https://meeshy.test/notifications/preferences'), recuperer)).text(),
+    );
+
+    expect(vus.some((v) => v.url.includes('/users/me/devices'))).toBe(false);
+    const zone = html.slice(html.indexOf('name="geste" value="push"'), html.indexOf('name="geste" value="push"') + 500);
+    expect(zone).toContain('aria-checked="false"');
+    expect(zone).toContain('name="valeur" value="true"');
+  });
+
+  it('un cookie appareil qui ne figure PAS parmi les appareils actifs rend `non-abonne`', async () => {
+    const { recuperer } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+      '/api/v1/users/me/devices': () => json({ success: true, data: [] }),
+    });
+
+    const html = await avecEnvFirebase(async () =>
+      (
+        await PREFERENCES(
+          requete('https://meeshy.test/notifications/preferences', { headers: { cookie: `${COOKIE}; meeshy_v3_push_appareil=device-inconnu` } }),
+          recuperer,
+        )
+      ).text(),
+    );
+
+    const zone = html.slice(html.indexOf('name="geste" value="push"'), html.indexOf('name="geste" value="push"') + 500);
+    expect(zone).toContain('aria-checked="false"');
+  });
+});
+
+describe('la porte de /notifications/preferences — POST du geste `push`', () => {
+  it('valeur=false, cookie appareil présent ⇒ DELETE {deviceId}, 303 vers ?regle=push-desabonne', async () => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+      '/api/v1/users/register-device-token': () => json({ success: true, data: { deletedCount: 1 } }),
+    });
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=push&valeur=false',
+        headers: { cookie: `${COOKIE}; meeshy_v3_push_appareil=device-42` },
+      }),
+      recuperer,
+    );
+
+    const suppression = vus.find((v) => v.options.method === 'DELETE');
+    expect(suppression).toBeDefined();
+    expect(JSON.parse(String(suppression?.options.body))).toEqual({ deviceId: 'device-42' });
+    expect(reponse.status).toBe(303);
+    expect(reponse.headers.get('location')).toBe('/notifications/preferences?regle=push-desabonne');
+  });
+
+  it('valeur=false SANS cookie appareil ⇒ 200, motif nommé, ZÉRO appel à la passerelle', async () => {
+    const { recuperer, vus } = NOMINALE();
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', { method: 'POST', corps: 'geste=push&valeur=false' }),
+      recuperer,
+    );
+    const html = await reponse.text();
+
+    expect(reponse.status).toBe(200);
+    expect(vus.filter((v) => v.options.method === 'DELETE')).toEqual([]);
+    expect(html).toContain('Aucun abonnement connu sur cet appareil.');
+  });
+
+  it('valeur=true, champ `abonnement` rempli ⇒ POST register-device-token, 303 vers ?regle=push-abonne', async () => {
+    const { recuperer, vus } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+      '/api/v1/users/register-device-token': () => json({ success: true, data: { id: 'pt-1', isNew: true } }),
+    });
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=push&valeur=true&abonnement=fcm-token-abc&deviceId=device-42',
+      }),
+      recuperer,
+    );
+
+    const enregistrement = vus.find((v) => v.options.method === 'POST' && v.url.includes('register-device-token'));
+    expect(enregistrement).toBeDefined();
+    expect(JSON.parse(String(enregistrement?.options.body))).toEqual({
+      token: 'fcm-token-abc',
+      type: 'fcm',
+      platform: 'web',
+      deviceId: 'device-42',
+      deviceName: 'Web v3',
+    });
+    expect(reponse.status).toBe(303);
+    expect(reponse.headers.get('location')).toBe('/notifications/preferences?regle=push-abonne');
+  });
+
+  it('valeur=true, champ `abonnement` VIDE (sans JavaScript) ⇒ 200, motif « exige JavaScript », ZÉRO appel gateway', async () => {
+    const { recuperer, vus } = NOMINALE();
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', { method: 'POST', corps: 'geste=push&valeur=true' }),
+      recuperer,
+    );
+    const html = await reponse.text();
+
+    expect(reponse.status).toBe(200);
+    expect(vus.some((v) => v.url.includes('register-device-token'))).toBe(false);
+    expect(html).toContain('S’abonner exige JavaScript');
+  });
+
+  it('refuse une origine ÉTRANGÈRE avant tout appel', async () => {
+    const { recuperer, vus } = NOMINALE();
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=push&valeur=false',
+        origine: 'https://ailleurs.test',
+      }),
+      recuperer,
+    );
+
+    expect(vus).toEqual([]);
+    expect(reponse.status).not.toBe(303);
+  });
+
+  it('renvoie se connecter quand register-device-token répond 401', async () => {
+    const { recuperer } = passerelle({
+      '/api/v1/me/preferences': () => json({ success: true, data: { notification: DOCUMENT_SERVI } }),
+      '/api/v1/users/register-device-token': () => json({ success: false }, 401),
+    });
+
+    const reponse = await PREFERENCES(
+      requete('https://meeshy.test/notifications/preferences', {
+        method: 'POST',
+        corps: 'geste=push&valeur=true&abonnement=fcm-token-abc&deviceId=device-42',
+      }),
+      recuperer,
+    );
+
+    expect(reponse.status).toBe(302);
+    expect(reponse.headers.get('location')).toBe('/login?returnUrl=%2Fnotifications%2Fpreferences');
+  });
+});

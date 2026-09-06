@@ -261,6 +261,13 @@ model User {
   /// Consentement pour le traitement général des données
   dataProcessingConsentAt DateTime?
 
+  /// Consentement à l'analytique produit (#4709) — la SEULE colonne qui
+  /// gouverne la préférence `PrivacyPreferenceSchema.allowAnalytics` ;
+  /// enfant direct de `dataProcessingConsentAt` dans la hiérarchie de
+  /// `CONSENT_PARENT` (`packages/shared/types/consents.ts`), jamais son
+  /// substitut. `PUT /me/consents/analytics` pose cette colonne.
+  analyticsConsentAt DateTime?
+
   /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
   /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
   /// est posée au `create` — jamais un booléen à côté, la date suffit.

@@ -749,6 +749,11 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // contenu qu'il faudrait lire. Les champs de saisie et le bouton restent
     // sur l'encre (`.action.primaire`, déjà nommé).
     '.fenetre-edition summary',
+    // La rangée push « Sur cet appareil » (#5391) : le cliquable — un
+    // `<summary>`, même emploi que `.fenetre-edition summary` juste
+    // au-dessus — il déplie l'explication de ce que l'appareil recevra,
+    // jamais un contenu qu'il faudrait lire d'emblée.
+    '.push-detail summary',
     // L'historique des appels (`cible/calls.png`, #5108) : la tuile d'une ligne
     // VIDÉO — même emploi que `dialog.espace .rangee .tuile` et `.marque
     // .tuile` : le glyphe d'une NATURE, ici celle de l'appel plutôt que celle
