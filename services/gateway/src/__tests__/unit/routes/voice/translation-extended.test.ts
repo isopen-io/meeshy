@@ -71,13 +71,34 @@ function makeTranslationService(overrides: Record<string, any> = {}) {
   } as any;
 }
 
+// #3624 — le chemin `attachmentId` vérifie désormais l'appartenance de
+// l'appelant à sa conversation (`ensureVoiceAttachmentAccessible`). Le défaut
+// simule un membre légitime, pour ne pas dévier les témoins de ce fichier
+// (qui portent sur d'autres branches) vers la garde d'appartenance.
+function makePrismaMock(overrides: Record<string, any> = {}) {
+  return {
+    messageAttachment: {
+      findUnique: jest.fn<any>().mockResolvedValue({ id: ATTACHMENT_ID, messageId: 'msg-1', uploadedBy: USER_ID }),
+    },
+    message: {
+      findUnique: jest.fn<any>().mockResolvedValue({ conversationId: 'conv-1', deletedAt: null, expiresAt: null }),
+    },
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
+    },
+    ...overrides,
+  } as any;
+}
+
 async function buildApp(opts: {
   audioService?: ReturnType<typeof makeAudioService>;
   translationService?: ReturnType<typeof makeTranslationService> | null;
+  prisma?: ReturnType<typeof makePrismaMock>;
 } = {}): Promise<FastifyInstance> {
   const {
     audioService = makeAudioService(),
     translationService = makeTranslationService(),
+    prisma = makePrismaMock(),
   } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -96,7 +117,7 @@ async function buildApp(opts: {
     (req as any).user = { userId: USER_ID, role: 'user' };
   });
 
-  registerTranslationRoutes(app, audioService, translationService ?? undefined, PREFIX);
+  registerTranslationRoutes(app, audioService, translationService ?? undefined, PREFIX, prisma);
   await app.ready();
   return app;
 }
@@ -324,10 +345,12 @@ describe('POST /api/v1/voice/transcribe — attachmentId, transcribeAttachment s
 async function buildAppWithMultipart(opts: {
   audioService?: ReturnType<typeof makeAudioService>;
   translationService?: ReturnType<typeof makeTranslationService> | null;
+  prisma?: ReturnType<typeof makePrismaMock>;
 } = {}): Promise<FastifyInstance> {
   const {
     audioService = makeAudioService(),
     translationService = makeTranslationService(),
+    prisma = makePrismaMock(),
   } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -352,7 +375,7 @@ async function buildAppWithMultipart(opts: {
     (req as any).user = { userId: USER_ID, role: 'user' };
   });
 
-  registerTranslationRoutes(app, audioService, translationService ?? undefined, PREFIX);
+  registerTranslationRoutes(app, audioService, translationService ?? undefined, PREFIX, prisma);
   await app.ready();
   return app;
 }
