@@ -1,10 +1,9 @@
 /**
- * LE MODULE D'ABONNEMENT PUSH (#5391) — `lib/realtime/push-abonnement.ts`,
- * armé par `lib/realtime/prefs.ts` sur la rangée push UNIQUEMENT.
+ * LE MODULE D'ABONNEMENT PUSH (#5391 puis restante FLUIDITÉ de #5391) —
+ * `lib/realtime/push-abonnement.ts`, armé par `lib/realtime/prefs.ts` sur la
+ * rangée push UNIQUEMENT.
  *
- * Ce que ces témoins gardent :
- *   - `valeur=false` (désabonner) traverse SANS interception — le chemin
- *     sans JavaScript reste le seul, § 3.2 ;
+ * Ce que ces témoins gardent, sur la moitié « abonner » (`valeur=true`) :
  *   - `valeur=true` sans configuration Firebase (attributs `data-` absents)
  *     ne fait RIEN — le bouton `disabled` ne devrait jamais soumettre, et
  *     ce module ne suppose pas le contraire ;
@@ -14,6 +13,11 @@
  *   - le chemin nominal remplit `abonnement`/`deviceId` puis appelle
  *     `formulaire.submit()` — jamais `requestSubmit()`, qui redéclencherait
  *     l'écouteur.
+ *
+ * La moitié « désabonner » (`valeur=false`) est maintenant INTERCEPTÉE elle
+ * aussi (le détail vit dans `__tests__/push-desabonnement.test.ts`) : ce
+ * fichier garde seulement que le geste EST intercepté et ne soumet jamais
+ * nativement.
  */
 
 import {
@@ -34,6 +38,9 @@ const CONFIG_ATTRS = {
   'data-fcm-installations-base': 'https://fcm-installations.bouchon.test',
   'data-fcm-registrations-base': 'https://fcm-registrations.bouchon.test',
 } as const;
+
+/** Le contexte que `lib/realtime/prefs.ts` transmet à l'armement — sans effet sur les témoins de la moitié « abonner ». */
+const CTX_TEST = { passerelle: 'https://passerelle.bouchon.test', jeton: 'jeton-arme-test' } as const;
 
 const monteLaRangee = (attrs?: Readonly<Record<string, string>>): { main: HTMLElement; formulaire: HTMLFormElement } => {
   const attributs = Object.entries(attrs ?? {})
@@ -117,20 +124,20 @@ describe('armeLAbonnementPush', () => {
     Reflect.deleteProperty(window, 'PushManager');
   });
 
-  it('n’intercepte JAMAIS le désabonnement (valeur=false) — aucun preventDefault', () => {
+  it('intercepte le désabonnement (valeur=false) — preventDefault posé, jamais de soumission native', () => {
     const { main, formulaire } = monteLaRangee(CONFIG_ATTRS);
     formulaire.querySelector<HTMLInputElement>('input[name="valeur"]')!.value = 'false';
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
 
     const evenement = soumets(formulaire);
 
-    expect(evenement.defaultPrevented).toBe(false);
+    expect(evenement.defaultPrevented).toBe(true);
     expect(HTMLFormElement.prototype.submit).not.toHaveBeenCalled();
   });
 
   it('sans configuration Firebase (attributs data- absents), ne fait rien', () => {
     const { main, formulaire } = monteLaRangee();
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
 
     const evenement = soumets(formulaire);
 
@@ -139,7 +146,7 @@ describe('armeLAbonnementPush', () => {
 
   it('navigateur incompatible (ni Notification, ni serviceWorker, ni PushManager) : échec peint, formulaire NON soumis', async () => {
     const { main, formulaire } = monteLaRangee(CONFIG_ATTRS);
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
 
     soumets(formulaire);
     await attendUneMicrotache();
@@ -156,7 +163,7 @@ describe('armeLAbonnementPush', () => {
     (globalThis as { Notification?: unknown }).Notification = { requestPermission: jest.fn(() => Promise.resolve('denied')) };
     Object.defineProperty(navigator, 'serviceWorker', { value: {}, configurable: true });
     (window as { PushManager?: unknown }).PushManager = function PushManager(): void {};
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
 
     soumets(formulaire);
     await attendUneMicrotache();
@@ -195,7 +202,7 @@ describe('armeLAbonnementPush', () => {
       return { ok: true, json: async () => ({ token: 'fcm-token-final' }) };
     }) as unknown as typeof fetch;
 
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
     soumets(formulaire);
     for (let i = 0; i < 10; i += 1) await attendUneMicrotache();
 
@@ -242,7 +249,7 @@ describe('armeLAbonnementPush', () => {
       return { ok: true, json: async () => ({ token: 'fcm-token-final' }) };
     }) as unknown as typeof fetch;
 
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
     soumets(formulaire);
     for (let i = 0; i < 10; i += 1) await attendUneMicrotache();
 
@@ -282,7 +289,7 @@ describe('armeLAbonnementPush', () => {
         : { ok: true, json: async () => ({ token: 'fcm-token-final' }) },
     ) as unknown as typeof fetch;
 
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
     soumets(formulaire);
     for (let i = 0; i < 10; i += 1) await attendUneMicrotache();
 
@@ -303,7 +310,7 @@ describe('armeLAbonnementPush', () => {
     });
     (window as { PushManager?: unknown }).PushManager = function PushManager(): void {};
 
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
     soumets(formulaire);
     for (let i = 0; i < 6; i += 1) await attendUneMicrotache();
 
@@ -328,7 +335,7 @@ describe('armeLAbonnementPush', () => {
     (window as { PushManager?: unknown }).PushManager = function PushManager(): void {};
     globalThis.fetch = jest.fn(async () => ({ ok: false, status: 500, json: async () => ({}) })) as unknown as typeof fetch;
 
-    armeLAbonnementPush(main);
+    armeLAbonnementPush(main, CTX_TEST);
     soumets(formulaire);
     await attendUneMicrotache();
     await attendUneMicrotache();

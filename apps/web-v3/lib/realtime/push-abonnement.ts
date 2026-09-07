@@ -1,6 +1,10 @@
 import { lisLAppareilPush, poseLAppareilPush } from '@/lib/api/push-appareil';
+import { retireLeJetonPush } from '@/lib/api/push-tokens';
 import { PREFS } from '@/lib/contenu/prefs-de-notif';
 import { CACHE_DE_ROTATION_PUSH, CLE_DE_CONTEXTE_PUSH, CLE_DE_ROTATION_PUSH } from '@/lib/sw/signal';
+
+import { montreLaReussite, montreLaSessionExpiree, montreLEchec } from './prefs-fentes';
+import { peinsLaRangee } from './prefs-peinture';
 
 /**
  * LE MODULE D'ABONNEMENT PUSH (#5391, § 3.4 de la spécification) — armé par
@@ -19,20 +23,29 @@ import { CACHE_DE_ROTATION_PUSH, CLE_DE_CONTEXTE_PUSH, CLE_DE_ROTATION_PUSH } fr
  * @firebase/messaging`) — la seule pièce non contractuelle de ce travail,
  * vérifiée en staging au premier envoi réel (§ 9, Q4).
  *
- * SEULE LA MOITIÉ « ABONNER » EST INTERCEPTÉE (`valeur=true`) : LA MOITIÉ
- * « DÉSABONNER » (`valeur=false`) RESTE UN `<form method="post">` NU — la
- * porte (`app/connecte/prefs-porte.ts`) retire le token depuis le COOKIE
- * appareil, sans qu'aucun geste client ne soit nécessaire (§ 3.2). Un module
- * qui interceptait aussi ce chemin aurait dupliqué une logique déjà servie
- * PLUS SIMPLEMENT sans JavaScript.
+ * LES DEUX MOITIÉS SONT INTERCEPTÉES (restante FLUIDITÉ de #5391, ce
+ * travail) : `valeur=true` (s'abonner) suit le chemin ci-dessous, inchangé.
+ * `valeur=false` (se désabonner) appelle DIRECTEMENT la passerelle
+ * (`retireLeJetonPush`, `lib/api/push-tokens.ts` — le MÊME site que la
+ * porte utilise) plutôt que de laisser la soumission NATIVE recharger la
+ * page — le patron des treize bascules voisines (`lib/realtime/prefs.ts`),
+ * jamais celui du rejeu en arrière-plan (`rejoueSiRotationEnArrierePlan`,
+ * réservé à une surface SANS cet écran). Le CHEMIN SANS JAVASCRIPT — le
+ * `<form method="post">` nu, la porte qui retire le token depuis le COOKIE
+ * appareil (`app/connecte/prefs-porte.ts`) — reste le repli qui marche
+ * partout : ce module l'AMÉLIORE, il ne le remplace pas.
  *
- * LE SERVEUR RESTE LE COMPOSITEUR : ce module ne peint jamais l'état
- * « abonné » lui-même — il remplit les DEUX champs cachés que la porte lit
- * (`abonnement`, `deviceId`) puis laisse la soumission NATIVE partir
- * (`formulaire.submit()`, qui NE DÉCLENCHE PAS l'événement `submit` — la
- * spec DOM le garantit, c'est ce qui évite la boucle avec l'écouteur
- * ci-dessous) : la porte fait le Post/Redirect/Get, et la rangée peinte au
- * retour est celle que le SERVEUR a relue sur `GET /users/me/devices`.
+ * SUR LA MOITIÉ « ABONNER », LE SERVEUR RESTE LE COMPOSITEUR : ce module ne
+ * peint jamais l'état « abonné » lui-même — il remplit les DEUX champs
+ * cachés que la porte lit (`abonnement`, `deviceId`) puis laisse la
+ * soumission NATIVE partir (`formulaire.submit()`, qui NE DÉCLENCHE PAS
+ * l'événement `submit` — la spec DOM le garantit, c'est ce qui évite la
+ * boucle avec l'écouteur ci-dessous) : la porte fait le Post/Redirect/Get,
+ * et la rangée peinte au retour est celle que le SERVEUR a relue sur `GET
+ * /users/me/devices`. LA MOITIÉ « DÉSABONNER » PEINT, ELLE, OPTIMISTE — le
+ * patron des treize bascules, jamais un espoir qui divergerait : réconciliée
+ * sur `fait`, défaite sur tout autre genre (voir `surSoumissionDesabonner`
+ * plus bas).
  *
  * CHAQUE ÉCHEC EST UN ÉTAT PEINT (permission refusée, navigateur
  * incompatible, `subscribe()` qui jette, un appel FCM non-2xx) — jamais une
@@ -81,15 +94,6 @@ const configurationDepuis = (main: HTMLElement): ConfigurationFCM | null => {
     baseInstallations: fcmInstallationsBase,
     baseRegistrations: fcmRegistrationsBase,
   };
-};
-
-const montreLEchec = (main: HTMLElement, motif: string): void => {
-  const avis = main.querySelector<HTMLElement>('.avis');
-  const echec = main.querySelector<HTMLElement>('.echec');
-  if (avis !== null) avis.hidden = true;
-  if (echec === null) return;
-  echec.hidden = false;
-  echec.textContent = motif;
 };
 
 /** La clé VAPID publique, du base64url que Firebase sert, à l'octet que `PushManager.subscribe` exige. */
@@ -257,18 +261,104 @@ const surSoumissionAbonner = async (main: HTMLElement, formulaire: HTMLFormEleme
   }
 };
 
+/** Le contexte que `lib/realtime/prefs.ts` détient déjà et transmet à l'armement (jeton du cookie, base de la passerelle). */
+export type ContextePush = {
+  readonly passerelle: string;
+  readonly jeton: string;
+};
+
+/**
+ * LA MOITIÉ « DÉSABONNER » (restante FLUIDITÉ de #5391, ce travail) — le
+ * patron des treize bascules voisines (`lib/realtime/prefs.ts` ›
+ * `surBascule`) : peinture OPTIMISTE, appel DIRECT à la passerelle
+ * (`retireLeJetonPush`, `lib/api/push-tokens.ts` — le MÊME site que la porte
+ * utilise sans JavaScript), rollback VISIBLE sur refus — jamais le patron du
+ * rejeu en arrière-plan (`rejoueSiRotationEnArrierePlan`), réservé à une
+ * surface SANS cet écran.
+ *
+ * LE COOKIE APPAREIL EST LA SOURCE DE VÉRITÉ du `deviceId` — jamais le champ
+ * caché du formulaire, qu'un lecteur pourrait altérer : la MÊME source que
+ * la porte lit sans JavaScript (`app/connecte/prefs-porte.ts`).
+ *
+ * LE SERVEUR D'ABORD, LE PUSHMANAGER APRÈS `fait` — direction d'erreur par
+ * coût de réparation (§ 4 étape 2 de la spécification) : désabonner le
+ * navigateur avant un retrait serveur qui échoue recréerait le symptôme même
+ * de #5391 (token FCM MORT chez la passerelle, rangée « Abonné »,
+ * notifications éteintes en silence). L'inverse — une souscription
+ * navigateur orpheline après un retrait serveur réussi — est inoffensif :
+ * plus aucun push ne part depuis ce navigateur.
+ *
+ * LE CONTEXTE DURABLE SUIT (`memoriseLeContextePush`) : sans cette
+ * réécriture, `rejoueSiRotationEnArrierePlan` sur `/chats` réabonnerait dans
+ * son dos un lecteur qui vient de se désabonner explicitement — le contexte
+ * écrit au dernier chargement de cette page disait encore `abonne: true`.
+ *
+ * PAS DE VERROU ANTI-DOUBLE-CLIC : `DELETE /users/register-device-token`
+ * est IDEMPOTENT (`deletedCount: 0` reste un 200) et un second clic sur la
+ * rangée repeinte (`valeur='true'`) est le geste LÉGITIME de réabonnement.
+ */
+const surSoumissionDesabonner = async (main: HTMLElement, formulaire: HTMLFormElement, ctx: ContextePush): Promise<void> => {
+  const deviceId = lisLAppareilPush(document.cookie);
+  if (deviceId === null) {
+    montreLEchec(main, PREFS.push.motifAucunAbonnementConnu);
+    return;
+  }
+
+  const bouton = formulaire.querySelector<HTMLButtonElement>('button[role="switch"]');
+  if (bouton === null) return;
+
+  const peins = (valeur: boolean): void =>
+    peinsLaRangee({ formulaire, bouton, valeur, libelleActif: PREFS.push.abonne, libelleInactif: PREFS.push.nonAbonne });
+
+  peins(false);
+
+  const issueDuRetrait = await retireLeJetonPush({ jeton: ctx.jeton, deviceId, base: ctx.passerelle });
+
+  if (issueDuRetrait.genre !== 'fait') {
+    peins(true);
+    if (issueDuRetrait.genre === 'session-expiree') {
+      montreLaSessionExpiree(main);
+      return;
+    }
+    montreLEchec(main, PREFS.push.motifEchecDesabonnement);
+    return;
+  }
+
+  montreLaReussite(main, PREFS.push.regleDesabonne);
+  void memoriseLeContextePush(main);
+
+  try {
+    const registration = await trouveLaRegistrationDeZone();
+    const souscription = await registration?.pushManager.getSubscription();
+    await souscription?.unsubscribe();
+  } catch {
+    // best-effort — une souscription navigateur orpheline est inoffensive
+    // (voir le doc-comment ci-dessus) : rien d'autre à faire ici.
+  }
+};
+
 /**
  * L'ARMEMENT — délégué sur `main`, comme les treize bascules
- * (`lib/realtime/prefs.ts`), mais filtré sur `form.bascule-push` ET
- * `valeur=true` : la moitié « désabonner » traverse cet écouteur sans être
- * interceptée.
+ * (`lib/realtime/prefs.ts`), filtré sur `form.bascule-push` et aiguillé par
+ * la VALEUR du geste : `valeur=true` (s'abonner) suit le chemin existant,
+ * `valeur=false` (se désabonner, restante FLUIDITÉ de #5391) appelle
+ * `surSoumissionDesabonner` ci-dessus, toute autre valeur traverse sans
+ * interception (repli sans JavaScript).
  */
-export const armeLAbonnementPush = (main: HTMLElement): void => {
+export const armeLAbonnementPush = (main: HTMLElement, ctx: ContextePush): void => {
   main.addEventListener('submit', (evenement) => {
     const formulaire = evenement.target;
     if (!(formulaire instanceof HTMLFormElement) || !formulaire.classList.contains('bascule-push')) return;
     const champValeur = formulaire.querySelector<HTMLInputElement>('input[name="valeur"]');
-    if (champValeur === null || champValeur.value !== 'true') return;
+    if (champValeur === null) return;
+
+    if (champValeur.value === 'false') {
+      evenement.preventDefault();
+      void surSoumissionDesabonner(main, formulaire, ctx);
+      return;
+    }
+
+    if (champValeur.value !== 'true') return;
     // Sans configuration Firebase, la rangée est déjà servie `disabled`
     // (`prefs-vue.ts`) : ce geste ne devrait jamais arriver ici, mais s'il
     // le fait, laisser la soumission NATIVE partir est le repli correct —

@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Browser, type BrowserContext } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type CDPSession, type Page } from '@playwright/test';
 
 import { THEME_STORAGE_KEY } from '../../app/theme-script';
 import { COOKIE_DE_JETON } from '../../lib/api/cookies';
@@ -456,6 +456,139 @@ test.describe('la rangée push — /notifications/preferences', () => {
         'AIza-bouchon-e2e',
       );
 
+      await contexte.close();
+    });
+
+    /**
+     * Le compte des `Page.frameNavigated` REÇUS À PARTIR de l'ouverture de la
+     * session CDP — la même technique de comptage réseau que
+     * `v3-reglages-details.spec.ts` › `compteLesRequetesVers`, appliquée au
+     * domaine `Page` plutôt que `Network` : c'est CE compteur que le critère
+     * de fin (« zéro événement frameNavigated ») nomme.
+     */
+    const compteLesNavigations = async (page: Page): Promise<{ readonly nombre: () => number }> => {
+      const cdp: CDPSession = await page.context().newCDPSession(page);
+      await cdp.send('Page.enable');
+      let vues = 0;
+      cdp.on('Page.frameNavigated', () => {
+        vues += 1;
+      });
+      return { nombre: () => vues };
+    };
+
+    /**
+     * DÉSABONNER SANS RECHARGEMENT (restante FLUIDITÉ de #5391, ce travail) —
+     * le critère de fin en entier : ZÉRO navigation (assertion CDP), la
+     * rangée passe à l'état désabonné OPTIMISTEMENT (pendant la pause
+     * réseau) puis se CONFIRME (après), et l'autorité finale reste ce que la
+     * PASSERELLE a gardé — jamais un espoir local.
+     */
+    test('désabonner ne navigue pas — zéro frameNavigated, optimiste puis confirmé', async ({ browser }) => {
+      const contexte = await contexteDeCetteSuite(browser, 'light');
+      await contexte.addCookies([
+        { name: 'meeshy_session', value: 'sonde', url: v3AvecFirebase.base },
+        { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3AvecFirebase.base },
+        { name: 'meeshy_v3_push_appareil', value: 'appareil-e2e-js', url: v3AvecFirebase.base },
+      ]);
+
+      const pose = await contexte.request.post(`${passerelleAvecFirebase.base}/api/v1/users/register-device-token`, {
+        headers: { authorization: `Bearer ${JETON_DU_MEMBRE}`, 'content-type': 'application/json' },
+        data: { token: 'fcm-token-e2e-js', type: 'fcm', platform: 'web', deviceId: 'appareil-e2e-js', deviceName: 'Web v3' },
+      });
+      expect(pose.ok()).toBe(true);
+
+      const page = await contexte.newPage();
+      await page.goto(`${v3AvecFirebase.base}/notifications/preferences`);
+      await attendsLeModule(page);
+
+      const compteur = await compteLesNavigations(page);
+
+      // La réponse RÉELLE est retardée : si l'état ne bougeait qu'à son
+      // retour, ce témoin ne verrait rien avant la fin de la pause — le
+      // même patron que la bascule optimiste des treize préférences.
+      await page.route(
+        (url) => url.pathname === '/api/v1/users/register-device-token',
+        async (route) => {
+          if (route.request().method() !== 'DELETE') return route.continue();
+          await new Promise((resoud) => setTimeout(resoud, 800));
+          await route.continue();
+        },
+      );
+
+      const commutateur = page.locator('form.bascule-push button[role="switch"]');
+      await expect(commutateur).toHaveAttribute('aria-checked', 'true');
+      const formulaire = page.locator('form.bascule-push');
+
+      await commutateur.click();
+
+      // PENDANT la pause : l'optimisme est déjà là.
+      await expect(commutateur).toHaveAttribute('aria-checked', 'false');
+      await expect(formulaire.locator('input[name="valeur"]')).toHaveValue('true');
+
+      // APRÈS la pause : la confirmation SERVEUR.
+      await expect(page.locator('.avis')).toContainText('abonnement retiré');
+
+      const liste = await contexte.request.get(`${passerelleAvecFirebase.base}/api/v1/users/me/devices`, {
+        headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+      });
+      const corps = (await liste.json()) as { readonly data: readonly { readonly deviceId?: string }[] };
+      expect(corps.data.some((appareil) => appareil.deviceId === 'appareil-e2e-js')).toBe(false);
+
+      expect(compteur.nombre()).toBe(0);
+      expect(new URL(page.url()).search).toBe('');
+
+      await page.unroute((url) => url.pathname === '/api/v1/users/register-device-token');
+      await contexte.close();
+    });
+
+    test('un échec de la passerelle rétablit la rangée ET montre le motif servi', async ({ browser }) => {
+      const contexte = await contexteDeCetteSuite(browser, 'light');
+      await contexte.addCookies([
+        { name: 'meeshy_session', value: 'sonde', url: v3AvecFirebase.base },
+        { name: COOKIE_DE_JETON, value: JETON_DU_MEMBRE, url: v3AvecFirebase.base },
+        { name: 'meeshy_v3_push_appareil', value: 'appareil-e2e-echec', url: v3AvecFirebase.base },
+      ]);
+
+      const pose = await contexte.request.post(`${passerelleAvecFirebase.base}/api/v1/users/register-device-token`, {
+        headers: { authorization: `Bearer ${JETON_DU_MEMBRE}`, 'content-type': 'application/json' },
+        data: { token: 'fcm-token-e2e-echec', type: 'fcm', platform: 'web', deviceId: 'appareil-e2e-echec', deviceName: 'Web v3' },
+      });
+      expect(pose.ok()).toBe(true);
+
+      const page = await contexte.newPage();
+      await page.goto(`${v3AvecFirebase.base}/notifications/preferences`);
+      await attendsLeModule(page);
+
+      const compteur = await compteLesNavigations(page);
+
+      await page.route(
+        (url) => url.pathname === '/api/v1/users/register-device-token',
+        (route) =>
+          route.request().method() === 'DELETE'
+            ? route.fulfill({
+                status: 500,
+                contentType: 'application/json',
+                body: JSON.stringify({ success: false, error: 'Internal Server Error' }),
+              })
+            : route.continue(),
+      );
+
+      const commutateur = page.locator('form.bascule-push button[role="switch"]');
+      await commutateur.click();
+
+      await expect(commutateur).toHaveAttribute('aria-checked', 'true');
+      await expect(page.locator('.echec[role="alert"]')).toBeVisible();
+      await expect(page.locator('.echec[role="alert"]')).toContainText('n’a pas pu être retiré');
+
+      const liste = await contexte.request.get(`${passerelleAvecFirebase.base}/api/v1/users/me/devices`, {
+        headers: { authorization: `Bearer ${JETON_DU_MEMBRE}` },
+      });
+      const corps = (await liste.json()) as { readonly data: readonly { readonly deviceId?: string }[] };
+      expect(corps.data.some((appareil) => appareil.deviceId === 'appareil-e2e-echec')).toBe(true);
+
+      expect(compteur.nombre()).toBe(0);
+
+      await page.unroute((url) => url.pathname === '/api/v1/users/register-device-token');
       await contexte.close();
     });
 
