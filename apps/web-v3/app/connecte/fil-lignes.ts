@@ -1,8 +1,8 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
-import { adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
+import { adresseDeTransfert, adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
 import { annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
-import { peutModifier, peutRetirer } from '@/lib/api/fil-mutations';
+import { peutModifier, peutRetirer, peutTransferer } from '@/lib/api/fil-mutations';
 import { FORME_PAR_GENRE, sEcouteSurPlace } from '@/lib/api/formes';
 import { adresseCarte, adresseGeo, type Lieu } from '@/lib/api/lieu';
 import { initiales, teinteDeLAvatar } from '@/lib/avatar';
@@ -508,31 +508,38 @@ const retraitServi = (message: Message, adresse: string): string =>
   '</div>';
 
 /**
- * LE MENU D'UNE LIGNE (§ 12.10.1, issue #5163) — l'atome `MENU_DE_LIGNE`
- * partagé avec `/chats` et `/links` (`app/connecte/atomes-feuille.ts`), et le
- * MÊME glyphe de menu (`ph-caret-down`, `liste-vue.ts:88`) : aucun 73e
- * glyphe. Trois boutons possibles, chacun une raison distincte de disparaître
- * plutôt que d'être rendu inerte (charte règle 7) :
+ * LE MENU D'UNE LIGNE (§ 12.10.1, issue #5163 ; #5386 pour le transfert) —
+ * l'atome `MENU_DE_LIGNE` partagé avec `/chats` et `/links`
+ * (`app/connecte/atomes-feuille.ts`), et le MÊME glyphe de menu
+ * (`ph-caret-down`, `liste-vue.ts:88`) : aucun 73e glyphe. Quatre boutons
+ * possibles, chacun une raison distincte de disparaître plutôt que d'être
+ * rendu inerte (charte règle 7) :
  *
  *   • « Répondre » — SI le composeur est ouvert (`composeurOuvert`) : sur une
  *     ligne close, ou chez un invité sans `canSendMessages`, il n'y a rien à
  *     armer ;
+ *   • « Transférer » (#5386) — sur TOUT message lisible (`peutTransferer`),
+ *     jamais réservé à ses propres messages : le patron du legacy
+ *     (`forward-message-modal.tsx`). Ouvre `?transferer=<id>` (§ 12.10.1),
+ *     la feuille de choix d'une conversation cible — réservé au MEMBRE
+ *     (choisir une cible suppose une liste de conversations, que l'invité
+ *     de `/chat/:lien` n'a pas) ;
  *   • « Modifier » — SEULEMENT sur SES propres messages, de moins de 24 h
  *     (`peutModifier`, borne inclusive comme la passerelle), et JAMAIS chez
  *     l'invité (régime 3, § 2 de la spécification : les quatre portes du
  *     gateway refusent un anonyme) ;
  *   • « Retirer » — SEULEMENT sur SES propres messages, jamais chez l'invité.
  *
- * `estInvite` gouverne modifier/retirer À LUI SEUL : un membre les voit dès
- * que le message est le sien, quelle que soit la porte qui sert cette ligne.
- * Sans AUCUN bouton admis, le `<details>` n'est pas rendu — un menu vide
- * serait un contrôle sans effet.
+ * `estInvite` gouverne transférer/modifier/retirer À LUI SEUL : un membre les
+ * voit (transférer toujours, modifier/retirer sur ses propres messages)
+ * quelle que soit la porte qui sert cette ligne. Sans AUCUN bouton admis, le
+ * `<details>` n'est pas rendu — un menu vide serait un contrôle sans effet.
  *
- * UN SEUL `<form method="get">` porte « Répondre » et « Modifier » (deux
- * NAVIGATIONS, la même adresse nue, un paramètre différent selon le bouton
- * cliqué — le comportement natif d'un formulaire GET) ; « Retirer » y
- * bascule en POST par `formmethod`, exactement le patron de `/chats`
- * (`liste-vue.ts` › `menu`).
+ * UN SEUL `<form method="get">` porte « Répondre », « Transférer » et
+ * « Modifier » (trois NAVIGATIONS, la même adresse nue, un paramètre
+ * différent selon le bouton cliqué — le comportement natif d'un formulaire
+ * GET) ; « Retirer » y bascule en POST par `formmethod`, exactement le
+ * patron de `/chats` (`liste-vue.ts` › `menu`).
  */
 export const menuDeLigne = (
   message: Message,
@@ -548,9 +555,10 @@ export const menuDeLigne = (
     protege: message.protege,
     ecritA: message.ecritA,
   };
+  const admetTransferer = !estInvite && peutTransferer(candidat);
   const admetModifier = !estInvite && peutModifier({ ...candidat, maintenant });
   const admetRetirer = !estInvite && peutRetirer(candidat);
-  if (!admetRepondre && !admetModifier && !admetRetirer) return '';
+  if (!admetRepondre && !admetTransferer && !admetModifier && !admetRetirer) return '';
   const nomDuMenu = message.deMoi ? FIL.actionsSurMonMessage : FIL.actionsSurLeMessage(message.auteur);
   return (
     '<details class="actions">' +
@@ -558,6 +566,9 @@ export const menuDeLigne = (
     `<form method="get" action="${echappe(adresse)}">` +
     (admetRepondre
       ? `<button type="submit" name="repondre" value="${echappe(message.id)}">${svgDuSprite('ph-chat-teardrop-text')}${echappe(FIL.repondre)}</button>`
+      : '') +
+    (admetTransferer
+      ? `<button type="submit" name="transferer" value="${echappe(message.id)}">${svgDuSprite('ph-arrow-bend-up-right')}${echappe(FIL.transferer)}</button>`
       : '') +
     (admetModifier
       ? `<button type="submit" name="modifier" value="${echappe(message.id)}">${svgDuSprite('ph-note-pencil')}${echappe(FIL.modifier)}</button>`
@@ -570,12 +581,13 @@ export const menuDeLigne = (
   );
 };
 
-/** Le gabarit du menu — les TROIS boutons, `value=""` : le module en retire ce que le lecteur ne peut pas faire. */
+/** Le gabarit du menu — les QUATRE boutons, `value=""` : le module en retire ce que le lecteur ne peut pas faire. */
 const gabaritDuMenu = (): string =>
   '<details class="actions">' +
   `<summary>${svgDuSprite('ph-caret-down')}<span class="hors-ecran"></span></summary>` +
   '<form method="get">' +
   `<button type="submit" name="repondre" value="">${svgDuSprite('ph-chat-teardrop-text')}${echappe(FIL.repondre)}</button>` +
+  `<button type="submit" name="transferer" value="">${svgDuSprite('ph-arrow-bend-up-right')}${echappe(FIL.transferer)}</button>` +
   `<button type="submit" name="modifier" value="">${svgDuSprite('ph-note-pencil')}${echappe(FIL.modifier)}</button>` +
   `<button type="submit" name="retirer" value="" formmethod="post" class="grave">${svgDuSprite('ph-x')}${echappe(FIL.retirer)}</button>` +
   '</form>' +

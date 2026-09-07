@@ -168,6 +168,16 @@ export const FIL = {
   retirer: 'Retirer',
   annuler: 'Annuler',
   /**
+   * TRANSFÉRER UN MESSAGE (#5386) — un quatrième geste de ligne, offert à
+   * TOUT message lisible (`peutTransferer`, `lib/api/fil-mutations.ts`),
+   * jamais réservé à ses propres messages comme « Modifier »/« Retirer ».
+   */
+  transferer: 'Transférer',
+  transfererLeMessage: 'Transférer le message',
+  /** Le nom accessible d'une cible de la feuille — « Transférer à Équipe Lagos ». */
+  transfererA: (nom: string): string => `Transférer à ${nom}`,
+  aucuneAutreConversation: 'Vous n’avez aucune autre conversation.',
+  /**
    * LA FENÊTRE D'ANNULATION D'UN RETRAIT (suivi #5163 § 12.12) — DISTINCTE de
    * `supprime` (« Ce message a été supprimé », le retrait CONFIRMÉ) : tant
    * que rien n'est parti, le lecteur doit pouvoir dire la différence entre

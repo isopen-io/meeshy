@@ -660,6 +660,8 @@ export const envoie = async ({
   langue,
   pieces: identifiantsDePieces,
   replyToId,
+  forwardedFromId,
+  forwardedFromConversationId,
   base,
   recuperer,
 }: {
@@ -673,6 +675,16 @@ export const envoie = async ({
   readonly pieces?: readonly string[];
   /** Le message auquel on répond — `replyToId` (`messages-send.ts:60`), un identifiant PRÉSENT dans la page (§ 2). */
   readonly replyToId?: string;
+  /**
+   * LA PROVENANCE D'UN TRANSFERT (#5386) — `forwardedFromId`/
+   * `forwardedFromConversationId` (`messages-send.ts:62-63`), le message
+   * d'origine et sa conversation. `texte` reste la copie de son contenu, à
+   * la charge de l'appelant (`fil-porte.ts` › `transfereLeMessage`) : la
+   * passerelle ne le recopie PAS elle-même — seul son refus d'un corps vide
+   * dépend de ce champ (`messages-send.ts:96-104`).
+   */
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
   readonly base?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<Envoi> => {
@@ -689,6 +701,8 @@ export const envoie = async ({
         ...(langue === undefined ? {} : { originalLanguage: langue }),
         ...(identifiantsDePieces === undefined || identifiantsDePieces.length === 0 ? {} : { attachmentIds: identifiantsDePieces }),
         ...(replyToId === undefined ? {} : { replyToId }),
+        ...(forwardedFromId === undefined ? {} : { forwardedFromId }),
+        ...(forwardedFromConversationId === undefined ? {} : { forwardedFromConversationId }),
       }),
     },
   );

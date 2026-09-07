@@ -142,6 +142,16 @@ export const peutModifier = (candidat: CandidatDeMutation & { readonly maintenan
 /** « RETIRER » N'A PAS DE FENÊTRE DE TEMPS — seulement l'auteur, sur un message vivant, déjà servi. */
 export const peutRetirer = (candidat: CandidatDeMutation): boolean => mienEtVivant(candidat);
 
+/**
+ * « TRANSFÉRER » N'EST NI RÉSERVÉ À L'AUTEUR NI BORNÉ DANS LE TEMPS (#5386) —
+ * n'importe quel message LISIBLE se transfère, le patron du legacy
+ * (`apps/web/components/conversations/forward-message-modal.tsx`). Seuls un
+ * message SYSTÈME, SUPPRIMÉ ou PROTÉGÉ ne se transfèrent pas : il n'y a rien
+ * à copier dans la conversation cible.
+ */
+export const peutTransferer = (candidat: { readonly systeme: boolean; readonly supprime: boolean; readonly protege: boolean }): boolean =>
+  !candidat.systeme && !candidat.supprime && !candidat.protege;
+
 export type Mutation =
   | { readonly genre: 'fait' }
   | { readonly genre: 'refus'; readonly message: string; readonly statut: number | null };

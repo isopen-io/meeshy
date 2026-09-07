@@ -169,3 +169,18 @@ export const PARAM_DU_RETRAIT = 'retirer';
 /** L'ouverture de la fenêtre : l'adresse de l'hôte, plus `?retirer=<id>`. */
 export const adresseDeRetrait = (adresse: string, id: string): string =>
   `${adresse}?${PARAM_DU_RETRAIT}=${encodeURIComponent(id)}`;
+
+/**
+ * LA FEUILLE « TRANSFÉRER LE MESSAGE » (#5386) — un ÉTAT DE PLUS DE LA MÊME
+ * ADRESSE HÔTE (la famille de `?media=`, `?repondre=`, `?retirer=`), MEMBRE
+ * SEUL : choisir une conversation cible suppose une liste de conversations à
+ * choisir, que l'invité de `/chat/:lien` n'a pas (une seule place, la
+ * sienne). Contrairement à « Modifier »/« Retirer », n'importe quel message
+ * lisible se transfère — pas seulement les siens (`peutTransferer`,
+ * `lib/api/fil-mutations.ts`, le patron du legacy `forward-message-modal.tsx`).
+ */
+export const PARAM_DU_TRANSFERT = 'transferer';
+
+/** L'ouverture de la feuille : l'adresse de l'hôte, plus `?transferer=<id>`. */
+export const adresseDeTransfert = (adresse: string, id: string): string =>
+  `${adresse}?${PARAM_DU_TRANSFERT}=${encodeURIComponent(id)}`;
