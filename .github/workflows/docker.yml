@@ -158,19 +158,67 @@ jobs:
               echo "agent=$([[ "$SELECTED" == *",agent,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             fi
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # **La v3.1 manquait à cette liste** (#5619). Une release taguée
+            # construisait le legacy, la v3 ANNULÉE, la passerelle, le
+            # translator et l'agent — et pas `apps/web-v3`, la seule
+            # application web en développement. Une omission dans une
+            # énumération ne rougit nulle part : elle produit une release
+            # complète en apparence, amputée en fait.
             echo "web=true" >> $GITHUB_OUTPUT
-            echo "web_v3=true" >> $GITHUB_OUTPUT
+            echo "web_v31=true" >> $GITHUB_OUTPUT
+            # `web_v3` reste FAUX même sur un tag : `apps/web-old-version3` est
+            # gelée (§ GEL DE LA V3) et n'est plus déployée nulle part depuis
+            # #5609. Construire une image que personne ne sert coûte un job et
+            # fait bouger un tag `staging` qui ne désigne plus rien.
+            echo "web_v3=false" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
             echo "agent=true" >> $GITHUB_OUTPUT
           else
-            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+            # **Quand on ne sait pas ce qui a changé, on CONSTRUIT** (#5619).
+            #
+            # `github.event.before` vaut 40 zéros sur une branche NEUVE, et
+            # désigne un commit disparu après une poussée FORCÉE : `git diff`
+            # rend alors « fatal: bad object » (mesuré). L'ancien repli
+            # `HEAD~1 HEAD` ne regardait plus que le DERNIER commit — une
+            # poussée de cinq commits dont seul le premier touche
+            # `apps/web-v3/` ne construisait rien, et la livraison était
+            # perdue SANS QUE RIEN NE ROUGISSE.
+            #
+            # La direction de l'erreur se choisit par son coût de réparation :
+            # un build de trop coûte quelques minutes de runner ; un build
+            # manquant coûte une livraison silencieusement absente, qu'on ne
+            # découvre qu'en constatant que staging sert l'ancien.
+            BASE="${{ github.event.before }}"
+            if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+              echo "::warning::base de comparaison introuvable ($BASE) — construction de TOUS les services plutôt qu'une détection devinée"
+              BASE=""
+            fi
+            if [[ -n "$BASE" ]]; then
+              CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
+            else
+              CHANGED="__BASE_INTROUVABLE__"
+            fi
+            if [[ "$CHANGED" == "__BASE_INTROUVABLE__" ]]; then
+              echo "web=true" >> $GITHUB_OUTPUT
+              echo "web_v31=true" >> $GITHUB_OUTPUT
+              echo "web_v3=false" >> $GITHUB_OUTPUT
+              echo "gateway=true" >> $GITHUB_OUTPUT
+              echo "translator=true" >> $GITHUB_OUTPUT
+              echo "agent=true" >> $GITHUB_OUTPUT
+            else
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "web_v3=$([[ "$CHANGED" == *"apps/web-old-version3/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/icons/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            # L'app ANNULÉE ne suit plus les paquets partagés : un changement
+            # dans `packages/shared` ne peut pas obliger à reconstruire une
+            # application gelée que plus aucun conteneur ne sert (#5609). Seule
+            # une modification de SON répertoire la reconstruit encore — et ce
+            # répertoire ne bouge plus. Retrait complet : #5496.
+            echo "web_v3=$([[ "$CHANGED" == *"apps/web-old-version3/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "web_v31=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: Build services list
@@ -407,7 +455,16 @@ jobs:
     name: Deploy to staging
     runs-on: ubuntu-latest
     needs: [detect, build]
-    if: github.ref == 'refs/heads/dev' && needs.detect.outputs.has_changes == 'true' && needs.build.result == 'success'
+    # **Une livraison ne dépend pas du build du voisin** (#5619). `needs.build`
+    # est un résultat AGRÉGÉ : exiger `== 'success'` faisait qu'un échec du
+    # translator — image ML lourde, qui échoue régulièrement — bloquait la mise
+    # en ligne d'une v3.1 pourtant construite et poussée.
+    #
+    # `up -d` SANS `--force-recreate` ne recrée que ce dont le digest a bougé :
+    # un service dont le build a échoué garde simplement son image, sans
+    # bruit. Déployer après un build PARTIEL ne livre donc jamais un échec —
+    # ça livre ce qui a réussi.
+    if: github.ref == 'refs/heads/dev' && needs.detect.outputs.has_changes == 'true' && needs.build.result != 'skipped' && needs.build.result != 'cancelled'
     steps:
       - name: Résoudre les services de staging à recréer
         id: cibles
