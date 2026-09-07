@@ -1,4 +1,18 @@
-import { OCTETS_MAX_PAR_MEDIA } from './composer';
+/**
+ * RECOPIÉ EN LITTÉRAL, JAMAIS IMPORTÉ DE `./composer` (#5475, #5478,
+ * 2026-09-07) — même geste que `MAX_POST_MEDIA` dans `composer.ts` lui-même,
+ * pour une raison DIFFÉRENTE. Ce module est atteint depuis `/feed`
+ * (`lib/contenu/story.ts` → `lib/contenu/partage.ts` →
+ * `lib/api/publication.ts` → `lib/realtime/feed.ts`, § 12.4) : un `import`
+ * DE VALEUR depuis `./composer` embarque `COMPOSER` — le texte ENTIER de
+ * l'écran `/composer` — dans le bundle du fil social, qui ne compose rien.
+ * Mesuré : `feed.js` gagnait 414 o gzip pour un seul chiffre affiché dans
+ * une phrase d'aide. `composer-porte.ts` et `story-neuve-porte.ts` (les
+ * routes SERVEUR, jamais bundlées ici) continuent d'importer la vraie
+ * constante (`OCTETS_MAX_PAR_MEDIA`, `OCTETS_MAX_D_UNE_STORY`) de
+ * `composer.ts` — cette recopie ne sert QUE la phrase ci-dessous.
+ */
+const MEGA_OCTETS_PAR_MEDIA_DE_STORY = 50;
 
 /**
  * LA COPIE DE `/stories/new` (#5033, médias #5389) — publier une story
@@ -66,7 +80,7 @@ export const STORY_NEUVE = {
    * jamais une exigence.
    */
   media: 'Votre photo ou vidéo',
-  mediaAide: `Une photo ou une vidéo, ${OCTETS_MAX_PAR_MEDIA / (1024 * 1024)} Mo au plus.`,
+  mediaAide: `Une photo ou une vidéo, ${MEGA_OCTETS_PAR_MEDIA_DE_STORY} Mo au plus.`,
   mediaImporter: 'Importer une photo ou une vidéo',
   /** Une story ne rend qu'UN média (`story.medias[0]`, `partage-vue.ts`) — une seconde sélection est refusée, pas fondue. */
   mediaUnSeul: 'Une story porte un seul média — resélectionnez un fichier.',
