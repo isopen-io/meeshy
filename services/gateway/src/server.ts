@@ -24,6 +24,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 // logger sans importer `server.ts` (effets de bord au chargement du module —
 // voir le commentaire en tête de `route-registration.ts`).
 import { logger } from './gateway-logger';
+import { getJwtSecret } from './utils/secrets';
 import { schemaValidationErrorResponse } from './utils/schema-validation-error';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -86,7 +87,7 @@ function loadConfiguration(): Config {
   return {
     nodeEnv,
     isDev,
-    jwtSecret: process.env.JWT_SECRET || 'meeshy-secret-key-dev',
+    jwtSecret: getJwtSecret(),
     port: parseInt(process.env.PORT || process.env.GATEWAY_PORT || '3000'),
     databaseUrl: process.env.DATABASE_URL || ''
   };
