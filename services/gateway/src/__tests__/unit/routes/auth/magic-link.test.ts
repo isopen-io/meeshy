@@ -95,7 +95,6 @@ jest.mock('../../../../routes/auth/types', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
-import { LEGACY_SID_WINDOW_CLOSES_AT } from '../../../../services/auth/session-jwt';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -657,127 +656,9 @@ describe('POST /refresh — deux sessions, une révoquée (#4264, critère 5)', 
   });
 });
 
-// ─── POST /refresh — fenêtre de transition d\'un jeton hérité (#4264, critère 3) ─
-
-/**
- * Fige l\'horloge SANS toucher aux timers : `doNotFake` laisse `setTimeout` &
- * consorts réels, dont Fastify dépend. Un témoin de butoir daté comparé à
- * l\'horloge RÉELLE serait une bombe — vert aujourd\'hui, rouge le jour où la
- * fenêtre se ferme, sur un code inchangé.
- */
-function figerHorloge(instant: Date) {
-  jest.useFakeTimers({
-    doNotFake: [
-      'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
-      'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask',
-      'performance', 'hrtime',
-    ],
-    now: instant,
-  });
-}
-
-const jetonHerite = (iatMs: number) => ({
-  userId: USER_ID, username: 'alice', role: 'USER', iat: Math.floor(iatMs / 1000),
-});
-
-describe('POST /refresh — jeton hérité, sans `sid`', () => {
-  // Un `mockResolvedValueOnce` laissé NON CONSOMMÉ par un témoin précédent
-  // (celui de la signature forgée prouve justement que le rattrapage n'est
-  // plus TENTÉ) reste en file et coifferait le nôtre. On vide la file.
-  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
-  afterEach(() => { jest.useRealTimers(); });
-
-  it('reste accepté DANS la fenêtre quand le compte garde une session valide', async () => {
-    // La transition explicite du critère 3 : refuser d\'emblée déconnecterait
-    // tout le parc installé pour fermer un cas étroit — le compromis que #4213
-    // avait déjà écarté.
-    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
-    const app = await buildApp({ prisma: makePrisma() });
-    await servirJeton(jetonHerite(dedans.getTime()));
-    figerHorloge(dedans);
-
-    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-hérité' } });
-
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('retombe sur la règle de compte de #4213 : zéro session valide ⇒ refus', async () => {
-    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
-    const prisma = makePrisma();
-    (prisma.userSession.count as jest.Mock<any>).mockResolvedValue(0);
-    const app = await buildApp({ prisma });
-    await servirJeton(jetonHerite(dedans.getTime()));
-    figerHorloge(dedans);
-
-    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-hérité' } });
-
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-
-  it('un JWT hérité vieux de six mois est refusé, même ENCORE DANS la fenêtre — critère de fin #3621', async () => {
-    // `legacyTokenRefusal` prouve déjà ce refus à son propre niveau
-    // (session-jwt.test.ts, « refuse un jeton plus vieux que l\'âge maximal »).
-    // Ce témoin le prouve à l\'étage que #3621 visait — la ROUTE — pour que le
-    // critère de fin de l\'issue (« un JWT de 6 mois est refusé (test) ») soit
-    // couvert de bout en bout, pas seulement au niveau de la fonction pure.
-    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
-    const sixMoisAvant = new Date(dedans.getTime() - 180 * 24 * 3600 * 1000);
-    const prisma = makePrisma();
-    const app = await buildApp({ prisma });
-    await servirJeton(jetonHerite(sixMoisAvant.getTime()));
-    figerHorloge(dedans);
-
-    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-vieux-de-six-mois' } });
-
-    expect(res.statusCode).toBe(401);
-    expect(res.json().data?.token).toBeUndefined();
-    // Refusé sur l'ÂGE du jeton, pas sur la fenêtre : l'horloge figée est
-    // encore dedans — ce qui distingue ce témoin de celui de la fenêtre fermée.
-    expect(prisma.userSession.count).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it('est REFUSÉ une fois la fenêtre fermée — le repli n\'est pas permanent', async () => {
-    // Sans ce butoir, `{ ignoreExpiration: true }` rendait un jeton hérité
-    // rafraîchissable INDÉFINIMENT : la garde du critère 2 n\'aurait jamais
-    // atteint personne, puisqu\'il suffit de ne pas porter `sid` pour l\'éviter.
-    const apres = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() + 1000);
-    const prisma = makePrisma();
-    const app = await buildApp({ prisma });
-    await servirJeton(jetonHerite(apres.getTime()));
-    figerHorloge(apres);
-
-    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-hérité' } });
-
-    expect(res.statusCode).toBe(401);
-    expect(res.json().data?.token).toBeUndefined();
-    // Et le refus précède la question du compte : on ne compte même plus.
-    expect(prisma.userSession.count).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it('SORT de la fenêtre : le jeton renouvelé prend le nom de la session de confiance présentée', async () => {
-    // La porte de sortie silencieuse. Un client hérité qui envoie son
-    // `sessionToken` repart avec un jeton NOMMÉ et ne voit rien — c\'est ce qui
-    // vide la fenêtre avant qu\'elle ne se ferme.
-    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
-    mockFindTrustedSession.mockResolvedValueOnce({ id: SID_COURANTE });
-    const authService = makeAuthService();
-    const app = await buildApp({ authService, prisma: makePrisma() });
-    await servirJeton(jetonHerite(dedans.getTime()));
-    figerHorloge(dedans);
-
-    await app.inject({
-      method: 'POST', url: '/refresh',
-      payload: { token: 'jwt-hérité', sessionToken: 'jeton-de-session' },
-    });
-
-    expect(authService.generateToken).toHaveBeenCalledWith(expect.anything(), SID_COURANTE);
-    await app.close();
-  });
-});
+// POST /refresh — fenêtre de transition d'un jeton hérité (#4264, critère 3),
+// y compris le critère de fin littéral de #3621 : extrait dans
+// magic-link-refresh-legacy-token.test.ts (#4531 — budget de taille).
 
 // ─── POST /verify-email ───────────────────────────────────────────────────────
 
