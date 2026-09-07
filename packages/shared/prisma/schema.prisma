@@ -108,6 +108,11 @@ model User {
   bio                       String   @default("")
   email                     String   @unique
   phoneNumber               String?
+  /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
+  /// (qui nomme une campagne créée explicitement). Généré paresseusement au
+  /// premier accès par ReferralCodeService.ensureReferralCode (#3690) ; null
+  /// tant que personne ne l'a demandé.
+  referralCode              String?  @unique
 
   /// Mots repliés (minuscules, sans diacritiques) de `username`, `displayName`,
   /// `firstName` et `lastName`, plus les initiales. Recalculés à CHAQUE écriture

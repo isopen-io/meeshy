@@ -134,7 +134,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 252 → 249 (#5423) : `ConversationEndpoint`, `DetectLanguageEndpoint` et
 // `StatusEndpoint` retirés du catalogue avec leurs trois routes de sondage
 // mortes — les trois entrées disparaissent, elles ne se comptent plus.
-const BASELINE_DEAD_ENTRIES = 249;
+//
+// 249 → 250 (#3690) : `UsersEndpoint.meReferralCode` (nouvelle route
+// `GET /users/me/referral-code`) — morte à la naissance PAR CONSTRUCTION,
+// exactement comme son miroir côté catalogue TS
+// (`check-ts-catalog-dead-entries.mjs`, même issue) : ses appelants Swift
+// (écran de parrainage, partage du code) sont portés par les issues sœurs du
+// même milestone, pas par celle-ci, qui ne livre que la route serveur et son
+// exposition dans les catalogues générés.
+const BASELINE_DEAD_ENTRIES = 250;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
