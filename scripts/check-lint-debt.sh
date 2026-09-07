@@ -64,12 +64,19 @@ NC='\033[0m'
 # `apps/web/eslint.config.mjs`). Il ne peut que descendre. Pour le baisser :
 # lancer ce script, il nomme la valeur à écrire ici.
 #
-# 4034, mesuré le 2026-09-07 par ce script ET par un run CI antérieur
-# (#5442, run 34057623392, rejoué une fois — même chiffre les deux fois, donc
-# non-flaky) : les deux s'accordent, comme le veut la règle d'ancrage du
-# cliquet jumeau. Confirmé stable avec et sans `packages/shared/dist` construit
-# (cf. en-tête) — aucun écart d'environnement à documenter ici.
-readonly WEB_LINT_BASELINE=4034
+# BAISSE #3646 (2026-09-07) : 4034 → 3988 (-46) — retrait du hook legacy mort
+# `hooks/use-conversation-messages.ts` (532 lignes) et de son test orphelin
+# `__tests__/hooks/use-conversation-messages.test.tsx` (623 lignes), aucun des
+# deux n'ayant plus d'importeur en production. Mesuré par ce script (CI et
+# local, même chiffre).
+#
+# Précédent : 4034, mesuré le 2026-09-07 par ce script ET par un run CI
+# antérieur (#5442, run 34057623392, rejoué une fois — même chiffre les deux
+# fois, donc non-flaky) : les deux s'accordent, comme le veut la règle
+# d'ancrage du cliquet jumeau. Confirmé stable avec et sans
+# `packages/shared/dist` construit (cf. en-tête) — aucun écart d'environnement
+# à documenter ici.
+readonly WEB_LINT_BASELINE=3988
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
