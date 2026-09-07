@@ -12,8 +12,10 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { BADGE_THRESHOLDS, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
@@ -76,10 +78,19 @@ export class EngagementService {
     }
 
     try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
+      const lang = recipientLanguage(user, 'fr');
       const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
-      await notificationService.createBadgeEarnedNotification({ userId, axisKey, threshold });
+      await notificationService.createNotification({
+        userId,
+        type: 'badge_earned',
+        priority: 'normal',
+        content: notificationString(lang, 'engagement.badgeEarned', { title: axisKey, count: threshold }),
+        context: {},
+        metadata: { action: 'view_details', axisKey, threshold },
+      });
     } catch (err) {
-      log.warn('createBadgeEarnedNotification failed after milestone was recorded', {
+      log.warn('badge_earned notification failed after milestone was recorded', {
         userId,
         axisKey,
         threshold,

@@ -18,6 +18,7 @@ const mockGetSharedNotificationService = getSharedNotificationService as jest.Mo
 function makePrisma(overrides: Partial<{
   upsert: jest.Mock;
   create: jest.Mock;
+  findUnique: jest.Mock;
 }> = {}) {
   return {
     engagementCounter: {
@@ -26,14 +27,17 @@ function makePrisma(overrides: Partial<{
     engagementMilestone: {
       create: overrides.create ?? jest.fn(),
     },
+    user: {
+      findUnique: overrides.findUnique ?? jest.fn().mockResolvedValue({ systemLanguage: 'fr' }),
+    },
   } as unknown as PrismaClient;
 }
 
 function makeSharedNotificationService(overrides: Partial<{
-  createBadgeEarnedNotification: jest.Mock;
+  createNotification: jest.Mock;
 }> = {}) {
   return {
-    createBadgeEarnedNotification: overrides.createBadgeEarnedNotification ?? jest.fn().mockResolvedValue(null),
+    createNotification: overrides.createNotification ?? jest.fn().mockResolvedValue(null),
   } as any;
 }
 
@@ -74,13 +78,14 @@ describe('EngagementService.recordActivity', () => {
     await svc.recordActivity('user-1', 'content.text_message');
 
     expect(create).not.toHaveBeenCalled();
-    expect(notificationService.createBadgeEarnedNotification).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
   it('awards a badge and notifies exactly once when the increment lands on a threshold', async () => {
     const upsert = jest.fn().mockResolvedValue({ count: 10 }); // 9 -> 10, crosses threshold 10
     const create = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ upsert, create });
+    const findUnique = jest.fn().mockResolvedValue({ systemLanguage: 'fr' });
+    const prisma = makePrisma({ upsert, create, findUnique });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -91,11 +96,14 @@ describe('EngagementService.recordActivity', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'badge', milestoneKey: 'content.post:10' },
     });
-    expect(notificationService.createBadgeEarnedNotification).toHaveBeenCalledTimes(1);
-    expect(notificationService.createBadgeEarnedNotification).toHaveBeenCalledWith({
+    expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
+    expect(notificationService.createNotification).toHaveBeenCalledWith({
       userId: 'user-1',
-      axisKey: 'content.post',
-      threshold: 10,
+      type: 'badge_earned',
+      priority: 'normal',
+      content: expect.any(String),
+      context: {},
+      metadata: { action: 'view_details', axisKey: 'content.post', threshold: 10 },
     });
   });
 
@@ -110,7 +118,7 @@ describe('EngagementService.recordActivity', () => {
     await svc.recordActivity('user-1', 'tool.sticker');
 
     expect(create).toHaveBeenCalledTimes(1);
-    expect(notificationService.createBadgeEarnedNotification).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
   it('propagates a milestone create error that is not a unique-constraint conflict', async () => {
@@ -141,7 +149,7 @@ describe('EngagementService.recordActivity', () => {
     ]);
 
     expect(create).toHaveBeenCalledTimes(2);
-    expect(notificationService.createBadgeEarnedNotification).toHaveBeenCalledTimes(1);
+    expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
   });
 
   it('does not let a notification failure roll back an already-recorded milestone', async () => {
@@ -149,7 +157,7 @@ describe('EngagementService.recordActivity', () => {
     const create = jest.fn().mockResolvedValue({});
     const prisma = makePrisma({ upsert, create });
     const notificationService = makeSharedNotificationService({
-      createBadgeEarnedNotification: jest.fn().mockRejectedValue(new Error('push down')),
+      createNotification: jest.fn().mockRejectedValue(new Error('push down')),
     });
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
