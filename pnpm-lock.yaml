@@ -353,7 +353,7 @@ importers:
         version: 5.102.8(react@19.2.8)
       preact:
         specifier: 10.29.8
-        version: 10.29.8
+        version: 10.29.8(preact-render-to-string@6.7.0)
       zustand:
         specifier: 5.0.15
         version: 5.0.15(@types/react@19.2.18)(immer@11.1.15)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
@@ -383,6 +383,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.7
         version: 19.2.7(@types/react@19.2.18)
+      preact-render-to-string:
+        specifier: 6.7.0
+        version: 6.7.0(preact@10.29.8)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -9856,6 +9859,11 @@ packages:
   postcss@8.5.28:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
+
+  preact-render-to-string@6.7.0:
+    resolution: {integrity: sha512-Z4WR8fmLMRpdYqJ9i7vrlXSsSrxVJydwrkEXHapexfARbWfGb7vGcnvNQnIzN0cXciMVOlz/XLoiMCi9gUsy9Q==}
+    peerDependencies:
+      preact: '>=10 || >= 11.0.0-0'
 
   preact@10.29.8:
     resolution: {integrity: sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==}
@@ -22389,7 +22397,13 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  preact@10.29.8: {}
+  preact-render-to-string@6.7.0(preact@10.29.8):
+    dependencies:
+      preact: 10.29.8(preact-render-to-string@6.7.0)
+
+  preact@10.29.8(preact-render-to-string@6.7.0):
+    optionalDependencies:
+      preact-render-to-string: 6.7.0(preact@10.29.8)
 
   prelude-ls@1.2.1: {}
 
