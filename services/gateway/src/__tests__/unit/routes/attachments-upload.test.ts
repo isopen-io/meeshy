@@ -241,7 +241,7 @@ describe('POST /attachments/upload — authenticated success', () => {
       method: 'POST',
       url: '/attachments/upload',
       headers: { 'content-type': CT },
-      payload: multipartFile('photo.jpg', 'image/jpeg'),
+      payload: multipartFileBuffer('photo.jpg', 'image/jpeg', JPEG_HEADER),
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -308,7 +308,10 @@ describe('POST /attachments/upload — invalid metadata JSON', () => {
       method: 'POST',
       url: '/attachments/upload',
       headers: { 'content-type': CT },
-      payload: multipartFileWithMetadata('photo.jpg', 'image/jpeg', '{not valid json}'),
+      // application/octet-stream : hors du périmètre image/audio de
+      // `matchesDeclaredSignature` (#3627) — ce test exerce le parsing de
+      // métadonnées, pas la vérification de signature de contenu.
+      payload: multipartFileWithMetadata('photo.bin', 'application/octet-stream', '{not valid json}'),
     });
     expect(res.statusCode).toBe(200);
   });
@@ -327,7 +330,10 @@ describe('POST /attachments/upload — non-metadata field ignored', () => {
       method: 'POST',
       url: '/attachments/upload',
       headers: { 'content-type': CT },
-      payload: multipartFileWithExtraField('photo.jpg', 'image/jpeg'),
+      // application/octet-stream : hors du périmètre image/audio de
+      // `matchesDeclaredSignature` (#3627) — ce test exerce l'ignorance d'un
+      // champ hors-contrat, pas la vérification de signature de contenu.
+      payload: multipartFileWithExtraField('photo.bin', 'application/octet-stream'),
     });
     expect(res.statusCode).toBe(200);
   });
@@ -346,7 +352,7 @@ describe('POST /attachments/upload — service error', () => {
       method: 'POST',
       url: '/attachments/upload',
       headers: { 'content-type': CT },
-      payload: multipartFile('photo.jpg', 'image/jpeg'),
+      payload: multipartFileBuffer('photo.jpg', 'image/jpeg', JPEG_HEADER),
     });
     expect(res.statusCode).toBe(500);
   });
@@ -359,7 +365,7 @@ describe('POST /attachments/upload — service error', () => {
       method: 'POST',
       url: '/attachments/upload',
       headers: { 'content-type': CT },
-      payload: multipartFile('photo.jpg', 'image/jpeg'),
+      payload: multipartFileBuffer('photo.jpg', 'image/jpeg', JPEG_HEADER),
     });
     expect(res.statusCode).toBe(500);
   });

@@ -382,18 +382,25 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       }
 
       // #3627 — le `filetype` TUS est déclaré par le CLIENT, jamais vérifié
-      // avant ce lot pour un appelant REGISTERED, ni pour un envoi de
-      // PostMedia quel que soit l'appelant (seul le chemin MESSAGE anonyme,
-      // plus bas, méritait la classification par octets). Appliqué ici, au
-      // point commun aux deux branches, avant tout traitement : un fichier
-      // qui déclare `image/*`/`audio/*` sans en porter la signature est
-      // détruit et refusé pour TOUT appelant.
-      const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
-      if (!matchesDeclaredSignature(mimeType, signaturePrefix)) {
-        await fs.unlink(destPath).catch((err) =>
-          logger.debug('[TUS] Mismatched-signature upload cleanup failed', { destPath, err }));
-        logger.warn('[TUS] Declared MIME type does not match file signature — rejected', { mimeType, filename });
-        throw { status_code: 400, body: 'File content does not match the declared type\n' };
+      // avant ce lot pour un appelant REGISTERED (PostMedia comme MESSAGE).
+      //
+      // Un appelant ANONYME n'entre PAS dans cette porte : la branche
+      // MESSAGE anonyme, plus bas, appelle `classifyAnonymousAttachment` —
+      // qui vérifie la MÊME signature, mais pour RECLASSIFIER un type
+      // déclaré sans octets correspondants vers la catégorie « fichier »
+      // plutôt que pour rejeter platement (round 1/2 sécurité). Rejeter ici
+      // romprait ce contrat, mesuré par
+      // `tus-handler.test.ts` : un PDF déclaré `audio/webm` doit retomber
+      // sous le droit de FICHIER (403 si interdit), jamais sous un 400
+      // générique qui court-circuiterait la décision de permission.
+      if (!isAnonymous) {
+        const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+        if (!matchesDeclaredSignature(mimeType, signaturePrefix)) {
+          await fs.unlink(destPath).catch((err) =>
+            logger.debug('[TUS] Mismatched-signature upload cleanup failed', { destPath, err }));
+          logger.warn('[TUS] Declared MIME type does not match file signature — rejected', { mimeType, filename });
+          throw { status_code: 400, body: 'File content does not match the declared type\n' };
+        }
       }
 
       let fileSize = upload.size || 0;

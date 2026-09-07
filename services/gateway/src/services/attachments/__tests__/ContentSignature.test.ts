@@ -1,6 +1,7 @@
 import {
   matchesAudioSignature,
   matchesImageSignature,
+  matchesDeclaredSignature,
   classifyAnonymousAttachment,
 } from '../ContentSignature';
 
@@ -242,5 +243,56 @@ describe('classifyAnonymousAttachment', () => {
 
   it('normalise la casse pour AUDIO/WEBM également', () => {
     expect(classifyAnonymousAttachment('AUDIO/WEBM', WEBM_HEADER, LOCKED)).toEqual({ allowed: true });
+  });
+});
+
+// ─── matchesDeclaredSignature — vérification universelle (#3627) ───────────
+//
+// Contrairement à `classifyAnonymousAttachment`, cette fonction ne RECLASSE
+// rien : elle rend un verdict binaire, appliqué à TOUT appelant (registered
+// ou anonyme) sur `routes/attachments/upload.ts` et `routes/uploads/tus-handler.ts`
+// — jusqu'ici les magic bytes ne servaient qu'à arbitrer un droit de lien de
+// partage anonyme, jamais à vérifier l'intégrité déclaré/réel pour tous.
+
+describe('matchesDeclaredSignature', () => {
+  it('accepte une image dont les octets correspondent au type déclaré', () => {
+    expect(matchesDeclaredSignature('image/jpeg', JPEG_HEADER)).toBe(true);
+    expect(matchesDeclaredSignature('image/png', PNG_HEADER)).toBe(true);
+    expect(matchesDeclaredSignature('image/webp', WEBP_HEADER)).toBe(true);
+  });
+
+  it('accepte un audio dont les octets correspondent au type déclaré', () => {
+    expect(matchesDeclaredSignature('audio/webm', WEBM_HEADER)).toBe(true);
+    expect(matchesDeclaredSignature('audio/mp4', MP4_M4A_HEADER)).toBe(true);
+    expect(matchesDeclaredSignature('audio/wav', WAV_HEADER)).toBe(true);
+  });
+
+  it('refuse une image dont les octets ne correspondent pas au type déclaré', () => {
+    expect(matchesDeclaredSignature('image/png', PDF_HEADER)).toBe(false);
+    expect(matchesDeclaredSignature('image/jpeg', ZIP_DOCX_HEADER)).toBe(false);
+  });
+
+  it('refuse un audio dont les octets ne correspondent pas au type déclaré', () => {
+    expect(matchesDeclaredSignature('audio/webm', PDF_HEADER)).toBe(false);
+    expect(matchesDeclaredSignature('audio/mp4', PLAIN_TEXT)).toBe(false);
+  });
+
+  it('normalise la casse du type déclaré', () => {
+    expect(matchesDeclaredSignature('IMAGE/JPEG', JPEG_HEADER)).toBe(true);
+    expect(matchesDeclaredSignature('AUDIO/WEBM', PDF_HEADER)).toBe(false);
+  });
+
+  it('exempte SVG — XML texte, hors du périmètre binaire de matchesImageSignature', () => {
+    // `image/svg+xml` n'est même pas dans `ACCEPTED_MIME_TYPES.IMAGE`
+    // (packages/shared/types/attachment.ts) : le traiter comme une image
+    // binaire rejetterait tout SVG légitime, qui n'a pas de magic number.
+    expect(matchesDeclaredSignature('image/svg+xml', Buffer.from('<svg xmlns="…"></svg>'))).toBe(true);
+    expect(matchesDeclaredSignature('IMAGE/SVG+XML', Buffer.from('<svg></svg>'))).toBe(true);
+  });
+
+  it('laisse passer un type hors image/audio (gap documenté, pas une garantie universelle)', () => {
+    expect(matchesDeclaredSignature('application/pdf', PLAIN_TEXT)).toBe(true);
+    expect(matchesDeclaredSignature('video/mp4', PLAIN_TEXT)).toBe(true);
+    expect(matchesDeclaredSignature('text/plain', PDF_HEADER)).toBe(true);
   });
 });

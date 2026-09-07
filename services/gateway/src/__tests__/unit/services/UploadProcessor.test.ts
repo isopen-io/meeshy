@@ -1120,10 +1120,10 @@ describe('UploadProcessor', () => {
         new Error('chmod failed')
       );
 
-      // Should not throw
+      // Should not throw, and still reports the byte size written
       await expect(
         (processor as any).saveFile(buffer, relativePath)
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({ size: buffer.length });
     });
   });
 

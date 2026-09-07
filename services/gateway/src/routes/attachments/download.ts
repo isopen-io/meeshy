@@ -317,7 +317,15 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
       // only async onSend hook — the proven-safe state every other route has.
       onSend: (request, reply, payload, done) => {
         reply.removeHeader('X-Frame-Options');
-        reply.header('Content-Security-Policy', "frame-ancestors *");
+        // #3627 — un SVG a déjà posé la CSP `sandbox` dans le handler (même
+        // garde que `GET /attachments/:attachmentId`) ; l'écraser ici par
+        // `frame-ancestors *` la neutraliserait pour TOUT le monde, y
+        // compris les navigateurs qui n'honorent que la dernière valeur de
+        // l'en-tête. Ce hook ne pose `frame-ancestors *` que pour tout ce
+        // qui n'est PAS un SVG.
+        if (reply.getHeader('Content-Type') !== 'image/svg+xml') {
+          reply.header('Content-Security-Policy', "frame-ancestors *");
+        }
         crossOriginMediaHeaders(request, reply, payload, done);
       }
     },

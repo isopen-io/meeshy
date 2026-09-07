@@ -158,13 +158,24 @@ export async function registerUploadRoutes(
         }
 
         // #3627 — le `Content-Type` multipart est déclaré par le CLIENT,
-        // jamais vérifié avant ce lot pour un appelant REGISTERED (seul le
-        // chemin anonyme, plus bas, méritait la classification par octets).
-        // Un fichier qui déclare `image/*`/`audio/*` sans en porter la
-        // signature est refusé pour TOUT appelant, avant tout traitement.
-        for (const file of files) {
-          if (!matchesDeclaredSignature(file.mimeType, file.buffer)) {
-            return sendBadRequest(reply, 'File content does not match the declared type');
+        // jamais vérifié avant ce lot pour un appelant REGISTERED. Un fichier
+        // qui déclare `image/*`/`audio/*` sans en porter la signature est
+        // refusé avant tout traitement.
+        //
+        // Un appelant ANONYME n'entre PAS dans cette porte : son chemin,
+        // `classifyAnonymousAttachment` plus bas, vérifie déjà les mêmes
+        // signatures — mais pour RECLASSIFIER un type déclaré qui ne
+        // correspond à aucun octet connu vers la catégorie « fichier », la
+        // plus stricte, plutôt que pour rejeter platement (round 1 sécurité,
+        // task-1-fix-round-1). Rejeter ici avant la classification romprait
+        // ce contrat : un PDF déclaré `audio/webm` doit retomber sous le
+        // droit de FICHIER (403 si interdit), jamais sous une erreur 400
+        // générique qui court-circuiterait la décision de permission.
+        if (!isAnonymous) {
+          for (const file of files) {
+            if (!matchesDeclaredSignature(file.mimeType, file.buffer)) {
+              return sendBadRequest(reply, 'File content does not match the declared type');
+            }
           }
         }
 
