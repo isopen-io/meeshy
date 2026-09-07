@@ -5,6 +5,7 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
+import { EngagementService } from '../../services/engagement/EngagementService';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
@@ -57,6 +58,7 @@ export function registerCommentRoutes(
 ) {
   const commentService = new PostCommentService(prisma);
   const mentionService = new MentionService(prisma);
+  const engagementService = new EngagementService(prisma);
 
   // GET /posts/:postId/comments — Top-level comments, cursor-paginated
   fastify.get('/posts/:postId/comments', {
@@ -402,6 +404,16 @@ export function registerCommentRoutes(
           fileUrl: linkedMedia.fileUrl ?? '',
           authorId: authContext.registeredUser.id,
         }).catch((err) => enhancedLogger.error('comment audio processing failed', err));
+      }
+
+      // Axe d'engagement « commentaire texte » (#5537) — un commentaire SANS
+      // pièce jointe audio crédite `comment.text`. Le pendant audio (#5536)
+      // créditera `comment.audio` sur la branche opposée de ce même test —
+      // les deux axes sont le complément l'un de l'autre.
+      if (!linkedMedia?.mimeType?.startsWith('audio/')) {
+        engagementService
+          .recordActivity(authContext.registeredUser.id, 'comment.text')
+          .catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: engagement comment.text failed', { err }));
       }
 
       const newCommentMentionedUsers = parsed.data.content
