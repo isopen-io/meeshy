@@ -617,7 +617,21 @@ extension StoryRenderer {
         // prédicat que celui qui décide, un étage plus bas, si la chaîne part
         // chez `MeeshyConfig.resolveMediaURL`. Deux réponses à une seule
         // question sont ce qui a produit ce défaut.
-        if let url = mediaURL, StoryBackgroundLayer.isAddressable(url) { return url }
+        //
+        // MAIS `isAddressable` reconnaît AUSSI `file://` (#5457) — et un
+        // `file://` n'est une adresse UTILISABLE que pour celui qui l'a écrit.
+        // Élargir la priorité à `isAddressable` a donc rouvert exactement ce
+        // que le paragraphe ci-dessus (et les deux au-dessus) documentent
+        // depuis l'origine : une `mediaURL` de sandbox AUTEUR ne doit gagner
+        // sur le `postMediaId` que lorsqu'aucun identifiant n'existe — sans
+        // quoi une story publiée avant `sanitizedForServerPublish()` retombe
+        // sur un chemin `file://` inaccessible à tout autre lecteur. Une
+        // adresse RÉSEAU (http/https, clé de stockage) n'a pas ce problème et
+        // continue de gagner sans condition.
+        if let url = mediaURL, StoryBackgroundLayer.isAddressable(url) {
+            let isAuthorSandboxFile = url.hasPrefix("file://")
+            if !isAuthorSandboxFile || postMediaId.isEmpty { return url }
+        }
         return postMediaId.isEmpty ? (mediaURL ?? "") : postMediaId
     }
 
