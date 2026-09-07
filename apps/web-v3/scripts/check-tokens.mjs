@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { chromium } from '@playwright/test';
+import { launchChromium } from './lib/browser.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SWIFT = join(HERE, '../../../packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift');
@@ -80,9 +80,7 @@ const EXPECTED = {
   },
 };
 
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await launchChromium();
 
 let failures = 0;
 for (const [scheme, table] of Object.entries(EXPECTED)) {
