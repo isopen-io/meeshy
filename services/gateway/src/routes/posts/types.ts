@@ -295,6 +295,11 @@ export const CreatePostSchema = z.object({
   // est rejetée ici (400 VALIDATION_ERROR), même garde que `visibility`
   // ci-dessus — jamais un `geoPoint`/`geoPrecision` brut, à aucun niveau.
   discoverabilityPrecision: z.enum(['EXACT', 'NEIGHBORHOOD', 'CITY', 'REGION']).optional(),
+  // Opt-in EXPLICITE requis pour obtenir `EXACT` (#3637) — un geste séparé du
+  // simple choix dans l'énumération ci-dessus. Sans lui (ou pour un auteur
+  // dont la majorité n'est pas vérifiée), `EXACT` retombe sur `NEIGHBORHOOD`
+  // côté serveur (`PostService.createPost` via `resolveDiscoverabilityPrecision`).
+  discoverabilityPrecisionConfirmed: z.boolean().optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
