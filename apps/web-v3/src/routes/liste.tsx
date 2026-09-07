@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { Glyphe } from '@/components/glyphe';
-import { LigneDeConversation } from '@/components/ligne-conversation';
+import { LigneLentille } from '@/components/ligne-lentille';
+import { useScene } from '@/lib/lentille/scene';
 import { CONVERSATIONS } from '@/lib/api/fixtures';
 import { LANGUES_DU_LECTEUR } from '@/lib/lecteur';
 
@@ -22,6 +23,8 @@ const FILTRES = ['Tous', 'Non lus', 'Groupes', 'Directs', 'Épinglés'] as const
 export default function EcranListe() {
   const [filtre, setFiltre] = useState<string>('Tous');
   const [recherche, setRecherche] = useState('');
+  const cadre = useRef<HTMLUListElement | null>(null);
+  const { focus } = useScene(cadre);
 
   const visibles = CONVERSATIONS.filter((c) => {
     if (filtre === 'Non lus' && c.nonLus === 0) return false;
@@ -114,12 +117,36 @@ export default function EcranListe() {
         </ul>
       </nav>
 
-      <ul id="contenu" className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pt-2 pb-2">
+      {/*
+        AUCUN `gap` : l'espacement des cartes est ce qui les faisait lire comme
+        des boîtes. La Lentille est un flux — les rangées se touchent, et c'est
+        la perspective qui les sépare.
+      */}
+      <ul ref={cadre} id="contenu" className="flex flex-1 flex-col overflow-y-auto px-2 pt-2">
         {visibles.map((c) => (
-          <li key={c.id}>
-            <LigneDeConversation conversation={c} langues={LANGUES_DU_LECTEUR} />
-          </li>
+          <LigneLentille
+            key={c.id}
+            conversation={c}
+            langues={LANGUES_DU_LECTEUR}
+            etat={{
+              magnifiee: focus === c.id,
+              /* La perspective est écrite par la scène directement dans le
+                 style du nœud, à chaque image. Ces valeurs-ci ne sont que
+                 l'état de DÉPART, avant la première passe. */
+              alpha: 1,
+              echelle: 1,
+              respiration: 0,
+            }}
+          />
         ))}
+        {/*
+          LA QUEUE DE LISTE — une demi-hauteur de fenêtre de vide sous la
+          dernière rangée. Sans elle, la bande de focus, ancrée à 140 du bas,
+          ne pourrait jamais atteindre les dernières conversations : elles
+          resteraient à jamais non magnifiées, et la liste se terminerait par
+          une zone morte que rien n'explique.
+        */}
+        <li aria-hidden="true" style={{ height: '50dvh', flexShrink: 0 }} />
         {visibles.length === 0 ? (
           /* Etat vide : jamais un spinner, jamais une phrase seule — un
              contour pointille de CONTROLE, un glyphe, une phrase, une sortie. */

@@ -116,5 +116,37 @@
       "ouvre_hors_ligne": true
     },
     "temoin": "scripts/verifie-institutionnel.mjs — un navigateur RÉEL et une DEUXIÈME visite. Aucun test de construction ne pouvait voir ce défaut : les fichiers étaient bien sur le disque. Vérifié par mutation : l'état d'avant le correctif rend rc=1 sur 35 invariants rompus."
+  },
+  "lentille": {
+    "quoi": "La peau LENTILLE de l'écran / — ligne PLATE de 84 px, perspective au défilement, magnification en place. Elle REMPLACE la peau carte, retirée : #5567 la déclare seule peau de la v3.1.",
+    "produit_par": "cd apps/web-v3 && bun run build && node scripts/mesure-poids.mjs && node scripts/verifie-lentille.mjs",
+    "date": "2026-09-07",
+    "premiere_peinture_ko": 25.22,
+    "premiere_peinture_avant_ko": 25.13,
+    "surcout_premiere_peinture_ko": 0.09,
+    "a_la_demande_ko": 26.75,
+    "a_la_demande_avant_ko": 23.98,
+    "note_cout": "La peau et sa scène arrivent avec le morceau de l'écran /, jamais avant le premier pixel : le surcoût de première peinture (0,09 Ko) n'est que la table de routage. Les 2,8 Ko à la demande portent la ligne, la loi et le moteur de défilement.",
+    "critere_binaire": {
+      "enonce": "Directive porteur : « le flux ne bouge jamais au défilement, ou on garde les cartes ». Il n'y a pas de demi-mesure à mesurer.",
+      "temoin": "scripts/verifie-lentille.mjs — navigateur réel, cinq paliers de défilement, `offsetTop` et `offsetHeight` de chaque case relevés à chacun.",
+      "cases": 4,
+      "hauteur_de_case_px": 84,
+      "paliers_px": [
+        40,
+        120,
+        240,
+        400,
+        600
+      ],
+      "cases_ayant_bouge": 0,
+      "opacites_distinctes": 12,
+      "transformations_distinctes": 15,
+      "mouvement_reduit": "toutes les opacités à 1, ÉLECTION CONSERVÉE — on perd le relief, jamais le repère",
+      "verifie_par_mutation": "faire grandir la case (84 → 100 quand magnifiée) rend rc=1 sur les cinq paliers"
+    },
+    "mecanisme": "La case de mise en page mesure 84 en permanence ; le conteneur visuel mesure 100 et déborde de 8 de chaque côté, son supplément à `opacity: 0` au repos. AUCUNE propriété de mise en page n'est jamais animée — seuls `transform` et `opacity`, les deux que le compositeur sait bouger sans repasser par la mise en page.",
+    "defaut_trouve_par_le_temoin": "`flexShrink: 0` manquait sur la case : la liste étant un conteneur flex, les cases étaient COMPRIMÉES à 31 px au lieu de 84. La compression étant uniforme, la perspective continuait de s'appliquer et rien n'avait l'air cassé à l'œil — seule la mesure de mise en page l'a vu.",
+    "loi": "src/lib/lentille/loi.ts, DÉRIVÉE de packages/shared/utils/focus-curve.ts (7 constantes) et de LentilleMetrics.swift (3 cotes de respiration). `scripts/verifie-courbe.mjs` interdit la dérive ; `loi.test.ts` garde les valeurs (17 tests)."
   }
 }

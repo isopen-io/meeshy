@@ -261,6 +261,7 @@ jobs:
         working-directory: apps/web-v3
         run: |
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:jetons
+          node scripts/verifie-courbe.mjs
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/mesure-poids.mjs
           node scripts/verifie-contexte-docker.mjs
@@ -591,7 +592,7 @@ jobs:
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
   institutionnel-v3:
-    name: Cache institutionnel web-v3 (5 pages, 2 formes, 0 requête)
+    name: Peaux web-v3 (cache institutionnel + flux de la Lentille)
     runs-on: ubuntu-latest
     needs: quality
     timeout-minutes: 15
@@ -651,6 +652,14 @@ jobs:
         run: |
           cd apps/web-v3
           node scripts/verifie-institutionnel.mjs
+
+      # LE CRITÈRE BINAIRE DE LA LENTILLE, dans le MÊME travail : il lève le
+      # même navigateur sur le même `dist`, et un second travail paierait une
+      # installation de Chromium pour rien.
+      - name: Gate flux de la Lentille (mise en page invariable au défilement)
+        run: |
+          cd apps/web-v3
+          node scripts/verifie-lentille.mjs
 
   # ===========================================================================
   # LIFECYCLE: le gate de cycle de vie du § 8.5 de la conception v3 — SON PORTEUR
@@ -1923,7 +1932,7 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Cache institutionnel web-v3 | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Peaux web-v3 (institutionnel + Lentille) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Chaînes web-v3 | ${{ needs.chaines-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
