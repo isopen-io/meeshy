@@ -15,6 +15,7 @@ import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
+import { EngagementService } from '../engagement/EngagementService';
 import {
   admitMessageForward,
   describeForwardRefusal,
@@ -38,6 +39,7 @@ export class MessagingService {
   private validator: MessageValidator;
   private processor: MessageProcessor;
   private readStatusService: MessageReadStatusService;
+  private engagementService: EngagementService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -47,6 +49,7 @@ export class MessagingService {
     this.validator = new MessageValidator(prisma);
     this.processor = new MessageProcessor(prisma, notificationService, translationService);
     this.readStatusService = new MessageReadStatusService(prisma);
+    this.engagementService = new EngagementService(prisma);
   }
 
   /**
@@ -487,6 +490,7 @@ export class MessagingService {
     runMessagePostSaveEffects({
       prisma: this.prisma,
       translationService: this.translationService,
+      engagementService: this.engagementService,
       message: {
         id: message.id,
         conversationId: message.conversationId,

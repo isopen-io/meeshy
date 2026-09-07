@@ -4489,3 +4489,25 @@ model EngagementMilestone {
   @@unique([userId, milestoneType, milestoneKey])
   @@index([userId, milestoneType])
 }
+
+/// Garde de dédoublonnage des axes "conversation distincte" (#5539,
+/// docs/product/streaks-badges-modele.md § 2) — "l'utilisateur envoie un
+/// premier message dans une conversation {privée,publique,communautaire}
+/// DISTINCTE" exige de savoir si CETTE conversation a déjà crédité CET axe
+/// pour CET utilisateur, ce qu'`EngagementCounter` (un total, sans mémoire
+/// par conversation) ne peut pas répondre. La contrainte unique est la
+/// garde — un `create` en conflit = conversation déjà créditée pour cet
+/// axe, no-op silencieux — jamais une relecture avant écriture, même
+/// raison anti-course qu'`EngagementMilestone`.
+model EngagementConversationCredit {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  /// "conversation.private" | "conversation.public" | "conversation.community"
+  /// — voir `EngagementAxisKey` (@meeshy/shared/types/engagement).
+  axisKey        String
+  conversationId String   @db.ObjectId
+  creditedAt     DateTime @default(now())
+
+  @@unique([userId, axisKey, conversationId])
+  @@index([userId, axisKey])
+}

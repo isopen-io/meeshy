@@ -19,6 +19,7 @@ function makePrisma(overrides: Partial<{
   upsert: jest.Mock;
   create: jest.Mock;
   findUnique: jest.Mock;
+  conversationCreditCreate: jest.Mock;
 }> = {}) {
   return {
     engagementCounter: {
@@ -26,6 +27,9 @@ function makePrisma(overrides: Partial<{
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn(),
+    },
+    engagementConversationCredit: {
+      create: overrides.conversationCreditCreate ?? jest.fn().mockResolvedValue({}),
     },
     user: {
       findUnique: overrides.findUnique ?? jest.fn().mockResolvedValue({ systemLanguage: 'fr' }),
@@ -164,5 +168,51 @@ describe('EngagementService.recordActivity', () => {
 
     await expect(svc.recordActivity('user-1', 'tool.sticker')).resolves.toBeUndefined();
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('EngagementService.recordConversationActivity', () => {
+  it('credits a first message in a distinct conversation and increments the axis counter', async () => {
+    const conversationCreditCreate = jest.fn().mockResolvedValue({});
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = makePrisma({ conversationCreditCreate, upsert });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordConversationActivity('user-1', 'conversation.public', 'conv-1');
+
+    expect(conversationCreditCreate).toHaveBeenCalledWith({
+      data: { userId: 'user-1', axisKey: 'conversation.public', conversationId: 'conv-1' },
+    });
+    expect(upsert).toHaveBeenCalledWith({
+      where: { userId_axisKey: { userId: 'user-1', axisKey: 'conversation.public' } },
+      create: { userId: 'user-1', axisKey: 'conversation.public', count: 1 },
+      update: { count: { increment: 1 } },
+      select: { count: true },
+    });
+  });
+
+  it('does not increment the counter again for a second message in an already-credited conversation', async () => {
+    const conversationCreditCreate = jest.fn().mockRejectedValue(p2002Error());
+    const upsert = jest.fn();
+    const prisma = makePrisma({ conversationCreditCreate, upsert });
+    const svc = new EngagementService(prisma);
+
+    await svc.recordConversationActivity('user-1', 'conversation.public', 'conv-1');
+
+    expect(conversationCreditCreate).toHaveBeenCalledTimes(1);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('propagates a conversation-credit error that is not a unique-constraint conflict', async () => {
+    const conversationCreditCreate = jest.fn().mockRejectedValue(new Error('connection lost'));
+    const upsert = jest.fn();
+    const prisma = makePrisma({ conversationCreditCreate, upsert });
+    const svc = new EngagementService(prisma);
+
+    await expect(
+      svc.recordConversationActivity('user-1', 'conversation.public', 'conv-1')
+    ).rejects.toThrow('connection lost');
+    expect(upsert).not.toHaveBeenCalled();
   });
 });
