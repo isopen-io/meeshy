@@ -55,6 +55,47 @@
 // le parseur sait borner l'objet API_ENDPOINTS sans déborder sur
 // API_PATH_METHODS voisin (un faux négatif classique : compter des chemins
 // littéraux comme des entrées de catalogue).
+//
+// EXCEPTIONS CONNUES (#5427)
+//
+// Quatre entrées mesurées en instruisant #5373 sont des FAUX MORTS : la
+// route est réellement appelée en production, mais jamais via
+// `API_ENDPOINTS.ns.entrée` — la seule forme que ce script reconnaît comme
+// appelant. Un marqueur manuel, documenté par cas et vérifié par grep avant
+// écriture, est plus honnête qu'une heuristique qui devinerait un chemin
+// (cf. le rejet symétrique dans `endpoint-literal-audit.ts`, § « une liste
+// d'exemptions serait pire ») — et contrairement à une liste qui grossirait
+// en silence, `applyKnownLiveExceptions` rougit si l'une d'elles cesse de
+// correspondre à une entrée réellement morte (voir plus bas).
+const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
+  // `GET /api/v1/l/:token` — atteinte par NAVIGATION DIRECTE du navigateur
+  // (lien partagé), jamais par un appel `fetch` typé. Chemin `/l/${token}`
+  // écrit à la main dans plusieurs sites de composition de lien partageable :
+  // `apps/web/lib/utils/link-parser.ts:116-117`,
+  // `apps/web/components/chat/message-with-links.tsx`.
+  'l.byToken',
+  // `GET /api/v1/static/:filename` — l'URL complète (`fileUrl`) est rendue
+  // par le serveur dans la charge utile et consommée directement (balise
+  // `<img>`/`<a>`, `fetch(attachment.fileUrl)`) — jamais reconstruite via
+  // `API_ENDPOINTS.static.byFilename`. Appelants réels (parmi d'autres) :
+  // `apps/web/components/markdown/MarkdownLightbox.tsx`,
+  // `apps/web/components/text/TextViewer.tsx`.
+  'static.byFilename',
+  // `GET /api/v1/u/:username` — navigation directe via des liens `<Link
+  // href={\`/u/${username}\`}>` écrits à la main dans des dizaines de sites
+  // (profils, mentions), jamais via `API_ENDPOINTS.u.byUsername`. Exemples :
+  // `apps/web/components/common/bubble-message/MessageNameDate.tsx`,
+  // `apps/web/components/v2/MessageBubble.tsx`.
+  'u.byUsername',
+  // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée par
+  // `apps/web-v3/lib/api/invite.ts:84` via un chemin construit à la main
+  // (`CHEMIN_BATTEMENT`). `apps/web-v3` est HORS du périmètre `SEARCH_ROOTS`
+  // de ce script (`apps/web`, `packages/shared`) : élargir le périmètre à
+  // toute l'arborescence `web-v3` déplacerait le compte de dette de façon non
+  // mesurée pour cette issue (cf. « toute baisse doit être MESURÉE, jamais
+  // supposée ») — l'exception documentée est le correctif proportionné.
+  'guestSessions.me',
+]);
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -139,9 +180,14 @@ export const parseCatalogBlock = (blockLines) => {
 // 277 → 276 (#5430) : `API_ENDPOINTS.admin.shareLinksByIdReveal` a reçu son
 // premier appelant hors test — `apps/web/app/admin/share-links/page.tsx`,
 // qui l'appelle désormais pour réparer les contrôles « Copier »/« Ouvrir ».
-// 276 → 273 (#5423) : les trois routes de sondage mortes (`conversation`,
+//
+// 276 → 272 (#5427) : `l.byToken`, `static.byFilename`, `u.byUsername`,
+// `guestSessions.me` retirées du compte de dette — quatre faux morts, voir
+// `KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE` ci-dessus.
+//
+// 272 → 269 (#5423) : les trois routes de sondage mortes (`conversation`,
 // `detectLanguage`, `status`) sont retirées du catalogue avec leurs routes.
-const BASELINE_DEAD_ENTRIES = 273;
+const BASELINE_DEAD_ENTRIES = 269;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
@@ -170,6 +216,19 @@ export const deadEntries = (world) =>
   world.namespaces.flatMap((ns) =>
     ns.entries.filter((e) => !world.usedPairs.has(`${ns.name}.${e}`)).map((e) => `${ns.name}.${e}`),
   );
+
+// Retire du compte de dette les faux morts PROUVÉS (#5427), et signale toute
+// exception devenue STALE : une entrée listée qui n'apparaît plus dans le
+// compte brut a soit regagné un appelant réel (l'exception est alors un
+// bruit à retirer), soit disparu du catalogue (même remède). Une liste
+// d'exceptions qui ne peut jamais rougir sur sa propre péremption est
+// exactement la « liste qui se périme en silence » que #5427 refuse.
+export const applyKnownLiveExceptions = (dead, exceptions) => {
+  const deadSet = new Set(dead);
+  const stale = [...exceptions].filter((e) => !deadSet.has(e));
+  const filtered = dead.filter((e) => !exceptions.has(e));
+  return { filtered, stale };
+};
 
 const RESULT = Object.freeze({ OK: 'ok', REGRESSION: 'regression', UNRECORDED_IMPROVEMENT: 'unrecorded-improvement' });
 
@@ -234,7 +293,24 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 6/6 vérifications passées (comptage, cliquet à deux sens, bornage API_ENDPOINTS≠API_PATH_METHODS).');
+  // Une exception PROUVÉE retire l'entrée du compte, même si elle serait
+  // "morte" au sens strict des appelants.
+  const withException = applyKnownLiveExceptions(['foo.dead1', 'foo.dead2'], new Set(['foo.dead1']));
+  if (withException.filtered.length !== 1 || withException.filtered[0] !== 'foo.dead2' || withException.stale.length !== 0) {
+    console.error(`AVEUGLE : une exception valide doit retirer exactement l'entrée exceptée, obtenu ${JSON.stringify(withException)}.`);
+    return 1;
+  }
+
+  // Une exception qui ne correspond plus à AUCUNE entrée morte (regagné un
+  // appelant, ou retirée du catalogue) doit être signalée STALE, jamais
+  // silencieusement ignorée.
+  const withStale = applyKnownLiveExceptions(['foo.dead1'], new Set(['foo.dead1', 'foo.longGone']));
+  if (withStale.stale.length !== 1 || withStale.stale[0] !== 'foo.longGone') {
+    console.error(`AVEUGLE : une exception qui ne matche plus aucune entrée morte doit être signalée STALE, obtenu ${JSON.stringify(withStale)}.`);
+    return 1;
+  }
+
+  console.log('self-test : 8/8 vérifications passées (comptage, cliquet à deux sens, bornage API_ENDPOINTS≠API_PATH_METHODS, exceptions #5427).');
   return 0;
 };
 
@@ -242,7 +318,17 @@ const main = () => {
   if (process.argv.includes('--self-test')) return selfTest();
 
   const world = readWorld(REPO_ROOT);
-  const dead = deadEntries(world).sort();
+  const { filtered, stale } = applyKnownLiveExceptions(deadEntries(world), KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE);
+
+  if (stale.length > 0) {
+    console.error(
+      `EXCEPTION PÉRIMÉE (#5427) : ${stale.join(', ')} ne figure(nt) plus parmi les entrées sans appelant — ` +
+        'a/ont regagné un appelant réel, ou disparu du catalogue. Retirez cette entrée de KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE.',
+    );
+    return 1;
+  }
+
+  const dead = filtered.sort();
   const verdict = evaluateRatchet(dead.length, BASELINE_DEAD_ENTRIES);
 
   if (verdict === RESULT.OK) {

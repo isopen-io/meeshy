@@ -71,6 +71,38 @@
 // régression (+1 entrée morte) et sur une amélioration non enregistrée
 // (-1 sans abaisser la référence). Un cliquet qui n'a jamais été vu échouer
 // sur les deux formes de dérive n'est pas un garde (leçon de #5366/#4764).
+//
+// EXCEPTIONS CONNUES (#5427)
+//
+// #4889/#5372 comptent une entrée sans occurrence `TypeName.entry` comme
+// morte. Trois cas mesurés en instruisant #5373 ne le sont pas : la route
+// est réellement appelée en production, mais par un chemin qu'AUCUNE analyse
+// du code source ne peut relier à l'énum — une URL COMPLÈTE rendue par le
+// SERVEUR dans la charge utile et consommée telle quelle (`fileUrl`), jamais
+// reconstruite ni citée en littéral nulle part dans l'arbre client. Élargir
+// la recherche aux chemins littéraux (comme `endpoint-literal-audit.ts` le
+// fait dans l'autre sens) ne fermerait donc RIEN ici : il n'existe aucun
+// littéral à trouver. Un marqueur manuel, documenté par cas, est plus honnête
+// qu'une heuristique qui devinerait un chemin absent du code (cf. le rejet
+// symétrique dans `endpoint-literal-audit.ts`, § « une liste d'exemptions
+// serait pire ») — cette liste-ci n'exempte PAS une régression future, elle
+// retire des faux positifs déjà PROUVÉS, un par un, comme le fait déjà
+// `BASELINE_DEAD_ENTRIES` pour chaque baisse mesurée.
+//
+// `LEndpoint.byToken` et `UEndpoint.byUsername` restent, eux, des entrées
+// mortes CÔTÉ SWIFT (aucune occurrence, littérale ou non, dans
+// `packages/MeeshySDK/Sources` ni `apps/ios/**` — vérifié par grep avant
+// d'écrire cette liste) : leur appelant réel est le catalogue TS
+// (`check-ts-catalog-dead-entries.mjs` porte leurs exceptions), pas iOS. Une
+// route qu'iOS n'implémente pas n'est pas une entrée Swift vivante.
+const KNOWN_LIVE_VIA_OPAQUE_SERVER_URL = new Set([
+  // `GET /api/v1/static/:filename` : l'URL complète (`fileUrl`) est rendue
+  // par le serveur dans la charge utile (stories, sons, pièces jointes) et
+  // consommée directement par `URLSession` — jamais reconstruite via
+  // `StaticEndpoint.byFilename`. Appelants réels (parmi d'autres) :
+  // `StoryAudioSourceResolver.swift`, `StoryCanvasUIView+Audio.swift`.
+  'StaticEndpoint.byFilename',
+]);
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -95,7 +127,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // le comptage manuel de #4889. Qui la baisse doit avoir mesuré une vraie
 // baisse ; qui la relève documente ici pourquoi une entrée neuve est morte à
 // la naissance (une porte posée pour un écran à venir, cf. #4889).
-const BASELINE_DEAD_ENTRIES = 250;
+//
+// 253 → 252 (#5427) : `StaticEndpoint.byFilename` retirée du compte de dette —
+// faux mort, voir `KNOWN_LIVE_VIA_OPAQUE_SERVER_URL` ci-dessus.
+//
+// 252 → 249 (#5423) : `ConversationEndpoint`, `DetectLanguageEndpoint` et
+// `StatusEndpoint` retirés du catalogue avec leurs trois routes de sondage
+// mortes — les trois entrées disparaissent, elles ne se comptent plus.
+const BASELINE_DEAD_ENTRIES = 249;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
@@ -181,6 +220,19 @@ export const deadEntries = (world) =>
     c.entries.filter((e) => !world.usedPairs.has(`${c.typeName}.${e}`)).map((e) => `${c.typeName}.${e}`),
   );
 
+// Retire du compte de dette les faux morts PROUVÉS (#5427), et signale toute
+// exception devenue STALE : une entrée listée qui n'apparaît plus dans le
+// compte brut a soit regagné un appelant réel (l'exception est alors un
+// bruit à retirer), soit disparu du catalogue (même remède). Une liste
+// d'exceptions qui ne peut jamais rougir sur sa propre péremption est
+// exactement la « liste qui se périme en silence » que #5427 refuse.
+export const applyKnownLiveExceptions = (dead, exceptions) => {
+  const deadSet = new Set(dead);
+  const stale = [...exceptions].filter((e) => !deadSet.has(e));
+  const filtered = dead.filter((e) => !exceptions.has(e));
+  return { filtered, stale };
+};
+
 const RESULT = Object.freeze({ OK: 'ok', REGRESSION: 'regression', UNRECORDED_IMPROVEMENT: 'unrecorded-improvement' });
 
 export const evaluateRatchet = (deadCount, baseline) => {
@@ -237,7 +289,24 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 6/6 vérifications passées (comptage, cliquet à deux sens, parseur déclaration≠switch-arm).');
+  // Une exception PROUVÉE retire l'entrée du compte, même si elle serait
+  // "morte" au sens strict des appelants.
+  const withException = applyKnownLiveExceptions(['FooEndpoint.dead1', 'FooEndpoint.dead2'], new Set(['FooEndpoint.dead1']));
+  if (withException.filtered.length !== 1 || withException.filtered[0] !== 'FooEndpoint.dead2' || withException.stale.length !== 0) {
+    console.error(`AVEUGLE : une exception valide doit retirer exactement l'entrée exceptée, obtenu ${JSON.stringify(withException)}.`);
+    return 1;
+  }
+
+  // Une exception qui ne correspond plus à AUCUNE entrée morte (regagné un
+  // appelant, ou retirée du catalogue) doit être signalée STALE, jamais
+  // silencieusement ignorée.
+  const withStale = applyKnownLiveExceptions(['FooEndpoint.dead1'], new Set(['FooEndpoint.dead1', 'FooEndpoint.longGone']));
+  if (withStale.stale.length !== 1 || withStale.stale[0] !== 'FooEndpoint.longGone') {
+    console.error(`AVEUGLE : une exception qui ne matche plus aucune entrée morte doit être signalée STALE, obtenu ${JSON.stringify(withStale)}.`);
+    return 1;
+  }
+
+  console.log('self-test : 8/8 vérifications passées (comptage, cliquet à deux sens, parseur déclaration≠switch-arm, exceptions #5427).');
   return 0;
 };
 
@@ -245,7 +314,17 @@ const main = () => {
   if (process.argv.includes('--self-test')) return selfTest();
 
   const world = readWorld(REPO_ROOT);
-  const dead = deadEntries(world).sort();
+  const { filtered, stale } = applyKnownLiveExceptions(deadEntries(world), KNOWN_LIVE_VIA_OPAQUE_SERVER_URL);
+
+  if (stale.length > 0) {
+    console.error(
+      `EXCEPTION PÉRIMÉE (#5427) : ${stale.join(', ')} ne figure(nt) plus parmi les entrées sans appelant — ` +
+        'a/ont regagné un appelant réel, ou disparu du catalogue. Retirez cette entrée de KNOWN_LIVE_VIA_OPAQUE_SERVER_URL.',
+    );
+    return 1;
+  }
+
+  const dead = filtered.sort();
   const verdict = evaluateRatchet(dead.length, BASELINE_DEAD_ENTRIES);
 
   if (verdict === RESULT.OK) {
