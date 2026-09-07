@@ -402,8 +402,8 @@ export async function runPublicationEffects(
 
   // Le type vient de la ligne ÉCRITE, jamais du type DEMANDÉ — un REEL (ou une
   // STORY) dégradé en POST par le service doit s'annoncer pour ce qu'il est
-  // devenu. Partagé par l'éventail d'amis ci-dessous et par l'axe
-  // d'engagement « stories » (#5534) qui suit.
+  // devenu. Partagé par l'éventail d'amis ci-dessous et par les axes
+  // d'engagement « stories » (#5534) / « réels » (#5535) qui suivent.
   const writtenType = (asOptionalString(post.type) ?? postType) as PublishedPostType;
 
   // Éventail vers les amis : `user_mentioned` prime (dedup via excludeUserIds).
@@ -424,12 +424,17 @@ export async function runPublicationEffects(
     });
   }
 
-  // Axe d'engagement « stories » (#5534) — suit le type ÉCRIT comme
-  // l'éventail juste au-dessus : une STORY dégradée en POST par le service ne
-  // doit pas créditer `content.story`.
+  // Axes d'engagement « stories » (#5534) et « réels » (#5535) — suivent le
+  // type ÉCRIT comme l'éventail juste au-dessus, mutuellement exclusifs sur
+  // la même ligne : un REEL non qualifiant dégradé en POST par le service ne
+  // doit créditer ni l'un ni l'autre.
   if (engagementService && writtenType === 'STORY') {
     engagementService.recordActivity(authorId, 'content.story').catch((err: unknown) => {
       logError(fastify.log, `[${porte}] content.story engagement recording failed`, err);
+    });
+  } else if (engagementService && writtenType === 'REEL') {
+    engagementService.recordActivity(authorId, 'content.reel').catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] content.reel engagement recording failed`, err);
     });
   }
 

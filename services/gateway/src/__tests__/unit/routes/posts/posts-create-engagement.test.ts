@@ -1,25 +1,28 @@
 /**
- * Axe d'engagement « stories » (#5534, sous-issue de #3695) — la publication
- * d'une STORY crédite `content.story` via `EngagementService.recordActivity`.
+ * Axes d'engagement « stories » (#5534) et « réels » (#5535, sous-issues de
+ * #3695) — la publication d'une STORY crédite `content.story`, celle d'un
+ * REEL crédite `content.reel`, via `EngagementService.recordActivity`.
+ * Mutuellement exclusifs sur la même ligne écrite (`publication.ts`).
  *
  * Câblé au même site que le corps partagé de publication (#4151,
  * `runPublicationEffects`, `routes/posts/publication.ts`) : `POST /posts` et
  * `POST /posts/from-attachment` sont les deux portes créatrices, et la
  * crédite doit partir des DEUX — `publication-single-core.test.ts` prouve déjà
  * que les deux portes partagent le même noyau, ce fichier garde uniquement le
- * CÂBLAGE de l'axe.
+ * CÂBLAGE des axes.
  *
  * Fichier séparé de `core.test.ts` (`DETTE_HERITEE`, plafonné à 1654 lignes —
  * cf. CLAUDE.md § Budget de taille) et de `publication-single-core.test.ts`
  * (déjà focalisé sur la parité des trois portes, #4151) : celui-ci garde
- * uniquement l'axe `content.story`.
+ * uniquement les axes `content.story` / `content.reel`.
  *
  * **Le type qui décide est le type ÉCRIT, pas le type DEMANDÉ** — même
  * discriminant que l'éventail d'amis (`publication.ts`, commentaire de
  * `runPublicationEffects` : « la diffusion suit l'intention, l'éventail
  * d'amis suit ce qui est en base »). `PostService.createPost` peut dégrader
  * un type non qualifiant (#PostService, 2026-08-02) ; un `type: 'STORY'`
- * DEMANDÉ mais ÉCRIT comme `'POST'` ne doit PAS créditer `content.story`.
+ * (ou `'REEL'`) DEMANDÉ mais ÉCRIT comme `'POST'` ne doit créditer NI l'un
+ * ni l'autre.
  *
  * @jest-environment node
  */
@@ -133,6 +136,7 @@ const PUBLISHED_ROW = {
 } as const;
 
 const storyRow = () => ({ ...PUBLISHED_ROW, id: `${PUBLISHED_ROW.id}-STORY`, type: 'STORY', visibility: 'FRIENDS' });
+const reelRow = () => ({ ...PUBLISHED_ROW, id: `${PUBLISHED_ROW.id}-REEL`, type: 'REEL' });
 
 const ATTACHMENT_ROW = {
   id: ATTACHMENT_ID,
@@ -293,6 +297,91 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.story » 
 
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.story');
+
+    await app.close();
+  });
+});
+
+describe('POST /posts — axe d\'engagement « content.reel » (#5535)', () => {
+  it('crédite content.reel quand la ligne ÉCRITE est un REEL', async () => {
+    mockCreatePost.mockResolvedValue(reelRow());
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'REEL', content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.reel');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.story');
+
+    await app.close();
+  });
+
+  it('ne crédite PAS content.reel pour un POST ordinaire', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
+
+    await app.close();
+  });
+
+  it('suit le type ÉCRIT, pas le type DEMANDÉ — un REEL dégradé en POST ne crédite pas', async () => {
+    // `PostService.createPost` dégrade un REEL non qualifiant en POST
+    // (2026-08-02) : la ligne ÉCRITE fait foi, pas la requête.
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW); // écrit comme POST
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'REEL', content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
+
+    await app.close();
+  });
+});
+
+describe('POST /posts/from-attachment — axe d\'engagement « content.reel » (#5535)', () => {
+  it('crédite content.reel quand la pièce jointe est publiée en REEL', async () => {
+    mockCreatePost.mockResolvedValue(reelRow());
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID, target: 'REEL' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.reel');
+
+    await app.close();
+  });
+
+  it('ne crédite pas content.reel pour une pièce jointe publiée en POST', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
 
     await app.close();
   });
