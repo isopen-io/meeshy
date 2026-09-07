@@ -286,7 +286,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
       'ne lit aucune collection : `$runCommandRaw({ ping: 1 })`, verdict mémoïsé 2 s, ce ' +
       "qui borne le coût de l'exemption de débit qu'une sonde exige.",
   },
-  { method: 'GET', url: '/info', why: "métadonnées statiques du service, aucune donnée d'utilisateur" },
   { method: 'GET', url: '/api/v1/languages', why: 'liste statique de langues supportées' },
   { method: 'GET', url: '/api/v1/app/min-version', why: 'plancher de version applicative pour le bootstrap de la porte cliente (spec R6) — config statique lue avant toute session, aucune donnée utilisateur' },
 

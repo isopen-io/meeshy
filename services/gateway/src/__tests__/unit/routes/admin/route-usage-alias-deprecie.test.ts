@@ -237,8 +237,9 @@ describe('Les alias surveilles hors /api/v1 sont ceux du manifeste', () => {
     // `known-gap` de `ALLOWED_OUTSIDE_API_V1` alors qu'elle est, seule de son
     // module, un alias EN SURSIS (#4317).
     //
-    // Le reste est ferme et NOMME : deux sondes d'infrastructure, qui ne se
-    // versionnent pas et n'ont aucun sunset ; six routes de
+    // Le reste est ferme et NOMME : une sonde d'infrastructure (`/health` —
+    // `/info` retiree du gateway par #5424, perimee et sans appelant mesure),
+    // qui ne se versionne pas et n'a aucun sunset ; six routes de
     // `userDeletionsRoutes` qui ne portent AUCUNE annonce `depreciee()` et
     // dont le successeur n'existe pas — une dette en attente d'une decision
     // produit, jamais un alias. Le jour ou une adresse hors `/api/v1` apparait,
@@ -249,7 +250,7 @@ describe('Les alias surveilles hors /api/v1 sont ceux du manifeste', () => {
     const horsApiV1 = manifeste.routes
       .filter((r) => !r.path.startsWith('/api/v1'))
       .map((r) => `${r.method} ${r.path}`);
-    expect(horsApiV1).toHaveLength(17);
+    expect(horsApiV1).toHaveLength(16);
 
     const surveilles = new Set(ALIAS_ATTENDUS);
     expect(horsApiV1.filter((a) => !surveilles.has(a)).sort()).toEqual([
@@ -257,7 +258,6 @@ describe('Les alias surveilles hors /api/v1 sont ceux du manifeste', () => {
       'DELETE /api/messages/bulk/delete-for-me',
       'GET /api/user/deleted-conversations',
       'GET /health',
-      'GET /info',
       'POST /api/conversations/:conversationId/clear-history',
       'POST /api/conversations/:conversationId/restore-for-me',
       'POST /api/messages/:messageId/restore-for-me',

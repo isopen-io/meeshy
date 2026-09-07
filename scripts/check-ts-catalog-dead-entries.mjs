@@ -203,7 +203,13 @@ export const parseCatalogBlock = (blockLines) => {
 // (watermark sharp/ffmpeg, cache) et son exposition dans les catalogues
 // générés ; l'appelant web (bouton d'export sur un média de post) est un
 // travail d'écran séparé, à ouvrir en issue de suivi.
-const BASELINE_DEAD_ENTRIES = 271;
+//
+// 271 → 266 (#5424) : cinq entrées retirées du catalogue généré — quatre
+// routes d'exploitation (`cleanup`, `stats`, `userStatus`, `test`) filtrées
+// par `packages/shared/api/ops-only-routes.ts` (jamais destinées à un
+// client), et `info` dont la route serveur elle-même a été retirée
+// (`route-registration.ts`, périmée et sans appelant mesuré).
+const BASELINE_DEAD_ENTRIES = 266;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
