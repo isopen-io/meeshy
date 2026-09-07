@@ -13,7 +13,7 @@
     "measure": "node scripts/measure-weight.mjs",
     "cap:sync": "cap sync",
     "test": "bun test",
-    "gate": "bun run check:tokens && node scripts/check-curve.mjs && bun run type-check && bun test && bun run build && node scripts/check-utilities.mjs && node scripts/measure-weight.mjs && node scripts/check-institutional.mjs && node scripts/check-lens.mjs && node scripts/check-thread-virtualization.mjs && node scripts/check-docker-context.mjs && node scripts/check-git-tracking.mjs",
+    "gate": "bun run check:tokens && node scripts/check-curve.mjs && bun run type-check && bun test && bun run build && node scripts/check-utilities.mjs && node scripts/measure-weight.mjs && node scripts/check-institutional.mjs && node scripts/check-lens.mjs && node scripts/check-thread-states.mjs && node scripts/check-thread-virtualization.mjs && node scripts/check-docker-context.mjs && node scripts/check-git-tracking.mjs",
     "check:tokens": "node ../../packages/design-tokens/scripts/generate-from-ios.mjs --check",
     "check:tokens-resolved": "node scripts/check-tokens.mjs",
     "test:coverage": "bun test --coverage",
@@ -23,7 +23,8 @@
     "check:curve": "node scripts/check-curve.mjs",
     "check:lens": "node scripts/check-lens.mjs",
     "check:utilities": "node scripts/check-utilities.mjs",
-    "check:virtualization": "node scripts/check-thread-virtualization.mjs"
+    "check:virtualization": "node scripts/check-thread-virtualization.mjs",
+    "check:states": "node scripts/check-thread-states.mjs"
   },
   "dependencies": {
     "@meeshy/shared": "workspace:*",

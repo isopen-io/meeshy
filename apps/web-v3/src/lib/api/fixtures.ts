@@ -356,6 +356,21 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageAt: minutesAgo(1_000),
     lastMessageOriginalLanguage: 'fr',
   },
+  /**
+   * UNE CONVERSATION SANS HISTORIQUE — elle n'est pas là pour décorer.
+   * L'état vide est un état à part entière (« Complétude », dimension 13) et
+   * il n'existe que si quelque chose y mène : sans cette entrée, l'écran vide
+   * serait du code que personne, témoin compris, n'atteint jamais.
+   */
+  {
+    ...conversationDefaults,
+    id: 'c-nouvelle',
+    title: 'Fatou Bâ',
+    type: 'direct',
+    memberCount: 2,
+    participants: [viewer, amina],
+    unreadCount: 0,
+  },
   {
     ...conversationDefaults,
     id: 'c-kwame',
@@ -376,3 +391,19 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageOriginalLanguage: 'fr',
   },
 ];
+
+
+/**
+ * L'HISTORIQUE D'UNE CONVERSATION — vide par défaut, et c'est le point.
+ *
+ * Le POC servait la même liste de messages à toute adresse `/c/:id`, ce qui
+ * rendait l'état « sans historique » inatteignable : il n'y avait aucun chemin
+ * pour l'afficher, donc rien pour le vérifier. Une conversation sans messages
+ * rend un tableau VIDE, exactement comme le fera la passerelle avant sa
+ * première page de résultats.
+ */
+export const messagesOf = (conversationId: string): readonly Message[] => {
+  if (conversationId === CONVERSATION_ID) return THREAD_MESSAGES;
+  const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
+  return last === undefined ? [] : [last];
+};

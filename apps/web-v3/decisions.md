@@ -359,3 +359,47 @@ pas sur sept messages. `MEESHY_BENCH=500 bun run build` pose `__BENCH__` en
 littéral ; le build servi vaut `0`, la branche devient `if (0 > 0)`, rolldown
 l'élimine, et le gate de poids le prouve. Un paramètre d'URL aurait fait entrer
 du code de banc dans le bundle : pour mesurer la légèreté, on l'aurait dégradée.
+
+## D-16 · Les états du fil, et ce qu'ils refusent de promettre — 2026-09-07 (#5560)
+
+**Quatre états dessinés** : conversation sans historique, coupure réseau,
+message écrit hors ligne, reprise d'un envoi échoué.
+
+**L'état vide est un ÉTAT.** Un fil sans historique qui rend du blanc se lit,
+sur un réseau lent, comme un chargement qui ne finit pas — l'interprétation la
+plus naturelle et la plus fausse. Il fallait aussi qu'il soit ATTEIGNABLE : le
+POC servait la même liste de messages à toute adresse `/c/:id`, donc l'écran
+vide était du code que personne, témoin compris, ne pouvait afficher. Une
+conversation sans messages entre désormais dans la fixture, et `messagesOf()`
+rend un tableau vide comme le fera la passerelle avant sa première page.
+
+**La coupure s'ANNONCE, elle ne BLOQUE pas.** L'application lit parfaitement
+depuis son précache : un voile ou une modale puniraient l'utilisateur pour un
+état où tout ce qu'il veut lire est déjà là. Le bandeau ne dit qu'une chose,
+celle qu'il ne peut pas deviner : ce qu'il ÉCRIT ne partira pas maintenant.
+
+**`navigator.onLine === false` est fiable, `true` ne l'est pas.** Le système
+sait qu'aucune interface n'est disponible ; il ne sait pas si la passerelle
+répond — un portail captif ou une antenne saturée laissent le drapeau à `true`.
+On s'en sert donc pour annoncer une coupure CERTAINE, jamais pour promettre
+qu'un envoi passera. `useSyncExternalStore` plutôt qu'un état miroir : sur un
+réseau qui coupe toutes les minutes, le rendu de décalage arrive.
+
+**Ce que l'interface refuse de promettre.** Un message écrit hors ligne est
+marqué NON ENVOYÉ tout de suite — pas d'horloge qui tourne sur un envoi qui ne
+partira pas. Et « Réessayer » alors que l'appareil est toujours coupé **laisse
+le message en échec** : repasser en « en attente » ferait tourner cette même
+horloge pour rien, et l'utilisateur croirait que c'est parti. En ligne, l'état
+reste « en attente » et n'ira pas plus loin : sans transport (#5493), aucune
+confirmation n'existe, et peindre « remis » serait un mensonge. **Le manque se
+VOIT plutôt que de se cacher.**
+
+**La bande de reprise est DANS la bulle**, parti d'iOS et meilleur que
+l'alternative : un bandeau global dirait « un envoi a échoué » sans dire
+LEQUEL, ce qui est inutilisable sur un fil de cinquante messages.
+
+**L'état local ne touche pas le domaine.** « en attente » et « échoué » ne sont
+pas des champs de `Message` — le serveur ne les sert pas et ne les connaît pas.
+Ce sont des opinions de CE client sur une charge, elle, partageable ; les
+confondre ferait voyager l'échec d'un appareil jusqu'à l'écran d'un autre.
+Ils vivent donc dans une carte à côté de la liste, jamais dedans.

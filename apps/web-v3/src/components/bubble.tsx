@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { Message, Attachment } from '@/lib/api/types';
 import { deliveryOf, isMineOf, kindOf, translationsOf, waveformOf } from '@/lib/view/message';
 import { initialsOf } from '@/lib/view/conversation';
-import type { Delivery } from '@/lib/view/message';
+import type { Delivery, LocalDelivery } from '@/lib/view/message';
 import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
@@ -244,11 +244,16 @@ export function Bubble({
   languages,
   isGrouped,
   viewerId,
+  localDelivery,
+  onRetry,
 }: {
   place: PlacedMessage;
   languages: readonly string[];
   isGrouped: boolean;
   viewerId: string;
+  /** L'opinion de CE client sur l'envoi, tant que le transport n'a pas tranché. */
+  localDelivery?: LocalDelivery;
+  onRetry?: () => void;
 }) {
   const { message, tail } = place;
   const isMine = isMineOf(message, viewerId);
@@ -309,6 +314,30 @@ export function Bubble({
         >
           {message.replyTo ? <Quote quote={message.replyTo} isMine={isMine} /> : null}
           {message.attachments ? <Attachments attachments={message.attachments} /> : null}
+          {/*
+            LA BANDE DE REPRISE EST **DANS** LA BULLE, pas sous le fil — c'est
+            le parti d'iOS, et il vaut mieux que le nôtre : un bandeau global
+            dirait « un envoi a échoué » sans dire LEQUEL, et sur un fil de
+            cinquante messages c'est une information inutilisable. Ici l'échec
+            est attaché au message qui a échoué, et le geste de reprise est à
+            l'endroit où le regard se pose déjà.
+          */}
+          {localDelivery === 'failed' && onRetry !== undefined ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 py-1.5 text-left text-check font-semibold"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
+                color: isMine ? 'white' : 'var(--color-error)',
+              }}
+            >
+              <Glyph name="warningCircle" size={12} />
+              <span className="flex-1">Non envoyé</span>
+              <span style={{ textDecoration: 'underline' }}>Réessayer</span>
+            </button>
+          ) : null}
+
           {rendered.text ? (
             /* Le contenu AFFICHE est deja la traduction preferee, rendu
                exactement comme du contenu natif — ni encadre, ni italique, ni
@@ -363,7 +392,10 @@ export function Bubble({
                 >
                   {time(message.createdAt)}
                 </time>
-                <Check status={deliveryOf(message)} isMine={isMine} />
+                <Check
+                  status={localDelivery === 'pending' ? 'pending' : deliveryOf(message)}
+                  isMine={isMine}
+                />
               </div>
             </div>
           </div>

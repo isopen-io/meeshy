@@ -600,7 +600,7 @@ jobs:
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
   institutionnel-v3:
-    name: Peaux web-v3 (cache institutionnel, flux de la Lentille, virtualisation du fil)
+    name: Peaux web-v3 (institutionnel, Lentille, états et virtualisation du fil)
     runs-on: ubuntu-latest
     needs: quality
     timeout-minutes: 15
@@ -673,6 +673,11 @@ jobs:
         run: |
           cd apps/web-v3
           node scripts/check-lens.mjs
+
+      - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
+        run: |
+          cd apps/web-v3
+          node scripts/check-thread-states.mjs
 
       # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
       # de banc (500 messages) pour mesurer la virtualisation, puis le
@@ -1954,7 +1959,7 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Peaux web-v3 (institutionnel + Lentille + virtualisation) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Peaux web-v3 (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Chaînes web-v3 | ${{ needs.chaines-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
