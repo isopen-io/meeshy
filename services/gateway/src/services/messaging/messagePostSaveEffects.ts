@@ -65,13 +65,13 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement';
 
 /**
- * Ce que l'axe d'engagement « conversation distincte » (#5539) demande, et
- * rien de plus — la déduplication par conversation vit entièrement dans
- * `EngagementService.recordConversationActivity`, cette unité n'a qu'à
- * l'appeler.
+ * Ce que les axes d'engagement « conversation distincte » (#5539) et
+ * « contenu produit » (#5532) demandent, et rien de plus — la déduplication
+ * par conversation et le franchissement de palier vivent entièrement dans
+ * `EngagementService`, cette unité n'a qu'à l'appeler.
  */
 export interface PostSaveEngagementService {
   recordConversationActivity(
@@ -79,6 +79,7 @@ export interface PostSaveEngagementService {
     axisKey: EngagementAxisKey,
     conversationId: string,
   ): Promise<void>;
+  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
 }
 
 /**
@@ -274,5 +275,22 @@ export function runMessagePostSaveEffects(params: {
         );
       })
       .catch(report('engagement'));
+  }
+
+  // Axe d'engagement « contenu produit » (#5532) — un message texte, c'est-à-
+  // dire SANS pièce jointe audio (l'axe distinct `content.audio_message`,
+  // #5531, couvre l'autre cas — un même envoi ne crédite jamais les deux).
+  // Même garde anonyme que ci-dessus : `EngagementCounter.userId` exige un
+  // `User.id`, qu'un participant anonyme n'a pas.
+  if (engagementService && message.senderUserId) {
+    const senderUserId = message.senderUserId;
+    const hasAudioAttachment = message.attachmentMimeTypes.some(
+      (mimeType) => resolveAttachmentType(mimeType) === 'audio'
+    );
+    if (!hasAudioAttachment) {
+      void Promise.resolve()
+        .then(() => engagementService.recordActivity(senderUserId, 'content.text_message'))
+        .catch(report('contentEngagement'));
+    }
   }
 }
