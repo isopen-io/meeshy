@@ -100,6 +100,12 @@ function createMockPrisma() {
     friendRequest: {
       findMany: jest.fn(),
     },
+    user: {
+      // Consulté UNIQUEMENT quand `discoverabilityPrecision === 'EXACT'`
+      // (#3637) — `null` par défaut : « date de naissance inconnue » est le
+      // repli fail-closed de `isAdult()`, jamais une supposition de majorité.
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
   };
   prisma.$transaction = jest.fn(async (arg: any) =>
     typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
@@ -468,8 +474,13 @@ describe('PostService', () => {
       expect(createCall.data.geoPrecision).toBe('CITY');
     });
 
-    it('quantizes EXACT precision to the unrounded coordinate', async () => {
+    // #3637 — "Défaut NEIGHBORHOOD, EXACT réservé à un opt-in explicite,
+    // jamais pour un mineur". EXACT n'est plus jamais implicite : il faut à
+    // la fois `discoverabilityPrecisionConfirmed: true` ET un auteur dont la
+    // majorité est VÉRIFIÉE (`User.birthDate`, via `isAdult()`).
+    it('downgrades EXACT to NEIGHBORHOOD when the explicit confirmation is missing', async () => {
       prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2', ...args.data }));
+      prisma.user.findUnique.mockResolvedValue({ birthDate: new Date('1990-01-01') });
 
       await service.createPost({
         ...basePostData,
@@ -478,8 +489,69 @@ describe('PostService', () => {
       }, 'user-1');
 
       const createCall = prisma.post.create.mock.calls[0][0];
+      // NEIGHBORHOOD arrondit à 0.01° (~1km) — cf. geoDiscoverability.ts.
+      expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.29, 48.86] });
+      expect(createCall.data.geoPrecision).toBe('NEIGHBORHOOD');
+    });
+
+    it('downgrades EXACT to NEIGHBORHOOD when confirmed but the author\'s majority is unverified (no birthDate)', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2b', ...args.data }));
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'EXACT',
+        discoverabilityPrecisionConfirmed: true,
+      } as any, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPrecision).toBe('NEIGHBORHOOD');
+    });
+
+    it('downgrades EXACT to NEIGHBORHOOD when confirmed but the author is a minor', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2c', ...args.data }));
+      const fifteenYearsAgo = new Date();
+      fifteenYearsAgo.setFullYear(fifteenYearsAgo.getFullYear() - 15);
+      prisma.user.findUnique.mockResolvedValue({ birthDate: fifteenYearsAgo });
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'EXACT',
+        discoverabilityPrecisionConfirmed: true,
+      } as any, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPrecision).toBe('NEIGHBORHOOD');
+    });
+
+    it('grants EXACT only when explicitly confirmed AND the author is a verified adult', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2d', ...args.data }));
+      prisma.user.findUnique.mockResolvedValue({ birthDate: new Date('1990-01-01') });
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'EXACT',
+        discoverabilityPrecisionConfirmed: true,
+      } as any, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.2945, 48.8584] });
       expect(createCall.data.geoPrecision).toBe('EXACT');
+    });
+
+    it('never consults the author\'s birthDate for a non-EXACT precision', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2e', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'CITY',
+      }, 'user-1');
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
 
     it('leaves geoPoint/geoPrecision null when discoverabilityPrecision is absent, even with a valid location', async () => {

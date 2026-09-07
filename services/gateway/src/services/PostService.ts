@@ -41,7 +41,8 @@ import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
 import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
-import { quantizeCoordinate, type DiscoverabilityPrecision } from './location/geoDiscoverability';
+import { quantizeCoordinate, resolveDiscoverabilityPrecision, type DiscoverabilityPrecision } from './location/geoDiscoverability';
+import { isAdult } from '@meeshy/shared/utils/age';
 import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 
 const log = enhancedLogger.child({ module: 'PostService' });
@@ -163,6 +164,13 @@ export class PostService {
      * supposer qu'il n'est jamais appelé autrement. Voir geoDiscoverability.ts.
      */
     discoverabilityPrecision?: unknown;
+    /**
+     * Opt-in EXPLICITE requis pour obtenir la précision `EXACT` (#3637) —
+     * un geste séparé du simple choix dans l'énumération. Sans lui (ou pour
+     * un auteur dont la majorité n'est pas vérifiée), `EXACT` retombe sur
+     * `NEIGHBORHOOD` : voir `resolveDiscoverabilityPrecision`.
+     */
+    discoverabilityPrecisionConfirmed?: unknown;
   }, userId: string) {
     const now = new Date();
     const expiresAt = ephemeralExpiresAt(data.type, now);
@@ -196,10 +204,28 @@ export class PostService {
     // `discoverabilityPrecision` est présent ET que la coordonnée est
     // valide. Absent (ou coordonnée invalide) => les deux champs restent
     // `null` (spec §2, geoDiscoverability.ts).
-    const geoPoint = sharedPlace && data.discoverabilityPrecision !== undefined
-      ? quantizeCoordinate(sharedPlace.latitude, sharedPlace.longitude, data.discoverabilityPrecision)
+    //
+    // EXACT est réservé à un opt-in explicite et à un auteur majeur VÉRIFIÉ
+    // (#3637) — la vérification d'âge ne coûte une requête que sur ce chemin
+    // rare (une demande explicite d'EXACT), jamais sur le cas nominal.
+    let discoverabilityAuthorIsAdult = false;
+    if (sharedPlace && data.discoverabilityPrecision === 'EXACT') {
+      const author = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { birthDate: true },
+      });
+      discoverabilityAuthorIsAdult = isAdult(author?.birthDate ?? null);
+    }
+    const resolvedPrecision = sharedPlace
+      ? resolveDiscoverabilityPrecision(data.discoverabilityPrecision, {
+          confirmed: data.discoverabilityPrecisionConfirmed === true,
+          isAdult: discoverabilityAuthorIsAdult,
+        })
+      : undefined;
+    const geoPoint = sharedPlace && resolvedPrecision !== undefined
+      ? quantizeCoordinate(sharedPlace.latitude, sharedPlace.longitude, resolvedPrecision)
       : null;
-    const geoPrecision = geoPoint ? (data.discoverabilityPrecision as DiscoverabilityPrecision) : null;
+    const geoPrecision = geoPoint ? (resolvedPrecision as DiscoverabilityPrecision) : null;
 
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
