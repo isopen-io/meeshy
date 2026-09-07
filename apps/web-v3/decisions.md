@@ -35,7 +35,7 @@ TanStack Router pesait **25,13 Ko gzip — 49 % de la première peinture**, plus
 de trois fois le runtime entier. **Ce poids est incompressible, mesuré** :
 retirer toutes ses options rend un chunk au **hash identique**.
 
-`src/lib/routeur.tsx` rend ~**1,4 Ko** : paramètres de chemin typés depuis le
+`src/lib/router.tsx` rend ~**1,4 Ko** : paramètres de chemin typés depuis le
 motif, paramètres de recherche, découpage par route, préchargement à
 l'intention, restauration du défilement.
 
@@ -48,8 +48,8 @@ Les trois premiers sont couverts par TanStack Query, qui reste.
 `packages/design-tokens/ios.css` est **généré** depuis `MeeshyColors.swift` et
 `DesignTokens.swift`. Le web ne porte aucune valeur iOS écrite à la main.
 
-Deux gates, qui prouvent deux choses différentes : `check:jetons` (le CSS n'a
-pas dérivé de Swift) et `verifie:jetons` (**le navigateur peint bien ces
+Deux gates, qui prouvent deux choses différentes : `check:tokens` (le CSS n'a
+pas dérivé de Swift) et `check:tokens-resolved` (**le navigateur peint bien ces
 valeurs**). Le second n'est pas redondant — un nom mal orthographié rend une
 couleur **vide**, pas une erreur.
 
@@ -184,7 +184,10 @@ variables d'environnement du déploiement (`FRONTEND_V3_IMAGE`,
 `meeshy-frontend-v3`, la zone `/__v3/`). Seuls les CHEMINS ont été repointés
 vers `web-old-version3`, pour que le déploiement en cours ne bouge pas d'un octet. La
 nouvelle application recevra sa propre configuration Docker quand elle sera
-prête à être servie — elle n'a pas encore de `Dockerfile`.
+prête à être servie. **Elle l'a reçue depuis** : `apps/web-v3/Dockerfile`
+(nginx statique) et le service `web-v31` de `docker.yml`, sous l'image
+`meeshy-web-v31` — un nom provisoire, que le décommissionnement (#5496)
+rendra à `meeshy-web-v3`.
 
 > **Piège de lecture, à connaître.** Les journaux — `tasks/lessons.md`,
 > `tasks/*.md`, `docs/product/MeeshyWebV3Design/` — contiennent des centaines de
@@ -200,3 +203,49 @@ la nouvelle, qui n'a **pas de configuration ESLint**, l'étape a été retirée
 plutôt que laissée à rendre une case verte qui ne linte rien. Le type-check
 bloquant et les gates (jetons dérivés, poids) tiennent la place. **L'ESLint de
 la v3.1 est un suivi.**
+
+
+## D-13 · Le code de la v3.1 est nommé en ANGLAIS — 2026-09-07 (directive porteur)
+
+**La règle.** Tout ce qui est un NOM dans le dépôt est en anglais : fichiers,
+répertoires, identifiants, types, propriétés, jetons CSS, classes utilitaires,
+clés JSON, scripts npm, valeurs d'énumération internes. Ce qui est de la PROSE
+reste en français : commentaires, messages de gate, documents de décision,
+messages de commit — et les **textes affichés à l'utilisateur**, qui relèvent
+de l'internationalisation, pas du nommage.
+
+**Pourquoi la frontière est là.** Un commentaire s'adresse à l'équipe, qui
+travaille en français ; un identifiant s'adresse au compilateur, à l'outillage,
+et à quiconque relit le dépôt sans le parler. Mélanger les deux dans un même
+symbole (`resolutionDuPrisme`, `HAUTEUR_DE_CASE`) coûte à chaque lecture et à
+chaque `grep`.
+
+**Ce que la bascule a coûté, mesuré.** 5 634 lignes, cinq couches
+(fichiers · identifiants · jetons CSS · classes utilitaires · clés JSON), et
+**+1,2 Ko sur la première peinture** — les noms anglais retenus sont plus longs
+que les français qu'ils remplacent, et les noms de variables CSS voyagent dans
+la feuille. C'est sous le plafond (40 Ko) et c'est le prix admis.
+
+**Trois défauts que le renommage a FABRIQUÉS, et ce qui les a attrapés.** Aucun
+n'aurait rougi au type-check :
+
+| défaut | pourquoi invisible | attrapé par |
+|---|---|---|
+| le service worker plantait à l'installation (`ROUTES_INSTITUTIONNELLES` non renommé dans une interpolation) | un SW qui échoue ne casse que la DEUXIÈME visite | `check-institutional.mjs` |
+| la scène de la lentille ne trouvait plus une seule ligne (`[data-ligne]` contre `data-row`) | un sélecteur qui ne matche rien rend une liste inerte, pas une erreur | `check-lens.mjs` |
+| le script de thème inline lisait `meeshy.schema` quand le module écrivait `light` sous `meeshy.scheme` | l'éclair blanc ne se voit qu'au démarrage à froid d'un utilisateur ayant déjà choisi | relecture — **aucun témoin ne le couvre**, c'est un suivi |
+
+La cause commune est UNE : **les chaînes de caractères sont la moitié du
+programme.** Un renommage qui ne traite que le code renomme la déclaration et
+laisse l'usage — sélecteur, clé de stockage, interpolation, nom de classe. Le
+premier passage a masqué les littéraux pour protéger la prose française, et
+c'est exactement ce masquage qui a laissé passer les trois.
+
+**Le témoin ajouté.** `scripts/check-utilities.mjs` ferme la dernière classe de
+défaut, la plus silencieuse : une classe Tailwind qui ne correspond à aucun
+jeton n'émet **aucune règle** — pas d'erreur, pas d'avertissement, juste un
+élément peint par défaut. Le gate n'oppose pas les classes à une liste de
+jetons déclarés (il faudrait alors tenir à la main les utilitaires natifs de
+Tailwind, qui dérivent à chaque version) mais **à la feuille produite** :
+Tailwind n'émet que ce qu'il a reconnu. Vérifié par mutation (rc=1 sur une
+classe falsifiée).

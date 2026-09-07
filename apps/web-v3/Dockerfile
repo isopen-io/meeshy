@@ -20,7 +20,7 @@
 #
 #   · La construction TOURNE SOUS BUN, et ce n'est pas une préférence : le
 #     greffon de préchauffage de `vite.config.ts` lance
-#     `bun run scripts/prerend-institutionnel.tsx`, qui rend du JSX avec la
+#     `bun run scripts/prerender-institutional.tsx`, qui rend du JSX avec la
 #     pragma preact. Une image de construction sans bun produirait un `dist`
 #     sans les cinq pages — et un service worker qui servirait la coquille de
 #     l'application à leur place. Défaut SILENCIEUX : le build sortirait vert.

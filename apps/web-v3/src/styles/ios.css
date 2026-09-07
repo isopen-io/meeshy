@@ -2,7 +2,7 @@
  *
  * Ce fichier ne porte AUCUNE valeur. Les valeurs vivent dans
  * `@meeshy/design-tokens/ios.css`, GÉNÉRÉ depuis MeeshyColors.swift et
- * DesignTokens.swift par `packages/design-tokens/scripts/genere-depuis-ios.mjs`.
+ * DesignTokens.swift par `packages/design-tokens/scripts/generate-from-ios.mjs`.
  * Ce qui reste ici est un NOMMAGE : donner aux jetons iOS des noms
  * d'utilitaires Tailwind. C'est le travail de l'application, pas de la table.
  *
@@ -23,47 +23,47 @@
 @import '@meeshy/design-tokens/ios.css';
 
 @theme inline {
-  --color-marque: var(--ios-indigo-500);
-  --color-marque-profonde: var(--ios-indigo-700);
-  --color-lu: var(--ios-accuse-lu);
+  --color-ios-brand: var(--ios-indigo-500);
+  --color-ios-brand-deep: var(--ios-indigo-700);
+  --color-read: var(--ios-read-receipt);
   --color-i50: var(--ios-indigo-50);
   --color-i200: var(--ios-indigo-200);
   --color-i300: var(--ios-indigo-300);
   --color-i400: var(--ios-indigo-400);
   --color-i600: var(--ios-indigo-600);
 
-  --color-ios-fond: var(--ios-plan-fond);
-  --color-ios-carte: var(--ios-plan-carte);
-  --color-ios-encre: var(--ios-encre);
-  --color-ios-encre-2: var(--ios-encre-2);
-  --color-ios-encre-3: var(--ios-encre-3);
+  --color-ios-surface: var(--ios-surface);
+  --color-ios-card: var(--ios-surface-card);
+  --color-ios-ink: var(--ios-ink);
+  --color-ios-ink-2: var(--ios-ink-2);
+  --color-ios-ink-3: var(--ios-ink-3);
 
-  --color-bulle-moi: var(--ios-bulle-moi);
-  --color-meta-moi: var(--ios-bulle-meta-moi);
-  --color-meta: var(--ios-bulle-meta);
-  --color-citation-moi: var(--ios-citation-fond-moi);
-  --color-citation: var(--ios-citation-fond);
-  --color-lisere: var(--ios-lisere);
-  --color-jour-encre: var(--ios-jour-encre);
-  --color-jour-filet: var(--ios-jour-filet);
+  --color-bubble-mine: var(--ios-bubble-mine);
+  --color-meta-mine: var(--ios-bubble-meta-mine);
+  --color-meta: var(--ios-bubble-meta);
+  --color-quote-mine: var(--ios-quote-bg-mine);
+  --color-quote: var(--ios-quote-bg);
+  --color-edge: var(--ios-edge);
+  --color-day-ink: var(--ios-day-ink);
+  --color-day-hairline: var(--ios-day-hairline);
 
   /* Les géométries : celles que Swift DÉCLARE, et celles qu'il porte en
      littéral — le générateur distingue les deux et cite le site de chacune. */
-  --radius-bulle: var(--ios-radius-bulle);
-  --radius-champ-ios: var(--ios-radius-champ);
-  --radius-citation: var(--ios-radius-citation);
-  --radius-ligne-ios: var(--ios-radius-md);
-  --size-avatar-ligne: var(--ios-avatar-ligne);
-  --size-avatar-bulle: var(--ios-avatar-bulle);
-  --size-avatar-entete: var(--ios-avatar-entete);
-  --size-avatar-frappe: var(--ios-avatar-frappe);
-  --size-rond-entete: var(--ios-rond-entete);
+  --radius-bubble: var(--ios-radius-bubble);
+  --radius-field-ios: var(--ios-radius-field);
+  --radius-quote: var(--ios-radius-quote);
+  --radius-row-ios: var(--ios-radius-md);
+  --size-avatar-row: var(--ios-avatar-row);
+  --size-avatar-bubble: var(--ios-avatar-bubble);
+  --size-avatar-header: var(--ios-avatar-header);
+  --size-avatar-typing: var(--ios-avatar-typing);
+  --size-header-circle: var(--ios-header-circle);
 
-  --text-coche: var(--ios-font-caption);
+  --text-check: var(--ios-font-caption);
   --text-mini: var(--ios-font-footnote);
-  --text-heure: var(--ios-text-heure);
-  --text-titre: var(--ios-font-subhead);
-  --text-bulle: var(--ios-font-body);
-  --text-saisie: var(--ios-text-saisie);
-  --text-grand-titre: var(--ios-text-grand-titre);
+  --text-time: var(--ios-text-time);
+  --text-title: var(--ios-font-subhead);
+  --text-bubble: var(--ios-font-body);
+  --text-input: var(--ios-text-input);
+  --text-large-title: var(--ios-text-large-title);
 }

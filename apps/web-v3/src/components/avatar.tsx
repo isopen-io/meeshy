@@ -1,4 +1,4 @@
-import type { Auteur } from '@/lib/api/modele';
+import type { Author } from '@/lib/api/model';
 
 /**
  * L'AVATAR, avec sa geometrie derivee — les memes formules que
@@ -15,63 +15,63 @@ import type { Auteur } from '@/lib/api/modele';
  * Et `hors-ligne` ne rend AUCUNE pastille : c'est une regle produit du depot
  * (« offline = pas de pastille sur les avatars »), pas un oubli.
  */
-const TEINTES: Record<1 | 2 | 3 | 4, string> = {
+const TINTS: Record<1 | 2 | 3 | 4, string> = {
   1: 'var(--color-av-1)',
   2: 'var(--color-av-2)',
   3: 'var(--color-av-3)',
   4: 'var(--color-av-4)',
 };
 
-const PRESENCE: Record<Exclude<Auteur['presence'], 'hors-ligne'>, string> = {
-  'en-ligne': 'var(--color-presence-en-ligne)',
-  absent: 'var(--color-presence-absent)',
-  inactif: 'var(--color-presence-inactif)',
+const PRESENCE: Record<Exclude<Author['presence'], 'offline'>, string> = {
+  online: 'var(--color-online)',
+  away: 'var(--color-away)',
+  idle: 'var(--color-idle)',
 };
 
 export function Avatar({
-  initiales,
-  teinte,
-  taille,
+  initials,
+  tint,
+  size,
   presence,
-  nom,
+  name,
 }: {
-  initiales: string;
-  teinte: 1 | 2 | 3 | 4;
-  taille: number;
-  presence?: Auteur['presence'];
-  nom?: string;
+  initials: string;
+  tint: 1 | 2 | 3 | 4;
+  size: number;
+  presence?: Author['presence'];
+  name?: string;
 }) {
-  const couleur = TEINTES[teinte];
-  const pastille = taille * 0.26;
+  const color = TINTS[tint];
+  const dot = size * 0.26;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
-  const decalage = taille * 0.8536 - pastille / 2;
-  const montrePastille = presence !== undefined && presence !== 'hors-ligne';
+  const offset = size * 0.8536 - dot / 2;
+  const showsDot = presence !== undefined && presence !== 'offline';
 
   return (
-    <span className="relative shrink-0" style={{ width: taille, height: taille }}>
+    <span className="relative shrink-0" style={{ width: size, height: size }}>
       <span
-        className="grid size-full place-items-center rounded-pastille font-semibold text-ios-fond"
+        className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
         style={{
-          background: `linear-gradient(135deg, ${couleur}, color-mix(in oklch, ${couleur} 68%, white))`,
-          fontSize: taille * 0.38,
+          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, white))`,
+          fontSize: size * 0.38,
         }}
-        aria-hidden={nom === undefined}
-        aria-label={nom}
-        role={nom === undefined ? undefined : 'img'}
+        aria-hidden={name === undefined}
+        aria-label={name}
+        role={name === undefined ? undefined : 'img'}
       >
-        {initiales}
+        {initials}
       </span>
-      {montrePastille ? (
+      {showsDot ? (
         <span
-          className="absolute rounded-pastille"
+          className="absolute rounded-chip"
           style={{
-            width: pastille,
-            height: pastille,
-            left: decalage,
-            top: decalage,
+            width: dot,
+            height: dot,
+            left: offset,
+            top: offset,
             backgroundColor: PRESENCE[presence],
-            boxShadow: '0 0 0 2px var(--ios-plan-fond)',
+            boxShadow: '0 0 0 2px var(--ios-surface)',
           }}
           aria-hidden
         />

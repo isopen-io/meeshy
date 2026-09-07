@@ -13,13 +13,13 @@ import type { CSSProperties } from 'react';
  * Le POC derive l'accent de la teinte de la conversation ; le vrai calcul vit
  * dans `ColorGeneration.swift` et devra etre porte tel quel.
  */
-const TEINTES: Record<1 | 2 | 3 | 4, string> = {
+const TINTS: Record<1 | 2 | 3 | 4, string> = {
   1: 'var(--color-av-1)',
   2: 'var(--color-av-2)',
   3: 'var(--color-av-3)',
   4: 'var(--color-av-4)',
 };
 
-export function avecAccent(teinte: 1 | 2 | 3 | 4, autres?: CSSProperties): CSSProperties {
-  return { ...autres, '--accent': TEINTES[teinte] } as CSSProperties;
+export function withAccent(tint: 1 | 2 | 3 | 4, rest?: CSSProperties): CSSProperties {
+  return { ...rest, '--accent': TINTS[tint] } as CSSProperties;
 }

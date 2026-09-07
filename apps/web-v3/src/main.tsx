@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client';
 
 import './styles/app.css';
 
-import Coquille from '@/components/coquille';
-import { Routeur } from '@/routes/table';
+import Shell from '@/components/shell';
+import { Router } from '@/routes/route-table';
 
 /**
  * CACHE-FIRST, RESEAU-ENSUITE — les « Instant App Principles » du depot,
@@ -30,26 +30,26 @@ const client = new QueryClient({
 });
 
 /** Le squelette d'attente d'un ecran decoupe — statique, jamais un spinner. */
-function Squelette() {
+function Skeleton() {
   return (
     <div className="grid gap-2 p-4" aria-busy="true">
-      <p className="text-meta" style={{ color: 'var(--color-ios-encre-2)' }}>
+      <p className="text-meta" style={{ color: 'var(--color-ios-ink-2)' }}>
         L’écran arrive…
       </p>
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-20 rounded-[14px]" style={{ backgroundColor: 'var(--color-ios-carte)' }} />
+        <div key={i} className="h-20 rounded-[14px]" style={{ backgroundColor: 'var(--color-ios-card)' }} />
       ))}
     </div>
   );
 }
 
-const racine = document.getElementById('racine');
-if (!racine) throw new Error('#racine absent du document');
+const root = document.getElementById('root');
+if (!root) throw new Error('#root absent du document');
 
-createRoot(racine).render(
+createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={client}>
-      <Routeur enveloppe={(ecran) => <Coquille>{ecran}</Coquille>} squelette={<Squelette />} />
+      <Router wrap={(screen) => <Shell>{screen}</Shell>} skeleton={<Skeleton />} />
     </QueryClientProvider>
   </StrictMode>,
 );
