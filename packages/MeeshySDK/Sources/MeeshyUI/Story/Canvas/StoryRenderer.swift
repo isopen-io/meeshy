@@ -617,7 +617,25 @@ extension StoryRenderer {
         // prédicat que celui qui décide, un étage plus bas, si la chaîne part
         // chez `MeeshyConfig.resolveMediaURL`. Deux réponses à une seule
         // question sont ce qui a produit ce défaut.
-        if let url = mediaURL, StoryBackgroundLayer.isAddressable(url) { return url }
+        //
+        // **Sauf `file://` (#5469, régression du correctif ci-dessus).**
+        // `isAddressable` classe délibérément `file://` comme adressable — à
+        // raison pour `directURLIfAny`, qui en a besoin pour le PREVIEW du
+        // composer (la sandbox de l'auteur = la sandbox du lecteur, sur le
+        // MÊME appareil). Ici le lecteur n'est pas forcément l'auteur : une
+        // story publiée avant `sanitizedForServerPublish()` peut porter une
+        // `mediaURL` en `file://` pointant vers la sandbox de l'AUTEUR,
+        // inaccessible à tout autre lecteur. La faire gagner sur un
+        // `postMediaId` existant — que le résolveur SAIT traiter — a cassé le
+        // fond de deux stories mesurées en production le 2026-08-01, la panne
+        // même que ce correctif visait à fermer.
+        //
+        // Sans identifiant (composer, média pas encore téléversé), le second
+        // `return` sert déjà la `file://` locale correctement : c'est alors la
+        // sandbox de celui qui REGARDE, et la seule source disponible.
+        if let url = mediaURL, !url.hasPrefix("file://"), StoryBackgroundLayer.isAddressable(url) {
+            return url
+        }
         return postMediaId.isEmpty ? (mediaURL ?? "") : postMediaId
     }
 
