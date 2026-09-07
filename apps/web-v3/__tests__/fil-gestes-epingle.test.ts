@@ -62,6 +62,7 @@ describe('soumissionDuFil lit epingler/desepingler (issue #5385)', () => {
     expect(soumissionDePorte(formulaire({ retirer: 'm9', epingler: 'm1', modifie: 'm2', texte: 'x' }))).toEqual({
       genre: 'retrait',
       messageId: 'm9',
+      confirme: false,
     });
     expect(soumissionDePorte(formulaire({ epingler: 'm1', modifie: 'm2', texte: 'x' }))).toEqual({ genre: 'epingler', messageId: 'm1' });
   });

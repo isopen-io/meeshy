@@ -23,6 +23,7 @@ import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DES_APPELS } from '@/app/connecte/appels-feuille';
 import { FEUILLE_DES_COMMUNAUTES } from '@/app/connecte/communautes-feuille';
+import { FEUILLE_DU_COMPOSER } from '@/app/connecte/composer-feuille';
 import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
@@ -91,6 +92,13 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/prefs-feuille.ts', source: FEUILLE_DES_PREFS },
   { nom: 'app/connecte/appels-feuille.ts', source: FEUILLE_DES_APPELS },
   { nom: 'app/connecte/communautes-feuille.ts', source: FEUILLE_DES_COMMUNAUTES },
+  // `/composer` (#4966, médias #5390) — la feuille d'un écran LIVRÉ qui
+  // n'était portée par AUCUNE règle de la charte : ni pixel, ni rayon, ni
+  // couleur littérale, ni hauteur d'action ne l'opposaient. Trouvée en
+  // relisant #5390, qui l'a fait GROSSIR (grille d'aperçus, tuile d'ajout).
+  // Une feuille absente de cette liste est une feuille hors charte, et rien
+  // ne le disait.
+  { nom: 'app/connecte/composer-feuille.ts', source: FEUILLE_DU_COMPOSER },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -174,6 +182,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/prefs-feuille.ts',
       'app/connecte/appels-feuille.ts',
       'app/connecte/communautes-feuille.ts',
+      'app/connecte/composer-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -207,6 +216,30 @@ describe('[hidden] l’emporte sur toute règle de display', () => {
     expect(SOCLE_DU_DOCUMENT).toContain('[hidden]{display:none!important}');
     const importants = FEUILLES.map(({ nom, source }) => ({ nom, importants: (source.match(/!important/g) ?? []).length }));
     expect(importants).toEqual(FEUILLES.map(({ nom }) => ({ nom, importants: nom === 'app/socle.ts' ? 1 : 0 })));
+  });
+});
+
+/**
+ * UN ÉCRAN LARGE N'EST PAS UN TÉLÉPHONE CENTRÉ — premier pas desktop (2026-09-06).
+ *
+ * Toute la v3 borne ses écrans à `var(--shell-width)` (680 px) ; à 1440 px,
+ * plus de la moitié de la fenêtre restait vide (mesuré au rendu, demande
+ * porteur). La bascule vit dans la TABLE DE JETONS — la règle 28 interdit à
+ * toute feuille de déclarer une variable, et c'est elle qui a renvoyé ce
+ * témoin au bon site — et redéfinit LA VARIABLE plutôt que d'éditer chaque
+ * conteneur : les huit écrans qui la consomment suivent d'un seul site. Le
+ * jour où une planche desktop tranche une autre géographie (deux colonnes
+ * liste + fil), c'est cette seule règle qui se reprend.
+ */
+describe('au-delà de 1024 px, la coquille passe en largeur wide', () => {
+  it('la table de jetons redéfinit --shell-width vers --shell-width-wide sous @media', () => {
+    const jetons = readFileSync(
+      join(__dirname, '..', '..', '..', 'packages', 'design-tokens', 'tokens.css'),
+      'utf8',
+    );
+    const bascule = jetons.replace(/\s+/g, '');
+    expect(bascule).toContain('@media(min-width:1024px){:root{--shell-width:var(--shell-width-wide);}}');
+    expect(SOCLE_DU_DOCUMENT).not.toContain('--shell-width-wide');
   });
 });
 
@@ -725,6 +758,11 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // contenu qu'il faudrait lire. Les champs de saisie et le bouton restent
     // sur l'encre (`.action.primaire`, déjà nommé).
     '.fenetre-edition summary',
+    // La rangée push « Sur cet appareil » (#5391) : le cliquable — un
+    // `<summary>`, même emploi que `.fenetre-edition summary` juste
+    // au-dessus — il déplie l'explication de ce que l'appareil recevra,
+    // jamais un contenu qu'il faudrait lire d'emblée.
+    '.push-detail summary',
     // L'historique des appels (`cible/calls.png`, #5108) : la tuile d'une ligne
     // VIDÉO — même emploi que `dialog.espace .rangee .tuile` et `.marque
     // .tuile` : le glyphe d'une NATURE, ici celle de l'appel plutôt que celle
@@ -732,6 +770,22 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // (manqué, répondu) restent sur `--color-danger`/`--color-success`, hors
     // de cette liste — règle 13 ne gouverne que l'ACCENT.
     '.appel .tuile.video',
+    // `/composer` (#4966) — DEUX contrôles SÉLECTIONNÉS, l'accent en fond ou
+    // en trait : l'onglet COURANT du format, même emploi que
+    // `.source[aria-current]` des commentaires et `.puces.filtres
+    // .puce[aria-current]` de la galerie ; et l'humeur COCHÉE, même emploi que
+    // `.prisme-multi … :checked` du fil social. Le titre, le champ de texte,
+    // l'aide, la grille des médias et la tuile « + Ajouter » (#5390) restent
+    // sur l'encre et sur `--color-border-interactive` — la tuile pointillée
+    // est un cliquable NEUTRE, pas une action primaire.
+    '.composer .onglets a[aria-current="page"]',
+    '.composer .humeurs label:has(input:checked)',
+    // `/stories/new` (#5389) — le bouton NATIF d'un `<input type="file">`
+    // VISIBLE, même emploi 1 (le cliquable) que `.action.primaire` : c'est
+    // l'action qui choisit le média de la story, la seule surface de
+    // sélection que cet écran sert. Le nom du fichier choisi (rendu par le
+    // navigateur, dans le même `<input>`) et l'aide restent sur l'encre.
+    '.composer .media-de-story input[type=file]::file-selector-button',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

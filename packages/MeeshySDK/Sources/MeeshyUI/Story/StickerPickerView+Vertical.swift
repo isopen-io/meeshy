@@ -365,10 +365,18 @@ extension StickerPickerView {
             // La `LazyVStack` ne construit cette section qu'en arrivant dessus :
             // le geste de défilement DIT l'intérêt, exactement comme le tap sur
             // l'onglet le disait. `places.isEmpty` garde l'idempotence.
-            placeTab.onAppear {
-                guard let nearbyPlaces, places.isEmpty else { return }
-                Task { places = await nearbyPlaces.nearby() }
-            }
+            // **Et le fournisseur peut ARRIVER après la section** (#5407).
+            // L'`onAppear` seul ne rattrape pas l'auteur qui accorde la
+            // position pendant que la palette est ouverte : la section reste
+            // montée, donc elle ne réapparaît jamais, et une permission
+            // fraîchement accordée n'a aucun site où déclencher la recherche.
+            // La section afficherait un message qui s'efface sur une grille
+            // qui reste vide — pire que le message.
+            placeTab
+                .onAppear { chercheLesLieuxSiBesoin() }
+                .adaptiveOnChange(of: nearbyPlaces != nil) { _, servable in
+                    if servable { chercheLesLieuxSiBesoin() }
+                }
         case .library: libraryTab
         default:
             if let famille = onglet.templateFamily {

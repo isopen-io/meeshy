@@ -6,6 +6,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { logError } from '../../utils/logger.js';
 
 /**
  * Lire ses propres permissions — DEUX adresses, UNE implémentation (#4350).
@@ -95,7 +96,7 @@ export async function handleMePermissions(request: FastifyRequest, reply: Fastif
 
     return sendSuccess(reply, { role, permissions: servedUserPermissions(role) });
   } catch (error) {
-    request.log.error({ err: error }, '[ME] Failed to serve own permissions');
+    logError(request.log, '[ME] Failed to serve own permissions', error);
     return sendInternalError(reply, 'Failed to read permissions');
   }
 }

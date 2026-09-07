@@ -176,16 +176,27 @@ final class ShareComposeHandoffConsumer: ObservableObject {
 
         switch forme {
         case .video:
-            return StoryComposerSeed.video(copying: fichier)
-                .map { StoryComposerSeed(payload: $0.payload, description: fiche.text) }
+            return StoryComposerSeed.video(copying: fichier,
+                                           declaredMimeType: premier.mime)
+                .map { StoryComposerSeed(payload: $0.payload, description: fiche.text, origin: $0.origin) }
         case .audio:
-            return StoryComposerSeed.audio(copying: fichier)
-                .map { StoryComposerSeed(payload: $0.payload, description: fiche.text) }
+            return StoryComposerSeed.audio(copying: fichier,
+                                           declaredMimeType: premier.mime)
+                .map { StoryComposerSeed(payload: $0.payload, description: fiche.text, origin: $0.origin) }
         case .image:
             guard let donnees = try? Data(contentsOf: fichier, options: .mappedIfSafe),
                   let bitmap = await StoryMediaLoader.shared.loadImage(data: donnees, maxDimension: 1080)
             else { return nil }
-            return StoryComposerSeed(payload: .image(bitmap), description: fiche.text)
+            // Le bitmap pour le CANVAS, le fichier pour la PUBLICATION (#5409) —
+            // même raison que sa jumelle `ConversationMediaSeeding.seed`. Cette
+            // porte-ci monte DÉJÀ la surface document : sans l'origine, partager
+            // une image depuis une autre app puis publier en POST perdait
+            // l'image, en production.
+            return StoryComposerSeed(
+                payload: .image(bitmap),
+                description: fiche.text,
+                origin: StoryComposerSeed.Origin(fileURL: fichier, mimeType: premier.mime)
+            )
         }
     }
 }

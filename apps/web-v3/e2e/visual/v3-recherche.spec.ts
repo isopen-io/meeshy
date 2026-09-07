@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import { SILENCE_DE_SAISIE_MS } from '../../lib/contenu/recherche';
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { ACTION_PRIMAIRE, ciblesMesurees, ciblesTropPetites, hauteursDe, LARGEURS, TARGET_MIN } from './lib/cibles';
 import { passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 
@@ -29,8 +30,7 @@ const ouvre = async (browser: Browser): Promise<Page> => {
   const page = await contexte.newPage();
   const reponse = await page.goto(`${v3.base}/search`, { waitUntil: 'domcontentloaded' });
   expect(reponse?.status(), '/search n’a pas servi l’écran').toBe(200);
-  await page.waitForFunction(() => document.querySelector('main[data-participation="recherche"]') !== null);
-  await page.waitForTimeout(1_200);
+  await attendsLeModuleArme(page, 'recherche');
   return page;
 };
 

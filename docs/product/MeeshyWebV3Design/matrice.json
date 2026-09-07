@@ -483,7 +483,7 @@
    "depend_de": [
     "feed"
    ],
-   "critere_de_fin": "Test unitaire prouvant qu'un SEUL composant lecteur sert la route publique et la route connectée (aucune jumelle) ; lecture à 60 fps mesurée pendant le défilement vertical ; une seule vidéo décodée à la fois (assertion sur le nombre d'éléments <video> actifs — pas de rétention mémoire au changement d'écran) ; TranslationToggle monté avec onDisplayedChange câblé ; 0 violation axe serious/critical.",
+   "critere_de_fin": "Test unitaire prouvant qu'un SEUL composant lecteur sert la route publique et la route connectée (aucune jumelle) ; assertion sur le nombre d'éléments <video> actifs (une seule décodée à la fois, pas de rétention au changement d'écran) ; 0 violation axe serious/critical ; poids du module mesuré et ratcheté dans budgets-mesures.json (jamais inventé). DEUX exigences de la rédaction d'origine sont RETIRÉES, pas oubliées : « 60 fps mesurés pendant le défilement vertical » — le module ne DÉFILE pas, il clique un lien déjà composé et la transition est celle du navigateur de zone (étage 1, <= 150 ms) : il n'existe aucun geste continu à mesurer sur cette géométrie (voir l'en-tête de e2e/visual/v3-reels-du-fil.spec.ts) ; et « TranslationToggle monté avec onDisplayedChange câblé » — une notion du legacy React : en v3 le Prisme est descendu par le SERVEUR (partageLu -> servie()) et la puce des langues est servie en liens ?lang=, gardée par v3-reels-du-fil.spec.ts (deux témoins de RANG).",
    "dimensions_visees": [
     "Fluidité",
     "Optimisation mémoire",

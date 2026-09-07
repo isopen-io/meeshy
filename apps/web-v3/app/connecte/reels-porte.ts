@@ -6,6 +6,7 @@ import { languesDuLecteur } from '@/lib/api/fil';
 import { baseDeLaPasserellePublique } from '@/lib/api/passerelle';
 import { partageLu, type Recuperateur } from '@/lib/api/publication';
 import { reelSuivant } from '@/lib/api/social';
+import { actifsTempsReel } from '@/lib/actifs-rt';
 import { GENRE_REEL } from '@/lib/contenu/partage';
 
 import { documentDuPartage, documentIndisponible } from '@/app/(public)/partage-vue';
@@ -129,6 +130,10 @@ export const LIS_LE_FIL_DES_REELS = async (
       confirmation: false,
       erreur: null,
       brouillon: '',
+      // LE MODULE DE LECTURE (#5388) — JOUER/DÉCIDER/RELÂCHER une seule vidéo
+      // décodée à la fois. Aucun `passerelle` : le module ne parle à personne,
+      // il clique des liens déjà composés.
+      lecture: { module: actifsTempsReel().reels.url },
     }),
   );
 };

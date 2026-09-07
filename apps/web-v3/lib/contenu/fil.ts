@@ -190,6 +190,22 @@ export const FIL = {
    * jamais une absence d'information.
    */
   decompteDuRetrait: (secondes: number): string => `${secondes} s`,
+  /**
+   * L'ANNONCE AU LECTEUR D'ÉCRAN D'UN GESTE DE RETRAIT (#5387) — écrite dans
+   * `#annonces-du-fil` (`fil-vue.ts`), une région `role="status"` SERVIE
+   * VIDE : le retrait et le rétablissement s'annoncent, qu'on les voie ou
+   * non. `retraitAnnonce` reprend le nombre de secondes de la MÊME source que
+   * `decompteDuRetrait` juste au-dessus — deux phrases, une seule mesure.
+   */
+  retraitAnnonce: (secondes: number): string => `Message retiré — annulable pendant ${secondes} secondes`,
+  retablissementAnnonce: 'Message rétabli',
+  /**
+   * LA FENÊTRE SANS JAVASCRIPT (#5387, `?retirer=<id>`) — l'ADRESSE est la
+   * fenêtre : la ligne visée porte cette mention, ternie, avec ses deux
+   * formulaires (« Annuler » et « Confirmer le retrait »).
+   */
+  retraitEnAttente: 'Retrait en attente',
+  confirmerLeRetrait: 'Confirmer le retrait',
   enregistrer: 'Enregistrer',
   modification: 'Modification du message',
   /**

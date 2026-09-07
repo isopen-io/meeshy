@@ -23,6 +23,17 @@
 // rend rc=1 sur toute croissance : la construction ELLE-MÊME est le témoin,
 // exactement comme pour les pages. Faire monter un plafond exige `--mesure`
 // et un diff relu, jamais un octet qui grossit en silence.
+//
+// `--mesure` N'ENREGISTRE JAMAIS LA SEULE VALEUR DU POSTE QUI L'A LANCÉ
+// (#5343) : le même esbuild, sur les mêmes sources, émet un binaire de
+// quelques dizaines d'octets bruts plus lourd dans le conteneur Docker (CI
+// Linux) que sur un poste macOS — un écart d'ENVIRONNEMENT, pas de code, et
+// il joue dans les deux sens selon qui mesure. Enregistrer la valeur du poste
+// seul fait rougir la CI sur un commit qui n'a rien changé ; enregistrer
+// celle de la CI seule ferait pareil au prochain `--mesure` lancé en local.
+// La règle du fichier (`budgets-mesures.json` › `role`) est d'enregistrer le
+// MAX des deux — mesurer ici, mesurer dans le conteneur (ou lire le job CI
+// « Quality (bun) »), prendre le plus grand.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -32,7 +43,7 @@ import { gzipSync } from 'node:zlib';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, '..');
-// DOUZE modules, pas un — et la raison est un POIDS mesuré, pas un goût
+// TREIZE modules, pas un — et la raison est un POIDS mesuré, pas un goût
 // d'architecture. `participate.js` pèse 26 173 o gzip (budgets-mesures.json) :
 // c'est le prix du fil — composeur, réserve, plein écran, réactions, peinture
 // de bulles. La LISTE n'a besoin d'aucun d'eux, et le FIL SOCIAL (#5031)
@@ -49,9 +60,12 @@ const RACINE = join(ICI, '..');
 // n'ont ni composeur ni socket non plus : une bascule est un ALLER SIMPLE,
 // exactement comme aimer ou reposter sur `/feed` — le même arbitrage,
 // mesuré à la même conclusion.
+// LE RÉEL (`reels`, `/feed/reels`, #5388) n'a ni composeur ni socket non
+// plus : il joue/arrête une vidéo déjà servie et ACTIVE des liens que le
+// serveur a composés — aucun appel à la passerelle.
 // Le socle que `participate` et `liste` PARTAGENT — socket.io-client — reste
-// UN actif, à UNE adresse ; `feed`, `plein` et `prefs` ne l'importent pas du tout.
-const SOURCES = [
+// UN actif, à UNE adresse ; `feed`, `plein`, `prefs` et `reels` ne l'importent pas du tout.
+export const SOURCES = [
   { base: 'participate', chemin: join(RACINE, 'lib', 'realtime', 'participate.ts') },
   { base: 'liste', chemin: join(RACINE, 'lib', 'realtime', 'liste.ts') },
   { base: 'feed', chemin: join(RACINE, 'lib', 'realtime', 'feed.ts') },
@@ -64,6 +78,7 @@ const SOURCES = [
   { base: 'navigateur', chemin: join(RACINE, 'lib', 'realtime', 'navigateur.ts') },
   { base: 'composer', chemin: join(RACINE, 'lib', 'realtime', 'composer.ts') },
   { base: 'prefs', chemin: join(RACINE, 'lib', 'realtime', 'prefs.ts') },
+  { base: 'reels', chemin: join(RACINE, 'lib', 'realtime', 'reels.ts') },
 ];
 const DOSSIER = join(RACINE, '.rt');
 const SOCKET = join(RACINE, 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js');
@@ -100,11 +115,39 @@ export const compile = () => {
   };
 };
 
-const ecrisLaMesure = (poids) => {
-  const mesures = JSON.parse(readFileSync(MESURES, 'utf8'));
+// LES CLÉS QUE CETTE FONCTION CALCULE ELLE-MÊME — tout le reste d'un bloc
+// `participate` PRÉCÉDENT est un champ MANUEL (défaut MAJEUR de revue #5387,
+// « le ratchet peut ABAISSER en silence un MAX documenté ») : `--mesure`
+// réécrivait le bloc EN ENTIER depuis la seule mesure du poste courant, et
+// `raison_de_la_hausse` — le seul endroit où vit la doctrine « on enregistre
+// le MAX des environnements » (#5343 : conteneur Docker +6 à +22 o gzip) —
+// disparaissait dès qu'un lancement local touchait des modules qu'il n'avait
+// pas mesurés dans le conteneur. Un ratchet qui efface sa propre doctrine en
+// silence ne protège plus rien.
+const CLES_CALCULEES = new Set([
+  'quoi',
+  ...SOURCES.flatMap(({ base }) => [`${base}_brut_octets`, `${base}_gzip_9_octets`]),
+  'socket_io_client_brut_octets',
+  'socket_io_client_gzip_9_octets',
+  'commande',
+  'temoin',
+  'date',
+]);
+
+/**
+ * `cheminMesures` — paramétré pour le TÉMOIN (`build-participate-mesure.test.ts`)
+ * : le défaut reste `MESURES`, le fichier réel, jamais touché ailleurs qu'ici
+ * ou par un `--mesure` intentionnel.
+ */
+export const ecrisLaMesure = (poids, cheminMesures = MESURES) => {
+  const mesures = JSON.parse(readFileSync(cheminMesures, 'utf8'));
+  // CE QUI N'EST PAS CALCULÉ CI-DESSOUS SURVIT — `raison_de_la_hausse` au
+  // minimum, mais tout champ manuel qu'un tour futur ajouterait de la même
+  // façon, sans qu'il faille modifier CETTE fonction pour l'apprendre.
+  const manuels = Object.fromEntries(Object.entries(mesures.participate ?? {}).filter(([cle]) => !CLES_CALCULEES.has(cle)));
   mesures.participate = {
     quoi:
-      'Le poids des DOUZE modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], lib/realtime/plein.ts pour /chats/:cle/medias [#4525], lib/realtime/navigateur.ts pour la navigation de zone [§ 12.11], lib/realtime/composer.ts pour /composer [#4966], lib/realtime/prefs.ts pour /notifications/preferences [#4899], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js et prefs.js ne l’importent pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
+      'Le poids des TREIZE modules de participation (lib/realtime/participate.ts pour le fil, lib/realtime/liste.ts pour /chats, lib/realtime/feed.ts pour /feed [#5031], lib/realtime/notifs.ts pour /notifications [#4898], lib/realtime/contacts.ts pour /contacts [#4921], lib/realtime/recherche.ts pour /search [#4897], lib/realtime/liens.ts pour /links [#5090], lib/realtime/commentaires.ts pour /post/:id [#5091], lib/realtime/plein.ts pour /chats/:cle/medias [#4525], lib/realtime/navigateur.ts pour la navigation de zone [§ 12.11], lib/realtime/composer.ts pour /composer [#4966], lib/realtime/prefs.ts pour /notifications/preferences [#4899], lib/realtime/reels.ts pour /feed/reels [#5388], compilés par bun build et servis sous /__v3/rt/<base>.<hash>.js) et de socket.io-client tel que servi (socket.io.esm.min.js, sous /__v3/rt/socket.io.<hash>.js — feed.js, prefs.js et reels.js ne l’importent pas). Tous arrivent APRÈS le premier pixel de /chats, /chats/:cle, /chat/:lien et /feed (§ 12.4) : ils n’entrent ni dans requetes_avant_premier_pixel ni dans le JS de page. Un écran ne télécharge QUE son module — la liste ne paie pas le fil, le fil social ne paie ni l’un ni l’autre.',
     // LES POIDS SE RÉPANDENT, ILS NE SE RECOPIENT PAS. Cette table était un
     // INVENTAIRE tenu à la main : `navigateur` figurait dans les SOURCES et
     // dans le `quoi` ci-dessus (« ONZE modules »), mais aucune de ses deux
@@ -123,10 +166,19 @@ const ecrisLaMesure = (poids) => {
     // LE RATCHET SE DÉCLARE (défaut majeur de revue) — comme `documents_du_fil`
     // et ses voisins de `budgets-mesures.json` : le nom du GATE qui l'oppose,
     // pas seulement de la commande qui l'écrit.
+    //
+    // CONSIGNE DE RELECTURE (défaut majeur de revue #5387) — ce `--mesure`
+    // PRÉSERVE `raison_de_la_hausse` et tout autre champ manuel du bloc
+    // précédent (voir `CLES_CALCULEES` ci-dessus), mais ne les MET PAS À
+    // JOUR : si CE lancement touche un module dont `raison_de_la_hausse`
+    // documentait la valeur MAX-ENVIRONNEMENTS (#5343), relire ce champ et
+    // le corriger à la main dans le MÊME diff — un ratchet qui garde une
+    // doctrine PÉRIMÉE au lieu de l'effacer n'est pas moins trompeur.
     temoin: 'cd apps/web-v3 && node scripts/build-participate.mjs — un RATCHET : toute valeur gzip au-dessus de celle enregistrée ici rend rc=1 (l’appel que `bun run build` fait par défaut, SANS --mesure), et la faire monter exige --mesure, donc un diff relu. SECOND GATE (travail `rich`, 2026-09-06) : participate_gzip_9_octets ne peut lui-même dépasser le PLAFOND déclaré dans budgets.json › temps_reel.plafonds, opposé par __tests__/bundle-budget.test.ts § « le plafond du module de participation » — binaire réel ≤ cette mesure ET cette mesure ≤ ce plafond.',
     date: new Date().toISOString().slice(0, 10),
+    ...manuels,
   };
-  writeFileSync(MESURES, `${JSON.stringify(mesures, null, 2)}\n`);
+  writeFileSync(cheminMesures, `${JSON.stringify(mesures, null, 2)}\n`);
 };
 
 /**

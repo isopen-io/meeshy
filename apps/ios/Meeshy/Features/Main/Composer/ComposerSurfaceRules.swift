@@ -102,7 +102,7 @@ nonisolated enum ComposerSurfaceRouting {
         //
         // Elles tomberont quand le meuble saura REPRENDRE et SEMER (#4751) —
         // et c'est à ce moment-là qu'on retournera leur témoin, jamais avant.
-        case .videoCameraReady, .resume, .mediaSeeded:
+        case .videoCameraReady, .resume:
             return .scene
         // **`.cameraReady` a QUITTÉ cette liste le 2026-09-01** (#4751,
         // directive porteur : « se concentrer sur le composer v3 et non
@@ -131,7 +131,27 @@ nonisolated enum ComposerSurfaceRouting {
         // l'atelier du SDK, la vue de composition de story qui préexistait au
         // meuble. Une story s'écrivait donc dans un composer et un post dans un
         // autre, sur un écran que l'auteur croit unique.
-        case .cameraReady, .keyboardOnContent, .moodGrid:
+        // **`.mediaSeeded` a QUITTÉ la liste ci-dessus le 2026-09-06** (#5409,
+        // directive porteur : « dans le longpress de message, le composer
+        // ouvert doit être remplacé par le composer v3 »).
+        //
+        // Elle y était pour une raison ÉCRITE — « `ComposerDocumentDraft` n'a
+        // ni `mediaIds`, ni fichier, ni lieu » — et cette raison était fausse
+        // sur les trois points : le type porte `localMedia`, `location` et
+        // `storyEffects` depuis #4756. Le commentaire jumeau de
+        // `DocumentComposerDoor` disait la même chose et avait DÉJÀ été corrigé ;
+        // celui-ci a survécu, et a tenu la porte fermée un lot de plus.
+        //
+        // > Un doc-comment qui EXEMPTE une unité d'une règle se vérifie comme
+        // > une affirmation, pas comme une décision.
+        //
+        // Ce qui manquait vraiment n'était pas dans le modèle mais dans le
+        // CHEMIN : la graine saute l'intake, donc son fichier n'entrait jamais
+        // dans `documentLocalMedia`, la seule liste que la voie document
+        // téléverse. `ComposerSeedIngestion` l'y met — et c'est ce qui rend ce
+        // reroutage sûr, là où le faire seul aurait fait disparaître le média
+        // semé de la publication.
+        case .cameraReady, .keyboardOnContent, .moodGrid, .mediaSeeded:
             switch format {
             case .story: return .document
             // **Le RÉEL rejoint le meuble le 2026-09-01** (#4751). Il était

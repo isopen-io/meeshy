@@ -325,6 +325,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// slide ID survives any reorder/insert/remove operation.
     var backgroundTransformCache: [String: BackgroundTransform] = [:]
 
+    /// **Une tâche de mesure PAR objet vidéo** (#5418). Une poignée unique
+    /// (`preloadTask`) suffisait à la graine, qui pose UNE vidéo ; le pont
+    /// document → canvas en pose autant que l'auteur en ingère, et elles se
+    /// voleraient leur poignée. Annulées au `deinit` comme `preloadTask`.
+    ///
+    /// `nonisolated(unsafe)` pour la MÊME raison que `preloadTask`, écrite à
+    /// son site : le `deinit` est `nonisolated` et doit pouvoir annuler sans
+    /// saut vers le main actor — l'annulation est `Sendable` et sûre.
+    nonisolated(unsafe) var videoMeasureTasks: [String: Task<Void, Never>] = [:]
+
     // MARK: - Media Storage (pre-publication)
 
     // `public internal(set)` (#4038) : `EmbeddedSceneCanvas` doit RECEVOIR ces
@@ -608,5 +618,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     nonisolated deinit {
         preloadTask?.cancel()
+        // #5418 — une session refermée ne finit pas de mesurer ses vidéos.
+        for tache in videoMeasureTasks.values { tache.cancel() }
     }
 }

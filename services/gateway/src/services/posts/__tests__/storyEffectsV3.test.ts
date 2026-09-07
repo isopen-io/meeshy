@@ -348,6 +348,28 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(st?.payload.fadeIn).toBe(0.3);
   });
 
+  // **Le porteur du fond existe dès que le fond a quelque chose à dire** (#5406).
+  // Jumeau du correctif Swift (`CanvasV3.migratedScene`) : `backgroundTransform`
+  // ne voyage QUE dans la charge de l'objet `bg`, dont l'existence était
+  // conditionnée à la seule COULEUR. Or `videoFitMode` — le cadrage que le
+  // double-tap fond choisit — ne vaut que sur un fond MÉDIA, là où aucune
+  // couleur n'a de raison d'être. La condition de perte et la condition
+  // d'utilité du geste étaient la même.
+  it('le cadrage du fond voyage SANS couleur de fond (#5406)', () => {
+    const doc = convertV1ToV3({
+      backgroundTransform: { videoFitMode: 'fit' },
+      mediaObjects: [{ id: 'm1', mediaURL: 'https://cdn/x.jpg', mediaType: 'image', isBackground: true }],
+    });
+    const bg = doc.scenes[0].objects.find(o => o.plane === 'bg');
+    expect((bg?.payload.transform as { videoFitMode?: string } | null)?.videoFitMode).toBe('fit');
+    expect(bg?.payload.background).toBeUndefined();
+  });
+
+  it('aucun porteur de fond quand ni couleur ni cadrage (#5406)', () => {
+    const doc = convertV1ToV3({ textObjects: [{ id: 't1', text: 'coucou' }] });
+    expect(doc.scenes[0].objects.find(o => o.plane === 'bg')).toBeUndefined();
+  });
+
   it('root filter lands on the bg media payload; root stickers become sticker objects (G3)', () => {
     const objs = convertV1ToV3(v1()).scenes[0].objects;
     const bg = objs.find(o => o.plane === 'bg');

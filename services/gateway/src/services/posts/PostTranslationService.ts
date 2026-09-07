@@ -65,8 +65,16 @@ export class PostTranslationService {
   /**
    * Translate a post's content to top 5 languages (minus original).
    * Fire-and-forget: results arrive via ZMQ events.
+   *
+   * `detectedLanguage` (#5349) is a client-MEASURED language (on-device
+   * detection over the actually-typed text, e.g. `detectMeasuredLanguage`
+   * on web) — never an interface preference. It only backs up
+   * `originalLanguage` (an author CLAIM, which always wins), and is itself
+   * preferred over this service's own crude regex `detectLanguage(content)`:
+   * a real measurement beats a guess made from a handful of stop-word
+   * patterns.
    */
-  async translatePost(postId: string, content: string, originalLanguage?: string): Promise<void> {
+  async translatePost(postId: string, content: string, originalLanguage?: string, detectedLanguage?: string): Promise<void> {
     // Skip translation for URL-only posts: links carry no translatable text and
     // must be preserved verbatim (NLLB would corrupt them). Mixed content still
     // translates — the translator masks/restores the URLs.
@@ -75,7 +83,7 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = originalLanguage ?? detectLanguage(content);
+    const sourceLang = originalLanguage ?? detectedLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
     /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
@@ -120,7 +128,7 @@ export class PostTranslationService {
     const force = options.force === true;
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { content: true, originalLanguage: true, translations: true, storyEffects: true },
+      select: { content: true, originalLanguage: true, detectedLanguage: true, translations: true, storyEffects: true },
     });
 
     if (!post) {
@@ -157,7 +165,11 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = post.originalLanguage ?? detectLanguage(post.content);
+    // Même priorité qu'à la création (`translatePost`, #5349/#5422) : la
+    // revendication de l'auteur d'abord, puis la mesure on-device PERSISTÉE
+    // (jamais recalculée), et seulement en dernier recours la détection regex
+    // — une supposition, pas une mesure.
+    const sourceLang = post.originalLanguage ?? post.detectedLanguage ?? detectLanguage(post.content);
 
     if (sourceLang === targetLanguage) {
       log.info('PostTranslation: target same as source, skipping', { postId, targetLanguage });

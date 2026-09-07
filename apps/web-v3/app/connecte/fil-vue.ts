@@ -177,6 +177,8 @@ export type EtatDuFil = {
    * optionnel, `null` par défaut, membre seul.
    */
   readonly lienCree?: string | null;
+  /** `?retirer=<id>` — la fenêtre d'annulation d'un retrait, sans JavaScript (#5387), résolue par la porte (`resoutLeRetrait`). Optionnel, `null` par défaut. */
+  readonly retrait?: string | null;
 };
 
 export const CHAMP_DU_MESSAGE = 'texte';
@@ -520,7 +522,7 @@ const listeDesMessages = (etat: EtatDuFil, inerte: boolean): string => {
     (fil.messages.length === 0 && !inerte && etat.composeur.genre === 'ouvert'
       ? carteVide({ glyphe: 'ph-chat-circle', titre: FIL.vide, phrase: FIL.videPrecision })
       : '') +
-    `<ol class="lignes" id="lignes" aria-label="${echappe(FIL.messagesOrdre)}">${lignes({ messages: fil.messages, maintenant: etat.maintenant, langueDuDocument: DOCUMENT_LANGUAGE, adresse, composeurOuvert: etat.composeur.genre === 'ouvert', estInvite: etat.porte.genre === 'invite', fuseau: etat.fuseau ?? null })}</ol>` +
+    `<ol class="lignes" id="lignes" aria-label="${echappe(FIL.messagesOrdre)}">${lignes({ messages: fil.messages, maintenant: etat.maintenant, langueDuDocument: DOCUMENT_LANGUAGE, adresse, composeurOuvert: etat.composeur.genre === 'ouvert', estInvite: etat.porte.genre === 'invite', fuseau: etat.fuseau ?? null, retrait: etat.retrait ?? null })}</ol>` +
     // La liste est close : sa dernière ligne, complète, se montre (feuille du fil, CLS).
     `<style>${REVELE_LA_DERNIERE_LIGNE}</style>` +
     '</div>' +
@@ -537,8 +539,10 @@ const listeDesMessages = (etat: EtatDuFil, inerte: boolean): string => {
  * avant que le premier message n'arrive, donc la liste ne bouge pas quand ils
  * sont analysés.
  */
+/** LES ANNONCES DES GESTES DU FIL (#5387) — SERVIE VIDE, comme la bannière : une région créée après coup n'est annoncée par aucun lecteur d'écran. `fil-gestes.ts` l'écrit, jamais ce fichier. */
 const zoneDeFrappe = (): string =>
-  '<div class="frappe-zone"><p class="frappe" id="frappe" aria-live="polite" hidden></p></div>';
+  '<div class="frappe-zone"><p class="frappe" id="frappe" aria-live="polite" hidden></p></div>' +
+  '<output id="annonces-du-fil" class="hors-ecran" role="status"></output>';
 
 const composeurFerme = (raison: string, cache: boolean): string =>
   `<p class="composeur ferme" id="composeur-ferme"${cache ? ' hidden' : ''}>${svgDuSprite('ph-lock')}<span class="raison">${echappe(raison)}</span></p>`;

@@ -150,6 +150,17 @@ nonisolated enum ComposerDocumentSendRefusal: Equatable {
     /// sur un envoi volatil obtenu en n'écrivant rien.
     case emptyDraft
 
+    /// **Le brouillon porte de la matière, mais pas celle qu'un RÉEL exige**
+    /// (#4869). Un réel est une vidéo, un son, ou au moins deux images —
+    /// `ReelComposition.qualifiesAsReel`, le MIROIR exact de la règle serveur
+    /// (`packages/shared/utils/reel-composition.ts`).
+    ///
+    /// Sans ce cas, un réel de texte seul partait et le serveur le DÉGRADAIT en
+    /// post (`createPost: REEL non qualifiant dégradé en POST`) : l'auteur
+    /// choisissait un format et en obtenait un autre, sans un mot. Refuser en le
+    /// DISANT vaut mieux — c'est le seul des deux verdicts qu'il puisse réparer.
+    case reelWithoutQualifyingMedia
+
     /// Le chemin existe mais ne survit ni au hors-ligne ni à un kill de l'app.
     /// Refuser vaut mieux qu'envoyer : un contenu perdu en silence coûte plus
     /// cher qu'un geste à refaire.
@@ -209,7 +220,18 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
     case refuse(ComposerDocumentSendRefusal)
 
     static func plan(for draft: ComposerDocumentDraft, isOffline: Bool) -> ComposerDocumentSendPlan {
-        guard draft.format == .post else { return .refuse(.wrongFormat(draft.format)) }
+        // **Le RÉEL passe par ce plan depuis #4869.** Il partage tout ce que
+        // le post exige — de la matière, une audience complète, un chemin
+        // durable — et ne diffère que par le `type` déclaré au serveur, que
+        // `PublishIntent.document` lit sur `draft.format.postType`.
+        //
+        // La STORY reste refusée, et ce n'est pas une omission : elle part par
+        // le canal de la SCÈNE, qui publie une unité par slide. L'y faire
+        // passer publierait une story vide de ses slides — le défaut que la
+        // note de `performSoclePublish` décrit.
+        guard draft.format == .post || draft.format == .reel else {
+            return .refuse(.wrongFormat(draft.format))
+        }
         // Un média SEUL suffit à faire partir un post — la feuille historique
         // l'accepte, et T2.1 aligne le meuble dessus. Un LIEU seul le fait
         // partir de même (T2.5, parité avec `hasContent` de la feuille
@@ -236,8 +258,11 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
         // 2026-09-06) : « rendre impossible la publication de canvas vide sans
         // texte, ni autre type d'object ». D'où `carriesObject` et non
         // `carriesMatter` — la seconde compte le fond, ce qui reste juste pour
-        // une STORY (#4741) et ne l'est pas pour un post, dont ce plan est le
-        // seul juge (`format == .post` en tête de fonction).
+        // une STORY (#4741) et ne l'est pas pour un post ni pour un réel, dont
+        // ce plan est le seul juge (le `guard` de format en tête de fonction).
+        // Un réel a d'autant plus besoin d'un OBJET que le serveur le dégrade
+        // en post s'il ne porte ni vidéo, ni son, ni deux images
+        // (`qualifiesAsReel`, `packages/shared/utils/reel-composition.ts`).
         let canvasSansMatiere = !(draft.storyEffects.map(StorySlidePublishMatter.carriesObject) ?? false)
         guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil || !canvasSansMatiere else {
             return .refuse(.emptyDraft)
@@ -251,6 +276,18 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
             userIds: draft.visibilityUserIds ?? []
         ) else {
             return .refuse(.incompleteAudience(draft.visibility))
+        }
+
+        // **Un RÉEL doit QUALIFIER, et la règle n'est pas réécrite ici** :
+        // `ReelComposition` est le miroir Swift de `qualifiesAsReel` côté
+        // serveur, et c'est lui que l'éventail de formats consulte déjà pour
+        // décider s'il OFFRE le réel (`documentComposesReel`). Offrir un format
+        // et refuser de le publier sous la même composition serait la
+        // contradiction que ce site existe pour empêcher.
+        if draft.format == .reel,
+           !ReelComposition.qualifiesAsReel(mimeTypes: draft.localMedia.map(\.mimeType),
+                                            durationsMs: draft.localMedia.map(\.durationMs)) {
+            return .refuse(.reelWithoutQualifyingMedia)
         }
 
         let chemin = ComposerDocumentSendRouting.path(

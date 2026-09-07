@@ -261,6 +261,13 @@ model User {
   /// Consentement pour le traitement général des données
   dataProcessingConsentAt DateTime?
 
+  /// Consentement à l'analytique produit (#4709) — la SEULE colonne qui
+  /// gouverne la préférence `PrivacyPreferenceSchema.allowAnalytics` ;
+  /// enfant direct de `dataProcessingConsentAt` dans la hiérarchie de
+  /// `CONSENT_PARENT` (`packages/shared/types/consents.ts`), jamais son
+  /// substitut. `PUT /me/consents/analytics` pose cette colonne.
+  analyticsConsentAt DateTime?
+
   /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
   /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
   /// est posée au `create` — jamais un booléen à côté, la date suffit.
@@ -3134,6 +3141,14 @@ model Post {
   content          String?
   /// Langue originale du contenu (ISO 639-1, détectée automatiquement à la création)
   originalLanguage String?
+  /// Langue MESURÉE on-device (tinyld) sur le texte réellement tapé au composer web
+  /// (#5349) — JAMAIS une préférence d'interface. Distincte d'`originalLanguage`
+  /// (revendication de l'auteur, qui garde son rang) : ce champ n'est qu'un SECOND
+  /// RECOURS, relu par `PostTranslationService` (création ET traduction à la
+  /// demande, #5422) quand aucune revendication n'a été persistée — avant que la
+  /// détection serveur par regex ne reprenne la main. `null` pour tout post publié
+  /// hors du composer web, ou dont la mesure on-device n'était pas assez fiable.
+  detectedLanguage String?
   /// Traductions auto-générées à la demande selon la langue du viewer
   /// Quand un utilisateur consulte un post dans une langue différente de originalLanguage,
   /// le backend traduit et cache le résultat ici (même pipeline que Message).

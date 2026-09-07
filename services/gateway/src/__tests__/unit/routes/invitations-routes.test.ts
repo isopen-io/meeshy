@@ -10,6 +10,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 jest.mock('../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../utils/logger') as object),
   logError: jest.fn(),
 }));
 

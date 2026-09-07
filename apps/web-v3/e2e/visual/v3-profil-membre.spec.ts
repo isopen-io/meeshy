@@ -362,9 +362,13 @@ test.describe('depuis /chats (la liste) — sans JavaScript', () => {
     const page = await contexte.newPage();
     await page.goto(`${v3.base}/chats`, { waitUntil: 'load' });
 
-    const avatar = page.locator('a.avatar-lien');
-    await expect(avatar).toHaveAttribute('href', `/chats?profil=${PAIR_HISPANOPHONE.id}`);
-    await cliqueEtNavigue(page, 'a.avatar-lien', (u) => u.pathname === '/chats' && u.searchParams.get('profil') === PAIR_HISPANOPHONE.id);
+    // Le locator vise l'avatar de MARTA par son href — la fixture de la liste
+    // sert plusieurs têtes-à-tête depuis #5270, un `a.avatar-lien` nu en
+    // résout six (strict mode violation, CI du 2026-09-06).
+    const versMarta = `a.avatar-lien[href="/chats?profil=${PAIR_HISPANOPHONE.id}"]`;
+    const avatar = page.locator(versMarta);
+    await expect(avatar).toHaveCount(1);
+    await cliqueEtNavigue(page, versMarta, (u) => u.pathname === '/chats' && u.searchParams.get('profil') === PAIR_HISPANOPHONE.id);
 
     await expect(page.locator('dialog.profil h2')).toHaveText('Marta Ruiz');
     // La conversation en commun, retrouvée LOCALEMENT.
