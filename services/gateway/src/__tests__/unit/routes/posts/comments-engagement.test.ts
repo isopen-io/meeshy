@@ -1,11 +1,15 @@
 /**
- * Axe d'engagement « commentaire texte » (#5537) sur POST /posts/:postId/comments.
+ * Axes d'engagement « commentaire texte » (#5537) et « comment.audio » (#5536)
+ * sur POST /posts/:postId/comments — mutuellement exclusifs (le pipeline audio
+ * de `comments.ts` décide déjà de la même distinction : média lié dont le MIME
+ * commence par `audio/`, ou non).
  *
- * Fichier séparé de comments.test.ts, qui porte déjà une dette de taille gelée
- * (`gateway-test-file-size-budget.test.ts` § règle 3) — y ajouter est interdit,
- * il faut extraire. Ce fichier ne couvre QUE le branchement `comment.text` /
- * `comment.audio`, avec son propre harnais minimal (même patron que
- * `comments-like-delete.test.ts`).
+ * Fichier séparé de `comments.test.ts` : ce dernier est dans `DETTE_HERITEE`
+ * (`gateway-test-file-size-budget.test.ts` § règle 3) et interdit d'ajout tant
+ * qu'il dépasse son budget — cf. CLAUDE.md § Budget de taille. Le comportement
+ * générique du compteur (incrément, notification `BADGE_EARNED` au
+ * franchissement d'un palier) est couvert par `EngagementService.test.ts`
+ * (#5530) ; ce fichier garde uniquement le CÂBLAGE route → axe.
  *
  * @jest-environment node
  */
@@ -46,6 +50,7 @@ jest.mock('../../../../services/MentionService', () => ({
     extractMentions: jest.fn<any>().mockReturnValue([]),
     resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
     createCommentMentions: jest.fn<any>().mockResolvedValue(undefined),
+    createCommentMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(undefined),
   })),
 }));
 
@@ -150,7 +155,59 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       payload: { attachmentIds: ['media-audio-002'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalled();
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.text');
+    await app.close();
+  });
+});
+
+describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio » (#5536)', () => {
+  it('crédite comment.audio quand le média lié est audio', async () => {
+    mockAddComment.mockResolvedValue({
+      id: 'comment-audio-engagement',
+      content: '',
+      authorId: USER_ID,
+      media: [{ id: 'media-audio-003', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio2.mp3' }],
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { attachmentIds: ['media-audio-003'] },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    await app.close();
+  });
+
+  it('ne crédite pas comment.audio pour un commentaire texte seul', async () => {
+    mockAddComment.mockResolvedValue({
+      id: 'comment-text-only',
+      content: 'Just text, no media',
+      authorId: USER_ID,
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Just text, no media' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    await app.close();
+  });
+
+  it('ne crédite pas comment.audio quand le média lié n\'est pas audio', async () => {
+    mockAddComment.mockResolvedValue({
+      id: 'comment-image',
+      content: '',
+      authorId: USER_ID,
+      media: [{ id: 'media-image-001', mimeType: 'image/png', fileUrl: '/uploads/pic.png' }],
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { attachmentIds: ['media-image-001'] },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio');
     await app.close();
   });
 });

@@ -52,13 +52,6 @@ jest.mock('../../../../services/posts/PostAudioService', () => ({
   },
 }));
 
-const mockRecordActivity = jest.fn<any>().mockResolvedValue(undefined);
-jest.mock('../../../../services/engagement/EngagementService', () => ({
-  EngagementService: jest.fn().mockImplementation(() => ({
-    recordActivity: (...args: any[]) => mockRecordActivity(...args),
-  })),
-}));
-
 const mockExtractMentions = jest.fn<any>().mockReturnValue([]);
 const mockResolveUsernames = jest.fn<any>().mockResolvedValue(new Map());
 const mockCreateCommentMentions = jest.fn<any>().mockResolvedValue(undefined);
@@ -494,44 +487,6 @@ describe('POST /posts/:postId/comments — audio attachment triggers PostAudioSe
       payload: { attachmentIds: ['media-audio-001'] },
     });
     expect(res.statusCode).toBe(201);
-    await app.close();
-  });
-});
-
-// #5536 — un commentaire audio alimente l'axe d'engagement « comment.audio ».
-describe('POST /posts/:postId/comments — audio comment records comment.audio engagement', () => {
-  it('records comment.audio for the commenter when the linked media is audio', async () => {
-    mockRecordActivity.mockClear();
-    mockAddComment.mockResolvedValueOnce({
-      id: 'comment-audio-engagement',
-      content: '',
-      authorId: USER_ID,
-      media: [{ id: 'media-audio-002', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio2.mp3' }],
-    });
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-audio-002'] },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio');
-    await app.close();
-  });
-
-  it('does not record comment.audio for a text-only comment', async () => {
-    mockRecordActivity.mockClear();
-    mockAddComment.mockResolvedValueOnce({
-      id: 'comment-text-only',
-      content: 'Just text, no media',
-      authorId: USER_ID,
-    });
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { content: 'Just text, no media' },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio');
     await app.close();
   });
 });
