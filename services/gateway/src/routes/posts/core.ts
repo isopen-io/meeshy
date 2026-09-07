@@ -40,6 +40,7 @@ import {
   projectReferencesForViewer,
 } from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
+import { EngagementService } from '../../services/engagement/EngagementService';
 import {
   createSocialTranslateRateLimitConfig,
   createSharedWriteRateLimitPreHandler,
@@ -179,6 +180,7 @@ export function registerCoreRoutes(
   const sharedWriteRateLimit = createSharedWriteRateLimitPreHandler();
   const mentionService = new MentionService(prisma);
   const hashtagService = new HashtagService(prisma);
+  const engagementService = new EngagementService(prisma);
 
   /**
    * Le corps de la PUBLICATION vit dans `./publication` (#4151) — un noyau
@@ -188,7 +190,7 @@ export function registerCoreRoutes(
    * réconcilie plutôt qu'elle ne crée) et n'emprunte au noyau que la relecture
    * des références et la composition de la réponse.
    */
-  const publicationContext = { fastify, prisma, mentionService, hashtagService };
+  const publicationContext = { fastify, prisma, mentionService, hashtagService, engagementService };
 
   // POST /posts — Create a new post
   //
