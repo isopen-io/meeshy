@@ -461,7 +461,7 @@ services:
   # interne (`gateway:3000`) et n'a pas à ressortir par Traefik. L'URL publique,
   # elle, est celle que les plateformes mettent en cache — donc le domaine.
   # `scripts/check-v3-pipeline.mjs` garde ce contrat : toute variable lue par
-  # `apps/web-v3/app` ou `apps/web-v3/lib` est déclarée ici.
+  # `apps/web-v3-old/app` ou `apps/web-v3-old/lib` est déclarée ici.
   frontend-v3:
     image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
     container_name: meeshy-frontend-v3

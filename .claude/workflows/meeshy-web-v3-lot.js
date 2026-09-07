@@ -1,7 +1,7 @@
 export const meta = {
   name: 'meeshy-web-v3-lot',
-  description: '[GELÉ 2026-09-07 — la v3 est décommissionnée, voir web-v4] Avancer la v3 web d un lot : cadrer, ouvrir les issues, implementer, revue croisee sonnet puis opus, gates, pousser sur dev',
-  whenToUse: "NE PAS INVOQUER — gelé le 2026-09-07 : apps/web-v3 est décommissionnée au profit de apps/web-v4 (voir #5491). Historiquement : reveille par la routine planifiee « Meeshy web v3 », ou lance a la main pour avancer d'un lot.",
+  description: '[GELÉ 2026-09-07 — la v3 en développement est annulée, voir apps/web-v3] Avancer la v3 web d un lot : cadrer, ouvrir les issues, implementer, revue croisee sonnet puis opus, gates, pousser sur dev',
+  whenToUse: "NE PAS INVOQUER — gelé le 2026-09-07 : apps/web-v3-old est ANNULÉE ; le chantier est apps/web-v3 (ex web-v4) (voir #5491). Historiquement : reveille par la routine planifiee « Meeshy web v3 », ou lance a la main pour avancer d'un lot.",
   phases: [
     { title: 'Cadrer', detail: "lire l'ordre calcule, mesurer ce qui est fait, choisir le lot suivant" },
     { title: 'Ouvrir', detail: 'une issue GitHub par ecran, AVANT la premiere ligne de code' },
@@ -16,7 +16,7 @@ export const meta = {
  * GELÉ — directive porteur du 2026-09-07.
  *
  * `apps/web-v3` ne reçoit plus aucun développement : elle sera décommissionnée
- * au profit de `apps/web-v4`. Ce workflow existait pour la faire avancer ; le
+ * au profit de `apps/web-v3` (ex `web-v4`). Ce workflow existait pour la faire avancer ; le
  * laisser exécutable le rendrait capable de rouvrir un chantier que la
  * direction a fermé — et il est déclenchable par une routine, donc sans qu'un
  * humain le relise au moment où il part.
@@ -27,8 +27,8 @@ export const meta = {
  * Ce qui le remplace : le milestone « La v4 remplace la v3 en production ».
  */
 throw new Error(
-  "meeshy-web-v3 est GELÉ (directive porteur 2026-09-07) : apps/web-v3 ne reçoit plus " +
-    "de développement et sera décommissionnée au profit de apps/web-v4. " +
+  "meeshy-web-v3 est GELÉ (directive porteur 2026-09-07) : apps/web-v3-old ne reçoit plus " +
+    "de développement et est annulée au profit de apps/web-v3 (ex web-v4). " +
     "Voir le milestone « La v4 remplace la v3 en production » et le § GEL DE LA V3 du CLAUDE.md racine. " +
     "Seule exception, hors de ce workflow : un incident de production ou une faille de sécurité sur la v3.",
 )
@@ -38,7 +38,7 @@ const REPO = '/home/user/meeshy'
 const D = `${REPO}/docs/product/MeeshyWebV3Design`
 
 const SOCLE = `
-TU TRAVAILLES SUR LA V3 WEB DE MEESHY, dans le monorepo ${REPO}, sur la branche dev.
+TU TRAVAILLES SUR L'ANCIENNE V3 WEB (apps/web-v3-old), ANNULEE, dans le monorepo ${REPO}, sur la branche dev.
 
 LIS CECI AVANT TOUT — ce sont les sources de verite, dans cet ordre :
 1. ${D}/conception-web-v3.md   la conception ARRETEE : stack, architecture, regle de placement,

@@ -402,15 +402,15 @@ services:
       - NEXT_PUBLIC_FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
       # LES PORTÉES DU TRAVAILLEUR DE ZONE (#4472) — l'AUTRE face de la règle
       # Traefik ci-dessous, dans le MÊME fichier pour ne pas diverger (témoin :
-      # apps/web-v3/__tests__/sw-registration.test.ts). Chaque portée doit être
+      # apps/web-v3-old/__tests__/sw-registration.test.ts). Chaque portée doit être
       # CAPTURÉE par la règle du routeur ET couverte par V3_ZONE_PREFIXES du
       # worker legacy. Jamais '/' avant l'étape 7 du § 4.9. Retirer la variable
       # désarme toute registration — le retour arrière du worker de zone.
       #
       # POSÉE SUR CE SERVICE, PAS SUR LE LEGACY. `process.env['V3_SW_PORTEES']`
-      # (`apps/web-v3/app/connecte/fil-vue.ts`) tourne dans le processus Next
+      # (`apps/web-v3-old/app/connecte/fil-vue.ts`) tourne dans le processus Next
       # de `frontend-v3-staging` — l'image `isopen/meeshy-web-v3`, celle qui
-      # embarque `apps/web-v3`. La déclarer sur `frontend-staging` (l'image
+      # embarque `apps/web-v3-old`. La déclarer sur `frontend-staging` (l'image
       # `isopen/meeshy-web`, qui ne contient pas ce code) est INERTE : c'est
       # le défaut que `scripts/check-v3-pipeline.mjs` ne pouvait pas voir tant
       # que son `ENV_CHAIN` ignorait la notation `process.env['NOM']`.
@@ -470,7 +470,7 @@ services:
       #
       # LES SIX ÉCRANS CONNECTÉS (#5075) — `/feed`, `/links`, `/search`,
       # `/notifications`, `/contacts` et `/settings` avec ses sous-écrans. Ils
-      # sont SERVIS par `apps/web-v3/app` et déjà connus du worker DÉPLOYÉ
+      # sont SERVIS par `apps/web-v3-old/app` et déjà connus du worker DÉPLOYÉ
       # (mesuré sur `https://staging.meeshy.me/sw.js` : les dix préfixes y
       # sont), donc l'ordre « servi ⇒ connu du worker ⇒ réclamé » est tenu et
       # il ne restait que la réclamation. Sans elle, aucun de ces écrans

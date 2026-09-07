@@ -8,8 +8,9 @@
  * jour où il rend une route absente du tableau, c'est le tableau qui a tort.
  *
  * Il énumère les DEUX legs, et pas seulement la v3 :
- *   apps/web    — le legacy, ce qui sert meeshy.me AUJOURD'HUI
- *   apps/web-v3 — la refonte gelée
+ *   apps/web        — le legacy, ce qui sert meeshy.me AUJOURD'HUI
+ *   apps/web-v3-old — l'ancienne refonte, ANNULÉE le 2026-09-07
+ *   apps/web-v3     — la v3.1, le chantier (ex web-v4)
  * Le risque de casser un lien existant vient du PREMIER. Cadrer l'inventaire
  * sur la v3 seule laisserait tomber `/signup/affiliate/:token`,
  * `/auth/magic-link` et les quatre adresses de conversation du legacy — dont
@@ -52,10 +53,10 @@ function routes(app) {
 }
 
 const legacy = routes('apps/web');
-const v3 = routes('apps/web-v3');
-const v4 = routes('apps/web-v4');
+const annulee = routes('apps/web-v3-old');
+const v31 = routes('apps/web-v3');
 
-const urls = new Set([...legacy, ...v3, ...v4].map((r) => r.url));
+const urls = new Set([...legacy, ...annulee, ...v31].map((r) => r.url));
 const dans = (liste, url) => liste.some((r) => r.url === url);
 
 if (process.argv.includes('--json')) {
@@ -64,20 +65,20 @@ if (process.argv.includes('--json')) {
       [...urls].sort().map((url) => ({
         url,
         legacy: dans(legacy, url),
-        v3: dans(v3, url),
-        v4: dans(v4, url),
+        annulee: dans(annulee, url),
+        v31: dans(v31, url),
       })),
       null,
       2,
     ),
   );
 } else {
-  console.log(`  apps/web     ${legacy.length} routes  (le legacy — sert meeshy.me)`);
-  console.log(`  apps/web-v3  ${v3.length} routes  (gelée)`);
-  console.log(`  apps/web-v4  ${v4.length} routes`);
-  console.log(`  union        ${urls.size} adresses distinctes\n`);
-  const orphelines = [...urls].sort().filter((u) => dans(legacy, u) && !dans(v3, u));
-  console.log(`  ${orphelines.length} routes du LEGACY sans équivalent en v3 — celles que cadrer`);
-  console.log(`  l'inventaire sur la v3 seule aurait laissé tomber :\n`);
+  console.log(`  apps/web         ${legacy.length} routes  (le legacy — sert meeshy.me)`);
+  console.log(`  apps/web-v3-old  ${annulee.length} routes  (l'ancienne refonte, ANNULÉE)`);
+  console.log(`  apps/web-v3      ${v31.length} routes  (la v3.1 — le chantier)`);
+  console.log(`  union            ${urls.size} adresses distinctes\n`);
+  const orphelines = [...urls].sort().filter((u) => dans(legacy, u) && !dans(annulee, u));
+  console.log(`  ${orphelines.length} routes du LEGACY sans équivalent dans l'ancienne refonte —`);
+  console.log(`  celles que cadrer l'inventaire sur elle seule aurait laissé tomber :\n`);
   for (const u of orphelines) console.log(`    ${u}`);
 }

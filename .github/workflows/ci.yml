@@ -179,12 +179,17 @@ jobs:
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
-      # Même partage que le type-check ci-dessous : l'amnistie de l'étape
-      # précédente est achetée par la dette du legacy. La v3 n'en a aucune, et
-      # une étape amnistiée est le SEUL signal qu'elle aurait — autant dire
-      # aucun. Elle rougit donc pour elle seule, sans toucher au reste.
-      - name: Lint (apps/web-v3 — blocking)
-        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint --filter=@meeshy/web-v3
+      # PAS D'ÉTAPE DE LINT DÉDIÉE À `@meeshy/web-v3` (2026-09-07).
+      #
+      # Elle existait pour l'ANCIENNE refonte, aujourd'hui `@meeshy/web-v3-old`
+      # et annulée. Le nom `@meeshy/web-v3` désigne désormais la NOUVELLE
+      # application (ex `web-v4`), qui n'a pas encore de configuration ESLint :
+      # rebrancher l'étape telle quelle rendrait une case VERTE qui ne linte
+      # rien — un signal pire que l'absence de signal, parce qu'on le croit.
+      #
+      # Ce qui tient la place en attendant : le type-check bloquant ci-dessous
+      # et les gates de l'application (jetons dérivés, poids). L'ESLint de la
+      # v3.1 est un suivi, pas un oubli.
 
       # Type-check, en DEUX étapes plutôt qu'une amnistie.
       #
@@ -206,8 +211,34 @@ jobs:
       # faire entrer la v3 lui offrirait un budget d'erreurs qu'elle n'a pas à
       # avoir. La v3 naît à zéro erreur, et cette étape est la seule qui puisse
       # le garantir — elle ne porte pas `continue-on-error`.
+      # `@meeshy/web-v3` désigne, depuis le 2026-09-07, la NOUVELLE application
+      # (ex `web-v4`, version 3.1.0) — l'ancienne refonte est `web-v3-old` et
+      # ne passe plus par la CI, étant annulée. La nouvelle naît à zéro erreur,
+      # donc elle reste dans l'étape BLOQUANTE et hors du ratchet gagé sur la
+      # dette du legacy.
+      #
+      # Elle n'y était pas avant ce jour : sous son ancien nom, aucun filtre de
+      # ce fichier ne la citait, et sa PR pouvait être verte avec l'application
+      # cassée. Un gate qui ne tourne pas n'est pas un gate.
       - name: Type-check (contract packages — blocking)
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent --filter=@meeshy/web-v3
+
+      # LES GATES PROPRES À LA V4 — ils ne rentrent dans aucun filtre turbo
+      # parce qu'ils ne sont pas des tâches de package : ce sont des mesures.
+      #
+      #   check:jetons  la palette dérivée n'a pas dérivé de MeeshyColors.swift
+      #   mesure-poids  la première peinture tient sous le plafond de budgets.json
+      #
+      # Le second est la raison d'être de cette application (une zone rurale,
+      # un réseau payé au mégaoctet) : le laisser hors CI reviendrait à écrire
+      # un budget que personne ne vérifie. Le build est mesuré à ~200 ms, le
+      # coût d'étape est négligeable.
+      - name: Gates web-v3 (jetons dérivés + poids de la première peinture)
+        working-directory: apps/web-v3
+        run: |
+          bun run check:jetons
+          bun run build
+          node scripts/mesure-poids.mjs
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh

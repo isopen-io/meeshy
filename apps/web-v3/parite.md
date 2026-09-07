@@ -11,7 +11,7 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-v3` | 48 | **le STAGING** (confirmé par le porteur, 2026-09-07) |
-| `apps/web-v4` | 0 | nulle part encore |
+| `apps/web-v3` | 0 | nulle part encore |
 
 **La v3 n'a jamais servi un seul écran à un utilisateur réel.**
 
@@ -54,7 +54,7 @@ Trois conséquences, et elles portent tout le reste de ce document :
 tourner et reçoit tout ce que la v4 ne réclame pas nommément.
 
 ```
-Traefik  ──▸ apps/web-v4   sur les chemins de la V4.0.0 (priority haute)
+Traefik  ──▸ apps/web-v3   sur les chemins de la V4.0.0 (priority haute)
          └─▸ apps/web      TOUT LE RESTE  (défaut, inchangé)
 ```
 

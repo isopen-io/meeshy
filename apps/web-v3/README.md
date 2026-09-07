@@ -1,4 +1,4 @@
-# apps/web-v4 — POC : une application TypeScript unique, web + Android + iOS
+# apps/web-v3 — POC : une application TypeScript unique, web + Android + iOS
 
 > **Statut : PROTOTYPE À ARBITRER.** Rien ici n'est en production, rien ne
 > remplace `apps/web-v3`, `apps/android` ni `apps/ios`. Le POC répond à une

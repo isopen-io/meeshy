@@ -1,9 +1,9 @@
 export const meta = {
   name: 'meeshy-web-v3-bout-en-bout',
   description:
-    '[GELÉ 2026-09-07 — la v3 est décommissionnée, voir web-v4] Developper la v3 web de bout en bout : dev resynchronise a chaque tour, etat des lieux ecran par ecran, travaux que personne d autre ne tient, vues neuves inscrites dans la planche et la conception, issues, une SPECIFICATION par travail, TDD ecran par ecran, temps reel, revue-correction systematique, gates, livraison — le bon modele au bon moment : fable DECRIT, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
+    '[GELÉ 2026-09-07 — la v3 en développement est annulée, voir apps/web-v3] Developper la v3 web de bout en bout : dev resynchronise a chaque tour, etat des lieux ecran par ecran, travaux que personne d autre ne tient, vues neuves inscrites dans la planche et la conception, issues, une SPECIFICATION par travail, TDD ecran par ecran, temps reel, revue-correction systematique, gates, livraison — le bon modele au bon moment : fable DECRIT, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
   whenToUse:
-    "NE PAS INVOQUER — gelé le 2026-09-07 : apps/web-v3 est décommissionnée au profit de apps/web-v4 (voir #5491 et le § GEL DE LA V3 du CLAUDE.md racine). Historiquement : lancer un tour de developpement de la v3 web (apps/web-v3) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat et le fil COMPLET, puis medias, story, comments, search, notifs, puis feeds/reels/creation/liens), puis l'ordre calcule de ordre.md. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, refaire_charte, pr, base, date, attribution, modeles }.",
+    "NE PAS INVOQUER — gelé le 2026-09-07 : apps/web-v3-old est ANNULÉE ; le chantier est apps/web-v3 (ex web-v4) (voir #5491 et le § GEL DE LA V3 du CLAUDE.md racine). Historiquement : lancer un tour de developpement de la v3 web (apps/web-v3-old) : d'abord les ecrans prioritaires du porteur (vitrine, tableau de bord, /chats, /chat et le fil COMPLET, puis medias, story, comments, search, notifs, puis feeds/reels/creation/liens), puis l'ordre calcule de ordre.md. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, refaire_charte, pr, base, date, attribution, modeles }.",
   phases: [
     { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
     { title: 'Cadrer', detail: "etat des lieux par surface (chat, chats, medias, story, comments, search, notifs…) contre dev, lecture de l'ordre et des issues, choix des travaux — fable DECRIT", model: 'fable' },
@@ -24,7 +24,7 @@ export const meta = {
  * GELÉ — directive porteur du 2026-09-07.
  *
  * `apps/web-v3` ne reçoit plus aucun développement : elle sera décommissionnée
- * au profit de `apps/web-v4`. Ce workflow existait pour la faire avancer ; le
+ * au profit de `apps/web-v3` (ex `web-v4`). Ce workflow existait pour la faire avancer ; le
  * laisser exécutable le rendrait capable de rouvrir un chantier que la
  * direction a fermé — et il est déclenchable par une routine, donc sans qu'un
  * humain le relise au moment où il part.
@@ -35,8 +35,8 @@ export const meta = {
  * Ce qui le remplace : le milestone « La v4 remplace la v3 en production ».
  */
 throw new Error(
-  "meeshy-web-v3 est GELÉ (directive porteur 2026-09-07) : apps/web-v3 ne reçoit plus " +
-    "de développement et sera décommissionnée au profit de apps/web-v4. " +
+  "meeshy-web-v3 est GELÉ (directive porteur 2026-09-07) : apps/web-v3-old ne reçoit plus " +
+    "de développement et est annulée au profit de apps/web-v3 (ex web-v4). " +
     "Voir le milestone « La v4 remplace la v3 en production » et le § GEL DE LA V3 du CLAUDE.md racine. " +
     "Seule exception, hors de ce workflow : un incident de production ou une faille de sécurité sur la v3.",
 )

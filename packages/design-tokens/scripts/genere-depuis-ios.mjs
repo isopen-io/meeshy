@@ -4,7 +4,7 @@
  *
  * Pourquoi ce script existe : la v4 web doit reprendre l'interface iOS
  * (directive porteur 2026-09-06, #5444). Elle a d'abord recopié la palette iOS
- * à la main dans `apps/web-v4/src/styles/ios.css` — c'est-à-dire une SECONDE
+ * à la main dans `apps/web-v3/src/styles/ios.css` — c'est-à-dire une SECONDE
  * TABLE, ce que la charte interdit (§ 12.5 règle 1), et le défaut exact que
  * #5445 demande de solder : une couleur corrigée d'un côté dérive de l'autre
  * en SILENCE, chaque table restant cohérente avec elle-même.

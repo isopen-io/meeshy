@@ -1,8 +1,8 @@
 /* Schéma SOMBRE — le rendu de référence de la v3 (la planche est « nocturne »).
    Porté par :root SANS classe : un navigateur qui n'exécute aucun JavaScript
    n'a pas de classe posée et doit tout de même être servi. La coquille racine
-   rend `<html class="dark">` côté SERVEUR (apps/web-v3/app/layout.tsx) et le
-   moteur de thème (apps/web-v3/app/theme-script.tsx) ne fait que CORRIGER
+   rend `<html class="dark">` côté SERVEUR (apps/web-v3-old/app/layout.tsx) et le
+   moteur de thème (apps/web-v3-old/app/theme-script.tsx) ne fait que CORRIGER
    cette classe ; aucune requête de média n'apparaît ici — un jeton ne bascule
    jamais tout seul.
 

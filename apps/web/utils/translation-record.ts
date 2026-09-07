@@ -5,7 +5,7 @@
  * L'IMPLÉMENTATION A DÉMÉNAGÉ dans `@meeshy/shared/utils/conversation-helpers`,
  * à côté du résolveur qu'elle sert. Ce fichier n'est plus qu'une ADRESSE : ses
  * deux consommateurs (`messages-display.tsx`, `use-message-display.ts`) gardent
- * la leur, et `apps/web-v3` — la seconde application qui lit des messages —
+ * la leur, et `apps/web-v3-old` — la seconde application qui lit des messages —
  * appelle la même fonction plutôt que d'en recopier une.
  *
  * La mention d'origine disait « SSOT UNIQUE de cet adaptateur CÔTÉ WEB ». Elle
