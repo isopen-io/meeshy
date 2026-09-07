@@ -400,6 +400,17 @@ jobs:
       security-events: write
 
     steps:
+      # LE TAG D'UNE BRANCHE S'ASSAINIT, parce qu'un nom de branche n'est pas un
+      # tag Docker. `docker/metadata-action` le fait à la CONSTRUCTION (un `/`
+      # devient `-`) ; cette étape-ci prenait `github.ref_name` BRUT, et
+      # cherchait donc un tag qui n'avait jamais été poussé.
+      #
+      # Le symptôme ne disait pas ça : Trivy rendait « could not parse
+      # reference: isopen/meeshy-web-v31:claude/v3-… » — une erreur de SYNTAXE
+      # sur le nom, pas une image introuvable. Et il ne se voyait ni sur `main`
+      # ni sur `dev`, dont les tags sont écrits en dur juste au-dessus : il
+      # fallait un déclenchement manuel depuis une branche à `/` dans son nom,
+      # c'est-à-dire toutes les branches `claude/*`.
       - name: Determine scan tag
         id: scan-tag
         run: |
@@ -408,7 +419,11 @@ jobs:
           elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
             echo "tag=staging${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           else
-            echo "tag=${{ github.ref_name }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
+            # Même transformation que `docker/metadata-action` : tout ce qui
+            # n'est pas alphanumérique, point, tiret ou souligné devient un
+            # tiret.
+            SLUG=$(printf '%s' "${{ github.ref_name }}" | tr -c 'a-zA-Z0-9._-' '-')
+            echo "tag=${SLUG}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Security scan
