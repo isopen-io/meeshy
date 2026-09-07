@@ -15,6 +15,7 @@ import {
   type ServerEventName,
   type ServerEventPayload,
 } from '../socketio/serverEmit';
+import { logWarn } from './logger';
 
 type SocketIOLike = ServerEmitIO;
 
@@ -85,14 +86,14 @@ export function broadcastToUser<E extends ServerEventName>(
 ): boolean {
   const io = resolveSocketIO(fastify);
   if (!io) {
-    fastify.log.warn({ userId, event }, 'broadcastToUser: Socket.IO layer unavailable');
+    logWarn(fastify.log, `broadcastToUser: Socket.IO layer unavailable (userId=${userId}, event=${String(event)})`);
     return false;
   }
   try {
     emitServerEvent(io.to(ROOMS.user(userId)), event, payload);
     return true;
   } catch (error) {
-    fastify.log.warn({ userId, event, err: error }, 'broadcastToUser: emit failed');
+    logWarn(fastify.log, `broadcastToUser: emit failed (userId=${userId}, event=${String(event)})`, error);
     return false;
   }
 }

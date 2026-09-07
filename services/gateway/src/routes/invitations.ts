@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../utils/logger';
+import { logError, logWarn } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { createInvitationRateLimitConfig } from '../middleware/rate-limit';
@@ -53,7 +53,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
           language: recipientLanguage(user, 'fr'),
         });
       } else {
-        fastify.log.warn('EmailService not available, invitation not sent');
+        logWarn(fastify.log, 'EmailService not available, invitation not sent');
       }
 
       return sendSuccess(reply, { email, sentAt: new Date().toISOString() }, { statusCode: 201 });

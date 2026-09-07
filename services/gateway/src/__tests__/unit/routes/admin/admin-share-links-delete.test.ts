@@ -39,7 +39,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {

@@ -96,7 +96,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 // ─── Mocks — dépendances lourdes de « moi » ──────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 jest.mock('../../../utils/socket-broadcast', () => ({ broadcastToUser: jest.fn() }));
 jest.mock('../../../routes/me/delete-account', () => ({
   deleteAccountRoutes: jest.fn(async () => {}),

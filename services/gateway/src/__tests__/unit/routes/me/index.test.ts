@@ -18,7 +18,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../../utils/socket-broadcast', () => ({ broadcastToUser: jest.fn() }));
 

@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

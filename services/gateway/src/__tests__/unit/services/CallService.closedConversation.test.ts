@@ -23,6 +23,7 @@ import { CallService } from '../../../services/CallService';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

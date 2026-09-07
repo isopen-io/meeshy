@@ -10,7 +10,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const mockIsValidMongoId = jest.fn<any>((id: string) => /^[0-9a-f]{24}$/i.test(id));
 

@@ -58,7 +58,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 import { getUserByEmail, getUserByPhone, publicUserSelect } from '../../../../routes/users/profile';
 import { servirProfilPublic, publicProfileSchema } from '../../../../routes/users/public-profile';

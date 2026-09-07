@@ -126,6 +126,7 @@ jest.mock('../../validation/call-schemas', () => ({
 }));
 
 jest.mock('../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

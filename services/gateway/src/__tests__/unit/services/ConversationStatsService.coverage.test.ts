@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }
 }));
 

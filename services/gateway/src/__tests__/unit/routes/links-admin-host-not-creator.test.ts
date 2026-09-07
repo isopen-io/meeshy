@@ -4,7 +4,7 @@ import { findFirstHonouringWhere as findFirstHonouringWhereShared } from '../../
 
 // ─── Module mocks (hoisted before imports) ───────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn<any>(() => async (req: any) => {

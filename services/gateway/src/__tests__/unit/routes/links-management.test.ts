@@ -21,7 +21,7 @@ const mockUpdateLinkParse = jest.fn<any>((body: any) => body);
 
 // ─── Module mocks (hoisted before imports) ───────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../utils/sanitize', () => ({
   SecuritySanitizer: { sanitizeText: jest.fn<any>((t: string) => t) },

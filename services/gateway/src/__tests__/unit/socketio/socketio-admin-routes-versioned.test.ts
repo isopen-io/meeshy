@@ -53,6 +53,7 @@ jest.mock('../../../services/message-translation/MessageTranslationService', () 
   MessageTranslationService: jest.fn(),
 }));
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
   logError: jest.fn(),
 }));

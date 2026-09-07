@@ -69,7 +69,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }) },
 }));
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 jest.mock('../../../utils/socket-broadcast', () => ({ broadcastToUser: jest.fn() }));
 jest.mock('../../../routes/me/delete-account', () => ({ deleteAccountRoutes: jest.fn(async () => {}) }));
 jest.mock('../../../routes/me/export', () => ({ dataExportRoutes: jest.fn(async () => {}) }));

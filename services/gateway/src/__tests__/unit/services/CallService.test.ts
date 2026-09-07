@@ -62,6 +62,7 @@ import { buildCallSummaryWithMetadata } from '@meeshy/shared/utils/call-summary'
 
 // Mock logger to avoid console noise during tests
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

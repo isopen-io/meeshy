@@ -12,6 +12,7 @@ import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData, type AgentAdminEve
 import { getCacheStore } from '../../services/CacheStore';
 import { AgentHttpClient } from '../../services/AgentHttpClient';
 import type { InvalidationStatus, AgentRouteDeps } from './agent-shared';
+import { logWarn } from '../../utils/logger';
 import { registerAgentObservabilityRoutes } from './agent-observability';
 import { registerAgentConfigsRoutes } from './agent-configs';
 import { registerAgentRolesRoutes } from './agent-roles';
@@ -54,7 +55,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     } else if (agentClient) {
       // Only warn if we tried HTTP and it failed — missing AGENT_HOST is
       // expected in some deployments and not worth a warning per request.
-      fastify.log.warn({ err: http.reason }, '[AgentConfig] HTTP cache invalidation failed');
+      logWarn(fastify.log, '[AgentConfig] HTTP cache invalidation failed', http.reason);
     }
     // "Succeeded" means at least one agent instance actually received the
     // invalidation. Redis PUBLISH returning 0 means the publish itself was
@@ -71,7 +72,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   function notifyAdminDashboards(kind: AgentAdminEventKind, conversationId?: string): void {
     const payload: AgentAdminEventData = conversationId ? { kind, conversationId } : { kind };
     getCacheStore().publish(AGENT_ADMIN_EVENT_CHANNEL, JSON.stringify(payload)).catch((err) =>
-      fastify.log.warn({ err }, '[AgentAdmin] admin-event publish failed'));
+      logWarn(fastify.log, '[AgentAdmin] admin-event publish failed', err));
   }
 
   const deps: AgentRouteDeps = { agentClient, broadcastInvalidation, notifyAdminDashboards };

@@ -63,6 +63,7 @@ jest.mock('../../../middleware/rate-limit', () => ({
 }));
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn<any>(),
     warn: jest.fn<any>(),

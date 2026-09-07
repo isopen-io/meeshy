@@ -14,7 +14,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../utils/sanitize', () => ({
   SecuritySanitizer: {

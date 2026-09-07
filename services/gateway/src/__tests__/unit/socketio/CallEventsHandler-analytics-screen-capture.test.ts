@@ -54,6 +54,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
 
 const mockLoggerInfo = jest.fn();
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: mockLoggerInfo,
     debug: jest.fn(),

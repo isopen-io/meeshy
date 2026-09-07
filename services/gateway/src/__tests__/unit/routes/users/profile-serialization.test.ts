@@ -31,6 +31,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 // left unmocked so `userSchema` and `formatUserResponse` run for real.)
 
 jest.mock('../../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logError: jest.fn(),
 }));
 

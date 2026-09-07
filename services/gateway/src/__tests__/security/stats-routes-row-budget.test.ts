@@ -46,7 +46,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-jest.mock('../../utils/logger', () => ({ logError: jest.fn(), logInfo: jest.fn() }));
+jest.mock('../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn(), logInfo: jest.fn() }));
 jest.mock('../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }) },
 }));

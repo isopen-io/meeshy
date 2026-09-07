@@ -22,7 +22,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
 }));

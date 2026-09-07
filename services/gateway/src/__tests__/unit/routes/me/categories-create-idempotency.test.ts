@@ -20,7 +20,7 @@ import { registerClientMutationIdHook } from '../../../../middleware/clientMutat
 import { meCategoriesRoutes } from '../../../../routes/me/categories';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const USER_ID = '68a000000000000000000001';
 const CMID_A = 'cmid_550e8400-e29b-41d4-a716-446655440001';

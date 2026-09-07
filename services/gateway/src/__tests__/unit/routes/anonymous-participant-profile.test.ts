@@ -22,7 +22,7 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const mockCanAccess = jest.fn<any>();
 jest.mock('../../../routes/conversations/utils/access-control', () =>

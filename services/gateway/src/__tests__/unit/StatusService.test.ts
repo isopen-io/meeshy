@@ -16,6 +16,7 @@ import { AttachmentService } from '../../services/attachments';
 
 // Mock du logger pour éviter les logs pendant les tests
 jest.mock('../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

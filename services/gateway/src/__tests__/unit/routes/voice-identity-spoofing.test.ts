@@ -38,6 +38,7 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 // ─── Module mocks (must be declared before imports) ──────────────────────────
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     debug: jest.fn(),

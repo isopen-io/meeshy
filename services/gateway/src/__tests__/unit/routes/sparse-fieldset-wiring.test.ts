@@ -33,7 +33,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../utils/rate-limiter.js', () => ({
   createCustomRateLimiter: () => ({ middleware: () => async () => undefined }),

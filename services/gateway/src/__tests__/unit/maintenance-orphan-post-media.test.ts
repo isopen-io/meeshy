@@ -20,6 +20,7 @@ import type { AttachmentService } from '../../services/attachments';
 import { unclaimedMediaWhere } from '../../services/posts/mediaOwnership';
 
 jest.mock('../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 

@@ -17,6 +17,7 @@ import multipart from '@fastify/multipart';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 jest.mock('../../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 

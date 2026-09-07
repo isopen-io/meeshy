@@ -21,6 +21,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 }));
 
 jest.mock('../../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logError: jest.fn(),
 }));
 

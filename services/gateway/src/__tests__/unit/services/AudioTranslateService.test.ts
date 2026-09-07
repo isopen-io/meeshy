@@ -10,6 +10,7 @@ import { EventEmitter } from 'events';
 
 // ─── logger mock ────────────────────────────────────────────────────────────
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
 

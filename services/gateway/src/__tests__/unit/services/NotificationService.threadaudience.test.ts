@@ -80,6 +80,7 @@ jest.mock('firebase-admin/messaging', () => ({
 jest.mock('fs', () => ({ existsSync: jest.fn().mockReturnValue(false), readFileSync: jest.fn() }));
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 

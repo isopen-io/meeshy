@@ -33,7 +33,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() })) },
 }));
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 jest.mock('../../../../utils/normalize', () => ({
   normalizeEmail: (e: string) => e.toLowerCase(),
   normalizePhoneNumber: (p: string) => `+33${p.replace(/\D/g, '').slice(-9)}`,

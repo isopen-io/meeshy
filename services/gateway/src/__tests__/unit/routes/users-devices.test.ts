@@ -10,7 +10,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // ─── Module mocks (must be before imports) ────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {

@@ -12,7 +12,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 

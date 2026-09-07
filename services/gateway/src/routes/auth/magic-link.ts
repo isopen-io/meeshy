@@ -14,6 +14,7 @@ import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { createUnifiedAuthMiddleware, findTrustedSession} from '../../middleware/auth';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { logWarn } from '../../utils/logger';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { disconnectSession } from '../../socketio/disconnectSession';
@@ -633,7 +634,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         io: fastify.socketIOHandler?.getManager?.()?.getIO(),
         userId,
         sessionId,
-        onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket cut failed on session revoke'),
+        onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on session revoke', error),
       });
 
       logger.info(`[AUTH] ✅ Session révoquée sessionId=${sessionId}`);
@@ -712,7 +713,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           userId,
           sessionId,
           message: 'This device was signed out from another device.',
-          onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket cut failed on revoke-others'),
+          onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on revoke-others', error),
         });
       }
 

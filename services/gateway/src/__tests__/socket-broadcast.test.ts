@@ -83,10 +83,15 @@ describe('broadcastToUser', () => {
       userId: 'u',
       categoryId: 'cat-1',
     })).toBe(false);
+    // `logWarn()` (utils/logger.ts, #5415) always writes through a real
+    // console.warn AND serves the received logger — so `fastify.log.warn` is
+    // called with a plain string carrying the context, not the Pino
+    // `({...}, message)` shape.
     expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u', event: SERVER_EVENTS.CATEGORY_DELETED }),
       expect.stringContaining('Socket.IO layer unavailable'),
     );
+    expect((fastify.log.warn as jest.Mock).mock.calls[0][0]).toContain('userId=u');
+    expect((fastify.log.warn as jest.Mock).mock.calls[0][0]).toContain(`event=${SERVER_EVENTS.CATEGORY_DELETED}`);
   });
 
   test('swallows emit errors, returns false, and logs the failure', () => {
@@ -102,10 +107,9 @@ describe('broadcastToUser', () => {
       }),
     });
     expect(broadcastToUser(fastify, 'u', 'x', {})).toBe(false);
-    expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u', event: 'x', err: expect.any(Error) }),
-      expect.stringContaining('emit failed'),
-    );
+    const calls = (fastify.log.warn as jest.Mock).mock.calls.flat();
+    expect(calls.some((arg) => typeof arg === 'string' && arg.includes('emit failed') && arg.includes('userId=u') && arg.includes('event=x'))).toBe(true);
+    expect(calls).toContain('boom');
   });
 
   test('resolveSocketIO returns null without handler', () => {

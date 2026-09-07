@@ -12,6 +12,7 @@ import { MaintenanceService } from '../../services/MaintenanceService';
 import type { AttachmentService } from '../../services/attachments';
 
 jest.mock('../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

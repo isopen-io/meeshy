@@ -63,7 +63,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 // Aucun handler n'est exécuté ici — seuls les effets de bord du montage
 // (constructeurs de services, fabrique de middleware) doivent tenir debout.
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn() }) },

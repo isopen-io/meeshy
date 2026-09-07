@@ -18,7 +18,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const createReport = jest.fn<any>();
 

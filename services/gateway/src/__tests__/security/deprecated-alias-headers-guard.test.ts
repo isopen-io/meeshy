@@ -355,7 +355,7 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
 // PARTIE 3 — COMPORTEMENT : les en-têtes sortent RÉELLEMENT sur le fil
 // ─────────────────────────────────────────────────────────────────────────
 
-jest.mock('../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const mockCreateReport = jest.fn<any>().mockResolvedValue({ id: 'rpt-1', status: 'pending' });
 jest.mock('../../services/admin/report.service', () => ({

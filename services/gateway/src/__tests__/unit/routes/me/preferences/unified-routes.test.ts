@@ -27,7 +27,7 @@ jest.mock('../../../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn(),
 }));
 
-jest.mock('../../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 jest.mock('../../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }),

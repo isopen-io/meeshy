@@ -12,6 +12,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { z } from 'zod';
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 

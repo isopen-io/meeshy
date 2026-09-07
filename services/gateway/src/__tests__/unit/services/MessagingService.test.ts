@@ -99,6 +99,7 @@ jest.mock('../../../services/MessageReadStatusService', () => ({
 
 // Mock logger
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     debug: jest.fn(),

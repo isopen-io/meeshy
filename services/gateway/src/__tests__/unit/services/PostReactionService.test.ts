@@ -37,6 +37,7 @@ jest.mock('@meeshy/shared/types/reaction', () => ({
 
 // Mock logger
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     debug: jest.fn(),

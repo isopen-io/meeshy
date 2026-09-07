@@ -46,7 +46,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
     child: jest.fn(() => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() })),
   },
 }));
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const mockResolveConversationId = jest.fn<any>();
 jest.mock('../../../utils/conversation-id-cache', () => ({

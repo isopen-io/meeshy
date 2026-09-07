@@ -43,6 +43,7 @@ import path from 'path';
 // ─── Mocks — identiques à ceux de friends-routes.test.ts ─────────────────────
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logError: jest.fn(),
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));

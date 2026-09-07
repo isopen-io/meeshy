@@ -29,7 +29,7 @@
 import { describe, it, expect, jest, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../utils/sanitize', () => ({
   SecuritySanitizer: {

@@ -12,7 +12,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 jest.mock('../../../utils/pagination', () => ({
   validatePagination: jest.fn<any>().mockReturnValue({ offset: 0, limit: 10 }),
   buildPaginationMeta: jest.fn<any>().mockReturnValue({ total: 0, limit: 10, offset: 0 }),

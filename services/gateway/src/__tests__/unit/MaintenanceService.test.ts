@@ -16,6 +16,7 @@ import { AttachmentService } from '../../services/attachments';
 
 // Mock du logger
 jest.mock('../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

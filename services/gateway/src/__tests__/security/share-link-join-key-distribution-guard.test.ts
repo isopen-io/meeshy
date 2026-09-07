@@ -111,7 +111,7 @@ jest.mock('../../middleware/auth', () => ({
   UnifiedAuthContext: {},
   UnifiedAuthRequest: {},
 }));
-jest.mock('../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 import { userAdminRoutes } from '../../routes/admin/users';
 import { registerContentShareLinkRoutes } from '../../routes/admin/content-share-links';

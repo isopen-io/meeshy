@@ -25,6 +25,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
 }));
 
 jest.mock('../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

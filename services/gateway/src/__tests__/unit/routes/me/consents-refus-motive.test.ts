@@ -26,7 +26,7 @@ import {
   CONSENT_POLICY_VERSION,
 } from '../../../../routes/me/consents';
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const USER_ID = '68a000000000000000000001';
 

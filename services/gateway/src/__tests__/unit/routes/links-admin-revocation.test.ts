@@ -17,7 +17,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify from 'fastify';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn<any>(() => async (req: any) => {

@@ -10,7 +10,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { isScanActive } from '@meeshy/shared/types/agent';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendBadRequest, sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
@@ -425,9 +425,10 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
 
       const invalidationStatus = await broadcastInvalidation({ conversationId });
       if (!invalidationStatus.anyChannelSucceeded) {
-        fastify.log.warn(
-          { conversationId, invalidationStatus },
-          '[AgentConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 5 min',
+        logWarn(
+          fastify.log,
+          `[AgentConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 5 min (conversationId=${conversationId})`,
+          invalidationStatus,
         );
       }
 

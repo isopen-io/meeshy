@@ -162,6 +162,75 @@ describe('logWarn', () => {
     logWarn(brokenLogger, 'msg', 'w');
     expect(warnSpy).toHaveBeenCalled();
   });
+
+  it('does not print the literal "undefined" when there is no cause', () => {
+    const mockLogger = { warn: jest.fn() };
+    logWarn(mockLogger, 'heads-up');
+    expect(mockLogger.warn).toHaveBeenCalledWith('heads-up');
+    expect(mockLogger.warn).not.toHaveBeenCalledWith('undefined');
+    expect(warnSpy.mock.calls.flat().join(' ')).not.toContain('undefined');
+  });
+});
+
+// ─── Visibilité en production (logWarn) ──────────────────────────────────────
+//
+// Même défaut que `logError` avant #3617, jamais corrigé jusqu'à #5415 :
+// `logWarn(fastify.log, …)` déléguait au logger REÇU, qui sous `logger: false`
+// est le no-op d'`abstract-logging` — ses méthodes existent, ne rejettent pas,
+// et n'écrivent rien. Tout avertissement de route était donc perdu.
+
+describe('logWarn — la ligne SORT, quel que soit le logger reçu', () => {
+  let warnSpy;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  /** Réplique fidèle de `fastify.log` sous `logger: false`. */
+  const noopFastifyLog = () => ({
+    error: function noop() {},
+    warn: function noop() {},
+    info: function noop() {},
+    debug: function noop() {},
+  });
+
+  it('écrit malgré un logger muet — le cas des 2 anciens appelants directs', () => {
+    logWarn(noopFastifyLog(), 'Truncated batch', new Error('too many contacts'));
+
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('nomme le contexte ET la cause', () => {
+    logWarn(noopFastifyLog(), 'Truncated batch', new Error('too many contacts'));
+
+    const printed = warnSpy.mock.calls.flat().join(' ');
+    expect(printed).toContain('Truncated batch');
+    expect(printed).toContain('too many contacts');
+  });
+
+  it('écrit aussi sans aucun logger', () => {
+    logWarn(null, 'heads-up', 'w');
+
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('écrit aussi sans aucune cause (garde applicative, pas exception)', () => {
+    logWarn(noopFastifyLog(), 'EmailService not available, invitation not sent');
+
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('continue de servir un vrai logger quand on lui en donne un', () => {
+    const realLogger = { warn: jest.fn() };
+
+    logWarn(realLogger, 'attention', new Error('minor'));
+
+    expect(realLogger.warn).toHaveBeenCalledWith('attention');
+  });
 });
 
 // ─── Visibilité en production ────────────────────────────────────────────────

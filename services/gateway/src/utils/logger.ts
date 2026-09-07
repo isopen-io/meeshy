@@ -106,20 +106,55 @@ export function logError(loggerOrMessage: any, message?: string | unknown, error
   }
 }
 
-export function logWarn(logger: any, message: string, error: unknown | any): void {
-  try {
-    if (logger && typeof logger.warn === 'function') {
-      logger.warn(message);
-      if (error instanceof Error) {
-        logger.warn(error.message);
-      } else {
-        logger.warn(String(error));
+/**
+ * Trace un avertissement — et la fait SORTIR.
+ *
+ * `logWarn()` portait EXACTEMENT le défaut que `logError()` portait avant
+ * #3617 : elle appelait `logger.warn(message)` sur le logger REÇU et ne
+ * retombait sur `console.warn` que si ce logger ne savait pas émettre — or
+ * `fastify.log`/`request.log` (le no-op d'`abstract-logging` sous
+ * `logger: false`) SAIT émettre, il n'écrit juste rien. `logWarn(fastify.log,
+ * …)` était donc silencieusement inefficace pour la quasi-totalité des
+ * appelants (#5415).
+ *
+ * La ligne part désormais TOUJOURS par le `logger` de ce module, qui écrit
+ * sur la console — le logger reçu est servi EN PLUS quand il sait émettre,
+ * exactement comme `logError()`.
+ */
+export function logWarn(loggerOrMessage: any, message?: string | unknown, error?: unknown): void {
+  // Même signature à deux arguments que `logError` (`logWarn('message', cause)`,
+  // sans logger) : le message humain arrive en position `loggerOrMessage`.
+  const calledWithoutLogger = typeof loggerOrMessage === 'string';
+  const sink = calledWithoutLogger ? null : loggerOrMessage;
+  const text = calledWithoutLogger ? loggerOrMessage : String(message ?? '');
+  const cause = calledWithoutLogger ? message : error;
+
+  const hasCause = cause !== undefined && cause !== null;
+  const detail = cause instanceof Error
+    ? `${cause.message}${cause.stack ? `\n${cause.stack}` : ''}`
+    : hasCause ? String(cause) : undefined;
+
+  if (detail !== undefined) {
+    logger.warn(text, detail);
+  } else {
+    // Un avertissement sans cause associée (garde applicative, pas exception)
+    // n'a rien à ajouter — ne pas imprimer littéralement "undefined".
+    logger.warn(text);
+  }
+
+  if (sink && typeof sink.warn === 'function') {
+    try {
+      sink.warn(text);
+      if (cause instanceof Error) {
+        sink.warn(cause.message);
+        sink.warn(cause.stack);
+      } else if (hasCause) {
+        sink.warn(String(cause));
       }
-    } else {
-      console.warn(message, error);
+    } catch {
+      // Un logger d'appelant qui casse ne doit pas emporter la trace : la
+      // ligne est déjà partie par `logger.warn` ci-dessus.
     }
-  } catch (e) {
-    console.warn(message, error);
   }
 }
 

@@ -13,6 +13,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 jest.mock('../../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logError: jest.fn(),
 }));
 

@@ -55,7 +55,7 @@ jest.mock('../../../../utils/logger-enhanced.js', () => ({
   },
 }));
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 // Seul `getOptionalAuth` est substitué : il pose directement un authContext
 // ANONYME, sans construire le vrai middleware JWT/session. `gateProfilePresence`

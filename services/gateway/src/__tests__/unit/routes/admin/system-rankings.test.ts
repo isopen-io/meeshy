@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, jest } from '@je
 
 // ── Module mocks (must precede all imports that reference these modules) ──────
 jest.mock('../../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logError: jest.fn(),
 }));
 

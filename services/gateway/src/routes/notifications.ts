@@ -20,7 +20,7 @@ import {
   encodePageCursor,
   type CursorSort,
 } from '../utils/cursor-pagination';
-import { logError } from '../utils/logger.js';
+import { logError, logWarn } from '../utils/logger.js';
 
 /**
  * L'ordre TOTAL de l'inbox, DÉCLARÉ une fois — et ce que le curseur encode.
@@ -772,7 +772,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Admin access required');
         }
 
-        fastify.log.warn({ user }, 'Admin clearing all notifications');
+        logWarn(fastify.log, `Admin clearing all notifications (userId=${user.userId})`);
 
         const result = await fastify.prisma.notification.deleteMany({});
 

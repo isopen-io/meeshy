@@ -63,7 +63,7 @@ jest.mock('../../services/admin/permissions.service', () => ({
     }),
   },
 }));
-jest.mock('../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 import { registerContentShareLinkRoutes } from '../../routes/admin/content-share-links';
 import { SHARE_LINK_JOIN_KEY_COLUMNS } from '../../routes/conversations/link-admission';

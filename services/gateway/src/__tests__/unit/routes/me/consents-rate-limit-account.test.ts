@@ -17,7 +17,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { meConsentsRoutes } from '../../../../routes/me/consents';
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 const EMPTY_COLUMNS = {
   dataProcessingConsentAt: null,

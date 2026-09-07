@@ -14,6 +14,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 jest.mock('../../../../utils/logger', () => ({
+  logWarn: jest.fn(),
   logError: jest.fn(),
   logInfo: jest.fn(),
 }));

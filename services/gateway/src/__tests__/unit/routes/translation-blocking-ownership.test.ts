@@ -31,7 +31,7 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
   MessageTranslationService: jest.fn().mockImplementation(() => ({})),

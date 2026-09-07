@@ -56,7 +56,7 @@ import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import jwt from 'jsonwebtoken';
 
-jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 import { invitationRoutes } from '../../../routes/invitations';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';

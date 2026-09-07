@@ -19,7 +19,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({ logWarn: jest.fn(), logError: jest.fn() }));
 
 jest.mock('../../../../middleware/admin-permissions.middleware', () => ({
   requireAnalyticsPermission: jest.fn().mockImplementation(async () => {}),
