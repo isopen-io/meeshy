@@ -266,23 +266,32 @@ describe('GET /posts/:postId/media/:mediaId/export', () => {
 
     it('déduplique deux requêtes concurrentes pour la MÊME variante — une seule génération', async () => {
       const destPath = watermarkedVariantPath(uploadBasePath, MEDIA_ID, '.jpg');
+      // #5583 — `ensureWatermarkedVariant` réserve sa place dans
+      // `generationsInFlight` de façon SYNCHRONE, avant tout appel I/O
+      // (voir son commentaire dans `media-export.ts`). Attendre un signal
+      // explicite — « la génération a démarré » — plutôt qu'un délai
+      // arbitraire rend ce témoin déterministe : la seconde requête ne part
+      // qu'une fois la réservation de la première GARANTIE posée, quelle que
+      // soit la charge de la machine qui l'exécute.
+      let startedGeneration: () => void = () => {};
+      const generationStarted = new Promise<void>((resolve) => {
+        startedGeneration = resolve;
+      });
       let resolveGeneration: () => void = () => {};
-      applyImageWatermark.mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveGeneration = () => {
-              fs.mkdir(path.dirname(destPath), { recursive: true })
-                .then(() => fs.writeFile(destPath, 'once'))
-                .then(() => resolve());
-            };
-          }),
-      );
+      applyImageWatermark.mockImplementationOnce(() => {
+        startedGeneration();
+        return new Promise<void>((resolve) => {
+          resolveGeneration = () => {
+            fs.mkdir(path.dirname(destPath), { recursive: true })
+              .then(() => fs.writeFile(destPath, 'once'))
+              .then(() => resolve());
+          };
+        });
+      });
 
       const { app } = await buildApp({ uploadBasePath });
       const first = app.inject({ method: 'GET', url: `/posts/${POST_ID}/media/${MEDIA_ID}/export` });
-      // Laisse la première requête entrer dans `ensureWatermarkedVariant` et
-      // poser sa promesse dans `generationsInFlight` avant que la seconde ne parte.
-      await new Promise((r) => setTimeout(r, 10));
+      await generationStarted;
       const second = app.inject({ method: 'GET', url: `/posts/${POST_ID}/media/${MEDIA_ID}/export` });
 
       resolveGeneration();
