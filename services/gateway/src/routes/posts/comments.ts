@@ -406,14 +406,18 @@ export function registerCommentRoutes(
         }).catch((err) => enhancedLogger.error('comment audio processing failed', err));
       }
 
-      // Axe d'engagement « commentaire texte » (#5537) — un commentaire SANS
-      // pièce jointe audio crédite `comment.text`. Le pendant audio (#5536)
-      // créditera `comment.audio` sur la branche opposée de ce même test —
-      // les deux axes sont le complément l'un de l'autre.
+      // Axes d'engagement « commentaire texte » (#5537) et « comment.audio »
+      // (#5536) — mutuellement exclusifs, sur la même distinction que le
+      // pipeline audio ci-dessus : un commentaire SANS pièce jointe audio
+      // crédite `comment.text`, un commentaire AVEC crédite `comment.audio`.
       if (!linkedMedia?.mimeType?.startsWith('audio/')) {
         engagementService
           .recordActivity(authContext.registeredUser.id, 'comment.text')
           .catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: engagement comment.text failed', { err }));
+      } else {
+        engagementService
+          .recordActivity(authContext.registeredUser.id, 'comment.audio')
+          .catch((err) => enhancedLogger.error('comment.audio engagement recording failed', err));
       }
 
       const newCommentMentionedUsers = parsed.data.content
