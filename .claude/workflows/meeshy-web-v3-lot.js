@@ -1,7 +1,7 @@
 export const meta = {
   name: 'meeshy-web-v3-lot',
   description: '[GELÉ 2026-09-07 — la v3 est décommissionnée, voir web-v4] Avancer la v3 web d un lot : cadrer, ouvrir les issues, implementer, revue croisee sonnet puis opus, gates, pousser sur dev',
-  whenToUse: "Reveille par la routine planifiee « Meeshy web v3 », ou lance a la main pour avancer d'un lot.",
+  whenToUse: "NE PAS INVOQUER — gelé le 2026-09-07 : apps/web-v3 est décommissionnée au profit de apps/web-v4 (voir #5491). Historiquement : reveille par la routine planifiee « Meeshy web v3 », ou lance a la main pour avancer d'un lot.",
   phases: [
     { title: 'Cadrer', detail: "lire l'ordre calcule, mesurer ce qui est fait, choisir le lot suivant" },
     { title: 'Ouvrir', detail: 'une issue GitHub par ecran, AVANT la premiere ligne de code' },
