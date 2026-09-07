@@ -7,18 +7,28 @@
 
 ## Ce que la mesure a rendu, et qui change le cadrage de #5492
 
-| application | routes | ce qu'elle sert en production |
+| application | routes | où elle tourne |
 |---|---|---|
-| `apps/web` (legacy) | **80** | **100 % du trafic utilisateur** |
-| `apps/web-v3` | 48 | **`/__v3/_next`, `/__v3/rt/`, `/__v3/sw` — des ACTIFS, aucune page** |
-| `apps/web-v4` | 0 | rien encore |
+| `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
+| `apps/web-v3` | 48 | **le STAGING** (confirmé par le porteur, 2026-09-07) |
+| `apps/web-v4` | 0 | nulle part encore |
 
-**La v3 n'a jamais servi un seul écran à un utilisateur réel.** Sa règle Traefik
-(`docker-compose.prod.yml`, routeur `frontend-v3`) ne publie que trois préfixes
-d'actifs, et le commentaire qui l'accompagne l'écrit noir sur blanc : *« `next
-build` n'émet aujourd'hui aucune PAGE d'App Router (seul `/healthz`) … un chemin
-PUBLIC prioritaire sur le legacy ne se publie pas avant que la zone ait de quoi
-y répondre. »*
+**La v3 n'a jamais servi un seul écran à un utilisateur réel.**
+
+> **Correction du 2026-09-07.** Une première version de ce document déduisait le
+> déploiement de `docker-compose.prod.yml`, qui décrit un routeur `frontend-v3`
+> publiant trois préfixes d'actifs (`/__v3/_next`, `/__v3/rt/`, `/__v3/sw`). Le
+> porteur a corrigé : **la production ne fait tourner que le legacy** ; la v3
+> tourne en staging. Un fichier de compose décrit une intention de
+> déploiement, pas un déploiement — et sur ce point c'est celui qui exploite
+> l'infrastructure qui fait foi, pas le dépôt. La conclusion, elle, n'est pas
+> affaiblie : elle est renforcée. La v3 n'a même pas servi d'actifs en
+> production.
+
+Le commentaire qui accompagne cette règle reste instructif pour la v4, parce
+qu'il énonce la doctrine de bascule : *« `next build` n'émet aujourd'hui aucune
+PAGE d'App Router (seul `/healthz`) … un chemin PUBLIC prioritaire sur le legacy
+ne se publie pas avant que la zone ait de quoi y répondre. »*
 
 Trois conséquences, et elles portent tout le reste de ce document :
 
@@ -29,12 +39,14 @@ Trois conséquences, et elles portent tout le reste de ce document :
    Cadrer l'inventaire sur la v3 — ce que demandait l'énoncé de #5492 — aurait
    laissé tomber **62 routes**, dont `/signup/affiliate/:token`,
    `/auth/magic-link` et les quatre adresses de conversation.
-3. **Le mécanisme de bascule progressive existe déjà et il est éprouvé** :
+3. **Le mécanisme de bascule progressive est ÉCRIT, et exercé en staging** :
    Traefik donne au conteneur v3 une `priority=100` sur des chemins NOMMÉS,
    « tout chemin absent de cette règle est servi par `apps/web` ». La v4 s'y
    branche à l'identique. `scripts/check-v3-pipeline.mjs` garde même les deux
    sens (un actif servi hors règle, un chemin de la règle que la zone ne sert
-   pas) — il se porte.
+   pas) — il se porte. **Il n'a jamais tourné en production** : le premier
+   chemin public de la v4 sera aussi le premier essai réel de ce routage, et
+   c'est à traiter comme tel — pas comme un acquis.
 
 ## La stratégie de bascule, qui découle de ce qui précède
 
@@ -45,6 +57,11 @@ tourner et reçoit tout ce que la v4 ne réclame pas nommément.
 Traefik  ──▸ apps/web-v4   sur les chemins de la V4.0.0 (priority haute)
          └─▸ apps/web      TOUT LE RESTE  (défaut, inchangé)
 ```
+
+Ce routage **n'a jamais tourné en production** (voir la correction ci-dessus) :
+le premier chemin public de la v4 en sera l'essai réel. Le poser d'abord sur les
+cinq pages institutionnelles — sans session, sans API — est la façon la moins
+risquée de le vérifier, et c'est une raison de plus de commencer par elles.
 
 Le décommissionnement du legacy (#5496) n'est donc **pas** un préalable à la
 mise en production de la v4 : c'est ce qui reste à faire **après** que chaque
