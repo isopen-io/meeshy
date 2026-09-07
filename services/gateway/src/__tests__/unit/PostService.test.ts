@@ -339,6 +339,35 @@ describe('PostService', () => {
   });
 
   // -----------------------------------------------------------------------
+  // createPost — commentsDisabled (#3959)
+  // -----------------------------------------------------------------------
+
+  describe('createPost — commentsDisabled', () => {
+    it('persists commentsDisabled: true when requested', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'cd-1', ...args.data }));
+
+      await service.createPost({
+        type: PostType.POST,
+        visibility: PostVisibility.PUBLIC,
+        commentsDisabled: true,
+      }, 'user-1');
+
+      expect(prisma.post.create.mock.calls[0][0].data.commentsDisabled).toBe(true);
+    });
+
+    it('defaults commentsDisabled to false when absent', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'cd-2', ...args.data }));
+
+      await service.createPost({
+        type: PostType.POST,
+        visibility: PostVisibility.PUBLIC,
+      }, 'user-1');
+
+      expect(prisma.post.create.mock.calls[0][0].data.commentsDisabled).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // createPost with repostOfId
   // -----------------------------------------------------------------------
 
