@@ -662,7 +662,11 @@ export function convertStoryEffectsForWire(effects: unknown): unknown {
 /**
  * Le LECTEUR d'une charge utile, tel que la négociation O17 le connaît.
  *
- * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` (absent = client legacy) ;
+ * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` — `undefined` (en-tête
+ * absent) vaut « client qui n'a rien dit » (legacy présumé) ; `0` vaut
+ * « client qui déclare ne rendre AUCUN canvas », une affirmation distincte de
+ * l'absence (#5195 — un client comme web-v3, qui ne lit jamais `storyEffects`
+ * par conception, se distingue ainsi d'un client simplement pas-encore-connu).
  * `readerLanguage` est la langue DÉJÀ résolue par le middleware d'auth
  * (`authContext.userLanguage` — le Prisme s'applique jusqu'à l'invite de mise
  * à jour). `broadcast` est l'exception temps réel F3 : une seule charge pour
@@ -761,7 +765,8 @@ export function upgradeSentinel(readerLanguage: string | undefined): Record<stri
  * pour la sentinelle ; `CANVAS_V3_READ` (lu à chaque appel, défaut OFF) ne
  * gouverne que la conversion de l'archive v1. Règle 5 : un post à média
  * porteur ne reçoit pas de sentinelle — `storyEffects` est OMIS, le média se
- * lit tel quel.
+ * lit tel quel. Règle 5 bis (#5195) : un lecteur qui DÉCLARE `canvasCaps: 0`
+ * ne reçoit pas non plus de sentinelle — voir plus bas.
  */
 export function negotiateWireStoryEffects<T>(post: T, reader?: WireReader): T {
   if (reader?.broadcast === true) return post;
@@ -774,7 +779,17 @@ export function negotiateWireStoryEffects<T>(post: T, reader?: WireReader): T {
     return { ...post, storyEffects: convertStoryEffectsForWire(effects) };
   }
   const media = (post as { media?: unknown }).media;
-  if (Array.isArray(media) && media.length > 0) {
+  /**
+   * `canvasCaps === 0` est une DÉCLARATION, jamais une absence (celle-ci vaut
+   * `undefined` — cf. `WireReader.canvasCaps`) : un client qui la pose dit
+   * « je ne rendrai AUCUN canvas », pas « je ne l'ai pas encore dit ». La
+   * sentinelle d'invite (« Mets à jour Meeshy pour voir ce contenu ») serait
+   * un conseil FAUX pour un tel client — se mettre à jour ne le ferait pas
+   * lire `storyEffects`, qu'il n'implémente pas par conception (#5195). Même
+   * sort que le média porteur (règle 5) : OMETTRE, jamais la sentinelle.
+   */
+  const declaresNoCanvasSupport = reader?.canvasCaps === 0;
+  if ((Array.isArray(media) && media.length > 0) || declaresNoCanvasSupport) {
     return { ...post, storyEffects: undefined };
   }
   return { ...post, storyEffects: upgradeSentinel(reader?.readerLanguage) };
