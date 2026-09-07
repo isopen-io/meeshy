@@ -187,7 +187,15 @@ export const parseCatalogBlock = (blockLines) => {
 //
 // 272 → 269 (#5423) : les trois routes de sondage mortes (`conversation`,
 // `detectLanguage`, `status`) sont retirées du catalogue avec leurs routes.
-const BASELINE_DEAD_ENTRIES = 269;
+//
+// 269 → 270 (#3690) : `users.meReferralCode` (`GET /users/me/referral-code`,
+// nouvelle route) — morte à la naissance PAR CONSTRUCTION : le milestone
+// « Parrainage attribué et boucles virales » sépare la route gateway (cette
+// issue) de ses appelants clients, portés par les issues sœurs (#3691 web,
+// et les équivalents iOS/Android). Le catalogue déclare la route avant que
+// la première surface ne l'appelle — à retirer de ce compte le jour où l'une
+// de ces issues câble un premier appelant.
+const BASELINE_DEAD_ENTRIES = 270;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
