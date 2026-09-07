@@ -74,11 +74,17 @@ public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable
 
     // MARK: - Leave Anonymous Session
 
+    /// `DELETE /guest-sessions/me` — successeur de l'alias déprécié
+    /// `POST /anonymous/leave` (#4167 critère 4, #5425). Le jeton voyage en
+    /// en-tête `X-Session-Token`, jamais dans le corps : la route l'identifie
+    /// ainsi, pas via le `sessionToken` du compte actif.
     public func leaveAnonymousSession(sessionToken: String) async throws {
-        struct LeaveRequest: Encodable { let sessionToken: String }
-        let _: APIResponse<[String: String]> = try await api.post(
-            AnonymousEndpoint.leave,
-            body: LeaveRequest(sessionToken: sessionToken)
+        let _: APIResponse<[String: String]> = try await api.requestWithHeaders(
+            GuestSessionsEndpoint.me,
+            method: "DELETE",
+            body: nil,
+            queryItems: nil,
+            headers: ["X-Session-Token": sessionToken]
         )
     }
 
