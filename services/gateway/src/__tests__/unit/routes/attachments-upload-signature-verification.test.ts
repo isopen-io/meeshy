@@ -21,10 +21,10 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  messageAttachmentSchema: { type: 'object', properties: { id: { type: 'string' } } },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
-}));
+// Pas de double de `@meeshy/shared/types/api-schemas` — mocker un schéma de
+// RÉPONSE désarme fast-json-stringify et rend vert un contrat que personne ne
+// respecte (`response-schema-stub-ratchet.test.ts`, cycle 91 bis). Les
+// schémas sont des littéraux JSON-Schema, sans coût à charger pour de vrai.
 
 const mockUploadMultiple = jest.fn<any>();
 
