@@ -8,6 +8,7 @@ import {
   type PasserelleDeBouchon,
   type ServeurV3,
 } from './lib/serveurs';
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { UTILISATEUR_DU_MEMBRE } from './lib/bouchon-socket';
 import { CURSEUR_DE_LA_BOITE_SUIVANTE } from './lib/bouchon-compte';
 
@@ -55,10 +56,7 @@ const ouvreLaBoite = async (browser: Browser): Promise<PageSuivie> => {
 };
 
 /** Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais par une minuterie seule. */
-const attendsLeModule = async (page: Page): Promise<void> => {
-  await page.waitForFunction(() => document.querySelector('main[data-participation="notifs"]') !== null);
-  await page.waitForTimeout(1_200);
-};
+const attendsLeModule = (page: Page): Promise<void> => attendsLeModuleArme(page, 'notifs');
 
 /**
  * `notification:new` tel que `NotificationService` l'émet (`:1650`) : la forme

@@ -2,6 +2,7 @@ import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { aime, reposte } from '@/lib/api/publication';
 import { FIL_SOCIAL } from '@/lib/contenu/social';
 
+import { signaleArme } from './arme';
 import { aposteRepost, basculeAime, doitRafraichirLeFil, type EtatDAime } from './feed-etat';
 import { observeCycleDeVie } from './lifecycle';
 
@@ -239,6 +240,7 @@ const demarre = (): void => {
   const ctx = { main, passerelle: config.passerelle, jeton };
   prendsLesGestes(ctx);
   suisLAbsence(ctx);
+  signaleArme(main);
 };
 
 demarre();
