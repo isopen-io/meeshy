@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { sendSuccess, sendPaginatedSuccess, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import { type UserRole } from './types';
@@ -746,7 +746,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       broadcastPostRemoval(
         fastify.socialEvents,
         post,
-        (err) => fastify.log.warn({ err }, '[DELETE /admin/posts/:postId]: broadcast deletion failed')
+        (err) => logWarn(fastify.log, '[DELETE /admin/posts/:postId]: broadcast deletion failed', err)
       );
 
       // Cette route écrit `deletedAt` SANS passer par `PostService.deletePost`.

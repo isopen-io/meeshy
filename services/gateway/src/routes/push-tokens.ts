@@ -9,7 +9,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../utils/logger';
+import { logError, logWarn } from '../utils/logger';
 import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
@@ -248,7 +248,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
+        logWarn(fastify.log, `[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
         return sendBadRequest(reply, 'Invalid request data');
       }
 
@@ -339,7 +339,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        fastify.log.warn(`[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
+        logWarn(fastify.log, `[PUSH_TOKEN] Validation error: ${JSON.stringify(error.issues)}`);
         return sendBadRequest(reply, 'Invalid request data');
       }
 
