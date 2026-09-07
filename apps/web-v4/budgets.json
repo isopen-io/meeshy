@@ -5,9 +5,9 @@
   "premiere_peinture": {
     "sujet": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
     "ko": {
-      "valeur": 120,
+      "valeur": 40,
       "statut": "CIBLE — PROPOSEE PAR LE POC, NON ARBITREE",
-      "source": "Aucune directive du porteur ne donne ce chiffre : il est propose par le POC et attend l'arbitrage. Sa justification est un calcul, pas une mesure — 120 Ko sur le profil ci-dessous font ~5,2 s de telechargement seul au demarrage a froid, une fois, contre 80 Ko par session de dix ecrans dans le modele v3. Il se remplace par la valeur que le porteur tranche."
+      "source": "Aucune directive du porteur ne donne ce chiffre : il est propose par le POC et attend l'arbitrage. DESCENDU de 120 a 40 apres #5447 (le remplacement de TanStack Router), qui a fait passer la mesure de 50,85 a 24,53 Ko. Un plafond suit la mesure DANS LES DEUX SENS quand la baisse est STRUCTURELLE — ici une dependance retiree, pas un jeu de donnees allege. Les ~15 Ko d'ecart avec la mesure ne sont pas une autorisation de croissance : ils absorbent les ecrans a venir dont une part atterrit forcement dans le socle (composants partages, table de jetons). Un plafond laisse a 120 aurait laisse rentrer une seconde dependance de 25 Ko sans qu'aucun gate ne rougisse — c'est precisement ce que #5447 a du trouver a la main."
     }
   },
   "reseau_note": "Le profil est REPRIS TEL QUEL de apps/web-v3/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

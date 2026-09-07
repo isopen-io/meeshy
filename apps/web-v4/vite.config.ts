@@ -123,7 +123,6 @@ export default defineConfig({
          */
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            if (id.includes('@tanstack/react-router')) return 'routeur';
             if (id.includes('@tanstack/react-query')) return 'donnees';
             return 'socle';
           }

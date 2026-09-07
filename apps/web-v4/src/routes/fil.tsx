@@ -1,4 +1,3 @@
-import { Link, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
@@ -8,7 +7,9 @@ import { Glyphe } from '@/components/glyphe';
 import { CONVERSATIONS, MESSAGES } from '@/lib/api/fixtures';
 import type { Message } from '@/lib/api/modele';
 import { avecAccent } from '@/lib/accent';
+import { useParams } from '@/lib/routeur';
 import { libelleDuJour, place } from '@/lib/groupage';
+import { Lien } from '@/routes/table';
 import { LANGUES_DU_LECTEUR } from '@/lib/lecteur';
 
 /**
@@ -23,7 +24,7 @@ import { LANGUES_DU_LECTEUR } from '@/lib/lecteur';
  * Le bouton de retour porte le compte de non-lus des AUTRES conversations.
  */
 export default function EcranFil() {
-  const { conversation: id } = useParams({ from: '/c/$conversation' });
+  const { conversation: id } = useParams<'/c/$conversation'>();
   const conversation = CONVERSATIONS.find((c) => c.id === id) ?? CONVERSATIONS[0]!;
   const [deplie, setDeplie] = useState(false);
   const [messages, setMessages] = useState<readonly Message[]>(MESSAGES);
@@ -66,8 +67,8 @@ export default function EcranFil() {
         style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-fond) 80%, transparent)' }}
       >
         <div className="flex items-center gap-2 px-4 py-2">
-          <Link
-            to="/"
+          <Lien
+            vers="liste"
             className="relative grid size-11 shrink-0 place-items-center rounded-pastille"
             style={{ color: 'var(--accent)' }}
             aria-label={autresNonLus > 0 ? `Retour — ${autresNonLus} messages non lus ailleurs` : 'Retour'}
@@ -82,7 +83,7 @@ export default function EcranFil() {
                 {autresNonLus}
               </span>
             ) : null}
-          </Link>
+          </Lien>
 
           {deplie ? (
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">

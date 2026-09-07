@@ -5,12 +5,22 @@ import type { Conversation, Message } from './modele';
  * mesures de poids et aux captures de suivre le CODE et non les donnees (la v3
  * en avait fait la regle pour `documents_du_fil`).
  *
+ * Les HORAIRES, en revanche, sont ancres sur MAINTENANT et non sur une date
+ * ecrite en dur. Une fixture datee du 6 septembre affichait « Aujourd'hui »
+ * le 6 et « Hier » le 7 : les captures changeaient de sens pendant la nuit, et
+ * un temoin qui cherchait « Aujourd'hui » tombait sans qu'une ligne de code ait
+ * bouge. Ce qui doit etre fixe, c'est la FORME du jeu (combien de messages, de
+ * quels genres, dans quelles langues) — pas l'instant ou on le regarde.
+ *
  * Le contenu est deliberement MULTILINGUE et desequilibre : un message ecrit en
  * anglais avec une traduction francaise, un ecrit en francais sans traduction,
  * un ecrit en anglais SANS traduction francaise. C'est le seul jeu qui fait
  * tomber un resolveur de Prisme faux — un jeu tout-francais rendrait vert
  * n'importe quelle implementation.
  */
+
+/** `aM(90)` = il y a 90 minutes. Le fil se lit donc toujours comme aujourd'hui. */
+const aM = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
 
 const moi = { id: 'u-moi', nom: 'Vous', initiales: 'VO', teinte: 1, presence: 'en-ligne' } as const;
 const amina = { id: 'u-amina', nom: 'Amina Diallo', initiales: 'AD', teinte: 2, presence: 'en-ligne' } as const;
@@ -24,7 +34,7 @@ export const MESSAGES: readonly Message[] = [
     contenu: 'Good morning! Did the deployment finish last night?',
     langueOriginale: 'en',
     traductions: [{ langue: 'fr', texte: 'Bonjour ! Est-ce que le deploiement a fini cette nuit ?' }],
-    envoyeA: '2026-09-06T08:12:00Z',
+    envoyeA: aM(96),
     etat: 'lu',
   },
   {
@@ -34,7 +44,7 @@ export const MESSAGES: readonly Message[] = [
     contenu: 'Oui, tout est passe vers 3h. Je te montre le rapport.',
     langueOriginale: 'fr',
     traductions: [{ langue: 'en', texte: 'Yes, everything went through around 3am. Let me show you the report.' }],
-    envoyeA: '2026-09-06T08:14:00Z',
+    envoyeA: aM(94),
     etat: 'lu',
   },
   {
@@ -44,7 +54,7 @@ export const MESSAGES: readonly Message[] = [
     contenu: '',
     langueOriginale: 'fr',
     traductions: [],
-    envoyeA: '2026-09-06T08:14:30Z',
+    envoyeA: aM(93),
     etat: 'lu',
     pieces: [
       {
@@ -65,7 +75,7 @@ export const MESSAGES: readonly Message[] = [
     // Aucune traduction francaise : le Prisme doit servir l'ORIGINAL, jamais
     // retomber sur la premiere traduction venue.
     traductions: [{ langue: 'es', texte: 'Bien. Pero el arranque en frio sigue por encima de dos segundos en 3G.' }],
-    envoyeA: '2026-09-06T08:21:00Z',
+    envoyeA: aM(87),
     etat: 'lu',
   },
   {
@@ -75,7 +85,7 @@ export const MESSAGES: readonly Message[] = [
     contenu: '',
     langueOriginale: 'en',
     traductions: [],
-    envoyeA: '2026-09-06T08:23:00Z',
+    envoyeA: aM(85),
     etat: 'lu',
     pieces: [
       {
@@ -96,7 +106,7 @@ export const MESSAGES: readonly Message[] = [
     contenu: 'Exact. On peut passer a un routeur plus leger, ca ferait -24 Ko.',
     langueOriginale: 'fr',
     traductions: [{ langue: 'en', texte: 'Right. We could move to a lighter router, that would save 24 KB.' }],
-    envoyeA: '2026-09-06T08:25:00Z',
+    envoyeA: aM(83),
     etat: 'remis',
     repondA: { id: 'm4', auteur: 'Kwame Mensah', extrait: 'the cold start is still above two seconds on 3G' },
     reactions: [{ glyphe: '👍', compte: 2, parMoi: false }],
@@ -108,7 +118,7 @@ export const MESSAGES: readonly Message[] = [
     contenu: 'Je pousse la mesure ce soir.',
     langueOriginale: 'fr',
     traductions: [],
-    envoyeA: '2026-09-06T08:26:00Z',
+    envoyeA: aM(82),
     etat: 'en-attente',
   },
 ];
@@ -127,7 +137,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
       langueOriginale: 'fr',
       traductions: [],
       auteur: 'Vous',
-      a: '2026-09-06T08:26:00Z',
+      a: aM(82),
     },
     nonLus: 0,
     enSourdine: false,
@@ -145,7 +155,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
       langueOriginale: 'en',
       traductions: [{ langue: 'fr', texte: 'A demain au bureau !' }],
       auteur: 'Amina Diallo',
-      a: '2026-09-06T07:52:00Z',
+      a: aM(116),
     },
     nonLus: 3,
     enSourdine: false,
@@ -163,7 +173,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
       langueOriginale: 'en',
       traductions: [],
       auteur: 'Kwame Mensah',
-      a: '2026-09-05T18:30:00Z',
+      a: aM(1_000),
     },
     nonLus: 0,
     enSourdine: true,
@@ -181,7 +191,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
       langueOriginale: 'fr',
       traductions: [{ langue: 'en', texte: 'The Yaba relay is back online.' }],
       auteur: 'Fatou',
-      a: '2026-09-05T14:05:00Z',
+      a: aM(1_265),
     },
     nonLus: 12,
     enSourdine: false,

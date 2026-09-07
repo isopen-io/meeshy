@@ -15,21 +15,40 @@ Profil réseau : **Fast 3G** (188 743 bps, 562,5 ms de latence) — le même que
 
 | | **Preact** (retenu) | React 19 |
 |---|---|---|
-| avant le premier pixel | **50,83 Ko** gzip | 96,3 Ko gzip |
-| téléchargement seul sur Fast 3G | **2,21 s** | 4,28 s |
-| requêtes avant le premier pixel | 8 | 8 |
+| avant le premier pixel | **24,53 Ko** gzip | 74,90 Ko gzip |
+| téléchargement seul sur Fast 3G | **1,06 s** | 3,25 s |
+| requêtes avant le premier pixel | 6 | 7 |
 
 Le code applicatif est le **même** : `preact/compat` est activé par un alias
-Vite (`MEESHY_RUNTIME=react` construit l'autre). L'écart — **45,5 Ko gzip** —
+Vite (`MEESHY_RUNTIME=react` construit l'autre). L'écart — **50,4 Ko gzip** —
 est du runtime seul. Pour référence, le plancher mesuré de Next 15 App Router
 sur ce dépôt est de **99,6 Ko / 6 requêtes** pour une page *vide* : la v4 rend
-deux écrans complets pour la moitié de ce prix.
+deux écrans complets pour le quart de ce prix.
+
+### Le routeur (#5447)
+
+TanStack Router pesait **25,13 Ko gzip — 49 % de la première peinture**, plus
+de trois fois le runtime Preact entier. Ce poids s'est révélé
+**incompressible** : retirer toutes ses options rend un chunk au **hash
+identique** — on ne paie pas ce qu'on utilise, on paie le moteur.
+
+Il est remplacé par `src/lib/routeur.tsx`, taillé pour ce que Meeshy demande
+(paramètres de chemin typés depuis le motif, paramètres de recherche,
+découpage par route, préchargement à l'intention, restauration du défilement) :
+**~1,4 Ko gzip**. La première peinture passe de **50,85 à 24,53 Ko** et de
+**2,21 s à 1,06 s** sur Fast 3G — soit **−52 %**.
+
+Ce qui est perdu, et qu'il faut savoir : chargeurs de route, états « pending »
+de navigation, validation des paramètres de recherche, routes imbriquées
+au-delà d'un niveau. Les trois premiers sont couverts par TanStack Query, qui
+reste ; le quatrième est une limite réelle, à lever le jour où un écran la
+rencontre.
 
 ### Les deux variantes
 
 | | **A — PWA seule** | **B — Capacitor 8** |
 |---|---|---|
-| avant le premier pixel | 50,83 Ko · 8 requêtes | 50,66 Ko · 7 requêtes |
+| avant le premier pixel | 24,53 Ko · 6 requêtes | 24,36 Ko · 5 requêtes |
 | service worker | oui (Workbox) | non (la coque gère son cycle) |
 | **2ᵉ visite** | **0 requête réseau · 0 octet** — vérifié | sans objet (embarqué) |
 | ouverture **hors ligne** | **oui**, navigation comprise — vérifié | oui |
@@ -41,6 +60,13 @@ change (base relative, service worker retiré). C'est la condition pour que
 
 Rejouer : `bun run gate`, `node scripts/verifie-hors-ligne.mjs`,
 `node scripts/capture.mjs` (captures dans `rendu/`, non versionnées).
+
+Les fixtures sont **ancrées sur maintenant** (`aM(90)` = il y a 90 minutes) et
+non sur des dates écrites en dur : une fixture du 6 septembre affichait
+« Aujourd'hui » le 6 et « Hier » le 7, donc les captures changeaient de sens
+pendant la nuit et un témoin qui cherchait « Aujourd'hui » tombait sans qu'une
+ligne de code ait bougé. Ce qui doit être fixe, c'est la **forme** du jeu de
+données, pas l'instant où on le regarde.
 
 ### Ce qui n'a PAS pu être vérifié ici
 

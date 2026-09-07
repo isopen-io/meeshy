@@ -1,8 +1,7 @@
-import { Link } from '@tanstack/react-router';
-
 import type { Conversation } from '@/lib/api/modele';
 import { servi } from '@/lib/api/prisme';
 import { avecAccent } from '@/lib/accent';
+import { Lien } from '@/routes/table';
 import { heure } from '@/lib/groupage';
 
 import { Avatar } from './avatar';
@@ -29,8 +28,8 @@ export function LigneDeConversation({ conversation, langues }: { conversation: C
   );
 
   return (
-    <Link
-      to="/c/$conversation"
+    <Lien
+      vers="fil"
       params={{ conversation: conversation.id }}
       className="flex items-start gap-3 rounded-[14px] p-3 transition-colors"
       style={avecAccent(conversation.teinte, {
@@ -103,6 +102,6 @@ export function LigneDeConversation({ conversation, langues }: { conversation: C
           ) : null}
         </span>
       </span>
-    </Link>
+    </Lien>
   );
 }

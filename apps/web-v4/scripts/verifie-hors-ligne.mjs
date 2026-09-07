@@ -74,7 +74,11 @@ try {
   // Le fil aussi doit s'ouvrir : une navigation interne ne doit toucher aucun reseau.
   await p3.getByRole('link', { name: /Equipe produit/ }).first().click();
   await p3.waitForTimeout(400);
-  horsLigneOk = (await p3.locator('text=Aujourd').count()) > 0;
+  /* On verifie le COMPOSEUR, pas le separateur de jour : ce dernier depend
+     de la date du jour, et le temoin tombait a minuit sans qu'une ligne de
+     code ait bouge. Le composeur, lui, est present si et seulement si l'ecran
+     du fil s'est reellement monte. */
+  horsLigneOk = (await p3.getByPlaceholder('Message…').count()) > 0;
 } catch (e) {
   titreHorsLigne = `ECHEC : ${e.message.split('\n')[0]}`;
 }

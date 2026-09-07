@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import './styles/app.css';
 
-import { arbreDesRoutes } from '@/routes/arbre';
+import Coquille from '@/components/coquille';
+import { Routeur } from '@/routes/table';
 
 /**
  * CACHE-FIRST, RESEAU-ENSUITE — les « Instant App Principles » du depot,
@@ -29,24 +29,18 @@ const client = new QueryClient({
   },
 });
 
-const routeur = createRouter({
-  routeTree: arbreDesRoutes,
-  defaultPreload: 'intent',
-  /**
-   * Sur un reseau lent, precharger au SURVOL gaspille des octets qu'on paie au
-   * mega-octet. `intent` ne precharge qu'a l'intention reelle (pointeur
-   * maintenu, focus clavier), et 300 ms de delai coupent les survols de
-   * passage.
-   */
-  defaultPreloadDelay: 300,
-  defaultPendingMs: 0,
-  scrollRestoration: true,
-});
-
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof routeur;
-  }
+/** Le squelette d'attente d'un ecran decoupe — statique, jamais un spinner. */
+function Squelette() {
+  return (
+    <div className="grid gap-2 p-4" aria-busy="true">
+      <p className="text-meta" style={{ color: 'var(--color-ios-encre-2)' }}>
+        L’écran arrive…
+      </p>
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="h-20 rounded-[14px]" style={{ backgroundColor: 'var(--color-ios-carte)' }} />
+      ))}
+    </div>
+  );
 }
 
 const racine = document.getElementById('racine');
@@ -55,7 +49,7 @@ if (!racine) throw new Error('#racine absent du document');
 createRoot(racine).render(
   <StrictMode>
     <QueryClientProvider client={client}>
-      <RouterProvider router={routeur} />
+      <Routeur enveloppe={(ecran) => <Coquille>{ecran}</Coquille>} squelette={<Squelette />} />
     </QueryClientProvider>
   </StrictMode>,
 );
