@@ -1,0 +1,100 @@
+# syntax=docker.io/docker/dockerfile:1
+# =============================================================================
+# MEESHY WEB v3.1 — l'application à page unique, servie en STATIQUE
+# Contexte de construction : la racine du monorepo (../../)
+# Dockerfile : apps/web-v3/Dockerfile
+# =============================================================================
+# CE QUI CHANGE PAR RAPPORT À apps/web-old-version3/Dockerfile, et pourquoi :
+#
+#   · L'image finale est nginx, pas Node. Cette application n'a AUCUN rendu à
+#     l'exécution : Vite émet un bundle et cinq documents préchauffés, point.
+#     Un runtime Node n'aurait rien à exécuter — il ne ferait que servir des
+#     fichiers, pour ~150 Mo au lieu de ~50.
+#
+#   · UN SEUL paquet du monorepo entre : `@meeshy/design-tokens`, le seul que
+#     le manifeste déclare. La règle du dépôt vaut quand même — tout ce que
+#     l'application importe hors de `apps/web-v3/` doit entrer dans l'image ET
+#     dans les déclencheurs de `docker.yml` — et c'est elle qui interdit
+#     d'ajouter `packages/shared` « au cas où » : on construirait un paquet que
+#     rien n'importe.
+#
+#   · La construction TOURNE SOUS BUN, et ce n'est pas une préférence : le
+#     greffon de préchauffage de `vite.config.ts` lance
+#     `bun run scripts/prerend-institutionnel.tsx`, qui rend du JSX avec la
+#     pragma preact. Une image de construction sans bun produirait un `dist`
+#     sans les cinq pages — et un service worker qui servirait la coquille de
+#     l'application à leur place. Défaut SILENCIEUX : le build sortirait vert.
+ARG BUN_VERSION=1.3.14
+
+# ===== CONSTRUCTION =====
+FROM docker.io/oven/bun:${BUN_VERSION}-alpine AS builder
+
+WORKDIR /app
+
+# LE MANIFESTE DE L'APPLICATION DEVIENT CELUI DE LA RACINE, et on lui greffe la
+# liste des workspaces RÉELLEMENT présents dans l'image. C'est le motif éprouvé
+# d'`apps/web/Dockerfile`, et il ferme un piège : recopier le manifeste de la
+# racine du dépôt déclarerait `apps/*`, `services/*`, `packages/*` — neuf
+# workspaces dont un seul est ici. L'installation chercherait alors des arbres
+# absents.
+#
+# Corollaire, pour la même raison : PAS de `--frozen-lockfile`. Le lockfile du
+# dépôt décrit les neuf workspaces ; l'image n'en porte qu'un, donc un gel
+# échouerait sur un écart qui est voulu.
+COPY apps/web-v3/package.json ./
+COPY packages/design-tokens/ ./packages/design-tokens/
+
+# `bun -e` et non `node -e` : l'image de construction est celle de bun, et rien
+# n'y garantit un binaire node.
+RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
+    && printf 'packages:\n  - "packages/design-tokens"\n' > pnpm-workspace.yaml
+
+# `--ignore-scripts` : le postinstall de `grpc-tools` télécharge un binaire par
+# une URL S3 que les proxys sortants réécrivent, et l'installation s'arrête là
+# en laissant des arbres partiels. Aucun gate de cette application n'en dépend
+# (§ « Local Test Parity » du CLAUDE.md racine).
+RUN bun install --ignore-scripts --no-save
+
+# CETTE COPIE ÉCRASE LE MANIFESTE PATCHÉ ci-dessus — c'est le défaut que le
+# Dockerfile de l'ancienne application avait déjà documenté, et il ne se voit
+# pas : l'installation a déjà eu lieu, les liens de workspace tiennent, et rien
+# ne rougit tant que personne ne relance une résolution. On le referme en
+# rejouant le patch, et on VÉRIFIE que le lien du seul paquet du monorepo est
+# bien là avant de construire.
+COPY apps/web-v3/ ./
+
+RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
+    && test -e node_modules/@meeshy/design-tokens \
+    || { echo "le lien de workspace @meeshy/design-tokens est absent"; exit 1; }
+
+# Le build EST le préchauffage : le greffon de `vite.config.ts` écrit les cinq
+# documents avant que `vite-plugin-pwa` ne scelle son manifeste de précache.
+RUN bun run build
+
+# La preuve que les cinq documents sont là — ici, pas en production. Sans elle,
+# une régression du greffon donnerait une image qui démarre, sert
+# l'application, et rend une page blanche sur /about au deuxième passage.
+RUN set -eu; for p in about contact partners privacy terms; do \
+      test -s "/app/dist/$p.html" || { echo "MANQUE dist/$p.html"; exit 1; }; \
+      test -s "/app/dist/$p/index.html" || { echo "MANQUE dist/$p/index.html"; exit 1; }; \
+    done; \
+    grep -q 'about.html' /app/dist/sw.js || { echo "sw.js ne precache pas les pages"; exit 1; }; \
+    echo "les cinq pages sont presentes et precachees"
+
+# ===== SERVICE =====
+FROM docker.io/nginx:1.29-alpine AS runner
+
+RUN apk add --no-cache tini curl
+
+COPY apps/web-v3/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist/ /usr/share/nginx/html/
+
+# 3400 : 3100 est au legacy, 3300 à l'ancienne refonte. Les trois peuvent
+# tourner côte à côte pendant la bascule.
+EXPOSE 3400
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3400/healthz || exit 1
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["nginx", "-g", "daemon off;"]
