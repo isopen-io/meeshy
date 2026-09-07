@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { match, compile } from './router';
+import { match, compile, routeKey } from './router';
 
 test('un motif sans parametre n apparie que lui-meme', () => {
   const root = compile('/');
@@ -39,4 +39,28 @@ test('les caracteres speciaux du motif sont echappes, pas interpretes', () => {
 test('plusieurs parametres dans un motif', () => {
   const media = compile('/c/$conversation/m/$message');
   expect(match(media, '/c/eq/m/m4')).toEqual({ conversation: 'eq', message: 'm4' });
+});
+
+// --- routeKey (#5566, defaut 8 : un fil -> un autre fil ne remontait pas
+// l'ecran, donc n'en reinitialisait aucun useState).
+test('routeKey : meme route, memes parametres -> meme cle', () => {
+  expect(routeKey({ key: '/c/$conversation', params: { conversation: 'c-a' } })).toBe(
+    routeKey({ key: '/c/$conversation', params: { conversation: 'c-a' } }),
+  );
+});
+
+test('routeKey : meme route, parametre DIFFERENT -> cle DIFFERENTE (le defaut mesure)', () => {
+  const a = routeKey({ key: '/c/$conversation', params: { conversation: 'c-a' } });
+  const b = routeKey({ key: '/c/$conversation', params: { conversation: 'c-b' } });
+  expect(a).not.toBe(b);
+});
+
+test('routeKey : route SANS parametre -> juste la cle de route', () => {
+  expect(routeKey({ key: '/', params: {} })).toBe('/');
+});
+
+test('routeKey : insensible a l ordre des parametres', () => {
+  const a = routeKey({ key: '/c/$c/m/$m', params: { c: 'x', m: 'y' } });
+  const b = routeKey({ key: '/c/$c/m/$m', params: { m: 'y', c: 'x' } });
+  expect(a).toBe(b);
 });

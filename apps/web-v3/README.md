@@ -54,7 +54,7 @@ rencontre.
 | ouverture **hors ligne** | **oui**, navigation comprise — vérifié | oui |
 | pipeline | `vite build` | `vite build && cap sync` — **86 ms** |
 
-Les deux se construisent depuis **le même `dist/`** ; seul `MEESHY_CIBLE`
+Les deux se construisent depuis **le même `dist/`** ; seul `MEESHY_TARGET`
 change (base relative, service worker retiré). C'est la condition pour que
 « transformable sans friction » soit une mesure et non une promesse.
 
