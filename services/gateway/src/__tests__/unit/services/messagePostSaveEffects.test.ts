@@ -47,14 +47,15 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makePrisma(overrides: { conversationType?: string | null } = {}) {
+function makePrisma(overrides: { conversationType?: string | null; communityId?: string | null } = {}) {
   return {
     conversation: {
       update: jest.fn<any>().mockResolvedValue(undefined),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-      findUnique: jest.fn<any>().mockResolvedValue(
-        overrides.conversationType === undefined ? { type: 'direct' } : { type: overrides.conversationType }
-      ),
+      findUnique: jest.fn<any>().mockResolvedValue({
+        type: overrides.conversationType === undefined ? 'direct' : overrides.conversationType,
+        communityId: overrides.communityId ?? null,
+      }),
     },
   } as any;
 }
@@ -240,14 +241,19 @@ describe('runMessagePostSaveEffects — comptage des messages', () => {
 });
 
 /**
- * Le cinquième effet — l'axe d'engagement « conversation distincte » (#5539,
- * docs/product/streaks-badges-modele.md § 2). Il ne vaut que pour un
- * utilisateur ENREGISTRÉ (un anonyme n'a pas de ligne `EngagementCounter`
- * possible, `userId` y étant un `User.id` requis), et seulement quand la
- * conversation reçoit son PREMIER message de cet utilisateur — la
- * déduplication elle-même vit dans `EngagementService.recordConversationActivity`,
- * pas ici : cette unité se contente d'aiguiller l'axe depuis le TYPE de la
- * conversation.
+ * Le cinquième effet — l'axe d'engagement « conversation distincte » (#5538,
+ * #5539, #5540 ; docs/product/streaks-badges-modele.md § 2). Il ne vaut que
+ * pour un utilisateur ENREGISTRÉ (un anonyme n'a pas de ligne
+ * `EngagementCounter` possible, `userId` y étant un `User.id` requis), et
+ * seulement quand la conversation reçoit son PREMIER message de cet
+ * utilisateur — la déduplication elle-même vit dans
+ * `EngagementService.recordConversationActivity`, pas ici : cette unité se
+ * contente d'aiguiller l'axe depuis le TYPE et le `communityId` de la
+ * conversation. `communityId` PRIME sur `type` : une conversation rattachée
+ * à une communauté n'est ni `private` ni `public` — c'est `#5540`, pas
+ * encore branché, donc aucun axe n'est crédité pour elle plutôt qu'un
+ * classement faux (private/public) qu'un futur branchement de #5540 ne
+ * pourrait plus corriger (le compteur serait déjà incrémenté).
  */
 describe('runMessagePostSaveEffects — axe d\'engagement des conversations', () => {
   it('crédite l\'axe conversation.public pour un utilisateur enregistré dans une conversation publique', async () => {
@@ -265,7 +271,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
 
     expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
       where: { id: CONV_ID },
-      select: { type: true },
+      select: { type: true, communityId: true },
     });
     expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
       USER_ID,
@@ -274,7 +280,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     );
   });
 
-  it('ne crédite rien pour une conversation qui n\'est pas publique', async () => {
+  it('crédite l\'axe conversation.private pour une conversation directe (#5538)', async () => {
     const prisma = makePrisma({ conversationType: 'direct' });
     const engagementService = makeEngagementService();
 
@@ -287,7 +293,67 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     });
     await flush();
 
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.private',
+      CONV_ID
+    );
+  });
+
+  it('crédite l\'axe conversation.private pour un groupe non rattaché à une communauté (#5538)', async () => {
+    const prisma = makePrisma({ conversationType: 'group' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.private',
+      CONV_ID
+    );
+  });
+
+  it('ne crédite rien pour une conversation rattachée à une communauté (axe #5540, pas encore branché)', async () => {
+    const prisma = makePrisma({ conversationType: 'group', communityId: '507f1f77bcf86cd799439abc' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
     expect(engagementService.recordConversationActivity).not.toHaveBeenCalled();
+  });
+
+  it('ne crédite rien pour une conversation publique rattachée à une communauté — communityId prime sur type', async () => {
+    const prisma = makePrisma({ conversationType: 'public', communityId: '507f1f77bcf86cd799439abc' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordConversationActivity).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'conversation.public',
+      expect.anything()
+    );
   });
 
   it('ne crédite rien, et ne lit même pas le type de la conversation, pour un expéditeur anonyme', async () => {
