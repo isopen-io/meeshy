@@ -1607,7 +1607,7 @@ describe('useSocketCacheSync — le sous-groupe MÉDIA suit `conversation:update
       content: 'hello',
       isBlurred: true,
       isViewOnce: true,
-      attachments: [{ id: 'att-existing' } as any],
+      attachments: [{ id: 'att-existing' }] as unknown as Message['attachments'],
     });
     const conversation = { id: 'conv-1', lastMessage: previous } as unknown as Conversation;
 
