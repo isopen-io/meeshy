@@ -68,12 +68,19 @@ export interface PostSaveTranslationQueue {
 export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement';
 
 /**
- * Ce que l'axe d'engagement « conversation distincte » (#5539) demande, et
- * rien de plus — la déduplication par conversation vit entièrement dans
- * `EngagementService.recordConversationActivity`, cette unité n'a qu'à
- * l'appeler.
+ * Ce que les axes d'engagement branchés sur le commit d'un message demandent,
+ * et rien de plus — la mécanique (compteur, anti-rejeu, notification de
+ * palier) vit entièrement dans `EngagementService`, cette unité n'a qu'à
+ * l'invoquer :
+ *
+ * - `recordActivity` pour un axe de CONTENU (#5531 : `content.audio_message`)
+ *   — un franchissement par (utilisateur, axe), sans déduplication par
+ *   conversation ;
+ * - `recordConversationActivity` pour l'axe « conversation distincte »
+ *   (#5539) — dédupliqué par conversation, cf. son doc-comment.
  */
 export interface PostSaveEngagementService {
+  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
   recordConversationActivity(
     userId: string,
     axisKey: EngagementAxisKey,
@@ -244,14 +251,30 @@ export function runMessagePostSaveEffects(params: {
     )
     .catch(report('messageStats'));
 
-  // Axe d'engagement « conversation distincte » (#5539) — seul le type
-  // `public` est aiguillé ici ; `conversation.private` / `conversation.community`
-  // rejoindront ce même branchement quand leurs issues (#5538, #5540) seront
-  // traitées. Un utilisateur ANONYME n'a pas de ligne `EngagementCounter`
-  // possible (`userId` y est un `User.id` requis) : la garde évite même la
-  // lecture de la conversation quand elle ne peut mener nulle part.
+  // Axes d'engagement (docs/product/streaks-badges-modele.md § 2). Un
+  // utilisateur ANONYME n'a pas de ligne `EngagementCounter` possible
+  // (`userId` y est un `User.id` requis) : la garde évite même la lecture de
+  // la conversation quand elle ne peut mener nulle part.
   if (engagementService && message.senderUserId) {
     const senderUserId = message.senderUserId;
+
+    // Axe « messages audio » (#5531) — un message est crédité dès qu'il porte
+    // au moins une pièce jointe dont le MIME résout en `audio` (même table
+    // que le comptage de conversation, `resolveAttachmentType`), quel que
+    // soit le type de la conversation qui le reçoit.
+    const hasAudioAttachment = message.attachmentMimeTypes.some(
+      (mimeType) => resolveAttachmentType(mimeType) === 'audio'
+    );
+    if (hasAudioAttachment) {
+      void Promise.resolve()
+        .then(() => engagementService.recordActivity(senderUserId, 'content.audio_message'))
+        .catch(report('engagement'));
+    }
+
+    // Axe « conversation distincte » (#5539) — seul le type `public` est
+    // aiguillé ici ; `conversation.private` / `conversation.community`
+    // rejoindront ce même branchement quand leurs issues (#5538, #5540)
+    // seront traitées.
     void Promise.resolve()
       .then(async () => {
         const conversation = await prisma.conversation.findUnique({

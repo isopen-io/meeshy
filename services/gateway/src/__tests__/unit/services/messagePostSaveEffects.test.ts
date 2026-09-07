@@ -64,7 +64,10 @@ function makeTranslationService() {
 }
 
 function makeEngagementService() {
-  return { recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined) };
+  return {
+    recordActivity: jest.fn<any>().mockResolvedValue(undefined),
+    recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined),
+  };
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -249,6 +252,101 @@ describe('runMessagePostSaveEffects — comptage des messages', () => {
  * pas ici : cette unité se contente d'aiguiller l'axe depuis le TYPE de la
  * conversation.
  */
+/**
+ * L'axe d'engagement « messages audio » (#5531,
+ * docs/product/streaks-badges-modele.md § 2). Contrairement à l'axe
+ * conversation ci-dessous, il ne dépend ni du type de la conversation ni
+ * d'une déduplication — un message crédite son axe dès qu'il porte une pièce
+ * jointe audio, à chaque envoi.
+ */
+describe('runMessagePostSaveEffects — axe d\'engagement du contenu audio', () => {
+  it('crédite content.audio_message quand le message porte une pièce jointe audio', async () => {
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ attachmentMimeTypes: ['audio/mp4'] }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message');
+  });
+
+  it('ne crédite rien pour un message sans pièce jointe audio', async () => {
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ attachmentMimeTypes: ['image/jpeg', 'application/pdf'] }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('crédite content.audio_message même dans une conversation qui n\'est pas publique', async () => {
+    const prisma = makePrisma({ conversationType: 'direct' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ attachmentMimeTypes: ['audio/mp4'] }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message');
+    expect(engagementService.recordConversationActivity).not.toHaveBeenCalled();
+  });
+
+  it('ne crédite rien pour un expéditeur anonyme, même avec une pièce jointe audio', async () => {
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ senderUserId: null, attachmentMimeTypes: ['audio/mp4'] }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('signale la panne de l\'axe audio sans toucher aux autres effets', async () => {
+    const prisma = makePrisma();
+    const translationService = makeTranslationService();
+    const engagementService = {
+      recordActivity: jest.fn<any>().mockRejectedValue(new Error('engagement down')),
+      recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined),
+    };
+    const onError = jest.fn();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService,
+      engagementService,
+      message: makeMessage({ attachmentMimeTypes: ['audio/mp4'] }),
+      originalLanguage: 'fr',
+      onError,
+    });
+    await flush();
+
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('engagement', expect.any(Error));
+  });
+});
+
 describe('runMessagePostSaveEffects — axe d\'engagement des conversations', () => {
   it('crédite l\'axe conversation.public pour un utilisateur enregistré dans une conversation publique', async () => {
     const prisma = makePrisma({ conversationType: 'public' });
@@ -330,6 +428,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     const prisma = makePrisma({ conversationType: 'public' });
     const translationService = makeTranslationService();
     const engagementService = {
+      recordActivity: jest.fn<any>().mockResolvedValue(undefined),
       recordConversationActivity: jest.fn<any>().mockRejectedValue(new Error('engagement down')),
     };
     const onError = jest.fn();
