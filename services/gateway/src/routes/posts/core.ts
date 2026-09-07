@@ -402,15 +402,14 @@ export function registerCoreRoutes(
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
         op: () => {
-          // `detectedLanguage` n'est PAS une entrée de `PostService.createPost`
-          // (§ Prisme, #5349) : elle ne se persiste jamais sur `Post`, elle ne
-          // sert qu'à `runPublicationEffects` ci-dessous, sur le pipeline de
-          // traduction. La séparer ici, plutôt que de la laisser traverser par
-          // le spread, empêche qu'elle ne devienne un jour un champ Prisma
-          // implicite au premier renommage voisin.
-          const { detectedLanguage: _detectedLanguage, ...postServiceData } = parsed.data;
+          // `detectedLanguage` (#5349) EST désormais une entrée de
+          // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
+          // une traduction demandée après coup (`translateOnDemand`) retombait
+          // sur la détection regex du serveur au lieu de la mesure on-device
+          // déjà faite à la création. Elle traverse donc par le spread comme le
+          // reste de `parsed.data`, au même titre qu'`originalLanguage`.
           return postService.createPost({
-            ...postServiceData,
+            ...parsed.data,
             content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
             type: parsed.data.type ?? 'POST',
             visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
