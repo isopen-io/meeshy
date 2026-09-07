@@ -540,12 +540,38 @@ jobs:
             SSH_OPTS="-o StrictHostKeyChecking=accept-new"
           fi
 
-          # `--no-deps` : on recrée les services NOMMÉS et rien d'autre. Un
-          # `up -d` nu recréerait tout service dont le digest a bougé — y compris
-          # la base et Redis au premier changement d'image de base.
-          ssh $SSH_OPTS -i ~/.ssh/id_deploy -o ConnectTimeout=20 \
-            "${SSH_USER:-root}@$SSH_HOST" \
-            "cd /opt/meeshy/staging && docker compose pull $CIBLES && docker compose up -d --no-deps $CIBLES"
+          # **On envoie des NOMS, pas une commande.** La clé est contrainte
+          # côté hôte par `command="/usr/local/bin/meeshy-deploy-staging.sh",restrict`
+          # dans `authorized_keys` : quoi qu'on envoie, c'est ce script qui
+          # s'exécute, et notre demande lui arrive en donnée
+          # (`$SSH_ORIGINAL_COMMAND`), validée contre une liste blanche de
+          # services.
+          #
+          # > Une clé de CI qui ouvrirait un shell root donnerait, en cas de
+          # > fuite du secret GitHub, la machine entière. Celle-ci ne donne que
+          # > le droit de redéployer des services déjà déclarés — éprouvé :
+          # > `cat /etc/shadow`, `database-staging` et `frontend-staging; id`
+          # > sont refusés en rc=64.
+          #
+          # Le script fait le `pull`, le `up -d --no-deps`, attend, puis IMPRIME
+          # l'état. Un seul aller-retour, et c'est l'appelant qui juge — sur ce
+          # que la machine montre, pas sur le code de retour d'`up -d`, qui rend
+          # 0 dès que Docker accepte la commande.
+          set +e
+          SORTIE=$(ssh $SSH_OPTS -i ~/.ssh/id_deploy -o ConnectTimeout=20 \
+            "${SSH_USER:-root}@$SSH_HOST" "$CIBLES" 2>&1)
+          RC=$?
+          set -e
+          echo "$SORTIE"
+
+          if [ "$RC" -ne 0 ]; then
+            echo "::error::le déploiement a échoué (rc=$RC)"
+            exit "$RC"
+          fi
+          if echo "$SORTIE" | grep -qiE "restarting|exited"; then
+            echo "::error::un service de staging ne tient pas debout après déploiement"
+            exit 1
+          fi
 
           {
             echo "## Staging déployé"
@@ -553,33 +579,6 @@ jobs:
             echo "Services recréés : \`$CIBLES\`"
           } >> $GITHUB_STEP_SUMMARY
           echo "deploye=true" >> $GITHUB_OUTPUT
-
-      - name: Vérifier que les conteneurs sont sains
-        # `steps.…outputs`, jamais `secrets` : le contexte `secrets` n'est PAS
-        # disponible dans un `if`, et l'y mettre fait rejeter le workflow ENTIER
-        # — aucun job créé, aucun log, un « failure » sans rien à lire.
-        if: steps.deploiement.outputs.deploye == 'true'
-        env:
-          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
-          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
-          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
-          CIBLES: ${{ steps.cibles.outputs.cibles }}
-        run: |
-          set -euo pipefail
-          # **Déployer n'est pas la preuve d'avoir déployé.** Un `up -d` rend 0
-          # dès que Docker a accepté la commande ; c'est l'état APRÈS qui dit si
-          # l'image tourne. Sans cette étape, un conteneur qui redémarre en
-          # boucle passerait pour un déploiement réussi — c'est exactement la
-          # forme du défaut `certs-dumper` (#5612), vert dans `docker ps` et
-          # mort 4 820 fois.
-          sleep 30
-          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_deploy \
-            "${SSH_USER:-root}@$SSH_HOST" \
-            "cd /opt/meeshy/staging && docker compose ps $CIBLES" | tee /tmp/etat
-          if grep -qiE "restarting|exited" /tmp/etat; then
-            echo "::error::un service de staging ne tient pas debout après déploiement"
-            exit 1
-          fi
 
   security-scan:
     name: Scan ${{ matrix.service }}
