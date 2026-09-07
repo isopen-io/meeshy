@@ -38,6 +38,12 @@ const ALLOWED = new Map([
   ['sr-only', 'émis seulement quand employé ; conservé comme utilitaire natif'],
   ['lens-row', 'crochet de sélection de la scène et du témoin — aucun style attendu'],
   ['lens-extra', 'idem : ce que la scène montre ou cache par style inline'],
+  [
+    'avatar-root',
+    'crochet de sélection du témoin de contraste (#5559 revue-correction, ' +
+      'défauts 1/8 — `check-list-actions.mjs`) : le fondu de sourdine vit en ' +
+      'style INLINE (`opacity`, prop `Avatar`), jamais dans la feuille',
+  ],
 ]);
 
 const sourceFiles = (dir) =>

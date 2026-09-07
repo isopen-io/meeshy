@@ -403,3 +403,44 @@ pas des champs de `Message` — le serveur ne les sert pas et ne les connaît pa
 Ce sont des opinions de CE client sur une charge, elle, partageable ; les
 confondre ferait voyager l'échec d'un appareil jusqu'à l'écran d'un autre.
 Ils vivent donc dans une carte à côté de la liste, jamais dedans.
+
+## D-17 · Les actions de rangée passent par un MENU, et leur état est un OVERRIDE — 2026-09-07 (#5559)
+
+**Le véhicule des actions est un menu ancré, pas un swipe.** iOS sert
+épingler / sourdine / lu–non-lu / archiver par deux glissements
+(`ConversationListView.swift:945-1040`) ET par un menu contextuel
+(`ConversationListView+Rows.swift:113-216`) : le menu est donc un véhicule
+CONFORME, pas une invention web. Il prend ici le geste primaire, pour deux
+raisons qui ne se discutent pas au cas par cas : le web n'a pas de vocabulaire
+de glissement horizontal qui ne se dispute pas avec le défilement de liste et
+le retour-geste des coques Capacitor ; et un bouton donne gratuitement le
+clavier et le lecteur d'écran, qu'un glissement ne donne jamais.
+
+**Le bouton d'actions est TOUJOURS tabulable et jamais `aria-hidden`.** Seule
+son APPARENCE est conditionnelle. La première forme le réservait à la rangée
+magnifiée — or la magnification est élue par la POSITION DE DÉFILEMENT, que
+personne ne pilote au clavier : les actions de toutes les autres rangées
+n'existaient donc pas pour qui n'a ni souris ni écran. Un contrôle qu'on VOIT
+au survol et qu'aucune technologie d'assistance ne peut atteindre est pire
+qu'un contrôle absent, parce que rien ne le signale.
+
+**Le menu suit le patron ARIA du menu déjà écrit** (`ReadingModeChip`) —
+tabindex roulant, flèches, `Home`/`End`, focus qui entre à l'ouverture et
+revient au bouton à la fermeture. Deux menus dans une même application, deux
+comportements clavier, et le témoin de l'un ne dit plus rien de l'autre :
+c'est la jumelle que ce dépôt paie deux fois à chaque fois qu'il l'ouvre.
+
+**L'épinglage se VOIT sur la rangée.** iOS n'en a pas besoin : il range les
+épinglées dans une SECTION nommée. La v3.1 a troqué les sections contre des
+chips de filtre, et rien ne restait alors pour DIRE l'épinglage — « Épingler »
+une conversation déjà en tête ne changeait strictement rien à l'écran. Une
+action dont l'effet n'est pas observable est une action inerte, quel que soit
+l'état qu'elle a bien changé en mémoire.
+
+**L'état de ces actions est un OVERRIDE, jamais une persistance.**
+`isPinned` / `isMuted` / `isArchived` viennent du fil (`userPreferences`,
+`GET /conversations`) et `unreadCount` du serveur : le magasin ne porte que la
+CORRECTION optimiste qu'un appel confirmera ou effacera, contrairement au mode
+de lecture (D-10) qui, lui, est un choix COLLANT du lecteur. Un magasin qui
+persisterait ces trois drapeaux les ferait survivre à leur propre démenti par
+le serveur.

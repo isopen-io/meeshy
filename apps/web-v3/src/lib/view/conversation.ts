@@ -1,5 +1,6 @@
 import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
+import { customNameOf } from '@/lib/api/preferences';
 import type { Conversation, Participant, UserPresenceStatus } from '@/lib/api/types';
 
 /**
@@ -29,9 +30,19 @@ export const unreadOf = (conversation: Conversation): number => conversation.unr
 /**
  * Une conversation directe n'a pas forcément de titre : elle porte le nom de
  * l'autre. `identifier` ferme la marche pour qu'une ligne ne soit jamais vide.
+ *
+ * `customName` (préférence PAR LECTEUR, `flagsOf`/`customNameOf` §3.1) PRIME
+ * sur tout le reste — c'est le nom que CE lecteur a choisi de donner à la
+ * conversation, avant même le titre serveur (loi iOS `ConversationListView…`,
+ * même précédence : un renommage local ne doit jamais être éclipsé par le
+ * titre de groupe ou le nom du pair).
  */
 export const titleOf = (conversation: Conversation, viewerId: string): string =>
-  conversation.title ?? peerOf(conversation, viewerId)?.displayName ?? conversation.identifier ?? '';
+  customNameOf(conversation) ??
+  conversation.title ??
+  peerOf(conversation, viewerId)?.displayName ??
+  conversation.identifier ??
+  '';
 
 /**
  * L'AUTRE, dans une conversation directe. `undefined` partout ailleurs — et
@@ -61,8 +72,16 @@ export const initialsOf = (name: string): string => {
  * aussi ce qu'impose la visibilité de la présence : hors amitié acceptée, le
  * serveur ne sert ni `isOnline` ni `lastActiveAt`, et un client ne fabrique
  * jamais ce que le serveur retire.
+ *
+ * `now` est INJECTABLE (repli `Date.now()`) : la loi 1/3/5 de
+ * `getUserPresenceStatus` prend son horloge en paramètre, jamais en lecture
+ * interne — sans l'injection ici, aucun témoin ne peut fixer les fenêtres
+ * `away`/`idle` sans dépendre de l'horloge RÉELLE au moment du test.
  */
-export const presenceOf = (participant: Participant | undefined): UserPresenceStatus =>
+export const presenceOf = (
+  participant: Participant | undefined,
+  now: number = Date.now(),
+): UserPresenceStatus =>
   getUserPresenceStatus(
     participant === undefined
       ? null
@@ -70,4 +89,5 @@ export const presenceOf = (participant: Participant | undefined): UserPresenceSt
           isOnline: participant.isOnline,
           ...(participant.lastActiveAt === undefined ? {} : { lastActiveAt: participant.lastActiveAt }),
         },
+    now,
   );

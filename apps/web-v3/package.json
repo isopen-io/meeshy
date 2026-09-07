@@ -13,7 +13,7 @@
     "measure": "node scripts/measure-weight.mjs",
     "cap:sync": "cap sync",
     "test": "bun test",
-    "gate": "bun run check:tokens && node scripts/check-curve.mjs && bun run type-check && bun test && bun run build && node scripts/check-utilities.mjs && node scripts/measure-weight.mjs && node scripts/check-institutional.mjs && node scripts/check-lens.mjs && node scripts/check-thread-states.mjs && node scripts/check-thread-virtualization.mjs && node scripts/check-reading-mode.mjs && node scripts/check-docker-context.mjs && node scripts/check-git-tracking.mjs",
+    "gate": "bun run check:tokens && node scripts/check-curve.mjs && bun run type-check && bun test && bun run build && node scripts/check-utilities.mjs && node scripts/measure-weight.mjs && node scripts/check-institutional.mjs && node scripts/check-lens.mjs && node scripts/check-list-actions.mjs && node scripts/check-thread-states.mjs && node scripts/check-thread-virtualization.mjs && node scripts/check-reading-mode.mjs && node scripts/check-docker-context.mjs && node scripts/check-git-tracking.mjs",
     "check:tokens": "node ../../packages/design-tokens/scripts/generate-from-ios.mjs --check",
     "check:tokens-resolved": "node scripts/check-tokens.mjs",
     "test:coverage": "bun test --coverage",
@@ -25,7 +25,8 @@
     "check:utilities": "node scripts/check-utilities.mjs",
     "check:virtualization": "node scripts/check-thread-virtualization.mjs",
     "check:states": "node scripts/check-thread-states.mjs",
-    "check:reading-mode": "node scripts/check-reading-mode.mjs"
+    "check:reading-mode": "node scripts/check-reading-mode.mjs",
+    "check:list-actions": "node scripts/check-list-actions.mjs"
   },
   "dependencies": {
     "@meeshy/shared": "workspace:*",
