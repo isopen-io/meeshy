@@ -21,10 +21,10 @@
     <script>
       (function () {
         try {
-          var choisi = localStorage.getItem('meeshy.schema');
-          var clair = choisi ? choisi === 'clair' : window.matchMedia('(prefers-color-scheme: light)').matches;
-          document.documentElement.classList.toggle('light', clair);
-          document.documentElement.classList.toggle('dark', !clair);
+          var chosen = localStorage.getItem('meeshy.scheme');
+          var light = chosen ? chosen === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches;
+          document.documentElement.classList.toggle('light', light);
+          document.documentElement.classList.toggle('dark', !light);
         } catch (e) {
           /* Mode privé, stockage refusé : le schema sombre du HTML reste. */
         }
@@ -32,7 +32,7 @@
     </script>
   </head>
   <body>
-    <div id="racine"></div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

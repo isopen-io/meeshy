@@ -96,9 +96,9 @@ docker-compose*.yml
 !apps/web-old-version3/scripts
 !apps/web-old-version3/scripts/**
 # LA v3.1 A LE MÊME BESOIN, pour une raison voisine et un symptôme identique :
-# `vite.config.ts` importe `./scripts/lib/routes-institutionnelles.mjs` (la
+# `vite.config.ts` importe `./scripts/lib/institutional-routes.mjs` (la
 # source unique des cinq adresses institutionnelles), et son greffon de
-# construction lance `scripts/prerend-institutionnel.tsx`. La règle générique
+# construction lance `scripts/prerender-institutional.tsx`. La règle générique
 # `**/scripts/` ci-dessus les retirait du contexte, et l'erreur aurait désigné
 # un chemin JUSTE vers un fichier qui EXISTE dans le dépôt — rien n'aurait dit
 # qu'il avait été filtré à l'entrée. L'image FINALE n'en porte rien : l'étage

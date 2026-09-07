@@ -32,7 +32,7 @@ de trois fois le runtime Preact entier. Ce poids s'est révélé
 **incompressible** : retirer toutes ses options rend un chunk au **hash
 identique** — on ne paie pas ce qu'on utilise, on paie le moteur.
 
-Il est remplacé par `src/lib/routeur.tsx`, taillé pour ce que Meeshy demande
+Il est remplacé par `src/lib/router.tsx`, taillé pour ce que Meeshy demande
 (paramètres de chemin typés depuis le motif, paramètres de recherche,
 découpage par route, préchargement à l'intention, restauration du défilement) :
 **~1,4 Ko gzip**. La première peinture passe de **50,85 à 24,53 Ko** et de
@@ -58,8 +58,8 @@ Les deux se construisent depuis **le même `dist/`** ; seul `MEESHY_CIBLE`
 change (base relative, service worker retiré). C'est la condition pour que
 « transformable sans friction » soit une mesure et non une promesse.
 
-Rejouer : `bun run gate`, `node scripts/verifie-hors-ligne.mjs`,
-`node scripts/capture.mjs` (captures dans `rendu/`, non versionnées).
+Rejouer : `bun run gate`, `node scripts/check-offline.mjs`,
+`node scripts/capture.mjs` (captures dans `render/`, non versionnées).
 
 Les captures figent l'horloge de la page (`page.clock.setFixedTime`) : sans
 ça, deux captures du même code diffèrent par leurs horodatages et comparer un
@@ -98,11 +98,11 @@ maquettes web. Ce qui en découle et qu'on rate en regardant vite :
 - **L'avatar et le nom vivent DANS le pied de la bulle**, et seulement sur le
   **dernier** message d'une suite (jamais le premier), en groupe, en réception.
 - **Regroupement** : même auteur + même jour, **sans fenêtre temporelle**
-  (`src/lib/groupage.ts`, témoins compris). C'est la même loi que iOS, le web
+  (`src/lib/grouping.ts`, témoins compris). C'est la même loi que iOS, le web
   et Android.
 - **Prisme Linguistique** : le contenu affiché EST déjà la traduction préférée,
   rendu comme du contenu natif ; la seule marque est la pastille `translate` et
-  la bande de drapeaux du pied. La descente est dans `src/lib/api/prisme.ts`,
+  la bande de drapeaux du pied. La descente est dans `src/lib/api/prism.ts`,
   avec le témoin qui compte — celui qui s'écrit sur un **rang autre que le
   premier**, sinon le court-circuit interdit et la règle juste rendent le même
   verdict.
@@ -120,7 +120,7 @@ fluidité sérieuse sur Android d'entrée de gamme.
 
 **Aucune valeur de couleur ou de géométrie iOS n'est écrite à la main ici.**
 `packages/design-tokens/ios.css` est **généré** depuis `MeeshyColors.swift` et
-`DesignTokens.swift` par `packages/design-tokens/scripts/genere-depuis-ios.mjs`.
+`DesignTokens.swift` par `packages/design-tokens/scripts/generate-from-ios.mjs`.
 `src/styles/ios.css` ne fait plus que **nommer** ces jetons en utilitaires
 Tailwind.
 
@@ -128,8 +128,8 @@ Deux gates, qui vérifient deux choses différentes :
 
 | gate | ce qu'il prouve |
 |---|---|
-| `bun run check:jetons` | le CSS généré n'a pas dérivé de ses sources Swift |
-| `bun run verifie:jetons` | **le navigateur peint bien ces valeurs-là**, dans les deux schémas |
+| `bun run check:tokens` | le CSS généré n'a pas dérivé de ses sources Swift |
+| `bun run check:tokens-resolved` | **le navigateur peint bien ces valeurs-là**, dans les deux schémas |
 
 Le second n'est pas redondant : entre le fichier généré et le pixel il y a un
 import, un `@theme inline`, la cascade et deux classes de schéma, et n'importe
@@ -170,4 +170,4 @@ vus rougir sur une valeur falsifiée.
   D'où `erreur`, `anneau`, `av-N`, `pile`.
 
 Les noms d'utilitaires sont les **rôles** de la charte, pas des tailles :
-`rounded-carte`, `text-corps`, `bg-plan`. Un mésusage se voit en revue.
+`rounded-card`, `text-body`, `bg-panel`. Un mésusage se voit en revue.

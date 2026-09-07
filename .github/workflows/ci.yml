@@ -250,22 +250,30 @@ jobs:
       # LES GATES PROPRES À LA V4 — ils ne rentrent dans aucun filtre turbo
       # parce qu'ils ne sont pas des tâches de package : ce sont des mesures.
       #
-      #   check:jetons  la palette dérivée n'a pas dérivé de MeeshyColors.swift
-      #   mesure-poids  la première peinture tient sous le plafond de budgets.json
+      #   check:tokens      la palette dérivée n'a pas dérivé de MeeshyColors.swift
+      #   measure-weight    la première peinture tient sous le plafond de budgets.json
+      #   check-utilities   aucune classe utilitaire n'est morte dans la feuille
       #
       # Le second est la raison d'être de cette application (une zone rurale,
       # un réseau payé au mégaoctet) : le laisser hors CI reviendrait à écrire
       # un budget que personne ne vérifie. Le build est mesuré à ~200 ms, le
       # coût d'étape est négligeable.
       - name: Gates web-v3 (jetons dérivés + poids de la première peinture)
-        working-directory: apps/web-v3
         run: |
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:jetons
-          node scripts/verifie-courbe.mjs
+          # `@meeshy/shared` sert son `dist/` : le type-check et le build de la
+          # v3.1 s'y résolvent depuis #5493. Étape EXPLICITE plutôt que filtre
+          # turbo, pour rester alignée sur les trois autres travaux navigateur
+          # qui la portent déjà.
+          cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-          node scripts/mesure-poids.mjs
-          node scripts/verifie-contexte-docker.mjs
-          node scripts/verifie-suivi-git.mjs
+          cd ../../apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
+          node scripts/check-curve.mjs
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          node scripts/check-utilities.mjs
+          node scripts/measure-weight.mjs
+          node scripts/check-docker-context.mjs
+          node scripts/check-git-tracking.mjs
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
@@ -640,6 +648,11 @@ jobs:
       # Le préchauffage des cinq documents fait partie de CE build depuis
       # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
       # exactement ce qu'un déploiement servirait.
+      - name: Build packages/shared (la v3.1 en importe depuis #5493)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
       - name: Build apps/web-v3
         run: |
           cd apps/web-v3
@@ -651,7 +664,7 @@ jobs:
       - name: Gate cache institutionnel
         run: |
           cd apps/web-v3
-          node scripts/verifie-institutionnel.mjs
+          node scripts/check-institutional.mjs
 
       # LE CRITÈRE BINAIRE DE LA LENTILLE, dans le MÊME travail : il lève le
       # même navigateur sur le même `dist`, et un second travail paierait une
@@ -659,7 +672,7 @@ jobs:
       - name: Gate flux de la Lentille (mise en page invariable au défilement)
         run: |
           cd apps/web-v3
-          node scripts/verifie-lentille.mjs
+          node scripts/check-lens.mjs
 
   # ===========================================================================
   # LIFECYCLE: le gate de cycle de vie du § 8.5 de la conception v3 — SON PORTEUR
