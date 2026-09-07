@@ -15,6 +15,7 @@ import { FEUILLE_DU_PLEIN } from '@/app/connecte/plein-feuille';
 import { FEUILLE_DES_MEDIAS } from '@/app/connecte/medias-feuille';
 import { FEUILLE_DES_CONTACTS } from '@/app/connecte/contacts-feuille';
 import { FEUILLE_DES_LIENS, FEUILLE_DU_NOUVEAU_LIEN } from '@/app/connecte/liens-feuille';
+import { FEUILLE_DU_TRANSFERT } from '@/app/connecte/transfert-feuille';
 import { FEUILLE_DES_COMMENTAIRES } from '@/app/connecte/commentaires-feuille';
 import { FEUILLE_DE_LA_RECHERCHE } from '@/app/connecte/recherche-feuille';
 import { FEUILLE_DE_LA_LISTE, FEUILLE_DE_LA_NOUVELLE_CONV } from '@/app/connecte/liste-feuille';
@@ -99,6 +100,10 @@ const FEUILLES: readonly Feuille[] = [
   // Une feuille absente de cette liste est une feuille hors charte, et rien
   // ne le disait.
   { nom: 'app/connecte/composer-feuille.ts', source: FEUILLE_DU_COMPOSER },
+  // La feuille « transférer le message » (#5386, `?transferer=<id>`) — le
+  // même partage que `FEUILLE_DU_NOUVEAU_LIEN` : servie SEULEMENT dans son
+  // état, une conversation ordinaire du fil n'en paie pas un octet.
+  { nom: 'app/connecte/transfert-feuille.ts', source: FEUILLE_DU_TRANSFERT },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -183,6 +188,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/appels-feuille.ts',
       'app/connecte/communautes-feuille.ts',
       'app/connecte/composer-feuille.ts',
+      'app/connecte/transfert-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -328,6 +334,12 @@ describe('règle 3 — le poids, plafonds décidés du § 12.6', () => {
     {
       nom: 'liens avec la feuille de création',
       source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DES_LIENS + FEUILLE_DU_NOUVEAU_LIEN,
+    },
+    // L'état `?transferer=<id>` du fil (#5386) : la SEULE composition qui
+    // porte la feuille de transfert — un fil ordinaire n'en paie pas un octet.
+    {
+      nom: 'fil avec la feuille de transfert',
+      source: CHROME + FEUILLE_CONNECTEE + FEUILLE_DU_FIL + FEUILLE_DU_TRANSFERT,
     },
     // L'état `/chats?nouvelle` : la liste plus sa feuille de création.
     {
@@ -606,6 +618,7 @@ describe('règles 14 et 16 — plans, filets, et ce qui ne se peint jamais', () 
       'app/connecte/communautes-feuille.ts › dialog.communaute-ouverte',
       'app/connecte/communautes-feuille.ts › dialog.nouvelle-communaute',
       'app/connecte/communautes-feuille.ts › dialog.nouvelle-communaute .pied',
+      'app/connecte/transfert-feuille.ts › dialog.transfert',
     ]);
   });
 });

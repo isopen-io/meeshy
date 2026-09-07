@@ -14,6 +14,7 @@ import { CHARGEUR_DE_PARTICIPATION, REGLES_DE_SPECULATION, blocDuNavigateur, scr
 export { CHARGEUR_DE_PARTICIPATION };
 import { adresseDeLaFeuilleDeLien, adresseDuRetourDuPlein } from '@/lib/api/adresses-du-fil';
 import { citationDeReponse, resoutContreLaPage } from '@/lib/api/citations';
+import type { Conversation } from '@/lib/api/compte';
 import { LONGUEUR_MAX_DU_MESSAGE, MENTIONS_RETENUES, type Fil, type Message } from '@/lib/api/fil';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import type { CleDeLien } from '@/lib/api/guest-session';
@@ -41,6 +42,8 @@ import { pieceEnPlein, piecesDuFil, pleinEcran } from './plein-vue';
 import { regionDuPrisme } from './prisme-vue';
 import { FEUILLE_DU_PROFIL } from './profil-feuille';
 import { surimpressionDuProfil, type ProfilDeLaSurimpression } from './profil-vue';
+import { FEUILLE_DU_TRANSFERT } from './transfert-feuille';
+import { feuilleDeTransfert } from './transfert-vue';
 import { carteVide } from './vue';
 
 export type { ProfilDeLaSurimpression } from './profil-vue';
@@ -178,6 +181,17 @@ export type EtatDuFil = {
   readonly lienCree?: string | null;
   /** `?retirer=<id>` — la fenêtre d'annulation d'un retrait, sans JavaScript (#5387), résolue par la porte (`resoutLeRetrait`). Optionnel, `null` par défaut. */
   readonly retrait?: string | null;
+  /**
+   * `?transferer=<id>` — LA FEUILLE « TRANSFÉRER LE MESSAGE » (#5386) — un
+   * ÉTAT de cette adresse, comme `lien` ci-dessus, réservé au MEMBRE (choisir
+   * une cible suppose une liste de conversations, que l'invité de
+   * `/chat/:lien` n'a pas). `message` vient de `resoutLeTransfert` (résolu
+   * contre la tranche servie) ; `conversations`, de `ciblesDeTransfert`
+   * (payée SEULEMENT quand la feuille s'ouvre, charte règle 7) ; `motif`, le
+   * refus déjà servi par la passerelle sur une soumission précédente — `null`
+   * au premier chargement. Optionnel, `null` par défaut.
+   */
+  readonly transfert?: { readonly message: Message; readonly conversations: readonly Conversation[]; readonly motif: string | null } | null;
 };
 
 export const CHAMP_DU_MESSAGE = 'texte';
@@ -905,28 +919,31 @@ export const documentPleinEcran = ({
   '</html>';
 
 /**
- * LA SURIMPRESSION — plein écran d'un média, profil d'un participant OU
- * feuille « nouveau lien de partage » (#5034), hors du `<main>`, comme la
- * modale de l'état CHOIX : une surimpression n'est pas un morceau du contenu
- * qu'elle recouvre. Sa FEUILLE ne part QUE dans son état (`documentDuFil`) :
- * ce que le fil n'affiche pas, il ne le paie pas (charte règle 7).
+ * LA SURIMPRESSION — plein écran d'un média, profil d'un participant, feuille
+ * « nouveau lien de partage » (#5034) OU feuille « transférer le message »
+ * (#5386), hors du `<main>`, comme la modale de l'état CHOIX : une
+ * surimpression n'est pas un morceau du contenu qu'elle recouvre. Sa FEUILLE
+ * ne part QUE dans son état (`documentDuFil`) : ce que le fil n'affiche pas,
+ * il ne le paie pas (charte règle 7).
  *
- * L'ORDRE EST PROFIL > LIEN > PLEIN ÉCRAN quand plusieurs adresses sont posées
- * à la fois — un cas qu'aucun des trois gestes ne produit seul (chacun vient
- * d'un lien distinct), mais qu'une adresse composée à la main peut
- * présenter : une seule surimpression à la fois, jamais deux `<dialog open>`
- * empilés.
+ * L'ORDRE EST PROFIL > LIEN > TRANSFERT > PLEIN ÉCRAN quand plusieurs
+ * adresses sont posées à la fois — un cas qu'aucun des quatre gestes ne
+ * produit seul (chacun vient d'un lien distinct), mais qu'une adresse
+ * composée à la main peut présenter : une seule surimpression à la fois,
+ * jamais deux `<dialog open>` empilés.
  *
- * LE LIEN EST FAIL-CLOSED CÔTÉ INVITÉ, ICI MÊME — pas seulement parce que la
- * porte ne construit jamais `etat.lien` pour lui (`app/(public)/chat/[lien]/
- * route.ts` ne lit jamais `?lien`) : la vue ne fait confiance à AUCUN appelant
- * pour cette garde, la même prudence que `peutAgir` en porte pour le profil.
+ * LE LIEN ET LE TRANSFERT SONT FAIL-CLOSED CÔTÉ INVITÉ, ICI MÊME — pas
+ * seulement parce que la porte ne construit jamais `etat.lien`/`etat.transfert`
+ * pour lui (`app/(public)/chat/[lien]/route.ts` ne lit ni `?lien` ni
+ * `?transferer=`) : la vue ne fait confiance à AUCUN appelant pour cette
+ * garde, la même prudence que `peutAgir` en porte pour le profil.
  */
 type Surimpression =
   | { readonly genre: 'aucune' }
   | { readonly genre: 'plein'; readonly html: string }
   | { readonly genre: 'profil'; readonly html: string }
-  | { readonly genre: 'lien'; readonly html: string };
+  | { readonly genre: 'lien'; readonly html: string }
+  | { readonly genre: 'transfert'; readonly html: string };
 
 const surimpressionDuLien = (etat: EtatDuFil): string | null => {
   if (etat.porte.genre !== 'membre') return null;
@@ -954,6 +971,28 @@ const surimpressionDuLien = (etat: EtatDuFil): string | null => {
   });
 };
 
+/**
+ * LA FEUILLE « TRANSFÉRER LE MESSAGE » (#5386) — FAIL-CLOSED CÔTÉ INVITÉ, la
+ * même garde que `surimpressionDuLien` juste au-dessus : `etat.transfert`
+ * n'est jamais construit pour l'invité (`resoutLeTransfert`, appelé porte
+ * seule avec `estInvite: false` sur `/chats/:cle`), mais cette fonction ne
+ * fait confiance à AUCUN appelant.
+ */
+const surimpressionDuTransfert = (etat: EtatDuFil): string | null => {
+  if (etat.porte.genre !== 'membre') return null;
+  const transfert = etat.transfert ?? null;
+  if (transfert === null) return null;
+  const adresseHote = adresseDeLaPorte(etat.porte);
+  return feuilleDeTransfert({
+    message: transfert.message,
+    conversations: transfert.conversations,
+    langues: etat.lecteur.langues,
+    motif: transfert.motif,
+    retour: adresseHote,
+    action: adresseHote,
+  });
+};
+
 const surimpression = (etat: EtatDuFil): Surimpression => {
   if (etat.profil !== null) {
     const { handle, servi, confirmerBlocage } = etat.profil;
@@ -973,6 +1012,8 @@ const surimpression = (etat: EtatDuFil): Surimpression => {
   }
   const lien = surimpressionDuLien(etat);
   if (lien !== null) return { genre: 'lien', html: lien };
+  const transfert = surimpressionDuTransfert(etat);
+  if (transfert !== null) return { genre: 'transfert', html: transfert };
   const plein = pieceEnPlein(piecesDuFil(etat.fil), etat.plein);
   return plein === null
     ? { genre: 'aucune' }
@@ -1021,7 +1062,8 @@ export const documentDuFil = (etat: EtatDuFil): string => {
       (etat.tempsReel === null ? '' : FEUILLE_DE_LA_BANNIERE) +
       (dessus.genre === 'plein' ? FEUILLE_DU_PLEIN : '') +
       (dessus.genre === 'profil' ? FEUILLE_DU_PROFIL : '') +
-      (dessus.genre === 'lien' ? FEUILLE_DU_NOUVEAU_LIEN : ''),
+      (dessus.genre === 'lien' ? FEUILLE_DU_NOUVEAU_LIEN : '') +
+      (dessus.genre === 'transfert' ? FEUILLE_DU_TRANSFERT : ''),
   });
 };
 

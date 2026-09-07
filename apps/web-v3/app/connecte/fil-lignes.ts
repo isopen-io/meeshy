@@ -1,6 +1,6 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { echappe } from '@/app/socle';
-import { adresseDeTransfert, adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
+import { adresseDuPlein, ancreDuMessage, identifiantDuMessage } from '@/lib/api/adresses-du-fil';
 import { annonceDuPrisme, type Citation, type GenreDeCitation, type Message, type PieceJointe } from '@/lib/api/fil';
 import { peutModifier, peutRetirer, peutTransferer } from '@/lib/api/fil-mutations';
 import { FORME_PAR_GENRE, sEcouteSurPlace } from '@/lib/api/formes';

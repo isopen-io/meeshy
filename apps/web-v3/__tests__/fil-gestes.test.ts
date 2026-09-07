@@ -585,9 +585,14 @@ describe('le menu d’une ligne (§ 12.10.1, issue #5163)', () => {
     expect(html).toContain('name="retirer" value="m3"');
   });
 
-  it('composeur FERMÉ : aucun menu sur les lignes d’autrui', () => {
+  it('composeur FERMÉ : ni répondre ni modifier ni retirer sur les lignes d’autrui — seul « Transférer » reste (#5386)', () => {
     const html = SANS_GABARIT(ETAT_DOC(AUTRUI, { composeur: { genre: 'ferme', raison: 'Fermé', cause: 'lien' } }));
-    expect(html).not.toContain('<details class="actions">');
+    expect(html).not.toContain('name="repondre" value="m2"');
+    expect(html).not.toContain('name="modifier" value="m2"');
+    expect(html).not.toContain('name="retirer" value="m2"');
+    // « Transférer » (#5386) n'est ni un geste d'auteur ni un geste de
+    // composeur — un message d'autrui, composeur fermé, reste transférable.
+    expect(html).toContain('name="transferer" value="m2"');
   });
 
   it('un invité ne voit jamais modifier ni retirer, même sur ses propres lignes', () => {
@@ -604,6 +609,9 @@ describe('le menu d’une ligne (§ 12.10.1, issue #5163)', () => {
     expect(html).toContain('name="repondre" value="m4"');
     expect(html).not.toContain('name="modifier" value="m4"');
     expect(html).not.toContain('name="retirer" value="m4"');
+    // « Transférer » (#5386) suppose une liste de conversations à choisir,
+    // que l'invité d'un lien n'a pas — jamais rendu pour lui.
+    expect(html).not.toContain('name="transferer" value="m4"');
   });
 });
 

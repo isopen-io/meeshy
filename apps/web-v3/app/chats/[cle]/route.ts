@@ -5,6 +5,7 @@ import {
   accuseCeQuiEstServi,
   ancreDemandee,
   CACHE_PRIVE,
+  ciblesDeTransfert,
   curseurDemande,
   feuilleDeLienDemandee,
   lienCreeDemande,
@@ -17,11 +18,13 @@ import {
   rendu,
   resoutLeContexte,
   resoutLeRetrait,
+  resoutLeTransfert,
   retraitDemande,
   soumissionDuFil,
   tempsReelDuDocument,
   traiteLaCreationDuLien,
   traiteLaSoumission,
+  transfertDemande,
 } from '@/app/connecte/fil-porte';
 import { adresseDeLaPorte, documentDuFil, documentIntrouvable } from '@/app/connecte/fil-vue';
 import { saisieDuFil, type SaisieDuLien } from '@/app/connecte/nouveau-lien-vue';
@@ -79,6 +82,8 @@ const charge = async ({
   idReponse = null,
   idModification = null,
   idRetrait = null,
+  idTransfert = null,
+  transfertMotif = null,
   lienDemande = false,
   lienSaisie,
   lienMotif = null,
@@ -101,6 +106,10 @@ const charge = async ({
   readonly idModification?: string | null;
   /** `?retirer=` — la fenêtre d'annulation d'un retrait, sans JavaScript (#5387). */
   readonly idRetrait?: string | null;
+  /** `?transferer=` — ou la cible CONSERVÉE d'un refus de transfert (#5386). */
+  readonly idTransfert?: string | null;
+  /** Le motif du refus de la passerelle à l'envoi transféré, rendu TEL QUEL dans la feuille. */
+  readonly transfertMotif?: string | null;
   /** `?lien` — la feuille « nouveau lien de partage » est-elle ouverte (#5034) ? */
   readonly lienDemande?: boolean;
   /** La saisie REPOSÉE après un refus de création — sinon le défaut (conversation verrouillée, nom = titre du fil). */
@@ -141,6 +150,15 @@ const charge = async ({
   // `?retirer=` (#5387) — résolu contre CE qui vient d'être servi, comme
   // `?repondre=`/`?modifier=` juste au-dessus.
   const retrait = resoutLeRetrait({ idRetrait, fil: issue.fil, estInvite: false });
+  // `?transferer=` (#5386) — résolu contre CE qui vient d'être servi, comme
+  // les états précédents. La liste des cibles n'est chargée que si la
+  // feuille s'ouvre réellement (charte règle 7) : une requête de plus,
+  // jamais payée sur une lecture nominale du fil.
+  const messageATransferer = resoutLeTransfert({ idTransfert, fil: issue.fil, estInvite: false });
+  const transfert =
+    messageATransferer === null
+      ? null
+      : { message: messageATransferer, conversations: await ciblesDeTransfert({ jeton, depuis: cle }), motif: transfertMotif };
   // `?lien` (#5034, § 12.10.5) — la saisie REPOSÉE après un refus, ou le
   // défaut (conversation VERROUILLÉE sur `cle`, nom PRÉREMPLI du titre du fil).
   const lien = lienDemande ? { saisie: lienSaisie ?? saisieDuFil(cle, issue.fil.titre), motif: lienMotif } : null;
@@ -162,6 +180,7 @@ const charge = async ({
       lien,
       lienCree,
       retrait,
+      transfert,
     }),
     // LE STATUT VIENT DE `statut` DIRECTEMENT (défaut 200) — pas de `erreur`,
     // depuis que la création d'un lien (#5034) peut refuser (422/503) SANS
@@ -188,20 +207,24 @@ export const GET = async (
   // `?retirer=` (#5387) — le TROISIÈME état exclusif de cette famille (§ 4
   // étape 2) : jamais en même temps que `?repondre=`/`?modifier=`.
   const idRetrait = idReponse === null && idModification === null ? retraitDemande(requete) : null;
+  // `?transferer=` (#5386) — le QUATRIÈME état exclusif de cette famille.
+  const idTransfert = idReponse === null && idModification === null && idRetrait === null ? transfertDemande(requete) : null;
 
   return charge({
     requete,
     jeton,
     cle,
     avant: curseurDemande(requete),
-    // `?repondre=`/`?modifier=`/`?retirer=` servent la tranche AUTOUR de leur
-    // cible — la loi de `?media=` (§ 9 Q2 de la spécification #5163) appliquée
-    // à un état de plus ; `?avant=` l'emporte toujours (jamais deux à la fois).
-    autour: ancreDemandee(requete) ?? idReponse ?? idModification ?? idRetrait,
+    // `?repondre=`/`?modifier=`/`?retirer=`/`?transferer=` servent la tranche
+    // AUTOUR de leur cible — la loi de `?media=` (§ 9 Q2 de la spécification
+    // #5163) appliquée à un état de plus ; `?avant=` l'emporte toujours
+    // (jamais deux à la fois).
+    autour: ancreDemandee(requete) ?? idReponse ?? idModification ?? idRetrait ?? idTransfert,
     plein: pleinDemande(requete),
     idReponse,
     idModification,
     idRetrait,
+    idTransfert,
     lienDemande: feuilleDeLienDemandee(requete),
     lienCree: lienCreeDemande(requete),
     erreur: null,
@@ -259,18 +282,24 @@ export const POST = async (
   if (issue.statut === 401) return versLaConnexion(cle);
   // Le contexte armé est CONSERVÉ sur un refus (§ 9 Q2) : le formulaire poste
   // vers l'adresse NUE, donc `requete.url` ne porte plus `?modifier=`/
-  // `?repondre=` — c'est la soumission elle-même qui dit ce qui était armé.
+  // `?repondre=`/`?transferer=` — c'est la soumission elle-même qui dit ce
+  // qui était armé.
   const idReponse = soumission.genre === 'reponse' ? soumission.replyToId : null;
   const idModification = soumission.genre === 'modification' ? soumission.messageId : null;
+  // Un TRANSFERT refusé (#5386) ROUVRE la feuille sur SA cible, avec le motif
+  // du refus — jamais une redirection qui perdrait le choix déjà fait.
+  const idTransfert = soumission.genre === 'transfert' ? soumission.messageId : null;
   return charge({
     requete,
     jeton,
     cle,
     avant: null,
-    autour: idReponse ?? idModification,
+    autour: idReponse ?? idModification ?? idTransfert,
     idReponse,
     idModification,
-    erreur: issue.message,
+    idTransfert,
+    transfertMotif: idTransfert === null ? null : issue.message,
+    erreur: idTransfert === null ? issue.message : null,
     brouillon: issue.brouillon,
     statut: issue.statut,
   });

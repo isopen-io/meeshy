@@ -1,6 +1,7 @@
 import { actifsTempsReel } from '@/lib/actifs-rt';
 import {
   adresseDeRetrait,
+  adresseDuFil,
   adresseDuLienCree,
   adresseDuMessage,
   PARAM_DE_L_ANCRE,
@@ -10,10 +11,11 @@ import {
   PARAM_DU_LIEN_CREE,
   PARAM_DU_PLEIN,
   PARAM_DU_RETRAIT,
+  PARAM_DU_TRANSFERT,
 } from '@/lib/api/adresses-du-fil';
-import { creeUnLien, type Lecteur, type Recuperateur } from '@/lib/api/compte';
-import { envoie, televerse, type Creance, type Fil } from '@/lib/api/fil';
-import { accuseLecture, aAccuser, modifie, peutModifier, peutRetirer, reagis, retire } from '@/lib/api/fil-mutations';
+import { conversations as conversationsDuLecteur, creeUnLien, sansArchivees, type Conversation, type Lecteur, type Recuperateur } from '@/lib/api/compte';
+import { envoie, televerse, type Creance, type Fil, type Message } from '@/lib/api/fil';
+import { accuseLecture, aAccuser, modifie, peutModifier, peutRetirer, peutTransferer, reagis, retire } from '@/lib/api/fil-mutations';
 import { baseDeLaPasserellePublique } from '@/lib/api/links';
 import { FIL } from '@/lib/contenu/fil';
 import { traduisLeMotifDuLien } from '@/lib/contenu/liens';
@@ -32,6 +34,12 @@ import {
 import { champsCommuns, saisieSoumise } from './nouveau-lien-porte';
 import type { SaisieDuLien } from './nouveau-lien-vue';
 import { pieceEnPlein, piecesDuFil } from './plein-vue';
+import {
+  CHAMP_DE_LA_CIBLE_DU_TRANSFERT,
+  CHAMP_DE_LA_LANGUE_TRANSFEREE,
+  CHAMP_DU_TEXTE_TRANSFERE,
+  CHAMP_DU_TRANSFERT,
+} from './transfert-vue';
 
 /**
  * CE QUE LES DEUX PORTES DU FIL PARTAGENT — la réponse, sa politique de cache,
@@ -127,6 +135,19 @@ export const retraitDemande = (requete: Request): string | null => {
 };
 
 /**
+ * `?transferer=<id>` — LA FEUILLE « TRANSFÉRER LE MESSAGE » (#5386). Lue ICI,
+ * comme `?repondre=`/`?modifier=`/`?retirer=` juste au-dessus : un cinquième
+ * état de la même adresse hôte, résolu contre ce qui est SERVI
+ * (`resoutLeTransfert`) — membre SEUL (`app/chats/[cle]/route.ts`
+ * uniquement, l'invité de `/chat/:lien` n'a pas de liste de conversations où
+ * transférer).
+ */
+export const transfertDemande = (requete: Request): string | null => {
+  const valeur = new URL(requete.url).searchParams.get(PARAM_DU_TRANSFERT);
+  return valeur === null || valeur.trim() === '' ? null : valeur;
+};
+
+/**
  * `?lien` — LA FEUILLE « NOUVEAU LIEN DE PARTAGE », OUVERTE DEPUIS LE FIL
  * (#5034, § 12.10.5). Lue ICI, comme `?media=`, `?profil=`, `?autour=` :
  * membre SEUL (`app/chats/[cle]/route.ts` — l'invité de `/chat/:lien` ne
@@ -215,6 +236,51 @@ export const resoutLeRetrait = ({
   return peutRetirer({ deMoi: cible.deMoi, systeme: cible.systeme, supprime: cible.supprime, protege: cible.protege }) ? idRetrait : null;
 };
 
+/**
+ * LA CIBLE DE `?transferer=<id>` (#5386), RÉSOLUE CONTRE CE QUI EST SERVI —
+ * le même patron que `resoutLeRetrait` juste au-dessus, PURE et ne faisant
+ * confiance à AUCUN appelant. Rend le MESSAGE entier (pas seulement son
+ * identifiant) : la feuille (`transfert-vue.ts`) a besoin de son texte et de
+ * sa langue d'origine pour les porter en champs cachés, sans requête de plus.
+ */
+export const resoutLeTransfert = ({
+  idTransfert,
+  fil,
+  estInvite,
+}: {
+  readonly idTransfert: string | null;
+  readonly fil: Fil;
+  readonly estInvite: boolean;
+}): Message | null => {
+  if (idTransfert === null || estInvite) return null;
+  const cible = fil.messages.find((m) => m.id === idTransfert);
+  if (cible === undefined) return null;
+  return peutTransferer({ systeme: cible.systeme, supprime: cible.supprime, protege: cible.protege }) ? cible : null;
+};
+
+const CIBLES_DE_TRANSFERT_MAX = 50;
+
+/**
+ * LES CIBLES POSSIBLES D'UN TRANSFERT — les conversations du lecteur, hors
+ * celle qu'il quitte et celles qu'il a archivées (`sansArchivees`, le même
+ * filtre que `/chats`, `lib/api/compte.ts`). Une requête de PLUS que le fil
+ * ordinaire, payée SEULEMENT quand la feuille s'ouvre réellement (charte
+ * règle 7) — jamais sur une lecture nominale du fil.
+ */
+export const ciblesDeTransfert = async ({
+  jeton,
+  depuis,
+  recuperer,
+}: {
+  readonly jeton: string;
+  readonly depuis: string;
+  readonly recuperer?: Recuperateur;
+}): Promise<readonly Conversation[]> => {
+  const fil = await conversationsDuLecteur({ jeton, limite: CIBLES_DE_TRANSFERT_MAX, recuperer });
+  if (fil.genre !== 'liste') return [];
+  return sansArchivees(fil.conversations).filter((conversation) => conversation.id !== depuis);
+};
+
 /** Le formulaire posté, ou `null` — un corps illisible n'est pas une exception. */
 export const lisLeFormulaire = async (requete: Request): Promise<FormData | null> =>
   requete.formData().catch(() => null);
@@ -251,7 +317,15 @@ export type SoumissionDuFil =
    */
   | { readonly genre: 'retrait'; readonly messageId: string; readonly confirme: boolean }
   /** « Annuler » de la fenêtre servie (#5387) — redirige, n'envoie rien. */
-  | { readonly genre: 'annulation-de-retrait'; readonly messageId: string };
+  | { readonly genre: 'annulation-de-retrait'; readonly messageId: string }
+  /**
+   * LE TRANSFERT D'UN MESSAGE VERS UNE AUTRE CONVERSATION (#5386) — posté
+   * PAR LA FEUILLE (`transfert-vue.ts`) : `texte`/`langue` sont l'ÉCHO de ce
+   * que la porte a déjà servi (`resoutLeTransfert`), pas une saisie libre —
+   * le même niveau de confiance que `CHAMP_DE_L_ORIGINAL` de la
+   * modification.
+   */
+  | { readonly genre: 'transfert'; readonly messageId: string; readonly versConversation: string; readonly texte: string; readonly langue: string | null };
 
 const texteDe = (formulaire: FormData, nom: string): string => {
   const brut = formulaire.get(nom);
@@ -266,11 +340,12 @@ const CHAMP_DE_L_ANNULATION_DU_RETRAIT = 'annuler-le-retrait';
 const CHAMP_DE_LA_CONFIRMATION_DU_RETRAIT = 'confirme';
 
 /**
- * L'ORDRE DE LECTURE (§ 4 étape 2 des spécifications #5163/#5387) :
- * `annuler-le-retrait` → `retirer` → `modifie` → `reaction`+`message` →
- * `reponse`/`message`. Un formulaire ne porte qu'UN de ces six genres à la
- * fois — le menu d'une ligne, sa fenêtre servie, le composeur et la
- * pastille de réaction sont autant de formulaires distincts.
+ * L'ORDRE DE LECTURE (§ 4 étape 2 des spécifications #5163/#5387, #5386
+ * pour le transfert) : `annuler-le-retrait` → `retirer` → `transferer` →
+ * `modifie` → `reaction`+`message` → `reponse`/`message`. Un formulaire ne
+ * porte qu'UN de ces sept genres à la fois — le menu d'une ligne, sa
+ * fenêtre servie, sa feuille de transfert, le composeur et la pastille de
+ * réaction sont autant de formulaires distincts.
  */
 export const soumissionDuFil = (formulaire: FormData | null): SoumissionDuFil => {
   if (formulaire === null) return { genre: 'message', texte: '', fichiers: [] };
@@ -281,6 +356,19 @@ export const soumissionDuFil = (formulaire: FormData | null): SoumissionDuFil =>
   const aRetirer = texteDe(formulaire, CHAMP_DU_RETRAIT);
   if (aRetirer !== '')
     return { genre: 'retrait', messageId: aRetirer, confirme: texteDe(formulaire, CHAMP_DE_LA_CONFIRMATION_DU_RETRAIT) === '1' };
+
+  const aTransferer = texteDe(formulaire, CHAMP_DU_TRANSFERT);
+  const versConversation = texteDe(formulaire, CHAMP_DE_LA_CIBLE_DU_TRANSFERT);
+  if (aTransferer !== '' && versConversation !== '') {
+    const langue = texteDe(formulaire, CHAMP_DE_LA_LANGUE_TRANSFEREE);
+    return {
+      genre: 'transfert',
+      messageId: aTransferer,
+      versConversation,
+      texte: texteDe(formulaire, CHAMP_DU_TEXTE_TRANSFERE),
+      langue: langue === '' ? null : langue,
+    };
+  }
 
   const aModifier = texteDe(formulaire, CHAMP_DE_LA_MODIFICATION);
   if (aModifier !== '')
@@ -405,6 +493,54 @@ const retireLeMessage = async ({
 };
 
 /**
+ * LE TRANSFERT D'UN MESSAGE VERS UNE AUTRE CONVERSATION (#5386) — la
+ * garde FAIL-CLOSED CÔTÉ INVITÉ, le même patron que `modifieLeMessage`/
+ * `retireLeMessage` (aucune des quatre portes du gateway n'accepte un
+ * anonyme sur `POST /conversations/:id/messages` avec `forwardedFromId`
+ * autrement qu'en tant que MEMBRE de la conversation CIBLE — un invité de
+ * lien n'en a aucune). `texte`/`langue` sont ceux que la feuille a servis
+ * (`resoutLeTransfert`), jamais recalculés ici : ce module ne fait
+ * confiance à AUCUN appelant pour l'ÉLIGIBILITÉ du message source (déjà
+ * vérifiée en porte), mais REND ce que la feuille affichait, comme le
+ * legacy copie `message.content` tel quel (`forward-message-modal.tsx`).
+ *
+ * SUCCÈS ⇒ REDIRECTION VERS LA CONVERSATION CIBLE, cadrée sur le message
+ * qui vient d'y naître : le message transféré, avec sa citation « Transféré
+ * depuis … » (déjà rendue par `fil-lignes.ts` › `citation`, site unique
+ * partagé), EST sa propre confirmation — aucun avis de plus à composer sur
+ * le fil source.
+ */
+const transfereLeMessage = async ({
+  creance,
+  depuis,
+  messageId,
+  versConversation,
+  texte,
+  langue,
+}: {
+  readonly creance: Creance;
+  /** La conversation SOURCE — `forwardedFromConversationId`, celle que la porte sert (`conversation`, jamais un champ caché). */
+  readonly depuis: string;
+  readonly messageId: string;
+  readonly versConversation: string;
+  readonly texte: string;
+  readonly langue: string | null;
+}): Promise<IssueDeSoumission> => {
+  if (creance.genre === 'invite') return { genre: 'erreur', message: FIL.refuse, brouillon: '', statut: 403 };
+  const envoi = await envoie({
+    cle: versConversation,
+    creance,
+    texte,
+    ...(langue === null ? {} : { langue }),
+    forwardedFromId: messageId,
+    forwardedFromConversationId: depuis,
+  });
+  if (envoi.genre === 'refus') return { genre: 'erreur', message: envoi.message, brouillon: '', statut: envoi.statut ?? 400 };
+  const versAdresse = adresseDuFil(versConversation);
+  return { genre: 'redirection', vers: envoi.id === null ? versAdresse : adresseDuMessage(versAdresse, envoi.id) };
+};
+
+/**
  * LA BASCULE D'UNE RÉACTION, sans JavaScript. La liste ne dit pas si la
  * pastille est la mienne ; la passerelle, si : `POST /reactions` rend 201
  * quand elle vient d'être posée et 200 — `unchanged` — quand elle l'était
@@ -453,6 +589,16 @@ export const traiteLaSoumission = ({
   }
   if (soumission.genre === 'retrait') {
     return retireLeMessage({ creance, adresse, messageId: soumission.messageId, confirme: soumission.confirme });
+  }
+  if (soumission.genre === 'transfert') {
+    return transfereLeMessage({
+      creance,
+      depuis: conversation,
+      messageId: soumission.messageId,
+      versConversation: soumission.versConversation,
+      texte: soumission.texte,
+      langue: soumission.langue,
+    });
   }
   if (soumission.genre === 'annulation-de-retrait') {
     // AUCUNE REQUÊTE : rien n'était parti — l'adresse nue est la seule
