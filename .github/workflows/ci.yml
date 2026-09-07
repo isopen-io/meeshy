@@ -44,6 +44,15 @@ env:
   # Python 3.10 required: pkuseg (chatterbox-tts dependency) fails to compile on 3.11+
   PYTHON_VERSION: '3.10'
   UV_VERSION: '0.5.x'
+  # #4861 — `secrets.TURBO_TOKEN` n'est PAS configuré sur ce dépôt (mesuré :
+  # dump `env:` d'un run récent montre `TURBO_TOKEN: ` vide, jamais `***`
+  # comme le rendrait un secret réellement posé). Le cache distant Turborepo
+  # est donc désactivé dans turbo.json (`remoteCache.enabled: false`) plutôt
+  # que déclaré actif sans jamais être joignable — et `signature: true`, qui
+  # l'accompagnait, exigeait `TURBO_REMOTE_CACHE_SIGNATURE_KEY`, absent lui
+  # aussi. Si `TURBO_TOKEN` est posé un jour, réactiver le cache distant ET
+  # poser la clé de signature dans le MÊME lot — l'un sans l'autre reproduit
+  # ce défaut.
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   # Default to bun, can be overridden by workflow_dispatch
