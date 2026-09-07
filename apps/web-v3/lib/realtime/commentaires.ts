@@ -1,5 +1,7 @@
 import { COMMENTAIRES } from '@/lib/contenu/commentaires';
 
+import { signaleArme } from './arme';
+
 /**
  * LE MODULE DE PARTICIPATION DE `/post/:id` (issue #5091) — le huitième, au
  * patron de `/links` : le formulaire d'écriture est INTERCEPTÉ, posté par
@@ -76,6 +78,8 @@ const demarre = (): void => {
     evenement.preventDefault();
     void soumets(formulaire);
   });
+
+  signaleArme(main);
 };
 
 demarre();

@@ -1,5 +1,7 @@
 import { PARAMETRE_DE_RECHERCHE, SILENCE_DE_SAISIE_MS } from '@/lib/contenu/recherche';
 
+import { signaleArme } from './arme';
+
 /**
  * LE MODULE DE PARTICIPATION DE `/search` (issue #4897) — le sixième, et le
  * seul qui n'appelle AUCUNE passerelle : il redemande CE document au serveur
@@ -95,6 +97,7 @@ const demarre = (): void => {
   if (champ === null || resultats === null) return;
 
   prendsLaSaisie({ main, champ, resultats, minuterie: null, enVol: null });
+  signaleArme(main);
 };
 
 demarre();
