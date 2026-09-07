@@ -23,7 +23,7 @@
 # conteneurs tournent côte à côte), et `assetPrefix: '/__v3'` — posé dans
 # next.config.ts, donc gravé dans le build — évite que les deux zones se
 # disputent `/_next/*` derrière le même hôte.
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 FROM docker.io/oven/bun:${BUN_VERSION}-alpine AS bun-dist
 
 FROM node:22-alpine AS base

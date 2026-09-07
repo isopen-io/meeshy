@@ -14,7 +14,7 @@
 # intermittence (release v1.25.9 échouée le 2026-08-12 malgré 3 tentatives ×
 # 5 essais curl). Docker Hub est déjà l'origine authentifiée des images de
 # base — plus aucun téléchargement GitHub dans le chemin de build.
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 FROM docker.io/oven/bun:${BUN_VERSION}-alpine AS bun-dist
 
 FROM node:22-alpine AS base
@@ -40,7 +40,7 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 
 ENV PNPM_HOME="/pnpm" \
     BUN_INSTALL="/bun" \
@@ -51,7 +51,7 @@ FROM base AS deps
 
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 
 # Build tools for native modules (bcrypt, sharp, zeromq)
 RUN apk add --no-cache \
@@ -125,7 +125,7 @@ FROM base AS prod-deps
 
 ARG PACKAGE_MANAGER=bun
 ARG PNPM_VERSION=9.15.0
-ARG BUN_VERSION=1.1.38
+ARG BUN_VERSION=1.3.14
 
 # Build tools for native modules
 RUN apk add --no-cache \
