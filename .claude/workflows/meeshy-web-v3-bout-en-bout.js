@@ -89,8 +89,15 @@ const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
 const SOCLE = `
 TU TRAVAILLES SUR LA V3.1 WEB DE MEESHY (\`apps/web-v3\` — Vite + Preact via preact/compat +
 Tailwind 4 + TanStack Query + zustand + routeur maison, empaquetable Android/iOS par Capacitor 8),
-monorepo ${REPO}, sur ${NOM_DE_BRANCHE} (verifie avec \`git branch --show-current\` ; NE CHANGE
-JAMAIS DE BRANCHE, ne cree pas de worktree). Date : ${DATE}.
+monorepo ${REPO}, sur ${NOM_DE_BRANCHE}. Date : ${DATE}.
+
+TON REPERTOIRE DE TRAVAIL EST ${REPO} — et le shell REINITIALISE le cwd entre deux appels Bash :
+PREFIXE CHAQUE commande, SANS EXCEPTION, par \`cd ${REPO} && \` (ou le sous-dossier vise, p.ex.
+\`cd ${V3} && \`). Une commande sans ce prefixe s'execute dans le cwd de session, qui peut etre un
+AUTRE clone/worktree du meme depot, occupe par une autre session — c'est le MAUVAIS depot : ce que
+tu y lirais est faux, ce que tu y ecrirais detruirait le travail d'un autre. Premiere commande de
+ta mission, litteralement : \`cd ${REPO} && git branch --show-current\` — elle doit rendre la
+branche attendue. NE CHANGE JAMAIS DE BRANCHE, ne cree pas de worktree.
 
 LA DIRECTIVE DU PORTEUR (2026-09-07 soir), qui gouverne ce chantier :
 « developper dans apps/web-v3 une application similaire a la version iOS (apps/ios) pour le web ET
@@ -145,11 +152,12 @@ LES TROIS PLATEFORMES, UN SEUL CODE :
   base relative, sans service worker. Les coques ios/ et android/ de ${V3} sont GENEREES
   (\`bunx cap add ios\`, \`bunx cap add android\`) si absentes ; capacitor.config.ts est la source.
 - OUTILLAGE LOCAL VERIFIE (2026-09-07) : SDK Android a ~/android-sdk (PAS ~/Library/Android),
-  JAVA_HOME=/opt/homebrew/opt/openjdk@21, AVD \`meeshy-poc\` (android-36 arm64, demarrage :
-  ~/android-sdk/emulator/emulator -avd meeshy-poc -no-snapshot -no-audio), adb dans
+  JAVA_HOME=/opt/homebrew/opt/openjdk@21, AVD \`Meeshy_Poc_Web-v31\` (nom affiche « Meeshy Poc Web-v31 », android-36 arm64, demarrage :
+  ~/android-sdk/emulator/emulator -avd Meeshy_Poc_Web-v31 -no-snapshot -no-audio), adb dans
   ~/android-sdk/platform-tools ; APK par \`cd ${V3}/android && JAVA_HOME=/opt/homebrew/opt/openjdk@21 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug\`
-  → app/build/outputs/apk/debug/app-debug.apk. Simulateur iOS : iPhone 16 Pro
-  30BFD3A6-C80B-489D-825E-5D14D6FCCAB5 ; build par \`xcodebuild -project ${V3}/ios/App/App.xcodeproj -scheme App -destination 'id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5' build\`
+  → app/build/outputs/apk/debug/app-debug.apk. Simulateur iOS DEDIE au chantier : « Meeshy Poc-Web-V31 »
+  (54438823-4ADC-4536-88D2-FC441395FA04, iPhone 16 Pro, iOS 26.1 — la DERNIERE version iOS disponible, directive porteur — noms fixes par le porteur
+  2026-09-07 : c'est LUI qu'on utilise, jamais un autre) ; build par \`xcodebuild -project ${V3}/ios/App/App.xcodeproj -scheme App -destination 'id=54438823-4ADC-4536-88D2-FC441395FA04' build\`
   → produits sous ${V3}/ios/App/Build/Products/Debug-iphonesimulator/App.app (le projet fixe son
   SYMROOT — ne cherche pas dans DerivedData).
 - CAPTURES WEB : \`cd ${V3} && BASE=http://localhost:5173 CHROMIUM='' node scripts/capture.mjs\`
@@ -269,6 +277,15 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
 6. LE BON MODELE AU BON MOMENT (2026-09-04) : fable DECRIT, sonnet et haiku DEVELOPPENT, opus
    RELIT ET CORRIGE — un agent ne choisit pas son modele, il fait le travail de son role. Le
    SPECIFICATEUR dit si l'implementation est PETITE (haiku) ou non (sonnet), et pourquoi.
+
+7. QUALITE ET OPTIMISATION DES LA PREMIERE ITERATION (directive porteur 2026-09-07 soir). On ne
+   livre pas un brouillon qu'on ameliorera plus tard : la PREMIERE forme est deja la bonne —
+   mesuree (poids, requetes, re-rendus), maintenable, et pensee pour les 40+ surfaces iOS qui
+   restent a porter. La REVUE est TRES POINTILLEUSE et porte une vision GLOBALE et MOYEN/LONG
+   TERME : elle juge le diff ET la trajectoire — cette forme tiendra-t-elle quand toutes les
+   surfaces seront la ? ce motif sera-t-il copie par trente ecrans (alors il doit etre juste
+   MAINTENANT) ? cette commodite d'aujourd'hui est-elle la jumelle de demain ? Un « ca marche »
+   qui rame, re-rend pour rien ou fige une mauvaise forme n'est PAS livrable.
 `
 
 // ---------------------------------------------------------------------------
@@ -526,17 +543,24 @@ for (let tour = 1; tour <= TOURS; tour += 1) {
   // -------------------------------------------------------------------------
   phase('Synchroniser')
   // -------------------------------------------------------------------------
-  const synchro = await agent(`${SOCLE}
+  const synchro = await agent(`ETAPE 0, AVANT TOUT AUTRE MOT — COLLE ET EXECUTE EXACTEMENT CETTE COMMANDE :
+\`cd ${REPO} && git branch --show-current\`
+Si la sortie n'est pas la branche attendue (${NOM_DE_BRANCHE}), c'est que ta commande n'avait pas
+le prefixe \`cd ${REPO} && \` — recommence avec le prefixe. Tout diagnostic rendu depuis un autre
+repertoire est FAUX et sera rejete : le cwd de session est un AUTRE clone, occupe par une autre
+session, et il ne te concerne en rien.
+
+${SOCLE}
 
 TA MISSION — REINTEGRER \`${DEPUIS}\` DANS ${NOM_DE_BRANCHE}, PUIS RELEVER CE QUE LES AUTRES SESSIONS TIENNENT.
 Tu ne modifies AUCUN fichier de production autrement que par la fusion elle-meme.
 
 A. LA REINTEGRATION
-1. \`git branch --show-current\` — tu DOIS etre sur ${NOM_DE_BRANCHE}.${BRANCHE === '(courante)' ? " Si la commande ne rend rien (HEAD detache), arrete-toi et dis-le : reintegre=false." : ` Si la branche n'existe pas encore
-   localement, cree-la depuis \`origin/${DEPUIS}\` (\`git fetch origin ${DEPUIS} && git checkout -B ${BRANCHE} origin/${DEPUIS}\`).`}
-   NE CHANGE JAMAIS pour une autre branche de travail, ne cree pas de worktree. Si l'arbre est sur
-   une AUTRE branche avec du travail sale qui n'est pas le tien, ARRETE-TOI et dis-le
-   (reintegre=false) : une autre session tient l'arbre.
+1. \`cd ${REPO} && git branch --show-current\` — tu DOIS etre sur ${NOM_DE_BRANCHE}.${BRANCHE === '(courante)' ? " Si la commande ne rend rien (HEAD detache), arrete-toi et dis-le : reintegre=false." : ` Si elle rend une
+   AUTRE branche, tu es dans le mauvais depot : verifie ton prefixe \`cd ${REPO} && \` AVANT de
+   conclure quoi que ce soit. Si la branche n'existe pas encore localement dans ${REPO}, cree-la
+   depuis \`origin/${DEPUIS}\` (\`cd ${REPO} && git fetch origin ${DEPUIS} && git checkout -B ${BRANCHE} origin/${DEPUIS}\`).`}
+   NE CHANGE JAMAIS pour une autre branche de travail, ne cree pas de worktree.
    Si \`${V3}/node_modules\` est vide ou absent, \`cd ${REPO} && bun install --ignore-scripts\` d'abord ;
    si \`${REPO}/packages/shared/dist\` est absent, \`cd ${REPO}/packages/shared && npx prisma generate --generator client && bun run build\`.
 2. \`git status --short\` : si l'arbre est sale DE TON FAIT, commite un point d'etape d'abord (jamais de stash).
@@ -563,7 +587,10 @@ Si gh ne repond pas, les outils mcp__github__ via ToolSearch ; sinon rends au mo
 branches — l'absence de releve se DIT, elle n'arrete pas le tour.
 
 Sois FACTUEL : 'etat' cite les commandes et leurs sorties, jamais une impression.`,
-    { label: `synchroniser:tour-${tour}`, phase: 'Synchroniser', schema: SYNCHRO, model: MODELE.mecanique, effort: 'medium' })
+    // Modele developpeur, pas mecanique : haiku a ignore deux fois le prefixe `cd` et rendu un
+    // diagnostic plausible et faux depuis le mauvais clone (2026-09-07) — la synchro d'ouverture
+    // fonde tout le tour, elle merite la fiabilite de sonnet.
+    { label: `synchroniser:tour-${tour}`, phase: 'Synchroniser', schema: SYNCHRO, model: MODELE.developper, effort: 'medium' })
 
   if (synchro && synchro.conflit_non_resolu) {
     log(`ARRET — la reintegration de ${DEPUIS} demande un arbitrage : ${synchro.conflit_non_resolu}`)
@@ -666,7 +693,7 @@ TA MISSION — POSER LA CIBLE DE CHAQUE TRAVAIL AVANT LE CODE. La cible d'un ecr
 L'ECRAN iOS QUI EXISTE (D-1) — pas une maquette web.
 
 1. LES CAPTURES CIBLES iOS. Pour chaque travail de genre "ecran" ci-dessous, capture l'ecran de
-   REFERENCE dans l'app iOS au simulateur (iPhone 16 Pro 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5) :
+   REFERENCE dans l'app iOS au simulateur du chantier « Meeshy Poc-Web-V31 » (54438823-4ADC-4536-88D2-FC441395FA04) :
    construis/installe l'app iOS si besoin (\`${IOS}/../ios/meeshy.sh build\` — lis apps/ios/CLAUDE.md ;
    si le build iOS est trop long ou casse, dis-le et capture ce qui est atteignable), navigue
    jusqu'a l'ecran, capture CLAIR et SOMBRE (\`xcrun simctl ui <udid> appearance dark\` puis
@@ -756,7 +783,9 @@ TA MISSION — RESYNCHRONISER l'arbre ${moment}. Un tour dure des heures : \`${D
 distante avancent pendant ce temps, et ce qui se specifie, se code, se juge ou se livre ici doit
 l'etre sur l'arbre FUSIONNE.
 
-1. \`git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE}. \`git status --short\` : si l'arbre
+1. \`cd ${REPO} && git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE} (sinon, ton prefixe
+   \`cd ${REPO} && \` manque : corrige-le, ne conclus rien depuis un autre depot).
+   \`cd ${REPO} && git status --short\` : si l'arbre
    porte du travail non commite, c'est un POINT D'ETAPE — commite-le D'ABORD, tel quel (\`git add -A\`
    apres avoir retire les artefacts generes : ${V3}/rendu/, ${V3}/dist/, ${V3}/ios/App/Build/,
    ${V3}/android/app/build/, .cache/), message \`wip(web-v3): point d'etape — <ce que l'arbre porte> (Refs #n)\`,
@@ -835,7 +864,9 @@ CE QUE LA SPECIFICATION CONTIENT, dans cet ordre :
 9. LES QUESTIONS que tu ne peux pas trancher seul, chacune avec la reponse RETENUE par defaut.
 
 Sois PRECIS et VERIFIABLE : chaque affirmation sur le code cite fichier:ligne. Une specification
-qui devine est pire qu'aucune.`,
+qui devine est pire qu'aucune. Et c'est ICI que la DIRECTIVE 7 se joue : la forme que tu specifies
+est celle que trente ecrans copieront — choisis celle qui tient a l'echelle des 40+ surfaces iOS,
+pas la plus rapide a coder ; nomme ce qui devra etre extrait, partage ou memoise DES MAINTENANT.`,
       { label: `specifier:${t.cle}`, phase: 'Specifier', schema: SPEC, model: MODELE.decrire, effort: 'high' })
 
     const SPEC_TEXTE = spec && spec.specification
@@ -876,7 +907,7 @@ METHODE, dans cet ordre :
    ${dossierDeTravail}/rendus/${t.cle}-{light,dark}.png et REGARDE-LES, compare-les a la cible iOS.
 5. COQUES (si le travail touche le dist, les assets, le routeur ou une coque) : reconstruit et
    rejoue sur les DEUX coques — \`MEESHY_CIBLE=capacitor bunx vite build && bunx cap sync\`, APK +
-   installation sur l'AVD meeshy-poc (QEMU), build + installation sur le simulateur iPhone 16 Pro,
+   installation sur l'AVD Meeshy_Poc_Web-v31 (QEMU), build + installation sur le simulateur « Meeshy Poc-Web-V31 »,
    capture chaque coque et REGARDE. Les commandes exactes sont dans le socle.
 6. Fais tourner localement : \`cd ${V3} && bun run type-check && bun test\`, puis \`bun run build\`
    et \`node scripts/check-curve.mjs\` ; corrige AVANT de rendre.
@@ -925,7 +956,9 @@ A. PRENDRE EN DEFAUT — LA SURFACE (git diff, git status, fichiers) :
 - si le travail touche dist/assets/routeur/coques : la coherence des COQUES a-t-elle ete rejouee
   (QEMU + simulateur, captures) ? Rejoue-la toi-meme si le rapport ne la prouve pas.
 
-B. PRENDRE EN DEFAUT — LA CONCEPTION, en ingenieur staff hostile :
+B. PRENDRE EN DEFAUT — LA CONCEPTION, en ingenieur staff hostile, avec la vision GLOBALE et
+MOYEN/LONG TERME de la DIRECTIVE 7 (tu juges le diff ET la trajectoire — ce que cette forme
+deviendra quand les 40+ surfaces iOS seront portees, ce que trente ecrans copieront d'elle) :
 - le POIDS : \`bun run build && node scripts/check-curve.mjs && node scripts/measure-weight.mjs\` —
   un chiffre non mesure ne compte pas ; la courbe est un gate, pas une intention ;
 - le PRISME : bon rang elu ? qui AFFICHE ce qu'il elit ? que transporte-t-on A COTE ? (cycles
@@ -952,7 +985,7 @@ ${SANS_COMMIT}
 Rends : verdict (l'etat APRES tes corrections), defauts_trouves (tous, avec preuve), corriges
 (nombre), restants (bloquant/majeur seulement), rapport, gates_rejoues (sorties tronquees),
 dimensions_mures, dimensions_restantes.`,
-      { label: `revue-correction:${t.cle}`, phase: 'Revue', schema: REVUE_CORRIGEE, model: MODELE.relire, effort: 'high' })
+      { label: `revue-correction:${t.cle}`, phase: 'Revue', schema: REVUE_CORRIGEE, model: MODELE.relire, effort: 'xhigh' })
 
     log(`${t.cle} : revue-correction — verdict ${revue ? revue.verdict : '(aucun)'}, ${revue ? revue.corriges : 0} corriges, ${revue && revue.restants ? revue.restants.length : 0} rendus au developpeur`)
 
@@ -1106,7 +1139,7 @@ Dans cet ordre, en t'arretant pour corriger des qu'un gate est rouge :
 5. \`node ${V3}/scripts/route-inventory.mjs\` (rc 0 — la parite est a jour).
 ${coquesTouchees ? `6. LA COHERENCE DES COQUES (le tour a touche dist/assets/coques) :
    \`cd ${V3} && MEESHY_CIBLE=capacitor bunx vite build && bunx cap sync\` ;
-   ANDROID (QEMU) : demarre l'AVD meeshy-poc si aucun \`adb devices\` ne repond, gradle
+   ANDROID (QEMU) : demarre l'AVD Meeshy_Poc_Web-v31 si aucun \`adb devices\` ne repond, gradle
    assembleDebug (JAVA_HOME et ANDROID_HOME du socle), \`adb install -r\`, lance MainActivity,
    capture (\`adb exec-out screencap -p\`) clair ET sombre (\`adb shell cmd uimode night yes|no\` +
    relance) ;
