@@ -88,6 +88,12 @@ const mockContactsDirectoryFns = {
 
 jest.mock('../../../../routes/users/contacts-directory', () => mockContactsDirectoryFns);
 
+const mockReferralCodeFns = {
+  getReferralCode: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/referral-code', () => mockReferralCodeFns);
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { userRoutes } from '../../../../routes/users/index';
@@ -145,6 +151,9 @@ describe('userRoutes — registers all route handler groups', () => {
 
     // Presence routes
     expect(mockPresenceFns.getUsersPresence).toHaveBeenCalledWith(mockFastify);
+
+    // Referral code (#3690)
+    expect(mockReferralCodeFns.getReferralCode).toHaveBeenCalledWith(mockFastify);
 
     // Contacts matching route
     expect(mockContactsMatchFns.matchContacts).toHaveBeenCalledWith(mockFastify);
