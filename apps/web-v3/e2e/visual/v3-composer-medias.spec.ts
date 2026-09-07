@@ -360,6 +360,39 @@ test('décrire deux photos puis retirer la première n’attache pas sa légende
   await ctx.close();
 });
 
+/**
+ * REVUE #5389/#5390 (défaut 2) — LE REPLI `medias-alt` PORTE UNE MARQUE DE
+ * DÉPLIAGE, ET LE CLIC LE FERME/ROUVRE. `display:flex` sur le `<summary>`
+ * supprimait le `::marker` natif sans rien y substituer (`composer-feuille.ts`
+ * règle 10) : le repli des légendes se lisait comme un simple texte, sans
+ * aucun indice qu'il se déplie. `display:list-item` est le sentinel mesuré
+ * ici — le `::marker` lui-même n'est pas interrogeable par le DOM, mais
+ * `display` conditionne directement sa présence (tout autre `display` la
+ * supprime, quel que soit `list-style`).
+ */
+test('le repli des légendes porte une marque de dépliage, et le clic le referme', async ({ browser }) => {
+  const ctx = await contexte(browser);
+  const page = await ctx.newPage();
+
+  await page.goto(`${v3.base}/composer?format=post`);
+  await page.waitForFunction(() => document.querySelector('main[data-brouillon="arme"]') !== null);
+  await page.locator('#c-medias').setInputFiles(PNG);
+
+  const summary = page.locator('details.medias-alt summary').first();
+  await expect(summary).toBeVisible();
+  expect(await summary.evaluate((noeud) => getComputedStyle(noeud).display)).toBe('list-item');
+
+  const repli = page.locator('details.medias-alt').first();
+  await expect(repli).toHaveJSProperty('open', true); // ouvert automatiquement à la sélection (E9)
+
+  await summary.click();
+  await expect(repli).toHaveJSProperty('open', false);
+  await summary.click();
+  await expect(repli).toHaveJSProperty('open', true);
+
+  await ctx.close();
+});
+
 /** La source citée existe bien — un fichier de fixtures binaire, pas un texte inventé. */
 test('les fixtures binaires existent', () => {
   expect(readFileSync(PNG).byteLength).toBeGreaterThan(0);

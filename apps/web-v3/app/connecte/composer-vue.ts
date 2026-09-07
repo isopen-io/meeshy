@@ -224,7 +224,8 @@ const ID_DU_REFUS = 'c-medias-refus';
  * `@meeshy/shared` (ESM) jette. Cette vue, elle, ne tourne que dans le process
  * Next — comme `composer-porte.ts`, qui importe les mêmes gardes.
  */
-const TYPES_ACCEPTES = [...ACCEPTED_MIME_TYPES.IMAGE, ...ACCEPTED_MIME_TYPES.VIDEO].join(',');
+/** EXPORTÉE (#5389) — `story-neuve-vue.ts` sert la MÊME liste sur son champ fichier, jamais une seconde. */
+export const TYPES_ACCEPTES = [...ACCEPTED_MIME_TYPES.IMAGE, ...ACCEPTED_MIME_TYPES.VIDEO].join(',');
 
 /**
  * LE GABARIT DU RETRAIT (#5390, revue — défaut 1) — `previsualiseMedias`

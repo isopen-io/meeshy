@@ -194,8 +194,12 @@ const altsDuFormulaire = (formulaire: FormData, format: FormatServi): readonly s
  * La BORNE DE TAILLE, elle, appartient à la v3 — voir `OCTETS_MAX_PAR_MEDIA`
  * (`lib/contenu/composer.ts`) : la porte relaie en tampon, la passerelle
  * accepte 4 Go.
+ *
+ * EXPORTÉE (#5389) — `story-neuve-porte.ts` applique EXACTEMENT la même
+ * règle sur son unique fichier ; la recopier y créerait la jumelle que le
+ * § 3.2 interdit, divergente au premier type accepté ajouté ici.
  */
-const premierRefusDeFichier = (fichiers: readonly File[]): string | null => {
+export const premierRefusDeFichier = (fichiers: readonly File[]): string | null => {
   for (const fichier of fichiers) {
     if (!isImageMimeType(fichier.type) && !isVideoMimeType(fichier.type)) return COMPOSER.mediasRefuse(fichier.name);
     if (fichier.size > OCTETS_MAX_PAR_MEDIA) return COMPOSER.mediasVolumineux(fichier.name);

@@ -70,8 +70,41 @@ import { avisDEcran } from './atomes-feuille';
  *     `.champ`** — ses dix lignes sont le MÊME `<p class="champ">` que
  *     `champDuTexte`/`champDeLAudience`, stylé une seule fois par
  *     `reglages-feuille.ts`. Seuls `<details class="medias-alt">` et son
- *     `<summary>` sont propres à cet écran : un disclosure natif, sans
- *     triangle personnalisé — la charte ne demande pas de le redessiner.
+ *     `<summary>` sont propres à cet écran : un disclosure natif — le
+ *     `::marker` par défaut du navigateur, jamais un triangle personnalisé.
+ *     **REVUE #5389/#5390 (défaut 2) : `display:flex` sur `summary` SUPPRIME
+ *     ce `::marker`** (`display` en dehors de `list-item` retire la boîte de
+ *     marqueur, quel que soit `list-style`) sans qu'aucun remplacement ne
+ *     soit rendu — un disclosure sans AUCUNE marque de dépliage, sur les DEUX
+ *     écrans qui chargent cette feuille. `display:list-item` restaure le
+ *     marqueur natif ; la cible 44 px reste tenue par le `padding` du
+ *     `summary`, plus par `min-height` seul (un `list-item` n'aligne pas son
+ *     contenu comme un flex : `align-items` n'a plus d'effet dessus).
+ * 11. **`.media-de-story` STYLE UN INPUT FICHIER VISIBLE (#5389)** — cette
+ *     feuille est déjà chargée par `/stories/new`
+ *     (`story-neuve-vue.ts:documentDeLaStoryNeuve`, classe partagée
+ *     `reglages composer`), donc la règle vit ICI plutôt que dans une
+ *     troisième feuille. `::file-selector-button` est le SEUL sélecteur qui
+ *     style le bouton natif d'un `<input type="file">` sans le remplacer par
+ *     un `<label>` enveloppant (l'idiome `.ajouter` ci-dessus) — nécessaire
+ *     ici car cet écran ne charge AUCUN module (§ 12.4) : rien ne peint le
+ *     nom du fichier choisi à la place du navigateur, donc l'input reste
+ *     VISIBLE plutôt que `.hors-ecran`.
+ *
+ *     **LE COÛT ASSUMÉ (revue #5389, défaut 2) : le bouton natif et le
+ *     statut du fichier (« Choisir un fichier » / « Aucun fichier choisi »,
+ *     ou leur équivalent) s'affichent dans la LANGUE DE L'INTERFACE DU
+ *     NAVIGATEUR, jamais dans celle du document.** `lang="fr"` sur `<html>`
+ *     ne gouverne PAS ce texte — un navigateur en anglais l'affiche en
+ *     anglais quelle que soit la langue de la page, contrairement au
+ *     `<label>` qui l'accompagne (`STORY_NEUVE.mediaImporter`, servi en
+ *     français) et à `::file-selector-button` qui n'en stylise que
+ *     l'apparence, jamais le texte. C'est le prix de l'option (b) retenue :
+ *     un input visible sans script coûte l'idiome anglais du navigateur ;
+ *     un `<label class="ajouter">` masquant l'input (option a, l'idiome de
+ *     la règle 5) l'aurait évité au prix d'une sélection AVEUGLE (aucun nom
+ *     de fichier peint, cf. `story-neuve-vue.ts:champDuMedia`) — un défaut
+ *     jugé pire sur un écran sans script pour le corriger après coup.
  *
  * Aucune COULEUR et aucun PIXEL ne sont écrits (charte règle 1).
  */
@@ -101,8 +134,12 @@ export const FEUILLE_DU_COMPOSER = compacte(`
 .composer .humeurs label:has(input:focus-visible),.composer .ajouter:has(input:focus-visible){outline:var(--stroke-focus) solid var(--color-focus);outline-offset:var(--stroke-strong)}
 
 .composer .medias-alt{margin-top:var(--space-3)}
-.composer .medias-alt summary{min-height:var(--target-min);display:flex;align-items:center;font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-text-muted);cursor:pointer}
+.composer .medias-alt summary{display:list-item;list-style-position:inside;min-height:var(--target-min);padding:var(--space-3) 0;font-size:var(--text-sm);font-weight:var(--font-weight-medium);color:var(--color-text-muted);cursor:pointer}
 .composer .medias-alt .champ{margin-top:var(--space-2)}
+
+.composer .media-de-story input[type=file]{display:block;width:100%;min-height:var(--target-min);padding:var(--space-2) 0;color:var(--color-text-muted);font-size:var(--text-sm)}
+.composer .media-de-story input[type=file]::file-selector-button{min-height:var(--target-min);margin-right:var(--space-3);padding:0 var(--space-4);border:0;border-radius:var(--radius-pill);background:var(--color-primary);color:var(--color-on-primary);font-weight:var(--font-weight-medium);cursor:pointer}
+.composer .media-de-story input[type=file]:focus-visible{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:var(--stroke-strong)}
 
 ${avisDEcran('.composer')}
 .composer .publier{width:100%}
