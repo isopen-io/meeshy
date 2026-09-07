@@ -566,7 +566,16 @@ public protocol OfflineQueueing: Sendable {
         /// L'identifiant d'objet de canvas de chaque fichier, même alignement.
         /// Sans défaut, même discipline : il ne sert à rien de le porter à
         /// moitié.
-        mediaObjectIds: [String?]?
+        mediaObjectIds: [String?]?,
+        /// L'autorisation d'extraction du son (#3996), même clé top-level
+        /// `allowSoundExtraction` que le chemin direct (`CreatePostRequest`,
+        /// `PostService.create`). Sur la REQUIREMENT et SANS défaut, même
+        /// discipline que `mobileTranscription` : Swift n'autorise pas les
+        /// défauts sur une exigence de protocole, et un défaut posé
+        /// seulement sur l'implémentation concrète serait ignoré par tout
+        /// appelant typé sur le protocole (les mocks des tests) — chaque
+        /// appelant DÉCLARE donc explicitement `nil` ou sa vraie valeur.
+        allowSoundExtraction: Bool?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -2085,7 +2094,11 @@ public actor OfflineQueue {
         mediaAlts: [String?]?,
         /// L'identifiant d'objet de canvas de chaque fichier — le chaînon de
         /// l'adoption (#5280).
-        mediaObjectIds: [String?]?
+        mediaObjectIds: [String?]?,
+        /// L'autorisation d'extraction du son (#3996). SANS défaut, même
+        /// discipline que `mobileTranscription`/`storyEffects` juste
+        /// au-dessus : chaque appelant DÉCLARE `nil` ou sa vraie valeur.
+        allowSoundExtraction: Bool?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -2110,7 +2123,8 @@ public actor OfflineQueue {
             storyEffects: storyEffects,
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
-            mediaObjectIds: mediaObjectIds
+            mediaObjectIds: mediaObjectIds,
+            allowSoundExtraction: allowSoundExtraction
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

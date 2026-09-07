@@ -898,7 +898,11 @@ class FeedViewModel: ObservableObject {
         /// des chemins qui en portent. Un défaut ferait disparaître ces champs
         /// d'un site d'appel sans casser la moindre compilation.
         mediaAlts: [String?]?,
-        mediaObjectIds: [String?]?
+        mediaObjectIds: [String?]?,
+        /// L'autorisation d'extraction du son (#3996) — même discipline que
+        /// `mediaAlts`/`mediaObjectIds` juste au-dessus : cette entrée n'a ni
+        /// éditeur d'objet ni scène, et passe donc `nil` en le DISANT.
+        allowSoundExtraction: Bool?
     ) async {
         publishError = nil
         publishSuccess = false
@@ -947,7 +951,8 @@ class FeedViewModel: ObservableObject {
             storyEffects: storyEffects,
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
-            mediaObjectIds: mediaObjectIds
+            mediaObjectIds: mediaObjectIds,
+            allowSoundExtraction: allowSoundExtraction
         )
     }
 
@@ -999,7 +1004,8 @@ class FeedViewModel: ObservableObject {
             // > exhaustif ne se vérifie pas en le lisant — il se vérifie en
             // > comptant, et c'est ce que fait `PublishIntentRelayTests`.
             mediaAlts: intent.mediaAlts,
-            mediaObjectIds: intent.mediaObjectIds
+            mediaObjectIds: intent.mediaObjectIds,
+            allowSoundExtraction: intent.allowSoundExtraction
         )
     }
 
@@ -1101,7 +1107,8 @@ class FeedViewModel: ObservableObject {
                 // mediaObjects=1` — le canvas et ses objets étaient là, le
                 // pont était nul, et l'adoption ne pouvait pas avoir lieu.
                 mediaAlts: mediaAlts,
-                mediaObjectIds: mediaObjectIds
+                mediaObjectIds: mediaObjectIds,
+                allowSoundExtraction: allowSoundExtraction
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in

@@ -31,7 +31,7 @@ final class ComposerReelPublishTests: XCTestCase {
             visibilityUserIds: [], repostOfId: nil, localMedia: localMedia, location: nil,
             discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
             references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:],
-            mediaObjectIds: [:]
+            mediaObjectIds: [:], allowSoundExtraction: nil
         )
     }
 
@@ -116,7 +116,7 @@ final class ComposerReelPublishTests: XCTestCase {
             visibilityUserIds: [], repostOfId: nil, localMedia: [video()], location: nil,
             discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
             references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:],
-            mediaObjectIds: [:]
+            mediaObjectIds: [:], allowSoundExtraction: nil
         )
         XCTAssertEqual(ComposerDocumentSendPlan.plan(for: story, isOffline: false),
                        .refuse(.wrongFormat(.story)))

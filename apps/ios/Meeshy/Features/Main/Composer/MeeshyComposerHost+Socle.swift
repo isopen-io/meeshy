@@ -889,7 +889,17 @@ extension MeeshyComposerHost {
                 // Le pont que `applyContentMedia` a rendu, remis TEL QUEL : la
                 // traduction en positions se fait un étage plus bas, là où
                 // l'ORDRE des fichiers existe.
-                mediaObjectIds: documentMediaObjectIdBySource
+                mediaObjectIds: documentMediaObjectIdBySource,
+                // **`nil`, honnêtement** (#3996). La surface `.document` (sans
+                // scène) ne monte aucun `SoundExtractionToggle` — il ne vit
+                // que dans l'atelier (`ComposerToolPanelHost` →
+                // `ComposerBottomBand`), monté seulement sous `.scene`. Poser
+                // autre chose que `nil` ici affirmerait une décision que
+                // l'auteur n'a jamais pu exprimer sur cette surface. Le champ
+                // voyage désormais de bout en bout (#3996) ; le jour où cette
+                // surface gagne son propre contrôle, c'est cette ligne qui le
+                // relaiera.
+                allowSoundExtraction: nil
             )
         }
     }
