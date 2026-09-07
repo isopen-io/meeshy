@@ -95,6 +95,7 @@ function ligneUtilisateur(id: string) {
 }
 
 function prismaDouble() {
+  let compteurJetons = 0;
   return {
     user: {
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) => ligneUtilisateur(where.id)),
@@ -102,6 +103,18 @@ function prismaDouble() {
       update: jest.fn(async () => ({})),
     },
     userSession: { findFirst: jest.fn(async () => ({ isValid: true })) },
+    // #3691 — la route crée désormais un AffiliateToken dédié (usage unique)
+    // par invitation, et la ligne EmailInvitation qui le référence.
+    affiliateToken: {
+      findUnique: jest.fn(async () => null),
+      create: jest.fn(async () => {
+        compteurJetons += 1;
+        return { id: `aff-token-${compteurJetons}`, token: `aff_test${compteurJetons}` };
+      }),
+    },
+    emailInvitation: {
+      create: jest.fn(async () => ({ id: 'email-invitation-id' })),
+    },
   };
 }
 
