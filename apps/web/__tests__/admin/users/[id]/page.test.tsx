@@ -180,6 +180,12 @@ jest.mock('@/components/admin/user-detail/UserSecuritySection', () => ({
   ),
 }));
 
+jest.mock('@/components/admin/user-detail/UserBanSection', () => ({
+  UserBanSection: ({ userId }) => (
+    <div data-testid="ban-section">Bans {userId}</div>
+  ),
+}));
+
 // Import after mocks
 import UserDetailPage from '../../../../app/admin/users/[id]/page';
 

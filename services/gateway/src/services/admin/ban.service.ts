@@ -1,0 +1,93 @@
+import { PrismaClient, Ban } from '@meeshy/shared/prisma/client';
+import type { UserManagementService } from './user-management.service';
+
+export interface CreateBanParams {
+  userId: string;
+  bannedById: string;
+  reason: string;
+  /** `null`/`undefined` = bannissement permanent. */
+  expiresAt?: Date | null;
+}
+
+export interface LiftBanParams {
+  banId: string;
+  liftedById: string;
+  liftReason?: string;
+}
+
+/**
+ * Un ban est EN VIGUEUR quand il n'a pas été levé et (permanent, ou son
+ * échéance n'est pas encore atteinte). Calculé, jamais stocké en double —
+ * voir le doc-comment du modèle `Ban` (schema.prisma).
+ */
+export function estEnVigueur(ban: Pick<Ban, 'liftedAt' | 'expiresAt'>, maintenant: Date = new Date()): boolean {
+  if (ban.liftedAt !== null) return false;
+  if (ban.expiresAt === null) return true;
+  return ban.expiresAt.getTime() > maintenant.getTime();
+}
+
+/**
+ * Bannissement durable d'un utilisateur (#3719). Un `Ban` créé pilote
+ * `User.isActive` via `UserManagementService.updateStatus` — le même levier
+ * que la suspension existante, pour hériter de sa révocation de sessions.
+ *
+ * L'expiration AUTOMATIQUE d'un ban à durée n'est pas appliquée ici : un ban
+ * expiré reste `isActive: false` jusqu'à un lever explicite. Suivi : #5527.
+ */
+export class BanService {
+  constructor(
+    private prisma: PrismaClient,
+    private userManagementService: UserManagementService
+  ) {}
+
+  async createBan(params: CreateBanParams): Promise<Ban> {
+    const ban = await this.prisma.ban.create({
+      data: {
+        userId: params.userId,
+        bannedById: params.bannedById,
+        reason: params.reason,
+        expiresAt: params.expiresAt ?? null,
+      },
+    });
+
+    await this.userManagementService.updateStatus(params.userId, { isActive: false });
+
+    return ban;
+  }
+
+  /**
+   * Lève un ban précis. Ne réactive le compte que si AUCUN autre ban de cet
+   * utilisateur n'est encore en vigueur — un compte sous deux bans ne doit
+   * pas se rouvrir parce que le premier a été levé par erreur.
+   */
+  async liftBan(params: LiftBanParams): Promise<Ban> {
+    const ban = await this.prisma.ban.findUniqueOrThrow({ where: { id: params.banId } });
+
+    const leve = await this.prisma.ban.update({
+      where: { id: params.banId },
+      data: {
+        liftedAt: new Date(),
+        liftedById: params.liftedById,
+        liftReason: params.liftReason ?? null,
+      },
+    });
+
+    const autresEnVigueur = await this.listActiveBans(ban.userId, { excludeBanId: params.banId });
+    if (autresEnVigueur.length === 0) {
+      await this.userManagementService.updateStatus(ban.userId, { isActive: true });
+    }
+
+    return leve;
+  }
+
+  async listBans(userId: string): Promise<Ban[]> {
+    return this.prisma.ban.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
+  }
+
+  async listActiveBans(userId: string, options: { excludeBanId?: string } = {}): Promise<Ban[]> {
+    const tous = await this.prisma.ban.findMany({
+      where: { userId, liftedAt: null, id: options.excludeBanId ? { not: options.excludeBanId } : undefined },
+    });
+    return tous.filter((b) => estEnVigueur(b));
+  }
+}

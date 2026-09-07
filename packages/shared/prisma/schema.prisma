@@ -1927,6 +1927,47 @@ model AdminAuditLog {
   @@index([createdAt])
 }
 
+/// Bannissement durable d'un utilisateur (#3719) — la SUSPENSION (`User.isActive`)
+/// n'a ni durée ni motif structuré ni historique ; un `Ban` en est le journal
+/// IMMUABLE : une ligne créée n'est jamais modifiée ni supprimée, seul un lever
+/// (`liftedAt`/`liftedById`/`liftReason`) la ferme, en laissant les champs de
+/// création intacts. Plusieurs lignes par utilisateur = l'historique complet des
+/// bannissements, jamais un seul état écrasé.
+///
+/// `expiresAt: null` = permanent. Un ban est EN VIGUEUR quand `liftedAt` est nul
+/// ET (`expiresAt` est nul OU `expiresAt` est dans le futur) — calculé par
+/// `BanService`, jamais stocké en double (pas de `isActive` redondant ici).
+///
+/// Portée 2026-09 : la création/le lever d'un `Ban` pilote `User.isActive`
+/// (même levier que la suspension actuelle), mais l'EXPIRATION AUTOMATIQUE d'un
+/// ban à durée n'est pas encore appliquée par un balayage — suivi ouvert en
+/// #5527 (dimension 13 · Complétude), un admin doit lever explicitement un ban
+/// expiré pour réactiver le compte tant que ce suivi n'est pas livré.
+model Ban {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// L'utilisateur banni
+  userId    String   @db.ObjectId
+  /// L'administrateur qui a prononcé le bannissement
+  bannedById String  @db.ObjectId
+  /// Motif du bannissement, toujours requis
+  reason    String
+  /// Fin du bannissement ; `null` = permanent
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  /// Date à laquelle le ban a été LEVÉ par un admin ; `null` = jamais levé.
+  /// Distinct de `expiresAt` : un ban expiré mais non levé reste en base tel
+  /// quel, `liftedAt` ne s'écrit que sur un geste administratif explicite.
+  liftedAt   DateTime?
+  liftedById String?   @db.ObjectId
+  liftReason String?
+
+  @@index([userId])
+  @@index([userId, liftedAt])
+  @@index([bannedById])
+  @@index([createdAt])
+}
+
 model AdminBroadcast {
   id                 String   @id @default(auto()) @map("_id") @db.ObjectId
   name               String
