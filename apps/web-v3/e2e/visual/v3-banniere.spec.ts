@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { DUREE_DE_LA_BANNIERE_MS } from '../../lib/contenu/banniere';
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { UTILISATEUR_DU_MEMBRE } from './lib/bouchon-socket';
 import {
   CONVERSATION_DU_LECTEUR,
@@ -41,13 +42,22 @@ const contexteDuLecteur = async (browser: Browser): Promise<BrowserContext> => {
   return contexte;
 };
 
-/** Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais par une minuterie seule. */
+/**
+ * Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais
+ * par une minuterie (#5139). La bannière se branche sur le socket que le
+ * module HÔTE tient déjà (`brancheLaBanniere`, appelée par `connecte()`) — sur
+ * `/chats` (`liste`), ça se lit par `data-arme="1"` (posé une fois `connecte()`
+ * résolu, ci-dessus dans `lib/realtime/liste.ts`) ; sur le fil, `participate.ts`
+ * porte déjà son propre marqueur de connexion, `.etat[data-etat="connecte"]`
+ * (`attendLeTempsReel`, `v3-fil-gestes.spec.ts`) — la même garantie, sous un
+ * nom plus ancien qu'il n'y avait pas de raison de dupliquer.
+ */
 const attendsLeModule = async (page: Page, participation: string): Promise<void> => {
-  await page.waitForFunction(
-    (nom) => document.querySelector(`main[data-participation="${nom}"]`) !== null,
-    participation,
-  );
-  await page.waitForTimeout(1_200);
+  if (participation === 'fil') {
+    await expect(page.locator('.etat')).toHaveAttribute('data-etat', 'connecte', { timeout: 15_000 });
+    return;
+  }
+  await attendsLeModuleArme(page, participation);
 };
 
 const ECRANS = [

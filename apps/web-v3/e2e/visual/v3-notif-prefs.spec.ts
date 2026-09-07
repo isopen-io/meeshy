@@ -7,6 +7,7 @@ import { expect, test, type Browser, type BrowserContext } from '@playwright/tes
 import { THEME_STORAGE_KEY } from '../../app/theme-script';
 import { COOKIE_DE_JETON } from '../../lib/api/cookies';
 import { BASCULES_DE_PREFS, type CleDePreference } from '../../lib/contenu/prefs-de-notif';
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { ciblesMesurees, ciblesTropPetites, TARGET_MIN } from './lib/cibles';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { chargeMesureReseau, passerelleDeBouchon, RACINE_V3, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
@@ -46,10 +47,7 @@ const contexteDuLecteur = async (
 };
 
 /** Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais par une minuterie seule. */
-const attendsLeModule = async (page: import('@playwright/test').Page): Promise<void> => {
-  await page.waitForFunction(() => document.querySelector('main[data-participation="prefs"]') !== null);
-  await page.waitForTimeout(1_200);
-};
+const attendsLeModule = (page: import('@playwright/test').Page): Promise<void> => attendsLeModuleArme(page, 'prefs');
 
 const formulaireDe = (page: import('@playwright/test').Page, cle: string) =>
   page.locator('form.bascule', { has: page.locator(`input[name="cle"][value="${cle}"]`) });

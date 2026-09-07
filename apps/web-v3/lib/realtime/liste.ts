@@ -9,6 +9,7 @@ import {
   type GesteDeLigne,
 } from '@/lib/contenu/liste';
 
+import { signaleArme } from './arme';
 import { brancheLaBanniere } from './banniere';
 import { prendsLeBalayage } from './balayage';
 import { armeLaDeconnexion } from './deconnexion';
@@ -423,6 +424,11 @@ const branche = (ctx: Contexte, socket: Socket): void => {
     const rattraper = doitRattraper({ deconnecteDepuis: ctx.deconnecteDepuis, maintenant: Date.now() });
     ctx.deconnecteDepuis = null;
     if (rattraper) void rattrape(ctx);
+    // ARMÉ ICI (#5139), jamais avant : avant `authenticated`, le socket n'a pas
+    // encore rejoint ses rooms (`_joinUserConversations`) — un événement poussé
+    // plus tôt n'atteindrait personne. Voir `point()` de `participate.ts`, qui
+    // pose son marqueur `.etat` au même instant, pour la même raison.
+    signaleArme(ctx.main);
   });
 
   socket.on('conversation:updated', (charge: unknown) => {
@@ -469,7 +475,14 @@ const connecte = async (ctx: Contexte): Promise<void> => {
   // aucune connexion. La région est cherchée une fois ; absente (un document
   // servi sans temps réel), la porte ne fait rien.
   brancheLaBanniere({ socket, region: document.querySelector<HTMLElement>('.banniere') });
-  if (!ctx.cache && ctx.enLigne) socket.connect();
+  if (ctx.cache || !ctx.enLigne) {
+    // HORS LIGNE AU MONTAGE : aucune connexion ne s'ouvre, donc `authenticated`
+    // ne viendra jamais — le module est déjà interactif (gestes, préférences),
+    // et l'armer ici évite d'attendre un réseau qui n'arrivera pas.
+    signaleArme(ctx.main);
+    return;
+  }
+  socket.connect();
 };
 
 /** Voir `participate.ts` : `connect()` seul ne fait rien tant qu'une reconnexion est armée. */
