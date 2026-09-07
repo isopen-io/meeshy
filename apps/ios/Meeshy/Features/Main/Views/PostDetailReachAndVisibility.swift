@@ -58,8 +58,29 @@ enum StoryCanvasVisibility {
 /// rendered (`BackgroundSoundBadge.detailCanvasIsRendered`, E2 DoD correctif
 /// rev.14) — a plain non-story post carrying its own background sound never
 /// mounts one, since no canvas plays here for it to control.
+/// **La commande du viewer est le TROISIÈME terme** (#5602, directive porteur
+/// 2026-09-07 : « avec même action stop play quand on touche »).
+///
+/// Les deux premiers termes sont SUBIS — la scène sort de l'écran, un appel
+/// prend la session audio. Aucun ne se commande. `SceneMotion` porte pourtant
+/// la directive du 2026-09-06 depuis son premier jour : « Une scène cinématique
+/// […] doit être considérée comme une vidéo ! Le bouton stop et play permet
+/// d'arrêter tout ou de poursuivre tout. » La fiche détail n'avait aucun des
+/// deux.
+///
+/// > **Le terme du viewer est un OU, pas un ET** : arrêter doit arrêter, quelle
+/// > que soit la visibilité. Un `&&` aurait fait reprendre la lecture au
+/// > premier défilement, en donnant au bouton l'air d'un raté plutôt que d'une
+/// > absence.
+///
+/// « arrêter TOUT » : les trois chemins de rendu du détail (mosaïque,
+/// mono-scène, republication) reçoivent le même terme — sans quoi couper la
+/// lecture depuis la trace laisserait jouer le canvas d'à côté.
 enum StoryDetailPlaybackPolicy {
-    static func isPaused(visible: Bool, callActive: Bool) -> Bool {
-        !visible || callActive
+    /// `viewerPaused` a un défaut pour que le sens de la règle reste lisible
+    /// à l'appel : « visible, pas d'appel » est l'état nominal, et un site qui
+    /// n'expose aucune commande ne doit pas avoir à écrire `false`.
+    static func isPaused(visible: Bool, callActive: Bool, viewerPaused: Bool = false) -> Bool {
+        !visible || callActive || viewerPaused
     }
 }

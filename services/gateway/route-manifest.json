@@ -3395,6 +3395,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/posts/:postId/media/:mediaId/export",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/posts/:postId/views",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
@@ -4167,6 +4181,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/users/me/referral-code",
+      "module": "userRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/users/me/stats",
       "module": "userStatsRoutes",
       "mountPrefix": "/api/v1",
@@ -4364,20 +4392,6 @@
     {
       "method": "GET",
       "path": "/health",
-      "module": "registerAllRoutes (déclaration directe sur l'instance racine, hors server.register)",
-      "mountPrefix": "",
-      "securityLevel": "inconnu",
-      "securityLevelCandidates": [
-        "S0",
-        "S1"
-      ],
-      "securityBasisKey": "no-standard-auth-hook",
-      "hierarchyGated": false,
-      "adminPrefixed": false
-    },
-    {
-      "method": "GET",
-      "path": "/info",
       "module": "registerAllRoutes (déclaration directe sur l'instance racine, hors server.register)",
       "mountPrefix": "",
       "securityLevel": "inconnu",

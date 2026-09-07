@@ -191,7 +191,8 @@ export function decisionsMissingPerimeterConsequence(
 }
 
 /**
- * Les CINQ modules montés sans préfixe Fastify au 2026-08-30, soit 22 routes —
+ * Les CINQ modules montés sans préfixe Fastify au 2026-08-30, soit 22 routes
+ * (21 depuis #5424, `GET /info` retirée) —
  * chacun avec la raison de son montage nu, l'endroit où cette raison est
  * ÉCRITE, et, pour les deux qui servent hors `/api`, ce à quoi ces adresses
  * échappent.
@@ -218,20 +219,23 @@ export const UNPREFIXED_MOUNT_DECISIONS: readonly UnprefixedMountDecision[] = [
     // décision périmée ET du nouveau libellé un module non déclaré, deux
     // rougeurs au lieu d'aucune.
     module: "registerAllRoutes (déclaration directe sur l'instance racine, hors server.register)",
-    routeCount: 2,
+    // #5424 — `GET /info` (l'autre route de ce module) est RETIRÉE du
+    // gateway (décision produit déjà écrite dans
+    // `docs/product/api-simplification/platform.md` : « Suppression
+    // immédiate, aucun consommateur, aucun alias ») : périmée (PostgreSQL,
+    // `/translate`) et sans appelant mesuré. `routeCount` baisse de 2 à 1.
+    routeCount: 1,
     perimeter: 'hors-api',
     reason:
-      "`/health` et `/info`, déclarés directement sur l'instance racine (src/route-registration.ts) : une sonde " +
-      "de disponibilité et un point de diagnostic ne se versionnent pas par convention HTTP — un orchestrateur " +
-      "ne connaît pas de version d'API.",
+      "`/health`, déclarée directement sur l'instance racine (src/route-registration.ts) : une sonde de " +
+      "disponibilité ne se versionne pas par convention HTTP — un orchestrateur ne connaît pas de version d'API.",
     decisionAt:
-      "src/route-registration.ts (server.get('/health'), server.get('/info')) ; famille `permanent` de " +
+      "src/route-registration.ts (server.get('/health')) ; famille `permanent` de " +
       'src/__tests__/route-manifest/no-routes-outside-api-v1.ts.',
     perimeterConsequence:
-      "Hors de toute règle ancrée sur `/api` — et c'est VOULU ici : `middleware/rate-limiter.ts` les exempte " +
+      "Hors de toute règle ancrée sur `/api` — et c'est VOULU ici : `middleware/rate-limiter.ts` l'exempte " +
       "nommément de son quota global (un 429 sur une sonde fait conclure « instance morte » et redémarrer le " +
-      "conteneur). La contrepartie est assumée : ces deux adresses ne reçoivent jamais ce qu'une telle règle " +
-      "apporterait, et leur charge reste donc fixe et sans donnée d'utilisateur.",
+      "conteneur).",
   },
   {
     module: 'registerTusRoutes',

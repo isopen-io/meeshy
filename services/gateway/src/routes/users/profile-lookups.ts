@@ -15,6 +15,8 @@ import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '..
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
 import { parseFieldList, restrictFields, type FieldSet } from '../../utils/sparse-fieldset';
+import { callerRateKey } from '../../utils/client-rate-key';
+import { createCustomRateLimiter } from '../../utils/rate-limiter';
 import {
   publicProfileSchema,
   publicUserSelect,
@@ -95,6 +97,41 @@ const QUERYSTRING_FIELDS = {
     fields: { type: 'string', description: 'Comma-separated subset of the default projection' },
   },
 } as const;
+
+/**
+ * Débit de l'annuaire INVERSÉ (#3629, #4160) — les deux seules routes qui
+ * joignent un identifiant de contact (email, téléphone) à une identité
+ * civile. Authentifiées, donc un seau PAR APPELANT (`callerRateKey`), et non
+ * par IP comme `GET /directory/availability` (qui ne confirme jamais
+ * d'existence et sert un public anonyme).
+ *
+ * Le préfixe seul ne suffit pas à PARTAGER le seau entre les deux routes :
+ * avec Redis il collision-nerait bien (clé externe commune), mais sans lui
+ * `createCustomRateLimiter` retombe sur un `MemoryStore` propre à chaque
+ * instance — deux appels séparés créeraient deux compteurs isolés, et un
+ * essai basculant entre email et téléphone rouvrirait le quota. Le cache par
+ * instance `fastify` ci-dessous garantit UN SEUL `RateLimiter`, donc UN SEUL
+ * compteur, quel que soit le backend.
+ */
+const LIMITEURS_ANNUAIRE_INVERSE = new WeakMap<FastifyInstance, ReturnType<typeof createCustomRateLimiter>>();
+
+function contactLookupRateLimiter(fastify: FastifyInstance) {
+  let limiteur = LIMITEURS_ANNUAIRE_INVERSE.get(fastify);
+  if (!limiteur) {
+    limiteur = createCustomRateLimiter(
+      {
+        max: 30,
+        windowMs: 60 * 1000,
+        keyPrefix: 'dir:contact-lookup:u',
+        message: 'Trop de recherches de contact. Veuillez patienter une minute.',
+        keyGenerator: callerRateKey,
+      },
+      fastify.redis ?? undefined
+    );
+    LIMITEURS_ANNUAIRE_INVERSE.set(fastify, limiteur);
+  }
+  return limiteur.middleware();
+}
 
 /**
  * Get user profile by username (public route)
@@ -262,6 +299,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
   // cette garde ; ces deux-là ne l'avaient jamais eue.
   fastify.get('/users/email/:email', {
     preValidation: [fastify.authenticate],
+    preHandler: [contactLookupRateLimiter(fastify)],
     schema: {
       description: 'Get public user profile by email address (case-insensitive)',
       tags: ['users'],
@@ -284,6 +322,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
           }
         },
         404: errorResponseSchema,
+        429: errorResponseSchema,
         500: errorResponseSchema
       }
     }
@@ -387,6 +426,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
   // index manquant est ici aussi une surface de déni de service (#4160).
   fastify.get('/users/phone/:phone', {
     preValidation: [fastify.authenticate],
+    preHandler: [contactLookupRateLimiter(fastify)],
     schema: {
       description: 'Get public user profile by phone number. Accepts digits with optional country code prefix (e.g. 336199909344 or +336199909344). Normalizes to E.164 format for lookup.',
       tags: ['users'],
@@ -410,6 +450,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         },
         400: errorResponseSchema,
         404: errorResponseSchema,
+        429: errorResponseSchema,
         500: errorResponseSchema
       }
     }

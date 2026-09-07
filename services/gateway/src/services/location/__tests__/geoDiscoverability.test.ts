@@ -1,4 +1,4 @@
-import { quantizeCoordinate, resolveDensityGridStepDegrees } from '../geoDiscoverability';
+import { quantizeCoordinate, resolveDensityGridStepDegrees, resolveDiscoverabilityPrecision } from '../geoDiscoverability';
 
 describe('quantizeCoordinate', () => {
   it('EXACT renvoie le point non arrondi', () => {
@@ -116,5 +116,37 @@ describe('resolveDensityGridStepDegrees', () => {
     expect(resolveDensityGridStepDegrees(Infinity)).toBeNull();
     expect(resolveDensityGridStepDegrees('10' as unknown)).toBeNull();
     expect(resolveDensityGridStepDegrees(undefined)).toBeNull();
+  });
+});
+
+// #3637 — "Défaut NEIGHBORHOOD, EXACT réservé à un opt-in explicite, jamais
+// pour un mineur".
+describe('resolveDiscoverabilityPrecision', () => {
+  it('laisse passer toute précision NON-EXACT telle quelle, sans condition', () => {
+    expect(resolveDiscoverabilityPrecision('NEIGHBORHOOD', { confirmed: false, isAdult: false })).toBe('NEIGHBORHOOD');
+    expect(resolveDiscoverabilityPrecision('CITY', { confirmed: false, isAdult: false })).toBe('CITY');
+    expect(resolveDiscoverabilityPrecision('REGION', { confirmed: false, isAdult: false })).toBe('REGION');
+  });
+
+  it('rend EXACT quand confirmed ET isAdult sont vrais', () => {
+    expect(resolveDiscoverabilityPrecision('EXACT', { confirmed: true, isAdult: true })).toBe('EXACT');
+  });
+
+  it('retombe sur NEIGHBORHOOD quand EXACT est demandé sans confirmation explicite', () => {
+    expect(resolveDiscoverabilityPrecision('EXACT', { confirmed: false, isAdult: true })).toBe('NEIGHBORHOOD');
+  });
+
+  it('retombe sur NEIGHBORHOOD quand EXACT est confirmé mais l\'auteur n\'est pas un adulte vérifié', () => {
+    expect(resolveDiscoverabilityPrecision('EXACT', { confirmed: true, isAdult: false })).toBe('NEIGHBORHOOD');
+  });
+
+  it('retombe sur NEIGHBORHOOD quand ni confirmed ni isAdult ne sont vrais', () => {
+    expect(resolveDiscoverabilityPrecision('EXACT', { confirmed: false, isAdult: false })).toBe('NEIGHBORHOOD');
+  });
+
+  it('rend undefined pour une valeur de précision invalide, comme quantizeCoordinate', () => {
+    expect(resolveDiscoverabilityPrecision('COUNTRY', { confirmed: true, isAdult: true })).toBeUndefined();
+    expect(resolveDiscoverabilityPrecision(undefined, { confirmed: true, isAdult: true })).toBeUndefined();
+    expect(resolveDiscoverabilityPrecision(null, { confirmed: true, isAdult: true })).toBeUndefined();
   });
 });

@@ -88,7 +88,7 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `apps/web/components/v2/MessageBubble.tsx`.
   'u.byUsername',
   // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée par
-  // `apps/web-v3/lib/api/invite.ts:84` via un chemin construit à la main
+  // `apps/web-old-version3/lib/api/invite.ts:84` via un chemin construit à la main
   // (`CHEMIN_BATTEMENT`). `apps/web-v3` est HORS du périmètre `SEARCH_ROOTS`
   // de ce script (`apps/web`, `packages/shared`) : élargir le périmètre à
   // toute l'arborescence `web-v3` déplacerait le compte de dette de façon non
@@ -187,7 +187,29 @@ export const parseCatalogBlock = (blockLines) => {
 //
 // 272 → 269 (#5423) : les trois routes de sondage mortes (`conversation`,
 // `detectLanguage`, `status`) sont retirées du catalogue avec leurs routes.
-const BASELINE_DEAD_ENTRIES = 269;
+//
+// 269 → 270 (#3690) : `users.meReferralCode` (`GET /users/me/referral-code`,
+// nouvelle route) — morte à la naissance PAR CONSTRUCTION : le milestone
+// « Parrainage attribué et boucles virales » sépare la route gateway (cette
+// issue) de ses appelants clients, portés par les issues sœurs (#3691 web,
+// et les équivalents iOS/Android). Le catalogue déclare la route avant que
+// la première surface ne l'appelle — à retirer de ce compte le jour où l'une
+// de ces issues câble un premier appelant.
+//
+// 270 → 271 (#3600) : `posts.byPostIdMediaByMediaIdExport`
+// (`GET /posts/:postId/media/:mediaId/export`, export watermarké côté
+// serveur) — morte à la naissance PAR CONSTRUCTION, même forme que
+// `users.meReferralCode` ci-dessus : cette issue livre la route serveur
+// (watermark sharp/ffmpeg, cache) et son exposition dans les catalogues
+// générés ; l'appelant web (bouton d'export sur un média de post) est un
+// travail d'écran séparé, à ouvrir en issue de suivi.
+//
+// 271 → 266 (#5424) : cinq entrées retirées du catalogue généré — quatre
+// routes d'exploitation (`cleanup`, `stats`, `userStatus`, `test`) filtrées
+// par `packages/shared/api/ops-only-routes.ts` (jamais destinées à un
+// client), et `info` dont la route serveur elle-même a été retirée
+// (`route-registration.ts`, périmée et sans appelant mesuré).
+const BASELINE_DEAD_ENTRIES = 266;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

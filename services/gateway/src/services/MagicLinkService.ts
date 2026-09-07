@@ -21,6 +21,7 @@ import { signSessionToken } from './auth/session-jwt';
 import { mintPendingTwoFactorChallenge } from './auth/pending-two-factor';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
+import { getJwtSecret } from '../utils/secrets';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 
@@ -433,7 +434,7 @@ export class MagicLinkService {
       });
 
       // 10. Signer le JWT, rattaché à la session qui vient de naître
-      const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+      const jwtSecret = getJwtSecret();
       const jwtToken = signSessionToken({
         user: { id: user.id, username: user.username, role: user.role },
         secret: jwtSecret,

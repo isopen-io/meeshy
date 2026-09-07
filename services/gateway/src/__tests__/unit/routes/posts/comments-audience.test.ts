@@ -95,6 +95,8 @@ type PostAcl = {
   id: string; authorId: string; visibility: string; visibilityUserIds: string[];
   expiresAt: Date | null;
   isQuote: boolean; repostOfId: string | null; originalRepostOfId: string | null;
+  /** #3959 — absent = `false` (comportement historique, comme les deux littéraux directs de ce fichier). */
+  commentsDisabled?: boolean;
 };
 
 // `id`/`isQuote:false`/`repostOfId:null` = « pas un repost » par défaut, ce
@@ -102,10 +104,10 @@ type PostAcl = {
 // `loadCommentPostAcl`, sans effet sur ces tests). La redirection repost
 // simple → racine (`resolveInteractionTarget`/`resolveConsumptionTarget`,
 // tâche 9) est couverte séparément plus bas.
-function acl(visibility: string, visibilityUserIds: string[] = [], expiresAt: Date | null = null): PostAcl {
+function acl(visibility: string, visibilityUserIds: string[] = [], expiresAt: Date | null = null, commentsDisabled = false): PostAcl {
   return {
     id: POST_ID, authorId: AUTHOR_ID, visibility, visibilityUserIds, expiresAt,
-    isQuote: false, repostOfId: null, originalRepostOfId: null,
+    isQuote: false, repostOfId: null, originalRepostOfId: null, commentsDisabled,
   };
 }
 
@@ -533,6 +535,60 @@ describe('GET /posts/:postId/comments — repost simple renvoie le fil de la RAC
 
     expect(res.statusCode).toBe(404);
     expect(mockGetComments).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// #3959 — réglage AUTEUR posé à la publication : désactivé bloque TOUT
+// commentaire, même un ami et même l'auteur lui-même — fail-closed, pas
+// d'exception qui rouvrirait le fil.
+describe('POST /posts/:postId/comments — commentsDisabled bloque TOUT commentaire', () => {
+  it('refuse un ami quand commentsDisabled est vrai', async () => {
+    const app = await buildApp(makePrisma({ post: acl('FRIENDS', [], null, true), isFriend: true }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'bien vu' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('COMMENTS_DISABLED');
+    expect(mockAddComment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuse même l’auteur du post quand commentsDisabled est vrai', async () => {
+    const prisma = makePrisma({ post: {
+      id: POST_ID, authorId: VIEWER_ID, visibility: 'PUBLIC', visibilityUserIds: [],
+      expiresAt: null, isQuote: false, repostOfId: null, originalRepostOfId: null,
+      commentsDisabled: true,
+    } });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'mon propre post' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('COMMENTS_DISABLED');
+    expect(mockAddComment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('admet un ami quand commentsDisabled est absent (comportement historique)', async () => {
+    const app = await buildApp(makePrisma({ post: acl('FRIENDS'), isFriend: true }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'bien vu' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalled();
     await app.close();
   });
 });

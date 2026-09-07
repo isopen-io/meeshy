@@ -22,6 +22,7 @@ on:
     tags: ['v*.*.*']
     paths:
       - 'apps/web/**'
+      - 'apps/web-old-version3/**'
       - 'apps/web-v3/**'
       - 'packages/design-tokens/**'
       - 'packages/icons/**'
@@ -43,6 +44,7 @@ on:
           - all
           - web
           - web-v3
+          - web-v31
           - gateway
           - translator
           - agent
@@ -136,6 +138,7 @@ jobs:
             if [[ "$SERVICES" == "all" ]]; then
               echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v3=true" >> $GITHUB_OUTPUT
+              echo "web_v31=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
@@ -147,6 +150,9 @@ jobs:
               SELECTED=",${SERVICES// /},"
               echo "web=$([[ "$SELECTED" == *",web,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "web_v3=$([[ "$SELECTED" == *",web-v3,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              # Les virgules encadrantes sont ce qui rend « web-v3 » et « web-v31 »
+              # disjoints : en sous-chaîne, demander la v3 aurait construit les deux.
+              echo "web_v31=$([[ "$SELECTED" == *",web-v31,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "agent=$([[ "$SELECTED" == *",agent,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -160,7 +166,8 @@ jobs:
           else
             CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "web_v3=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/icons/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web_v3=$([[ "$CHANGED" == *"apps/web-old-version3/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/icons/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web_v31=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -188,9 +195,22 @@ jobs:
 
           if [[ "${{ steps.changes.outputs.web_v3 }}" == "true" ]]; then
             HAS_CHANGES=true
+            VERSION=$(node -p "require('./apps/web-old-version3/package.json').version" 2>/dev/null || echo "0.0.0")
+            [[ "$FIRST" == "false" ]] && SERVICES+=','
+            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-old-version3/Dockerfile","image":"meeshy-web-v3","version":"'$VERSION'"}'
+            FIRST=false
+          fi
+
+          # LA v3.1 — image DISTINCTE de `meeshy-web-v3`, qui appartient encore à
+          # l'ancienne refonte. Reprendre ce nom maintenant changerait en
+          # silence ce qu'un `meeshy-web-v3:latest` déjà déployé désigne. La
+          # v3.1 le reprendra quand `apps/web-old-version3` sera supprimée
+          # (#5496) — pas avant.
+          if [[ "${{ steps.changes.outputs.web_v31 }}" == "true" ]]; then
+            HAS_CHANGES=true
             VERSION=$(node -p "require('./apps/web-v3/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v3","version":"'$VERSION'"}'
+            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'"}'
             FIRST=false
           fi
 
@@ -345,6 +365,7 @@ jobs:
             VCS_REF=${{ github.sha }}
             VERSION=${{ matrix.version }}
             PACKAGE_MANAGER=${{ env.PACKAGE_MANAGER }}
+            BUN_VERSION=${{ env.BUN_VERSION }}
             TORCH_BACKEND=${{ matrix.torch_backend || 'cpu' }}
 
       - name: Build summary
@@ -379,6 +400,17 @@ jobs:
       security-events: write
 
     steps:
+      # LE TAG D'UNE BRANCHE S'ASSAINIT, parce qu'un nom de branche n'est pas un
+      # tag Docker. `docker/metadata-action` le fait à la CONSTRUCTION (un `/`
+      # devient `-`) ; cette étape-ci prenait `github.ref_name` BRUT, et
+      # cherchait donc un tag qui n'avait jamais été poussé.
+      #
+      # Le symptôme ne disait pas ça : Trivy rendait « could not parse
+      # reference: isopen/meeshy-web-v31:claude/v3-… » — une erreur de SYNTAXE
+      # sur le nom, pas une image introuvable. Et il ne se voyait ni sur `main`
+      # ni sur `dev`, dont les tags sont écrits en dur juste au-dessus : il
+      # fallait un déclenchement manuel depuis une branche à `/` dans son nom,
+      # c'est-à-dire toutes les branches `claude/*`.
       - name: Determine scan tag
         id: scan-tag
         run: |
@@ -387,7 +419,11 @@ jobs:
           elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
             echo "tag=staging${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           else
-            echo "tag=${{ github.ref_name }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
+            # Même transformation que `docker/metadata-action` : tout ce qui
+            # n'est pas alphanumérique, point, tiret ou souligné devient un
+            # tiret.
+            SLUG=$(printf '%s' "${{ github.ref_name }}" | tr -c 'a-zA-Z0-9._-' '-')
+            echo "tag=${SLUG}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Security scan

@@ -405,7 +405,7 @@ describe('PATCH /users/me/password — notification catch fires on reject (line 
     const app = await buildApp({ routes: [updateUserPassword], prisma, notificationService });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpass123', newPassword: 'newpass456' },
+      payload: { currentPassword: 'oldpass123', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(200);
     await Promise.resolve(); // drain the .catch() microtask

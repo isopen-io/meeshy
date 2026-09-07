@@ -24,6 +24,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../build-catalog.js';
 import { renderSwiftEndpoints } from '../build-swift-endpoints.js';
+import { filterOutOpsOnlyRoutes } from '../ops-only-routes.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../../..');
@@ -39,7 +40,8 @@ function manifestRoutes(): readonly ManifestRouteInput[] {
   const parsed = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as {
     routes: readonly ManifestRouteInput[];
   };
-  return parsed.routes;
+  // #5424 — même filtre que `scripts/generate-ios-endpoints.ts`.
+  return filterOutOpsOnlyRoutes(parsed.routes);
 }
 
 describe("cliquet — les énumérations Swift suivent le manifeste", () => {

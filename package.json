@@ -68,9 +68,6 @@
         "@tensorflow/tfjs-node",
         "@xenova/transformers"
       ]
-    },
-    "overrides": {
-      "browserslist": "4.28.8"
     }
   },
   "overrides": {

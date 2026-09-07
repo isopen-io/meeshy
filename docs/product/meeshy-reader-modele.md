@@ -488,7 +488,7 @@ rien.
 
 ## 4 bis-2. Ils sont QUATRE, pas trois (mesure 2026-09-03)
 
-Le § 4 bis parle des « TROIS lecteurs ». **`apps/web-v3` en est un quatrième**,
+Le § 4 bis parle des « TROIS lecteurs ». **`apps/web-old-version3` en est un quatrième**,
 et il sert déjà `/stories/:id`, `/reels/:id`, `/moods/:id` — le rôle de lecture
 PUBLIQUE, celui d'un lien partagé. Milestone #74, 47 issues ouvertes ; 284
 fichiers ; aucune mention dans la documentation produit jusqu'à cette ligne.

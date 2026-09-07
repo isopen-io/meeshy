@@ -108,6 +108,11 @@ model User {
   bio                       String   @default("")
   email                     String   @unique
   phoneNumber               String?
+  /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
+  /// (qui nomme une campagne créée explicitement). Généré paresseusement au
+  /// premier accès par ReferralCodeService.ensureReferralCode (#3690) ; null
+  /// tant que personne ne l'a demandé.
+  referralCode              String?  @unique
 
   /// Mots repliés (minuscules, sans diacritiques) de `username`, `displayName`,
   /// `firstName` et `lastName`, plus les initiales. Recalculés à CHAQUE écriture
@@ -300,6 +305,7 @@ model User {
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
   affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
   referredRelations      AffiliateRelation[]           @relation("ReferredUser")
+  sentEmailInvitations   EmailInvitation[]              @relation("EmailInvitationSender")
   createdTrackingLinks   TrackingLink[]                @relation("TrackingLinkCreator")
   initiatedCalls         CallSession[]                 @relation("CallInitiator")
   conversationPrefs      UserConversationPreferences[]
@@ -1780,8 +1786,9 @@ model AffiliateToken {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  creator      User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
-  affiliations AffiliateRelation[]
+  creator          User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
+  affiliations     AffiliateRelation[]
+  emailInvitations EmailInvitation[]
 }
 
 /// Relation d'affiliation entre utilisateurs
@@ -1797,6 +1804,27 @@ model AffiliateRelation {
   affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
   affiliateUser  User           @relation("AffiliateUser", fields: [affiliateUserId], references: [id])
   referredUser   User           @relation("ReferredUser", fields: [referredUserId], references: [id])
+}
+
+/// Relation d'invitation par e-mail persistée (#3691) — QUI a invité QUI, par
+/// quelle adresse, distincte de l'`AffiliateRelation` (qui ne s'écrit qu'APRÈS
+/// inscription). Le lien tracé et la page d'atterrissage réutilisent
+/// l'`AffiliateToken` existant (`/signup/affiliate/:token`) plutôt qu'un
+/// second système : `affiliateTokenId` pointe un jeton dédié à CETTE
+/// invitation (`maxUses: 1`), et son nom reste générique (jamais l'email du
+/// destinataire, public via `GET /affiliate/validate/:token`).
+model EmailInvitation {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  senderId         String   @db.ObjectId
+  email            String
+  affiliateTokenId String   @db.ObjectId
+  sentAt           DateTime @default(now())
+
+  sender         User           @relation("EmailInvitationSender", fields: [senderId], references: [id])
+  affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
+
+  @@index([senderId])
+  @@index([email])
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés
@@ -3276,6 +3304,17 @@ model Post {
   allowSoundExtraction Boolean @default(false)
 
   // ============================================
+  // MODÉRATION DE LA PUBLICATION
+  // ============================================
+  /// Réglage AUTEUR posé à la publication (#3959) — un drapeau de ce qui
+  /// PART, jamais une propriété d'une slide/objet de storyEffects. `false`
+  /// par défaut (commentaires ouverts, comportement historique). Gouverne
+  /// `POST /posts/:postId/comments` (création ET réponses, même endpoint) —
+  /// fail-closed : désactivé bloque TOUT commentaire, auteur compris, comme
+  /// la fermeture de discussion des plateformes de référence.
+  commentsDisabled Boolean @default(false)
+
+  // ============================================
   // STATUS/MOOD-SPECIFIC
   // ============================================
   /// Emoji mood (ex: "😴", "🎉", "💪", "☕")
@@ -4449,4 +4488,67 @@ model PostHashtag {
   @@unique([postId, hashtagId], name: "post_hashtag_unique")
   @@index([hashtagId])
   @@index([postId])
+}
+
+/// Compteur d'engagement par (utilisateur, axe) — #5530,
+/// docs/product/streaks-badges-modele.md § 3. Un document par axe, jamais
+/// une colonne par axe sur `User` : ajouter un axe n'ajoute aucune migration
+/// de schéma. Incrémenté UNIQUEMENT par `EngagementService.recordActivity`
+/// (`services/gateway/src/services/engagement/EngagementService.ts`) — aucune
+/// route ni handler socket n'écrit ce modèle directement.
+model EngagementCounter {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Clé stable du catalogue, ex. "content.audio_message" — voir
+  /// `EngagementAxisKey` (@meeshy/shared/types/engagement).
+  axisKey   String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, axisKey])
+  @@index([userId])
+}
+
+/// Garde anti-rejeu — #5530, docs/product/streaks-badges-modele.md § 4. Un
+/// palier déjà écrit ici ne se re-notifie jamais, même si le compteur source
+/// est recalculé : la mémoire de ce qui a déjà été notifié est CETTE table,
+/// pas la valeur courante du compteur. La contrainte unique est la garde
+/// (un `create` en conflit = palier déjà servi, no-op silencieux), jamais une
+/// relecture avant écriture — ça évite la course entre deux écritures
+/// concurrentes du même utilisateur.
+model EngagementMilestone {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  /// "badge" | "streak" | "level" | "achievement" — voir
+  /// `EngagementMilestoneType` (@meeshy/shared/types/engagement).
+  milestoneType String
+  /// ex. "content.audio_message:10", "streak:7", "level:3",
+  /// "achievement.first_post" — unique par (userId, milestoneType, clé).
+  milestoneKey  String
+  reachedAt     DateTime @default(now())
+
+  @@unique([userId, milestoneType, milestoneKey])
+  @@index([userId, milestoneType])
+}
+
+/// Garde de dédoublonnage des axes "conversation distincte" (#5539,
+/// docs/product/streaks-badges-modele.md § 2) — "l'utilisateur envoie un
+/// premier message dans une conversation {privée,publique,communautaire}
+/// DISTINCTE" exige de savoir si CETTE conversation a déjà crédité CET axe
+/// pour CET utilisateur, ce qu'`EngagementCounter` (un total, sans mémoire
+/// par conversation) ne peut pas répondre. La contrainte unique est la
+/// garde — un `create` en conflit = conversation déjà créditée pour cet
+/// axe, no-op silencieux — jamais une relecture avant écriture, même
+/// raison anti-course qu'`EngagementMilestone`.
+model EngagementConversationCredit {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  /// "conversation.private" | "conversation.public" | "conversation.community"
+  /// — voir `EngagementAxisKey` (@meeshy/shared/types/engagement).
+  axisKey        String
+  conversationId String   @db.ObjectId
+  creditedAt     DateTime @default(now())
+
+  @@unique([userId, axisKey, conversationId])
+  @@index([userId, axisKey])
 }

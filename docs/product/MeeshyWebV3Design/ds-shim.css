@@ -3,7 +3,7 @@
    Ces valeurs sont deduites des couleurs ecrites en dur DANS la planche
    (#0d0e16 body, #161826 BG, #75798c, #9397ab, #292b31, #2b2e40) et servent
    UNIQUEMENT au rendu des captures cibles. Le design system reel de la v3 est
-   celui de Meeshy — voir apps/web-v3. */
+   celui de Meeshy — voir apps/web-old-version3. */
 :root {
   --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --color-bg: #0d0e16;

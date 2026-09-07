@@ -25,16 +25,16 @@ final class APIServiceTests: XCTestCase {
 
     func test_request_tracksEndpointAndMethod() async throws {
         let mock = makeMockClient()
-        mock.stub("/test", result: ["key": "value"])
+        mock.stub("/health", result: ["key": "value"])
 
         let _: [String: String] = try await mock.request(
-            TestEndpoint.root,
+            HealthEndpoint.root,
             method: "GET",
             body: nil,
             queryItems: nil
         )
 
-        XCTAssertEqual(mock.requestEndpoints, ["/test"])
+        XCTAssertEqual(mock.requestEndpoints, ["/health"])
         XCTAssertEqual(mock.requestMethods, ["GET"])
         XCTAssertEqual(mock.requestCount, 1)
     }
@@ -190,8 +190,8 @@ final class APIServiceTests: XCTestCase {
     func test_reset_clearsAllState() async throws {
         let mock = makeMockClient()
         mock.authToken = "token"
-        mock.stub("/test", result: ["k": "v"])
-        let _: [String: String] = try await mock.request(TestEndpoint.root, method: "GET", body: nil, queryItems: nil)
+        mock.stub("/health", result: ["k": "v"])
+        let _: [String: String] = try await mock.request(HealthEndpoint.root, method: "GET", body: nil, queryItems: nil)
 
         mock.reset()
 

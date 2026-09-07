@@ -82,7 +82,12 @@ describe('AudioPreferenceSchema', () => {
       noiseSuppression: true,
       echoCancellation: true,
       voiceProfileEnabled: false,
-      voiceCloneQuality: 'balanced' as const
+      voiceCloneQuality: 'balanced' as const,
+      voiceCloningExaggeration: 0.5,
+      voiceCloningCfgWeight: 0.5,
+      voiceCloningTemperature: 1.0,
+      voiceCloningTopP: 0.9,
+      voiceCloningQualityPreset: 'balanced' as const
     };
 
     const result = AudioPreferenceSchema.parse(valid);

@@ -134,7 +134,28 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 252 → 249 (#5423) : `ConversationEndpoint`, `DetectLanguageEndpoint` et
 // `StatusEndpoint` retirés du catalogue avec leurs trois routes de sondage
 // mortes — les trois entrées disparaissent, elles ne se comptent plus.
-const BASELINE_DEAD_ENTRIES = 249;
+//
+// 249 → 250 (#3690) : `UsersEndpoint.meReferralCode` (nouvelle route
+// `GET /users/me/referral-code`) — morte à la naissance PAR CONSTRUCTION,
+// exactement comme son miroir côté catalogue TS
+// (`check-ts-catalog-dead-entries.mjs`, même issue) : ses appelants Swift
+// (écran de parrainage, partage du code) sont portés par les issues sœurs du
+// même milestone, pas par celle-ci, qui ne livre que la route serveur et son
+// exposition dans les catalogues générés.
+//
+// 250 → 251 (#3600) : `PostsEndpoint.byPostIdMediaByMediaIdExport` (nouvelle
+// route `GET /posts/:postId/media/:mediaId/export`, export watermarké côté
+// serveur) — morte à la naissance PAR CONSTRUCTION : cette issue ne livre que
+// la route serveur (watermark sharp/ffmpeg, cache) et son exposition dans les
+// catalogues générés. L'appel iOS (bouton d'export sur un média) est un
+// travail client à part, à ouvrir en issue de suivi le jour où l'écran existe.
+//
+// 251 → 246 (#5424) : cinq fichiers d'énumération retirés (`CleanupEndpoint`,
+// `StatsEndpoint`, `UserStatusEndpoint`, `TestEndpoint`, `InfoEndpoint`) —
+// quatre routes d'exploitation filtrées par
+// `packages/shared/api/ops-only-routes.ts`, et `/info` dont la route serveur
+// elle-même a été retirée. Aucun des cinq n'avait d'appelant Swift hors test.
+const BASELINE_DEAD_ENTRIES = 246;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

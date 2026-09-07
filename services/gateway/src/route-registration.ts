@@ -157,28 +157,6 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
       }
     });
 
-    // Service information endpoint
-    server.get('/info', async (_request, _reply) => {
-      return {
-        name: 'Meeshy Translation Gateway',
-        version: '1.0.0',
-        build: resolveBuildInfo(),
-        environment: process.env.NODE_ENV || 'development',
-        architecture: {
-          frontend: 'WebSocket + REST API',
-          backend: 'ZMQ + Protocol Buffers',
-          database: 'PostgreSQL + Prisma'
-        },
-        endpoints: {
-          websocket: '/socket.io/',
-          health: '/health',
-          translate: '/translate'
-        },
-        supportedLanguages: ['fr', 'en', 'es', 'de', 'pt', 'zh', 'ja', 'ar'],
-        features: ['real-time translation', 'multiple language support', 'caching', 'typing indicators']
-      };
-    });
-
     // ═══════════════════════════════════════════════════════════════════
     // Traduction : décore le service AVANT d'enregistrer trois sous-modules
     // qui le lisent (`fastify.translationService`, etc.) — aucune des deux

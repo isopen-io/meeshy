@@ -341,7 +341,11 @@ export async function canUserInteractWithPost(
 /**
  * Tranche ACL + redirection d'un post CANDIDAT à une interaction sociale
  * (like/réaction, commentaire). Porte, en plus de `PostVisibilityRecord`, les
- * champs qui décident SI ce post redirige vers sa racine.
+ * champs qui décident SI ce post redirige vers sa racine — et `commentsDisabled`
+ * (#3959), un PASSAGER qui ne participe à AUCUNE décision de redirection : il
+ * évite au seul appelant qui en a besoin (`POST /posts/:postId/comments`) une
+ * seconde requête sur la cible déjà résolue (racine d'un repost simple
+ * comprise). Les appelants « like/réaction » l'ignorent simplement.
  */
 export type PostRedirectRecord = PostVisibilityRecord & {
   id: string;
@@ -349,6 +353,7 @@ export type PostRedirectRecord = PostVisibilityRecord & {
   isQuote: boolean;
   repostOfId: string | null;
   originalRepostOfId: string | null;
+  commentsDisabled: boolean;
 };
 
 const POST_REDIRECT_SELECT = {
@@ -361,6 +366,7 @@ const POST_REDIRECT_SELECT = {
   isQuote: true,
   repostOfId: true,
   originalRepostOfId: true,
+  commentsDisabled: true,
 } as const;
 
 async function loadPostRedirectRecord(
