@@ -2384,7 +2384,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             repostOfId: "post-source",
             audioUrl: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:],
             forcePlainPost: false,
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            allowSoundExtraction: nil
         )
         XCTAssertEqual(
             ComposerDocumentSendPlan.plan(for: citation, isOffline: false),
