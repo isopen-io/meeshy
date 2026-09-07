@@ -58,6 +58,27 @@ extension PostDetailView {
         }
     }
 
+    /// **La trace du son de fond, au-dessus de la scène** (#5602).
+    ///
+    /// Montée par les DEUX chemins de `storyCanvasSection` — mosaïque et
+    /// mono-scène — parce qu'un post à plusieurs scènes emporte son fond comme
+    /// un autre, et qu'une trace qui ne paraîtrait que sur l'un des deux serait
+    /// pire qu'absente : elle ferait croire que l'autre ne joue rien.
+    ///
+    /// L'existence est celle du badge (`backgroundTrace(of:)`) : pas de piste
+    /// ⇒ rien, et la scène reprend toute la hauteur.
+    @ViewBuilder
+    func sceneSoundHeader(_ renderedItem: StoryItem) -> some View {
+        PostSceneSoundHeader(
+            trace: BackgroundSoundBadge.backgroundTrace(of: renderedItem.storyEffects),
+            isPaused: isCanvasPaused,
+            accentHex: accentColor,
+            onTogglePlayback: { isCanvasPaused.toggle() }
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
     /// Le chemin NATIF. Le lecteur est construit sur `renderedItem` plutôt que
     /// de laisser `StoryReaderRepresentable(feedPost:)` reconvertir le même
     /// `FeedPost` : une seconde conversion par évaluation de body, et surtout
@@ -65,6 +86,7 @@ extension PostDetailView {
     /// d'un côté sans l'autre (post-revue 2026-07-13).
     @ViewBuilder
     func storyCanvasSection(_ post: FeedPost, renderedItem: StoryItem) -> some View {
+        sceneSoundHeader(renderedItem)
         // **Les dispositions de scène valent AUSSI sur la page détail**
         // (directive porteur 2026-09-06). Le détail rendait `sceneIndex: 0` par
         // l'hôte reader : un post de dix scènes n'en montrait qu'une, et les
@@ -81,11 +103,22 @@ extension PostDetailView {
                 // mono-scène juste en dessous.** Il n'y a qu'une publication à
                 // l'écran, donc aucune élection à arbitrer : ce qui gouverne
                 // est la visibilité et l'appel en cours, comme pour le reader.
-                // C'est ce qui fait que le son de fond s'active à l'ouverture
-                // du détail — la directive du 2026-09-05, tenue aussi pour un
-                // post à plusieurs scènes.
                 isActive: !StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
-                                                              callActive: isCallActive),
+                                                              callActive: isCallActive,
+                                                              viewerPaused: isCanvasPaused),
+                // **L'hôte DIT qu'il est le détail, et c'est ce qui ouvre le
+                // son** (#5593). `isActive` ne gouverne que la PAUSE : la
+                // mosaïque montait son player en `mode: .card`, dont
+                // `ScenePlayerConfig` VERROUILLE le muet (#4084). Le son de
+                // fond d'un post à plusieurs scènes ne se jouait donc jamais
+                // dans le détail, et le bouton muet de la barre d'actions
+                // n'atteignait aucun lecteur sur ce chemin — pendant que les
+                // deux autres (mono-scène ci-dessous, republication) passaient
+                // bien `mute: isCanvasMuted`. Le commentaire qui vivait ici
+                // AFFIRMAIT que le son s'activait : il décrivait l'intention,
+                // pas le câblage.
+                host: .detail,
+                isMuted: isCanvasMuted,
                 onTapScene: { index in
                     detailSceneIndex = index
                     fullscreenMediaId = nil
@@ -101,7 +134,9 @@ extension PostDetailView {
                     story: renderedItem,
                     preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
                     mute: isCanvasMuted,
-                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
+                                                                callActive: isCallActive,
+                                                                viewerPaused: isCanvasPaused)
                 )
             }
             .padding(.horizontal, 16)

@@ -37,6 +37,41 @@ import MeeshyUI
 /// élue par le viewport, et seulement si la scène BOUGE (`SceneMotion`) — trois
 /// conditions dont la dernière est celle que la directive ajoute : « une scène
 /// cinématique doit être considérée comme une vidéo ».
+
+/// **Qui monte la mosaïque — et ce que cet hôte fait entendre** (#5593).
+///
+/// Deux surfaces montent `PostSceneMosaic`, et elles n'ont pas le même contrat
+/// sonore :
+///
+/// | hôte | ce qu'on entend | pourquoi |
+/// |---|---|---|
+/// | fil | rien, définitivement | plusieurs cartes à l'écran, aucune n'a de bouton à piloter (#4084, E3) |
+/// | détail | le son de fond, coupable par la barre d'actions | une seule publication à l'écran, et `StoryDetailPlaybackPolicy` : « Audio is ON by DEFAULT in detail » |
+///
+/// La question « quel mode de player ? » se posait AILLEURS — dans la vue, en
+/// dur. Un mode enfoui suit la vue partout où elle va : celui de la carte de
+/// fil a accompagné la mosaïque jusqu'à la fiche détail (`4a3e13607b`), où il
+/// verrouillait un muet que personne n'avait demandé.
+///
+/// > **Un mode de lecture n'appartient pas à ce qui est rendu, mais à l'endroit
+/// > où on le rend.** Nommer l'hôte le rend impossible à hériter par accident.
+nonisolated enum PostSceneMosaicHost: Equatable {
+    /// Le fil — muet PAR CONSTRUCTION.
+    case feed
+    /// La fiche détail — le son de fond joue, le viewer peut le couper.
+    case detail
+
+    /// Le mode servi au `MeeshyScenePlayer`. C'est LUI qui porte le verrou
+    /// (`ScenePlayerConfig.locksMute`), jamais un booléen doublé ici : deux
+    /// écritures d'une même règle divergent.
+    var playerMode: ScenePlayerMode {
+        switch self {
+        case .feed: return .card
+        case .detail: return .preview
+        }
+    }
+}
+
 struct PostSceneMosaic: View {
 
     let post: FeedPost
@@ -47,6 +82,20 @@ struct PostSceneMosaic: View {
     /// fil autorise à jouer ? `false` par défaut : un hôte sans coordinateur
     /// (détail, signets) ne fabrique pas une élection que personne ne tient.
     var isActive: Bool = false
+    /// **Où cette mosaïque est montée — donc ce qu'on y entend** (#5593).
+    ///
+    /// Le mode du player n'est pas une propriété de CETTE vue : c'est une
+    /// propriété de son hôte. Écrit en dur (`.card`), il a suivi la mosaïque du
+    /// fil jusqu'à la fiche détail, où il disait l'inverse de ce que le détail
+    /// veut — et le son de fond d'un post à plusieurs scènes ne s'y jouait
+    /// jamais. Le défaut par défaut reste le FIL : un site qui ne dit rien
+    /// n'ouvre pas le son par inadvertance.
+    var host: PostSceneMosaicHost = .feed
+    /// Le muet DEMANDÉ par l'hôte — celui que la barre d'actions du détail
+    /// bascule (`isCanvasMuted`). Le fil l'ignore : son mode VERROUILLE le
+    /// muet (`ScenePlayerConfig.locksMute`, #4084), et c'est `hostMute` qui
+    /// tranche, jamais une seconde règle recopiée ici.
+    var isMuted: Bool = false
     /// Le doigt sur une tuile ouvre le plein écran SUR CETTE SCÈNE — pas sur
     /// la première. Une mosaïque dont toutes les tuiles mènent au même endroit
     /// serait un seul bouton dessiné quatre fois.
@@ -323,19 +372,8 @@ struct PostSceneMosaic: View {
                 SceneFocusFrame(focus: MosaicLayout.isPaged(mode: mode)
                                 ? scene.flatMap { SceneFraming.focus(scene: $0) }
                                 : nil) {
-                    MeeshyScenePlayer(
-                        document: document,
-                        mode: .card,
-                        sceneIndex: .constant(tuile.sceneIndex),
-                        // **Une scène ne joue que si elle BOUGE.** Une scène
-                        // fixe qui remporterait la lecture occuperait l'unique
-                        // place jouante du fil sans rien en faire — et
-                        // TAIRAIT la vidéo voisine.
-                        isPlaying: .constant(joue && bouge),
-                        accentColorHex: accentColor,
-                        carrier: carrier
-                    )
-                    .preferredContentLanguages(preferredContentLanguages)
+                    scenePlayer(sceneIndex: tuile.sceneIndex, joue: joue && bouge)
+                        .preferredContentLanguages(preferredContentLanguages)
                 }
             }
         }
@@ -379,6 +417,43 @@ struct PostSceneMosaic: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// **Le player d'une tuile — nommé pour être LU** (#5593).
+    ///
+    /// Extrait de `vignette` parce qu'une garde de source prouve qu'une ligne
+    /// existe, jamais qu'elle s'exécute : `DetailMosaicBackgroundSoundTests`
+    /// monte la mosaïque et lit le muet réellement SERVI à l'hôte canvas,
+    /// comme `ScenePlayerModeTests` le fait côté SDK.
+    ///
+    /// `joue` porte déjà la conjonction de l'élection et du mouvement — cette
+    /// fonction ne rejuge rien, elle CÂBLE.
+    func scenePlayer(sceneIndex: Int, joue: Bool) -> MeeshyScenePlayer {
+        MeeshyScenePlayer(
+            document: document,
+            mode: host.playerMode,
+            sceneIndex: .constant(sceneIndex),
+            // **Une scène ne joue que si elle BOUGE.** Une scène fixe qui
+            // remporterait la lecture occuperait l'unique place jouante du fil
+            // sans rien en faire — et TAIRAIT la vidéo voisine.
+            isPlaying: .constant(joue),
+            accentColorHex: accentColor,
+            carrier: carrier,
+            isMuted: isMuted
+        )
+    }
+
+    /// Le muet est-il VERROUILLÉ par le mode de l'hôte ? Une seule lecture,
+    /// partagée par le player (via `hostMute`) et par l'indicateur ci-dessous —
+    /// l'indicateur ne peut donc pas annoncer un état que le player ne sert pas.
+    private var muetVerrouille: Bool {
+        ScenePlayerConfig(mode: host.playerMode).locksMute
+    }
+
+    /// La porte de l'indicateur, exposée pour son témoin : « ce document a
+    /// quelque chose à couper » ET « cet hôte ne peut pas le rétablir ».
+    var montreLIndicateurDeSonCoupe: Bool {
+        muetVerrouille && SceneMotion.isAudible(document)
+    }
+
     /// **Le son est COUPÉ, et voici pourquoi vous n'entendez rien.**
     ///
     /// > « Les scènes cinématiques jouent avec signe audio barré » (constat
@@ -398,9 +473,14 @@ struct PostSceneMosaic: View {
     /// `SceneMotion.isAudible`, et non `isCinematic` : une vidéo muette bouge
     /// sans rien faire entendre, et y poser un haut-parleur barré ferait mentir
     /// l'indicateur sur l'état qu'il annonce.
+    ///
+    /// **Et seulement là où le muet est VERROUILLÉ** (#5593). Son libellé dit
+    /// « ouvrir en plein écran pour l'entendre » : dans la fiche détail, où le
+    /// fond joue et où la barre d'actions le coupe, ce conseil serait faux deux
+    /// fois. La porte suit donc le verrou du mode, jamais un `true` en dur.
     @ViewBuilder
     private func indicateurDeSonCoupe(_ document: CanvasV3) -> some View {
-        if SceneMotion.isAudible(document) {
+        if montreLIndicateurDeSonCoupe {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(.white)
