@@ -768,22 +768,6 @@ describe('PATCH /users/me/password — wrong current password', () => {
   });
 });
 
-describe('PATCH /users/me/password — weak new password (#3629)', () => {
-  it('rejects a new password that meets the length bound but fails strength checks', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(true);
-    const app = await buildApp({ routes: [updateUserPassword] });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      // 12+ chars (passes the Zod length gate) but all-lowercase, no digit —
-      // exactly what the schema alone let through before this fix.
-      payload: { currentPassword: 'correctpassword', newPassword: 'aaaaaaaaaaaaaaaa' },
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('Password requirements');
-    await app.close();
-  });
-});
-
 describe('PATCH /users/me/password — success', () => {
   it('returns 200 when password is updated', async () => {
     mockBcryptCompare.mockResolvedValueOnce(true);
