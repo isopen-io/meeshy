@@ -439,6 +439,7 @@ jobs:
           echo "cibles=$(echo $CIBLES | xargs)" >> $GITHUB_OUTPUT
 
       - name: Déployer
+        id: deploiement
         if: steps.cibles.outputs.cibles != ''
         env:
           SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
@@ -464,6 +465,7 @@ jobs:
               echo "\`STAGING_SSH_HOST\`, \`STAGING_SSH_USER\`, \`STAGING_SSH_KEY\`"
               echo "(et, recommandé, \`STAGING_SSH_KNOWN_HOSTS\`)."
             } >> $GITHUB_STEP_SUMMARY
+            echo "deploye=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -493,9 +495,13 @@ jobs:
             echo ""
             echo "Services recréés : \`$CIBLES\`"
           } >> $GITHUB_STEP_SUMMARY
+          echo "deploye=true" >> $GITHUB_OUTPUT
 
       - name: Vérifier que les conteneurs sont sains
-        if: steps.cibles.outputs.cibles != '' && secrets.STAGING_SSH_KEY != '' && secrets.STAGING_SSH_HOST != ''
+        # `steps.…outputs`, jamais `secrets` : le contexte `secrets` n'est PAS
+        # disponible dans un `if`, et l'y mettre fait rejeter le workflow ENTIER
+        # — aucun job créé, aucun log, un « failure » sans rien à lire.
+        if: steps.deploiement.outputs.deploye == 'true'
         env:
           SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
           SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
