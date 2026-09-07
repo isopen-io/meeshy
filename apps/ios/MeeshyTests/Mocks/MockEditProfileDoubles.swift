@@ -86,6 +86,10 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         let mediaCaptions: [String?]?
         let mediaAlts: [String?]?
         let mediaObjectIds: [String?]?
+        /// L'autorisation d'extraction du son (#3996) — observable ici, même
+        /// raison que ses voisins : un mock qui reçoit sans enregistrer ne
+        /// teste pas ce qu'il reçoit.
+        let allowSoundExtraction: Bool?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -110,7 +114,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         storyEffects: StoryEffects?,
         mediaCaptions: [String?]?,
         mediaAlts: [String?]?,
-        mediaObjectIds: [String?]?
+        mediaObjectIds: [String?]?,
+        allowSoundExtraction: Bool?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
@@ -128,7 +133,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             storyEffects: storyEffects,
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
-            mediaObjectIds: mediaObjectIds
+            mediaObjectIds: mediaObjectIds,
+            allowSoundExtraction: allowSoundExtraction
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(

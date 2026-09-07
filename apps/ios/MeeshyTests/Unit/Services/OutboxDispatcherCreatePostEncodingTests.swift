@@ -25,7 +25,8 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         mobileTranscription: MobileTranscriptionPayload? = nil,
         storyEffects: StoryEffects? = nil,
         mediaCaption: [String: String]? = nil,
-        mediaAlt: [String: String]? = nil
+        mediaAlt: [String: String]? = nil,
+        allowSoundExtraction: Bool? = nil
     ) -> CreatePostBody {
         CreatePostBody(
             content: "Coucou",
@@ -44,7 +45,8 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
             mobileTranscription: mobileTranscription,
             storyEffects: storyEffects,
             mediaCaption: mediaCaption,
-            mediaAlt: mediaAlt
+            mediaAlt: mediaAlt,
+            allowSoundExtraction: allowSoundExtraction
         )
     }
 
@@ -277,5 +279,25 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         let json = try encodeToJSON(makeBody(mediaCaption: ["m1": "belle journée"]))
         XCTAssertEqual(json["mediaCaption"] as? [String: String], ["m1": "belle journée"])
         XCTAssertNil(json["mediaAlt"])
+    }
+
+    // MARK: - #3996 — l'autorisation d'extraction du son atteint le corps encodé
+
+    /// **La clé part quand l'auteur a décidé** — `true` ou `false`, la même
+    /// clé top-level `allowSoundExtraction` que le chemin direct
+    /// (`CreatePostRequest`).
+    func test_lAutorisationDExtractionDuSon_partSousSaCle() throws {
+        let autorise = try encodeToJSON(makeBody(allowSoundExtraction: true))
+        XCTAssertEqual(autorise["allowSoundExtraction"] as? Bool, true)
+
+        let refuse = try encodeToJSON(makeBody(allowSoundExtraction: false))
+        XCTAssertEqual(refuse["allowSoundExtraction"] as? Bool, false)
+    }
+
+    /// **`nil` — « l'auteur n'a rien décidé » — n'encode aucune clé.** Un
+    /// `null` explicite affirmerait un refus que l'auteur n'a jamais exprimé.
+    func test_sansDecisionDExtractionDuSon_laCleNestPasPosee() throws {
+        let json = try encodeToJSON(makeBody(allowSoundExtraction: nil))
+        XCTAssertNil(json["allowSoundExtraction"])
     }
 }
