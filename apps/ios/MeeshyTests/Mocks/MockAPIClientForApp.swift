@@ -11,9 +11,10 @@ import XCTest
 /// travail. Ce type le lui permet sans rouvrir la porte au code de production,
 /// puisqu'il vit dans la cible de test.
 /// (Nommée `FictionalEndpoint` et non `TestEndpoint` : le serveur sert bien une
-/// route `/api/v1/test`, donc le catalogue GÉNÉRÉ porte déjà un
-/// `TestEndpoint`. La collision aurait été silencieuse à l'écriture et
-/// déroutante à la lecture.)
+/// route `/api/v1/test`, gardée pour ce nom au moment de l'écriture. Depuis
+/// #5424, cette route est une route d'EXPLOITATION filtrée du catalogue
+/// généré — `TestEndpoint` n'existe donc plus — mais le nom `FictionalEndpoint`
+/// reste le bon : il dit ce que ce type EST, pas ce qu'il évite.)
 struct FictionalEndpoint: MeeshyEndpoint {
     let path: String
     init(_ path: String) { self.path = path }
