@@ -319,6 +319,8 @@ export const passerelleDeBouchon = async (options?: {
   const pieces = new Map<string, PieceDeBouchon>();
   /** Les `PostMedia` téléversés par TUS (#5390) — `bouchon-uploads.ts` écrit, `duCompte` réclame sur `mediaIds`. */
   const mediasDePostEnAttente = new Map<string, MediaDePostDeBouchon>();
+  /** Les posts créés PENDANT le test, relus par `GET /api/v1/posts/:postId` (#5389). */
+  const postsCrees = new Map<string, Record<string, unknown>>();
   const presences = Object.assign(new Map<string, boolean>(PRESENCES_INITIALES), {
     reinitialise: (): void => {
       presences.clear();
@@ -459,6 +461,7 @@ export const passerelleDeBouchon = async (options?: {
     conversationsCreees,
     publicationsRecues,
     mediasDePostEnAttente,
+    postsCrees,
     pieces,
     boite,
     filDeCommentaires,

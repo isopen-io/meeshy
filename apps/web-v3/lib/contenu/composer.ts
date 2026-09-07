@@ -123,6 +123,16 @@ export const OCTETS_MAX_PAR_PUBLICATION = MEGA_OCTETS_PAR_PUBLICATION * 1024 * 1
  */
 export const OCTETS_MAX_DE_LA_CHARGE = OCTETS_MAX_PAR_PUBLICATION + 1024 * 1024;
 
+/**
+ * LE PLAFOND D'UNE STORY (#5389) — SA SŒUR, pas une recopie de
+ * `OCTETS_MAX_DE_LA_CHARGE` : celle-ci suppose jusqu'à `MAX_POST_MEDIA`
+ * fichiers, une story n'en porte JAMAIS qu'UN (`STORY_NEUVE.mediaUnSeul`,
+ * `lib/contenu/story-neuve.ts`). La même marge d'1 Mo pour le texte du
+ * formulaire et les frontières multipart, appliquée à un seul média plutôt
+ * qu'à `OCTETS_MAX_PAR_PUBLICATION`.
+ */
+export const OCTETS_MAX_D_UNE_STORY = OCTETS_MAX_PAR_MEDIA + 1024 * 1024;
+
 /** Le paramètre d'adresse qui choisit le format. Un seul site le nomme. */
 export const CHAMP_DU_FORMAT = 'format';
 
