@@ -1037,6 +1037,14 @@ export type VoiceAPIResponse<T = unknown> = VoiceAPISuccessResponse<T> | VoiceAP
 export type VoiceCloningQualityPreset = 'fast' | 'balanced' | 'high_quality';
 
 /**
+ * Les valeurs de `VoiceCloningQualityPreset`, énumérées UNE fois — site unique
+ * pour `VoiceProfileService.ts` (validation d'écriture) et
+ * `AudioPreferenceSchema` (`preferences/audio.ts`, persistance) (#3735).
+ * Une seconde énumération littérale divergerait silencieusement de ce type.
+ */
+export const VOICE_CLONING_QUALITY_PRESETS = ['fast', 'balanced', 'high_quality'] as const satisfies readonly VoiceCloningQualityPreset[];
+
+/**
  * Configuration utilisateur persistée pour le clonage vocal
  * Ces paramètres sont stockés dans UserFeature et peuvent être modifiés
  * via PUT /user-features/configuration

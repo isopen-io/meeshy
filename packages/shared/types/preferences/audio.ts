@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import type { VoiceCloningQualityPreset } from '../voice-api';
+import { VOICE_CLONING_QUALITY_PRESETS } from '../voice-api';
 
 /**
  * Le preset de qualité du clonage vocal FIN (`voiceCloningQualityPreset`) est le
@@ -16,7 +16,6 @@ import type { VoiceCloningQualityPreset } from '../voice-api';
  * l'écran web (`audio-settings.tsx`), distinct des cinq réglages fins
  * `voiceCloning*` (#3735).
  */
-const VOICE_CLONING_QUALITY_PRESETS = ['fast', 'balanced', 'high_quality'] as const satisfies readonly VoiceCloningQualityPreset[];
 
 export const AudioPreferenceSchema = z.object({
   // Transcription
