@@ -1,90 +1,155 @@
 #!/usr/bin/env python3
-"""Genere les icones PNG de la PWA depuis la MEME geometrie que public/favicon.svg.
+"""Derive les icones PNG de la PWA depuis le LOGO D'APPLICATION iOS.
 
-Pourquoi un generateur plutot que trois binaires commites : une icone posee a la
-main derive en silence de la marque (la v3 a paye cette lecon sur ses captures,
-d'ou capture-cibles.js). Ici la geometrie est ECRITE une fois ; les trois
-fichiers en sont des projections, rejouables par `python3 scripts/genere-icones.py`.
+La source de verite de la marque est l'icone de l'app iOS —
+`apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png`
+(degrade indigo #6366F1 -> #4338CA, trois barres blanches empilees ; voir
+`apps/ios/CLAUDE.md` § Brand Identity). Directive porteur 2026-09-07 : les
+logos existants se RECUPERENT, ils ne se redessinent pas — l'ancienne version
+de ce script dessinait un « M » synthetique qui n'etait pas la marque.
 
-`maskable` n'est pas la meme image agrandie : Android rogne jusqu'a 20 % de
-chaque bord pour l'adapter au gabarit de l'appareil. La variante masquable pose
-donc le fond a PLEIN BORD et rentre le glyphe dans la zone sure (40 % du rayon),
-sinon le trait se fait couper.
+Pourquoi un generateur plutot que trois binaires poses a la main : une icone
+posee a la main derive en silence de sa source. Ici les trois fichiers sont des
+PROJECTIONS (reduction par moyenne de surface, sans dependance hors stdlib),
+rejouables par `python3 scripts/generate-icons.py`.
+
+`maskable` : Android rogne jusqu'a 20 % de chaque bord. L'icone iOS est
+plein-bord avec le glyphe dans la zone sure (~60 % du centre) — la meme image
+reduite convient, et c'est verifie a l'oeil sur les captures d'emulateur.
 """
 import struct
+import sys
 import zlib
 from pathlib import Path
 
-FOND = (0x7D, 0x80, 0xF6)
-ENCRE = (0x0B, 0x0C, 0x14)
+REPO = Path(__file__).resolve().parents[3]
+SOURCE = REPO / "apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png"
 PUBLIC = Path(__file__).resolve().parent.parent / "public"
 
-# La polyligne du favicon, en coordonnees 0..32 : M8,21 L8,11 L16,17 L24,11 L24,21
-POLYLIGNE = [(8, 21), (8, 11), (16, 17), (24, 11), (24, 21)]
-EPAISSEUR = 2.5  # stroke-width du SVG, meme repere
+TARGETS = {
+    "icon-192.png": 192,
+    "icon-512.png": 512,
+    "icon-512-maskable.png": 512,
+}
 
 
-def distance_au_segment(px, py, ax, ay, bx, by):
-    dx, dy = bx - ax, by - ay
-    longueur2 = dx * dx + dy * dy
-    t = 0.0 if longueur2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / longueur2))
-    cx, cy = ax + t * dx, ay + t * dy
-    return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+def read_png_rgba(path):
+    """Decode un PNG 8 bits (RGB ou RGBA, non entrelace) en lignes RGBA."""
+    raw = path.read_bytes()
+    if raw[:8] != b"\x89PNG\r\n\x1a\n":
+        raise SystemExit(f"{path} n'est pas un PNG")
+    pos, width, height, channels, idat = 8, 0, 0, 0, b""
+    while pos < len(raw):
+        (length,) = struct.unpack(">I", raw[pos : pos + 4])
+        kind = raw[pos + 4 : pos + 8]
+        body = raw[pos + 8 : pos + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, color, _, _, interlace = struct.unpack(">IIBBBBB", body)
+            if depth != 8 or interlace != 0:
+                raise SystemExit("source inattendue : PNG 8 bits non entrelace requis")
+            channels = {0: 1, 2: 3, 4: 2, 6: 4}[color]
+        elif kind == b"IDAT":
+            idat += body
+        elif kind == b"IEND":
+            break
+        pos += 12 + length
+    flat = zlib.decompress(idat)
+    stride = width * channels
+    lines, previous = [], bytearray(stride)
+    offset = 0
+    for _ in range(height):
+        filter_type = flat[offset]
+        line = bytearray(flat[offset + 1 : offset + 1 + stride])
+        offset += 1 + stride
+        if filter_type == 1:  # Sub
+            for i in range(channels, stride):
+                line[i] = (line[i] + line[i - channels]) & 0xFF
+        elif filter_type == 2:  # Up
+            for i in range(stride):
+                line[i] = (line[i] + previous[i]) & 0xFF
+        elif filter_type == 3:  # Average
+            for i in range(stride):
+                left = line[i - channels] if i >= channels else 0
+                line[i] = (line[i] + ((left + previous[i]) >> 1)) & 0xFF
+        elif filter_type == 4:  # Paeth
+            for i in range(stride):
+                left = line[i - channels] if i >= channels else 0
+                up = previous[i]
+                up_left = previous[i - channels] if i >= channels else 0
+                p = left + up - up_left
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - up_left)
+                predictor = left if pa <= pb and pa <= pc else up if pb <= pc else up_left
+                line[i] = (line[i] + predictor) & 0xFF
+        previous = line
+        if channels == 4:
+            lines.append(bytes(line))
+        elif channels == 3:
+            rgba = bytearray()
+            for i in range(0, stride, 3):
+                rgba += line[i : i + 3] + b"\xff"
+            lines.append(bytes(rgba))
+        else:
+            raise SystemExit("source inattendue : RGB ou RGBA requis")
+    return width, height, lines
 
 
-def png(chemin, taille, masquable):
-    echelle = taille / 32.0
-    demi_trait = (EPAISSEUR / 2.0) * echelle
-    rayon = 0.0 if masquable else 8.0 * echelle  # rx=8 du SVG
-    # Zone sure d'une icone masquable : le glyphe est reduit pour survivre au rognage.
-    facteur_glyphe = 0.8 if masquable else 1.0
-    centre = taille / 2.0
+def downscale(width, height, lines, size):
+    """Moyenne de surface (box filter a bornes fractionnaires) vers size x size."""
+    ratio = width / size
+    out_lines = []
+    for oy in range(size):
+        y0, y1 = oy * ratio, (oy + 1) * ratio
+        row = bytearray()
+        for ox in range(size):
+            x0, x1 = ox * ratio, (ox + 1) * ratio
+            acc = [0.0, 0.0, 0.0, 0.0]
+            area = 0.0
+            sy = int(y0)
+            while sy < y1 and sy < height:
+                wy = min(y1, sy + 1) - max(y0, sy)
+                sx = int(x0)
+                base = lines[sy]
+                while sx < x1 and sx < width:
+                    wx = min(x1, sx + 1) - max(x0, sx)
+                    weight = wx * wy
+                    i = sx * 4
+                    acc[0] += base[i] * weight
+                    acc[1] += base[i + 1] * weight
+                    acc[2] += base[i + 2] * weight
+                    acc[3] += base[i + 3] * weight
+                    area += weight
+                    sx += 1
+                sy += 1
+            row += bytes(min(255, round(component / area)) for component in acc)
+        out_lines.append(bytes(row))
+    return out_lines
 
-    segments = []
-    for (ax, ay), (bx, by) in zip(POLYLIGNE, POLYLIGNE[1:]):
-        pts = []
-        for x, y in ((ax, ay), (bx, by)):
-            gx = centre + (x * echelle - centre) * facteur_glyphe
-            gy = centre + (y * echelle - centre) * facteur_glyphe
-            pts.append((gx, gy))
-        segments.append((*pts[0], *pts[1]))
-    demi_trait *= facteur_glyphe
 
-    lignes = bytearray()
-    for y in range(taille):
-        lignes.append(0)  # filtre PNG « None »
-        cy = y + 0.5
-        for x in range(taille):
-            cx = x + 0.5
-            # Coins arrondis : hors du rayon, le pixel est transparent.
-            if rayon > 0:
-                dx = max(rayon - cx, cx - (taille - rayon), 0.0)
-                dy = max(rayon - cy, cy - (taille - rayon), 0.0)
-                if dx * dx + dy * dy > rayon * rayon:
-                    lignes.extend((0, 0, 0, 0))
-                    continue
-            couleur = FOND
-            for seg in segments:
-                if distance_au_segment(cx, cy, *seg) <= demi_trait:
-                    couleur = ENCRE
-                    break
-            lignes.extend((*couleur, 255))
+def write_png(path, size, lines):
+    def chunk(kind, body):
+        payload = kind + body
+        return struct.pack(">I", len(body)) + payload + struct.pack(">I", zlib.crc32(payload))
 
-    def bloc(nom, donnees):
-        entete = nom + donnees
-        return struct.pack(">I", len(donnees)) + entete + struct.pack(">I", zlib.crc32(entete) & 0xFFFFFFFF)
-
-    fichier = (
+    ihdr = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
+    raw = b"".join(b"\x00" + line for line in lines)
+    png = (
         b"\x89PNG\r\n\x1a\n"
-        + bloc(b"IHDR", struct.pack(">IIBBBBB", taille, taille, 8, 6, 0, 0, 0))
-        + bloc(b"IDAT", zlib.compress(bytes(lignes), 9))
-        + bloc(b"IEND", b"")
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
     )
-    chemin.write_bytes(fichier)
-    print(f"  {chemin.name}  {taille}x{taille}  {len(fichier)} o")
+    path.write_bytes(png)
+    print(f"  {path.name}  {size}x{size}  {len(png)} octets")
 
 
-PUBLIC.mkdir(exist_ok=True)
-png(PUBLIC / "icone-192.png", 192, masquable=False)
-png(PUBLIC / "icone-512.png", 512, masquable=False)
-png(PUBLIC / "icone-512-masque.png", 512, masquable=True)
+def main():
+    if not SOURCE.exists():
+        raise SystemExit(f"source introuvable : {SOURCE}")
+    width, height, lines = read_png_rgba(SOURCE)
+    print(f"source : {SOURCE.relative_to(REPO)} ({width}x{height})")
+    for name, size in TARGETS.items():
+        write_png(PUBLIC / name, size, downscale(width, height, lines, size))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
