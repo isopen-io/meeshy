@@ -1,8 +1,10 @@
 /**
- * Axes d'engagement « stories » (#5534) et « réels » (#5535, sous-issues de
- * #3695) — la publication d'une STORY crédite `content.story`, celle d'un
- * REEL crédite `content.reel`, via `EngagementService.recordActivity`.
- * Mutuellement exclusifs sur la même ligne écrite (`publication.ts`).
+ * Axes d'engagement « stories » (#5534), « réels » (#5535) et « posts »
+ * (#5533, sous-issues de #3695) — la publication d'une STORY crédite
+ * `content.story`, celle d'un REEL crédite `content.reel`, celle d'un POST
+ * (hors brouillon) crédite `content.post`, via
+ * `EngagementService.recordActivity`. Mutuellement exclusifs sur la même
+ * ligne écrite (`publication.ts`).
  *
  * Câblé au même site que le corps partagé de publication (#4151,
  * `runPublicationEffects`, `routes/posts/publication.ts`) : `POST /posts` et
@@ -14,7 +16,7 @@
  * Fichier séparé de `core.test.ts` (`DETTE_HERITEE`, plafonné à 1654 lignes —
  * cf. CLAUDE.md § Budget de taille) et de `publication-single-core.test.ts`
  * (déjà focalisé sur la parité des trois portes, #4151) : celui-ci garde
- * uniquement les axes `content.story` / `content.reel`.
+ * uniquement les axes `content.story` / `content.reel` / `content.post`.
  *
  * **Le type qui décide est le type ÉCRIT, pas le type DEMANDÉ** — même
  * discriminant que l'éventail d'amis (`publication.ts`, commentaire de
@@ -22,7 +24,14 @@
  * d'amis suit ce qui est en base »). `PostService.createPost` peut dégrader
  * un type non qualifiant (#PostService, 2026-08-02) ; un `type: 'STORY'`
  * (ou `'REEL'`) DEMANDÉ mais ÉCRIT comme `'POST'` ne doit créditer NI l'un
- * ni l'autre.
+ * ni l'autre — mais crédite `content.post` s'il n'est pas un brouillon.
+ *
+ * **`content.post` — décision produit (#5533).** L'issue demandait
+ * « status: PUBLISHED, pas brouillon » ; `Post` n'a pas de champ `status`
+ * (vérifié contre `schema.prisma`). Le brouillon y est modélisé par
+ * `PostVisibility.PRIVATE` (« Brouillon / seulement l'auteur ») — seul signal
+ * du dépôt qui porte cette distinction. `content.post` crédite donc tout
+ * POST dont la visibilité écrite n'est PAS `PRIVATE`.
  *
  * @jest-environment node
  */
@@ -382,6 +391,88 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.reel » (
 
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
+
+    await app.close();
+  });
+});
+
+describe('POST /posts — axe d\'engagement « content.post » (#5533)', () => {
+  it('crédite content.post pour un POST publié (visibilité non PRIVATE)', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+
+  it('ne crédite PAS content.post pour un brouillon (visibilité PRIVATE)', async () => {
+    mockCreatePost.mockResolvedValue({ ...PUBLISHED_ROW, visibility: 'PRIVATE' });
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Brouillon', visibility: 'PRIVATE' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+
+  it('ne crédite PAS content.post pour une STORY', async () => {
+    mockCreatePost.mockResolvedValue(storyRow());
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'STORY', content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+});
+
+describe('POST /posts/from-attachment — axe d\'engagement « content.post » (#5533)', () => {
+  it('crédite content.post pour une pièce jointe publiée en POST', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+
+  it('ne crédite pas content.post pour un brouillon (visibilité PRIVATE)', async () => {
+    mockCreatePost.mockResolvedValue({ ...PUBLISHED_ROW, visibility: 'PRIVATE' });
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID, visibility: 'PRIVATE' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
 
     await app.close();
   });

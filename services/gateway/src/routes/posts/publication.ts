@@ -424,10 +424,18 @@ export async function runPublicationEffects(
     });
   }
 
-  // Axes d'engagement « stories » (#5534) et « réels » (#5535) — suivent le
-  // type ÉCRIT comme l'éventail juste au-dessus, mutuellement exclusifs sur
-  // la même ligne : un REEL non qualifiant dégradé en POST par le service ne
-  // doit créditer ni l'un ni l'autre.
+  // Axes d'engagement « stories » (#5534), « réels » (#5535) et « posts »
+  // (#5533) — suivent le type ÉCRIT comme l'éventail juste au-dessus,
+  // mutuellement exclusifs sur la même ligne : un REEL non qualifiant
+  // dégradé en POST par le service ne doit créditer ni l'un ni l'autre, mais
+  // doit alors créditer `content.post` s'il n'est pas un brouillon.
+  //
+  // #5533 demandait « status: PUBLISHED, pas un brouillon » — un champ qui
+  // n'existe pas sur `Post` (vérifié contre schema.prisma). Le brouillon y
+  // est modélisé par `PostVisibility.PRIVATE` (« Brouillon / seulement
+  // l'auteur », schema.prisma) : c'est le SEUL signal du dépôt qui porte
+  // cette distinction, donc le discriminant retenu ici. Un POST à toute
+  // autre visibilité EST publié.
   if (engagementService && writtenType === 'STORY') {
     engagementService.recordActivity(authorId, 'content.story').catch((err: unknown) => {
       logError(fastify.log, `[${porte}] content.story engagement recording failed`, err);
@@ -435,6 +443,10 @@ export async function runPublicationEffects(
   } else if (engagementService && writtenType === 'REEL') {
     engagementService.recordActivity(authorId, 'content.reel').catch((err: unknown) => {
       logError(fastify.log, `[${porte}] content.reel engagement recording failed`, err);
+    });
+  } else if (engagementService && writtenType === 'POST' && visibility !== 'PRIVATE') {
+    engagementService.recordActivity(authorId, 'content.post').catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] content.post engagement recording failed`, err);
     });
   }
 
