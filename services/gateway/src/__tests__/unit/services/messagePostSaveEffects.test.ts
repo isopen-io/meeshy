@@ -250,10 +250,8 @@ describe('runMessagePostSaveEffects — comptage des messages', () => {
  * `EngagementService.recordConversationActivity`, pas ici : cette unité se
  * contente d'aiguiller l'axe depuis le TYPE et le `communityId` de la
  * conversation. `communityId` PRIME sur `type` : une conversation rattachée
- * à une communauté n'est ni `private` ni `public` — c'est `#5540`, pas
- * encore branché, donc aucun axe n'est crédité pour elle plutôt qu'un
- * classement faux (private/public) qu'un futur branchement de #5540 ne
- * pourrait plus corriger (le compteur serait déjà incrémenté).
+ * à une communauté crédite `conversation.community`, quel que soit son
+ * `type` — jamais `private` ni `public`.
  */
 describe('runMessagePostSaveEffects — axe d\'engagement des conversations', () => {
   it('crédite l\'axe conversation.public pour un utilisateur enregistré dans une conversation publique', async () => {
@@ -320,7 +318,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     );
   });
 
-  it('ne crédite rien pour une conversation rattachée à une communauté (axe #5540, pas encore branché)', async () => {
+  it('crédite l\'axe conversation.community pour une conversation rattachée à une communauté (#5540)', async () => {
     const prisma = makePrisma({ conversationType: 'group', communityId: '507f1f77bcf86cd799439abc' });
     const engagementService = makeEngagementService();
 
@@ -333,10 +331,14 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     });
     await flush();
 
-    expect(engagementService.recordConversationActivity).not.toHaveBeenCalled();
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.community',
+      CONV_ID
+    );
   });
 
-  it('ne crédite rien pour une conversation publique rattachée à une communauté — communityId prime sur type', async () => {
+  it('crédite conversation.community, jamais conversation.public — communityId prime sur type', async () => {
     const prisma = makePrisma({ conversationType: 'public', communityId: '507f1f77bcf86cd799439abc' });
     const engagementService = makeEngagementService();
 
@@ -349,6 +351,11 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     });
     await flush();
 
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.community',
+      CONV_ID
+    );
     expect(engagementService.recordConversationActivity).not.toHaveBeenCalledWith(
       expect.anything(),
       'conversation.public',

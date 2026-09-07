@@ -244,17 +244,15 @@ export function runMessagePostSaveEffects(params: {
     )
     .catch(report('messageStats'));
 
-  // Axe d'engagement « conversation distincte » (#5538, #5539 ; #5540 pas
-  // encore branché) — dérivé de la conversation, jamais recalculé au site
-  // d'appel. `communityId` PRIME sur `type` (docs/product/streaks-badges-modele.md
+  // Axe d'engagement « conversation distincte » (#5538, #5539, #5540) —
+  // dérivé de la conversation, jamais recalculé au site d'appel.
+  // `communityId` PRIME sur `type` (docs/product/streaks-badges-modele.md
   // § 2 : « conversations communautaires » = rattachée à une communauté,
-  // quel que soit son type) : classer une conversation communautaire en
-  // private/public serait un classement FAUX qu'un futur branchement de
-  // #5540 ne pourrait plus corriger — le compteur serait déjà incrémenté,
-  // et `recordConversationActivity` ne crédite qu'une fois par (axe,
-  // conversation). Un utilisateur ANONYME n'a pas de ligne `EngagementCounter`
-  // possible (`userId` y est un `User.id` requis) : la garde évite même la
-  // lecture de la conversation quand elle ne peut mener nulle part.
+  // quel que soit son type) : une conversation rattachée à une communauté
+  // crédite `conversation.community`, jamais `private` ni `public`. Un
+  // utilisateur ANONYME n'a pas de ligne `EngagementCounter` possible
+  // (`userId` y est un `User.id` requis) : la garde évite même la lecture
+  // de la conversation quand elle ne peut mener nulle part.
   if (engagementService && message.senderUserId) {
     const senderUserId = message.senderUserId;
     void Promise.resolve()
@@ -263,8 +261,12 @@ export function runMessagePostSaveEffects(params: {
           where: { id: message.conversationId },
           select: { type: true, communityId: true },
         });
-        if (!conversation || conversation.communityId) return;
-        const axisKey = conversation.type === 'public' ? 'conversation.public' : 'conversation.private';
+        if (!conversation) return;
+        const axisKey = conversation.communityId
+          ? 'conversation.community'
+          : conversation.type === 'public'
+            ? 'conversation.public'
+            : 'conversation.private';
         await engagementService.recordConversationActivity(
           senderUserId,
           axisKey,
