@@ -12,6 +12,7 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
+import { logWarn } from '../utils/logger';
 import {
   cursorPage,
   cursorPaginationSchema,
@@ -772,7 +773,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Admin access required');
         }
 
-        fastify.log.warn({ user }, 'Admin clearing all notifications');
+        logWarn(fastify.log, `Admin clearing all notifications (userId=${user.userId})`);
 
         const result = await fastify.prisma.notification.deleteMany({});
 

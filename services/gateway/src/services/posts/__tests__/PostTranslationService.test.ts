@@ -246,6 +246,40 @@ describe('PostTranslationService', () => {
       expect(targets).toEqual(['fr']);
     });
 
+    // #5422 — la mesure on-device PERSISTÉE (#5349) est relue ici au même rang
+    // qu'à la création : second recours, après la revendication et avant la
+    // détection regex du serveur (une supposition, pas une mesure).
+    describe('detectedLanguage (#5422)', () => {
+      it('is used as source when originalLanguage is absent', async () => {
+        const { service, zmqClient } = makeService({
+          post: { content: 'Ola tudo bem', originalLanguage: null, detectedLanguage: 'pt', translations: {} },
+        });
+        await service.translateOnDemand('post-1', 'fr');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('pt');
+      });
+
+      it('never overrides a persisted originalLanguage', async () => {
+        const { service, zmqClient } = makeService({
+          post: { content: 'Hello', originalLanguage: 'en', detectedLanguage: 'es', translations: {} },
+        });
+        await service.translateOnDemand('post-1', 'fr');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('en');
+      });
+
+      it('wins over the regex-based fallback detection', async () => {
+        const { service, zmqClient } = makeService({
+          // Sans marqueur reconnu par `detectLanguage` — retomberait sur 'en'
+          // sans la mesure persistée.
+          post: { content: 'Ola tudo bem', originalLanguage: null, detectedLanguage: 'pt', translations: {} },
+        });
+        await service.translateOnDemand('post-1', 'de');
+        const [, sourceLang] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+        expect(sourceLang).toBe('pt');
+      });
+    });
+
     // ─── Textes du CANVAS (feuille « Traductions » du lecteur story) ────────
     //
     // Une story est très souvent faite ENTIÈREMENT de texte posé sur le

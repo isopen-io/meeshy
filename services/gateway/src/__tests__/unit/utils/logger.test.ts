@@ -162,6 +162,14 @@ describe('logWarn', () => {
     logWarn(brokenLogger, 'msg', 'w');
     expect(warnSpy).toHaveBeenCalled();
   });
+
+  it('writes even without a cause (message-only call)', () => {
+    const mockLogger = { warn: jest.fn() };
+    logWarn(mockLogger, 'EmailService not available, invitation not sent');
+    expect(mockLogger.warn).toHaveBeenCalledWith('EmailService not available, invitation not sent');
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalled();
+  });
 });
 
 // ─── Visibilité en production ────────────────────────────────────────────────
@@ -236,5 +244,69 @@ describe('logError — la ligne SORT, quel que soit le logger reçu', () => {
     logError(realLogger, 'oops', new Error('bad'));
 
     expect(realLogger.error).toHaveBeenCalledWith('oops');
+  });
+});
+
+// ─── Visibilité en production (logWarn) ────────────────────────────────────
+//
+// Même défaut que `logError` avant #3617, jamais corrigé pour ce niveau
+// (#5415) : `logWarn` n'appelait que le PARAMÈTRE `logger`, jamais le
+// singleton du module. Sous `logger: false`, `fastify.log`/`request.log` est
+// le no-op d'`abstract-logging` — 32 sites du dépôt lui passaient l'un des
+// deux, et tout avertissement de route ne laissait aucune trace.
+
+describe('logWarn — la ligne SORT, quel que soit le logger reçu', () => {
+  let warnSpy;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  /** Réplique fidèle de `fastify.log` sous `logger: false`. */
+  const noopFastifyLog = () => ({
+    error: function noop() {},
+    warn: function noop() {},
+    info: function noop() {},
+    debug: function noop() {},
+  });
+
+  it('écrit malgré un logger muet — le cas des 32 sites concernés', () => {
+    logWarn(noopFastifyLog(), '[TopicCatalog] Redis publish failed', new Error('ECONNREFUSED'));
+
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('nomme le contexte ET la cause', () => {
+    logWarn(noopFastifyLog(), '[TopicCatalog] Redis publish failed', new Error('ECONNREFUSED'));
+
+    const printed = warnSpy.mock.calls.flat().join(' ');
+    expect(printed).toContain('[TopicCatalog] Redis publish failed');
+    expect(printed).toContain('ECONNREFUSED');
+  });
+
+  it('écrit aussi sans aucune cause — le message seul', () => {
+    logWarn(noopFastifyLog(), 'EmailService not available, invitation not sent');
+
+    expect(warnSpy).toHaveBeenCalled();
+    const printed = warnSpy.mock.calls.flat().join(' ');
+    expect(printed).toContain('EmailService not available, invitation not sent');
+  });
+
+  it('écrit aussi sans aucun logger', () => {
+    logWarn(null, 'boom', new Error('bad'));
+
+    expect(warnSpy).toHaveBeenCalled();
+  });
+
+  it('continue de servir un vrai logger quand on lui en donne un', () => {
+    const realLogger = { warn: jest.fn() };
+
+    logWarn(realLogger, 'attention', new Error('bad'));
+
+    expect(realLogger.warn).toHaveBeenCalledWith('attention');
   });
 });
