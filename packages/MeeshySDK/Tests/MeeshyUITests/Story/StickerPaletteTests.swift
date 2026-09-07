@@ -174,6 +174,13 @@ final class StickerPaletteTests: XCTestCase {
     /// dessus. Ce témoin RE-VISE ; il ne s'allège pas, et il garde la moitié
     /// qui n'a pas bougé : le `.task` de la feuille ne doit toujours pas
     /// nommer le fournisseur.
+    ///
+    /// **Le déclencheur a de nouveau bougé au #5407** : `.onAppear` et
+    /// l'arrivée tardive du fournisseur délèguent désormais à un site UNIQUE,
+    /// `chercheLesLieuxSiBesoin()` (`StickerPickerView+Templates.swift`), au
+    /// lieu d'inliner l'appel à chaque déclencheur. Ce témoin suit le
+    /// déplacement — il vérifie le CÂBLAGE des deux déclencheurs ici, et
+    /// l'IDEMPOTENCE de la fonction partagée dans son fichier.
     func test_thePlaceProvider_isCalledOnTabEntry_notOnSheetOpen() throws {
         let code = Self.strippingComments(
             try String(contentsOf: Self.pickerSourceURL, encoding: .utf8))
@@ -186,22 +193,43 @@ final class StickerPaletteTests: XCTestCase {
 
         let sections = Self.strippingComments(
             try String(contentsOf: Self.verticalSourceURL, encoding: .utf8))
-        let surApparition = try XCTUnwrap(
-            Self.blockBody(after: "placeTab.onAppear {", in: sections),
-            "Le déclencheur de la section Lieu est introuvable — personne ne chargerait les lieux.")
-        XCTAssertTrue(surApparition.contains("nearbyPlaces.nearby()"),
-                      "Personne ne charge les lieux : la section resterait vide à jamais.")
-        XCTAssertTrue(surApparition.contains("places.isEmpty"),
-                      "Sans garde d'idempotence, revenir sur la section relance une recherche.")
 
-        // **Et le déclencheur ne remonte pas d'un cran.** Le poser sur la liste
-        // entière, ou sur le switch de nature, ramènerait exactement le défaut
-        // que ce témoin existe pour interdire : la position demandée avant que
-        // l'auteur ait montré le moindre intérêt pour un lieu.
-        XCTAssertFalse(Self.blockBody(after: "var naturedContent: some View {", in: sections)?
-                        .contains("nearbyPlaces") ?? false,
-                       "Le chargement est remonté au conteneur : il se déclencherait "
-                        + "dès l'affichage de la nature « sticker ».")
+        let sectionContent = try XCTUnwrap(
+            Self.blockBody(after: "private func stickerSectionContent(_ onglet: StickerPaletteTab) -> some View {", in: sections),
+            "Le switch de nature est introuvable.")
+        let placeCase = try XCTUnwrap(sectionContent.range(of: "case .place:"),
+                                      "Le cas .place est introuvable dans le switch de nature.")
+        let placeCaseEnd = sectionContent[placeCase.upperBound...]
+            .range(of: "case .library:")?.lowerBound ?? sectionContent.endIndex
+        let beforePlace = sectionContent[sectionContent.startIndex..<placeCase.lowerBound]
+        let placeBody = sectionContent[placeCase.upperBound..<placeCaseEnd]
+        let afterPlace = sectionContent[placeCaseEnd...]
+
+        XCTAssertTrue(
+            placeBody.contains("placeTab") && placeBody.contains(".onAppear { chercheLesLieuxSiBesoin() }"),
+            "Le déclencheur de la section Lieu est introuvable — personne ne chargerait les lieux.")
+        XCTAssertTrue(placeBody.contains("if servable { chercheLesLieuxSiBesoin() }"),
+                      "Le fournisseur arrivant après la section n'y relance plus la recherche.")
+
+        // **Et le déclencheur ne remonte pas d'un cran.** L'appeler dans un cas
+        // voisin, ou dans le switch lui-même hors du cas `.place`, ramènerait
+        // exactement le défaut que ce témoin existe pour interdire : la
+        // position demandée avant que l'auteur ait montré le moindre intérêt
+        // pour un lieu.
+        XCTAssertFalse(
+            beforePlace.contains("chercheLesLieuxSiBesoin") || afterPlace.contains("chercheLesLieuxSiBesoin"),
+            "Le chargement est remonté hors du cas .place : il se déclencherait "
+             + "dès l'affichage d'une autre nature.")
+
+        let templates = Self.strippingComments(
+            try String(contentsOf: Self.templatesSourceURL, encoding: .utf8))
+        let chercheLesLieux = try XCTUnwrap(
+            Self.blockBody(after: "func chercheLesLieuxSiBesoin() {", in: templates),
+            "Le site unique de chargement des lieux est introuvable.")
+        XCTAssertTrue(chercheLesLieux.contains("nearbyPlaces.nearby()"),
+                      "Personne ne charge les lieux : la section resterait vide à jamais.")
+        XCTAssertTrue(chercheLesLieux.contains("places.isEmpty"),
+                      "Sans garde d'idempotence, revenir sur la section relance une recherche.")
     }
 
     private static var verticalSourceURL: URL {
@@ -216,6 +244,13 @@ final class StickerPaletteTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshyUI/Story/StickerPickerView.swift")
+    }
+
+    private static var templatesSourceURL: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/StickerPickerView+Templates.swift")
     }
 
     /// Le corps d'un bloc, isolé par équilibrage d'accolades depuis son entête.
