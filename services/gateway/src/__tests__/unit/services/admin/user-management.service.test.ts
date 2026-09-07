@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UserFilters } from '@meeshy/shared/types';
 
 // Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216, et le
@@ -22,80 +21,10 @@ jest.mock('../../../../utils/password-hash', () => ({
 import { UserManagementService } from '../../../../services/admin/user-management.service';
 import { hashPassword, verifyPassword, BCRYPT_COST } from '../../../../utils/password-hash';
 import { logger } from '../../../../utils/logger';
+import { makeUser, makePrisma, makeService } from './user-management-mocks';
 
 const mockHash = hashPassword as jest.Mock;
 const mockCompare = verifyPassword as jest.Mock;
-
-function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    id: '507f1f77bcf86cd799439011',
-    username: 'testuser',
-    firstName: 'John',
-    lastName: 'Doe',
-    displayName: 'John D.',
-    bio: '',
-    email: 'test@example.com',
-    password: 'hashed',
-    phoneNumber: null,
-    avatar: null,
-    role: 'USER',
-    isActive: true,
-    isOnline: false,
-    emailVerifiedAt: null,
-    phoneVerifiedAt: null,
-    lastActiveAt: new Date(),
-    systemLanguage: 'en',
-    regionalLanguage: 'en',
-    customDestinationLanguage: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deactivatedAt: null,
-    deletedAt: null,
-    twoFactorEnabledAt: null,
-    twoFactorSecret: null,
-    twoFactorBackupCodes: null,
-    failedLoginAttempts: 0,
-    lockedUntil: null,
-    lockedReason: null,
-    ...overrides,
-  };
-}
-
-function makePrisma(methods: Partial<{
-  findMany: jest.Mock;
-  findUnique: jest.Mock;
-  create: jest.Mock;
-  update: jest.Mock;
-  count: jest.Mock;
-}> = {}) {
-  return {
-    user: {
-      findMany: methods.findMany ?? jest.fn(),
-      findUnique: methods.findUnique ?? jest.fn(),
-      create: methods.create ?? jest.fn(),
-      update: methods.update ?? jest.fn(),
-      count: methods.count ?? jest.fn(),
-    },
-    // `createUser` route désormais aussi par `ensureGlobalConversationMembership`
-    // (#3876) — repli SANS salon global trouvé par défaut : les describe
-    // blocks qui ne testent pas ce comportement restent silencieux.
-    conversation: {
-      findFirst: jest.fn().mockResolvedValue(null),
-    },
-    participant: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({ id: 'part-new' }),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    message: {
-      create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
-    },
-  } as unknown as PrismaClient;
-}
-
-function makeService(prisma?: PrismaClient, deps?: { revokeSessions?: unknown; resolveSocketManager?: unknown }) {
-  return new UserManagementService(prisma ?? makePrisma(), deps as never);
-}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -686,53 +615,6 @@ describe('UserManagementService.resetPassword', () => {
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ password: 'hashed_password' }),
     }));
-  });
-});
-
-// #5569 — un mot de passe réinitialisé par un admin (ex: réponse à un
-// incident, compte compromis signalé) doit couper les sessions déjà
-// ouvertes ; sans cela le compte garde son accès REST jusqu'à expiration du
-// JWT (jusqu'à 24h) malgré le nouveau mot de passe. Même patron que
-// `updateStatus — révocation des sockets du compte désactivé` ci-dessus.
-describe('UserManagementService.resetPassword — révocation des sessions actives', () => {
-  it("réinitialiser le mot de passe appelle la révocation avec l'id, APRÈS que l'écriture a abouti", async () => {
-    const order: string[] = [];
-    const update = jest.fn(() => new Promise((resolve) => setTimeout(() => {
-      order.push('written');
-      resolve(makeUser());
-    }, 5)));
-    const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
-    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
-
-    await svc.resetPassword('user-id', { newPassword: 'newpass' });
-
-    expect(revokeSessions).toHaveBeenCalledTimes(1);
-    expect(revokeSessions).toHaveBeenCalledWith('user-id');
-    expect(order).toEqual(['written', 'revoked:user-id']);
-  });
-
-  it("échec de la révocation ⇒ l'écriture est faite, l'utilisateur est rendu, l'échec est journalisé", async () => {
-    const written = makeUser();
-    const update = jest.fn().mockResolvedValue(written);
-    const revokeSessions = jest.fn(async (_userId: string) => { throw new Error('adapter down'); });
-    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
-    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
-
-    const result = await svc.resetPassword('user-id', { newPassword: 'newpass' });
-
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(result).toBe(written);
-    expect(revokeSessions).toHaveBeenCalledWith('user-id');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('user-id'));
-    warn.mockRestore();
-  });
-
-  it('sans révocateur injecté, réinitialiser écrit et rend l\'utilisateur', async () => {
-    const written = makeUser();
-    const update = jest.fn().mockResolvedValue(written);
-    const svc = makeService(makePrisma({ update }));
-
-    await expect(svc.resetPassword('user-id', { newPassword: 'newpass' })).resolves.toBe(written);
   });
 });
 
