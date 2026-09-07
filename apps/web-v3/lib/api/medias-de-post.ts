@@ -1,3 +1,5 @@
+import type { PostMediaUploadContext } from '@meeshy/shared/types/attachment';
+
 import { chaine, objet } from './lecture';
 import { baseDeLaPasserelle } from './passerelle';
 import type { Recuperateur } from './publication';
@@ -51,8 +53,8 @@ const REFUS_TELEVERSEMENT = 'Le service ne répond pas.';
 /** `Upload-Metadata` — les valeurs voyagent en base64 (protocole TUS, valeurs ASCII garanties ici : nom et type MIME). */
 const enBase64 = (valeur: string): string => Buffer.from(valeur, 'utf8').toString('base64');
 
-const enTeteDeMetadonnees = (nom: string, type: string): string =>
-  `filename ${enBase64(nom)},filetype ${enBase64(type)},uploadcontext ${enBase64('post')}`;
+const enTeteDeMetadonnees = (nom: string, type: string, contexte: PostMediaUploadContext): string =>
+  `filename ${enBase64(nom)},filetype ${enBase64(type)},uploadcontext ${enBase64(contexte)}`;
 
 const nombreEnTete = (valeur: string | null): number | null => {
   if (valeur === null) return null;
@@ -86,11 +88,14 @@ export type IssueDeTeleversement =
 export const televerseMediaDePost = async ({
   jeton,
   fichier,
+  contexte = 'post',
   base,
   recuperer,
 }: {
   readonly jeton: string;
   readonly fichier: { readonly nom: string; readonly type: string; readonly octets: Uint8Array };
+  /** `uploadcontext` (#5389) — `'post'` pour le composer, `'story'` pour `/stories/new` : c'est CE champ qui fait écrire `PostMedia.postId` sur le bon type de publication (`tus-handler.ts:449-505`). */
+  readonly contexte?: PostMediaUploadContext;
   readonly base?: string;
   readonly recuperer?: Recuperateur;
 }): Promise<IssueDeTeleversement> => {
@@ -103,7 +108,7 @@ export const televerseMediaDePost = async ({
       authorization: `Bearer ${jeton}`,
       'tus-resumable': '1.0.0',
       'upload-length': String(fichier.octets.byteLength),
-      'upload-metadata': enTeteDeMetadonnees(fichier.nom, fichier.type),
+      'upload-metadata': enTeteDeMetadonnees(fichier.nom, fichier.type, contexte),
       'content-type': 'application/offset+octet-stream',
     },
     body: Buffer.from(fichier.octets),
