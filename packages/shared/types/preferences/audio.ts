@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import type { VoiceCloningQualityPreset } from '../voice-api';
+import type { VoiceCloningQualityPreset } from '../voice-api.js';
 
 /**
  * Le preset de qualité du clonage vocal FIN (`voiceCloningQualityPreset`) est le
