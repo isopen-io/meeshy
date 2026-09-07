@@ -61,9 +61,15 @@ export const USERNAME_PATTERN = new RegExp(usernamePatternSource);
  * l'arbitre, et lui imposer une longueur enfermerait tout compte créé sous une
  * borne plus basse.
  *
+ * Portée à 12 par #3629 : 6 caractères laissait passer des mots de passe
+ * triviaux (`zxcvbn` seul, au reset, en jugeait déjà la moitié trop faibles).
+ * Douze est le plancher NIST SP 800-63B pour un secret mémorisé sans
+ * complexité imposée — la longueur, pas la composition, est ce qui coûte le
+ * plus cher à un attaquant.
+ *
  * Garde : `__tests__/password-min-length-parity.test.ts`.
  */
-export const PASSWORD_MIN_LENGTH = 6;
+export const PASSWORD_MIN_LENGTH = 12;
 
 export const passwordTooShort = `Mot de passe trop court (min ${PASSWORD_MIN_LENGTH} caractères)`;
 

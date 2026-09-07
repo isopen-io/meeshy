@@ -16,7 +16,6 @@
 
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
-import zxcvbn from 'zxcvbn';
 import axios from 'axios';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
@@ -25,7 +24,7 @@ import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword, verifyPassword } from '../utils/password-hash';
 import { unsetOrNull } from '../utils/prisma-unset';
-import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
+import { validatePasswordStrength } from '../utils/password-strength';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 
 // Logger dédié pour PasswordResetService
@@ -35,7 +34,6 @@ const logger = enhancedLogger.child({ module: 'PasswordResetService' });
 const TOKEN_EXPIRY_MINUTES = 15;
 const MAX_RESET_ATTEMPTS_24H = 10;
 const PASSWORD_HISTORY_COUNT = 10;
-const MIN_PASSWORD_SCORE = 3; // zxcvbn score (0-4)
 
 export interface PasswordResetRequest {
   email: string;
@@ -263,7 +261,7 @@ export class PasswordResetService {
       }
 
       // 2. Validate password strength
-      const passwordValidation = this.validatePasswordStrength(newPassword);
+      const passwordValidation = validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
         return {
           success: false,
@@ -632,49 +630,6 @@ export class PasswordResetService {
         revokedReason: 'NEW_REQUEST'
       }
     });
-  }
-
-  private validatePasswordStrength(password: string): {
-    isValid: boolean;
-    errors: string[];
-  } {
-    const errors: string[] = [];
-
-    // Basic requirements
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      errors.push(`minimum ${PASSWORD_MIN_LENGTH} characters`);
-    }
-
-    if (!/[a-z]/.test(password)) {
-      errors.push('one lowercase letter');
-    }
-
-    if (!/[A-Z]/.test(password)) {
-      errors.push('one uppercase letter');
-    }
-
-    if (!/[0-9]/.test(password)) {
-      errors.push('one digit');
-    }
-
-    // Special character is optional (bonus for stronger password)
-    // if (!/[^a-zA-Z0-9]/.test(password)) {
-    //   errors.push('one special character');
-    // }
-
-    // Use zxcvbn for advanced strength checking
-    const result = zxcvbn(password);
-    if (result.score < MIN_PASSWORD_SCORE) {
-      errors.push(`password strength score is ${result.score}/4 (minimum: ${MIN_PASSWORD_SCORE}/4)`);
-      if (result.feedback.warning) {
-        errors.push(result.feedback.warning);
-      }
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
   }
 
   private async checkPasswordHistory(userId: string, newPassword: string): Promise<boolean> {

@@ -363,7 +363,7 @@ describe('GET /admin/users/:userId', () => {
 // ── POST /admin/users ────────────────────────────────────────────────────────
 describe('POST /admin/users', () => {
   let app: FastifyInstance;
-  const validBody = { username: 'newuser', email: 'new@example.com', password: 'Pass1234!' };
+  const validBody = { username: 'newuser', email: 'new@example.com', password: 'Xk9$mQ2vLp8#nR4wZ' };
 
   beforeAll(async () => {
     resetMocks();
@@ -419,6 +419,16 @@ describe('POST /admin/users', () => {
     mockUMS.createUser.mockRejectedValue(new Error('DB error'));
     const res = await app.inject({ method: 'POST', url: '/admin/users', payload: validBody });
     expect(res.statusCode).toBe(500);
+  });
+
+  it('returns 400 when the password is weak (#3629)', async () => {
+    // 12+ chars (passes the Zod length gate) but all-lowercase, no digit —
+    // exactly what the schema alone let an admin create before this fix.
+    const weakBody = { ...validBody, password: 'aaaaaaaaaaaa' };
+    (adminUserValidation.createUserValidationSchema.parse as jest.Mock).mockReturnValue(weakBody);
+    const res = await app.inject({ method: 'POST', url: '/admin/users', payload: weakBody });
+    expect(res.statusCode).toBe(400);
+    expect(mockUMS.createUser).not.toHaveBeenCalled();
   });
 });
 
@@ -590,7 +600,7 @@ describe('PATCH /admin/users/:userId/status', () => {
 // ── POST /admin/users/:userId/reset-password ─────────────────────────────────
 describe('POST /admin/users/:userId/reset-password', () => {
   let app: FastifyInstance;
-  const validBody = { newPassword: 'NewPass123!' };
+  const validBody = { newPassword: 'Xk9$mQ2vLp8#nR4wZ' };
 
   beforeAll(async () => {
     resetMocks();
@@ -630,6 +640,14 @@ describe('POST /admin/users/:userId/reset-password', () => {
     mockUMS.resetPassword.mockRejectedValue(new Error('DB error'));
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/reset-password', payload: validBody });
     expect(res.statusCode).toBe(500);
+  });
+
+  it('returns 400 when the new password is weak (#3629)', async () => {
+    const weakBody = { newPassword: 'aaaaaaaaaaaa' };
+    (adminUserValidation.resetPasswordValidationSchema.parse as jest.Mock).mockReturnValue(weakBody);
+    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/reset-password', payload: weakBody });
+    expect(res.statusCode).toBe(400);
+    expect(mockUMS.resetPassword).not.toHaveBeenCalled();
   });
 });
 
