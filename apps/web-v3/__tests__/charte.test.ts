@@ -780,6 +780,12 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // est un cliquable NEUTRE, pas une action primaire.
     '.composer .onglets a[aria-current="page"]',
     '.composer .humeurs label:has(input:checked)',
+    // `/stories/new` (#5389) — le bouton NATIF d'un `<input type="file">`
+    // VISIBLE, même emploi 1 (le cliquable) que `.action.primaire` : c'est
+    // l'action qui choisit le média de la story, la seule surface de
+    // sélection que cet écran sert. Le nom du fichier choisi (rendu par le
+    // navigateur, dans le même `<input>`) et l'aide restent sur l'encre.
+    '.composer .media-de-story input[type=file]::file-selector-button',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

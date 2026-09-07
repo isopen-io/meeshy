@@ -4,6 +4,20 @@ import type { PieceDeBouchon } from './bouchon-fil';
 import type { Identite } from './bouchon-socket';
 
 /**
+ * `PostMediaUploadContext` (`@meeshy/shared/types/attachment:464`) — RECOPIÉE
+ * EN LITTÉRAL, jamais importée en VALEUR : ce fichier tourne dans le process
+ * Playwright lui-même (comme `lib/contenu/composer.ts`, voir son doc-comment
+ * sur `MAX_POST_MEDIA`), où un `import` STATIQUE de `@meeshy/shared` (ESM)
+ * jette — `bouchon-preferences.ts` contourne le même mur par un `import()`
+ * DYNAMIQUE. `isPostMediaUploadContext` (`tus-handler.ts:449`) accepte les
+ * QUATRE : post/story/status/comment créent tous un `PostMedia` (`postId:
+ * null`, pending), jamais un `MessageAttachment` — le bouchon ne refusait que
+ * `story`, faisant échouer tout téléversement de story (#5389, découvert par
+ * le témoin e2e de bout en bout).
+ */
+const CONTEXTES_DE_MEDIA_DE_POST: readonly string[] = ['post', 'story', 'status', 'comment'];
+
+/**
  * LE BOUCHON TUS (#5390) — `POST /api/v1/uploads`
  * (`services/gateway/src/routes/uploads/tus-handler.ts:297-343` la création,
  * `:581-622` le corps de fin) et `DELETE /api/v1/posts/media/:mediaId`
@@ -21,9 +35,10 @@ import type { Identite } from './bouchon-socket';
  *
  *   1. une créance (`Authorization: Bearer` ou `X-Session-Token`) — sinon 401,
  *      TEXTE BRUT (`onUploadCreate`, jamais de JSON sur un refus) ;
- *   2. `uploadcontext: post` (`Upload-Metadata`, décodé depuis le base64 du
- *      protocole TUS) — c'est ce qui fait écrire un `PostMedia` plutôt qu'un
- *      `MessageAttachment` (`isPostMediaUploadContext`) ;
+ *   2. `uploadcontext` PARMI `post/story/status/comment` (`Upload-Metadata`,
+ *      décodé depuis le base64 du protocole TUS) — c'est ce qui fait écrire
+ *      un `PostMedia` plutôt qu'un `MessageAttachment`
+ *      (`isPostMediaUploadContext`, les QUATRE traités à l'identique) ;
  *   3. un COMPTE ENREGISTRÉ — un invité y reçoit 403, MÊME TEXTE que la
  *      passerelle réelle (`onUploadCreate:325-331`).
  *
@@ -98,7 +113,7 @@ export const routesDesUploads =
     }
 
     const meta = metadonneesDuTeleversement(requete.headers['upload-metadata']);
-    if (meta.uploadcontext !== 'post') {
+    if (!CONTEXTES_DE_MEDIA_DE_POST.includes(meta.uploadcontext ?? '')) {
       texteBrut(400, 'Unsupported upload context\n');
       return true;
     }
