@@ -179,7 +179,9 @@ extension PostDetailView {
                         repost: repost,
                         preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
                         mute: isCanvasMuted,
-                        isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                        isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
+                                                                    callActive: isCallActive,
+                                                                    viewerPaused: isCanvasPaused)
                     )
                 }
                 .padding(.horizontal, 12)

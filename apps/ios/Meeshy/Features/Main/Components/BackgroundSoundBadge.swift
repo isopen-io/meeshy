@@ -162,8 +162,21 @@ extension BackgroundSoundBadge {
     /// lecture appellent CETTE fonction, jamais
     /// `AudioChipDisplay.backgroundAnnouncement(` directement — « un
     /// résolveur, trois surfaces ».
+    /// **L'ENTRÉE de fond elle-même — la trace, pas son annonce** (#5602).
+    ///
+    /// `announcement(for:)` en tire trois chaînes ; la trace de la fiche détail
+    /// a besoin de l'OBJET, qui porte en plus `waveformSamples` — le relevé que
+    /// le spectre dessine, et dont l'absence commande la sinusoïde de repli.
+    ///
+    /// Site UNIQUE de la question « quelle entrée est le fond ? », partagé avec
+    /// l'annonce : deux `first(where:)` écrits côte à côte finissent par
+    /// diverger sur le jour où le prédicat change.
+    static func backgroundTrace(of storyEffects: StoryEffects?) -> StoryAudioPlayerObject? {
+        storyEffects?.audioPlayerObjects?.first(where: { $0.isBackground == true })
+    }
+
     static func announcement(for storyEffects: StoryEffects?) -> BackgroundAudioAnnouncement {
-        let backgroundEntry = storyEffects?.audioPlayerObjects?.first(where: { $0.isBackground == true })
+        let backgroundEntry = backgroundTrace(of: storyEffects)
         return AudioChipDisplay.backgroundAnnouncement(
             sound: backgroundSound(of: storyEffects),
             libraryTitle: backgroundEntry?.name,
