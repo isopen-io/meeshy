@@ -33,9 +33,9 @@ import {
   BrowserTranscription,
   ServiceResult,
   VoiceCloningUserSettings,
-  VoicePreviewSample,
-  VOICE_CLONING_QUALITY_PRESETS
+  VoicePreviewSample
 } from '@meeshy/shared/types/voice-api';
+import { VOICE_CLONING_QUALITY_PRESETS } from '@meeshy/shared/types/preferences';
 import type { FastifyInstance } from 'fastify';
 import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -583,7 +583,16 @@ export class VoiceProfileService extends EventEmitter {
 
         if (Object.keys(updateData).length > 0) {
           logger.info('[VoiceProfileService] Persisting voice cloning settings to UserPreferences.audio:', updateData);
-          await this.persistVoiceCloningSettings(userId, updateData);
+          // Best-effort : le profil vocal (embedding, qualityScore, userVoiceModel)
+          // est déjà écrit à ce point. Une panne sur cette persistance annexe
+          // (préférences UX, pas le profil lui-même) ne doit pas faire échouer
+          // toute l'inscription — l'utilisateur récupère un profil fonctionnel,
+          // juste sans ces réglages fins tant que la prochaine écriture réussit.
+          try {
+            await this.persistVoiceCloningSettings(userId, updateData);
+          } catch (persistError) {
+            logger.error('[VoiceProfileService] Failed to persist voice cloning settings', persistError);
+          }
         }
       }
 
